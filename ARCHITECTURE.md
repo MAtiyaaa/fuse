@@ -35,6 +35,7 @@ flowchart TD
     data[core:data]
     ds[ui:designsystem]
     shell[ui:shell]
+    link[ui:link]
     android[app:android]
     desktop[app:desktop]
 
@@ -48,8 +49,11 @@ flowchart TD
     integrations --> shell
     data --> shell
     ds --> shell
+    shell --> link
     shell --> android
     shell --> desktop
+    link --> android
+    link --> desktop
 ```
 
 Read an arrow as "is used by". Dependencies only point down: `core:*` modules know nothing about
@@ -81,6 +85,7 @@ Namespaces follow the module path (`io.github.matiyaaa.fuse.core.model` for `:co
 | `core:data` | SQLDelight database, repositories, the library indexer that reconciles scans, app settings and scoped settings, the `SecretStore` contract | `FuseData.kt`, `repo/LibraryIndexer.kt`, `settings/AppSettings.kt` |
 | `ui:designsystem` | Tokens, colours, typography, shapes, motion, theme presets, focus and selection, input routing, components, icons, sounds, hero backdrop and generated art | `theme/`, `components/`, `input/InputRouter.kt` |
 | `ui:shell` | Every screen and overlay, navigation, onboarding and settings, written against the `FuseStore` and `PlatformUi` interfaces | `app/FuseApp.kt`, `store/FuseStore.kt`, `store/FuseServices.kt` |
+| `ui:link` | Phone Link: a small Ktor (CIO) web server with its JSON and live-updates API over `FuseStore`, sign-in (PBKDF2 password hash, sessions, lockout) and the phone web app in `src/web`, bundled into `WebAssets.kt` at build time. See [docs/PHONE_LINK.md](docs/PHONE_LINK.md) | `PhoneLinkServer.kt`, `LinkApi.kt`, `LinkAuth.kt`, `src/web/` |
 | `app:android` | Android host: implements `FuseServices` and `PlatformUi` (Home role, emulator launching, status data, Cartridge provider client, installer, companion screen, Keystore secrets) | `app/android/src/main` |
 | `app:desktop` | Linux host: implements `FuseServices` and `PlatformUi` (window modes, joystick input, Secret Service secrets, AppImage packaging) | `app/desktop/src/main` |
 
@@ -314,7 +319,7 @@ The interface and the platform meet through three interfaces in `ui:shell`:
   settings, credentials and updates. Reads are `StateFlow`s or `Flow`s; writes are suspend functions
   or fire-and-forget calls that run on background dispatchers. Screens only talk to this interface.
 - **`FuseServices`** (`store/FuseServices.kt`) is what the shared store needs from the operating
-  system: the database (`FuseData`), a read-only `FuseFileSystem`, the `SecretStore`, the shared
+  system: the database (`FuseData`), a `FuseFileSystem` (read-only except the Storage screen's delete), the `SecretStore`, the shared
   `HttpClient`, Fuse's cache directory, and the `EmulatorDetector`, `GameLauncher`, `CartridgeBridge`,
   `ReleaseInstaller`, `AppsProvider` and `DeviceLocations` implementations.
 - **`PlatformUi`** (`platform/PlatformUi.kt`) is what the interface can ask of the system directly:
@@ -369,11 +374,14 @@ presses.
   ScreenScraper media URLs are stored without credentials and re-signed just before download.
 - **Cartridge never shares credentials.** `CartridgeStatus` carries no server address, token or
   password; Cartridge's status provider is read-only and protected by its `READ_STATUS`
-  permission. (The Cartridge side is in review as [MAtiyaaa/cartridge#29](https://github.com/MAtiyaaa/cartridge/pull/29); until a release ships it, Fuse sees Cartridge as installed without the bridge.)
+  permission. Picture files it hands over for RomM's art are Cartridge's own, opened read-only.
 - **Launches carry only what the emulator needs**: a path, a SAF URI, a FileProvider URI with a read
   grant for that one launch, or an id.
-- **The library is read-only.** `FuseFileSystem` has no write operations. Fuse writes only to its own
-  directories (`FuseServices.cacheDir`) or to places the user picked.
+- **The library is only changed on request.** `FuseFileSystem`'s one write is `delete`, used only by
+  Settings, Storage after the user confirms, and only for paths inside the game's own library folder
+  (links are removed, never followed; saves next to a game are left). Otherwise Fuse writes only to
+  its own directories (`FuseServices.cacheDir`) or to places the user picked. Phone Link has no route
+  that deletes.
 - **Updates need approval.** Nothing is downloaded or installed until the user confirms; the
   installer verifies the `sha256:` digest GitHub publishes for the asset (`ReleaseInstaller`) and
   discards the download on a mismatch.

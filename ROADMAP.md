@@ -96,6 +96,10 @@ Builds, passes its unit tests, packages as a Deb and an AppImage, and starts und
 
 ## Phase 2: Polish and depth
 
+- [x] Phone Link: a phone web app on the same network, signed in with a password set on the device (0.0.4)
+- [x] Storage: space per drive and per game, and deleting games' files after a confirmation (0.0.4)
+- [x] Collections with automatic series from game details and shared titles (0.0.4)
+- [x] RomM details, pictures and per-game download progress through Cartridge's bridge protocol 2 (0.0.4; needs the next Cartridge)
 - [ ] SAF-only storage mode that works without All files access (emulators that need FileProvider URIs would then be limited)
 - [ ] R8 minification and resource shrinking for release APKs
 - [ ] Screenshot tests for the design system and main screens

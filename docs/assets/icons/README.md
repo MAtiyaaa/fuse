@@ -30,6 +30,9 @@ contains text, so nothing depends on fonts.
 | <img src="achievements.svg" width="40" height="40" alt=""> | <img src="line/achievements.svg" width="20" height="20" alt=""> | `achievements` | `trophy` | Achievements |
 | <img src="cartridge.svg" width="40" height="40" alt=""> | <img src="line/cartridge.svg" width="20" height="20" alt=""> | `cartridge` | `cloud-download` | Cartridge and RomM |
 | <img src="second-screen.svg" width="40" height="40" alt=""> | <img src="line/second-screen.svg" width="20" height="20" alt=""> | `second-screen` | `tablet-smartphone` | Second screen |
+| <img src="phone-link.svg" width="40" height="40" alt=""> | <img src="line/phone-link.svg" width="20" height="20" alt=""> | `phone-link` | `qr-code` | Phone Link |
+| <img src="storage.svg" width="40" height="40" alt=""> | <img src="line/storage.svg" width="20" height="20" alt=""> | `storage` | `hard-drive` | Storage |
+| <img src="collections.svg" width="40" height="40" alt=""> | <img src="line/collections.svg" width="20" height="20" alt=""> | `collections` | `library-big` | Collections |
 | <img src="interface.svg" width="40" height="40" alt=""> | <img src="line/interface.svg" width="20" height="20" alt=""> | `interface` | `sparkles` | Interface |
 | <img src="themes.svg" width="40" height="40" alt=""> | <img src="line/themes.svg" width="20" height="20" alt=""> | `themes` | `palette` | Themes |
 | <img src="accessibility.svg" width="40" height="40" alt=""> | <img src="line/accessibility.svg" width="20" height="20" alt=""> | `accessibility` | `accessibility` | Accessibility |

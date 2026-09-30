@@ -43,12 +43,14 @@ MD5 cross-check in `core:integrations`) live in `desktopTest` sources and run in
 ./gradlew :core:launch:desktopTest
 ./gradlew :core:integrations:desktopTest
 ./gradlew :core:data:desktopTest
+./gradlew :ui:link:desktopTest          # Phone Link: sign-in rules and the real server over HTTP
 ./gradlew :core:library:desktopTest --tests '*FilenameParserTest'   # one test class
 ```
 
 Android host tests are not enabled for the shared modules yet (the AGP Kotlin Multiplatform library
 plugin creates them only when a module opts in), so there are no Android unit test tasks for them.
-`ui:designsystem` and `ui:shell` have no tests yet. Test reports are written to
+`ui:designsystem` (the keyboard), `ui:shell` (the store end to end, with a real database and fake
+platform services) and `ui:link` (Phone Link) have desktop tests too. Test reports are written to
 `<module>/build/reports/tests/desktopTest/`.
 
 ## AppImage
