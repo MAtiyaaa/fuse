@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Fuse's mark (FuseMark in ui/shell app/Hud.kt) on the 108dp adaptive icon canvas: a rounded square
+  outline, a curved fuse running into it and a glowing spark at its end. The mark is 56dp wide and
+  centred, inside the 66dp safe zone.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <path
+        android:name="frame"
+        android:fillColor="#00000000"
+        android:pathData="M44.48,28.8 H63.52 A15.68,15.68 0 0 1 79.2,44.48 V63.52 A15.68,15.68 0 0 1 63.52,79.2 H44.48 A15.68,15.68 0 0 1 28.8,63.52 V44.48 A15.68,15.68 0 0 1 44.48,28.8 Z"
+        android:strokeWidth="5.6"
+        android:strokeColor="@color/fuse_mark" />
+
+    <path
+        android:name="fuse"
+        android:fillColor="#00000000"
+        android:pathData="M41.68,65.2 C49.52,65.2 50.64,45.04 61.84,45.04"
+        android:strokeWidth="5.6"
+        android:strokeColor="@color/fuse_mark"
+        android:strokeLineCap="round" />
+
+    <path
+        android:name="glow"
+        android:pathData="M65.2,42.8 m-12.32,0 a12.32,12.32 0 1 0 24.64,0 a12.32,12.32 0 1 0 -24.64,0">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:centerX="65.2"
+                android:centerY="42.8"
+                android:endColor="#00FF8A3D"
+                android:gradientRadius="12.32"
+                android:startColor="#FFFF8A3D"
+                android:type="radial" />
+        </aapt:attr>
+    </path>
+
+    <path
+        android:name="spark"
+        android:fillColor="@color/fuse_spark"
+        android:pathData="M65.2,42.8 m-3.92,0 a3.92,3.92 0 1 0 7.84,0 a3.92,3.92 0 1 0 -7.84,0" />
+</vector>

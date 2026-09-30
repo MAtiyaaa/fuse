@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Fuse
+GenericName=Game Launcher
+Comment=Controller-first game launcher
+Exec=fuse %u
+Icon=fuse
+Terminal=false
+Categories=Game;
+Keywords=games;emulator;launcher;controller;retro;
+StartupWMClass=fuse

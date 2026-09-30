@@ -8,19 +8,18 @@ kotlin {
     sourceSets {
         commonMain.dependencies {
             api(projects.core.model)
-            implementation(projects.core.library)
             api(libs.sqldelight.runtime)
             implementation(libs.sqldelight.coroutines)
         }
         androidMain.dependencies {
             implementation(libs.sqldelight.android.driver)
         }
-        val desktopMain by getting {
+        getByName("desktopMain") {
             dependencies {
                 implementation(libs.sqldelight.sqlite.driver)
             }
         }
-        val desktopTest by getting {
+        getByName("desktopTest") {
             dependencies {
                 implementation(libs.sqldelight.sqlite.driver)
             }

@@ -1,0 +1,4 @@
+#!/bin/sh
+# Entry point of the Fuse AppImage: runs the bundled launcher (its own Java runtime is inside).
+HERE="$(dirname "$(readlink -f "$0")")"
+exec "$HERE/usr/lib/fuse/bin/fuse" "$@"

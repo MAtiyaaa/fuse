@@ -1,0 +1,192 @@
+package io.github.matiyaaa.fuse.ui.shell.store.impl
+
+import io.github.matiyaaa.fuse.library.FsPath
+import io.github.matiyaaa.fuse.library.bios.BiosChecker
+import io.github.matiyaaa.fuse.library.bios.BiosSearchPaths
+import io.github.matiyaaa.fuse.library.parse.DisplayNameCleaner
+import io.github.matiyaaa.fuse.library.scan.FolderPolicyResolver
+import io.github.matiyaaa.fuse.library.scan.LibraryScanner
+import io.github.matiyaaa.fuse.library.scan.ScanRequest
+import io.github.matiyaaa.fuse.model.BiosStatus
+import io.github.matiyaaa.fuse.model.FolderPolicy
+import io.github.matiyaaa.fuse.model.LibrarySource
+import io.github.matiyaaa.fuse.model.LibrarySourceId
+import io.github.matiyaaa.fuse.model.LibrarySourceKind
+import io.github.matiyaaa.fuse.model.PlatformId
+import io.github.matiyaaa.fuse.model.ScanPhase
+import io.github.matiyaaa.fuse.model.ScanProgress
+import io.github.matiyaaa.fuse.model.ScanScope
+import io.github.matiyaaa.fuse.model.ScopedSettings
+import io.github.matiyaaa.fuse.model.SettingScope
+import io.github.matiyaaa.fuse.ui.shell.store.SourceOps
+import io.github.matiyaaa.fuse.ui.shell.store.SuggestedSource
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
+
+/**
+ * Library sources, scanning and firmware checks. Scans are incremental (QUICK skips platform folders
+ * whose modification times are unchanged), cancellable, and only ever read the file system.
+ */
+internal class LibraryEngine(private val ctx: StoreContext) : SourceOps {
+    private val data = ctx.data
+    private val scanner = LibraryScanner(ctx.services.fs, data.folderState, ctx.platforms)
+    private var biosJob: Job? = null
+
+    override val sources: StateFlow<List<LibrarySource>> =
+        data.sources.observeAll().resilient().stateIn(ctx.scope, SharingStarted.Eagerly, emptyList())
+
+    private val scanState = MutableStateFlow(ScanProgress(ScanPhase.IDLE))
+    override val scan: StateFlow<ScanProgress> = scanState
+
+    /** Platform folders found by the last scans, by platform. */
+    val platformFolders = MutableStateFlow<Map<PlatformId, List<String>>>(emptyMap())
+
+    /** Firmware status of platforms that need firmware and have games. */
+    val bios = MutableStateFlow<Map<PlatformId, BiosStatus>>(emptyMap())
+
+    override suspend fun add(path: String, kind: LibrarySourceKind): LibrarySource? {
+        val normalized = FsPath.normalize(path.trim())
+        if (normalized.isEmpty()) return null
+        data.sources.all().firstOrNull { FsPath.normalize(it.path) == normalized }?.let { return it }
+        val label = FsPath.name(normalized).ifBlank { normalized }
+        val id = data.sources.add(normalized, label, kind)
+        rescan(ScanScope.QUICK)
+        return data.sources.get(id)
+    }
+
+    override suspend fun remove(source: LibrarySource) {
+        // Games from the source are marked missing (user edits survive a re-add). Files are untouched.
+        data.sources.remove(source.id)
+        rescan(ScanScope.QUICK)
+    }
+
+    override suspend fun suggestions(): List<SuggestedSource> {
+        val existing = data.sources.all().map { FsPath.normalize(it.path) }.toSet()
+        val hints = runCatching { ctx.services.locations.libraryCandidates() }.getOrDefault(emptyList())
+        return hints
+            .distinctBy { FsPath.normalize(it.path) }
+            .filter { FsPath.normalize(it.path) !in existing }
+            .mapNotNull { hint ->
+                val probe = LibrarySource(LibrarySourceId(-1), hint.path, hint.label, hint.kind)
+                val found = try {
+                    scanner.discover(probe).platformFolders.map { it.platform.id }.distinct().size
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    return@mapNotNull null
+                }
+                if (found == 0) null else SuggestedSource(hint.path, hint.label, hint.kind, found)
+            }
+            .sortedByDescending { it.platformsFound }
+    }
+
+    /** One scan at a time: requests queue up and merge, so callers on any thread can ask. */
+    private data class Pending(val scope: ScanScope, val platform: PlatformId?)
+
+    private val requests = Channel<Pending>(Channel.UNLIMITED)
+
+    fun start() {
+        ctx.scope.launch {
+            for (first in requests) {
+                // Collapse what queued up meanwhile: a full scan covers everything, duplicates run once.
+                val batch = mutableListOf(first)
+                while (true) batch += requests.tryReceive().getOrNull() ?: break
+                if (batch.any { it.scope == ScanScope.FULL }) {
+                    runScan(ScanScope.FULL, null)
+                } else {
+                    batch.distinct().forEach { runScan(it.scope, it.platform) }
+                }
+            }
+        }
+    }
+
+    override fun rescan(scope: ScanScope, platform: PlatformId?) {
+        requests.trySend(Pending(scope, platform))
+    }
+
+    private suspend fun runScan(scope: ScanScope, platform: PlatformId?) {
+        val enabled = data.sources.all().filter { it.enabled }
+        if (enabled.isEmpty()) {
+            platformFolders.value = emptyMap()
+            scanState.value = ScanProgress(ScanPhase.DONE)
+            return
+        }
+        var last = ScanProgress(ScanPhase.DISCOVERING)
+        scanState.value = last
+        val report = try {
+            scanner.scan(ScanRequest(enabled, scope, platform, policyResolver())) { progress ->
+                last = progress
+                scanState.value = progress
+            }
+        } catch (e: CancellationException) {
+            scanState.value = ScanProgress(ScanPhase.IDLE)
+            throw e
+        } catch (e: Exception) {
+            scanState.value = last.copy(phase = ScanPhase.FAILED)
+            return
+        }
+        scanState.value = last.copy(phase = ScanPhase.SAVING)
+        val cleanNew = ctx.settings.value.library.cleanDisplayNames
+        val delta = data.indexer.apply(report, ctx.now(), DisplayNameCleaner::clean, useCleanedForNew = cleanNew)
+        enabled.forEach { data.sources.markScanned(it.id) }
+
+        val found = HashMap<PlatformId, MutableList<String>>()
+        report.scanned.forEach { found.getOrPut(it.platformId) { ArrayList() } += it.folderPath }
+        report.unchanged.forEach { f -> f.platformId?.let { found.getOrPut(it) { ArrayList() } += f.path } }
+        val folders = found.mapValues { (_, paths) -> paths.distinct() }
+        platformFolders.value = if (platform == null) folders else platformFolders.value - platform + folders
+
+        scanState.value = last.copy(
+            phase = ScanPhase.DONE,
+            added = delta.added,
+            removed = delta.missing,
+            changed = delta.updated + delta.restored,
+        )
+        refreshBios()
+    }
+
+    /** Game -> Platform -> Global folder policies for the scanner. */
+    private suspend fun policyResolver(): FolderPolicyResolver {
+        val settings = data.scopedSettings
+        val global = settings.resolve(ScopedSettings.FolderMode, null, null)
+            .takeIf { it.from == SettingScope.GLOBAL && !it.isDefault && it.value != FolderPolicy.AUTO }
+            ?.value
+        val perPlatform = ctx.platforms.all.mapNotNull { p ->
+            val r = settings.resolve(ScopedSettings.FolderMode, p.id, null)
+            if (r.from == SettingScope.PLATFORM) p.id to r.value else null
+        }.toMap()
+        return FolderPolicyResolver.of(data.games.folderPolicyOverrides(), perPlatform, global)
+    }
+
+    override fun refreshBios() {
+        if (biosJob?.isActive == true) return
+        biosJob = ctx.scope.launch {
+            val services = ctx.services
+            val sources = data.sources.all()
+            val roots = runCatching { services.locations.biosRoots() }.getOrDefault(emptyList())
+            val emulatorFolders = services.emulators.biosFolders(ctx.installed.value)
+            val unreadable = services.emulators.unreadablePaths()
+            val checker = BiosChecker(services.fs)
+            val platforms = data.games.platformCounts().first().keys.mapNotNull(ctx::platform).filter { it.bios != null }
+            val result = HashMap<PlatformId, BiosStatus>()
+            for (p in platforms) {
+                val paths = BiosSearchPaths.forPlatform(p, roots, sources, emulatorFolders)
+                result[p.id] = try {
+                    checker.check(p, paths, unreadable)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    BiosStatus(io.github.matiyaaa.fuse.model.BiosState.UNKNOWN, note = "Fuse couldn't check this system's firmware folders")
+                }
+            }
+            bios.value = result
+        }
+    }
+}

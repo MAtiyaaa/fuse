@@ -11,3 +11,8 @@ local.properties
 !debug.keystore
 /release/
 /dist/
+
+# Agent worktrees (local only)
+/.claude/worktrees/
+*.p12
+*.pfx

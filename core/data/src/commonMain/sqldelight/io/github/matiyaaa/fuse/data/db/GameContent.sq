@@ -1,0 +1,64 @@
+-- DLC, updates and other child content of a game (file-derived, rewritten by the indexer).
+CREATE TABLE game_content (
+    game_id INTEGER NOT NULL REFERENCES game(id) ON DELETE CASCADE,
+    position INTEGER NOT NULL,
+    -- ContentKind name
+    kind TEXT NOT NULL,
+    name TEXT NOT NULL,
+    path TEXT NOT NULL,
+    is_directory INTEGER NOT NULL DEFAULT 0,
+    size_bytes INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (game_id, position)
+);
+
+-- Discs of a multi-disc game (file-derived).
+CREATE TABLE game_disc (
+    game_id INTEGER NOT NULL REFERENCES game(id) ON DELETE CASCADE,
+    position INTEGER NOT NULL,
+    number INTEGER NOT NULL,
+    label TEXT NOT NULL,
+    path TEXT NOT NULL,
+    PRIMARY KEY (game_id, position)
+);
+
+-- Genres from metadata_json, kept as rows so per-genre collections are a cheap GROUP BY.
+CREATE TABLE game_genre (
+    game_id INTEGER NOT NULL REFERENCES game(id) ON DELETE CASCADE,
+    genre TEXT NOT NULL COLLATE NOCASE,
+    PRIMARY KEY (game_id, genre)
+);
+
+CREATE INDEX game_genre_genre ON game_genre(genre);
+
+contentFor:
+SELECT * FROM game_content WHERE game_id IN ? ORDER BY game_id, position;
+
+insertContent:
+INSERT INTO game_content(game_id, position, kind, name, path, is_directory, size_bytes)
+VALUES (?, ?, ?, ?, ?, ?, ?);
+
+deleteContent:
+DELETE FROM game_content WHERE game_id = ?;
+
+discsFor:
+SELECT * FROM game_disc WHERE game_id IN ? ORDER BY game_id, number, position;
+
+insertDisc:
+INSERT INTO game_disc(game_id, position, number, label, path) VALUES (?, ?, ?, ?, ?);
+
+deleteDiscs:
+DELETE FROM game_disc WHERE game_id = ?;
+
+insertGenre:
+INSERT OR IGNORE INTO game_genre(game_id, genre) VALUES (?, ?);
+
+deleteGenres:
+DELETE FROM game_genre WHERE game_id = ?;
+
+-- Genres differing only in case are one group, named by its first spelling in binary order.
+genreCounts:
+SELECT MIN(gg.genre COLLATE BINARY) AS genre, COUNT(*) AS game_count
+FROM game_genre gg JOIN game g ON g.id = gg.game_id
+WHERE g.missing = 0 AND g.removed_at IS NULL AND g.hidden = 0
+GROUP BY gg.genre
+ORDER BY gg.genre;

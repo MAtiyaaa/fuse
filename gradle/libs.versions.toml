@@ -1,6 +1,6 @@
 [versions]
 # Verified against Maven Central / Google Maven / Gradle Plugin Portal on 2026-09-30.
-# See docs/RESEARCH.md ("Dependency versions") before bumping.
+# See RESEARCH.md ("Dependency versions") before bumping.
 kotlin = "2.4.20"
 agp = "9.4.1"
 compose-multiplatform = "1.12.1"
@@ -15,6 +15,7 @@ datetime = "0.8.0"
 androidx-activity = "1.13.0"
 androidx-core = "1.19.1"
 media3 = "1.11.1"
+junit = "4.13.2"
 
 android-compileSdk = "37"
 android-targetSdk = "36"
@@ -42,6 +43,7 @@ compose-ui-util = { module = "org.jetbrains.compose.ui:ui-util", version.ref = "
 compose-animation = { module = "org.jetbrains.compose.animation:animation", version.ref = "compose-multiplatform" }
 compose-material3 = { module = "org.jetbrains.compose.material3:material3", version.ref = "compose-material3" }
 compose-components-resources = { module = "org.jetbrains.compose.components:components-resources", version.ref = "compose-multiplatform" }
+compose-ui-test = { module = "org.jetbrains.compose.ui:ui-test", version.ref = "compose-multiplatform" }
 jb-lifecycle-runtime-compose = { module = "org.jetbrains.androidx.lifecycle:lifecycle-runtime-compose", version.ref = "jb-lifecycle" }
 jb-lifecycle-viewmodel-compose = { module = "org.jetbrains.androidx.lifecycle:lifecycle-viewmodel-compose", version.ref = "jb-lifecycle" }
 
@@ -52,6 +54,7 @@ sqldelight-sqlite-driver = { module = "app.cash.sqldelight:sqlite-driver", versi
 
 coil-compose = { module = "io.coil-kt.coil3:coil-compose", version.ref = "coil" }
 coil-network-ktor = { module = "io.coil-kt.coil3:coil-network-ktor3", version.ref = "coil" }
+coil-svg = { module = "io.coil-kt.coil3:coil-svg", version.ref = "coil" }
 
 ktor-client-core = { module = "io.ktor:ktor-client-core", version.ref = "ktor" }
 ktor-client-okhttp = { module = "io.ktor:ktor-client-okhttp", version.ref = "ktor" }
@@ -64,6 +67,7 @@ androidx-activity-compose = { module = "androidx.activity:activity-compose", ver
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "androidx-core" }
 media3-exoplayer = { module = "androidx.media3:media3-exoplayer", version.ref = "media3" }
 media3-ui = { module = "androidx.media3:media3-ui", version.ref = "media3" }
+junit = { module = "junit:junit", version.ref = "junit" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

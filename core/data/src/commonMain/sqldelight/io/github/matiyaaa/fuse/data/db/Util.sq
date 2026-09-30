@@ -1,0 +1,3 @@
+-- Must run inside the same transaction as the INSERT (JDBC connections are per thread).
+lastInsertRowId:
+SELECT last_insert_rowid();

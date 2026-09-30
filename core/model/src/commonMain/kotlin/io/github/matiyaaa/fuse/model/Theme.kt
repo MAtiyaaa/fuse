@@ -4,7 +4,7 @@ import kotlinx.serialization.Serializable
 
 /**
  * A theme changes more than colour: background renderer, geometry, focus treatment, motion and
- * sound. Presets are original designs; docs/DESIGN_SYSTEM.md notes what inspired each.
+ * sound. Presets are original designs; DESIGN_SYSTEM.md notes what inspired each.
  */
 @Serializable
 data class ThemeSpec(

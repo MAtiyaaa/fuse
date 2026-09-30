@@ -1,0 +1,70 @@
+package io.github.matiyaaa.fuse.ui.designsystem.focus
+
+import androidx.compose.animation.core.AnimationSpec
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.gestures.animateScrollBy
+import androidx.compose.foundation.gestures.scrollBy
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.grid.LazyGridState
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.flow.collectLatest
+
+private val followSpec: AnimationSpec<Float> = spring(dampingRatio = 1f, stiffness = 600f)
+
+/**
+ * Keeps [index] at a steady anchor inside a lazy row/column (anchor 0 = aligned with the content
+ * padding, which is how shelves keep the selected tile at a fixed spot while the row slides). Each new selection starts a new
+ * animation from wherever the list currently is, so holding a direction glides instead of stepping,
+ * and an item that isn't laid out yet is jumped to without animating through hundreds of rows.
+ *
+ * [anchor] is where the selected item's leading edge should sit, as a fraction of the viewport.
+ */
+suspend fun LazyListState.follow(index: Int, anchor: Float = 0.12f, animate: Boolean = true) {
+    val info = layoutInfo
+    val inner = info.viewportSize.let { if (info.orientation == androidx.compose.foundation.gestures.Orientation.Horizontal) it.width else it.height } -
+        info.beforeContentPadding - info.afterContentPadding
+    // Item offsets are measured from the end of the leading content padding.
+    val target = (inner * anchor).toInt()
+    val item = info.visibleItemsInfo.firstOrNull { it.index == index }
+    if (item == null) {
+        scrollToItem(index, -(inner * anchor).toInt())
+        return
+    }
+    val delta = (item.offset - target).toFloat()
+    if (delta == 0f) return
+    if (animate) animateScrollBy(delta, followSpec) else scrollBy(delta)
+}
+
+/** Grid version: keeps the selected row near [anchor] of the viewport height. */
+suspend fun LazyGridState.follow(index: Int, anchor: Float = 0.2f, animate: Boolean = true) {
+    val info = layoutInfo
+    val viewport = info.viewportEndOffset - info.viewportStartOffset
+    val item = info.visibleItemsInfo.firstOrNull { it.index == index }
+    if (item == null) {
+        scrollToItem(index, -(viewport * anchor).toInt().coerceAtMost(0))
+        return
+    }
+    val target = (viewport * anchor).toInt()
+    val delta = (item.offset.y - target).toFloat()
+    // Only scroll when the row is leaving the comfortable middle band, so moving sideways never scrolls.
+    val band = viewport * 0.18f
+    if (kotlin.math.abs(delta) < band && item.offset.y >= 0 && item.offset.y + item.size.height <= viewport) return
+    if (animate) animateScrollBy(delta, followSpec) else scrollBy(delta)
+}
+
+/** Follows [selected] whenever it changes. */
+@Composable
+fun FollowSelection(state: LazyListState, selected: () -> Int, anchor: Float = 0.12f, animate: Boolean = true) {
+    LaunchedEffect(state) {
+        snapshotFlow(selected).collectLatest { state.follow(it, anchor, animate) }
+    }
+}
+
+@Composable
+fun FollowSelection(state: LazyGridState, selected: () -> Int, anchor: Float = 0.2f, animate: Boolean = true) {
+    LaunchedEffect(state) {
+        snapshotFlow(selected).collectLatest { state.follow(it, anchor, animate) }
+    }
+}
