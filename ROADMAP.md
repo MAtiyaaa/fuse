@@ -58,8 +58,11 @@ right emulator with a controller, on Android and Linux.
 - [x] Design system: tokens, squircle tiles, the focus spark, motion profiles, nine themes, generated art, hero backdrop, procedural sounds, Lucide icons, original glyphs
 - [x] Input router with repeat, hold to reorder, stick to D-pad and layered handlers; explicit selection models
 - [x] Screens: Home (Flow and Channels with 19 widget kinds), Library, Systems, Apps, Cartridge, game page, Search, media manager, folder browser, quick menu, Settings (16 sections), onboarding
-- [ ] `DefaultFuseStore`, the store over the core modules (in progress) <!-- verify -->
-- [ ] Second-screen companion content (the entry point exists and is empty) <!-- verify -->
+- [x] `DefaultFuseStore`, the store over the core modules, with end-to-end tests (scan, launch, play sessions, cache-only playlists, persisted settings)
+- [x] Second-screen companion content: the focused game or system, or the running game with its real session time
+- [x] Button mapping screen with capture and a live controller test
+- [x] Performance overlay and dynamic tile borders
+- [x] Licence texts shipped in the apps, with a licences screen
 
 ### Android app (in progress)
 
@@ -95,7 +98,6 @@ right emulator with a controller, on Android and Linux.
 - [ ] Localization (all interface text is English today)
 - [ ] In-app text size setting
 - [ ] TV overscan-safe margins
-- [ ] A button remapping screen (the input router already supports remaps)
 - [ ] RetroAchievements hashing for disc systems, Nintendo DS/DSi and 3DS
 - [ ] ScreenScraper developer credentials injected into official builds from CI secrets
 - [ ] A pre-release update channel (the setting exists; update checks only look at stable releases)
