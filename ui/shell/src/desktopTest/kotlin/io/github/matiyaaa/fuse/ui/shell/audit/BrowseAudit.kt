@@ -28,8 +28,13 @@ private fun LibraryLayout.words(): String = when (this) {
     LibraryLayout.COMPACT_LIST -> "Compact List"
 }
 
-/** The number of game actions before the view actions in a library's options menu. */
-private const val GAME_ACTIONS = 13
+/**
+ * The number of game actions before the view actions in a library's options menu: Play, Manage
+ * Media, Game Info, Favourites, Collection, Pin, Emulator, Find Details and Art, Rename, Folder
+ * Behaviour, Hide and Remove, plus the Cartridge item while Cartridge is installed.
+ */
+private val AuditDriver.gameActions: Int
+    get() = 12 + if (libraryStore.cartridge.status.value.installed) 1 else 0
 
 /**
  * Chooses a layout the way a user does: Options, "View as", then the layout. [shootChoice] also
@@ -37,8 +42,9 @@ private const val GAME_ACTIONS = 13
  */
 internal fun AuditDriver.viewAs(layout: LibraryLayout, shootChoice: Boolean = false) {
     tap(PadButton.X)
-    waitFor("View as")
-    choose(GAME_ACTIONS)
+    // "View as" sits below the game actions, often past the bottom of the menu.
+    waitFor("Manage Media")
+    choose(gameActions)
     waitFor("Cover grid")
     if (shootChoice) shoot("View as choice list open")
     choose(layout.ordinal)
@@ -155,14 +161,45 @@ internal fun AuditDriver.libraryScreens(exhaustive: Boolean) {
         }
     }
 
+    scenario("library", "system with art") {
+        useLibrary()
+        val gba = libraryStore.library.platforms.value.first { it.platform.id == PlatformId("gba") }
+        val owner = MediaOwner.OfPlatform(gba.platform.id)
+        val dir = File(cache, "system-art").apply { mkdirs() }
+        val panel = File(dir, "gba-panel.png").also { AuditSystemArt.panel(it, gba.platform.accent) }
+        val logo = File(dir, "gba-logo.png").also { AuditSystemArt.logo(it, gba.platform.shortName) }
+        runBlocking {
+            libraryStore.media.setFromFile(owner, MediaKind.BOXART, panel.absolutePath)
+            libraryStore.media.setFromFile(owner, MediaKind.LOGO, logo.absolutePath)
+        }
+        try {
+            tab(Destination.SYSTEMS)
+            val grid = Grid(libraryStore.library.platforms.value.count { it.gameCount > 0 })
+            grid.goTo(platformIndex("gba"))
+            settle(1_200)
+            shoot("Systems with the Game Boy Advance focused")
+            tap(PadButton.A)
+            waitFor("Beacon Bay")
+            settle(1_200)
+            shoot("its page keeps the logo and the art panel")
+            tap(PadButton.DPAD_RIGHT)
+            settle(1_200)
+            shoot("the next game, same background")
+        } finally {
+            runBlocking { libraryStore.media.reset(owner, null) }
+        }
+    }
+
     scenario("library", "system without emulator") {
         useLibrary()
         tab(Destination.SYSTEMS)
-        val grid = Grid(libraryStore.library.platforms.value.count { it.gameCount > 0 })
-        grid.goTo(platformIndex("psp"))
+        val systems = libraryStore.library.platforms.value.filter { it.gameCount > 0 }
+        val bare = systems.firstOrNull { !it.emulatorInstalled } ?: throw NotCovered("Every system in the audit library has an emulator")
+        val grid = Grid(systems.size)
+        grid.goTo(platformIndex(bare.platform.id.value))
         tap(PadButton.A)
         waitFor("No emulator installed")
-        shoot("PlayStation Portable, no emulator installed")
+        shoot("${bare.platform.name}, no emulator installed")
     }
 
     scenario("library", "collection") {

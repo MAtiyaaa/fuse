@@ -173,6 +173,8 @@ internal class AuditDriver(
             block()
         } catch (e: Throwable) {
             if (e is org.junit.internal.AssumptionViolatedException) throw e
+            // Anything but a screen that couldn't be reached is a bug worth its stack trace.
+            if (e !is NotCovered && e !is AssertionError) e.printStackTrace(System.out)
             val reason = (e.message ?: e.toString()).lines().take(12).joinToString(" | ")
             Audit.uncovered(AuditGap(size.label, group, screen, lastState, reason))
             recover()

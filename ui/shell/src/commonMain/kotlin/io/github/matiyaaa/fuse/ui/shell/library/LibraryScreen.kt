@@ -1,29 +1,11 @@
 package io.github.matiyaaa.fuse.ui.shell.library
 
-import io.github.matiyaaa.fuse.ui.designsystem.media.PrefetchArt
-
-import androidx.compose.foundation.rememberScrollState
-
-import androidx.compose.foundation.horizontalScroll
-
-import kotlinx.coroutines.flow.map
-
-import kotlinx.coroutines.flow.flowOf
-
-import kotlinx.coroutines.flow.combine
-
-import io.github.matiyaaa.fuse.ui.shell.app.gameConfirmLabel
-import io.github.matiyaaa.fuse.ui.shell.app.activateGame
-import io.github.matiyaaa.fuse.ui.shell.app.ConfirmSpec
-
-import io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec
-
-import io.github.matiyaaa.fuse.ui.shell.store.GameSet
-
-import io.github.matiyaaa.fuse.ui.designsystem.components.fadingEdges
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -40,13 +22,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -60,6 +42,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import io.github.matiyaaa.fuse.model.CollectionId
@@ -77,6 +60,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction
 import io.github.matiyaaa.fuse.ui.designsystem.components.Spinner
 import io.github.matiyaaa.fuse.ui.designsystem.components.Tile
 import io.github.matiyaaa.fuse.ui.designsystem.components.Trailing
+import io.github.matiyaaa.fuse.ui.designsystem.components.fadingEdges
 import io.github.matiyaaa.fuse.ui.designsystem.focus.FollowSelection
 import io.github.matiyaaa.fuse.ui.designsystem.focus.GridSelection
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
@@ -88,16 +72,21 @@ import io.github.matiyaaa.fuse.ui.designsystem.media.ArtSlot
 import io.github.matiyaaa.fuse.ui.designsystem.media.Artwork
 import io.github.matiyaaa.fuse.ui.designsystem.media.GeneratedArt
 import io.github.matiyaaa.fuse.ui.designsystem.media.HeroSource
-import io.github.matiyaaa.fuse.ui.designsystem.shape.PillShape
+import io.github.matiyaaa.fuse.ui.designsystem.media.PrefetchArt
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Aspect
+import io.github.matiyaaa.fuse.ui.designsystem.theme.Durations
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
 import io.github.matiyaaa.fuse.ui.designsystem.theme.toColor
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
+import io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec
+import io.github.matiyaaa.fuse.ui.shell.app.ConfirmSpec
 import io.github.matiyaaa.fuse.ui.shell.app.ContextMenuSpec
 import io.github.matiyaaa.fuse.ui.shell.app.FocusZone
 import io.github.matiyaaa.fuse.ui.shell.app.Route
+import io.github.matiyaaa.fuse.ui.shell.app.activateGame
+import io.github.matiyaaa.fuse.ui.shell.app.gameConfirmLabel
 import io.github.matiyaaa.fuse.ui.shell.app.gameMenu
 import io.github.matiyaaa.fuse.ui.shell.app.play
 import io.github.matiyaaa.fuse.ui.shell.app.rememberRouteState
@@ -109,6 +98,12 @@ import io.github.matiyaaa.fuse.ui.shell.components.playtimeText
 import io.github.matiyaaa.fuse.ui.shell.components.stage
 import io.github.matiyaaa.fuse.ui.shell.store.GameCard
 import io.github.matiyaaa.fuse.ui.shell.store.GameQuery
+import io.github.matiyaaa.fuse.ui.shell.store.GameSet
+import io.github.matiyaaa.fuse.ui.shell.systems.SystemHeader
+import io.github.matiyaaa.fuse.ui.shell.systems.SystemShowcase
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 /** What a library view lists. */
@@ -230,9 +225,21 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
     PrefetchArt(tileArt, state.grid.index, size = LocalTileMetrics.current.icon * 1.4f)
     PrefetchArt(remember(list) { list.orEmpty().map { it.art.logo } }, state.grid.index, size = 360.dp)
     val special = scope == LibraryScope.All && segment.set != GameSet.LIBRARY
-    LaunchedEffect(selectedCard?.id, special) {
+    val systemCard = platforms.firstOrNull { it.platform.id == platformId }
+    // A system's page keeps the system's own background while moving between its games; a game
+    // with its own background image shows that instead.
+    val ownHero = selectedCard?.art?.hero
+    LaunchedEffect(selectedCard?.id, special, systemCard?.art) {
         state.selectedId = selectedCard?.id
-        app.hero = selectedCard?.let { HeroSource(it.id, it.art.hero ?: it.art.grid, it.accent.toColor(), it.art.heroFocusX, it.art.heroFocusY, it.art.video) }
+        app.hero = when {
+            systemCard != null && ownHero == null -> HeroSource(
+                selectedCard?.id ?: systemCard.platform.id, systemCard.art.hero, systemCard.platform.accent.toColor(),
+                video = selectedCard?.art?.video,
+            )
+            systemCard != null && selectedCard != null ->
+                HeroSource(selectedCard.id, ownHero, selectedCard.accent.toColor(), selectedCard.art.heroFocusX, selectedCard.art.heroFocusY, selectedCard.art.video)
+            else -> selectedCard?.let { HeroSource(it.id, it.art.hero ?: it.art.grid, it.accent.toColor(), it.art.heroFocusX, it.art.heroFocusY, it.art.video) }
+        }
         app.hints = when {
             selectedCard == null -> emptyList()
             special -> listOf(Hint(HintButton.CONFIRM, "Choose"), Hint(HintButton.BACK, "Back"))
@@ -347,12 +354,25 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
                 else -> state.grid.index = i
             }
         }
+        val compactHeader = maxH < 560.dp
+        // Like the Systems screen: the art pack's panel on the right unless there is a background image.
+        if (systemCard != null) {
+            AnimatedVisibility(
+                visible = systemCard.art.hero == null && ownHero == null,
+                modifier = Modifier.align(Alignment.CenterEnd),
+                enter = fadeIn(Fuse.motion.fade(Durations.SLOW)),
+                exit = fadeOut(Fuse.motion.fade(Durations.BASE)),
+            ) {
+                SystemShowcase(systemCard, Modifier.fillMaxHeight().width(maxH * 0.46f))
+            }
+        }
         Column(Modifier.fillMaxSize()) {
-            Spacer(Modifier.height(Size.hudHeight))
+            Spacer(Modifier.height(Size.hudHeight + if (systemCard != null) (if (compactHeader) Space.s else Space.xl) else 0.dp))
             LibraryHeader(
                 app = app,
                 scope = scope,
-                platform = platforms.firstOrNull { it.platform.id == platformId },
+                platform = systemCard,
+                compact = compactHeader,
                 system = platforms.firstOrNull { it.platform.id == state.system },
                 count = list?.size,
                 header = header,
@@ -416,6 +436,7 @@ private fun LibraryHeader(
     app: AppState,
     scope: LibraryScope,
     platform: io.github.matiyaaa.fuse.ui.shell.store.PlatformCard?,
+    compact: Boolean,
     system: io.github.matiyaaa.fuse.ui.shell.store.PlatformCard?,
     count: Int?,
     header: List<HeaderItem>,
@@ -428,8 +449,8 @@ private fun LibraryHeader(
     val c = Fuse.colors
     fun focused(i: Int) = state.inHeader && app.focusZone == FocusZone.CONTENT && i == state.headerIndex
     Row(
-        Modifier.fillMaxWidth().padding(start = Space.gutter, end = Space.gutter, top = Space.xs, bottom = Space.xs),
-        verticalAlignment = Alignment.CenterVertically,
+        Modifier.fillMaxWidth().padding(start = Space.gutter, end = Space.gutter, top = if (platform != null) 0.dp else Space.xs, bottom = Space.xs),
+        verticalAlignment = if (platform != null) Alignment.Bottom else Alignment.CenterVertically,
     ) {
         if (scope == LibraryScope.All) {
             val scroll = rememberScrollState()
@@ -453,21 +474,20 @@ private fun LibraryHeader(
                     }
                 }
             }
+        } else if (platform != null) {
+            // The same header as the Systems screen, in the same place, so the logo stays put.
+            SystemHeader(platform, compact, Modifier.weight(1f), widthFraction = 0.9f)
         } else {
             Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
                 val title = when (scope) {
-                    is LibraryScope.OfPlatform -> platform?.platform?.name ?: scope.platform.value
+                    is LibraryScope.OfPlatform -> scope.platform.value
                     is LibraryScope.OfCollection -> scope.name
                     LibraryScope.All -> "Library"
                 }
                 FText(title, Fuse.type.titleSmall, maxLines = 1)
-                if (platform != null && !platform.emulatorInstalled) {
-                    Spacer(Modifier.width(Space.m))
-                    Chip("No emulator installed", icon = FuseIcons.Warning, color = c.warning)
-                }
             }
         }
-        if (count != null) {
+        if (count != null && platform == null) {
             Spacer(Modifier.width(Space.m))
             FText("$count ${if (count == 1) "game" else "games"}", Fuse.type.label, color = c.textMuted, maxLines = 1)
         }

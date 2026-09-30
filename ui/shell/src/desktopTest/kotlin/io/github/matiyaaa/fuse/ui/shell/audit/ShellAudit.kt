@@ -376,6 +376,24 @@ internal fun AuditDriver.companionScreens() {
         shoot("game with an update and DLC focused", 2_000)
         Spotlight.set(PlatformId("psx"))
         shoot("system focused (firmware missing)", 2_000)
+        // With the art pack's logo and panel (drawn by the audit; the pack itself is downloaded).
+        val psx = store.library.platforms.value.first { it.platform.id == PlatformId("psx") }
+        val owner = io.github.matiyaaa.fuse.model.MediaOwner.OfPlatform(psx.platform.id)
+        val dir = java.io.File(cache, "system-art").apply { mkdirs() }
+        val panel = java.io.File(dir, "psx-panel.png").also { AuditSystemArt.panel(it, psx.platform.accent) }
+        val logo = java.io.File(dir, "psx-logo.png").also { AuditSystemArt.logo(it, psx.platform.shortName) }
+        runBlocking {
+            store.media.setFromFile(owner, io.github.matiyaaa.fuse.model.MediaKind.BOXART, panel.absolutePath)
+            store.media.setFromFile(owner, io.github.matiyaaa.fuse.model.MediaKind.LOGO, logo.absolutePath)
+        }
+        try {
+            Spotlight.set(null)
+            settle(600)
+            Spotlight.set(PlatformId("psx"))
+            shoot("system focused with its logo and art panel", 2_500)
+        } finally {
+            runBlocking { store.media.reset(owner, null) }
+        }
         Spotlight.set(PlatformId("psp"))
         shoot("system focused (no emulator)", 2_000)
         Spotlight.set(null)

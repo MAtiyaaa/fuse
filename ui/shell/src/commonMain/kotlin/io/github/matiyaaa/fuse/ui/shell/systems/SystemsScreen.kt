@@ -210,13 +210,13 @@ fun SystemsScreen(app: AppState) {
 
 /** The focused system: logo (or name), then games and emulator. No firmware details here. */
 @Composable
-private fun SystemHeader(card: PlatformCard?, compact: Boolean, modifier: Modifier = Modifier) {
+internal fun SystemHeader(card: PlatformCard?, compact: Boolean, modifier: Modifier = Modifier, widthFraction: Float = 0.62f) {
     val c = Fuse.colors
     val motion = Fuse.motion
     val logoHeight = if (compact) 40.dp else 64.dp
     AnimatedContent(
         targetState = card,
-        modifier = modifier.fillMaxWidth(0.62f),
+        modifier = modifier.fillMaxWidth(widthFraction),
         contentKey = { it?.platform?.id },
         transitionSpec = { fadeIn(motion.fade(Durations.BASE)) togetherWith fadeOut(motion.fade(Durations.INSTANT)) },
         contentAlignment = Alignment.BottomStart,
@@ -263,29 +263,34 @@ private fun SystemHeader(card: PlatformCard?, compact: Boolean, modifier: Modifi
  * fading into the background on its left and toward the bottom so the grid stays calm.
  */
 @Composable
-private fun SystemShowcase(card: PlatformCard?, modifier: Modifier) {
+internal fun SystemShowcase(card: PlatformCard?, modifier: Modifier) {
     val art = card?.art?.boxart
     Crossfade(targetState = art, modifier = modifier, animationSpec = Fuse.motion.fade(Durations.SLOW), label = "showcase") { model ->
         if (model == null) return@Crossfade
         Artwork(
             model,
-            Modifier.fillMaxSize()
-                .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
-                .drawWithContent {
-                    drawContent()
-                    drawRect(Brush.horizontalGradient(0f to Color.Transparent, 0.55f to Color.Black), blendMode = BlendMode.DstIn)
-                    // Clear of the status bar at the top, quieter behind the grid toward the bottom.
-                    drawRect(
-                        Brush.verticalGradient(0f to Color.Transparent, 0.2f to Color.Black.copy(alpha = 0.8f), 0.5f to Color.Black.copy(alpha = 0.55f), 1f to Color.Black.copy(alpha = 0.15f)),
-                        blendMode = BlendMode.DstIn,
-                    )
-                },
+            Modifier.fillMaxSize().panelFade(),
             contentScale = ContentScale.Crop,
             focusX = 0.5f,
             focusY = 0.3f,
         )
     }
 }
+
+/**
+ * Fades a side panel into the background: from nothing on its left to full on its right, clear of
+ * the status bar at the top and quieter toward the bottom.
+ */
+internal fun Modifier.panelFade(): Modifier = this
+    .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+    .drawWithContent {
+        drawContent()
+        drawRect(Brush.horizontalGradient(0f to Color.Transparent, 0.55f to Color.Black), blendMode = BlendMode.DstIn)
+        drawRect(
+            Brush.verticalGradient(0f to Color.Transparent, 0.2f to Color.Black.copy(alpha = 0.8f), 0.5f to Color.Black.copy(alpha = 0.55f), 1f to Color.Black.copy(alpha = 0.15f)),
+            blendMode = BlendMode.DstIn,
+        )
+    }
 
 /** Options for a system (Context button or long press on its card). */
 fun AppState.systemMenu(card: PlatformCard): ContextMenuSpec {

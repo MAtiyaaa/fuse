@@ -3,6 +3,9 @@ package io.github.matiyaaa.fuse.ui.shell.app
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -48,8 +51,11 @@ import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
 import io.github.matiyaaa.fuse.ui.designsystem.media.ArtSlot
 import io.github.matiyaaa.fuse.ui.designsystem.media.Artwork
 import io.github.matiyaaa.fuse.ui.designsystem.media.GeneratedArt
+import io.github.matiyaaa.fuse.ui.designsystem.media.HeroBackdrop
+import io.github.matiyaaa.fuse.ui.designsystem.media.HeroSource
 import io.github.matiyaaa.fuse.ui.designsystem.shape.SquircleShape
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Durations
+import io.github.matiyaaa.fuse.ui.designsystem.theme.Easings
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.FuseTheme
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
@@ -64,24 +70,49 @@ import io.github.matiyaaa.fuse.ui.shell.store.PlatformCard
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import io.github.matiyaaa.fuse.ui.shell.systems.SystemShowcase
+import io.github.matiyaaa.fuse.ui.shell.systems.panelFade
+import kotlin.time.TimeSource
 
 /**
  * What the main screen has in focus, shared with the companion screen. Keys are [GameId] or
- * [PlatformId]; null when nothing specific is focused.
+ * [PlatformId]; null when nothing specific is focused. [Focus.direction] says which way the main
+ * screen moved to get there (1 right or down, -1 left or up, 0 a jump or a tap), so the companion
+ * can slide the same way.
  */
 object Spotlight {
-    private val state = MutableStateFlow<Any?>(null)
-    val focused: StateFlow<Any?> = state
+    data class Focus(val key: Any?, val direction: Int = 0)
+
+    private val state = MutableStateFlow(Focus(null))
+    val focused: StateFlow<Focus> = state
+    private var pending = 0
+    private var pendingAt: TimeSource.Monotonic.ValueTimeMark? = null
+
+    /** The main screen moved the selection; the next [set] (if it comes soon) slides this way. */
+    fun moved(direction: Int) {
+        pending = direction
+        pendingAt = TimeSource.Monotonic.markNow()
+    }
 
     fun set(key: Any?) {
-        state.value = key
+        if (state.value.key == key) return
+        val fresh = pendingAt?.let { it.elapsedNow().inWholeMilliseconds < 800 } == true
+        state.value = Focus(key, if (fresh) pending else 0)
+        pending = 0
+        pendingAt = null
     }
 }
+
+/** What the companion shows, with the direction it arrived from. */
+private data class CompanionContent(val target: Any?, val direction: Int)
 
 /**
  * Content for a second screen (dual-screen handhelds, an external display). The Android app shows
  * it in its own activity on the other display; it is touch only and never takes controller input,
  * so the main screen keeps focus.
+ *
+ * The backdrop crossfades behind everything (the previous art stays until the next has decoded),
+ * while the details slide in the direction the main screen moved and the logo settles in.
  */
 @Composable
 fun CompanionApp(store: FuseStore, platform: PlatformUi, mode: DualScreenMode) {
@@ -96,27 +127,41 @@ fun CompanionApp(store: FuseStore, platform: PlatformUi, mode: DualScreenMode) {
     ) {
         val home by store.library.home.collectAsState()
         val status by platform.status.collectAsState()
-        val focused by Spotlight.focused.collectAsState()
+        val focus by Spotlight.focused.collectAsState()
+        val systems by store.library.platforms.collectAsState()
         val time = rememberClockText(prefs.clock24h)
         val playing = home.playtime.currentGame
         Box(Modifier.fillMaxSize().background(Fuse.colors.ink)) {
-            val content: Any? = when {
-                mode == DualScreenMode.GAME_COMPANION && playing != null -> playing
-                mode == DualScreenMode.LIBRARY_COMPANION -> focused
-                playing != null -> playing
-                else -> null
+            val content = when {
+                mode == DualScreenMode.GAME_COMPANION && playing != null -> CompanionContent(playing, 0)
+                mode == DualScreenMode.LIBRARY_COMPANION -> CompanionContent(focus.key, focus.direction)
+                playing != null -> CompanionContent(playing, 0)
+                else -> CompanionContent(null, 0)
             }
+            val hero = companionHero(store, systems, content.target)
+            HeroBackdrop(hero, Modifier.fillMaxSize(), dim = 0.25f, gradient = 0.75f, settleMs = 60)
             val motion = Fuse.motion
             AnimatedContent(
                 targetState = content,
-                transitionSpec = { fadeIn(motion.fade(Durations.SLOW)) togetherWith fadeOut(motion.fade(Durations.BASE)) },
-                contentKey = { (it as? GameCard)?.id ?: it },
+                transitionSpec = {
+                    val dir = targetState.direction
+                    val enter = fadeIn(motion.fade(Durations.SLOW)) + scaleIn(motion.tween(Durations.SLOW, Easings.Enter), initialScale = if (motion.reduced) 1f else 0.97f)
+                    val exit = fadeOut(motion.fade(Durations.FAST))
+                    if (dir == 0 || motion.reduced) {
+                        enter togetherWith exit
+                    } else {
+                        val shift = (motion.slideFraction * 2.5f).coerceAtMost(0.2f)
+                        (slideInHorizontally(motion.tween(Durations.SLOW, Easings.Enter)) { (it * shift * dir).toInt() } + enter) togetherWith
+                            (slideOutHorizontally(motion.tween(Durations.BASE, Easings.Exit)) { (-it * shift * dir).toInt() } + exit)
+                    }
+                },
+                contentKey = { (it.target as? GameCard)?.id ?: it.target },
                 label = "companion",
-            ) { target ->
-                when (target) {
+            ) { c ->
+                when (val target = c.target) {
                     is GameCard -> NowPlaying(target, home.playtime.currentSince)
                     is GameId -> FocusedGame(store, target)
-                    is PlatformId -> FocusedPlatform(store.library.platforms.collectAsState().value.firstOrNull { it.platform.id == target })
+                    is PlatformId -> FocusedPlatform(systems.firstOrNull { it.platform.id == target })
                     else -> Idle(time)
                 }
             }
@@ -138,28 +183,27 @@ fun CompanionApp(store: FuseStore, platform: PlatformUi, mode: DualScreenMode) {
     }
 }
 
+/** The backdrop for what the companion shows: the game's background art, or the system's. */
+@Composable
+private fun companionHero(store: FuseStore, systems: List<PlatformCard>, target: Any?): HeroSource? = when (target) {
+    is GameCard -> HeroSource(target.id, target.art.hero ?: target.art.grid, target.accent.toColor(), target.art.heroFocusX, target.art.heroFocusY)
+    is GameId -> {
+        val flow = remember(target) { store.library.game(target) }
+        val detail by flow.collectAsState(initial = null)
+        detail?.let { d -> HeroSource(target, d.art.hero ?: d.art.grid, d.platform.accent.toColor(), d.art.heroFocusX, d.art.heroFocusY) }
+    }
+    is PlatformId -> systems.firstOrNull { it.platform.id == target }?.let { HeroSource(target, it.art.hero, it.platform.accent.toColor()) }
+    else -> null
+}
+
 @Composable
 private fun Idle(time: String) {
-    Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
+    // Opaque, so the last game's art never lingers behind the clock.
+    Column(Modifier.fillMaxSize().background(Fuse.colors.ink), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
         FuseMark(Modifier.size(56.dp))
         Spacer(Modifier.height(Space.l))
         FText(time, Fuse.type.numericLarge)
         FText(formatDate(), Fuse.type.body, color = Fuse.colors.textMuted)
-    }
-}
-
-/** Art-lit backdrop shared by the companion layouts: the art, darkened toward the bottom. */
-@Composable
-private fun Backdrop(model: Any?, accent: Color, focusX: Float = 0.5f, focusY: Float = 0.35f) {
-    Box(Modifier.fillMaxSize()) {
-        Artwork(model, Modifier.fillMaxSize(), focusX = focusX, focusY = focusY, fallback = {
-            Box(Modifier.fillMaxSize().background(Brush.radialGradient(listOf(accent.copy(alpha = 0.35f), Color.Transparent))))
-        })
-        Box(
-            Modifier.fillMaxSize().background(
-                Brush.verticalGradient(0f to Fuse.colors.ink.copy(alpha = 0.35f), 0.55f to Fuse.colors.ink.copy(alpha = 0.7f), 1f to Fuse.colors.ink),
-            ),
-        )
     }
 }
 
@@ -168,23 +212,19 @@ private fun FocusedGame(store: FuseStore, id: GameId) {
     val flow = remember(id) { store.library.game(id) }
     val detail by flow.collectAsState(initial = null)
     val d = detail ?: return
-    val accent = d.platform.accent.toColor()
-    Box(Modifier.fillMaxSize()) {
-        Backdrop(d.art.hero ?: d.art.grid, accent, d.art.heroFocusX, d.art.heroFocusY)
-        BoxWithConstraints(Modifier.fillMaxSize().padding(horizontal = Space.xl, vertical = Space.xl)) {
-            val wide = maxWidth > maxHeight
-            val maxH = maxHeight
-            if (wide) {
-                Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(Space.xl), verticalAlignment = Alignment.Bottom) {
-                    Cover(d, Modifier.fillMaxHeight(0.8f))
-                    GameFacts(d, Modifier.weight(1f))
-                }
-            } else {
-                Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.Bottom) {
-                    Cover(d, Modifier.height(maxH * 0.42f))
-                    Spacer(Modifier.height(Space.l))
-                    GameFacts(d, Modifier.fillMaxWidth())
-                }
+    BoxWithConstraints(Modifier.fillMaxSize().padding(horizontal = Space.xl, vertical = Space.xl)) {
+        val wide = maxWidth > maxHeight * 1.15f
+        val maxH = maxHeight
+        if (wide) {
+            Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(Space.xl), verticalAlignment = Alignment.Bottom) {
+                Cover(d, Modifier.fillMaxHeight(0.8f))
+                GameFacts(d, Modifier.weight(1f))
+            }
+        } else {
+            Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.Bottom) {
+                Cover(d, Modifier.height(maxH * 0.42f))
+                Spacer(Modifier.height(Space.l))
+                GameFacts(d, Modifier.fillMaxWidth())
             }
         }
     }
@@ -234,26 +274,58 @@ private fun GameFacts(d: GameDetail, modifier: Modifier) {
     }
 }
 
+/**
+ * A system: the art pack's panel on the right (unless the system has a background image), its
+ * logo in white over the system's colour, then games, emulator and firmware.
+ */
 @Composable
 private fun FocusedPlatform(card: PlatformCard?) {
     card ?: return
     val p = card.platform
-    val accent = p.accent.toColor()
-    Box(Modifier.fillMaxSize()) {
-        Backdrop(card.art.hero, accent)
-        Column(Modifier.align(Alignment.BottomStart).padding(Space.xl)) {
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val tall = maxHeight > maxWidth * 1.15f
+        val panel = if (tall) Modifier.align(Alignment.TopEnd).fillMaxWidth(0.9f).fillMaxHeight(0.7f)
+        else Modifier.align(Alignment.CenterEnd).fillMaxHeight().fillMaxWidth(0.6f)
+        when {
+            card.art.hero != null -> Unit
+            card.art.boxart != null -> SystemShowcase(card, panel)
+            // Until the art pack is downloaded, a panel in the system's colour.
+            else -> Box(panel.panelFade()) {
+                GeneratedArt(p.shortName, p.accent.toColor(), slot = ArtSlot.SYSTEM, label = p.manufacturer, showText = false)
+            }
+        }
+        Column(Modifier.align(Alignment.BottomStart).fillMaxWidth(if (tall) 1f else 0.62f).padding(Space.xl)) {
             SectionLabel(listOfNotNull(p.manufacturer, p.releaseYear?.toString()).joinToString("  ·  ").ifEmpty { "System" })
-            FText(p.name, Fuse.type.display, maxLines = 2)
+            Spacer(Modifier.height(Space.s))
+            val name: @Composable () -> Unit = { FText(p.name, Fuse.type.display, maxLines = 2) }
+            if (card.art.logo != null) {
+                Artwork(
+                    card.art.logo,
+                    Modifier.height(72.dp).fillMaxWidth(0.85f),
+                    contentScale = ContentScale.Fit,
+                    focusX = 0f,
+                    focusY = 1f,
+                    tint = Color.White,
+                    fadeIn = false,
+                    fallback = name,
+                )
+            } else {
+                name()
+            }
             Spacer(Modifier.height(Space.m))
             Row(horizontalArrangement = Arrangement.spacedBy(Space.s)) {
                 Chip("${card.gameCount} ${if (card.gameCount == 1) "game" else "games"}", icon = FuseIcons.Library)
                 Chip(card.emulatorName ?: "No emulator", icon = FuseIcons.Gamepad, color = if (card.emulatorInstalled) Fuse.colors.text else Fuse.colors.warning)
-                when (card.bios.state) {
-                    BiosState.READY -> Chip("Firmware ready", icon = FuseIcons.Check, color = Fuse.colors.success)
-                    BiosState.MISSING -> Chip("Firmware missing", icon = FuseIcons.Warning, color = Fuse.colors.danger)
-                    BiosState.PARTIAL -> Chip("Firmware incomplete", icon = FuseIcons.Warning, color = Fuse.colors.warning)
-                    else -> Unit
-                }
+            }
+            val firmware = when (card.bios.state) {
+                BiosState.READY -> Triple("Firmware ready", FuseIcons.Check, Fuse.colors.success)
+                BiosState.MISSING -> Triple("Firmware missing", FuseIcons.Warning, Fuse.colors.danger)
+                BiosState.PARTIAL -> Triple("Firmware incomplete", FuseIcons.Warning, Fuse.colors.warning)
+                else -> null
+            }
+            if (firmware != null) {
+                Spacer(Modifier.height(Space.s))
+                Chip(firmware.first, icon = firmware.second, color = firmware.third)
             }
         }
     }
@@ -270,7 +342,6 @@ private fun NowPlaying(game: GameCard, since: Long?) {
         }
     }
     Box(Modifier.fillMaxSize()) {
-        Backdrop(game.art.hero ?: game.art.grid, accent, game.art.heroFocusX, game.art.heroFocusY)
         Row(Modifier.align(Alignment.BottomStart).padding(Space.xl), verticalAlignment = Alignment.Bottom) {
             Box(Modifier.width(120.dp).aspectRatio(0.72f).clip(SquircleShape.fraction(Fuse.geometry.tileCornerFraction * 0.7f))) {
                 Artwork(game.art.boxart ?: game.art.icon, Modifier.fillMaxSize(), fallback = {

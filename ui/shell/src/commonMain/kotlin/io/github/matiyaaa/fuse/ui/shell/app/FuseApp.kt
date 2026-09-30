@@ -157,6 +157,12 @@ fun FuseApp(store: FuseStore, platform: PlatformUi, router: InputRouter) {
                         },
                     )
                     if (!event.isRepeat) platform.haptics.tick()
+                    // The second screen slides the same way when what it shows changes.
+                    when (event.action) {
+                        NavAction.LEFT, NavAction.UP, NavAction.PAGE_UP -> Spotlight.moved(-1)
+                        NavAction.RIGHT, NavAction.DOWN, NavAction.PAGE_DOWN -> Spotlight.moved(1)
+                        else -> Unit
+                    }
                 }
                 NavResult.ACTIVATED -> { platform.sounds.play(SoundCue.SELECT); platform.haptics.confirm() }
                 NavResult.BLOCKED -> if (!event.isRepeat) { platform.sounds.play(SoundCue.BUMP); platform.haptics.reject() }

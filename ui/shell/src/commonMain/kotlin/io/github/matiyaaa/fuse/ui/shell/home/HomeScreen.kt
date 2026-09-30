@@ -420,9 +420,10 @@ private fun ShelfItem.stage(feed: io.github.matiyaaa.fuse.ui.shell.store.HomeFee
     )
 }
 
+/** The backdrop for an item, keyed by its game or system (the second screen shows what the key names). */
 private fun ShelfItem.hero(): HeroSource? = when (this) {
-    is ShelfItem.Game -> HeroSource(key, card.art.hero ?: card.art.grid, card.accent.toColor(), card.art.heroFocusX, card.art.heroFocusY, card.art.video)
-    is ShelfItem.System -> HeroSource(key, card.art.hero, card.platform.accent.toColor())
+    is ShelfItem.Game -> HeroSource(card.id, card.art.hero ?: card.art.grid, card.accent.toColor(), card.art.heroFocusX, card.art.heroFocusY, card.art.video)
+    is ShelfItem.System -> HeroSource(card.platform.id, card.art.hero, card.platform.accent.toColor())
     else -> null
 }
 

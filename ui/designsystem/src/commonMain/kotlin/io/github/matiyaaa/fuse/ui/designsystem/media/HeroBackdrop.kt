@@ -88,7 +88,8 @@ fun HeroBackdrop(
             .debounce { if (layers.isEmpty()) 0L else settleMs }
             .collect { next ->
                 if (next == null) return@collect
-                if (layers.lastOrNull()?.source?.let { it.id == next.id && it.model == next.model } == true) return@collect
+                // Another item with the same art (games on their system's background) keeps the layer.
+                if (layers.lastOrNull()?.source?.let { it.model == next.model && (it.id == next.id || next.model != null) } == true) return@collect
                 // Drop layers that never finished loading; keep the visible one underneath.
                 layers.removeAll { !it.ready && it !== layers.firstOrNull() }
                 layers.add(HeroLayer(next))
