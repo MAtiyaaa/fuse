@@ -71,7 +71,8 @@ It needs `curl` and network access the first time, to fetch `appimagetool`. Runn
 
 ## Release signing
 
-Release APKs are signed with the key described by four environment variables:
+Release APKs are signed with the key described by four environment variables (in CI the release
+workflow sets them from the `ANDROID_*` repository secrets described below):
 
 | Variable | Meaning |
 |---|---|
@@ -95,7 +96,8 @@ still produces an installable APK. To create a key:
 keytool -genkeypair -v -keystore fuse-release.jks -alias fuse -keyalg RSA -keysize 4096 -validity 10000
 ```
 
-Keep the keystore and its passwords out of the repository (`*.jks` and `*.keystore` are git-ignored).
+Keep the keystore and its passwords out of the repository (`*.jks`, `*.keystore`, `*.p12` and `*.pfx`
+are git-ignored).
 Losing the key means existing installs cannot update to your builds.
 
 ## Releases on GitHub
@@ -111,18 +113,32 @@ release `v<version>` titled `Fuse <version> - <releaseName>` with the notes from
 `docs/releases/<version>.md`. So a release is: add `docs/releases/<version>.md`, bump `fuse.version`,
 `fuse.versionCode` and `fuse.releaseName`, and merge to `main`.
 
-Repository secrets used by the workflow (all optional; without them the APK is not signed with the
-release key and the workflow warns about it):
+Repository secrets used by the workflow (Settings > Secrets and variables > Actions > New repository
+secret). Without them the APK is signed with a debug key and the workflow warns; phones that
+installed a debug-signed build cannot update to a release signed with the real key.
 
 | Secret | Content |
 |---|---|
-| `FUSE_KEYSTORE_BASE64` | The keystore file, base64 encoded (`base64 -w0 fuse-release.jks`) |
-| `FUSE_KEYSTORE_PASSWORD` | Keystore password |
-| `FUSE_KEY_ALIAS` | Key alias |
-| `FUSE_KEY_PASSWORD` | Key password |
+| `ANDROID_KEYSTORE_BASE64` | The keystore file, base64 encoded (`base64 -w0 fuse-release.p12`) |
+| `ANDROID_KEYSTORE_PASSWORD` | Keystore password |
+| `ANDROID_KEY_ALIAS` | Key alias |
+| `ANDROID_KEY_PASSWORD` | Optional. Key password; defaults to the keystore password (PKCS12 keys share it) |
 
-`.github/workflows/ci.yml` runs the core tests, builds the debug APK and compiles the desktop app for
-every pull request and every push to a branch other than `main`.
+After building, the workflow checks with `apksigner` that the APK carries exactly that key's
+certificate and fails the release otherwise, so every release can update the previous one. Keep a
+backup of the keystore and its password somewhere safe: if they are lost, installed copies can only
+move to a new key by uninstalling.
+
+To create a key locally:
+
+```sh
+keytool -genkeypair -storetype PKCS12 -keystore fuse-release.p12 -alias fuse \
+  -keyalg RSA -keysize 4096 -validity 18250 -dname "CN=Fuse, OU=Fuse, O=Fuse"
+base64 -w0 fuse-release.p12   # the value of ANDROID_KEYSTORE_BASE64
+```
+
+`.github/workflows/ci.yml` runs every test suite and builds the debug APK for every pull request and
+every push to a branch other than `main`.
 
 ## Troubleshooting
 

@@ -14,3 +14,5 @@ local.properties
 
 # Agent worktrees (local only)
 /.claude/worktrees/
+*.p12
+*.pfx

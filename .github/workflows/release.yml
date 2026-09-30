@@ -121,24 +121,59 @@ jobs:
         uses: gradle/actions/setup-gradle@v6
 
       - name: Prepare the signing key
+        # Repository secrets (Settings > Secrets and variables > Actions):
+        #   ANDROID_KEYSTORE_BASE64    the keystore file, base64 encoded
+        #   ANDROID_KEYSTORE_PASSWORD  its password
+        #   ANDROID_KEY_ALIAS          the key's alias
+        #   ANDROID_KEY_PASSWORD       optional; defaults to the keystore password (PKCS12 keys share it)
+        # Every release must be signed with the same key, or Android refuses to update the app.
         env:
-          KEYSTORE_BASE64: ${{ secrets.FUSE_KEYSTORE_BASE64 }}
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           set -euo pipefail
           if [ -n "$KEYSTORE_BASE64" ]; then
-            keystore="$RUNNER_TEMP/fuse-release.jks"
+            if [ -z "$KEYSTORE_PASSWORD" ] || [ -z "$KEY_ALIAS" ]; then
+              echo "::error::ANDROID_KEYSTORE_BASE64 is set, but ANDROID_KEYSTORE_PASSWORD or ANDROID_KEY_ALIAS is missing."
+              exit 1
+            fi
+            keystore="$RUNNER_TEMP/fuse-release.p12"
             printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$keystore"
-            echo "FUSE_KEYSTORE_PATH=$keystore" >> "$GITHUB_ENV"
+            {
+              echo "FUSE_KEYSTORE_PATH=$keystore"
+              echo "FUSE_KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD"
+              echo "FUSE_KEY_ALIAS=$KEY_ALIAS"
+              echo "FUSE_KEY_PASSWORD=${KEY_PASSWORD:-$KEYSTORE_PASSWORD}"
+            } >> "$GITHUB_ENV"
+            # The signing certificate's fingerprint, to check the built APK against.
+            expected="$(keytool -list -v -keystore "$keystore" -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" \
+              | sed -n 's/^[[:space:]]*SHA256: //p' | head -1 | tr -d ':' | tr '[:upper:]' '[:lower:]')"
+            if [ -z "$expected" ]; then
+              echo "::error::Could not read the key from the keystore. Check the password and alias secrets."
+              exit 1
+            fi
+            echo "FUSE_EXPECTED_CERT_SHA256=$expected" >> "$GITHUB_ENV"
           else
-            echo "::warning::The FUSE_KEYSTORE_BASE64 secret is not set, so the APK is not signed with the release key."
+            echo "::warning::ANDROID_KEYSTORE_BASE64 is not set, so the APK is signed with a debug key. Installed copies will not accept later releases signed with the real key."
           fi
 
       - name: Build the release APK
-        env:
-          FUSE_KEYSTORE_PASSWORD: ${{ secrets.FUSE_KEYSTORE_PASSWORD }}
-          FUSE_KEY_ALIAS: ${{ secrets.FUSE_KEY_ALIAS }}
-          FUSE_KEY_PASSWORD: ${{ secrets.FUSE_KEY_PASSWORD }}
         run: ./gradlew :app:android:assembleRelease --stacktrace
+
+      - name: Check the APK signature
+        if: env.FUSE_EXPECTED_CERT_SHA256 != ''
+        run: |
+          set -euo pipefail
+          apksigner="$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)"
+          apk="$(ls app/android/build/outputs/apk/release/*.apk | head -1)"
+          actual="$("$apksigner" verify --print-certs "$apk" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | head -1)"
+          if [ "$actual" != "$FUSE_EXPECTED_CERT_SHA256" ]; then
+            echo "::error::The APK is not signed with the release key (expected $FUSE_EXPECTED_CERT_SHA256, got ${actual:-nothing})."
+            exit 1
+          fi
+          echo "Signed with the release key, certificate SHA-256 $actual"
 
       - name: Collect the APK
         run: |
@@ -167,7 +202,7 @@ jobs:
 
       - name: Remove the signing key
         if: always()
-        run: rm -f "$RUNNER_TEMP/fuse-release.jks"
+        run: rm -f "$RUNNER_TEMP/fuse-release.p12"
 
       - name: Upload the APK
         uses: actions/upload-artifact@v7
