@@ -1065,6 +1065,7 @@ button.value-box:active { background: #0E1016; }
 .art-row + .art-row::before { content: ""; position: absolute; top: 0; left: 90px; right: 0; height: 1px; background: var(--hairline); }
 .art-thumb { width: 76px; height: 52px; flex: none; display: grid; place-items: center; }
 .art-thumb > .art { border-radius: 8px; }
+.art-thumb > .k-square,
 .art-thumb > .k-icon { width: 48px; height: 48px; border-radius: 12px; }
 .art-thumb > .k-cover { width: 37px; height: 52px; }
 .art-thumb > .k-banner { width: 76px; height: 36px; }

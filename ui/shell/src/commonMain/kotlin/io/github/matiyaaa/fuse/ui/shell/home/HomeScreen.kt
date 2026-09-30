@@ -1,12 +1,8 @@
 package io.github.matiyaaa.fuse.ui.shell.home
 
-import io.github.matiyaaa.fuse.ui.designsystem.components.fadingEdges
 import androidx.compose.animation.core.animateFloatAsState
-import io.github.matiyaaa.fuse.ui.designsystem.components.Trailing
-import androidx.compose.ui.zIndex
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -33,7 +29,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import io.github.matiyaaa.fuse.model.Destination
 import io.github.matiyaaa.fuse.model.HomeMode
 import io.github.matiyaaa.fuse.model.NavAction
@@ -42,29 +40,34 @@ import io.github.matiyaaa.fuse.ui.designsystem.components.FText
 import io.github.matiyaaa.fuse.ui.designsystem.components.Hint
 import io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction
 import io.github.matiyaaa.fuse.ui.designsystem.components.SectionLabel
+import io.github.matiyaaa.fuse.ui.designsystem.components.Trailing
+import io.github.matiyaaa.fuse.ui.designsystem.components.fadingEdges
 import io.github.matiyaaa.fuse.ui.designsystem.focus.FollowSelection
 import io.github.matiyaaa.fuse.ui.designsystem.focus.ShelfSelection
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
-import io.github.matiyaaa.fuse.ui.designsystem.media.PrefetchArt
 import io.github.matiyaaa.fuse.ui.designsystem.icons.HintButton
 import io.github.matiyaaa.fuse.ui.designsystem.input.InputLayer
 import io.github.matiyaaa.fuse.ui.designsystem.input.NavResult
 import io.github.matiyaaa.fuse.ui.designsystem.media.HeroSource
+import io.github.matiyaaa.fuse.ui.designsystem.media.PrefetchArt
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Durations
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
 import io.github.matiyaaa.fuse.ui.designsystem.theme.toColor
-import io.github.matiyaaa.fuse.ui.shell.app.gameConfirmLabel
-import io.github.matiyaaa.fuse.ui.shell.app.activateGame
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.ContextMenuSpec
 import io.github.matiyaaa.fuse.ui.shell.app.FocusZone
 import io.github.matiyaaa.fuse.ui.shell.app.Route
+import io.github.matiyaaa.fuse.ui.shell.app.activateGame
 import io.github.matiyaaa.fuse.ui.shell.app.dismissFromContinue
+import io.github.matiyaaa.fuse.ui.shell.app.gameConfirmLabel
 import io.github.matiyaaa.fuse.ui.shell.app.gameMenu
+import io.github.matiyaaa.fuse.ui.shell.app.openApp
 import io.github.matiyaaa.fuse.ui.shell.app.play
 import io.github.matiyaaa.fuse.ui.shell.app.rememberRouteState
+import io.github.matiyaaa.fuse.ui.shell.app.rememberSystems
+import io.github.matiyaaa.fuse.ui.shell.app.room
 import io.github.matiyaaa.fuse.ui.shell.apps.appMenu
 import io.github.matiyaaa.fuse.ui.shell.components.AppTile
 import io.github.matiyaaa.fuse.ui.shell.components.GameIconTile
@@ -77,10 +80,6 @@ import io.github.matiyaaa.fuse.ui.shell.components.stage
 import io.github.matiyaaa.fuse.ui.shell.library.CollectionTile
 import io.github.matiyaaa.fuse.ui.shell.systems.moveSystem
 import io.github.matiyaaa.fuse.ui.shell.systems.systemMenu
-import kotlinx.coroutines.launch
-import io.github.matiyaaa.fuse.ui.shell.app.room
-import io.github.matiyaaa.fuse.ui.shell.app.rememberSystems
-import io.github.matiyaaa.fuse.ui.shell.app.openApp
 
 @Composable
 fun HomeScreen(app: AppState) {
@@ -327,8 +326,8 @@ private fun ShelfRow(
             shelf.items.map { item ->
                 when (item) {
                     is ShelfItem.Game -> if (shelf.style == ShelfStyle.WIDE) item.card.art.hero ?: item.card.art.grid ?: item.card.art.boxart
-                    else item.card.art.icon ?: item.card.art.boxart ?: item.card.art.grid
-                    is ShelfItem.System -> item.card.art.icon ?: item.card.art.boxart
+                    else item.card.art.square ?: item.card.art.icon ?: item.card.art.boxart ?: item.card.art.grid
+                    is ShelfItem.System -> item.card.art.square ?: item.card.art.icon ?: item.card.art.boxart
                     else -> null
                 }
             }

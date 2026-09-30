@@ -28,7 +28,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -63,7 +62,6 @@ import io.github.matiyaaa.fuse.ui.designsystem.input.NavResult
 import io.github.matiyaaa.fuse.ui.designsystem.media.ArtSlot
 import io.github.matiyaaa.fuse.ui.designsystem.media.Artwork
 import io.github.matiyaaa.fuse.ui.designsystem.media.GeneratedArt
-import io.github.matiyaaa.fuse.ui.designsystem.media.HeroSource
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Aspect
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
@@ -75,14 +73,14 @@ import io.github.matiyaaa.fuse.ui.shell.app.Route
 import io.github.matiyaaa.fuse.ui.shell.app.collectionPicker
 import io.github.matiyaaa.fuse.ui.shell.app.emulatorPicker
 import io.github.matiyaaa.fuse.ui.shell.app.gameMenu
+import io.github.matiyaaa.fuse.ui.shell.app.gameRoom
 import io.github.matiyaaa.fuse.ui.shell.app.play
+import io.github.matiyaaa.fuse.ui.shell.app.rememberSystems
 import io.github.matiyaaa.fuse.ui.shell.components.agoText
 import io.github.matiyaaa.fuse.ui.shell.components.playtimeText
 import io.github.matiyaaa.fuse.ui.shell.store.GameCard
 import io.github.matiyaaa.fuse.ui.shell.store.GameDetail
 import kotlinx.coroutines.launch
-import io.github.matiyaaa.fuse.ui.shell.app.gameRoom
-import io.github.matiyaaa.fuse.ui.shell.app.rememberSystems
 
 private data class DetailAction(val id: String, val label: String?, val icon: ImageVector, val primary: Boolean = false, val run: () -> Unit)
 
@@ -240,7 +238,7 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
                     Spacer(Modifier.width(Space.xxl))
                     Tile(selected = false, showSpark = false, glow = accent, modifier = Modifier.width(200.dp).aspectRatio(Aspect.BOX)) {
                         Artwork(
-                            d.art.boxart ?: d.art.grid ?: d.art.icon, Modifier.fillMaxSize(),
+                            d.art.boxart ?: d.art.grid ?: d.art.square ?: d.art.icon, Modifier.fillMaxSize(),
                             fallback = { GeneratedArt(game.displayTitle, accent, slot = ArtSlot.BOX, label = d.platform.shortName) },
                         )
                     }

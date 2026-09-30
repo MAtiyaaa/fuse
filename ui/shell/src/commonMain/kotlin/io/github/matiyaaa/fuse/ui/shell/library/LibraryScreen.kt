@@ -96,6 +96,7 @@ import io.github.matiyaaa.fuse.ui.shell.collections.addGamesPicker
 import io.github.matiyaaa.fuse.ui.shell.components.GameCoverTile
 import io.github.matiyaaa.fuse.ui.shell.components.GameIconTile
 import io.github.matiyaaa.fuse.ui.shell.components.LocalTileMetrics
+import io.github.matiyaaa.fuse.ui.shell.components.SquareGameArt
 import io.github.matiyaaa.fuse.ui.shell.components.Stage
 import io.github.matiyaaa.fuse.ui.shell.components.playtimeText
 import io.github.matiyaaa.fuse.ui.shell.components.stage
@@ -226,9 +227,9 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
     val tileArt = remember(list, layout) {
         list.orEmpty().map { a ->
             when (layout) {
-                LibraryLayout.COVER_GRID -> a.art.boxart ?: a.art.grid ?: a.art.icon
+                LibraryLayout.COVER_GRID -> a.art.boxart ?: a.art.grid ?: a.art.square ?: a.art.icon
                 LibraryLayout.CAPSULE -> a.art.hero ?: a.art.grid ?: a.art.boxart
-                else -> a.art.icon ?: a.art.boxart ?: a.art.grid
+                else -> a.art.square ?: a.art.icon ?: a.art.boxart ?: a.art.grid
             }
         }
     }
@@ -539,7 +540,7 @@ private fun sortLabel(s: SortOrder) = when (s) {
 }
 
 private fun layoutLabel(l: LibraryLayout) = when (l) {
-    LibraryLayout.ICON -> "Icons"
+    LibraryLayout.ICON -> "Box art"
     LibraryLayout.CAPSULE -> "Capsules"
     LibraryLayout.COVER_GRID -> "Cover grid"
     LibraryLayout.COMPACT_LIST -> "List"
@@ -624,7 +625,7 @@ private fun setMenu(app: AppState, card: GameCard, segment: LibrarySegment): Con
             MenuAction("restore", "Restore to Fuse", FuseIcons.Undo, onSelect = { run("${card.title} is back in your library") { lib.restore(card.id) } }),
         )
     }
-    return ContextMenuSpec(title = card.title, subtitle = "${card.platformShort}  ·  ${segment.label}", art = card.art.icon, actions = actions)
+    return ContextMenuSpec(title = card.title, subtitle = "${card.platformShort}  ·  ${segment.label}", art = card.art.tile, actions = actions)
 }
 
 @Composable
@@ -725,8 +726,8 @@ private fun CompactList(
                 ) {
                     Box(Modifier.width(3.dp).height(20.dp).background(if (sel) c.accent else androidx.compose.ui.graphics.Color.Transparent, RoundedCornerShape(2.dp)))
                     Spacer(Modifier.width(Space.m))
-                    Artwork(
-                        card.art.icon ?: card.art.boxart,
+                    SquareGameArt(
+                        card.art,
                         Modifier.size(34.dp).clip(RoundedCornerShape(8.dp)),
                         fallback = { GeneratedArt(card.title, card.accent.toColor(), slot = ArtSlot.ICON) },
                     )
@@ -745,7 +746,7 @@ private fun CompactList(
             if (selected != null) {
                 Tile(selected = false, modifier = Modifier.fillMaxWidth(0.55f).height(260.dp), showSpark = false) {
                     Artwork(
-                        selected.art.boxart ?: selected.art.grid ?: selected.art.icon,
+                        selected.art.boxart ?: selected.art.grid ?: selected.art.square ?: selected.art.icon,
                         Modifier.fillMaxSize(),
                         fallback = { GeneratedArt(selected.title, selected.accent.toColor(), slot = ArtSlot.BOX, label = selected.platformShort) },
                     )

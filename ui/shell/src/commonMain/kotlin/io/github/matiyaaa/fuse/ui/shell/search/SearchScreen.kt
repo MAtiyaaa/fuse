@@ -60,13 +60,13 @@ import io.github.matiyaaa.fuse.ui.shell.app.KeyboardTarget
 import io.github.matiyaaa.fuse.ui.shell.app.Route
 import io.github.matiyaaa.fuse.ui.shell.app.activateGame
 import io.github.matiyaaa.fuse.ui.shell.app.gameMenu
+import io.github.matiyaaa.fuse.ui.shell.app.openApp
 import io.github.matiyaaa.fuse.ui.shell.app.pasteInto
+import io.github.matiyaaa.fuse.ui.shell.components.SquareGameArt
 import io.github.matiyaaa.fuse.ui.shell.store.SearchResults
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.launch
-import io.github.matiyaaa.fuse.ui.shell.app.openApp
 
 private sealed interface Hit {
     val key: String
@@ -208,7 +208,7 @@ fun SearchScreen(app: AppState) {
                         Box(Modifier.width(3.dp).height(24.dp).background(if (selected) c.accent else Color.Transparent, RoundedCornerShape(2.dp)))
                         Spacer(Modifier.width(Space.m))
                         when (h) {
-                            is Hit.Game -> Artwork(h.card.art.icon ?: h.card.art.boxart, Modifier.size(40.dp).clip(RoundedCornerShape(10.dp)), fallback = { GeneratedArt(h.title, h.card.accent.toColor(), slot = ArtSlot.ICON) })
+                            is Hit.Game -> SquareGameArt(h.card.art, Modifier.size(40.dp).clip(RoundedCornerShape(10.dp)), fallback = { GeneratedArt(h.title, h.card.accent.toColor(), slot = ArtSlot.ICON) })
                             is Hit.App -> Artwork(h.card.icon, Modifier.size(40.dp))
                             is Hit.System -> Box(Modifier.size(40.dp).clip(RoundedCornerShape(10.dp)).background(h.card.platform.accent.toColor()), contentAlignment = Alignment.Center) {
                                 FText(h.card.platform.shortName.take(4), Fuse.type.caption, color = Color.White)

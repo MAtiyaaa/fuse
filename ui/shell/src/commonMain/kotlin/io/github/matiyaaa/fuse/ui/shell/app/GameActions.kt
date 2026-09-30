@@ -3,9 +3,9 @@ package io.github.matiyaaa.fuse.ui.shell.app
 import io.github.matiyaaa.fuse.model.CartridgeRoute
 import io.github.matiyaaa.fuse.model.FolderPolicy
 import io.github.matiyaaa.fuse.model.GameId
-import io.github.matiyaaa.fuse.model.MediaOwner
-import io.github.matiyaaa.fuse.model.MediaKind
 import io.github.matiyaaa.fuse.model.MediaFillMode
+import io.github.matiyaaa.fuse.model.MediaKind
+import io.github.matiyaaa.fuse.model.MediaOwner
 import io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction
 import io.github.matiyaaa.fuse.ui.designsystem.components.ToastKind
 import io.github.matiyaaa.fuse.ui.designsystem.components.Trailing
@@ -36,7 +36,7 @@ fun AppState.play(card: GameCard, emulator: io.github.matiyaaa.fuse.model.Emulat
 
 private fun AppState.launch(card: GameCard, emulator: io.github.matiyaaa.fuse.model.EmulatorId?, discPath: String?, display: io.github.matiyaaa.fuse.model.LaunchDisplay?) {
     if (launching != null) return
-    launching = LaunchVeil(card.title, card.art.hero ?: card.art.boxart ?: card.art.icon, card.accent)
+    launching = LaunchVeil(card.title, card.art.hero ?: card.art.boxart ?: card.art.tile, card.accent)
     platform.sounds.play(SoundCue.LAUNCH)
     scope.launch {
         when (val outcome = store.library.launch(card.id, emulator, discPath, display)) {
@@ -151,7 +151,7 @@ fun AppState.gameMenu(card: GameCard, fromDetail: Boolean = false, extra: List<M
             )
         }))
     }
-    return ContextMenuSpec(title = card.title, subtitle = card.platformShort, art = card.art.icon ?: card.art.boxart, actions = actions)
+    return ContextMenuSpec(title = card.title, subtitle = card.platformShort, art = card.art.tile, actions = actions)
 }
 
 fun AppState.collectionPicker(game: GameId, title: String) {

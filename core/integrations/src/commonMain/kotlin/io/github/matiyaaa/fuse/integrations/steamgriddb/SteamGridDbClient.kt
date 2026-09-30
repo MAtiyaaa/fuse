@@ -61,6 +61,9 @@ data class SgdbDimension(val width: Int, val height: Int) {
 
     val isPortraitCapsule: Boolean get() = this in PORTRAIT
 
+    /** Square grids are square box art. */
+    val isSquare: Boolean get() = width > 0 && width == height
+
     companion object {
         val GRID_460x215 = SgdbDimension(460, 215)
         val GRID_920x430 = SgdbDimension(920, 430)
@@ -75,6 +78,9 @@ data class SgdbDimension(val width: Int, val height: Int) {
 
         /** Grid sizes that are portrait capsules, i.e. box art. */
         val PORTRAIT: Set<SgdbDimension> = setOf(GRID_600x900, GRID_342x482, GRID_660x930)
+
+        /** Square grid sizes, i.e. square box art. */
+        val SQUARE: Set<SgdbDimension> = setOf(GRID_512x512, GRID_1024x1024)
     }
 }
 
@@ -236,9 +242,15 @@ class SteamGridDbClient(
     }
 }
 
-/** The media kind an asset fills: portrait grids are box art, other grids stay grids. */
+/** The media kind an asset fills: portrait grids are covers, square grids square box art, other grids stay grids. */
 fun SgdbAssetType.mediaKind(width: Int, height: Int): MediaKind = when (this) {
-    SgdbAssetType.GRID -> if (SgdbDimension(width, height).isPortraitCapsule) MediaKind.BOXART else MediaKind.GRID
+    SgdbAssetType.GRID -> SgdbDimension(width, height).let { d ->
+        when {
+            d.isPortraitCapsule -> MediaKind.BOXART
+            d.isSquare -> MediaKind.SQUARE
+            else -> MediaKind.GRID
+        }
+    }
     SgdbAssetType.HERO -> MediaKind.HERO
     SgdbAssetType.LOGO -> MediaKind.LOGO
     SgdbAssetType.ICON -> MediaKind.ICON

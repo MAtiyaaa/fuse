@@ -137,7 +137,7 @@ fun StorageScreen(app: AppState) {
                 detail = "${g.card.platformShort}  ·  ${g.files} ${if (g.files == 1) "file" else "files"}",
                 trailing = Trailing.Value(bytesText(g.bytes)),
                 // The game's logo, or its square art when it has no logo.
-                art = MenuArt(logo ?: g.card.art.icon ?: g.card.art.boxart, square = logo == null, fallbackTitle = g.card.title, accent = g.card.accent),
+                art = MenuArt(logo ?: g.card.art.tile, square = logo == null, fallbackTitle = g.card.title, accent = g.card.accent),
                 onSelect = { picked = if (on) picked - g.card.id else picked + g.card.id },
             ))
         }

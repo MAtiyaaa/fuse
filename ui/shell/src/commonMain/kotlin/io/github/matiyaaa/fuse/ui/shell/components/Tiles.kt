@@ -1,18 +1,16 @@
 package io.github.matiyaaa.fuse.ui.shell.components
 
 import androidx.compose.foundation.background
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.graphics.lerp
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -24,7 +22,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import io.github.matiyaaa.fuse.ui.designsystem.components.FText
@@ -40,12 +40,33 @@ import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
 import io.github.matiyaaa.fuse.ui.designsystem.theme.TileMetrics
 import io.github.matiyaaa.fuse.ui.designsystem.theme.toColor
 import io.github.matiyaaa.fuse.ui.shell.store.AppCard
+import io.github.matiyaaa.fuse.ui.shell.store.Art
 import io.github.matiyaaa.fuse.ui.shell.store.GameCard
 import io.github.matiyaaa.fuse.ui.shell.store.PlatformCard
 
 val LocalTileMetrics = staticCompositionLocalOf { TileMetrics.forHeight(720.dp, 1280.dp) }
 
-/** Square game icon: the tile of Icon Mode and most Home shelves. */
+/**
+ * A game's art in a square: its square box art, else its icon, else its portrait cover drawn whole
+ * over a soft copy of itself (so its title isn't cropped away), else its wide art.
+ */
+@Composable
+fun SquareGameArt(art: Art, modifier: Modifier = Modifier, fallback: @Composable () -> Unit = {}) {
+    val direct = art.square ?: art.icon
+    if (direct == null && art.boxart != null) {
+        Artwork(
+            model = art.boxart,
+            modifier = modifier,
+            backdrop = true,
+            backdropBlur = if (Fuse.quality.blur) 14.dp else 0.dp,
+            fallback = fallback,
+        )
+    } else {
+        Artwork(model = direct ?: art.grid, modifier = modifier, fallback = fallback)
+    }
+}
+
+/** Square game tile, drawn with its box art: the tile of the Box art layout and most Home shelves. */
 @Composable
 fun GameIconTile(
     card: GameCard,
@@ -63,8 +84,8 @@ fun GameIconTile(
         onClick = onClick,
         onLongClick = onLongClick,
     ) {
-        Artwork(
-            model = card.art.icon ?: card.art.boxart ?: card.art.grid,
+        SquareGameArt(
+            art = card.art,
             modifier = Modifier.fillMaxSize().alpha(if (card.missing) 0.45f else 1f),
             fallback = { GeneratedArt(card.title, accent, slot = ArtSlot.ICON, label = card.platformShort) },
         )
@@ -95,7 +116,7 @@ fun GameCoverTile(
         onLongClick = onLongClick,
     ) {
         Artwork(
-            model = card.art.boxart ?: card.art.grid ?: card.art.icon,
+            model = card.art.boxart ?: card.art.grid ?: card.art.square ?: card.art.icon,
             modifier = Modifier.fillMaxSize().alpha(if (card.missing) 0.45f else 1f),
             fallback = { GeneratedArt(card.title, accent, slot = ArtSlot.BOX, label = card.platformShort) },
         )
@@ -196,7 +217,7 @@ fun SystemTile(
 }
 
 /**
- * What a system card shows. An icon the user chose wins; then the system art pack's look (brand
+ * What a system card shows. Box art or an icon the user chose wins; then the system art pack's look (brand
  * colour, the artwork panel on the right, the logo in white, as in console-style frontends); with
  * no art at all, Fuse's own typographic [SystemGlyph].
  */
@@ -204,7 +225,8 @@ fun SystemTile(
 fun SystemCardArt(card: PlatformCard, large: Boolean = false) {
     val accent = card.platform.accent.toColor()
     when {
-        card.art.icon != null -> Artwork(card.art.icon, Modifier.fillMaxSize(), fallback = { SystemGlyph(card, accent, large) })
+        (card.art.square ?: card.art.icon) != null ->
+            Artwork(card.art.square ?: card.art.icon, Modifier.fillMaxSize(), fallback = { SystemGlyph(card, accent, large) })
         card.art.boxart != null || card.art.logo != null -> PackCard(card, accent, large)
         else -> SystemGlyph(card, accent, large)
     }

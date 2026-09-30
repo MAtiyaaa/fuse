@@ -33,7 +33,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
@@ -67,12 +66,12 @@ import io.github.matiyaaa.fuse.ui.shell.store.FuseStore
 import io.github.matiyaaa.fuse.ui.shell.store.GameCard
 import io.github.matiyaaa.fuse.ui.shell.store.GameDetail
 import io.github.matiyaaa.fuse.ui.shell.store.PlatformCard
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
 import io.github.matiyaaa.fuse.ui.shell.systems.SystemShowcase
 import io.github.matiyaaa.fuse.ui.shell.systems.panelFade
 import kotlin.time.TimeSource
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 
 /**
  * What the main screen has in focus, shared with the companion screen. Keys are [GameId] or
@@ -234,7 +233,7 @@ private fun FocusedGame(store: FuseStore, id: GameId) {
 private fun Cover(d: GameDetail, modifier: Modifier) {
     val shape = SquircleShape.fraction(Fuse.geometry.tileCornerFraction * 0.7f)
     Box(modifier.aspectRatio(0.72f).clip(shape)) {
-        Artwork(d.art.boxart ?: d.art.grid ?: d.art.icon, Modifier.fillMaxSize(), contentScale = ContentScale.Crop, fallback = {
+        Artwork(d.art.boxart ?: d.art.grid ?: d.art.square ?: d.art.icon, Modifier.fillMaxSize(), contentScale = ContentScale.Crop, fallback = {
             GeneratedArt(d.game.displayTitle, d.platform.accent.toColor(), slot = ArtSlot.BOX, label = d.platform.shortName)
         })
     }
@@ -344,7 +343,7 @@ private fun NowPlaying(game: GameCard, since: Long?) {
     Box(Modifier.fillMaxSize()) {
         Row(Modifier.align(Alignment.BottomStart).padding(Space.xl), verticalAlignment = Alignment.Bottom) {
             Box(Modifier.width(120.dp).aspectRatio(0.72f).clip(SquircleShape.fraction(Fuse.geometry.tileCornerFraction * 0.7f))) {
-                Artwork(game.art.boxart ?: game.art.icon, Modifier.fillMaxSize(), fallback = {
+                Artwork(game.art.boxart ?: game.art.square ?: game.art.icon, Modifier.fillMaxSize(), fallback = {
                     GeneratedArt(game.title, accent, slot = ArtSlot.BOX, label = game.platformShort)
                 })
             }

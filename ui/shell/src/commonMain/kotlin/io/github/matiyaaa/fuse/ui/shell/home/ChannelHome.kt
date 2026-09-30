@@ -79,6 +79,8 @@ import io.github.matiyaaa.fuse.ui.shell.app.formatDate
 import io.github.matiyaaa.fuse.ui.shell.app.play
 import io.github.matiyaaa.fuse.ui.shell.app.rememberClockText
 import io.github.matiyaaa.fuse.ui.shell.app.rememberRouteState
+import io.github.matiyaaa.fuse.ui.shell.app.rememberSystems
+import io.github.matiyaaa.fuse.ui.shell.app.room
 import io.github.matiyaaa.fuse.ui.shell.components.CoverCollage
 import io.github.matiyaaa.fuse.ui.shell.components.Stage
 import io.github.matiyaaa.fuse.ui.shell.components.StageInfo
@@ -86,8 +88,6 @@ import io.github.matiyaaa.fuse.ui.shell.components.playtimeText
 import io.github.matiyaaa.fuse.ui.shell.components.stage
 import io.github.matiyaaa.fuse.ui.shell.store.GameCard
 import io.github.matiyaaa.fuse.ui.shell.store.HomeFeed
-import io.github.matiyaaa.fuse.ui.shell.app.room
-import io.github.matiyaaa.fuse.ui.shell.app.rememberSystems
 
 private const val BOARD_COLUMNS = 4
 
@@ -382,7 +382,7 @@ private fun SpotlightStrip(kind: WidgetKind, feed: HomeFeed, height: androidx.co
                     Modifier.height(height * (1f - i * 0.08f)).aspectRatio(0.72f).clip(shape)
                         .graphicsLayer { alpha = 1f - i * 0.16f },
                 ) {
-                    Artwork(g.art.boxart ?: g.art.grid ?: g.art.icon, Modifier.fillMaxSize(), fallback = {
+                    Artwork(g.art.boxart ?: g.art.grid ?: g.art.square ?: g.art.icon, Modifier.fillMaxSize(), fallback = {
                         GeneratedArt(g.title, g.accent.toColor(), slot = ArtSlot.BOX, label = g.platformShort)
                     })
                 }

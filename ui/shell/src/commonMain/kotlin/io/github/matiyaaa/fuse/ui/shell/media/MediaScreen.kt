@@ -98,6 +98,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 private val slots = listOf(
+    MediaKind.SQUARE to "Box art",
     MediaKind.ICON to "Icon",
     MediaKind.BOXART to "Cover",
     MediaKind.GRID to "Wide capsule",

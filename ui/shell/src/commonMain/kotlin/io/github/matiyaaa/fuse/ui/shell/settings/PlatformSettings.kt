@@ -44,18 +44,18 @@ import io.github.matiyaaa.fuse.ui.designsystem.icons.HintButton
 import io.github.matiyaaa.fuse.ui.designsystem.input.InputLayer
 import io.github.matiyaaa.fuse.ui.designsystem.input.NavResult
 import io.github.matiyaaa.fuse.ui.designsystem.media.HeroSource
-import io.github.matiyaaa.fuse.ui.designsystem.theme.toColor
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
+import io.github.matiyaaa.fuse.ui.designsystem.theme.toColor
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec
 import io.github.matiyaaa.fuse.ui.shell.app.FocusZone
 import io.github.matiyaaa.fuse.ui.shell.app.Route
-import io.github.matiyaaa.fuse.ui.shell.systems.platformEmulatorPicker
-import kotlinx.coroutines.launch
 import io.github.matiyaaa.fuse.ui.shell.app.hasTwoScreens
 import io.github.matiyaaa.fuse.ui.shell.app.screenName
+import io.github.matiyaaa.fuse.ui.shell.systems.platformEmulatorPicker
+import kotlinx.coroutines.launch
 
 /**
  * One inheritable setting for a system. The row says whether the value is set for this system or
@@ -112,7 +112,7 @@ fun PlatformSettingsScreen(app: AppState, platformId: PlatformId) {
             FolderPolicy.FOLDER_BROWSER to "Open as a folder", FolderPolicy.FILE to "Files only",
         ), detail = "How folders inside ${p.shortName}'s folder are read. Nothing on disk changes"))
         add(app.scopedRow(ScopedSettings.Layout, platformId, "View", FuseIcons.Grid, LibraryLayout.entries.map { it to when (it) {
-            LibraryLayout.ICON -> "Icons"; LibraryLayout.CAPSULE -> "Capsules"; LibraryLayout.COVER_GRID -> "Cover grid"; LibraryLayout.COMPACT_LIST -> "List"
+            LibraryLayout.ICON -> "Box art"; LibraryLayout.CAPSULE -> "Capsules"; LibraryLayout.COVER_GRID -> "Cover grid"; LibraryLayout.COMPACT_LIST -> "List"
         } }))
         add(app.scopedRow(ScopedSettings.ShowHero, platformId, "Background art", FuseIcons.Image, on))
         add(app.scopedRow(ScopedSettings.ShowLogo, platformId, "Title logos", FuseIcons.Type, on))
@@ -146,7 +146,7 @@ fun PlatformSettingsScreen(app: AppState, platformId: PlatformId) {
         for (folder in card.romFolders) add(infoRow("rom.$folder", "ROM folder", detail = folder, icon = FuseIcons.Folder))
         add(MenuAction("media", "System media", FuseIcons.Image, detail = "Icon, background and logo", trailing = Trailing.Chevron, onSelect = { app.go(Route.Media(MediaOwner.OfPlatform(platformId), p.name)) }))
         add(MenuAction("fill", "Fill missing game art", FuseIcons.Wand, onSelect = {
-            app.store.media.fill(MediaFillMode.FILL_MISSING, setOf(MediaKind.ICON, MediaKind.BOXART, MediaKind.HERO, MediaKind.LOGO, MediaKind.GRID), platform = platformId)
+            app.store.media.fill(MediaFillMode.FILL_MISSING, setOf(MediaKind.SQUARE, MediaKind.ICON, MediaKind.BOXART, MediaKind.HERO, MediaKind.LOGO, MediaKind.GRID), platform = platformId)
             app.toasts.show("Finding missing art for ${p.shortName}")
         }))
         add(MenuAction("rescan", "Rescan ${p.shortName}", FuseIcons.Refresh, onSelect = { app.store.sources.rescan(ScanScope.PLATFORM, platformId); app.toasts.show("Rescanning") }))

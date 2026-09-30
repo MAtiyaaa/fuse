@@ -1,7 +1,6 @@
 package io.github.matiyaaa.fuse.ui.shell.store.impl
 
 import io.github.matiyaaa.fuse.data.settings.SecretKeys
-import io.github.matiyaaa.fuse.integrations.ApiResult
 import io.github.matiyaaa.fuse.integrations.KeyCheck
 import io.github.matiyaaa.fuse.integrations.igdb.IgdbClient
 import io.github.matiyaaa.fuse.integrations.igdb.IgdbCredentials
@@ -33,10 +32,10 @@ import io.github.matiyaaa.fuse.model.MediaSource
 import io.github.matiyaaa.fuse.model.MetadataSource
 import io.github.matiyaaa.fuse.model.PlatformId
 import io.github.matiyaaa.fuse.model.ProviderStatus
+import io.github.matiyaaa.fuse.model.ScopedSettings
 import io.github.matiyaaa.fuse.model.ScrapeCandidate
 import io.github.matiyaaa.fuse.model.ScrapeProviderId
 import io.github.matiyaaa.fuse.model.ScrapeQuery
-import io.github.matiyaaa.fuse.model.ScopedSettings
 import io.github.matiyaaa.fuse.ui.shell.store.ArtworkResult
 import io.github.matiyaaa.fuse.ui.shell.store.FillChoice
 import io.github.matiyaaa.fuse.ui.shell.store.FillProgress
@@ -244,8 +243,8 @@ internal class DefaultMediaOps(
             is ScrapeOutcome.NotFound -> ArtworkResult.Unavailable(
                 when {
                     outcome.searched.isEmpty() -> "No artwork source is set up. Add a SteamGridDB key in Settings."
-                    kind == MediaKind.ICON && ScrapeProviderId.STEAMGRIDDB !in outcome.searched ->
-                        "Icons come from SteamGridDB. Add a SteamGridDB key in Settings, Media and Scraping."
+                    (kind == MediaKind.ICON || kind == MediaKind.SQUARE) && ScrapeProviderId.STEAMGRIDDB !in outcome.searched ->
+                        "${if (kind == MediaKind.ICON) "Icons come" else "Square box art comes"} from SteamGridDB. Add a SteamGridDB key in Settings, Media and Scraping."
                     else -> "No ${kind.label()} found for this game."
                 },
             )
@@ -451,8 +450,7 @@ internal class DefaultMediaOps(
 
     override suspend fun acceptCandidate(game: GameId, candidate: ScrapeCandidate): Boolean {
         val g = ctx.data.games.get(game) ?: return false
-        val kinds = setOf(MediaKind.BOXART, MediaKind.GRID, MediaKind.HERO, MediaKind.LOGO, MediaKind.ICON, MediaKind.SCREENSHOT)
-        val plan = FillPlanner.plan(media.get(MediaOwner.OfGame(game)), MediaFillMode.REPLACE_ALL, kinds)
+        val plan = FillPlanner.plan(media.get(MediaOwner.OfGame(game)), MediaFillMode.REPLACE_ALL, FILLABLE)
         val (request, coordinator) = request(g, plan.fetch, metadata = true, collectAll = false)
         val outcome = coordinator.accept(request, candidate) as? ScrapeOutcome.Accepted ?: return false
         ctx.data.cache.remove(TRIED, game.value.toString())
@@ -470,7 +468,7 @@ internal class DefaultMediaOps(
 private val namedSearch = setOf(ScrapeProviderId.STEAMGRIDDB, ScrapeProviderId.IGDB, ScrapeProviderId.THEGAMESDB)
 
 /** Every art kind a fill can find (videos and borders come from elsewhere). */
-internal val FILLABLE = setOf(MediaKind.ICON, MediaKind.BOXART, MediaKind.GRID, MediaKind.HERO, MediaKind.LOGO, MediaKind.SCREENSHOT)
+internal val FILLABLE = setOf(MediaKind.SQUARE, MediaKind.ICON, MediaKind.BOXART, MediaKind.GRID, MediaKind.HERO, MediaKind.LOGO, MediaKind.SCREENSHOT)
 
 /** Games worked on at once. Each provider still keeps to its own rate limit. */
 private const val FILL_WORKERS = 3
@@ -522,8 +520,9 @@ private data class Tried(
 }
 
 private fun MediaKind.label(): String = when (this) {
+    MediaKind.SQUARE -> "box art"
     MediaKind.ICON -> "icons"
-    MediaKind.BOXART -> "box art"
+    MediaKind.BOXART -> "covers"
     MediaKind.GRID -> "grid art"
     MediaKind.HERO -> "hero art"
     MediaKind.LOGO -> "logos"

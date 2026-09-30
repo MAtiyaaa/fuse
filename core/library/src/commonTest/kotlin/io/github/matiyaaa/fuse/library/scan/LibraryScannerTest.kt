@@ -195,6 +195,7 @@ class LibraryScannerTest {
         fs.file("/ROMs/snes/Chrono Trigger (USA).sfc")
         fs.file("/ROMs/snes/media/covers/Chrono Trigger (USA).png")
         fs.file("/ROMs/snes/media/marquees/Chrono Trigger (USA).png")
+        fs.file("/ROMs/snes/media/squares/Chrono Trigger (USA).png")
         fs.file("/ROMs/snes/videos/Chrono Trigger (USA).mp4")
         fs.file("/ROMs/snes/Europe/Secret of Mana (Europe).sfc")
         fs.file("/ROMs/snes/Europe/Other (Europe).sfc")
@@ -204,12 +205,14 @@ class LibraryScannerTest {
         fs.file("/ROMs/gba/Pokemon Emerald.gba")
         fs.file("/ROMs/gba/images/Pokemon Emerald-thumb.png")
         fs.file("/ROMs/gba/images/Pokemon Emerald-marquee.png")
+        fs.file("/ROMs/gba/images/Pokemon Emerald-square.png")
         fs.file("/ROMs/gba/images/Pokemon Emerald-notes.txt")
 
         val report = scan(source("/ROMs", LibrarySourceKind.ROMS_ROOT), mediaRoots = listOf("/ES-DE/downloaded_media"))
         val chrono = report.of("snes").games.single { it.title == "Chrono Trigger (USA)" }
         assertEquals("/ROMs/snes/media/covers/Chrono Trigger (USA).png", chrono.localMedia[MediaKind.BOXART])
         assertEquals("/ROMs/snes/media/marquees/Chrono Trigger (USA).png", chrono.localMedia[MediaKind.LOGO])
+        assertEquals("/ROMs/snes/media/squares/Chrono Trigger (USA).png", chrono.localMedia[MediaKind.SQUARE])
         assertEquals("/ROMs/snes/videos/Chrono Trigger (USA).mp4", chrono.localMedia[MediaKind.VIDEO])
         assertEquals("/ES-DE/downloaded_media/snes/screenshots/Chrono Trigger (USA).png", chrono.localMedia[MediaKind.SCREENSHOT])
         assertEquals("/ES-DE/downloaded_media/snes/fanart/Chrono Trigger (USA).jpg", chrono.localMedia[MediaKind.HERO])
@@ -220,6 +223,7 @@ class LibraryScannerTest {
         val emerald = report.of("gba").games.single()
         assertEquals("/ROMs/gba/images/Pokemon Emerald-thumb.png", emerald.localMedia[MediaKind.BOXART])
         assertEquals("/ROMs/gba/images/Pokemon Emerald-marquee.png", emerald.localMedia[MediaKind.LOGO])
+        assertEquals("/ROMs/gba/images/Pokemon Emerald-square.png", emerald.localMedia[MediaKind.SQUARE])
         // Media folders are never games.
         assertEquals(1, report.of("gba").games.size)
     }

@@ -54,7 +54,7 @@ fun CoverCollage(games: List<GameCard>, height: Dp, background: Any? = null) {
                         .graphicsLayer { rotationZ = 6f * side; shadowElevation = 12f; this.shape = shape; clip = true }
                         .align(Alignment.BottomCenter),
                 ) {
-                    Artwork(g.art.boxart ?: g.art.grid ?: g.art.icon, Modifier.fillMaxSize(), fallback = {
+                    Artwork(g.art.boxart ?: g.art.grid ?: g.art.square ?: g.art.icon, Modifier.fillMaxSize(), fallback = {
                         // Only the front cover names its game; the ones behind would show cut-off words.
                         GeneratedArt(g.title, g.accent.toColor(), slot = ArtSlot.BOX, label = g.platformShort, showText = index == 0)
                     })

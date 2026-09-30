@@ -8,9 +8,9 @@ import io.github.matiyaaa.fuse.model.LocationKind
 import io.github.matiyaaa.fuse.model.MediaKind
 import io.github.matiyaaa.fuse.model.Platform
 import io.github.matiyaaa.fuse.model.ScannedGame
+import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
-import kotlin.coroutines.cancellation.CancellationException
 
 /**
  * Media files found for one platform folder, keyed by the game's name relative to the platform
@@ -49,7 +49,7 @@ class MediaIndex internal constructor(
  *
  * Type folders map to kinds: covers/boxart/box2dfront (then 3dboxes, then miximages) -> BOXART,
  * screenshots/snaps (then titlescreens) -> SCREENSHOT, marquees/wheel/logos -> LOGO,
- * fanart/heroes -> HERO, videos -> VIDEO, icons -> ICON, grids -> GRID. Subfolders mirror the ROM
+ * fanart/heroes -> HERO, videos -> VIDEO, squares -> SQUARE, icons -> ICON, grids -> GRID. Subfolders mirror the ROM
  * folder (`covers/Europe/Game.png` for `psx/Europe/Game.chd`).
  */
 class MediaLocator(private val fs: FuseFileSystem, private val maxDepth: Int = 3) {
@@ -66,6 +66,7 @@ class MediaLocator(private val fs: FuseFileSystem, private val maxDepth: Int = 3
         "fanart" to TypeDir(MediaKind.HERO, 0), "heroes" to TypeDir(MediaKind.HERO, 0),
         "videos" to TypeDir(MediaKind.VIDEO, 0),
         "icons" to TypeDir(MediaKind.ICON, 0), "grids" to TypeDir(MediaKind.GRID, 0),
+        "squares" to TypeDir(MediaKind.SQUARE, 0), "square" to TypeDir(MediaKind.SQUARE, 0),
     )
 
     // Batocera names media "<rom>-<suffix>.<ext>" inside images/ and videos/.
@@ -75,7 +76,7 @@ class MediaLocator(private val fs: FuseFileSystem, private val maxDepth: Int = 3
         "screenshot" to TypeDir(MediaKind.SCREENSHOT, 1), "titleshot" to TypeDir(MediaKind.SCREENSHOT, 1),
         "marquee" to TypeDir(MediaKind.LOGO, 1), "wheel" to TypeDir(MediaKind.LOGO, 1),
         "logo" to TypeDir(MediaKind.LOGO, 1), "fanart" to TypeDir(MediaKind.HERO, 1),
-        "video" to TypeDir(MediaKind.VIDEO, 1),
+        "video" to TypeDir(MediaKind.VIDEO, 1), "square" to TypeDir(MediaKind.SQUARE, 1),
     )
 
     private val imageExtensions = setOf("png", "jpg", "jpeg", "webp", "gif", "bmp")

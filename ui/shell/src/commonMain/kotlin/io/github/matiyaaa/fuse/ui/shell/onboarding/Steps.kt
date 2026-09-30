@@ -297,7 +297,7 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
         ))
         add(Step(
             "art", "Artwork", if ("sgdb.apikey" in secrets) "SteamGridDB is ready" else "Better artwork",
-            "Fuse uses art from RomM (through Cartridge) and your folders first. A free SteamGridDB key adds covers, backgrounds, logos and icons for everything else. More sources are in Settings, Media and Scraping.",
+            "Fuse uses art from RomM (through Cartridge) and your folders first. A free SteamGridDB key adds box art, covers, backgrounds, logos and icons for everything else. More sources are in Settings, Media and Scraping.",
             optional = true,
             actions = listOf(
                 StepAction(if ("sgdb.apikey" in secrets) "Continue" else "Add SteamGridDB key", primary = true) {

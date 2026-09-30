@@ -12,11 +12,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.BiasAlignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.BlurredEdgeTreatment
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.paint
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImagePainter
 import coil3.compose.LocalPlatformContext
 import coil3.compose.rememberAsyncImagePainter
@@ -38,6 +43,10 @@ import kotlinx.coroutines.delay
  *
  * [focusX]/[focusY] (0..1) choose which part of the image stays visible when it is cropped.
  * [tint] recolours the image (single-colour logos, such as system logos, drawn in white).
+ *
+ * [backdrop] draws the whole image ([ContentScale.Fit]) over a dimmed, cropped copy of itself,
+ * blurred by [backdropBlur] (0 for none), so art of another shape fills the slot without losing its
+ * edges: a portrait cover in a square tile keeps its title and logo.
  */
 @Composable
 fun Artwork(
@@ -50,6 +59,8 @@ fun Artwork(
     fadeIn: Boolean = true,
     tint: Color? = null,
     fallbackDelayMs: Long = 400,
+    backdrop: Boolean = false,
+    backdropBlur: Dp = 0.dp,
     fallback: @Composable () -> Unit = {},
 ) {
     if (model == null) {
@@ -60,7 +71,7 @@ fun Artwork(
     val request = remember(model, context) {
         ImageRequest.Builder(context).data(model).crossfade(false).build()
     }
-    val painter = rememberAsyncImagePainter(request, contentScale = contentScale)
+    val painter = rememberAsyncImagePainter(request, contentScale = if (backdrop) ContentScale.Fit else contentScale)
     val state by painter.state.collectAsStateCompat()
     val success = state as? AsyncImagePainter.State.Success
     val failed = state is AsyncImagePainter.State.Error
@@ -82,6 +93,20 @@ fun Artwork(
     }
     Box(modifier) {
         if (failed || (slow && alpha.value < 1f)) fallback()
+        if (backdrop) {
+            val dim = if (backdropBlur > 0.dp) BACKDROP_DIM else BACKDROP_DIM_SHARP
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .graphicsLayer { this.alpha = alpha.value }
+                    .then(if (backdropBlur > 0.dp) Modifier.blur(backdropBlur, BlurredEdgeTreatment.Rectangle) else Modifier)
+                    .drawWithContent {
+                        drawContent()
+                        drawRect(Color.Black.copy(alpha = dim))
+                    }
+                    .paint(painter, contentScale = ContentScale.Crop),
+            )
+        }
         Box(
             Modifier
                 .fillMaxSize()
@@ -94,13 +119,17 @@ fun Artwork(
                 }
                 .paint(
                     painter,
-                    contentScale = contentScale,
+                    contentScale = if (backdrop) ContentScale.Fit else contentScale,
                     alignment = BiasAlignment(focusX * 2 - 1, focusY * 2 - 1),
                     colorFilter = tint?.let { ColorFilter.tint(it) },
                 ),
         )
     }
 }
+
+/** How much the copy behind fitted art is dimmed: blurred, or left sharp where blur is off. */
+private const val BACKDROP_DIM = 0.3f
+private const val BACKDROP_DIM_SHARP = 0.55f
 
 /** Alignment helper for callers positioning cropped art. */
 fun focusAlignment(x: Float, y: Float): Alignment = BiasAlignment(x * 2 - 1, y * 2 - 1)

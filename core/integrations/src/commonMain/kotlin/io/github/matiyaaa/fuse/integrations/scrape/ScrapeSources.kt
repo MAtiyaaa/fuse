@@ -254,7 +254,7 @@ class SteamGridDbSource(
 ) : ScrapeSource {
     override val id = ScrapeProviderId.STEAMGRIDDB
     override val providesMetadata = false
-    override val artworkKinds = setOf(MediaKind.BOXART, MediaKind.GRID, MediaKind.HERO, MediaKind.LOGO, MediaKind.ICON)
+    override val artworkKinds = setOf(MediaKind.SQUARE, MediaKind.BOXART, MediaKind.GRID, MediaKind.HERO, MediaKind.LOGO, MediaKind.ICON)
 
     override suspend fun search(query: ScrapeQuery): ApiResult<List<ProviderGame>> =
         client.searchAutocomplete(query.title).map { list ->
@@ -271,6 +271,7 @@ class SteamGridDbSource(
     override suspend fun artwork(game: ProviderGame, query: ScrapeQuery, kinds: Set<MediaKind>): ApiResult<List<ArtworkOption>> {
         val gameId = game.providerGameId.toLongOrNull() ?: return ApiResult.Success(emptyList())
         val requests = buildList {
+            if (MediaKind.SQUARE in kinds) add(SgdbAssetType.GRID to baseFilters.copy(dimensions = SgdbDimension.SQUARE))
             if (MediaKind.BOXART in kinds) add(SgdbAssetType.GRID to baseFilters.copy(dimensions = SgdbDimension.PORTRAIT))
             if (MediaKind.GRID in kinds) {
                 add(SgdbAssetType.GRID to baseFilters.copy(dimensions = setOf(SgdbDimension.GRID_460x215, SgdbDimension.GRID_920x430)))

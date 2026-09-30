@@ -1,6 +1,5 @@
 package io.github.matiyaaa.fuse.ui.shell.cartridge
 
-import io.github.matiyaaa.fuse.ui.shell.home.bytesText
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -32,8 +31,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import io.github.matiyaaa.fuse.model.CartridgeRoute
 import io.github.matiyaaa.fuse.model.CartridgeStatus
-import io.github.matiyaaa.fuse.model.QueueState
 import io.github.matiyaaa.fuse.model.NavAction
+import io.github.matiyaaa.fuse.model.QueueState
 import io.github.matiyaaa.fuse.model.ReleaseInfo
 import io.github.matiyaaa.fuse.ui.designsystem.components.ButtonKind
 import io.github.matiyaaa.fuse.ui.designsystem.components.FText
@@ -51,18 +50,20 @@ import io.github.matiyaaa.fuse.ui.designsystem.icons.HintButton
 import io.github.matiyaaa.fuse.ui.designsystem.input.InputLayer
 import io.github.matiyaaa.fuse.ui.designsystem.input.NavResult
 import io.github.matiyaaa.fuse.ui.designsystem.media.ArtSlot
-import io.github.matiyaaa.fuse.ui.designsystem.media.Artwork
 import io.github.matiyaaa.fuse.ui.designsystem.media.GeneratedArt
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
 import io.github.matiyaaa.fuse.ui.designsystem.theme.toColor
-import io.github.matiyaaa.fuse.ui.shell.app.activateGame
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.ConfirmSpec
 import io.github.matiyaaa.fuse.ui.shell.app.FocusZone
+import io.github.matiyaaa.fuse.ui.shell.app.activateGame
 import io.github.matiyaaa.fuse.ui.shell.app.play
+import io.github.matiyaaa.fuse.ui.shell.components.SquareGameArt
 import io.github.matiyaaa.fuse.ui.shell.components.agoText
+import io.github.matiyaaa.fuse.ui.shell.home.bytesText
+import io.github.matiyaaa.fuse.ui.shell.store.Art
 import io.github.matiyaaa.fuse.ui.shell.store.RecentDownload
 import kotlinx.coroutines.launch
 
@@ -309,8 +310,8 @@ private fun RecentRow(r: RecentDownload, selected: Boolean) {
         Box(Modifier.width(3.dp).height(24.dp).background(if (selected) c.accent else Color.Transparent, RoundedCornerShape(2.dp)))
         Spacer(Modifier.width(Space.m))
         val game = r.game
-        Artwork(
-            game?.art?.icon ?: game?.art?.boxart,
+        SquareGameArt(
+            game?.art ?: Art.None,
             Modifier.size(44.dp).clip(RoundedCornerShape(10.dp)),
             fallback = { GeneratedArt(r.download.title, (game?.accent ?: 0xFF5B6475).toColor(), slot = ArtSlot.ICON) },
         )

@@ -2,19 +2,18 @@ package io.github.matiyaaa.fuse.ui.shell.store.impl
 
 import io.github.matiyaaa.fuse.data.repo.AppOverrideRepository
 import io.github.matiyaaa.fuse.data.settings.SecretKeys
+import io.github.matiyaaa.fuse.library.series.SeriesDetector
+import io.github.matiyaaa.fuse.library.series.SeriesInput
 import io.github.matiyaaa.fuse.model.AppEntry
 import io.github.matiyaaa.fuse.model.AppFilter
 import io.github.matiyaaa.fuse.model.BorderStyle
 import io.github.matiyaaa.fuse.model.CollectionId
 import io.github.matiyaaa.fuse.model.CollectionKind
-import io.github.matiyaaa.fuse.library.series.SeriesDetector
-import io.github.matiyaaa.fuse.library.series.SeriesInput
-import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.debounce
-import kotlinx.coroutines.launch
 import io.github.matiyaaa.fuse.model.GameCollection
 import io.github.matiyaaa.fuse.model.GameId
+import io.github.matiyaaa.fuse.model.LaunchDisplay
 import io.github.matiyaaa.fuse.model.LibraryLayout
+import io.github.matiyaaa.fuse.model.MediaOwner
 import io.github.matiyaaa.fuse.model.PlatformId
 import io.github.matiyaaa.fuse.model.Resolved
 import io.github.matiyaaa.fuse.model.ScopeRef
@@ -30,15 +29,16 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
-import io.github.matiyaaa.fuse.model.MediaOwner
 import kotlinx.coroutines.flow.stateIn
-import io.github.matiyaaa.fuse.model.LaunchDisplay
+import kotlinx.coroutines.launch
 
 internal class DefaultCollectionOps(private val ctx: StoreContext) : CollectionOps {
     private val repo = ctx.data.collections
@@ -118,7 +118,7 @@ internal class DefaultAppOps(private val ctx: StoreContext) : AppOps {
             ctx.data.media.observeFor(ids.map { MediaOwner.OfApp(it) }).map { media ->
                 media.mapNotNull { (owner, set) ->
                     val id = (owner as? MediaOwner.OfApp)?.packageName ?: return@mapNotNull null
-                    (set.icon ?: set.boxart ?: set.grid)?.model?.let { id to (it as Any) }
+                    (set.icon ?: set.square ?: set.boxart ?: set.grid)?.model?.let { id to (it as Any) }
                 }.toMap()
             }
         }

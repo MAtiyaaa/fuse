@@ -22,7 +22,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 
 private fun LibraryLayout.words(): String = when (this) {
-    LibraryLayout.ICON -> "Icon"
+    LibraryLayout.ICON -> "Box art"
     LibraryLayout.CAPSULE -> "Capsule"
     LibraryLayout.COVER_GRID -> "Cover Grid"
     LibraryLayout.COMPACT_LIST -> "Compact List"
@@ -152,6 +152,37 @@ internal fun AuditDriver.libraryScreens(exhaustive: Boolean) {
             viewAs(layout)
             shoot("Game Boy Advance, ${layout.words()} layout")
         }
+    }
+
+    scenario("library", "box art") {
+        useLibrary()
+        // One game each with square box art, only an icon, only a portrait cover, and nothing.
+        val gba = runBlocking { libraryStore.library.games(GameQuery()).first().filter { it.platformId == PlatformId("gba") }.sortedBy { it.title } }
+        val dir = File(cache, "box-art").apply { mkdirs() }
+        runBlocking {
+            gba.getOrNull(0)?.let { g ->
+                val f = File(dir, "square.png").also { AuditCovers.square(it, g.title, g.accent) }
+                libraryStore.media.setFromFile(MediaOwner.OfGame(g.id), MediaKind.SQUARE, f.absolutePath)
+            }
+            gba.getOrNull(1)?.let { g ->
+                val f = File(dir, "icon.png").also { AuditIcons.write(it, g.title, g.accent, 1) }
+                libraryStore.media.setFromFile(MediaOwner.OfGame(g.id), MediaKind.ICON, f.absolutePath)
+            }
+            gba.getOrNull(2)?.let { g ->
+                val f = File(dir, "cover.png").also { AuditCovers.cover(it, g.title, g.accent) }
+                libraryStore.media.setFromFile(MediaOwner.OfGame(g.id), MediaKind.BOXART, f.absolutePath)
+            }
+        }
+        tab(Destination.SYSTEMS)
+        val grid = Grid(libraryStore.library.platforms.value.count { it.gameCount > 0 })
+        grid.goTo(platformIndex("gba"))
+        tap(PadButton.A)
+        waitFor("Beacon Bay")
+        settle(1_200)
+        shoot("Box art, icon, cover only and no art")
+        viewAs(LibraryLayout.COMPACT_LIST)
+        settle(800)
+        shoot("The same games as a list")
     }
 
     scenario("library", "system with art") {
@@ -399,6 +430,8 @@ internal fun AuditDriver.gameScreens(exhaustive: Boolean) {
         settle(1_500)
         shoot("Identify game with no source set up")
         tap(PadButton.DPAD_DOWN)
+        shoot("Box art slot")
+        tap(PadButton.DPAD_DOWN)
         shoot("Icon slot")
         tap(PadButton.DPAD_DOWN)
         shoot("Cover slot preview fits the screen")
@@ -413,10 +446,10 @@ internal fun AuditDriver.gameScreens(exhaustive: Boolean) {
         shoot("fill art choice")
         tap(PadButton.B)
         // Down to the last slot, then all the way back: the header and every row come back.
-        repeat(8) { tap(PadButton.DPAD_DOWN) }
+        repeat(9) { tap(PadButton.DPAD_DOWN) }
         settle(600)
         shoot("last slot focused")
-        repeat(8) { tap(PadButton.DPAD_UP) }
+        repeat(10) { tap(PadButton.DPAD_UP) }
         settle(800)
         shoot("back at the top, everything shown again")
     }

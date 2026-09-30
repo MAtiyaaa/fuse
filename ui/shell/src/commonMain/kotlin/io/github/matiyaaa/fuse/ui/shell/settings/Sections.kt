@@ -60,7 +60,7 @@ private fun motionName(m: MotionProfile?) = when (m) {
 }
 
 private fun layoutName(l: LibraryLayout) = when (l) {
-    LibraryLayout.ICON -> "Icons"
+    LibraryLayout.ICON -> "Box art"
     LibraryLayout.CAPSULE -> "Capsules"
     LibraryLayout.COVER_GRID -> "Cover grid"
     LibraryLayout.COMPACT_LIST -> "List"
@@ -443,7 +443,7 @@ fun mediaRows(app: AppState): List<MenuAction> {
         })
         addAll(fillRows(app, fill))
         add(MenuAction("fill", "Fill missing art", FuseIcons.Wand, detail = "Icons, covers, banners, backgrounds and logos for games without them. Custom art is never replaced", onSelect = {
-            app.store.media.fill(MediaFillMode.FILL_MISSING, setOf(MediaKind.ICON, MediaKind.BOXART, MediaKind.HERO, MediaKind.LOGO, MediaKind.GRID))
+            app.store.media.fill(MediaFillMode.FILL_MISSING, setOf(MediaKind.SQUARE, MediaKind.ICON, MediaKind.BOXART, MediaKind.HERO, MediaKind.LOGO, MediaKind.GRID))
             app.toasts.show("Looking for missing art. Progress shows here and in the top bar")
         }))
         add(MenuAction("fill.all", "Fill everything", FuseIcons.Sparkles, detail = "Every kind of art, screenshots and details (description, year, genres, series, rating) for every game, plus system art. Nothing you chose or edited is replaced", onSelect = {
@@ -451,7 +451,7 @@ fun mediaRows(app: AppState): List<MenuAction> {
             app.toasts.show("Filling art and details. Progress shows here and in the top bar")
         }))
         add(app.confirmRow("replace", "Replace all scraped art", FuseIcons.RotateCcw, "Replace scraped art?", "Fuse fetches art again for every game and replaces art it scraped before. Art you chose yourself stays.", "Replace") {
-            app.store.media.fill(MediaFillMode.REPLACE_ALL, setOf(MediaKind.ICON, MediaKind.BOXART, MediaKind.HERO, MediaKind.LOGO, MediaKind.GRID))
+            app.store.media.fill(MediaFillMode.REPLACE_ALL, setOf(MediaKind.SQUARE, MediaKind.ICON, MediaKind.BOXART, MediaKind.HERO, MediaKind.LOGO, MediaKind.GRID))
         })
         add(toggleRow("video", "Video previews", FuseIcons.Film, p.videoPreview, if (app.platform.features.videoPreview) "After resting on a game, its art turns into a muted gameplay clip" else "Not available on this system yet", enabled = app.platform.features.videoPreview) { v -> set { it.copy(videoPreview = v) } })
         add(app.choiceRow("video.delay", "Preview delay", FuseIcons.Timer, p.videoDelaySeconds, listOf(5, 10, 15, 20, 30).map { it to "$it seconds" }) { v -> set { it.copy(videoDelaySeconds = v) } })

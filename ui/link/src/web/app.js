@@ -18,6 +18,7 @@ const SORTS = [
   { id: 'added', label: 'Recently added', sub: 'Newest first' },
 ];
 const ART_KINDS = [
+  { kind: 'square', label: 'Box art', noun: 'box art', article: '', min: '72px', ar: '1', artNoun: 'box art' },
   { kind: 'icon', label: 'Icon', noun: 'icon', article: 'an', min: '72px', ar: '1' },
   { kind: 'cover', label: 'Cover', noun: 'cover', article: 'a', min: '96px', ar: '0.72' },
   { kind: 'banner', label: 'Banner', noun: 'banner', article: 'a', min: '150px', ar: '460 / 215' },
@@ -2023,7 +2024,7 @@ function artCard(d) {
     if (missing) {
       thumb = h('span', { class: `art art-empty k-${k.kind}` }, icon('image'));
     } else {
-      thumb = art(url, { title: d.title, system: d.system, contain: k.contain, text: k.kind === 'icon' || k.kind === 'cover' });
+      thumb = art(url, { title: d.title, system: d.system, contain: k.contain, text: k.kind === 'square' || k.kind === 'icon' || k.kind === 'cover' });
       thumb.classList.add(`k-${k.kind}`);
       if (k.contain) thumb.classList.add('logo-bg');
       if (k.kind === 'screenshot' && shots.length > 1) thumb.append(h('span.art-count', `+${shots.length - 1}`));
@@ -2159,7 +2160,7 @@ function optSkeleton(k) {
 function openArtPicker(d, k) {
   const body = h('div');
   const layer = openModal({
-    title: k.kind === 'screenshot' ? 'Add a screenshot' : `Choose ${k.article} ${k.noun}`,
+    title: k.kind === 'screenshot' ? 'Add a screenshot' : `Choose ${k.article ? `${k.article} ` : ''}${k.noun}`,
     subtitle: d.title || '',
     body,
   });
@@ -2170,7 +2171,7 @@ function openArtPicker(d, k) {
 
   const renderOptions = (opts) => {
     if (!opts.length) {
-      body.replaceChildren(emptyState('image', `No ${k.noun} art found`,
+      body.replaceChildren(emptyState('image', `No ${k.artNoun || `${k.noun} art`} found`,
         'Try Identify game, or change Search as, then look again.',
         btn('Look again', { icon: 'refresh-cw', onClick: load })));
       return;
@@ -2259,7 +2260,7 @@ function openArtPicker(d, k) {
       renderOptions((Array.isArray(r && r.options) ? r.options : []).filter((o) => o && typeof o === 'object' && (o.url || o.thumb)));
     } catch (e) {
       if (e.status === 401 || !layer.open) return;
-      body.replaceChildren(errorState(`Couldn't load ${k.noun} art`, e, load));
+      body.replaceChildren(errorState(`Couldn't load ${k.artNoun || `${k.noun} art`}`, e, load));
     }
   };
   load();

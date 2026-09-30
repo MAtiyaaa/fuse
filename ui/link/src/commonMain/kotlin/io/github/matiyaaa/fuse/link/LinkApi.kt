@@ -20,6 +20,7 @@ import io.github.matiyaaa.fuse.ui.shell.store.GameQuery
 import io.github.matiyaaa.fuse.ui.shell.store.IdentifyResult
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
+import kotlin.jvm.Synchronized
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -38,11 +39,8 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
-import kotlin.jvm.Synchronized
 
 internal val LinkJson = Json { explicitNulls = true; encodeDefaults = true }
 
@@ -234,7 +232,7 @@ internal class LinkApi(
             put("system", d.platform.id.value)
             put("systemName", d.platform.name)
             put("year", g.metadata.releaseYear)
-            put("cover", url(d.art.boxart ?: d.art.grid ?: d.art.icon))
+            put("cover", url(d.art.boxart ?: d.art.grid ?: d.art.square ?: d.art.icon))
             put("icon", url(d.art.icon))
             put("hero", url(d.art.hero))
             put("logo", url(d.art.logo))
@@ -340,7 +338,7 @@ internal class LinkApi(
         val platform = o?.string("system")?.takeIf { it.isNotBlank() }?.let(::PlatformId)
         when (o?.string("mode")) {
             "everything" -> store.media.fillEverything(platform)
-            else -> store.media.fill(MediaFillMode.FILL_MISSING, setOf(MediaKind.ICON, MediaKind.BOXART, MediaKind.HERO, MediaKind.LOGO, MediaKind.GRID), platform = platform)
+            else -> store.media.fill(MediaFillMode.FILL_MISSING, setOf(MediaKind.SQUARE, MediaKind.ICON, MediaKind.BOXART, MediaKind.HERO, MediaKind.LOGO, MediaKind.GRID), platform = platform)
         }
         return ok()
     }
@@ -387,7 +385,7 @@ internal class LinkApi(
         put("system", card.platformId.value)
         put("systemName", store.library.platforms.value.firstOrNull { it.platform.id == card.platformId }?.platform?.name ?: card.platformShort)
         put("year", card.year)
-        put("cover", url(card.art.boxart ?: card.art.grid ?: card.art.icon))
+        put("cover", url(card.art.boxart ?: card.art.grid ?: card.art.square ?: card.art.icon))
         put("icon", url(card.art.icon))
         put("hero", url(card.art.hero))
         put("logo", url(card.art.logo))
@@ -431,10 +429,11 @@ internal class LinkApi(
 
     companion object {
         private const val MAX_IMAGE = 16 * 1024 * 1024
-        private val FILL_KINDS = setOf(MediaKind.ICON, MediaKind.BOXART, MediaKind.GRID, MediaKind.HERO, MediaKind.LOGO, MediaKind.SCREENSHOT)
+        private val FILL_KINDS = setOf(MediaKind.SQUARE, MediaKind.ICON, MediaKind.BOXART, MediaKind.GRID, MediaKind.HERO, MediaKind.LOGO, MediaKind.SCREENSHOT)
 
         /** The phone's names for the art slots. */
         val slots = linkedMapOf(
+            "square" to MediaKind.SQUARE,
             "icon" to MediaKind.ICON,
             "cover" to MediaKind.BOXART,
             "banner" to MediaKind.GRID,
