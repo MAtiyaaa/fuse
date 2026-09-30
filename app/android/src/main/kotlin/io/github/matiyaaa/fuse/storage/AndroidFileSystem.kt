@@ -20,7 +20,7 @@ import java.security.MessageDigest
  * Read-only [FuseFileSystem] over `java.io` and `stat`. With All files access every folder on shared
  * storage is readable; without it, or for other apps' `Android/data` on Android 11+, listing a
  * folder that exists throws [FsAccessException] so the scanner reports "unknown", never "empty".
- * Nothing here writes.
+ * Only [delete] writes, for games the user deletes in Settings, Storage.
  */
 class AndroidFileSystem(
     private val volumes: () -> List<Volume>,
@@ -51,6 +51,36 @@ class AndroidFileSystem(
         } ?: throw FsAccessException(path)
         val base = path.trimEnd('/')
         names.mapNotNull { name -> entry(name, "$base/$name") }
+    }
+
+    /**
+     * The one write: deleting a game's files when the user asks in Settings, Storage. Links are
+     * removed, never followed, so nothing outside the game's folder can go.
+     */
+    override suspend fun delete(path: String): Boolean = withContext(io) {
+        if (isPrivateAppFolder(path)) return@withContext false
+        fun remove(p: String): Boolean {
+            val st = try {
+                Os.lstat(p)
+            } catch (e: ErrnoException) {
+                return e.errno == OsConstants.ENOENT
+            }
+            if (OsConstants.S_ISDIR(st.st_mode)) {
+                val names = File(p).list() ?: return false
+                if (!names.all { remove("${p.trimEnd('/')}/$it") }) return false
+            }
+            return try {
+                Os.remove(p)
+                true
+            } catch (e: ErrnoException) {
+                e.errno == OsConstants.ENOENT
+            }
+        }
+        try {
+            remove(path)
+        } catch (e: SecurityException) {
+            false
+        }
     }
 
     override suspend fun stat(path: String): FsEntry? = withContext(io) {

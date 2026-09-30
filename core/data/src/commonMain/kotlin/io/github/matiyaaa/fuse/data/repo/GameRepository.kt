@@ -243,6 +243,19 @@ class GameRepository(
         }
     }
 
+    /**
+     * Forgets a game whose files the user just deleted (Settings, Storage): the record goes, with
+     * its media, sessions and collection entries, as if it had been missing.
+     */
+    suspend fun forgetDeleted(id: GameId, now: Long): Boolean = withContext(dispatcher) {
+        db.transactionWithResult {
+            q.markMissing(now, id.value)
+            val deleted = q.deleteMissing(id.value).value > 0
+            if (deleted) db.mediaQueries.deleteOwner(MediaOwner.OfGame(id).type(), id.value.toString())
+            deleted
+        }
+    }
+
     // Internals -----------------------------------------------------------------------------------
 
     private suspend fun write(block: () -> Unit) = withContext(dispatcher) { block() }

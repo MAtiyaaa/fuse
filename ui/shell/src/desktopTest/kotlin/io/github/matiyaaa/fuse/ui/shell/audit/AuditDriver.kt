@@ -237,11 +237,11 @@ internal class AuditDriver(
      * Chooses the menu row showing exactly [text] the way a player does (menus whose order changes
      * between versions): Down until that row is the selected one, then A.
      */
-    fun tapText(text: String, step: PadButton = PadButton.DPAD_DOWN) {
+    fun tapText(text: String, step: PadButton = PadButton.DPAD_DOWN, substring: Boolean = false) {
         waitFor(text.take(1))
         repeat(40) {
             settle(STEP_MS)
-            val on = ui.onAllNodes(androidx.compose.ui.test.hasText(text) and androidx.compose.ui.test.isSelected()).fetchSemanticsNodes()
+            val on = ui.onAllNodes(androidx.compose.ui.test.hasText(text, substring = substring) and androidx.compose.ui.test.isSelected()).fetchSemanticsNodes()
             if (on.isNotEmpty()) {
                 tap(PadButton.A)
                 return

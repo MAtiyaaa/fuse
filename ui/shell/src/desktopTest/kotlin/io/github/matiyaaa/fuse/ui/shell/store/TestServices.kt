@@ -111,6 +111,8 @@ internal class MemorySecrets : SecretStore {
 }
 
 internal class JavaFileSystem : FuseFileSystem {
+    override suspend fun delete(path: String): Boolean = File(path).let { !it.exists() || it.deleteRecursively() }
+
     override suspend fun list(path: String): List<FsEntry> {
         val dir = File(path)
         val children = dir.listFiles() ?: throw FsAccessException(path, "Unreadable")

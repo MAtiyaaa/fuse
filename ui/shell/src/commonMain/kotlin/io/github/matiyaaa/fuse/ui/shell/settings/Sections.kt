@@ -727,7 +727,13 @@ fun storageRows(app: AppState): List<MenuAction> {
             trailing = Trailing.Value(if (storage == StorageState.GRANTED || storage == StorageState.NOT_NEEDED) "Allowed" else "Allow"),
             onSelect = { app.platform.storage.request() },
         ))
-        add(infoRow("readonly", "Fuse never changes your games", detail = "It only reads your folders. Nothing is moved, renamed or deleted, and playlists for multi-disc games are made in Fuse's own storage", icon = FuseIcons.ShieldCheck))
+        add(MenuAction(
+            "space", "Games and space", FuseIcons.HardDrive,
+            detail = "What each game takes on each drive, and deleting games you're done with",
+            trailing = Trailing.Chevron,
+            onSelect = { app.go(Route.Storage) },
+        ))
+        add(infoRow("readonly", "Fuse only changes your games when you ask", detail = "It reads your folders. Files are only deleted when you delete games in Games and space, after you confirm. Playlists for multi-disc games are made in Fuse's own storage", icon = FuseIcons.ShieldCheck))
     }
 }
 

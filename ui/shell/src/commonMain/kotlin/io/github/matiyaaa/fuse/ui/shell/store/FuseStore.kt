@@ -53,7 +53,50 @@ interface FuseStore {
     val settings: ScopedSettingsOps
     val credentials: CredentialOps
     val updates: UpdateOps
+    val storage: StorageOps
 }
+
+/**
+ * Space on the drives the library lives on, what each game takes (every disc, track and folder
+ * file) and deleting games' files. Deleting is only offered on the device, in Settings, Storage.
+ */
+interface StorageOps {
+    /** The latest measurement; null until [refresh] first runs. Updates as games are measured. */
+    val usage: StateFlow<StorageUsage?>
+    /** Measures every game again. */
+    fun refresh()
+    /** What [game] takes on disk, or null when it is gone. */
+    suspend fun size(game: GameId): Long?
+    /**
+     * Deletes the games' files (all discs, tracks and folder contents; never saves next to them)
+     * and forgets the games. Only paths inside the game's library folder are touched.
+     */
+    suspend fun delete(games: List<GameId>): DeleteReport
+}
+
+data class StorageUsage(
+    val volumes: List<VolumeUsage>,
+    /** Largest first. */
+    val games: List<GameSize>,
+    val measured: Int,
+    val total: Int,
+    val finished: Boolean,
+)
+
+/** A drive: its size, what's free, and how much of it is games, by system. */
+data class VolumeUsage(
+    val label: String,
+    val totalBytes: Long,
+    val freeBytes: Long,
+    val gamesBytes: Long,
+    val systems: List<SystemShare>,
+)
+
+data class SystemShare(val platform: PlatformId, val name: String, val accent: Long, val bytes: Long)
+
+data class GameSize(val card: GameCard, val bytes: Long, val files: Int)
+
+data class DeleteReport(val deleted: Int, val freedBytes: Long, val failed: List<String>)
 
 data class GameQuery(
     val platform: PlatformId? = null,

@@ -1,5 +1,6 @@
 package io.github.matiyaaa.fuse.ui.shell.cartridge
 
+import io.github.matiyaaa.fuse.ui.shell.home.bytesText
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -268,11 +269,7 @@ private fun DownloadsPanel(status: CartridgeStatus, modifier: Modifier = Modifie
     }
 }
 
-private fun bytesText(bytes: Long): String = when {
-    bytes >= 1_000_000_000 -> "${(bytes / 100_000_000) / 10.0} GB"
-    bytes >= 1_000_000 -> "${bytes / 1_000_000} MB"
-    else -> "${bytes / 1_000} KB"
-}
+
 
 private fun statusLine(s: CartridgeStatus): String = when {
     !s.installed -> "Cartridge brings your RomM server's games to this device, each into the right system folder. Fuse shows them the moment they land."

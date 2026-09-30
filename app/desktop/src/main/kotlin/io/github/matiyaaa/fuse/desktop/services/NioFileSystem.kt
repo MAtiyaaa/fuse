@@ -24,9 +24,24 @@ import java.nio.ByteBuffer
 /**
  * Read-only [FuseFileSystem] over java.nio. Symlinks are reported, not walked: an entry that is a
  * link to a directory says so ([FsEntry.isDirectory] and [FsEntry.isSymlink]), and the scanner uses
- * [canonical] to skip directories it has already seen, so link loops end. Nothing here writes.
+ * [canonical] to skip directories it has already seen, so link loops end. Only [delete] writes.
  */
 class NioFileSystem : FuseFileSystem {
+
+    /** The one write: deleting a game's files when the user asks in Settings, Storage. */
+    override suspend fun delete(path: String): Boolean = withContext(Dispatchers.IO) {
+        val root = Paths.get(path)
+        if (!Files.exists(root, java.nio.file.LinkOption.NOFOLLOW_LINKS)) return@withContext true
+        try {
+            // Files.walk doesn't follow links, so a link inside a game folder is removed, not what it points to.
+            Files.walk(root).use { stream -> stream.sorted(Comparator.reverseOrder()).forEach { Files.deleteIfExists(it) } }
+            true
+        } catch (e: IOException) {
+            false
+        } catch (e: SecurityException) {
+            false
+        }
+    }
 
     override suspend fun list(path: String): List<FsEntry> = withContext(Dispatchers.IO) {
         val dir = Paths.get(path)

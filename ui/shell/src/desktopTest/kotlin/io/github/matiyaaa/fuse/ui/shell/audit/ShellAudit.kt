@@ -126,6 +126,33 @@ internal fun AuditDriver.settingsScreens(exhaustive: Boolean) {
     }
     if (!exhaustive) return
 
+    scenario("settings", "storage") {
+        useLibrary()
+        openSettings()
+        tap(PadButton.DPAD_DOWN, sectionIndex("storage"))
+        tap(PadButton.DPAD_RIGHT)
+        tapText("Games and space")
+        waitFor("Showing")
+        settle(2_500)
+        shoot("drives and games by size")
+        tapText("Showing")
+        waitFor("Show games from")
+        tap(PadButton.B)
+        // Pick the two largest games.
+        tapText("Showing")
+        tap(PadButton.B)
+        tap(PadButton.DPAD_DOWN)
+        tap(PadButton.A)
+        tap(PadButton.DPAD_DOWN)
+        tap(PadButton.A)
+        settle(600)
+        shoot("two games picked")
+        tapText("Delete 2 games", step = PadButton.DPAD_UP, substring = true)
+        waitFor("This can't be undone")
+        shoot("delete confirmation naming what goes")
+        tap(PadButton.B)
+    }
+
     scenario("settings", "controls") {
         useLibrary()
         openSettings()

@@ -310,7 +310,8 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
                 }
             }
             ContentSection(d)
-            InfoSection(d)
+            val size by androidx.compose.runtime.produceState<Long?>(null, game.id) { value = app.store.storage.size(game.id) }
+            InfoSection(d, size)
             Spacer(Modifier.height(Size.hintHeight + Space.x4))
         }
     }
@@ -357,12 +358,14 @@ private fun ContentSection(d: GameDetail) {
 }
 
 @Composable
-private fun InfoSection(d: GameDetail) {
+private fun InfoSection(d: GameDetail, size: Long?) {
     val c = Fuse.colors
     val game = d.game
     Section("Details") {
         Column(verticalArrangement = Arrangement.spacedBy(Space.xs), modifier = Modifier.widthIn(max = 820.dp)) {
             Info("File", game.location.path)
+            // Every disc, track and folder file together, as Settings, Storage counts it.
+            size?.let { Info("Size", io.github.matiyaaa.fuse.ui.shell.home.bytesText(it)) }
             if (game.location.launchPath != game.location.path) Info("Launches", game.location.launchPath)
             Info("Read as", when (game.location.interpretation) {
                 io.github.matiyaaa.fuse.model.FolderInterpretation.SINGLE_FILE -> "A single file"

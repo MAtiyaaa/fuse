@@ -19,6 +19,7 @@ sealed interface Route {
     data class PlatformGames(val platform: PlatformId) : Route
     data class CollectionGames(val collection: CollectionId, val name: String) : Route
     data object Collections : Route
+    data object Storage : Route
     data class GameInfo(val game: GameId) : Route
     /** Manage media; [identify] opens Identify game straight away (a game a fill couldn't name). */
     data class Media(val owner: MediaOwner, val title: String, val identify: Boolean = false) : Route

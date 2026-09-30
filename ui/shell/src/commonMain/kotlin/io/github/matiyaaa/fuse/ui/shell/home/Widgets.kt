@@ -280,12 +280,15 @@ private fun ColumnScope.ClockWidget(clock24h: Boolean) {
     FText(formatDate(), Fuse.type.caption, color = Fuse.colors.textMuted, maxLines = 1)
 }
 
+/** "1.2 GB", "640 MB", "12 KB": sizes as people read them (decimal units, like drives are sold). */
 fun bytesText(bytes: Long): String {
     val gb = bytes / 1_000_000_000.0
     return when {
         gb >= 100 -> "${gb.toInt()} GB"
         gb >= 1 -> "${(gb * 10).toInt() / 10.0} GB"
-        else -> "${bytes / 1_000_000} MB"
+        bytes >= 1_000_000 -> "${bytes / 1_000_000} MB"
+        bytes > 0 -> "${((bytes + 999) / 1_000).coerceAtLeast(1)} KB"
+        else -> "0 KB"
     }
 }
 

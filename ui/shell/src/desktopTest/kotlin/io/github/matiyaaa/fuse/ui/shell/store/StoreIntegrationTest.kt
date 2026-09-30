@@ -234,6 +234,39 @@ class StoreIntegrationTest {
         }
     }
 
+    @Test
+    fun storageMeasuresGamesAndDeletesEveryFileOfOne() = runBlocking {
+        val lib = Files.createTempDirectory("fuse-storage").toFile()
+        try {
+            File(lib, "psx").mkdirs()
+            File(lib, "psx/Big Game (USA).cue").writeText("FILE \"Big Game (USA) (Track 1).bin\" BINARY\nFILE \"Big Game (USA) (Track 2).bin\" BINARY\n")
+            File(lib, "psx/Big Game (USA) (Track 1).bin").writeBytes(ByteArray(4000))
+            File(lib, "psx/Big Game (USA) (Track 2).bin").writeBytes(ByteArray(1000))
+            File(lib, "psx/Big Game (USA).srm").writeBytes(ByteArray(10))
+            File(lib, "psx/Small Game (USA).chd").writeBytes(ByteArray(300))
+            val services = FakeServices(FuseData(DesktopDatabase.open(freshDb())), cache)
+            val store = createFuseStore(services, scope)
+            store.sources.add(lib.absolutePath, LibrarySourceKind.ROMS_ROOT)
+            withTimeout(20_000) { store.library.games(GameQuery()).first { it.size == 2 } }
+
+            store.storage.refresh()
+            val usage = withTimeout(20_000) { store.storage.usage.first { it?.finished == true } }!!
+            val big = usage.games.first()
+            assertTrue(big.card.title.startsWith("Big Game"), big.card.title)
+            assertEquals(3, big.files)
+            assertTrue(big.bytes >= 5000)
+
+            val report = store.storage.delete(listOf(big.card.id))
+            assertEquals(1, report.deleted)
+            assertTrue(report.failed.isEmpty())
+            assertTrue(File(lib, "psx").list()!!.toSet() == setOf("Big Game (USA).srm", "Small Game (USA).chd"), File(lib, "psx").list()!!.toList().toString())
+            val left = withTimeout(10_000) { store.library.games(GameQuery()).first { it.size == 1 } }
+            assertTrue(left.single().title.startsWith("Small Game"))
+        } finally {
+            lib.deleteRecursively()
+        }
+    }
+
     /**
      * A new database file per store, like the desktop app uses. (The in-memory database shares one
      * connection between threads, which the app never does.)

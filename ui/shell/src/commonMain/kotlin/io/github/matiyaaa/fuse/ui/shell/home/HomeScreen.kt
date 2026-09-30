@@ -432,7 +432,7 @@ private fun openWidget(app: AppState, kind: WidgetKind) {
         WidgetKind.CARTRIDGE_DOWNLOADS -> app.selectTab(Destination.CARTRIDGE)
         WidgetKind.RECENT_ACHIEVEMENT, WidgetKind.RECENT_ACHIEVEMENTS, WidgetKind.ACHIEVEMENT_PROGRESS,
         WidgetKind.RECENTLY_MASTERED -> app.selectTab(Destination.ACHIEVEMENTS)
-        WidgetKind.STORAGE -> app.go(Route.Settings("storage"))
+        WidgetKind.STORAGE -> app.go(Route.Storage)
         WidgetKind.CLOCK -> app.quickMenuOpen = true
         else -> app.selectTab(Destination.LIBRARY)
     }
