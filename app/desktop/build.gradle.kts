@@ -6,6 +6,7 @@ plugins {
 
 dependencies {
     implementation(projects.ui.shell)
+    implementation(projects.ui.link)
     implementation(compose.desktop.currentOs)
     implementation(libs.kotlinx.coroutines.swing)
     implementation(libs.ktor.client.cio)

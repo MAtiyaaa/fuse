@@ -120,7 +120,7 @@ private fun ApplicationScope.FuseWindow(session: DesktopSession) {
                                 add(SvgDecoder.Factory())
                             }
                         }
-                        FuseApp(s.store, session.platform, session.router)
+                        FuseApp(s.store, session.platform, session.router, s.phoneLink)
                     }
                 }
             }

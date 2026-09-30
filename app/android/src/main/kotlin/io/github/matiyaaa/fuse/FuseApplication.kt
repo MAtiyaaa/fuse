@@ -2,6 +2,9 @@ package io.github.matiyaaa.fuse
 
 import android.app.ActivityManager
 import android.app.Application
+import android.net.Uri
+import android.os.Build
+import android.provider.Settings
 import android.util.Log
 import coil3.ImageLoader
 import coil3.PlatformContext
@@ -10,11 +13,13 @@ import io.github.matiyaaa.fuse.data.FuseData
 import io.github.matiyaaa.fuse.data.db.AndroidDatabase
 import io.github.matiyaaa.fuse.integrations.FuseHttp
 import io.github.matiyaaa.fuse.integrations.FuseHttpConfig
+import io.github.matiyaaa.fuse.link.PhoneLinkServer
 import io.github.matiyaaa.fuse.platform.AndroidPlatformUi
 import io.github.matiyaaa.fuse.platform.AppIconFetcher
 import io.github.matiyaaa.fuse.services.AndroidFuseServices
 import io.github.matiyaaa.fuse.ui.shell.platform.fuseImageLoader
 import io.github.matiyaaa.fuse.ui.shell.store.FuseStore
+import io.github.matiyaaa.fuse.ui.shell.store.PhoneLinkControl
 import io.github.matiyaaa.fuse.ui.shell.store.createFuseStore
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
@@ -35,7 +40,7 @@ import kotlinx.coroutines.withContext
 /** Where app start-up is. Activities show a plain splash until [Ready]. */
 sealed interface Startup {
     data object Loading : Startup
-    data class Ready(val store: FuseStore) : Startup
+    data class Ready(val store: FuseStore, val phoneLink: PhoneLinkControl? = null) : Startup
     data class Failed(val message: String) : Startup
 }
 
@@ -87,7 +92,8 @@ class FuseApplication : Application(), SingletonImageLoader.Factory {
 
         appScope.launch {
             _startup.value = try {
-                Startup.Ready(createFuseStore(services, appScope))
+                val store = createFuseStore(services, appScope)
+                Startup.Ready(store, startPhoneLink(store))
             } catch (e: CancellationException) {
                 throw e
             } catch (t: Throwable) {
@@ -96,6 +102,39 @@ class FuseApplication : Application(), SingletonImageLoader.Factory {
             }
             (_startup.value as? Startup.Ready)?.store?.let(::followLowPower)
         }
+    }
+
+    /**
+     * Phone Link's server. It follows the switch in Settings and lives as long as the process, so a
+     * phone stays connected while a game runs. A failure here never stops Fuse from starting.
+     */
+    private fun startPhoneLink(store: FuseStore): PhoneLinkControl? = try {
+        val name = Settings.Global.getString(contentResolver, Settings.Global.DEVICE_NAME)?.takeIf { it.isNotBlank() } ?: Build.MODEL
+        PhoneLinkServer(store, services.secrets, appScope, name, BuildConfig.VERSION_NAME, readUri = ::readContent).also { it.start() }
+    } catch (e: CancellationException) {
+        throw e
+    } catch (t: Throwable) {
+        Log.w(TAG, "Phone Link could not start: ${t.javaClass.name}")
+        crashLog.recordNonFatal(t)
+        null
+    }
+
+    /** Art behind a content URI (a folder picked with the system picker), for Phone Link's image route. */
+    private suspend fun readContent(uri: String): ByteArray? = withContext(Dispatchers.IO) {
+        runCatching {
+            contentResolver.openInputStream(Uri.parse(uri))?.use { input ->
+                val out = java.io.ByteArrayOutputStream()
+                val buffer = ByteArray(64 * 1024)
+                while (true) {
+                    val n = input.read(buffer)
+                    if (n < 0) break
+                    out.write(buffer, 0, n)
+                    // Art only: anything this large isn't worth sending to a phone.
+                    if (out.size() > MAX_CONTENT_BYTES) return@use null
+                }
+                out.toByteArray()
+            }
+        }.getOrNull()
     }
 
     /** Suspends until the store exists; null when start-up failed. */
@@ -151,5 +190,6 @@ class FuseApplication : Application(), SingletonImageLoader.Factory {
 
     private companion object {
         const val TAG = "Fuse"
+        const val MAX_CONTENT_BYTES = 16 * 1024 * 1024
     }
 }

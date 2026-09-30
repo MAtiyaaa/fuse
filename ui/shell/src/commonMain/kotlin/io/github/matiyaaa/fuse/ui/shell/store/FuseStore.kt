@@ -324,3 +324,25 @@ sealed interface UpdateState {
     data class Installing(val release: ReleaseInfo) : UpdateState
     data class Failed(val release: ReleaseInfo, val message: String) : UpdateState
 }
+
+/**
+ * Phone Link as Settings sees it. The server itself lives in :ui:link and follows
+ * [UiPrefs.phoneLinkEnabled]; account changes happen only here, on the device.
+ */
+interface PhoneLinkControl {
+    val state: StateFlow<PhoneLinkState>
+    /** Sets the username and password phones sign in with; every signed-in phone is signed out. */
+    suspend fun setAccount(username: String, password: String): Result<Unit>
+    suspend fun signOutAll()
+    /** The QR code for [text] as rows of dark modules. */
+    fun qr(text: String): List<BooleanArray>?
+}
+
+data class PhoneLinkState(
+    val running: Boolean = false,
+    /** Addresses phones open, like "http://192.168.1.20:47300/". Empty when not on a network. */
+    val addresses: List<String> = emptyList(),
+    val username: String? = null,
+    val sessions: Int = 0,
+    val error: String? = null,
+)

@@ -34,8 +34,12 @@ declared in the version catalog for the platform apps and not yet used by any mo
 | Coil network (Ktor 3) | `io.coil-kt.coil3:coil-network-ktor3` | 3.6.3 | Apache-2.0 | `ui:shell` | [coil](https://github.com/coil-kt/coil) |
 | Coil SVG (with AndroidSVG on Android) | `io.coil-kt.coil3:coil-svg`, `com.caverock:androidsvg-aar` | 3.6.3 | Apache-2.0 | `ui:shell` | [coil](https://github.com/coil-kt/coil), [androidsvg](https://github.com/BigBadaboom/androidsvg) |
 | Ktor client core, content negotiation, kotlinx JSON serialization | `io.ktor:ktor-client-core`, `:ktor-client-content-negotiation`, `:ktor-serialization-kotlinx-json` | 3.6.0 | Apache-2.0 | `core:integrations` | [ktor](https://github.com/ktorio/ktor) |
-| Ktor client OkHttp engine (with OkHttp and Okio) | `io.ktor:ktor-client-okhttp` | 3.6.0 | Apache-2.0 | Catalog only (planned for `app:android`) | [ktor](https://github.com/ktorio/ktor), [okhttp](https://github.com/square/okhttp) |
-| Ktor client CIO engine | `io.ktor:ktor-client-cio` | 3.6.0 | Apache-2.0 | Catalog only (planned for `app:desktop`) | [ktor](https://github.com/ktorio/ktor) |
+| Ktor client OkHttp engine (with OkHttp and Okio) | `io.ktor:ktor-client-okhttp` | 3.6.0 | Apache-2.0 | `app:android` | [ktor](https://github.com/ktorio/ktor), [okhttp](https://github.com/square/okhttp) |
+| Ktor client CIO engine | `io.ktor:ktor-client-cio` | 3.6.0 | Apache-2.0 | `app:desktop` | [ktor](https://github.com/ktorio/ktor) |
+| Ktor server core and CIO engine (Phone Link's web server) | `io.ktor:ktor-server-core`, `:ktor-server-cio` | 3.6.0 | Apache-2.0 | `ui:link` | [ktor](https://github.com/ktorio/ktor) |
+| Pulled in by the Ktor server: Typesafe Config, kotlinx.coroutines SLF4J | `com.typesafe:config`, `org.jetbrains.kotlinx:kotlinx-coroutines-slf4j` | 1.4.9, 1.11.0 | Apache-2.0 | `ui:link` | [config](https://github.com/lightbend/config), [kotlinx.coroutines](https://github.com/Kotlin/kotlinx.coroutines) |
+| SLF4J API (logging facade pulled in by the Ktor server; Fuse adds no logger, so nothing is logged through it) | `org.slf4j:slf4j-api` | 2.0.19 | MIT | `ui:link` | [slf4j](https://github.com/qos-ch/slf4j) |
+| QR Code generator library (Phone Link pairing codes) | `io.nayuki:qrcodegen` | 1.8.0 | MIT | `ui:link` | [qrcodegen](https://github.com/nayuki/QR-Code-generator) |
 | Ktor client mock engine | `io.ktor:ktor-client-mock` | 3.6.0 | Apache-2.0 | Tests only | [ktor](https://github.com/ktorio/ktor) |
 | AndroidX Activity Compose | `androidx.activity:activity-compose` | 1.13.0 | Apache-2.0 | `app:android` | [activity](https://developer.android.com/jetpack/androidx/releases/activity) |
 | AndroidX Core KTX | `androidx.core:core-ktx` | 1.19.1 | Apache-2.0 | `app:android` | [core](https://developer.android.com/jetpack/androidx/releases/core) |
@@ -103,8 +107,8 @@ cached on their device. None of it is part of Fuse's distribution.
 
 | Licence | Where | Conclusion |
 |---|---|---|
-| Apache-2.0 | Kotlin, kotlinx, Compose Multiplatform, JetBrains Lifecycle, SQLDelight, Coil, Ktor, OkHttp, Okio, AndroidX, Media3, SQLite JDBC, Skiko, Gradle | Compatible. The Free Software Foundation lists Apache-2.0 as compatible with GPL version 3, so Apache-2.0 code can be combined into a work distributed under GPL-3.0-or-later. Apache-2.0 asks redistributors to pass on its licence text and any NOTICE files |
-| MIT | Feather-derived Lucide icons, ES-DE (facts), rcheevos (reimplemented rules), Cartridge (approach) | Compatible. Permissive; the notices are kept in `files/licenses/LICENSE-lucide.txt` and credited above |
+| Apache-2.0 | Kotlin, kotlinx, Compose Multiplatform, JetBrains Lifecycle, SQLDelight, Coil, Ktor, Typesafe Config, OkHttp, Okio, AndroidX, Media3, SQLite JDBC, Skiko, Gradle | Compatible. The Free Software Foundation lists Apache-2.0 as compatible with GPL version 3, so Apache-2.0 code can be combined into a work distributed under GPL-3.0-or-later. Apache-2.0 asks redistributors to pass on its licence text and any NOTICE files |
+| MIT | QR Code generator library, SLF4J API, Feather-derived Lucide icons, ES-DE (facts), rcheevos (reimplemented rules), Cartridge (approach) | Compatible. Permissive; the notices are kept in `files/licenses/LICENSE-qrcodegen.txt`, `files/licenses/LICENSE-slf4j.txt` and `files/licenses/LICENSE-lucide.txt` and credited above |
 | ISC | Lucide icons | Compatible. Permissive; the copyright and permission notice is kept in `files/licenses/LICENSE-lucide.txt` |
 | BSD-3-Clause | Skia inside Skiko (desktop) | Compatible. Permissive |
 | LGPL-2.1-or-later | JLayer (desktop only) | Compatible. The LGPL lets a covered library be combined with a program under any licence, and section 3 of LGPL-2.1 also allows applying the GPL to it. Fuse uses the unmodified jar, which the AppImage keeps as a separate file that can be replaced; its licence text ships with Fuse |
@@ -119,7 +123,8 @@ cached on their device. None of it is part of Fuse's distribution.
 The licence texts live in `ui/designsystem/src/commonMain/composeResources/files/licenses/`:
 `GPL-3.0.txt` (Fuse's own licence, a copy of `LICENSE`), `Apache-2.0.txt` (the libraries under the
 Apache License), `OFL-Sora.txt` and `OFL-Manrope.txt` (SIL OFL 1.1 with each font's copyright line),
-`LICENSE-lucide.txt` (Lucide's ISC licence and Feather's MIT licence) and `LGPL-2.1.txt` (JLayer). Because they are Compose
+`LICENSE-lucide.txt` (Lucide's ISC licence and Feather's MIT licence), `LICENSE-qrcodegen.txt` (the QR Code
+generator library's MIT licence), `LICENSE-slf4j.txt` (SLF4J's MIT licence) and `LGPL-2.1.txt` (JLayer). Because they are Compose
 resources, they are packaged inside both the APK and the AppImage, and Settings > About > Open-source
 licences shows each of them. Libraries that carry their own NOTICE files keep them where their jars
 and AARs put them; collecting those into the licences screen is on the roadmap.

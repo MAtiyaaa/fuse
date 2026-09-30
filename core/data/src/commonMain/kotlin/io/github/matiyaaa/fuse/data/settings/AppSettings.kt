@@ -167,6 +167,8 @@ data class LibraryPreferences(
     val systemArtStyle: String = "CLASSIC",
     /** Confirm on a game opens its page instead of starting it. */
     val selectOpensGamePage: Boolean = false,
+    /** Phone Link's server runs while this is on (Settings, Phone Link). */
+    val phoneLinkEnabled: Boolean = false,
     /** Collections as a whole; off hides them everywhere (they are kept). */
     val collectionsEnabled: Boolean = true,
     /** Fuse makes a collection for each series it finds and keeps it up to date. */

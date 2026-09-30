@@ -59,6 +59,7 @@ val settingsSections: List<SettingsSection> = listOf(
     SettingsSection("displays", "Displays", FuseIcons.DualScreen, "Second screen and launching", ::displayRows),
     SettingsSection("performance", "Performance and Power", FuseIcons.Gauge, "Profile and Low Power Mode", ::performanceRows),
     SettingsSection("network", "Network", FuseIcons.Wifi, "What Fuse connects to", ::networkRows),
+    SettingsSection("phonelink", "Phone Link", FuseIcons.Smartphone, "Your library from a phone on the same Wi-Fi", ::phoneLinkRows),
     SettingsSection("storage", "Storage", FuseIcons.HardDrive, "File access and caches", ::storageRows),
     SettingsSection("privacy", "Privacy", FuseIcons.ShieldCheck, "No telemetry, where data goes", ::privacyRows),
     SettingsSection("updates", "Updates", FuseIcons.Download, "New versions of Fuse", ::updateRows),

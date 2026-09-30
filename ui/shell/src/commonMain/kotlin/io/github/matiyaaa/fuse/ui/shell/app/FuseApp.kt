@@ -74,6 +74,7 @@ import io.github.matiyaaa.fuse.ui.shell.search.SearchScreen
 import io.github.matiyaaa.fuse.ui.shell.settings.PlatformSettingsScreen
 import io.github.matiyaaa.fuse.ui.shell.settings.SettingsScreen
 import io.github.matiyaaa.fuse.ui.shell.store.FuseStore
+import io.github.matiyaaa.fuse.ui.shell.store.PhoneLinkControl
 import io.github.matiyaaa.fuse.ui.shell.systems.SystemsScreen
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
@@ -99,7 +100,7 @@ import androidx.compose.ui.graphics.Brush
  * desktop window) because that is where raw input arrives.
  */
 @Composable
-fun FuseApp(store: FuseStore, platform: PlatformUi, router: InputRouter) {
+fun FuseApp(store: FuseStore, platform: PlatformUi, router: InputRouter, phoneLink: PhoneLinkControl? = null) {
     val base = rememberCoroutineScope()
     val prefs by store.prefs.collectAsState()
     val app = remember {
@@ -110,7 +111,7 @@ fun FuseApp(store: FuseStore, platform: PlatformUi, router: InputRouter) {
                 state.toasts.show("Something went wrong (${t::class.simpleName ?: "error"}). Fuse kept running.", ToastKind.ERROR)
             },
         )
-        state = AppState(store, platform, scope, if (prefs.onboardingDone) Route.Root(Destination.HOME) else Route.Onboarding)
+        state = AppState(store, platform, scope, if (prefs.onboardingDone) Route.Root(Destination.HOME) else Route.Onboarding, phoneLink)
         state
     }
     val spec = ThemePresets.byId(prefs.themeId)
@@ -329,6 +330,7 @@ private fun Pages(app: AppState) {
                 is Route.CollectionGames -> LibraryScreen(app, LibraryScope.OfCollection(route.collection, route.name))
                 Route.Collections -> io.github.matiyaaa.fuse.ui.shell.collections.CollectionsScreen(app)
                 Route.Storage -> io.github.matiyaaa.fuse.ui.shell.settings.StorageScreen(app)
+                Route.PhoneLink -> io.github.matiyaaa.fuse.ui.shell.settings.PhoneLinkScreen(app)
                 is Route.GameInfo -> GameScreen(app, route.game)
                 is Route.Media -> MediaScreen(app, route.owner, route.title, route.identify)
                 is Route.Settings -> SettingsScreen(app, route.section)

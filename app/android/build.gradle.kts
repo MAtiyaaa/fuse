@@ -57,6 +57,7 @@ android {
 
 dependencies {
     implementation(projects.ui.shell)
+    implementation(projects.ui.link)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.core.ktx)
     implementation(libs.kotlinx.coroutines.android)

@@ -27,6 +27,7 @@ include(
     ":core:data",
     ":ui:designsystem",
     ":ui:shell",
+    ":ui:link",
     ":app:android",
     ":app:desktop",
 )

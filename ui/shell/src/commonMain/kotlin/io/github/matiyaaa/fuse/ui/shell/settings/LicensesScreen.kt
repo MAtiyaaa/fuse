@@ -52,10 +52,12 @@ private data class LicenceDoc(val file: String, val title: String, val covers: S
 
 private val docs = listOf(
     LicenceDoc("GPL-3.0.txt", "Fuse", "GNU General Public License 3.0 or later"),
-    LicenceDoc("Apache-2.0.txt", "Libraries", "Apache License 2.0: Kotlin, Compose Multiplatform, AndroidX, Ktor, Coil, SQLDelight, kotlinx, Media3"),
+    LicenceDoc("Apache-2.0.txt", "Libraries", "Apache License 2.0: Kotlin, Compose Multiplatform, AndroidX, Ktor, Coil, SQLDelight, kotlinx, Media3, Typesafe Config"),
     LicenceDoc("OFL-Sora.txt", "Sora typeface", "SIL Open Font License 1.1"),
     LicenceDoc("OFL-Manrope.txt", "Manrope typeface", "SIL Open Font License 1.1"),
     LicenceDoc("LICENSE-lucide.txt", "Lucide icons", "ISC License (and MIT for icons derived from Feather)"),
+    LicenceDoc("LICENSE-qrcodegen.txt", "QR codes", "MIT License: Project Nayuki's QR Code generator library, for Phone Link pairing"),
+    LicenceDoc("LICENSE-slf4j.txt", "SLF4J", "MIT License: the logging interface Phone Link's web server (Ktor) is built on"),
     LicenceDoc("LGPL-2.1.txt", "JLayer", "GNU Lesser General Public License 2.1 or later: the MP3 decoder for menu music in the Linux app"),
     LicenceDoc(
         "art-book-next", "System art", "Art Book Next, CC BY-NC-SA 2.0. Downloaded when used, not part of Fuse",

@@ -12,6 +12,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.components.ToastState
 import io.github.matiyaaa.fuse.ui.designsystem.media.HeroSource
 import io.github.matiyaaa.fuse.ui.shell.platform.PlatformUi
 import io.github.matiyaaa.fuse.ui.shell.store.FuseStore
+import io.github.matiyaaa.fuse.ui.shell.store.PhoneLinkControl
 import kotlinx.coroutines.CoroutineScope
 
 /** Where controller focus is: the section tabs at the top, or the page content. */
@@ -62,6 +63,8 @@ class AppState(
     val platform: PlatformUi,
     val scope: CoroutineScope,
     start: Route,
+    /** Phone Link's server, where this build has one. */
+    val phoneLink: PhoneLinkControl? = null,
 ) {
     val navigator = Navigator(start)
     val toasts = ToastState()

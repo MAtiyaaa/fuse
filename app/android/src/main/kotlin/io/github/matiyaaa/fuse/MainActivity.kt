@@ -183,7 +183,7 @@ class MainActivity : ComponentActivity(), ActivityRequests {
                             .focusRequester(focus)
                             .focusable(),
                     ) {
-                        FuseApp(s.store, app.platformUi, router)
+                        FuseApp(s.store, app.platformUi, router, s.phoneLink)
                     }
                     LaunchedEffect(Unit) { focus.requestFocus() }
                 }

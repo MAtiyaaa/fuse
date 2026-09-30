@@ -124,6 +124,42 @@ internal fun AuditDriver.settingsScreens(exhaustive: Boolean) {
             if (moved >= 5) shoot("last row focused")
         }
     }
+    scenario("settings", "phone link") {
+        phoneLink.state.value = io.github.matiyaaa.fuse.ui.shell.store.PhoneLinkState(
+            running = true,
+            addresses = listOf("http://192.168.1.20:47300/", "http://10.0.0.8:47300/"),
+            username = "player",
+            sessions = 1,
+        )
+        useLibrary { it.copy(phoneLinkEnabled = true) }
+        openSettings()
+        tap(PadButton.DPAD_DOWN, sectionIndex("phonelink"))
+        tap(PadButton.DPAD_RIGHT)
+        waitFor("Pair a phone")
+        shoot("settings rows")
+        tapText("Pair a phone")
+        waitFor("Address in the code")
+        settle(800)
+        shoot("pairing code, sign-in and signed-in phones")
+        tapText("Signed-in phones")
+        waitFor("Sign out all phones?")
+        shoot("sign out all confirmation")
+        tap(PadButton.B)
+        tapText("Sign-in", step = PadButton.DPAD_UP)
+        waitFor("Phone Link username")
+        shoot("username entry")
+        tap(PadButton.B)
+        phoneLink.state.value = io.github.matiyaaa.fuse.ui.shell.store.PhoneLinkState()
+        useLibrary { it.copy(phoneLinkEnabled = false) }
+        openSettings()
+        tap(PadButton.DPAD_DOWN, sectionIndex("phonelink"))
+        tap(PadButton.DPAD_RIGHT)
+        tapText("Pair a phone")
+        waitFor("Phone Link is off")
+        settle(600)
+        shoot("off")
+    }
+
     if (!exhaustive) return
 
     scenario("settings", "storage") {

@@ -108,6 +108,9 @@ internal class AuditDriver(
 
     val platform: PlatformUi = AuditPlatform(size)
 
+    /** Phone Link as Settings sees it; scenarios set what it reports. */
+    val phoneLink = AuditPhoneLink()
+
     /** Shows the library app from a fresh start (default focus everywhere) with the baseline settings. */
     fun useLibrary(prefs: (UiPrefs) -> UiPrefs = { it }) {
         val store = libraryStore
@@ -138,7 +141,7 @@ internal class AuditDriver(
             when (val v = view) {
                 AuditView.Blank -> Unit
                 is AuditView.App -> key(v.generation) {
-                    FuseApp(v.store, v.platform, router)
+                    FuseApp(v.store, v.platform, router, phoneLink)
                     ExtraToasts(v.store, v.platform)
                 }
                 is AuditView.Companion -> key(v.mode, v.store) { CompanionApp(v.store, v.platform, v.mode) }

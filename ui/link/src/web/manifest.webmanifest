@@ -1,0 +1,19 @@
+{
+  "name": "Fuse Phone Link",
+  "short_name": "Fuse",
+  "description": "Manage your Fuse library from your phone.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0B0D12",
+  "theme_color": "#0B0D12",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Crect width='48' height='48' rx='12' fill='%230B0D12'/%3E%3Cg transform='translate(10 10) scale(1.1667)' fill='none' stroke='%23E6E8EF' stroke-width='2.4' stroke-linecap='round'%3E%3Crect x='1.2' y='1.2' width='21.6' height='21.6' rx='6.7'/%3E%3Cpath d='M6.72 16.8C10.08 16.8 10.56 8.16 15.36 8.16'/%3E%3Ccircle cx='16.8' cy='7.2' r='1.9' fill='%23FF6A3D' stroke='none'/%3E%3C/g%3E%3C/svg%3E",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
