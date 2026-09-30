@@ -1,4 +1,4 @@
-# Tests the shared core, builds the Android debug APK and compiles the desktop app for every pull
+# Runs every test suite (core, store, UI flows, both apps) and builds the Android debug APK for every pull
 # request and every push to a branch other than main. Releases are handled by release.yml.
 
 name: CI
@@ -44,7 +44,7 @@ jobs:
 
       # Shared modules have a JVM target named "desktop", so their commonTest and desktopTest
       # sources run in the desktopTest task (see build-logic/src/main/kotlin/fuse.kmp.library.gradle.kts).
-      - name: Test, build the debug APK, compile the desktop app
+      - name: Test everything and build the debug APK
         run: >-
           ./gradlew --stacktrace
           :core:model:desktopTest
@@ -52,9 +52,10 @@ jobs:
           :core:launch:desktopTest
           :core:integrations:desktopTest
           :core:data:desktopTest
-          :ui:shell:compileKotlinDesktop
+          :ui:shell:desktopTest
+          :app:android:testDebugUnitTest
           :app:android:assembleDebug
-          :app:desktop:compileKotlin
+          :app:desktop:test
 
       - name: Upload test reports
         if: failure()
