@@ -118,6 +118,7 @@ internal class DefaultFuseStore private constructor(
             achievements.load()
             emulators.detectNow()
             cartridge.start()
+            collections.start()
             if (data.sources.all().isNotEmpty()) engine.rescan(ScanScope.QUICK)
             achievements.refresh(force = false)
             data.cache.purgeExpired(ctx.now())

@@ -28,13 +28,6 @@ private fun LibraryLayout.words(): String = when (this) {
     LibraryLayout.COMPACT_LIST -> "Compact List"
 }
 
-/**
- * The number of game actions before the view actions in a library's options menu: Play, Manage
- * Media, Game Info, Favourites, Collection, Pin, Emulator, Find Details and Art, Rename, Folder
- * Behaviour, Hide and Remove, plus the Cartridge item while Cartridge is installed.
- */
-private val AuditDriver.gameActions: Int
-    get() = 12 + if (libraryStore.cartridge.status.value.installed) 1 else 0
 
 /**
  * Chooses a layout the way a user does: Options, "View as", then the layout. [shootChoice] also
@@ -44,7 +37,7 @@ internal fun AuditDriver.viewAs(layout: LibraryLayout, shootChoice: Boolean = fa
     tap(PadButton.X)
     // "View as" sits below the game actions, often past the bottom of the menu.
     waitFor("Manage Media")
-    choose(gameActions)
+    tapText("View as")
     waitFor("Cover grid")
     if (shootChoice) shoot("View as choice list open")
     choose(layout.ordinal)
@@ -190,6 +183,25 @@ internal fun AuditDriver.libraryScreens(exhaustive: Boolean) {
         }
     }
 
+    scenario("collections", "grid") {
+        useLibrary()
+        tab(Destination.LIBRARY)
+        waitFor("All")
+        if (nav(NavAction.UP) != NavResult.MOVED) throw NotCovered("Up did not reach the Library header")
+        tapText("Collections", step = PadButton.DPAD_RIGHT)
+        waitFor("New collection")
+        tap(PadButton.DPAD_RIGHT)
+        settle(1_200)
+        shoot("your collections, the first one focused")
+        tap(PadButton.X)
+        waitFor("Add or remove games")
+        shoot("options for a collection")
+        tapText("Add or remove games")
+        waitFor("Select games to add")
+        shoot("picking its games")
+        tap(PadButton.B)
+    }
+
     scenario("library", "system without emulator") {
         useLibrary()
         tab(Destination.SYSTEMS)
@@ -207,7 +219,9 @@ internal fun AuditDriver.libraryScreens(exhaustive: Boolean) {
         search("Long Adventures")
         tap(PadButton.START)
         tap(PadButton.A)
-        waitFor("Glasswing Requiem")
+        // A collection of the user's own can be edited from its header.
+        waitFor("Add or remove games")
+        settle(1_000)
         for (layout in LibraryLayout.entries) {
             viewAs(layout)
             shoot("Long Adventures, ${layout.words()} layout")

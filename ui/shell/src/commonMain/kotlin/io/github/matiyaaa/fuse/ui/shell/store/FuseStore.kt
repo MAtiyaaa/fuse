@@ -204,8 +204,11 @@ interface CollectionOps {
     suspend fun rename(id: CollectionId, name: String)
     suspend fun delete(id: CollectionId)
     suspend fun add(id: CollectionId, game: GameId)
+    suspend fun addGames(id: CollectionId, games: List<GameId>)
     suspend fun remove(id: CollectionId, game: GameId)
     suspend fun membership(game: GameId): Set<CollectionId>
+    /** Makes a series the user's own collection: Fuse stops changing it (hide its name from series too). */
+    suspend fun keepSeries(id: CollectionId)
 }
 
 interface AchievementOps {

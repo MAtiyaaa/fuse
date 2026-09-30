@@ -237,7 +237,7 @@ internal class AuditDriver(
      * Chooses the menu row showing exactly [text] the way a player does (menus whose order changes
      * between versions): Down until that row is the selected one, then A.
      */
-    fun tapText(text: String) {
+    fun tapText(text: String, step: PadButton = PadButton.DPAD_DOWN) {
         waitFor(text.take(1))
         repeat(40) {
             settle(STEP_MS)
@@ -246,7 +246,7 @@ internal class AuditDriver(
                 tap(PadButton.A)
                 return
             }
-            tap(PadButton.DPAD_DOWN)
+            tap(step)
         }
         throw NotCovered("\"$text\" was never selected")
     }

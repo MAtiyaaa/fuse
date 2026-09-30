@@ -104,7 +104,8 @@ private fun ChoiceOverlay(app: AppState) {
     val spec = app.choice
     var shown by remember { mutableStateOf(spec) }
     if (spec != null) shown = spec
-    val sel = remember(spec) { LinearSelection() }
+    // Keyed by the title, so a list that updates itself (checks toggled in place) keeps its place.
+    val sel = remember(spec?.title) { LinearSelection() }
     if (spec != null) {
         InputLayer(priority = LayerPriority.DIALOG + 1, modal = true) { e ->
             when (e.action) {

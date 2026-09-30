@@ -119,7 +119,7 @@ fun SearchScreen(app: AppState) {
     val results by flow.collectAsState(initial = SearchResults())
     val hits = remember(results) {
         results.games.map { Hit.Game(it) } + results.platforms.map { Hit.System(it) } +
-            results.apps.map { Hit.App(it) } + results.collections.map { Hit.Collection(it) }
+            results.apps.map { Hit.App(it) } + results.collections.filter { app.store.prefs.value.collectionsEnabled }.map { Hit.Collection(it) }
     }
     sel.clamp(hits.size)
 

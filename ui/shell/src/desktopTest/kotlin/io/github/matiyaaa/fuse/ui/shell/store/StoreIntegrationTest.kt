@@ -9,6 +9,7 @@ import io.github.matiyaaa.fuse.library.FsAccessException
 import io.github.matiyaaa.fuse.library.FsEntry
 import io.github.matiyaaa.fuse.library.FuseFileSystem
 import io.github.matiyaaa.fuse.model.CartridgeRoute
+import io.github.matiyaaa.fuse.model.CollectionKind
 import io.github.matiyaaa.fuse.model.CartridgeStatus
 import io.github.matiyaaa.fuse.model.EmulatorId
 import io.github.matiyaaa.fuse.model.Host
@@ -198,6 +199,39 @@ class StoreIntegrationTest {
         store.media.fill(MediaFillMode.FILL_MISSING, setOf(MediaKind.ICON))
         val none = withTimeout(20_000) { store.media.fillProgress.first { it?.finished == true && it.total == 0 } }!!
         assertEquals(0, none.done)
+    }
+
+    @Test
+    fun seriesBecomeCollectionsAndCanBeHiddenOrKept() = runBlocking {
+        val lib = Files.createTempDirectory("fuse-series").toFile()
+        try {
+            File(lib, "gba").mkdirs()
+            listOf("Super Mario Advance (USA)", "Super Mario Advance 2 (USA)", "Super Mario Advance 4 (USA)", "Metroid Fusion (USA)")
+                .forEach { File(lib, "gba/$it.gba").writeBytes(ByteArray(64)) }
+            val services = FakeServices(FuseData(DesktopDatabase.open(freshDb())), cache)
+            val store = createFuseStore(services, scope)
+            store.sources.add(lib.absolutePath, LibrarySourceKind.ROMS_ROOT)
+            val series = withTimeout(20_000) {
+                store.collections.collections.first { list -> list.any { it.kind == CollectionKind.SERIES } }
+            }.single { it.kind == CollectionKind.SERIES }
+            assertEquals("Super Mario", series.name)
+            assertEquals(3, series.gameCount)
+
+            // Hidden: it goes away and isn't made again.
+            store.updatePrefs { it.copy(hiddenSeries = listOf("super mario")) }
+            withTimeout(10_000) { store.collections.collections.first { list -> list.none { it.kind == CollectionKind.SERIES } } }
+
+            // Back again, then kept as the user's own: Fuse stops managing it.
+            store.updatePrefs { it.copy(hiddenSeries = emptyList()) }
+            val again = withTimeout(10_000) { store.collections.collections.first { list -> list.any { it.kind == CollectionKind.SERIES } } }
+                .single { it.kind == CollectionKind.SERIES }
+            store.collections.keepSeries(again.id)
+            store.updatePrefs { it.copy(hiddenSeries = listOf("super mario")) }
+            val kept = withTimeout(10_000) { store.collections.collections.first { list -> list.any { it.id == again.id && it.kind == CollectionKind.MANUAL } } }
+            assertEquals(3, kept.single { it.id == again.id }.gameCount)
+        } finally {
+            lib.deleteRecursively()
+        }
     }
 
     /**

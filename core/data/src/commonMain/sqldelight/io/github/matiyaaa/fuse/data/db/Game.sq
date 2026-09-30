@@ -91,6 +91,10 @@ SELECT title_original, title_cleaned, title_custom, title_metadata, use_cleaned 
 selectAllTitles:
 SELECT id, platform_id, title_original, title_cleaned, title_custom, title_metadata, use_cleaned FROM game;
 
+seriesInputs:
+SELECT id, title_original, title_cleaned, title_custom, title_metadata, use_cleaned, metadata_json FROM game
+WHERE missing = 0 AND removed_at IS NULL;
+
 selectMetadata:
 SELECT metadata_json, title_metadata, title_custom, title_cleaned, title_original, use_cleaned FROM game WHERE id = ?;
 

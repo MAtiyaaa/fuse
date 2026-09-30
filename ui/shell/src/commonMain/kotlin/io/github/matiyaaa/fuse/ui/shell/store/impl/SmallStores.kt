@@ -6,6 +6,12 @@ import io.github.matiyaaa.fuse.model.AppEntry
 import io.github.matiyaaa.fuse.model.AppFilter
 import io.github.matiyaaa.fuse.model.BorderStyle
 import io.github.matiyaaa.fuse.model.CollectionId
+import io.github.matiyaaa.fuse.model.CollectionKind
+import io.github.matiyaaa.fuse.library.series.SeriesDetector
+import io.github.matiyaaa.fuse.library.series.SeriesInput
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.launch
 import io.github.matiyaaa.fuse.model.GameCollection
 import io.github.matiyaaa.fuse.model.GameId
 import io.github.matiyaaa.fuse.model.LibraryLayout
@@ -50,9 +56,43 @@ internal class DefaultCollectionOps(private val ctx: StoreContext) : CollectionO
 
     override suspend fun add(id: CollectionId, game: GameId) = repo.addGames(id, listOf(game))
 
+    override suspend fun addGames(id: CollectionId, games: List<GameId>) = repo.addGames(id, games)
+
     override suspend fun remove(id: CollectionId, game: GameId) = repo.removeGames(id, listOf(game))
 
     override suspend fun membership(game: GameId): Set<CollectionId> = repo.observeCollectionsOf(game).first()
+
+    override suspend fun keepSeries(id: CollectionId) = repo.setKind(id, CollectionKind.MANUAL)
+
+    /**
+     * Keeps series collections up to date: whenever games change (a scan, new details, a rename) or
+     * the series settings change, the library's series are found again and synced. Nothing runs
+     * while Collections are off; turning automatic series off removes them.
+     */
+    @OptIn(kotlinx.coroutines.FlowPreview::class)
+    fun start() {
+        val settings = ctx.settings.map { Triple(it.library.collectionsEnabled, it.library.autoSeries, it.library.hiddenSeries.toSet()) }.distinctUntilChanged()
+        ctx.scope.launch {
+            combine(repo.observeGameChanges().debounce(1_500), settings) { _, s -> s }
+                .collectLatest { (enabled, auto, hidden) ->
+                    if (!enabled) return@collectLatest
+                    runCatching { syncSeries(auto, hidden) }
+                }
+        }
+    }
+
+    private suspend fun syncSeries(auto: Boolean, hidden: Set<String>) {
+        if (!auto) {
+            repo.syncSeries(emptyMap())
+            return
+        }
+        val inputs = repo.seriesInputs().map { SeriesInput(it.id, it.title, it.franchise) }
+        val found = SeriesDetector.detect(inputs)
+            .filter { it.name.lowercase() !in hidden }
+            // The user's own collection with the same name wins.
+            .filter { s -> collections.value.none { it.kind != CollectionKind.SERIES && it.name.equals(s.name, ignoreCase = true) } }
+        repo.syncSeries(found.associate { it.name to it.members })
+    }
 }
 
 internal class DefaultAppOps(private val ctx: StoreContext) : AppOps {

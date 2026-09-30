@@ -213,6 +213,37 @@ fun libraryRows(app: AppState): List<MenuAction> {
             listOf(false to "Plays it", true to "Opens its page"),
             detail = "What confirm (or a tap on a selected game) does. Play is always on the game's page",
         ) { v -> app.store.updatePrefs { it.copy(openGamePage = v) } })
+        add(toggleRow("collections", "Collections", FuseIcons.LibraryBig, p.collectionsEnabled, "Your own collections and the series Fuse finds. Off hides them everywhere; nothing is deleted") { v ->
+            app.store.updatePrefs { it.copy(collectionsEnabled = v) }
+        })
+        add(toggleRow(
+            "series", "Automatic series", FuseIcons.Sparkles, p.autoSeries,
+            "A collection for each series, like Super Mario, from game details and shared titles. Kept up to date",
+            enabled = p.collectionsEnabled,
+        ) { v -> app.store.updatePrefs { it.copy(autoSeries = v) } })
+        if (p.hiddenSeries.isNotEmpty() && p.collectionsEnabled) {
+            add(MenuAction(
+                "series.hidden", "Hidden series", FuseIcons.EyeOff,
+                detail = "Series you hid or kept as your own. Bring one back to let Fuse make it again",
+                trailing = Trailing.Value(p.hiddenSeries.size.toString()),
+                onSelect = {
+                    app.choice = ChoiceSpec(
+                        title = "Hidden series",
+                        message = "Fuse makes these again when you bring them back.",
+                        options = p.hiddenSeries.sorted().map { name ->
+                            MenuAction("s.$name", name.replaceFirstChar { it.uppercase() }, FuseIcons.Eye, detail = "Bring back", onSelect = {
+                                app.store.updatePrefs { it.copy(hiddenSeries = it.hiddenSeries - name) }
+                                app.choice = null
+                                app.toasts.show("Fuse will make this series again")
+                            })
+                        } + MenuAction("all", "Bring all back", FuseIcons.Refresh, onSelect = {
+                            app.store.updatePrefs { it.copy(hiddenSeries = emptyList()) }
+                            app.choice = null
+                        }),
+                    )
+                },
+            ))
+        }
         add(MenuAction(
             "clean", "Clean display names", FuseIcons.Wand,
             detail = "Hides tags like (USA) and [!] in titles. Files are never renamed",

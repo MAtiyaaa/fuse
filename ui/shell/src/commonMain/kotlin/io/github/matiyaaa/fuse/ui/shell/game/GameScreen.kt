@@ -201,6 +201,7 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
                     val meta = listOfNotNull(
                         game.metadata.releaseYear?.toString(),
                         game.metadata.developer,
+                        game.metadata.franchise?.takeIf { it.isNotBlank() && !game.displayTitle.startsWith(it, ignoreCase = true) }?.let { "$it series" },
                         game.metadata.genres.take(2).joinToString(", ").ifBlank { null },
                         game.metadata.players?.let { "$it players" },
                     )

@@ -28,6 +28,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.graphicsLayer
@@ -175,7 +177,7 @@ fun Chip(
                 }
             }
             .clip(PillShape)
-            .then(if (onClick != null) Modifier.clickable(remember { MutableInteractionSource() }, null, onClick = onClick) else Modifier)
+            .then(if (onClick != null) Modifier.clickable(remember { MutableInteractionSource() }, null, onClick = onClick).semantics { this.selected = focused } else Modifier)
             .background(if (selected) c.text else background)
             .padding(horizontal = Space.m, vertical = Space.xs + 1.dp),
         verticalAlignment = Alignment.CenterVertically,

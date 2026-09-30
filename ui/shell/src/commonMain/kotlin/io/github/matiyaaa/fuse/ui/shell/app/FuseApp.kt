@@ -327,6 +327,7 @@ private fun Pages(app: AppState) {
                 }
                 is Route.PlatformGames -> LibraryScreen(app, LibraryScope.OfPlatform(route.platform))
                 is Route.CollectionGames -> LibraryScreen(app, LibraryScope.OfCollection(route.collection, route.name))
+                Route.Collections -> io.github.matiyaaa.fuse.ui.shell.collections.CollectionsScreen(app)
                 is Route.GameInfo -> GameScreen(app, route.game)
                 is Route.Media -> MediaScreen(app, route.owner, route.title, route.identify)
                 is Route.Settings -> SettingsScreen(app, route.section)

@@ -20,7 +20,6 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -80,6 +79,7 @@ import io.github.matiyaaa.fuse.ui.shell.app.formatDate
 import io.github.matiyaaa.fuse.ui.shell.app.play
 import io.github.matiyaaa.fuse.ui.shell.app.rememberClockText
 import io.github.matiyaaa.fuse.ui.shell.app.rememberRouteState
+import io.github.matiyaaa.fuse.ui.shell.components.CoverCollage
 import io.github.matiyaaa.fuse.ui.shell.components.Stage
 import io.github.matiyaaa.fuse.ui.shell.components.StageInfo
 import io.github.matiyaaa.fuse.ui.shell.components.playtimeText
@@ -102,8 +102,10 @@ fun ChannelHome(app: AppState) {
     val prefs by store.prefs.collectAsState()
     val feed by store.library.home.collectAsState()
     val cartridge by store.cartridge.status.collectAsState()
-    // The Cartridge channel only while Cartridge support is on and it is installed.
-    val widgets = prefs.home.widgets.filter { it.visible && (it.kind != WidgetKind.CARTRIDGE_DOWNLOADS || cartridge.installed) }.sortedBy { it.order }
+    // The Cartridge channel only while Cartridge support is on and it is installed; Collections only while on.
+    val widgets = prefs.home.widgets.filter {
+        it.visible && (it.kind != WidgetKind.CARTRIDGE_DOWNLOADS || cartridge.installed) && (it.kind != WidgetKind.COLLECTIONS || prefs.collectionsEnabled)
+    }.sortedBy { it.order }
     val cells = remember(widgets) { packCells(widgets.map { channelSpan(it).columns }, BOARD_COLUMNS) }
     val sel = rememberRouteState(app.navigator, "home.channels") { SpatialSelection() }
     sel.clamp(widgets.size)
@@ -492,48 +494,6 @@ private fun Channel(
         }
         Spacer(Modifier.height(Space.s + Space.xs))
         FText(kind.title(), Fuse.type.label, color = if (selected) c.text else c.textMuted, maxLines = 1)
-    }
-}
-
-/**
- * A game channel as a collage: the first game's background art, dimmed, with the covers of the first
- * three games fanned over it.
- */
-@Composable
-private fun CoverCollage(games: List<GameCard>, height: androidx.compose.ui.unit.Dp) {
-    val first = games.first()
-    val shape = io.github.matiyaaa.fuse.ui.designsystem.shape.SquircleShape.fraction(Fuse.geometry.tileCornerFraction * 0.45f)
-    Box(Modifier.fillMaxSize()) {
-        Artwork(
-            first.art.hero ?: first.art.grid ?: first.art.boxart,
-            Modifier.fillMaxSize(),
-            focusX = first.art.heroFocusX,
-            focusY = first.art.heroFocusY,
-            fallback = { GeneratedArt(first.title, first.accent.toColor(), slot = ArtSlot.WIDE, showText = false) },
-        )
-        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to Color.Black.copy(alpha = 0.1f), 1f to Color.Black.copy(alpha = 0.55f))))
-        val cover = height * 0.66f
-        val fan = games.take(3)
-        Box(Modifier.align(Alignment.BottomCenter).padding(bottom = Space.m)) {
-            // Back to front, so the first game sits on top in the middle.
-            val slots = listOf(1 to -1f, 2 to 1f, 0 to 0f).filter { it.first < fan.size }
-            for ((index, side) in slots) {
-                val g = fan[index]
-                Box(
-                    Modifier
-                        .offset(x = cover * 0.46f * side)
-                        .height(if (index == 0) cover else cover * 0.88f)
-                        .aspectRatio(0.72f)
-                        .graphicsLayer { rotationZ = 6f * side; shadowElevation = 12f; this.shape = shape; clip = true }
-                        .align(Alignment.BottomCenter),
-                ) {
-                    Artwork(g.art.boxart ?: g.art.grid ?: g.art.icon, Modifier.fillMaxSize(), fallback = {
-                        // Only the front cover names its game; the ones behind would show cut-off words.
-                        GeneratedArt(g.title, g.accent.toColor(), slot = ArtSlot.BOX, label = g.platformShort, showText = index == 0)
-                    })
-                }
-            }
-        }
     }
 }
 

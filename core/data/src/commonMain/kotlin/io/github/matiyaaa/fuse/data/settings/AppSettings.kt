@@ -167,6 +167,12 @@ data class LibraryPreferences(
     val systemArtStyle: String = "CLASSIC",
     /** Confirm on a game opens its page instead of starting it. */
     val selectOpensGamePage: Boolean = false,
+    /** Collections as a whole; off hides them everywhere (they are kept). */
+    val collectionsEnabled: Boolean = true,
+    /** Fuse makes a collection for each series it finds and keeps it up to date. */
+    val autoSeries: Boolean = true,
+    /** Series the user hid or kept as their own collection, lower case, so Fuse doesn't make them again. */
+    val hiddenSeries: List<String> = emptyList(),
     /** Brand colours from the system art pack (opaque ARGB), by platform id. */
     val systemColors: Map<String, Long> = emptyMap(),
 )

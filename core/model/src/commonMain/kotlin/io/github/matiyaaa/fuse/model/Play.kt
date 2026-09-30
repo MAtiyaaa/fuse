@@ -47,6 +47,8 @@ enum class CollectionKind {
     UNPLAYED,
     /** Rule-based: one platform, genre or series. */
     SMART,
+    /** A series Fuse found in the library (from game details or shared title starts); kept up to date. */
+    SERIES,
 }
 
 /** RetroAchievements data, cached. Fuse only displays it; emulators unlock achievements. */

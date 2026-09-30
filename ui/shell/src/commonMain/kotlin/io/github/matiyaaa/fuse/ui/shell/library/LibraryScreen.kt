@@ -99,6 +99,7 @@ import io.github.matiyaaa.fuse.ui.shell.components.stage
 import io.github.matiyaaa.fuse.ui.shell.store.GameCard
 import io.github.matiyaaa.fuse.ui.shell.store.GameQuery
 import io.github.matiyaaa.fuse.ui.shell.store.GameSet
+import io.github.matiyaaa.fuse.ui.shell.collections.addGamesPicker
 import io.github.matiyaaa.fuse.ui.shell.systems.SystemHeader
 import io.github.matiyaaa.fuse.ui.shell.systems.SystemShowcase
 import kotlinx.coroutines.flow.combine
@@ -127,7 +128,7 @@ enum class LibrarySegment(val label: String, val set: GameSet) {
 }
 
 /** The buttons at the end of the Library header. */
-enum class LibraryButton { SYSTEM, SORT, VIEW }
+enum class LibraryButton { COLLECTIONS, ADD_GAMES, SYSTEM, SORT, VIEW }
 
 /** Remembered per library view: which game was selected (by id, so re-sorting keeps it), and where focus was. */
 @Stable
@@ -177,7 +178,14 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
     val segments = if (scope != LibraryScope.All) emptyList() else LibrarySegment.entries.filter { s ->
         s.set == GameSet.LIBRARY || (extraCounts[s] ?: 0) > 0 || state.segment == s
     }
+    val collectionsOn = prefs.collectionsEnabled
+    val allCollections by store.collections.collections.collectAsState()
+    // A collection of the user's own (not a series Fuse keeps up to date) can be edited here.
+    val ownCollection = (scope as? LibraryScope.OfCollection)?.let { s -> allCollections.firstOrNull { it.id == s.collection } }
+        ?.takeIf { it.kind != io.github.matiyaaa.fuse.model.CollectionKind.SERIES }
     val buttons = buildList {
+        if (scope == LibraryScope.All && collectionsOn) add(LibraryButton.COLLECTIONS)
+        if (ownCollection != null) add(LibraryButton.ADD_GAMES)
         if (scope == LibraryScope.All) add(LibraryButton.SYSTEM)
         add(LibraryButton.SORT)
         add(LibraryButton.VIEW)
@@ -254,12 +262,20 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
             app.openContextMenu(setMenu(app, card, segment))
             return
         }
-        val base = app.gameMenu(card)
+        val remove = ownCollection?.let { c ->
+            listOf(MenuAction("uncollect", "Remove from ${c.name}", FuseIcons.Minus, detail = "The game stays in your library", onSelect = {
+                app.closeOverlays()
+                app.scope.launch { store.collections.remove(c.id, card.id) }
+            }))
+        }.orEmpty()
+        val base = app.gameMenu(card, extra = remove)
         app.openContextMenu(base.copy(actions = base.actions + viewActions(app, state, platformId, layout, sort)))
     }
 
     fun press(button: LibraryButton) {
         when (button) {
+            LibraryButton.COLLECTIONS -> app.go(Route.Collections)
+            LibraryButton.ADD_GAMES -> ownCollection?.let { app.addGamesPicker(it.id, it.name) }
             LibraryButton.SYSTEM -> app.choice = systemPicker(app, state, platforms)
             LibraryButton.SORT -> app.choice = sortPicker(app, sort)
             LibraryButton.VIEW -> app.choice = layoutPicker(app, state, platformId, layout)
@@ -495,6 +511,8 @@ private fun LibraryHeader(
             if (item is HeaderItem.Button) {
                 Spacer(Modifier.width(Space.s))
                 val (label, icon) = when (item.button) {
+                    LibraryButton.COLLECTIONS -> "Collections" to FuseIcons.LibraryBig
+                    LibraryButton.ADD_GAMES -> "Add or remove games" to FuseIcons.ListPlus
                     LibraryButton.SYSTEM -> (system?.platform?.shortName ?: "All systems") to FuseIcons.Filter
                     LibraryButton.SORT -> sortLabel(sort) to FuseIcons.Sort
                     LibraryButton.VIEW -> layoutLabel(layout) to layoutIcon(layout)

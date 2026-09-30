@@ -119,7 +119,7 @@ fun FlowHome(app: AppState) {
     val cartridge by store.cartridge.status.collectAsState()
     val achievementsOn by store.achievements.configured.collectAsState()
     val shelves = remember(prefs.home, feed, achievementsOn, cartridge.installed) {
-        buildShelves(prefs.home.widgets, feed, achievementsOn, cartridge.installed)
+        buildShelves(prefs.home.widgets, if (prefs.collectionsEnabled) feed else feed.copy(collections = emptyList()), achievementsOn, cartridge.installed)
     }
     val sel = rememberRouteState(app.navigator, "home.flow") { ShelfSelection() }
     val keys = shelves.map { it.key }
