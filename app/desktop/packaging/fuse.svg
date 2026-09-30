@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Fuse's mark on an ink tile. Same geometry as FuseMark in ui/shell (Hud.kt) and FuseMarkPainter. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <defs>
+    <radialGradient id="spark" cx="160.768" cy="95.232" r="36.045" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FF8A3D" stop-opacity="1"/>
+      <stop offset="1" stop-color="#FF8A3D" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect x="0" y="0" width="256" height="256" rx="56.32" ry="56.32" fill="#0B0D12"/>
+  <rect x="54.272" y="54.272" width="147.456" height="147.456" rx="45.875" ry="45.875"
+        fill="none" stroke="#F2F4F8" stroke-width="16.384"/>
+  <path d="M 91.955 160.768 C 114.893 160.768 118.170 101.786 150.938 101.786"
+        fill="none" stroke="#F2F4F8" stroke-width="16.384" stroke-linecap="round"/>
+  <circle cx="160.768" cy="95.232" r="36.045" fill="url(#spark)"/>
+  <circle cx="160.768" cy="95.232" r="11.469" fill="#FF8A3D"/>
+</svg>
