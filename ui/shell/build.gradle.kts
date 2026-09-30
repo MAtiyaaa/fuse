@@ -16,5 +16,10 @@ kotlin {
             implementation(libs.jb.lifecycle.runtime.compose)
             implementation(libs.kotlinx.datetime)
         }
+        val desktopTest by getting {
+            dependencies {
+                implementation(libs.ktor.client.mock)
+            }
+        }
     }
 }
