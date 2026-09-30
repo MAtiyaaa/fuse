@@ -100,6 +100,11 @@ Builds, passes its unit tests, packages as a Deb and an AppImage, and starts und
 - [x] Storage: space per drive and per game, and deleting games' files after a confirmation (0.0.4)
 - [x] Collections with automatic series from game details and shared titles (0.0.4)
 - [x] RomM details, pictures and per-game download progress through Cartridge's bridge protocol 2 (0.0.4; needs the next Cartridge)
+- [x] Square box art as every game's tile art, with covers drawn whole when there is none (0.0.5)
+- [x] Menu music: *jam channel* by boipurple, a song picker and your own file (0.0.5)
+- [x] Top or bottom screen for games and apps on dual-screen devices, asked or remembered (0.0.5)
+- [x] Uploading games to RomM, with their discs, DLC and updates, through Cartridge's bridge protocol 3 (0.0.5; needs the next Cartridge)
+- [x] Art that fills itself after scans, searches other names and falls back when a source runs out (0.0.5)
 - [ ] SAF-only storage mode that works without All files access (emulators that need FileProvider URIs would then be limited)
 - [ ] R8 minification and resource shrinking for release APKs
 - [ ] Screenshot tests for the design system and main screens

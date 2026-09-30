@@ -86,8 +86,8 @@ fraction of the tile's short side (see [Shapes](#shapes)).
 
 | Token | Ratio | Use |
 |---|---|---|
-| `ICON` | 1 | Icon mode tiles |
-| `BOX` | 0.72 | Box art |
+| `ICON` | 1 | Square tiles (the Box art layout, Home shelves), drawn with square box art |
+| `BOX` | 0.72 | Portrait covers |
 | `CAPSULE` | 2 / 3 | Portrait capsules |
 | `GRID_WIDE` | 460 / 215 | Wide grid capsules |
 | `HERO` | 1920 / 620 | Hero art |

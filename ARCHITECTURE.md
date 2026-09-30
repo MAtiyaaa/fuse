@@ -158,7 +158,8 @@ Everything in this section is in `core:library` and `core:data` and covered by t
    `FilenameTags`. Display-name cleanup is optional (off by default) and reversible.
 6. **Find local media** (`MediaLocator`): type folders inside the platform folder or its `media/` or
    `downloaded_media/` folder, ES-DE's global `downloaded_media/<system>/<type>/` layout, and
-   Batocera's `images/<name>-thumb.png` style suffixes.
+   Batocera's `images/<name>-thumb.png` style suffixes. Square box art comes from `squares/` (or
+   `square/`) type folders and `-square` suffixes.
 7. **Reconcile** (`LibraryIndexer` in `core:data`). Per platform folder, in one transaction: new
    paths are inserted; known paths get only their file-derived columns rewritten; after a complete
    scan, games that were in that folder and are absent now are marked missing (never deleted);

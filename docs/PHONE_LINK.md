@@ -44,7 +44,7 @@ the static files, `GET /api/session` and `POST /api/login` needs a session (401
 ### Session
 | Route | Body | Result |
 |---|---|---|
-| `GET /api/session` | | `{"signedIn": bool, "device": "AYN Thor", "version": "0.0.4"}` |
+| `GET /api/session` | | `{"signedIn": bool, "device": "AYN Thor", "version": "0.0.5"}` |
 | `POST /api/login` | `{"username", "password"}` | 200 `{"ok": true}` and the cookie; 401 wrong; 429 `{"error", "retryAfterSeconds"}` |
 | `POST /api/logout` | | `{"ok": true}` |
 
@@ -80,7 +80,7 @@ device lists them in Settings.
 - `GET /api/games/{id}` → `GameSummary` plus `{"description", "developer", "publisher",
   "genres": [], "players", "rating": 0..100 | null, "series", "fileName", "sizeBytes",
   "playMinutes", "searchAs": {"current", "custom": bool, "default"},
-  "media": {"icon"|"cover"|"banner"|"background"|"logo": {"url", "source"} | null},
+  "media": {"square"|"icon"|"cover"|"banner"|"background"|"logo": {"url", "source"} | null},
   "screenshots": [url]}`
 
 ### Fix a game
@@ -89,7 +89,7 @@ device lists them in Settings.
 | `PUT /api/games/{id}/search-as` | `{"name": "Pepsiman"}` (empty goes back to the title) | `{"ok": true, "searchAs": {...}}` |
 | `GET /api/games/{id}/identify` | | `{"query", "candidates": [Candidate]}` or `{"error"}` |
 | `POST /api/games/{id}/identify` | `{"providerId", "providerGameId"}` of a listed `Candidate` | `{"ok": true}` (names the game, fills details and art) |
-| `GET /api/games/{id}/art/{kind}` | kind: icon, cover, banner, background, logo, screenshot | `{"options": [ArtOption]}`, `{"needsMatch": [Candidate]}` or `{"error"}` |
+| `GET /api/games/{id}/art/{kind}` | kind: square (box art), icon, cover, banner, background, logo, screenshot | `{"options": [ArtOption]}`, `{"needsMatch": [Candidate]}` or `{"error"}` |
 | `POST /api/games/{id}/art/{kind}` | `{"url"}` of a listed `ArtOption` | `{"ok": true}` |
 | `POST /api/games/{id}/fill` | | `{"ok": true}` (fills what is missing for this game) |
 

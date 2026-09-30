@@ -39,12 +39,23 @@ and redact credentials from every error message (`redact()`, see
 | Libretro thumbnails | Nothing | The system folder name and candidate game names in image URLs | When you fill artwork |
 | System art (Art Book Next) | Nothing | The pack's system name (for example `snes`) in file URLs on raw.githubusercontent.com | When a platform's system art or the style picker is shown and the files are not cached yet |
 | GitHub Releases | Nothing | A request for the latest release of Fuse or Cartridge, your IP address and the User-Agent with Fuse's version | Update checks (automatic check can be turned off) and "Install Cartridge"; downloads only after you confirm |
-| Cartridge | Nothing | Nothing leaves the device: Fuse reads Cartridge's local status and opens it with deep links | On resume and when Cartridge reports a change |
+| Cartridge | Nothing | Nothing leaves the device through Fuse: Fuse reads Cartridge's local status and opens it with deep links. "Upload to RomM" hands Cartridge a game's file paths; Cartridge uploads the files to your own RomM server only after you confirm there | On resume and when Cartridge reports a change; uploads only when you start one and confirm it in Cartridge |
 
 The "When" column describes the store that drives these clients (`DefaultFuseStore`). The "Sent by Fuse" column is what the clients in `core:integrations` can send.
 
-Never sent anywhere: ROM files, your folder paths, your play time, your collections, device
-identifiers, analytics or crash reports. Fuse contains no telemetry.
+Never sent anywhere by Fuse: ROM files, your folder paths, your play time, your collections, device
+identifiers, analytics or crash reports. Fuse contains no telemetry. The one way a game's files
+leave the device is an upload you start and confirm, which Cartridge sends to your own RomM server.
+
+**Filling art by itself.** With "Find art by itself" on (Settings, Media and Scraping; on by
+default), Fuse runs "Fill missing art" on its own a few seconds after a scan and after a key is
+saved, for games still missing art or details, with the same sources and requests as a fill you
+start. Games it recently looked for without finding more are skipped. Each source is searched by the
+game's title and, while nothing sure turns up, by up to two other names (a name a provider gave, the
+cleaned file name, the title without its subtitle, "&" or "and", Roman numerals or digits, without a
+leading "The", without accents). A source that runs out of requests, rejects its key or keeps
+failing rests for a while (30 minutes for a quota or a rejected key, 5 after three failures in a
+row); the others carry on, and Fuse remembers nothing as missing while one rests.
 
 ## RetroAchievements
 
@@ -95,8 +106,9 @@ Docs: [RetroAchievements API](https://api-docs.retroachievements.org/).
 
 ## SteamGridDB
 
-**What for.** Grids (wide capsules and portrait box art), heroes, logos and icons, for games,
-platforms and apps.
+**What for.** Grids (wide capsules, portrait covers and square box art), heroes, logos and icons,
+for games, platforms and apps. Square grids (512 x 512 and 1024 x 1024) are Fuse's box art, the
+tile art of the Box art layout and Home.
 
 **You provide.** A free API key from your
 [SteamGridDB preferences](https://www.steamgriddb.com/profile/preferences/api), stored as
@@ -243,6 +255,9 @@ and owns the RomM credentials. Fuse then:
 - with bridge protocol 2 (a Cartridge newer than 0.9.10), reads every game Cartridge downloaded with
   RomM's details and pictures and applies them to the matching Fuse game (see
   [What Fuse does with it](#what-fuse-does-with-it));
+- with bridge protocol 3, hands Cartridge a game to upload to RomM ("Upload to RomM" in a game's
+  options, "Upload a game" on the Cartridge tab) and shows the uploads Cartridge reports (see
+  [Uploads](#uploads-protocol-3));
 - keeps a "RomM (via Cartridge)" slot in the scraper order. Before protocol 2, RomM artwork and
   metadata only reach Fuse through what Cartridge saves next to the games, which the local media
   scanner reads.
@@ -256,14 +271,15 @@ local only, read-only for Fuse, and never carries a server address, token or pas
 |---|---|
 | Cartridge package (Android) | `io.github.abdu2304.cartridge` |
 | Minimum Cartridge version for the bridge | `0.9.10` |
-| Protocol version | `2` for the tables and file fields (`1` still works); links use `v=1` |
+| Protocol version | `3` for uploads, `2` for the queue and games tables (`1` still works); links use `v=1`, the upload link `v=3` |
 | Link scheme | `cartridge://` |
 | Release source for "Install Cartridge" | [MAtiyaaa/cartridge](https://github.com/MAtiyaaa/cartridge) releases, assets `Cartridge-android.apk` and `Cartridge-x86_64.AppImage` (upstream: [abdu2304/cartridge](https://github.com/abdu2304/cartridge)) |
 
 Cartridge 0.9.10 adds the provider, status file and links below (protocol 1). Protocol 2 adds the
 download queue game by game and the downloaded games with RomM's details and pictures (in review as
-[MAtiyaaa/cartridge#30](https://github.com/MAtiyaaa/cartridge/pull/30); Cartridge's own
-`docs/FUSE_BRIDGE.md` is the full contract). With an older Cartridge, Fuse only knows it is
+[MAtiyaaa/cartridge#30](https://github.com/MAtiyaaa/cartridge/pull/30)). Protocol 3 adds uploads (in
+review as [MAtiyaaa/cartridge#31](https://github.com/MAtiyaaa/cartridge/pull/31)). Cartridge's own
+`docs/FUSE_BRIDGE.md` is the full contract. With an older Cartridge, Fuse only knows it is
 installed and its version (`installedWithoutBridge`).
 
 ### Deep links
@@ -297,6 +313,7 @@ Platform slugs are RomM slugs (`psx`, `snes`, `switch`, ...). Example:
 | Recent URI | `content://io.github.abdu2304.cartridge.status/recent` (finished downloads, newest first) |
 | Queue URI (protocol 2) | `content://io.github.abdu2304.cartridge.status/queue` (every download in the Downloads page's order) |
 | Games URI (protocol 2) | `content://io.github.abdu2304.cartridge.status/games` (downloaded games with RomM's details) |
+| Uploads URI (protocol 3) | `content://io.github.abdu2304.cartridge.status/uploads` (games handed over to upload, newest first) |
 
 `/status` columns:
 
@@ -326,6 +343,10 @@ Platform slugs are RomM slugs (`psx`, `snes`, `switch`, ...). Example:
 `/queue` columns (protocol 2): `rom_id`, `title`, `platform_slug`, `state` (`downloading`, `queued`,
 `paused`, `failed` or `done`), `received`, `total` (null while unknown) and `position`. Fuse leaves
 out `done` rows (they are in `/recent`) and states it doesn't know.
+
+`/uploads` columns (protocol 3): `id`, `title`, `platform_slug`, `state` (`waiting`, `uploading`,
+`scanning`, `done`, `failed` or `cancelled`), `sent`, `total` (null while unknown), `files`, `rom_id`
+(null until the game is on RomM), `error` and `updated_at`. Fuse leaves out states it doesn't know.
 
 `/games` columns (protocol 2): `rom_id`, `path`, `title`, `platform_slug`, `summary`, `year`,
 `genres` and `series` (JSON array text), `developer`, `publisher`, `rating` (0..100), `players`,
@@ -368,8 +389,8 @@ fields in camelCase:
 }
 ```
 
-With protocol 2 the file also has `queue` and `games` arrays with the same fields in camelCase
-(pictures are absolute paths of files in Cartridge's own folder). A file without `protocol`, or one
+With protocol 2 the file also has `queue` and `games` arrays, and with protocol 3 an `uploads` array,
+with the same fields in camelCase (pictures are absolute paths of files in Cartridge's own folder). A file without `protocol`, or one
 that is not valid JSON, is ignored. Numbers and booleans are accepted quoted or unquoted. The Linux
 app watches the file's folder and re-reads it after changes (files up to 16 MB).
 
@@ -398,6 +419,39 @@ and, for each one (`CartridgeDetails`):
 
 A game is written again only when Cartridge says its row or pictures changed, so a later "Fill
 everything" isn't undone at every sync.
+
+### Uploads (protocol 3)
+
+"Upload to RomM" (a game's options, for games that didn't come from RomM) and "Upload a game" (the
+Cartridge tab: a system, then a game) are offered when Cartridge reports protocol 3; an older
+Cartridge gets an explanation and an offer to update. Fuse gathers the game's files the way Storage
+counts them (`UploadFiles`): the launch file or `.m3u` first, then the other discs and tracks; for a
+folder game everything inside it, each file with its folder relative to the game (`dlc`, `update`,
+...), leaving out system clutter. It then hands Cartridge an upload request
+(`CartridgeProtocol.uploadRequest`):
+
+```json
+{
+  "v": 1, "from": "fuse", "title": "Pepsiman", "platform": "psx",
+  "files": [
+    { "name": "Pepsiman.m3u", "folder": "", "size": 58, "path": "/storage/emulated/0/ROMs/psx/Pepsiman/Pepsiman.m3u" },
+    { "name": "Extra.bin", "folder": "dlc", "size": 1024, "path": "/storage/emulated/0/ROMs/psx/Pepsiman/dlc/Extra.bin" }
+  ]
+}
+```
+
+- **Android:** `Intent.ACTION_VIEW` with `cartridge://upload?from=fuse&v=3`, sent to Cartridge's
+  package, with the request in the string extra `io.github.matiyaaa.fuse.extra.UPLOAD`
+  (`CartridgeProtocol.EXTRA_UPLOAD`). Cartridge reads the files by path with its own All files
+  access.
+- **Linux:** Fuse writes the request to `~/.cache/fuse/cartridge-upload/upload-<time>.json` (your
+  user only; requests older than a day are cleared) and opens
+  `cartridge://upload?request=<that path>&from=fuse&v=3`.
+
+Cartridge shows the game, its files and the console on RomM, and uploads only after you press
+Upload there: the first file into the console's folder, then, once RomM has added the game, the
+other files into its folder (RomM 5.3 or newer). Fuse shows the uploads it reports on the Cartridge
+tab, as a ring in the top line while one runs, and in a message when one is on RomM or failed.
 
 ## GitHub Releases
 
