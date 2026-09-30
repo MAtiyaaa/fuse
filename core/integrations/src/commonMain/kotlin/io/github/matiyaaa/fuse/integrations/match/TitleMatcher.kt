@@ -185,7 +185,7 @@ class TitleMatcher(
     private fun queryTitles(query: ScrapeQuery): List<String> {
         val base = query.fileName?.substringAfterLast('/')?.substringAfterLast('\\')
             ?.let { if ('.' in it) it.substringBeforeLast('.') else it }
-        return listOfNotNull(query.title, base).filter { it.isNotBlank() }.distinct()
+        return (listOfNotNull(query.title, base) + query.alsoKnownAs).filter { it.isNotBlank() }.distinct()
     }
 
     /** Similarity of two raw titles. */

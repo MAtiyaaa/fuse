@@ -181,6 +181,8 @@ internal class LinkApi(
         put("details", f.details)
         put("finished", f.finished)
         put("cancelled", f.cancelled)
+        put("automatic", f.automatic)
+        putJsonArray("paused") { f.paused.forEach { add(JsonPrimitive(it)) } }
         putJsonArray("needsYou") {
             f.needsYou.forEach { add(buildJsonObject { put("id", it.game.value); put("title", it.title) }) }
         }
@@ -329,7 +331,7 @@ internal class LinkApi(
     }
 
     fun fillGame(id: Long): Reply {
-        store.media.fill(MediaFillMode.FILL_MISSING, FILL_KINDS, game = GameId(id))
+        store.media.fill(MediaFillMode.FILL_MISSING, MediaKind.Fillable, game = GameId(id))
         return ok()
     }
 
@@ -338,7 +340,7 @@ internal class LinkApi(
         val platform = o?.string("system")?.takeIf { it.isNotBlank() }?.let(::PlatformId)
         when (o?.string("mode")) {
             "everything" -> store.media.fillEverything(platform)
-            else -> store.media.fill(MediaFillMode.FILL_MISSING, setOf(MediaKind.SQUARE, MediaKind.ICON, MediaKind.BOXART, MediaKind.HERO, MediaKind.LOGO, MediaKind.GRID), platform = platform)
+            else -> store.media.fill(MediaFillMode.FILL_MISSING, MediaKind.Fillable, platform = platform)
         }
         return ok()
     }
@@ -429,7 +431,6 @@ internal class LinkApi(
 
     companion object {
         private const val MAX_IMAGE = 16 * 1024 * 1024
-        private val FILL_KINDS = setOf(MediaKind.SQUARE, MediaKind.ICON, MediaKind.BOXART, MediaKind.GRID, MediaKind.HERO, MediaKind.LOGO, MediaKind.SCREENSHOT)
 
         /** The phone's names for the art slots. */
         val slots = linkedMapOf(

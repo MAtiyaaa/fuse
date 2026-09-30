@@ -15,11 +15,11 @@ import io.github.matiyaaa.fuse.model.MetadataSource
 import io.github.matiyaaa.fuse.model.PlatformId
 import io.github.matiyaaa.fuse.model.ScrapeProviderId
 import io.github.matiyaaa.fuse.model.ScrapeQuery
-import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
+import kotlinx.coroutines.test.runTest
 
 class ScrapeCoordinatorTest {
 
@@ -215,5 +215,108 @@ class ScrapeCoordinatorTest {
         assertEquals("https://images.igdb.com/igdb/image/upload/t_cover_big/co1tqi.jpg", kinds[MediaKind.BOXART])
         assertEquals("https://cdn2.steamgriddb.com/hero/a.png", kinds[MediaKind.HERO])
         assertTrue(http.requests.any { "/heroes/game/5247" in it.url.encodedPath })
+    }
+    /** A provider answering by the name it was asked for; [answers] is what each call returns until it runs out. */
+    private class ScriptedSource(
+        override val id: ScrapeProviderId,
+        override val providesMetadata: Boolean,
+        private val byName: (String) -> ApiResult<List<ProviderGame>>,
+        private val art: List<ArtworkOption> = emptyList(),
+    ) : ScrapeSource {
+        val asked = ArrayList<String>()
+        override suspend fun search(query: ScrapeQuery): ApiResult<List<ProviderGame>> {
+            asked += query.title
+            return byName(query.title)
+        }
+        override suspend fun artwork(game: ProviderGame, query: ScrapeQuery, kinds: Set<MediaKind>) =
+            ApiResult.Success(art.filter { it.kind in kinds })
+    }
+
+    @Test
+    fun searchesOtherNamesWhenTheTitleFindsNothing() = runTest {
+        val ff7 = game(ScrapeProviderId.IGDB, "427", "Final Fantasy VII", listOf("PlayStation"))
+        val igdb = ScriptedSource(ScrapeProviderId.IGDB, true, { name ->
+            ApiResult.Success(if (name == "Final Fantasy VII") listOf(ff7) else emptyList())
+        })
+        val q = ScrapeQuery("Final Fantasy 7", PlatformId("psx"), "PlayStation", fileName = null)
+        val outcome = ScrapeCoordinator(listOf(igdb)).scrape(ScrapeRequest(q, listOf(ScrapeProviderId.IGDB), setOf(ScrapeProviderId.IGDB)))
+        assertIs<ScrapeOutcome.Accepted>(outcome)
+        assertEquals("427", outcome.candidate.providerGameId)
+        assertEquals(listOf("Final Fantasy 7", "Final Fantasy VII"), igdb.asked)
+    }
+
+    @Test
+    fun otherNamesIncludeWhatTheGameIsAlsoKnownAs() = runTest {
+        val pepsiman = game(ScrapeProviderId.IGDB, "9", "Pepsiman", listOf("PlayStation"))
+        val igdb = ScriptedSource(ScrapeProviderId.IGDB, true, { name ->
+            ApiResult.Success(if (name == "Pepsiman") listOf(pepsiman) else emptyList())
+        })
+        val q = ScrapeQuery("pepsi_man_final", PlatformId("psx"), "PlayStation", fileName = null, alsoKnownAs = listOf("Pepsiman"))
+        val outcome = ScrapeCoordinator(listOf(igdb)).scrape(ScrapeRequest(q, listOf(ScrapeProviderId.IGDB), setOf(ScrapeProviderId.IGDB)))
+        assertIs<ScrapeOutcome.Accepted>(outcome)
+        assertEquals(listOf("pepsi_man_final", "Pepsiman"), igdb.asked)
+    }
+
+    @Test
+    fun aProviderOutOfRequestsRestsAndTheOthersTakeOver() = runTest {
+        var clock = 1_000_000L
+        val metroid = { p: ScrapeProviderId -> game(p, "1", "Super Metroid", listOf("SNES")) }
+        val tgdb = ScriptedSource(ScrapeProviderId.THEGAMESDB, true, { ApiResult.RateLimited(null, "TheGamesDB monthly allowance is used up") })
+        val igdb = ScriptedSource(ScrapeProviderId.IGDB, true, { ApiResult.Success(listOf(metroid(ScrapeProviderId.IGDB))) })
+        val coordinator = ScrapeCoordinator(listOf(tgdb, igdb), now = { clock })
+        val req = request(ScrapeProviderId.THEGAMESDB, ScrapeProviderId.IGDB)
+
+        val first = coordinator.scrape(req)
+        assertIs<ScrapeOutcome.Accepted>(first)
+        assertEquals(ScrapeProviderId.IGDB, first.candidate.provider)
+        assertEquals(listOf(ScrapeProviderId.THEGAMESDB), first.errors.map { it.provider })
+        assertEquals(mapOf(ScrapeProviderId.THEGAMESDB to "TheGamesDB monthly allowance is used up"), coordinator.resting())
+
+        // The next game doesn't ask it again, but still reports it, so a miss isn't remembered.
+        val second = coordinator.scrape(req)
+        assertIs<ScrapeOutcome.Accepted>(second)
+        assertEquals(1, tgdb.asked.size)
+        assertEquals(listOf(ScrapeProviderId.THEGAMESDB), second.errors.map { it.provider })
+
+        // After the rest it is asked again.
+        clock += 31 * 60_000L
+        coordinator.scrape(req)
+        assertEquals(2, tgdb.asked.size)
+        assertTrue(coordinator.resting().containsKey(ScrapeProviderId.THEGAMESDB))
+    }
+
+    @Test
+    fun everyProviderRestingIsAnErrorNotAMiss() = runTest {
+        val tgdb = ScriptedSource(ScrapeProviderId.THEGAMESDB, true, { ApiResult.RateLimited(null, "used up") })
+        val coordinator = ScrapeCoordinator(listOf(tgdb))
+        coordinator.scrape(request(ScrapeProviderId.THEGAMESDB))
+        val outcome = coordinator.scrape(request(ScrapeProviderId.THEGAMESDB))
+        assertIs<ScrapeOutcome.ProviderErrors>(outcome)
+        assertEquals(1, tgdb.asked.size)
+    }
+
+    @Test
+    fun aShortRateLimitIsWaitedOutOnce() = runTest {
+        var calls = 0
+        val igdb = ScriptedSource(ScrapeProviderId.IGDB, true, {
+            calls++
+            if (calls == 1) ApiResult.RateLimited(2, "slow down") else ApiResult.Success(listOf(game(ScrapeProviderId.IGDB, "1", "Super Metroid", listOf("SNES"))))
+        })
+        val coordinator = ScrapeCoordinator(listOf(igdb))
+        val outcome = coordinator.scrape(request(ScrapeProviderId.IGDB))
+        assertIs<ScrapeOutcome.Accepted>(outcome)
+        assertEquals(2, calls)
+        assertTrue(coordinator.resting().isEmpty())
+    }
+
+    @Test
+    fun repeatedFailuresRestAProviderButA404DoesNot() = runTest {
+        val down = ScriptedSource(ScrapeProviderId.STEAMGRIDDB, false, { ApiResult.NetworkError("offline") })
+        val missing = ScriptedSource(ScrapeProviderId.THEGAMESDB, true, { ApiResult.HttpError(404) })
+        val coordinator = ScrapeCoordinator(listOf(down, missing))
+        repeat(4) { coordinator.scrape(request(ScrapeProviderId.STEAMGRIDDB, ScrapeProviderId.THEGAMESDB)) }
+        assertEquals(3, down.asked.size)
+        assertEquals(4, missing.asked.size)
+        assertEquals(setOf(ScrapeProviderId.STEAMGRIDDB), coordinator.resting().keys)
     }
 }

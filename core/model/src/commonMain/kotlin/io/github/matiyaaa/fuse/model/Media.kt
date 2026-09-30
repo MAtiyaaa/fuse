@@ -26,6 +26,11 @@ enum class MediaKind(
     /** Frame around the artwork (Dynamic Borders). */
     BORDER(null),
     ;
+
+    companion object {
+        /** Every kind a fill looks for (videos and borders come from elsewhere). */
+        val Fillable: Set<MediaKind> = setOf(SQUARE, ICON, BOXART, GRID, HERO, LOGO, SCREENSHOT)
+    }
 }
 
 /**

@@ -1,21 +1,23 @@
 package io.github.matiyaaa.fuse.ui.shell.store.impl
 
-import io.github.matiyaaa.fuse.library.parse.DisplayNameCleaner
-
 import io.github.matiyaaa.fuse.data.settings.SecretKeys
+import io.github.matiyaaa.fuse.library.parse.DisplayNameCleaner
+import io.github.matiyaaa.fuse.model.ScanPhase
+import io.github.matiyaaa.fuse.model.ScanScope
 import io.github.matiyaaa.fuse.model.ScopeRef
 import io.github.matiyaaa.fuse.model.ScopedSettings
-import io.github.matiyaaa.fuse.model.ScanScope
-import io.github.matiyaaa.fuse.ui.shell.store.FuseServices
 import io.github.matiyaaa.fuse.ui.designsystem.res.Res
 import io.github.matiyaaa.fuse.ui.shell.music.BundledMusic
+import io.github.matiyaaa.fuse.ui.shell.store.FuseServices
 import io.github.matiyaaa.fuse.ui.shell.store.FuseStore
 import io.github.matiyaaa.fuse.ui.shell.store.UiPrefs
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -132,11 +134,23 @@ internal class DefaultFuseStore private constructor(
             data.cache.purgeExpired(ctx.now())
             runCatching { updates.checkIfDue() }
         }
+        // New games find their art by themselves, once Cartridge's RomM details have had a moment.
+        ctx.scope.launch {
+            engine.scan.map { it.phase }.distinctUntilChanged().collect { phase ->
+                if (phase == ScanPhase.DONE) {
+                    delay(AUTO_FILL_DELAY_MS)
+                    mediaOps.autoFill()
+                }
+            }
+        }
     }
 
     companion object {
         /** Version of [DisplayNameCleaner]'s rules; existing names are cleaned again when it grows. */
         const val CLEAN_RULES = 2
+
+        /** How long after a scan (or a new key) the automatic fill starts. */
+        const val AUTO_FILL_DELAY_MS = 5_000L
 
         suspend fun create(services: FuseServices, scope: CoroutineScope): DefaultFuseStore {
             val settings = services.data.settings.current()

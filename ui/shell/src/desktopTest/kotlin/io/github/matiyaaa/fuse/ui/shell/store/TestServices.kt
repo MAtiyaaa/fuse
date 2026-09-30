@@ -1,7 +1,6 @@
 package io.github.matiyaaa.fuse.ui.shell.store
 
 import io.github.matiyaaa.fuse.data.FuseData
-import io.github.matiyaaa.fuse.data.db.DesktopDatabase
 import io.github.matiyaaa.fuse.data.settings.SecretStore
 import io.github.matiyaaa.fuse.integrations.github.ReleasePlatform
 import io.github.matiyaaa.fuse.launch.ResolvedLaunch
@@ -13,36 +12,24 @@ import io.github.matiyaaa.fuse.model.CartridgeStatus
 import io.github.matiyaaa.fuse.model.EmulatorId
 import io.github.matiyaaa.fuse.model.Host
 import io.github.matiyaaa.fuse.model.InstalledEmulator
-import io.github.matiyaaa.fuse.model.LaunchPlan
-import io.github.matiyaaa.fuse.model.LaunchTarget
-import io.github.matiyaaa.fuse.model.LibrarySourceKind
 import io.github.matiyaaa.fuse.model.PlatformId
 import io.github.matiyaaa.fuse.model.ReleaseAsset
-import io.github.matiyaaa.fuse.model.ScanPhase
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respondError
 import io.ktor.http.HttpStatusCode
 import java.io.File
-import java.nio.file.Files
-import kotlin.test.AfterTest
-import kotlin.test.BeforeTest
 import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertIs
-import kotlin.test.assertNotNull
-import kotlin.test.assertTrue
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.withTimeout
 
 /** Test doubles for [FuseServices]: real files and database, fake launcher and system. */
-internal class FakeServices(override val data: FuseData, private val cache: File) : FuseServices {
+internal class FakeServices(override val data: FuseData, private val cache: File, autoFill: Boolean = false) : FuseServices {
+    init {
+        // Tests start fills themselves; the automatic one runs only where a test turns it on.
+        kotlinx.coroutines.runBlocking { data.settings.update { it.copy(scraping = it.scraping.copy(autoFill = autoFill)) } }
+    }
+
     val launched = mutableListOf<ResolvedLaunch>()
     var exit: CompletableDeferred<Unit>? = null
 

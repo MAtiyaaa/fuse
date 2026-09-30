@@ -146,7 +146,7 @@ fun PlatformSettingsScreen(app: AppState, platformId: PlatformId) {
         for (folder in card.romFolders) add(infoRow("rom.$folder", "ROM folder", detail = folder, icon = FuseIcons.Folder))
         add(MenuAction("media", "System media", FuseIcons.Image, detail = "Icon, background and logo", trailing = Trailing.Chevron, onSelect = { app.go(Route.Media(MediaOwner.OfPlatform(platformId), p.name)) }))
         add(MenuAction("fill", "Fill missing game art", FuseIcons.Wand, onSelect = {
-            app.store.media.fill(MediaFillMode.FILL_MISSING, setOf(MediaKind.SQUARE, MediaKind.ICON, MediaKind.BOXART, MediaKind.HERO, MediaKind.LOGO, MediaKind.GRID), platform = platformId)
+            app.store.media.fill(MediaFillMode.FILL_MISSING, MediaKind.Fillable, platform = platformId)
             app.toasts.show("Finding missing art for ${p.shortName}")
         }))
         add(MenuAction("rescan", "Rescan ${p.shortName}", FuseIcons.Refresh, onSelect = { app.store.sources.rescan(ScanScope.PLATFORM, platformId); app.toasts.show("Rescanning") }))

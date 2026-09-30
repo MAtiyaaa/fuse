@@ -51,6 +51,11 @@ import kotlinx.coroutines.flow.StateFlow
  * no network. Nothing here runs a game.
  */
 internal class ScreenshotServices(override val data: FuseData, private val cache: File) : FuseServices {
+    init {
+        // Screenshots show what the scene sets up, not an art search Fuse started by itself.
+        kotlinx.coroutines.runBlocking { data.settings.update { it.copy(scraping = it.scraping.copy(autoFill = false)) } }
+    }
+
     override val host = Host.LINUX
     override val appVersion = "0.0.1"
     override val fs: FuseFileSystem = JavaFileSystem()

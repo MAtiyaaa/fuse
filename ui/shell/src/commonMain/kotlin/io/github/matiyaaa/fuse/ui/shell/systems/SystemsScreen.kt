@@ -307,7 +307,7 @@ fun AppState.systemMenu(card: PlatformCard): ContextMenuSpec {
             }),
             MenuAction("fill", "Fill Missing Game Art", FuseIcons.Wand, detail = "Only games without art; your custom art is never replaced", onSelect = {
                 closeOverlays()
-                store.media.fill(MediaFillMode.FILL_MISSING, setOf(MediaKind.SQUARE, MediaKind.ICON, MediaKind.BOXART, MediaKind.HERO, MediaKind.LOGO, MediaKind.GRID), platform = p.id)
+                store.media.fill(MediaFillMode.FILL_MISSING, MediaKind.Fillable, platform = p.id)
                 toasts.show("Finding missing art for ${p.shortName}")
             }),
             MenuAction("emulator", "Emulator", FuseIcons.Chip, trailing = Trailing.Value(card.emulatorName ?: "None"), onSelect = { platformEmulatorPicker(card) }),

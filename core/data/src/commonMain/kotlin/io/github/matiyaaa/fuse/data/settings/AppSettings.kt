@@ -121,6 +121,8 @@ data class ScrapingSettings(
     val preferredRegion: String? = null,
     /** Global matching strictness; the global level of [io.github.matiyaaa.fuse.model.ScopedSettings.Matching]. */
     val matching: MatchStrictness = MatchStrictness.NORMAL,
+    /** Look for missing art and details by itself after scans and when a source is added. */
+    val autoFill: Boolean = true,
 ) {
     /** Enabled providers in effective order. */
     fun effectiveOrder(): List<ScrapeProviderId> =

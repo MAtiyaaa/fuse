@@ -67,6 +67,8 @@ data class UiPrefs(
     val scraperLanguage: String = "en",
     val scraperRegion: String = "any",
     val matching: MatchStrictness = MatchStrictness.NORMAL,
+    /** Missing art and details are looked for by themselves after scans. */
+    val autoFillArt: Boolean = true,
     val autoRefreshFromCartridge: Boolean = true,
     /** Cartridge support as a whole; off hides every Cartridge feature. */
     val cartridgeEnabled: Boolean = true,

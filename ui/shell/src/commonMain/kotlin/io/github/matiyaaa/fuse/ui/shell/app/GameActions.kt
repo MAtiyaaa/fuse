@@ -117,7 +117,7 @@ fun AppState.gameMenu(card: GameCard, fromDetail: Boolean = false, extra: List<M
         }
         add(MenuAction("rescrape", "Find Details and Art", FuseIcons.Wand, detail = "Fills what's missing, including a proper title. Your own art and names stay", onSelect = {
             closeOverlays()
-            store.media.fill(MediaFillMode.FILL_MISSING, MediaKind.entries.filter { it != MediaKind.VIDEO && it != MediaKind.BORDER }.toSet(), game = card.id)
+            store.media.fill(MediaFillMode.FILL_MISSING, MediaKind.Fillable, game = card.id)
             toasts.show("Looking for details and art for ${card.title}")
         }))
         add(MenuAction("rename", "Rename Display Title", FuseIcons.TextCursor, detail = "The file keeps its name", onSelect = {

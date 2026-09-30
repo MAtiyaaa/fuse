@@ -1440,13 +1440,15 @@ function createFillCard() {
     cancel.hidden = fin;
     dismiss.hidden = !fin;
     if (fin) {
-      title.textContent = 'Art fill finished';
+      title.textContent = f.automatic ? 'Art search finished' : 'Art fill finished';
       text.textContent = total > 0 ? `Checked ${plural(total, 'game', 'games')}.` : 'Nothing needed filling.';
       setBar(bar, 1);
       current.textContent = '';
     } else {
-      title.textContent = f.pending ? 'Starting' : 'Filling art';
-      text.textContent = total > 0 ? `${nf.format(Math.min(done, total))} of ${plural(total, 'game', 'games')} checked` : 'Getting the list of games ready';
+      title.textContent = f.pending ? 'Starting' : f.automatic ? 'Finding art for new games' : 'Filling art';
+      const paused = Array.isArray(f.paused) ? f.paused.filter((n) => typeof n === 'string') : [];
+      const note = paused.length ? ` ${paused.join(' and ')} ${paused.length === 1 ? 'is' : 'are'} out of requests for now, using the others.` : '';
+      text.textContent = (total > 0 ? `${nf.format(Math.min(done, total))} of ${plural(total, 'game', 'games')} checked.` : 'Getting the list of games ready.') + note;
       setBar(bar, total > 0 ? done / total : null);
       current.replaceChildren(f.current ? 'Working on ' : '', f.current ? h('b', String(f.current)) : '');
     }

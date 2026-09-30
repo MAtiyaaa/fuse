@@ -11,6 +11,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -21,22 +23,26 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import io.github.matiyaaa.fuse.ui.designsystem.components.ToastKind
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.draw.blur
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.unit.dp
 import io.github.matiyaaa.fuse.model.BackgroundStyle
 import io.github.matiyaaa.fuse.model.Destination
 import io.github.matiyaaa.fuse.model.GlyphStyle
 import io.github.matiyaaa.fuse.model.NavAction
 import io.github.matiyaaa.fuse.model.RenderQuality
+import io.github.matiyaaa.fuse.model.ScopedSettings
 import io.github.matiyaaa.fuse.ui.designsystem.background.AmbientBackground
 import io.github.matiyaaa.fuse.ui.designsystem.background.CrtOverlay
 import io.github.matiyaaa.fuse.ui.designsystem.components.HintBar
 import io.github.matiyaaa.fuse.ui.designsystem.components.ToastHost
+import io.github.matiyaaa.fuse.ui.designsystem.components.ToastKind
+import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
 import io.github.matiyaaa.fuse.ui.designsystem.input.InputFeedback
 import io.github.matiyaaa.fuse.ui.designsystem.input.InputLayer
 import io.github.matiyaaa.fuse.ui.designsystem.input.InputRouter
@@ -44,6 +50,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.input.InputSource
 import io.github.matiyaaa.fuse.ui.designsystem.input.LayerPriority
 import io.github.matiyaaa.fuse.ui.designsystem.input.LocalInputRouter
 import io.github.matiyaaa.fuse.ui.designsystem.input.NavResult
+import io.github.matiyaaa.fuse.ui.designsystem.input.TextInput
 import io.github.matiyaaa.fuse.ui.designsystem.media.HeroBackdrop
 import io.github.matiyaaa.fuse.ui.designsystem.sound.LocalUiSounds
 import io.github.matiyaaa.fuse.ui.designsystem.sound.SoundCue
@@ -52,22 +59,24 @@ import io.github.matiyaaa.fuse.ui.designsystem.theme.Easings
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.FuseTheme
 import io.github.matiyaaa.fuse.ui.designsystem.theme.GlyphConfig
+import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
 import io.github.matiyaaa.fuse.ui.designsystem.theme.ThemePresets
 import io.github.matiyaaa.fuse.ui.designsystem.theme.TileMetrics
-import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
-import io.github.matiyaaa.fuse.ui.shell.store.UpdateState
 import io.github.matiyaaa.fuse.ui.shell.apps.AppsScreen
 import io.github.matiyaaa.fuse.ui.shell.cartridge.CartridgeScreen
+import io.github.matiyaaa.fuse.ui.shell.components.LocalTileBorders
 import io.github.matiyaaa.fuse.ui.shell.components.LocalTileMetrics
+import io.github.matiyaaa.fuse.ui.shell.components.PerformanceOverlay
+import io.github.matiyaaa.fuse.ui.shell.components.TileBorders
 import io.github.matiyaaa.fuse.ui.shell.game.FolderBrowserScreen
 import io.github.matiyaaa.fuse.ui.shell.game.GameScreen
 import io.github.matiyaaa.fuse.ui.shell.home.HomeScreen
 import io.github.matiyaaa.fuse.ui.shell.library.LibraryScope
 import io.github.matiyaaa.fuse.ui.shell.library.LibraryScreen
 import io.github.matiyaaa.fuse.ui.shell.media.MediaScreen
-import io.github.matiyaaa.fuse.ui.shell.onboarding.OnboardingScreen
 import io.github.matiyaaa.fuse.ui.shell.music.BundledMusic
+import io.github.matiyaaa.fuse.ui.shell.onboarding.OnboardingScreen
 import io.github.matiyaaa.fuse.ui.shell.platform.MenuMusicPlayer
 import io.github.matiyaaa.fuse.ui.shell.platform.PlatformUi
 import io.github.matiyaaa.fuse.ui.shell.quick.QuickMenu
@@ -76,25 +85,16 @@ import io.github.matiyaaa.fuse.ui.shell.settings.PlatformSettingsScreen
 import io.github.matiyaaa.fuse.ui.shell.settings.SettingsScreen
 import io.github.matiyaaa.fuse.ui.shell.store.FuseStore
 import io.github.matiyaaa.fuse.ui.shell.store.PhoneLinkControl
+import io.github.matiyaaa.fuse.ui.shell.store.UpdateState
 import io.github.matiyaaa.fuse.ui.shell.systems.SystemsScreen
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
-import io.github.matiyaaa.fuse.ui.shell.components.TileBorders
-import io.github.matiyaaa.fuse.ui.shell.components.LocalTileBorders
-import io.github.matiyaaa.fuse.ui.shell.components.PerformanceOverlay
-import io.github.matiyaaa.fuse.model.ScopedSettings
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
-import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
-import io.github.matiyaaa.fuse.ui.designsystem.input.TextInput
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Brush
 
 /**
  * The whole Fuse interface for one window. [router] is created by the host (Android activity or
@@ -498,8 +498,11 @@ private fun FillFinishedToast(app: AppState) {
         if (!running) return@LaunchedEffect
         running = false
         if (f.cancelled || (app.navigator.current as? Route.Settings)?.section == "media") return@LaunchedEffect
+        // Fuse's own fills speak up only when they found something.
+        if (f.automatic && f.added == 0 && f.details == 0) return@LaunchedEffect
         val needs = f.needsYou.size.takeIf { it > 0 }?.let { " $it need you in Settings, Media and Scraping." } ?: ""
-        app.toasts.show("Fill finished. ${io.github.matiyaaa.fuse.ui.shell.settings.fillSummary(f)}.$needs")
+        val lead = if (f.automatic) "Found art for your games" else "Fill finished"
+        app.toasts.show("$lead. ${io.github.matiyaaa.fuse.ui.shell.settings.fillSummary(f)}.$needs")
     }
 }
 
@@ -512,7 +515,7 @@ private fun hudActivities(app: AppState): List<HudActivity> {
     return buildList {
         fill?.takeIf { !it.finished }?.let { f ->
             add(HudActivity(
-                "fill", FuseIcons.Wand, "Filling art and details: ${f.done} of ${f.total}",
+                "fill", FuseIcons.Wand, "${if (f.automatic) "Finding art" else "Filling art and details"}: ${f.done} of ${f.total}",
                 progress = f.fraction.takeIf { f.total > 0 },
             ) { app.go(Route.Settings("media")) })
         }

@@ -2,30 +2,17 @@ package io.github.matiyaaa.fuse.ui.shell.store
 
 import io.github.matiyaaa.fuse.data.FuseData
 import io.github.matiyaaa.fuse.data.db.DesktopDatabase
-import io.github.matiyaaa.fuse.data.settings.SecretStore
-import io.github.matiyaaa.fuse.integrations.github.ReleasePlatform
-import io.github.matiyaaa.fuse.launch.ResolvedLaunch
-import io.github.matiyaaa.fuse.library.FsAccessException
-import io.github.matiyaaa.fuse.library.FsEntry
-import io.github.matiyaaa.fuse.library.FuseFileSystem
-import io.github.matiyaaa.fuse.model.CartridgeRoute
-import io.github.matiyaaa.fuse.model.CollectionKind
 import io.github.matiyaaa.fuse.model.CartridgeStatus
+import io.github.matiyaaa.fuse.model.CollectionKind
 import io.github.matiyaaa.fuse.model.EmulatorId
-import io.github.matiyaaa.fuse.model.Host
-import io.github.matiyaaa.fuse.model.InstalledEmulator
 import io.github.matiyaaa.fuse.model.LaunchPlan
 import io.github.matiyaaa.fuse.model.LaunchTarget
 import io.github.matiyaaa.fuse.model.LibrarySourceKind
 import io.github.matiyaaa.fuse.model.MediaFillMode
 import io.github.matiyaaa.fuse.model.MediaKind
 import io.github.matiyaaa.fuse.model.PlatformId
-import io.github.matiyaaa.fuse.model.ReleaseAsset
 import io.github.matiyaaa.fuse.model.ScanPhase
-import io.ktor.client.HttpClient
-import io.ktor.client.engine.mock.MockEngine
-import io.ktor.client.engine.mock.respondError
-import io.ktor.http.HttpStatusCode
+import io.github.matiyaaa.fuse.model.ScanScope
 import java.io.File
 import java.nio.file.Files
 import kotlin.test.AfterTest
@@ -34,12 +21,14 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
+import kotlin.test.assertSame
 import kotlin.test.assertTrue
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
@@ -273,6 +262,29 @@ class StoreIntegrationTest {
         store.media.fill(MediaFillMode.FILL_MISSING, setOf(MediaKind.ICON))
         val none = withTimeout(20_000) { store.media.fillProgress.first { it?.finished == true && it.total == 0 } }!!
         assertEquals(0, none.done)
+    }
+
+    @Test
+    fun newGamesFindTheirArtByThemselvesOnce() = runBlocking {
+        val services = FakeServices(FuseData(DesktopDatabase.open(freshDb())), cache, autoFill = true)
+        val store = createFuseStore(services, scope)
+        store.sources.add(root.absolutePath, LibrarySourceKind.ROMS_ROOT)
+        awaitScan(store)
+        fun libretro() = services.requestHosts.count { it == "thumbnails.libretro.com" }
+
+        // Shortly after the scan, Fuse looks for the new games' art without being asked.
+        val auto = withTimeout(30_000) { store.media.fillProgress.first { it?.finished == true } }!!
+        assertTrue(auto.automatic)
+        assertEquals(2, auto.total)
+        val asked = libretro()
+        assertTrue(asked > 0, "libretro should have been asked")
+
+        // Another scan finds nothing new to try: no requests, and no progress for the user to see.
+        store.sources.rescan(ScanScope.QUICK)
+        withTimeout(20_000) { store.sources.scan.first { it.phase == ScanPhase.DONE } }
+        delay(7_000)
+        assertEquals(asked, libretro())
+        assertSame(auto, store.media.fillProgress.value)
     }
 
     @Test

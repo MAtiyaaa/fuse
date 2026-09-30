@@ -12,6 +12,7 @@ import io.github.matiyaaa.fuse.model.FolderPolicy
 import io.github.matiyaaa.fuse.model.GameCollection
 import io.github.matiyaaa.fuse.model.GameId
 import io.github.matiyaaa.fuse.model.InstalledEmulator
+import io.github.matiyaaa.fuse.model.LaunchDisplay
 import io.github.matiyaaa.fuse.model.LibraryLayout
 import io.github.matiyaaa.fuse.model.LibrarySource
 import io.github.matiyaaa.fuse.model.LibrarySourceKind
@@ -31,7 +32,6 @@ import io.github.matiyaaa.fuse.model.ScrapeProviderId
 import io.github.matiyaaa.fuse.model.SortOrder
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
-import io.github.matiyaaa.fuse.model.LaunchDisplay
 
 /**
  * Everything the interface reads and does, in one place. Screens only talk to this interface; the
@@ -239,6 +239,10 @@ data class FillProgress(
     /** Games with several close matches, for the user to pick in Identify game. */
     val needsYou: List<FillChoice> = emptyList(),
     val cancelled: Boolean = false,
+    /** Sources resting (out of requests, key rejected or not answering); the others carry on. */
+    val paused: List<String> = emptyList(),
+    /** Started by Fuse after a scan rather than by the user. */
+    val automatic: Boolean = false,
 ) {
     val fraction: Float get() = if (total <= 0) 1f else (done.toFloat() / total).coerceIn(0f, 1f)
 }

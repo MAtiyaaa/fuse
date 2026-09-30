@@ -441,9 +441,13 @@ fun mediaRows(app: AppState): List<MenuAction> {
                 }
             } else set { it.copy(matching = v) }
         })
+        add(toggleRow(
+            "fill.auto", "Find art by itself", FuseIcons.ScanSearch, p.autoFillArt,
+            "After a scan or a new key, games missing art or details get them. When a source runs out of requests, the others take over",
+        ) { v -> set { it.copy(autoFillArt = v) } })
         addAll(fillRows(app, fill))
-        add(MenuAction("fill", "Fill missing art", FuseIcons.Wand, detail = "Icons, covers, banners, backgrounds and logos for games without them. Custom art is never replaced", onSelect = {
-            app.store.media.fill(MediaFillMode.FILL_MISSING, setOf(MediaKind.SQUARE, MediaKind.ICON, MediaKind.BOXART, MediaKind.HERO, MediaKind.LOGO, MediaKind.GRID))
+        add(MenuAction("fill", "Fill missing art", FuseIcons.Wand, detail = "Box art, icons, covers, banners, backgrounds, logos and screenshots for games without them. Custom art is never replaced", onSelect = {
+            app.store.media.fill(MediaFillMode.FILL_MISSING, MediaKind.Fillable)
             app.toasts.show("Looking for missing art. Progress shows here and in the top bar")
         }))
         add(MenuAction("fill.all", "Fill everything", FuseIcons.Sparkles, detail = "Every kind of art, screenshots and details (description, year, genres, series, rating) for every game, plus system art. Nothing you chose or edited is replaced", onSelect = {
@@ -451,7 +455,7 @@ fun mediaRows(app: AppState): List<MenuAction> {
             app.toasts.show("Filling art and details. Progress shows here and in the top bar")
         }))
         add(app.confirmRow("replace", "Replace all scraped art", FuseIcons.RotateCcw, "Replace scraped art?", "Fuse fetches art again for every game and replaces art it scraped before. Art you chose yourself stays.", "Replace") {
-            app.store.media.fill(MediaFillMode.REPLACE_ALL, setOf(MediaKind.SQUARE, MediaKind.ICON, MediaKind.BOXART, MediaKind.HERO, MediaKind.LOGO, MediaKind.GRID))
+            app.store.media.fill(MediaFillMode.REPLACE_ALL, MediaKind.Fillable)
         })
         add(toggleRow("video", "Video previews", FuseIcons.Film, p.videoPreview, if (app.platform.features.videoPreview) "After resting on a game, its art turns into a muted gameplay clip" else "Not available on this system yet", enabled = app.platform.features.videoPreview) { v -> set { it.copy(videoPreview = v) } })
         add(app.choiceRow("video.delay", "Preview delay", FuseIcons.Timer, p.videoDelaySeconds, listOf(5, 10, 15, 20, 30).map { it to "$it seconds" }) { v -> set { it.copy(videoDelaySeconds = v) } })
@@ -464,8 +468,8 @@ fun fillRows(app: AppState, fill: FillProgress?): List<MenuAction> {
     return buildList {
         if (!f.finished) {
             add(MenuAction(
-                "fill.progress", "Filling art and details", FuseIcons.Wand,
-                detail = listOfNotNull(f.current, "${f.added} ${if (f.added == 1) "image" else "images"} added", "Select to stop").joinToString("  ·  "),
+                "fill.progress", if (f.automatic) "Finding art for your games" else "Filling art and details", FuseIcons.Wand,
+                detail = listOfNotNull(f.current, "${f.added} ${if (f.added == 1) "image" else "images"} added", pausedNote(f), "Select to stop").joinToString("  ·  "),
                 trailing = Trailing.Progress(f.fraction.takeIf { f.total > 0 }, "${f.done} of ${f.total}"),
                 onSelect = { app.store.media.cancelFill() },
             ))
@@ -479,6 +483,11 @@ fun fillRows(app: AppState, fill: FillProgress?): List<MenuAction> {
         }
         if (f.needsYou.isNotEmpty()) add(needsYouRow(app, f.needsYou))
     }
+}
+
+/** Which sources are resting while the fill carries on with the others, or null. */
+fun pausedNote(f: FillProgress): String? = f.paused.takeIf { it.isNotEmpty() }?.let { names ->
+    "${names.joinToString(" and ")} ${if (names.size == 1) "is" else "are"} out of requests for now, using the others"
 }
 
 /** "40 images added, details for 12 games" (or that nothing new was found). */
