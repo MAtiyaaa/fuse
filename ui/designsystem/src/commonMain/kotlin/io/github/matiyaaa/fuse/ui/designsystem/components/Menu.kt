@@ -77,13 +77,23 @@ fun MenuRow(
     action: MenuAction,
     selected: Boolean,
     modifier: Modifier = Modifier,
+    /** Shown as the current choice without controller focus (a quieter background, no bar). */
+    marked: Boolean = false,
     onClick: () -> Unit = action.onSelect,
 ) {
     val c = Fuse.colors
     val t = Fuse.type
     val motion = Fuse.motion
     val sel by animateFloatAsState(if (selected) 1f else 0f, motion.tween(Durations.FAST), label = "row")
-    val bg by animateColorAsState(if (selected) c.text.copy(alpha = 0.1f) else Color.Transparent, motion.tween(Durations.FAST), label = "rowbg")
+    val bg by animateColorAsState(
+        when {
+            selected -> c.text.copy(alpha = 0.1f)
+            marked -> c.text.copy(alpha = 0.05f)
+            else -> Color.Transparent
+        },
+        motion.tween(Durations.FAST),
+        label = "rowbg",
+    )
     val available = action.enabled && action.unavailableReason == null
     val tint = when {
         !available -> c.textFaint
@@ -140,6 +150,10 @@ fun MenuList(
     actions: List<MenuAction>,
     selection: LinearSelection,
     modifier: Modifier = Modifier,
+    /** False while focus is elsewhere (another pane), so no row looks selected. */
+    showSelection: Boolean = true,
+    /** Keeps a quiet marker on the selected row while focus is in another pane (settings sections). */
+    dimSelection: Boolean = false,
     header: (@Composable () -> Unit)? = null,
 ) {
     val state = rememberLazyListState()
@@ -151,7 +165,7 @@ fun MenuList(
     ) {
         if (header != null) item { header() }
         itemsIndexed(actions, key = { _, a -> a.id }) { i, a ->
-            MenuRow(a, selected = i == selection.index, onClick = {
+            MenuRow(a, selected = showSelection && !dimSelection && i == selection.index, marked = showSelection && dimSelection && i == selection.index, onClick = {
                 selection.select(i, actions.size)
                 if (a.enabled && a.unavailableReason == null) a.onSelect()
             })

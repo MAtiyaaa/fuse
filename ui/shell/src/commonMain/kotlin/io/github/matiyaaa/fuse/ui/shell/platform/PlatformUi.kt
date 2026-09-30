@@ -81,6 +81,9 @@ interface StorageAccess {
     fun request()
     /** Opens the platform folder picker; returns a filesystem path Fuse can read, or null. */
     suspend fun pickFolder(title: String): String?
+
+    /** Opens the platform image picker; returns a readable path (copied into Fuse's storage if needed), or null. */
+    suspend fun pickImage(title: String): String?
     fun refresh()
 }
 
