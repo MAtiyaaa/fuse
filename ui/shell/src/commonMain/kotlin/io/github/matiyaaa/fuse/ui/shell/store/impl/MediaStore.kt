@@ -127,7 +127,7 @@ internal class DefaultMediaOps(
                     test()
                 } catch (e: CancellationException) {
                     throw e
-                } catch (e: Exception) {
+                } catch (e: Throwable) {
                     KeyCheck.Failed("The check could not run (${e::class.simpleName})")
                 }
                 checks.value = checks.value + (provider to result)
@@ -264,7 +264,7 @@ internal class DefaultMediaOps(
                         fillOne(g, mode, kinds)
                     } catch (e: CancellationException) {
                         throw e
-                    } catch (e: Exception) {
+                    } catch (e: Throwable) {
                         0
                     }
                 }

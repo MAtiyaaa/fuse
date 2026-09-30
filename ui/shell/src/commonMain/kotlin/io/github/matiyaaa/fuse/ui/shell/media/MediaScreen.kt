@@ -129,7 +129,8 @@ fun MediaScreen(app: AppState, owner: MediaOwner, title: String) {
                 app.store.media.artworkOptions(owner, k)
             } catch (e: CancellationException) {
                 throw e
-            } catch (e: Exception) {
+            } catch (e: Throwable) {
+                // Errors too (a class that failed to load), so the spinner always gives way to a message.
                 ArtworkResult.Unavailable("Fuse couldn't search for art (${e::class.simpleName}). Try again, or check your keys in Settings, Media and Scraping.")
             }
             browser = when (val r = result) {

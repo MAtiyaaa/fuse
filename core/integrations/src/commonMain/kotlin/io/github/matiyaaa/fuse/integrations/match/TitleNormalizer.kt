@@ -10,7 +10,8 @@ package io.github.matiyaaa.fuse.integrations.match
  */
 object TitleNormalizer {
 
-    private val brackets = Regex("\\([^)]*\\)|\\[[^]]*]|\\{[^}]*}")
+    // Android's regex engine (ICU) rejects "[^]]", which Java accepts, so every bracket is escaped.
+    private val brackets = Regex("\\([^)]*\\)|\\[[^\\]]*\\]|\\{[^}]*\\}")
     private val trailingArticle = Regex(",\\s*(the|a|an)(?=\\s*($|[-:;]))")
     private val apostrophes = Regex("['’`´]")
     private val nonAlphanumeric = Regex("[^a-z0-9]+")
