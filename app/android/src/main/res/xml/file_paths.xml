@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Files Fuse may hand to an emulator as a content:// URI ({PROVIDER} launches), always one file at a
+  time with a read-only grant to that emulator. The provider itself is not exported.
+-->
+<paths>
+    <!-- Internal shared storage (/storage/emulated/<user>). -->
+    <external-path name="shared" path="." />
+    <!-- SD cards and USB drives (/storage/XXXX-XXXX). -->
+    <root-path name="volumes" path="storage/" />
+    <!-- Generated disc playlists and downloaded updates. -->
+    <cache-path name="cache" path="." />
+</paths>

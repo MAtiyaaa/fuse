@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Plain ink window: what shows before the first frame, so start-up never flashes white. -->
+    <style name="Theme.Fuse" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/fuse_ink</item>
+        <item name="android:colorBackground">@color/fuse_ink</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
+    </style>
+</resources>
