@@ -19,6 +19,7 @@ import io.github.matiyaaa.fuse.ui.shell.store.createFuseStore
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.awt.EventQueue
@@ -171,7 +172,7 @@ class DesktopSession(
             return block()
         } finally {
             if (wasFullscreen) {
-                withContext(Dispatchers.Main) {
+                withContext(NonCancellable + Dispatchers.Main) {
                     fullscreen = true
                     windowState?.placement = placement
                     bringToFront()
@@ -182,6 +183,12 @@ class DesktopSession(
 
     override fun exitApplication() {
         EventQueue.invokeLater { exit() }
+    }
+
+    override val currentWindowMode: WindowMode get() = windowMode
+
+    override fun changeWindowMode(mode: WindowMode) {
+        if (EventQueue.isDispatchThread()) setWindowMode(mode) else EventQueue.invokeLater { setWindowMode(mode) }
     }
 
     /** Releases devices, the database and the HTTP client. Safe to call twice. */

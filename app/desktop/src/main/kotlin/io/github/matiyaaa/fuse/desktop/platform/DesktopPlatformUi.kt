@@ -3,6 +3,7 @@ package io.github.matiyaaa.fuse.desktop.platform
 import io.github.matiyaaa.fuse.desktop.BuildInfo
 import io.github.matiyaaa.fuse.desktop.FuseDirs
 import io.github.matiyaaa.fuse.desktop.Log
+import io.github.matiyaaa.fuse.desktop.WindowMode
 import io.github.matiyaaa.fuse.desktop.services.UpdateHandoff
 import io.github.matiyaaa.fuse.desktop.system.Processes
 import io.github.matiyaaa.fuse.model.CapabilityProfile
@@ -38,6 +39,12 @@ import java.net.URI
 /** Window-level actions [DesktopPlatformUi] needs from Main. */
 interface WindowActions : DialogHost {
     fun exitApplication()
+
+    /** Fullscreen, borderless or windowed right now. */
+    val currentWindowMode: WindowMode
+
+    /** Switches and remembers the window mode. */
+    fun changeWindowMode(mode: WindowMode)
 }
 
 /**
@@ -164,6 +171,21 @@ class DesktopPlatformUi(
     }
 
     override fun exit() = window.exitApplication()
+
+    // Desktop-only controls. PlatformUi has no entries for these yet ([PlatformFeatures.windowModes]
+    // is true because F11 and the command line flags work); a Settings row can call them directly.
+
+    val windowMode: WindowMode get() = window.currentWindowMode
+
+    fun setWindowMode(mode: WindowMode) = window.changeWindowMode(mode)
+
+    /** True when Fuse runs from an AppImage or package, so a login entry has a stable path. */
+    val autostartSupported: Boolean get() = Autostart.supported()
+
+    fun isAutostartEnabled(): Boolean = Autostart.isEnabled(dirs)
+
+    /** Writes or removes `~/.config/autostart/fuse.desktop`. Only on the user's request. */
+    fun setAutostart(enabled: Boolean): Result<Unit> = if (enabled) Autostart.enable(dirs) else Autostart.disable(dirs)
 
     override fun close() {
         desktopSounds.close()
