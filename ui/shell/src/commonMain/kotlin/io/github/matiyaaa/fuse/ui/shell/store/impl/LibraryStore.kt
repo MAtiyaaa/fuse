@@ -141,7 +141,7 @@ internal class DefaultLibraryOps(
                     romFolders = folders[p.id].orEmpty(),
                 )
             }
-    }.flowOn(Dispatchers.Default).stateIn(ctx.scope, SharingStarted.Eagerly, emptyList())
+    }.flowOn(Dispatchers.Default).resilient().stateIn(ctx.scope, SharingStarted.Eagerly, emptyList())
 
     // Home ------------------------------------------------------------------------------------------
 
@@ -194,7 +194,7 @@ internal class DefaultLibraryOps(
             achievements = v[10] as io.github.matiyaaa.fuse.ui.shell.store.AchievementsFeed?,
             storage = v[11] as StorageSummary?,
         )
-    }.flowOn(Dispatchers.Default).stateIn(ctx.scope, SharingStarted.Eagerly, HomeFeed())
+    }.flowOn(Dispatchers.Default).resilient().stateIn(ctx.scope, SharingStarted.Eagerly, HomeFeed())
 
     // Lists and search ------------------------------------------------------------------------------
 

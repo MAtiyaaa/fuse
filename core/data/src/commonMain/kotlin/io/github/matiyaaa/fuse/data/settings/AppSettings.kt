@@ -98,6 +98,8 @@ data class AppearanceSettings(
 data class PerformanceSettings(
     val profile: PerformanceProfile = PerformanceProfile.AUTOMATIC,
     val lowPowerMode: Boolean = false,
+    /** Shows the performance overlay (only values the system really reports). */
+    val overlay: Boolean = false,
 )
 
 @Serializable

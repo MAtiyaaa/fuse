@@ -64,6 +64,7 @@ fun GameIconTile(
             modifier = Modifier.fillMaxSize().alpha(if (card.missing) 0.45f else 1f),
             fallback = { GeneratedArt(card.title, accent, slot = ArtSlot.ICON, label = card.platformShort) },
         )
+        TileBorder(LocalTileBorders.current.of(card.platformId), accent, Fuse.geometry.tileCornerFraction, card.platformShort)
         TileBadges(card, Modifier.align(Alignment.TopEnd))
     }
 }
@@ -94,6 +95,7 @@ fun GameCoverTile(
             modifier = Modifier.fillMaxSize().alpha(if (card.missing) 0.45f else 1f),
             fallback = { GeneratedArt(card.title, accent, slot = ArtSlot.BOX, label = card.platformShort) },
         )
+        TileBorder(LocalTileBorders.current.of(card.platformId), accent, Fuse.geometry.tileCornerFraction * 0.55f, card.platformShort)
         TileBadges(card, Modifier.align(Alignment.TopEnd))
     }
 }

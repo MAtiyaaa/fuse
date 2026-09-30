@@ -11,6 +11,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -78,7 +79,17 @@ internal class DefaultFuseStore private constructor(
     }
 
     private fun start() {
-        ctx.scope.launch { for (next in writes) persist(next) }
+        engine.start()
+        ctx.scope.launch {
+            for (next in writes) {
+                // A failed write must not stop later ones; retry once, then keep the in-memory value.
+                val ok = runCatching { persist(next) }.isSuccess
+                if (!ok) {
+                    delay(250)
+                    runCatching { persist(prefsState.value) }
+                }
+            }
+        }
         ctx.scope.launch {
             library.recoverSession()
             credentials.load()

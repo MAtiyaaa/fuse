@@ -70,6 +70,14 @@ import io.github.matiyaaa.fuse.ui.shell.settings.SettingsScreen
 import io.github.matiyaaa.fuse.ui.shell.store.FuseStore
 import io.github.matiyaaa.fuse.ui.shell.systems.SystemsScreen
 import kotlinx.coroutines.delay
+import io.github.matiyaaa.fuse.ui.shell.components.TileBorders
+import io.github.matiyaaa.fuse.ui.shell.components.LocalTileBorders
+import io.github.matiyaaa.fuse.ui.shell.components.PerformanceOverlay
+import io.github.matiyaaa.fuse.model.ScopedSettings
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
+import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 
 /**
  * The whole Fuse interface for one window. [router] is created by the host (Android activity or
@@ -130,7 +138,8 @@ fun FuseApp(store: FuseStore, platform: PlatformUi, router: InputRouter) {
         CompositionLocalProvider(LocalInputRouter provides router, LocalUiSounds provides platform.sounds) {
             BoxWithConstraints(Modifier.fillMaxSize().background(Fuse.colors.ink)) {
                 val metrics = remember(maxWidth, maxHeight) { TileMetrics.forHeight(maxHeight, maxWidth) }
-                CompositionLocalProvider(LocalTileMetrics provides metrics) {
+                val borders = rememberTileBorders(store)
+                CompositionLocalProvider(LocalTileMetrics provides metrics, LocalTileBorders provides borders) {
                     Room(app, prefs.showHero, spec.background, prefs.heroDim, prefs.glass, prefs.videoPreview, prefs.videoDelaySeconds)
                     ShellInput(app)
                     Pages(app)
@@ -148,6 +157,10 @@ fun FuseApp(store: FuseStore, platform: PlatformUi, router: InputRouter) {
                             onSelect = { app.focusZone = FocusZone.CONTENT; app.selectTab(it) },
                             onStatusClick = { app.quickMenuOpen = true },
                         )
+                    }
+                    if (prefs.performanceOverlay) {
+                        val metrics by platform.performance.collectAsState()
+                        PerformanceOverlay(metrics, Modifier.align(Alignment.TopStart).padding(start = Space.gutter, top = Size.hudHeight + Space.s))
                     }
                     HintBar(app.hints, Modifier.align(Alignment.BottomEnd).padding(horizontal = Space.gutter, vertical = Space.s))
                     QuickMenu(app)
@@ -324,3 +337,19 @@ private fun LaunchVeilView(app: AppState) {
         LaunchVeilContent(v)
     }
 }
+
+/** Dynamic border style of every platform with games (Global -> Platform), for the tiles. */
+@Composable
+private fun rememberTileBorders(store: FuseStore): TileBorders {
+    val platforms by store.library.platforms.collectAsState()
+    val ids = platforms.map { it.platform.id }
+    val flow = remember(ids) {
+        if (ids.isEmpty()) {
+            flowOf(TileBorders())
+        } else {
+            combine(ids.map { id -> store.settings.observe(ScopedSettings.Border, id, null).map { id to it.value } }) { TileBorders(it.toMap()) }
+        }
+    }
+    return flow.collectAsState(TileBorders()).value
+}
+

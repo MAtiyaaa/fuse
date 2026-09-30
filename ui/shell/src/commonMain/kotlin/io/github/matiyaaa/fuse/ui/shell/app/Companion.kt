@@ -120,6 +120,13 @@ fun CompanionApp(store: FuseStore, platform: PlatformUi, mode: DualScreenMode) {
                     else -> Idle(time)
                 }
             }
+            if (prefs.display.companionShowsPerformance) {
+                val metrics by platform.performance.collectAsState()
+                io.github.matiyaaa.fuse.ui.shell.components.PerformanceOverlay(
+                    metrics,
+                    Modifier.align(Alignment.BottomEnd).padding(Space.l),
+                )
+            }
             StatusCluster(
                 status,
                 time,

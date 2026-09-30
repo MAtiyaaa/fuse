@@ -37,6 +37,7 @@ data class UiPrefs(
     val display: DisplayProfile = DisplayProfile(),
     val performance: PerformanceProfile = PerformanceProfile.AUTOMATIC,
     val lowPower: Boolean = false,
+    val performanceOverlay: Boolean = false,
     val sound: SoundProfile = SoundProfile.SOFT,
     val soundVolume: Float = 0.6f,
     val clock24h: Boolean = false,

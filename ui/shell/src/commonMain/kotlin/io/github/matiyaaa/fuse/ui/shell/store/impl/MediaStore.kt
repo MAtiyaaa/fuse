@@ -85,7 +85,7 @@ internal class DefaultMediaOps(
             }
             ProviderStatus(id, enabled = id !in disabled, configured = configured, note = note)
         }
-    }.stateIn(ctx.scope, SharingStarted.Eagerly, emptyList())
+    }.resilient().stateIn(ctx.scope, SharingStarted.Eagerly, emptyList())
 
     /** Drops cached clients after credentials change. */
     fun invalidate() {

@@ -38,6 +38,7 @@ internal fun AppSettings.toUiPrefs(scoped: GlobalScoped): UiPrefs {
         display = display,
         performance = performance.profile,
         lowPower = performance.lowPowerMode,
+        performanceOverlay = performance.overlay,
         sound = if (!sound.enabled) SoundProfile.OFF else sound.profile ?: theme.sound,
         soundVolume = sound.volume,
         clock24h = statusArea.use24HourClock ?: false,
@@ -74,7 +75,7 @@ internal fun AppSettings.withUiPrefs(prefs: UiPrefs): AppSettings {
             heroDim = prefs.heroDim.coerceIn(0f, 0.9f),
             highContrastFocus = prefs.highContrastFocus,
         ),
-        performance = performance.copy(profile = prefs.performance, lowPowerMode = prefs.lowPower),
+        performance = performance.copy(profile = prefs.performance, lowPowerMode = prefs.lowPower, overlay = prefs.performanceOverlay),
         input = prefs.input,
         display = prefs.display,
         scraping = scraping.copy(

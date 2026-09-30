@@ -56,7 +56,7 @@ internal class DefaultCartridgeOps(
             }
         }
         .flowOn(Dispatchers.Default)
-        .stateIn(ctx.scope, SharingStarted.Eagerly, emptyList())
+        .resilient().stateIn(ctx.scope, SharingStarted.Eagerly, emptyList())
 
     fun start() {
         watcher = runCatching { ctx.services.cartridge.watch { refresh() } }.getOrNull()

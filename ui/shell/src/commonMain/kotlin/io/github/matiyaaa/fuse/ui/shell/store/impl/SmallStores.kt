@@ -33,7 +33,7 @@ internal class DefaultCollectionOps(private val ctx: StoreContext) : CollectionO
     private val repo = ctx.data.collections
 
     override val collections: StateFlow<List<GameCollection>> =
-        repo.observeManual().stateIn(ctx.scope, SharingStarted.Eagerly, emptyList())
+        repo.observeManual().resilient().stateIn(ctx.scope, SharingStarted.Eagerly, emptyList())
 
     override suspend fun create(name: String): CollectionId = repo.create(name.trim().ifEmpty { "New collection" })
 
@@ -62,7 +62,7 @@ internal class DefaultAppOps(private val ctx: StoreContext) : AppOps {
         combine(provider.apps, overrides.observeAll()) { apps, o -> AppOverrideRepository.applyTo(apps, o) }
     }
 
-    private val all: StateFlow<List<AppEntry>> = entries.stateIn(ctx.scope, SharingStarted.Eagerly, emptyList())
+    private val all: StateFlow<List<AppEntry>> = entries.resilient().stateIn(ctx.scope, SharingStarted.Eagerly, emptyList())
 
     override fun apps(filter: AppFilter): Flow<List<AppCard>> = combine(all, flowOf(filter)) { list, f ->
         val visible = list.filterNot { it.hidden }

@@ -22,14 +22,13 @@ import io.github.matiyaaa.fuse.ui.shell.store.SourceOps
 import io.github.matiyaaa.fuse.ui.shell.store.SuggestedSource
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 
 /**
  * Library sources, scanning and firmware checks. Scans are incremental (QUICK skips platform folders
@@ -38,13 +37,10 @@ import kotlinx.coroutines.sync.withLock
 internal class LibraryEngine(private val ctx: StoreContext) : SourceOps {
     private val data = ctx.data
     private val scanner = LibraryScanner(ctx.services.fs, data.folderState, ctx.platforms)
-    private val scanLock = Mutex()
-    private var scanJob: Job? = null
-    private var pendingQuick = false
     private var biosJob: Job? = null
 
     override val sources: StateFlow<List<LibrarySource>> =
-        data.sources.observeAll().stateIn(ctx.scope, SharingStarted.Eagerly, emptyList())
+        data.sources.observeAll().resilient().stateIn(ctx.scope, SharingStarted.Eagerly, emptyList())
 
     private val scanState = MutableStateFlow(ScanProgress(ScanPhase.IDLE))
     override val scan: StateFlow<ScanProgress> = scanState
@@ -91,23 +87,28 @@ internal class LibraryEngine(private val ctx: StoreContext) : SourceOps {
             .sortedByDescending { it.platformsFound }
     }
 
+    /** One scan at a time: requests queue up and merge, so callers on any thread can ask. */
+    private data class Pending(val scope: ScanScope, val platform: PlatformId?)
+
+    private val requests = Channel<Pending>(Channel.UNLIMITED)
+
+    fun start() {
+        ctx.scope.launch {
+            for (first in requests) {
+                // Collapse what queued up meanwhile: a full scan covers everything, duplicates run once.
+                val batch = mutableListOf(first)
+                while (true) batch += requests.tryReceive().getOrNull() ?: break
+                if (batch.any { it.scope == ScanScope.FULL }) {
+                    runScan(ScanScope.FULL, null)
+                } else {
+                    batch.distinct().forEach { runScan(it.scope, it.platform) }
+                }
+            }
+        }
+    }
+
     override fun rescan(scope: ScanScope, platform: PlatformId?) {
-        val running = scanJob
-        if (running?.isActive == true) {
-            if (scope == ScanScope.QUICK && platform == null) {
-                // A quick scan is already running; run one more after it so late changes are seen.
-                pendingQuick = true
-                return
-            }
-            running.cancel()
-        }
-        scanJob = ctx.scope.launch {
-            scanLock.withLock { runScan(scope, platform) }
-            while (pendingQuick) {
-                pendingQuick = false
-                scanLock.withLock { runScan(ScanScope.QUICK, null) }
-            }
-        }
+        requests.trySend(Pending(scope, platform))
     }
 
     private suspend fun runScan(scope: ScanScope, platform: PlatformId?) {

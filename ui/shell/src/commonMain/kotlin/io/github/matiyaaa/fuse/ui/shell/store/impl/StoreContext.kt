@@ -27,6 +27,9 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.retryWhen
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
 
 /** State and helpers shared by every part of the default store. */
 internal class StoreContext(
@@ -116,5 +119,18 @@ internal class StoreContext(
     companion object {
         const val DAY_MS = 86_400_000L
         const val DEFAULT_ACCENT = 0xFF8A93A6
+    }
+}
+
+/**
+ * Keeps a long-lived flow alive through a failed database read: it restarts with a short backoff
+ * instead of leaving the interface frozen on its last value.
+ */
+internal fun <T> Flow<T>.resilient(): Flow<T> = retryWhen { cause, attempt ->
+    if (cause is CancellationException) {
+        false
+    } else {
+        delay(minOf(2_000L, 200L * (attempt + 1)))
+        true
     }
 }

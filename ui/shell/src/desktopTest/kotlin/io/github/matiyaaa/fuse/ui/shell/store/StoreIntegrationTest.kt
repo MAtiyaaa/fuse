@@ -72,8 +72,7 @@ class StoreIntegrationTest {
 
     @Test
     fun scansLaunchesAndTracksPlaytime() = runBlocking {
-        val db = DesktopDatabase.open(null)
-        val services = FakeServices(FuseData(db), cache)
+        val services = FakeServices(FuseData(DesktopDatabase.open(freshDb())), cache)
         val store = createFuseStore(services, scope)
 
         store.sources.add(root.absolutePath, LibrarySourceKind.ROMS_ROOT)
@@ -109,7 +108,7 @@ class StoreIntegrationTest {
 
     @Test
     fun multiDiscGamesGetAPlaylistInTheCacheOnly() = runBlocking {
-        val services = FakeServices(FuseData(DesktopDatabase.open(null)), cache)
+        val services = FakeServices(FuseData(DesktopDatabase.open(freshDb())), cache)
         val store = createFuseStore(services, scope)
         store.sources.add(root.absolutePath, LibrarySourceKind.ROMS_ROOT)
         awaitScan(store)
@@ -144,7 +143,7 @@ class StoreIntegrationTest {
 
     @Test
     fun removingAGameNeverTouchesFiles() = runBlocking {
-        val services = FakeServices(FuseData(DesktopDatabase.open(null)), cache)
+        val services = FakeServices(FuseData(DesktopDatabase.open(freshDb())), cache)
         val store = createFuseStore(services, scope)
         store.sources.add(root.absolutePath, LibrarySourceKind.ROMS_ROOT)
         awaitScan(store)
@@ -155,9 +154,17 @@ class StoreIntegrationTest {
         assertTrue(store.library.games(GameQuery(platform = PlatformId("gba"))).first().isEmpty())
     }
 
+    /**
+     * A new database file per store, like the desktop app uses. (The in-memory database shares one
+     * connection between threads, which the app never does.)
+     */
+    private fun freshDb(): String = File(cache, "fuse-${System.nanoTime()}.db").absolutePath
+
+    /** Waits until the scan's results are in the library (a follow-up quick scan may already run). */
     private suspend fun awaitScan(store: FuseStore) {
         withTimeout(20_000) {
-            store.sources.scan.first { it.phase == ScanPhase.DONE && it.added + it.changed > 0 }
+            store.library.platforms.first { systems -> systems.sumOf { it.gameCount } == 2 }
+            store.sources.scan.first { it.phase == ScanPhase.DONE }
         }
     }
 }

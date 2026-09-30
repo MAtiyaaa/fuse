@@ -453,6 +453,7 @@ fun performanceRows(app: AppState): List<MenuAction> {
             detail = "Automatic picks for this device: ${cap.tier.name.lowercase().replaceFirstChar { it.uppercase() }}",
         ) { v -> app.store.updatePrefs { it.copy(performance = v) } },
         toggleRow("low", "Low Power Mode", FuseIcons.Leaf, p.lowPower, "No video previews, blur, moving backgrounds or CRT; lighter artwork. Navigation stays quick") { v -> app.store.updatePrefs { it.copy(lowPower = v) } },
+        toggleRow("overlay", "Performance overlay", FuseIcons.Activity, p.performanceOverlay, "Fuse's own frame rate, memory and temperatures, only as the system reports them. Other apps' frame rates can't be read") { v -> app.store.updatePrefs { it.copy(performanceOverlay = v) } },
         infoRow("cpu", "Processor", "${cap.cpuCores} cores", icon = FuseIcons.Chip),
         infoRow("ram", "Memory", "${(cap.totalRamMb / 1024.0 * 10).toInt() / 10.0} GB", icon = FuseIcons.Memory),
         infoRow("screen", "Screen", "${cap.screenWidthPx}x${cap.screenHeightPx}, up to ${cap.maxRefreshRate.toInt()} Hz", icon = FuseIcons.Monitor),
