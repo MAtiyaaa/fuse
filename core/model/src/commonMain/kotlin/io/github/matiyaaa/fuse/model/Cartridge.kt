@@ -25,7 +25,42 @@ data class CartridgeStatus(
     val recent: List<CartridgeDownload> = emptyList(),
     /** Every download in Cartridge's queue with its own progress (bridge 2 and later), in order. */
     val queue: List<CartridgeQueueItem> = emptyList(),
+    /** The bridge protocol Cartridge speaks: 0 without a bridge, 1 for 0.9.10, 2 adds the queue and games. */
+    val protocol: Int = 0,
+    /**
+     * Counts changes to Cartridge's downloaded games (Fuse's own counter, not Cartridge's): when it
+     * moves, Fuse reads the games and their RomM details again.
+     */
+    val gamesRevision: Long = 0,
     val checkedAt: Long = 0,
+)
+
+/**
+ * A game Cartridge downloaded and still has on disk, with RomM's details (bridge protocol 2).
+ * Pictures are files Cartridge hands over itself: a content URI on Android, an absolute path on
+ * Linux; never a RomM address.
+ */
+@Serializable
+data class CartridgeGame(
+    val romId: Long,
+    /** The file or folder Cartridge saved the game to. */
+    val path: String?,
+    val title: String,
+    val platformSlug: String,
+    val summary: String? = null,
+    val year: Int? = null,
+    val genres: List<String> = emptyList(),
+    val developer: String? = null,
+    val publisher: String? = null,
+    /** 0..100 */
+    val rating: Int? = null,
+    val players: String? = null,
+    val series: List<String> = emptyList(),
+    val cover: String? = null,
+    val logo: String? = null,
+    val screenshot: String? = null,
+    /** Moves when the download, the details or a picture changed. */
+    val updatedAt: Long = 0,
 )
 
 /** One game in Cartridge's download queue. */

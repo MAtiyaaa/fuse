@@ -75,8 +75,13 @@ internal class FakeServices(override val data: FuseData, private val cache: File
         override suspend fun openApp(appId: String): RunResult = RunResult.Started()
     }
 
+    /** What the fake Cartridge reports; tests change it and call refresh. */
+    var cartridgeStatus = CartridgeStatus(installed = false)
+    var cartridgeGames: List<io.github.matiyaaa.fuse.model.CartridgeGame>? = null
+
     override val cartridge = object : CartridgeBridge {
-        override suspend fun read() = CartridgeStatus(installed = false)
+        override suspend fun read() = cartridgeStatus
+        override suspend fun games() = cartridgeGames
         override fun open(route: CartridgeRoute, link: String) = false
     }
 

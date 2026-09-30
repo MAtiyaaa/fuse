@@ -545,10 +545,16 @@ fun cartridgeRows(app: AppState): List<MenuAction> {
             detail = when {
                 !s.installed -> "Install it from the Cartridge tab"
                 !s.bridge -> "Update to 0.9.10 or newer for direct links and live status"
+                s.protocol >= 2 -> "Linked. Downloads, each game's progress and RomM's details appear in Fuse"
                 else -> "Linked. Downloads appear in Fuse automatically"
             }))
         if (s.installed) add(MenuAction("open", "Open Cartridge", FuseIcons.External, onSelect = { app.store.cartridge.open(CartridgeRoute.Home) }))
         add(toggleRow("auto", "Pick up new downloads on return", FuseIcons.Refresh, p.autoRefreshFromCartridge, "Rescans the folders Cartridge saved to when you come back") { v -> app.store.updatePrefs { it.copy(autoRefreshFromCartridge = v) } })
+        add(toggleRow(
+            "romm", "Details and art from RomM", FuseIcons.Database, p.cartridgeRommDetails,
+            if (s.installed && s.bridge && s.protocol < 2) "Needs a newer Cartridge. Games it downloaded then get RomM's description, genres, series, cover and logo"
+            else "Games Cartridge downloaded get RomM's description, genres, series, cover and logo. Your own edits and picks stay",
+        ) { v -> app.store.updatePrefs { it.copy(cartridgeRommDetails = v) } })
     }
 }
 

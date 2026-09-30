@@ -82,6 +82,9 @@ SELECT * FROM game WHERE id IN ?;
 selectIdByPath:
 SELECT id FROM game WHERE path = ?;
 
+selectPaths:
+SELECT id, path FROM game WHERE removed_at IS NULL;
+
 selectIdsByRaGameIds:
 SELECT id, ra_game_id FROM game WHERE ra_game_id IN ?;
 

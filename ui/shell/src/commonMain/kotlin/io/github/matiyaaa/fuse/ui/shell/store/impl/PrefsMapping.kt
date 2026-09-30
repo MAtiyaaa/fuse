@@ -62,6 +62,7 @@ internal fun AppSettings.toUiPrefs(scoped: GlobalScoped): UiPrefs {
         scraperRegion = scraping.preferredRegion ?: ANY_REGION,
         matching = scraping.matching,
         autoRefreshFromCartridge = cartridge.autoRefreshOnReturn,
+        cartridgeRommDetails = cartridge.rommDetails,
         cartridgeEnabled = cartridge.enabled,
         checkForUpdates = updates.checkForUpdates,
         heroDim = appearance.heroDim,
@@ -126,7 +127,7 @@ internal fun AppSettings.withUiPrefs(prefs: UiPrefs): AppSettings {
             showWifi = prefs.showWifi,
             showBluetooth = prefs.showBluetooth,
         ),
-        cartridge = cartridge.copy(autoRefreshOnReturn = prefs.autoRefreshFromCartridge, enabled = prefs.cartridgeEnabled),
+        cartridge = cartridge.copy(autoRefreshOnReturn = prefs.autoRefreshFromCartridge, enabled = prefs.cartridgeEnabled, rommDetails = prefs.cartridgeRommDetails),
         updates = updates.copy(checkForUpdates = prefs.checkForUpdates),
     )
 }

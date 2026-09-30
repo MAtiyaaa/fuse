@@ -224,6 +224,11 @@ data class CartridgeSettings(
     val enabled: Boolean = true,
     /** Rescan the folders Cartridge changed when returning from it. */
     val autoRefreshOnReturn: Boolean = true,
+    /**
+     * Use RomM's details and pictures for games Cartridge downloaded (bridge protocol 2): they fill
+     * empty fields and replace scraped ones, never what the user set.
+     */
+    val rommDetails: Boolean = true,
 )
 
 /**

@@ -240,8 +240,12 @@ and owns the RomM credentials. Fuse then:
   library change (only folders whose modification time changed are read again), and remembers each
   downloaded file's RomM rom id (`ExternalLinks.rommRomId`) so "Open in Cartridge" can jump to that
   game;
-- keeps a "RomM (via Cartridge)" slot in the scraper order. In 0.0.1 RomM artwork and metadata only
-  reach Fuse through what Cartridge saves next to the games, which the local media scanner reads.
+- with bridge protocol 2 (a Cartridge newer than 0.9.10), reads every game Cartridge downloaded with
+  RomM's details and pictures and applies them to the matching Fuse game (see
+  [What Fuse does with it](#what-fuse-does-with-it));
+- keeps a "RomM (via Cartridge)" slot in the scraper order. Before protocol 2, RomM artwork and
+  metadata only reach Fuse through what Cartridge saves next to the games, which the local media
+  scanner reads.
 
 ## Cartridge bridge protocol
 
@@ -252,12 +256,15 @@ local only, read-only for Fuse, and never carries a server address, token or pas
 |---|---|
 | Cartridge package (Android) | `io.github.abdu2304.cartridge` |
 | Minimum Cartridge version for the bridge | `0.9.10` |
-| Protocol version | `1` |
+| Protocol version | `2` for the tables and file fields (`1` still works); links use `v=1` |
 | Link scheme | `cartridge://` |
 | Release source for "Install Cartridge" | [MAtiyaaa/cartridge](https://github.com/MAtiyaaa/cartridge) releases, assets `Cartridge-android.apk` and `Cartridge-x86_64.AppImage` (upstream: [abdu2304/cartridge](https://github.com/abdu2304/cartridge)) |
 
-Cartridge 0.9.10 adds the provider, status file and links below. (The Cartridge side is in review as [MAtiyaaa/cartridge#29](https://github.com/MAtiyaaa/cartridge/pull/29); until a release ships it, Fuse sees Cartridge as installed without the bridge.) With an older Cartridge, Fuse only knows it is installed and its version
-(`installedWithoutBridge`).
+Cartridge 0.9.10 adds the provider, status file and links below (protocol 1). Protocol 2 adds the
+download queue game by game and the downloaded games with RomM's details and pictures (in review as
+[MAtiyaaa/cartridge#30](https://github.com/MAtiyaaa/cartridge/pull/30); Cartridge's own
+`docs/FUSE_BRIDGE.md` is the full contract). With an older Cartridge, Fuse only knows it is
+installed and its version (`installedWithoutBridge`).
 
 ### Deep links
 
@@ -288,12 +295,14 @@ Platform slugs are RomM slugs (`psx`, `snes`, `switch`, ...). Example:
 | Permission | `io.github.abdu2304.cartridge.permission.READ_STATUS` |
 | Status URI | `content://io.github.abdu2304.cartridge.status/status` (one row) |
 | Recent URI | `content://io.github.abdu2304.cartridge.status/recent` (finished downloads, newest first) |
+| Queue URI (protocol 2) | `content://io.github.abdu2304.cartridge.status/queue` (every download in the Downloads page's order) |
+| Games URI (protocol 2) | `content://io.github.abdu2304.cartridge.status/games` (downloaded games with RomM's details) |
 
 `/status` columns:
 
 | Column | Type | Meaning |
 |---|---|---|
-| `protocol` | int | Bridge protocol version, currently 1 |
+| `protocol` | int | Bridge protocol version: 1 (Cartridge 0.9.10) or 2 |
 | `version` | text | Cartridge's version name |
 | `connected` | int 0/1 or null | Whether Cartridge can reach its RomM server; null when unknown |
 | `active_downloads` | int | Downloads in progress |
@@ -314,9 +323,20 @@ Platform slugs are RomM slugs (`psx`, `snes`, `switch`, ...). Example:
 | `path` | text | Local path the game was saved to |
 | `finished_at` | int | Epoch millis |
 
-Fuse maps the row with `statusFromRow` and `downloadFromRow`: rows without a rom id or title are
-skipped, counts are clamped at zero and progress to 0..1. The Android app declares the permission,
-reads the provider on resume and listens for changes with a `ContentObserver`.
+`/queue` columns (protocol 2): `rom_id`, `title`, `platform_slug`, `state` (`downloading`, `queued`,
+`paused`, `failed` or `done`), `received`, `total` (null while unknown) and `position`. Fuse leaves
+out `done` rows (they are in `/recent`) and states it doesn't know.
+
+`/games` columns (protocol 2): `rom_id`, `path`, `title`, `platform_slug`, `summary`, `year`,
+`genres` and `series` (JSON array text), `developer`, `publisher`, `rating` (0..100), `players`,
+`cover`, `logo`, `screenshot` (content URIs the provider serves read-only, or null) and
+`updated_at`.
+
+Fuse maps the rows with `statusFromRow`, `downloadFromRow`, `queueItemFromRow` and `gameFromRow`:
+rows without a rom id or title are skipped, counts are clamped at zero, progress to 0..1 and ratings
+to 0..100. The Android app declares the permission, reads the provider on resume and listens for
+changes with a `ContentObserver` on `/status` and one on `/games`, which only fires when the games or
+their pictures change; `/games` is read only then.
 
 ### Linux: status file
 
@@ -348,15 +368,36 @@ fields in camelCase:
 }
 ```
 
-A file without `protocol`, or one that is not valid JSON, is ignored. Numbers and booleans are
-accepted quoted or unquoted. The Linux app watches the file's folder and re-reads it after changes.
+With protocol 2 the file also has `queue` and `games` arrays with the same fields in camelCase
+(pictures are absolute paths of files in Cartridge's own folder). A file without `protocol`, or one
+that is not valid JSON, is ignored. Numbers and booleans are accepted quoted or unquoted. The Linux
+app watches the file's folder and re-reads it after changes (files up to 16 MB).
 
 ### What Fuse does with it
 
 On resume (and when the bridge reports a change), Fuse reads the status, shows download progress in
 the Cartridge section and the Cartridge Downloads widget, and, when "Pick up new downloads on return"
 is on (Settings, Cartridge; on by default), rescans the folders Cartridge saved to
-(`CartridgeSettings.autoRefreshOnReturn`) with a quick scan.
+(`CartridgeSettings.autoRefreshOnReturn`) with a quick scan. With protocol 2 the Downloads panel,
+the top line and Phone Link show each game in the queue.
+
+When "Details and art from RomM" is on (Settings, Cartridge; on by default,
+`CartridgeSettings.rommDetails`), Fuse reads the downloaded games whenever they or the library change
+and, for each one (`CartridgeDetails`):
+
+- finds the Fuse game by its path (`CartridgeMatch`): the exact path, the same place written another
+  way (`content://` document URIs, `/sdcard`, `/storage/emulated/0`), the one game inside a folder
+  Cartridge reports (multi-disc games), the same folder and file name, or a file name no other game
+  has. Games Fuse hasn't indexed yet are tried again after the next scan;
+- links it to its RomM entry (`rommRomId`);
+- applies RomM's description, year, developer, publisher, genres, series (as the franchise, which
+  feeds automatic series collections), players and rating with source `ROMM`: they fill empty fields
+  and replace scraped ones, while details the user edited are only ever filled;
+- adds the cover and logo as `ROMM` media, replacing scraped art but never the user's picks or art
+  from the game's folder, and a screenshot only when the game has none.
+
+A game is written again only when Cartridge says its row or pictures changed, so a later "Fill
+everything" isn't undone at every sync.
 
 ## GitHub Releases
 

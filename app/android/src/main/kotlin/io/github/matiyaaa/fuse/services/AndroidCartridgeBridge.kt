@@ -14,6 +14,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
 import io.github.matiyaaa.fuse.ActivityHolder
 import io.github.matiyaaa.fuse.integrations.cartridge.CartridgeProtocol
+import io.github.matiyaaa.fuse.model.CartridgeGame
 import io.github.matiyaaa.fuse.model.CartridgeRoute
 import io.github.matiyaaa.fuse.model.CartridgeStatus
 import io.github.matiyaaa.fuse.ui.shell.store.CartridgeBridge
@@ -23,7 +24,8 @@ import kotlinx.coroutines.withContext
 /**
  * Cartridge through its read-only status provider (Cartridge 0.9.10+) and `cartridge://` deep links.
  * Older versions, or a provider that refuses Fuse (the READ_STATUS permission is only granted when
- * Cartridge was installed before Fuse), are reported as installed without the bridge.
+ * Cartridge was installed before Fuse), are reported as installed without the bridge. With bridge
+ * protocol 2 it also reads the queue game by game and, when they change, the downloaded games.
  */
 class AndroidCartridgeBridge(
     context: Context,
@@ -32,6 +34,9 @@ class AndroidCartridgeBridge(
     private val appContext = context.applicationContext
     private val pm = appContext.packageManager
     private val resolver = appContext.contentResolver
+
+    /** Moves when the provider says its games changed (see [CartridgeStatus.gamesRevision]). */
+    private val gamesRevision = java.util.concurrent.atomic.AtomicLong(0)
 
     override suspend fun read(): CartridgeStatus = withContext(Dispatchers.IO) {
         val now = System.currentTimeMillis()
@@ -43,7 +48,8 @@ class AndroidCartridgeBridge(
             val status = rows(CartridgeProtocol.STATUS_URI).firstOrNull()
                 ?: return@withContext CartridgeProtocol.installedWithoutBridge(version, now)
             val recent = rows(CartridgeProtocol.RECENT_URI)
-            CartridgeProtocol.statusFromRow(status, recent, version, now)
+            val queue = if (CartridgeProtocol.hasGames(status)) rows(CartridgeProtocol.QUEUE_URI) else emptyList()
+            CartridgeProtocol.statusFromRow(status, recent, version, now, queue).copy(gamesRevision = gamesRevision.get())
         } catch (e: SecurityException) {
             CartridgeProtocol.installedWithoutBridge(version, now)
         } catch (e: RuntimeException) {
@@ -52,25 +58,39 @@ class AndroidCartridgeBridge(
         }
     }
 
+    override suspend fun games(): List<CartridgeGame>? = withContext(Dispatchers.IO) {
+        try {
+            val cursorRows = resolver.query(CartridgeProtocol.GAMES_URI.toUri(), null, null, null, null)?.use { readRows(it) }
+                ?: return@withContext null
+            cursorRows.mapNotNull(CartridgeProtocol::gameFromRow)
+        } catch (e: SecurityException) {
+            null
+        } catch (e: RuntimeException) {
+            null
+        }
+    }
+
     private fun rows(uri: String): List<Map<String, Any?>> {
         val cursor = resolver.query(uri.toUri(), null, null, null, null) ?: return emptyList()
-        return cursor.use { c ->
-            val out = ArrayList<Map<String, Any?>>(c.count.coerceAtLeast(0))
-            while (c.moveToNext()) {
-                val row = HashMap<String, Any?>(c.columnCount * 2)
-                for (i in 0 until c.columnCount) {
-                    row[c.getColumnName(i)] = when (c.getType(i)) {
-                        Cursor.FIELD_TYPE_NULL -> null
-                        Cursor.FIELD_TYPE_INTEGER -> c.getLong(i)
-                        Cursor.FIELD_TYPE_FLOAT -> c.getDouble(i)
-                        Cursor.FIELD_TYPE_STRING -> c.getString(i)
-                        else -> null
-                    }
+        return cursor.use(::readRows)
+    }
+
+    private fun readRows(c: Cursor): List<Map<String, Any?>> {
+        val out = ArrayList<Map<String, Any?>>(c.count.coerceAtLeast(0))
+        while (c.moveToNext()) {
+            val row = HashMap<String, Any?>(c.columnCount * 2)
+            for (i in 0 until c.columnCount) {
+                row[c.getColumnName(i)] = when (c.getType(i)) {
+                    Cursor.FIELD_TYPE_NULL -> null
+                    Cursor.FIELD_TYPE_INTEGER -> c.getLong(i)
+                    Cursor.FIELD_TYPE_FLOAT -> c.getDouble(i)
+                    Cursor.FIELD_TYPE_STRING -> c.getString(i)
+                    else -> null
                 }
-                out += row
             }
-            out
+            out += row
         }
+        return out
     }
 
     override fun open(route: CartridgeRoute, link: String): Boolean {
@@ -95,12 +115,20 @@ class AndroidCartridgeBridge(
         val observer = object : ContentObserver(handler) {
             override fun onChange(selfChange: Boolean) = onChange()
         }
+        // The games (and their pictures) are announced on their own URI, only when they change.
+        val gamesObserver = object : ContentObserver(handler) {
+            override fun onChange(selfChange: Boolean) {
+                gamesRevision.incrementAndGet()
+                onChange()
+            }
+        }
         var observing = false
 
         fun register() {
             if (observing) {
                 try {
                     resolver.unregisterContentObserver(observer)
+                    resolver.unregisterContentObserver(gamesObserver)
                 } catch (e: RuntimeException) {
                     // Already gone.
                 }
@@ -108,6 +136,8 @@ class AndroidCartridgeBridge(
             }
             observing = try {
                 resolver.registerContentObserver(CartridgeProtocol.STATUS_URI.toUri(), true, observer)
+                // Queue changes come with the status; the games have their own notification.
+                resolver.registerContentObserver(CartridgeProtocol.GAMES_URI.toUri(), true, gamesObserver)
                 true
             } catch (e: SecurityException) {
                 false
@@ -139,7 +169,10 @@ class AndroidCartridgeBridge(
             } catch (e: IllegalArgumentException) {
                 // Not registered.
             }
-            if (observing) resolver.unregisterContentObserver(observer)
+            if (observing) {
+                resolver.unregisterContentObserver(observer)
+                resolver.unregisterContentObserver(gamesObserver)
+            }
             observing = false
         }
     }

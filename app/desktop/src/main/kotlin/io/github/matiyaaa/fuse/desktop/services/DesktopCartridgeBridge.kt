@@ -4,6 +4,7 @@ import io.github.matiyaaa.fuse.desktop.FuseDirs
 import io.github.matiyaaa.fuse.desktop.system.DirectoryWatcher
 import io.github.matiyaaa.fuse.desktop.system.Processes
 import io.github.matiyaaa.fuse.integrations.cartridge.CartridgeProtocol
+import io.github.matiyaaa.fuse.model.CartridgeGame
 import io.github.matiyaaa.fuse.model.CartridgeRoute
 import io.github.matiyaaa.fuse.model.CartridgeStatus
 import io.github.matiyaaa.fuse.ui.shell.store.CartridgeBridge
@@ -16,22 +17,39 @@ import java.util.concurrent.TimeUnit
 
 /**
  * Cartridge on Linux: its status file (`$XDG_STATE_HOME/cartridge/status.json`) for live status, a
- * few file checks for "is it installed", and `xdg-open cartridge://...` for deep links.
+ * few file checks for "is it installed", and `xdg-open cartridge://...` for deep links. With bridge
+ * protocol 2 the same file carries the queue and the downloaded games; the games are kept from the
+ * last read and counted as changed only when they differ.
  */
 internal class DesktopCartridgeBridge(private val dirs: FuseDirs) : CartridgeBridge {
     private val statusFile: String? = CartridgeProtocol.statusFilePath(System.getenv("XDG_STATE_HOME"), dirs.home)
 
+    @Volatile private var lastGames: List<CartridgeGame>? = null
+    @Volatile private var gamesRevision = 0L
+
     override suspend fun read(): CartridgeStatus = withContext(Dispatchers.IO) {
         val now = System.currentTimeMillis()
         try {
-            val text = statusFile?.let { SystemLinuxEnvironment.readSmallText(it) }
-            text?.let { CartridgeProtocol.parseStatusFile(it, installedVersion = null, checkedAt = now) }
-                ?: if (isInstalled()) CartridgeProtocol.installedWithoutBridge(version = null, checkedAt = now)
-                else CartridgeStatus(installed = false, checkedAt = now)
+            val text = statusFile?.let { SystemLinuxEnvironment.readSmallText(it, CartridgeProtocol.MAX_STATUS_FILE_BYTES) }
+            val snapshot = text?.let { CartridgeProtocol.parseSnapshot(it, installedVersion = null, checkedAt = now) }
+            if (snapshot != null) {
+                if (snapshot.games != lastGames) {
+                    lastGames = snapshot.games
+                    gamesRevision++
+                }
+                snapshot.status.copy(gamesRevision = gamesRevision)
+            } else if (isInstalled()) {
+                CartridgeProtocol.installedWithoutBridge(version = null, checkedAt = now)
+            } else {
+                CartridgeStatus(installed = false, checkedAt = now)
+            }
         } catch (e: Exception) {
             CartridgeStatus(installed = false, checkedAt = now)
         }
     }
+
+    /** The games from the last status file read (the file holds them; no second read needed). */
+    override suspend fun games(): List<CartridgeGame>? = lastGames
 
     /** Status file, an AppImage in the usual folders, `cartridge` on PATH, or a desktop entry. */
     private fun isInstalled(): Boolean {

@@ -128,6 +128,11 @@ class GameRepository(
         q.selectIdByPath(path).executeAsOneOrNull()?.let(::GameId)
     }
 
+    /** Every game's path (removed games left out), for matching paths other apps report. */
+    suspend fun paths(): List<Pair<GameId, String>> = withContext(dispatcher) {
+        q.selectPaths().executeAsList().map { GameId(it.id) to it.path }
+    }
+
     /** Local games linked to each RetroAchievements game id (for the COMPLETED collection). */
     suspend fun idsForRetroAchievements(raGameIds: Collection<Long>): Map<Long, List<GameId>> = withContext(dispatcher) {
         raGameIds.distinct().chunked(SQL_CHUNK)

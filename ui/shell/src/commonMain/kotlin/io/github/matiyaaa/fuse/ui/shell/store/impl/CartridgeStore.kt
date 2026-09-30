@@ -1,6 +1,7 @@
 package io.github.matiyaaa.fuse.ui.shell.store.impl
 
 import io.github.matiyaaa.fuse.integrations.ApiResult
+import io.github.matiyaaa.fuse.integrations.cartridge.CartridgeMatch
 import io.github.matiyaaa.fuse.integrations.cartridge.CartridgeProtocol
 import io.github.matiyaaa.fuse.integrations.github.GitHubReleases
 import io.github.matiyaaa.fuse.integrations.github.SemVer
@@ -8,6 +9,7 @@ import io.github.matiyaaa.fuse.integrations.getOrNull
 import io.github.matiyaaa.fuse.model.CartridgeRoute
 import io.github.matiyaaa.fuse.model.CartridgeStatus
 import io.github.matiyaaa.fuse.model.ReleaseInfo
+import io.github.matiyaaa.fuse.model.ScanPhase
 import io.github.matiyaaa.fuse.model.ScanScope
 import io.github.matiyaaa.fuse.ui.shell.store.CartridgeOps
 import io.github.matiyaaa.fuse.ui.shell.store.RecentDownload
@@ -32,7 +34,8 @@ import kotlinx.coroutines.launch
 /**
  * Fuse's side of the Cartridge bridge: status, recent downloads and deep links. When Cartridge
  * reports a library change (a finished download), Fuse runs a quick scan so the game shows up
- * without a restart.
+ * without a restart. With bridge protocol 2 it also brings in RomM's details and pictures for the
+ * games Cartridge downloaded ([CartridgeDetails]).
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 internal class DefaultCartridgeOps(
@@ -44,6 +47,12 @@ internal class DefaultCartridgeOps(
     private var readJob: Job? = null
     private var watcher: AutoCloseable? = null
     private var seenLibraryChange: Long? = null
+    private var seenGamesRevision: Long? = null
+    private val details = CartridgeDetails(ctx)
+    private var gamesJob: Job? = null
+
+    /** Games Cartridge reported that Fuse hadn't indexed yet: matched again after the next scan. */
+    private var waitingForScan = false
 
     override val recent: StateFlow<List<RecentDownload>> = combine(
         state.map { it.recent }.distinctUntilChanged(),
@@ -51,8 +60,10 @@ internal class DefaultCartridgeOps(
         engine.scan.map { it.phase }.distinctUntilChanged(),
     ) { downloads, _ -> downloads }
         .mapLatest { downloads ->
+            // The same file can be written differently by the two apps (see CartridgeMatch).
+            val match = if (downloads.any { it.path != null }) CartridgeMatch(ctx.data.games.paths()) else null
             downloads.map { d ->
-                val id = d.path?.let { ctx.data.games.idByPath(it) }
+                val id = d.path?.let { p -> match?.find(p) }
                 if (id != null && d.romId > 0) rememberRomId(id, d.romId)
                 RecentDownload(d, id?.let { ctx.card(it) })
             }
@@ -70,6 +81,16 @@ internal class DefaultCartridgeOps(
 
     /** Follows the Cartridge switch: watching and reading only while it is on. */
     fun start() {
+        // A scan that just finished may have indexed games Cartridge already reported.
+        ctx.scope.launch {
+            engine.scan.map { it.phase }.distinctUntilChanged().collect { phase ->
+                if (phase == ScanPhase.DONE && waitingForScan) syncGames()
+            }
+        }
+        // Turning RomM's details on applies them straight away.
+        ctx.scope.launch {
+            ctx.settings.map { it.cartridge.rommDetails }.distinctUntilChanged().collect { on -> if (on) syncGames() }
+        }
         ctx.scope.launch {
             ctx.settings.map { it.cartridge.enabled }.distinctUntilChanged().collect { on ->
                 watcher?.let { runCatching { it.close() } }
@@ -81,8 +102,30 @@ internal class DefaultCartridgeOps(
                 } else {
                     // Everything Cartridge-related hides when it reads as not installed.
                     state.value = CartridgeStatus()
+                    gamesJob?.cancel()
+                    seenGamesRevision = null
                 }
             }
+        }
+    }
+
+    /**
+     * Reads the games Cartridge downloaded (protocol 2) and brings in their RomM details. One run at
+     * a time; a newer change restarts it.
+     */
+    private fun syncGames() {
+        if (!enabled || state.value.protocol < CartridgeProtocol.GAMES_PROTOCOL) return
+        gamesJob?.cancel()
+        gamesJob = ctx.scope.launch(Dispatchers.Default) {
+            val games = try {
+                ctx.services.cartridge.games()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                null
+            } ?: return@launch
+            val outcome = details.sync(games, applyDetails = ctx.settings.value.cartridge.rommDetails)
+            waitingForScan = outcome.unmatched > 0
         }
     }
 
@@ -126,6 +169,10 @@ internal class DefaultCartridgeOps(
         val previous = seenLibraryChange
         seenLibraryChange = changedAt
         val changed = previous != null && changedAt > previous
+        if (next.protocol >= CartridgeProtocol.GAMES_PROTOCOL && (next.gamesRevision != seenGamesRevision || changed)) {
+            seenGamesRevision = next.gamesRevision
+            syncGames()
+        }
         if (changed && ctx.settings.value.cartridge.autoRefreshOnReturn) {
             // Let Cartridge finish writing the file before looking at the folder.
             delay(300)

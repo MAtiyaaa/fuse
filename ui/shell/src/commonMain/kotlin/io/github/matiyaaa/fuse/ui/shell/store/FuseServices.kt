@@ -6,6 +6,7 @@ import io.github.matiyaaa.fuse.integrations.github.ReleasePlatform
 import io.github.matiyaaa.fuse.launch.ResolvedLaunch
 import io.github.matiyaaa.fuse.library.FuseFileSystem
 import io.github.matiyaaa.fuse.model.AppEntry
+import io.github.matiyaaa.fuse.model.CartridgeGame
 import io.github.matiyaaa.fuse.model.CartridgeRoute
 import io.github.matiyaaa.fuse.model.CartridgeStatus
 import io.github.matiyaaa.fuse.model.Host
@@ -125,6 +126,13 @@ interface GameLauncher {
 interface CartridgeBridge {
     /** Current status. Cheap enough to call on every resume. Never throws. */
     suspend fun read(): CartridgeStatus
+
+    /**
+     * The games Cartridge downloaded, with RomM's details (bridge protocol 2); null when this
+     * Cartridge doesn't offer them. Read only when [CartridgeStatus.gamesRevision] or the library
+     * changed, since it can be large.
+     */
+    suspend fun games(): List<CartridgeGame>? = null
 
     /** Opens [route] in Cartridge ([link] is the built `cartridge://` URL). False when nothing handled it. */
     fun open(route: CartridgeRoute, link: String): Boolean

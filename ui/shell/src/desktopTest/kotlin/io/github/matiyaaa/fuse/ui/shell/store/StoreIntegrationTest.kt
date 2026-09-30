@@ -110,6 +110,53 @@ class StoreIntegrationTest {
     }
 
     @Test
+    fun cartridgeGamesGetRommDetailsWithoutTouchingTheUsersOwn(): Unit = runBlocking {
+        val services = FakeServices(FuseData(DesktopDatabase.open(freshDb())), cache)
+        val store = createFuseStore(services, scope)
+        store.sources.add(root.absolutePath, LibrarySourceKind.ROMS_ROOT)
+        awaitScan(store)
+        val wars = store.library.games(GameQuery(platform = PlatformId("gba"))).first().single()
+        val ff7 = store.library.games(GameQuery(platform = PlatformId("psx"))).first().single()
+        // The user already picked their own cover for Final Fantasy VII.
+        store.media.setFromFile(io.github.matiyaaa.fuse.model.MediaOwner.OfGame(ff7.id), MediaKind.BOXART, "/home/me/ff7.png")
+
+        services.cartridgeGames = listOf(
+            io.github.matiyaaa.fuse.model.CartridgeGame(
+                romId = 77, path = "file://" + File(root, "gba/Advance Wars (USA).gba").absolutePath.replace(" ", "%20"),
+                title = "Advance Wars", platformSlug = "gba", summary = "Orange Star goes to war.", year = 2001,
+                genres = listOf("Strategy"), developer = "Intelligent Systems", publisher = "Nintendo", rating = 91,
+                players = "1-4", series = listOf("Wars"), cover = "/cartridge/imgcache/aw", logo = "/cartridge/logos/77-r.png",
+                updatedAt = 10,
+            ),
+            // Cartridge saved the two discs as a folder; Fuse lists the game by its discs.
+            io.github.matiyaaa.fuse.model.CartridgeGame(
+                romId = 78, path = File(root, "psx").absolutePath + "/", title = "Final Fantasy VII", platformSlug = "psx",
+                genres = listOf("RPG"), cover = "/cartridge/imgcache/ff7", updatedAt = 11,
+            ),
+            io.github.matiyaaa.fuse.model.CartridgeGame(romId = 79, path = "/elsewhere/Not Here.gba", title = "Not Here", platformSlug = "gba"),
+        )
+        services.cartridgeStatus = CartridgeStatus(installed = true, version = "0.9.11", bridge = true, protocol = 2, gamesRevision = 1)
+        store.cartridge.refresh()
+
+        val detail = withTimeout(10_000) { store.library.game(wars.id).first { it?.game?.metadata?.source == io.github.matiyaaa.fuse.model.MetadataSource.ROMM } }!!
+        val meta = detail.game.metadata
+        assertEquals("Orange Star goes to war.", meta.description)
+        assertEquals(listOf("Strategy"), meta.genres)
+        assertEquals("Wars", meta.franchise)
+        assertEquals(91, meta.rating)
+        assertEquals(77L, detail.game.links.rommRomId)
+        val cover = withTimeout(10_000) { store.library.game(wars.id).first { it?.media?.boxart != null } }!!.media
+        assertEquals("/cartridge/imgcache/aw", cover.boxart?.model)
+        assertEquals(io.github.matiyaaa.fuse.model.MediaSource.ROMM, cover.boxart?.source)
+        assertEquals("/cartridge/logos/77-r.png", cover.logo?.model)
+
+        // The folder matched the one game inside it; the user's cover stayed.
+        val ff7Detail = withTimeout(10_000) { store.library.game(ff7.id).first { it?.game?.metadata?.genres == listOf("RPG") } }!!
+        assertEquals(78L, ff7Detail.game.links.rommRomId)
+        assertEquals("/home/me/ff7.png", ff7Detail.media.boxart?.model)
+    }
+
+    @Test
     fun multiDiscGamesGetAPlaylistInTheCacheOnly() = runBlocking {
         val services = FakeServices(FuseData(DesktopDatabase.open(freshDb())), cache)
         val store = createFuseStore(services, scope)
