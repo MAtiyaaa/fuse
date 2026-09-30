@@ -35,9 +35,9 @@ early: expect rough edges, and please report what you find.
 - **Controllers first**: key repeat that speeds up while held, hold to reorder, stick navigation with
   a deadzone, Nintendo button layout, and hint glyphs for Xbox, Nintendo, PlayStation or keyboard.
 - **Android**: optional Home screen mode, an app drawer, a second-screen companion, and in-app updates
-  checked against their SHA-256 digest before installing <!-- verify -->.
-- **Linux**: a single AppImage, window modes, gamepad input, and keys kept in the Secret Service
-  <!-- verify -->.
+  checked against their SHA-256 digest before installing.
+- **Linux**: a single AppImage, window modes (full screen, borderless, window) and an optional
+  login entry, gamepad input without extra drivers, and keys kept in the Secret Service.
 - **Private**: no telemetry, analytics or crash reporting.
 
 Downloads: `Fuse-0.0.1-android.apk` (Android 9 or newer), `Fuse-0.0.1-x86_64.AppImage` (64-bit x86

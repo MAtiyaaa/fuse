@@ -64,34 +64,39 @@ right emulator with a controller, on Android and Linux.
 - [x] Performance overlay and dynamic tile borders
 - [x] Licence texts shipped in the apps, with a licences screen
 
-### Android app (in progress)
+### Android app
 
-- [ ] Home role with an opt-in alias, root back handling, never looping the role request <!-- verify -->
-- [ ] Emulator detection and launching: SAF tree URIs, FileProvider grants, activity checks, launch display <!-- verify -->
-- [ ] Status data: battery, Wi-Fi, Bluetooth, displays, performance metrics that can really be measured <!-- verify -->
-- [ ] Cartridge status provider client and deep links <!-- verify -->
-- [ ] Update and Cartridge installer through `PackageInstaller` with digest verification <!-- verify -->
-- [ ] Companion screen on a second display <!-- verify -->
-- [ ] Secrets in Android Keystore (AES-256-GCM) <!-- verify -->
-- [ ] Interface sounds and video previews <!-- verify -->
+Builds (debug and release), passes its unit tests and lint. Not yet tried on a device.
 
-### Linux app (in progress)
+- [x] Home role with an opt-in alias, root back handling, never looping the role request
+- [x] Emulator detection and launching: SAF tree URIs, FileProvider grants, activity checks, launch display, clip-reveal transition
+- [x] Status data: battery, Wi-Fi, Bluetooth, displays, and only performance metrics that can really be measured
+- [x] Cartridge status provider client, change observer and deep links
+- [x] Update and Cartridge installer through `PackageInstaller` with SHA-256 verification
+- [x] Companion screen on a second display (Android 10 and later)
+- [x] Secrets in Android Keystore (AES-256-GCM)
+- [x] Interface sounds (`AudioTrack`), haptics and muted video previews (Media3)
+- [ ] Checked on real handhelds: Home intent timing, clip reveal across tasks, launch display ids, package-change broadcasts
 
-- [ ] Window modes <!-- verify -->
-- [ ] Joystick and gamepad input <!-- verify -->
-- [ ] Secrets in the Secret Service <!-- verify -->
-- [ ] AppImage packaging (`scripts/build-appimage.sh`) <!-- verify -->
+### Linux app
+
+Builds, passes its unit tests, packages as a Deb and an AppImage, and starts under Xvfb.
+
+- [x] Window modes (full screen, borderless, window) in Settings, F11 and command line flags
+- [x] Joystick and gamepad input from `/dev/input/js*`, without native libraries
+- [x] Secrets in the Secret Service, with an encrypted-file fallback
+- [x] AppImage packaging (`scripts/build-appimage.sh`) and an optional login entry
+- [ ] Video previews on the desktop
 
 ### Project
 
 - [x] Documentation, licence and third-party notices
 - [x] CI and release workflows (`.github/workflows/`)
-- [ ] First release published by the release workflow <!-- verify -->
+- [ ] First release published by the release workflow
 
 ## Phase 2: Polish and depth
 
 - [ ] SAF-only storage mode that works without All files access (emulators that need FileProvider URIs would then be limited)
-- [ ] Video previews on the desktop
 - [ ] R8 minification and resource shrinking for release APKs
 - [ ] Screenshot tests for the design system and main screens
 - [ ] Tests for `ui:designsystem` input and selection logic; Android host tests (not enabled in the build yet)

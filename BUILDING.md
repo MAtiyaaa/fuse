@@ -54,10 +54,10 @@ plugin creates them only when a module opts in), so there are no Android unit te
 ## AppImage
 
 `scripts/build-appimage.sh` builds the desktop app and packages it as
-`build/appimage/Fuse-<version>-x86_64.AppImage`, with `<version>` read from `gradle.properties`
-<!-- verify -->. Running an AppImage (including the packaging tool) needs the FUSE 2 library
+`build/appimage/Fuse-<version>-x86_64.AppImage`, with `<version>` read from `gradle.properties`.
+It needs `curl` and network access the first time, to fetch `appimagetool`. Running an AppImage (including the packaging tool) needs the FUSE 2 library
 (`libfuse2`, or `libfuse2t64` on Ubuntu 24.04 and later); where that is not possible, set
-`APPIMAGE_EXTRACT_AND_RUN=1` <!-- verify -->.
+`APPIMAGE_EXTRACT_AND_RUN=1` (the script already does this for `appimagetool`).
 
 ## Versions
 
@@ -71,7 +71,7 @@ plugin creates them only when a module opts in), so there are no Android unit te
 
 ## Release signing
 
-Release APKs are signed with the key described by four environment variables <!-- verify -->:
+Release APKs are signed with the key described by four environment variables:
 
 | Variable | Meaning |
 |---|---|
@@ -88,7 +88,8 @@ export FUSE_KEY_PASSWORD=...
 ./gradlew :app:android:assembleRelease
 ```
 
-Without them the release build is not signed with the release key <!-- verify -->. To create a key:
+Without them the release build is signed with the debug key and Gradle prints a warning, so CI
+still produces an installable APK. To create a key:
 
 ```sh
 keytool -genkeypair -v -keystore fuse-release.jks -alias fuse -keyalg RSA -keysize 4096 -validity 10000

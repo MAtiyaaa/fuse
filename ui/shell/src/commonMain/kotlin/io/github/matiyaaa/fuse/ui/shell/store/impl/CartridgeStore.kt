@@ -52,11 +52,18 @@ internal class DefaultCartridgeOps(
         .mapLatest { downloads ->
             downloads.map { d ->
                 val id = d.path?.let { ctx.data.games.idByPath(it) }
+                if (id != null && d.romId > 0) rememberRomId(id, d.romId)
                 RecentDownload(d, id?.let { ctx.card(it) })
             }
         }
         .flowOn(Dispatchers.Default)
         .resilient().stateIn(ctx.scope, SharingStarted.Eagerly, emptyList())
+
+    /** Links a game to its RomM entry so "Open in Cartridge" can jump straight to it. */
+    private suspend fun rememberRomId(id: io.github.matiyaaa.fuse.model.GameId, romId: Long) {
+        val current = ctx.data.games.get(id)?.links ?: return
+        if (current.rommRomId != romId) ctx.data.games.updateLinks(id) { it.copy(rommRomId = romId) }
+    }
 
     fun start() {
         watcher = runCatching { ctx.services.cartridge.watch { refresh() } }.getOrNull()

@@ -322,8 +322,9 @@ Fuse draws its own focus and press feedback, so Compose's ripple indication is t
 
 Interface sounds are synthesised at runtime by `ToneSynth` (`designsystem/sound/UiSounds.kt`): short
 16-bit mono PCM tones at 44.1 kHz with a 4 ms attack and an exponential decay. No recorded or console
-sounds ship with Fuse. Each platform plays the samples through its own audio API (planned for 0.0.1:
-AudioTrack on Android, javax.sound on Linux) <!-- verify -->.
+sounds ship with Fuse. Each platform plays the samples through its own audio API: `AudioTrack` on
+Android, and one shared `javax.sound` line on Linux that is released after a few seconds of silence,
+so a game never finds the audio device busy.
 
 | Cue | Sound |
 |---|---|

@@ -59,9 +59,10 @@ sha256sum -c SHA256SUMS.txt --ignore-missing
 ```
 
 **Android.** Open the APK and allow your browser or file manager to install apps when asked. Fuse
-works as a normal app; making it your Home screen is optional and offered during setup
-<!-- verify -->. To read your folders and hand games to emulators that need file paths or FileProvider
-links, Fuse asks for All files access, the same access ES-DE uses <!-- verify -->.
+works as a normal app; making it your Home screen is optional and offered during setup. To read
+your folders and hand games to emulators that need file paths or FileProvider links, Fuse asks for
+All files access, the same access ES-DE uses. Fuse only reads: it never moves, renames or deletes
+your files.
 
 **Linux.** Make the AppImage executable and run it:
 
@@ -71,7 +72,7 @@ chmod +x Fuse-*-x86_64.AppImage
 ```
 
 If it does not start, your distribution may need the FUSE 2 library (`libfuse2`, or `libfuse2t64` on
-newer Ubuntu and Debian) <!-- verify -->. See the
+newer Ubuntu and Debian). See the
 [AppImage FUSE guide](https://docs.appimage.org/user-guide/troubleshooting/fuse.html).
 
 Fuse does not include emulators, BIOS files or games. Install the emulators you want; Fuse finds them
@@ -99,7 +100,8 @@ show what it is doing.
 To pair them:
 
 1. Install Cartridge 0.9.10 or newer (Settings, Cartridge in Fuse can install it from Cartridge's
-   GitHub releases after you confirm) <!-- verify -->.
+   GitHub releases after you confirm). The bridge is in review as
+   [MAtiyaaa/cartridge#29](https://github.com/MAtiyaaa/cartridge/pull/29).
 2. Sign in to RomM inside Cartridge and download some games.
 3. In Fuse, add the folder Cartridge saves to as a library, if setup did not suggest it already.
 

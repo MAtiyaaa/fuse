@@ -55,8 +55,8 @@ flowchart TD
 Read an arrow as "is used by". Dependencies only point down: `core:*` modules know nothing about
 Compose, `ui:designsystem` knows nothing about the library or launching, and nothing below the apps
 knows which operating system it runs on. The graph is enforced by the `build.gradle.kts` of each
-module; `settings.gradle.kts` lists the nine modules. The two app modules depend on `ui:shell` once
-their platform hosts are wired up for 0.0.1 <!-- verify -->.
+module; `settings.gradle.kts` lists the nine modules. The two app modules depend on `ui:shell` and
+implement its `FuseServices` and `PlatformUi` contracts.
 
 Build conventions live in `build-logic/` as precompiled script plugins:
 
@@ -81,8 +81,8 @@ Namespaces follow the module path (`io.github.matiyaaa.fuse.core.model` for `:co
 | `core:data` | SQLDelight database, repositories, the library indexer that reconciles scans, app settings and scoped settings, the `SecretStore` contract | `FuseData.kt`, `repo/LibraryIndexer.kt`, `settings/AppSettings.kt` |
 | `ui:designsystem` | Tokens, colours, typography, shapes, motion, theme presets, focus and selection, input routing, components, icons, sounds, hero backdrop and generated art | `theme/`, `components/`, `input/InputRouter.kt` |
 | `ui:shell` | Every screen and overlay, navigation, onboarding and settings, written against the `FuseStore` and `PlatformUi` interfaces | `app/FuseApp.kt`, `store/FuseStore.kt`, `store/FuseServices.kt` |
-| `app:android` | Android host: implements `FuseServices` and `PlatformUi` (planned for 0.0.1: Home role, emulator launching, status bar data, Cartridge provider client, installer, companion screen) <!-- verify --> | `app/android/src/main` |
-| `app:desktop` | Linux host: implements `FuseServices` and `PlatformUi` (planned for 0.0.1: window modes, joystick input, Secret Service, AppImage packaging) <!-- verify --> | `app/desktop/src/main` |
+| `app:android` | Android host: implements `FuseServices` and `PlatformUi` (Home role, emulator launching, status data, Cartridge provider client, installer, companion screen, Keystore secrets) | `app/android/src/main` |
+| `app:desktop` | Linux host: implements `FuseServices` and `PlatformUi` (window modes, joystick input, Secret Service secrets, AppImage packaging) | `app/desktop/src/main` |
 
 ## Domain concepts
 
@@ -193,7 +193,7 @@ argument, needs it installed from its own menu, or has no known way.
 Policies inherit **Global -> Platform -> Game**. The global and platform levels are the scoped key
 `ScopedSettings.FolderMode` (`folder.policy`); a game's override is `Game.folderPolicyOverride`.
 `FolderPolicyResolver.of` builds the lookup the scanner uses from these values (the store passes it
-in through `ScanRequest.policies` <!-- verify -->). It looks up, in order: an override on the folder's
+in through `ScanRequest.policies`). It looks up, in order: an override on the folder's
 path or its nearest ancestor with one, the platform's policy, the global policy, and finally the
 platform's catalog default (`Platform.defaultFolderPolicy`). The same inheritance applies to every
 `ScopedKey`, and `Resolved.from` tells the interface where a value came from ("Inherited from
@@ -320,8 +320,10 @@ The interface and the platform meet through three interfaces in `ui:shell`:
 
 `DefaultFuseStore` composes `core:library`, `core:launch`, `core:integrations` and `core:data` over a
 `FuseServices`, so library, launching, scraping, achievements and Cartridge logic are shared by both
-apps. It is being written for 0.0.1; `createFuseStore` in `store/StoreFactory.kt` is its entry
-point. <!-- verify -->
+apps. `createFuseStore` in `store/StoreFactory.kt` is its entry point. It is tested end to end in
+`ui/shell/src/desktopTest`: scanning a temporary library, launching through a fake launcher, play
+sessions, playlists written only to the cache, persisted settings, and UI flows driven by controller
+presses.
 
 ## Database and migrations
 
@@ -351,8 +353,9 @@ point. <!-- verify -->
 ## Security model
 
 - **Secrets live only in the platform's secure store.** `SecretStore` is implemented with Android
-  Keystore backed encryption on Android and the Secret Service on Linux (planned for 0.0.1)
-  <!-- verify -->. The keys are listed in `SecretKeys`: RetroAchievements username and web API key,
+  Keystore backed encryption (AES-256-GCM) on Android and the Secret Service (`secret-tool`) on
+  Linux, falling back to an AES-GCM encrypted file readable only by the user when no Secret Service
+  is available. The keys are listed in `SecretKeys`: RetroAchievements username and web API key,
   SteamGridDB key, IGDB client id and secret, TheGamesDB key, ScreenScraper user and password.
   Secrets never go into the database, `AppSettings`, logs or exported intents.
 - **Secrets cannot leak through strings.** Clients hold keys in `Secret`, whose `toString()` prints
@@ -362,14 +365,14 @@ point. <!-- verify -->
   ScreenScraper media URLs are stored without credentials and re-signed just before download.
 - **Cartridge never shares credentials.** `CartridgeStatus` carries no server address, token or
   password; Cartridge's status provider is read-only and protected by its `READ_STATUS`
-  permission <!-- verify -->.
+  permission. (The Cartridge side is in review as [MAtiyaaa/cartridge#29](https://github.com/MAtiyaaa/cartridge/pull/29); until a release ships it, Fuse sees Cartridge as installed without the bridge.)
 - **Launches carry only what the emulator needs**: a path, a SAF URI, a FileProvider URI with a read
   grant for that one launch, or an id.
 - **The library is read-only.** `FuseFileSystem` has no write operations. Fuse writes only to its own
   directories (`FuseServices.cacheDir`) or to places the user picked.
 - **Updates need approval.** Nothing is downloaded or installed until the user confirms; the
-  installer verifies the `sha256:` digest GitHub publishes for the asset (`ReleaseInstaller`)
-  <!-- verify -->.
+  installer verifies the `sha256:` digest GitHub publishes for the asset (`ReleaseInstaller`) and
+  discards the download on a mismatch.
 - **No telemetry.** There is no analytics, crash reporting or usage tracking code.
   `PrivacySettings.telemetry` exists only so the Privacy screen can say so, and is always false.
 

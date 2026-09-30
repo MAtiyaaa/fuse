@@ -39,8 +39,7 @@ and redact credentials from every error message (`redact()`, see
 | GitHub Releases | Nothing | A request for the latest release of Fuse or Cartridge, your IP address and the User-Agent with Fuse's version | Update checks (automatic check can be turned off) and "Install Cartridge"; downloads only after you confirm |
 | Cartridge | Nothing | Nothing leaves the device: Fuse reads Cartridge's local status and opens it with deep links | On resume and when Cartridge reports a change |
 
-The "When" column describes the store that drives these clients, which is being written for 0.0.1
-<!-- verify -->. The "Sent by Fuse" column is what the clients in `core:integrations` can send.
+The "When" column describes the store that drives these clients (`DefaultFuseStore`). The "Sent by Fuse" column is what the clients in `core:integrations` can send.
 
 Never sent anywhere: ROM files, your folder paths, your play time, your collections, device
 identifiers, analytics or crash reports. Fuse contains no telemetry.
@@ -83,7 +82,7 @@ for these times (`RaCachePolicy`) and shows stale data offline:
 **Matching games.** Fuse links a local game to a RetroAchievements game by hashing the ROM on the
 device the way rcheevos does (`RaHasher`: whole-file MD5, header-stripped NES, SNES, PC Engine,
 Atari 7800 and Lynx, byte-order normalised N64, file name for arcade) and comparing it with the hash
-lists it downloads (the store does the comparison <!-- verify -->). None of the endpoints Fuse calls
+lists it downloads (the store does the comparison, and caches each console's list for 7 days). None of the endpoints Fuse calls
 accepts a hash, so hashes never leave the device. Disc images, Nintendo DS/DSi and
 3DS are not hashed yet; Fuse reports them as unsupported instead of guessing.
 
@@ -205,12 +204,12 @@ and owns the RomM credentials. Fuse then:
 
 - scans the folders Cartridge downloads into like any other library (RomM Structure A and B are both
   understood, see [ARCHITECTURE.md](ARCHITECTURE.md#scanning-pipeline));
-- reads Cartridge's status (below) to show downloads, rescan exactly the folders that changed, and
-  remember each downloaded file's RomM rom id (`ExternalLinks.rommRomId`) so "Open in Cartridge" can
-  jump to that game;
+- reads Cartridge's status (below) to show downloads, runs a quick rescan when Cartridge reports a
+  library change (only folders whose modification time changed are read again), and remembers each
+  downloaded file's RomM rom id (`ExternalLinks.rommRomId`) so "Open in Cartridge" can jump to that
+  game;
 - keeps a "RomM (via Cartridge)" slot in the scraper order. In 0.0.1 RomM artwork and metadata only
-  reach Fuse through what Cartridge saves next to the games, which the local media scanner reads
-  <!-- verify -->.
+  reach Fuse through what Cartridge saves next to the games, which the local media scanner reads.
 
 ## Cartridge bridge protocol
 
@@ -225,8 +224,7 @@ local only, read-only for Fuse, and never carries a server address, token or pas
 | Link scheme | `cartridge://` |
 | Release source for "Install Cartridge" | [MAtiyaaa/cartridge](https://github.com/MAtiyaaa/cartridge) releases, assets `Cartridge-android.apk` and `Cartridge-x86_64.AppImage` (upstream: [abdu2304/cartridge](https://github.com/abdu2304/cartridge)) |
 
-Cartridge versions from 0.9.10 on are expected to implement the provider, status file and links below
-<!-- verify -->. With an older Cartridge, Fuse only knows it is installed and its version
+Cartridge 0.9.10 adds the provider, status file and links below. (The Cartridge side is in review as [MAtiyaaa/cartridge#29](https://github.com/MAtiyaaa/cartridge/pull/29); until a release ships it, Fuse sees Cartridge as installed without the bridge.) With an older Cartridge, Fuse only knows it is installed and its version
 (`installedWithoutBridge`).
 
 ### Deep links
@@ -286,7 +284,7 @@ Platform slugs are RomM slugs (`psx`, `snes`, `switch`, ...). Example:
 
 Fuse maps the row with `statusFromRow` and `downloadFromRow`: rows without a rom id or title are
 skipped, counts are clamped at zero and progress to 0..1. The Android app declares the permission,
-reads the provider on resume and listens for changes (planned for 0.0.1) <!-- verify -->.
+reads the provider on resume and listens for changes with a `ContentObserver`.
 
 ### Linux: status file
 
@@ -319,14 +317,14 @@ fields in camelCase:
 ```
 
 A file without `protocol`, or one that is not valid JSON, is ignored. Numbers and booleans are
-accepted quoted or unquoted. The Linux app watches the file (planned for 0.0.1) <!-- verify -->.
+accepted quoted or unquoted. The Linux app watches the file's folder and re-reads it after changes.
 
 ### What Fuse does with it
 
 On resume (and when the bridge reports a change), Fuse reads the status, shows download progress in
 the Cartridge section and the Cartridge Downloads widget, and, when "Pick up new downloads on return"
 is on (Settings, Cartridge; on by default), rescans the folders Cartridge saved to
-(`CartridgeSettings.autoRefreshOnReturn`) <!-- verify -->.
+(`CartridgeSettings.autoRefreshOnReturn`) with a quick scan.
 
 ## GitHub Releases
 
@@ -342,11 +340,12 @@ it. When GitHub's hourly limit is reached, Fuse says so instead of failing silen
 **Approval and verification.** Nothing is downloaded until you confirm. The installer then downloads
 the asset into Fuse's cache, verifies its SHA-256 digest when GitHub published one, and hands it to
 the system installer on Android or places the new AppImage next to the running one and marks it
-executable on Linux (`ReleaseInstaller`, planned for 0.0.1) <!-- verify -->. Every release also
+executable on Linux (`ReleaseInstaller`). A digest mismatch deletes the download and reports the
+failure; on Linux an existing file is never overwritten. Every release also
 carries a `SHA256SUMS.txt` you can check by hand (see [README.md](README.md#install)).
 
 **Automatic checks.** "Check automatically" (Settings, Updates) is on by default and checks once a
-day <!-- verify -->. Turn it off and Fuse only contacts GitHub when you press "Check for updates" or
+day. Turn it off and Fuse only contacts GitHub when you press "Check for updates" or
 "Install Cartridge".
 
 **Leaves the device.** Your IP address, the User-Agent with Fuse's version, and which repository was
