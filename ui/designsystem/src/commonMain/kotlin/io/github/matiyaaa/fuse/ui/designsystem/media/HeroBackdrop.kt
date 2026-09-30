@@ -45,6 +45,8 @@ data class HeroSource(
     val accent: Color,
     val focusX: Float = 0.5f,
     val focusY: Float = 0.35f,
+    /** Muted gameplay clip that may replace the art after the selection rests (path or URL). */
+    val video: String? = null,
 )
 
 private class HeroLayer(val source: HeroSource) {

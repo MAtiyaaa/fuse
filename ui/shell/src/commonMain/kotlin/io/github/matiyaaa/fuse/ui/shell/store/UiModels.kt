@@ -27,6 +27,7 @@ data class Art(
     val logo: Any? = null,
     val heroFocusX: Float = 0.5f,
     val heroFocusY: Float = 0.35f,
+    val video: String? = null,
 ) {
     companion object {
         val None = Art()
@@ -39,6 +40,7 @@ data class Art(
             logo = media.logo?.model,
             heroFocusX = media.hero?.focusX ?: 0.5f,
             heroFocusY = media.hero?.focusY ?: 0.35f,
+            video = media.video?.model,
         )
     }
 }

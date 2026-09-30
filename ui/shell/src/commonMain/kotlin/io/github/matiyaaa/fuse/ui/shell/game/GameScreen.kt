@@ -139,7 +139,7 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
     val col = sel.column(row)
 
     LaunchedEffect(game.id) {
-        app.hero = HeroSource(game.id, d.art.hero ?: d.art.grid, accent, d.art.heroFocusX, d.art.heroFocusY)
+        app.hero = HeroSource(game.id, d.art.hero ?: d.art.grid, accent, d.art.heroFocusX, d.art.heroFocusY, d.art.video)
     }
     LaunchedEffect(row, col) {
         app.hints = when (row) {

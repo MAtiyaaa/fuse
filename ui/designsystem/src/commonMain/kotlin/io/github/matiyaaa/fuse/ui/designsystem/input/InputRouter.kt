@@ -62,7 +62,8 @@ fun interface InputFeedback {
 class InputRouter(
     private val scope: CoroutineScope,
     profile: InputProfile = InputProfile(),
-    private val feedback: InputFeedback = InputFeedback { _, _ -> },
+    /** Called after every action with its result (sounds, haptics). Set by the app shell. */
+    var feedback: InputFeedback = InputFeedback { _, _ -> },
 ) {
     var profile: InputProfile = profile
         set(value) {
@@ -142,8 +143,12 @@ class InputRouter(
     private val held = mutableMapOf<PadButton, Job?>()
     private val longPressConsumed = mutableSetOf<PadButton>()
 
+    /** Sees every physical press and release (the controller test screen uses it). */
+    var rawListener: ((PadButton, Boolean) -> Unit)? = null
+
     /** A physical button went down. Platform key repeats must not be forwarded. */
     fun press(button: PadButton, source: InputSource) {
+        rawListener?.invoke(button, true)
         if (held.containsKey(button)) return
         val action = actionFor(button) ?: return
         _lastSource.value = source
@@ -168,6 +173,7 @@ class InputRouter(
     }
 
     fun release(button: PadButton, source: InputSource) {
+        rawListener?.invoke(button, false)
         if (!held.containsKey(button)) return
         val job = held.remove(button)
         job?.cancel()

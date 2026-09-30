@@ -302,7 +302,7 @@ private fun ShelfItem.stage(feed: io.github.matiyaaa.fuse.ui.shell.store.HomeFee
 }
 
 private fun ShelfItem.hero(): HeroSource? = when (this) {
-    is ShelfItem.Game -> HeroSource(key, card.art.hero ?: card.art.grid, card.accent.toColor(), card.art.heroFocusX, card.art.heroFocusY)
+    is ShelfItem.Game -> HeroSource(key, card.art.hero ?: card.art.grid, card.accent.toColor(), card.art.heroFocusX, card.art.heroFocusY, card.art.video)
     is ShelfItem.System -> HeroSource(key, card.art.hero, card.platform.accent.toColor())
     else -> null
 }

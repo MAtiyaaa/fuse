@@ -168,7 +168,7 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
     val selectedCard = list?.getOrNull(state.grid.index)
     LaunchedEffect(selectedCard?.id) {
         state.selectedId = selectedCard?.id
-        app.hero = selectedCard?.let { HeroSource(it.id, it.art.hero ?: it.art.grid, it.accent.toColor(), it.art.heroFocusX, it.art.heroFocusY) }
+        app.hero = selectedCard?.let { HeroSource(it.id, it.art.hero ?: it.art.grid, it.accent.toColor(), it.art.heroFocusX, it.art.heroFocusY, it.art.video) }
         app.hints = if (selectedCard != null) {
             listOf(Hint(HintButton.CONFIRM, "Play"), Hint(HintButton.OPTIONS, "Options"), Hint(HintButton.SEARCH, "Search"))
         } else emptyList()
