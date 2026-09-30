@@ -1,5 +1,6 @@
 package io.github.matiyaaa.fuse.ui.shell.store
 
+import io.github.matiyaaa.fuse.ui.shell.store.impl.DefaultFuseStore
 import kotlinx.coroutines.CoroutineScope
 
 /**
@@ -7,4 +8,4 @@ import kotlinx.coroutines.CoroutineScope
  * frame already knows whether onboarding is done. [scope] lives as long as the app process.
  */
 suspend fun createFuseStore(services: FuseServices, scope: CoroutineScope): FuseStore =
-    TODO("DefaultFuseStore is being written")
+    DefaultFuseStore.create(services, scope)

@@ -156,6 +156,10 @@ UPDATE game SET emulator_override = :emulatorOverride, updated_at = :now WHERE i
 setFolderPolicyOverride:
 UPDATE game SET folder_policy_override = :folderPolicyOverride, updated_at = :now WHERE id = :id;
 
+folderPolicyOverrides:
+SELECT path, folder_policy_override FROM game
+WHERE folder_policy_override IS NOT NULL AND removed_at IS NULL;
+
 setLinks:
 UPDATE game SET ra_game_id = :raGameId, sgdb_game_id = :sgdbGameId, igdb_id = :igdbId,
     romm_rom_id = :rommRomId, steam_app_id = :steamAppId, updated_at = :now

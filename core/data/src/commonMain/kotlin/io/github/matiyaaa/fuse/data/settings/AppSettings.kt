@@ -88,6 +88,10 @@ data class AppearanceSettings(
     val crt: CrtSettings? = null,
     /** Null follows the theme's motion profile. */
     val motion: MotionProfile? = null,
+    /** How much the hero art behind the interface is darkened, 0..1. */
+    val heroDim: Float = 0.3f,
+    /** Adds an outline to the focused element on top of the glow. */
+    val highContrastFocus: Boolean = false,
 )
 
 @Serializable

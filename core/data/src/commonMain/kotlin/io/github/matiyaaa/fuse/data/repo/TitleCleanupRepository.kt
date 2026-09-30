@@ -71,6 +71,27 @@ class TitleCleanupRepository(
         }
     }
 
+    /**
+     * Turns cleaned titles off for every game (Clean Display Names switched off). Recorded like
+     * [apply], so it can be undone. Returns how many games changed.
+     */
+    suspend fun disable(): Int = withContext(dispatcher) {
+        db.transactionWithResult {
+            val now = clock()
+            val entries = ArrayList<HistoryEntry>()
+            for (row in db.gameQueries.selectAllTitles().executeAsList()) {
+                val before = row.titles()
+                if (!before.useCleaned) continue
+                entries += HistoryEntry(row.id, before.cleaned, before.useCleaned)
+                db.writeTitles(row.id, before.copy(useCleaned = false), now)
+            }
+            if (entries.isNotEmpty()) {
+                db.titleCleanupQueries.insert(now, DataJson.encodeToString(HistorySerializer, entries))
+            }
+            entries.size
+        }
+    }
+
     /** Restores the titles changed by the most recent [apply]. Returns the games restored, or null if nothing to undo. */
     suspend fun undoLast(): Int? = withContext(dispatcher) {
         db.transactionWithResult {

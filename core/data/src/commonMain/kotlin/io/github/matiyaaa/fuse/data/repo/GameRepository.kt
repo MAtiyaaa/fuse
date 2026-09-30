@@ -159,6 +159,14 @@ class GameRepository(
         write { q.setFolderPolicyOverride(policy?.name, clock(), id.value) }
 
     /** Replaces every external id. */
+    /** Per-game folder policy overrides by game path, for the scanner's folder policy resolver. */
+    suspend fun folderPolicyOverrides(): Map<String, FolderPolicy> = withContext(dispatcher) {
+        q.folderPolicyOverrides().executeAsList().mapNotNull { row ->
+            val policy = row.folder_policy_override?.let { name -> FolderPolicy.entries.firstOrNull { it.name == name } }
+            policy?.let { row.path to it }
+        }.toMap()
+    }
+
     suspend fun setLinks(id: GameId, links: ExternalLinks) = write { writeLinks(id, links) }
 
     /** Read-modify-write of the external ids in one transaction; returns the new links. */

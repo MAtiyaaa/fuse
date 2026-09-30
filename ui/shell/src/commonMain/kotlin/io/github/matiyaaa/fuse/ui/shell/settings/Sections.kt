@@ -308,7 +308,7 @@ fun mediaRows(app: AppState): List<MenuAction> {
         add(secretRow("ss.user", "ScreenScraper username", "Optional. Your account raises your request limits"))
         add(secretRow("ss.password", "ScreenScraper password", "Stored encrypted"))
         add(app.choiceRow("lang", "Preferred language", FuseIcons.Globe, p.scraperLanguage, listOf("en" to "English", "fr" to "French", "de" to "German", "es" to "Spanish", "it" to "Italian", "pt" to "Portuguese", "ja" to "Japanese", "zh" to "Chinese", "ko" to "Korean")) { v -> set { it.copy(scraperLanguage = v) } })
-        add(app.choiceRow("region", "Preferred region", FuseIcons.Map, p.scraperRegion, listOf("us" to "USA", "eu" to "Europe", "jp" to "Japan", "wor" to "World")) { v -> set { it.copy(scraperRegion = v) } })
+        add(app.choiceRow("region", "Preferred region", FuseIcons.Map, p.scraperRegion, listOf("any" to "Any region", "us" to "USA", "eu" to "Europe", "jp" to "Japan", "wor" to "World")) { v -> set { it.copy(scraperRegion = v) } })
         add(app.choiceRow(
             "match", "Matching", FuseIcons.Target, p.matching,
             listOf(MatchStrictness.EXACT to "Exact", MatchStrictness.NORMAL to "Normal", MatchStrictness.AGGRESSIVE to "Aggressive"),

@@ -48,7 +48,7 @@ data class UiPrefs(
         ScrapeProviderId.IGDB, ScrapeProviderId.THEGAMESDB, ScrapeProviderId.SCREENSCRAPER,
     ),
     val scraperLanguage: String = "en",
-    val scraperRegion: String = "us",
+    val scraperRegion: String = "any",
     val matching: MatchStrictness = MatchStrictness.NORMAL,
     val autoRefreshFromCartridge: Boolean = true,
     val checkForUpdates: Boolean = true,

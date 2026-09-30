@@ -110,6 +110,9 @@ interface GameLauncher {
 
     /** Opens the emulator's own settings screen, when its adapter documents one. */
     suspend fun openSettings(installed: InstalledEmulator): RunResult = openApp(installed.appId)
+
+    /** The display to use for "Open games on the second screen", or null when there is none. */
+    fun secondaryDisplayId(): Int? = null
 }
 
 /** Talks to Cartridge: status provider or status file, and deep links. */
