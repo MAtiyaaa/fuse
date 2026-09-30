@@ -38,6 +38,7 @@ import io.github.matiyaaa.fuse.model.PlatformId
 import io.github.matiyaaa.fuse.ui.designsystem.components.FText
 import io.github.matiyaaa.fuse.ui.designsystem.components.Hint
 import io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction
+import io.github.matiyaaa.fuse.ui.designsystem.components.MenuArt
 import io.github.matiyaaa.fuse.ui.designsystem.components.MenuList
 import io.github.matiyaaa.fuse.ui.designsystem.components.SectionLabel
 import io.github.matiyaaa.fuse.ui.designsystem.components.Trailing
@@ -130,10 +131,13 @@ fun StorageScreen(app: AppState) {
         ))
         shown.forEach { g ->
             val on = g.card.id in picked
+            val logo = g.card.art.logo
             add(MenuAction(
                 "g${g.card.id.value}", g.card.title, if (on) FuseIcons.SquareCheck else FuseIcons.Square,
                 detail = "${g.card.platformShort}  ·  ${g.files} ${if (g.files == 1) "file" else "files"}",
                 trailing = Trailing.Value(bytesText(g.bytes)),
+                // The game's logo, or its square art when it has no logo.
+                art = MenuArt(logo ?: g.card.art.icon ?: g.card.art.boxart, square = logo == null, fallbackTitle = g.card.title, accent = g.card.accent),
                 onSelect = { picked = if (on) picked - g.card.id else picked + g.card.id },
             ))
         }

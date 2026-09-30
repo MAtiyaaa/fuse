@@ -81,6 +81,8 @@ import io.github.matiyaaa.fuse.ui.shell.components.playtimeText
 import io.github.matiyaaa.fuse.ui.shell.store.GameCard
 import io.github.matiyaaa.fuse.ui.shell.store.GameDetail
 import kotlinx.coroutines.launch
+import io.github.matiyaaa.fuse.ui.shell.app.gameRoom
+import io.github.matiyaaa.fuse.ui.shell.app.rememberSystems
 
 private data class DetailAction(val id: String, val label: String?, val icon: ImageVector, val primary: Boolean = false, val run: () -> Unit)
 
@@ -138,8 +140,10 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
     val row = rows.getOrNull(sel.row) ?: "actions"
     val col = sel.column(row)
 
-    LaunchedEffect(game.id) {
-        app.hero = HeroSource(game.id, d.art.hero ?: d.art.grid, accent, d.art.heroFocusX, d.art.heroFocusY, d.art.video)
+    val systems = rememberSystems(app)
+    val system = systems[d.platform.id]
+    LaunchedEffect(game.id, d.art, system?.art) {
+        app.hero = gameRoom(game.id, d.art, d.platform.accent, system)
     }
     LaunchedEffect(row, col) {
         app.hints = when (row) {

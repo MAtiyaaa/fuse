@@ -78,6 +78,8 @@ import io.github.matiyaaa.fuse.ui.shell.library.CollectionTile
 import io.github.matiyaaa.fuse.ui.shell.systems.moveSystem
 import io.github.matiyaaa.fuse.ui.shell.systems.systemMenu
 import kotlinx.coroutines.launch
+import io.github.matiyaaa.fuse.ui.shell.app.room
+import io.github.matiyaaa.fuse.ui.shell.app.rememberSystems
 
 @Composable
 fun HomeScreen(app: AppState) {
@@ -137,8 +139,9 @@ fun FlowHome(app: AppState) {
     }
 
     // The room and the stage follow the selection.
-    LaunchedEffect(item?.key, reorder, movingSystem) {
-        app.hero = item?.hero()
+    val systems = rememberSystems(app)
+    LaunchedEffect(item?.key, reorder, movingSystem, systems) {
+        app.hero = item?.hero(systems)
         app.hints = when {
             reorder != null || movingSystem -> listOf(Hint(HintButton.DPAD, "Move"), Hint(HintButton.CONFIRM, "Done"))
             item is ShelfItem.Game -> listOf(Hint(HintButton.CONFIRM, app.gameConfirmLabel), Hint(HintButton.OPTIONS, "Options"), Hint(HintButton.SEARCH, "Search"))
@@ -421,8 +424,8 @@ private fun ShelfItem.stage(feed: io.github.matiyaaa.fuse.ui.shell.store.HomeFee
 }
 
 /** The backdrop for an item, keyed by its game or system (the second screen shows what the key names). */
-private fun ShelfItem.hero(): HeroSource? = when (this) {
-    is ShelfItem.Game -> HeroSource(card.id, card.art.hero ?: card.art.grid, card.accent.toColor(), card.art.heroFocusX, card.art.heroFocusY, card.art.video)
+private fun ShelfItem.hero(systems: Map<io.github.matiyaaa.fuse.model.PlatformId, io.github.matiyaaa.fuse.ui.shell.store.PlatformCard>): HeroSource? = when (this) {
+    is ShelfItem.Game -> card.room(systems[card.platformId])
     is ShelfItem.System -> HeroSource(card.platform.id, card.art.hero, card.platform.accent.toColor())
     else -> null
 }

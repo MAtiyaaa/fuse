@@ -11,10 +11,12 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -26,12 +28,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.semantics.selected
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import io.github.matiyaaa.fuse.model.NavAction
 import io.github.matiyaaa.fuse.ui.designsystem.focus.FollowSelection
@@ -40,6 +43,9 @@ import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
 import io.github.matiyaaa.fuse.ui.designsystem.input.NavEvent
 import io.github.matiyaaa.fuse.ui.designsystem.input.NavResult
+import io.github.matiyaaa.fuse.ui.designsystem.media.ArtSlot
+import io.github.matiyaaa.fuse.ui.designsystem.media.Artwork
+import io.github.matiyaaa.fuse.ui.designsystem.media.GeneratedArt
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Durations
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
@@ -70,7 +76,22 @@ data class MenuAction(
     val destructive: Boolean = false,
     /** Shown dimmed with this note instead of doing anything (integration unfinished, not supported here). */
     val unavailableReason: String? = null,
+    /** Artwork before the label, such as a game's logo. */
+    val art: MenuArt? = null,
     val onSelect: () -> Unit = {},
+)
+
+/**
+ * Artwork in a menu row: a logo fitted into a wide slot, or square art at the slot's start. Every
+ * row with art uses the same slot, so labels line up whether a game has a logo or not.
+ */
+data class MenuArt(
+    val model: Any?,
+    val square: Boolean = false,
+    /** With no artwork (or while it can't load), a generated square with this title's initials. */
+    val fallbackTitle: String? = null,
+    /** ARGB colour for the generated square. */
+    val accent: Long = 0xFF8A93A6,
 )
 
 /**
@@ -128,6 +149,26 @@ fun MenuRow(
         Spacer(Modifier.width(Space.m))
         if (action.icon != null) {
             FuseIcon(action.icon, tint = if (selected) tint else tint.copy(alpha = if (available) 0.78f else 0.5f))
+            Spacer(Modifier.width(Space.m))
+        }
+        action.art?.let { art ->
+            Box(Modifier.width(MENU_ART_WIDTH).height(MENU_ART_HEIGHT), contentAlignment = Alignment.CenterStart) {
+                val square = Modifier.size(MENU_ART_HEIGHT).clip(RoundedCornerShape(Fuse.geometry.control))
+                val generated: @Composable () -> Unit = {
+                    art.fallbackTitle?.let { GeneratedArt(it, Color(art.accent), square, slot = ArtSlot.ICON) }
+                }
+                if (art.model != null) {
+                    Artwork(
+                        art.model,
+                        if (art.square) square else Modifier.fillMaxSize(),
+                        contentScale = if (art.square) ContentScale.Crop else ContentScale.Fit,
+                        focusX = 0f,
+                        fallback = generated,
+                    )
+                } else {
+                    generated()
+                }
+            }
             Spacer(Modifier.width(Space.m))
         }
         Column(Modifier.weight(1f).padding(vertical = Space.s)) {
@@ -199,3 +240,6 @@ fun handleMenuAction(event: NavEvent, actions: List<MenuAction>, selection: Line
         else -> NavResult.IGNORED
     }
 }
+
+private val MENU_ART_WIDTH = 104.dp
+private val MENU_ART_HEIGHT = 44.dp

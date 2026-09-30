@@ -186,11 +186,11 @@ fun CompanionApp(store: FuseStore, platform: PlatformUi, mode: DualScreenMode) {
 /** The backdrop for what the companion shows: the game's background art, or the system's. */
 @Composable
 private fun companionHero(store: FuseStore, systems: List<PlatformCard>, target: Any?): HeroSource? = when (target) {
-    is GameCard -> HeroSource(target.id, target.art.hero ?: target.art.grid, target.accent.toColor(), target.art.heroFocusX, target.art.heroFocusY)
+    is GameCard -> target.room(systems.firstOrNull { it.platform.id == target.platformId })
     is GameId -> {
         val flow = remember(target) { store.library.game(target) }
         val detail by flow.collectAsState(initial = null)
-        detail?.let { d -> HeroSource(target, d.art.hero ?: d.art.grid, d.platform.accent.toColor(), d.art.heroFocusX, d.art.heroFocusY) }
+        detail?.let { d -> gameRoom(target, d.art, d.platform.accent, systems.firstOrNull { it.platform.id == d.platform.id }) }
     }
     is PlatformId -> systems.firstOrNull { it.platform.id == target }?.let { HeroSource(target, it.art.hero, it.platform.accent.toColor()) }
     else -> null

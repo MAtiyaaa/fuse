@@ -411,6 +411,14 @@ internal fun AuditDriver.gameScreens(exhaustive: Boolean) {
         tap(PadButton.X)
         waitFor("Fill art")
         shoot("fill art choice")
+        tap(PadButton.B)
+        // Down to the last slot, then all the way back: the header and every row come back.
+        repeat(8) { tap(PadButton.DPAD_DOWN) }
+        settle(600)
+        shoot("last slot focused")
+        repeat(8) { tap(PadButton.DPAD_UP) }
+        settle(800)
+        shoot("back at the top, everything shown again")
     }
     if (!exhaustive) return
 

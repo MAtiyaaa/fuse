@@ -1,20 +1,11 @@
 package io.github.matiyaaa.fuse.ui.shell.media
 
-import androidx.compose.foundation.rememberScrollState
-
-import androidx.compose.foundation.verticalScroll
-
-import androidx.compose.foundation.relocation.bringIntoViewRequester
-
-import androidx.compose.foundation.relocation.BringIntoViewRequester
-
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.ui.unit.Dp
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -25,25 +16,22 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.lazy.rememberLazyListState
-import io.github.matiyaaa.fuse.model.ScopeRef
-import io.github.matiyaaa.fuse.model.ScopedSettings
-import io.github.matiyaaa.fuse.model.ScrapeCandidate
-import io.github.matiyaaa.fuse.ui.shell.app.TextInputSpec
-import io.github.matiyaaa.fuse.ui.shell.store.IdentifyResult
-import io.github.matiyaaa.fuse.ui.shell.store.SearchTitle
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -56,9 +44,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import io.github.matiyaaa.fuse.model.ArtworkOption
 import io.github.matiyaaa.fuse.model.MediaFillMode
@@ -66,8 +58,11 @@ import io.github.matiyaaa.fuse.model.MediaKind
 import io.github.matiyaaa.fuse.model.MediaOwner
 import io.github.matiyaaa.fuse.model.MediaSet
 import io.github.matiyaaa.fuse.model.MediaSource
-import io.github.matiyaaa.fuse.model.ScrapeProviderId
 import io.github.matiyaaa.fuse.model.NavAction
+import io.github.matiyaaa.fuse.model.ScopeRef
+import io.github.matiyaaa.fuse.model.ScopedSettings
+import io.github.matiyaaa.fuse.model.ScrapeCandidate
+import io.github.matiyaaa.fuse.model.ScrapeProviderId
 import io.github.matiyaaa.fuse.ui.designsystem.components.ButtonKind
 import io.github.matiyaaa.fuse.ui.designsystem.components.Chip
 import io.github.matiyaaa.fuse.ui.designsystem.components.FText
@@ -77,6 +72,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction
 import io.github.matiyaaa.fuse.ui.designsystem.components.SectionLabel
 import io.github.matiyaaa.fuse.ui.designsystem.components.Spinner
 import io.github.matiyaaa.fuse.ui.designsystem.components.Tile
+import io.github.matiyaaa.fuse.ui.designsystem.components.fadingEdges
 import io.github.matiyaaa.fuse.ui.designsystem.focus.FollowSelection
 import io.github.matiyaaa.fuse.ui.designsystem.focus.GridSelection
 import io.github.matiyaaa.fuse.ui.designsystem.focus.LinearSelection
@@ -94,7 +90,10 @@ import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec
 import io.github.matiyaaa.fuse.ui.shell.app.ConfirmSpec
 import io.github.matiyaaa.fuse.ui.shell.app.FocusZone
+import io.github.matiyaaa.fuse.ui.shell.app.TextInputSpec
 import io.github.matiyaaa.fuse.ui.shell.store.ArtworkResult
+import io.github.matiyaaa.fuse.ui.shell.store.IdentifyResult
+import io.github.matiyaaa.fuse.ui.shell.store.SearchTitle
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
@@ -389,9 +388,28 @@ fun MediaScreen(app: AppState, owner: MediaOwner, title: String, identifyFirst: 
     val between = if (maxWidth < 1000.dp) Space.xl else Space.xxl
     Row(Modifier.fillMaxSize().padding(horizontal = Space.gutter)) {
         val rowRequesters = remember(rowCount) { List(rowCount) { BringIntoViewRequester() } }
-        LaunchedEffect(sel.index) { rowRequesters.getOrNull(sel.index)?.bringIntoView() }
-        Column(Modifier.width(listWidth).fillMaxHeight().verticalScroll(rememberScrollState()).padding(bottom = Size.hintHeight + Space.l)) {
-            Spacer(Modifier.height(Size.hudHeight + Space.l))
+        val listScroll = rememberScrollState()
+        val density = LocalDensity.current
+        // The first row brings the whole header back; others keep a little room above and stay
+        // clear of the hints, which are drawn over the list.
+        val above = with(density) { Space.xl.toPx() }
+        val below = with(density) { (Size.hintHeight + Space.xxl).toPx() }
+        var rowHeights by remember { mutableStateOf(mapOf<Int, Int>()) }
+        LaunchedEffect(sel.index) {
+            when (sel.index) {
+                0 -> listScroll.animateScrollTo(0)
+                rowCount - 1 -> listScroll.animateScrollTo(listScroll.maxValue)
+                else -> {
+                    val h = (rowHeights[sel.index] ?: 0).toFloat()
+                    rowRequesters.getOrNull(sel.index)?.bringIntoView(Rect(0f, -above, 1f, h + below))
+                }
+            }
+        }
+        // The list scrolls below the top line, never under it.
+        Column(Modifier.width(listWidth).fillMaxHeight()) {
+        Spacer(Modifier.height(Size.hudHeight))
+        Column(Modifier.fillMaxWidth().weight(1f).fadingEdges(top = Space.l, bottom = 0.dp).verticalScroll(listScroll).padding(bottom = Size.hintHeight + Space.l)) {
+            Spacer(Modifier.height(Space.l))
             FText("Manage media", Fuse.type.display)
             FText(title, Fuse.type.body, color = c.textMuted, maxLines = 1)
             Spacer(Modifier.height(Space.l))
@@ -407,7 +425,7 @@ fun MediaScreen(app: AppState, owner: MediaOwner, title: String, identifyFirst: 
                             GameRow.SEARCH_AS -> if (st?.custom == true) "Search as · your search name" else "Search as · the game's title"
                             GameRow.IDENTIFY -> "Pick the right game from your sources"
                         },
-                        modifier = Modifier.bringIntoViewRequester(rowRequesters[i]),
+                        modifier = Modifier.bringIntoViewRequester(rowRequesters[i]).onSizeChanged { if (rowHeights[i] != it.height) rowHeights = rowHeights + (i to it.height) },
                         onClick = { sel.index = i; runGameRow(row) },
                     ) {
                         FuseIcon(if (row == GameRow.SEARCH_AS) FuseIcons.TextCursor else FuseIcons.ScanSearch, size = 20.dp, tint = c.textMuted)
@@ -423,7 +441,7 @@ fun MediaScreen(app: AppState, owner: MediaOwner, title: String, identifyFirst: 
                     selected = i == sel.index && listFocused,
                     name = name,
                     detail = sourceLine(media, k),
-                    modifier = Modifier.bringIntoViewRequester(rowRequesters[i]),
+                    modifier = Modifier.bringIntoViewRequester(rowRequesters[i]).onSizeChanged { if (rowHeights[i] != it.height) rowHeights = rowHeights + (i to it.height) },
                     onClick = { sel.index = i; app.choice = ChoiceSpec(name, sourceLine(media, k), slotActions(k)) },
                 ) {
                     val m = media.first(k)
@@ -431,6 +449,7 @@ fun MediaScreen(app: AppState, owner: MediaOwner, title: String, identifyFirst: 
                     else FuseIcon(if (k == MediaKind.VIDEO) FuseIcons.Film else FuseIcons.Image, size = 18.dp, tint = c.textFaint)
                 }
             }
+        }
         }
         Spacer(Modifier.width(between))
         Box(Modifier.weight(1f).fillMaxHeight().padding(top = Size.hudHeight + Space.l, bottom = Size.hintHeight + Space.l)) {

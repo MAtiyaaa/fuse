@@ -90,6 +90,9 @@ import io.github.matiyaaa.fuse.ui.shell.app.gameConfirmLabel
 import io.github.matiyaaa.fuse.ui.shell.app.gameMenu
 import io.github.matiyaaa.fuse.ui.shell.app.play
 import io.github.matiyaaa.fuse.ui.shell.app.rememberRouteState
+import io.github.matiyaaa.fuse.ui.shell.app.rememberSystems
+import io.github.matiyaaa.fuse.ui.shell.app.room
+import io.github.matiyaaa.fuse.ui.shell.collections.addGamesPicker
 import io.github.matiyaaa.fuse.ui.shell.components.GameCoverTile
 import io.github.matiyaaa.fuse.ui.shell.components.GameIconTile
 import io.github.matiyaaa.fuse.ui.shell.components.LocalTileMetrics
@@ -99,7 +102,6 @@ import io.github.matiyaaa.fuse.ui.shell.components.stage
 import io.github.matiyaaa.fuse.ui.shell.store.GameCard
 import io.github.matiyaaa.fuse.ui.shell.store.GameQuery
 import io.github.matiyaaa.fuse.ui.shell.store.GameSet
-import io.github.matiyaaa.fuse.ui.shell.collections.addGamesPicker
 import io.github.matiyaaa.fuse.ui.shell.systems.SystemHeader
 import io.github.matiyaaa.fuse.ui.shell.systems.SystemShowcase
 import kotlinx.coroutines.flow.combine
@@ -234,19 +236,16 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
     PrefetchArt(remember(list) { list.orEmpty().map { it.art.logo } }, state.grid.index, size = 360.dp)
     val special = scope == LibraryScope.All && segment.set != GameSet.LIBRARY
     val systemCard = platforms.firstOrNull { it.platform.id == platformId }
-    // A system's page keeps the system's own background while moving between its games; a game
-    // with its own background image shows that instead.
-    val ownHero = selectedCard?.art?.hero
-    LaunchedEffect(selectedCard?.id, special, systemCard?.art) {
+    // A game with its own background image shows it; any other game shows its system's background,
+    // so a system's page keeps one room while moving between its games.
+    val systems = rememberSystems(app)
+    val gameSystem = selectedCard?.let { systems[it.platformId] }
+    LaunchedEffect(selectedCard?.id, selectedCard?.art, special, systemCard?.art, gameSystem?.art) {
         state.selectedId = selectedCard?.id
         app.hero = when {
-            systemCard != null && ownHero == null -> HeroSource(
-                selectedCard?.id ?: systemCard.platform.id, systemCard.art.hero, systemCard.platform.accent.toColor(),
-                video = selectedCard?.art?.video,
-            )
-            systemCard != null && selectedCard != null ->
-                HeroSource(selectedCard.id, ownHero, selectedCard.accent.toColor(), selectedCard.art.heroFocusX, selectedCard.art.heroFocusY, selectedCard.art.video)
-            else -> selectedCard?.let { HeroSource(it.id, it.art.hero ?: it.art.grid, it.accent.toColor(), it.art.heroFocusX, it.art.heroFocusY, it.art.video) }
+            selectedCard != null -> selectedCard.room(gameSystem)
+            systemCard != null -> HeroSource(systemCard.platform.id, systemCard.art.hero, systemCard.platform.accent.toColor())
+            else -> null
         }
         app.hints = when {
             selectedCard == null -> emptyList()
@@ -374,7 +373,7 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
         // Like the Systems screen: the art pack's panel on the right unless there is a background image.
         if (systemCard != null) {
             AnimatedVisibility(
-                visible = systemCard.art.hero == null && ownHero == null,
+                visible = systemCard.art.hero == null && selectedCard?.art?.hero == null,
                 modifier = Modifier.align(Alignment.CenterEnd),
                 enter = fadeIn(Fuse.motion.fade(Durations.SLOW)),
                 exit = fadeOut(Fuse.motion.fade(Durations.BASE)),

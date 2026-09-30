@@ -86,6 +86,8 @@ import io.github.matiyaaa.fuse.ui.shell.components.playtimeText
 import io.github.matiyaaa.fuse.ui.shell.components.stage
 import io.github.matiyaaa.fuse.ui.shell.store.GameCard
 import io.github.matiyaaa.fuse.ui.shell.store.HomeFeed
+import io.github.matiyaaa.fuse.ui.shell.app.room
+import io.github.matiyaaa.fuse.ui.shell.app.rememberSystems
 
 private const val BOARD_COLUMNS = 4
 
@@ -112,11 +114,10 @@ fun ChannelHome(app: AppState) {
     var carrying by remember { mutableStateOf(false) }
     val current = widgets.getOrNull(sel.index)
 
-    LaunchedEffect(current?.id, carrying) {
+    val systems = rememberSystems(app)
+    LaunchedEffect(current?.id, carrying, systems) {
         val game = current?.let { firstGame(it.kind, feed) }
-        app.hero = game?.let {
-            io.github.matiyaaa.fuse.ui.designsystem.media.HeroSource(it.id, it.art.hero ?: it.art.grid, it.accent.toColor())
-        }
+        app.hero = game?.room(systems[game.platformId])
         app.hints = if (carrying) {
             listOf(Hint(HintButton.DPAD, "Move"), Hint(HintButton.CONFIRM, "Put down"))
         } else {
