@@ -70,7 +70,7 @@ internal fun AuditDriver.overlayScreens(exhaustive: Boolean) {
         waitFor("Continue playing")
         tap(PadButton.DPAD_LEFT)
         tap(PadButton.X)
-        waitFor("Rename Display Title")
+        waitMenu()
         choose(8)
         waitFor("Display title")
         shoot("rename dialog with the on-screen keyboard")
@@ -376,7 +376,7 @@ internal fun AuditDriver.companionScreens() {
         shoot("game with an update and DLC focused", 2_000)
         Spotlight.set(PlatformId("psx"))
         shoot("system focused (firmware missing)", 2_000)
-        Spotlight.set(PlatformId("psp"))
+        Spotlight.set(PlatformId("psvita"))
         shoot("system focused (no emulator)", 2_000)
         Spotlight.set(null)
     }

@@ -120,14 +120,14 @@ internal class AuditDriver(
     fun show(store: FuseStore, platform: PlatformUi = this.platform) {
         val generation = ((view as? AuditView.App)?.generation ?: 0) + 1
         view = AuditView.App(store, platform, generation)
-        settle(1_600)
+        settle(1_200)
     }
 
     /** Restarts the app on the same store: navigation, focus and remembered selections start over. */
     fun restartApp() {
         val v = view as? AuditView.App ?: return
         view = v.copy(generation = v.generation + 1)
-        settle(1_600)
+        settle(1_200)
     }
 
     @Composable
@@ -168,7 +168,7 @@ internal class AuditDriver(
         this.group = group
         this.screen = screen
         lastState = "*"
-        println("Audit: ${size.name} $group/$screen")
+        println("Audit: ${size.name} $group/$screen (${elapsed()})")
         try {
             block()
         } catch (e: Throwable) {
@@ -350,7 +350,7 @@ internal class AuditDriver(
         file.delete()
         ImageIO.write(frame, "png", file)
         Audit.shot(AuditShot(file.absolutePath, group, screen, state, size.label))
-        println("Audit shot: ${file.absolutePath}")
+        println("Audit shot: ${file.absolutePath} (${elapsed()})")
         // A failure from here on happened after this shot, on the way to the next one.
         lastState = "after: $state"
     }
@@ -371,9 +371,13 @@ internal class AuditDriver(
         return true
     }
 
+    private val started = System.nanoTime()
+
+    private fun elapsed(): String = "%.1f s".format((System.nanoTime() - started) / 1e9)
+
     companion object {
-        const val SETTLE_MS = 1_400L
-        const val STEP_MS = 90L
+        const val SETTLE_MS = 1_100L
+        const val STEP_MS = 70L
         private const val FRAME_MS = 16L
         private const val MAX_STEP_MS = 250L
     }

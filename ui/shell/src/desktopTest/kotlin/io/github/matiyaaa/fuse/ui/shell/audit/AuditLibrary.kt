@@ -29,15 +29,15 @@ import kotlinx.coroutines.withTimeout
 
 /**
  * The README sample library plus what the audit needs on top: a system with no emulator installed
- * (PSP), firmware folders that make PS1 missing, PS2 ready and Dreamcast partial (Switch keeps its
+ * (PlayStation Vita), firmware folders that make PS1 missing, PS2 ready and Dreamcast partial (Switch keeps its
  * firmware inside the emulator, so it is unknown), a game that only opens its emulator, an empty
  * collection, pinned games and pinned apps.
  */
 internal object AuditLibrary {
-    /** PSP games; no PSP emulator is installed. */
-    val pspGames = listOf("Waystation Nine", "Driftwood Courier", "Neon Almanac")
+    /** PlayStation Vita games; nothing installed can run them (RetroArch has no Vita core). */
+    val vitaGames = listOf("Waystation Nine", "Driftwood Courier", "Neon Almanac")
 
-    val gameCount: Int get() = SampleLibrary.games.size + pspGames.size
+    val gameCount: Int get() = SampleLibrary.games.size + vitaGames.size
     val platformCount: Int get() = SampleLibrary.platformCount + 1
 
     /** A game set to Citron, which Fuse can only open, not start a game in. */
@@ -47,8 +47,8 @@ internal object AuditLibrary {
 
     fun writeTo(root: File) {
         SampleLibrary.writeTo(root)
-        val psp = File(root, "psp").apply { mkdirs() }
-        pspGames.forEachIndexed { i, title -> File(psp, "$title.${if (i == 1) "cso" else "iso"}").writeBytes(ByteArray(512)) }
+        val vita = File(root, "psvita").apply { mkdirs() }
+        vitaGames.forEach { title -> File(vita, "$title.vpk").writeBytes(ByteArray(512)) }
         // Firmware: an empty PS1 folder (missing), a full-size PS2 dump name (ready), half of Dreamcast's pair (partial).
         File(root, "bios/psx").mkdirs()
         File(root, "bios/ps2").mkdirs()

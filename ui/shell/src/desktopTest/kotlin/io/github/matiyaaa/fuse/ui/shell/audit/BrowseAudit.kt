@@ -33,7 +33,8 @@ private const val GAME_ACTIONS = 13
  */
 internal fun AuditDriver.viewAs(layout: LibraryLayout, shootChoice: Boolean = false) {
     tap(PadButton.X)
-    waitFor("View as")
+    // The menu scrolls: its view rows are below the fold until reached.
+    waitFor("Game Info")
     choose(GAME_ACTIONS)
     waitFor("Cover grid")
     if (shootChoice) shoot("View as choice list open")
@@ -52,6 +53,12 @@ internal fun AuditDriver.libraryFilter(index: Int) {
 private fun AuditDriver.platformIndex(id: String): Int =
     libraryStore.library.platforms.value.filter { it.gameCount > 0 }.indexOfFirst { it.platform.id == PlatformId(id) }
         .also { if (it < 0) throw NotCovered("System $id has no games") }
+
+/**
+ * Waits for a game's options menu. It scrolls on short screens, so this waits for an early row
+ * rather than the one about to be chosen.
+ */
+internal fun AuditDriver.waitMenu() = waitFor("Add to Collection")
 
 /** Search, typed on a hardware keyboard, then into the results. */
 internal fun AuditDriver.search(query: String) {
@@ -155,10 +162,10 @@ internal fun AuditDriver.libraryScreens(exhaustive: Boolean) {
         useLibrary()
         tab(Destination.SYSTEMS)
         val grid = Grid(libraryStore.library.platforms.value.count { it.gameCount > 0 })
-        grid.goTo(platformIndex("psp"))
+        grid.goTo(platformIndex("psvita"))
         tap(PadButton.A)
         waitFor("No emulator installed")
-        shoot("PlayStation Portable, no emulator installed")
+        shoot("PlayStation Vita, no emulator installed")
     }
 
     scenario("library", "collection") {
@@ -166,7 +173,7 @@ internal fun AuditDriver.libraryScreens(exhaustive: Boolean) {
         search("Long Adventures")
         tap(PadButton.START)
         tap(PadButton.A)
-        waitFor("Glasswing Requiem")
+        waitFor("Emberline Saga")
         for (layout in LibraryLayout.entries) {
             viewAs(layout)
             shoot("Long Adventures, ${layout.words()} layout")
@@ -198,7 +205,7 @@ internal fun AuditDriver.systemsScreens(exhaustive: Boolean) {
         for ((id, words) in listOf(
             "psx" to "PS1, firmware missing",
             "ps2" to "PS2, firmware ready",
-            "psp" to "PSP, no emulator installed",
+            "psvita" to "Vita, no emulator installed",
             "dc" to "Dreamcast, firmware partly found",
             "switch" to "Switch, firmware unknown (kept inside the emulator)",
         )) {
@@ -214,10 +221,10 @@ internal fun AuditDriver.systemsScreens(exhaustive: Boolean) {
         useLibrary()
         tab(Destination.SYSTEMS)
         waitFor("System options")
-        Grid(libraryStore.library.platforms.value.count { it.gameCount > 0 }).goTo(platformIndex("psp"))
+        Grid(libraryStore.library.platforms.value.count { it.gameCount > 0 }).goTo(platformIndex("psvita"))
         tap(PadButton.X)
         waitFor("System Settings")
-        shoot("PSP options (no emulator installed)")
+        shoot("Vita options (no emulator installed)")
         choose(4)
         waitFor("Emulator for")
         shoot("emulator picker, nothing installed")
@@ -309,7 +316,7 @@ internal fun AuditDriver.gameScreens(exhaustive: Boolean) {
     scenario("game", "no emulator installed") {
         useLibrary()
         openGame("Waystation Nine")
-        shoot("PSP game, nothing can run it")
+        shoot("Vita game, nothing can run it")
     }
 
     scenario("game", "emulator only opens the app") {
@@ -322,7 +329,7 @@ internal fun AuditDriver.gameScreens(exhaustive: Boolean) {
         useLibrary()
         openGame("Aurora Outpost")
         tap(PadButton.X)
-        waitFor("Folder Behaviour")
+        waitMenu()
         shoot("options menu from the game page")
         tap(PadButton.DPAD_DOWN, 11)
         shoot("options menu, last row (Remove from Fuse)")
@@ -352,7 +359,7 @@ internal fun AuditDriver.gameScreens(exhaustive: Boolean) {
         useLibrary()
         openGame("Emberline Saga")
         tap(PadButton.X)
-        waitFor("Folder Behaviour")
+        waitMenu()
         choose(8)
         waitFor("Nothing on disk changes")
         shoot("choice list")
@@ -362,7 +369,7 @@ internal fun AuditDriver.gameScreens(exhaustive: Boolean) {
         useLibrary()
         openGame("Emberline Saga")
         tap(PadButton.X)
-        waitFor("Rename Display Title")
+        waitMenu()
         choose(7)
         waitFor("Display title")
         shoot("text input with the on-screen keyboard")
@@ -378,7 +385,7 @@ internal fun AuditDriver.gameScreens(exhaustive: Boolean) {
         useLibrary()
         openGame("Emberline Saga")
         tap(PadButton.X)
-        waitFor("Remove from Fuse")
+        waitMenu()
         choose(11)
         waitFor("stay exactly where they are")
         shoot("destructive confirm dialog, Cancel focused")
@@ -454,7 +461,7 @@ internal fun AuditDriver.launchScreens() {
         waitFor("Continue playing")
         tap(PadButton.DPAD_LEFT)
         tap(PadButton.X)
-        waitFor("Pin to Home")
+        waitMenu()
         shoot("game options menu on Home")
         choose(4)
         waitFor("Pinned to Home")
@@ -550,7 +557,7 @@ internal fun AuditDriver.appsScreens(exhaustive: Boolean) {
         shoot("All apps")
         tap(PadButton.DPAD_RIGHT, 2)
         tap(PadButton.X)
-        waitFor("App Info")
+        waitFor("Customise Artwork")
         shoot("app options menu")
     }
 }
