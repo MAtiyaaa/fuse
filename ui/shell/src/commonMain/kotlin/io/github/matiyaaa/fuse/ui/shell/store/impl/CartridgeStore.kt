@@ -12,6 +12,7 @@ import io.github.matiyaaa.fuse.model.ScanScope
 import io.github.matiyaaa.fuse.ui.shell.store.CartridgeOps
 import io.github.matiyaaa.fuse.ui.shell.store.RecentDownload
 import io.github.matiyaaa.fuse.ui.shell.store.UpdateOps
+import io.github.matiyaaa.fuse.ui.shell.store.UpdateState
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -145,11 +146,56 @@ internal class DefaultUpdateOps(private val ctx: StoreContext) : UpdateOps {
         return latest.value
     }
 
-    /** Downloads, verifies and opens the system installer. Only called after the user confirmed. */
-    override suspend fun install(release: ReleaseInfo): Result<Unit> {
+    private val stateFlow = MutableStateFlow<UpdateState>(UpdateState.Idle)
+    override val state: StateFlow<UpdateState> = stateFlow
+    private var job: Job? = null
+
+    override fun download(release: ReleaseInfo) {
+        val current = stateFlow.value
+        if (current is UpdateState.Downloading || current is UpdateState.Installing) return
+        if (current is UpdateState.Ready && current.release.tag == release.tag) return
         val asset = GitHubReleases.pickAsset(release, ctx.services.installer.platform)
-            ?: return Result.failure(IllegalStateException("This release has no build for this device."))
-        return ctx.services.installer.install(asset)
+        if (asset == null) {
+            stateFlow.value = UpdateState.Failed(release, "This release has no build for this device.")
+            return
+        }
+        stateFlow.value = UpdateState.Downloading(release, null)
+        job = ctx.scope.launch {
+            val result = try {
+                ctx.services.installer.download(asset) { p -> stateFlow.value = UpdateState.Downloading(release, p) }
+            } catch (e: CancellationException) {
+                stateFlow.value = UpdateState.Idle
+                throw e
+            } catch (e: Throwable) {
+                Result.failure(e)
+            }
+            stateFlow.value = result.fold(
+                onSuccess = { UpdateState.Ready(release, it) },
+                onFailure = { UpdateState.Failed(release, it.message ?: "The download failed. Try again.") },
+            )
+        }
+    }
+
+    override fun cancelDownload() {
+        job?.cancel()
+        job = null
+        stateFlow.value = UpdateState.Idle
+    }
+
+    override suspend fun apply(): Result<Boolean> {
+        val ready = stateFlow.value as? UpdateState.Ready ?: return Result.failure(IllegalStateException("Download the update first."))
+        stateFlow.value = UpdateState.Installing(ready.release)
+        val result = try {
+            ctx.services.installer.applyUpdate(ready.file)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Throwable) {
+            Result.failure(e)
+        }
+        // Stays ready: after a refusal (install permission not given yet, the confirmation dismissed)
+        // it can be tried again without downloading again.
+        stateFlow.value = ready
+        return result
     }
 
     private companion object {

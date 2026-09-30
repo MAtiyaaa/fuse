@@ -75,7 +75,7 @@ internal class FakeServices(override val data: FuseData, private val cache: File
         override fun open(route: CartridgeRoute, link: String) = false
     }
 
-    override val installer = object : ReleaseInstaller {
+    override var installer: ReleaseInstaller = object : ReleaseInstaller {
         override val platform = ReleasePlatform.LINUX_X86_64
         override suspend fun install(asset: ReleaseAsset, onProgress: (Float) -> Unit) = Result.failure<Unit>(UnsupportedOperationException())
     }

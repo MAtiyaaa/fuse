@@ -39,6 +39,8 @@ import androidx.compose.runtime.mutableStateOf
 import io.github.matiyaaa.fuse.ui.shell.platform.WindowStyle
 import io.github.matiyaaa.fuse.ui.shell.platform.WindowControls
 import io.github.matiyaaa.fuse.ui.shell.store.MusicPrefs
+import io.github.matiyaaa.fuse.ui.shell.store.UpdateState
+import io.github.matiyaaa.fuse.ui.shell.app.applyUpdate
 
 private fun motionName(m: MotionProfile?) = when (m) {
     null -> "Theme default"
@@ -651,13 +653,40 @@ fun privacyRows(app: AppState): List<MenuAction> = listOf(
 fun updateRows(app: AppState): List<MenuAction> {
     val p by app.store.prefs.collectAsState()
     val available by app.store.updates.available.collectAsState()
+    val state by app.store.updates.state.collectAsState()
     return buildList {
         add(infoRow("version", "Fuse", app.store.updates.currentVersion, icon = FuseIcons.Info))
-        if (available != null) {
-            val r = available!!
-            add(app.confirmRow("install", "Install ${r.name}", FuseIcons.Download, "Install ${r.name}?", "Fuse downloads the release from GitHub, checks its checksum, and hands it to your system's installer.", "Download") {
-                app.scope.launch { app.store.updates.install(r).onFailure { app.toasts.show(it.message ?: "Update failed") } }
-            })
+        val r = available
+        if (r != null) {
+            val size = GitHubReleasesSize.of(r, app)
+            when (val st = state) {
+                is UpdateState.Downloading -> add(MenuAction(
+                    "download", "Downloading ${r.name}", FuseIcons.Download,
+                    detail = "You can keep using Fuse. Select to stop",
+                    trailing = Trailing.Value(st.progress?.let { "${(it * 100).toInt()}%" } ?: "Starting"),
+                    onSelect = { app.store.updates.cancelDownload() },
+                ))
+                is UpdateState.Ready, is UpdateState.Installing -> add(MenuAction(
+                    "apply", "Restart and update", FuseIcons.Refresh,
+                    detail = if (app.platform.host == io.github.matiyaaa.fuse.model.Host.ANDROID) "Android asks you to confirm, then Fuse starts again in ${r.name}" else "Fuse closes and starts again in ${r.name}",
+                    trailing = Trailing.Value(if (st is UpdateState.Installing) "Installing" else "Ready"),
+                    onSelect = { app.applyUpdate() },
+                ))
+                is UpdateState.Failed -> add(MenuAction(
+                    "download", "Download ${r.name} again", FuseIcons.Download, detail = st.message,
+                    onSelect = { app.store.updates.download(r) },
+                ))
+                UpdateState.Idle -> add(MenuAction(
+                    "download", "Download ${r.name}", FuseIcons.Download,
+                    detail = listOfNotNull(size, "Checked against the checksum GitHub publishes. Nothing installs until you choose Restart and update").joinToString(". "),
+                    onSelect = { app.store.updates.download(r) },
+                ))
+            }
+            if (r.notes.isNotBlank()) add(MenuAction("notes", "What's new in ${r.name}", FuseIcons.Sparkles, trailing = Trailing.Chevron, onSelect = {
+                app.choice = ChoiceSpec(r.name, r.notes.lines().filterNot { it.startsWith("# ") }.joinToString("\n").trim().take(1600), listOf(
+                    MenuAction("ok", "Close", FuseIcons.Check, onSelect = { app.choice = null }),
+                ))
+            }))
         }
         add(MenuAction("check", "Check for updates", FuseIcons.Refresh, onSelect = {
             app.scope.launch { app.toasts.show(if (app.store.updates.check() != null) "An update is available" else "Fuse is up to date") }
@@ -712,4 +741,16 @@ private fun crashRow(app: AppState, report: String): MenuAction {
             ),
         )
     })
+}
+
+/** The download size of the update for this device, for the Updates row. */
+private object GitHubReleasesSize {
+    fun of(release: io.github.matiyaaa.fuse.model.ReleaseInfo, app: AppState): String? {
+        val asset = release.assets.firstOrNull { a ->
+            val n = a.name.lowercase()
+            if (app.platform.host == io.github.matiyaaa.fuse.model.Host.ANDROID) n.endsWith(".apk") else n.endsWith(".appimage")
+        } ?: return null
+        if (asset.sizeBytes <= 0) return null
+        return "${(asset.sizeBytes / 1_000_000.0).let { (it * 10).toInt() / 10.0 }} MB"
+    }
 }

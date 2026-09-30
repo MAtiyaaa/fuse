@@ -217,3 +217,12 @@ fun AppState.folderPolicyPicker(card: GameCard) {
         ),
     )
 }
+
+/** Installs the downloaded Fuse update: restarts into it (Linux) or hands it to Android's installer. */
+fun AppState.applyUpdate() {
+    scope.launch {
+        store.updates.apply()
+            .onSuccess { restart -> if (restart) platform.restart() }
+            .onFailure { toasts.show(it.message ?: "The update couldn't be installed") }
+    }
+}

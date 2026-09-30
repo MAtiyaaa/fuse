@@ -55,6 +55,8 @@ import io.github.matiyaaa.fuse.ui.designsystem.theme.GlyphConfig
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
 import io.github.matiyaaa.fuse.ui.designsystem.theme.ThemePresets
 import io.github.matiyaaa.fuse.ui.designsystem.theme.TileMetrics
+import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
+import io.github.matiyaaa.fuse.ui.shell.store.UpdateState
 import io.github.matiyaaa.fuse.ui.shell.apps.AppsScreen
 import io.github.matiyaaa.fuse.ui.shell.cartridge.CartridgeScreen
 import io.github.matiyaaa.fuse.ui.shell.components.LocalTileMetrics
@@ -195,6 +197,7 @@ fun FuseApp(store: FuseStore, platform: PlatformUi, router: InputRouter) {
                             showBluetooth = prefs.showBluetooth,
                             onSelect = { app.focusZone = FocusZone.CONTENT; app.selectTab(it) },
                             onStatusClick = { app.quickMenuOpen = true },
+                            activities = hudActivities(app),
                         )
                     }
                     if (prefs.performanceOverlay) {
@@ -445,4 +448,18 @@ private fun MenuMusic(app: AppState, player: MenuMusicPlayer?) {
     LaunchedEffect(music.volume) { player.setVolume(music.volume) }
     val quiet = app.launching != null || home.playtime.currentGame != null
     LaunchedEffect(quiet) { player.setPlaying(!quiet) }
+}
+
+/** What is working in the background, for the top line: Fuse updates (more join as they are added). */
+@Composable
+private fun hudActivities(app: AppState): List<HudActivity> {
+    val update by app.store.updates.state.collectAsState()
+    val available by app.store.updates.available.collectAsState()
+    return buildList {
+        when (val u = update) {
+            is UpdateState.Downloading -> add(HudActivity("update", FuseIcons.Download, "Downloading ${u.release.name}", progress = u.progress) { app.go(Route.Settings("updates")) })
+            is UpdateState.Ready -> add(HudActivity("update", FuseIcons.Refresh, "${u.release.name} is ready: restart to update", attention = true) { app.go(Route.Settings("updates")) })
+            else -> if (available != null) add(HudActivity("update", FuseIcons.Download, "${available?.name} is available", attention = true) { app.go(Route.Settings("updates")) })
+        }
+    }
 }

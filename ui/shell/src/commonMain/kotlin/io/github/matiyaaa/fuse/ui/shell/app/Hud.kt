@@ -30,6 +30,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.relocation.BringIntoViewRequester
@@ -121,6 +126,7 @@ fun Hud(
     gutter: Dp = Space.gutter,
     focusedButton: HudButton? = null,
     onButton: (HudButton) -> Unit = {},
+    activities: List<HudActivity> = emptyList(),
 ) {
     val time = rememberClockText(clock24h)
     BoxWithConstraints(modifier.fillMaxWidth().height(Size.hudHeight).padding(horizontal = gutter)) {
@@ -189,6 +195,10 @@ fun Hud(
             Box(Modifier.alpha(glyphs)) { ButtonGlyph(HintButton.NEXT, size = 18.dp, color = Fuse.colors.textFaint) }
         }
         Spacer(Modifier.width(Space.m))
+        for (a in activities) {
+            HudActivityChip(a)
+            Spacer(Modifier.width(Space.xs))
+        }
         HudIconButton(FuseIcons.Search, "Search", focused = tabsFocused && focusedButton == HudButton.SEARCH) { onButton(HudButton.SEARCH) }
         Spacer(Modifier.width(Space.xs))
         HudIconButton(FuseIcons.Settings, "Settings", focused = tabsFocused && focusedButton == HudButton.SETTINGS) { onButton(HudButton.SETTINGS) }
@@ -202,6 +212,49 @@ fun Hud(
             StatusCluster(status, time, showWifi = showWifi, showBluetooth = showBluetooth)
         }
     }
+    }
+}
+
+/**
+ * Something working in the background, shown in the top line: an icon in a ring that fills with
+ * [progress] (spinning while it is null), or with an accent dot when it needs you ([attention]).
+ */
+data class HudActivity(
+    val id: String,
+    val icon: ImageVector,
+    val label: String,
+    val progress: Float? = null,
+    val attention: Boolean = false,
+    val onClick: () -> Unit,
+)
+
+@Composable
+private fun HudActivityChip(a: HudActivity) {
+    val c = Fuse.colors
+    val sweep by animateFloatAsState((a.progress ?: 0f).coerceIn(0f, 1f), Fuse.motion.tween(Durations.BASE), label = "activity")
+    val spin = rememberInfiniteTransition(label = "spin")
+    val angle by spin.animateFloat(0f, 360f, infiniteRepeatable(tween(1100, easing = LinearEasing)), label = "angle")
+    Box(
+        Modifier
+            .size(36.dp)
+            .clip(PillShape)
+            .clickable(remember { MutableInteractionSource() }, null, onClick = a.onClick)
+            .drawBehind {
+                val stroke = 2.5.dp.toPx()
+                val inset = stroke / 2
+                val arc = GSize(size.width - stroke, size.height - stroke)
+                drawArc(c.text.copy(alpha = 0.14f), 0f, 360f, false, Offset(inset, inset), arc, style = Stroke(stroke))
+                when {
+                    a.attention -> Unit
+                    a.progress == null -> drawArc(c.accent, angle, 90f, false, Offset(inset, inset), arc, style = Stroke(stroke, cap = StrokeCap.Round))
+                    else -> drawArc(c.accent, -90f, 360f * sweep, false, Offset(inset, inset), arc, style = Stroke(stroke, cap = StrokeCap.Round))
+                }
+                if (a.attention) drawCircle(c.accent, radius = 4.dp.toPx(), center = Offset(size.width - 6.dp.toPx(), 6.dp.toPx()))
+            }
+            .semantics { contentDescription = a.label },
+        contentAlignment = Alignment.Center,
+    ) {
+        FuseIcon(a.icon, size = 16.dp, tint = c.text.copy(alpha = 0.85f))
     }
 }
 

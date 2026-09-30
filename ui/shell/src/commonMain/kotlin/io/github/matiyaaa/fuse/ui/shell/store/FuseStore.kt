@@ -234,7 +234,22 @@ interface CredentialOps {
 
 interface UpdateOps {
     val available: StateFlow<ReleaseInfo?>
+    /** Where an update stands: downloading with progress, ready to install, installing, failed. */
+    val state: StateFlow<UpdateState>
     suspend fun check(): ReleaseInfo?
-    suspend fun install(release: ReleaseInfo): Result<Unit>
+    /** Starts downloading [release] in the background (again after a failure). A second call while it runs does nothing. */
+    fun download(release: ReleaseInfo)
+    fun cancelDownload()
+    /** Installs the ready update. Success(true): restart Fuse now; Success(false): the system took over. */
+    suspend fun apply(): Result<Boolean>
     val currentVersion: String
+}
+
+sealed interface UpdateState {
+    data object Idle : UpdateState
+    /** [progress] 0..1, or null while the size is unknown. */
+    data class Downloading(val release: ReleaseInfo, val progress: Float?) : UpdateState
+    data class Ready(val release: ReleaseInfo, val file: String) : UpdateState
+    data class Installing(val release: ReleaseInfo) : UpdateState
+    data class Failed(val release: ReleaseInfo, val message: String) : UpdateState
 }

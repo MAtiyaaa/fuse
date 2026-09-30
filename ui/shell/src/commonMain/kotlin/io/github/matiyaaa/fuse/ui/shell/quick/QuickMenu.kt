@@ -55,6 +55,8 @@ import io.github.matiyaaa.fuse.ui.designsystem.sound.SoundCue
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Durations
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
+import io.github.matiyaaa.fuse.ui.shell.app.applyUpdate
+import io.github.matiyaaa.fuse.ui.shell.store.UpdateState
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.ConfirmSpec
 import io.github.matiyaaa.fuse.ui.shell.app.Route
@@ -89,6 +91,8 @@ fun QuickMenu(app: AppState) {
     var col by remember { mutableIntStateOf(0) }
 
     fun close() { app.quickMenuOpen = false }
+    val updateAvailable by app.store.updates.available.collectAsState()
+    val updateState by app.store.updates.state.collectAsState()
 
     val tiles = buildList {
         if (features.wifiSettings) add(QuickTile("Wi-Fi", FuseIcons.Wifi) { platform.quick.openWifi() })
@@ -123,6 +127,19 @@ fun QuickMenu(app: AppState) {
         tiles.chunked(3).forEach { add(QuickRow.Tiles(it)) }
         if (features.brightness) brightness?.let { add(QuickRow.Slider("Brightness", FuseIcons.Sun, it) { v -> platform.quick.setBrightness(v) }) }
         if (features.volume) volume?.let { add(QuickRow.Slider("Volume", FuseIcons.Volume, it) { v -> platform.quick.setVolume(v) }) }
+        val release = updateAvailable
+        if (release != null) {
+            val ready = updateState is UpdateState.Ready
+            add(QuickRow.Item(MenuAction(
+                "update", if (ready) "Restart and update" else "Update to ${release.name}", if (ready) FuseIcons.Refresh else FuseIcons.Download,
+                detail = when (val u = updateState) {
+                    is UpdateState.Downloading -> "Downloading" + (u.progress?.let { " ${(it * 100).toInt()}%" } ?: "")
+                    is UpdateState.Ready -> "Downloaded and checked"
+                    else -> "Download it in Settings, Updates"
+                },
+                onSelect = { close(); if (ready) app.applyUpdate() else app.go(Route.Settings("updates")) },
+            )))
+        }
         add(QuickRow.Item(MenuAction("home", "Arrange Home", FuseIcons.Dashboard, onSelect = { close(); app.go(Route.Settings("home")) })))
         add(QuickRow.Item(MenuAction("settings", "Settings", FuseIcons.Settings, trailing = Trailing.Chevron, onSelect = { close(); app.go(Route.Settings()) })))
         add(QuickRow.Item(MenuAction("restart", "Restart Fuse", FuseIcons.Refresh, onSelect = { platform.restart() })))

@@ -143,6 +143,19 @@ interface ReleaseInstaller {
      * marks it executable (Linux). [onProgress] gets 0..1.
      */
     suspend fun install(asset: ReleaseAsset, onProgress: (Float) -> Unit = {}): Result<Unit>
+
+    /**
+     * The first half of a Fuse update: downloads and verifies [asset] and keeps it ready. Returns a
+     * handle for [applyUpdate] (the downloaded file). Nothing is installed yet.
+     */
+    suspend fun download(asset: ReleaseAsset, onProgress: (Float) -> Unit = {}): Result<String> =
+        install(asset, onProgress).map { "" }
+
+    /**
+     * Installs what [download] prepared. Returns true when Fuse must restart itself into it (Linux);
+     * false when the system takes over (Android asks to confirm and restarts Fuse).
+     */
+    suspend fun applyUpdate(downloaded: String): Result<Boolean> = Result.success(false)
 }
 
 /** Launchable apps (Android launcher apps; Linux `.desktop` applications). */
