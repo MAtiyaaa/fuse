@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generates FuseIcons.kt from Lucide SVGs (ISC licence, see licenses/LICENSE-lucide.txt).
+"""Generates FuseIcons.kt from Lucide SVGs (ISC licence, see ui/designsystem/src/commonMain/composeResources/files/licenses/LICENSE-lucide.txt).
 
 Usage: python3 tools/icons/generate_icons.py <lucide-static>/icons > ui/designsystem/.../FuseIcons.kt
 

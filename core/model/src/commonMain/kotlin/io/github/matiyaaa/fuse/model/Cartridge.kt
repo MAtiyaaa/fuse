@@ -36,7 +36,7 @@ data class CartridgeDownload(
     val finishedAt: Long,
 )
 
-/** Places Fuse can open inside Cartridge. See docs/INTEGRATIONS.md, "Cartridge Bridge". */
+/** Places Fuse can open inside Cartridge. See INTEGRATIONS.md, "Cartridge Bridge". */
 @Serializable
 sealed interface CartridgeRoute {
     @Serializable data object Home : CartridgeRoute

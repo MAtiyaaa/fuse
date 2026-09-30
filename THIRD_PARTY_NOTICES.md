@@ -58,9 +58,9 @@ from the same project).
 
 | Asset | Files | Licence | Copyright | Licence text |
 |---|---|---|---|---|
-| Sora typeface (Medium, SemiBold, Bold) | `ui/designsystem/src/commonMain/composeResources/font/sora_*.ttf` | SIL Open Font License 1.1 | Copyright 2019 The Sora Project Authors ([sora-font](https://github.com/sora-xor/sora-font)) | [licenses/OFL-Sora.txt](licenses/OFL-Sora.txt) |
-| Manrope typeface (Regular, Medium, SemiBold, Bold) | `ui/designsystem/src/commonMain/composeResources/font/manrope_*.ttf` | SIL Open Font License 1.1 | Copyright 2018 The Manrope Project Authors ([manrope](https://github.com/googlefonts/manrope)) | [licenses/OFL-Manrope.txt](licenses/OFL-Manrope.txt) |
-| Lucide icons 1.49.0 (167 icons, converted to path data) | `ui/designsystem/src/commonMain/kotlin/io/github/matiyaaa/fuse/ui/designsystem/icons/FuseIcons.kt` | ISC; the icons Lucide derived from Feather are also under MIT | Copyright (c) 2026 Lucide Icons and Contributors; Copyright (c) 2013-present Cole Bemis (Feather) | [licenses/LICENSE-lucide.txt](licenses/LICENSE-lucide.txt) |
+| Sora typeface (Medium, SemiBold, Bold) | `ui/designsystem/src/commonMain/composeResources/font/sora_*.ttf` | SIL Open Font License 1.1 | Copyright 2019 The Sora Project Authors ([sora-font](https://github.com/sora-xor/sora-font)) | [licenses/OFL-Sora.txt](ui/designsystem/src/commonMain/composeResources/files/licenses/OFL-Sora.txt) |
+| Manrope typeface (Regular, Medium, SemiBold, Bold) | `ui/designsystem/src/commonMain/composeResources/font/manrope_*.ttf` | SIL Open Font License 1.1 | Copyright 2018 The Manrope Project Authors ([manrope](https://github.com/googlefonts/manrope)) | [licenses/OFL-Manrope.txt](ui/designsystem/src/commonMain/composeResources/files/licenses/OFL-Manrope.txt) |
+| Lucide icons 1.49.0 (167 icons, converted to path data) | `ui/designsystem/src/commonMain/kotlin/io/github/matiyaaa/fuse/ui/designsystem/icons/FuseIcons.kt` | ISC; the icons Lucide derived from Feather are also under MIT | Copyright (c) 2026 Lucide Icons and Contributors; Copyright (c) 2013-present Cole Bemis (Feather) | [licenses/LICENSE-lucide.txt](ui/designsystem/src/commonMain/composeResources/files/licenses/LICENSE-lucide.txt) |
 
 Everything else visible in Fuse (the Fuse mark, controller and status glyphs, theme backgrounds,
 generated placeholder art and interface sounds) is original work drawn or synthesised in code and is
@@ -101,8 +101,8 @@ cached on their device. None of it is part of Fuse's distribution.
 | Licence | Where | Conclusion |
 |---|---|---|
 | Apache-2.0 | Kotlin, kotlinx, Compose Multiplatform, JetBrains Lifecycle, SQLDelight, Coil, Ktor, OkHttp, Okio, AndroidX, Media3, SQLite JDBC, Skiko, Gradle | Compatible. The Free Software Foundation lists Apache-2.0 as compatible with GPL version 3, so Apache-2.0 code can be combined into a work distributed under GPL-3.0-or-later. Apache-2.0 asks redistributors to pass on its licence text and any NOTICE files |
-| MIT | Feather-derived Lucide icons, ES-DE (facts), rcheevos (reimplemented rules), Cartridge (approach) | Compatible. Permissive; the notices are kept in `licenses/LICENSE-lucide.txt` and credited above |
-| ISC | Lucide icons | Compatible. Permissive; the copyright and permission notice is kept in `licenses/LICENSE-lucide.txt` |
+| MIT | Feather-derived Lucide icons, ES-DE (facts), rcheevos (reimplemented rules), Cartridge (approach) | Compatible. Permissive; the notices are kept in `files/licenses/LICENSE-lucide.txt` and credited above |
+| ISC | Lucide icons | Compatible. Permissive; the copyright and permission notice is kept in `files/licenses/LICENSE-lucide.txt` |
 | BSD-3-Clause | Skia inside Skiko (desktop) | Compatible. Permissive |
 | Public domain | SQLite | Compatible. No conditions |
 | SIL OFL 1.1 | Sora and Manrope fonts | Compatible for distribution. The fonts stay under the OFL and are not relicensed; the OFL explicitly allows bundling the fonts with software under any licence as long as the fonts are not sold on their own and the licence travels with them. Fuse does not modify the fonts, and neither declares a Reserved Font Name |
@@ -111,9 +111,10 @@ cached on their device. None of it is part of Fuse's distribution.
 
 ### Licence texts
 
-The licence texts the bundled assets require are in the repository's `licenses/` folder:
-`OFL-Sora.txt` and `OFL-Manrope.txt` (SIL OFL 1.1 with each font's copyright line) and
-`LICENSE-lucide.txt` (Lucide's ISC licence and Feather's MIT licence). They are part of every source
-release. Shipping the same folder, and the Apache-2.0 licence and NOTICE texts of the libraries,
-inside the APK and the AppImage is part of the packaging work for 0.0.1 <!-- verify -->. The Settings,
-About screen credits Lucide, Sora and Manrope with their licences.
+The licence texts live in `ui/designsystem/src/commonMain/composeResources/files/licenses/`:
+`GPL-3.0.txt` (Fuse's own licence, a copy of `LICENSE`), `Apache-2.0.txt` (the libraries under the
+Apache License), `OFL-Sora.txt` and `OFL-Manrope.txt` (SIL OFL 1.1 with each font's copyright line)
+and `LICENSE-lucide.txt` (Lucide's ISC licence and Feather's MIT licence). Because they are Compose
+resources, they are packaged inside both the APK and the AppImage, and Settings > About > Open-source
+licences shows each of them. Libraries that carry their own NOTICE files keep them where their jars
+and AARs put them; collecting those into the licences screen is on the roadmap.

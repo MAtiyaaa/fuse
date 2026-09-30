@@ -24,6 +24,7 @@ sealed interface Route {
     data class PlatformSettings(val platform: PlatformId) : Route
     data object Search : Route
     data object Controls : Route
+    data object Licenses : Route
     data object Onboarding : Route
     data class FolderBrowser(val game: GameId) : Route
 }

@@ -12,7 +12,7 @@ import io.github.matiyaaa.fuse.model.ThemePalette
 import io.github.matiyaaa.fuse.model.ThemeSpec
 
 /**
- * Built-in themes. All are original designs; docs/DESIGN_SYSTEM.md notes the console eras that
+ * Built-in themes. All are original designs; DESIGN_SYSTEM.md notes the console eras that
  * inspired some of them. Names are Fuse's own and never use console trademarks.
  */
 object ThemePresets {

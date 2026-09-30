@@ -44,10 +44,7 @@ data class UiPrefs(
     val showWifi: Boolean = true,
     val showBluetooth: Boolean = false,
     val cleanDisplayNames: Boolean = false,
-    val scraperOrder: List<ScrapeProviderId> = listOf(
-        ScrapeProviderId.LOCAL, ScrapeProviderId.ROMM, ScrapeProviderId.STEAMGRIDDB, ScrapeProviderId.LIBRETRO,
-        ScrapeProviderId.IGDB, ScrapeProviderId.THEGAMESDB, ScrapeProviderId.SCREENSCRAPER,
-    ),
+    val scraperOrder: List<ScrapeProviderId> = io.github.matiyaaa.fuse.data.settings.ScrapingSettings.DefaultProviderOrder,
     val scraperLanguage: String = "en",
     val scraperRegion: String = "any",
     val matching: MatchStrictness = MatchStrictness.NORMAL,

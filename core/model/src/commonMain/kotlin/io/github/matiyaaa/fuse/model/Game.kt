@@ -107,7 +107,7 @@ enum class FolderPolicy {
 /**
  * RomM's file categories inside a multi-file game folder (`RomFileCategory` in RomM's
  * backend/models/rom.py). A folder directly under the game folder whose lower-cased name is the
- * category, its plural with "s" or "es", belongs to that category. See docs/INTEGRATIONS.md.
+ * category, its plural with "s" or "es", belongs to that category. See INTEGRATIONS.md.
  */
 @Serializable
 enum class ContentKind(val slug: String, val holdsGameData: Boolean) {
