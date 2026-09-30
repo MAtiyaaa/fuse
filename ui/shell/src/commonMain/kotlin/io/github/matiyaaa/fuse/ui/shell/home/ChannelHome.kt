@@ -2,6 +2,12 @@ package io.github.matiyaaa.fuse.ui.shell.home
 
 import io.github.matiyaaa.fuse.ui.designsystem.components.fadingEdges
 import androidx.compose.animation.core.animateFloatAsState
+import io.github.matiyaaa.fuse.ui.shell.app.ContextMenuSpec
+import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
+import io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction
+import androidx.compose.ui.zIndex
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -143,12 +149,27 @@ fun ChannelHome(app: AppState) {
             NavAction.UP, NavAction.DOWN, NavAction.LEFT, NavAction.RIGHT -> sel.move(e.action, cells)
             NavAction.SELECT -> { current?.let(::open); NavResult.ACTIVATED }
             NavAction.REORDER -> { carrying = true; NavResult.ACTIVATED }
-            NavAction.CONTEXT -> { app.go(Route.Settings("home")); NavResult.ACTIVATED }
+            NavAction.CONTEXT -> {
+                app.openContextMenu(
+                    ContextMenuSpec(
+                        title = current?.kind?.title() ?: "Home",
+                        subtitle = "Home",
+                        actions = listOfNotNull(
+                            current?.let { MenuAction("move", "Move this channel", FuseIcons.Move, detail = "Or hold the confirm button on it", onSelect = { app.closeOverlays(); carrying = true }) },
+                        ) + app.homeStyleActions(),
+                    ),
+                )
+                NavResult.ACTIVATED
+            }
             else -> NavResult.IGNORED
         }
     }
 
-    BoxWithConstraints(Modifier.fillMaxSize()) {
+    BoxWithConstraints(
+        Modifier.fillMaxSize()
+            // A tap outside the channels puts a carried one down.
+            .pointerInput(carrying) { if (carrying) detectTapGestures { carrying = false } },
+    ) {
         val unit = ((maxWidth - Space.gutter * 2 - Space.l * (BOARD_COLUMNS - 1)) / BOARD_COLUMNS).coerceAtMost(maxHeight * 0.3f)
         val grid = rememberLazyGridState()
         FollowSelection(grid, { sel.index }, anchor = 0.25f)
@@ -171,7 +192,13 @@ fun ChannelHome(app: AppState) {
                 itemsIndexed(widgets, key = { _, w -> w.id }, span = { _, w -> GridItemSpan(channelSpan(w).columns.coerceAtMost(BOARD_COLUMNS)) }) { i, w ->
                     val selected = i == sel.index && app.focusZone == FocusZone.CONTENT
                     val lift by animateFloatAsState(if (selected && carrying) 1f else 0f, Fuse.motion.focusSpring(), label = "carry")
-                    Box(Modifier.graphicsLayer { translationY = -10.dp.toPx() * lift; rotationZ = -1.2f * lift }) {
+                    Box(
+                        Modifier
+                            // Channels slide into their new places as one is carried past them.
+                            .animateItem(fadeInSpec = null, fadeOutSpec = null)
+                            .zIndex(if (selected && carrying) 1f else 0f)
+                            .graphicsLayer { translationY = -10.dp.toPx() * lift; rotationZ = -1.2f * lift },
+                    ) {
                         Channel(
                             widget = w,
                             feed = feed,
@@ -181,8 +208,12 @@ fun ChannelHome(app: AppState) {
                             height = unit * 0.78f,
                             carrying = selected && carrying,
                             onClick = {
-                                if (sel.index == i) open(w) else sel.index = i
                                 app.focusZone = FocusZone.CONTENT
+                                when {
+                                    carrying -> carrying = false
+                                    sel.index == i -> open(w)
+                                    else -> sel.index = i
+                                }
                             },
                             onLongClick = { sel.index = i; carrying = true },
                         )

@@ -34,6 +34,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import io.github.matiyaaa.fuse.model.NavAction
+import io.github.matiyaaa.fuse.model.HomeMode
 import io.github.matiyaaa.fuse.model.PerformanceProfile
 import io.github.matiyaaa.fuse.ui.designsystem.components.BatteryGlyph
 import io.github.matiyaaa.fuse.ui.designsystem.components.FText
@@ -59,6 +60,7 @@ import io.github.matiyaaa.fuse.ui.shell.app.ConfirmSpec
 import io.github.matiyaaa.fuse.ui.shell.app.Route
 import io.github.matiyaaa.fuse.ui.shell.app.formatDate
 import io.github.matiyaaa.fuse.ui.shell.app.rememberClockText
+import io.github.matiyaaa.fuse.ui.shell.home.switchHomeStyle
 import io.github.matiyaaa.fuse.model.Destination
 
 private data class QuickTile(val label: String, val icon: ImageVector, val active: Boolean = false, val detail: String? = null, val run: () -> Unit)
@@ -109,7 +111,10 @@ fun QuickMenu(app: AppState) {
         })
         add(QuickTile("Low Power", FuseIcons.Leaf, active = prefs.lowPower) { app.store.updatePrefs { it.copy(lowPower = !it.lowPower) } })
         add(QuickTile("Cartridge", FuseIcons.CloudDownload) { close(); app.selectTab(Destination.CARTRIDGE) })
-        add(QuickTile("Search", FuseIcons.Search) { close(); app.go(Route.Search) })
+        // Search has its own button in the top line; Home's style is one press here.
+        add(QuickTile("Home", if (prefs.home.mode == HomeMode.CHANNELS) FuseIcons.Grid else FuseIcons.Rows, detail = if (prefs.home.mode == HomeMode.CHANNELS) "Channels" else "Flow") {
+            app.switchHomeStyle()
+        })
         add(QuickTile("Sound", FuseIcons.Volume, active = prefs.sound != io.github.matiyaaa.fuse.model.SoundProfile.OFF) {
             app.store.updatePrefs { it.copy(sound = if (it.sound == io.github.matiyaaa.fuse.model.SoundProfile.OFF) io.github.matiyaaa.fuse.model.SoundProfile.SOFT else io.github.matiyaaa.fuse.model.SoundProfile.OFF) }
         })
