@@ -11,6 +11,8 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -23,9 +25,12 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
@@ -135,7 +140,11 @@ fun SliderBar(value: Float, selected: Boolean, modifier: Modifier = Modifier) {
     }
 }
 
-/** Small rounded label: platform names, counts, states. */
+/**
+ * Small rounded label: platform names, counts, states, and tabs or filters. [selected] fills it;
+ * [focused] adds the focus ring so controller focus is visible even on the selected chip.
+ * [onClick] makes it tappable.
+ */
 @Composable
 fun Chip(
     text: String,
@@ -144,11 +153,29 @@ fun Chip(
     color: Color = Fuse.colors.text,
     background: Color = color.copy(alpha = 0.12f),
     selected: Boolean = false,
+    focused: Boolean = false,
+    onClick: (() -> Unit)? = null,
 ) {
     val c = Fuse.colors
+    val ring by animateFloatAsState(if (focused) 1f else 0f, Fuse.motion.focusSpring(), label = "chipFocus")
     Row(
         modifier
+            .graphicsLayer { val s = 1f + 0.06f * ring; scaleX = s; scaleY = s }
+            .drawBehind {
+                if (ring > 0.01f) {
+                    // The ring sits just outside the chip, so focusing never changes the layout.
+                    val gap = 3.dp.toPx()
+                    drawRoundRect(
+                        c.focus.copy(alpha = ring),
+                        topLeft = Offset(-gap, -gap),
+                        size = androidx.compose.ui.geometry.Size(size.width + gap * 2, size.height + gap * 2),
+                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(size.height / 2 + gap),
+                        style = Stroke(2.dp.toPx()),
+                    )
+                }
+            }
             .clip(PillShape)
+            .then(if (onClick != null) Modifier.clickable(remember { MutableInteractionSource() }, null, onClick = onClick) else Modifier)
             .background(if (selected) c.text else background)
             .padding(horizontal = Space.m, vertical = Space.xs + 1.dp),
         verticalAlignment = Alignment.CenterVertically,

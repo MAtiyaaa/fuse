@@ -1,5 +1,13 @@
 package io.github.matiyaaa.fuse.ui.shell.media
 
+import androidx.compose.foundation.rememberScrollState
+
+import androidx.compose.foundation.verticalScroll
+
+import androidx.compose.foundation.relocation.bringIntoViewRequester
+
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -221,7 +229,9 @@ fun MediaScreen(app: AppState, owner: MediaOwner, title: String) {
 
     val c = Fuse.colors
     Row(Modifier.fillMaxSize().padding(horizontal = Space.gutter)) {
-        Column(Modifier.width(380.dp).fillMaxHeight()) {
+        val slotRequesters = remember { List(slots.size) { BringIntoViewRequester() } }
+        LaunchedEffect(sel.index) { slotRequesters[sel.index].bringIntoView() }
+        Column(Modifier.width(380.dp).fillMaxHeight().verticalScroll(rememberScrollState()).padding(bottom = Size.hintHeight + Space.l)) {
             Spacer(Modifier.height(Size.hudHeight + Space.l))
             FText("Manage media", Fuse.type.display)
             FText(title, Fuse.type.body, color = c.textMuted, maxLines = 1)
@@ -229,7 +239,7 @@ fun MediaScreen(app: AppState, owner: MediaOwner, title: String) {
             slots.forEachIndexed { i, (k, name) ->
                 val selected = i == sel.index && app.focusZone == FocusZone.CONTENT && adj == null && options == null
                 Row(
-                    Modifier.fillMaxWidth().clip(RoundedCornerShape(Fuse.geometry.control))
+                    Modifier.fillMaxWidth().bringIntoViewRequester(slotRequesters[i]).clip(RoundedCornerShape(Fuse.geometry.control))
                         .background(if (selected) c.text.copy(alpha = 0.1f) else Color.Transparent)
                         .clickable(remember { MutableInteractionSource() }, null) { sel.index = i; app.choice = ChoiceSpec(name, sourceLine(media, k), slotActions(k)) }
                         .padding(horizontal = Space.m, vertical = Space.s),

@@ -19,6 +19,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -129,6 +131,9 @@ fun QuickMenu(app: AppState) {
     LaunchedEffect(open) {
         if (open) { row = 0; col = 0; platform.sounds.play(SoundCue.OPEN) }
     }
+    // The selected row scrolls into view, so the stick and the list never drift apart.
+    val requesters = remember(rows.size) { List(rows.size) { BringIntoViewRequester() } }
+    LaunchedEffect(row, open) { if (open) requesters.getOrNull(row)?.bringIntoView() }
 
     if (open) {
         InputLayer(priority = LayerPriority.OVERLAY, modal = true) { e ->
@@ -174,6 +179,7 @@ fun QuickMenu(app: AppState) {
                 }
                 Spacer(Modifier.height(Space.l))
                 rows.forEachIndexed { i, r ->
+                  Column(Modifier.bringIntoViewRequester(requesters[i])) {
                     when (r) {
                         is QuickRow.Tiles -> {
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.s)) {
@@ -207,6 +213,7 @@ fun QuickMenu(app: AppState) {
                             MenuRow(r.action, selected = i == row)
                         }
                     }
+                  }
                 }
             }
         }

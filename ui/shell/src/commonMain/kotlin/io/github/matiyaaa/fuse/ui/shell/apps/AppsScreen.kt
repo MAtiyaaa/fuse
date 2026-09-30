@@ -107,7 +107,18 @@ fun AppsScreen(app: AppState) {
             Row(Modifier.padding(horizontal = Space.gutter), horizontalArrangement = Arrangement.spacedBy(Space.s)) {
                 filters.forEachIndexed { i, (_, label) ->
                     val focused = inFilters && app.focusZone == FocusZone.CONTENT && i == filterIndex
-                    Chip(label, selected = i == filterIndex, color = if (focused) Fuse.colors.text else Fuse.colors.textMuted, background = Fuse.colors.text.copy(alpha = if (focused) 0.2f else 0.08f))
+                    Chip(
+                        label,
+                        selected = i == filterIndex,
+                        focused = focused,
+                        color = Fuse.colors.textMuted,
+                        background = Fuse.colors.text.copy(alpha = 0.08f),
+                        onClick = {
+                            app.focusZone = FocusZone.CONTENT
+                            filterIndex = i
+                            inFilters = false
+                        },
+                    )
                 }
             }
             Spacer(Modifier.height(Space.xl))
@@ -134,7 +145,9 @@ fun AppsScreen(app: AppState) {
                             onClick = {
                                 app.focusZone = FocusZone.CONTENT
                                 inFilters = false
-                                if (sel.index == i) app.scope.launch { store.apps.launch(a) } else sel.index = i
+                                // A tap opens the app straight away, like any launcher.
+                                sel.index = i
+                                app.scope.launch { store.apps.launch(a) }
                             },
                             onLongClick = { sel.index = i; app.openContextMenu(app.appMenu(a)) },
                         )
