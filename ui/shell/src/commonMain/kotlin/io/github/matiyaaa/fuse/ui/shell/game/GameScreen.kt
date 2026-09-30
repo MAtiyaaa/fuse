@@ -164,7 +164,7 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
                 when (row) {
                     "actions" -> actions.getOrNull(col)?.run?.invoke()
                     "discs" -> discs.getOrNull(col)?.let { disc ->
-                        app.scope.launch { app.store.library.launch(game.id, discPath = disc.path) }
+                        app.play(card, discPath = disc.path)
                     }
                     else -> Unit
                 }
@@ -273,7 +273,7 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
                     Row(horizontalArrangement = Arrangement.spacedBy(Space.m)) {
                         discs.forEachIndexed { i, disc ->
                             FuseButton(disc.label, selected = row == "discs" && col == i, icon = FuseIcons.Disc, onClick = {
-                                app.scope.launch { app.store.library.launch(game.id, discPath = disc.path) }
+                                app.play(card, discPath = disc.path)
                             })
                         }
                     }

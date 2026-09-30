@@ -31,6 +31,7 @@ import io.github.matiyaaa.fuse.model.ScrapeProviderId
 import io.github.matiyaaa.fuse.model.SortOrder
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
+import io.github.matiyaaa.fuse.model.LaunchDisplay
 
 /**
  * Everything the interface reads and does, in one place. Screens only talk to this interface; the
@@ -120,7 +121,8 @@ interface LibraryOps {
     fun game(id: GameId): Flow<GameDetail?>
     fun search(query: String): Flow<SearchResults>
 
-    suspend fun launch(id: GameId, emulator: EmulatorId? = null, discPath: String? = null): LaunchOutcome
+    /** [display] overrides the screen settings for this launch (the user just picked one). */
+    suspend fun launch(id: GameId, emulator: EmulatorId? = null, discPath: String? = null, display: LaunchDisplay? = null): LaunchOutcome
 
     /** Called when Fuse comes back to the foreground: closes the running session, checks for changes. */
     fun onResume()
@@ -271,7 +273,8 @@ interface AchievementOps {
 interface AppOps {
     val supported: Boolean
     fun apps(filter: AppFilter): Flow<List<AppCard>>
-    suspend fun launch(app: AppCard)
+    /** [display] is the screen to open on (main when null or on devices with one screen). */
+    suspend fun launch(app: AppCard, display: LaunchDisplay? = null)
     suspend fun setPinned(app: AppCard, pinned: Boolean)
     suspend fun setHidden(app: AppCard, hidden: Boolean)
     suspend fun rename(app: AppCard, title: String?)

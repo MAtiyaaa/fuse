@@ -140,7 +140,7 @@ internal class AuditApps(entries: List<AppEntry>, private val icons: Map<String,
     override val apps: StateFlow<List<AppEntry>> = MutableStateFlow(entries)
     override fun iconModel(entry: AppEntry): Any? = icons[entry.id]
     override fun refresh() = Unit
-    override suspend fun launch(entry: AppEntry): RunResult = RunResult.Started()
+    override suspend fun launch(entry: AppEntry, displayId: Int?): RunResult = RunResult.Started()
     override fun openInfo(entry: AppEntry) = Unit
 
     companion object {

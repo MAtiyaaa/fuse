@@ -65,9 +65,16 @@ internal class FakeServices(override val data: FuseData, private val cache: File
         )
     }
 
+    /** The device's second screen, when the test gives it one, and the display each launch asked for. */
+    var secondDisplay: Int? = null
+    val launchedOn = mutableListOf<Int?>()
+
     override val launcher = object : GameLauncher {
+        override fun secondaryDisplayId(): Int? = secondDisplay
+
         override suspend fun run(launch: ResolvedLaunch, displayId: Int?): RunResult {
             launched += launch
+            launchedOn += displayId
             val waiter = exit
             return RunResult.Started(awaitExit = waiter?.let { w -> { w.await() } })
         }

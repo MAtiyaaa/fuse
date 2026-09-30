@@ -44,6 +44,7 @@ ICONS = {
     "ScanSearch": "scan-search", "ScanLine": "scan-line", "BadgeCheck": "badge-check", "Cable": "cable",
     "Plug": "plug", "Unplug": "unplug", "Tv": "tv", "AppWindow": "app-window", "SquarePlay": "square-play",
     "CirclePlay": "circle-play", "Dashboard": "layout-dashboard", "PanelsTop": "panels-top-left",
+    "PanelTop": "panel-top", "PanelBottom": "panel-bottom",
     "HomePlus": "house-plus", "Pin": "pin", "PinOff": "pin-off", "History": "history", "Flame": "flame",
     "Activity": "activity", "Thermometer": "thermometer", "Memory": "memory-stick", "Battery": "battery",
     "BatteryCharging": "battery-charging", "BatteryLow": "battery-low", "Aperture": "aperture",

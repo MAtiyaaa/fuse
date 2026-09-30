@@ -54,6 +54,8 @@ import io.github.matiyaaa.fuse.ui.shell.app.FocusZone
 import io.github.matiyaaa.fuse.ui.shell.app.Route
 import io.github.matiyaaa.fuse.ui.shell.systems.platformEmulatorPicker
 import kotlinx.coroutines.launch
+import io.github.matiyaaa.fuse.ui.shell.app.hasTwoScreens
+import io.github.matiyaaa.fuse.ui.shell.app.screenName
 
 /**
  * One inheritable setting for a system. The row says whether the value is set for this system or
@@ -120,7 +122,9 @@ fun PlatformSettingsScreen(app: AppState, platformId: PlatformId) {
             BorderStyle(mode = BorderMode.PLATFORM_DEFAULT) to "System frame",
             BorderStyle(mode = BorderMode.PLATFORM_DEFAULT, logoOverlay = true) to "System frame with logo",
         ), detail = "A frame in ${p.shortName}'s colour around its games' art"))
-        add(app.scopedRow(ScopedSettings.LaunchScreen, platformId, "Open games on", FuseIcons.DualScreen, listOf(LaunchDisplay.PRIMARY to "Main screen", LaunchDisplay.SECONDARY to "Second screen"), detail = "Only where the device and emulator support it"))
+        if (app.hasTwoScreens && !io.github.matiyaaa.fuse.launch.DualScreenPlatforms.usesSecondScreen(platformId)) {
+            add(app.scopedRow(ScopedSettings.LaunchScreen, platformId, "Games open on", FuseIcons.DualScreen, LaunchDisplay.entries.map { it to screenName(it) }, detail = "Where this system's games start. A game can have its own in its options"))
+        }
         add(app.scopedRow(ScopedSettings.GenerateM3u, platformId, "Disc playlists", FuseIcons.Disc, on, detail = "Multi-disc games get a playlist in Fuse's storage (never in your folder)"))
         add(app.scopedRow(ScopedSettings.ScrapeEnabled, platformId, "Find art and details", FuseIcons.Wand, on))
         add(app.scopedRow(ScopedSettings.Matching, platformId, "Matching", FuseIcons.Target, listOf(MatchStrictness.EXACT to "Exact", MatchStrictness.NORMAL to "Normal", MatchStrictness.AGGRESSIVE to "Aggressive")))

@@ -543,6 +543,27 @@ internal fun AuditDriver.launchScreens() {
         shoot("error toast after the launch failed", 700)
     }
 
+    scenario("launch", "which screen") {
+        useLibrary(twoScreens)
+        openGame("Emberline Saga")
+        tap(PadButton.A)
+        waitFor("Play on which screen?")
+        shoot("top or bottom, just this time")
+        tapText("Remember")
+        settle(400)
+        shoot("remember for this game")
+        tapText("Remember")
+        settle(400)
+        shoot("remember for the whole system")
+        tap(PadButton.B)
+        // Game options offer the screen too.
+        tap(PadButton.X)
+        tapText("Screen")
+        waitFor("Open Emberline Saga on")
+        shoot("a game's own screen")
+        tap(PadButton.B)
+    }
+
     scenario("launch", "needs emulator") {
         useLibrary()
         openGame("Waystation Nine")

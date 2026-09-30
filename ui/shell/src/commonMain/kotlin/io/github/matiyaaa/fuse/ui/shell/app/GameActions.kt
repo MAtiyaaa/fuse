@@ -28,12 +28,18 @@ fun AppState.activateGame(card: GameCard) {
 /** The hint for confirming on a game tile, following [activateGame]. */
 val AppState.gameConfirmLabel: String get() = if (store.prefs.value.openGamePage) "Open" else "Play"
 
-fun AppState.play(card: GameCard, emulator: io.github.matiyaaa.fuse.model.EmulatorId? = null) {
+fun AppState.play(card: GameCard, emulator: io.github.matiyaaa.fuse.model.EmulatorId? = null, discPath: String? = null) {
+    if (launching != null) return
+    // On two screens this may ask which one first; the veil only covers the launch itself.
+    playOnChosenScreen(card) { display -> launch(card, emulator, discPath, display) }
+}
+
+private fun AppState.launch(card: GameCard, emulator: io.github.matiyaaa.fuse.model.EmulatorId?, discPath: String?, display: io.github.matiyaaa.fuse.model.LaunchDisplay?) {
     if (launching != null) return
     launching = LaunchVeil(card.title, card.art.hero ?: card.art.boxart ?: card.art.icon, card.accent)
     platform.sounds.play(SoundCue.LAUNCH)
     scope.launch {
-        when (val outcome = store.library.launch(card.id, emulator)) {
+        when (val outcome = store.library.launch(card.id, emulator, discPath, display)) {
             LaunchOutcome.Started -> {
                 // The veil lifts when Fuse is paused by the emulator; this is only a safety net.
                 delay(4_000)
@@ -106,6 +112,9 @@ fun AppState.gameMenu(card: GameCard, fromDetail: Boolean = false, extra: List<M
         }
         add(MenuAction("pin", "Pin to Home", FuseIcons.Pin, onSelect = { run { lib.setPinned(card.id, true); toasts.show("Pinned to Home") } }))
         add(MenuAction("emulator", "Emulator", FuseIcons.Chip, trailing = Trailing.Chevron, onSelect = { emulatorPicker(card) }))
+        if (hasTwoScreens && !io.github.matiyaaa.fuse.launch.DualScreenPlatforms.usesSecondScreen(card.platformId)) {
+            add(MenuAction("screen", "Screen", FuseIcons.DualScreen, detail = "Top, bottom, or ask when it starts", trailing = Trailing.Chevron, onSelect = { screenPicker(card) }))
+        }
         add(MenuAction("rescrape", "Find Details and Art", FuseIcons.Wand, detail = "Fills what's missing, including a proper title. Your own art and names stay", onSelect = {
             closeOverlays()
             store.media.fill(MediaFillMode.FILL_MISSING, MediaKind.entries.filter { it != MediaKind.VIDEO && it != MediaKind.BORDER }.toSet(), game = card.id)

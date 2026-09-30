@@ -181,7 +181,8 @@ interface AppsProvider {
     /** Image model for the app's icon (an [AppIconModel] the platform's image loader understands). */
     fun iconModel(entry: AppEntry): Any?
     fun refresh()
-    suspend fun launch(entry: AppEntry): RunResult
+    /** Opens [entry], on the display with [displayId] when given (the device's second screen). */
+    suspend fun launch(entry: AppEntry, displayId: Int? = null): RunResult
     fun openInfo(entry: AppEntry)
 }
 

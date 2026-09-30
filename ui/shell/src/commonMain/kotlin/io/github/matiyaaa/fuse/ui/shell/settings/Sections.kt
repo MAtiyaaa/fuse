@@ -3,25 +3,31 @@ package io.github.matiyaaa.fuse.ui.shell.settings
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import io.github.matiyaaa.fuse.integrations.KeyCheck
+import io.github.matiyaaa.fuse.integrations.systemart.SystemArtPack
+import io.github.matiyaaa.fuse.integrations.systemart.SystemArtStyle
+import io.github.matiyaaa.fuse.model.CartridgeRoute
 import io.github.matiyaaa.fuse.model.Destination
 import io.github.matiyaaa.fuse.model.DualScreenMode
 import io.github.matiyaaa.fuse.model.GlyphStyle
 import io.github.matiyaaa.fuse.model.HomeMode
+import io.github.matiyaaa.fuse.model.LaunchDisplay
 import io.github.matiyaaa.fuse.model.LibraryLayout
 import io.github.matiyaaa.fuse.model.MatchStrictness
 import io.github.matiyaaa.fuse.model.MediaFillMode
-import io.github.matiyaaa.fuse.model.MediaOwner
 import io.github.matiyaaa.fuse.model.MediaKind
+import io.github.matiyaaa.fuse.model.MediaOwner
 import io.github.matiyaaa.fuse.model.MotionProfile
 import io.github.matiyaaa.fuse.model.PerformanceProfile
 import io.github.matiyaaa.fuse.model.ScanScope
+import io.github.matiyaaa.fuse.model.ScopeRef
+import io.github.matiyaaa.fuse.model.ScopedSettings
 import io.github.matiyaaa.fuse.model.SoundProfile
 import io.github.matiyaaa.fuse.model.Support
 import io.github.matiyaaa.fuse.model.WidgetKind
-import io.github.matiyaaa.fuse.model.CartridgeRoute
-import io.github.matiyaaa.fuse.integrations.KeyCheck
-import io.github.matiyaaa.fuse.integrations.systemart.SystemArtPack
-import io.github.matiyaaa.fuse.integrations.systemart.SystemArtStyle
 import io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction
 import io.github.matiyaaa.fuse.ui.designsystem.components.Trailing
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
@@ -30,21 +36,20 @@ import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec
 import io.github.matiyaaa.fuse.ui.shell.app.ConfirmSpec
 import io.github.matiyaaa.fuse.ui.shell.app.Route
+import io.github.matiyaaa.fuse.ui.shell.app.applyUpdate
+import io.github.matiyaaa.fuse.ui.shell.app.hasTwoScreens
 import io.github.matiyaaa.fuse.ui.shell.app.label
+import io.github.matiyaaa.fuse.ui.shell.app.screenName
 import io.github.matiyaaa.fuse.ui.shell.home.title
+import io.github.matiyaaa.fuse.ui.shell.music.BundledMusic
 import io.github.matiyaaa.fuse.ui.shell.platform.StorageState
-import kotlinx.coroutines.launch
-import androidx.compose.runtime.setValue
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.mutableStateOf
-import io.github.matiyaaa.fuse.ui.shell.platform.WindowStyle
 import io.github.matiyaaa.fuse.ui.shell.platform.WindowControls
+import io.github.matiyaaa.fuse.ui.shell.platform.WindowStyle
 import io.github.matiyaaa.fuse.ui.shell.store.FillChoice
 import io.github.matiyaaa.fuse.ui.shell.store.FillProgress
 import io.github.matiyaaa.fuse.ui.shell.store.MusicPrefs
-import io.github.matiyaaa.fuse.ui.shell.music.BundledMusic
 import io.github.matiyaaa.fuse.ui.shell.store.UpdateState
-import io.github.matiyaaa.fuse.ui.shell.app.applyUpdate
+import kotlinx.coroutines.launch
 
 private fun motionName(m: MotionProfile?) = when (m) {
     null -> "Theme default"
@@ -668,7 +673,11 @@ fun displayRows(app: AppState): List<MenuAction> {
         }
         add(app.choiceRow(
             "mode", "Second screen", FuseIcons.DualScreen, d.mode,
-            listOf(DualScreenMode.OFF to "Off", DualScreenMode.LIBRARY_COMPANION to "Show the selected game", DualScreenMode.GAME_COMPANION to "Companion while playing", DualScreenMode.REVERSE to "Play on the second screen"),
+            // Playing on the second screen is now "Games open on"; the old choice stays listed only while it's set.
+            listOfNotNull(
+                DualScreenMode.OFF to "Off", DualScreenMode.LIBRARY_COMPANION to "Show the selected game", DualScreenMode.GAME_COMPANION to "Companion while playing",
+                (DualScreenMode.REVERSE to "Play on the second screen").takeIf { d.mode == DualScreenMode.REVERSE },
+            ),
             optionDetail = {
                 when (it) {
                     DualScreenMode.OFF -> "Leave the second screen alone"
@@ -678,6 +687,19 @@ fun displayRows(app: AppState): List<MenuAction> {
                 }
             },
         ) { v -> app.store.updatePrefs { it.copy(display = it.display.copy(mode = v)) } })
+        if (app.hasTwoScreens) {
+            val games by remember { app.store.settings.observe(ScopedSettings.LaunchScreen, null, null) }.collectAsState(null)
+            val screens = LaunchDisplay.entries.map { it to screenName(it) }
+            add(app.choiceRow(
+                "games.screen", "Games open on", FuseIcons.PanelTop, games?.value ?: LaunchDisplay.ASK, screens,
+                detail = "A game or system can have its own: game options, Screen, or the system's settings",
+                optionDetail = { if (it == LaunchDisplay.ASK) "Pick when a game starts, and remember it for the game or its system if you like" else null },
+            ) { v -> app.scope.launch { app.store.settings.set(ScopedSettings.LaunchScreen, ScopeRef.Global, v) } })
+            add(app.choiceRow(
+                "apps.screen", "Apps open on", FuseIcons.Smartphone, d.appScreen, screens,
+                detail = if (d.appScreens.isEmpty()) "An app can have its own: app options, Screen" else "${d.appScreens.size} ${if (d.appScreens.size == 1) "app has" else "apps have"} a screen of their own",
+            ) { v -> app.store.updatePrefs { it.copy(display = it.display.copy(appScreen = v)) } })
+        }
         if (app.platform.features.secondScreen) {
             add(infoRow(
                 "dual", "Games with two screens", icon = FuseIcons.DualScreen,

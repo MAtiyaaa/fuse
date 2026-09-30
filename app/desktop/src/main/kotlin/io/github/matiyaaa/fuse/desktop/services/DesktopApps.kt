@@ -196,7 +196,8 @@ internal class DesktopAppsProvider(
         requests.trySend(Unit)
     }
 
-    override suspend fun launch(entry: AppEntry): RunResult {
+    /** Linux windows open where the desktop puts them; [displayId] is Android's. */
+    override suspend fun launch(entry: AppEntry, displayId: Int?): RunResult {
         val app = index.get(entry.id) ?: return RunResult.NotInstalled
         if (!File(app.path).isFile) return RunResult.NotInstalled
         return launcher.launchDesktopFile(app.path)

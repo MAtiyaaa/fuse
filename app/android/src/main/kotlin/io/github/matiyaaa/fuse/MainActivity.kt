@@ -117,6 +117,7 @@ class MainActivity : ComponentActivity(), ActivityRequests {
                     Lifecycle.Event.ON_PAUSE -> {
                         gamepad.releaseAll()
                         store?.library?.onPause()
+                        pausedWhileAway = true
                     }
                     Lifecycle.Event.ON_START -> app.platformUi.music.setForeground(true)
                     // A game or another app is in front: the second screen and the sound are theirs.
@@ -189,6 +190,26 @@ class MainActivity : ComponentActivity(), ActivityRequests {
                 }
             }
         }
+    }
+
+    /** Fuse lost focus to a game or app (on this screen or the other one) and was not paused since. */
+    private var lostFocus = false
+    private var pausedWhileAway = false
+
+    /**
+     * A game or app on the other screen leaves Fuse resumed but takes the focus (Android 10 and
+     * later). When Fuse gets the focus back without having been paused, that game's play session
+     * ends here, the way it does on resume after a game on this screen.
+     */
+    override fun onTopResumedActivityChanged(isTopResumedActivity: Boolean) {
+        super.onTopResumedActivityChanged(isTopResumedActivity)
+        if (!isTopResumedActivity) {
+            lostFocus = true
+            pausedWhileAway = false
+            return
+        }
+        if (lostFocus && !pausedWhileAway) (app.startup.value as? Startup.Ready)?.store?.library?.onResume()
+        lostFocus = false
     }
 
     @SuppressLint("RestrictedApi") // Lint false positive: Activity.dispatchKeyEvent is public API.

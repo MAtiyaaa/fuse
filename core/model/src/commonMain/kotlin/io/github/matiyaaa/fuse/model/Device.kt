@@ -114,6 +114,10 @@ data class DisplayProfile(
     val mode: DualScreenMode = DualScreenMode.LIBRARY_COMPANION,
     val companionShowsPerformance: Boolean = false,
     val companionTouchControls: Boolean = true,
+    /** Where apps open on a device with two screens, unless [appScreens] names one. */
+    val appScreen: LaunchDisplay = LaunchDisplay.ASK,
+    /** Screens chosen for single apps, by app id ("package/activity"). */
+    val appScreens: Map<String, LaunchDisplay> = emptyMap(),
 )
 
 /** Live system status for the status area. Fields are null when the platform doesn't report them. */

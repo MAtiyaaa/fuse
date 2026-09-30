@@ -50,7 +50,8 @@ object ScopedSettings {
     /** The name art and metadata searches use for a game, when the user set one; empty uses its title. */
     val SearchTitle = ScopedKey("scrape.title", "", String.serializer(), setOf(SettingScope.GAME))
     val Matching = ScopedKey("scrape.matching", MatchStrictness.NORMAL, MatchStrictness.serializer(), setOf(SettingScope.GLOBAL, SettingScope.PLATFORM))
-    val LaunchScreen = ScopedKey("launch.display", LaunchDisplay.PRIMARY, LaunchDisplay.serializer())
+    /** Asks by default; devices with one screen treat asking as the main screen and never ask. */
+    val LaunchScreen = ScopedKey("launch.display", LaunchDisplay.ASK, LaunchDisplay.serializer())
     val GenerateM3u = ScopedKey("launch.m3u", true, Boolean.serializer(), setOf(SettingScope.GLOBAL, SettingScope.PLATFORM))
 
     val all: List<ScopedKey<*>> = listOf(
@@ -63,6 +64,9 @@ object ScopedSettings {
 @Serializable
 enum class MatchStrictness { EXACT, NORMAL, AGGRESSIVE }
 
-/** Which screen a game should open on, when the device and emulator allow choosing. */
+/**
+ * Which screen a game or app opens on, when the device has two. [PRIMARY] is the main (top) screen,
+ * [SECONDARY] the other (bottom) one, and [ASK] asks at each launch; with one screen it is the main one.
+ */
 @Serializable
-enum class LaunchDisplay { PRIMARY, SECONDARY }
+enum class LaunchDisplay { PRIMARY, SECONDARY, ASK }

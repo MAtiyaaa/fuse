@@ -38,6 +38,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import io.github.matiyaaa.fuse.model.MediaOwner
 import kotlinx.coroutines.flow.stateIn
+import io.github.matiyaaa.fuse.model.LaunchDisplay
 
 internal class DefaultCollectionOps(private val ctx: StoreContext) : CollectionOps {
     private val repo = ctx.data.collections
@@ -143,9 +144,10 @@ internal class DefaultAppOps(private val ctx: StoreContext) : AppOps {
 
     private fun card(entry: AppEntry, icons: Map<String, Any>) = AppCard(entry, icons[entry.id] ?: provider?.iconModel(entry))
 
-    override suspend fun launch(app: AppCard) {
+    override suspend fun launch(app: AppCard, display: LaunchDisplay?) {
         val p = provider ?: return
-        p.launch(app.entry)
+        val displayId = if (display == LaunchDisplay.SECONDARY) ctx.services.launcher.secondaryDisplayId() else null
+        p.launch(app.entry, displayId)
         overrides.markUsed(app.entry.id, ctx.now())
     }
 

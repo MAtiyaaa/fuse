@@ -66,6 +66,7 @@ import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
+import io.github.matiyaaa.fuse.ui.shell.app.openApp
 
 private sealed interface Hit {
     val key: String
@@ -137,7 +138,7 @@ fun SearchScreen(app: AppState) {
         when (hit) {
             is Hit.Game -> app.activateGame(hit.card)
             is Hit.System -> app.go(Route.PlatformGames(hit.card.platform.id))
-            is Hit.App -> app.scope.launch { app.store.apps.launch(hit.card) }
+            is Hit.App -> app.openApp(hit.card)
             is Hit.Collection -> app.go(Route.CollectionGames(hit.c.id, hit.c.name))
         }
     }

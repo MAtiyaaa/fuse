@@ -112,13 +112,18 @@ internal class AuditDriver(
     val phoneLink = AuditPhoneLink()
 
     /** Shows the library app from a fresh start (default focus everywhere) with the baseline settings. */
-    fun useLibrary(prefs: (UiPrefs) -> UiPrefs = { it }) {
+    fun useLibrary(platform: PlatformUi = this.platform, prefs: (UiPrefs) -> UiPrefs = { it }) {
         val store = libraryStore
         val base = libraryPrefs!!
         store.updatePrefs { prefs(base) }
         controls.cartridge = io.github.matiyaaa.fuse.model.CartridgeStatus(installed = false)
         store.cartridge.refresh()
         show(store, platform)
+    }
+
+    /** The audit device with a second screen games and apps can open on. */
+    val twoScreens: PlatformUi by lazy {
+        AuditPlatform(size, features = io.github.matiyaaa.fuse.ui.shell.screenshots.ScreenshotPlatform.features.copy(secondScreen = true, launchOnOtherDisplay = true))
     }
 
     /** Shows [store] in a freshly started app. */

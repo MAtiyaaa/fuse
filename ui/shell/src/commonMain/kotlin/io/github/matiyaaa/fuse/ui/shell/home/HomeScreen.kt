@@ -80,6 +80,7 @@ import io.github.matiyaaa.fuse.ui.shell.systems.systemMenu
 import kotlinx.coroutines.launch
 import io.github.matiyaaa.fuse.ui.shell.app.room
 import io.github.matiyaaa.fuse.ui.shell.app.rememberSystems
+import io.github.matiyaaa.fuse.ui.shell.app.openApp
 
 @Composable
 fun HomeScreen(app: AppState) {
@@ -155,7 +156,7 @@ fun FlowHome(app: AppState) {
         when (i) {
             is ShelfItem.Game -> app.activateGame(i.card)
             is ShelfItem.System -> app.go(Route.PlatformGames(i.card.platform.id))
-            is ShelfItem.App -> app.scope.launch { store.apps.launch(i.card) }
+            is ShelfItem.App -> app.openApp(i.card)
             is ShelfItem.Collection -> app.go(Route.CollectionGames(i.collection.id, i.collection.name))
             is ShelfItem.Widget -> openWidget(app, i.kind)
         }

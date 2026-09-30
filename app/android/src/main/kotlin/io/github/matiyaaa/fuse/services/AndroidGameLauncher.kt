@@ -43,6 +43,9 @@ interface DualScreenHandoff {
 
     /** The game did not start after all. */
     fun dualScreenGameFailed()
+
+    /** On the main thread, just before a game or app opens on the second screen: it takes that screen. */
+    fun beforeSecondScreenLaunch() = beforeDualScreenGame()
 }
 
 /**
@@ -324,14 +327,16 @@ class AndroidGameLauncher(
         name: String,
         screens: Screens = Screens.APP,
     ): RunResult = withContext(Dispatchers.Main) {
+        val second = displayId != null && displayId != Display.DEFAULT_DISPLAY
         when {
             screens == Screens.BOTH -> dualScreen?.beforeDualScreenGame()
-            // A game sent to the second screen keeps it to itself.
-            screens == Screens.GAME && (displayId == null || displayId == Display.DEFAULT_DISPLAY) -> dualScreen?.beforeGame()
+            // A game or app sent to the second screen keeps it to itself: the companion steps aside.
+            second -> dualScreen?.beforeSecondScreenLaunch()
+            screens == Screens.GAME -> dualScreen?.beforeGame()
             else -> Unit
         }
         val result = startOn(intent, displayId, name)
-        if (screens == Screens.BOTH && result !is RunResult.Started) dualScreen?.dualScreenGameFailed()
+        if ((screens == Screens.BOTH || second) && result !is RunResult.Started) dualScreen?.dualScreenGameFailed()
         result
     }
 

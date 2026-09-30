@@ -157,6 +157,33 @@ class StoreIntegrationTest {
     }
 
     @Test
+    fun gamesOpenOnTheScreenPickedOrRemembered(): Unit = runBlocking {
+        val services = FakeServices(FuseData(DesktopDatabase.open(freshDb())), cache)
+        services.secondDisplay = 7
+        val store = createFuseStore(services, scope)
+        store.sources.add(root.absolutePath, LibrarySourceKind.ROMS_ROOT)
+        awaitScan(store)
+        val wars = store.library.games(GameQuery(platform = PlatformId("gba"))).first().single()
+        // Asking is the default; without an answer the game opens on the main screen.
+        assertEquals(io.github.matiyaaa.fuse.model.LaunchDisplay.ASK, store.settings.observe(io.github.matiyaaa.fuse.model.ScopedSettings.LaunchScreen, wars.platformId, wars.id).first().value)
+        assertIs<LaunchOutcome.Started>(store.library.launch(wars.id))
+        assertEquals(null, services.launchedOn.last())
+        store.library.onResume()
+        // The answer picked at launch.
+        assertIs<LaunchOutcome.Started>(store.library.launch(wars.id, display = io.github.matiyaaa.fuse.model.LaunchDisplay.SECONDARY))
+        assertEquals(7, services.launchedOn.last())
+        store.library.onResume()
+        // Remembered for the system, then overridden for the game.
+        store.settings.set(io.github.matiyaaa.fuse.model.ScopedSettings.LaunchScreen, io.github.matiyaaa.fuse.model.ScopeRef.platform(wars.platformId), io.github.matiyaaa.fuse.model.LaunchDisplay.SECONDARY)
+        assertIs<LaunchOutcome.Started>(store.library.launch(wars.id))
+        assertEquals(7, services.launchedOn.last())
+        store.library.onResume()
+        store.settings.set(io.github.matiyaaa.fuse.model.ScopedSettings.LaunchScreen, io.github.matiyaaa.fuse.model.ScopeRef.game(wars.id), io.github.matiyaaa.fuse.model.LaunchDisplay.PRIMARY)
+        assertIs<LaunchOutcome.Started>(store.library.launch(wars.id))
+        assertEquals(null, services.launchedOn.last())
+    }
+
+    @Test
     fun multiDiscGamesGetAPlaylistInTheCacheOnly() = runBlocking {
         val services = FakeServices(FuseData(DesktopDatabase.open(freshDb())), cache)
         val store = createFuseStore(services, scope)
