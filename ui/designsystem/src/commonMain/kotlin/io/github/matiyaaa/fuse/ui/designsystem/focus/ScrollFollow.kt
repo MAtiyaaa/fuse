@@ -14,7 +14,8 @@ import kotlinx.coroutines.flow.collectLatest
 private val followSpec: AnimationSpec<Float> = spring(dampingRatio = 1f, stiffness = 600f)
 
 /**
- * Keeps [index] at a steady anchor inside a lazy row/column. Each new selection starts a new
+ * Keeps [index] at a steady anchor inside a lazy row/column (anchor 0 = aligned with the content
+ * padding, which is how shelves keep the selected tile at a fixed spot while the row slides). Each new selection starts a new
  * animation from wherever the list currently is, so holding a direction glides instead of stepping,
  * and an item that isn't laid out yet is jumped to without animating through hundreds of rows.
  *
@@ -22,14 +23,15 @@ private val followSpec: AnimationSpec<Float> = spring(dampingRatio = 1f, stiffne
  */
 suspend fun LazyListState.follow(index: Int, anchor: Float = 0.12f, animate: Boolean = true) {
     val info = layoutInfo
-    val viewport = info.viewportEndOffset - info.viewportStartOffset
+    val inner = info.viewportSize.let { if (info.orientation == androidx.compose.foundation.gestures.Orientation.Horizontal) it.width else it.height } -
+        info.beforeContentPadding - info.afterContentPadding
+    // Item offsets are measured from the end of the leading content padding.
+    val target = (inner * anchor).toInt()
     val item = info.visibleItemsInfo.firstOrNull { it.index == index }
     if (item == null) {
-        val offset = -(viewport * anchor).toInt()
-        scrollToItem(index, offset.coerceAtMost(0))
+        scrollToItem(index, -(inner * anchor).toInt())
         return
     }
-    val target = (viewport * anchor).toInt()
     val delta = (item.offset - target).toFloat()
     if (delta == 0f) return
     if (animate) animateScrollBy(delta, followSpec) else scrollBy(delta)
