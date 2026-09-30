@@ -153,9 +153,9 @@ Terminology in the tables:
 | Emulator | Package → Activity | Action | ROM / extras | Flags | Dir | Notes / confidence |
 |---|---|---|---|---|---|---|
 | DuckStation | `com.github.stenzek.duckstation` → `.EmulationActivity` | none | `bootPath`=SAF (String), `resumeState`=false (boolean) | CT, CTop | No (use .m3u or directory-as-file) | Android source is **not public**; the upstream README only links the Play Store. Needs a scoped-storage grant on `ROMs/psx`. **V-ESDE + X-DJ.** Daijishō also has a legacy variant passing `bootPath` as a file path |
-| ePSXe | `com.epsxe.ePSXe` → `.ePSXe` | `MAIN` | `com.epsxe.ePSXe.isoName`=PATH | – | No | **V-ESDE + X-DJ** |
-| FPseNG / FPse | `com.emulator.fpse64` / `com.emulator.fpse` → `.Main` | `VIEW` | data=FP | – | No | Also needs scoped storage in the emulator; no .chd support. **V-ESDE** |
-| ARMSX1 | ES-DE: `com.nanodata.armsx` → `com.armsx2.Main` | none | data=SAF | – | No | **Conflict:** the public ARMSX1 repo manifest (github.com/ARMSX2/ARMSX1 `android/app/src/main/AndroidManifest.xml`) only declares `com.nanodata.armsx.EmulatorActivity` (MAIN and VIEW). Daijishō also uses `com.armsx2.Main`, so release APKs may differ from repo HEAD. **V-ESDE, source disagrees; test on device** |
+| ePSXe | `com.epsxe.ePSXe` → `.ePSXe` | `MAIN` | `com.epsxe.ePSXe.isoName`=PATH | none | No | **V-ESDE + X-DJ** |
+| FPseNG / FPse | `com.emulator.fpse64` / `com.emulator.fpse` → `.Main` | `VIEW` | data=FP | none | No | Also needs scoped storage in the emulator; no .chd support. **V-ESDE** |
+| ARMSX1 | ES-DE: `com.nanodata.armsx` → `com.armsx2.Main` | none | data=SAF | none | No | **Conflict:** the public ARMSX1 repo manifest (github.com/ARMSX2/ARMSX1 `android/app/src/main/AndroidManifest.xml`) only declares `com.nanodata.armsx.EmulatorActivity` (MAIN and VIEW). Daijishō also uses `com.armsx2.Main`, so release APKs may differ from repo HEAD. **V-ESDE, source disagrees; test on device** |
 
 ### 3.3 PlayStation 2
 
@@ -164,9 +164,9 @@ Terminology in the tables:
 | NetherSX2 / AetherSX2 | `xyz.aethersx2.android` → `.EmulationActivity` | `MAIN` | `bootPath`=SAF | CT, CTop | Closed source. ES-DE recommends the patched NetherSX2 `15210-v1.5-4248-noads.apk` (patch: https://github.com/Trixarian/NetherSX2-patch). The Play AetherSX2 "probably can't be used". **V-ESDE + X-DJ** |
 | NetherSX2-Turnip | `xyz.aethersx2.tturnip` → `xyz.aethersx2.android.EmulationActivity` | `MAIN` | `bootPath`=SAF | CT, CTop | **V-ESDE + X-DJ** |
 | NetherSX2-Turnip Classic | `xyz.aethersx2.cturnip` → `xyz.aethersx2.android.EmulationActivity` | `MAIN` | `bootPath`=SAF | CT, CTop | **V-ESDE + X-DJ** |
-| ARMSX2 | `come.nanodata.armsx2` (the "come" typo is real) → `com.armsx2.MainActivity`<br>`com.armsx2` → `.MainActivity`<br>`com.armsx2.nightly` → `com.armsx2.MainActivity`<br>`come.nanodata.armsx2` → `kr.co.iefriends.pcsx2.MainActivity`<br>`come.nanodata.armsx2.debug` → `kr.co.iefriends.pcsx2.MainActivity` | `VIEW` | data=SAF | – | Daijishō instead uses `com.armsx2.Main` and `kr.co.iefriends.pcsx2.activities.MainActivity`. The sibling ARMSX3 source exports **both** `com.armsx2.Main` and `com.armsx2.MainActivity`, so both likely exist. **V-ESDE; source repo not reachable** |
+| ARMSX2 | `come.nanodata.armsx2` (the "come" typo is real) → `com.armsx2.MainActivity`<br>`com.armsx2` → `.MainActivity`<br>`com.armsx2.nightly` → `com.armsx2.MainActivity`<br>`come.nanodata.armsx2` → `kr.co.iefriends.pcsx2.MainActivity`<br>`come.nanodata.armsx2.debug` → `kr.co.iefriends.pcsx2.MainActivity` | `VIEW` | data=SAF | none | Daijishō instead uses `com.armsx2.Main` and `kr.co.iefriends.pcsx2.activities.MainActivity`. The sibling ARMSX3 source exports **both** `com.armsx2.Main` and `com.armsx2.MainActivity`, so both likely exist. **V-ESDE; source repo not reachable** |
 | EmuCoreX | `com.sbro.emucorex` → `.MainActivity` | `VIEW` | data=SAF | CT | **V-ESDE** only |
-| Play! | `com.virtualapplications.play` → `.MainActivity` | `VIEW` | data=SAF | – | **V-ESDE** |
+| Play! | `com.virtualapplications.play` → `.MainActivity` | `VIEW` | data=SAF | none | **V-ESDE** |
 
 ### 3.4 PSP: PPSSPP
 
@@ -203,12 +203,12 @@ Scoped-storage content URIs are preferred over raw paths.
 
 | Emulator | Package → Activity | Action | ROM / extras | Flags | Notes / confidence |
 |---|---|---|---|---|---|
-| melonDS | `me.magnum.melonds` → `.ui.emulator.EmulatorActivity`; fork `me.magnum.melondualds` → `me.magnum.melonds.ui.emulator.EmulatorActivity` | `me.magnum.melonds.LAUNCH_ROM` | `uri`=SAF (String) | – | Source `LaunchArgs.fromIntent`: parcelable `rom`, then `intent.data`, then String `PATH` (file path), then `uri` (String or Uri). The manifest filter action is `${applicationId}.LAUNCH_ROM`, but the code does not check the action. **V-ESDE + V-SRC + X-DJ** |
-| melonDS Nightly | `me.magnum.melonds.nightly` → `me.magnum.melonds.ui.emulator.EmulatorActivity` | `me.magnum.melonds.nightly.LAUNCH_ROM` | `uri`=SAF | – | **V-ESDE + X-DJ** |
-| WatermelonDS | `me.magnum.melondualds` (same activity) | `me.magnum.melonds.LAUNCH_ROM` | `uri`=SAF | – | **V-ESDE** |
+| melonDS | `me.magnum.melonds` → `.ui.emulator.EmulatorActivity`; fork `me.magnum.melondualds` → `me.magnum.melonds.ui.emulator.EmulatorActivity` | `me.magnum.melonds.LAUNCH_ROM` | `uri`=SAF (String) | none | Source `LaunchArgs.fromIntent`: parcelable `rom`, then `intent.data`, then String `PATH` (file path), then `uri` (String or Uri). The manifest filter action is `${applicationId}.LAUNCH_ROM`, but the code does not check the action. **V-ESDE + V-SRC + X-DJ** |
+| melonDS Nightly | `me.magnum.melonds.nightly` → `me.magnum.melonds.ui.emulator.EmulatorActivity` | `me.magnum.melonds.nightly.LAUNCH_ROM` | `uri`=SAF | none | **V-ESDE + X-DJ** |
+| WatermelonDS | `me.magnum.melondualds` (same activity) | `me.magnum.melonds.LAUNCH_ROM` | `uri`=SAF | none | **V-ESDE** |
 | DraStic | `com.dsemu.drastic` → `.DraSticActivity` | none | data=SAF | CT, CTop | Closed; **no zipped ROMs**; removed from Play. **V-ESDE + X-DJ** |
 | NooDS | `com.hydra.noods` → `.FileBrowser` | none | `LaunchPath`=PATH | CT, CTop | Only the GitHub build launches from frontends; no zip support. **V-ESDE** |
-| SeedlessDS | `com.seedlessds.app` → `.LaunchGame` | none | `rom_path`=PATH | – | **V-ESDE** |
+| SeedlessDS | `com.seedlessds.app` → `.LaunchGame` | none | `rom_path`=PATH | none | **V-ESDE** |
 | SkyEmu | `com.sky.SkyEmu` → `.EnhancedNativeActivity` | `VIEW` | data=FP | CT, CTop | **V-ESDE** |
 
 melonDS sources:
@@ -222,14 +222,14 @@ ES-DE currently lists Azahar, AzaharPlus, Citra, Citra Canary, Citra MMJ, Mandar
 | Emulator | Package → Activity | Action | ROM | Flags | Notes / confidence |
 |---|---|---|---|---|---|
 | Azahar | `org.azahar_emu.azahar` → `org.citra.citra_emu.activities.EmulationActivity` | none (the manifest filter is VIEW, `content`, `application/octet-stream`) | data=SAF | CT, CTop | See the source note below. **V-ESDE + V-SRC + X-DJ** |
-| Azahar (Play build) | `io.github.lime3ds.android` → `org.citra.citra_emu.activities.EmulationActivity` | – | data=SAF | CT, CTop | The `googlePlay` flavor keeps the old Lime3DS applicationId (`build.gradle.kts`). **V-SRC** |
-| AzaharPlus | `io.github.azaharplus.android` → `org.citra.citra_emu.activities.EmulationActivity` | – | data=SAF | CT, CTop | Use the APK marked `coexists_with_azahar`. **V-ESDE + X-DJ** |
-| Citra (PabloMK7 fork) | `org.citra.citra_emu` → `.activities.EmulationActivity` (fallback `.ui.main.MainActivity`) | – | data=SAF | CT, CTop | **V-ESDE + X-DJ** |
-| Citra Canary | `org.citra.citra_emu.canary` → `org.citra.citra_emu.activities.EmulationActivity` | – | data=SAF | CT, CTop | **V-ESDE + X-DJ** |
-| Citra MMJ | `org.citra.emu` → `.ui.EmulationActivity`; spoofed `com.antutu.ABenchMark` → `org.citra.emu.ui.EmulationActivity` | – | `GamePath`=PATH | – | **V-ESDE + X-DJ** |
-| Mandarine | `io.github.mandarine3ds.mandarine` → `.activities.EmulationActivity` | – | data=SAF | CT, CTop | **V-ESDE + X-DJ** |
-| Lime3DS (legacy) | `io.github.lime3ds.android` → `.activities.EmulationActivity` | – | data=SAF | CT, CTop | Discontinued and merged into Azahar. **V-ESDE** |
-| Panda3DS (pandroid) | `com.panda3ds.pandroid` → `.app.MainActivity` | – | data=FP | – | ES-DE: "no way to run a game directly"; the emulator GUI opens instead. **V-ESDE** |
+| Azahar (Play build) | `io.github.lime3ds.android` → `org.citra.citra_emu.activities.EmulationActivity` | none | data=SAF | CT, CTop | The `googlePlay` flavor keeps the old Lime3DS applicationId (`build.gradle.kts`). **V-SRC** |
+| AzaharPlus | `io.github.azaharplus.android` → `org.citra.citra_emu.activities.EmulationActivity` | none | data=SAF | CT, CTop | Use the APK marked `coexists_with_azahar`. **V-ESDE + X-DJ** |
+| Citra (PabloMK7 fork) | `org.citra.citra_emu` → `.activities.EmulationActivity` (fallback `.ui.main.MainActivity`) | none | data=SAF | CT, CTop | **V-ESDE + X-DJ** |
+| Citra Canary | `org.citra.citra_emu.canary` → `org.citra.citra_emu.activities.EmulationActivity` | none | data=SAF | CT, CTop | **V-ESDE + X-DJ** |
+| Citra MMJ | `org.citra.emu` → `.ui.EmulationActivity`; spoofed `com.antutu.ABenchMark` → `org.citra.emu.ui.EmulationActivity` | none | `GamePath`=PATH | none | **V-ESDE + X-DJ** |
+| Mandarine | `io.github.mandarine3ds.mandarine` → `.activities.EmulationActivity` | none | data=SAF | CT, CTop | **V-ESDE + X-DJ** |
+| Lime3DS (legacy) | `io.github.lime3ds.android` → `.activities.EmulationActivity` | none | data=SAF | CT, CTop | Discontinued and merged into Azahar. **V-ESDE** |
+| Panda3DS (pandroid) | `com.panda3ds.pandroid` → `.app.MainActivity` | none | data=FP | none | ES-DE: "no way to run a game directly"; the emulator GUI opens instead. **V-ESDE** |
 
 Azahar source note (`EmulationFragment.kt`): reads `intent.data`, falling back to the legacy String extra `SelectedGame`. Non-Play builds open the URI as a file descriptor (`fd://`).
 - If the emulator has no grant, it fails with "Permission Denial … requires that you obtain access using ACTION_OPEN_DOCUMENT" (issue #1484).
@@ -332,20 +332,20 @@ ARMSX3 source:
 | System | Emulator | Package → Activity | Action | ROM / extras | Flags | Notes / confidence |
 |---|---|---|---|---|---|---|
 | Saturn | Yaba Sanshiro 2 | `org.devmiyax.yabasanshioro2.pro` (then non-pro) → `org.uoyabause.android.Yabause` | `VIEW` | `org.uoyabause.android.FileNameUri`=SAF | CT, CTop | Only the **Pro** build launches from ES-DE. .bin/.cue broken, .chd works. Some devices report "Cannot initialize SH2". Daijishō uses `FileNameEx` with a path for the older non-"2" builds. **V-ESDE + X-DJ** |
-| Saturn | Saturn.emu | `com.explusalpha.SaturnEmu` → `com.imagine.BaseActivity` | none | data=SAF | – | **V-ESDE** |
-| N64 | M64Plus FZ | `org.mupen64plusae.v3.fzurita.amazon` / `.pro` / (free) → `paulscode.android.mupen64plusae.SplashActivity` | `VIEW` | data=SAF | – | SplashActivity forwards `getIntent().getData()` to GalleryActivity. Needs a scoped grant on `ROMs/n64`. **V-ESDE + V-SRC (partial) + X-DJ** |
-| N64 | Mupen64Plus AE | `org.mupen64plusae.v3.alpha` → same activity | `VIEW` | data=SAF | – | **V-ESDE + X-DJ** |
+| Saturn | Saturn.emu | `com.explusalpha.SaturnEmu` → `com.imagine.BaseActivity` | none | data=SAF | none | **V-ESDE** |
+| N64 | M64Plus FZ | `org.mupen64plusae.v3.fzurita.amazon` / `.pro` / (free) → `paulscode.android.mupen64plusae.SplashActivity` | `VIEW` | data=SAF | none | SplashActivity forwards `getIntent().getData()` to GalleryActivity. Needs a scoped grant on `ROMs/n64`. **V-ESDE + V-SRC (partial) + X-DJ** |
+| N64 | Mupen64Plus AE | `org.mupen64plusae.v3.alpha` → same activity | `VIEW` | data=SAF | none | **V-ESDE + X-DJ** |
 | GBA | Pizza Boy GBA | `it.dbtecno.pizzaboygbapro` → `it.dbtecno.pizzaboygbapro.MainActivity`; `it.dbtecno.pizzaboygba` → `it.dbtecno.pizzaboygba.MainActivity` | none | `rom_uri`=SAF | CT, CTop | Closed. **V-ESDE + X-DJ** |
-| GBA | My Boy! | `com.fastemulator.gba` → `.EmulatorActivity` | `VIEW` | data=SAF | – | The Lite/free build is unsupported. **V-ESDE + X-DJ** |
-| GBA | GBA.emu | `com.explusalpha.GbaEmu` → `com.imagine.BaseActivity` | none | data=FP | – | **V-ESDE + V-SRC** (EX+ BaseActivity: `file://` becomes a path, otherwise the content URI is used and the data is cleared after one use) |
+| GBA | My Boy! | `com.fastemulator.gba` → `.EmulatorActivity` | `VIEW` | data=SAF | none | The Lite/free build is unsupported. **V-ESDE + X-DJ** |
+| GBA | GBA.emu | `com.explusalpha.GbaEmu` → `com.imagine.BaseActivity` | none | data=FP | none | **V-ESDE + V-SRC** (EX+ BaseActivity: `file://` becomes a path, otherwise the content URI is used and the data is cleared after one use) |
 | GB/GBC | Pizza Boy GBC | `it.dbtecno.pizzaboypro` / `it.dbtecno.pizzaboy` → `<pkg>.MainActivity` | none | `rom_uri`=SAF | CT, CTop | **V-ESDE + X-DJ** |
-| GB/GBC | My OldBoy! | `com.fastemulator.gbc` → `.EmulatorActivity` | `VIEW` | data=SAF | – | **V-ESDE + X-DJ** |
-| GB/GBC | GBC.emu | `com.explusalpha.GbcEmu` → `com.imagine.BaseActivity` | none | data=FP | – | **V-ESDE** |
-| GB/GBC/GBA | Linkboy | `com.pixelrespawn.linkboy` → `.EmulatorActivity` | `VIEW` | data=SAF | – | **V-ESDE** |
-| NES | NES.emu | `com.explusalpha.NesEmu` → `com.imagine.BaseActivity` | none | data=FP | – | **V-ESDE + X-DJ** |
+| GB/GBC | My OldBoy! | `com.fastemulator.gbc` → `.EmulatorActivity` | `VIEW` | data=SAF | none | **V-ESDE + X-DJ** |
+| GB/GBC | GBC.emu | `com.explusalpha.GbcEmu` → `com.imagine.BaseActivity` | none | data=FP | none | **V-ESDE** |
+| GB/GBC/GBA | Linkboy | `com.pixelrespawn.linkboy` → `.EmulatorActivity` | `VIEW` | data=SAF | none | **V-ESDE** |
+| NES | NES.emu | `com.explusalpha.NesEmu` → `com.imagine.BaseActivity` | none | data=FP | none | **V-ESDE + X-DJ** |
 | NES | iNES | `com.fms.ines.free` → `com.fms.emulib.TVActivity` | `VIEW` | data=SAF | CT, CTop | **V-ESDE** |
-| NES | Nesoid | `com.androidemu.nes` → `.EmulatorActivity` | `VIEW` | data=**PATH** | – | **V-ESDE** |
-| SNES | Snes9x EX+ | `com.explusalpha.Snes9xPlus` → `com.imagine.BaseActivity` | none | data=SAF | – | **V-ESDE + X-DJ** (Daijishō adds `-t application/zip`) |
+| NES | Nesoid | `com.androidemu.nes` → `.EmulatorActivity` | `VIEW` | data=**PATH** | none | **V-ESDE** |
+| SNES | Snes9x EX+ | `com.explusalpha.Snes9xPlus` → `com.imagine.BaseActivity` | none | data=SAF | none | **V-ESDE + X-DJ** (Daijishō adds `-t application/zip`) |
 
 EX+ Alpha source: https://github.com/Rakashazi/emu-ex-plus-alpha/blob/master/imagine/src/base/android/imagine-v9/src/main/java/com/imagine/BaseActivity.java (`intentDataPath()`).
 
