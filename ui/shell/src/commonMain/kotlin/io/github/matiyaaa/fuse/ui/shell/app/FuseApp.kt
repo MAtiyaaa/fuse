@@ -65,6 +65,7 @@ import io.github.matiyaaa.fuse.ui.shell.library.LibraryScope
 import io.github.matiyaaa.fuse.ui.shell.library.LibraryScreen
 import io.github.matiyaaa.fuse.ui.shell.media.MediaScreen
 import io.github.matiyaaa.fuse.ui.shell.onboarding.OnboardingScreen
+import io.github.matiyaaa.fuse.ui.shell.platform.MenuMusicPlayer
 import io.github.matiyaaa.fuse.ui.shell.platform.PlatformUi
 import io.github.matiyaaa.fuse.ui.shell.quick.QuickMenu
 import io.github.matiyaaa.fuse.ui.shell.search.SearchScreen
@@ -140,6 +141,7 @@ fun FuseApp(store: FuseStore, platform: PlatformUi, router: InputRouter) {
         platform.sounds.setProfile(prefs.sound)
         platform.sounds.setVolume(prefs.soundVolume)
     }
+    MenuMusic(app, platform.music)
     DisposableEffect(router) {
         router.feedback = InputFeedback { event, result ->
             when (result) {
@@ -432,3 +434,15 @@ private fun rememberTileBorders(store: FuseStore): TileBorders {
     return flow.collectAsState(TileBorders()).value
 }
 
+/** The menu music follows its settings and steps aside while a game starts or runs. */
+@Composable
+private fun MenuMusic(app: AppState, player: MenuMusicPlayer?) {
+    player ?: return
+    val prefs by app.store.prefs.collectAsState()
+    val home by app.store.library.home.collectAsState()
+    val music = prefs.music
+    LaunchedEffect(music.enabled, music.songPath) { player.setSong(music.songPath.takeIf { music.enabled }) }
+    LaunchedEffect(music.volume) { player.setVolume(music.volume) }
+    val quiet = app.launching != null || home.playtime.currentGame != null
+    LaunchedEffect(quiet) { player.setPlaying(!quiet) }
+}

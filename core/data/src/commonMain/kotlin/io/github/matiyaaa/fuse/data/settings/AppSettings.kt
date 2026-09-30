@@ -39,6 +39,7 @@ data class AppSettings(
     val videoPreview: VideoPreviewSettings = VideoPreviewSettings(),
     val library: LibraryPreferences = LibraryPreferences(),
     val sound: SoundSettings = SoundSettings(),
+    val music: MusicSettings = MusicSettings(),
     val statusArea: StatusAreaSettings = StatusAreaSettings(),
     val cartridge: CartridgeSettings = CartridgeSettings(),
     val privacy: PrivacySettings = PrivacySettings(),
@@ -177,6 +178,21 @@ data class SoundSettings(
     val volume: Float = 0.7f,
     /** Null follows the theme's sound profile. */
     val profile: SoundProfile? = null,
+)
+
+/**
+ * Music under Fuse's menus. Fuse ships no song: the user picks a file, which is copied into Fuse's
+ * storage so it keeps playing after the original moves.
+ */
+@Serializable
+data class MusicSettings(
+    val enabled: Boolean = true,
+    /** 0..1, low by default so the music sits under the interface. */
+    val volume: Float = 0.2f,
+    /** Fuse's copy of the song; null when none was chosen. */
+    val songPath: String? = null,
+    /** What Settings calls the song (the picked file's name). */
+    val songName: String? = null,
 )
 
 @Serializable

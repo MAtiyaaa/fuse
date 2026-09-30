@@ -17,6 +17,7 @@ import java.lang.ref.WeakReference
 interface ActivityRequests {
     suspend fun pickFolder(): Uri?
     suspend fun pickImage(): Uri?
+    suspend fun pickAudio(): Uri?
     suspend fun requestRole(intent: Intent): Boolean
     suspend fun requestPermission(permission: String): Boolean
 }

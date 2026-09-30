@@ -6,6 +6,7 @@ import io.github.matiyaaa.fuse.model.Destination
 import io.github.matiyaaa.fuse.model.LibraryLayout
 import io.github.matiyaaa.fuse.model.SoundProfile
 import io.github.matiyaaa.fuse.ui.designsystem.theme.ThemePresets
+import io.github.matiyaaa.fuse.ui.shell.store.MusicPrefs
 import io.github.matiyaaa.fuse.ui.shell.store.UiPrefs
 
 /** Global values of scoped keys that the interface shows as plain preferences. */
@@ -41,6 +42,7 @@ internal fun AppSettings.toUiPrefs(scoped: GlobalScoped): UiPrefs {
         performanceOverlay = performance.overlay,
         sound = if (!sound.enabled) SoundProfile.OFF else sound.profile ?: theme.sound,
         soundVolume = sound.volume,
+        music = MusicPrefs(music.enabled, music.volume, music.songPath, music.songName),
         clock24h = statusArea.use24HourClock ?: false,
         showWifi = statusArea.showWifi,
         showBluetooth = statusArea.showBluetooth,
@@ -101,6 +103,12 @@ internal fun AppSettings.withUiPrefs(prefs: UiPrefs): AppSettings {
             enabled = prefs.sound != SoundProfile.OFF,
             volume = prefs.soundVolume.coerceIn(0f, 1f),
             profile = prefs.sound.takeIf { it != SoundProfile.OFF && it != theme.sound },
+        ),
+        music = music.copy(
+            enabled = prefs.music.enabled,
+            volume = prefs.music.volume.coerceIn(0f, 1f),
+            songPath = prefs.music.songPath,
+            songName = prefs.music.songName,
         ),
         statusArea = statusArea.copy(
             use24HourClock = prefs.clock24h,

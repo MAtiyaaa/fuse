@@ -11,6 +11,8 @@ dependencies {
     implementation(libs.ktor.client.cio)
     implementation(libs.coil.compose)
     implementation(libs.coil.svg)
+    // MP3 decoding for menu music (LGPL-2.1-or-later, see THIRD_PARTY_NOTICES.md).
+    implementation(libs.jlayer)
     testImplementation(kotlin("test"))
 }
 

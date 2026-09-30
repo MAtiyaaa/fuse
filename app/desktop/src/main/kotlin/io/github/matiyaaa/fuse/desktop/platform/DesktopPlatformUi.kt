@@ -100,6 +100,7 @@ class DesktopPlatformUi(
 
     /** No desktop video player is bundled yet, so previews are off rather than half working. */
     override val video: VideoPreview? = null
+    override val music: DesktopMenuMusic = DesktopMenuMusic()
 
     init {
         // Status and displays: every 10 s while anything shows them.
@@ -230,6 +231,7 @@ class DesktopPlatformUi(
 
     override fun close() {
         desktopSounds.close()
+        music.close()
     }
 
     private fun measureDevice(): CapabilityProfile {

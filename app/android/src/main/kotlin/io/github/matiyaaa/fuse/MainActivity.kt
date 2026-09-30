@@ -71,6 +71,8 @@ class MainActivity : ComponentActivity(), ActivityRequests {
     private val folderLauncher = registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { folderSlot.complete(it) }
     private val imageSlot = ResultSlot<Uri?>(null)
     private val imageLauncher = registerForActivityResult(ActivityResultContracts.PickVisualMedia()) { imageSlot.complete(it) }
+    private val audioSlot = ResultSlot<Uri?>(null)
+    private val audioLauncher = registerForActivityResult(ActivityResultContracts.OpenDocument()) { audioSlot.complete(it) }
     private val roleSlot = ResultSlot(false)
     private val roleLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         roleSlot.complete(it.resultCode == RESULT_OK)
@@ -116,8 +118,12 @@ class MainActivity : ComponentActivity(), ActivityRequests {
                         gamepad.releaseAll()
                         store?.library?.onPause()
                     }
-                    // A game or another app is in front: the second screen is theirs.
-                    Lifecycle.Event.ON_STOP -> companions.onMainStopped()
+                    Lifecycle.Event.ON_START -> app.platformUi.music.setForeground(true)
+                    // A game or another app is in front: the second screen and the sound are theirs.
+                    Lifecycle.Event.ON_STOP -> {
+                        companions.onMainStopped()
+                        app.platformUi.music.setForeground(false)
+                    }
                     else -> Unit
                 }
             },
@@ -217,6 +223,7 @@ class MainActivity : ComponentActivity(), ActivityRequests {
     override fun onDestroy() {
         folderSlot.cancel()
         imageSlot.cancel()
+        audioSlot.cancel()
         roleSlot.cancel()
         permissionSlot.cancel()
         if (isFinishing) companions.stop()
@@ -230,6 +237,8 @@ class MainActivity : ComponentActivity(), ActivityRequests {
     override suspend fun pickImage(): Uri? = imageSlot.request {
         imageLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
     }
+
+    override suspend fun pickAudio(): Uri? = audioSlot.request { audioLauncher.launch(arrayOf("audio/*")) }
 
     override suspend fun requestRole(intent: Intent): Boolean = roleSlot.request { roleLauncher.launch(intent) }
 
