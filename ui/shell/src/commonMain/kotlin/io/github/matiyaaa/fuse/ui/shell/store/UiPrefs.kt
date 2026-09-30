@@ -43,7 +43,13 @@ data class UiPrefs(
     val clock24h: Boolean = false,
     val showWifi: Boolean = true,
     val showBluetooth: Boolean = false,
-    val cleanDisplayNames: Boolean = false,
+    val cleanDisplayNames: Boolean = true,
+    /** Systems in the user's order (platform ids); the rest follow in catalog order. */
+    val systemOrder: List<String> = emptyList(),
+    /** Games taken off Continue Playing (game id to when), until they are played again. */
+    val continueDismissed: Map<String, Long> = emptyMap(),
+    val systemArtAuto: Boolean = true,
+    val systemArtStyle: String = "CLASSIC",
     val scraperOrder: List<ScrapeProviderId> = io.github.matiyaaa.fuse.data.settings.ScrapingSettings.DefaultProviderOrder,
     val scraperLanguage: String = "en",
     val scraperRegion: String = "any",

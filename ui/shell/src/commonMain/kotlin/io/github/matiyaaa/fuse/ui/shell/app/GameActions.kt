@@ -64,7 +64,15 @@ fun AppState.play(card: GameCard, emulator: io.github.matiyaaa.fuse.model.Emulat
 }
 
 /** The options menu for a game (Context button, Select, or a long press). */
-fun AppState.gameMenu(card: GameCard, fromDetail: Boolean = false): ContextMenuSpec {
+/** Takes [card] off Continue Playing until it is played again. */
+fun AppState.dismissFromContinue(card: GameCard) {
+    val now = kotlin.time.Clock.System.now().toEpochMilliseconds()
+    store.updatePrefs { it.copy(continueDismissed = it.continueDismissed + (card.id.value.toString() to now)) }
+    toasts.show("Removed from Continue playing")
+}
+
+/** [extra] actions go right after Play, for the shelf or list the game was opened from. */
+fun AppState.gameMenu(card: GameCard, fromDetail: Boolean = false, extra: List<MenuAction> = emptyList()): ContextMenuSpec {
     val lib = store.library
     fun run(block: suspend () -> Unit) {
         closeOverlays()
@@ -72,6 +80,7 @@ fun AppState.gameMenu(card: GameCard, fromDetail: Boolean = false): ContextMenuS
     }
     val actions = buildList {
         add(MenuAction("play", "Play", FuseIcons.Play, onSelect = { closeOverlays(); play(card) }))
+        addAll(extra)
         if (!fromDetail) add(MenuAction("info", "Game Info", FuseIcons.Info, onSelect = { closeOverlays(); go(Route.GameInfo(card.id)) }))
         add(
             MenuAction(

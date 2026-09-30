@@ -164,9 +164,11 @@ fun FuseApp(store: FuseStore, platform: PlatformUi, router: InputRouter) {
                     if (route != Route.Onboarding) {
                         val status by platform.status.collectAsState()
                         Hud(
-                            destinations = listOf(Destination.HOME) + prefs.destinations.filter { it != Destination.HOME },
+                            destinations = visibleTabs(app, prefs),
                             active = app.navigator.root?.destination,
                             tabsFocused = app.focusZone == FocusZone.TABS,
+                            focusedButton = app.hudButton,
+                            onButton = { app.focusZone = FocusZone.CONTENT; app.hudButton = null; app.runHudButton(it) },
                             status = status,
                             clock24h = prefs.clock24h,
                             showWifi = prefs.showWifi,
@@ -282,6 +284,7 @@ private fun Pages(app: AppState) {
                     Destination.HOME -> HomeScreen(app)
                     Destination.LIBRARY -> LibraryScreen(app, LibraryScope.All)
                     Destination.SYSTEMS -> SystemsScreen(app)
+                    Destination.ACHIEVEMENTS -> io.github.matiyaaa.fuse.ui.shell.achievements.AchievementsScreen(app)
                     Destination.APPS -> AppsScreen(app)
                     Destination.CARTRIDGE -> CartridgeScreen(app)
                 }
@@ -308,7 +311,7 @@ private fun Pages(app: AppState) {
 @Composable
 private fun ShellInput(app: AppState) {
     val prefs by app.store.prefs.collectAsState()
-    val tabs = listOf(Destination.HOME) + prefs.destinations.filter { it != Destination.HOME }
+    val tabs = visibleTabs(app, prefs)
     val onboarding = app.navigator.current == Route.Onboarding
     InputLayer(priority = LayerPriority.SHELL) { e ->
         if (onboarding) return@InputLayer NavResult.IGNORED
@@ -320,11 +323,23 @@ private fun ShellInput(app: AppState) {
             return NavResult.MOVED
         }
         if (app.focusZone == FocusZone.TABS) {
+            val button = app.hudButton
+            fun leave(): NavResult { app.focusZone = FocusZone.CONTENT; app.hudButton = null; return NavResult.MOVED }
             return@InputLayer when (e.action) {
-                NavAction.LEFT -> cycle(-1)
-                NavAction.RIGHT -> cycle(1)
-                NavAction.DOWN, NavAction.SELECT -> { app.focusZone = FocusZone.CONTENT; NavResult.MOVED }
-                NavAction.BACK -> { app.focusZone = FocusZone.CONTENT; NavResult.CONSUMED }
+                // After the last tab the stick moves on to Search and Settings.
+                NavAction.LEFT -> when (button) {
+                    HudButton.SETTINGS -> { app.hudButton = HudButton.SEARCH; NavResult.MOVED }
+                    HudButton.SEARCH -> { app.hudButton = null; NavResult.MOVED }
+                    null -> cycle(-1)
+                }
+                NavAction.RIGHT -> when (button) {
+                    HudButton.SEARCH -> { app.hudButton = HudButton.SETTINGS; NavResult.MOVED }
+                    HudButton.SETTINGS -> NavResult.BLOCKED
+                    null -> if (tabs.lastOrNull() == active) { app.hudButton = HudButton.SEARCH; NavResult.MOVED } else cycle(1)
+                }
+                NavAction.SELECT -> if (button != null) { leave(); app.runHudButton(button); NavResult.ACTIVATED } else leave()
+                NavAction.DOWN -> leave()
+                NavAction.BACK -> { leave(); NavResult.CONSUMED }
                 NavAction.UP -> NavResult.BLOCKED
                 NavAction.PREVIOUS_SECTION -> cycle(-1)
                 NavAction.NEXT_SECTION -> cycle(1)
@@ -349,6 +364,19 @@ private fun ShellInput(app: AppState) {
             else -> NavResult.IGNORED
         }
     }
+}
+
+/** The tabs shown in the top line: Home first, then the user's order. Cartridge needs Cartridge. */
+@Composable
+private fun visibleTabs(app: AppState, prefs: io.github.matiyaaa.fuse.ui.shell.store.UiPrefs): List<Destination> {
+    val cartridge by app.store.cartridge.status.collectAsState()
+    return (listOf(Destination.HOME) + prefs.destinations.filter { it != Destination.HOME })
+        .filter { it != Destination.CARTRIDGE || cartridge.installed }
+}
+
+private fun AppState.runHudButton(button: HudButton) = when (button) {
+    HudButton.SEARCH -> go(Route.Search)
+    HudButton.SETTINGS -> go(Route.Settings())
 }
 
 /** A short, calm handoff while the emulator starts: the game's art fills the screen and dims away. */

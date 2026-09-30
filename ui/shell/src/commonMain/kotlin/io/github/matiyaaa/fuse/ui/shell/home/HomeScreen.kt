@@ -54,6 +54,7 @@ import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.ContextMenuSpec
 import io.github.matiyaaa.fuse.ui.shell.app.FocusZone
 import io.github.matiyaaa.fuse.ui.shell.app.Route
+import io.github.matiyaaa.fuse.ui.shell.app.dismissFromContinue
 import io.github.matiyaaa.fuse.ui.shell.app.gameMenu
 import io.github.matiyaaa.fuse.ui.shell.app.play
 import io.github.matiyaaa.fuse.ui.shell.app.rememberRouteState
@@ -67,6 +68,7 @@ import io.github.matiyaaa.fuse.ui.shell.components.StageInfo
 import io.github.matiyaaa.fuse.ui.shell.components.SystemTile
 import io.github.matiyaaa.fuse.ui.shell.components.stage
 import io.github.matiyaaa.fuse.ui.shell.library.CollectionTile
+import io.github.matiyaaa.fuse.ui.shell.systems.moveSystem
 import io.github.matiyaaa.fuse.ui.shell.systems.systemMenu
 import kotlinx.coroutines.launch
 
@@ -95,6 +97,8 @@ fun FlowHome(app: AppState) {
     val keys = shelves.map { it.key }
     sel.clamp(keys) { k -> shelves.firstOrNull { it.key == k }?.items?.size ?: 0 }
     var reorder by remember { mutableStateOf<String?>(null) }
+    // A system picked up on the Systems shelf (hold confirm); left and right move it.
+    var movingSystem by remember { mutableStateOf(false) }
 
     val shelf = shelves.getOrNull(sel.row)
     val item = shelf?.items?.getOrNull(sel.column(shelf.key))
@@ -105,11 +109,12 @@ fun FlowHome(app: AppState) {
     }
 
     // The room and the stage follow the selection.
-    LaunchedEffect(item?.key) {
+    LaunchedEffect(item?.key, reorder, movingSystem) {
         app.hero = item?.hero()
         app.hints = when {
-            reorder != null -> listOf(Hint(HintButton.DPAD, "Move"), Hint(HintButton.CONFIRM, "Done"))
+            reorder != null || movingSystem -> listOf(Hint(HintButton.DPAD, "Move"), Hint(HintButton.CONFIRM, "Done"))
             item is ShelfItem.Game -> listOf(Hint(HintButton.CONFIRM, "Play"), Hint(HintButton.OPTIONS, "Options"), Hint(HintButton.SEARCH, "Search"))
+            item is ShelfItem.System -> listOf(Hint(HintButton.CONFIRM, "Open"), Hint(HintButton.HOLD_CONFIRM, "Hold to move"), Hint(HintButton.OPTIONS, "Options"))
             item is ShelfItem.Widget -> listOf(Hint(HintButton.CONFIRM, "Open"), Hint(HintButton.HOLD_CONFIRM, "Hold to arrange"))
             else -> listOf(Hint(HintButton.CONFIRM, "Open"), Hint(HintButton.OPTIONS, "Options"), Hint(HintButton.SEARCH, "Search"))
         }
@@ -126,11 +131,20 @@ fun FlowHome(app: AppState) {
     }
 
     fun options(i: ShelfItem) {
+        val s = shelf ?: return
         when (i) {
-            is ShelfItem.Game -> app.openContextMenu(app.gameMenu(i.card))
+            is ShelfItem.Game -> {
+                val extra = if (s.widgets.any { it.kind == WidgetKind.CONTINUE_PLAYING }) {
+                    listOf(MenuAction("uncontinue", "Remove from Continue Playing", FuseIcons.Close, detail = "Comes back when you play it again", onSelect = {
+                        app.closeOverlays()
+                        app.dismissFromContinue(i.card)
+                    }))
+                } else emptyList()
+                app.openContextMenu(app.gameMenu(i.card, extra = extra))
+            }
             is ShelfItem.System -> app.openContextMenu(app.systemMenu(i.card))
             is ShelfItem.App -> app.openContextMenu(app.appMenu(i.card))
-            else -> app.openContextMenu(shelfMenu(app, shelf ?: return))
+            else -> app.openContextMenu(shelfMenu(app, s) { reorder = s.key })
         }
     }
 
@@ -154,6 +168,17 @@ fun FlowHome(app: AppState) {
     }
 
     InputLayer(enabled = app.focusZone == FocusZone.CONTENT && !app.overlayOpen, longPress = true) { e ->
+        if (movingSystem && shelf != null) {
+            return@InputLayer when (e.action) {
+                NavAction.LEFT, NavAction.RIGHT -> {
+                    val from = sel.column(shelf.key)
+                    val to = app.moveSystem(feed.systems, from, if (e.action == NavAction.LEFT) -1 else 1)
+                    if (to == from) NavResult.BLOCKED else { sel.setColumn(shelf.key, to); NavResult.MOVED }
+                }
+                NavAction.SELECT, NavAction.BACK, NavAction.REORDER -> { movingSystem = false; NavResult.CONSUMED }
+                else -> NavResult.CONSUMED
+            }
+        }
         val moving = reorder
         if (moving != null) {
             return@InputLayer when (e.action) {
@@ -168,7 +193,10 @@ fun FlowHome(app: AppState) {
                 sel.move(e.action, keys) { k -> shelves.firstOrNull { it.key == k }?.items?.size ?: 0 }
             NavAction.SELECT -> { item?.let(::activate); if (item != null) NavResult.ACTIVATED else NavResult.BLOCKED }
             NavAction.CONTEXT -> { item?.let(::options); NavResult.ACTIVATED }
-            NavAction.REORDER -> { reorder = shelf?.key; NavResult.ACTIVATED }
+            NavAction.REORDER -> {
+                if (item is ShelfItem.System) movingSystem = true else reorder = shelf?.key
+                NavResult.ACTIVATED
+            }
             else -> NavResult.IGNORED
         }
     }
@@ -187,12 +215,14 @@ fun FlowHome(app: AppState) {
             LazyColumn(
                 state = rows,
                 modifier = Modifier.fillMaxWidth().weight(1f).fadingEdges(top = if (rows.canScrollBackward) 24.dp else 0.dp),
-                contentPadding = PaddingValues(bottom = Size.hintHeight + maxH * 0.4f),
+                // Only room for the hint line: the list ends where its content ends, by stick or by touch.
+                contentPadding = PaddingValues(bottom = Size.hintHeight + Space.xl),
                 verticalArrangement = Arrangement.spacedBy(Space.l),
             ) {
                 itemsIndexed(shelves, key = { _, s -> s.key }) { index, s ->
                     val rowAlpha by animateFloatAsState(
-                        if (index < sel.row) 0f else if (index == sel.row) 1f else 0.72f,
+                        // Shelves above the selection dim rather than vanish, so touch scrolling always shows them.
+                        if (index == sel.row) 1f else if (index < sel.row) 0.55f else 0.72f,
                         Fuse.motion.fade(Durations.BASE),
                         label = "shelf",
                     )
@@ -202,6 +232,7 @@ fun FlowHome(app: AppState) {
                         selectedColumn = if (index == sel.row && app.focusZone == FocusZone.CONTENT) sel.column(s.key) else -1,
                         rememberedColumn = sel.column(s.key),
                         moving = reorder == s.key,
+                        movingItem = movingSystem && index == sel.row,
                         feed = feed,
                         cartridge = cartridge,
                         clock24h = prefs.clock24h,
@@ -232,6 +263,7 @@ private fun ShelfRow(
     selectedColumn: Int,
     rememberedColumn: Int,
     moving: Boolean,
+    movingItem: Boolean,
     feed: io.github.matiyaaa.fuse.ui.shell.store.HomeFeed,
     cartridge: io.github.matiyaaa.fuse.model.CartridgeStatus,
     clock24h: Boolean,
@@ -253,9 +285,9 @@ private fun ShelfRow(
     ) {
         Row(Modifier.padding(horizontal = Space.gutter), verticalAlignment = Alignment.CenterVertically) {
             SectionLabel(shelf.title, color = if (selectedColumn >= 0) c.text else c.textMuted)
-            if (moving) {
+            if (moving || movingItem) {
                 Spacer(Modifier.padding(horizontal = Space.xs))
-                FText("Moving: up and down to place it", Fuse.type.caption, color = c.accent)
+                FText(if (moving) "Moving: up and down to place it" else "Moving: left and right to place it", Fuse.type.caption, color = c.accent)
             }
         }
         Spacer(Modifier.height(Space.m))
@@ -313,19 +345,20 @@ private fun openWidget(app: AppState, kind: WidgetKind) {
     when (kind) {
         WidgetKind.CARTRIDGE_DOWNLOADS -> app.selectTab(Destination.CARTRIDGE)
         WidgetKind.RECENT_ACHIEVEMENT, WidgetKind.RECENT_ACHIEVEMENTS, WidgetKind.ACHIEVEMENT_PROGRESS,
-        WidgetKind.RECENTLY_MASTERED -> app.go(Route.Settings("achievements"))
+        WidgetKind.RECENTLY_MASTERED -> app.selectTab(Destination.ACHIEVEMENTS)
         WidgetKind.STORAGE -> app.go(Route.Settings("storage"))
         WidgetKind.CLOCK -> app.quickMenuOpen = true
         else -> app.selectTab(Destination.LIBRARY)
     }
 }
 
-private fun shelfMenu(app: AppState, shelf: Shelf): ContextMenuSpec = ContextMenuSpec(
+private fun shelfMenu(app: AppState, shelf: Shelf, onArrange: () -> Unit): ContextMenuSpec = ContextMenuSpec(
     title = shelf.title,
     subtitle = "Home",
     actions = listOf(
-        MenuAction("arrange", "Arrange Home", FuseIcons.Move, detail = "Or hold the confirm button on any shelf", onSelect = {
+        MenuAction("arrange", "Move this shelf", FuseIcons.Move, detail = "Or hold the confirm button on any shelf", onSelect = {
             app.closeOverlays()
+            onArrange()
         }),
         MenuAction("hide", "Hide this shelf", FuseIcons.EyeOff, onSelect = {
             app.store.updatePrefs { p ->

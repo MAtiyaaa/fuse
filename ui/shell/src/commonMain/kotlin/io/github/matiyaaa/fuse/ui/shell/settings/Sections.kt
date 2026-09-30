@@ -238,14 +238,26 @@ fun libraryRows(app: AppState): List<MenuAction> {
 @Composable
 fun systemsRows(app: AppState): List<MenuAction> {
     val platforms by app.store.library.platforms.collectAsState()
-    return platforms.filter { it.gameCount > 0 }.map { p ->
-        MenuAction(
-            "sys.${p.platform.id}", p.platform.name, FuseIcons.Chip,
-            detail = listOfNotNull("${p.gameCount} games", p.emulatorName ?: "No emulator").joinToString("  ·  "),
-            trailing = Trailing.Chevron,
-            onSelect = { app.go(Route.PlatformSettings(p.platform.id)) },
-        )
-    }.ifEmpty { listOf(infoRow("none", "No systems yet", detail = "Systems appear once Fuse finds games for them")) }
+    val prefs by app.store.prefs.collectAsState()
+    val systems = platforms.filter { it.gameCount > 0 }
+    return buildList {
+        add(infoRow("order", "Arrange systems", detail = "Hold confirm on a system in Systems or on Home, then move it with the D-pad. The order is used everywhere"))
+        if (prefs.systemOrder.isNotEmpty()) {
+            add(MenuAction("order.reset", "Reset system order", FuseIcons.RotateCcw, detail = "Back to the order Fuse uses by default", onSelect = {
+                app.store.updatePrefs { it.copy(systemOrder = emptyList()) }
+                app.toasts.show("System order reset")
+            }))
+        }
+        systems.forEach { p ->
+            add(MenuAction(
+                "sys.${p.platform.id}", p.platform.name, FuseIcons.Chip,
+                detail = listOfNotNull("${p.gameCount} games", p.emulatorName ?: "No emulator").joinToString("  ·  "),
+                trailing = Trailing.Chevron,
+                onSelect = { app.go(Route.PlatformSettings(p.platform.id)) },
+            ))
+        }
+        if (systems.isEmpty()) add(infoRow("none", "No systems yet", detail = "Systems appear once Fuse finds games for them"))
+    }
 }
 
 @Composable

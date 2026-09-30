@@ -45,7 +45,7 @@ data class AppSettings(
     val updates: UpdateSettings = UpdateSettings(),
 ) {
     companion object {
-        const val CURRENT_VERSION = 1
+        const val CURRENT_VERSION = 2
     }
 }
 
@@ -67,6 +67,11 @@ data class HomeSettings(
     /** Root destinations in the user's order. Unknown entries from newer versions are dropped. */
     @Serializable(with = DestinationListSerializer::class)
     val destinations: List<DestinationSetting> = Destination.entries.map { DestinationSetting(it) },
+    /**
+     * Games taken off Continue Playing, by game id, with when. A game comes back once it is played
+     * again after that time.
+     */
+    val continueDismissed: Map<String, Long> = emptyMap(),
 ) {
     /**
      * Visible destinations in order. Destinations missing from the stored list (added in a newer
@@ -143,10 +148,18 @@ data class VideoPreviewSettings(
 @Serializable
 data class LibraryPreferences(
     /**
-     * Clean Display Names: show cleaned titles for new games and after a bulk cleanup. Off by default;
-     * the interface warns that automatic name parsing can be wrong before it is turned on.
+     * Clean Display Names: show cleaned titles ("Metroid Fusion" for "Metroid Fusion (USA) [!]").
+     * On by default since 0.0.2; every cleanup can be undone and custom titles are never touched.
      */
-    val cleanDisplayNames: Boolean = false,
+    val cleanDisplayNames: Boolean = true,
+    /** Existing games were given cleaned names once, when clean names became the default. */
+    val cleanedExistingNames: Boolean = false,
+    /** Systems in the user's order, by platform id. Systems not listed follow in catalog order. */
+    val systemOrder: List<String> = emptyList(),
+    /** Fetch system logos and art from the system art pack when a system has none. */
+    val systemArtAuto: Boolean = true,
+    /** Artwork set used from the system art pack (a SystemArtStyle name). */
+    val systemArtStyle: String = "CLASSIC",
 )
 
 /**

@@ -124,7 +124,7 @@ fun ChannelHome(app: AppState) {
                 app.selectTab(io.github.matiyaaa.fuse.model.Destination.LIBRARY)
             WidgetKind.CARTRIDGE_DOWNLOADS -> app.selectTab(io.github.matiyaaa.fuse.model.Destination.CARTRIDGE)
             WidgetKind.CLOCK -> app.quickMenuOpen = true
-            else -> app.go(Route.Settings("achievements"))
+            else -> app.selectTab(io.github.matiyaaa.fuse.model.Destination.ACHIEVEMENTS)
         }
     }
 

@@ -62,6 +62,9 @@ class AppState(
     val toasts = ToastState()
 
     var focusZone by mutableStateOf(FocusZone.CONTENT)
+
+    /** Search or Settings in the top line has controller focus (only while [focusZone] is TABS). */
+    var hudButton by mutableStateOf<HudButton?>(null)
     var quickMenuOpen by mutableStateOf(false)
     var contextMenu by mutableStateOf<ContextMenuSpec?>(null)
     var confirm by mutableStateOf<ConfirmSpec?>(null)

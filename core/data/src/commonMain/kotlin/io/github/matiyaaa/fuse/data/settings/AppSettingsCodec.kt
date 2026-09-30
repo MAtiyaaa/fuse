@@ -7,7 +7,11 @@ import kotlinx.serialization.encoding.CompositeDecoder
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.jsonObject
 
 /**
@@ -24,8 +28,32 @@ internal object AppSettingsCodec {
         explicitNulls = true
     }
 
-    /** Step i upgrades a version i + 1 document to version i + 2. Empty while at version 1. */
-    private val steps: List<(JsonObject) -> JsonObject> = emptyList()
+    /** Step i upgrades a version i + 1 document to version i + 2. */
+    private val steps: List<(JsonObject) -> JsonObject> = listOf(::toVersion2)
+
+    /** The 0.0.1 tab order; a document still using it gets the new default order. */
+    private val version1Tabs = listOf("HOME", "LIBRARY", "SYSTEMS", "APPS", "CARTRIDGE")
+
+    /**
+     * 0.0.2: tabs untouched since 0.0.1 take the new order (Home, Systems, Library, Achievements,
+     * Apps); clean display names become the default, applied once to existing games; the old
+     * Nintendo toggle becomes Nintendo labels without a key swap.
+     */
+    private fun toVersion2(obj: JsonObject): JsonObject {
+        val out = LinkedHashMap(obj)
+        (obj["home"] as? JsonObject)?.let { home ->
+            val tabs = (home["destinations"] as? JsonArray)?.mapNotNull { (it as? JsonObject)?.get("destination")?.jsonPrimitive?.contentOrNull }
+            if (tabs == version1Tabs) out["home"] = JsonObject(home - "destinations")
+        }
+        val library = (obj["library"] as? JsonObject) ?: JsonObject(emptyMap())
+        out["library"] = JsonObject(library + ("cleanDisplayNames" to JsonPrimitive(true)) + ("cleanedExistingNames" to JsonPrimitive(false)))
+        (obj["input"] as? JsonObject)?.let { input ->
+            if ((input["nintendoLayout"] as? JsonPrimitive)?.booleanOrNull == true) {
+                out["input"] = JsonObject(input + ("nintendoLayout" to JsonPrimitive(false)) + ("glyphs" to JsonPrimitive("NINTENDO")))
+            }
+        }
+        return JsonObject(out)
+    }
 
     fun decode(text: String?): AppSettings {
         if (text.isNullOrBlank()) return AppSettings()

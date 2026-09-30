@@ -13,8 +13,10 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -39,6 +41,8 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import io.github.matiyaaa.fuse.model.Destination
@@ -63,6 +67,7 @@ fun Destination.label(): String = when (this) {
     Destination.HOME -> "Home"
     Destination.LIBRARY -> "Library"
     Destination.SYSTEMS -> "Systems"
+    Destination.ACHIEVEMENTS -> "Achievements"
     Destination.APPS -> "Apps"
     Destination.CARTRIDGE -> "Cartridge"
 }
@@ -71,14 +76,19 @@ fun Destination.icon(): ImageVector = when (this) {
     Destination.HOME -> FuseIcons.Home
     Destination.LIBRARY -> FuseIcons.Library
     Destination.SYSTEMS -> FuseIcons.Chip
+    Destination.ACHIEVEMENTS -> FuseIcons.Trophy
     Destination.APPS -> FuseIcons.Smartphone
     Destination.CARTRIDGE -> FuseIcons.CloudDownload
 }
 
+/** The buttons at the end of the tab line, reachable with the stick after the last tab. */
+enum class HudButton { SEARCH, SETTINGS }
+
 /**
- * The top line: Fuse's mark and the section tabs on the left, status on the right. The active tab
- * shows its name; the others are icons only, so the line stays calm. When controller focus moves up
- * into the tabs the active one gets an outline, and LB/RB switch sections from anywhere.
+ * The top line: Fuse's mark and the section tabs on the left, then Search and Settings, and status
+ * on the right. Every tab shows its name when there is room (icons alone left people guessing what
+ * they were); on narrow screens only the active one does. When controller focus moves up into the
+ * line the focused item gets an outline, and LB/RB switch sections from anywhere.
  */
 @Composable
 fun Hud(
@@ -93,21 +103,26 @@ fun Hud(
     onStatusClick: () -> Unit,
     modifier: Modifier = Modifier,
     gutter: Dp = Space.gutter,
+    focusedButton: HudButton? = null,
+    onButton: (HudButton) -> Unit = {},
 ) {
     val time = rememberClockText(clock24h)
+    BoxWithConstraints(modifier.fillMaxWidth().height(Size.hudHeight).padding(horizontal = gutter)) {
+    // Room for every label: about 120dp per tab plus the mark, buttons and status.
+    val labels = maxWidth > 120.dp * destinations.size + 380.dp
     Row(
-        modifier.fillMaxWidth().height(Size.hudHeight).padding(horizontal = gutter),
+        Modifier.fillMaxSize(),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         FuseMark(Modifier.size(22.dp))
-        Spacer(Modifier.width(Space.xl))
+        Spacer(Modifier.width(Space.l))
         if (tabsFocused) {
             ButtonGlyph(HintButton.PREV, size = 18.dp, color = Fuse.colors.textFaint)
             Spacer(Modifier.width(Space.s))
         }
         Row(horizontalArrangement = Arrangement.spacedBy(Space.xs), verticalAlignment = Alignment.CenterVertically) {
             for (d in destinations) {
-                Tab(d, selected = d == active, focused = tabsFocused && d == active, onClick = { onSelect(d) })
+                Tab(d, selected = d == active, focused = tabsFocused && focusedButton == null && d == active, showLabel = labels || d == active, onClick = { onSelect(d) })
             }
         }
         if (tabsFocused) {
@@ -115,6 +130,10 @@ fun Hud(
             ButtonGlyph(HintButton.NEXT, size = 18.dp, color = Fuse.colors.textFaint)
         }
         Spacer(Modifier.weight(1f))
+        HudIconButton(FuseIcons.Search, "Search", focused = tabsFocused && focusedButton == HudButton.SEARCH) { onButton(HudButton.SEARCH) }
+        Spacer(Modifier.width(Space.xs))
+        HudIconButton(FuseIcons.Settings, "Settings", focused = tabsFocused && focusedButton == HudButton.SETTINGS) { onButton(HudButton.SETTINGS) }
+        Spacer(Modifier.width(Space.m))
         Box(
             Modifier
                 .clip(PillShape)
@@ -124,10 +143,32 @@ fun Hud(
             StatusCluster(status, time, showWifi = showWifi, showBluetooth = showBluetooth)
         }
     }
+    }
+}
+
+/** A round icon button in the top line; the outline shows controller focus. */
+@Composable
+private fun HudIconButton(icon: ImageVector, label: String, focused: Boolean, onClick: () -> Unit) {
+    val c = Fuse.colors
+    val bg by animateColorAsState(if (focused) c.text.copy(alpha = 0.14f) else Color.Transparent, Fuse.motion.tween(Durations.FAST), label = "hudbtn")
+    Box(
+        Modifier
+            .size(40.dp)
+            .clip(PillShape)
+            .background(bg)
+            .clickable(remember { MutableInteractionSource() }, null, onClick = onClick)
+            .drawBehind {
+                if (focused) drawRoundRect(c.focus.copy(alpha = 0.8f), cornerRadius = CornerRadius(size.height / 2), style = Stroke(1.5.dp.toPx()))
+            }
+            .semantics { contentDescription = label },
+        contentAlignment = Alignment.Center,
+    ) {
+        FuseIcon(icon, size = Size.iconM, tint = if (focused) c.text else c.text.copy(alpha = 0.7f))
+    }
 }
 
 @Composable
-private fun Tab(destination: Destination, selected: Boolean, focused: Boolean, onClick: () -> Unit) {
+private fun Tab(destination: Destination, selected: Boolean, focused: Boolean, showLabel: Boolean, onClick: () -> Unit) {
     val c = Fuse.colors
     val motion = Fuse.motion
     val tint by animateColorAsState(if (selected) c.text else c.text.copy(alpha = 0.5f), motion.tween(Durations.FAST), label = "tab")
@@ -162,7 +203,7 @@ private fun Tab(destination: Destination, selected: Boolean, focused: Boolean, o
     ) {
         FuseIcon(destination.icon(), size = Size.iconM, tint = tint)
         AnimatedVisibility(
-            visible = selected,
+            visible = showLabel,
             enter = expandHorizontally(motion.tween(Durations.BASE)) + fadeIn(motion.fade(Durations.BASE)),
             exit = shrinkHorizontally(motion.tween(Durations.FAST)) + fadeOut(motion.fade(Durations.INSTANT)),
         ) {
