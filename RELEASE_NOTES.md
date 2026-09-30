@@ -38,6 +38,10 @@ Linux) and `SHA256SUMS.txt`.
 
 ## Changed
 
+- **Uninstall 0.0.1 first.** 0.0.2 is the first release signed with Fuse's own release key; 0.0.1
+  was signed with a temporary key. Android does not install an app over a copy signed with a
+  different key, so remove 0.0.1, then install 0.0.2. Fuse's settings and play history start over;
+  your games, folders and emulators are not touched. Later updates install over 0.0.2 as usual.
 - **Top bar.** Every tab shows its name when there is room, and Search and Settings have their own
   buttons at the end, reachable by touch or by moving right past the last tab. Tabs are Home,
   Systems, Library, Achievements and Apps; Cartridge shows while Cartridge is installed. A tab order
