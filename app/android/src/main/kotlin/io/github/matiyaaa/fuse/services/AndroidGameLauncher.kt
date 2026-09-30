@@ -10,6 +10,7 @@ import android.net.Uri
 import android.provider.DocumentsContract
 import androidx.core.content.FileProvider
 import io.github.matiyaaa.fuse.ActivityHolder
+import io.github.matiyaaa.fuse.launch.DualScreenPlatforms
 import io.github.matiyaaa.fuse.launch.LaunchTokens
 import io.github.matiyaaa.fuse.launch.ResolvedLaunch
 import io.github.matiyaaa.fuse.launch.android.AndroidIntentAdapter
@@ -327,7 +328,7 @@ class AndroidGameLauncher(
         /** Android's uid range per user (UserHandle.PER_USER_RANGE). */
         const val PER_USER_RANGE = 100_000
 
-        /** Systems with two screens. Mirrors the ids in core:library's CatalogPlatforms. */
-        val DUAL_SCREEN_PLATFORMS = setOf("nds", "nintendo-dsi", "3ds", "new-nintendo-3ds", "wiiu")
+        /** Systems with two screens, as platform ids. */
+        val DUAL_SCREEN_PLATFORMS: Set<String> = DualScreenPlatforms.ids.map { it.value }.toSet()
     }
 }

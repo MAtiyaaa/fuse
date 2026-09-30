@@ -34,7 +34,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
 /** A key on the on-screen keyboard. [span] is its width in letter-key units. */
 internal data class Key(val label: String, val span: Int = 1, val icon: ImageVector? = null, val kind: KeyKind = KeyKind.CHAR)
 
-internal enum class KeyKind { CHAR, SHIFT, SPACE, BACKSPACE, DONE }
+internal enum class KeyKind { CHAR, SHIFT, SPACE, PASTE, BACKSPACE, DONE }
 
 private val rows: List<List<Key>> = listOf(
     "1234567890".map { Key(it.toString()) },
@@ -43,7 +43,8 @@ private val rows: List<List<Key>> = listOf(
     "zxcvbnm-:.".map { Key(it.toString()) },
     listOf(
         Key("Shift", 2, FuseIcons.ChevronUp, KeyKind.SHIFT),
-        Key("Space", 4, null, KeyKind.SPACE),
+        Key("Paste", 2, FuseIcons.ClipboardPaste, KeyKind.PASTE),
+        Key("Space", 2, null, KeyKind.SPACE),
         Key("Delete", 2, FuseIcons.ArrowLeft, KeyKind.BACKSPACE),
         Key("Done", 2, FuseIcons.Check, KeyKind.DONE),
     ),
@@ -69,9 +70,9 @@ class KeyboardState {
 
     /**
      * Handles navigation and typing. Calls [onText] with the new text; [onDone] when Done/Start is
-     * chosen. X deletes and Y types a space from anywhere, like console keyboards.
+     * chosen. X deletes, Y types a space and R pastes from anywhere, like console keyboards.
      */
-    fun handle(event: NavEvent, text: String, onText: (String) -> Unit, onDone: () -> Unit): NavResult {
+    fun handle(event: NavEvent, text: String, onText: (String) -> Unit, onDone: () -> Unit, onPaste: (() -> Unit)? = null): NavResult {
         when (event.action) {
             NavAction.LEFT -> return if (column > 0) { column--; NavResult.MOVED } else NavResult.BLOCKED
             NavAction.RIGHT -> return if (column < rows[row].lastIndex) { column++; NavResult.MOVED } else NavResult.BLOCKED
@@ -84,9 +85,10 @@ class KeyboardState {
                 return NavResult.MOVED
             }
             NavAction.SELECT -> {
-                press(rows[row][column], text, onText, onDone)
+                press(rows[row][column], text, onText, onDone, onPaste)
                 return NavResult.ACTIVATED
             }
+            NavAction.NEXT_SECTION -> return if (onPaste != null) { onPaste(); NavResult.ACTIVATED } else NavResult.IGNORED
             NavAction.CONTEXT -> { onText(text.dropLast(1)); return NavResult.ACTIVATED }
             NavAction.SEARCH -> { onText("$text "); return NavResult.ACTIVATED }
             NavAction.QUICK_MENU -> { onDone(); return NavResult.ACTIVATED }
@@ -94,7 +96,7 @@ class KeyboardState {
         }
     }
 
-    internal fun press(key: Key, text: String, onText: (String) -> Unit, onDone: () -> Unit) {
+    internal fun press(key: Key, text: String, onText: (String) -> Unit, onDone: () -> Unit, onPaste: (() -> Unit)? = null) {
         when (key.kind) {
             KeyKind.CHAR -> {
                 onText(text + if (shift) key.label.uppercase() else key.label)
@@ -102,6 +104,7 @@ class KeyboardState {
             }
             KeyKind.SHIFT -> shift = !shift
             KeyKind.SPACE -> onText("$text ")
+            KeyKind.PASTE -> onPaste?.invoke()
             KeyKind.BACKSPACE -> onText(text.dropLast(1))
             KeyKind.DONE -> onDone()
         }
@@ -109,8 +112,9 @@ class KeyboardState {
 }
 
 /**
- * A controller-first keyboard: every key is reachable with the D-pad, X deletes, Y adds a space and
- * Start finishes. Touch works on every key too. Hardware keyboards type directly.
+ * A controller-first keyboard: every key is reachable with the D-pad, X deletes, Y adds a space, R
+ * pastes and Start finishes. Touch works on every key too. Hardware keyboards type directly.
+ * [onPaste] inserts the clipboard; without it the Paste key is dimmed.
  */
 @Composable
 fun OnScreenKeyboard(
@@ -120,6 +124,7 @@ fun OnScreenKeyboard(
     onDone: () -> Unit,
     modifier: Modifier = Modifier,
     keyHeight: androidx.compose.ui.unit.Dp = 44.dp,
+    onPaste: (() -> Unit)? = null,
 ) {
     Column(modifier, verticalArrangement = Arrangement.spacedBy(Space.s)) {
         rows.forEachIndexed { r, keys ->
@@ -130,11 +135,12 @@ fun OnScreenKeyboard(
                         key = key,
                         shift = state.shift,
                         selected = selected,
+                        enabled = key.kind != KeyKind.PASTE || onPaste != null,
                         modifier = Modifier.weight(key.span.toFloat()).height(keyHeight),
                         onClick = {
                             state.row = r
                             state.column = col
-                            state.press(key, text, onText, onDone)
+                            state.press(key, text, onText, onDone, onPaste)
                         },
                     )
                 }
@@ -144,7 +150,7 @@ fun OnScreenKeyboard(
 }
 
 @Composable
-private fun KeyCap(key: Key, shift: Boolean, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
+private fun KeyCap(key: Key, shift: Boolean, selected: Boolean, enabled: Boolean, modifier: Modifier, onClick: () -> Unit) {
     val c = Fuse.colors
     val accentKey = key.kind == KeyKind.DONE || (key.kind == KeyKind.SHIFT && shift)
     val bg by animateColorAsState(
@@ -156,7 +162,11 @@ private fun KeyCap(key: Key, shift: Boolean, selected: Boolean, modifier: Modifi
         Fuse.motion.tween(Durations.INSTANT),
         label = "key",
     )
-    val fg = if (selected) c.ink else c.text
+    val fg = when {
+        selected -> c.ink
+        !enabled -> c.textFaint
+        else -> c.text
+    }
     Box(
         modifier
             .clip(RoundedCornerShape(Fuse.geometry.control))

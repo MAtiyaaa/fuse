@@ -53,6 +53,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
 import io.github.matiyaaa.fuse.ui.designsystem.theme.toColor
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
+import io.github.matiyaaa.fuse.ui.shell.app.pasteInto
 import io.github.matiyaaa.fuse.ui.shell.app.FocusZone
 import io.github.matiyaaa.fuse.ui.shell.app.KeyboardTarget
 import io.github.matiyaaa.fuse.ui.shell.app.Route
@@ -149,7 +150,7 @@ fun SearchScreen(app: AppState) {
                 else -> NavResult.IGNORED
             }
         } else {
-            val r = keyboard.handle(e, query, { query = it }, { if (hits.isNotEmpty()) inResults = true })
+            val r = keyboard.handle(e, query, { query = it }, { if (hits.isNotEmpty()) inResults = true }, onPaste = { app.pasteInto({ query }, { query = it }) })
             if (r == NavResult.BLOCKED && e.action == NavAction.RIGHT && hits.isNotEmpty()) { inResults = true; NavResult.MOVED } else r
         }
     }
@@ -167,7 +168,7 @@ fun SearchScreen(app: AppState) {
                 FText(if (query.isEmpty()) "Games, systems, apps" else "$query|", Fuse.type.title, color = if (query.isEmpty()) c.textFaint else c.text, maxLines = 1)
             }
             Spacer(Modifier.height(Space.l))
-            OnScreenKeyboard(keyboard, query, { query = it; inResults = false }, { if (hits.isNotEmpty()) inResults = true })
+            OnScreenKeyboard(keyboard, query, { query = it; inResults = false }, { if (hits.isNotEmpty()) inResults = true }, onPaste = { app.pasteInto({ query }, { query = it; inResults = false }) })
         }
         Spacer(Modifier.width(Space.xxl))
         Column(Modifier.weight(1f).fillMaxHeight()) {

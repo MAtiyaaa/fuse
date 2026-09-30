@@ -111,6 +111,11 @@ fun InputRouter.handleKeyEvent(event: KeyEvent): Boolean {
  */
 private fun InputRouter.typeInto(event: KeyEvent): Boolean {
     val input = textInput ?: return false
+    // Ctrl+V (Cmd+V) pastes; other shortcuts are left alone.
+    if ((event.isCtrlPressed || event.isMetaPressed) && event.key == Key.V) {
+        if (event.type == KeyEventType.KeyDown) input.paste()
+        return true
+    }
     if (event.isCtrlPressed || event.isAltPressed || event.isMetaPressed) return false
     val down = event.type == KeyEventType.KeyDown
     when (event.key) {

@@ -112,6 +112,7 @@ fun FuseApp(store: FuseStore, platform: PlatformUi, router: InputRouter) {
                 override fun type(text: String) = target.set(target.get() + text)
                 override fun backspace() = target.set(target.get().dropLast(1))
                 override fun submit() = target.submit()
+                override fun paste() = app.pasteInto(target.get, target.set)
             }
         }
         onDispose { router.textInput = null }

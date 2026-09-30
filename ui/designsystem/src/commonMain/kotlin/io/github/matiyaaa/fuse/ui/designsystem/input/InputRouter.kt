@@ -319,4 +319,7 @@ interface TextInput {
     fun type(text: String)
     fun backspace()
     fun submit()
+
+    /** Inserts the clipboard's text (Ctrl+V). */
+    fun paste() {}
 }
