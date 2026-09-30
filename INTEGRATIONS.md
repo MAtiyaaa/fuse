@@ -1,0 +1,388 @@
+# Integrations
+
+Fuse works fully offline with the games and art already on your device. Every online service below is
+optional, is used only after you set it up (GitHub update checks are the one exception and can be
+turned off), and only reads data for display. This page lists, for each integration, what it is for,
+what you provide, what the code does, and exactly what leaves the device and when.
+
+All provider clients live in `core/integrations/src/commonMain/kotlin/io/github/matiyaaa/fuse/integrations/`.
+They share one HTTP client (`FuseHttp`) whose User-Agent is `Fuse/<version> (+https://github.com/MAtiyaaa/fuse)`,
+pace requests per host (`RateLimiter`), never throw network errors into the interface (`ApiResult`),
+and redact credentials from every error message (`redact()`, see
+[ARCHITECTURE.md](ARCHITECTURE.md#security-model)). No HTTP logging is installed.
+
+## Contents
+
+- [Summary: what leaves the device](#summary-what-leaves-the-device)
+- [RetroAchievements](#retroachievements)
+- [SteamGridDB](#steamgriddb)
+- [IGDB](#igdb)
+- [TheGamesDB](#thegamesdb)
+- [ScreenScraper](#screenscraper)
+- [Libretro thumbnails](#libretro-thumbnails)
+- [How scraping picks a match](#how-scraping-picks-a-match)
+- [RomM via Cartridge](#romm-via-cartridge)
+- [Cartridge bridge protocol](#cartridge-bridge-protocol)
+- [GitHub Releases](#github-releases)
+- [Steam and Windows launchers](#steam-and-windows-launchers)
+
+## Summary: what leaves the device
+
+| Service | You provide | Sent by Fuse | When |
+|---|---|---|---|
+| RetroAchievements | Username and web API key | Your username (or ULID), your key, RetroAchievements game and console ids | When the achievement data Fuse has cached is older than its time to live and a screen needs it |
+| SteamGridDB | API key | Your key, game titles you look up, SteamGridDB game ids, Steam app ids | When you fill or pick artwork |
+| IGDB | Twitch Client ID and Client Secret | Your Client ID and Secret (to Twitch, for a token), the token, game titles, IGDB platform ids | When you fill metadata or artwork |
+| TheGamesDB | API key | Your key, game titles, TheGamesDB platform and game ids | When you fill metadata or artwork |
+| ScreenScraper | Developer credentials (not shipped yet) and optionally your account | Developer and account credentials, and either a file's CRC32/MD5 with its size, file name (no folders) and system id, or a title | When you fill metadata or artwork |
+| Libretro thumbnails | Nothing | The system folder name and candidate game names in image URLs | When you fill artwork |
+| GitHub Releases | Nothing | A request for the latest release of Fuse or Cartridge, your IP address and the User-Agent with Fuse's version | Update checks (automatic check can be turned off) and "Install Cartridge"; downloads only after you confirm |
+| Cartridge | Nothing | Nothing leaves the device: Fuse reads Cartridge's local status and opens it with deep links | On resume and when Cartridge reports a change |
+
+The "When" column describes the store that drives these clients, which is being written for 0.0.1
+<!-- verify -->. The "Sent by Fuse" column is what the clients in `core:integrations` can send.
+
+Never sent anywhere: ROM files, your folder paths, your play time, your collections, device
+identifiers, analytics or crash reports. Fuse contains no telemetry.
+
+## RetroAchievements
+
+**What for.** Show your RetroAchievements profile, recent unlocks, per-game progress, awards and
+mastery on Home and on each game's page. Fuse only displays achievements; the emulator's own
+RetroAchievements login unlocks them.
+
+**You provide.** Your username and the web API key from retroachievements.org (Settings, Keys). They
+are checked with `API_GetUserProfile` before being saved, and stored in the platform's secure store
+under `ra.username` and `ra.apikey` (`SecretKeys`).
+
+**How it works** (`retroachievements/RetroAchievementsClient.kt`).
+`https://retroachievements.org/API/API_<Name>.php` with the key in the `y` parameter and the user in
+`u`. Endpoints used: `GetUserProfile`, `GetUserSummary`, `GetUserRecentAchievements`,
+`GetGameInfoAndUserProgress`, `GetUserCompletionProgress` (pages of up to 500), `GetUserAwards`,
+`GetUserRecentlyPlayedGames` (up to 50), `GetGameHashes`, `GetGameList`, `GetConsoleIDs`. Badge and
+icon paths are resolved against `https://media.retroachievements.org`. RetroAchievements does not
+publish its rate limits, so the client sends one request at a time, at least 400 ms apart, and
+treats a `200` answer that carries an `Error` field as a failure.
+
+**Caching.** The client itself never caches; the data layer keeps responses in the `kv_cache` table
+for these times (`RaCachePolicy`) and shows stale data offline:
+
+| Data | Time to live |
+|---|---|
+| Profile | 10 minutes |
+| Summary | 10 minutes |
+| Recent achievements | 2 minutes |
+| Recently played games | 5 minutes |
+| Game progress | 15 minutes |
+| Completion progress | 15 minutes |
+| Awards | 30 minutes |
+| Game list (per console) | 7 days |
+| Game hashes | 7 days |
+| Console ids | 30 days |
+
+**Matching games.** Fuse links a local game to a RetroAchievements game by hashing the ROM on the
+device the way rcheevos does (`RaHasher`: whole-file MD5, header-stripped NES, SNES, PC Engine,
+Atari 7800 and Lynx, byte-order normalised N64, file name for arcade) and comparing it with the hash
+lists it downloads (the store does the comparison <!-- verify -->). None of the endpoints Fuse calls
+accepts a hash, so hashes never leave the device. Disc images, Nintendo DS/DSi and
+3DS are not hashed yet; Fuse reports them as unsupported instead of guessing.
+
+**Leaves the device.** Your username or ULID and key in HTTPS query parameters, and RetroAchievements
+game and console ids.
+
+Docs: [RetroAchievements API](https://api-docs.retroachievements.org/).
+
+## SteamGridDB
+
+**What for.** Grids (wide capsules and portrait box art), heroes, logos and icons, for games,
+platforms and apps.
+
+**You provide.** A free API key from your
+[SteamGridDB preferences](https://www.steamgriddb.com/profile/preferences/api), stored as
+`sgdb.apikey`.
+
+**How it works** (`steamgriddb/SteamGridDbClient.kt`). `https://www.steamgriddb.com/api/v2` with
+`Authorization: Bearer <key>`: `/search/autocomplete/{term}`, `/games/id/{id}`,
+`/games/steam/{appId}`, and `/grids|heroes|logos|icons/game/{gameId}` with style, dimension, MIME and
+animation filters. NSFW, humour and epilepsy-warning assets are excluded by default. Requests are
+paced 100 ms apart, at most four at a time.
+
+**Leaves the device.** Your key (in a header), the titles you look up, SteamGridDB game ids and Steam
+app ids. Images are downloaded from SteamGridDB's CDN.
+
+Terms: [SteamGridDB terms](https://www.steamgriddb.com/terms).
+
+## IGDB
+
+**What for.** Descriptions, release year, genres, developers and publishers, plus covers (box art),
+artworks (heroes) and screenshots.
+
+**You provide.** Your own Twitch application's Client ID and Client Secret, created in the
+[Twitch developer console](https://dev.twitch.tv/console). A client secret must never ship inside a
+public app, so Fuse asks each user for theirs. Stored as `igdb.clientId` and `igdb.clientSecret`.
+
+**How it works** (`igdb/IgdbClient.kt`). Fuse gets an app access token from
+`https://id.twitch.tv/oauth2/token` (client-credentials grant), keeps it in memory until shortly before
+it expires, and retries once with a fresh token when IGDB answers 401. Searches go to
+`https://api.igdb.com/v4/games`, filtered to the game's IGDB platform when known and excluding
+versions. Requests are paced to IGDB's limit of 4 per second. Images come from
+`https://images.igdb.com`.
+
+**Leaves the device.** Your Client ID and Secret (to Twitch only), the token and Client ID (to IGDB),
+game titles and IGDB platform ids.
+
+Docs and terms: [IGDB API](https://api-docs.igdb.com/),
+[Twitch Developer Services Agreement](https://legal.twitch.com/legal/developer-agreement/).
+
+## TheGamesDB
+
+**What for.** Metadata, plus box art, fanart, banners, screenshots, title screens and clear logos.
+
+**You provide.** Your own API key (public keys have a small monthly allowance per IP), stored as
+`tgdb.apikey`.
+
+**How it works** (`thegamesdb/TheGamesDbClient.kt`). `https://api.thegamesdb.net` with the key in the
+`apikey` parameter: `/v1.1/Games/ByGameName` (with platform filter) and `/v1/Games/Images`. Every
+response reports the remaining allowance, which Fuse surfaces. Requests are paced 250 ms apart, at
+most two at a time.
+
+**Leaves the device.** Your key, game titles, TheGamesDB platform ids and game ids.
+
+Docs: [TheGamesDB API](https://api.thegamesdb.net/).
+
+## ScreenScraper
+
+**What for.** Identifying ROMs by checksum, and metadata and media from ScreenScraper's database.
+
+**You provide.** Nothing yet in 0.0.1. ScreenScraper requires developer credentials (`devid`,
+`devpassword`, `softname`), which it grants to free software on request. Fuse does not ship any; later
+official builds may inject them from CI secrets. Until then the provider is shown as "needs
+ScreenScraper developer credentials" and **makes no request at all**. An optional ScreenScraper
+account (`ss.user`, `ss.password`) raises your quota and thread count once developer credentials exist.
+
+**How it works** (`screenscraper/ScreenScraperClient.kt`). `https://api.screenscraper.fr/api2/`:
+`jeuInfos.php` identifies a file by CRC32 or MD5 plus size, file name (any folder part removed) and
+system id when Fuse has a hash for it; otherwise `jeuRecherche.php` searches by title. The request
+pacing adapts to the per-user thread and per-minute limits each answer reports, and ScreenScraper's
+documented status codes (closed API, quota used up, version blocked) become clear messages. Media URLs
+are stored without credentials and re-signed just before a download.
+
+**Leaves the device.** Developer and account credentials in HTTPS query parameters, and the file's
+checksum, size, file name and system id, or the title.
+
+Docs: [ScreenScraper API](https://www.screenscraper.fr/webapi2.php).
+
+## Libretro thumbnails
+
+**What for.** Box art, title screens, snaps and logos for systems that libretro covers.
+
+**You provide.** Nothing; no key is needed.
+
+**How it works** (`libretro/LibretroThumbnails.kt`). Fuse builds
+`https://thumbnails.libretro.com/{System}/{Named_Boxarts|Named_Snaps|Named_Titles|Named_Logos}/{Name}.png`
+for a few name candidates (from the title and the file name, with characters that are unsafe in file
+names replaced by `_`) and probes which exist. Requests are paced 100 ms apart, at most two at a time.
+The thumbnail repository has no licence file, so images are fetched at runtime and cached on the
+device only; nothing from it is bundled with Fuse.
+
+**Leaves the device.** The libretro system folder name and candidate game names, as part of the URLs.
+
+## How scraping picks a match
+
+`scrape/ScrapeCoordinator.kt` asks providers in your order (Settings, Media and Scraping; Local media
+and RomM come first by default). Only providers that have the credentials they need are asked.
+Metadata providers are tried first, then artwork-only ones. Fuse's own `TitleMatcher` scores each result and
+explains the score; a result is accepted without asking only when it clears the chosen strictness
+(Exact, Normal or Aggressive), otherwise you pick from the candidates. The coordinator never writes
+anything: the data layer decides what to store, and `FillPlanner` guarantees that **art you set
+yourself is never replaced** except by the explicit "reset custom art" action.
+
+## RomM via Cartridge
+
+Fuse has no RomM client and never talks to a RomM server. [Cartridge](https://github.com/MAtiyaaa/cartridge)
+(a RomM companion app by abdu2304, MIT licensed) signs in to RomM, downloads games into local folders
+and owns the RomM credentials. Fuse then:
+
+- scans the folders Cartridge downloads into like any other library (RomM Structure A and B are both
+  understood, see [ARCHITECTURE.md](ARCHITECTURE.md#scanning-pipeline));
+- reads Cartridge's status (below) to show downloads, rescan exactly the folders that changed, and
+  remember each downloaded file's RomM rom id (`ExternalLinks.rommRomId`) so "Open in Cartridge" can
+  jump to that game;
+- keeps a "RomM (via Cartridge)" slot in the scraper order. In 0.0.1 RomM artwork and metadata only
+  reach Fuse through what Cartridge saves next to the games, which the local media scanner reads
+  <!-- verify -->.
+
+## Cartridge bridge protocol
+
+The bridge is defined in `cartridge/CartridgeProtocol.kt` and is the same on Android and Linux. It is
+local only, read-only for Fuse, and never carries a server address, token or password.
+
+| Constant | Value |
+|---|---|
+| Cartridge package (Android) | `io.github.abdu2304.cartridge` |
+| Minimum Cartridge version for the bridge | `0.9.10` |
+| Protocol version | `1` |
+| Link scheme | `cartridge://` |
+| Release source for "Install Cartridge" | [MAtiyaaa/cartridge](https://github.com/MAtiyaaa/cartridge) releases, assets `Cartridge-android.apk` and `Cartridge-x86_64.AppImage` (upstream: [abdu2304/cartridge](https://github.com/abdu2304/cartridge)) |
+
+Cartridge versions from 0.9.10 on are expected to implement the provider, status file and links below
+<!-- verify -->. With an older Cartridge, Fuse only knows it is installed and its version
+(`installedWithoutBridge`).
+
+### Deep links
+
+Fuse opens Cartridge with `cartridge://<route>?...&from=fuse&v=1`. Path segments and query values are
+percent-encoded (a space is `%20`); when parsing, `+` is also read as a space.
+
+| Route | Link |
+|---|---|
+| Home | `cartridge://home?from=fuse&v=1` |
+| Library | `cartridge://library?from=fuse&v=1` |
+| Downloads | `cartridge://downloads?from=fuse&v=1` |
+| Consoles | `cartridge://consoles?from=fuse&v=1` |
+| Settings | `cartridge://settings?from=fuse&v=1` |
+| Sync | `cartridge://sync?from=fuse&v=1` |
+| One platform | `cartridge://platform/{slug}?from=fuse&v=1` |
+| One game | `cartridge://game/{romId}?from=fuse&v=1` |
+| Search | `cartridge://search?q={query}&platform={slug}&from=fuse&v=1` (`platform` is optional) |
+| Platform BIOS | `cartridge://bios/{slug}?from=fuse&v=1` |
+
+Platform slugs are RomM slugs (`psx`, `snes`, `switch`, ...). Example:
+`cartridge://search?q=Chrono%20Trigger&platform=snes&from=fuse&v=1`.
+
+### Android: status provider
+
+| Item | Value |
+|---|---|
+| Authority | `io.github.abdu2304.cartridge.status` |
+| Permission | `io.github.abdu2304.cartridge.permission.READ_STATUS` |
+| Status URI | `content://io.github.abdu2304.cartridge.status/status` (one row) |
+| Recent URI | `content://io.github.abdu2304.cartridge.status/recent` (finished downloads, newest first) |
+
+`/status` columns:
+
+| Column | Type | Meaning |
+|---|---|---|
+| `protocol` | int | Bridge protocol version, currently 1 |
+| `version` | text | Cartridge's version name |
+| `connected` | int 0/1 or null | Whether Cartridge can reach its RomM server; null when unknown |
+| `active_downloads` | int | Downloads in progress |
+| `queued_downloads` | int | Downloads waiting |
+| `progress` | real 0..1 or null | Progress across the active queue |
+| `current_title` | text or null | Game downloading now |
+| `current_platform` | text or null | Its platform slug |
+| `library_changed_at` | int | Epoch millis when Cartridge last changed anything on disk |
+| `updated_at` | int | Epoch millis of this status |
+
+`/recent` columns:
+
+| Column | Type | Meaning |
+|---|---|---|
+| `rom_id` | int | RomM rom id |
+| `title` | text | Game title |
+| `platform_slug` | text | RomM platform slug |
+| `path` | text | Local path the game was saved to |
+| `finished_at` | int | Epoch millis |
+
+Fuse maps the row with `statusFromRow` and `downloadFromRow`: rows without a rom id or title are
+skipped, counts are clamped at zero and progress to 0..1. The Android app declares the permission,
+reads the provider on resume and listens for changes (planned for 0.0.1) <!-- verify -->.
+
+### Linux: status file
+
+Cartridge writes `$XDG_STATE_HOME/cartridge/status.json`, or `$HOME/.local/state/cartridge/status.json`
+when `XDG_STATE_HOME` is unset or not an absolute path (`statusFilePath`). The JSON uses the same
+fields in camelCase:
+
+```json
+{
+  "protocol": 1,
+  "version": "0.9.10",
+  "connected": true,
+  "activeDownloads": 1,
+  "queuedDownloads": 0,
+  "progress": 0.5,
+  "currentTitle": "Chrono Trigger",
+  "currentPlatform": "snes",
+  "libraryChangedAt": 1790000000000,
+  "updatedAt": 1790000000000,
+  "recent": [
+    {
+      "romId": 42,
+      "title": "Chrono Trigger",
+      "platformSlug": "snes",
+      "path": "/home/me/roms/snes/Chrono Trigger.sfc",
+      "finishedAt": 1790000000000
+    }
+  ]
+}
+```
+
+A file without `protocol`, or one that is not valid JSON, is ignored. Numbers and booleans are
+accepted quoted or unquoted. The Linux app watches the file (planned for 0.0.1) <!-- verify -->.
+
+### What Fuse does with it
+
+On resume (and when the bridge reports a change), Fuse reads the status, shows download progress in
+the Cartridge section and the Cartridge Downloads widget, and, when "Pick up new downloads on return"
+is on (Settings, Cartridge; on by default), rescans the folders Cartridge saved to
+(`CartridgeSettings.autoRefreshOnReturn`) <!-- verify -->.
+
+## GitHub Releases
+
+**What for.** Checking for new Fuse versions, and installing Cartridge.
+
+**How it works** (`github/GitHubReleases.kt`). An unauthenticated request to
+`https://api.github.com/repos/{owner}/{repo}/releases/latest` (60 requests per hour per IP), for
+`MAtiyaaa/fuse` and `MAtiyaaa/cartridge`. Drafts and pre-releases are never offered. The asset for the
+device is chosen by name: on Android an `.apk` (one named `universal`, then `android`, then any); on
+Linux the file ending in `x86_64.AppImage`. GitHub's `sha256:<hex>` digest for the asset is kept with
+it. When GitHub's hourly limit is reached, Fuse says so instead of failing silently.
+
+**Approval and verification.** Nothing is downloaded until you confirm. The installer then downloads
+the asset into Fuse's cache, verifies its SHA-256 digest when GitHub published one, and hands it to
+the system installer on Android or places the new AppImage next to the running one and marks it
+executable on Linux (`ReleaseInstaller`, planned for 0.0.1) <!-- verify -->. Every release also
+carries a `SHA256SUMS.txt` you can check by hand (see [README.md](README.md#install)).
+
+**Automatic checks.** "Check automatically" (Settings, Updates) is on by default and checks once a
+day <!-- verify -->. Turn it off and Fuse only contacts GitHub when you press "Check for updates" or
+"Install Cartridge".
+
+**Leaves the device.** Your IP address, the User-Agent with Fuse's version, and which repository was
+asked.
+
+## Steam and Windows launchers
+
+Fuse does not run Windows games itself. It starts them through the launcher you use, with a per-game
+launch only where the launcher documents one, and otherwise opens the launcher and says so ("Open in
+X", `LaunchPlan.OpenAppOnly`). Sources and confidence for each entry are in
+`core/launch/.../launch/android/AndroidPcDefs.kt` and [RESEARCH.md](RESEARCH.md#pc-and-steam-launchers-on-android).
+
+### Android
+
+| Launcher | Per-game launch | What Fuse needs |
+|---|---|---|
+| GameNative | Yes: action `app.gamenative.LAUNCH_GAME`, int `app_id`, `game_source` | Id files from GameNative's "Export for frontend": `.steam`, `.epic`, `.gog`, `.amazon`, `.pcgame`, each containing only the numeric id |
+| GameHub Lite | Yes: action `gamehub.lite.LAUNCH_GAME`, `steamAppId`, `autoStartGame` | A `.steam` file with the Steam app id |
+| GameHub Lite (local id) | Yes: `localGameId`, `autoStartGame` | A `.steam` or `.pcgame` file containing GameHub's local game id (copy it inside GameHub) |
+| GameHub (original) | No | Fuse opens GameHub |
+| Winlator Cmod, Cmod Glibc, Cmod PRoot | Yes: `XServerDisplayActivity` with `shortcut_path` | A `.desktop` from Winlator's "Export for Frontend"; Fuse passes its real file path |
+| WinNative | Yes: `shortcut_path` | A `.desktop` exported by WinNative |
+| Bannerlator | Yes: `com.winlator.star.XServerDisplayActivity` with `shortcut_path` (vendor guide) | A `.desktop` export |
+| Winlator (mainline) | No: its game activity is not exported | Fuse opens Winlator |
+| Winlator Frost | No: launch intent unknown | Fuse opens it |
+
+Put these files in a `steam` or `win` platform folder, or add a folder of them as a Shortcuts source.
+Because several launchers are published under the same spoofed package names, Fuse always checks that
+the expected activity exists and is exported before using an entry.
+
+### Linux
+
+| Launcher | How |
+|---|---|
+| Steam | `steam -applaunch <appid>` from a `.steam` file (native or the `com.valvesoftware.Steam` Flatpak) |
+| Steam (link) | `xdg-open steam://rungameid/<appid>` |
+| `.desktop` shortcuts (Steam, Heroic, Lutris, emulator shortcuts) | `gio launch <file>` when GLib's `gio` is installed, otherwise the file's `Exec=` line with field codes removed |
+
+**Leaves the device.** Nothing; these are local app launches.
