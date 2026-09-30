@@ -294,7 +294,7 @@ fun AppState.systemMenu(card: PlatformCard): ContextMenuSpec {
     return ContextMenuSpec(
         title = p.name,
         subtitle = "${card.gameCount} games",
-        actions = listOf(
+        actions = listOfNotNull(
             MenuAction("open", "Open", FuseIcons.Grid, onSelect = { closeOverlays(); go(Route.PlatformGames(p.id)) }),
             MenuAction("settings", "System Settings", FuseIcons.Settings, trailing = Trailing.Chevron, onSelect = { closeOverlays(); go(Route.PlatformSettings(p.id)) }),
             MenuAction("media", "Change System Media", FuseIcons.Image, detail = "Icon, background and logo for ${p.shortName}", trailing = Trailing.Chevron, onSelect = {
@@ -316,7 +316,7 @@ fun AppState.systemMenu(card: PlatformCard): ContextMenuSpec {
             MenuAction("rescan", "Rescan", FuseIcons.Refresh, onSelect = {
                 closeOverlays(); store.sources.rescan(ScanScope.PLATFORM, p.id); toasts.show("Rescanning ${p.shortName}")
             }),
-            MenuAction("cartridge", "Browse in Cartridge", FuseIcons.CloudDownload, onSelect = {
+            if (!store.cartridge.status.value.installed) null else MenuAction("cartridge", "Browse in Cartridge", FuseIcons.CloudDownload, onSelect = {
                 closeOverlays(); store.cartridge.open(CartridgeRoute.Platform(p.id.value))
             }),
         ),

@@ -450,12 +450,20 @@ private fun MenuMusic(app: AppState, player: MenuMusicPlayer?) {
     LaunchedEffect(quiet) { player.setPlaying(!quiet) }
 }
 
-/** What is working in the background, for the top line: Fuse updates (more join as they are added). */
+/** What is working in the background, for the top line: Cartridge downloads and Fuse updates. */
 @Composable
 private fun hudActivities(app: AppState): List<HudActivity> {
     val update by app.store.updates.state.collectAsState()
     val available by app.store.updates.available.collectAsState()
+    val cartridge by app.store.cartridge.status.collectAsState()
     return buildList {
+        if (cartridge.installed && (cartridge.activeDownloads > 0 || cartridge.queue.any { it.state == io.github.matiyaaa.fuse.model.QueueState.DOWNLOADING })) {
+            val current = cartridge.queue.firstOrNull { it.state == io.github.matiyaaa.fuse.model.QueueState.DOWNLOADING }
+            add(HudActivity(
+                "cartridge", FuseIcons.CloudDownload, "Cartridge is downloading ${current?.title ?: cartridge.currentTitle ?: "a game"}",
+                progress = current?.progress ?: cartridge.progress,
+            ) { app.selectTab(io.github.matiyaaa.fuse.model.Destination.CARTRIDGE) })
+        }
         when (val u = update) {
             is UpdateState.Downloading -> add(HudActivity("update", FuseIcons.Download, "Downloading ${u.release.name}", progress = u.progress) { app.go(Route.Settings("updates")) })
             is UpdateState.Ready -> add(HudActivity("update", FuseIcons.Refresh, "${u.release.name} is ready: restart to update", attention = true) { app.go(Route.Settings("updates")) })

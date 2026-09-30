@@ -212,6 +212,8 @@ data class StatusAreaSettings(
 
 @Serializable
 data class CartridgeSettings(
+    /** Off: Fuse leaves Cartridge alone entirely (no tab, widget, menu entries or status reads). */
+    val enabled: Boolean = true,
     /** Rescan the folders Cartridge changed when returning from it. */
     val autoRefreshOnReturn: Boolean = true,
 )

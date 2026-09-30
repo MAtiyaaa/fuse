@@ -23,8 +23,28 @@ data class CartridgeStatus(
     /** Epoch millis Cartridge last changed anything on disk (download finished, library synced). */
     val libraryChangedAt: Long = 0,
     val recent: List<CartridgeDownload> = emptyList(),
+    /** Every download in Cartridge's queue with its own progress (bridge 2 and later), in order. */
+    val queue: List<CartridgeQueueItem> = emptyList(),
     val checkedAt: Long = 0,
 )
+
+/** One game in Cartridge's download queue. */
+@Serializable
+data class CartridgeQueueItem(
+    val romId: Long,
+    val title: String,
+    val platformSlug: String,
+    val state: QueueState,
+    val received: Long,
+    /** Bytes in total, when known. */
+    val total: Long?,
+) {
+    /** 0..1 when the size is known. */
+    val progress: Float? get() = total?.takeIf { it > 0 }?.let { (received.toFloat() / it).coerceIn(0f, 1f) }
+}
+
+@Serializable
+enum class QueueState { DOWNLOADING, QUEUED, PAUSED, FAILED }
 
 @Serializable
 data class CartridgeDownload(

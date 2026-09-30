@@ -114,7 +114,7 @@ fun QuickMenu(app: AppState) {
             app.toasts.show(io.github.matiyaaa.fuse.ui.shell.settings.performanceSummary(next, prefs.lowPower, platform.device, platform.host))
         })
         add(QuickTile("Low Power", FuseIcons.Leaf, active = prefs.lowPower) { app.store.updatePrefs { it.copy(lowPower = !it.lowPower) } })
-        add(QuickTile("Cartridge", FuseIcons.CloudDownload) { close(); app.selectTab(Destination.CARTRIDGE) })
+        if (prefs.cartridgeEnabled) add(QuickTile("Cartridge", FuseIcons.CloudDownload) { close(); app.selectTab(Destination.CARTRIDGE) })
         // Search has its own button in the top line; Home's style is one press here.
         add(QuickTile("Home", if (prefs.home.mode == HomeMode.CHANNELS) FuseIcons.Grid else FuseIcons.Rows, detail = if (prefs.home.mode == HomeMode.CHANNELS) "Channels" else "Flow") {
             app.switchHomeStyle()

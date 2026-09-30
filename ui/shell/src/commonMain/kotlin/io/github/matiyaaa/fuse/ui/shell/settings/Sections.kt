@@ -109,7 +109,7 @@ fun homeRows(app: AppState): List<MenuAction> {
         add(app.choiceRow("mode", "Home style", FuseIcons.Dashboard, p.home.mode, listOf(HomeMode.FLOW to "Flow", HomeMode.CHANNELS to "Channels"), optionDetail = {
             if (it == HomeMode.FLOW) "A continuous dashboard of shelves" else "A board of tiles you arrange yourself"
         }) { v -> set { it.copy(home = it.home.copy(mode = v)) } })
-        for (d in Destination.entries.filter { it != Destination.HOME }) {
+        for (d in Destination.entries.filter { it != Destination.HOME && (it != Destination.CARTRIDGE || p.cartridgeEnabled) }) {
             val visible = d in p.destinations
             add(toggleRow("dest.$d", "${d.label()} in the top bar", FuseIcons.PanelsTop, visible) { v ->
                 set { it.copy(destinations = if (v) (it.destinations + d).sortedBy { x -> Destination.entries.indexOf(x) } else it.destinations - d) }
@@ -446,6 +446,11 @@ fun cartridgeRows(app: AppState): List<MenuAction> {
     val s by app.store.cartridge.status.collectAsState()
     val p by app.store.prefs.collectAsState()
     return buildList {
+        add(toggleRow(
+            "enabled", "Cartridge support", FuseIcons.Plug, p.cartridgeEnabled,
+            if (p.cartridgeEnabled) "The Cartridge tab, downloads, menu entries and status" else "Off: Fuse leaves Cartridge alone",
+        ) { v -> app.store.updatePrefs { it.copy(cartridgeEnabled = v) } })
+        if (!p.cartridgeEnabled) return@buildList
         add(infoRow("status", "Cartridge", if (!s.installed) "Not installed" else s.version ?: "Installed", icon = FuseIcons.CloudDownload,
             detail = when {
                 !s.installed -> "Install it from the Cartridge tab"

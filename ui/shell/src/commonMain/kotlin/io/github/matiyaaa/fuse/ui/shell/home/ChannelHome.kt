@@ -85,7 +85,8 @@ fun ChannelHome(app: AppState) {
     val prefs by store.prefs.collectAsState()
     val feed by store.library.home.collectAsState()
     val cartridge by store.cartridge.status.collectAsState()
-    val widgets = prefs.home.widgets.filter { it.visible }.sortedBy { it.order }
+    // The Cartridge channel only while Cartridge support is on and it is installed.
+    val widgets = prefs.home.widgets.filter { it.visible && (it.kind != WidgetKind.CARTRIDGE_DOWNLOADS || cartridge.installed) }.sortedBy { it.order }
     val cells = remember(widgets) { packCells(widgets.map { channelSpan(it).columns }, BOARD_COLUMNS) }
     val sel = rememberRouteState(app.navigator, "home.channels") { SpatialSelection() }
     sel.clamp(widgets.size)

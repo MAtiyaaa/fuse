@@ -31,6 +31,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import io.github.matiyaaa.fuse.model.CartridgeRoute
 import io.github.matiyaaa.fuse.model.CartridgeStatus
+import io.github.matiyaaa.fuse.model.QueueState
 import io.github.matiyaaa.fuse.model.NavAction
 import io.github.matiyaaa.fuse.model.ReleaseInfo
 import io.github.matiyaaa.fuse.ui.designsystem.components.ButtonKind
@@ -193,16 +194,9 @@ fun CartridgeScreen(app: AppState) {
                 }
             }
         }
-        if (status.activeDownloads > 0 || status.queuedDownloads > 0) {
+        if (status.activeDownloads > 0 || status.queuedDownloads > 0 || status.queue.isNotEmpty()) {
             Spacer(Modifier.height(Space.xl))
-            Panel(Modifier.widthIn(max = 720.dp)) {
-                Column(Modifier.padding(Space.l), verticalArrangement = Arrangement.spacedBy(Space.s)) {
-                    SectionLabel("Downloading")
-                    FText(status.currentTitle ?: "Preparing", Fuse.type.titleSmall, maxLines = 1)
-                    ProgressBar(status.progress, Modifier.fillMaxWidth(), height = 6.dp)
-                    if (status.queuedDownloads > 0) FText("${status.queuedDownloads} more in the queue", Fuse.type.caption, color = c.textMuted)
-                }
-            }
+            DownloadsPanel(status, Modifier.widthIn(max = 720.dp))
         }
         if (recent.isNotEmpty()) {
             Spacer(Modifier.height(Space.xl))
@@ -218,6 +212,66 @@ fun CartridgeScreen(app: AppState) {
             }
         }
     }
+}
+
+/**
+ * What Cartridge is downloading: the current game with its progress, then each queued game with its
+ * own (bridge 2), or the queue count (older Cartridge).
+ */
+@Composable
+private fun DownloadsPanel(status: CartridgeStatus, modifier: Modifier = Modifier) {
+    val c = Fuse.colors
+    val current = status.queue.firstOrNull { it.state == QueueState.DOWNLOADING }
+    Panel(modifier) {
+        Column(Modifier.padding(Space.l), verticalArrangement = Arrangement.spacedBy(Space.s)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                SectionLabel("Downloading", Modifier.weight(1f))
+                val pct = (current?.progress ?: status.progress)?.let { "${(it * 100).toInt()}%" }
+                if (pct != null) FText(pct, Fuse.type.label, color = c.accent)
+            }
+            FText(current?.title ?: status.currentTitle ?: "Preparing", Fuse.type.titleSmall, maxLines = 1)
+            val platform = current?.platformSlug ?: status.currentPlatform
+            val sizes = current?.let { q -> q.total?.let { "${bytesText(q.received)} of ${bytesText(it)}" } }
+            listOfNotNull(platform?.uppercase(), sizes).takeIf { it.isNotEmpty() }?.let {
+                FText(it.joinToString("  ·  "), Fuse.type.caption, color = c.textMuted, maxLines = 1)
+            }
+            ProgressBar(current?.progress ?: status.progress, Modifier.fillMaxWidth(), height = 6.dp)
+            val waiting = status.queue.filter { it !== current }
+            if (waiting.isNotEmpty()) {
+                Spacer(Modifier.height(Space.xs))
+                for (q in waiting.take(5)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.m)) {
+                        FuseIcon(
+                            when (q.state) {
+                                QueueState.PAUSED -> FuseIcons.Timer
+                                QueueState.FAILED -> FuseIcons.Warning
+                                else -> FuseIcons.Clock
+                            },
+                            size = 16.dp, tint = if (q.state == QueueState.FAILED) c.warning else c.textMuted,
+                        )
+                        FText(q.title, Fuse.type.body, maxLines = 1, modifier = Modifier.weight(1f))
+                        FText(
+                            when (q.state) {
+                                QueueState.PAUSED -> "Paused"
+                                QueueState.FAILED -> "Failed"
+                                else -> q.progress?.takeIf { it > 0f }?.let { "${(it * 100).toInt()}%" } ?: "Waiting"
+                            },
+                            Fuse.type.caption, color = c.textMuted,
+                        )
+                    }
+                }
+                if (waiting.size > 5) FText("and ${waiting.size - 5} more", Fuse.type.caption, color = c.textMuted)
+            } else if (status.queuedDownloads > 0) {
+                FText("${status.queuedDownloads} more in the queue", Fuse.type.caption, color = c.textMuted)
+            }
+        }
+    }
+}
+
+private fun bytesText(bytes: Long): String = when {
+    bytes >= 1_000_000_000 -> "${(bytes / 100_000_000) / 10.0} GB"
+    bytes >= 1_000_000 -> "${bytes / 1_000_000} MB"
+    else -> "${bytes / 1_000} KB"
 }
 
 private fun statusLine(s: CartridgeStatus): String = when {

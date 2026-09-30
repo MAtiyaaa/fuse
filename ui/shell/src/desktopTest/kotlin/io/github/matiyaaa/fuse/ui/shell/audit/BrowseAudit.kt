@@ -1,6 +1,8 @@
 package io.github.matiyaaa.fuse.ui.shell.audit
 
 import io.github.matiyaaa.fuse.model.CartridgeDownload
+import io.github.matiyaaa.fuse.model.CartridgeQueueItem
+import io.github.matiyaaa.fuse.model.QueueState
 import io.github.matiyaaa.fuse.model.CartridgeStatus
 import io.github.matiyaaa.fuse.model.Destination
 import io.github.matiyaaa.fuse.model.LibraryLayout
@@ -621,6 +623,11 @@ internal fun AuditDriver.cartridgeReady(): CartridgeStatus {
         progress = 0.42f,
         currentTitle = "Kestrel Nine",
         currentPlatform = "genesis",
+        queue = listOf(
+            CartridgeQueueItem(201, "Kestrel Nine", "genesis", QueueState.DOWNLOADING, 1_300_000, 3_100_000),
+            CartridgeQueueItem(202, "Lantern Keep", "psx", QueueState.QUEUED, 0, 540_000_000),
+            CartridgeQueueItem(203, "Tidal Circuit", "n64", QueueState.PAUSED, 8_000_000, 16_000_000),
+        ),
         recent = listOf(
             CartridgeDownload(101, "Brightwater Farm", "switch", path("switch", "Brightwater Farm.nsp"), now - 25 * 60_000L),
             CartridgeDownload(102, "Starfold Academy", "ngc", path("ngc", "Starfold Academy.rvz"), now - 3 * 3_600_000L),

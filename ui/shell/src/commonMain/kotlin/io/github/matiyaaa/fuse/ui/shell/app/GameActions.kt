@@ -116,14 +116,17 @@ fun AppState.gameMenu(card: GameCard, fromDetail: Boolean = false, extra: List<M
             }
         }))
         add(MenuAction("folder", "Folder Behaviour", FuseIcons.FolderOpen, trailing = Trailing.Chevron, onSelect = { folderPolicyPicker(card) }))
-        if (card.rommRomId != null) {
-            add(MenuAction("cartridge", "Open in Cartridge", FuseIcons.CloudDownload, onSelect = {
-                closeOverlays(); store.cartridge.open(CartridgeRoute.Game(card.rommRomId))
-            }))
-        } else {
-            add(MenuAction("find", "Find in Cartridge", FuseIcons.CloudDownload, onSelect = {
-                closeOverlays(); store.cartridge.open(CartridgeRoute.Search(card.title, null))
-            }))
+        // Only while Cartridge support is on and Cartridge is installed.
+        if (store.cartridge.status.value.installed) {
+            if (card.rommRomId != null) {
+                add(MenuAction("cartridge", "Open in Cartridge", FuseIcons.CloudDownload, onSelect = {
+                    closeOverlays(); store.cartridge.open(CartridgeRoute.Game(card.rommRomId))
+                }))
+            } else {
+                add(MenuAction("find", "Find in Cartridge", FuseIcons.CloudDownload, onSelect = {
+                    closeOverlays(); store.cartridge.open(CartridgeRoute.Search(card.title, null))
+                }))
+            }
         }
         add(MenuAction("hide", "Hide", FuseIcons.EyeOff, onSelect = { run { lib.setHidden(card.id, true); toasts.show("Hidden. Show hidden games from Library options.") } }))
         add(MenuAction("remove", "Remove from Fuse", FuseIcons.Trash, destructive = true, detail = "Your files are not touched", onSelect = {

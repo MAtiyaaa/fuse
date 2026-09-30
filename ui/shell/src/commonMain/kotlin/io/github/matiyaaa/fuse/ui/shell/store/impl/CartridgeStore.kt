@@ -66,9 +66,24 @@ internal class DefaultCartridgeOps(
         if (current.rommRomId != romId) ctx.data.games.updateLinks(id) { it.copy(rommRomId = romId) }
     }
 
+    private val enabled: Boolean get() = ctx.settings.value.cartridge.enabled
+
+    /** Follows the Cartridge switch: watching and reading only while it is on. */
     fun start() {
-        watcher = runCatching { ctx.services.cartridge.watch { refresh() } }.getOrNull()
-        refresh()
+        ctx.scope.launch {
+            ctx.settings.map { it.cartridge.enabled }.distinctUntilChanged().collect { on ->
+                watcher?.let { runCatching { it.close() } }
+                watcher = null
+                readJob?.cancel()
+                if (on) {
+                    watcher = runCatching { ctx.services.cartridge.watch { refresh() } }.getOrNull()
+                    refresh()
+                } else {
+                    // Everything Cartridge-related hides when it reads as not installed.
+                    state.value = CartridgeStatus()
+                }
+            }
+        }
     }
 
     /** Opening can wait on the system (xdg-open on Linux), so it never runs on the caller's thread. */
@@ -86,12 +101,13 @@ internal class DefaultCartridgeOps(
     }
 
     override fun refresh() {
-        if (readJob?.isActive == true) return
+        if (!enabled || readJob?.isActive == true) return
         readJob = ctx.scope.launch { readNow() }
     }
 
     /** On return to Fuse: re-read status, and rescan when Cartridge changed the library meanwhile. */
     suspend fun refreshOnResume() {
+        if (!enabled) return
         readJob?.cancel()
         readNow()
     }
@@ -104,6 +120,7 @@ internal class DefaultCartridgeOps(
         } catch (e: Exception) {
             return
         }
+        if (!enabled) return
         state.value = next
         val changedAt = next.libraryChangedAt
         val previous = seenLibraryChange

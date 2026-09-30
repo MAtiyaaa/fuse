@@ -60,6 +60,8 @@ data class UiPrefs(
     val scraperRegion: String = "any",
     val matching: MatchStrictness = MatchStrictness.NORMAL,
     val autoRefreshFromCartridge: Boolean = true,
+    /** Cartridge support as a whole; off hides every Cartridge feature. */
+    val cartridgeEnabled: Boolean = true,
     val checkForUpdates: Boolean = true,
     val heroDim: Float = 0.3f,
 )
