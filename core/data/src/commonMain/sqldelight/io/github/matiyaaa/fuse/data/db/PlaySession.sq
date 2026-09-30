@@ -1,0 +1,37 @@
+-- Observed play sessions. An open session has ended_at NULL; its duration is never invented.
+CREATE TABLE play_session (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    game_id INTEGER NOT NULL REFERENCES game(id) ON DELETE CASCADE,
+    emulator_id TEXT,
+    started_at INTEGER NOT NULL,
+    ended_at INTEGER,
+    -- PlaySessionSource name
+    source TEXT NOT NULL
+);
+
+CREATE INDEX play_session_game ON play_session(game_id, started_at);
+CREATE INDEX play_session_ended ON play_session(ended_at);
+
+insert:
+INSERT INTO play_session(game_id, emulator_id, started_at, ended_at, source) VALUES (?, ?, ?, ?, ?);
+
+selectById:
+SELECT * FROM play_session WHERE id = ?;
+
+selectOpen:
+SELECT * FROM play_session WHERE ended_at IS NULL ORDER BY started_at DESC, id DESC LIMIT 1;
+
+deleteOpen:
+DELETE FROM play_session WHERE ended_at IS NULL;
+
+deleteById:
+DELETE FROM play_session WHERE id = ?;
+
+setEnded:
+UPDATE play_session SET ended_at = :endedAt WHERE id = :id AND ended_at IS NULL;
+
+endedAfter:
+SELECT started_at, ended_at FROM play_session WHERE ended_at IS NOT NULL AND ended_at > :since;
+
+byGame:
+SELECT * FROM play_session WHERE game_id = ? ORDER BY started_at DESC, id DESC;

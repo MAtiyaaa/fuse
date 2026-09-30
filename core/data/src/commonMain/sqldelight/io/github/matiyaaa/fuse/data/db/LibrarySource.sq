@@ -1,0 +1,34 @@
+-- Folders the user pointed Fuse at. Fuse only reads from them.
+CREATE TABLE library_source (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    path TEXT NOT NULL UNIQUE,
+    label TEXT NOT NULL,
+    -- LibrarySourceKind name
+    kind TEXT NOT NULL,
+    enabled INTEGER NOT NULL DEFAULT 1,
+    last_scan_at INTEGER
+);
+
+selectAll:
+SELECT * FROM library_source ORDER BY label COLLATE NOCASE, id;
+
+selectById:
+SELECT * FROM library_source WHERE id = ?;
+
+selectByPath:
+SELECT * FROM library_source WHERE path = ?;
+
+insert:
+INSERT INTO library_source(path, label, kind, enabled) VALUES (?, ?, ?, ?);
+
+update:
+UPDATE library_source SET path = :path, label = :label, kind = :kind, enabled = :enabled WHERE id = :id;
+
+setEnabled:
+UPDATE library_source SET enabled = :enabled WHERE id = :id;
+
+setLastScan:
+UPDATE library_source SET last_scan_at = :lastScanAt WHERE id = :id;
+
+delete:
+DELETE FROM library_source WHERE id = ?;

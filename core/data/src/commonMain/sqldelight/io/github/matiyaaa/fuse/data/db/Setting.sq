@@ -1,0 +1,35 @@
+-- Settings as JSON values. scope is a SettingScope name; scope_id is '' for GLOBAL, the platform
+-- id or the game id otherwise. The global app settings live at (GLOBAL, '', 'app').
+CREATE TABLE setting (
+    scope TEXT NOT NULL,
+    scope_id TEXT NOT NULL DEFAULT '',
+    key TEXT NOT NULL,
+    value_json TEXT NOT NULL,
+    updated_at INTEGER NOT NULL,
+    PRIMARY KEY (scope, scope_id, key)
+);
+
+CREATE INDEX setting_key ON setting(key);
+
+get:
+SELECT value_json FROM setting WHERE scope = ? AND scope_id = ? AND key = ?;
+
+put:
+INSERT OR REPLACE INTO setting(scope, scope_id, key, value_json, updated_at) VALUES (?, ?, ?, ?, ?);
+
+delete:
+DELETE FROM setting WHERE scope = ? AND scope_id = ? AND key = ?;
+
+deleteScope:
+DELETE FROM setting WHERE scope = ? AND scope_id = ?;
+
+chain:
+SELECT scope, scope_id, value_json FROM setting
+WHERE key = :key AND (
+    (scope = 'GLOBAL' AND scope_id = '')
+    OR (scope = 'PLATFORM' AND scope_id = :platformId)
+    OR (scope = 'GAME' AND scope_id = :gameId)
+);
+
+keysInScope:
+SELECT key FROM setting WHERE scope = ? AND scope_id = ? ORDER BY key;

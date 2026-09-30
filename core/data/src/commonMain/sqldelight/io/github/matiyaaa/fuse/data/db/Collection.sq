@@ -1,0 +1,63 @@
+-- Manual collections. Smart collections (favourites, playing, per platform/genre...) are computed.
+-- Named game_collection because a generated `Collection` class would shadow kotlin.collections.Collection.
+CREATE TABLE game_collection (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    -- CollectionKind name (MANUAL for rows created by the user)
+    kind TEXT NOT NULL DEFAULT 'MANUAL',
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_at INTEGER NOT NULL
+);
+
+CREATE TABLE collection_game (
+    collection_id INTEGER NOT NULL REFERENCES game_collection(id) ON DELETE CASCADE,
+    game_id INTEGER NOT NULL REFERENCES game(id) ON DELETE CASCADE,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (collection_id, game_id)
+);
+
+CREATE INDEX collection_game_game ON collection_game(game_id);
+
+selectAllWithCount:
+SELECT c.id, c.name, c.kind, c.sort_order, c.created_at,
+    (SELECT COUNT(*) FROM collection_game cg JOIN game g ON g.id = cg.game_id
+     WHERE cg.collection_id = c.id AND g.missing = 0 AND g.removed_at IS NULL AND g.hidden = 0) AS game_count
+FROM game_collection c
+ORDER BY c.sort_order, c.id;
+
+insert:
+INSERT INTO game_collection(name, kind, sort_order, created_at) VALUES (?, ?, ?, ?);
+
+rename:
+UPDATE game_collection SET name = :name WHERE id = :id;
+
+delete:
+DELETE FROM game_collection WHERE id = ?;
+
+setOrder:
+UPDATE game_collection SET sort_order = :sortOrder WHERE id = :id;
+
+maxOrder:
+SELECT MAX(sort_order) AS max_order FROM game_collection;
+
+addGame:
+INSERT OR IGNORE INTO collection_game(collection_id, game_id, sort_order) VALUES (?, ?, ?);
+
+removeGame:
+DELETE FROM collection_game WHERE collection_id = ? AND game_id = ?;
+
+maxGameOrder:
+SELECT MAX(sort_order) AS max_order FROM collection_game WHERE collection_id = ?;
+
+setGameOrder:
+UPDATE collection_game SET sort_order = :sortOrder WHERE collection_id = :collectionId AND game_id = :gameId;
+
+collectionsOfGame:
+SELECT collection_id FROM collection_game WHERE game_id = ?;
+
+gamesIn:
+SELECT game_summary.* FROM game_summary
+JOIN collection_game cg ON cg.game_id = game_summary.id
+WHERE cg.collection_id = ? AND game_summary.missing = 0 AND game_summary.removed_at IS NULL
+    AND game_summary.hidden = 0
+ORDER BY cg.sort_order, game_summary.sort_title;

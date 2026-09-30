@@ -1,0 +1,312 @@
+-- One game as the user sees it. File-derived columns are rewritten by the indexer; every other
+-- column is user- or scraper-owned and is never touched by a rescan.
+CREATE TABLE game (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    platform_id TEXT NOT NULL,
+    source_id INTEGER NOT NULL,
+    -- Platform folder the scanner reported this game under (drives missing detection).
+    folder_path TEXT NOT NULL,
+    path TEXT NOT NULL UNIQUE,
+    -- LocationKind name
+    kind TEXT NOT NULL,
+    launch_path TEXT NOT NULL,
+    -- FolderInterpretation name
+    interpretation TEXT NOT NULL,
+    size_bytes INTEGER NOT NULL DEFAULT 0,
+    modified_at INTEGER NOT NULL DEFAULT 0,
+    -- Fingerprint of every file-derived field, so unchanged games are skipped on rescan.
+    scan_hash TEXT NOT NULL DEFAULT '',
+    title_original TEXT NOT NULL,
+    title_cleaned TEXT,
+    title_custom TEXT,
+    title_metadata TEXT,
+    use_cleaned INTEGER NOT NULL DEFAULT 0,
+    -- Normalised lower-case display title (plus original) for LIKE search.
+    search_title TEXT NOT NULL,
+    sort_title TEXT NOT NULL,
+    tags_json TEXT,
+    metadata_json TEXT,
+    -- Denormalised from metadata_json / children for fast list screens.
+    release_year INTEGER,
+    dlc_count INTEGER NOT NULL DEFAULT 0,
+    update_count INTEGER NOT NULL DEFAULT 0,
+    disc_count INTEGER NOT NULL DEFAULT 0,
+    favorite INTEGER NOT NULL DEFAULT 0,
+    hidden INTEGER NOT NULL DEFAULT 0,
+    pinned INTEGER NOT NULL DEFAULT 0,
+    missing INTEGER NOT NULL DEFAULT 0,
+    missing_since INTEGER,
+    -- Set by "Remove from Fuse": the row stays so a rescan cannot bring the game back.
+    removed_at INTEGER,
+    added_at INTEGER NOT NULL,
+    last_played_at INTEGER,
+    tracked_seconds INTEGER NOT NULL DEFAULT 0,
+    imported_seconds INTEGER NOT NULL DEFAULT 0,
+    imported_source TEXT,
+    session_count INTEGER NOT NULL DEFAULT 0,
+    ra_game_id INTEGER,
+    sgdb_game_id INTEGER,
+    igdb_id INTEGER,
+    romm_rom_id INTEGER,
+    steam_app_id INTEGER,
+    emulator_override TEXT,
+    folder_policy_override TEXT,
+    updated_at INTEGER NOT NULL
+);
+
+CREATE INDEX game_platform ON game(platform_id, sort_title);
+CREATE INDEX game_folder ON game(folder_path);
+CREATE INDEX game_last_played ON game(last_played_at);
+CREATE INDEX game_added ON game(added_at);
+CREATE INDEX game_search ON game(search_title COLLATE NOCASE);
+CREATE INDEX game_sort ON game(sort_title);
+CREATE INDEX game_missing ON game(missing);
+CREATE INDEX game_ra ON game(ra_game_id);
+
+-- Light projection for list screens.
+CREATE VIEW game_summary AS
+SELECT id, platform_id, title_original, title_cleaned, title_custom, title_metadata, use_cleaned,
+    search_title, sort_title, release_year, dlc_count, update_count, disc_count, favorite, hidden,
+    pinned, missing, removed_at, added_at, last_played_at, tracked_seconds, imported_seconds,
+    session_count
+FROM game;
+
+-- Full rows ---------------------------------------------------------------------------------------
+
+selectById:
+SELECT * FROM game WHERE id = ?;
+
+selectByIds:
+SELECT * FROM game WHERE id IN ?;
+
+selectIdByPath:
+SELECT id FROM game WHERE path = ?;
+
+selectIdsByRaGameIds:
+SELECT id, ra_game_id FROM game WHERE ra_game_id IN ?;
+
+selectTitles:
+SELECT title_original, title_cleaned, title_custom, title_metadata, use_cleaned FROM game WHERE id = ?;
+
+selectAllTitles:
+SELECT id, platform_id, title_original, title_cleaned, title_custom, title_metadata, use_cleaned FROM game;
+
+selectMetadata:
+SELECT metadata_json, title_metadata, title_custom, title_cleaned, title_original, use_cleaned FROM game WHERE id = ?;
+
+-- Indexer -----------------------------------------------------------------------------------------
+
+selectIndexStateByFolder:
+SELECT id, path, platform_id, source_id, folder_path, scan_hash, missing, removed_at,
+    title_custom, title_metadata, use_cleaned
+FROM game WHERE folder_path = ?;
+
+selectIndexStateByPath:
+SELECT id, path, platform_id, source_id, folder_path, scan_hash, missing, removed_at,
+    title_custom, title_metadata, use_cleaned
+FROM game WHERE path = ?;
+
+insertScanned:
+INSERT INTO game(platform_id, source_id, folder_path, path, kind, launch_path, interpretation,
+    size_bytes, modified_at, scan_hash, title_original, title_cleaned, use_cleaned, search_title,
+    sort_title, tags_json, dlc_count, update_count, disc_count, added_at, updated_at)
+VALUES (:platformId, :sourceId, :folderPath, :path, :kind, :launchPath, :interpretation,
+    :sizeBytes, :modifiedAt, :scanHash, :titleOriginal, :titleCleaned, :useCleaned, :searchTitle,
+    :sortTitle, :tagsJson, :dlcCount, :updateCount, :discCount, :now, :now);
+
+updateScanned:
+UPDATE game SET platform_id = :platformId, source_id = :sourceId, folder_path = :folderPath,
+    kind = :kind, launch_path = :launchPath, interpretation = :interpretation,
+    size_bytes = :sizeBytes, modified_at = :modifiedAt, scan_hash = :scanHash,
+    title_original = :titleOriginal, title_cleaned = :titleCleaned, search_title = :searchTitle,
+    sort_title = :sortTitle, tags_json = :tagsJson, dlc_count = :dlcCount,
+    update_count = :updateCount, disc_count = :discCount, updated_at = :now
+WHERE id = :id;
+
+markMissing:
+UPDATE game SET missing = 1, missing_since = :now, updated_at = :now WHERE id = :id AND missing = 0;
+
+markPresent:
+UPDATE game SET missing = 0, missing_since = NULL, updated_at = :now WHERE id = :id;
+
+markSourceMissing:
+UPDATE game SET missing = 1, missing_since = :now, updated_at = :now
+WHERE source_id = :sourceId AND missing = 0;
+
+-- User mutations ----------------------------------------------------------------------------------
+
+setFavorite:
+UPDATE game SET favorite = :favorite, updated_at = :now WHERE id = :id;
+
+setHidden:
+UPDATE game SET hidden = :hidden, updated_at = :now WHERE id = :id;
+
+setPinned:
+UPDATE game SET pinned = :pinned, updated_at = :now WHERE id = :id;
+
+setTitleColumns:
+UPDATE game SET title_custom = :titleCustom, title_metadata = :titleMetadata,
+    title_cleaned = :titleCleaned, use_cleaned = :useCleaned, search_title = :searchTitle,
+    sort_title = :sortTitle, updated_at = :now
+WHERE id = :id;
+
+setEmulatorOverride:
+UPDATE game SET emulator_override = :emulatorOverride, updated_at = :now WHERE id = :id;
+
+setFolderPolicyOverride:
+UPDATE game SET folder_policy_override = :folderPolicyOverride, updated_at = :now WHERE id = :id;
+
+setLinks:
+UPDATE game SET ra_game_id = :raGameId, sgdb_game_id = :sgdbGameId, igdb_id = :igdbId,
+    romm_rom_id = :rommRomId, steam_app_id = :steamAppId, updated_at = :now
+WHERE id = :id;
+
+setMetadata:
+UPDATE game SET metadata_json = :metadataJson, release_year = :releaseYear,
+    title_metadata = :titleMetadata, search_title = :searchTitle, sort_title = :sortTitle,
+    updated_at = :now
+WHERE id = :id;
+
+setRemoved:
+UPDATE game SET removed_at = :removedAt, hidden = :hidden, updated_at = :now WHERE id = :id;
+
+deleteMissing:
+DELETE FROM game WHERE id = :id AND missing = 1;
+
+-- Play time ---------------------------------------------------------------------------------------
+
+markPlayStarted:
+UPDATE game SET last_played_at = :now, updated_at = :now WHERE id = :id;
+
+addTrackedSession:
+UPDATE game SET tracked_seconds = tracked_seconds + :seconds, session_count = session_count + 1,
+    last_played_at = CASE WHEN last_played_at IS NULL OR last_played_at < :endedAt THEN :endedAt ELSE last_played_at END,
+    updated_at = :endedAt
+WHERE id = :id;
+
+setImported:
+UPDATE game SET imported_seconds = :seconds, imported_source = :source,
+    last_played_at = CASE
+        WHEN :lastPlayedAt IS NULL THEN last_played_at
+        WHEN last_played_at IS NULL OR last_played_at < :lastPlayedAt THEN :lastPlayedAt
+        ELSE last_played_at END,
+    updated_at = :now
+WHERE id = :id;
+
+playtimeTotals:
+SELECT COALESCE(SUM(tracked_seconds), 0) AS tracked, COALESCE(SUM(imported_seconds), 0) AS imported
+FROM game;
+
+-- Lists (visible = present, not removed, not hidden) ----------------------------------------------
+-- :sort 0 = title, 1 = recently played, 2 = recently added, 3 = most played, 4 = release year.
+
+summariesByPlatform:
+SELECT * FROM game_summary
+WHERE platform_id = :platformId AND missing = 0 AND removed_at IS NULL
+    AND (hidden = 0 OR :includeHidden = 1)
+ORDER BY
+    CASE WHEN :sort = 1 THEN last_played_at END DESC,
+    CASE WHEN :sort = 2 THEN added_at END DESC,
+    CASE WHEN :sort = 3 THEN tracked_seconds + imported_seconds END DESC,
+    CASE WHEN :sort = 4 THEN COALESCE(release_year, 99999) END ASC,
+    sort_title, id;
+
+summariesAll:
+SELECT * FROM game_summary
+WHERE missing = 0 AND removed_at IS NULL AND (hidden = 0 OR :includeHidden = 1)
+ORDER BY
+    CASE WHEN :sort = 1 THEN last_played_at END DESC,
+    CASE WHEN :sort = 2 THEN added_at END DESC,
+    CASE WHEN :sort = 3 THEN tracked_seconds + imported_seconds END DESC,
+    CASE WHEN :sort = 4 THEN COALESCE(release_year, 99999) END ASC,
+    sort_title, id;
+
+summariesByIds:
+SELECT * FROM game_summary
+WHERE id IN ? AND missing = 0 AND removed_at IS NULL AND hidden = 0
+ORDER BY sort_title, id;
+
+summaryById:
+SELECT * FROM game_summary WHERE id = ?;
+
+recentlyPlayed:
+SELECT * FROM game_summary
+WHERE last_played_at > 0 AND missing = 0 AND removed_at IS NULL AND hidden = 0
+ORDER BY last_played_at DESC, id
+LIMIT :limit;
+
+playedSince:
+SELECT * FROM game_summary
+WHERE last_played_at >= :since AND missing = 0 AND removed_at IS NULL AND hidden = 0
+ORDER BY last_played_at DESC, id
+LIMIT :limit;
+
+recentlyAdded:
+SELECT * FROM game_summary
+WHERE missing = 0 AND removed_at IS NULL AND hidden = 0
+ORDER BY added_at DESC, id DESC
+LIMIT :limit;
+
+favorites:
+SELECT * FROM game_summary
+WHERE favorite = 1 AND missing = 0 AND removed_at IS NULL AND hidden = 0
+ORDER BY sort_title, id;
+
+pinned:
+SELECT * FROM game_summary
+WHERE pinned = 1 AND missing = 0 AND removed_at IS NULL AND hidden = 0
+ORDER BY sort_title, id;
+
+mostPlayed:
+SELECT * FROM game_summary
+WHERE tracked_seconds + imported_seconds > 0 AND missing = 0 AND removed_at IS NULL AND hidden = 0
+ORDER BY tracked_seconds + imported_seconds DESC, id
+LIMIT :limit;
+
+unplayed:
+SELECT * FROM game_summary
+WHERE last_played_at IS NULL AND tracked_seconds = 0 AND imported_seconds = 0
+    AND missing = 0 AND removed_at IS NULL AND hidden = 0
+ORDER BY sort_title, id
+LIMIT :limit;
+
+byGenre:
+SELECT * FROM game_summary
+WHERE id IN (SELECT game_id FROM game_genre WHERE genre = :genre)
+    AND missing = 0 AND removed_at IS NULL AND hidden = 0
+ORDER BY sort_title, id;
+
+missingGames:
+SELECT * FROM game_summary WHERE missing = 1 ORDER BY sort_title, id;
+
+hiddenGames:
+SELECT * FROM game_summary WHERE hidden = 1 AND removed_at IS NULL AND missing = 0 ORDER BY sort_title, id;
+
+removedGames:
+SELECT * FROM game_summary WHERE removed_at > 0 ORDER BY sort_title, id;
+
+-- :contains = '%q%', :prefix = 'q%', :wordPrefix = '% q%'. Prefix matches rank first.
+search:
+SELECT * FROM game_summary
+WHERE search_title LIKE :contains AND missing = 0 AND removed_at IS NULL AND hidden = 0
+ORDER BY
+    CASE WHEN search_title LIKE :prefix THEN 0 WHEN search_title LIKE :wordPrefix THEN 1 ELSE 2 END,
+    sort_title, id
+LIMIT :limit;
+
+platformCounts:
+SELECT platform_id, COUNT(*) AS game_count FROM game
+WHERE missing = 0 AND removed_at IS NULL AND hidden = 0
+GROUP BY platform_id;
+
+visibleCounts:
+SELECT
+    COUNT(*) AS total,
+    COALESCE(SUM(favorite), 0) AS favorites,
+    COALESCE(SUM(CASE WHEN last_played_at >= :playingSince THEN 1 ELSE 0 END), 0) AS playing,
+    COALESCE(SUM(CASE WHEN last_played_at IS NULL AND tracked_seconds = 0 AND imported_seconds = 0 THEN 1 ELSE 0 END), 0) AS unplayed
+FROM game
+WHERE missing = 0 AND removed_at IS NULL AND hidden = 0;
+
+countVisibleIn:
+SELECT COUNT(*) FROM game WHERE id IN ? AND missing = 0 AND removed_at IS NULL AND hidden = 0;

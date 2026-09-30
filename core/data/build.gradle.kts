@@ -8,7 +8,6 @@ kotlin {
     sourceSets {
         commonMain.dependencies {
             api(projects.core.model)
-            implementation(projects.core.library)
             api(libs.sqldelight.runtime)
             implementation(libs.sqldelight.coroutines)
         }
