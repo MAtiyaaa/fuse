@@ -163,7 +163,7 @@ data class PickedFile(val path: String, val name: String)
  * the platform also keeps it quiet while Fuse is in the background, and fades in and out.
  */
 interface MenuMusicPlayer {
-    /** The file to loop, or null for silence. */
+    /** The file to loop, or null for silence. Changing songs while music plays crossfades. */
     fun setSong(path: String?)
 
     /** 0..1 */

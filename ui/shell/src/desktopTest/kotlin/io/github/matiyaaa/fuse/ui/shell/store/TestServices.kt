@@ -105,6 +105,16 @@ internal class FakeServices(override val data: FuseData, private val cache: File
         return file.absolutePath
     }
 
+    override suspend fun cacheFile(relativePath: String, content: suspend () -> ByteArray): String? {
+        require(!relativePath.contains("..")) { "Cache paths never leave the cache" }
+        val file = File(cache, relativePath)
+        if (!file.isFile) {
+            file.parentFile.mkdirs()
+            file.writeBytes(content())
+        }
+        return file.absolutePath
+    }
+
     override fun utcOffsetMillis() = 0L
 }
 

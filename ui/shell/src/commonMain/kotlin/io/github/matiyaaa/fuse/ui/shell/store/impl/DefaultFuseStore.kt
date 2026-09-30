@@ -7,6 +7,8 @@ import io.github.matiyaaa.fuse.model.ScopeRef
 import io.github.matiyaaa.fuse.model.ScopedSettings
 import io.github.matiyaaa.fuse.model.ScanScope
 import io.github.matiyaaa.fuse.ui.shell.store.FuseServices
+import io.github.matiyaaa.fuse.ui.designsystem.res.Res
+import io.github.matiyaaa.fuse.ui.shell.music.BundledMusic
 import io.github.matiyaaa.fuse.ui.shell.store.FuseStore
 import io.github.matiyaaa.fuse.ui.shell.store.UiPrefs
 import kotlinx.coroutines.CoroutineScope
@@ -56,6 +58,11 @@ internal class DefaultFuseStore private constructor(
     }
 
     override val media get() = mediaOps
+
+    override suspend fun bundledTrack(id: String): String? {
+        if (BundledMusic.byId(id) == null) return null
+        return ctx.services.cacheFile(BundledMusic.cachePath(id)) { Res.readBytes(BundledMusic.resource(id)) }
+    }
 
     override fun updatePrefs(transform: (UiPrefs) -> UiPrefs) {
         val before = prefsState.value

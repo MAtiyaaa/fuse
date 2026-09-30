@@ -464,6 +464,10 @@ Third-party components keep their own licences; see [THIRD_PARTY_NOTICES.md](THI
   (Fuse installs it from the [MAtiyaaa/cartridge](https://github.com/MAtiyaaa/cartridge) releases).
 - [rcheevos](https://github.com/RetroAchievements/rcheevos) and
   [RetroAchievements](https://retroachievements.org/).
+- **Music by boipurple.** Fuse's menu music is the album *jam channel* by boipurple: puddleworld
+  plays under the menus and alright apothecary during setup, and every song on the album can be
+  picked in Settings, Sound. The songs remain the artist's own and are not covered by Fuse's
+  licence.
 - [Lucide](https://lucide.dev/) icons (ISC), and the [Sora](https://github.com/sora-xor/sora-font) and
   [Manrope](https://github.com/googlefonts/manrope) typefaces (SIL Open Font License).
 - Kotlin, Compose Multiplatform, SQLDelight, Ktor, Coil and kotlinx libraries.
@@ -471,7 +475,7 @@ Third-party components keep their own licences; see [THIRD_PARTY_NOTICES.md](THI
 
 <sub>iiSU was studied as a reference for quality only; no code or assets were taken from it, nor from
 Sony, Microsoft or Nintendo. Console and game names are trademarks of their owners and are used only
-to identify systems. Fuse ships no console artwork, sounds, BIOS files or games.</sub>
+to identify systems. Fuse ships no console artwork, console sounds, BIOS files or games.</sub>
 
 <br>
 

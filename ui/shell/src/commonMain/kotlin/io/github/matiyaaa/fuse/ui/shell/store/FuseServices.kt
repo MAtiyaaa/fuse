@@ -59,6 +59,13 @@ interface FuseServices {
      */
     fun writeCacheFile(relativePath: String, content: String): String?
 
+    /**
+     * The file at [relativePath] below [cacheDir], written from [content] when it isn't there yet
+     * (for example a bundled song unpacked once). Writes are atomic, so a file that exists is
+     * complete. Null when it could not be written or this platform has no files.
+     */
+    suspend fun cacheFile(relativePath: String, content: suspend () -> ByteArray): String? = null
+
     /** Offset of local time from UTC right now, for "today" and "this week" playtime buckets. */
     fun utcOffsetMillis(): Long
 }

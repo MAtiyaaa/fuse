@@ -19,10 +19,13 @@ import io.github.matiyaaa.fuse.ui.shell.store.FuseServices
 import io.github.matiyaaa.fuse.ui.shell.store.GameLauncher
 import io.github.matiyaaa.fuse.ui.shell.store.ReleaseInstaller
 import io.ktor.client.HttpClient
-import kotlinx.coroutines.CoroutineScope
 import java.io.File
 import java.io.IOException
 import java.util.TimeZone
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /** The Android implementation of everything the shared store needs from the system. */
 class AndroidFuseServices(
@@ -56,16 +59,39 @@ class AndroidFuseServices(
     override val apps: AppsProvider = AndroidAppsProvider(appContext, scope, activities)
     override val locations: DeviceLocations = AndroidDeviceLocations(volumes)
 
-    override fun writeCacheFile(relativePath: String, content: String): String? {
+    override fun writeCacheFile(relativePath: String, content: String): String? =
+        writeCacheBytes(relativePath, content.toByteArray(Charsets.UTF_8))
+
+    override suspend fun cacheFile(relativePath: String, content: suspend () -> ByteArray): String? = withContext(Dispatchers.IO) {
+        cacheTarget(relativePath)?.takeIf { it.isFile && it.length() > 0 }?.let { return@withContext it.absolutePath }
+        val bytes = try {
+            content()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            return@withContext null
+        }
+        writeCacheBytes(relativePath, bytes)
+    }
+
+    /** The file for [relativePath] inside the cache, or null when the path would leave it. */
+    private fun cacheTarget(relativePath: String): File? {
         if (!StoragePaths.isSafeRelative(relativePath)) return null
         return try {
             val root = File(cacheDir).canonicalFile
-            val file = File(root, relativePath).canonicalFile
-            if (!file.path.startsWith(root.path + File.separator)) return null
+            File(root, relativePath).canonicalFile.takeIf { it.path.startsWith(root.path + File.separator) }
+        } catch (e: IOException) {
+            null
+        }
+    }
+
+    private fun writeCacheBytes(relativePath: String, content: ByteArray): String? {
+        val file = cacheTarget(relativePath) ?: return null
+        return try {
             val parent = file.parentFile ?: return null
             if (!parent.isDirectory && !parent.mkdirs()) return null
             val temp = File(parent, ".${file.name}.tmp")
-            temp.writeText(content, Charsets.UTF_8)
+            temp.writeBytes(content)
             if (!temp.renameTo(file)) {
                 temp.delete()
                 return null

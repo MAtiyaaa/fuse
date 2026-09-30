@@ -54,6 +54,9 @@ interface FuseStore {
     val credentials: CredentialOps
     val updates: UpdateOps
     val storage: StorageOps
+
+    /** A song that ships with Fuse ([io.github.matiyaaa.fuse.ui.shell.music.BundledMusic]) as a file the player can open. */
+    suspend fun bundledTrack(id: String): String? = null
 }
 
 /**

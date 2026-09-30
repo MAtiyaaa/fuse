@@ -6,6 +6,7 @@ import io.github.matiyaaa.fuse.model.Destination
 import io.github.matiyaaa.fuse.model.LibraryLayout
 import io.github.matiyaaa.fuse.model.SoundProfile
 import io.github.matiyaaa.fuse.ui.designsystem.theme.ThemePresets
+import io.github.matiyaaa.fuse.ui.shell.music.BundledMusic
 import io.github.matiyaaa.fuse.ui.shell.store.MusicPrefs
 import io.github.matiyaaa.fuse.ui.shell.store.UiPrefs
 
@@ -42,7 +43,10 @@ internal fun AppSettings.toUiPrefs(scoped: GlobalScoped): UiPrefs {
         performanceOverlay = performance.overlay,
         sound = if (!sound.enabled) SoundProfile.OFF else sound.profile ?: theme.sound,
         soundVolume = sound.volume,
-        music = MusicPrefs(music.enabled, music.volume, music.songPath, music.songName),
+        music = MusicPrefs(
+            music.enabled, music.volume, music.songPath, music.songName,
+            track = music.track ?: if (music.songPath != null) BundledMusic.OWN_SONG else BundledMusic.MENU_DEFAULT,
+        ),
         clock24h = statusArea.use24HourClock ?: false,
         showWifi = statusArea.showWifi,
         showBluetooth = statusArea.showBluetooth,
@@ -121,6 +125,7 @@ internal fun AppSettings.withUiPrefs(prefs: UiPrefs): AppSettings {
             volume = prefs.music.volume.coerceIn(0f, 1f),
             songPath = prefs.music.songPath,
             songName = prefs.music.songName,
+            track = prefs.music.track,
         ),
         statusArea = statusArea.copy(
             use24HourClock = prefs.clock24h,

@@ -20,6 +20,9 @@ import io.github.matiyaaa.fuse.ui.shell.store.ReleaseInstaller
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.IOException
 import java.nio.file.Files
@@ -63,6 +66,20 @@ class DesktopFuseServices private constructor(
 
     override fun writeCacheFile(relativePath: String, content: String): String? = writeBelow(cacheDir, relativePath, content)
 
+    override suspend fun cacheFile(relativePath: String, content: suspend () -> ByteArray): String? = withContext(Dispatchers.IO) {
+        val rel = relativePath.trim().trimStart('/')
+        val existing = File(cacheDir, rel).absoluteFile
+        if (FsPath.isWithin(existing.path, File(cacheDir).absolutePath) && existing.isFile && existing.length() > 0) return@withContext existing.path
+        val bytes = try {
+            content()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            return@withContext null
+        }
+        writeBelow(cacheDir, relativePath) { bytes }
+    }
+
     override fun utcOffsetMillis(): Long = TimeZone.getDefault().getOffset(System.currentTimeMillis()).toLong()
 
     override fun close() {
@@ -82,7 +99,10 @@ class DesktopFuseServices private constructor(
          * Absolute paths are taken as relative; `.`/`..` segments and NUL are refused, so nothing is
          * ever written outside [rootDir].
          */
-        internal fun writeBelow(rootDir: String, relativePath: String, content: String): String? {
+        internal fun writeBelow(rootDir: String, relativePath: String, content: String): String? =
+            writeBelow(rootDir, relativePath) { content.toByteArray(Charsets.UTF_8) }
+
+        internal fun writeBelow(rootDir: String, relativePath: String, content: () -> ByteArray): String? {
             val rel = relativePath.trim().trimStart('/')
             if (rel.isEmpty() || rel.split('/').any { it == ".." || it == "." } || '\u0000' in rel) return null
             val root = File(rootDir).absoluteFile
@@ -91,7 +111,7 @@ class DesktopFuseServices private constructor(
             return try {
                 target.parentFile.mkdirs()
                 val tmp = File(target.parentFile, ".${target.name}.tmp")
-                tmp.writeText(content, Charsets.UTF_8)
+                tmp.writeBytes(content())
                 try {
                     Files.move(tmp.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
                 } catch (e: IOException) {

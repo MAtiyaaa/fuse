@@ -66,11 +66,14 @@ from the same project).
 |---|---|---|---|---|
 | Sora typeface (Medium, SemiBold, Bold) | `ui/designsystem/src/commonMain/composeResources/font/sora_*.ttf` | SIL Open Font License 1.1 | Copyright 2019 The Sora Project Authors ([sora-font](https://github.com/sora-xor/sora-font)) | [licenses/OFL-Sora.txt](ui/designsystem/src/commonMain/composeResources/files/licenses/OFL-Sora.txt) |
 | Manrope typeface (Regular, Medium, SemiBold, Bold) | `ui/designsystem/src/commonMain/composeResources/font/manrope_*.ttf` | SIL Open Font License 1.1 | Copyright 2018 The Manrope Project Authors ([manrope](https://github.com/googlefonts/manrope)) | [licenses/OFL-Manrope.txt](ui/designsystem/src/commonMain/composeResources/files/licenses/OFL-Manrope.txt) |
+| Menu music: the album "jam channel" by boipurple (10 songs: soiree, dewwy, puddleworld, alright apothecary, chachuu, beamrider, mirth, comeaux, wub time, sighonara), re-encoded to 128 kbps MP3 | `ui/designsystem/src/commonMain/composeResources/files/music/*.mp3` | Not under Fuse's licence; all rights remain with the artist. Included at the request of Fuse's maintainer, who supplied the files | boipurple | Credited in Settings, Sound and in Settings, About, Open-source licences, Music |
 | Lucide icons 1.49.0 (167 icons, converted to path data) | `ui/designsystem/src/commonMain/kotlin/io/github/matiyaaa/fuse/ui/designsystem/icons/FuseIcons.kt` | ISC; the icons Lucide derived from Feather are also under MIT | Copyright (c) 2026 Lucide Icons and Contributors; Copyright (c) 2013-present Cole Bemis (Feather) | [licenses/LICENSE-lucide.txt](ui/designsystem/src/commonMain/composeResources/files/licenses/LICENSE-lucide.txt) |
 
-Everything else visible in Fuse (the Fuse mark, controller and status glyphs, theme backgrounds,
-generated placeholder art and interface sounds) is original work drawn or synthesised in code and is
-part of Fuse under GPL-3.0-or-later.
+Everything else visible or audible in Fuse (the Fuse mark, controller and status glyphs, theme
+backgrounds, generated placeholder art and interface sounds) is original work drawn or synthesised in
+code and is part of Fuse under GPL-3.0-or-later. The menu music is the one exception: it is
+boipurple's work, shipped alongside Fuse as a separate work rather than part of it, the way the fonts
+are.
 
 ## Data and conventions from other projects
 

@@ -67,6 +67,7 @@ import io.github.matiyaaa.fuse.ui.shell.library.LibraryScope
 import io.github.matiyaaa.fuse.ui.shell.library.LibraryScreen
 import io.github.matiyaaa.fuse.ui.shell.media.MediaScreen
 import io.github.matiyaaa.fuse.ui.shell.onboarding.OnboardingScreen
+import io.github.matiyaaa.fuse.ui.shell.music.BundledMusic
 import io.github.matiyaaa.fuse.ui.shell.platform.MenuMusicPlayer
 import io.github.matiyaaa.fuse.ui.shell.platform.PlatformUi
 import io.github.matiyaaa.fuse.ui.shell.quick.QuickMenu
@@ -451,14 +452,32 @@ private fun rememberTileBorders(store: FuseStore): TileBorders {
     return flow.collectAsState(TileBorders()).value
 }
 
-/** The menu music follows its settings and steps aside while a game starts or runs. */
+/**
+ * The menu music follows its settings and steps aside while a game starts or runs. First-time setup
+ * plays its own song and crossfades into the menu song when it finishes.
+ */
 @Composable
 private fun MenuMusic(app: AppState, player: MenuMusicPlayer?) {
     player ?: return
     val prefs by app.store.prefs.collectAsState()
     val home by app.store.library.home.collectAsState()
     val music = prefs.music
-    LaunchedEffect(music.enabled, music.songPath) { player.setSong(music.songPath.takeIf { music.enabled }) }
+    val setup = app.navigator.current == Route.Onboarding
+    val track = when {
+        !music.enabled -> null
+        setup -> BundledMusic.ONBOARDING
+        else -> music.track
+    }
+    // The previous song keeps playing until the next one is ready, so the player can crossfade.
+    var song by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(track, music.songPath) {
+        song = when (track) {
+            null -> null
+            BundledMusic.OWN_SONG -> music.songPath
+            else -> app.store.bundledTrack(track)
+        }
+    }
+    LaunchedEffect(song) { player.setSong(song) }
     LaunchedEffect(music.volume) { player.setVolume(music.volume) }
     val quiet = app.launching != null || home.playtime.currentGame != null
     LaunchedEffect(quiet) { player.setPlaying(!quiet) }

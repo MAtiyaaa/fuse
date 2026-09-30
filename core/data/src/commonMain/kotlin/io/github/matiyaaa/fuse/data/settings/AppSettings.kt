@@ -193,18 +193,23 @@ data class SoundSettings(
 )
 
 /**
- * Music under Fuse's menus. Fuse ships no song: the user picks a file, which is copied into Fuse's
- * storage so it keeps playing after the original moves.
+ * Music under Fuse's menus: one of the songs Fuse ships, or a file the user picked, which is copied
+ * into Fuse's storage so it keeps playing after the original moves.
  */
 @Serializable
 data class MusicSettings(
     val enabled: Boolean = true,
     /** 0..1, low by default so the music sits under the interface. */
     val volume: Float = 0.2f,
-    /** Fuse's copy of the song; null when none was chosen. */
+    /** Fuse's copy of the user's own song; null when none was chosen. */
     val songPath: String? = null,
     /** What Settings calls the song (the picked file's name). */
     val songName: String? = null,
+    /**
+     * A bundled song's id, or "file" for the user's own song. Null for settings from before songs
+     * were bundled: the user's own song if there is one, else the default bundled song.
+     */
+    val track: String? = null,
 )
 
 @Serializable

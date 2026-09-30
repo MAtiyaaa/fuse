@@ -42,6 +42,7 @@ import io.github.matiyaaa.fuse.ui.shell.platform.WindowControls
 import io.github.matiyaaa.fuse.ui.shell.store.FillChoice
 import io.github.matiyaaa.fuse.ui.shell.store.FillProgress
 import io.github.matiyaaa.fuse.ui.shell.store.MusicPrefs
+import io.github.matiyaaa.fuse.ui.shell.music.BundledMusic
 import io.github.matiyaaa.fuse.ui.shell.store.UpdateState
 import io.github.matiyaaa.fuse.ui.shell.app.applyUpdate
 
@@ -568,39 +569,58 @@ fun soundRows(app: AppState): List<MenuAction> {
         if (app.platform.music == null) {
             add(infoRow("music", "Menu music", "Not available", icon = FuseIcons.Music, detail = "This device can't play music in Fuse"))
         } else {
-            add(toggleRow("music", "Menu music", FuseIcons.Music, music.enabled, if (music.songPath == null) "Choose a song below. Fuse comes without one" else "Plays in Fuse's menus and stops for games") { v -> setMusic { it.copy(enabled = v) } })
+            add(toggleRow("music", "Menu music", FuseIcons.Music, music.enabled, "Plays in Fuse's menus and stops for games") { v -> setMusic { it.copy(enabled = v) } })
             add(app.percentRow("musicvolume", "Music volume", FuseIcons.Volume, music.volume, "Low sits nicely under the interface") { v -> setMusic { it.copy(volume = v) } })
-            add(
-                MenuAction(
-                    "song", "Song", FuseIcons.Disc,
-                    detail = "An audio file on this device, such as MP3. Fuse keeps its own copy",
-                    trailing = Trailing.Value(music.songName ?: "None"),
-                    onSelect = {
-                        app.choice = ChoiceSpec(
-                            title = "Menu music",
-                            message = music.songName?.let { "Now playing: $it" } ?: "Pick a song from this device. It loops quietly in Fuse's menus.",
-                            options = listOfNotNull(
-                                MenuAction("pick", "Choose a file", FuseIcons.FolderOpen, detail = "MP3 works everywhere", onSelect = {
-                                    app.choice = null
-                                    app.scope.launch {
-                                        val picked = app.platform.storage.pickAudio("Choose menu music") ?: return@launch
-                                        setMusic { it.copy(enabled = true, songPath = picked.path, songName = picked.name) }
-                                        app.toasts.show("Menu music: ${picked.name}")
-                                    }
-                                }),
-                                if (music.songPath != null) MenuAction("none", "No song", FuseIcons.VolumeOff, onSelect = {
-                                    app.choice = null
-                                    setMusic { it.copy(songPath = null, songName = null) }
-                                }) else null,
-                            ),
-                        )
-                    },
-                ),
-            )
+            add(songRow(app, music, ::setMusic))
+            add(infoRow("credit", "Music by ${BundledMusic.ARTIST}", detail = "Fuse's songs are from the album ${BundledMusic.ALBUM}. First-time setup plays ${BundledMusic.byId(BundledMusic.ONBOARDING)?.title}", icon = FuseIcons.Heart))
         }
         add(app.choiceRow("sound", "Interface sounds", FuseIcons.Bell, p.sound, listOf(SoundProfile.OFF to "Off", SoundProfile.SOFT to "Soft", SoundProfile.CLICK to "Crisp", SoundProfile.CHIME to "Chime")) { v -> app.store.updatePrefs { it.copy(sound = v) } })
         add(app.percentRow("volume", "Sound effects volume", FuseIcons.Volume, p.soundVolume, "Moving, confirming and going back") { v -> app.store.updatePrefs { it.copy(soundVolume = v) } })
     }
+}
+
+/** The menu song: one of the album's songs, or the user's own. Picking one plays it straight away. */
+private fun songRow(app: AppState, music: MusicPrefs, setMusic: ((MusicPrefs) -> MusicPrefs) -> Unit): MenuAction {
+    val own = music.track == BundledMusic.OWN_SONG
+    val current = if (own) music.songName ?: "Your song" else BundledMusic.byId(music.track)?.title ?: "None"
+    fun pickFile() {
+        app.choice = null
+        app.scope.launch {
+            val picked = app.platform.storage.pickAudio("Choose menu music") ?: return@launch
+            setMusic { it.copy(enabled = true, songPath = picked.path, songName = picked.name, track = BundledMusic.OWN_SONG) }
+            app.toasts.show("Menu music: ${picked.name}")
+        }
+    }
+    return MenuAction(
+        "song", "Song", FuseIcons.Disc,
+        detail = if (own) "Your own song. Fuse keeps its own copy" else "${BundledMusic.ARTIST}, ${BundledMusic.ALBUM}",
+        trailing = Trailing.Value(current),
+        onSelect = {
+            app.choice = ChoiceSpec(
+                title = "Menu music",
+                message = "${BundledMusic.CREDIT}, or a song of your own. The song you pick plays straight away.",
+                options = BundledMusic.tracks.map { t ->
+                    MenuAction(
+                        "t.${t.id}", t.title, FuseIcons.Music,
+                        detail = if (t.id == BundledMusic.MENU_DEFAULT) "Fuse's default" else null,
+                        trailing = Trailing.Check(!own && music.track == t.id),
+                        onSelect = {
+                            app.choice = null
+                            setMusic { it.copy(enabled = true, track = t.id) }
+                        },
+                    )
+                } + listOfNotNull(
+                    music.songPath?.let { path ->
+                        MenuAction("own", music.songName ?: "Your song", FuseIcons.FolderOpen, detail = "Your own song", trailing = Trailing.Check(own), onSelect = {
+                            app.choice = null
+                            setMusic { it.copy(enabled = true, track = BundledMusic.OWN_SONG, songPath = path) }
+                        })
+                    },
+                    MenuAction("pick", if (music.songPath == null) "Choose your own song" else "Choose another song", FuseIcons.Upload, detail = "An audio file on this device. MP3 works everywhere", onSelect = ::pickFile),
+                ),
+            )
+        },
+    )
 }
 
 @Composable

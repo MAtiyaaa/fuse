@@ -76,10 +76,15 @@ data class UiPrefs(
     val heroDim: Float = 0.3f,
 )
 
-/** Menu music: on or off, how loud, and the song the user chose (none is bundled). */
+/**
+ * Menu music: on or off, how loud, and which song. [track] is a bundled song's id
+ * ([io.github.matiyaaa.fuse.ui.shell.music.BundledMusic]) or `"file"` for the user's own song at
+ * [songPath].
+ */
 data class MusicPrefs(
     val enabled: Boolean = true,
     val volume: Float = 0.2f,
     val songPath: String? = null,
     val songName: String? = null,
+    val track: String = io.github.matiyaaa.fuse.ui.shell.music.BundledMusic.MENU_DEFAULT,
 )
