@@ -49,6 +49,8 @@ data class UiPrefs(
     /** Games taken off Continue Playing (game id to when), until they are played again. */
     val continueDismissed: Map<String, Long> = emptyMap(),
     val systemArtAuto: Boolean = true,
+    /** How the Library is sorted. */
+    val librarySort: io.github.matiyaaa.fuse.model.SortOrder = io.github.matiyaaa.fuse.model.SortOrder.TITLE,
     val systemArtStyle: String = "CLASSIC",
     val scraperOrder: List<ScrapeProviderId> = io.github.matiyaaa.fuse.data.settings.ScrapingSettings.DefaultProviderOrder,
     val scraperLanguage: String = "en",

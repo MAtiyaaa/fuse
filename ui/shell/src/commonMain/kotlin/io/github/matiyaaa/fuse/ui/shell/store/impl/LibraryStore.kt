@@ -216,6 +216,14 @@ internal class DefaultLibraryOps(
 
     override fun games(query: GameQuery): Flow<List<GameCard>> {
         val games = data.games
+        if (query.set != io.github.matiyaaa.fuse.ui.shell.store.GameSet.LIBRARY) {
+            val set = when (query.set) {
+                io.github.matiyaaa.fuse.ui.shell.store.GameSet.MISSING -> games.observeMissing()
+                io.github.matiyaaa.fuse.ui.shell.store.GameSet.HIDDEN -> games.observeHidden()
+                else -> games.observeRemoved()
+            }
+            return ctx.cards(set.map { list -> list.filter { query.platform == null || it.platformId == query.platform }.sortedWith(query.sort.comparator()) })
+        }
         val summaries = when {
             query.collection != null -> data.collections.observeGames(CollectionKey.Manual(query.collection))
             query.favoritesOnly -> games.observeFavorites()
@@ -470,6 +478,15 @@ internal class DefaultLibraryOps(
     }
 
     override suspend fun removeFromFuse(id: GameId) = data.games.removeFromFuse(id)
+
+    override suspend fun restore(id: GameId) {
+        data.games.restoreToFuse(id)
+        data.games.setHidden(id, false)
+    }
+
+    override suspend fun forgetMissing(id: GameId) {
+        data.games.forgetMissing(id)
+    }
 
     override suspend fun previewCleanNames(): List<Pair<String, String>> =
         data.titleCleanup.preview(DisplayNameCleaner::clean).map { it.before to it.after }

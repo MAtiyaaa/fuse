@@ -158,6 +158,8 @@ data class LibraryPreferences(
     val systemOrder: List<String> = emptyList(),
     /** Fetch system logos and art from the system art pack when a system has none. */
     val systemArtAuto: Boolean = true,
+    /** How the Library is sorted. */
+    val sort: io.github.matiyaaa.fuse.model.SortOrder = io.github.matiyaaa.fuse.model.SortOrder.TITLE,
     /** Artwork set used from the system art pack (a SystemArtStyle name). */
     val systemArtStyle: String = "CLASSIC",
 )

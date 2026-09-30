@@ -48,6 +48,7 @@ internal fun AppSettings.toUiPrefs(scoped: GlobalScoped): UiPrefs {
         systemOrder = library.systemOrder,
         continueDismissed = home.continueDismissed,
         systemArtAuto = library.systemArtAuto,
+        librarySort = library.sort,
         systemArtStyle = library.systemArtStyle,
         scraperOrder = scraping.providerOrder,
         scraperLanguage = scraping.preferredLanguage,
@@ -93,6 +94,7 @@ internal fun AppSettings.withUiPrefs(prefs: UiPrefs): AppSettings {
             cleanDisplayNames = prefs.cleanDisplayNames,
             systemOrder = prefs.systemOrder,
             systemArtAuto = prefs.systemArtAuto,
+            sort = prefs.librarySort,
             systemArtStyle = prefs.systemArtStyle,
         ),
         sound = sound.copy(

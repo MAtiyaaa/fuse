@@ -61,7 +61,11 @@ data class GameQuery(
     val favoritesOnly: Boolean = false,
     val includeHidden: Boolean = false,
     val sort: SortOrder = SortOrder.TITLE,
+    val set: GameSet = GameSet.LIBRARY,
 )
+
+/** Which games a [GameQuery] lists: the library, or games whose files are gone, hidden or removed. */
+enum class GameSet { LIBRARY, MISSING, HIDDEN, REMOVED }
 
 interface LibraryOps {
     val home: StateFlow<HomeFeed>
@@ -84,6 +88,10 @@ interface LibraryOps {
     suspend fun setFolderPolicy(id: GameId, policy: FolderPolicy?)
     /** Removes the entry from Fuse only. Files are never touched. */
     suspend fun removeFromFuse(id: GameId)
+    /** Brings back a hidden or removed game. */
+    suspend fun restore(id: GameId)
+    /** Forgets a game whose file is gone, with its art and play history. Files are never touched. */
+    suspend fun forgetMissing(id: GameId)
 
     /** Clean Display Names: preview, apply and undo. Files are never renamed. */
     suspend fun previewCleanNames(): List<Pair<String, String>>
