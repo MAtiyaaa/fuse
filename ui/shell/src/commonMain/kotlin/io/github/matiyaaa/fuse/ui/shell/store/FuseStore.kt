@@ -295,6 +295,25 @@ interface CartridgeOps {
     /** Downloads and hands the release to the system installer. Only after the user confirmed. */
     suspend fun install(release: ReleaseInfo): Result<Unit>
     fun refresh()
+
+    /**
+     * Hands [game] to Cartridge to upload to RomM: every file of it, other discs, DLC and updates
+     * included. Cartridge shows what it would send and uploads only after the user confirms there.
+     */
+    suspend fun upload(game: GameId): UploadHandoff
+}
+
+/** What happened when Fuse handed a game to Cartridge to upload. */
+enum class UploadHandoff {
+    /** Cartridge is showing the upload. */
+    OPENED,
+    NOT_INSTALLED,
+    /** This Cartridge can't take uploads (bridge protocol 3). */
+    TOO_OLD,
+    /** None of the game's files were found. */
+    NO_FILES,
+    /** Cartridge didn't open. */
+    FAILED,
 }
 
 /** Global -> Platform -> Game settings with visible inheritance. */

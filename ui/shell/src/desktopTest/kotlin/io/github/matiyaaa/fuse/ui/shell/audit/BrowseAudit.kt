@@ -2,8 +2,8 @@ package io.github.matiyaaa.fuse.ui.shell.audit
 
 import io.github.matiyaaa.fuse.model.CartridgeDownload
 import io.github.matiyaaa.fuse.model.CartridgeQueueItem
-import io.github.matiyaaa.fuse.model.QueueState
 import io.github.matiyaaa.fuse.model.CartridgeStatus
+import io.github.matiyaaa.fuse.model.CartridgeUploadItem
 import io.github.matiyaaa.fuse.model.Destination
 import io.github.matiyaaa.fuse.model.LibraryLayout
 import io.github.matiyaaa.fuse.model.MediaKind
@@ -11,6 +11,8 @@ import io.github.matiyaaa.fuse.model.MediaOwner
 import io.github.matiyaaa.fuse.model.NavAction
 import io.github.matiyaaa.fuse.model.PadButton
 import io.github.matiyaaa.fuse.model.PlatformId
+import io.github.matiyaaa.fuse.model.QueueState
+import io.github.matiyaaa.fuse.model.UploadState
 import io.github.matiyaaa.fuse.ui.designsystem.components.ToastKind
 import io.github.matiyaaa.fuse.ui.designsystem.input.NavResult
 import io.github.matiyaaa.fuse.ui.shell.store.GameQuery
@@ -768,6 +770,36 @@ internal fun AuditDriver.cartridgeScreens(exhaustive: Boolean) {
         shoot("recent download focused")
         tap(PadButton.DPAD_DOWN, 3)
         shoot("download not in the library yet focused")
+    }
+
+    scenario("cartridge", "uploads") {
+        useLibrary()
+        val now = Clock.System.now().toEpochMilliseconds()
+        setCartridge(
+            cartridgeReady().copy(
+                protocol = 3, activeDownloads = 0, queuedDownloads = 0, progress = null, currentTitle = null, queue = emptyList(),
+                uploads = listOf(
+                    CartridgeUploadItem("u3", "Hollow Meridian", "psx", UploadState.UPLOADING, 212_000_000, 540_000_000, files = 3, updatedAt = now),
+                    CartridgeUploadItem("u2", "Beacon Bay", "gba", UploadState.DONE, 8_000_000, 8_000_000, files = 1, romId = 88, updatedAt = now - 60_000),
+                    CartridgeUploadItem("u1", "Tidal Circuit", "n64", UploadState.FAILED, 0, 16_000_000, files = 1, error = "RomM has no N64 console yet", updatedAt = now - 120_000),
+                ),
+            ),
+        )
+        tab(Destination.CARTRIDGE)
+        waitFor("Uploading to RomM")
+        tap(PadButton.DPAD_LEFT)
+        shoot("an upload going, one done and one failed")
+        tap(PadButton.DPAD_RIGHT, 5)
+        shoot("last button focused, the row scrolled")
+        if (!exhaustive) return@scenario
+        // Sync library, Consoles, then Upload a game
+        tap(PadButton.DPAD_LEFT, 2)
+        tap(PadButton.A)
+        waitFor("Upload a game to RomM")
+        shoot("pick a system to upload from")
+        tapText("Game Boy Advance")
+        waitFor("Upload a Game Boy Advance game")
+        shoot("pick a game to upload")
     }
     if (!exhaustive) return
 

@@ -265,6 +265,32 @@ class StoreIntegrationTest {
     }
 
     @Test
+    fun aGameGoesToCartridgeToUploadOnlyWhenCartridgeTakesUploads() = runBlocking {
+        val services = FakeServices(FuseData(DesktopDatabase.open(freshDb())), cache)
+        val store = createFuseStore(services, scope)
+        store.sources.add(root.absolutePath, LibrarySourceKind.ROMS_ROOT)
+        awaitScan(store)
+        val game = store.library.games(GameQuery(platform = PlatformId("gba"))).first().single()
+
+        assertEquals(UploadHandoff.NOT_INSTALLED, store.cartridge.upload(game.id))
+        services.cartridgeStatus = CartridgeStatus(installed = true, version = "0.9.11", bridge = true, protocol = 2)
+        store.cartridge.refresh()
+        withTimeout(5_000) { store.cartridge.status.first { it.protocol == 2 } }
+        assertEquals(UploadHandoff.TOO_OLD, store.cartridge.upload(game.id))
+        assertTrue(services.uploads.isEmpty())
+
+        services.cartridgeStatus = services.cartridgeStatus.copy(protocol = 3)
+        store.cartridge.refresh()
+        withTimeout(5_000) { store.cartridge.status.first { it.protocol == 3 } }
+        assertEquals(UploadHandoff.OPENED, store.cartridge.upload(game.id))
+        val sent = services.uploads.single()
+        assertEquals("gba", sent.platformSlug)
+        assertEquals(game.title, sent.title)
+        assertEquals(listOf(File(root, "gba/Advance Wars (USA).gba").absolutePath), sent.files.map { it.path })
+        assertEquals(1024L, sent.sizeBytes)
+    }
+
+    @Test
     fun newGamesFindTheirArtByThemselvesOnce() = runBlocking {
         val services = FakeServices(FuseData(DesktopDatabase.open(freshDb())), cache, autoFill = true)
         val store = createFuseStore(services, scope)

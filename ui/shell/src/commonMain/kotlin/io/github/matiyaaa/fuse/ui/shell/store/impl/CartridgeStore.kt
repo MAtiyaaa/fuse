@@ -3,11 +3,14 @@ package io.github.matiyaaa.fuse.ui.shell.store.impl
 import io.github.matiyaaa.fuse.integrations.ApiResult
 import io.github.matiyaaa.fuse.integrations.cartridge.CartridgeMatch
 import io.github.matiyaaa.fuse.integrations.cartridge.CartridgeProtocol
+import io.github.matiyaaa.fuse.integrations.getOrNull
 import io.github.matiyaaa.fuse.integrations.github.GitHubReleases
 import io.github.matiyaaa.fuse.integrations.github.SemVer
-import io.github.matiyaaa.fuse.integrations.getOrNull
+import io.github.matiyaaa.fuse.library.storage.UploadFiles
 import io.github.matiyaaa.fuse.model.CartridgeRoute
 import io.github.matiyaaa.fuse.model.CartridgeStatus
+import io.github.matiyaaa.fuse.model.CartridgeUpload
+import io.github.matiyaaa.fuse.model.GameId
 import io.github.matiyaaa.fuse.model.ReleaseInfo
 import io.github.matiyaaa.fuse.model.ScanPhase
 import io.github.matiyaaa.fuse.model.ScanScope
@@ -15,6 +18,7 @@ import io.github.matiyaaa.fuse.ui.shell.store.CartridgeOps
 import io.github.matiyaaa.fuse.ui.shell.store.RecentDownload
 import io.github.matiyaaa.fuse.ui.shell.store.UpdateOps
 import io.github.matiyaaa.fuse.ui.shell.store.UpdateState
+import io.github.matiyaaa.fuse.ui.shell.store.UploadHandoff
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -30,6 +34,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * Fuse's side of the Cartridge bridge: status, recent downloads and deep links. When Cartridge
@@ -132,6 +137,29 @@ internal class DefaultCartridgeOps(
     /** Opening can wait on the system (xdg-open on Linux), so it never runs on the caller's thread. */
     override fun open(route: CartridgeRoute) {
         ctx.scope.launch(Dispatchers.Default) { ctx.services.cartridge.open(route, CartridgeProtocol.deepLink(route)) }
+    }
+
+    override suspend fun upload(game: GameId): UploadHandoff = withContext(Dispatchers.Default) {
+        val status = state.value
+        if (!enabled || !status.installed) return@withContext UploadHandoff.NOT_INSTALLED
+        if (!CartridgeProtocol.supportsUploads(status)) return@withContext UploadHandoff.TOO_OLD
+        val g = ctx.data.games.get(game) ?: return@withContext UploadHandoff.NO_FILES
+        val files = try {
+            UploadFiles.collect(ctx.services.fs, g.location, g.discs)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            emptyList()
+        }
+        if (files.isEmpty()) return@withContext UploadHandoff.NO_FILES
+        val handed = try {
+            ctx.services.cartridge.upload(CartridgeUpload(g.displayTitle, g.platformId.value, files))
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            false
+        }
+        if (handed) UploadHandoff.OPENED else UploadHandoff.FAILED
     }
 
     override suspend fun latestRelease(): ReleaseInfo? =

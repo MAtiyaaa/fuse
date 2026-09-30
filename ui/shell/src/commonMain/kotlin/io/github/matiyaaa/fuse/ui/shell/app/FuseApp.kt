@@ -150,6 +150,7 @@ fun FuseApp(store: FuseStore, platform: PlatformUi, router: InputRouter, phoneLi
     }
     MenuMusic(app, platform.music)
     FillFinishedToast(app)
+    io.github.matiyaaa.fuse.ui.shell.cartridge.UploadFinishedToasts(app)
     DisposableEffect(router) {
         router.feedback = InputFeedback { event, result ->
             when (result) {
@@ -518,6 +519,12 @@ private fun hudActivities(app: AppState): List<HudActivity> {
                 "fill", FuseIcons.Wand, "${if (f.automatic) "Finding art" else "Filling art and details"}: ${f.done} of ${f.total}",
                 progress = f.fraction.takeIf { f.total > 0 },
             ) { app.go(Route.Settings("media")) })
+        }
+        cartridge.uploads.firstOrNull { it.active }?.let { u ->
+            add(HudActivity(
+                "upload", FuseIcons.Upload, "Uploading ${u.title} to RomM",
+                progress = u.progress.takeIf { u.state == io.github.matiyaaa.fuse.model.UploadState.UPLOADING },
+            ) { app.selectTab(io.github.matiyaaa.fuse.model.Destination.CARTRIDGE) })
         }
         if (cartridge.installed && (cartridge.activeDownloads > 0 || cartridge.queue.any { it.state == io.github.matiyaaa.fuse.model.QueueState.DOWNLOADING })) {
             val current = cartridge.queue.firstOrNull { it.state == io.github.matiyaaa.fuse.model.QueueState.DOWNLOADING }

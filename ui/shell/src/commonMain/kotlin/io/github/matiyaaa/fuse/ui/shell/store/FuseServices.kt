@@ -9,6 +9,7 @@ import io.github.matiyaaa.fuse.model.AppEntry
 import io.github.matiyaaa.fuse.model.CartridgeGame
 import io.github.matiyaaa.fuse.model.CartridgeRoute
 import io.github.matiyaaa.fuse.model.CartridgeStatus
+import io.github.matiyaaa.fuse.model.CartridgeUpload
 import io.github.matiyaaa.fuse.model.Host
 import io.github.matiyaaa.fuse.model.InstalledEmulator
 import io.github.matiyaaa.fuse.model.LibrarySourceKind
@@ -143,6 +144,12 @@ interface CartridgeBridge {
 
     /** Opens [route] in Cartridge ([link] is the built `cartridge://` URL). False when nothing handled it. */
     fun open(route: CartridgeRoute, link: String): Boolean
+
+    /**
+     * Hands [upload] to Cartridge (bridge protocol 3), which shows the files and uploads them to RomM
+     * once the user confirms there. False when nothing handled it.
+     */
+    suspend fun upload(upload: CartridgeUpload): Boolean = false
 
     /** Calls [onChange] when Cartridge reports a change (Android ContentObserver, Linux file watch). */
     fun watch(onChange: () -> Unit): AutoCloseable? = null

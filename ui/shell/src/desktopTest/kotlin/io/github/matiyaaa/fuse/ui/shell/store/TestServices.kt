@@ -73,10 +73,17 @@ internal class FakeServices(override val data: FuseData, private val cache: File
     var cartridgeStatus = CartridgeStatus(installed = false)
     var cartridgeGames: List<io.github.matiyaaa.fuse.model.CartridgeGame>? = null
 
+    /** Games handed to the fake Cartridge to upload. */
+    val uploads = mutableListOf<io.github.matiyaaa.fuse.model.CartridgeUpload>()
+
     override val cartridge = object : CartridgeBridge {
         override suspend fun read() = cartridgeStatus
         override suspend fun games() = cartridgeGames
         override fun open(route: CartridgeRoute, link: String) = false
+        override suspend fun upload(upload: io.github.matiyaaa.fuse.model.CartridgeUpload): Boolean {
+            uploads += upload
+            return true
+        }
     }
 
     override var installer: ReleaseInstaller = object : ReleaseInstaller {

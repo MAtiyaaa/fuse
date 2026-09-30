@@ -13,11 +13,18 @@ import io.github.matiyaaa.fuse.model.CartridgeGame
 import io.github.matiyaaa.fuse.model.CartridgeQueueItem
 import io.github.matiyaaa.fuse.model.CartridgeRoute
 import io.github.matiyaaa.fuse.model.CartridgeStatus
+import io.github.matiyaaa.fuse.model.CartridgeUpload
+import io.github.matiyaaa.fuse.model.CartridgeUploadItem
 import io.github.matiyaaa.fuse.model.QueueState
+import io.github.matiyaaa.fuse.model.UploadState
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.addJsonObject
+import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonArray
 
 /**
  * The Fuse <-> Cartridge bridge, as pure functions shared by Android and Linux: deep links into
@@ -39,6 +46,15 @@ object CartridgeProtocol {
     /** First protocol with the queue game by game and the downloaded games with RomM's details. */
     const val GAMES_PROTOCOL = 2
 
+    /** First protocol that takes games from Fuse to upload to RomM, and reports the uploads. */
+    const val UPLOADS_PROTOCOL = 3
+
+    /**
+     * Android: the upload request (JSON, see [uploadRequest]) travels in this extra, and the files'
+     * content URIs in the intent's ClipData, which carries the read grants.
+     */
+    const val EXTRA_UPLOAD = "io.github.matiyaaa.fuse.extra.UPLOAD"
+
     const val SCHEME = "cartridge"
 
     /** Release source for "Install Cartridge" (publishes Cartridge-android.apk and Cartridge-x86_64.AppImage). */
@@ -57,10 +73,12 @@ object CartridgeProtocol {
     const val PATH_RECENT = "/recent"
     const val PATH_QUEUE = "/queue"
     const val PATH_GAMES = "/games"
+    const val PATH_UPLOADS = "/uploads"
     const val STATUS_URI = "content://$STATUS_AUTHORITY$PATH_STATUS"
     const val RECENT_URI = "content://$STATUS_AUTHORITY$PATH_RECENT"
     const val QUEUE_URI = "content://$STATUS_AUTHORITY$PATH_QUEUE"
     const val GAMES_URI = "content://$STATUS_AUTHORITY$PATH_GAMES"
+    const val UPLOADS_URI = "content://$STATUS_AUTHORITY$PATH_UPLOADS"
 
     /** Largest status file Fuse reads (with protocol 2 it holds every downloaded game's details). */
     const val MAX_STATUS_FILE_BYTES = 16 * 1024 * 1024
@@ -119,6 +137,28 @@ object CartridgeProtocol {
         const val POSITION = "position"
     }
 
+    /** Columns of the `/uploads` rows (protocol 3): games Fuse handed over, newest first. */
+    object UploadColumns {
+        /** text, Cartridge's id for the upload. */
+        const val ID = "id"
+        const val TITLE = "title"
+        const val PLATFORM_SLUG = "platform_slug"
+        /** text: waiting, uploading, scanning, done, failed or cancelled. */
+        const val STATE = "state"
+        /** int, bytes sent so far. */
+        const val SENT = "sent"
+        /** int or null while unknown. */
+        const val TOTAL = "total"
+        /** int, how many files. */
+        const val FILES = "files"
+        /** int or null until the game is on RomM. */
+        const val ROM_ID = "rom_id"
+        /** text or null: why it failed. */
+        const val ERROR = "error"
+        /** int, epoch millis. */
+        const val UPDATED_AT = "updated_at"
+    }
+
     /** Columns of the `/games` rows (protocol 2): downloaded games with RomM's details. */
     object GameColumns {
         const val ROM_ID = "rom_id"
@@ -171,6 +211,38 @@ object CartridgeProtocol {
         return "$SCHEME://$path?$query"
     }
 
+    /**
+     * The link that hands Cartridge a game to upload. On Linux [requestPath] names the request file
+     * Fuse wrote ([uploadRequest]); on Android the request travels in [EXTRA_UPLOAD] instead.
+     */
+    fun uploadLink(requestPath: String? = null): String {
+        val params = listOfNotNull(requestPath?.let { "request" to it }, "from" to "fuse", "v" to UPLOADS_PROTOCOL.toString())
+        return "$SCHEME://upload?" + params.joinToString("&") { (k, v) -> "$k=${UrlCoding.encode(v)}" }
+    }
+
+    /**
+     * The upload request Cartridge reads: the game's title and platform, and each file with its
+     * name, size and the folder it goes in on RomM. A file is named by [locations] (a content URI on
+     * Android, the same order as the files) or else by its absolute path (Linux).
+     */
+    fun uploadRequest(upload: CartridgeUpload, locations: List<String>? = null): String = buildJsonObject {
+        put("v", 1)
+        put("from", "fuse")
+        put("title", upload.title)
+        put("platform", upload.platformSlug)
+        putJsonArray("files") {
+            upload.files.forEachIndexed { i, f ->
+                addJsonObject {
+                    put("name", f.name)
+                    put("folder", f.folder)
+                    put("size", f.sizeBytes)
+                    val uri = locations?.getOrNull(i)
+                    if (uri != null) put("uri", uri) else put("path", f.path)
+                }
+            }
+        }
+    }.toString()
+
     /** Parses a `cartridge://` link back into a route, or null when it is not one Fuse knows. */
     fun parse(link: String): CartridgeRoute? {
         val prefix = "$SCHEME://"
@@ -216,11 +288,13 @@ object CartridgeProtocol {
         installedVersion: String? = null,
         checkedAt: Long = 0,
         queue: List<Map<String, Any?>> = emptyList(),
+        uploads: List<Map<String, Any?>> = emptyList(),
     ): CartridgeStatus {
         val protocol = row[StatusColumns.PROTOCOL].asLong()
         return CartridgeStatus(
             protocol = protocol?.toInt()?.coerceAtLeast(0) ?: 0,
             queue = queue.mapNotNull(::queueItemFromRow),
+            uploads = uploads.take(MAX_UPLOADS).mapNotNull(::uploadItemFromRow),
             installed = true,
             version = row[StatusColumns.VERSION].asText() ?: installedVersion,
             bridge = protocol != null && protocol >= 1,
@@ -246,6 +320,55 @@ object CartridgeProtocol {
             platformSlug = row[RecentColumns.PLATFORM_SLUG].asText().orEmpty(),
             path = row[RecentColumns.PATH].asText(),
             finishedAt = row[RecentColumns.FINISHED_AT].asLong() ?: 0,
+        )
+    }
+
+    /** True when Cartridge takes uploads from Fuse ([UPLOADS_PROTOCOL]). */
+    fun supportsUploads(status: CartridgeStatus): Boolean = status.installed && status.protocol >= UPLOADS_PROTOCOL
+
+    /** True when a status [row] says Cartridge has the uploads table. */
+    fun hasUploads(row: Map<String, Any?>): Boolean = (row[StatusColumns.PROTOCOL].asLong() ?: 0) >= UPLOADS_PROTOCOL
+
+    /** Maps one `/uploads` row; null without an id or title, or in a state this Fuse doesn't know. */
+    fun uploadItemFromRow(row: Map<String, Any?>): CartridgeUploadItem? = uploadItem(
+        id = row[UploadColumns.ID].asText(),
+        title = row[UploadColumns.TITLE].asText(),
+        platformSlug = row[UploadColumns.PLATFORM_SLUG].asText(),
+        state = row[UploadColumns.STATE].asText(),
+        sent = row[UploadColumns.SENT].asLong(),
+        total = row[UploadColumns.TOTAL].asLong(),
+        files = row[UploadColumns.FILES].asLong()?.toInt(),
+        romId = row[UploadColumns.ROM_ID].asLong(),
+        error = row[UploadColumns.ERROR].asText(),
+        updatedAt = row[UploadColumns.UPDATED_AT].asLong(),
+    )
+
+    private fun uploadItem(
+        id: String?, title: String?, platformSlug: String?, state: String?, sent: Long?, total: Long?,
+        files: Int?, romId: Long?, error: String?, updatedAt: Long?,
+    ): CartridgeUploadItem? {
+        val key = id?.takeIf { it.isNotBlank() } ?: return null
+        val name = title?.takeIf { it.isNotBlank() } ?: return null
+        val uploadState = when (state?.trim()?.lowercase()) {
+            "waiting" -> UploadState.WAITING
+            "uploading" -> UploadState.UPLOADING
+            "scanning" -> UploadState.SCANNING
+            "done" -> UploadState.DONE
+            "failed" -> UploadState.FAILED
+            "cancelled", "canceled" -> UploadState.CANCELLED
+            else -> return null
+        }
+        return CartridgeUploadItem(
+            id = key.take(64),
+            title = name,
+            platformSlug = platformSlug.orEmpty(),
+            state = uploadState,
+            sent = (sent ?: 0).coerceAtLeast(0),
+            total = total?.takeIf { it > 0 },
+            files = (files ?: 0).coerceAtLeast(0),
+            romId = romId?.takeIf { it > 0 },
+            error = error?.take(300),
+            updatedAt = updatedAt ?: 0,
         )
     }
 
@@ -328,6 +451,7 @@ object CartridgeProtocol {
     }
 
     private const val MAX_SUMMARY = 8000
+    private const val MAX_UPLOADS = 50
     private const val MAX_NAMES = 12
 
     /** Status when Cartridge is installed but too old (or not answering) for the bridge. */
@@ -381,6 +505,13 @@ object CartridgeProtocol {
         val status = CartridgeStatus(
             protocol = protocol.coerceAtLeast(0),
             queue = file.queue.orEmpty().mapNotNull { q -> queueItem(q.romId, q.title, q.platformSlug, q.state, q.received, q.total) },
+            uploads = if (protocol >= UPLOADS_PROTOCOL) {
+                file.uploads.orEmpty().take(MAX_UPLOADS).mapNotNull { u ->
+                    uploadItem(u.id, u.title, u.platformSlug, u.state, u.sent, u.total, u.files, u.romId, u.error, u.updatedAt)
+                }
+            } else {
+                emptyList()
+            },
             installed = true,
             version = file.version ?: installedVersion,
             bridge = protocol >= 1,
@@ -464,6 +595,21 @@ internal data class CartridgeStatusFile(
     val recent: List<CartridgeRecentEntry> = emptyList(),
     val queue: List<CartridgeQueueEntry>? = null,
     val games: List<CartridgeGameEntry>? = null,
+    val uploads: List<CartridgeUploadEntry>? = null,
+)
+
+@Serializable
+internal data class CartridgeUploadEntry(
+    val id: String? = null,
+    val title: String? = null,
+    val platformSlug: String? = null,
+    val state: String? = null,
+    @Serializable(with = FlexLong::class) val sent: Long? = null,
+    @Serializable(with = FlexLong::class) val total: Long? = null,
+    @Serializable(with = FlexInt::class) val files: Int? = null,
+    @Serializable(with = FlexLong::class) val romId: Long? = null,
+    val error: String? = null,
+    @Serializable(with = FlexLong::class) val updatedAt: Long? = null,
 )
 
 @Serializable

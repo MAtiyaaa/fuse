@@ -11,6 +11,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.components.ToastKind
 import io.github.matiyaaa.fuse.ui.designsystem.components.Trailing
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
 import io.github.matiyaaa.fuse.ui.designsystem.sound.SoundCue
+import io.github.matiyaaa.fuse.ui.shell.cartridge.uploadToRomm
 import io.github.matiyaaa.fuse.ui.shell.store.GameCard
 import io.github.matiyaaa.fuse.ui.shell.store.LaunchOutcome
 import kotlinx.coroutines.delay
@@ -137,6 +138,8 @@ fun AppState.gameMenu(card: GameCard, fromDetail: Boolean = false, extra: List<M
                 add(MenuAction("find", "Find in Cartridge", FuseIcons.CloudDownload, onSelect = {
                     closeOverlays(); store.cartridge.open(CartridgeRoute.Search(card.title, null))
                 }))
+                // Games Cartridge downloaded are on RomM already.
+                add(MenuAction("upload", "Upload to RomM", FuseIcons.Upload, detail = "Through Cartridge, with its other discs, DLC and updates", onSelect = { uploadToRomm(card) }))
             }
         }
         add(MenuAction("hide", "Hide", FuseIcons.EyeOff, onSelect = { run { lib.setHidden(card.id, true); toasts.show("Hidden. Show hidden games from Library options.") } }))

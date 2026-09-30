@@ -17,6 +17,7 @@ import io.github.matiyaaa.fuse.integrations.cartridge.CartridgeProtocol
 import io.github.matiyaaa.fuse.model.CartridgeGame
 import io.github.matiyaaa.fuse.model.CartridgeRoute
 import io.github.matiyaaa.fuse.model.CartridgeStatus
+import io.github.matiyaaa.fuse.model.CartridgeUpload
 import io.github.matiyaaa.fuse.ui.shell.store.CartridgeBridge
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -49,7 +50,8 @@ class AndroidCartridgeBridge(
                 ?: return@withContext CartridgeProtocol.installedWithoutBridge(version, now)
             val recent = rows(CartridgeProtocol.RECENT_URI)
             val queue = if (CartridgeProtocol.hasGames(status)) rows(CartridgeProtocol.QUEUE_URI) else emptyList()
-            CartridgeProtocol.statusFromRow(status, recent, version, now, queue).copy(gamesRevision = gamesRevision.get())
+            val uploads = if (CartridgeProtocol.hasUploads(status)) rows(CartridgeProtocol.UPLOADS_URI) else emptyList()
+            CartridgeProtocol.statusFromRow(status, recent, version, now, queue, uploads).copy(gamesRevision = gamesRevision.get())
         } catch (e: SecurityException) {
             CartridgeProtocol.installedWithoutBridge(version, now)
         } catch (e: RuntimeException) {
@@ -102,6 +104,25 @@ class AndroidCartridgeBridge(
             activities.start(intent, activities.revealOptions()?.toBundle())
         } catch (e: ActivityNotFoundException) {
             false
+        }
+    }
+
+    /**
+     * Opens Cartridge's upload page with the request in [CartridgeProtocol.EXTRA_UPLOAD]. Cartridge
+     * reads the files by path with its own All files access, so no content grants are needed.
+     */
+    override suspend fun upload(upload: CartridgeUpload): Boolean {
+        val intent = Intent(Intent.ACTION_VIEW, CartridgeProtocol.uploadLink().toUri())
+            .setPackage(CartridgeProtocol.PACKAGE_NAME)
+            .putExtra(CartridgeProtocol.EXTRA_UPLOAD, CartridgeProtocol.uploadRequest(upload))
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        if (PackageSupport.resolveActivity(pm, intent) == null) return false
+        return withContext(Dispatchers.Main) {
+            try {
+                activities.start(intent, activities.revealOptions()?.toBundle())
+            } catch (e: ActivityNotFoundException) {
+                false
+            }
         }
     }
 

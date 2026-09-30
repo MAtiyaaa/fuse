@@ -7,13 +7,14 @@ import io.github.matiyaaa.fuse.integrations.cartridge.CartridgeProtocol
 import io.github.matiyaaa.fuse.model.CartridgeGame
 import io.github.matiyaaa.fuse.model.CartridgeRoute
 import io.github.matiyaaa.fuse.model.CartridgeStatus
+import io.github.matiyaaa.fuse.model.CartridgeUpload
 import io.github.matiyaaa.fuse.ui.shell.store.CartridgeBridge
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import java.awt.EventQueue
 import java.io.File
 import java.util.Locale
 import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /**
  * Cartridge on Linux: its status file (`$XDG_STATE_HOME/cartridge/status.json`) for live status, a
@@ -79,7 +80,34 @@ internal class DesktopCartridgeBridge(private val dirs: FuseDirs) : CartridgeBri
      * usual mime files, xdg-open is still tried and its answer awaited briefly, so a missing handler
      * reports false instead of pretending.
      */
-    override fun open(route: CartridgeRoute, link: String): Boolean {
+    override fun open(route: CartridgeRoute, link: String): Boolean = openLink(link)
+
+    /**
+     * Writes the upload request to Fuse's cache (readable by this user only) and opens Cartridge's
+     * upload page on it. Requests older than a day are cleared first.
+     */
+    override suspend fun upload(upload: CartridgeUpload): Boolean = withContext(Dispatchers.IO) {
+        val dir = File(dirs.cache, "cartridge-upload")
+        val file = try {
+            dir.mkdirs()
+            val dayAgo = System.currentTimeMillis() - 24 * 60 * 60 * 1000L
+            dir.listFiles { f -> f.name.endsWith(".json") && f.lastModified() < dayAgo }?.forEach { it.delete() }
+            File(dir, "upload-${System.currentTimeMillis()}.json").apply {
+                writeText(CartridgeProtocol.uploadRequest(upload))
+                setReadable(false, false)
+                setReadable(true, true)
+                setWritable(false, false)
+                setWritable(true, true)
+            }
+        } catch (e: java.io.IOException) {
+            return@withContext false
+        } catch (e: SecurityException) {
+            return@withContext false
+        }
+        openLink(CartridgeProtocol.uploadLink(file.absolutePath))
+    }
+
+    private fun openLink(link: String): Boolean {
         if (!link.startsWith("${CartridgeProtocol.SCHEME}://")) return false
         val xdgOpen = Processes.which("xdg-open") ?: return false
         if (hasRegisteredHandler()) return Processes.spawn(listOf(xdgOpen, link)) != null

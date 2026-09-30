@@ -92,6 +92,8 @@ data class MenuArt(
     val fallbackTitle: String? = null,
     /** ARGB colour for the generated square. */
     val accent: Long = 0xFF8A93A6,
+    /** The slot is logo-wide, so labels line up with rows that show a logo; off in lists of square art only. */
+    val wide: Boolean = true,
 )
 
 /**
@@ -152,7 +154,7 @@ fun MenuRow(
             Spacer(Modifier.width(Space.m))
         }
         action.art?.let { art ->
-            Box(Modifier.width(MENU_ART_WIDTH).height(MENU_ART_HEIGHT), contentAlignment = Alignment.CenterStart) {
+            Box(Modifier.width(if (art.wide) MENU_ART_WIDTH else MENU_ART_HEIGHT).height(MENU_ART_HEIGHT), contentAlignment = Alignment.CenterStart) {
                 val square = Modifier.size(MENU_ART_HEIGHT).clip(RoundedCornerShape(Fuse.geometry.control))
                 val generated: @Composable () -> Unit = {
                     art.fallbackTitle?.let { GeneratedArt(it, Color(art.accent), square, slot = ArtSlot.ICON) }

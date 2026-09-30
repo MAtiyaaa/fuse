@@ -32,3 +32,26 @@ fun Modifier.fadingEdges(top: Dp = 24.dp, bottom: Dp = 40.dp): Modifier = this
             blendMode = BlendMode.DstIn,
         )
     }
+
+/**
+ * Softens the left and right edges of a horizontally scrolling row, only where more of it is out of
+ * view ([start], [end]), so a row of buttons shows that it goes on.
+ */
+fun Modifier.fadingEdgesHorizontal(start: Boolean, end: Boolean, width: Dp = 40.dp): Modifier =
+    if (!start && !end) this else this
+        .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+        .drawWithContent {
+            drawContent()
+            val w = size.width
+            if (w <= 0f) return@drawWithContent
+            val f = (width.toPx() / w).coerceIn(0f, 0.5f)
+            drawRect(
+                Brush.horizontalGradient(
+                    0f to if (start) Color.Transparent else Color.Black,
+                    f to Color.Black,
+                    1f - f to Color.Black,
+                    1f to if (end) Color.Transparent else Color.Black,
+                ),
+                blendMode = BlendMode.DstIn,
+            )
+        }
