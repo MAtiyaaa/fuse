@@ -60,7 +60,7 @@ import io.github.matiyaaa.fuse.ui.shell.app.FocusZone
 import io.github.matiyaaa.fuse.ui.shell.app.Route
 import io.github.matiyaaa.fuse.ui.shell.app.rememberRouteState
 import io.github.matiyaaa.fuse.ui.shell.components.Stage
-import io.github.matiyaaa.fuse.ui.shell.components.SystemGlyph
+import io.github.matiyaaa.fuse.ui.shell.components.SystemCardArt
 import io.github.matiyaaa.fuse.ui.shell.components.stage
 import io.github.matiyaaa.fuse.ui.shell.store.PlatformCard
 import kotlinx.coroutines.launch
@@ -151,7 +151,7 @@ fun SystemsScreen(app: AppState) {
                         },
                         onLongClick = { sel.index = i; app.openContextMenu(app.systemMenu(card)) },
                     ) {
-                        Artwork(card.art.icon, Modifier.fillMaxSize(), fallback = { SystemGlyph(card, card.platform.accent.toColor(), large = false) })
+                        SystemCardArt(card)
                     }
                 }
             }

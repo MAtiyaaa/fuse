@@ -110,7 +110,8 @@ internal class DefaultLibraryOps(
             }
         }
 
-    private val systemOrder: Flow<List<String>> = data.settings.settings.map { it.library.systemOrder }.distinctUntilChanged()
+    private val systemOrder: Flow<Pair<List<String>, Map<String, Long>>> =
+        data.settings.settings.map { it.library.systemOrder to it.library.systemColors }.distinctUntilChanged()
 
     override val platforms: StateFlow<List<PlatformCard>> = combine(
         data.games.platformCounts(),
@@ -118,7 +119,8 @@ internal class DefaultLibraryOps(
         combine(engine.bios, engine.platformFolders, ::Pair),
         platformChoices,
         combine(platformArt, systemOrder, ::Pair),
-    ) { counts, installed, (bios, folders), choices, (art, order) ->
+    ) { counts, installed, (bios, folders), choices, (art, orderAndColors) ->
+        val (order, colors) = orderAndColors
         // The user's order first (hold confirm on a system to move it), then catalog order.
         val catalogOrder = ctx.platforms.all.withIndex().associate { (i, p) -> p.id to i + order.size }
         val userOrder = order.withIndex().associate { (i, id) -> PlatformId(id) to i }
@@ -134,7 +136,8 @@ internal class DefaultLibraryOps(
                     ?: candidates.firstOrNull { it.id in installedIds }?.id
                 val effectiveInstalled = installed.firstOrNull { it.id == effective }
                 PlatformCard(
-                    platform = p,
+                    // A brand colour from the system art pack replaces Fuse's generated accent.
+                    platform = colors[p.id.value]?.let { p.copy(accent = it) } ?: p,
                     gameCount = counts[p.id] ?: 0,
                     art = art[p.id] ?: Art.None,
                     emulatorName = effectiveInstalled?.name ?: effective?.let { ctx.registry[it]?.name },

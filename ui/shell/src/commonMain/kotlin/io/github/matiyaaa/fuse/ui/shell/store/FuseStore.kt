@@ -145,6 +145,9 @@ interface MediaOps {
     val keyChecks: StateFlow<Map<ScrapeProviderId, io.github.matiyaaa.fuse.integrations.KeyCheck?>>
     /** Tests every provider key that is set with a real request; null marks a check in progress. */
     fun checkKeys()
+    /** Fetches logos, artwork and colours from the system art pack for every system with games. */
+    fun downloadSystemArt()
+    val systemArtProgress: StateFlow<FillProgress?>
 }
 
 sealed interface ArtworkResult {

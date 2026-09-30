@@ -1,6 +1,11 @@
 package io.github.matiyaaa.fuse.ui.shell.components
 
 import androidx.compose.foundation.background
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -169,7 +174,7 @@ private fun TileBadges(card: GameCard, modifier: Modifier) {
     }
 }
 
-/** A system: its own icon art if set, otherwise an original typographic tile in its colour. */
+/** A system: its own icon art if set, then its system art pack card, otherwise an original typographic tile. */
 @Composable
 fun SystemTile(
     card: PlatformCard,
@@ -187,11 +192,92 @@ fun SystemTile(
         onClick = onClick,
         onLongClick = onLongClick,
     ) {
-        Artwork(
-            model = card.art.icon,
-            modifier = Modifier.fillMaxSize(),
-            fallback = { SystemGlyph(card, accent) },
+        SystemCardArt(card)
+    }
+}
+
+/**
+ * What a system card shows. An icon the user chose wins; then the system art pack's look (brand
+ * colour, the artwork panel on the right, the logo in white, as in console-style frontends); with
+ * no art at all, Fuse's own typographic [SystemGlyph].
+ */
+@Composable
+fun SystemCardArt(card: PlatformCard, large: Boolean = false) {
+    val accent = card.platform.accent.toColor()
+    when {
+        card.art.icon != null -> Artwork(card.art.icon, Modifier.fillMaxSize(), fallback = { SystemGlyph(card, accent, large) })
+        card.art.boxart != null || card.art.logo != null -> PackCard(card, accent, large)
+        else -> SystemGlyph(card, accent, large)
+    }
+}
+
+@Composable
+private fun PackCard(card: PlatformCard, accent: Color, large: Boolean) {
+    val deep = lerp(accent, Color.Black, 0.55f)
+    BoxWithConstraints(
+        Modifier
+            .fillMaxSize()
+            .background(Brush.linearGradient(listOf(lerp(accent, Color.Black, 0.1f), deep))),
+    ) {
+        val cardHeight = maxHeight
+        // Pack artwork is a tall panel (about 454 x 1080); it fills the height on the right.
+        val artWidth = (maxHeight * 0.52f).coerceAtMost(maxWidth * 0.6f)
+        if (card.art.boxart != null) {
+            Artwork(
+                card.art.boxart,
+                Modifier.align(Alignment.CenterEnd).width(artWidth).fillMaxHeight(),
+                contentScale = ContentScale.Crop,
+                focusX = 0.5f,
+                focusY = 0.35f,
+            )
+            // Blend the panel's left edge into the card colour.
+            Box(
+                Modifier.align(Alignment.CenterEnd).width(artWidth).fillMaxHeight()
+                    .background(Brush.horizontalGradient(listOf(lerp(accent, Color.Black, 0.3f), Color.Transparent), endX = with(LocalDensity.current) { (artWidth * 0.45f).toPx() })),
+            )
+        }
+        // A soft floor so the white logo reads on light brand colours too.
+        Box(
+            Modifier.fillMaxSize().background(Brush.verticalGradient(0.45f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.45f))),
         )
+        Column(
+            Modifier.align(Alignment.BottomStart).padding(if (large) Space.xl else Space.m).fillMaxWidth(0.62f),
+            verticalArrangement = Arrangement.spacedBy(Space.xs),
+        ) {
+            if (card.art.logo != null) {
+                Artwork(
+                    card.art.logo,
+                    Modifier.fillMaxWidth().height((cardHeight * 0.24f).coerceIn(18.dp, 72.dp)),
+                    contentScale = ContentScale.Fit,
+                    focusX = 0f,
+                    focusY = 1f,
+                    tint = Color.White,
+                    fallback = { FText(card.platform.shortName, Fuse.type.title, color = Color.White, maxLines = 1) },
+                )
+            } else {
+                FText(card.platform.shortName, if (large) Fuse.type.hero else Fuse.type.title, color = Color.White, maxLines = 1)
+            }
+            if (cardHeight > 96.dp) {
+                FText(
+                    "${card.gameCount} ${if (card.gameCount == 1) "game" else "games"}",
+                    Fuse.type.caption,
+                    color = Color.White.copy(alpha = 0.78f),
+                    maxLines = 1,
+                )
+            }
+        }
+        SystemWarning(card, Modifier.align(Alignment.TopEnd))
+    }
+}
+
+/** A small warning mark when a system has no emulator or is missing firmware. */
+@Composable
+private fun SystemWarning(card: PlatformCard, modifier: Modifier) {
+    if (card.bios.state == BiosState.MISSING || card.bios.state == BiosState.PARTIAL || !card.emulatorInstalled) {
+        Box(
+            modifier.padding(Space.s).size(22.dp).background(Color.Black.copy(alpha = 0.55f), CircleShape),
+            contentAlignment = Alignment.Center,
+        ) { FuseIcon(FuseIcons.Warning, size = 13.dp, tint = Fuse.colors.warning) }
     }
 }
 
@@ -225,12 +311,7 @@ fun SystemGlyph(card: PlatformCard, accent: Color, large: Boolean = false) {
                 )
             }
         }
-        if (card.bios.state == BiosState.MISSING || card.bios.state == BiosState.PARTIAL || !card.emulatorInstalled) {
-            Box(
-                Modifier.align(Alignment.TopEnd).padding(Space.s).size(22.dp).background(Color.Black.copy(alpha = 0.55f), CircleShape),
-                contentAlignment = Alignment.Center,
-            ) { FuseIcon(FuseIcons.Warning, size = 13.dp, tint = Fuse.colors.warning) }
-        }
+        SystemWarning(card, Modifier.align(Alignment.TopEnd))
     }
 }
 

@@ -109,6 +109,7 @@ internal class DefaultFuseStore private constructor(
             library.recoverSession()
             cleanExistingNamesOnce()
             credentials.load()
+            mediaOps.startSystemArt()
             achievements.load()
             emulators.detectNow()
             cartridge.start()

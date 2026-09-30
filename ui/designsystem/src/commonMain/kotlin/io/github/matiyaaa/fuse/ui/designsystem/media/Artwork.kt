@@ -11,6 +11,8 @@ import androidx.compose.ui.BiasAlignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.paint
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import coil3.compose.AsyncImagePainter
@@ -27,6 +29,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
  * instead of an empty box, so a library with no scraped art still looks designed.
  *
  * [focusX]/[focusY] (0..1) choose which part of the image stays visible when it is cropped.
+ * [tint] recolours the image (single-colour logos, such as system logos, drawn in white).
  */
 @Composable
 fun Artwork(
@@ -37,6 +40,7 @@ fun Artwork(
     focusY: Float = 0.5f,
     zoom: Float = 1f,
     fadeIn: Boolean = true,
+    tint: Color? = null,
     fallback: @Composable () -> Unit = {},
 ) {
     if (model == null) {
@@ -71,6 +75,7 @@ fun Artwork(
                     painter,
                     contentScale = contentScale,
                     alignment = BiasAlignment(focusX * 2 - 1, focusY * 2 - 1),
+                    colorFilter = tint?.let { ColorFilter.tint(it) },
                 ),
         )
     }

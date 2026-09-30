@@ -55,6 +55,7 @@ import io.github.matiyaaa.fuse.model.MediaKind
 import io.github.matiyaaa.fuse.model.MediaOwner
 import io.github.matiyaaa.fuse.model.MediaSet
 import io.github.matiyaaa.fuse.model.MediaSource
+import io.github.matiyaaa.fuse.model.ScrapeProviderId
 import io.github.matiyaaa.fuse.model.NavAction
 import io.github.matiyaaa.fuse.ui.designsystem.components.Chip
 import io.github.matiyaaa.fuse.ui.designsystem.components.FText
@@ -357,7 +358,12 @@ private fun ArtworkGrid(b: Browser.Options, grid: GridSelection, onPick: (Artwor
                     }
                     Spacer(Modifier.height(Space.xs))
                     FText(
-                        listOfNotNull(opt.provider.displayName, opt.style, opt.width?.let { "${it}x${opt.height}" }).joinToString("  ·  "),
+                        // System art pack options carry the pack's name as their author.
+                        listOfNotNull(
+                            if (opt.provider == ScrapeProviderId.LOCAL && opt.author != null) opt.author else opt.provider.displayName,
+                            opt.style,
+                            opt.width?.let { "${it}x${opt.height}" },
+                        ).joinToString("  ·  "),
                         Fuse.type.caption, color = Fuse.colors.textMuted, maxLines = 1,
                     )
                 }

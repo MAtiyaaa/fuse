@@ -162,6 +162,8 @@ data class LibraryPreferences(
     val sort: io.github.matiyaaa.fuse.model.SortOrder = io.github.matiyaaa.fuse.model.SortOrder.TITLE,
     /** Artwork set used from the system art pack (a SystemArtStyle name). */
     val systemArtStyle: String = "CLASSIC",
+    /** Brand colours from the system art pack (opaque ARGB), by platform id. */
+    val systemColors: Map<String, Long> = emptyMap(),
 )
 
 /**

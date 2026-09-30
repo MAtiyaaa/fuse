@@ -1,5 +1,7 @@
 package io.github.matiyaaa.fuse.ui.shell.settings
 
+import io.github.matiyaaa.fuse.integrations.systemart.SystemArtPack
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -42,8 +44,11 @@ import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.FocusZone
 import kotlinx.coroutines.launch
 
-/** A licence text shipped inside the app (composeResources/files/licenses). */
-private data class LicenceDoc(val file: String, val title: String, val covers: String)
+/**
+ * A licence text shipped inside the app (composeResources/files/licenses), or [inline] text for
+ * material Fuse downloads rather than ships.
+ */
+private data class LicenceDoc(val file: String, val title: String, val covers: String, val inline: String? = null)
 
 private val docs = listOf(
     LicenceDoc("GPL-3.0.txt", "Fuse", "GNU General Public License 3.0 or later"),
@@ -51,6 +56,16 @@ private val docs = listOf(
     LicenceDoc("OFL-Sora.txt", "Sora typeface", "SIL Open Font License 1.1"),
     LicenceDoc("OFL-Manrope.txt", "Manrope typeface", "SIL Open Font License 1.1"),
     LicenceDoc("LICENSE-lucide.txt", "Lucide icons", "ISC License (and MIT for icons derived from Feather)"),
+    LicenceDoc(
+        "art-book-next", "System art", "Art Book Next, CC BY-NC-SA 2.0. Downloaded when used, not part of Fuse",
+        inline = SystemArtPack.ATTRIBUTION + "\n\n" +
+            "Source: ${SystemArtPack.REPO_URL}\n" +
+            "Licence: ${SystemArtPack.LICENSE} (${SystemArtPack.LICENSE_URL}). You may share and adapt this art " +
+            "for non-commercial purposes with credit to the authors above, under the same licence.\n\n" +
+            "Fuse never bundles this art. When you turn on system art, Fuse downloads the logos, artwork and " +
+            "colours for your systems from the pack's repository and keeps them on your device. Console names " +
+            "and logos are trademarks of their owners and are shown only to identify each system.",
+    ),
 )
 
 /** Every licence text Fuse ships, readable with the controller (L2/R2 page through the text). */
@@ -64,7 +79,7 @@ fun LicensesScreen(app: AppState) {
     LaunchedEffect(current) {
         text = null
         scroll.scrollTo(0)
-        text = runCatching { Res.readBytes("files/licenses/${current.file}").decodeToString() }
+        text = current.inline ?: runCatching { Res.readBytes("files/licenses/${current.file}").decodeToString() }
             .getOrElse { "This licence text could not be read." }
     }
     LaunchedEffect(Unit) {

@@ -64,6 +64,14 @@ internal class DefaultMediaOps(
     private val progress = MutableStateFlow<FillProgress?>(null)
     override val fillProgress: StateFlow<FillProgress?> = progress
 
+    private val systemArt = SystemArtStore(ctx)
+    override val systemArtProgress: StateFlow<FillProgress?> = systemArt.progress
+
+    /** Starts fetching system art for systems that have none (see [SystemArtStore]). */
+    fun startSystemArt() = systemArt.start()
+
+    override fun downloadSystemArt() = systemArt.downloadAll()
+
     private val checks = MutableStateFlow<Map<ScrapeProviderId, KeyCheck?>>(emptyMap())
     override val keyChecks: StateFlow<Map<ScrapeProviderId, KeyCheck?>> = checks
     private var checkJob: Job? = null
@@ -185,8 +193,20 @@ internal class DefaultMediaOps(
     override fun media(owner: MediaOwner): Flow<MediaSet> = media.observe(owner)
 
     override suspend fun artworkOptions(owner: MediaOwner, kind: MediaKind): ArtworkResult {
+        if (owner is MediaOwner.OfPlatform) {
+            val platform = ctx.platform(owner.id) ?: return ArtworkResult.Unavailable("Fuse doesn't know this system.")
+            val options = systemArt.options(platform, kind)
+            return if (options.isNotEmpty()) {
+                ArtworkResult.Options(options)
+            } else {
+                ArtworkResult.Unavailable(
+                    if (kind == MediaKind.LOGO || kind == MediaKind.BOXART) "The system art pack has nothing for ${platform.name}, or it couldn't be reached."
+                    else "System art comes as a logo and a cover-style panel. For other slots, choose an image from a file.",
+                )
+            }
+        }
         val gameId = (owner as? MediaOwner.OfGame)?.id
-            ?: return ArtworkResult.Unavailable("Online artwork is found for games. For systems, choose an image from a file.")
+            ?: return ArtworkResult.Unavailable("Online artwork is found for games and systems. Here, choose an image from a file.")
         val game = ctx.data.games.get(gameId) ?: return ArtworkResult.Unavailable("This game is no longer in your library.")
         val (request, coordinator) = request(game, setOf(kind), metadata = false, collectAll = true)
         return when (val outcome = coordinator.scrape(request)) {

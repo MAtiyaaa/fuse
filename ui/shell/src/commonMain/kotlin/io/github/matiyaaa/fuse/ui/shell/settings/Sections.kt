@@ -19,6 +19,8 @@ import io.github.matiyaaa.fuse.model.Support
 import io.github.matiyaaa.fuse.model.WidgetKind
 import io.github.matiyaaa.fuse.model.CartridgeRoute
 import io.github.matiyaaa.fuse.integrations.KeyCheck
+import io.github.matiyaaa.fuse.integrations.systemart.SystemArtPack
+import io.github.matiyaaa.fuse.integrations.systemart.SystemArtStyle
 import io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction
 import io.github.matiyaaa.fuse.ui.designsystem.components.Trailing
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
@@ -241,7 +243,36 @@ fun systemsRows(app: AppState): List<MenuAction> {
     val platforms by app.store.library.platforms.collectAsState()
     val prefs by app.store.prefs.collectAsState()
     val systems = platforms.filter { it.gameCount > 0 }
+    val artProgress by app.store.media.systemArtProgress.collectAsState()
     return buildList {
+        add(toggleRow("art.auto", "System art", FuseIcons.Image, prefs.systemArtAuto, "Logos, artwork and colours for each system from the Art Book Next pack, downloaded when a system has none") { v ->
+            app.store.updatePrefs { it.copy(systemArtAuto = v) }
+        })
+        add(app.choiceRow(
+            "art.style", "System art style", FuseIcons.Palette, prefs.systemArtStyle,
+            SystemArtStyle.entries.map { it.name to it.displayName },
+            detail = "Used the next time system art is downloaded",
+        ) { v ->
+            app.store.updatePrefs { it.copy(systemArtStyle = v) }
+            app.confirm = ConfirmSpec("Download in this style now?", "Fuse downloads art for every system again in the new style. Art you chose yourself stays.", "Download") {
+                app.store.media.downloadSystemArt()
+                app.toasts.show("Downloading system art")
+            }
+        })
+        val progress = artProgress
+        add(MenuAction(
+            "art.all", "Download system art for all systems", FuseIcons.CloudDownload,
+            detail = when {
+                progress == null -> "Fetches every system again in the chosen style. Art you chose yourself stays"
+                !progress.finished -> "Working: ${progress.current ?: ""} (${progress.done + 1} of ${progress.total})"
+                else -> "Done: ${progress.added} images for ${progress.total} systems"
+            },
+            onSelect = {
+                app.store.media.downloadSystemArt()
+                app.toasts.show("Downloading system art")
+            },
+        ))
+        add(infoRow("art.credit", "Art Book Next", detail = SystemArtPack.ATTRIBUTION, icon = FuseIcons.Info))
         add(infoRow("order", "Arrange systems", detail = "Hold confirm on a system in Systems or on Home, then move it with the D-pad. The order is used everywhere"))
         if (prefs.systemOrder.isNotEmpty()) {
             add(MenuAction("order.reset", "Reset system order", FuseIcons.RotateCcw, detail = "Back to the order Fuse uses by default", onSelect = {
