@@ -1,0 +1,73 @@
+-- Artwork for games, platforms, collections and apps. USER rows are never replaced by scrapers.
+CREATE TABLE media (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    -- 'game' | 'platform' | 'collection' | 'app'
+    owner_type TEXT NOT NULL,
+    owner_id TEXT NOT NULL,
+    -- MediaKind name
+    kind TEXT NOT NULL,
+    -- MediaSource name
+    source TEXT NOT NULL,
+    local_path TEXT,
+    remote_url TEXT,
+    width INTEGER,
+    height INTEGER,
+    focus_x REAL NOT NULL DEFAULT 0.5,
+    focus_y REAL NOT NULL DEFAULT 0.5,
+    zoom REAL NOT NULL DEFAULT 1.0,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    added_at INTEGER NOT NULL
+);
+
+CREATE INDEX media_owner ON media(owner_type, owner_id, kind);
+
+-- USER rows first within a kind, so they win when the UI picks one.
+selectByOwner:
+SELECT * FROM media WHERE owner_type = ? AND owner_id = ?
+ORDER BY kind, CASE WHEN source = 'USER' THEN 0 ELSE 1 END, sort_order, id;
+
+selectByOwners:
+SELECT * FROM media WHERE owner_type = ? AND owner_id IN ?
+ORDER BY owner_id, kind, CASE WHEN source = 'USER' THEN 0 ELSE 1 END, sort_order, id;
+
+selectKind:
+SELECT * FROM media WHERE owner_type = ? AND owner_id = ? AND kind = ?
+ORDER BY CASE WHEN source = 'USER' THEN 0 ELSE 1 END, sort_order, id;
+
+countKind:
+SELECT COUNT(*) FROM media WHERE owner_type = ? AND owner_id = ? AND kind = ?;
+
+insert:
+INSERT INTO media(owner_type, owner_id, kind, source, local_path, remote_url, width, height,
+    focus_x, focus_y, zoom, sort_order, added_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+deleteKindUser:
+DELETE FROM media WHERE owner_type = ? AND owner_id = ? AND kind = ? AND source = 'USER';
+
+deleteKindNonUser:
+DELETE FROM media WHERE owner_type = ? AND owner_id = ? AND kind = ? AND source <> 'USER';
+
+deleteKind:
+DELETE FROM media WHERE owner_type = ? AND owner_id = ? AND kind = ?;
+
+deleteOwner:
+DELETE FROM media WHERE owner_type = ? AND owner_id = ?;
+
+updateLocalFolderPath:
+UPDATE media SET local_path = :localPath
+WHERE owner_type = :ownerType AND owner_id = :ownerId AND kind = :kind AND source = 'LOCAL_FOLDER';
+
+adjust:
+UPDATE media SET focus_x = :focusX, focus_y = :focusY, zoom = :zoom WHERE id = :id;
+
+-- Visible (present, not removed) games with no media of :kind, optionally for one platform.
+gamesLackingKind:
+SELECT g.id FROM game g
+WHERE g.missing = 0 AND g.removed_at IS NULL
+    AND (:platformId IS NULL OR g.platform_id = :platformId)
+    AND NOT EXISTS (
+        SELECT 1 FROM media m
+        WHERE m.owner_type = 'game' AND m.owner_id = CAST(g.id AS TEXT) AND m.kind = :kind
+    )
+ORDER BY g.id;

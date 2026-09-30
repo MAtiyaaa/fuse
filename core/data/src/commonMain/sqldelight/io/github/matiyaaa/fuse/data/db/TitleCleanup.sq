@@ -1,0 +1,19 @@
+-- Undo history for bulk Clean Display Names. entries_json lists each game's previous
+-- title_cleaned / use_cleaned. Files are never renamed.
+CREATE TABLE title_cleanup_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    applied_at INTEGER NOT NULL,
+    entries_json TEXT NOT NULL
+);
+
+insert:
+INSERT INTO title_cleanup_history(applied_at, entries_json) VALUES (?, ?);
+
+latest:
+SELECT * FROM title_cleanup_history ORDER BY id DESC LIMIT 1;
+
+count:
+SELECT COUNT(*) FROM title_cleanup_history;
+
+delete:
+DELETE FROM title_cleanup_history WHERE id = ?;

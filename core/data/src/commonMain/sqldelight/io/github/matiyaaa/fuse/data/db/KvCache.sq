@@ -1,0 +1,26 @@
+-- Response cache for RetroAchievements and scrapers. expires_at NULL never expires.
+CREATE TABLE kv_cache (
+    namespace TEXT NOT NULL,
+    key TEXT NOT NULL,
+    value_json TEXT NOT NULL,
+    fetched_at INTEGER NOT NULL,
+    expires_at INTEGER,
+    PRIMARY KEY (namespace, key)
+);
+
+CREATE INDEX kv_cache_expires ON kv_cache(expires_at);
+
+get:
+SELECT value_json, fetched_at, expires_at FROM kv_cache WHERE namespace = ? AND key = ?;
+
+put:
+INSERT OR REPLACE INTO kv_cache(namespace, key, value_json, fetched_at, expires_at) VALUES (?, ?, ?, ?, ?);
+
+delete:
+DELETE FROM kv_cache WHERE namespace = ? AND key = ?;
+
+deleteNamespace:
+DELETE FROM kv_cache WHERE namespace = ?;
+
+purgeExpired:
+DELETE FROM kv_cache WHERE expires_at IS NOT NULL AND expires_at <= :now;

@@ -1,0 +1,20 @@
+-- Last seen modification time of each scanned folder (quick scans skip unchanged folders).
+CREATE TABLE folder_state (
+    path TEXT NOT NULL PRIMARY KEY,
+    modified_at INTEGER NOT NULL
+);
+
+get:
+SELECT modified_at FROM folder_state WHERE path = ?;
+
+put:
+INSERT OR REPLACE INTO folder_state(path, modified_at) VALUES (?, ?);
+
+delete:
+DELETE FROM folder_state WHERE path = ?;
+
+deleteRange:
+DELETE FROM folder_state WHERE path >= :fromInclusive AND path < :untilExclusive;
+
+deleteAll:
+DELETE FROM folder_state;

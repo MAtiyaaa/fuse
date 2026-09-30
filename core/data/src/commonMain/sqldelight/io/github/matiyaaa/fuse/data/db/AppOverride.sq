@@ -1,0 +1,36 @@
+-- The user's choices about an installed app (Android package/activity or Linux .desktop id).
+CREATE TABLE app_override (
+    app_id TEXT NOT NULL PRIMARY KEY,
+    custom_title TEXT,
+    pinned INTEGER NOT NULL DEFAULT 0,
+    hidden INTEGER NOT NULL DEFAULT 0,
+    sort_order INTEGER,
+    last_used_at INTEGER
+);
+
+selectAll:
+SELECT * FROM app_override;
+
+selectById:
+SELECT * FROM app_override WHERE app_id = ?;
+
+ensure:
+INSERT OR IGNORE INTO app_override(app_id) VALUES (?);
+
+setCustomTitle:
+UPDATE app_override SET custom_title = :customTitle WHERE app_id = :appId;
+
+setPinned:
+UPDATE app_override SET pinned = :pinned WHERE app_id = :appId;
+
+setHidden:
+UPDATE app_override SET hidden = :hidden WHERE app_id = :appId;
+
+setSortOrder:
+UPDATE app_override SET sort_order = :sortOrder WHERE app_id = :appId;
+
+setLastUsed:
+UPDATE app_override SET last_used_at = :lastUsedAt WHERE app_id = :appId;
+
+delete:
+DELETE FROM app_override WHERE app_id = ?;
