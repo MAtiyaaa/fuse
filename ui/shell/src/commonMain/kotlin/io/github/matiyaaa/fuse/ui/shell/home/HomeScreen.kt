@@ -41,6 +41,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.components.SectionLabel
 import io.github.matiyaaa.fuse.ui.designsystem.focus.FollowSelection
 import io.github.matiyaaa.fuse.ui.designsystem.focus.ShelfSelection
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
+import io.github.matiyaaa.fuse.ui.designsystem.media.PrefetchArt
 import io.github.matiyaaa.fuse.ui.designsystem.icons.HintButton
 import io.github.matiyaaa.fuse.ui.designsystem.input.InputLayer
 import io.github.matiyaaa.fuse.ui.designsystem.input.NavResult
@@ -275,6 +276,18 @@ private fun ShelfRow(
     val metrics = LocalTileMetrics.current
     val row = rememberLazyListState()
     FollowSelection(row, { rememberedColumn }, anchor = 0f)
+    PrefetchArt(
+        remember(shelf.items) {
+            shelf.items.map { item ->
+                when (item) {
+                    is ShelfItem.Game -> item.card.art.grid ?: item.card.art.icon ?: item.card.art.boxart
+                    is ShelfItem.System -> item.card.art.icon ?: item.card.art.boxart
+                    else -> null
+                }
+            }
+        },
+        if (selectedColumn >= 0) selectedColumn else -1,
+    )
     Column(
         modifier
             .fillMaxWidth()

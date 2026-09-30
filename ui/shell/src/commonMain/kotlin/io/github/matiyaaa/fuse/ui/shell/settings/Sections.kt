@@ -479,6 +479,7 @@ fun inputRows(app: AppState): List<MenuAction> {
 fun displayRows(app: AppState): List<MenuAction> {
     val p by app.store.prefs.collectAsState()
     val displays by app.platform.displays.collectAsState()
+    val log by app.platform.secondScreenLog.collectAsState()
     val d = p.display
     return buildList {
         app.platform.windowControls?.let { w ->
@@ -504,6 +505,24 @@ fun displayRows(app: AppState): List<MenuAction> {
                 }
             },
         ) { v -> app.store.updatePrefs { it.copy(display = it.display.copy(mode = v)) } })
+        if (app.platform.features.secondScreen) {
+            add(infoRow(
+                "dual", "Games with two screens", icon = FuseIcons.DualScreen,
+                detail = "DS, DSi, 3DS and Wii U games get the second screen: the companion steps aside while they run and comes back with Fuse. With Fuse as your Home app, Fuse is also the second screen's Home",
+            ))
+            add(MenuAction(
+                "dual.log", "Second screen status", FuseIcons.Activity,
+                detail = log.lastOrNull() ?: "Nothing has happened on the second screen yet",
+                trailing = Trailing.Chevron,
+                onSelect = {
+                    app.choice = io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec(
+                        title = "Second screen status",
+                        message = log.takeLast(8).joinToString("\n").ifEmpty { "Nothing has happened on the second screen yet." },
+                        options = listOf(MenuAction("dual.ok", "Close", FuseIcons.Check, onSelect = { app.choice = null })),
+                    )
+                },
+            ))
+        }
         add(toggleRow("perf", "Show performance on the second screen", FuseIcons.Activity, d.companionShowsPerformance, "Only values the system really reports; nothing is estimated") { v -> app.store.updatePrefs { it.copy(display = it.display.copy(companionShowsPerformance = v)) } })
         add(toggleRow("touch", "Touch controls on the second screen", FuseIcons.Hand, d.companionTouchControls) { v -> app.store.updatePrefs { it.copy(display = it.display.copy(companionTouchControls = v)) } })
         for (disp in displays) {
@@ -529,9 +548,10 @@ fun performanceRows(app: AppState): List<MenuAction> {
         app.choiceRow(
             "profile", "Performance profile", FuseIcons.Gauge, p.performance,
             listOf(PerformanceProfile.AUTOMATIC to "Automatic", PerformanceProfile.LOW_POWER to "Low power", PerformanceProfile.BALANCED to "Balanced", PerformanceProfile.HIGH_QUALITY to "High quality"),
-            detail = "Automatic picks for this device: ${cap.tier.name.lowercase().replaceFirstChar { it.uppercase() }}",
+            detail = "Now: " + performanceSummary(p.performance, p.lowPower, cap, app.platform.host) +
+                "\nAutomatic picks for this device: ${cap.tier.name.lowercase().replaceFirstChar { it.uppercase() }}",
         ) { v -> app.store.updatePrefs { it.copy(performance = v) } },
-        toggleRow("low", "Low Power Mode", FuseIcons.Leaf, p.lowPower, "No video previews, blur, moving backgrounds or CRT; lighter artwork. Navigation stays quick") { v -> app.store.updatePrefs { it.copy(lowPower = v) } },
+        toggleRow("low", "Low Power Mode", FuseIcons.Leaf, p.lowPower, "60 Hz, no video previews, blur, moving backgrounds or CRT; lighter artwork and a smaller image cache. Navigation stays quick") { v -> app.store.updatePrefs { it.copy(lowPower = v) } },
         toggleRow("overlay", "Performance overlay", FuseIcons.Activity, p.performanceOverlay, "Fuse's own frame rate, memory and temperatures, only as the system reports them. Other apps' frame rates can't be read") { v -> app.store.updatePrefs { it.copy(performanceOverlay = v) } },
         infoRow("cpu", "Processor", "${cap.cpuCores} cores", icon = FuseIcons.Chip),
         infoRow("ram", "Memory", "${(cap.totalRamMb / 1024.0 * 10).toInt() / 10.0} GB", icon = FuseIcons.Memory),

@@ -25,6 +25,8 @@ import io.github.matiyaaa.fuse.ui.designsystem.components.ToastKind
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.graphicsLayer
 import io.github.matiyaaa.fuse.model.BackgroundStyle
 import io.github.matiyaaa.fuse.model.Destination
@@ -248,9 +250,13 @@ private fun Room(
             delay(videoDelay * 1000L)
             playVideo = true
         }
+        // Glass panels frost the art behind them, when the performance profile allows blur.
+        val blur = if (glass.enabled && quality.blur) maxOf(glass.heroBlur, glass.blur * 0.5f) else 0f
         HeroBackdrop(
             source = hero,
-            modifier = Modifier.fillMaxSize().graphicsLayer { alpha = if (glass.enabled) glass.backgroundOpacity else 1f },
+            modifier = Modifier.fillMaxSize()
+                .then(if (blur > 0f) Modifier.blur(blur.dp) else Modifier)
+                .graphicsLayer { alpha = if (glass.enabled) glass.backgroundOpacity else 1f },
             dim = if (glass.enabled) glass.overlayDarkness * 0.6f else dim,
             gradient = if (glass.enabled) glass.gradientStrength else 0.9f,
             brightness = if (glass.enabled) glass.heroBrightness else 1f,

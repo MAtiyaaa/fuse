@@ -104,6 +104,8 @@ fun QuickMenu(app: AppState) {
         ) {
             val next = PerformanceProfile.entries[(prefs.performance.ordinal + 1) % PerformanceProfile.entries.size]
             app.store.updatePrefs { it.copy(performance = next) }
+            // Say what changed, since most of it is felt rather than seen.
+            app.toasts.show(io.github.matiyaaa.fuse.ui.shell.settings.performanceSummary(next, prefs.lowPower, platform.device, platform.host))
         })
         add(QuickTile("Low Power", FuseIcons.Leaf, active = prefs.lowPower) { app.store.updatePrefs { it.copy(lowPower = !it.lowPower) } })
         add(QuickTile("Cartridge", FuseIcons.CloudDownload) { close(); app.selectTab(Destination.CARTRIDGE) })

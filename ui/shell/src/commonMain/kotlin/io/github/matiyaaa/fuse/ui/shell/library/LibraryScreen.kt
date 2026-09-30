@@ -1,5 +1,7 @@
 package io.github.matiyaaa.fuse.ui.shell.library
 
+import io.github.matiyaaa.fuse.ui.designsystem.media.PrefetchArt
+
 import androidx.compose.foundation.rememberScrollState
 
 import androidx.compose.foundation.horizontalScroll
@@ -213,6 +215,7 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
         if (idx >= 0) state.grid.index = idx else state.grid.clamp(list.size)
     }
     val selectedCard = list?.getOrNull(state.grid.index)
+    PrefetchArt(remember(list) { list.orEmpty().map { it.art.icon ?: it.art.boxart ?: it.art.grid } }, state.grid.index)
     val special = scope == LibraryScope.All && segment.set != GameSet.LIBRARY
     LaunchedEffect(selectedCard?.id, special) {
         state.selectedId = selectedCard?.id
