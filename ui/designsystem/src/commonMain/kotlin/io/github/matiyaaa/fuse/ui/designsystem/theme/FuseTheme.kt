@@ -41,7 +41,7 @@ data class FuseGeometry(
 
 /** How controller buttons are drawn in hints, and whether confirm is on the right (Nintendo layout). */
 @Immutable
-data class GlyphConfig(val style: GlyphStyle, val nintendoLayout: Boolean)
+data class GlyphConfig(val style: GlyphStyle, val confirmOnRight: Boolean)
 
 /** Everything a Fuse composable may read about the current look. */
 @Immutable
@@ -61,7 +61,7 @@ val LocalFuseMotion = staticCompositionLocalOf { FuseMotion(MotionProfile.STANDA
 val LocalRenderQuality = staticCompositionLocalOf {
     RenderQuality.of(PerformanceProfile.BALANCED, null, lowPower = false)
 }
-val LocalGlyphs = staticCompositionLocalOf { GlyphConfig(GlyphStyle.XBOX, nintendoLayout = false) }
+val LocalGlyphs = staticCompositionLocalOf { GlyphConfig(GlyphStyle.XBOX, confirmOnRight = false) }
 
 /** Shorthand accessors, like MaterialTheme.colorScheme. */
 object Fuse {
@@ -83,7 +83,7 @@ fun FuseTheme(
     spec: ThemeSpec = ThemePresets.Fuse,
     motion: MotionProfile? = null,
     quality: RenderQuality = RenderQuality.of(PerformanceProfile.BALANCED, null, lowPower = false),
-    glyphs: GlyphConfig = GlyphConfig(GlyphStyle.XBOX, nintendoLayout = false),
+    glyphs: GlyphConfig = GlyphConfig(GlyphStyle.XBOX, confirmOnRight = false),
     glass: GlassSettings? = null,
     highContrastFocus: Boolean = false,
     content: @Composable () -> Unit,

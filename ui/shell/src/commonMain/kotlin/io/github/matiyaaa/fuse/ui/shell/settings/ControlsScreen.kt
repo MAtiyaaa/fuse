@@ -32,6 +32,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.components.FText
 import io.github.matiyaaa.fuse.ui.designsystem.components.Hint
 import io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction
 import io.github.matiyaaa.fuse.ui.designsystem.components.MenuList
+import io.github.matiyaaa.fuse.ui.designsystem.components.FuseButton
 import io.github.matiyaaa.fuse.ui.designsystem.components.Panel
 import io.github.matiyaaa.fuse.ui.designsystem.components.ProgressBar
 import io.github.matiyaaa.fuse.ui.designsystem.components.SectionLabel
@@ -69,13 +70,17 @@ private val mappable = listOf(
 private val remappable = listOf(
     PadButton.A, PadButton.B, PadButton.X, PadButton.Y, PadButton.L1, PadButton.R1, PadButton.L2, PadButton.R2,
     PadButton.L3, PadButton.R3, PadButton.START, PadButton.SELECT, PadButton.MODE,
+    // Some handhelds send a face button as the system Back key.
+    PadButton.KEY_ESCAPE,
 )
 
-private fun PadButton.label(nintendo: Boolean): String = when (this) {
-    PadButton.A -> if (nintendo) "B (bottom)" else "A (bottom)"
-    PadButton.B -> if (nintendo) "A (right)" else "B (right)"
-    PadButton.X -> if (nintendo) "Y (left)" else "X (left)"
-    PadButton.Y -> if (nintendo) "X (top)" else "Y (top)"
+/** [nintendoKeys]: the pad sends Nintendo keycodes, so A is the right button. */
+private fun PadButton.label(nintendoKeys: Boolean): String = when (this) {
+    PadButton.A -> if (nintendoKeys) "A (right)" else "A (bottom)"
+    PadButton.B -> if (nintendoKeys) "B (bottom)" else "B (right)"
+    PadButton.X -> if (nintendoKeys) "X (top)" else "X (left)"
+    PadButton.Y -> if (nintendoKeys) "Y (left)" else "Y (top)"
+    PadButton.KEY_ESCAPE -> "Back key"
     PadButton.L1 -> "LB"
     PadButton.R1 -> "RB"
     PadButton.L2 -> "LT"
@@ -102,6 +107,8 @@ fun ControlsScreen(app: AppState) {
     val router = LocalInputRouter.current
     val sel = remember { LinearSelection() }
     var capturing by remember { mutableStateOf<Pair<NavAction, String>?>(null) }
+    var testing by remember { mutableStateOf(false) }
+    var testHeld by remember { mutableStateOf<PadButton?>(null) }
 
     fun setProfile(transform: (InputProfile) -> InputProfile) = app.store.updatePrefs { it.copy(input = transform(it.input)) }
 
@@ -122,13 +129,29 @@ fun ControlsScreen(app: AppState) {
             capturing = null
         }
     }
+    // While testing, every button only lights up the test. Holding one for a moment ends the test.
+    DisposableEffect(testing) {
+        if (testing) {
+            router.exclusive = { button, down -> testHeld = if (down) button else if (testHeld == button) null else testHeld }
+        }
+        onDispose { if (testing) router.exclusive = null }
+    }
+    LaunchedEffect(testHeld) {
+        if (testing && testHeld != null) {
+            delay(TEST_EXIT_MS)
+            testing = false
+            testHeld = null
+        }
+    }
     LaunchedEffect(Unit) { app.hero = null }
-    LaunchedEffect(capturing) {
-        app.hints = if (capturing != null) emptyList() else listOf(Hint(HintButton.CONFIRM, "Change"), Hint(HintButton.BACK, "Back"))
+    LaunchedEffect(capturing, testing) {
+        app.hints = if (capturing != null || testing) emptyList() else listOf(Hint(HintButton.CONFIRM, "Change"), Hint(HintButton.BACK, "Back"))
     }
 
-    val nintendo = prefs.input.nintendoLayout
+    val nintendo = prefs.input.glyphs == io.github.matiyaaa.fuse.model.GlyphStyle.NINTENDO
     val actions = buildList {
+        add(MenuAction("test", "Test buttons", FuseIcons.Joystick, detail = "Every button lights up here and does nothing else. Hold any button to stop", onSelect = { testing = true }))
+        add(MenuAction("detect", "Detect my buttons", FuseIcons.ScanSearch, detail = "Sets the layout and confirm button from two presses", onSelect = { app.buttonDetect = true }))
         for ((action, label) in mappable) {
             val buttons = buttonsFor(router, action)
             add(
@@ -153,7 +176,7 @@ fun ControlsScreen(app: AppState) {
         )
     }
     sel.clamp(actions.size)
-    InputLayer(enabled = app.focusZone == FocusZone.CONTENT && !app.overlayOpen && capturing == null) { e -> handleMenuAction(e, actions, sel) }
+    InputLayer(enabled = app.focusZone == FocusZone.CONTENT && !app.overlayOpen && capturing == null && !testing) { e -> handleMenuAction(e, actions, sel) }
 
     BoxWithConstraints(Modifier.fillMaxSize().padding(horizontal = Space.gutter)) {
         val wide = maxWidth > 900.dp
@@ -170,8 +193,26 @@ fun ControlsScreen(app: AppState) {
                     Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
                         SectionLabel("Controller test")
                         Spacer(Modifier.height(Space.m))
-                        ControllerTest()
+                        ControllerTest(nintendo)
                     }
+                }
+            }
+        }
+        AnimatedVisibility(
+            visible = testing,
+            enter = fadeIn(Fuse.motion.fade(150)),
+            exit = fadeOut(Fuse.motion.fade(150)),
+            modifier = Modifier.align(Alignment.Center),
+        ) {
+            Panel(raised = true) {
+                Column(Modifier.padding(Space.xl).widthIn(min = 360.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    FText("Button test", Fuse.type.title)
+                    Spacer(Modifier.height(Space.l))
+                    ControllerTest(nintendo)
+                    Spacer(Modifier.height(Space.l))
+                    FText("Hold any button to stop", Fuse.type.caption, color = Fuse.colors.textFaint)
+                    Spacer(Modifier.height(Space.s))
+                    FuseButton("Done", selected = true, onClick = { testing = false })
                 }
             }
         }
@@ -209,3 +250,4 @@ private fun CaptureCountdown(key: Any?) {
 }
 
 private const val CAPTURE_MS = 5_000L
+private const val TEST_EXIT_MS = 1_200L

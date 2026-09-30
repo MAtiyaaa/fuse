@@ -54,6 +54,7 @@ fun OverlayHost(app: AppState) {
     ChoiceOverlay(app)
     ConfirmOverlay(app)
     TextInputOverlay(app)
+    io.github.matiyaaa.fuse.ui.shell.settings.ButtonDetectOverlay(app)
 }
 
 @Composable

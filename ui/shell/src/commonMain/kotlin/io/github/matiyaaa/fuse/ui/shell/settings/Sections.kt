@@ -81,10 +81,6 @@ fun appearanceRows(app: AppState): List<MenuAction> {
             add(app.percentRow("crt.vignette", "Vignette", FuseIcons.Contrast, p.crt.vignette) { v -> set { it.copy(crt = it.crt.copy(vignette = v)) } })
         }
         add(toggleRow("contrast", "High contrast focus", FuseIcons.Accessibility, p.highContrastFocus, "Adds an outline to everything that's selected") { v -> set { it.copy(highContrastFocus = v) } })
-        add(app.choiceRow(
-            "glyphs", "Button symbols", FuseIcons.Gamepad, if (p.input.autoGlyphs) null else p.input.glyphs,
-            listOf(null to "Automatic", GlyphStyle.XBOX to "A B X Y", GlyphStyle.NINTENDO to "Nintendo style", GlyphStyle.PLAYSTATION to "Shapes", GlyphStyle.KEYBOARD to "Keyboard"),
-        ) { v -> set { it.copy(input = it.input.copy(autoGlyphs = v == null, glyphs = v ?: it.input.glyphs)) } })
     }
 }
 
@@ -395,7 +391,14 @@ fun inputRows(app: AppState): List<MenuAction> {
     val i = p.input
     fun setInput(t: (io.github.matiyaaa.fuse.model.InputProfile) -> io.github.matiyaaa.fuse.model.InputProfile) = app.store.updatePrefs { it.copy(input = t(it.input)) }
     return listOf(
-        toggleRow("nintendo", "Nintendo button layout", FuseIcons.Gamepad, i.nintendoLayout, "Confirm on the right button, back on the bottom; X and Y swap too") { v -> setInput { it.copy(nintendoLayout = v) } },
+        MenuAction("detect", "Detect my buttons", FuseIcons.ScanSearch, detail = "Press two buttons and Fuse sets the layout and confirm button for you", onSelect = { app.buttonDetect = true }),
+        app.choiceRow(
+            "layout", "Button layout", FuseIcons.Gamepad, i.glyphs,
+            listOf(GlyphStyle.XBOX to "Xbox (A at the bottom)", GlyphStyle.NINTENDO to "Nintendo (A on the right)", GlyphStyle.PLAYSTATION to "PlayStation (shapes)"),
+            detail = "The letters printed on your buttons. Hints use them",
+        ) { v -> setInput { it.copy(glyphs = v) } },
+        toggleRow("swap", "Swap confirm and back", FuseIcons.MoveHorizontal, i.swapConfirmBack, if (i.confirmOnRight) "Now: confirm is the right button" else "Now: confirm is the bottom button") { v -> setInput { it.copy(swapConfirmBack = v) } },
+        toggleRow("keyhints", "Keyboard hints when typing", FuseIcons.Keyboard, i.autoGlyphs, "Show keyboard keys in hints after a keyboard key is used") { v -> setInput { it.copy(autoGlyphs = v) } },
         app.choiceRow("delay", "Repeat delay", FuseIcons.Timer, i.repeatDelayMs, listOf(180, 220, 280, 350, 450).map { it to "$it ms" }, detail = "How long a held direction waits before repeating") { v -> setInput { it.copy(repeatDelayMs = v) } },
         app.choiceRow("speed", "Repeat speed", FuseIcons.Zap, i.repeatIntervalMs, listOf(40 to "Fastest", 55 to "Fast", 70 to "Normal", 100 to "Relaxed", 140 to "Slow")) { v -> setInput { it.copy(repeatIntervalMs = v) } },
         toggleRow("accel", "Speed up while held", FuseIcons.Rocket, i.repeatAccelerate) { v -> setInput { it.copy(repeatAccelerate = v) } },

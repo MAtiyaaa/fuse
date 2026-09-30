@@ -34,7 +34,7 @@ internal fun AppSettings.toUiPrefs(scoped: GlobalScoped): UiPrefs {
         showLogo = scoped.showLogo,
         videoPreview = videoPreview.enabled,
         videoDelaySeconds = videoPreview.delaySeconds,
-        input = input,
+        input = input.migrated(),
         display = display,
         performance = performance.profile,
         lowPower = performance.lowPowerMode,

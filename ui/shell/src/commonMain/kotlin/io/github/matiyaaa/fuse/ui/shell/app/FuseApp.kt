@@ -148,7 +148,7 @@ fun FuseApp(store: FuseStore, platform: PlatformUi, router: InputRouter) {
         spec = spec,
         motion = prefs.motion,
         quality = quality,
-        glyphs = GlyphConfig(glyphStyle, prefs.input.nintendoLayout),
+        glyphs = GlyphConfig(glyphStyle, prefs.input.confirmOnRight),
         glass = prefs.glass,
         highContrastFocus = prefs.highContrastFocus,
     ) {
