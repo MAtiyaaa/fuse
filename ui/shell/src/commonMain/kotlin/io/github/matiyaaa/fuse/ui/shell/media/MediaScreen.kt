@@ -82,6 +82,7 @@ import io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec
 import io.github.matiyaaa.fuse.ui.shell.app.ConfirmSpec
 import io.github.matiyaaa.fuse.ui.shell.app.FocusZone
 import io.github.matiyaaa.fuse.ui.shell.store.ArtworkResult
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 private val slots = listOf(
@@ -123,14 +124,22 @@ fun MediaScreen(app: AppState, owner: MediaOwner, title: String) {
         browser = Browser.Loading
         grid.index = 0
         app.scope.launch {
-            browser = when (val r = app.store.media.artworkOptions(owner, k)) {
+            val result = try {
+                app.store.media.artworkOptions(owner, k)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                ArtworkResult.Unavailable("Fuse couldn't search for art (${e::class.simpleName}). Try again, or check your keys in Settings, Media and Scraping.")
+            }
+            browser = when (val r = result) {
                 is ArtworkResult.Options -> if (r.options.isEmpty()) Browser.Message("No ${slotName(k).lowercase()} found. Try another source in Media and Scraping settings.") else Browser.Options(k, r.options)
                 is ArtworkResult.NeedsMatch -> {
                     app.choice = ChoiceSpec(
                         title = "Which game is this?",
                         message = "Fuse found several close matches. Pick the right one and art will be searched for it.",
-                        options = r.candidates.map { c ->
-                            MenuAction("c${c.providerGameId}", c.title, FuseIcons.Target, detail = listOfNotNull(c.platformName, c.year?.toString(), "${(c.confidence * 100).toInt()}% match").joinToString("  ·  "), onSelect = {
+                        // Ids include the provider and position: two providers can share a game number.
+                        options = r.candidates.mapIndexed { i, c ->
+                            MenuAction("c.${c.provider}.${c.providerGameId}.$i", c.title, FuseIcons.Target, detail = listOfNotNull(c.platformName, c.year?.toString(), "${(c.confidence * 100).toInt()}% match").joinToString("  ·  "), onSelect = {
                                 app.choice = null
                                 val game = (owner as? MediaOwner.OfGame)?.id
                                 if (game != null) app.scope.launch { app.store.media.acceptCandidate(game, c); browse(k) }

@@ -27,6 +27,7 @@ import io.github.matiyaaa.fuse.model.ScanScope
 import io.github.matiyaaa.fuse.model.ScopeRef
 import io.github.matiyaaa.fuse.model.ScopedKey
 import io.github.matiyaaa.fuse.model.ScrapeCandidate
+import io.github.matiyaaa.fuse.model.ScrapeProviderId
 import io.github.matiyaaa.fuse.model.SortOrder
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
@@ -132,6 +133,10 @@ interface MediaOps {
     suspend fun candidates(game: GameId): List<ScrapeCandidate>
     suspend fun acceptCandidate(game: GameId, candidate: ScrapeCandidate)
     val providers: StateFlow<List<ProviderStatus>>
+    /** The last key check per provider; empty until a check ran. Checks run after a key is saved. */
+    val keyChecks: StateFlow<Map<ScrapeProviderId, io.github.matiyaaa.fuse.integrations.KeyCheck?>>
+    /** Tests every provider key that is set with a real request; null marks a check in progress. */
+    fun checkKeys()
 }
 
 sealed interface ArtworkResult {

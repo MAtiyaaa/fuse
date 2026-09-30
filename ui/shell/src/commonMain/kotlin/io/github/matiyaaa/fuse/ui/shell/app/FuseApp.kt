@@ -21,6 +21,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import io.github.matiyaaa.fuse.ui.designsystem.components.ToastKind
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -69,6 +70,10 @@ import io.github.matiyaaa.fuse.ui.shell.settings.PlatformSettingsScreen
 import io.github.matiyaaa.fuse.ui.shell.settings.SettingsScreen
 import io.github.matiyaaa.fuse.ui.shell.store.FuseStore
 import io.github.matiyaaa.fuse.ui.shell.systems.SystemsScreen
+import kotlinx.coroutines.CoroutineExceptionHandler
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import io.github.matiyaaa.fuse.ui.shell.components.TileBorders
 import io.github.matiyaaa.fuse.ui.shell.components.LocalTileBorders
@@ -90,9 +95,19 @@ import androidx.compose.ui.graphics.Brush
  */
 @Composable
 fun FuseApp(store: FuseStore, platform: PlatformUi, router: InputRouter) {
-    val scope = rememberCoroutineScope()
+    val base = rememberCoroutineScope()
     val prefs by store.prefs.collectAsState()
-    val app = remember { AppState(store, platform, scope, if (prefs.onboardingDone) Route.Root(Destination.HOME) else Route.Onboarding) }
+    val app = remember {
+        lateinit var state: AppState
+        // Everything screens start runs here. A failure shows a message; it never closes Fuse.
+        val scope = CoroutineScope(
+            base.coroutineContext + SupervisorJob(base.coroutineContext[Job]) + CoroutineExceptionHandler { _, t ->
+                state.toasts.show("Something went wrong (${t::class.simpleName ?: "error"}). Fuse kept running.", ToastKind.ERROR)
+            },
+        )
+        state = AppState(store, platform, scope, if (prefs.onboardingDone) Route.Root(Destination.HOME) else Route.Onboarding)
+        state
+    }
     val spec = ThemePresets.byId(prefs.themeId)
     val quality = RenderQuality.of(prefs.performance, platform.device, prefs.lowPower)
     val lastSource by router.lastSource.collectAsState()

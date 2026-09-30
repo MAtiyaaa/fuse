@@ -120,7 +120,7 @@ private fun ChoiceOverlay(app: AppState) {
                 FText(s.title, Fuse.type.title, maxLines = 2)
                 s.message?.let {
                     Spacer(Modifier.height(Space.s))
-                    FText(it, Fuse.type.body, color = Fuse.colors.textMuted, maxLines = 5)
+                    FText(it, Fuse.type.body, color = Fuse.colors.textMuted, maxLines = 8)
                 }
                 Spacer(Modifier.height(Space.l))
                 MenuList(s.options, sel, modifier = Modifier.heightIn(max = 420.dp))

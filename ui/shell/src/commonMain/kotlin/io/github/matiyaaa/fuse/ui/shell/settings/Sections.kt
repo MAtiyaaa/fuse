@@ -18,6 +18,7 @@ import io.github.matiyaaa.fuse.model.SoundProfile
 import io.github.matiyaaa.fuse.model.Support
 import io.github.matiyaaa.fuse.model.WidgetKind
 import io.github.matiyaaa.fuse.model.CartridgeRoute
+import io.github.matiyaaa.fuse.integrations.KeyCheck
 import io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction
 import io.github.matiyaaa.fuse.ui.designsystem.components.Trailing
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
@@ -289,6 +290,7 @@ fun emulatorRows(app: AppState): List<MenuAction> {
 fun mediaRows(app: AppState): List<MenuAction> {
     val p by app.store.prefs.collectAsState()
     val providers by app.store.media.providers.collectAsState()
+    val checks by app.store.media.keyChecks.collectAsState()
     val stored by app.store.credentials.stored.collectAsState()
     val set = app.store::updatePrefs
     fun secretRow(key: String, label: String, detail: String) = app.textRow(
@@ -312,7 +314,25 @@ fun mediaRows(app: AppState): List<MenuAction> {
             )
         }))
         for (s in providers) {
-            add(infoRow("prov.${s.id}", s.id.displayName, if (s.configured) "Ready" else "Needs setup", detail = s.note, icon = if (s.configured) FuseIcons.CircleCheck else FuseIcons.Alert))
+            // Providers with a key show the result of the last real test, not just "a key is saved".
+            val tested = s.id in checks
+            val check = checks[s.id]
+            val (value, icon, detail) = when {
+                !s.configured -> Triple("Needs setup", FuseIcons.Alert, s.note)
+                tested && check == null -> Triple("Checking", FuseIcons.Hourglass, "Testing the key with a real request")
+                check is KeyCheck.Working -> Triple("Working", FuseIcons.CircleCheck, s.note ?: "The key was accepted")
+                check is KeyCheck.Rejected -> Triple("Key rejected", FuseIcons.CircleX, check.reason)
+                check is KeyCheck.Unreachable -> Triple("Offline", FuseIcons.WifiOff, "Couldn't reach it to test the key: ${check.reason}")
+                check is KeyCheck.Failed -> Triple("Not confirmed", FuseIcons.Warning, check.reason)
+                else -> Triple("Ready", FuseIcons.CircleCheck, s.note)
+            }
+            add(infoRow("prov.${s.id}", s.id.displayName, value, detail = detail, icon = icon))
+        }
+        if (checks.isNotEmpty() || stored.any { it.startsWith("sgdb.") || it.startsWith("igdb.") || it.startsWith("tgdb.") }) {
+            add(MenuAction("test", "Test keys", FuseIcons.ShieldCheck, detail = "Checks every key with a real request and shows the result above", onSelect = {
+                app.store.media.checkKeys()
+                app.toasts.show("Testing keys")
+            }))
         }
         add(secretRow("sgdb.apikey", "SteamGridDB API key", "Free from steamgriddb.com, Preferences, API. Stored encrypted on this device"))
         add(secretRow("igdb.clientId", "IGDB Client ID", "From your own Twitch developer app. IGDB doesn't allow apps to share one"))
@@ -546,7 +566,8 @@ fun updateRows(app: AppState): List<MenuAction> {
 }
 
 @Composable
-fun aboutRows(app: AppState): List<MenuAction> = listOf(
+fun aboutRows(app: AppState): List<MenuAction> = listOfNotNull(
+    app.platform.lastCrashReport()?.let { report -> crashRow(app, report) },
     infoRow("fuse", "Fuse ${app.store.updates.currentVersion}", detail = "A console-style home for your games. Free and open source (GPL-3.0-or-later)", icon = FuseIcons.Info),
     MenuAction("source", "Source code", FuseIcons.External, detail = "github.com/MAtiyaaa/fuse", onSelect = { app.platform.openUrl("https://github.com/MAtiyaaa/fuse") }),
     MenuAction("licences", "Open-source licences", FuseIcons.File, detail = "Fuse, its libraries, fonts and icons", trailing = Trailing.Chevron, onSelect = { app.go(Route.Licenses) }),
@@ -569,3 +590,25 @@ private fun autostartRow(app: AppState, w: WindowControls): MenuAction {
     }
 }
 
+/** The last crash Fuse recorded: what happened, where, and a way to clear it once it's been read. */
+private fun crashRow(app: AppState, report: String): MenuAction {
+    val lines = report.lines().map { it.trim() }.filter { it.isNotEmpty() }
+    // The exception line and the first frames that are Fuse's own say most.
+    val cause = lines.firstOrNull { it.contains("Exception") || it.contains("Error") } ?: lines.firstOrNull().orEmpty()
+    val frames = lines.filter { it.startsWith("at io.github.matiyaaa.fuse") }.take(4)
+    val summary = (listOfNotNull(lines.firstOrNull { it.startsWith("Time:") }, cause) + frames).joinToString("\n")
+    return MenuAction("crash", "Last crash report", FuseIcons.Warning, detail = cause.take(120), trailing = Trailing.Chevron, onSelect = {
+        app.choice = io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec(
+            title = "Last crash report",
+            message = summary,
+            options = listOf(
+                MenuAction("crash.clear", "Clear report", FuseIcons.Trash, detail = "Include this in a bug report first if you can", onSelect = {
+                    app.platform.clearCrashReport()
+                    app.choice = null
+                    app.toasts.show("Crash report cleared")
+                }),
+                MenuAction("crash.keep", "Keep", FuseIcons.Check, onSelect = { app.choice = null }),
+            ),
+        )
+    })
+}
