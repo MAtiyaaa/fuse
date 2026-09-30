@@ -4,7 +4,7 @@ import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.net.Uri
+import androidx.core.net.toUri
 import io.github.matiyaaa.fuse.ActivityHolder
 import io.github.matiyaaa.fuse.BuildConfig
 import io.github.matiyaaa.fuse.CompanionScreens
@@ -84,7 +84,7 @@ class AndroidPlatformUi(
     }
 
     override fun openUrl(url: String) {
-        val uri = Uri.parse(url)
+        val uri = url.toUri()
         if (uri.scheme != "https" && uri.scheme != "http") return
         activities.start(Intent(Intent.ACTION_VIEW, uri).addCategory(Intent.CATEGORY_BROWSABLE))
     }

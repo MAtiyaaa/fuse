@@ -53,8 +53,11 @@ class AndroidHaptics(context: Context) : Haptics {
             val primitive = when (kind) {
                 Kind.TICK -> VibrationEffect.Composition.PRIMITIVE_TICK
                 Kind.CONFIRM -> VibrationEffect.Composition.PRIMITIVE_CLICK
-                Kind.REJECT -> VibrationEffect.Composition.PRIMITIVE_LOW_TICK.takeIf { Build.VERSION.SDK_INT >= Build.VERSION_CODES.S }
-                    ?: VibrationEffect.Composition.PRIMITIVE_TICK
+                Kind.REJECT -> if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    VibrationEffect.Composition.PRIMITIVE_LOW_TICK
+                } else {
+                    VibrationEffect.Composition.PRIMITIVE_TICK
+                }
             }
             if (v.areAllPrimitivesSupported(primitive)) {
                 val composition = VibrationEffect.startComposition().addPrimitive(primitive, scale)

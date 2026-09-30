@@ -4,9 +4,9 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageInstaller
-import android.net.Uri
 import android.os.Build
 import android.provider.Settings
+import androidx.core.net.toUri
 import io.github.matiyaaa.fuse.ActivityHolder
 import io.github.matiyaaa.fuse.integrations.github.ReleasePlatform
 import io.github.matiyaaa.fuse.model.ReleaseAsset
@@ -46,7 +46,7 @@ class AndroidReleaseInstaller(
         if (!appContext.packageManager.canRequestPackageInstalls()) {
             withContext(Dispatchers.Main) {
                 activities.startFirst(
-                    Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${appContext.packageName}")),
+                    Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, "package:${appContext.packageName}".toUri()),
                     Intent(Settings.ACTION_SECURITY_SETTINGS),
                 )
             }

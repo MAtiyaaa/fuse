@@ -178,6 +178,7 @@
     <application
         android:name=".FuseApplication"
         android:allowBackup="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
         android:enableOnBackInvokedCallback="true"
         android:icon="@mipmap/ic_launcher"
         android:label="Fuse"
@@ -186,6 +187,7 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.Fuse"
+        tools:ignore="DataExtractionRules"
         tools:targetApi="36">
 
         <activity
@@ -245,6 +247,7 @@
         <!-- Only used for benchmark tooling over adb; Fuse exports nothing besides its launcher entries. -->
         <receiver
             android:name="androidx.profileinstaller.ProfileInstallReceiver"
+            tools:ignore="MissingClass"
             tools:node="remove" />
     </application>
 </manifest>

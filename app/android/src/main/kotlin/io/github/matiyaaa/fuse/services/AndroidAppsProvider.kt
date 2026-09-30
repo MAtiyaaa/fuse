@@ -6,12 +6,12 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.pm.LauncherApps
-import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.os.Process
 import android.os.UserHandle
 import android.provider.Settings
+import androidx.core.net.toUri
 import io.github.matiyaaa.fuse.ActivityHolder
 import io.github.matiyaaa.fuse.model.AppEntry
 import io.github.matiyaaa.fuse.ui.shell.store.AppIconModel
@@ -117,7 +117,7 @@ class AndroidAppsProvider(
 
     override fun openInfo(entry: AppEntry) {
         activities.start(
-            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${entry.packageName}"))
+            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, "package:${entry.packageName}".toUri())
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
         )
     }

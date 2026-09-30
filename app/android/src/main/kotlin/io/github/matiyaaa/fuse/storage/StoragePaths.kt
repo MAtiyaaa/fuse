@@ -22,6 +22,8 @@ object StoragePaths {
     const val EXTERNAL_STORAGE_AUTHORITY = "com.android.externalstorage.documents"
     const val PRIMARY_ID = "primary"
 
+    /** Other spellings of internal storage that users and older tools write into paths. */
+    @Suppress("SdCardPath")
     private val primaryAliases = listOf("/sdcard", "/storage/self/primary", "/mnt/sdcard")
 
     /**

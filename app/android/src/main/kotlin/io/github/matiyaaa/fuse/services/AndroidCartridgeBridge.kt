@@ -7,11 +7,11 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.database.ContentObserver
 import android.database.Cursor
-import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.os.PatternMatcher
 import androidx.core.content.ContextCompat
+import androidx.core.net.toUri
 import io.github.matiyaaa.fuse.ActivityHolder
 import io.github.matiyaaa.fuse.integrations.cartridge.CartridgeProtocol
 import io.github.matiyaaa.fuse.model.CartridgeRoute
@@ -53,7 +53,7 @@ class AndroidCartridgeBridge(
     }
 
     private fun rows(uri: String): List<Map<String, Any?>> {
-        val cursor = resolver.query(Uri.parse(uri), null, null, null, null) ?: return emptyList()
+        val cursor = resolver.query(uri.toUri(), null, null, null, null) ?: return emptyList()
         return cursor.use { c ->
             val out = ArrayList<Map<String, Any?>>(c.count.coerceAtLeast(0))
             while (c.moveToNext()) {
@@ -74,7 +74,7 @@ class AndroidCartridgeBridge(
     }
 
     override fun open(route: CartridgeRoute, link: String): Boolean {
-        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(link))
+        val intent = Intent(Intent.ACTION_VIEW, link.toUri())
             .setPackage(CartridgeProtocol.PACKAGE_NAME)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         if (PackageSupport.resolveActivity(pm, intent) == null) return false
@@ -107,7 +107,7 @@ class AndroidCartridgeBridge(
                 observing = false
             }
             observing = try {
-                resolver.registerContentObserver(Uri.parse(CartridgeProtocol.STATUS_URI), true, observer)
+                resolver.registerContentObserver(CartridgeProtocol.STATUS_URI.toUri(), true, observer)
                 true
             } catch (e: SecurityException) {
                 false

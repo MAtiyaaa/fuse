@@ -1,5 +1,6 @@
 package io.github.matiyaaa.fuse.platform
 
+import android.annotation.SuppressLint
 import android.net.Uri
 import android.view.LayoutInflater
 import androidx.annotation.OptIn
@@ -12,6 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.net.toUri
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
@@ -56,7 +58,10 @@ class AndroidVideoPreview : VideoPreview {
         LaunchedEffect(player, playing) { player.playWhenReady = playing }
         AndroidView(
             factory = { ctx ->
-                (LayoutInflater.from(ctx).inflate(R.layout.fuse_video_preview, null, false) as PlayerView).also {
+                // No parent: AndroidView sizes the view itself.
+                @SuppressLint("InflateParams")
+                val view = LayoutInflater.from(ctx).inflate(R.layout.fuse_video_preview, null, false) as PlayerView
+                view.also {
                     it.player = player
                 }
             },
@@ -67,5 +72,5 @@ class AndroidVideoPreview : VideoPreview {
     }
 
     private fun uriOf(source: String): Uri =
-        if (source.startsWith("/")) Uri.fromFile(File(source)) else Uri.parse(source)
+        if (source.startsWith("/")) Uri.fromFile(File(source)) else source.toUri()
 }

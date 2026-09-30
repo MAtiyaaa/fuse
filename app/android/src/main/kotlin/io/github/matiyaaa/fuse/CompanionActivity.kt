@@ -1,5 +1,6 @@
 package io.github.matiyaaa.fuse
 
+import android.annotation.SuppressLint
 import android.graphics.Color as AndroidColor
 import android.os.Bundle
 import android.view.Display
@@ -75,6 +76,7 @@ class CompanionActivity : ComponentActivity() {
         if (displayIdCompat() == Display.DEFAULT_DISPLAY) finish()
     }
 
+    @SuppressLint("RestrictedApi") // Lint false positive: Activity.dispatchKeyEvent is public API.
     override fun dispatchKeyEvent(event: KeyEvent): Boolean =
         app.activities.main?.forwardKey(event) == true || super.dispatchKeyEvent(event)
 

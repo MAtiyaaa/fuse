@@ -8,6 +8,7 @@ import android.os.Build
 import android.provider.DocumentsContract
 import android.provider.Settings
 import android.webkit.MimeTypeMap
+import androidx.core.net.toUri
 import io.github.matiyaaa.fuse.ActivityHolder
 import io.github.matiyaaa.fuse.storage.StoragePaths
 import io.github.matiyaaa.fuse.storage.StorageVolumes
@@ -48,9 +49,9 @@ class AndroidStorageAccess(
     override fun request() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             activities.startFirst(
-                Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, Uri.parse("package:${appContext.packageName}")),
+                Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, "package:${appContext.packageName}".toUri()),
                 Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION),
-                Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${appContext.packageName}")),
+                Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, "package:${appContext.packageName}".toUri()),
             )
         } else {
             val requests = activities.requests ?: return

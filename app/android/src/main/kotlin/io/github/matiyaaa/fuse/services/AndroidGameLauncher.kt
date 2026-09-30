@@ -162,14 +162,14 @@ class AndroidGameLauncher(
         suspend fun fill(template: String, allowProvider: Boolean): String {
             var out = template
             if (LaunchTokens.EXTDATA in out) out = out.replace(LaunchTokens.EXTDATA, volumes.primaryRoot)
-            if (LaunchTokens.INTDATA in out) out = out.replace(LaunchTokens.INTDATA, "/data/user/${android.os.Process.myUid() / PER_USER_RANGE}")
+            if (LaunchTokens.INTDATA in out) out = out.replace(LaunchTokens.INTDATA, internalDataRoot())
             if (LaunchTokens.SAF in out) out = out.replace(LaunchTokens.SAF, safUri())
             if (LaunchTokens.PROVIDER in out) {
                 if (!allowProvider) throw LaunchProblem("This launch passes a shared file in an extra, which Android does not allow.")
                 out = out.replace(LaunchTokens.PROVIDER, providerUri())
                 usedProvider = true
             }
-            LaunchTokens.tokensIn(out).firstOrNull()?.let { throw LaunchProblem("Fuse can't fill $it for ${appName(pkg)}.") }
+            // No check for other "{...}" here: file names may contain braces, e.g. "Game {USA}.zip".
             return out
         }
 
@@ -250,6 +250,13 @@ class AndroidGameLauncher(
             appContext.startActivity(Intent(intent).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), options.toBundle())
         }
     }
+
+    /**
+     * ES-DE's `%INTERNALDATA%`: `/data/user/<user>`, the root of every app's private data for this
+     * user. Emulators use it to find their own folders; Fuse never reads there.
+     */
+    @Suppress("SdCardPath")
+    private fun internalDataRoot(): String = "/data/user/${android.os.Process.myUid() / PER_USER_RANGE}"
 
     private fun appName(pkg: String): String =
         PackageSupport.packageInfo(pm, pkg)?.let { PackageSupport.label(pm, it) } ?: pkg

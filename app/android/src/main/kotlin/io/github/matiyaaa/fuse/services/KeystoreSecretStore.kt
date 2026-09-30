@@ -1,17 +1,20 @@
 package io.github.matiyaaa.fuse.services
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.content.SharedPreferences
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
 import android.util.Log
+import androidx.core.content.edit
 import io.github.matiyaaa.fuse.data.settings.SecretStore
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import java.io.IOException
 import java.security.GeneralSecurityException
 import java.security.KeyStore
 import javax.crypto.Cipher
@@ -47,13 +50,15 @@ class KeystoreSecretStore(
             cipher.updateAAD(key.toByteArray(Charsets.UTF_8))
             val ciphertext = cipher.doFinal(value.toByteArray(Charsets.UTF_8))
             val stored = VERSION + ":" + b64(cipher.iv) + ":" + b64(ciphertext)
-            if (!prefs.edit().putString(key, stored).commit()) error("Could not save the credential")
+            // Not the KTX edit {}: it drops commit()'s result, and a failed save must not look saved.
+            @SuppressLint("UseKtx")
+            val saved = prefs.edit().putString(key, stored).commit()
+            if (!saved) throw IOException("Could not save the credential")
         }
     }
 
     override suspend fun remove(key: String) = withContext(io) {
-        mutex.withLock { prefs.edit().remove(key).commit() }
-        Unit
+        mutex.withLock { prefs.edit(commit = true) { remove(key) } }
     }
 
     override suspend fun has(key: String): Boolean = get(key) != null

@@ -1,5 +1,6 @@
 package io.github.matiyaaa.fuse
 
+import android.annotation.SuppressLint
 import android.content.Intent
 import android.graphics.Color as AndroidColor
 import android.net.Uri
@@ -172,6 +173,7 @@ class MainActivity : ComponentActivity(), ActivityRequests {
         }
     }
 
+    @SuppressLint("RestrictedApi") // Lint false positive: Activity.dispatchKeyEvent is public API.
     override fun dispatchKeyEvent(event: KeyEvent): Boolean = gamepad.onKey(event) || super.dispatchKeyEvent(event)
 
     override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean =
