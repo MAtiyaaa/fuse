@@ -149,9 +149,9 @@ internal class DefaultLibraryOps(
         data.playSessions.totalSeconds(),
         data.playSessions.secondsSince(ctx.weekStart()),
         data.playSessions.dailyTotals(7, ctx.services.utcOffsetMillis()),
-        data.playSessions.openSession().mapLatest { open -> open?.let { ctx.card(it.gameId) } },
+        data.playSessions.openSession().mapLatest { open -> open?.let { ctx.card(it.gameId)?.to(it.startedAt) } },
     ) { totals, week, daily, current ->
-        PlaytimeSummary(totals.totalSeconds, week, daily.map { it.seconds }, current)
+        PlaytimeSummary(totals.totalSeconds, week, daily.map { it.seconds }, current?.first, current?.second)
     }
 
     private val storage: Flow<StorageSummary?> = combine(

@@ -137,6 +137,8 @@ data class PlaytimeSummary(
     /** Seconds per day for the last 7 days, oldest first. */
     val lastSevenDays: List<Long> = emptyList(),
     val currentGame: GameCard? = null,
+    /** When the open session started (epoch millis), while a game is running. */
+    val currentSince: Long? = null,
 )
 
 @Immutable

@@ -91,6 +91,8 @@ fun FuseApp(store: FuseStore, platform: PlatformUi, router: InputRouter) {
 
     // Input settings, sounds and haptics follow preferences.
     LaunchedEffect(prefs.input) { router.profile = prefs.input }
+    // The companion screen (second display) follows what the main screen has in focus.
+    LaunchedEffect(app.hero?.id) { Spotlight.set(app.hero?.id) }
     LaunchedEffect(prefs.sound, prefs.soundVolume) {
         platform.sounds.setProfile(prefs.sound)
         platform.sounds.setVolume(prefs.soundVolume)
