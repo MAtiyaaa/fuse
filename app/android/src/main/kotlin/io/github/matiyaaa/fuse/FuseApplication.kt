@@ -26,8 +26,11 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /** Where app start-up is. Activities show a plain splash until [Ready]. */
 sealed interface Startup {
@@ -42,13 +45,17 @@ sealed interface Startup {
  * published through [startup].
  */
 class FuseApplication : Application(), SingletonImageLoader.Factory {
+    /** The last crash and recent background errors, in private files (see [CrashLog]). */
+    val crashLog: CrashLog by lazy { CrashLog(java.io.File(filesDir, "crash"), BuildConfig.VERSION_NAME) }
+
     /**
      * App-wide scope handed to the store. A failing background task is logged by type only (messages
-     * can contain request URLs with API keys) and does not take Fuse down.
+     * can contain request URLs with API keys), recorded in [crashLog] and does not take Fuse down.
      */
     val appScope: CoroutineScope = CoroutineScope(
         SupervisorJob() + Dispatchers.Default + CoroutineExceptionHandler { _, t ->
             Log.w(TAG, "Background task failed: ${t.javaClass.name}")
+            crashLog.recordNonFatal(t)
         },
     )
 
@@ -59,20 +66,24 @@ class FuseApplication : Application(), SingletonImageLoader.Factory {
     lateinit var services: AndroidFuseServices
         private set
 
-    val platformUi: AndroidPlatformUi by lazy { AndroidPlatformUi(this, activities, appScope, services.volumes) }
+    val platformUi: AndroidPlatformUi by lazy { AndroidPlatformUi(this, activities, appScope, services.volumes, crashLog) }
+
+    /** The second-screen companion, shared by the main screen and the game launcher. */
+    val companions: CompanionScreens by lazy { CompanionScreens(this) }
 
     private val _startup = MutableStateFlow<Startup>(Startup.Loading)
     val startup: StateFlow<Startup> = _startup.asStateFlow()
 
     override fun onCreate() {
         super.onCreate()
+        crashLog.install()
         activities = ActivityHolder(this)
         registerActivityLifecycleCallbacks(activities)
         activities.onFuseResumed = { platformUi.onFuseResumed() }
 
         val data = FuseData(AndroidDatabase.open(this))
         http = FuseHttp.client(OkHttp.create(), FuseHttpConfig(appVersion = BuildConfig.VERSION_NAME))
-        services = AndroidFuseServices(this, data, http, appScope, activities)
+        services = AndroidFuseServices(this, data, http, appScope, activities, companions)
 
         appScope.launch {
             _startup.value = try {
@@ -83,6 +94,7 @@ class FuseApplication : Application(), SingletonImageLoader.Factory {
                 Log.e(TAG, "Fuse could not start: ${t.javaClass.name}")
                 Startup.Failed("Fuse could not load its library and settings (${t.javaClass.simpleName}).")
             }
+            (_startup.value as? Startup.Ready)?.store?.let(::followLowPower)
         }
     }
 
@@ -92,12 +104,48 @@ class FuseApplication : Application(), SingletonImageLoader.Factory {
         else -> null
     }
 
-    override fun newImageLoader(context: PlatformContext): ImageLoader {
+    /** Whether the device itself is short of memory; Low Power Mode adds to it (see [followLowPower]). */
+    private val deviceLowMemory: Boolean by lazy {
         val am = getSystemService(ActivityManager::class.java)
-        val lowMemory = am?.isLowRamDevice == true || (am?.memoryClass ?: 256) < 192
-        return fuseImageLoader(context, cacheDir.absolutePath, http, lowMemory) {
+        am?.isLowRamDevice == true || (am?.memoryClass ?: 256) < 192
+    }
+
+    /** The low-memory setting the current singleton image loader was built with. */
+    @Volatile private var imageLoaderLowMemory: Boolean? = null
+
+    override fun newImageLoader(context: PlatformContext): ImageLoader {
+        val lowPower = (startup.value as? Startup.Ready)?.store?.prefs?.value?.lowPower == true
+        return buildImageLoader(context, deviceLowMemory || lowPower, reuse = null)
+    }
+
+    private fun buildImageLoader(context: PlatformContext, lowMemory: Boolean, reuse: ImageLoader?): ImageLoader {
+        imageLoaderLowMemory = lowMemory
+        val loader = fuseImageLoader(context, cacheDir.absolutePath, http, lowMemory) {
             add(AppIconFetcher.Factory(this@FuseApplication))
             add(AppIconFetcher.IconKeyer())
+        }
+        // One disk cache per folder: a rebuilt loader keeps the one already open.
+        val disk = reuse?.diskCache ?: return loader
+        return loader.newBuilder().diskCache(disk).build()
+    }
+
+    /**
+     * Low Power Mode shrinks the image memory cache and the largest decoded bitmap, like a low-memory
+     * device. The singleton loader is rebuilt when the mode changes; images already on screen keep
+     * the old one until they are drawn again.
+     */
+    private fun followLowPower(store: FuseStore) {
+        appScope.launch {
+            store.prefs.map { it.lowPower }.distinctUntilChanged().collect { lowPower ->
+                val lowMemory = deviceLowMemory || lowPower
+                val built = imageLoaderLowMemory ?: return@collect // Not built yet: newImageLoader reads the mode.
+                if (built == lowMemory) return@collect
+                withContext(Dispatchers.Main) {
+                    val old = SingletonImageLoader.get(this@FuseApplication)
+                    SingletonImageLoader.setUnsafe(buildImageLoader(this@FuseApplication, lowMemory, reuse = old))
+                    old.memoryCache?.clear()
+                }
+            }
         }
     }
 

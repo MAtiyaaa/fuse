@@ -8,6 +8,7 @@ import io.github.matiyaaa.fuse.model.Host
 import io.github.matiyaaa.fuse.model.PerformanceMetric
 import io.github.matiyaaa.fuse.model.SystemStatus
 import io.github.matiyaaa.fuse.ui.designsystem.sound.UiSounds
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
 /**
@@ -33,12 +34,29 @@ interface PlatformUi {
     /** Window and login controls on desktop Linux; null where the system manages Fuse's window. */
     val windowControls: WindowControls? get() = null
 
+    /**
+     * Recent second-screen events (companion started or closed and why, refused displays, display
+     * changes), oldest first, for a status row in Settings. Empty where there is no companion screen.
+     */
+    val secondScreenLog: StateFlow<List<String>> get() = NoSecondScreenLog
+
     fun openUrl(url: String)
     fun restart()
 
     /** Leaves Fuse. Not offered while Fuse is the Home app (Home has nowhere to exit to). */
     fun exit()
+
+    /** Text on the system clipboard, or null when it is empty, not text or can't be read. */
+    suspend fun readClipboardText(): String? = null
+
+    /** The last crash Fuse recorded (time, version, thread, stack trace), or null when there is none. */
+    fun lastCrashReport(): String? = null
+
+    /** Forgets the recorded crash, after the user has seen or shared it. */
+    fun clearCrashReport() {}
 }
+
+private val NoSecondScreenLog: StateFlow<List<String>> = MutableStateFlow(emptyList())
 
 data class PlatformFeatures(
     val homeRole: Boolean = false,

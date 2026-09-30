@@ -58,13 +58,23 @@ class ManifestQueriesTest {
     }
 
     @Test
-    fun onlyTheLauncherEntriesAreExported() {
+    fun onlyTheLauncherAndHomeEntriesAreExported() {
         val app = manifest().children("application").single()
         val exported = listOf("activity", "activity-alias", "receiver", "service", "provider")
             .flatMap { app.children(it) }
             .filter { it.getAttributeNS(androidNs, "exported") == "true" }
             .map { it.getAttributeNS(androidNs, "name") }
-        assertEquals(listOf(".MainActivity", ".HomeAlias"), exported)
+        assertEquals(listOf(".MainActivity", ".CompanionHomeActivity", ".HomeAlias"), exported)
+    }
+
+    @Test
+    fun secondaryHomeIsNotSingleInstance() {
+        val home = manifest().children("activity").single { it.getAttributeNS(androidNs, "name") == ".CompanionHomeActivity" }
+        // Android refuses singleTask and singleInstance activities as a secondary display's Home.
+        assertEquals("", home.getAttributeNS(androidNs, "launchMode"))
+        val categories = home.children("category").map { it.getAttributeNS(androidNs, "name") }
+        assertTrue("android.intent.category.SECONDARY_HOME" in categories)
+        assertTrue("android.intent.category.DEFAULT" in categories)
     }
 
     @Test

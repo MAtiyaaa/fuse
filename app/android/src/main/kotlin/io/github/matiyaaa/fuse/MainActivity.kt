@@ -44,6 +44,8 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import io.github.matiyaaa.fuse.input.GamepadInput
 import io.github.matiyaaa.fuse.model.NavAction
+import io.github.matiyaaa.fuse.model.PadButton
+import io.github.matiyaaa.fuse.model.PerformanceProfile
 import io.github.matiyaaa.fuse.ui.designsystem.input.InputRouter
 import io.github.matiyaaa.fuse.ui.designsystem.input.handleKeyEvent
 import io.github.matiyaaa.fuse.ui.shell.app.FuseApp
@@ -54,15 +56,15 @@ import kotlinx.coroutines.launch
 
 /**
  * Fuse's only window on the main screen. It owns the [InputRouter] (raw controller and keyboard
- * input arrives here), keeps the interface immersive at the highest refresh rate, bridges pickers
- * and system dialogs for the platform layer, and hands Back to the interface instead of closing:
- * as the Home app there is nothing to go back to.
+ * input arrives here), keeps the interface immersive at the refresh rate the performance profile
+ * asks for, bridges pickers and system dialogs for the platform layer, and hands Back to the
+ * interface instead of closing: as the Home app there is nothing to go back to.
  */
 class MainActivity : ComponentActivity(), ActivityRequests {
     private val app: FuseApplication get() = application as FuseApplication
     private val router: InputRouter by lazy { InputRouter(lifecycleScope) }
     private val gamepad: GamepadInput by lazy { GamepadInput(router) }
-    private val companions by lazy { CompanionScreens(app) }
+    private val companions: CompanionScreens get() = app.companions
     private var resumedOnce = false
 
     private val folderSlot = ResultSlot<Uri?>(null)
@@ -83,15 +85,18 @@ class MainActivity : ComponentActivity(), ActivityRequests {
         )
         super.onCreate(savedInstanceState)
         enterImmersive()
-        preferRefreshRate(highest = true)
+        preferRefreshRate(RefreshPreference.of(PerformanceProfile.AUTOMATIC, app.platformUi.device.tier, lowPower = false))
         app.platformUi.quick.applyTo(window)
 
-        // Back always goes to the interface; Fuse never finishes itself on Back.
+        // Back always goes to the interface, as the Escape button, so button mapping and the
+        // controller test see it too. Fuse never finishes itself on Back.
         onBackPressedDispatcher.addCallback(
             this,
             object : OnBackPressedCallback(true) {
                 override fun handleOnBackPressed() {
-                    router.dispatch(NavAction.BACK, router.lastSource.value)
+                    val source = router.lastSource.value
+                    router.press(PadButton.KEY_ESCAPE, source)
+                    router.release(PadButton.KEY_ESCAPE, source)
                 }
             },
         )
@@ -104,6 +109,8 @@ class MainActivity : ComponentActivity(), ActivityRequests {
                         // The first resume is covered by FuseApp, which calls onResume when it starts.
                         if (resumedOnce) store?.library?.onResume()
                         resumedOnce = true
+                        // Back from a game or another app: the companion goes in front on its screen again.
+                        store?.let { companions.onMainResumed(this, it.prefs.value.display.mode) }
                     }
                     Lifecycle.Event.ON_PAUSE -> {
                         gamepad.releaseAll()
@@ -131,7 +138,10 @@ class MainActivity : ComponentActivity(), ActivityRequests {
                 }
             }
             launch {
-                store.prefs.map { it.lowPower }.distinctUntilChanged().collect { lowPower -> preferRefreshRate(highest = !lowPower) }
+                val tier = app.platformUi.device.tier
+                store.prefs.map { RefreshPreference.of(it.performance, tier, it.lowPower) }
+                    .distinctUntilChanged()
+                    .collect { preferRefreshRate(it) }
             }
             launch {
                 kotlinx.coroutines.flow.combine(

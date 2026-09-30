@@ -174,6 +174,26 @@ class DesktopPlatformUi(
 
     override fun exit() = window.exitApplication()
 
+    private val crashLog = io.github.matiyaaa.fuse.desktop.CrashLog(File(dirs.data, "crash"))
+
+    override suspend fun readClipboardText(): String? = kotlinx.coroutines.withContext(Dispatchers.IO) {
+        try {
+            val clipboard = Toolkit.getDefaultToolkit().systemClipboard
+            if (!clipboard.isDataFlavorAvailable(java.awt.datatransfer.DataFlavor.stringFlavor)) {
+                null
+            } else {
+                (clipboard.getData(java.awt.datatransfer.DataFlavor.stringFlavor) as? String)?.takeIf { it.isNotEmpty() }
+            }
+        } catch (e: Exception) {
+            // Headless, no clipboard owner, or the owner went away while reading.
+            null
+        }
+    }
+
+    override fun lastCrashReport(): String? = crashLog.read()
+
+    override fun clearCrashReport() = crashLog.clear()
+
     override val windowControls: WindowControls = object : WindowControls {
         override val mode: WindowStyle get() = when (windowMode) {
             WindowMode.FULLSCREEN -> WindowStyle.FULLSCREEN

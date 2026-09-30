@@ -50,6 +50,7 @@ fun main(args: Array<String>) {
     setX11WmClass()
     val dirs = FuseDirs.fromEnvironment()
     dirs.ensure()
+    CrashLog(java.io.File(dirs.data, "crash")).install()
     Log.info("Fuse ${BuildInfo.VERSION} starting")
     // Lives as long as the process; runs on the AWT event thread, which is Compose's UI thread.
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
