@@ -125,7 +125,7 @@ fun SearchScreen(app: AppState) {
     LaunchedEffect(inResults) {
         app.hero = null
         app.hints = if (inResults) listOf(Hint(HintButton.CONFIRM, "Open"), Hint(HintButton.OPTIONS, "Options"), Hint(HintButton.BACK, "Back"))
-        else listOf(Hint(HintButton.CONFIRM, "Type"), Hint(HintButton.OPTIONS, "Delete"), Hint(HintButton.SEARCH, "Space"), Hint(HintButton.MENU, "Results"))
+        else listOf(Hint(HintButton.CONFIRM, "Type"), Hint(HintButton.OPTIONS, "Delete"), Hint(HintButton.SEARCH, "Space"), Hint(HintButton.NEXT, "Paste"), Hint(HintButton.MENU, "Results"))
     }
 
     fun open(hit: Hit) {
