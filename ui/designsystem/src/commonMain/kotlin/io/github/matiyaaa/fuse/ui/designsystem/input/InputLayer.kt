@@ -11,6 +11,10 @@ import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.isAltPressed
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.isMetaPressed
+import androidx.compose.ui.input.key.utf16CodePoint
 import io.github.matiyaaa.fuse.model.PadButton
 
 val LocalInputRouter = staticCompositionLocalOf<InputRouter> { error("No InputRouter provided") }
@@ -89,6 +93,7 @@ private val gamepadKeys = setOf(
  * callers can stop it from reaching text fields or default focus handling.
  */
 fun InputRouter.handleKeyEvent(event: KeyEvent): Boolean {
+    if (typeInto(event)) return true
     val button = padButtonFor(event.key) ?: return false
     val source = if (button in gamepadKeys) InputSource.GAMEPAD else InputSource.KEYBOARD
     when (event.type) {
@@ -96,5 +101,31 @@ fun InputRouter.handleKeyEvent(event: KeyEvent): Boolean {
         KeyEventType.KeyUp -> release(button, source)
         else -> return false
     }
+    return true
+}
+
+/**
+ * Hardware typing while a text field is open: printable characters, Backspace and Enter go to
+ * [InputRouter.textInput]. Arrow keys, Escape and Tab still navigate, and shortcuts with Ctrl, Alt or
+ * Meta are left alone.
+ */
+private fun InputRouter.typeInto(event: KeyEvent): Boolean {
+    val input = textInput ?: return false
+    if (event.isCtrlPressed || event.isAltPressed || event.isMetaPressed) return false
+    val down = event.type == KeyEventType.KeyDown
+    when (event.key) {
+        Key.Backspace -> {
+            if (down) input.backspace()
+            return true
+        }
+        Key.Enter, Key.NumPadEnter -> {
+            if (down) input.submit()
+            return true
+        }
+    }
+    val codePoint = event.utf16CodePoint
+    // Control characters and AWT's CHAR_UNDEFINED are not text.
+    if (codePoint <= 0x1F || codePoint == 0x7F || codePoint == 0xFFFF) return false
+    if (down) input.type(codePoint.toChar().toString())
     return true
 }

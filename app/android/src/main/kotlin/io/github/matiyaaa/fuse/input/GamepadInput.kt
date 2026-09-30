@@ -21,6 +21,9 @@ class GamepadInput(private val router: InputRouter) {
 
     /** Handles [event] when it is a navigation key. Returns true when it was consumed. */
     fun onKey(event: KeyEvent): Boolean {
+        // While a text field is open, keyboard Backspace, Enter and Space are typing, not navigation.
+        // They go on to Compose, where the router hands them to the field.
+        if (router.textInput != null && !isFromController(event) && event.keyCode in typingKeys) return false
         val button = buttonFor(event.keyCode) ?: return false
         val source = sourceOf(event, button)
         when (event.action) {
@@ -128,4 +131,9 @@ class GamepadInput(private val router: InputRouter) {
             else -> null
         }
     }
+
+    private fun isFromController(event: KeyEvent): Boolean =
+        event.isFromSource(InputDevice.SOURCE_GAMEPAD) || event.isFromSource(InputDevice.SOURCE_JOYSTICK)
+
+    private val typingKeys = setOf(KeyEvent.KEYCODE_DEL, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER, KeyEvent.KEYCODE_SPACE)
 }

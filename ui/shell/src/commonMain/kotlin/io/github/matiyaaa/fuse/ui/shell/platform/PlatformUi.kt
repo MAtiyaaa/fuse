@@ -30,6 +30,9 @@ interface PlatformUi {
     val video: VideoPreview?
     val appVersion: String
 
+    /** Window and login controls on desktop Linux; null where the system manages Fuse's window. */
+    val windowControls: WindowControls? get() = null
+
     fun openUrl(url: String)
     fun restart()
 
@@ -109,4 +112,22 @@ interface QuickControls {
 interface VideoPreview {
     @Composable
     fun Player(source: String, playing: Boolean, modifier: Modifier, onFirstFrame: () -> Unit)
+}
+
+enum class WindowStyle { FULLSCREEN, BORDERLESS, WINDOWED }
+
+/**
+ * Desktop window and startup controls. [mode] is snapshot state, so reading it in composition
+ * follows changes made elsewhere (F11, Alt+Enter).
+ */
+interface WindowControls {
+    val mode: WindowStyle
+    fun setMode(mode: WindowStyle)
+
+    /** True when Fuse runs from its AppImage or an installed package, so a login entry has a stable path. */
+    val autostartAvailable: Boolean
+    fun isAutostart(): Boolean
+
+    /** Writes or removes the login entry. Only on the user's request. */
+    fun setAutostart(enabled: Boolean): Result<Unit>
 }

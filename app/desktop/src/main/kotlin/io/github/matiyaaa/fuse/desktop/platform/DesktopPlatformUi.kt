@@ -35,6 +35,8 @@ import java.awt.Toolkit
 import java.io.File
 import java.lang.management.ManagementFactory
 import java.net.URI
+import io.github.matiyaaa.fuse.ui.shell.platform.WindowStyle
+import io.github.matiyaaa.fuse.ui.shell.platform.WindowControls
 
 /** Window-level actions [DesktopPlatformUi] needs from Main. */
 interface WindowActions : DialogHost {
@@ -172,8 +174,27 @@ class DesktopPlatformUi(
 
     override fun exit() = window.exitApplication()
 
-    // Desktop-only controls. PlatformUi has no entries for these yet ([PlatformFeatures.windowModes]
-    // is true because F11 and the command line flags work); a Settings row can call them directly.
+    override val windowControls: WindowControls = object : WindowControls {
+        override val mode: WindowStyle get() = when (windowMode) {
+            WindowMode.FULLSCREEN -> WindowStyle.FULLSCREEN
+            WindowMode.BORDERLESS -> WindowStyle.BORDERLESS
+            WindowMode.WINDOWED -> WindowStyle.WINDOWED
+        }
+
+        override fun setMode(mode: WindowStyle) = setWindowMode(
+            when (mode) {
+                WindowStyle.FULLSCREEN -> WindowMode.FULLSCREEN
+                WindowStyle.BORDERLESS -> WindowMode.BORDERLESS
+                WindowStyle.WINDOWED -> WindowMode.WINDOWED
+            },
+        )
+
+        override val autostartAvailable: Boolean get() = autostartSupported
+        override fun isAutostart(): Boolean = isAutostartEnabled()
+        override fun setAutostart(enabled: Boolean): Result<Unit> = this@DesktopPlatformUi.setAutostart(enabled)
+    }
+
+    // Desktop-only controls behind [window] (F11 and the command line flags also change the mode).
 
     val windowMode: WindowMode get() = window.currentWindowMode
 

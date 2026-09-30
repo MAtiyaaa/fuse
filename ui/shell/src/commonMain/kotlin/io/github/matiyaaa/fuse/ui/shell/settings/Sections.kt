@@ -29,6 +29,11 @@ import io.github.matiyaaa.fuse.ui.shell.app.label
 import io.github.matiyaaa.fuse.ui.shell.home.title
 import io.github.matiyaaa.fuse.ui.shell.platform.StorageState
 import kotlinx.coroutines.launch
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import io.github.matiyaaa.fuse.ui.shell.platform.WindowStyle
+import io.github.matiyaaa.fuse.ui.shell.platform.WindowControls
 
 private fun motionName(m: MotionProfile?) = when (m) {
     null -> "Theme default"
@@ -410,6 +415,14 @@ fun displayRows(app: AppState): List<MenuAction> {
     val displays by app.platform.displays.collectAsState()
     val d = p.display
     return buildList {
+        app.platform.windowControls?.let { w ->
+            add(app.choiceRow(
+                "window", "Window", FuseIcons.Monitor, w.mode,
+                listOf(WindowStyle.FULLSCREEN to "Full screen", WindowStyle.BORDERLESS to "Borderless", WindowStyle.WINDOWED to "Window"),
+                detail = "F11 switches full screen at any time",
+            ) { v -> w.setMode(v) })
+            add(autostartRow(app, w))
+        }
         if (!app.platform.features.secondScreen) {
             add(infoRow("none", "One screen", detail = "Second-screen options appear when a second display is connected"))
         }
@@ -526,3 +539,18 @@ fun aboutRows(app: AppState): List<MenuAction> = listOf(
     infoRow("credits", "Made with", detail = "Kotlin, Compose Multiplatform, SQLDelight, Ktor, Coil. Icons: Lucide (ISC). Fonts: Sora and Manrope (SIL OFL). Emulator launch data: ES-DE (MIT) and Cartridge (MIT). Hashing rules: rcheevos (MIT)", icon = FuseIcons.Blocks),
     infoRow("trademarks", "Trademarks", detail = "Console and game names belong to their owners. Fuse ships no console artwork, sounds, BIOS or games", icon = FuseIcons.Tag),
 )
+
+@Composable
+private fun autostartRow(app: AppState, w: WindowControls): MenuAction {
+    var on by remember { mutableStateOf(w.isAutostart()) }
+    return toggleRow(
+        "autostart", "Start Fuse when you log in", FuseIcons.Power, on,
+        if (w.autostartAvailable) "Adds Fuse to your desktop's startup applications" else "Available when Fuse runs from its AppImage or an installed package",
+        enabled = w.autostartAvailable,
+    ) { v ->
+        w.setAutostart(v)
+            .onSuccess { on = v }
+            .onFailure { app.toasts.show(it.message ?: "Couldn't change the startup setting") }
+    }
+}
+

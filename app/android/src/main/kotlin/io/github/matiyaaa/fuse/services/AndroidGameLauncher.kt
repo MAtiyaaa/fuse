@@ -24,6 +24,8 @@ import io.github.matiyaaa.fuse.ui.shell.store.RunResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
+import android.view.Display
+import android.hardware.display.DisplayManager
 
 /**
  * Starts emulators and apps from [ResolvedLaunch] plans, following the contract documented on
@@ -52,6 +54,14 @@ class AndroidGameLauncher(
     }
 
     override suspend fun openApp(appId: String): RunResult = openApp(appId, null)
+
+    /** The first display that isn't the built-in one, preferring presentation displays. */
+    override fun secondaryDisplayId(): Int? {
+        val displays = appContext.getSystemService(DisplayManager::class.java) ?: return null
+        val presentation = displays.getDisplays(DisplayManager.DISPLAY_CATEGORY_PRESENTATION)
+            .firstOrNull { it.displayId != Display.DEFAULT_DISPLAY }
+        return (presentation ?: displays.displays.firstOrNull { it.displayId != Display.DEFAULT_DISPLAY })?.displayId
+    }
 
     private suspend fun openApp(appId: String, displayId: Int?): RunResult {
         val (pkg, activity) = AndroidIntentAdapter.splitAppId(appId.trim())
@@ -101,9 +111,9 @@ class AndroidGameLauncher(
         }
         return when (prepared) {
             is Prepared.Result -> prepared.result
-            is Prepared.OpenInstead -> {
-                openApp(pkg, displayId)
-                RunResult.Failed(prepared.reason)
+            is Prepared.OpenInstead -> when (val opened = openApp(pkg, displayId)) {
+                is RunResult.Started -> RunResult.OpenedAppInstead(prepared.reason)
+                else -> opened
             }
             is Prepared.Launch -> startIntent(prepared.intent, displayId, name)
         }

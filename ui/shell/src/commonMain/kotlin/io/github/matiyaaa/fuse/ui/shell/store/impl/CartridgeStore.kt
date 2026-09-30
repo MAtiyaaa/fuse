@@ -63,8 +63,9 @@ internal class DefaultCartridgeOps(
         refresh()
     }
 
+    /** Opening can wait on the system (xdg-open on Linux), so it never runs on the caller's thread. */
     override fun open(route: CartridgeRoute) {
-        ctx.services.cartridge.open(route, CartridgeProtocol.deepLink(route))
+        ctx.scope.launch(Dispatchers.Default) { ctx.services.cartridge.open(route, CartridgeProtocol.deepLink(route)) }
     }
 
     override suspend fun latestRelease(): ReleaseInfo? =

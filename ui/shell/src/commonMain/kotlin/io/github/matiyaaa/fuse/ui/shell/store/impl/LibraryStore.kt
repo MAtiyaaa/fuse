@@ -362,6 +362,7 @@ internal class DefaultLibraryOps(
             is LaunchPlan.Unsupported -> LaunchOutcome.Unsupported(plan.reason)
             is LaunchPlan.OpenAppOnly -> when (val r = ctx.services.launcher.openApp(plan.appId)) {
                 is RunResult.Started -> LaunchOutcome.OpenedAppOnly(installedEmulator.name, plan.reason)
+                is RunResult.OpenedAppInstead -> LaunchOutcome.OpenedAppOnly(installedEmulator.name, r.reason)
                 RunResult.NotInstalled -> notInstalled(installedEmulator)
                 is RunResult.Failed -> LaunchOutcome.Failed(r.message)
             }
@@ -370,6 +371,8 @@ internal class DefaultLibraryOps(
                     startSession(id, installedEmulator.id, r.awaitExit)
                     LaunchOutcome.Started
                 }
+                // Only the app opened; which game gets played there is unknown, so no session is recorded.
+                is RunResult.OpenedAppInstead -> LaunchOutcome.OpenedAppOnly(installedEmulator.name, r.reason)
                 RunResult.NotInstalled -> notInstalled(installedEmulator)
                 is RunResult.Failed -> LaunchOutcome.Failed(r.message)
             }

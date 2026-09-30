@@ -98,6 +98,7 @@ private sealed interface Hit {
  * Global search: games, systems, apps and collections, entirely on the device (nothing goes online).
  * Type with the on-screen keyboard or any hardware keyboard; results update as you type.
  */
+@OptIn(kotlinx.coroutines.FlowPreview::class)
 @Composable
 fun SearchScreen(app: AppState) {
     var query by remember { mutableStateOf("") }

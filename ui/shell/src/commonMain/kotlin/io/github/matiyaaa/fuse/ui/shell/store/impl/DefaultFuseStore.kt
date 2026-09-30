@@ -35,7 +35,7 @@ internal class DefaultFuseStore private constructor(
     override val sources = engine
     override val collections = DefaultCollectionOps(ctx)
     override val apps = DefaultAppOps(ctx)
-    private lateinit var mediaOps: DefaultMediaOps
+    private val mediaOps: DefaultMediaOps
     override val credentials = DefaultCredentialOps(ctx) { key ->
         if (key != SecretKeys.RA_USERNAME && key != SecretKeys.RA_API_KEY) mediaOps.invalidate()
     }

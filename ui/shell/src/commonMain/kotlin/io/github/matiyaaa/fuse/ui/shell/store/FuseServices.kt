@@ -91,6 +91,12 @@ sealed interface RunResult {
      */
     data class Started(val awaitExit: (suspend () -> Unit)? = null) : RunResult
 
+    /**
+     * The game could not be started directly (for example a required activity is missing in this
+     * build), so the emulator app was opened instead. [reason] tells the user what to do there.
+     */
+    data class OpenedAppInstead(val reason: String) : RunResult
+
     /** The app is not installed (any more). */
     data object NotInstalled : RunResult
 

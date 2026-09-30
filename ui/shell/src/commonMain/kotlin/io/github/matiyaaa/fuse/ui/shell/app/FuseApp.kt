@@ -78,6 +78,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
+import io.github.matiyaaa.fuse.ui.designsystem.input.TextInput
 
 /**
  * The whole Fuse interface for one window. [router] is created by the host (Android activity or
@@ -99,6 +100,18 @@ fun FuseApp(store: FuseStore, platform: PlatformUi, router: InputRouter) {
 
     // Input settings, sounds and haptics follow preferences.
     LaunchedEffect(prefs.input) { router.profile = prefs.input }
+    // A hardware keyboard types into whichever text field is open.
+    val keyboardTarget = app.keyboardTarget
+    DisposableEffect(router, keyboardTarget) {
+        router.textInput = keyboardTarget?.let { target ->
+            object : TextInput {
+                override fun type(text: String) = target.set(target.get() + text)
+                override fun backspace() = target.set(target.get().dropLast(1))
+                override fun submit() = target.submit()
+            }
+        }
+        onDispose { router.textInput = null }
+    }
     // The companion screen (second display) follows what the main screen has in focus.
     LaunchedEffect(app.hero?.id) { Spotlight.set(app.hero?.id) }
     LaunchedEffect(prefs.sound, prefs.soundVolume) {

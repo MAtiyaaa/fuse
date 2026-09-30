@@ -147,6 +147,12 @@ class InputRouter(
     var rawListener: ((PadButton, Boolean) -> Unit)? = null
 
     /**
+     * The text field a hardware keyboard types into while one is open (search, rename). Letters then
+     * become text instead of shortcuts; arrows and Escape keep navigating.
+     */
+    var textInput: TextInput? = null
+
+    /**
      * While set, the next physical presses go only here and never become actions (the button
      * mapping screen listens for "press the button for Confirm"). Releases still reach [rawListener].
      */
@@ -288,4 +294,11 @@ class InputRouter(
         triggers[button] = down
         if (down) press(button, source) else release(button, source)
     }
+}
+
+/** Receives hardware keyboard typing for the open text field. */
+interface TextInput {
+    fun type(text: String)
+    fun backspace()
+    fun submit()
 }
