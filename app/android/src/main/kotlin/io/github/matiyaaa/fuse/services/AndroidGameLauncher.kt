@@ -30,6 +30,9 @@ import android.hardware.display.DisplayManager
 
 /** What the launcher tells Fuse's second-screen companion around a game that draws on both screens. */
 interface DualScreenHandoff {
+    /** On the main thread, just before a game that uses one screen starts. */
+    fun beforeGame()
+
     /** On the main thread, just before such a game starts: the second screen is the game's now. */
     fun beforeDualScreenGame()
 
@@ -157,7 +160,7 @@ class AndroidGameLauncher(
                 is RunResult.Started -> RunResult.OpenedAppInstead(prepared.reason)
                 else -> opened
             }
-            is Prepared.Launch -> startIntent(prepared.intent, displayId, name, bothScreens)
+            is Prepared.Launch -> startIntent(prepared.intent, displayId, name, if (bothScreens) Screens.BOTH else Screens.GAME)
         }
     }
 
@@ -264,15 +267,23 @@ class AndroidGameLauncher(
         }
     }
 
+    /** What a launch means for the second screen: an app, a game on one screen, or a game on both. */
+    private enum class Screens { APP, GAME, BOTH }
+
     private suspend fun startIntent(
         intent: Intent,
         displayId: Int?,
         name: String,
-        bothScreens: Boolean = false,
+        screens: Screens = Screens.APP,
     ): RunResult = withContext(Dispatchers.Main) {
-        if (bothScreens) dualScreen?.beforeDualScreenGame()
+        when {
+            screens == Screens.BOTH -> dualScreen?.beforeDualScreenGame()
+            // A game sent to the second screen keeps it to itself.
+            screens == Screens.GAME && (displayId == null || displayId == Display.DEFAULT_DISPLAY) -> dualScreen?.beforeGame()
+            else -> Unit
+        }
         val result = startOn(intent, displayId, name)
-        if (bothScreens && result !is RunResult.Started) dualScreen?.dualScreenGameFailed()
+        if (screens == Screens.BOTH && result !is RunResult.Started) dualScreen?.dualScreenGameFailed()
         result
     }
 

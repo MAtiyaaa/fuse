@@ -64,7 +64,8 @@ class AndroidPlatformUi(
     override val features: PlatformFeatures
         get() {
             val hasSecond = displayMonitor.secondary() != null
-            val companion = hasSecond && CompanionScreens.SUPPORTED
+            // The companion is a Presentation while Fuse is in front, which every supported Android version shows.
+            val companion = displayMonitor.presentationTarget() != null
             return PlatformFeatures(
                 homeRole = homeRole.available,
                 androidApps = true,

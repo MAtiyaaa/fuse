@@ -116,6 +116,8 @@ class MainActivity : ComponentActivity(), ActivityRequests {
                         gamepad.releaseAll()
                         store?.library?.onPause()
                     }
+                    // A game or another app is in front: the second screen is theirs.
+                    Lifecycle.Event.ON_STOP -> companions.onMainStopped()
                     else -> Unit
                 }
             },
