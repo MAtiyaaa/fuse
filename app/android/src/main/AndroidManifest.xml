@@ -1,11 +1,250 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <application android:label="Fuse">
-        <activity android:name=".MainActivity" android:exported="true">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <!-- Libraries are read by path, and FileProvider launches need Fuse to own file access (ES-DE does the same). -->
+    <uses-permission
+        android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
+        tools:ignore="ScopedStorage" />
+    <uses-permission
+        android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
+    <!-- Installing Cartridge and Fuse updates, always through the system's confirmation. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission
+        android:name="android.permission.BLUETOOTH"
+        android:maxSdkVersion="30" />
+    <!-- Cartridge's read-only status provider. -->
+    <uses-permission android:name="io.github.abdu2304.cartridge.permission.READ_STATUS" />
+
+    <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
+    <uses-feature android:name="android.hardware.gamepad" android:required="false" />
+    <uses-feature android:name="android.hardware.bluetooth" android:required="false" />
+    <uses-feature android:name="android.hardware.wifi" android:required="false" />
+
+    <!--
+      Package visibility (Android 11+). Launcher apps cover most emulators; the explicit list is every
+      package in AndroidEmulatorCatalog.allPackages(), checked by ManifestQueriesTest so it can't drift.
+    -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="cartridge" />
+        </intent>
+        <package android:name="io.github.abdu2304.cartridge" />
+        <package android:name="Ali.Xanite" />
+        <package android:name="Ali.Xanite.green" />
+        <package android:name="aenu.aps3e" />
+        <package android:name="aenu.aps3e.premium" />
+        <package android:name="aenu.ax360e" />
+        <package android:name="aenu.ax360e.free" />
+        <package android:name="app.gamenative" />
+        <package android:name="app.gamenative.gold" />
+        <package android:name="com.PceEmu" />
+        <package android:name="com.androidemu.nes" />
+        <package android:name="com.antutu.ABenchMark" />
+        <package android:name="com.antutu.benchmark.full" />
+        <package android:name="com.armsx2" />
+        <package android:name="com.armsx2.nightly" />
+        <package android:name="com.armsx3" />
+        <package android:name="com.armsx3.play" />
+        <package android:name="com.bachatas4.android" />
+        <package android:name="com.bachatas4.android.github" />
+        <package android:name="com.cmodded.winlator" />
+        <package android:name="com.dsemu.drastic" />
+        <package android:name="com.emulator.fpse" />
+        <package android:name="com.emulator.fpse64" />
+        <package android:name="com.epsxe.ePSXe" />
+        <package android:name="com.explusalpha.A2600Emu" />
+        <package android:name="com.explusalpha.C64Emu" />
+        <package android:name="com.explusalpha.GbaEmu" />
+        <package android:name="com.explusalpha.GbcEmu" />
+        <package android:name="com.explusalpha.LynxEmu" />
+        <package android:name="com.explusalpha.MdEmu" />
+        <package android:name="com.explusalpha.MsxEmu" />
+        <package android:name="com.explusalpha.NeoEmu" />
+        <package android:name="com.explusalpha.NesEmu" />
+        <package android:name="com.explusalpha.NgpEmu" />
+        <package android:name="com.explusalpha.SaturnEmu" />
+        <package android:name="com.explusalpha.Snes9xPlus" />
+        <package android:name="com.explusalpha.SwanEmu" />
+        <package android:name="com.fastemulator.gba" />
+        <package android:name="com.fastemulator.gbc" />
+        <package android:name="com.flycast.emulator" />
+        <package android:name="com.fms.colem" />
+        <package android:name="com.fms.colem.deluxe" />
+        <package android:name="com.fms.fmsx" />
+        <package android:name="com.fms.fmsx.deluxe" />
+        <package android:name="com.fms.ines.free" />
+        <package android:name="com.fms.mg" />
+        <package android:name="com.github.stenzek.duckstation" />
+        <package android:name="com.hydra.noods" />
+        <package android:name="com.izzy2lost.x1box" />
+        <package android:name="com.ludashi.aibench" />
+        <package android:name="com.ludashi.benchmark" />
+        <package android:name="com.miHoYo.Yuanshen" />
+        <package android:name="com.miHoYo.Yuanshen.nightly" />
+        <package android:name="com.nanodata.armsx" />
+        <package android:name="com.panda3ds.pandroid" />
+        <package android:name="com.pixelrespawn.linkboy" />
+        <package android:name="com.retroarch" />
+        <package android:name="com.retroarch.aarch64" />
+        <package android:name="com.retroarch.ra32" />
+        <package android:name="com.rfandango.haku_x" />
+        <package android:name="com.sbro.emucorec" />
+        <package android:name="com.sbro.emucorev" />
+        <package android:name="com.sbro.emucorex" />
+        <package android:name="com.seedlessds.app" />
+        <package android:name="com.seleuco.mame4d2024" />
+        <package android:name="com.seleuco.mame4droid" />
+        <package android:name="com.simongellis.vvb" />
+        <package android:name="com.sky.SkyEmu" />
+        <package android:name="com.swordfish.lemuroid" />
+        <package android:name="com.tencent.ig" />
+        <package android:name="com.virtualapplications.play" />
+        <package android:name="com.winlator" />
+        <package android:name="com.winlator.banner" />
+        <package android:name="com.winlator.cmod" />
+        <package android:name="com.winlator.vanilla" />
+        <package android:name="com.winnative.cmod" />
+        <package android:name="come.nanodata.armsx2" />
+        <package android:name="come.nanodata.armsx2.debug" />
+        <package android:name="dev.eden.eden_emulator" />
+        <package android:name="dev.eden.eden_emulator.nightly" />
+        <package android:name="dev.legacy.eden_emulator" />
+        <package android:name="dev.legacy.eden_emulator.nightly" />
+        <package android:name="emuready.gamehub.lite" />
+        <package android:name="gamehub.lite" />
+        <package android:name="info.cemu.Cemu" />
+        <package android:name="info.cemu.cemu" />
+        <package android:name="io.github.azaharplus.android" />
+        <package android:name="io.github.lime3ds.android" />
+        <package android:name="io.github.mandarine3ds.mandarine" />
+        <package android:name="io.recompiled.redream" />
+        <package android:name="it.dbtecno.pizzaboy" />
+        <package android:name="it.dbtecno.pizzaboygba" />
+        <package android:name="it.dbtecno.pizzaboygbapro" />
+        <package android:name="it.dbtecno.pizzaboypro" />
+        <package android:name="it.dbtecno.pizzaboyscbasic" />
+        <package android:name="it.dbtecno.pizzaboyscpro" />
+        <package android:name="me.magnum.melonds" />
+        <package android:name="me.magnum.melonds.nightly" />
+        <package android:name="me.magnum.melondualds" />
+        <package android:name="net.rpcs3" />
+        <package android:name="net.rpcsx" />
+        <package android:name="org.azahar_emu.azahar" />
+        <package android:name="org.citra.citra_emu" />
+        <package android:name="org.citra.citra_emu.canary" />
+        <package android:name="org.citra.emu" />
+        <package android:name="org.citron.citron_emu" />
+        <package android:name="org.citron.citron_emu.ea" />
+        <package android:name="org.devmiyax.yabasanshioro2" />
+        <package android:name="org.devmiyax.yabasanshioro2.pro" />
+        <package android:name="org.dolphinemu.dolphinemu" />
+        <package android:name="org.dolphinemu.mmjr" />
+        <package android:name="org.kenjinx.android" />
+        <package android:name="org.mm.jr" />
+        <package android:name="org.mupen64plusae.v3.alpha" />
+        <package android:name="org.mupen64plusae.v3.fzurita" />
+        <package android:name="org.mupen64plusae.v3.fzurita.amazon" />
+        <package android:name="org.mupen64plusae.v3.fzurita.pro" />
+        <package android:name="org.ppsspp.ppsspp" />
+        <package android:name="org.ppsspp.ppssppgold" />
+        <package android:name="org.scummvm.scummvm" />
+        <package android:name="org.scummvm.scummvm.debug" />
+        <package android:name="org.stratoemu.strato" />
+        <package android:name="org.sudachi.sudachi_emu" />
+        <package android:name="org.vita3k.emulator" />
+        <package android:name="org.vita3k.emulator.ikhoeyZX" />
+        <package android:name="org.yuzu.yuzu_emu" />
+        <package android:name="org.yuzu.yuzu_emu.ea" />
+        <package android:name="ru.vastness.altmer.iratajaguar" />
+        <package android:name="ru.vastness.altmer.real3doplayer" />
+        <package android:name="skyline.emu" />
+        <package android:name="xendroid.compose" />
+        <package android:name="xyz.aethersx2.android" />
+        <package android:name="xyz.aethersx2.cturnip" />
+        <package android:name="xyz.aethersx2.tturnip" />
+    </queries>
+
+    <application
+        android:name=".FuseApplication"
+        android:allowBackup="false"
+        android:enableOnBackInvokedCallback="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="Fuse"
+        android:requestLegacyExternalStorage="true"
+        android:resizeableActivity="true"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.Fuse"
+        tools:targetApi="36">
+
+        <activity
+            android:name=".MainActivity"
+            android:clearTaskOnLaunch="true"
+            android:configChanges="colorMode|density|fontScale|fontWeightAdjustment|grammaticalGender|keyboard|keyboardHidden|layoutDirection|locale|mcc|mnc|navigation|orientation|screenLayout|screenSize|smallestScreenSize|touchscreen|uiMode"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:resizeableActivity="true"
+            android:resumeWhilePausing="true"
+            android:stateNotNeeded="true"
+            android:taskAffinity=""
+            android:windowSoftInputMode="adjustNothing">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Makes Fuse a Home app. Disabled until the user asks (see AndroidHomeRole). -->
+        <activity-alias
+            android:name=".HomeAlias"
+            android:enabled="false"
+            android:exported="true"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.HOME" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity-alias>
+
+        <!-- Second screen. Started by Fuse only, in its own task on the other display. -->
+        <activity
+            android:name=".CompanionActivity"
+            android:configChanges="colorMode|density|fontScale|fontWeightAdjustment|grammaticalGender|keyboard|keyboardHidden|layoutDirection|locale|mcc|mnc|navigation|orientation|screenLayout|screenSize|smallestScreenSize|touchscreen|uiMode"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:launchMode="singleInstance"
+            android:resizeableActivity="true"
+            android:taskAffinity="io.github.matiyaaa.fuse.companion" />
+
+        <receiver
+            android:name=".services.InstallResultReceiver"
+            android:exported="false" />
+
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.files"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
+        <!-- Only used for benchmark tooling over adb; Fuse exports nothing besides its launcher entries. -->
+        <receiver
+            android:name="androidx.profileinstaller.ProfileInstallReceiver"
+            tools:node="remove" />
     </application>
 </manifest>

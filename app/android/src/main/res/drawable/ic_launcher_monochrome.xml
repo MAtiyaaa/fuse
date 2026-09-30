@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Single-colour mark for themed icons (Android 13+): same geometry, the spark without its glow. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M44.48,28.8 H63.52 A15.68,15.68 0 0 1 79.2,44.48 V63.52 A15.68,15.68 0 0 1 63.52,79.2 H44.48 A15.68,15.68 0 0 1 28.8,63.52 V44.48 A15.68,15.68 0 0 1 44.48,28.8 Z"
+        android:strokeWidth="5.6"
+        android:strokeColor="#FFFFFFFF" />
+
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M41.68,65.2 C49.52,65.2 50.64,45.04 61.84,45.04"
+        android:strokeWidth="5.6"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeLineCap="round" />
+
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M65.2,42.8 m-5.6,0 a5.6,5.6 0 1 0 11.2,0 a5.6,5.6 0 1 0 -11.2,0" />
+</vector>
