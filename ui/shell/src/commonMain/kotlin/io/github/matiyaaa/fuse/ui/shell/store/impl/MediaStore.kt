@@ -23,6 +23,7 @@ import io.github.matiyaaa.fuse.library.parse.LeadingNumbers
 import io.github.matiyaaa.fuse.model.ArtworkOption
 import io.github.matiyaaa.fuse.model.Game
 import io.github.matiyaaa.fuse.model.GameId
+import io.github.matiyaaa.fuse.model.GameMetadata
 import io.github.matiyaaa.fuse.model.MediaFillMode
 import io.github.matiyaaa.fuse.model.MediaItem
 import io.github.matiyaaa.fuse.model.MediaKind
@@ -37,12 +38,15 @@ import io.github.matiyaaa.fuse.model.ScrapeProviderId
 import io.github.matiyaaa.fuse.model.ScrapeQuery
 import io.github.matiyaaa.fuse.model.ScopedSettings
 import io.github.matiyaaa.fuse.ui.shell.store.ArtworkResult
+import io.github.matiyaaa.fuse.ui.shell.store.FillChoice
 import io.github.matiyaaa.fuse.ui.shell.store.FillProgress
 import io.github.matiyaaa.fuse.ui.shell.store.IdentifyResult
 import io.github.matiyaaa.fuse.ui.shell.store.MediaOps
 import io.github.matiyaaa.fuse.ui.shell.store.SearchTitle
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -51,6 +55,8 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /**
  * Artwork and metadata. Providers are only asked when the user starts something (a fill, a search
@@ -265,46 +271,134 @@ internal class DefaultMediaOps(
         kinds.forEach { media.resetCustom(owner, it) }
     }
 
-    override fun fill(mode: MediaFillMode, kinds: Set<MediaKind>, platform: PlatformId?, game: GameId?) {
-        if (kinds.isEmpty()) return
+    override fun fill(mode: MediaFillMode, kinds: Set<MediaKind>, platform: PlatformId?, game: GameId?) =
+        startFill(FillJob(mode, kinds, platform, game, everything = false))
+
+    override fun fillEverything(platform: PlatformId?) {
+        startFill(FillJob(MediaFillMode.FILL_MISSING, FILLABLE, platform, game = null, everything = true))
+        // System logos and panels come from the art pack, alongside the games.
+        systemArt.start()
+    }
+
+    override fun cancelFill() {
+        val job = fillJob ?: return
+        if (!job.isActive) return
+        job.cancel()
+        progress.value = progress.value?.copy(current = null, finished = true, cancelled = true)
+    }
+
+    /**
+     * Runs [job] over its games, several at once (one in Low Power), each within the providers' own
+     * rate limits. Progress is published after every game, so the screens update as art arrives.
+     */
+    private fun startFill(job: FillJob) {
+        if (job.kinds.isEmpty()) return
         fillJob?.cancel()
         fillJob = ctx.scope.launch {
+            val (configured, coordinator) = coordinator()
+            val priority = ctx.settings.value.scraping.effectiveOrder()
+            // Asking for art no source has is what made fills crawl over games that looked done.
+            val kinds = job.kinds intersect coordinator.availableKinds(priority, configured)
+            val details = coordinator.providesMetadata(priority, configured)
             val targets: List<GameId> = when {
-                game != null -> listOf(game)
-                mode == MediaFillMode.FILL_MISSING -> media.gamesMissing(kinds, platform).keys.toList()
-                platform != null -> ctx.data.games.observeByPlatform(platform).first().map { it.id }
-                else -> ctx.data.games.observeAll().first().map { it.id }
+                job.game != null -> listOf(job.game)
+                job.everything -> gamesIn(job.platform)
+                job.mode == MediaFillMode.FILL_MISSING -> if (kinds.isEmpty()) emptyList() else media.gamesMissing(kinds, job.platform).keys.toList()
+                else -> gamesIn(job.platform)
             }
-            var done = 0
-            var added = 0
-            progress.value = FillProgress(0, targets.size, null, 0, finished = targets.isEmpty())
-            for (id in targets) {
-                val g = ctx.data.games.get(id)
-                if (g != null && ctx.data.scopedSettings.resolve(ScopedSettings.ScrapeEnabled, g.platformId, g.id).value) {
-                    progress.value = FillProgress(done, targets.size, g.displayTitle, added, finished = false)
-                    added += try {
-                        fillOne(g, mode, kinds)
-                    } catch (e: CancellationException) {
-                        throw e
-                    } catch (e: Throwable) {
-                        0
+            val lock = Mutex()
+            var state = FillProgress(0, targets.size, null, 0, finished = targets.isEmpty())
+            progress.value = state
+            if (targets.isEmpty()) return@launch
+            val queue = Channel<GameId>(Channel.UNLIMITED)
+            targets.forEach { queue.trySend(it) }
+            queue.close()
+            val workers = if (ctx.settings.value.performance.lowPowerMode) 1 else FILL_WORKERS
+            coroutineScope {
+                repeat(workers.coerceAtMost(targets.size)) {
+                    launch {
+                        for (id in queue) {
+                            val g = ctx.data.games.get(id)
+                            val enabled = g != null && ctx.data.scopedSettings.resolve(ScopedSettings.ScrapeEnabled, g.platformId, g.id).value
+                            if (g != null && enabled) {
+                                lock.withLock { state = state.copy(current = g.displayTitle); progress.value = state }
+                            }
+                            val result = if (g == null || !enabled) {
+                                GameFill()
+                            } else {
+                                try {
+                                    fillOne(g, job, kinds, details, configured)
+                                } catch (e: CancellationException) {
+                                    throw e
+                                } catch (e: Throwable) {
+                                    GameFill()
+                                }
+                            }
+                            lock.withLock {
+                                state = state.copy(
+                                    done = state.done + 1,
+                                    added = state.added + result.added,
+                                    details = state.details + if (result.details) 1 else 0,
+                                    needsYou = if (result.needsChoice && g != null) state.needsYou + FillChoice(g.id, g.displayTitle) else state.needsYou,
+                                )
+                                progress.value = state
+                            }
+                        }
                     }
                 }
-                done++
             }
-            progress.value = FillProgress(done, targets.size, null, added, finished = true)
+            progress.value = state.copy(current = null, finished = true)
         }
     }
 
-    /** Scrapes one game and stores what the plan allows. Returns the number of items added. */
-    private suspend fun fillOne(game: Game, mode: MediaFillMode, kinds: Set<MediaKind>): Int {
+    private suspend fun gamesIn(platform: PlatformId?): List<GameId> =
+        (if (platform != null) ctx.data.games.observeByPlatform(platform) else ctx.data.games.observeAll()).first().map { it.id }
+
+    /**
+     * Scrapes one game and stores what the plan allows. A bulk "fill missing" remembers what the
+     * sources didn't have (for [TRIED_DAYS] days, per search name and set of sources) and doesn't
+     * ask again; a new key, another search name or filling this one game asks again.
+     */
+    private suspend fun fillOne(game: Game, job: FillJob, kinds: Set<MediaKind>, detailSources: Boolean, configured: Set<ScrapeProviderId>): GameFill {
         val owner = MediaOwner.OfGame(game.id)
-        val plan = FillPlanner.plan(media.get(owner), mode, kinds)
-        if (plan.isEmpty) return 0
+        val plan = FillPlanner.plan(media.get(owner), job.mode, kinds)
+        val wantDetails = detailSources && (job.everything || job.game != null) && game.metadata.lacksDetails()
+        if (plan.isEmpty && !wantDetails) return GameFill()
         val (request, coordinator) = request(game, plan.fetch, metadata = true, collectAll = false)
-        val outcome = coordinator.scrape(request) as? ScrapeOutcome.Accepted ?: return 0
-        return store(game, outcome, mode, plan.fetch)
+        val remember = job.game == null && job.mode == MediaFillMode.FILL_MISSING
+        val key = game.id.value.toString()
+        if (job.game != null) ctx.data.cache.remove(TRIED, key)
+        if (remember) {
+            val tried = ctx.data.cache.getOrNull(TRIED, key, ctx.now())?.let(Tried::decode)
+            if (tried != null && tried.covers(request.query.title, configured, plan.fetch, wantDetails)) return GameFill(needsChoice = tried.choice)
+        }
+        return when (val outcome = coordinator.scrape(request)) {
+            is ScrapeOutcome.Accepted -> {
+                val added = store(game, outcome, job.mode, plan.fetch)
+                val found = outcome.artwork.map { it.kind }.toSet()
+                val missing = plan.fetch - found
+                if (remember && (missing.isNotEmpty() || (wantDetails && outcome.metadata == null))) {
+                    remember(key, Tried(request.query.title, configured, missing, details = wantDetails && outcome.metadata == null, choice = false))
+                } else if (remember) {
+                    ctx.data.cache.remove(TRIED, key)
+                }
+                GameFill(added, details = outcome.metadata != null && wantDetails)
+            }
+            is ScrapeOutcome.NeedsReview -> {
+                if (remember) remember(key, Tried(request.query.title, configured, plan.fetch, details = wantDetails, choice = true))
+                GameFill(needsChoice = true)
+            }
+            is ScrapeOutcome.NotFound -> {
+                if (remember && outcome.errors.isEmpty()) remember(key, Tried(request.query.title, configured, plan.fetch, details = wantDetails, choice = false))
+                GameFill()
+            }
+            // Offline or a quota: nothing to remember, the next fill tries again.
+            is ScrapeOutcome.ProviderErrors -> GameFill()
+        }
     }
+
+    private suspend fun remember(key: String, tried: Tried) =
+        ctx.data.cache.put(TRIED, key, tried.encode(), ctx.now(), TRIED_DAYS * 24L * 60 * 60 * 1000)
 
     private suspend fun store(game: Game, outcome: ScrapeOutcome.Accepted, mode: MediaFillMode, kinds: Set<MediaKind>): Int {
         val items = outcome.artwork
@@ -361,10 +455,11 @@ internal class DefaultMediaOps(
         val plan = FillPlanner.plan(media.get(MediaOwner.OfGame(game)), MediaFillMode.REPLACE_ALL, kinds)
         val (request, coordinator) = request(g, plan.fetch, metadata = true, collectAll = false)
         val outcome = coordinator.accept(request, candidate) as? ScrapeOutcome.Accepted ?: return false
+        ctx.data.cache.remove(TRIED, game.value.toString())
         store(g, outcome, MediaFillMode.REPLACE_ALL, plan.fetch)
         ctx.data.games.applyMetadata(
             game,
-            (outcome.metadata ?: io.github.matiyaaa.fuse.model.GameMetadata()).copy(source = candidate.provider.metadataSource()),
+            (outcome.metadata ?: GameMetadata()).copy(source = candidate.provider.metadataSource()),
             titleFromMetadata = candidate.title,
             onlyFillEmpty = false,
         )
@@ -373,6 +468,58 @@ internal class DefaultMediaOps(
 }
 
 private val namedSearch = setOf(ScrapeProviderId.STEAMGRIDDB, ScrapeProviderId.IGDB, ScrapeProviderId.THEGAMESDB)
+
+/** Every art kind a fill can find (videos and borders come from elsewhere). */
+internal val FILLABLE = setOf(MediaKind.ICON, MediaKind.BOXART, MediaKind.GRID, MediaKind.HERO, MediaKind.LOGO, MediaKind.SCREENSHOT)
+
+/** Games worked on at once. Each provider still keeps to its own rate limit. */
+private const val FILL_WORKERS = 3
+
+/** Cache namespace of what a fill looked for and didn't find, per game. */
+private const val TRIED = "fill.tried"
+private const val TRIED_DAYS = 14
+
+private data class FillJob(
+    val mode: MediaFillMode,
+    val kinds: Set<MediaKind>,
+    val platform: PlatformId?,
+    val game: GameId?,
+    val everything: Boolean,
+)
+
+private data class GameFill(val added: Int = 0, val details: Boolean = false, val needsChoice: Boolean = false)
+
+private fun GameMetadata.lacksDetails(): Boolean = description == null || releaseYear == null || genres.isEmpty()
+
+/** What a fill asked the sources for and didn't get, so the next bulk fill can skip the game. */
+private data class Tried(
+    val title: String,
+    val providers: Set<ScrapeProviderId>,
+    val kinds: Set<MediaKind>,
+    val details: Boolean,
+    val choice: Boolean,
+) {
+    /** True when asking again (same name, no new source) could only find the same nothing. */
+    fun covers(title: String, configured: Set<ScrapeProviderId>, fetch: Set<MediaKind>, details: Boolean): Boolean =
+        title == this.title && providers.containsAll(configured) && kinds.containsAll(fetch) && (!details || this.details || choice)
+
+    fun encode(): String = listOf(
+        title.replace("\n", " "),
+        providers.joinToString(",") { it.name },
+        kinds.joinToString(",") { it.name },
+        details.toString(),
+        choice.toString(),
+    ).joinToString("\n")
+
+    companion object {
+        fun decode(text: String): Tried? = runCatching {
+            val parts = text.split("\n")
+            if (parts.size != 5) return null
+            fun <T> set(value: String, parse: (String) -> T): Set<T> = value.split(",").filter { it.isNotEmpty() }.map(parse).toSet()
+            Tried(parts[0], set(parts[1], ScrapeProviderId::valueOf), set(parts[2], MediaKind::valueOf), parts[3].toBoolean(), parts[4].toBoolean())
+        }.getOrNull()
+    }
+}
 
 private fun MediaKind.label(): String = when (this) {
     MediaKind.ICON -> "icons"

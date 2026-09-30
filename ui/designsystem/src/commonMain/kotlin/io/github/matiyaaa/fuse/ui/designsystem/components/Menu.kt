@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -52,6 +53,8 @@ sealed interface Trailing {
     /** Marks a setting as coming from a parent scope ("Global", "PlayStation 2"). */
     data class Inherited(val from: String) : Trailing
     data class Badge(val text: String) : Trailing
+    /** A running job: [text] over a small bar ([fraction] null while its size isn't known). */
+    data class Progress(val fraction: Float?, val text: String) : Trailing
 }
 
 @Immutable
@@ -137,6 +140,11 @@ fun MenuRow(
             is Trailing.Check -> if (tr.on) FuseIcon(FuseIcons.Check, tint = c.accent)
             is Trailing.Inherited -> Chip(tr.from, icon = FuseIcons.Layers, color = c.textMuted)
             is Trailing.Badge -> Chip(tr.text, color = c.accent)
+            is Trailing.Progress -> Column(Modifier.width(112.dp), horizontalAlignment = Alignment.End) {
+                FText(tr.text, t.label, color = c.textMuted, maxLines = 1)
+                Spacer(Modifier.height(Space.xs))
+                ProgressBar(tr.fraction, Modifier.fillMaxWidth())
+            }
         }
     }
 }

@@ -16,6 +16,8 @@ import io.github.matiyaaa.fuse.model.InstalledEmulator
 import io.github.matiyaaa.fuse.model.LaunchPlan
 import io.github.matiyaaa.fuse.model.LaunchTarget
 import io.github.matiyaaa.fuse.model.LibrarySourceKind
+import io.github.matiyaaa.fuse.model.MediaFillMode
+import io.github.matiyaaa.fuse.model.MediaKind
 import io.github.matiyaaa.fuse.model.PlatformId
 import io.github.matiyaaa.fuse.model.ReleaseAsset
 import io.github.matiyaaa.fuse.model.ScanPhase
@@ -162,6 +164,40 @@ class StoreIntegrationTest {
         store.library.rename(game.id, "My Wars")
         assertTrue(File(root, "gba/Advance Wars (USA).gba").exists())
         assertTrue(store.library.games(GameQuery(platform = PlatformId("gba"))).first().isEmpty())
+    }
+
+    @Test
+    fun bulkFillRemembersWhatSourcesDidNotHave() = runBlocking {
+        val services = FakeServices(FuseData(DesktopDatabase.open(freshDb())), cache)
+        val store = createFuseStore(services, scope)
+        store.sources.add(root.absolutePath, LibrarySourceKind.ROMS_ROOT)
+        awaitScan(store)
+        fun libretro() = services.requestHosts.count { it == "thumbnails.libretro.com" }
+
+        // Only libretro is set up: icons can't come from it, so only box art is looked for.
+        store.media.fill(MediaFillMode.FILL_MISSING, setOf(MediaKind.ICON, MediaKind.BOXART))
+        val first = withTimeout(20_000) { store.media.fillProgress.first { it?.finished == true } }!!
+        assertEquals(2, first.total)
+        assertEquals(2, first.done)
+        assertEquals(0, first.added)
+        val asked = libretro()
+        assertTrue(asked > 0, "libretro should have been asked")
+
+        // The same fill again skips both games: the sources had nothing a moment ago.
+        store.media.fill(MediaFillMode.FILL_MISSING, setOf(MediaKind.ICON, MediaKind.BOXART))
+        withTimeout(20_000) { store.media.fillProgress.first { it?.finished == true && it !== first } }
+        assertEquals(asked, libretro())
+
+        // A single game is always searched again.
+        val game = store.library.games(GameQuery(platform = PlatformId("gba"))).first().single()
+        store.media.fill(MediaFillMode.FILL_MISSING, setOf(MediaKind.BOXART), game = game.id)
+        withTimeout(20_000) { store.media.fillProgress.first { it?.finished == true && it.total == 1 } }
+        assertTrue(libretro() > asked)
+
+        // Icons alone: no source can return one, so there is nothing to do.
+        store.media.fill(MediaFillMode.FILL_MISSING, setOf(MediaKind.ICON))
+        val none = withTimeout(20_000) { store.media.fillProgress.first { it?.finished == true && it.total == 0 } }!!
+        assertEquals(0, none.done)
     }
 
     /**

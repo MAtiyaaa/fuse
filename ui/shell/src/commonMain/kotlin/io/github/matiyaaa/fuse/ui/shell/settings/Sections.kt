@@ -10,6 +10,7 @@ import io.github.matiyaaa.fuse.model.HomeMode
 import io.github.matiyaaa.fuse.model.LibraryLayout
 import io.github.matiyaaa.fuse.model.MatchStrictness
 import io.github.matiyaaa.fuse.model.MediaFillMode
+import io.github.matiyaaa.fuse.model.MediaOwner
 import io.github.matiyaaa.fuse.model.MediaKind
 import io.github.matiyaaa.fuse.model.MotionProfile
 import io.github.matiyaaa.fuse.model.PerformanceProfile
@@ -38,6 +39,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
 import io.github.matiyaaa.fuse.ui.shell.platform.WindowStyle
 import io.github.matiyaaa.fuse.ui.shell.platform.WindowControls
+import io.github.matiyaaa.fuse.ui.shell.store.FillChoice
+import io.github.matiyaaa.fuse.ui.shell.store.FillProgress
 import io.github.matiyaaa.fuse.ui.shell.store.MusicPrefs
 import io.github.matiyaaa.fuse.ui.shell.store.UpdateState
 import io.github.matiyaaa.fuse.ui.shell.app.applyUpdate
@@ -332,6 +335,7 @@ fun mediaRows(app: AppState): List<MenuAction> {
     val providers by app.store.media.providers.collectAsState()
     val checks by app.store.media.keyChecks.collectAsState()
     val stored by app.store.credentials.stored.collectAsState()
+    val fill by app.store.media.fillProgress.collectAsState()
     val set = app.store::updatePrefs
     fun secretRow(key: String, label: String, detail: String) = app.textRow(
         "key.$key", label, FuseIcons.Key, if (key in stored) "Saved" else null, detail = detail, placeholder = "Paste or type",
@@ -400,9 +404,14 @@ fun mediaRows(app: AppState): List<MenuAction> {
                 }
             } else set { it.copy(matching = v) }
         })
-        add(MenuAction("fill", "Fill missing art", FuseIcons.Wand, detail = "Every game without an icon, cover, background or logo. Custom art is never replaced", onSelect = {
+        addAll(fillRows(app, fill))
+        add(MenuAction("fill", "Fill missing art", FuseIcons.Wand, detail = "Icons, covers, banners, backgrounds and logos for games without them. Custom art is never replaced", onSelect = {
             app.store.media.fill(MediaFillMode.FILL_MISSING, setOf(MediaKind.ICON, MediaKind.BOXART, MediaKind.HERO, MediaKind.LOGO, MediaKind.GRID))
-            app.toasts.show("Looking for missing art in the background")
+            app.toasts.show("Looking for missing art. Progress shows here and in the top bar")
+        }))
+        add(MenuAction("fill.all", "Fill everything", FuseIcons.Sparkles, detail = "Every kind of art, screenshots and details (description, year, genres, series, rating) for every game, plus system art. Nothing you chose or edited is replaced", onSelect = {
+            app.store.media.fillEverything()
+            app.toasts.show("Filling art and details. Progress shows here and in the top bar")
         }))
         add(app.confirmRow("replace", "Replace all scraped art", FuseIcons.RotateCcw, "Replace scraped art?", "Fuse fetches art again for every game and replaces art it scraped before. Art you chose yourself stays.", "Replace") {
             app.store.media.fill(MediaFillMode.REPLACE_ALL, setOf(MediaKind.ICON, MediaKind.BOXART, MediaKind.HERO, MediaKind.LOGO, MediaKind.GRID))
@@ -411,6 +420,56 @@ fun mediaRows(app: AppState): List<MenuAction> {
         add(app.choiceRow("video.delay", "Preview delay", FuseIcons.Timer, p.videoDelaySeconds, listOf(5, 10, 15, 20, 30).map { it to "$it seconds" }) { v -> set { it.copy(videoDelaySeconds = v) } })
     }
 }
+
+/** The running or last fill: live progress (select to stop), then what it did and the games that need a choice. */
+fun fillRows(app: AppState, fill: FillProgress?): List<MenuAction> {
+    val f = fill ?: return emptyList()
+    return buildList {
+        if (!f.finished) {
+            add(MenuAction(
+                "fill.progress", "Filling art and details", FuseIcons.Wand,
+                detail = listOfNotNull(f.current, "${f.added} ${if (f.added == 1) "image" else "images"} added", "Select to stop").joinToString("  ·  "),
+                trailing = Trailing.Progress(f.fraction.takeIf { f.total > 0 }, "${f.done} of ${f.total}"),
+                onSelect = { app.store.media.cancelFill() },
+            ))
+        } else {
+            add(infoRow(
+                "fill.result", if (f.cancelled) "Fill stopped" else "Fill finished",
+                "${f.done} of ${f.total}",
+                detail = fillSummary(f),
+                icon = if (f.cancelled) FuseIcons.CircleX else FuseIcons.CircleCheck,
+            ))
+        }
+        if (f.needsYou.isNotEmpty()) add(needsYouRow(app, f.needsYou))
+    }
+}
+
+/** "40 images added, details for 12 games" (or that nothing new was found). */
+fun fillSummary(f: FillProgress): String {
+    val parts = listOfNotNull(
+        f.added.takeIf { it > 0 }?.let { "$it ${if (it == 1) "image" else "images"} added" },
+        f.details.takeIf { it > 0 }?.let { "details for $it ${if (it == 1) "game" else "games"}" },
+    )
+    return if (parts.isEmpty()) "Nothing new was found" else parts.joinToString(", ").replaceFirstChar { it.uppercase() }
+}
+
+private fun needsYouRow(app: AppState, games: List<FillChoice>): MenuAction = MenuAction(
+    "fill.needs", "${games.size} ${if (games.size == 1) "game needs" else "games need"} you", FuseIcons.FileQuestion,
+    detail = "Several close matches. Pick the right game in Identify game",
+    trailing = Trailing.Badge(games.size.toString()),
+    onSelect = {
+        app.choice = ChoiceSpec(
+            title = "Pick the right game",
+            message = "Fuse found several close matches for these. Choose one to see them all.",
+            options = games.take(60).map { g ->
+                MenuAction("needs.${g.game.value}", g.title, FuseIcons.Gamepad, trailing = Trailing.Chevron, onSelect = {
+                    app.choice = null
+                    app.go(Route.Media(MediaOwner.OfGame(g.game), g.title, identify = true))
+                })
+            },
+        )
+    },
+)
 
 @Composable
 fun achievementRows(app: AppState): List<MenuAction> {

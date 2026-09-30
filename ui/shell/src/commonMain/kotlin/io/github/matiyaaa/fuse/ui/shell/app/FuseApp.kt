@@ -144,6 +144,7 @@ fun FuseApp(store: FuseStore, platform: PlatformUi, router: InputRouter) {
         platform.sounds.setVolume(prefs.soundVolume)
     }
     MenuMusic(app, platform.music)
+    FillFinishedToast(app)
     DisposableEffect(router) {
         router.feedback = InputFeedback { event, result ->
             when (result) {
@@ -318,7 +319,7 @@ private fun Pages(app: AppState) {
                 is Route.PlatformGames -> LibraryScreen(app, LibraryScope.OfPlatform(route.platform))
                 is Route.CollectionGames -> LibraryScreen(app, LibraryScope.OfCollection(route.collection, route.name))
                 is Route.GameInfo -> GameScreen(app, route.game)
-                is Route.Media -> MediaScreen(app, route.owner, route.title)
+                is Route.Media -> MediaScreen(app, route.owner, route.title, route.identify)
                 is Route.Settings -> SettingsScreen(app, route.section)
                 is Route.PlatformSettings -> PlatformSettingsScreen(app, route.platform)
                 Route.Search -> SearchScreen(app)
@@ -451,12 +452,38 @@ private fun MenuMusic(app: AppState, player: MenuMusicPlayer?) {
 }
 
 /** What is working in the background, for the top line: Cartridge downloads and Fuse updates. */
+/** Says once when a fill that ran for more than one game finishes, unless its Settings page is open. */
+@Composable
+private fun FillFinishedToast(app: AppState) {
+    val fill by app.store.media.fillProgress.collectAsState()
+    var running by remember { mutableStateOf(false) }
+    LaunchedEffect(fill) {
+        val f = fill ?: return@LaunchedEffect
+        if (!f.finished) {
+            running = f.total > 1
+            return@LaunchedEffect
+        }
+        if (!running) return@LaunchedEffect
+        running = false
+        if (f.cancelled || (app.navigator.current as? Route.Settings)?.section == "media") return@LaunchedEffect
+        val needs = f.needsYou.size.takeIf { it > 0 }?.let { " $it need you in Settings, Media and Scraping." } ?: ""
+        app.toasts.show("Fill finished. ${io.github.matiyaaa.fuse.ui.shell.settings.fillSummary(f)}.$needs")
+    }
+}
+
 @Composable
 private fun hudActivities(app: AppState): List<HudActivity> {
     val update by app.store.updates.state.collectAsState()
     val available by app.store.updates.available.collectAsState()
     val cartridge by app.store.cartridge.status.collectAsState()
+    val fill by app.store.media.fillProgress.collectAsState()
     return buildList {
+        fill?.takeIf { !it.finished }?.let { f ->
+            add(HudActivity(
+                "fill", FuseIcons.Wand, "Filling art and details: ${f.done} of ${f.total}",
+                progress = f.fraction.takeIf { f.total > 0 },
+            ) { app.go(Route.Settings("media")) })
+        }
         if (cartridge.installed && (cartridge.activeDownloads > 0 || cartridge.queue.any { it.state == io.github.matiyaaa.fuse.model.QueueState.DOWNLOADING })) {
             val current = cartridge.queue.firstOrNull { it.state == io.github.matiyaaa.fuse.model.QueueState.DOWNLOADING }
             add(HudActivity(

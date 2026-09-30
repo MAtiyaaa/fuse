@@ -172,9 +172,18 @@ class ScrapeCoordinator(
         return finish(request, source, game, candidate, null, activeSources(request), errors)
     }
 
-    private fun activeSources(request: ScrapeRequest): List<ScrapeSource> = request.priority.distinct().mapNotNull { id ->
-        sources[id]?.takeIf { !id.needsCredentials || id in request.configured }
-    }
+    /** The art kinds at least one active source (in [priority], with [configured] keys) can return. */
+    fun availableKinds(priority: List<ScrapeProviderId>, configured: Set<ScrapeProviderId>): Set<MediaKind> =
+        activeSources(priority, configured).flatMapTo(LinkedHashSet()) { it.artworkKinds }
+
+    /** Whether an active source can fill in details (description, year, genres). */
+    fun providesMetadata(priority: List<ScrapeProviderId>, configured: Set<ScrapeProviderId>): Boolean =
+        activeSources(priority, configured).any { it.providesMetadata }
+
+    private fun activeSources(request: ScrapeRequest): List<ScrapeSource> = activeSources(request.priority, request.configured)
+
+    private fun activeSources(priority: List<ScrapeProviderId>, configured: Set<ScrapeProviderId>): List<ScrapeSource> =
+        priority.distinct().mapNotNull { id -> sources[id]?.takeIf { !id.needsCredentials || id in configured } }
 
     private suspend fun finish(
         request: ScrapeRequest,
@@ -202,9 +211,12 @@ class ScrapeCoordinator(
         val out = LinkedHashMap<String, ArtworkOption>()
         // The winner first when it is in the list, then the rest in the user's order.
         val order = (listOf(winner) + active).distinctBy { it.id }
+        // Kinds no source can return never hold the loop open.
+        val reachable = kinds.filter { k -> order.any { k in it.artworkKinds } }
         val followUp = request.query.copy(title = game.title, year = request.query.year ?: game.year)
         for (source in order) {
-            if (!request.collectAllArtwork && kinds.all { k -> out.values.any { it.kind == k } }) break
+            if (!request.collectAllArtwork && reachable.all { k -> out.values.any { it.kind == k } }) break
+            if (source.artworkKinds.none { it in kinds }) continue
             val options = if (source.id == winner.id) {
                 source.artwork(game, request.query, kinds)
             } else {

@@ -50,7 +50,12 @@ internal class FakeServices(override val data: FuseData, private val cache: File
     override val appVersion = "0.0.1"
     override val fs: FuseFileSystem = JavaFileSystem()
     override val secrets: SecretStore = MemorySecrets()
-    override val http = HttpClient(MockEngine { respondError(HttpStatusCode.NotFound) })
+    /** Hosts of every request made, in order (nothing is found anywhere). */
+    val requestHosts: MutableList<String> = java.util.Collections.synchronizedList(mutableListOf())
+    override val http = HttpClient(MockEngine { request ->
+        requestHosts += request.url.host
+        respondError(HttpStatusCode.NotFound)
+    })
     override val cacheDir: String = cache.absolutePath
 
     override val emulators = object : EmulatorDetector {

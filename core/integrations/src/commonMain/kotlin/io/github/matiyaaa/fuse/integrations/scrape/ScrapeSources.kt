@@ -68,6 +68,9 @@ interface ScrapeSource {
     /** False for artwork-only providers (SteamGridDB, libretro). */
     val providesMetadata: Boolean
 
+    /** The art kinds this source can ever return, so a fill never asks for what it can't have. */
+    val artworkKinds: Set<MediaKind> get() = MediaKind.entries.toSet()
+
     /** Finds games for [query]. */
     suspend fun search(query: ScrapeQuery): ApiResult<List<ProviderGame>>
 
@@ -79,6 +82,7 @@ interface ScrapeSource {
 class IgdbSource(private val client: IgdbClient, private val limit: Int = 10) : ScrapeSource {
     override val id = ScrapeProviderId.IGDB
     override val providesMetadata = true
+    override val artworkKinds = setOf(MediaKind.BOXART, MediaKind.HERO, MediaKind.SCREENSHOT)
 
     override suspend fun search(query: ScrapeQuery): ApiResult<List<ProviderGame>> {
         val platformId = IgdbPlatforms.idFor(query.platform)
@@ -121,6 +125,8 @@ class IgdbSource(private val client: IgdbClient, private val limit: Int = 10) : 
                 developer = developers.firstOrNull(),
                 publisher = publishers.firstOrNull(),
                 genres = genres.map { it.name }.filter { it.isNotBlank() },
+                franchise = series,
+                rating = totalRating?.takeIf { it > 0 }?.let { kotlin.math.round(it).toInt().coerceIn(0, 100) },
                 source = MetadataSource.IGDB,
             ),
             artwork = art,
@@ -141,6 +147,7 @@ class IgdbSource(private val client: IgdbClient, private val limit: Int = 10) : 
 class TheGamesDbSource(private val client: TheGamesDbClient) : ScrapeSource {
     override val id = ScrapeProviderId.THEGAMESDB
     override val providesMetadata = true
+    override val artworkKinds = setOf(MediaKind.BOXART, MediaKind.HERO, MediaKind.GRID, MediaKind.SCREENSHOT, MediaKind.LOGO)
 
     override suspend fun search(query: ScrapeQuery): ApiResult<List<ProviderGame>> {
         val platformId = TgdbPlatforms.idFor(query.platform)
@@ -247,6 +254,7 @@ class SteamGridDbSource(
 ) : ScrapeSource {
     override val id = ScrapeProviderId.STEAMGRIDDB
     override val providesMetadata = false
+    override val artworkKinds = setOf(MediaKind.BOXART, MediaKind.GRID, MediaKind.HERO, MediaKind.LOGO, MediaKind.ICON)
 
     override suspend fun search(query: ScrapeQuery): ApiResult<List<ProviderGame>> =
         client.searchAutocomplete(query.title).map { list ->
@@ -289,9 +297,10 @@ class SteamGridDbSource(
 class LibretroSource(private val thumbnails: LibretroThumbnails) : ScrapeSource {
     override val id = ScrapeProviderId.LIBRETRO
     override val providesMetadata = false
+    override val artworkKinds = LibretroThumbnailType.entries.map { it.kind }.toSet()
 
     override suspend fun search(query: ScrapeQuery): ApiResult<List<ProviderGame>> =
-        thumbnails.find(query.platform, query.title, query.fileName, setOf(LibretroThumbnailType.BOXART, LibretroThumbnailType.SNAP))
+        thumbnails.find(query.platform, query.title, query.fileName, searched)
             .map { found ->
                 found.firstOrNull()?.let { hit ->
                     listOf(
@@ -307,9 +316,15 @@ class LibretroSource(private val thumbnails: LibretroThumbnails) : ScrapeSource 
                 } ?: emptyList()
             }
 
+    /** Box art and snaps were already looked up by [search]; only the other types are asked for. */
     override suspend fun artwork(game: ProviderGame, query: ScrapeQuery, kinds: Set<MediaKind>): ApiResult<List<ArtworkOption>> {
-        val types = LibretroThumbnailType.entries.filter { it.kind in kinds }.toSet()
-        if (types.isEmpty()) return ApiResult.Success(emptyList())
-        return thumbnails.find(query.platform, game.title, null, types).map { list -> list.map { it.toArtworkOption() } }
+        val known = game.artwork.filter { it.kind in kinds }
+        val types = LibretroThumbnailType.entries.filter { it.kind in kinds && it !in searched }.toSet()
+        if (types.isEmpty()) return ApiResult.Success(known)
+        return thumbnails.find(query.platform, game.title, null, types).map { list -> known + list.map { it.toArtworkOption() } }
+    }
+
+    private companion object {
+        val searched = setOf(LibretroThumbnailType.BOXART, LibretroThumbnailType.SNAP)
     }
 }

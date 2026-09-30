@@ -71,7 +71,16 @@ data class IgdbGame(
     val screenshots: List<IgdbImage> = emptyList(),
     val platforms: List<IgdbPlatform> = emptyList(),
     @SerialName("game_type") @Serializable(with = FlexLong::class) val gameType: Long? = null,
+    val franchise: IgdbNamed? = null,
+    val franchises: List<IgdbNamed> = emptyList(),
+    val collections: List<IgdbNamed> = emptyList(),
+    /** Critic and user rating, 0..100. */
+    @SerialName("total_rating") val totalRating: Double? = null,
 ) {
+    /** The series the game belongs to: its main franchise, else the first franchise or collection. */
+    val series: String?
+        get() = (listOfNotNull(franchise) + franchises + collections).map { it.name.trim() }.firstOrNull { it.isNotEmpty() }
+
     val developers: List<String> get() = involvedCompanies.filter { it.developer }.mapNotNull { it.company?.name }
     val publishers: List<String> get() = involvedCompanies.filter { it.publisher }.mapNotNull { it.company?.name }
 }
@@ -87,7 +96,8 @@ internal data class TwitchToken(
 object IgdbQuery {
     const val GAME_FIELDS = "name,first_release_date,summary,genres.name," +
         "involved_companies.company.name,involved_companies.developer,involved_companies.publisher," +
-        "cover.image_id,artworks.image_id,screenshots.image_id,platforms.abbreviation,platforms.name,game_type"
+        "cover.image_id,artworks.image_id,screenshots.image_id,platforms.abbreviation,platforms.name,game_type," +
+        "franchise.name,franchises.name,collections.name,total_rating"
 
     /** Escapes a value for use inside an Apicalypse string literal. */
     fun escape(value: String): String = value.replace("\\", "\\\\").replace("\"", "\\\"")

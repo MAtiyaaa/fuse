@@ -135,8 +135,15 @@ interface MediaOps {
     suspend fun setFromFile(owner: MediaOwner, kind: MediaKind, path: String)
     suspend fun adjust(owner: MediaOwner, kind: MediaKind, focusX: Float, focusY: Float, zoom: Float)
     suspend fun reset(owner: MediaOwner, kind: MediaKind?)
-    /** Bulk fill for a game, platform or everything ([platform] and [game] null). */
+    /**
+     * Bulk fill for a game, platform or everything ([platform] and [game] null). Kinds no configured
+     * source can return are left out, and a bulk "fill missing" skips games whose sources had
+     * nothing a short while ago (a single game is always searched again).
+     */
     fun fill(mode: MediaFillMode, kinds: Set<MediaKind>, platform: PlatformId? = null, game: GameId? = null)
+    /** Every art kind and every detail the sources have, for games missing any, plus system art. */
+    fun fillEverything(platform: PlatformId? = null)
+    fun cancelFill()
     val fillProgress: StateFlow<FillProgress?>
     /** The name art and details are searched with for [game]; null when the game is gone. */
     suspend fun searchTitle(game: GameId): SearchTitle?
@@ -171,7 +178,25 @@ sealed interface IdentifyResult {
 
 data class RecentDownload(val download: io.github.matiyaaa.fuse.model.CartridgeDownload, val game: GameCard?)
 
-data class FillProgress(val done: Int, val total: Int, val current: String?, val added: Int, val finished: Boolean)
+data class FillProgress(
+    val done: Int,
+    val total: Int,
+    /** The game (or system) being worked on; with several at once, the latest one started. */
+    val current: String?,
+    /** Images added. */
+    val added: Int,
+    val finished: Boolean,
+    /** Games whose details (description, year, genres, series, rating) were filled in. */
+    val details: Int = 0,
+    /** Games with several close matches, for the user to pick in Identify game. */
+    val needsYou: List<FillChoice> = emptyList(),
+    val cancelled: Boolean = false,
+) {
+    val fraction: Float get() = if (total <= 0) 1f else (done.toFloat() / total).coerceIn(0f, 1f)
+}
+
+/** A game a fill couldn't name by itself. */
+data class FillChoice(val game: GameId, val title: String)
 
 interface CollectionOps {
     val collections: StateFlow<List<GameCollection>>

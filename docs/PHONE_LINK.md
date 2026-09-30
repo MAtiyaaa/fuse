@@ -50,7 +50,9 @@ All responses are JSON unless stated. Errors are `{"error": "message people can 
   "fill": FillProgress | null
 }
 ```
-`FillProgress`: `{"done": 12, "total": 340, "current": "Pepsiman" | null, "added": 40, "finished": false}`.
+`FillProgress`: `{"done": 12, "total": 340, "current": "Pepsiman" | null, "added": 40, "details": 9,
+"finished": false, "cancelled": false, "needsYou": [{"id": 5, "title": "Pepsiman"}]}`. `needsYou` lists
+games with several close matches; the phone opens Identify game for them.
 
 ### Library
 - `GET /api/systems` → `[{"id": "psx", "name": "PlayStation", "shortName": "PS1", "gameCount": 12,

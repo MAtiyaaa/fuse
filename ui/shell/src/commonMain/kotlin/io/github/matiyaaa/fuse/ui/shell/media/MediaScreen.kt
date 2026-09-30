@@ -130,7 +130,7 @@ private enum class GameRow(val label: String) { SEARCH_AS("Search as"), IDENTIFY
  * by itself.
  */
 @Composable
-fun MediaScreen(app: AppState, owner: MediaOwner, title: String) {
+fun MediaScreen(app: AppState, owner: MediaOwner, title: String, identifyFirst: Boolean = false) {
     val flow = remember(owner) { app.store.media.media(owner) }
     val media by flow.collectAsState(initial = MediaSet.Empty)
     val gameId = (owner as? MediaOwner.OfGame)?.id
@@ -177,6 +177,15 @@ fun MediaScreen(app: AppState, owner: MediaOwner, title: String) {
                     else Browser.Matches(result.query, result.candidates, then)
                 is IdentifyResult.Unavailable -> Browser.Message(result.reason)
             }
+        }
+    }
+
+    // Opened from a fill's "needs you" list: straight to the matches, once the search name is known.
+    var identified by remember(owner) { mutableStateOf(false) }
+    LaunchedEffect(searchTitle != null) {
+        if (identifyFirst && !identified && searchTitle != null) {
+            identified = true
+            identify()
         }
     }
 
