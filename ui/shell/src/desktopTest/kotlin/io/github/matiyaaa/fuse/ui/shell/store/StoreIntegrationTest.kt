@@ -101,9 +101,9 @@ class StoreIntegrationTest {
 
         exit.complete(Unit)
         withTimeout(10_000) { services.data.playSessions.openSession().first { it == null } }
-        val played = services.data.games.summary(game.id)
-        assertNotNull(played?.lastPlayedAt)
-        assertEquals(1, played?.sessions)
+        val played = assertNotNull(services.data.games.summary(game.id))
+        assertNotNull(played.lastPlayedAt)
+        assertEquals(1, played.sessions)
     }
 
     @Test

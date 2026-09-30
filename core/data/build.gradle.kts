@@ -14,12 +14,12 @@ kotlin {
         androidMain.dependencies {
             implementation(libs.sqldelight.android.driver)
         }
-        val desktopMain by getting {
+        getByName("desktopMain") {
             dependencies {
                 implementation(libs.sqldelight.sqlite.driver)
             }
         }
-        val desktopTest by getting {
+        getByName("desktopTest") {
             dependencies {
                 implementation(libs.sqldelight.sqlite.driver)
             }

@@ -3,7 +3,7 @@ package io.github.matiyaaa.fuse.ui.shell.app
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.runComposeUiTest
+import androidx.compose.ui.test.v2.runComposeUiTest
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.printToString
 import io.github.matiyaaa.fuse.data.FuseData
