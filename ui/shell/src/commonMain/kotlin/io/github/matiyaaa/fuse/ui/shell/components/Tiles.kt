@@ -27,7 +27,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import io.github.matiyaaa.fuse.model.BiosState
 import io.github.matiyaaa.fuse.ui.designsystem.components.FText
 import io.github.matiyaaa.fuse.ui.designsystem.components.Tile
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
@@ -257,7 +256,7 @@ private fun PackCard(card: PlatformCard, accent: Color, large: Boolean) {
             } else {
                 FText(card.platform.shortName, if (large) Fuse.type.hero else Fuse.type.title, color = Color.White, maxLines = 1)
             }
-            if (cardHeight > 96.dp) {
+            if (large || cardHeight > 120.dp) {
                 FText(
                     "${card.gameCount} ${if (card.gameCount == 1) "game" else "games"}",
                     Fuse.type.caption,
@@ -270,10 +269,10 @@ private fun PackCard(card: PlatformCard, accent: Color, large: Boolean) {
     }
 }
 
-/** A small warning mark when a system has no emulator or is missing firmware. */
+/** A small warning mark when a system has no emulator. Firmware is told on the system's own page. */
 @Composable
 private fun SystemWarning(card: PlatformCard, modifier: Modifier) {
-    if (card.bios.state == BiosState.MISSING || card.bios.state == BiosState.PARTIAL || !card.emulatorInstalled) {
+    if (!card.emulatorInstalled) {
         Box(
             modifier.padding(Space.s).size(22.dp).background(Color.Black.copy(alpha = 0.55f), CircleShape),
             contentAlignment = Alignment.Center,
@@ -281,17 +280,19 @@ private fun SystemWarning(card: PlatformCard, modifier: Modifier) {
     }
 }
 
-/** Generated system art: short name large, full name and count small. */
+/** Generated system art: short name large, maker and count small when the tile has room. */
 @Composable
 fun SystemGlyph(card: PlatformCard, accent: Color, large: Boolean = false) {
-    Box(Modifier.fillMaxSize()) {
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        // Small tiles (the Systems grid, Home) show the name alone.
+        val roomy = large || maxHeight > 120.dp
         GeneratedArt(title = card.platform.name, accent = accent, slot = ArtSlot.WIDE, showText = false)
         Column(
-            Modifier.fillMaxSize().padding(if (large) Space.xl else Space.m),
+            Modifier.fillMaxSize().padding(if (large) Space.xl else if (roomy) Space.m else Space.s + Space.xs),
             verticalArrangement = Arrangement.SpaceBetween,
         ) {
             FText(
-                card.platform.manufacturer?.uppercase() ?: "",
+                if (roomy) card.platform.manufacturer?.uppercase() ?: "" else "",
                 Fuse.type.overline,
                 color = Color.White.copy(alpha = 0.7f),
                 maxLines = 1,
@@ -299,16 +300,18 @@ fun SystemGlyph(card: PlatformCard, accent: Color, large: Boolean = false) {
             Column {
                 FText(
                     card.platform.shortName,
-                    if (large) Fuse.type.hero else Fuse.type.title,
+                    if (large) Fuse.type.hero else if (roomy) Fuse.type.title else Fuse.type.titleSmall,
                     color = Color.White,
                     maxLines = 1,
                 )
-                FText(
-                    "${card.gameCount} ${if (card.gameCount == 1) "game" else "games"}",
-                    Fuse.type.caption,
-                    color = Color.White.copy(alpha = 0.75f),
-                    maxLines = 1,
-                )
+                if (roomy) {
+                    FText(
+                        "${card.gameCount} ${if (card.gameCount == 1) "game" else "games"}",
+                        Fuse.type.caption,
+                        color = Color.White.copy(alpha = 0.75f),
+                        maxLines = 1,
+                    )
+                }
             }
         }
         SystemWarning(card, Modifier.align(Alignment.TopEnd))

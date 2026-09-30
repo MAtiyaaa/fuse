@@ -1,6 +1,29 @@
 package io.github.matiyaaa.fuse.ui.shell.systems
 
 import io.github.matiyaaa.fuse.ui.designsystem.components.fadingEdges
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.zIndex
+import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
+import io.github.matiyaaa.fuse.ui.designsystem.theme.Durations
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -27,14 +50,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import io.github.matiyaaa.fuse.model.BiosState
 import io.github.matiyaaa.fuse.model.CartridgeRoute
 import io.github.matiyaaa.fuse.model.MediaFillMode
 import io.github.matiyaaa.fuse.model.MediaKind
 import io.github.matiyaaa.fuse.model.MediaOwner
 import io.github.matiyaaa.fuse.model.NavAction
 import io.github.matiyaaa.fuse.model.ScanScope
-import io.github.matiyaaa.fuse.ui.designsystem.components.Chip
 import io.github.matiyaaa.fuse.ui.designsystem.components.FText
 import io.github.matiyaaa.fuse.ui.designsystem.components.Hint
 import io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction
@@ -59,16 +80,16 @@ import io.github.matiyaaa.fuse.ui.shell.app.ContextMenuSpec
 import io.github.matiyaaa.fuse.ui.shell.app.FocusZone
 import io.github.matiyaaa.fuse.ui.shell.app.Route
 import io.github.matiyaaa.fuse.ui.shell.app.rememberRouteState
-import io.github.matiyaaa.fuse.ui.shell.components.Stage
 import io.github.matiyaaa.fuse.ui.shell.components.SystemCardArt
-import io.github.matiyaaa.fuse.ui.shell.components.stage
 import io.github.matiyaaa.fuse.ui.shell.store.PlatformCard
 import kotlinx.coroutines.launch
 
 /**
- * Every system Fuse found games for, as large cards. A card shows the system's own art when set,
- * otherwise an original typographic design in its colour; a warning mark means no emulator is
- * installed or firmware is missing.
+ * Every system Fuse found games for, as a compact grid under a slim header: the focused system's
+ * logo or name, its game count and emulator. Its artwork panel from the system art pack stands on
+ * the right as the backdrop (a background the user chose fills the screen instead). Firmware and
+ * emulator details live on the system's page and settings; the grid only marks a system with no
+ * emulator.
  */
 @Composable
 fun SystemsScreen(app: AppState) {
@@ -77,7 +98,7 @@ fun SystemsScreen(app: AppState) {
     val sel = rememberRouteState(app.navigator, "systems") { GridSelection() }
     sel.clamp(systems.size)
     val current = systems.getOrNull(sel.index)
-    var columns = 4
+    var columns = 5
     // Holding confirm picks a system up; the D-pad moves it and the order is saved for Home too.
     var moving by remember { mutableStateOf(false) }
 
@@ -115,17 +136,23 @@ fun SystemsScreen(app: AppState) {
         }
     }
 
-    BoxWithConstraints(Modifier.fillMaxSize()) {
-        val cardWidth = ((maxWidth - Space.gutter * 2) / 4.2f).coerceIn(180.dp, 320.dp)
-        columns = ((maxWidth - Space.gutter * 2 + Space.l) / (cardWidth + Space.l)).toInt().coerceAtLeast(2)
-        val maxH = maxHeight
+    BoxWithConstraints(
+        Modifier.fillMaxSize()
+            // A tap outside the cards puts a carried system down.
+            .pointerInput(moving) { if (moving) detectTapGestures { moving = false } },
+    ) {
+        val gap = Space.m
+        val usable = maxWidth - Space.gutter * 2
+        // About six cards across, never smaller than a thumb.
+        val target = (maxWidth * 0.135f).coerceAtLeast(112.dp)
+        columns = ((usable + gap) / (target + gap)).toInt().coerceIn(3, 8)
+        val compactHeader = maxHeight < 560.dp
+        // The art pack's panel stands on the right, unless the user chose a background for the system.
+        if (current?.art?.hero == null) SystemShowcase(current, Modifier.align(Alignment.CenterEnd).fillMaxHeight().width(maxHeight * 0.46f))
         Column(Modifier.fillMaxSize()) {
-            Spacer(Modifier.height(Size.hudHeight))
-            Box(Modifier.fillMaxWidth().height((maxH * 0.24f).coerceIn(120.dp, 210.dp)).padding(horizontal = Space.gutter), contentAlignment = Alignment.BottomStart) {
-                Stage(current?.stage())
-            }
-            current?.let { StatusLine(it) }
-            Spacer(Modifier.height(Space.l))
+            Spacer(Modifier.height(Size.hudHeight + if (compactHeader) Space.s else Space.xl))
+            SystemHeader(current, compactHeader, Modifier.padding(horizontal = Space.gutter))
+            Spacer(Modifier.height(if (compactHeader) Space.xs else Space.m))
             if (systems.isEmpty()) {
                 FText("Systems appear here once Fuse finds games for them.", Fuse.type.body, color = Fuse.colors.textMuted, modifier = Modifier.padding(horizontal = Space.gutter))
             }
@@ -134,20 +161,38 @@ fun SystemsScreen(app: AppState) {
             LazyVerticalGrid(
                 columns = GridCells.Fixed(columns),
                 state = grid,
-                modifier = Modifier.fadingEdges(top = if (grid.canScrollBackward) 24.dp else 0.dp),
-                contentPadding = PaddingValues(start = Space.gutter, end = Space.gutter, top = Space.s, bottom = Size.hintHeight + Space.x4),
-                horizontalArrangement = Arrangement.spacedBy(Space.l),
-                verticalArrangement = Arrangement.spacedBy(Space.xl),
+                modifier = Modifier.fadingEdges(top = if (grid.canScrollBackward) 20.dp else 0.dp),
+                // Room above the first row for a lifted or carried card.
+                contentPadding = PaddingValues(start = Space.gutter, end = Space.gutter, top = Space.l, bottom = Size.hintHeight + Space.x4),
+                horizontalArrangement = Arrangement.spacedBy(gap),
+                verticalArrangement = Arrangement.spacedBy(Space.l),
             ) {
                 itemsIndexed(systems, key = { _, p -> p.platform.id.value }) { i, card ->
                     val selected = i == sel.index && app.focusZone == FocusZone.CONTENT
+                    val carried = moving && i == sel.index
+                    val lifted by animateFloatAsState(if (carried) 1f else 0f, Fuse.motion.focusSpring(), label = "carry")
                     Tile(
                         selected = selected,
                         glow = card.platform.accent.toColor(),
-                        modifier = Modifier.fillMaxWidth().aspectRatio(Aspect.SYSTEM_CARD),
+                        modifier = Modifier
+                            .animateItem(fadeInSpec = null, fadeOutSpec = null)
+                            .zIndex(if (carried) 1f else 0f)
+                            .graphicsLayer {
+                                // A carried system floats a little above the others.
+                                val s = 1f + 0.05f * lifted
+                                scaleX = s
+                                scaleY = s
+                                translationY = -6.dp.toPx() * lifted
+                            }
+                            .fillMaxWidth()
+                            .aspectRatio(Aspect.SYSTEM_CARD),
                         onClick = {
                             app.focusZone = FocusZone.CONTENT
-                            if (sel.index == i) app.go(Route.PlatformGames(card.platform.id)) else sel.index = i
+                            when {
+                                moving -> moving = false
+                                sel.index == i -> app.go(Route.PlatformGames(card.platform.id))
+                                else -> sel.index = i
+                            }
                         },
                         onLongClick = { sel.index = i; app.openContextMenu(app.systemMenu(card)) },
                     ) {
@@ -159,20 +204,82 @@ fun SystemsScreen(app: AppState) {
     }
 }
 
+/** The focused system: logo (or name), then games and emulator. No firmware details here. */
 @Composable
-private fun StatusLine(card: PlatformCard) {
+private fun SystemHeader(card: PlatformCard?, compact: Boolean, modifier: Modifier = Modifier) {
     val c = Fuse.colors
-    Row(Modifier.padding(horizontal = Space.gutter, vertical = Space.s), horizontalArrangement = Arrangement.spacedBy(Space.s), verticalAlignment = Alignment.CenterVertically) {
-        Chip(card.emulatorName ?: "No emulator", icon = FuseIcons.Chip, color = if (card.emulatorInstalled) c.text else c.warning)
-        val (label, color) = when (card.bios.state) {
-            BiosState.READY -> "BIOS ready" to c.success
-            BiosState.PARTIAL -> "BIOS partly found" to c.warning
-            BiosState.MISSING -> "BIOS missing" to c.danger
-            BiosState.UNKNOWN -> "BIOS: check in emulator" to c.textMuted
-            BiosState.NOT_REQUIRED -> null to c.text
+    val motion = Fuse.motion
+    val logoHeight = if (compact) 40.dp else 64.dp
+    AnimatedContent(
+        targetState = card,
+        modifier = modifier.fillMaxWidth(0.62f),
+        contentKey = { it?.platform?.id },
+        transitionSpec = { fadeIn(motion.fade(Durations.BASE)) togetherWith fadeOut(motion.fade(Durations.INSTANT)) },
+        contentAlignment = Alignment.BottomStart,
+        label = "system header",
+    ) { s ->
+        if (s == null) {
+            Spacer(Modifier.height(logoHeight))
+            return@AnimatedContent
         }
-        if (label != null) Chip(label, icon = FuseIcons.Key, color = color)
-        if (card.installedEmulators > 1) Chip("${card.installedEmulators} emulators", color = c.textMuted)
+        Column(verticalArrangement = Arrangement.spacedBy(if (compact) Space.xs else Space.s)) {
+            val name: @Composable () -> Unit = {
+                FText(s.platform.name, if (compact) Fuse.type.title else Fuse.type.display, color = c.text, maxLines = 1)
+            }
+            if (s.art.logo != null) {
+                Artwork(
+                    s.art.logo,
+                    Modifier.height(logoHeight).fillMaxWidth(),
+                    contentScale = ContentScale.Fit,
+                    focusX = 0f,
+                    focusY = 0.5f,
+                    tint = Color.White,
+                    fallback = name,
+                )
+            } else {
+                name()
+            }
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s)) {
+                Box(Modifier.size(7.dp).background(s.platform.accent.toColor(), CircleShape))
+                FText("${s.gameCount} ${if (s.gameCount == 1) "game" else "games"}", Fuse.type.body, color = c.textMuted, maxLines = 1)
+                FText("·", Fuse.type.body, color = c.textFaint)
+                if (s.emulatorInstalled && s.emulatorName != null) {
+                    FText(s.emulatorName, Fuse.type.body, color = c.textMuted, maxLines = 1)
+                } else {
+                    FuseIcon(FuseIcons.Warning, size = 14.dp, tint = c.warning)
+                    FText("No emulator installed", Fuse.type.body, color = c.warning, maxLines = 1)
+                }
+            }
+        }
+    }
+}
+
+/**
+ * The system art pack's tall artwork panel (made for the right side of a frontend's system view),
+ * fading into the background on its left and toward the bottom so the grid stays calm.
+ */
+@Composable
+private fun SystemShowcase(card: PlatformCard?, modifier: Modifier) {
+    val art = card?.art?.boxart
+    Crossfade(targetState = art, modifier = modifier, animationSpec = Fuse.motion.fade(Durations.SLOW), label = "showcase") { model ->
+        if (model == null) return@Crossfade
+        Artwork(
+            model,
+            Modifier.fillMaxSize()
+                .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+                .drawWithContent {
+                    drawContent()
+                    drawRect(Brush.horizontalGradient(0f to Color.Transparent, 0.55f to Color.Black), blendMode = BlendMode.DstIn)
+                    // Clear of the status bar at the top, quieter behind the grid toward the bottom.
+                    drawRect(
+                        Brush.verticalGradient(0f to Color.Transparent, 0.2f to Color.Black.copy(alpha = 0.8f), 0.5f to Color.Black.copy(alpha = 0.55f), 1f to Color.Black.copy(alpha = 0.15f)),
+                        blendMode = BlendMode.DstIn,
+                    )
+                },
+            contentScale = ContentScale.Crop,
+            focusX = 0.5f,
+            focusY = 0.3f,
+        )
     }
 }
 

@@ -131,6 +131,39 @@ internal object AuditLibrary {
 }
 
 /** App icons drawn for the audit: a rounded square in the app's colour with a simple mark. */
+/** Stand-ins for system art pack images: a tall artwork panel and a white logo on transparency. */
+internal object AuditSystemArt {
+    fun panel(file: File, color: Long) {
+        val w = 454
+        val h = 1080
+        val img = BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB)
+        val g = img.createGraphics()
+        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
+        val base = Color(color.toInt(), true)
+        g.paint = GradientPaint(0f, 0f, base.brighter(), w.toFloat(), h.toFloat(), base.darker().darker())
+        g.fillRect(0, 0, w, h)
+        g.color = Color(255, 255, 255, 60)
+        g.stroke = BasicStroke(18f)
+        g.draw(Ellipse2D.Float(60f, 220f, 340f, 340f))
+        g.color = Color(255, 255, 255, 36)
+        g.fill(RoundRectangle2D.Float(110f, 640f, 240f, 150f, 40f, 40f))
+        g.dispose()
+        ImageIO.write(img, "png", file)
+    }
+
+    fun logo(file: File, text: String) {
+        val img = BufferedImage(640, 160, BufferedImage.TYPE_INT_ARGB)
+        val g = img.createGraphics()
+        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
+        g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON)
+        g.color = Color.WHITE
+        g.font = java.awt.Font(java.awt.Font.SANS_SERIF, java.awt.Font.BOLD or java.awt.Font.ITALIC, 112)
+        g.drawString(text, 8, 124)
+        g.dispose()
+        ImageIO.write(img, "png", file)
+    }
+}
+
 internal object AuditIcons {
     fun write(file: File, label: String, color: Long, variant: Int) {
         val size = 192
