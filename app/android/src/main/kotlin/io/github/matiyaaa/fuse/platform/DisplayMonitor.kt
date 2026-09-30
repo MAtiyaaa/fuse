@@ -63,12 +63,13 @@ class DisplayMonitor(context: Context) {
     }
 
     /**
-     * The display for the companion Presentation, chosen the way Cartridge does: a presentation
-     * display first, else any other real screen that is not off. Recording and casting displays are
-     * never used, and whether activities may start there does not matter for a Presentation.
+     * The display for the companion Presentation, chosen the way Cartridge does: not the one Fuse is
+     * on ([mainDisplay]), a presentation display first, else any other real screen that is not off.
+     * Recording and casting displays are never used, and whether activities may start there does not
+     * matter for a Presentation.
      */
-    fun presentationTarget(): DisplayInfo? {
-        val real = _displays.value.filter { !it.isPrimary && it.isOn && it.id !in virtualIds }
+    fun presentationTarget(mainDisplay: Int = Display.DEFAULT_DISPLAY): DisplayInfo? {
+        val real = _displays.value.filter { it.id != mainDisplay && it.isOn && it.id !in virtualIds }
         return real.firstOrNull { it.isPresentation } ?: real.firstOrNull()
     }
 

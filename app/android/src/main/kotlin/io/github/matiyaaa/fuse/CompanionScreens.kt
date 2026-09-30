@@ -141,7 +141,7 @@ class CompanionScreens(private val app: FuseApplication) : DualScreenHandoff {
             if (current.isShowing && monitor.displays.value.any { it.id == id }) return
             hidePresentation("display $id is gone")
         }
-        val target = monitor.presentationTarget() ?: return
+        val target = monitor.presentationTarget(mainDisplay = main.displayIdCompat()) ?: return
         if (target.id in refusedPresentation) return
         val display = app.getSystemService(DisplayManager::class.java)?.getDisplay(target.id) ?: return
         val shown = CompanionPresentation(main, display) { CompanionContent(app) }
