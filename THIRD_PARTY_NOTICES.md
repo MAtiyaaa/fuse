@@ -94,6 +94,7 @@ cached on their device. None of it is part of Fuse's distribution.
 | TheGamesDB | [API](https://api.thegamesdb.net/) |
 | ScreenScraper | [API documentation](https://www.screenscraper.fr/webapi2.php) |
 | Libretro thumbnails | [Repository](https://github.com/libretro-thumbnails/libretro-thumbnails) (no licence file; images belong to their owners). Fetched at runtime, never bundled |
+| Art Book Next system art | [Repository](https://github.com/anthonycaccese/art-book-next-es-de), [CC BY-NC-SA 2.0](https://creativecommons.org/licenses/by-nc-sa/2.0/). Theme by Anthony Caccese; system logos modified from Dan Patrick's console logos; Noir artwork set by tenlevels with help from f8less; Outline artwork set by Joppa Fallston; some artwork by theUnBurn. Fetched at runtime from a pinned commit, never bundled, credited wherever it is shown |
 | GitHub REST API | [Releases API](https://docs.github.com/en/rest/releases/releases), [GitHub Terms of Service](https://docs.github.com/en/site-policy/github-terms/github-terms-of-service) |
 
 ## Compatibility with GPL-3.0-or-later
@@ -108,6 +109,7 @@ cached on their device. None of it is part of Fuse's distribution.
 | SIL OFL 1.1 | Sora and Manrope fonts | Compatible for distribution. The fonts stay under the OFL and are not relicensed; the OFL explicitly allows bundling the fonts with software under any licence as long as the fonts are not sold on their own and the licence travels with them. Fuse does not modify the fonts, and neither declares a Reserved Font Name |
 | AGPL-3.0 | RomM | No code is used, only facts and names, which carry no licence obligations. (AGPL-3.0 and GPL-3.0 are also explicitly combinable under section 13 of each) |
 | No licence | Daijisho files, community configs, libretro thumbnails | Nothing is copied or bundled |
+| CC BY-NC-SA 2.0 | Art Book Next system art | Not combined with Fuse. The files are downloaded by each user at runtime and cached on their device, never bundled or redistributed, so the NonCommercial and ShareAlike terms do not reach Fuse's own licence. Fuse shows the required attribution with the art |
 
 ### Licence texts
 

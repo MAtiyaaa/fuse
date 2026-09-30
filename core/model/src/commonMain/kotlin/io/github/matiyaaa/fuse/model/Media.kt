@@ -26,9 +26,12 @@ enum class MediaKind(
     ;
 }
 
-/** Where a piece of artwork came from. [USER] media is never replaced without an explicit action. */
+/**
+ * Where a piece of artwork came from. [USER] media is never replaced without an explicit action.
+ * [ART_PACK] is platform art from the Art Book Next system art pack.
+ */
 @Serializable
-enum class MediaSource { USER, LOCAL_FOLDER, ROMM, STEAMGRIDDB, IGDB, THEGAMESDB, SCREENSCRAPER, LIBRETRO, GENERATED }
+enum class MediaSource { USER, LOCAL_FOLDER, ROMM, STEAMGRIDDB, IGDB, THEGAMESDB, SCREENSCRAPER, LIBRETRO, GENERATED, ART_PACK }
 
 /** What a media record belongs to. */
 @Serializable
