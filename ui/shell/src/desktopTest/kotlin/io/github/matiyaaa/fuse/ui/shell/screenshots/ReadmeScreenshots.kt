@@ -53,6 +53,9 @@ import org.junit.Assume.assumeTrue
  * names an output folder, which the `desktopScreenshots` Gradle task sets:
  *
  *     ./gradlew :ui:shell:desktopScreenshots
+ *
+ * The PNGs in docs/assets/screenshots were then recompressed losslessly (`oxipng -o 6`), which
+ * keeps every file under about 900 KB.
  */
 @OptIn(ExperimentalTestApi::class)
 class ReadmeScreenshots {
@@ -274,6 +277,12 @@ class ReadmeScreenshots {
         private const val HEIGHT = 1080
         private const val DENSITY = 1.5f
         private const val FRAME_MS = 16L
-        private const val MAX_STEP_MS = 100L
+
+        /**
+         * Frames render slowly in software at this size, so each step follows real time (the
+         * on-screen clock only ticks when the test clock reaches the next minute); the cap only
+         * guards against a single huge jump.
+         */
+        private const val MAX_STEP_MS = 1_000L
     }
 }
