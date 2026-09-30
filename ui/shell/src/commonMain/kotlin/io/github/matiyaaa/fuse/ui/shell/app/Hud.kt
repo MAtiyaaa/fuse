@@ -30,7 +30,20 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.onPlaced
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.positionInParent
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
@@ -125,13 +138,51 @@ fun Hud(
         Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.alpha(glyphs)) { ButtonGlyph(HintButton.PREV, size = 18.dp, color = Fuse.colors.textFaint) }
             Spacer(Modifier.width(Space.s))
+            // When the tabs don't all fit they scroll like a carousel: the active one is always
+            // shown whole, and tabs slipping past either edge shrink and fade into it.
+            val scroll = rememberScrollState()
+            val requesters = remember(destinations) { destinations.associateWith { BringIntoViewRequester() } }
+            var viewport by remember { mutableIntStateOf(0) }
+            val edge = with(LocalDensity.current) { 56.dp.toPx() }
+            val activeWidth = remember { mutableIntStateOf(0) }
+            // Again once its label has opened, and with room to spare so the fade never covers it.
+            LaunchedEffect(active, labels, activeWidth.intValue) {
+                val requester = active?.let { requesters[it] } ?: return@LaunchedEffect
+                requester.bringIntoView(Rect(-edge, 0f, activeWidth.intValue + edge, 1f))
+            }
             Row(
-                Modifier.weight(1f, fill = false).clipHorizontally(),
+                Modifier
+                    .weight(1f, fill = false)
+                    .onSizeChanged { viewport = it.width }
+                    .fadeSides(fadeLeft = { scroll.value > 0 }, fadeRight = { scroll.value < scroll.maxValue })
+                    .horizontalScroll(scroll),
                 horizontalArrangement = Arrangement.spacedBy(Space.xs),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 for (d in destinations) {
-                    Tab(d, selected = d == active, focused = tabsFocused && focusedButton == null && d == active, showLabel = labels || d == active, onClick = { onSelect(d) })
+                    var x by remember { mutableFloatStateOf(0f) }
+                    var w by remember { mutableIntStateOf(0) }
+                    Tab(
+                        d, selected = d == active, focused = tabsFocused && focusedButton == null && d == active, showLabel = labels || d == active,
+                        modifier = Modifier
+                            .bringIntoViewRequester(requesters.getValue(d))
+                            .onPlaced {
+                                x = it.positionInParent().x
+                                w = it.size.width
+                                if (d == active) activeWidth.intValue = it.size.width
+                            }
+                            .graphicsLayer {
+                                if (viewport <= 0 || scroll.maxValue == 0) return@graphicsLayer
+                                val center = x - scroll.value + w / 2f
+                                val nearest = minOf(center, viewport - center)
+                                val t = (nearest / edge).coerceIn(0f, 1f)
+                                val s = 0.84f + 0.16f * t
+                                scaleX = s
+                                scaleY = s
+                                alpha = 0.45f + 0.55f * t
+                            },
+                        onClick = { onSelect(d) },
+                    )
                 }
             }
             Spacer(Modifier.width(Space.s))
@@ -176,14 +227,14 @@ private fun HudIconButton(icon: ImageVector, label: String, focused: Boolean, on
 }
 
 @Composable
-private fun Tab(destination: Destination, selected: Boolean, focused: Boolean, showLabel: Boolean, onClick: () -> Unit) {
+private fun Tab(destination: Destination, selected: Boolean, focused: Boolean, showLabel: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val c = Fuse.colors
     val motion = Fuse.motion
     val tint by animateColorAsState(if (selected) c.text else c.text.copy(alpha = 0.5f), motion.tween(Durations.FAST), label = "tab")
     val bar by animateFloatAsState(if (selected) 1f else 0f, motion.focusSpring(), label = "bar")
     val bg by animateColorAsState(if (focused) c.text.copy(alpha = 0.12f) else Color.Transparent, motion.tween(Durations.FAST), label = "tabbg")
     Row(
-        Modifier
+        modifier
             .clip(PillShape)
             .background(bg)
             .clickable(remember { MutableInteractionSource() }, null, onClick = onClick)
@@ -284,9 +335,24 @@ fun formatDate(): String {
     return "$day, $month ${t.day}"
 }
 
-/** Clips sideways only, so focus outlines and the active tab's mark above and below still show. */
-private fun Modifier.clipHorizontally(): Modifier = drawWithContent {
-    clipRect(left = 0f, top = -size.height, right = size.width, bottom = size.height * 2) {
-        this@drawWithContent.drawContent()
+/** Fades the left and/or right edge out while there is more to scroll that way. */
+private fun Modifier.fadeSides(fadeLeft: () -> Boolean, fadeRight: () -> Boolean): Modifier = this
+    .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+    .drawWithContent {
+        drawContent()
+        val w = size.width
+        if (w <= 0f) return@drawWithContent
+        val f = (28.dp.toPx() / w).coerceIn(0f, 0.3f)
+        val left = fadeLeft()
+        val right = fadeRight()
+        if (!left && !right) return@drawWithContent
+        drawRect(
+            Brush.horizontalGradient(
+                0f to (if (left) Color.Transparent else Color.Black),
+                f to Color.Black,
+                1f - f to Color.Black,
+                1f to (if (right) Color.Transparent else Color.Black),
+            ),
+            blendMode = BlendMode.DstIn,
+        )
     }
-}

@@ -203,6 +203,11 @@ fun libraryRows(app: AppState): List<MenuAction> {
         })
         add(MenuAction("bios", "Check BIOS again", FuseIcons.Key, onSelect = { app.store.sources.refreshBios(); app.toasts.show("Checking BIOS files") }))
         add(app.choiceRow("layout", "Default view", FuseIcons.Grid, p.defaultLayout, LibraryLayout.entries.map { it to layoutName(it) }) { v -> app.store.updatePrefs { it.copy(defaultLayout = v) } })
+        add(app.choiceRow(
+            "select", "Selecting a game", FuseIcons.Play, p.openGamePage,
+            listOf(false to "Plays it", true to "Opens its page"),
+            detail = "What confirm (or a tap on a selected game) does. Play is always on the game's page",
+        ) { v -> app.store.updatePrefs { it.copy(openGamePage = v) } })
         add(MenuAction(
             "clean", "Clean display names", FuseIcons.Wand,
             detail = "Hides tags like (USA) and [!] in titles. Files are never renamed",

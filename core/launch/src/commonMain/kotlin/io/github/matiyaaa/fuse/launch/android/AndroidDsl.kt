@@ -24,6 +24,7 @@ internal const val FMS_ACTIVITY = "com.fms.emulib.TVActivity"
 
 internal const val SAF = LaunchTokens.SAF
 internal const val PROVIDER = LaunchTokens.PROVIDER
+internal const val DOC = LaunchTokens.DOC
 internal const val PATH = LaunchTokens.PATH
 internal const val SERIAL = LaunchTokens.SERIAL
 internal const val INJECT = LaunchTokens.INJECT

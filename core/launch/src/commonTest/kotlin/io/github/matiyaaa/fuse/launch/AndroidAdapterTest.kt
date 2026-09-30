@@ -55,7 +55,7 @@ class AndroidAdapterTest {
     fun safAndProviderTokensStayForTheAndroidApp() {
         val rom = "$ROMS/psx/a.chd"
         val duck = planOf("duckstation", game("psx", rom), androidEmu("duckstation", "com.github.stenzek.duckstation"), LaunchTarget.File(rom))
-        assertEquals(mapOf("bootPath" to "{SAF}"), duck.intent.stringExtras)
+        assertEquals(mapOf("bootPath" to "{DOC}"), duck.intent.stringExtras)
         assertEquals(mapOf("resumeState" to false), duck.intent.boolExtras)
         assertTrue(duck.intent.clearTask && duck.intent.clearTop)
         assertEquals("com.github.stenzek.duckstation.EmulationActivity", duck.intent.activity)

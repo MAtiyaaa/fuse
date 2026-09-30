@@ -20,6 +20,14 @@ import kotlinx.coroutines.launch
  * Starts a game. The launch veil appears immediately (so pressing Play always responds), the store
  * resolves the emulator and fires the launch, and anything other than a clean start is explained.
  */
+/** What confirming a game tile does: play it, or open its page when the user chose that. */
+fun AppState.activateGame(card: GameCard) {
+    if (store.prefs.value.openGamePage) go(Route.GameInfo(card.id)) else play(card)
+}
+
+/** The hint for confirming on a game tile, following [activateGame]. */
+val AppState.gameConfirmLabel: String get() = if (store.prefs.value.openGamePage) "Open" else "Play"
+
 fun AppState.play(card: GameCard, emulator: io.github.matiyaaa.fuse.model.EmulatorId? = null) {
     if (launching != null) return
     launching = LaunchVeil(card.title, card.art.hero ?: card.art.boxart ?: card.art.icon, card.accent)

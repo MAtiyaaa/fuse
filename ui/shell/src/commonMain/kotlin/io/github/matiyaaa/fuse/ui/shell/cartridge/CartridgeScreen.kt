@@ -55,6 +55,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
 import io.github.matiyaaa.fuse.ui.designsystem.theme.toColor
+import io.github.matiyaaa.fuse.ui.shell.app.activateGame
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.ConfirmSpec
 import io.github.matiyaaa.fuse.ui.shell.app.FocusZone
@@ -134,7 +135,7 @@ fun CartridgeScreen(app: AppState) {
                 NavAction.DOWN, NavAction.PAGE_UP, NavAction.PAGE_DOWN -> recentSel.move(e.action, recent.size, vertical = true).let { if (it == NavResult.IGNORED) NavResult.BLOCKED else it }
                 NavAction.SELECT -> {
                     val r = recent.getOrNull(recentSel.index) ?: return@InputLayer NavResult.BLOCKED
-                    if (r.game != null) app.play(r.game) else open(CartridgeRoute.Game(r.download.romId))
+                    if (r.game != null) app.activateGame(r.game) else open(CartridgeRoute.Game(r.download.romId))
                     NavResult.ACTIVATED
                 }
                 NavAction.CONTEXT -> { recent.getOrNull(recentSel.index)?.let { open(CartridgeRoute.Game(it.download.romId)) }; NavResult.ACTIVATED }

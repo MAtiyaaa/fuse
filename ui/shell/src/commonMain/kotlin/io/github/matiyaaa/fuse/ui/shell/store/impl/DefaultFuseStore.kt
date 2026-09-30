@@ -82,14 +82,19 @@ internal class DefaultFuseStore private constructor(
 
     /**
      * Clean names became the default in 0.0.2. Games already in the library get cleaned names once,
-     * recorded like any cleanup so Settings, Library can undo it; custom titles are never touched.
+     * and again whenever the cleaning rules improve ([CLEAN_RULES]; 0.0.4 learned list numbers and
+     * codes in front of names). Recorded like any cleanup so Settings, Library can undo it; custom
+     * titles are never touched.
      */
     private suspend fun cleanExistingNamesOnce() {
         val library = ctx.settings.value.library
-        if (!library.cleanDisplayNames || library.cleanedExistingNames) return
+        if (!library.cleanDisplayNames) return
+        if (library.cleanedExistingNames && library.cleanedNamesRules >= CLEAN_RULES) return
         runCatching { data.titleCleanup.apply(DisplayNameCleaner::clean) }
         writeLock.withLock {
-            ctx.settings.value = data.settings.update { it.copy(library = it.library.copy(cleanedExistingNames = true)) }
+            ctx.settings.value = data.settings.update {
+                it.copy(library = it.library.copy(cleanedExistingNames = true, cleanedNamesRules = CLEAN_RULES))
+            }
         }
     }
 
@@ -121,6 +126,9 @@ internal class DefaultFuseStore private constructor(
     }
 
     companion object {
+        /** Version of [DisplayNameCleaner]'s rules; existing names are cleaned again when it grows. */
+        const val CLEAN_RULES = 2
+
         suspend fun create(services: FuseServices, scope: CoroutineScope): DefaultFuseStore {
             val settings = services.data.settings.current()
             val ctx = StoreContext(services, scope, settings)

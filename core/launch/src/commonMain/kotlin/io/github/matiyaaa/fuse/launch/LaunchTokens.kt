@@ -46,6 +46,16 @@ object LaunchTokens {
     /** Android: Fuse FileProvider content URI with a read grant (ES-DE `%ROMPROVIDER%`). Data only. */
     const val PROVIDER = "{PROVIDER}"
 
+    /**
+     * Android: the best content URI for the file. Single-file disc images ([singleFileImages]) go
+     * through Fuse's FileProvider with a read grant, so the emulator needs no folder grant of its
+     * own; everything else (cue/bin sets, playlists) is the [SAF] document. Allowed in extras.
+     */
+    const val DOC = "{DOC}"
+
+    /** Disc image formats that are one self-contained file, for [DOC]. */
+    val singleFileImages: Set<String> = setOf("chd", "pbp", "iso", "img", "ecm", "cso", "zso", "rvz", "gcz", "wbfs")
+
     /** Android: `/storage/emulated/<user>` (ES-DE `%EXTERNALDATA%`). */
     const val EXTDATA = "{EXTDATA}"
 
@@ -53,7 +63,7 @@ object LaunchTokens {
     const val INTDATA = "{INTDATA}"
 
     /** Tokens the Android app fills because they need Android APIs or the user id. */
-    val androidResolved: Set<String> = setOf(SAF, PROVIDER, EXTDATA, INTDATA)
+    val androidResolved: Set<String> = setOf(SAF, PROVIDER, DOC, EXTDATA, INTDATA)
 
     /** Every token a template may use. */
     val all: Set<String> =

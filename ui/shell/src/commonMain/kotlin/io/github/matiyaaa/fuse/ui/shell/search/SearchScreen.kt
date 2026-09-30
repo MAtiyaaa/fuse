@@ -52,6 +52,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
 import io.github.matiyaaa.fuse.ui.designsystem.theme.toColor
+import io.github.matiyaaa.fuse.ui.shell.app.activateGame
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.pasteInto
 import io.github.matiyaaa.fuse.ui.shell.app.FocusZone
@@ -130,7 +131,7 @@ fun SearchScreen(app: AppState) {
 
     fun open(hit: Hit) {
         when (hit) {
-            is Hit.Game -> app.play(hit.card)
+            is Hit.Game -> app.activateGame(hit.card)
             is Hit.System -> app.go(Route.PlatformGames(hit.card.platform.id))
             is Hit.App -> app.scope.launch { app.store.apps.launch(hit.card) }
             is Hit.Collection -> app.go(Route.CollectionGames(hit.c.id, hit.c.name))

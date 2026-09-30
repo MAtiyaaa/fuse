@@ -324,6 +324,41 @@ internal fun AuditDriver.gameScreens(exhaustive: Boolean) {
         tap(PadButton.DPAD_DOWN)
         shoot("discs row focused")
     }
+
+    // At every size: the art preview must fit a handheld screen.
+    scenario("media", "game") {
+        useLibrary()
+        // From the game's options: Play, then Manage Media.
+        search("Hollow Meridian")
+        tap(PadButton.START)
+        tap(PadButton.X)
+        waitFor("Game Info")
+        choose(1)
+        waitFor("Manage media")
+        shoot("Search as row")
+        tap(PadButton.A)
+        settle(600)
+        shoot("Search as keyboard")
+        tap(PadButton.B)
+        tap(PadButton.DPAD_DOWN)
+        shoot("Identify game row")
+        tap(PadButton.A)
+        settle(1_500)
+        shoot("Identify game with no source set up")
+        tap(PadButton.DPAD_DOWN)
+        shoot("Icon slot")
+        tap(PadButton.DPAD_DOWN)
+        shoot("Cover slot preview fits the screen")
+        tap(PadButton.A)
+        waitFor("Choose a file")
+        shoot("Cover slot actions")
+        choose(0)
+        settle(1_500)
+        shoot("Find cover with no art source set up")
+        tap(PadButton.X)
+        waitFor("Fill art")
+        shoot("fill art choice")
+    }
     if (!exhaustive) return
 
     scenario("game", "single file") {
@@ -421,38 +456,6 @@ internal fun AuditDriver.gameScreens(exhaustive: Boolean) {
         tap(PadButton.B)
     }
 
-    scenario("media", "game") {
-        useLibrary()
-        // From the game's options: Play, then Manage Media.
-        search("Hollow Meridian")
-        tap(PadButton.START)
-        tap(PadButton.X)
-        waitFor("Game Info")
-        choose(1)
-        waitFor("Manage media")
-        shoot("Search as row")
-        tap(PadButton.A)
-        settle(600)
-        shoot("Search as keyboard")
-        tap(PadButton.B)
-        tap(PadButton.DPAD_DOWN)
-        shoot("Identify game row")
-        tap(PadButton.A)
-        settle(1_500)
-        shoot("Identify game with no source set up")
-        tap(PadButton.DPAD_DOWN)
-        shoot("Icon slot")
-        tap(PadButton.DPAD_DOWN)
-        tap(PadButton.A)
-        waitFor("Choose a file")
-        shoot("Cover slot actions")
-        choose(0)
-        settle(1_500)
-        shoot("Find cover with no art source set up")
-        tap(PadButton.X)
-        waitFor("Fill art")
-        shoot("fill art choice")
-    }
 
     gap("game", "folder browser", "*", "Unreachable: nothing in the app pushes Route.FolderBrowser. A game whose folder behaviour is " +
         "\"Open as a folder\" launches the folder directly instead of opening the browser.")

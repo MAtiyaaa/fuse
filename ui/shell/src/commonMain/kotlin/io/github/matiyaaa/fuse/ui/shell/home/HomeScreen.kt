@@ -55,6 +55,8 @@ import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
 import io.github.matiyaaa.fuse.ui.designsystem.theme.toColor
+import io.github.matiyaaa.fuse.ui.shell.app.gameConfirmLabel
+import io.github.matiyaaa.fuse.ui.shell.app.activateGame
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.ContextMenuSpec
 import io.github.matiyaaa.fuse.ui.shell.app.FocusZone
@@ -139,7 +141,7 @@ fun FlowHome(app: AppState) {
         app.hero = item?.hero()
         app.hints = when {
             reorder != null || movingSystem -> listOf(Hint(HintButton.DPAD, "Move"), Hint(HintButton.CONFIRM, "Done"))
-            item is ShelfItem.Game -> listOf(Hint(HintButton.CONFIRM, "Play"), Hint(HintButton.OPTIONS, "Options"), Hint(HintButton.SEARCH, "Search"))
+            item is ShelfItem.Game -> listOf(Hint(HintButton.CONFIRM, app.gameConfirmLabel), Hint(HintButton.OPTIONS, "Options"), Hint(HintButton.SEARCH, "Search"))
             item is ShelfItem.System -> listOf(Hint(HintButton.CONFIRM, "Open"), Hint(HintButton.HOLD_CONFIRM, "Hold to move"), Hint(HintButton.OPTIONS, "Options"))
             item is ShelfItem.Widget -> listOf(Hint(HintButton.CONFIRM, "Open"), Hint(HintButton.HOLD_CONFIRM, "Hold to arrange"))
             else -> listOf(Hint(HintButton.CONFIRM, "Open"), Hint(HintButton.OPTIONS, "Options"), Hint(HintButton.SEARCH, "Search"))
@@ -148,7 +150,7 @@ fun FlowHome(app: AppState) {
 
     fun activate(i: ShelfItem) {
         when (i) {
-            is ShelfItem.Game -> app.play(i.card)
+            is ShelfItem.Game -> app.activateGame(i.card)
             is ShelfItem.System -> app.go(Route.PlatformGames(i.card.platform.id))
             is ShelfItem.App -> app.scope.launch { store.apps.launch(i.card) }
             is ShelfItem.Collection -> app.go(Route.CollectionGames(i.collection.id, i.collection.name))
@@ -314,17 +316,34 @@ private fun ShelfRow(
     val metrics = LocalTileMetrics.current
     val row = rememberLazyListState()
     FollowSelection(row, { rememberedColumn }, anchor = 0f)
+    // What the tiles and the stage will draw next, decoded ahead into memory.
+    val focus = if (selectedColumn >= 0) selectedColumn else -1
     PrefetchArt(
-        remember(shelf.items) {
+        remember(shelf.items, shelf.style) {
             shelf.items.map { item ->
                 when (item) {
-                    is ShelfItem.Game -> item.card.art.grid ?: item.card.art.icon ?: item.card.art.boxart
+                    is ShelfItem.Game -> if (shelf.style == ShelfStyle.WIDE) item.card.art.hero ?: item.card.art.grid ?: item.card.art.boxart
+                    else item.card.art.icon ?: item.card.art.boxart ?: item.card.art.grid
                     is ShelfItem.System -> item.card.art.icon ?: item.card.art.boxart
                     else -> null
                 }
             }
         },
-        if (selectedColumn >= 0) selectedColumn else -1,
+        focus,
+        size = metrics.icon * 1.4f,
+    )
+    PrefetchArt(
+        remember(shelf.items) {
+            shelf.items.map { item ->
+                when (item) {
+                    is ShelfItem.Game -> item.card.art.logo
+                    is ShelfItem.System -> item.card.art.logo
+                    else -> null
+                }
+            }
+        },
+        focus,
+        size = 360.dp,
     )
     Column(
         modifier

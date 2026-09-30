@@ -93,12 +93,15 @@ internal object AndroidConsoleDefs {
             id = "duckstation", name = "DuckStation",
             apps = listOf(app("com.github.stenzek.duckstation", ".EmulationActivity")),
             platforms = PSX,
-            modes = listOf(anyFile(intent(extras = listOf(bool("resumeState", false), str("bootPath", SAF)), task = true))),
+            // CHD, PBP and ISO files are handed over through Fuse's own share with a read grant:
+            // with only a folder URI DuckStation reports the file missing unless it was granted
+            // exactly that folder. cue/bin sets and .m3u playlists still use its folder grant.
+            modes = listOf(anyFile(intent(extras = listOf(bool("resumeState", false), str("bootPath", DOC)), task = true))),
             source = esde("DUCKSTATION"), confidence = VERIFIED_ESDE,
             homepage = "https://www.duckstation.org/",
             limitations = listOf(
                 "The Android source is not public; the launch comes from ES-DE's config.",
-                "For multi-disc games keep an .m3u in the psx folder so DuckStation can read it through its folder grant.",
+                "CHD, PBP and ISO files open through Fuse's own share (needs All files access for Fuse). For cue/bin sets and multi-disc .m3u files, grant DuckStation the psx folder.",
             ),
         ),
         AndroidEmulatorDef(

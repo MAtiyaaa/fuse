@@ -1,13 +1,19 @@
 package io.github.matiyaaa.fuse.services
 
+import android.Manifest
 import android.app.ActivityOptions
 import android.content.ActivityNotFoundException
 import android.content.ClipData
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.hardware.display.DisplayManager
 import android.net.Uri
+import android.os.Build
+import android.os.Environment
 import android.provider.DocumentsContract
+import android.view.Display
 import androidx.core.content.FileProvider
 import io.github.matiyaaa.fuse.ActivityHolder
 import io.github.matiyaaa.fuse.launch.DualScreenPlatforms
@@ -15,6 +21,7 @@ import io.github.matiyaaa.fuse.launch.LaunchTokens
 import io.github.matiyaaa.fuse.launch.ResolvedLaunch
 import io.github.matiyaaa.fuse.launch.android.AndroidIntentAdapter
 import io.github.matiyaaa.fuse.launch.android.AndroidIntentPlan
+import io.github.matiyaaa.fuse.library.FsPath
 import io.github.matiyaaa.fuse.model.LaunchPlan
 import io.github.matiyaaa.fuse.model.LaunchTarget
 import io.github.matiyaaa.fuse.storage.SourceRoot
@@ -22,11 +29,9 @@ import io.github.matiyaaa.fuse.storage.StoragePaths
 import io.github.matiyaaa.fuse.storage.StorageVolumes
 import io.github.matiyaaa.fuse.ui.shell.store.GameLauncher
 import io.github.matiyaaa.fuse.ui.shell.store.RunResult
+import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.io.File
-import android.view.Display
-import android.hardware.display.DisplayManager
 
 /** What the launcher tells Fuse's second-screen companion around a game that draws on both screens. */
 interface DualScreenHandoff {
@@ -137,6 +142,7 @@ class AndroidGameLauncher(
         val name = appName(pkg)
         val prepared = withContext(Dispatchers.IO) {
             if (PackageSupport.packageInfo(pm, pkg) == null) return@withContext Prepared.Result(RunResult.NotInstalled)
+            missingFile(spec.target)?.let { return@withContext Prepared.Result(RunResult.Failed(it)) }
             val candidates = plan.activityCandidates.ifEmpty { listOfNotNull(spec.activity) }
             val verified = candidates.firstOrNull { PackageSupport.isExportedActivity(pm, pkg, it) }
             val activity = when {
@@ -163,6 +169,31 @@ class AndroidGameLauncher(
             is Prepared.Launch -> startIntent(prepared.intent, displayId, name, if (bothScreens) Screens.BOTH else Screens.GAME)
         }
     }
+
+    /**
+     * Says so when the game's file is no longer where the library has it (moved, renamed, card
+     * removed), instead of letting the emulator report a file that "doesn't exist". Only checked
+     * when Fuse can see all files; otherwise the file may just be hidden from Fuse.
+     */
+    private fun missingFile(target: LaunchTarget): String? {
+        val path = when (target) {
+            is LaunchTarget.File -> target.path
+            is LaunchTarget.Directory -> target.path
+            is LaunchTarget.Playlist -> target.path
+            else -> return null
+        }
+        if (!canSeeAllFiles() || path.startsWith(appContext.cacheDir.absolutePath)) return null
+        val file = File(path)
+        if (file.exists()) return null
+        return "${file.name} isn't in ${file.parent ?: "its folder"} any more. If you moved or renamed it, rescan the library."
+    }
+
+    private fun canSeeAllFiles(): Boolean =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            Environment.isExternalStorageManager()
+        } else {
+            appContext.checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED
+        }
 
     private sealed interface Prepared {
         data class Launch(val intent: Intent) : Prepared
@@ -201,9 +232,11 @@ class AndroidGameLauncher(
         if (spec.clearTop) flags = flags or Intent.FLAG_ACTIVITY_CLEAR_TOP
         if (plan.noHistory) flags = flags or Intent.FLAG_ACTIVITY_NO_HISTORY
         intent.addFlags(flags)
-        if ((plan.grantReadUri || tokens.usedProvider) && data != null) {
+        // The read grant covers the URI in clipData, so a shared file passed in an extra works too.
+        val grant = data?.takeIf { plan.grantReadUri || tokens.usedProvider } ?: tokens.sharedUri?.let(Uri::parse)
+        if (grant != null) {
             intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            intent.clipData = ClipData.newRawUri("", data)
+            intent.clipData = ClipData.newRawUri("", grant)
         }
         return intent
     }
@@ -212,6 +245,10 @@ class AndroidGameLauncher(
     private inner class TokenValues(private val target: LaunchTarget, private val pkg: String) {
         var usedProvider = false
             private set
+
+        /** A FileProvider URI handed over in an extra ([LaunchTokens.DOC]); granted through clipData. */
+        var sharedUri: String? = null
+            private set
         private var saf: String? = null
 
         suspend fun fill(template: String, allowProvider: Boolean): String {
@@ -219,6 +256,7 @@ class AndroidGameLauncher(
             if (LaunchTokens.EXTDATA in out) out = out.replace(LaunchTokens.EXTDATA, volumes.primaryRoot)
             if (LaunchTokens.INTDATA in out) out = out.replace(LaunchTokens.INTDATA, internalDataRoot())
             if (LaunchTokens.SAF in out) out = out.replace(LaunchTokens.SAF, safUri())
+            if (LaunchTokens.DOC in out) out = out.replace(LaunchTokens.DOC, documentUri())
             if (LaunchTokens.PROVIDER in out) {
                 if (!allowProvider) throw LaunchProblem("This launch passes a shared file in an extra, which Android does not allow.")
                 out = out.replace(LaunchTokens.PROVIDER, providerUri())
@@ -251,6 +289,16 @@ class AndroidGameLauncher(
             val tree = DocumentsContract.buildTreeDocumentUri(StoragePaths.EXTERNAL_STORAGE_AUTHORITY, ids.first)
             val uri = DocumentsContract.buildDocumentUriUsingTree(tree, ids.second).toString()
             saf = uri
+            return uri
+        }
+
+        /** Fuse's own share for a single-file image, the SAF document for anything else. */
+        private suspend fun documentUri(): String {
+            val path = (target as? LaunchTarget.File)?.path
+            val single = path != null && FsPath.extension(path).lowercase() in LaunchTokens.singleFileImages
+            if (!single || !File(path!!).canRead()) return safUri()
+            val uri = providerUri()
+            sharedUri = uri
             return uri
         }
 

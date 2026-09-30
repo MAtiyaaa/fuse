@@ -69,6 +69,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.input.InputLayer
 import io.github.matiyaaa.fuse.ui.designsystem.input.NavResult
 import io.github.matiyaaa.fuse.ui.designsystem.media.Artwork
 import io.github.matiyaaa.fuse.ui.designsystem.media.HeroSource
+import io.github.matiyaaa.fuse.ui.designsystem.media.PrefetchArt
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Aspect
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
@@ -105,6 +106,9 @@ fun SystemsScreen(app: AppState) {
     LaunchedEffect(current?.platform?.id) {
         app.hero = current?.let { HeroSource(it.platform.id, it.art.hero, it.platform.accent.toColor()) }
     }
+    // Logos and art panels of the neighbouring systems are decoded ahead, so the header never waits.
+    PrefetchArt(remember(systems) { systems.map { it.art.logo } }, sel.index, size = 360.dp)
+    PrefetchArt(remember(systems) { systems.map { it.art.boxart } }, sel.index, size = 480.dp)
     LaunchedEffect(moving) {
         app.hints = if (moving) {
             listOf(Hint(HintButton.DPAD, "Move"), Hint(HintButton.CONFIRM, "Done"))

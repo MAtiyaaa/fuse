@@ -53,6 +53,8 @@ data class UiPrefs(
     /** How the Library is sorted. */
     val librarySort: io.github.matiyaaa.fuse.model.SortOrder = io.github.matiyaaa.fuse.model.SortOrder.TITLE,
     val systemArtStyle: String = "CLASSIC",
+    /** Confirm (or a tap on a selected tile) opens a game's page instead of playing it. */
+    val openGamePage: Boolean = false,
     val scraperOrder: List<ScrapeProviderId> = io.github.matiyaaa.fuse.data.settings.ScrapingSettings.DefaultProviderOrder,
     val scraperLanguage: String = "en",
     val scraperRegion: String = "any",

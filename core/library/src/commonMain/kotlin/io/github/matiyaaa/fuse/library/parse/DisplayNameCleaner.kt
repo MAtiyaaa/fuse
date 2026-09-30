@@ -45,11 +45,11 @@ data class CleanupPreview(
  * 5. Trailing articles move to the front of each " - " segment:
  *    "Legend of Zelda, The - A Link to the Past" -> "The Legend of Zelda - A Link to the Past".
  * 6. Underscores become spaces when the title has no spaces at all; whitespace is collapsed.
- * 7. A list number in front is removed when it is three to five digits followed by ". "
- *    ("001. Title"), or four or five digits followed by " - " that do not read as a year
- *    1900..2099 ("0123 - Metroid Fusion"). Shorter numbers, years and numbers without a
- *    separator stay, because they are usually the title: "12 - Title", "1943 - The Battle of
- *    Midway", "007 - The World Is Not Enough", "1942", "2048".
+ * 7. A list number or product code in front is removed ([LeadingNumbers]): "12 - Title",
+ *    "123. Title", "12) Title", "#12 Title", "0123 Title", "0123-Title", "A123 - Title",
+ *    "NUS-012 Title". Numbers that are usually the title stay: years 1900..2099 ("1943 - The
+ *    Battle of Midway"), 007, numbers with no separator and no leading zero ("1942",
+ *    "1080 Snowboarding") and short numbers tied to a word ("10-Yard Fight", "3-D WorldRunner").
  * 8. A bare version at the very end is removed when it has a dot ("Title v1.1", "Title V1.0.3");
  *    "Title v2" stays.
  * 9. Separators left empty by removals are collapsed: "A - - B" becomes "A - B", and a
@@ -64,8 +64,6 @@ object DisplayNameCleaner {
     )
     private val trailingElision = Regex("^(.+?),\\s*(L')$", RegexOption.IGNORE_CASE)
     private val whitespace = Regex("\\s+")
-    private val listNumberDot = Regex("^(\\d{3,5})\\s*\\.\\s+(?=\\S)")
-    private val listNumberDash = Regex("^(\\d{4,5})\\s*-\\s+(?=\\S)")
     private val trailingVersion = Regex("\\s+[vV]\\d+(?:\\.\\d+)+[a-z]?$")
     private val emptySeparators = Regex("(?<=\\s)-(?:\\s+-)+(?=\\s|$)")
 
@@ -161,16 +159,49 @@ object DisplayNameCleaner {
         return s
     }
 
-    /** A list number in front of [title], per rule 7, or null. */
-    private fun listNumber(title: String): MatchResult? {
-        listNumberDot.find(title)?.let { return it }
-        val dash = listNumberDash.find(title) ?: return null
-        return dash.takeUnless { it.groupValues[1].length == 4 && it.groupValues[1].toInt() in 1900..2099 }
-    }
+    /** A list number or code in front of [title], per rule 7, or null. */
+    private fun listNumber(title: String): MatchResult? = LeadingNumbers.find(title)
 
     /** "A - - B" -> "A - B"; a leading or trailing " -" is dropped. */
     private fun collapseSeparators(title: String): String =
         collapse(title.replace(emptySeparators, "-")).removePrefix("- ").removeSuffix(" -").trim()
 
     private fun collapse(s: String): String = s.replace(whitespace, " ").trim()
+}
+
+/**
+ * List numbers and product codes that collections and dumps put in front of a game's name
+ * ("0123 - Metroid Fusion", "12. Pepsiman", "A123-Tetris"), told apart from numbers that belong to
+ * the title ("1942", "1080 Snowboarding", "007 GoldenEye", "10-Yard Fight", "1943 - The Battle of
+ * Midway"). Used for display names and for the names Fuse searches art with.
+ */
+object LeadingNumbers {
+    // Spaced separators: "12 - Title", "12 : Title", "12 _ Title".
+    private val spaced = Regex("^#?(\\d{1,6})\\s+[-:_]\\s+(?=\\S)")
+    // Dot or bracket, spaces optional: "12. Title", "12.Title", "12) Title".
+    private val dotted = Regex("^#?(\\d{1,6})\\s*[.)]\\s*(?=\\p{L})")
+    // Tight dash or underscore: only three digits or more, so "10-Yard Fight" keeps its number.
+    private val tight = Regex("^#?(\\d{3,6})[-_]\\s*(?=\\p{L})")
+    // Leading zero and a space: "0123 Title", "045 Title".
+    private val zero = Regex("^#?(0\\d{1,5})\\s+(?=\\p{L})")
+    // A hash number: "#12 Title".
+    private val hashed = Regex("^#(\\d{1,6})\\s+(?=\\p{L})")
+    // Product codes: "NUS-012 Title", "SLUS-00001. Title", "A123 - Title", "B123_Title".
+    private val code = Regex("^([A-Z]{2,5}-\\d{2,6}|[A-Z]\\d{3,6})(?:\\s*[-_.:)]\\s*|\\s+)(?=\\p{L})")
+
+    /** The number or code in front of [title] to remove, or null when there is none. */
+    fun find(title: String): MatchResult? {
+        val m = spaced.find(title) ?: dotted.find(title) ?: tight.find(title) ?: zero.find(title)
+            ?: hashed.find(title) ?: code.find(title) ?: return null
+        val number = m.groupValues[1]
+        if (number == "007") return null
+        if (number.length == 4 && number.all { it.isDigit() } && number.toInt() in 1900..2099) return null
+        // Something must be left, and it must not be only a number.
+        val rest = title.substring(m.range.last + 1).trim()
+        if (rest.none { it.isLetter() }) return null
+        return m
+    }
+
+    /** [title] without a leading list number or code. */
+    fun strip(title: String): String = find(title)?.let { title.substring(it.range.last + 1).trim() } ?: title
 }

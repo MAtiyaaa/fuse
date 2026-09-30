@@ -155,6 +155,8 @@ data class LibraryPreferences(
     val cleanDisplayNames: Boolean = true,
     /** Existing games were given cleaned names once, when clean names became the default. */
     val cleanedExistingNames: Boolean = false,
+    /** The cleaning rules the library's names were last cleaned with (see DefaultFuseStore.CLEAN_RULES). */
+    val cleanedNamesRules: Int = 1,
     /** Systems in the user's order, by platform id. Systems not listed follow in catalog order. */
     val systemOrder: List<String> = emptyList(),
     /** Fetch system logos and art from the system art pack when a system has none. */
@@ -163,6 +165,8 @@ data class LibraryPreferences(
     val sort: io.github.matiyaaa.fuse.model.SortOrder = io.github.matiyaaa.fuse.model.SortOrder.TITLE,
     /** Artwork set used from the system art pack (a SystemArtStyle name). */
     val systemArtStyle: String = "CLASSIC",
+    /** Confirm on a game opens its page instead of starting it. */
+    val selectOpensGamePage: Boolean = false,
     /** Brand colours from the system art pack (opaque ARGB), by platform id. */
     val systemColors: Map<String, Long> = emptyMap(),
 )

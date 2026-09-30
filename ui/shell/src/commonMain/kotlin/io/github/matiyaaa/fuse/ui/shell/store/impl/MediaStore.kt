@@ -18,6 +18,8 @@ import io.github.matiyaaa.fuse.integrations.scrape.TheGamesDbSource
 import io.github.matiyaaa.fuse.integrations.steamgriddb.SteamGridDbClient
 import io.github.matiyaaa.fuse.integrations.thegamesdb.TheGamesDbClient
 import io.github.matiyaaa.fuse.library.FsPath
+import io.github.matiyaaa.fuse.library.parse.DisplayNameCleaner
+import io.github.matiyaaa.fuse.library.parse.LeadingNumbers
 import io.github.matiyaaa.fuse.model.ArtworkOption
 import io.github.matiyaaa.fuse.model.Game
 import io.github.matiyaaa.fuse.model.GameId
@@ -182,9 +184,13 @@ internal class DefaultMediaOps(
     private suspend fun searchAs(game: Game): String? =
         ctx.data.scopedSettings.resolve(ScopedSettings.SearchTitle, game.platformId, game.id).value.trim().ifEmpty { null }
 
-    /** Their own name, then a name a provider gave, then the cleaned file name. */
+    /**
+     * Their own name, then a name a provider gave, then the file name cleaned with today's rules
+     * (a stored cleaned name may predate them), without a list number or code in front.
+     */
     private fun defaultSearchTitle(game: Game): String =
-        game.titles.custom ?: game.titles.metadata ?: game.titles.cleaned ?: game.titles.original
+        game.titles.custom ?: game.titles.metadata
+            ?: LeadingNumbers.strip(DisplayNameCleaner.clean(game.titles.original)).ifBlank { game.titles.cleaned ?: game.titles.original }
 
     override suspend fun searchTitle(game: GameId): SearchTitle? {
         val g = ctx.data.games.get(game) ?: return null

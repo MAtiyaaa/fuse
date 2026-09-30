@@ -12,6 +12,8 @@ import kotlinx.coroutines.flow.flowOf
 
 import kotlinx.coroutines.flow.combine
 
+import io.github.matiyaaa.fuse.ui.shell.app.gameConfirmLabel
+import io.github.matiyaaa.fuse.ui.shell.app.activateGame
 import io.github.matiyaaa.fuse.ui.shell.app.ConfirmSpec
 
 import io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec
@@ -215,7 +217,18 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
         if (idx >= 0) state.grid.index = idx else state.grid.clamp(list.size)
     }
     val selectedCard = list?.getOrNull(state.grid.index)
-    PrefetchArt(remember(list) { list.orEmpty().map { it.art.icon ?: it.art.boxart ?: it.art.grid } }, state.grid.index)
+    // The next tiles' art and the stage logos are ready before the selection reaches them.
+    val tileArt = remember(list, layout) {
+        list.orEmpty().map { a ->
+            when (layout) {
+                LibraryLayout.COVER_GRID -> a.art.boxart ?: a.art.grid ?: a.art.icon
+                LibraryLayout.CAPSULE -> a.art.hero ?: a.art.grid ?: a.art.boxart
+                else -> a.art.icon ?: a.art.boxart ?: a.art.grid
+            }
+        }
+    }
+    PrefetchArt(tileArt, state.grid.index, size = LocalTileMetrics.current.icon * 1.4f)
+    PrefetchArt(remember(list) { list.orEmpty().map { it.art.logo } }, state.grid.index, size = 360.dp)
     val special = scope == LibraryScope.All && segment.set != GameSet.LIBRARY
     LaunchedEffect(selectedCard?.id, special) {
         state.selectedId = selectedCard?.id
@@ -223,7 +236,7 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
         app.hints = when {
             selectedCard == null -> emptyList()
             special -> listOf(Hint(HintButton.CONFIRM, "Choose"), Hint(HintButton.BACK, "Back"))
-            else -> listOf(Hint(HintButton.CONFIRM, "Play"), Hint(HintButton.OPTIONS, "Options"), Hint(HintButton.SEARCH, "Search"))
+            else -> listOf(Hint(HintButton.CONFIRM, app.gameConfirmLabel), Hint(HintButton.OPTIONS, "Options"), Hint(HintButton.SEARCH, "Search"))
         }
     }
 
@@ -307,7 +320,7 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
                 when {
                     selectedCard == null -> Unit
                     special -> options(selectedCard)
-                    else -> app.play(selectedCard)
+                    else -> app.activateGame(selectedCard)
                 }
                 if (selectedCard != null) NavResult.ACTIVATED else NavResult.BLOCKED
             }
@@ -330,7 +343,7 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
             state.inHeader = false
             when {
                 special -> { state.grid.index = i; options(cards[i]) }
-                state.grid.index == i -> app.play(cards[i])
+                state.grid.index == i -> app.activateGame(cards[i])
                 else -> state.grid.index = i
             }
         }

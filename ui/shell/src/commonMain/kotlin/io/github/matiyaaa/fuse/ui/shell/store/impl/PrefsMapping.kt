@@ -52,6 +52,7 @@ internal fun AppSettings.toUiPrefs(scoped: GlobalScoped): UiPrefs {
         systemArtAuto = library.systemArtAuto,
         librarySort = library.sort,
         systemArtStyle = library.systemArtStyle,
+        openGamePage = library.selectOpensGamePage,
         scraperOrder = scraping.providerOrder,
         scraperLanguage = scraping.preferredLanguage,
         scraperRegion = scraping.preferredRegion ?: ANY_REGION,
@@ -98,6 +99,7 @@ internal fun AppSettings.withUiPrefs(prefs: UiPrefs): AppSettings {
             systemArtAuto = prefs.systemArtAuto,
             sort = prefs.librarySort,
             systemArtStyle = prefs.systemArtStyle,
+            selectOpensGamePage = prefs.openGamePage,
         ),
         sound = sound.copy(
             enabled = prefs.sound != SoundProfile.OFF,

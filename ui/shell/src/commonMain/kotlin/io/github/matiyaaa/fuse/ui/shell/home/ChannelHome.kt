@@ -2,6 +2,7 @@ package io.github.matiyaaa.fuse.ui.shell.home
 
 import io.github.matiyaaa.fuse.ui.designsystem.components.fadingEdges
 import androidx.compose.animation.core.animateFloatAsState
+import io.github.matiyaaa.fuse.ui.shell.app.activateGame
 import io.github.matiyaaa.fuse.ui.shell.app.ContextMenuSpec
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
 import io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction
@@ -125,7 +126,7 @@ fun ChannelHome(app: AppState) {
             WidgetKind.PINNED_APPS -> app.selectTab(io.github.matiyaaa.fuse.model.Destination.APPS)
             WidgetKind.COLLECTIONS -> feed.collections.firstOrNull()?.let { app.go(Route.CollectionGames(it.id, it.name)) }
             WidgetKind.CONTINUE_PLAYING, WidgetKind.RECENTLY_PLAYED, WidgetKind.PINNED_GAMES, WidgetKind.CURRENT_GAME ->
-                firstGame(w.kind, feed)?.let { app.play(it) }
+                firstGame(w.kind, feed)?.let { app.activateGame(it) }
             WidgetKind.FAVORITES, WidgetKind.RECENTLY_ADDED, WidgetKind.MOST_PLAYED ->
                 app.selectTab(io.github.matiyaaa.fuse.model.Destination.LIBRARY)
             WidgetKind.CARTRIDGE_DOWNLOADS -> app.selectTab(io.github.matiyaaa.fuse.model.Destination.CARTRIDGE)

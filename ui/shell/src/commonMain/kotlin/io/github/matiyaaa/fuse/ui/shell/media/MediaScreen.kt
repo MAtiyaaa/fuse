@@ -14,6 +14,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.ui.unit.Dp
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -136,12 +138,15 @@ fun MediaScreen(app: AppState, owner: MediaOwner, title: String) {
     val sel = remember { LinearSelection() }
     var browser by remember { mutableStateOf<Browser>(Browser.Closed) }
     val grid = remember { GridSelection() }
+    var optionCols by remember { mutableStateOf(4) }
     val matchSel = remember { LinearSelection() }
     var adjusting by remember { mutableStateOf<MediaKind?>(null) }
     var fx by remember { mutableFloatStateOf(0.5f) }
     var fy by remember { mutableFloatStateOf(0.5f) }
     var zoom by remember { mutableFloatStateOf(1f) }
     val gameRow = gameRows.getOrNull(sel.index)
+    // A message about one row gives way to the preview of the next.
+    LaunchedEffect(sel.index) { if (browser is Browser.Message) browser = Browser.Closed }
     val kind = slots[(sel.index - gameRows.size).coerceIn(0, slots.lastIndex)].first
 
     // The search name follows the setting, and the game's own name after it is identified.
@@ -308,7 +313,7 @@ fun MediaScreen(app: AppState, owner: MediaOwner, title: String) {
                     browser = Browser.Closed
                     NavResult.ACTIVATED
                 }
-                else -> grid.move(e.action, options.options.size, columns = 4).let { if (it == NavResult.IGNORED) NavResult.BLOCKED else it }
+                else -> grid.move(e.action, options.options.size, columns = optionCols).let { if (it == NavResult.IGNORED) NavResult.BLOCKED else it }
             }
         }
     }
@@ -369,10 +374,14 @@ fun MediaScreen(app: AppState, owner: MediaOwner, title: String) {
 
     val c = Fuse.colors
     val listFocused = app.focusZone == FocusZone.CONTENT && adj == null && options == null && matches == null
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+    // On handheld screens the list narrows so the art beside it keeps a useful size.
+    val listWidth = (maxWidth * 0.36f).coerceIn(260.dp, 380.dp)
+    val between = if (maxWidth < 1000.dp) Space.xl else Space.xxl
     Row(Modifier.fillMaxSize().padding(horizontal = Space.gutter)) {
         val rowRequesters = remember(rowCount) { List(rowCount) { BringIntoViewRequester() } }
         LaunchedEffect(sel.index) { rowRequesters.getOrNull(sel.index)?.bringIntoView() }
-        Column(Modifier.width(380.dp).fillMaxHeight().verticalScroll(rememberScrollState()).padding(bottom = Size.hintHeight + Space.l)) {
+        Column(Modifier.width(listWidth).fillMaxHeight().verticalScroll(rememberScrollState()).padding(bottom = Size.hintHeight + Space.l)) {
             Spacer(Modifier.height(Size.hudHeight + Space.l))
             FText("Manage media", Fuse.type.display)
             FText(title, Fuse.type.body, color = c.textMuted, maxLines = 1)
@@ -414,7 +423,7 @@ fun MediaScreen(app: AppState, owner: MediaOwner, title: String) {
                 }
             }
         }
-        Spacer(Modifier.width(Space.xxl))
+        Spacer(Modifier.width(between))
         Box(Modifier.weight(1f).fillMaxHeight().padding(top = Size.hudHeight + Space.l, bottom = Size.hintHeight + Space.l)) {
             when (val b = browser) {
                 is Browser.Loading -> Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
@@ -432,7 +441,7 @@ fun MediaScreen(app: AppState, owner: MediaOwner, title: String) {
                         if (gameId != null) FuseButton("Change search name", selected = false, onClick = { editSearchName(thenIdentify = false) }, icon = FuseIcons.TextCursor)
                     }
                 }
-                is Browser.Options -> ArtworkGrid(b, grid) { opt ->
+                is Browser.Options -> ArtworkGrid(b, grid, onColumns = { optionCols = it }) { opt ->
                     app.scope.launch { app.store.media.apply(owner, opt) }
                     browser = Browser.Closed
                 }
@@ -440,6 +449,7 @@ fun MediaScreen(app: AppState, owner: MediaOwner, title: String) {
                 Browser.Closed -> if (gameRow != null) GamePanel(gameRow, searchTitle, title) else Preview(media, kind, adj, fx, fy, zoom)
             }
         }
+    }
     }
 }
 
@@ -551,11 +561,18 @@ private fun MatchList(b: Browser.Matches, sel: LinearSelection, onPick: (ScrapeC
 private fun Preview(media: MediaSet, kind: MediaKind, adjusting: MediaKind?, fx: Float, fy: Float, zoom: Float) {
     val c = Fuse.colors
     val m = media.first(kind)
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+    // The art is as large as fits: never wider than the pane, never taller than the space left
+    // under the label and above the details, whatever its shape (tall covers on a short screen).
+    val aspect = kind.aspect ?: 2.6f
+    val below = (if (kind == MediaKind.SCREENSHOT && media.screenshots.size > 1) 54.dp + Space.m else 0.dp) + (if (m != null) 32.dp + Space.m else 0.dp)
+    val roomH = (maxHeight - 28.dp - Space.m - below).coerceAtLeast(80.dp)
+    val tileW = minOf(maxWidth, roomH * aspect, 640.dp)
+    val thumbs = ((maxWidth + Space.s) / (96.dp + Space.s)).toInt().coerceIn(1, 6)
     Column {
         SectionLabel(if (adjusting != null) "Adjusting ${slotName(kind).lowercase()}" else slotName(kind))
         Spacer(Modifier.height(Space.m))
-        val aspect = kind.aspect ?: 2.6f
-        Tile(selected = false, showSpark = false, modifier = Modifier.widthIn(max = 640.dp).fillMaxWidth().aspectRatio(aspect).heightIn(max = 420.dp)) {
+        Tile(selected = false, showSpark = false, modifier = Modifier.size(tileW, tileW / aspect)) {
             if (m != null && kind != MediaKind.VIDEO) {
                 Artwork(
                     m.model, Modifier.fillMaxSize(),
@@ -580,7 +597,7 @@ private fun Preview(media: MediaSet, kind: MediaKind, adjusting: MediaKind?, fx:
         if (kind == MediaKind.SCREENSHOT && media.screenshots.size > 1) {
             Spacer(Modifier.height(Space.m))
             Row(horizontalArrangement = Arrangement.spacedBy(Space.s)) {
-                media.screenshots.take(6).forEach { s -> Artwork(s.model, Modifier.size(width = 96.dp, height = 54.dp).clip(RoundedCornerShape(6.dp))) }
+                media.screenshots.take(thumbs).forEach { s -> Artwork(s.model, Modifier.size(width = 96.dp, height = 54.dp).clip(RoundedCornerShape(6.dp))) }
             }
         }
         m?.let {
@@ -591,17 +608,31 @@ private fun Preview(media: MediaSet, kind: MediaKind, adjusting: MediaKind?, fx:
             }
         }
     }
+    }
+}
+
+/** How many options fit side by side in [width]: tall covers get narrower cells than banners. */
+private fun optionColumns(kind: MediaKind, width: Dp): Int {
+    val cell = when {
+        (kind.aspect ?: 2.2f) < 1.2f -> 120.dp
+        (kind.aspect ?: 2.2f) < 2f -> 170.dp
+        else -> 220.dp
+    }
+    return ((width + Space.m) / (cell + Space.m)).toInt().coerceIn(2, 6)
 }
 
 @Composable
-private fun ArtworkGrid(b: Browser.Options, grid: GridSelection, onPick: (ArtworkOption) -> Unit) {
+private fun ArtworkGrid(b: Browser.Options, grid: GridSelection, onColumns: (Int) -> Unit, onPick: (ArtworkOption) -> Unit) {
     val state = rememberLazyGridState()
     FollowSelection(state, { grid.index }, anchor = 0.15f)
+    BoxWithConstraints {
+    val columns = optionColumns(b.kind, maxWidth)
+    LaunchedEffect(columns) { onColumns(columns) }
     Column {
         SectionLabel("${b.options.size} options for ${slotName(b.kind).lowercase()}")
         Spacer(Modifier.height(Space.m))
         LazyVerticalGrid(
-            columns = GridCells.Fixed(4),
+            columns = GridCells.Fixed(columns),
             state = state,
             horizontalArrangement = Arrangement.spacedBy(Space.m),
             verticalArrangement = Arrangement.spacedBy(Space.l),
@@ -627,6 +658,7 @@ private fun ArtworkGrid(b: Browser.Options, grid: GridSelection, onPick: (Artwor
                 }
             }
         }
+    }
     }
 }
 
