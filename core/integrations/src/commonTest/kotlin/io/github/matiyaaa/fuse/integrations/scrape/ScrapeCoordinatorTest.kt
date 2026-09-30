@@ -116,6 +116,36 @@ class ScrapeCoordinatorTest {
     }
 
     @Test
+    fun identifyListsEveryMatchWithoutAccepting() = runTest {
+        // A match scrape() would accept on its own is still only offered here.
+        val igdb = StubSource(
+            ScrapeProviderId.IGDB, true,
+            ApiResult.Success(listOf(game(ScrapeProviderId.IGDB, "1103", "Super Metroid", listOf("SNES")), game(ScrapeProviderId.IGDB, "9", "Metroid Fusion"))),
+        )
+        val sgdb = StubSource(
+            ScrapeProviderId.STEAMGRIDDB, false,
+            ApiResult.Success(listOf(game(ScrapeProviderId.STEAMGRIDDB, "5247", "Super Metroid"), game(ScrapeProviderId.STEAMGRIDDB, "5247", "Super Metroid"))),
+        )
+        val coordinator = ScrapeCoordinator(listOf(igdb, sgdb))
+        val outcome = coordinator.candidates(request(ScrapeProviderId.IGDB, ScrapeProviderId.STEAMGRIDDB))
+        assertIs<ScrapeOutcome.NeedsReview>(outcome)
+        assertEquals(listOf("1103", "5247", "9").sorted(), outcome.candidates.map { it.providerGameId }.sorted())
+        assertEquals("Metroid Fusion", outcome.candidates.last().title)
+        assertEquals(1, igdb.searches)
+        assertEquals(1, sgdb.searches)
+    }
+
+    @Test
+    fun identifyReportsFailuresAndEmptyResults() = runTest {
+        val down = StubSource(ScrapeProviderId.IGDB, true, ApiResult.NetworkError("offline"))
+        assertIs<ScrapeOutcome.ProviderErrors>(ScrapeCoordinator(listOf(down)).candidates(request(ScrapeProviderId.IGDB)))
+        val empty = StubSource(ScrapeProviderId.IGDB, true, ApiResult.Success(emptyList()))
+        val none = ScrapeCoordinator(listOf(empty)).candidates(request(ScrapeProviderId.IGDB))
+        assertIs<ScrapeOutcome.NotFound>(none)
+        assertEquals(listOf(ScrapeProviderId.IGDB), none.searched)
+    }
+
+    @Test
     fun unconfiguredProvidersAreSkippedAndFailuresReported() = runTest {
         val igdb = StubSource(ScrapeProviderId.IGDB, true, ApiResult.Success(emptyList()))
         val tgdb = StubSource(ScrapeProviderId.THEGAMESDB, true, ApiResult.NetworkError("offline"))

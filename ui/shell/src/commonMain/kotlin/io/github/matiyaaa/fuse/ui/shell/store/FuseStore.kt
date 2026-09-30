@@ -138,8 +138,12 @@ interface MediaOps {
     /** Bulk fill for a game, platform or everything ([platform] and [game] null). */
     fun fill(mode: MediaFillMode, kinds: Set<MediaKind>, platform: PlatformId? = null, game: GameId? = null)
     val fillProgress: StateFlow<FillProgress?>
-    suspend fun candidates(game: GameId): List<ScrapeCandidate>
-    suspend fun acceptCandidate(game: GameId, candidate: ScrapeCandidate)
+    /** The name art and details are searched with for [game]; null when the game is gone. */
+    suspend fun searchTitle(game: GameId): SearchTitle?
+    /** Every match the configured sources list for [game] (by its search name), best first. Never saves anything. */
+    suspend fun identify(game: GameId): IdentifyResult
+    /** Links [game] to [candidate]: takes its name and details and replaces scraped art. False when the source no longer lists it. */
+    suspend fun acceptCandidate(game: GameId, candidate: ScrapeCandidate): Boolean
     val providers: StateFlow<List<ProviderStatus>>
     /** The last key check per provider; empty until a check ran. Checks run after a key is saved. */
     val keyChecks: StateFlow<Map<ScrapeProviderId, io.github.matiyaaa.fuse.integrations.KeyCheck?>>
@@ -154,6 +158,15 @@ sealed interface ArtworkResult {
     data class Options(val options: List<ArtworkOption>) : ArtworkResult
     data class NeedsMatch(val candidates: List<ScrapeCandidate>) : ArtworkResult
     data class Unavailable(val reason: String) : ArtworkResult
+}
+
+/** The name searches use for a game: [custom] when the user set it, else [default] (its title). */
+data class SearchTitle(val current: String, val custom: Boolean, val default: String)
+
+sealed interface IdentifyResult {
+    /** Matches for [query], best first. */
+    data class Matches(val query: String, val candidates: List<ScrapeCandidate>) : IdentifyResult
+    data class Unavailable(val reason: String) : IdentifyResult
 }
 
 data class RecentDownload(val download: io.github.matiyaaa.fuse.model.CartridgeDownload, val game: GameCard?)

@@ -47,13 +47,15 @@ object ScopedSettings {
     val VideoPreview = ScopedKey("video.preview", true, Boolean.serializer())
     val VideoDelaySeconds = ScopedKey("video.delay", 10, Int.serializer(), setOf(SettingScope.GLOBAL, SettingScope.PLATFORM))
     val ScrapeEnabled = ScopedKey("scrape.enabled", true, Boolean.serializer())
+    /** The name art and metadata searches use for a game, when the user set one; empty uses its title. */
+    val SearchTitle = ScopedKey("scrape.title", "", String.serializer(), setOf(SettingScope.GAME))
     val Matching = ScopedKey("scrape.matching", MatchStrictness.NORMAL, MatchStrictness.serializer(), setOf(SettingScope.GLOBAL, SettingScope.PLATFORM))
     val LaunchScreen = ScopedKey("launch.display", LaunchDisplay.PRIMARY, LaunchDisplay.serializer())
     val GenerateM3u = ScopedKey("launch.m3u", true, Boolean.serializer(), setOf(SettingScope.GLOBAL, SettingScope.PLATFORM))
 
     val all: List<ScopedKey<*>> = listOf(
         Layout, ShowHero, ShowLogo, PreferredCover, Border, Emulator, RetroArchCore, FolderMode,
-        VideoPreview, VideoDelaySeconds, ScrapeEnabled, Matching, LaunchScreen, GenerateM3u,
+        VideoPreview, VideoDelaySeconds, ScrapeEnabled, SearchTitle, Matching, LaunchScreen, GenerateM3u,
     )
 }
 

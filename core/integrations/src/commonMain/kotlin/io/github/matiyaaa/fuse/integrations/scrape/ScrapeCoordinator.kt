@@ -122,6 +122,41 @@ class ScrapeCoordinator(
     }
 
     /**
+     * Every game the active providers list for the query, ranked, without accepting any of them: for
+     * "Identify game", where the user always picks. Returns [ScrapeOutcome.NeedsReview] with the
+     * matches (best first), [ScrapeOutcome.NotFound] when none had anything, or
+     * [ScrapeOutcome.ProviderErrors] when every provider failed.
+     */
+    suspend fun candidates(request: ScrapeRequest): ScrapeOutcome {
+        val active = activeSources(request)
+        if (active.isEmpty()) return ScrapeOutcome.NotFound(emptyList())
+        val errors = ArrayList<ProviderError>()
+        val found = ArrayList<ScoredMatch>()
+        val searched = ArrayList<ScrapeProviderId>()
+        for (source in active) {
+            val games = when (val r = source.search(request.query)) {
+                is ApiResult.Failure -> {
+                    errors += ProviderError(source.id, r)
+                    continue
+                }
+                is ApiResult.Success -> r.value.take(request.maxCandidates)
+            }
+            searched += source.id
+            found += matcher.rank(request.query, games.map { it.toMatchInput() })
+        }
+        return when {
+            found.isNotEmpty() -> ScrapeOutcome.NeedsReview(
+                found.sortedByDescending { it.candidate.confidence }
+                    .distinctBy { it.candidate.provider to it.candidate.providerGameId }
+                    .map { it.candidate },
+                errors,
+            )
+            searched.isEmpty() && errors.isNotEmpty() -> ScrapeOutcome.ProviderErrors(errors)
+            else -> ScrapeOutcome.NotFound(searched, errors)
+        }
+    }
+
+    /**
      * Completes a job with the candidate the user picked from [ScrapeOutcome.NeedsReview]: searches
      * that provider again and returns its metadata and artwork (plus other providers' artwork).
      */
