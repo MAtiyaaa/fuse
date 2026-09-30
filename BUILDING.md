@@ -102,7 +102,7 @@ Losing the key means existing installs cannot update to your builds.
 
 `.github/workflows/release.yml` publishes a release when:
 
-- `gradle.properties` changes on `main` and no release `v<fuse.version>` exists yet;
+- `gradle.properties` or anything in `docs/releases/` changes on `main` and no release `v<fuse.version>` exists yet;
 - a tag `v*` is pushed (the tag must equal `v<fuse.version>`); or
 - it is started by hand (Actions, Release, Run workflow), again only if the release does not exist.
 

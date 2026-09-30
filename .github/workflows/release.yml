@@ -1,6 +1,6 @@
 # Publishes a GitHub release with the Android APK, the Linux AppImage and SHA256SUMS.txt.
 #
-# Runs when gradle.properties changes on main, when a v* tag is pushed, or by hand. The version and
+# Runs when gradle.properties or docs/releases/ changes on main, when a v* tag is pushed, or by hand. The version and
 # release name come from fuse.version and fuse.releaseName in gradle.properties, and the release notes
 # from docs/releases/<version>.md. Nothing is published when release v<version> already exists,
 # unless the run was started by pushing that tag.
@@ -16,6 +16,9 @@ on:
       - main
     paths:
       - gradle.properties
+      # New release notes are the other signal (the first release arrives with its notes, while
+      # fuse.version was already set).
+      - docs/releases/**
     # Path filters are not applied to tag pushes, so every v* tag starts a run.
     tags:
       - "v*"
