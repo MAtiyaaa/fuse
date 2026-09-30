@@ -12,6 +12,7 @@ kotlin {
             api(projects.core.integrations)
             api(projects.core.data)
             implementation(libs.coil.compose)
+            implementation(libs.coil.network.ktor)
             implementation(libs.jb.lifecycle.runtime.compose)
             implementation(libs.kotlinx.datetime)
         }
