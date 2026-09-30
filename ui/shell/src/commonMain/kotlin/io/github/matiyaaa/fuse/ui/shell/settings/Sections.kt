@@ -400,7 +400,7 @@ fun inputRows(app: AppState): List<MenuAction> {
         app.percentRow("vibration", "Vibration", FuseIcons.Vibrate, i.vibration) { v -> setInput { it.copy(vibration = v) } },
         app.choiceRow("sound", "Interface sounds", FuseIcons.Music, p.sound, listOf(SoundProfile.OFF to "Off", SoundProfile.SOFT to "Soft", SoundProfile.CLICK to "Crisp", SoundProfile.CHIME to "Chime")) { v -> app.store.updatePrefs { it.copy(sound = v) } },
         app.percentRow("volume", "Sound volume", FuseIcons.Volume, p.soundVolume) { v -> app.store.updatePrefs { it.copy(soundVolume = v) } },
-        MenuAction("test", "Controller test", FuseIcons.Joystick, detail = "Press buttons to see what Fuse receives", trailing = Trailing.Chevron, onSelect = { app.go(Route.Onboarding) }),
+        MenuAction("mapping", "Button mapping and test", FuseIcons.Joystick, detail = if (i.remap.isEmpty()) "Standard layout. See what Fuse receives from each button" else "${i.remap.size} custom mappings", trailing = Trailing.Chevron, onSelect = { app.go(Route.Controls) }),
     )
 }
 

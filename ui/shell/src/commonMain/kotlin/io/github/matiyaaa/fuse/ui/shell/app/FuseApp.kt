@@ -265,6 +265,7 @@ private fun Pages(app: AppState) {
                 is Route.Settings -> SettingsScreen(app, route.section)
                 is Route.PlatformSettings -> PlatformSettingsScreen(app, route.platform)
                 Route.Search -> SearchScreen(app)
+                Route.Controls -> io.github.matiyaaa.fuse.ui.shell.settings.ControlsScreen(app)
                 Route.Onboarding -> OnboardingScreen(app)
                 is Route.FolderBrowser -> FolderBrowserScreen(app, route.game)
             }

@@ -146,9 +146,20 @@ class InputRouter(
     /** Sees every physical press and release (the controller test screen uses it). */
     var rawListener: ((PadButton, Boolean) -> Unit)? = null
 
+    /**
+     * While set, the next physical presses go only here and never become actions (the button
+     * mapping screen listens for "press the button for Confirm"). Releases still reach [rawListener].
+     */
+    var capture: ((PadButton) -> Unit)? = null
+
     /** A physical button went down. Platform key repeats must not be forwarded. */
     fun press(button: PadButton, source: InputSource) {
         rawListener?.invoke(button, true)
+        capture?.let {
+            _lastSource.value = source
+            it(button)
+            return
+        }
         if (held.containsKey(button)) return
         val action = actionFor(button) ?: return
         _lastSource.value = source

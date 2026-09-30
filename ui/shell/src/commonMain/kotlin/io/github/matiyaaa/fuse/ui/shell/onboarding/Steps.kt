@@ -426,7 +426,7 @@ private fun Ignition(lit: Boolean = false) {
 
 /** Live view of what the controller sends, so users can confirm their layout. */
 @Composable
-private fun ControllerTest() {
+internal fun ControllerTest() {
     val router = LocalInputRouter.current
     val pressed = remember { mutableStateListOf<PadButton>() }
     var last by remember { mutableStateOf<PadButton?>(null) }
