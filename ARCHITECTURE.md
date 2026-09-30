@@ -262,8 +262,12 @@ All controller, keyboard and remote input goes through `InputRouter` (`ui:design
 `input/InputRouter.kt`). Platforms feed raw presses and releases of `PadButton`s, stick positions and
 trigger values; the router does the rest:
 
-- **Mapping.** Buttons map to `NavAction`s by position, with the Nintendo layout swapping A/B and X/Y,
-  and user remaps (`InputProfile.remap`) taking precedence.
+- **Mapping.** Buttons map to `NavAction`s by keycode. `InputProfile.glyphs` only says how the pad
+  is labelled (hint glyphs and their positions); `swapConfirmBack` swaps A/B and X/Y for pads that
+  report buttons by position. Android handhelds with Nintendo labels already send Nintendo keycodes,
+  so they need no swap. User remaps (`InputProfile.remap`) take precedence. System Back arrives as
+  `KEY_ESCAPE` through `press`, so capture and the button test see it; `exclusive` takes every press
+  while the test runs.
 - **Repeat.** Platform auto-repeat is ignored. Directions and page jumps repeat after
   `repeatDelayMs` (280 ms) every `repeatIntervalMs` (70 ms), accelerating by 10% per step after the
   fourth repeat down to half the interval. Repeats are never queued, so releasing stops movement at

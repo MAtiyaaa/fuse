@@ -108,6 +108,11 @@ platforms and apps.
 animation filters. NSFW, humour and epilepsy-warning assets are excluded by default. Requests are
 paced 100 ms apart, at most four at a time.
 
+**Key checks.** Saving a SteamGridDB, IGDB or TheGamesDB key (or choosing Test keys in Settings, Media
+and Scraping) makes one real request with it (`verifyKey` / `verifyCredentials`, returning a
+`KeyCheck`), so Settings can say Working, Key rejected or Offline. Keys and client ids are stripped of
+whitespace and invisible characters when saved.
+
 **Leaves the device.** Your key (in a header), the titles you look up, SteamGridDB game ids and Steam
 app ids. Images are downloaded from SteamGridDB's CDN.
 

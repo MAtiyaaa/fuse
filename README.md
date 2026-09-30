@@ -256,9 +256,9 @@ Play.
 <br>
 
 - Custom **key repeat** that accelerates while held, **hold to reorder**, **stick navigation** with
-  deadzones, a **Nintendo button layout** option, and hint glyphs for Xbox, Nintendo, PlayStation or
-  keyboard.
-- A **button mapping** screen with capture and a live controller test.
+  deadzones, **Detect my buttons** (Xbox, Nintendo or PlayStation layout from two presses), and hint
+  glyphs for Xbox, Nintendo, PlayStation or keyboard.
+- A **button mapping** screen with capture and a live button test that no button can leave by accident.
 - **Home** as a flowing dashboard (Flow) or a board of tiles you arrange (Channels), with 19 kinds of
   widgets.
 - **Library** layouts from icons to capsules to covers to a compact list; **Systems**, **Apps**,

@@ -32,6 +32,7 @@ declared in the version catalog for the platform apps and not yet used by any mo
 | SQLDelight SQLite (JDBC) driver, with Xerial SQLite JDBC | `app.cash.sqldelight:sqlite-driver` | 2.4.0 | Apache-2.0 (SQLite itself is in the public domain) | `core:data` (desktop) | [sqldelight](https://github.com/sqldelight/sqldelight), [sqlite-jdbc](https://github.com/xerial/sqlite-jdbc) |
 | Coil compose | `io.coil-kt.coil3:coil-compose` | 3.6.3 | Apache-2.0 | `ui:designsystem`, `ui:shell` | [coil](https://github.com/coil-kt/coil) |
 | Coil network (Ktor 3) | `io.coil-kt.coil3:coil-network-ktor3` | 3.6.3 | Apache-2.0 | `ui:shell` | [coil](https://github.com/coil-kt/coil) |
+| Coil SVG (with AndroidSVG on Android) | `io.coil-kt.coil3:coil-svg`, `com.caverock:androidsvg-aar` | 3.6.3 | Apache-2.0 | `ui:shell` | [coil](https://github.com/coil-kt/coil), [androidsvg](https://github.com/BigBadaboom/androidsvg) |
 | Ktor client core, content negotiation, kotlinx JSON serialization | `io.ktor:ktor-client-core`, `:ktor-client-content-negotiation`, `:ktor-serialization-kotlinx-json` | 3.6.0 | Apache-2.0 | `core:integrations` | [ktor](https://github.com/ktorio/ktor) |
 | Ktor client OkHttp engine (with OkHttp and Okio) | `io.ktor:ktor-client-okhttp` | 3.6.0 | Apache-2.0 | Catalog only (planned for `app:android`) | [ktor](https://github.com/ktorio/ktor), [okhttp](https://github.com/square/okhttp) |
 | Ktor client CIO engine | `io.ktor:ktor-client-cio` | 3.6.0 | Apache-2.0 | Catalog only (planned for `app:desktop`) | [ktor](https://github.com/ktorio/ktor) |
