@@ -175,7 +175,17 @@ private fun TextInputOverlay(app: AppState) {
     var shown by remember { mutableStateOf(spec) }
     if (spec != null) shown = spec
     val keyboard = remember(spec) { KeyboardState() }
-    LaunchedEffect(spec) { if (spec != null) app.textDraft = spec.initial }
+    LaunchedEffect(spec) {
+        if (spec != null) {
+            app.textDraft = spec.initial
+            app.keyboardTarget = KeyboardTarget({ app.textDraft }, { app.textDraft = it }, {
+                app.textInput = null
+                spec.onDone(app.textDraft)
+            })
+        } else {
+            app.keyboardTarget = null
+        }
+    }
     fun done() {
         val s = spec ?: return
         app.textInput = null

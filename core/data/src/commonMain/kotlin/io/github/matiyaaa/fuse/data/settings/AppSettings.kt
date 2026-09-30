@@ -136,8 +136,11 @@ data class VideoPreviewSettings(
 
 @Serializable
 data class LibraryPreferences(
-    /** Clean Display Names: show cleaned titles for new games and after a bulk cleanup. */
-    val cleanDisplayNames: Boolean = true,
+    /**
+     * Clean Display Names: show cleaned titles for new games and after a bulk cleanup. Off by default;
+     * the interface warns that automatic name parsing can be wrong before it is turned on.
+     */
+    val cleanDisplayNames: Boolean = false,
 )
 
 /**

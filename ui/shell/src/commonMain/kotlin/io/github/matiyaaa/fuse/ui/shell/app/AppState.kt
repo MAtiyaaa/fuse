@@ -71,6 +71,9 @@ class AppState(
     /** Text being typed in the text input overlay (on-screen keyboard or a hardware keyboard). */
     var textDraft by mutableStateOf("")
 
+    /** Where hardware keyboard typing goes (search field, rename dialog), or null for navigation keys. */
+    var keyboardTarget by mutableStateOf<KeyboardTarget?>(null)
+
     /** What the room is lit by. Screens set it from their selection. */
     var hero by mutableStateOf<HeroSource?>(null)
 
@@ -106,6 +109,9 @@ class AppState(
         navigator.selectRoot(destination)
     }
 }
+
+/** A text field that accepts hardware keyboard input. */
+class KeyboardTarget(val get: () -> String, val set: (String) -> Unit, val submit: () -> Unit)
 
 /** Shown for the moment between pressing Play and the emulator taking over. */
 data class LaunchVeil(val title: String, val art: Any?, val accent: Long)
