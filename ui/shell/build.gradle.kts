@@ -25,3 +25,25 @@ kotlin {
         }
     }
 }
+
+// README screenshots: the real interface over a sample library of invented games, rendered headless
+// into docs/assets/screenshots. Never part of desktopTest, check or CI; run it on purpose:
+//     ./gradlew :ui:shell:desktopScreenshots
+val screenshotTests = "io.github.matiyaaa.fuse.ui.shell.screenshots.*"
+
+tasks.named<Test>("desktopTest") {
+    filter { excludeTestsMatching(screenshotTests) }
+}
+
+tasks.register<Test>("desktopScreenshots") {
+    description = "Renders the README screenshots into docs/assets/screenshots."
+    group = "documentation"
+    val desktopTest = tasks.named<Test>("desktopTest").get()
+    testClassesDirs = desktopTest.testClassesDirs
+    classpath = desktopTest.classpath
+    filter { includeTestsMatching(screenshotTests) }
+    systemProperty("fuse.screenshots.dir", rootProject.layout.projectDirectory.dir("docs/assets/screenshots").asFile.absolutePath)
+    maxHeapSize = "1g"
+    testLogging { showStandardStreams = true }
+    outputs.upToDateWhen { false }
+}
