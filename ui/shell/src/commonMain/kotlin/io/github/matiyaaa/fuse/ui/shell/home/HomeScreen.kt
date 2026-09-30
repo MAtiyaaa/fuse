@@ -173,7 +173,8 @@ fun FlowHome(app: AppState) {
     }
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
-        val stageHeight = (maxHeight * 0.3f).coerceIn(150.dp, 280.dp)
+        val maxH = maxHeight
+        val stageHeight = (maxH * 0.3f).coerceIn(150.dp, 280.dp)
         val rows = rememberLazyListState()
         FollowSelection(rows, { sel.row }, anchor = 0f)
         Column(Modifier.fillMaxSize()) {
@@ -185,7 +186,7 @@ fun FlowHome(app: AppState) {
             LazyColumn(
                 state = rows,
                 modifier = Modifier.fillMaxWidth().weight(1f),
-                contentPadding = PaddingValues(bottom = Size.hintHeight + maxHeight * 0.4f),
+                contentPadding = PaddingValues(bottom = Size.hintHeight + maxH * 0.4f),
                 verticalArrangement = Arrangement.spacedBy(Space.l),
             ) {
                 itemsIndexed(shelves, key = { _, s -> s.key }) { index, s ->

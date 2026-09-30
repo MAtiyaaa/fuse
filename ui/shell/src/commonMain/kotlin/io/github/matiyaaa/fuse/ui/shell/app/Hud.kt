@@ -32,7 +32,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.Size as GSize
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -145,7 +145,7 @@ private fun Tab(destination: Destination, selected: Boolean, focused: Boolean, o
                     drawRoundRect(
                         c.accent.copy(alpha = bar),
                         topLeft = Offset((size.width - w) / 2, size.height - h - 3.dp.toPx()),
-                        size = Size(w, h),
+                        size = GSize(w, h),
                         cornerRadius = CornerRadius(h / 2),
                     )
                 }
@@ -186,7 +186,7 @@ fun FuseMark(modifier: Modifier = Modifier, color: Color = Fuse.colors.text, spa
         drawRoundRect(
             color,
             topLeft = Offset(stroke / 2, stroke / 2),
-            size = Size(w - stroke, w - stroke),
+            size = GSize(w - stroke, w - stroke),
             cornerRadius = CornerRadius(w * 0.28f),
             style = Stroke(stroke),
         )

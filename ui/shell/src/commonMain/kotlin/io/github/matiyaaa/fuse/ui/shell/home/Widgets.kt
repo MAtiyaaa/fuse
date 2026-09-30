@@ -4,6 +4,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -100,7 +101,7 @@ fun WidgetContent(kind: WidgetKind, feed: HomeFeed, cartridge: CartridgeStatus, 
 }
 
 @Composable
-private fun BigNumber(label: String, value: String, caption: String?) {
+private fun ColumnScope.BigNumber(label: String, value: String, caption: String?) {
     SectionLabel(label)
     Spacer(Modifier.weight(1f))
     FText(value, Fuse.type.title, maxLines = 1)
@@ -108,7 +109,7 @@ private fun BigNumber(label: String, value: String, caption: String?) {
 }
 
 @Composable
-private fun PlaytimeWeek(feed: HomeFeed) {
+private fun ColumnScope.PlaytimeWeek(feed: HomeFeed) {
     val c = Fuse.colors
     val days = feed.playtime.lastSevenDays.ifEmpty { List(7) { 0L } }
     Row(verticalAlignment = Alignment.Top) {
@@ -136,7 +137,7 @@ private fun PlaytimeWeek(feed: HomeFeed) {
 }
 
 @Composable
-private fun MostPlayed(feed: HomeFeed) {
+private fun ColumnScope.MostPlayed(feed: HomeFeed) {
     val c = Fuse.colors
     SectionLabel("Most played")
     Spacer(Modifier.height(Space.s))
@@ -155,7 +156,7 @@ private fun MostPlayed(feed: HomeFeed) {
 }
 
 @Composable
-private fun CurrentGame(feed: HomeFeed) {
+private fun ColumnScope.CurrentGame(feed: HomeFeed) {
     val g = feed.playtime.currentGame ?: return
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.m)) {
         Artwork(
@@ -171,7 +172,7 @@ private fun CurrentGame(feed: HomeFeed) {
 }
 
 @Composable
-private fun RecentAchievement(feed: HomeFeed) {
+private fun ColumnScope.RecentAchievement(feed: HomeFeed) {
     val a = feed.achievements?.recent?.firstOrNull() ?: return
     Row(horizontalArrangement = Arrangement.spacedBy(Space.m), verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxSize()) {
         Artwork(a.achievement.badgeUrl, Modifier.size(64.dp).clip(RoundedCornerShape(10.dp)))
@@ -184,7 +185,7 @@ private fun RecentAchievement(feed: HomeFeed) {
 }
 
 @Composable
-private fun RecentAchievements(feed: HomeFeed) {
+private fun ColumnScope.RecentAchievements(feed: HomeFeed) {
     val list = feed.achievements?.recent.orEmpty().take(6)
     SectionLabel("Recent achievements")
     Spacer(Modifier.height(Space.s))
@@ -200,7 +201,7 @@ private fun RecentAchievements(feed: HomeFeed) {
 }
 
 @Composable
-private fun AchievementProgress(feed: HomeFeed) {
+private fun ColumnScope.AchievementProgress(feed: HomeFeed) {
     val s = feed.achievements?.inProgress?.firstOrNull() ?: return
     Row(horizontalArrangement = Arrangement.spacedBy(Space.m), verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxSize()) {
         Box(contentAlignment = Alignment.Center) {
@@ -216,7 +217,7 @@ private fun AchievementProgress(feed: HomeFeed) {
 }
 
 @Composable
-private fun RecentlyMastered(feed: HomeFeed) {
+private fun ColumnScope.RecentlyMastered(feed: HomeFeed) {
     val s = feed.achievements?.recentlyMastered?.firstOrNull() ?: return
     Row(horizontalArrangement = Arrangement.spacedBy(Space.m), verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxSize()) {
         Artwork(s.iconUrl, Modifier.size(60.dp).clip(RoundedCornerShape(12.dp)))
@@ -231,7 +232,7 @@ private fun RecentlyMastered(feed: HomeFeed) {
 }
 
 @Composable
-private fun CartridgeWidget(status: CartridgeStatus) {
+private fun ColumnScope.CartridgeWidget(status: CartridgeStatus) {
     val c = Fuse.colors
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s)) {
         FuseIcon(FuseIcons.CloudDownload, size = 16.dp, tint = c.textMuted)
@@ -260,7 +261,7 @@ private fun CartridgeWidget(status: CartridgeStatus) {
 }
 
 @Composable
-private fun StorageWidget(feed: HomeFeed) {
+private fun ColumnScope.StorageWidget(feed: HomeFeed) {
     val s = feed.storage ?: return
     val used = 1f - s.freeBytes.toFloat() / s.totalBytes.coerceAtLeast(1)
     SectionLabel("Storage")
@@ -272,7 +273,7 @@ private fun StorageWidget(feed: HomeFeed) {
 }
 
 @Composable
-private fun ClockWidget(clock24h: Boolean) {
+private fun ColumnScope.ClockWidget(clock24h: Boolean) {
     val time = rememberClockText(clock24h)
     Spacer(Modifier.weight(1f))
     FText(time, Fuse.type.numericLarge, maxLines = 1)

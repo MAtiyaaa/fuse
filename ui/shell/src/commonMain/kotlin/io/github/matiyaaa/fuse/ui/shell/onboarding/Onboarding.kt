@@ -200,8 +200,9 @@ fun FuseLine(progress: Float, label: String, modifier: Modifier = Modifier) {
     val c = Fuse.colors
     val p by animateFloatAsState(progress.coerceIn(0f, 1f), Fuse.motion.tween(Durations.DELIBERATE), label = "fuse")
     val flicker = remember { Animatable(0.8f) }
+    val ambient = Fuse.motion.ambient
     LaunchedEffect(Unit) {
-        if (!Fuse.motion.ambient) return@LaunchedEffect
+        if (!ambient) return@LaunchedEffect
         while (true) {
             flicker.animateTo(1f, androidx.compose.animation.core.tween(380))
             flicker.animateTo(0.75f, androidx.compose.animation.core.tween(420))

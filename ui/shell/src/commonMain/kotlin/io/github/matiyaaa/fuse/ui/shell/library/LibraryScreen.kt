@@ -229,6 +229,8 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val metrics = LocalTileMetrics.current
+        val maxH = maxHeight
+        val maxW = maxWidth
         Column(Modifier.fillMaxSize()) {
             Spacer(Modifier.height(Size.hudHeight))
             LibraryHeader(app, scope, platforms.firstOrNull { it.platform.id == platformId }, list?.size, filters.map { it.label }, state)
@@ -237,11 +239,11 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
                 list.isEmpty() -> LibraryEmpty(scope, filter.label)
                 else -> when (layout) {
                     LibraryLayout.ICON -> {
-                        Box(Modifier.fillMaxWidth().height((maxHeight * 0.22f).coerceIn(110.dp, 200.dp)).padding(horizontal = Space.gutter), contentAlignment = Alignment.BottomStart) {
+                        Box(Modifier.fillMaxWidth().height((maxH * 0.22f).coerceIn(110.dp, 200.dp)).padding(horizontal = Space.gutter), contentAlignment = Alignment.BottomStart) {
                             Stage(selectedCard?.stage(), showLogo = prefs.showLogo, logoHeight = 84.dp)
                         }
                         Spacer(Modifier.height(Space.l))
-                        val cols = ((maxWidth - Space.gutter * 2 + metrics.gap) / (metrics.icon + metrics.gap)).toInt().coerceAtLeast(2)
+                        val cols = ((maxW - Space.gutter * 2 + metrics.gap) / (metrics.icon + metrics.gap)).toInt().coerceAtLeast(2)
                         columns = cols
                         IconGrid(list, state, cols, metrics.icon, metrics.gap, onTap = { i -> tap(app, state, list, i) }, onLong = { i -> state.grid.index = i; options(list[i]) }, focused = !state.inFilters && app.focusZone == FocusZone.CONTENT)
                     }
@@ -262,7 +264,7 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
                     }
                     LibraryLayout.COVER_GRID -> {
                         val coverW = metrics.coverWidth
-                        val cols = ((maxWidth - Space.gutter * 2 + metrics.gap) / (coverW + metrics.gap)).toInt().coerceAtLeast(2)
+                        val cols = ((maxW - Space.gutter * 2 + metrics.gap) / (coverW + metrics.gap)).toInt().coerceAtLeast(2)
                         columns = cols
                         CoverGrid(list, state, cols, coverW, metrics.gap, onTap = { i -> tap(app, state, list, i) }, onLong = { i -> state.grid.index = i; options(list[i]) }, focused = !state.inFilters && app.focusZone == FocusZone.CONTENT)
                     }

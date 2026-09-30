@@ -55,6 +55,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.theme.TileMetrics
 import io.github.matiyaaa.fuse.ui.shell.apps.AppsScreen
 import io.github.matiyaaa.fuse.ui.shell.cartridge.CartridgeScreen
 import io.github.matiyaaa.fuse.ui.shell.components.LocalTileMetrics
+import io.github.matiyaaa.fuse.ui.shell.game.FolderBrowserScreen
 import io.github.matiyaaa.fuse.ui.shell.game.GameScreen
 import io.github.matiyaaa.fuse.ui.shell.home.HomeScreen
 import io.github.matiyaaa.fuse.ui.shell.library.LibraryScope

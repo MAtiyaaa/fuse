@@ -93,9 +93,10 @@ fun SystemsScreen(app: AppState) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val cardWidth = ((maxWidth - Space.gutter * 2) / 4.2f).coerceIn(180.dp, 320.dp)
         columns = ((maxWidth - Space.gutter * 2 + Space.l) / (cardWidth + Space.l)).toInt().coerceAtLeast(2)
+        val maxH = maxHeight
         Column(Modifier.fillMaxSize()) {
             Spacer(Modifier.height(Size.hudHeight))
-            Box(Modifier.fillMaxWidth().height((maxHeight * 0.24f).coerceIn(120.dp, 210.dp)).padding(horizontal = Space.gutter), contentAlignment = Alignment.BottomStart) {
+            Box(Modifier.fillMaxWidth().height((maxH * 0.24f).coerceIn(120.dp, 210.dp)).padding(horizontal = Space.gutter), contentAlignment = Alignment.BottomStart) {
                 Stage(current?.stage())
             }
             current?.let { StatusLine(it) }

@@ -173,10 +173,11 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val wide = maxWidth > 820.dp
+        val maxH = maxHeight
         Column(
             Modifier.fillMaxSize().verticalScroll(scroll).padding(horizontal = Space.gutter),
         ) {
-            Spacer(Modifier.height(Size.hudHeight + (maxHeight * 0.12f)))
+            Spacer(Modifier.height(Size.hudHeight + (maxH * 0.12f)))
             Row(verticalAlignment = Alignment.Bottom) {
                 Column(Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s)) {
