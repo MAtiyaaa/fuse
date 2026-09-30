@@ -47,7 +47,7 @@ fun LaunchVeilContent(veil: LaunchVeil) {
         Artwork(
             veil.art,
             Modifier.fillMaxSize().graphicsLayer { scaleX = settle.value; scaleY = settle.value },
-            fallback = { GeneratedArt(veil.title, veil.accent.toColor(), slot = ArtSlot.HERO) },
+            fallback = { GeneratedArt(veil.title, veil.accent.toColor(), slot = ArtSlot.HERO, showText = false) },
         )
         Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.35f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.88f))))
         Column(Modifier.align(Alignment.BottomStart).padding(horizontal = Space.gutter, vertical = Space.x3)) {

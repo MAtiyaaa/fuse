@@ -37,6 +37,8 @@ fun GeneratedArt(
     modifier: Modifier = Modifier,
     slot: ArtSlot = ArtSlot.ICON,
     label: String? = null,
+    /** False when the container lays its own title over the art, so the name never appears twice. */
+    showText: Boolean = true,
 ) {
     val seed = remember(title) { abs(title.hashCode()) }
     val base = lerp(Color(0xFF0B0C10), accent, 0.42f)
@@ -77,7 +79,7 @@ fun GeneratedArt(
         }
         val pad = (w / 12f).coerceIn(6f, 28f)
         val type = Fuse.type
-        when (slot) {
+        if (showText) when (slot) {
             ArtSlot.ICON, ArtSlot.SYSTEM -> {
                 val initials = remember(title) { initialsOf(title) }
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {

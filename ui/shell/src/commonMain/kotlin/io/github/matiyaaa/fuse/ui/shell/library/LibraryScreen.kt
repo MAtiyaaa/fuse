@@ -1,5 +1,6 @@
 package io.github.matiyaaa.fuse.ui.shell.library
 
+import io.github.matiyaaa.fuse.ui.designsystem.components.fadingEdges
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -351,6 +352,7 @@ private fun IconGrid(
     LazyVerticalGrid(
         columns = GridCells.Fixed(columns),
         state = grid,
+        modifier = Modifier.fadingEdges(top = if (grid.canScrollBackward) 24.dp else 0.dp),
         contentPadding = PaddingValues(start = Space.gutter, end = Space.gutter, top = Space.s, bottom = Size.hintHeight + Space.x4),
         horizontalArrangement = Arrangement.spacedBy(gap),
         verticalArrangement = Arrangement.spacedBy(gap + Space.s),
@@ -386,6 +388,7 @@ private fun CoverGrid(
         LazyVerticalGrid(
             columns = GridCells.Fixed(columns),
             state = grid,
+            modifier = Modifier.fadingEdges(top = if (grid.canScrollBackward) 24.dp else 0.dp),
             contentPadding = PaddingValues(start = Space.gutter, end = Space.gutter, top = Space.m, bottom = Size.hintHeight + Space.x4),
             horizontalArrangement = Arrangement.spacedBy(gap),
             verticalArrangement = Arrangement.spacedBy(gap + Space.m),
@@ -413,7 +416,7 @@ private fun CompactList(
     Row(Modifier.fillMaxSize().padding(start = Space.gutter, end = Space.gutter)) {
         LazyColumn(
             state = listState,
-            modifier = Modifier.weight(1.1f).fillMaxHeight(),
+            modifier = Modifier.weight(1.1f).fillMaxHeight().fadingEdges(top = if (listState.canScrollBackward) 24.dp else 0.dp),
             contentPadding = PaddingValues(top = Space.s, bottom = Size.hintHeight + Space.xxl),
             verticalArrangement = Arrangement.spacedBy(Space.xxs),
         ) {

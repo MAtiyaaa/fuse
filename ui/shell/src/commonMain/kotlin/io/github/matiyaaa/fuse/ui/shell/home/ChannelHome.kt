@@ -1,5 +1,6 @@
 package io.github.matiyaaa.fuse.ui.shell.home
 
+import io.github.matiyaaa.fuse.ui.designsystem.components.fadingEdges
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -165,7 +166,7 @@ fun ChannelHome(app: AppState) {
                 contentPadding = PaddingValues(start = Space.gutter, end = Space.gutter, top = Space.l, bottom = Size.hintHeight + Space.xxl),
                 horizontalArrangement = Arrangement.spacedBy(Space.l),
                 verticalArrangement = Arrangement.spacedBy(Space.xl),
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(1f).fadingEdges(top = if (grid.canScrollBackward) 24.dp else 0.dp),
             ) {
                 itemsIndexed(widgets, key = { _, w -> w.id }, span = { _, w -> GridItemSpan(channelSpan(w).columns.coerceAtMost(BOARD_COLUMNS)) }) { i, w ->
                     val selected = i == sel.index && app.focusZone == FocusZone.CONTENT
@@ -244,7 +245,7 @@ private fun Channel(
                     Artwork(
                         game.art.hero ?: game.art.grid ?: game.art.boxart,
                         Modifier.fillMaxSize(),
-                        fallback = { GeneratedArt(game.title, game.accent.toColor(), slot = ArtSlot.WIDE, label = game.platformShort) },
+                        fallback = { GeneratedArt(game.title, game.accent.toColor(), slot = ArtSlot.WIDE, showText = false) },
                     )
                     Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.5f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.7f))))
                     FText(game.title, Fuse.type.bodyStrong, color = Color.White, maxLines = 1, modifier = Modifier.align(Alignment.BottomStart).padding(Space.m))

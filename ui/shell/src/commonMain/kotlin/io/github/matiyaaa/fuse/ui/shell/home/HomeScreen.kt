@@ -1,5 +1,6 @@
 package io.github.matiyaaa.fuse.ui.shell.home
 
+import io.github.matiyaaa.fuse.ui.designsystem.components.fadingEdges
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -185,7 +186,7 @@ fun FlowHome(app: AppState) {
             Spacer(Modifier.height(Space.xl))
             LazyColumn(
                 state = rows,
-                modifier = Modifier.fillMaxWidth().weight(1f),
+                modifier = Modifier.fillMaxWidth().weight(1f).fadingEdges(top = if (rows.canScrollBackward) 24.dp else 0.dp),
                 contentPadding = PaddingValues(bottom = Size.hintHeight + maxH * 0.4f),
                 verticalArrangement = Arrangement.spacedBy(Space.l),
             ) {

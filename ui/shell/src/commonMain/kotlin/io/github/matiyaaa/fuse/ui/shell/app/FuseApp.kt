@@ -79,6 +79,10 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.input.TextInput
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
 
 /**
  * The whole Fuse interface for one window. [router] is created by the host (Android activity or
@@ -174,6 +178,16 @@ fun FuseApp(store: FuseStore, platform: PlatformUi, router: InputRouter) {
                     if (prefs.performanceOverlay) {
                         val metrics by platform.performance.collectAsState()
                         PerformanceOverlay(metrics, Modifier.align(Alignment.TopStart).padding(start = Space.gutter, top = Size.hudHeight + Space.s))
+                    }
+                    // Content fades out under the hint line, so hints never sit on top of tiles.
+                    if (app.hints.isNotEmpty()) {
+                        Box(
+                            Modifier
+                                .align(Alignment.BottomCenter)
+                                .fillMaxWidth()
+                                .height(Size.hintHeight + Space.xxl)
+                                .background(Brush.verticalGradient(0f to Color.Transparent, 0.55f to Fuse.colors.ink.copy(alpha = 0.78f), 1f to Fuse.colors.ink.copy(alpha = 0.94f))),
+                        )
                     }
                     HintBar(app.hints, Modifier.align(Alignment.BottomEnd).padding(horizontal = Space.gutter, vertical = Space.s))
                     QuickMenu(app)

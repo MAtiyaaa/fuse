@@ -1,5 +1,6 @@
 package io.github.matiyaaa.fuse.ui.shell.systems
 
+import io.github.matiyaaa.fuse.ui.designsystem.components.fadingEdges
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -109,6 +110,7 @@ fun SystemsScreen(app: AppState) {
             LazyVerticalGrid(
                 columns = GridCells.Fixed(columns),
                 state = grid,
+                modifier = Modifier.fadingEdges(top = if (grid.canScrollBackward) 24.dp else 0.dp),
                 contentPadding = PaddingValues(start = Space.gutter, end = Space.gutter, top = Space.s, bottom = Size.hintHeight + Space.x4),
                 horizontalArrangement = Arrangement.spacedBy(Space.l),
                 verticalArrangement = Arrangement.spacedBy(Space.xl),

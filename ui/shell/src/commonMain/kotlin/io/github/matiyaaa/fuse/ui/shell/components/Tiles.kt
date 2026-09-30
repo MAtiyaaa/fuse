@@ -126,7 +126,7 @@ fun GameWideTile(
             modifier = Modifier.fillMaxSize(),
             focusX = card.art.heroFocusX,
             focusY = card.art.heroFocusY,
-            fallback = { GeneratedArt(card.title, accent, slot = ArtSlot.WIDE, label = card.platformShort) },
+            fallback = { GeneratedArt(card.title, accent, slot = ArtSlot.WIDE, showText = false) },
         )
         Box(
             Modifier.fillMaxSize().background(
@@ -199,7 +199,7 @@ fun SystemTile(
 @Composable
 fun SystemGlyph(card: PlatformCard, accent: Color, large: Boolean = false) {
     Box(Modifier.fillMaxSize()) {
-        GeneratedArt(title = card.platform.name, accent = accent, slot = ArtSlot.WIDE, label = null)
+        GeneratedArt(title = card.platform.name, accent = accent, slot = ArtSlot.WIDE, showText = false)
         Column(
             Modifier.fillMaxSize().padding(if (large) Space.xl else Space.m),
             verticalArrangement = Arrangement.SpaceBetween,
