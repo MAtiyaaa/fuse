@@ -56,6 +56,7 @@ class AndroidPlatformUi(
     override val storage: AndroidStorageAccess = AndroidStorageAccess(appContext, activities, volumes, scope)
     override val quick: AndroidQuickControls = AndroidQuickControls(appContext, activities)
     override val video: VideoPreview = AndroidVideoPreview()
+    override val music: AndroidMenuMusic = AndroidMenuMusic()
     override val secondScreenLog: StateFlow<List<String>> = SecondScreenLog.entries
 
     private val hasBluetooth = appContext.packageManager.hasSystemFeature(PackageManager.FEATURE_BLUETOOTH)
@@ -64,7 +65,8 @@ class AndroidPlatformUi(
     override val features: PlatformFeatures
         get() {
             val hasSecond = displayMonitor.secondary() != null
-            val companion = hasSecond && CompanionScreens.SUPPORTED
+            // The companion is a Presentation while Fuse is in front, which every supported Android version shows.
+            val companion = displayMonitor.presentationTarget() != null
             return PlatformFeatures(
                 homeRole = homeRole.available,
                 androidApps = true,

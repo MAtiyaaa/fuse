@@ -70,6 +70,18 @@ internal fun AuditDriver.homeFlow(exhaustive: Boolean) {
             shoot("shelf ${i + 1} of ${shelves.size}, ${shelves[i].title} (${shelves[i].style.words()})")
         }
     }
+
+    // At every size: the stick reaching the tabs must not squeeze the clock (0.0.2 on the AYN).
+    scenario("home", "flow section tabs") {
+        useLibrary()
+        waitFor("Continue playing")
+        if (nav(NavAction.UP) != NavResult.MOVED) throw NotCovered("Up from the first shelf did not reach the tabs")
+        shoot("focus moved up into the section tabs")
+        tap(PadButton.DPAD_RIGHT)
+        shoot("tabs focused, moved to Library")
+        tap(PadButton.DPAD_DOWN)
+        shoot("back down into Library")
+    }
     if (!exhaustive) return
 
     scenario("home", "flow every shelf type") {
@@ -105,17 +117,6 @@ internal fun AuditDriver.homeFlow(exhaustive: Boolean) {
         shoot("shelf moved down one place")
         tap(PadButton.A)
         shoot("put down")
-    }
-
-    scenario("home", "flow section tabs") {
-        useLibrary()
-        waitFor("Continue playing")
-        if (nav(NavAction.UP) != NavResult.MOVED) throw NotCovered("Up from the first shelf did not reach the tabs")
-        shoot("focus moved up into the section tabs")
-        tap(PadButton.DPAD_RIGHT)
-        shoot("tabs focused, moved to Library")
-        tap(PadButton.DPAD_DOWN)
-        shoot("back down into Library")
     }
 }
 

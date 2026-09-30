@@ -285,7 +285,7 @@ internal fun AuditDriver.lookScreens() {
             home()
             tap(PadButton.X)
             waitFor("Game Info")
-            choose(1)
+            choose(2)
             waitFor("Last played")
             shoot("game page")
         }

@@ -26,6 +26,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.components.Trailing
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
 import io.github.matiyaaa.fuse.ui.designsystem.theme.ThemePresets
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
+import io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec
 import io.github.matiyaaa.fuse.ui.shell.app.ConfirmSpec
 import io.github.matiyaaa.fuse.ui.shell.app.Route
 import io.github.matiyaaa.fuse.ui.shell.app.label
@@ -37,6 +38,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
 import io.github.matiyaaa.fuse.ui.shell.platform.WindowStyle
 import io.github.matiyaaa.fuse.ui.shell.platform.WindowControls
+import io.github.matiyaaa.fuse.ui.shell.store.MusicPrefs
 
 private fun motionName(m: MotionProfile?) = when (m) {
     null -> "Theme default"
@@ -448,6 +450,51 @@ fun cartridgeRows(app: AppState): List<MenuAction> {
     }
 }
 
+/** Menu music and interface sounds, each with its own volume. */
+@Composable
+fun soundRows(app: AppState): List<MenuAction> {
+    val p by app.store.prefs.collectAsState()
+    val music = p.music
+    fun setMusic(change: (MusicPrefs) -> MusicPrefs) = app.store.updatePrefs { it.copy(music = change(it.music)) }
+    return buildList {
+        if (app.platform.music == null) {
+            add(infoRow("music", "Menu music", "Not available", icon = FuseIcons.Music, detail = "This device can't play music in Fuse"))
+        } else {
+            add(toggleRow("music", "Menu music", FuseIcons.Music, music.enabled, if (music.songPath == null) "Choose a song below. Fuse comes without one" else "Plays in Fuse's menus and stops for games") { v -> setMusic { it.copy(enabled = v) } })
+            add(app.percentRow("musicvolume", "Music volume", FuseIcons.Volume, music.volume, "Low sits nicely under the interface") { v -> setMusic { it.copy(volume = v) } })
+            add(
+                MenuAction(
+                    "song", "Song", FuseIcons.Disc,
+                    detail = "An audio file on this device, such as MP3. Fuse keeps its own copy",
+                    trailing = Trailing.Value(music.songName ?: "None"),
+                    onSelect = {
+                        app.choice = ChoiceSpec(
+                            title = "Menu music",
+                            message = music.songName?.let { "Now playing: $it" } ?: "Pick a song from this device. It loops quietly in Fuse's menus.",
+                            options = listOfNotNull(
+                                MenuAction("pick", "Choose a file", FuseIcons.FolderOpen, detail = "MP3 works everywhere", onSelect = {
+                                    app.choice = null
+                                    app.scope.launch {
+                                        val picked = app.platform.storage.pickAudio("Choose menu music") ?: return@launch
+                                        setMusic { it.copy(enabled = true, songPath = picked.path, songName = picked.name) }
+                                        app.toasts.show("Menu music: ${picked.name}")
+                                    }
+                                }),
+                                if (music.songPath != null) MenuAction("none", "No song", FuseIcons.VolumeOff, onSelect = {
+                                    app.choice = null
+                                    setMusic { it.copy(songPath = null, songName = null) }
+                                }) else null,
+                            ),
+                        )
+                    },
+                ),
+            )
+        }
+        add(app.choiceRow("sound", "Interface sounds", FuseIcons.Bell, p.sound, listOf(SoundProfile.OFF to "Off", SoundProfile.SOFT to "Soft", SoundProfile.CLICK to "Crisp", SoundProfile.CHIME to "Chime")) { v -> app.store.updatePrefs { it.copy(sound = v) } })
+        add(app.percentRow("volume", "Sound effects volume", FuseIcons.Volume, p.soundVolume, "Moving, confirming and going back") { v -> app.store.updatePrefs { it.copy(soundVolume = v) } })
+    }
+}
+
 @Composable
 fun inputRows(app: AppState): List<MenuAction> {
     val p by app.store.prefs.collectAsState()
@@ -469,8 +516,6 @@ fun inputRows(app: AppState): List<MenuAction> {
         app.percentRow("threshold", "Stick push to move", FuseIcons.Crosshair, i.navigationThreshold) { v -> setInput { it.copy(navigationThreshold = v.coerceIn(0.2f, 0.95f)) } },
         app.choiceRow("long", "Hold time", FuseIcons.Hand, i.longPressMs, listOf(400, 550, 700, 900).map { it to "$it ms" }, detail = "Holding confirm (or a long touch) arranges Home and opens options") { v -> setInput { it.copy(longPressMs = v) } },
         app.percentRow("vibration", "Vibration", FuseIcons.Vibrate, i.vibration) { v -> setInput { it.copy(vibration = v) } },
-        app.choiceRow("sound", "Interface sounds", FuseIcons.Music, p.sound, listOf(SoundProfile.OFF to "Off", SoundProfile.SOFT to "Soft", SoundProfile.CLICK to "Crisp", SoundProfile.CHIME to "Chime")) { v -> app.store.updatePrefs { it.copy(sound = v) } },
-        app.percentRow("volume", "Sound volume", FuseIcons.Volume, p.soundVolume) { v -> app.store.updatePrefs { it.copy(soundVolume = v) } },
         MenuAction("mapping", "Button mapping and test", FuseIcons.Joystick, detail = if (i.remap.isEmpty()) "Standard layout. See what Fuse receives from each button" else "${i.remap.size} custom mappings", trailing = Trailing.Chevron, onSelect = { app.go(Route.Controls) }),
     )
 }

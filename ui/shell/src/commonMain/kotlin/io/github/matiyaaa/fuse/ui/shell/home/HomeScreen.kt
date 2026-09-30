@@ -2,6 +2,10 @@ package io.github.matiyaaa.fuse.ui.shell.home
 
 import io.github.matiyaaa.fuse.ui.designsystem.components.fadingEdges
 import androidx.compose.animation.core.animateFloatAsState
+import io.github.matiyaaa.fuse.ui.designsystem.components.Trailing
+import androidx.compose.ui.zIndex
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -77,6 +81,27 @@ import kotlinx.coroutines.launch
 fun HomeScreen(app: AppState) {
     val prefs by app.store.prefs.collectAsState()
     if (prefs.home.mode == HomeMode.CHANNELS) ChannelHome(app) else FlowHome(app)
+}
+
+/** Flips Home between Flow and Channels, and says which one it is now. */
+fun AppState.switchHomeStyle() {
+    val next = if (store.prefs.value.home.mode == HomeMode.CHANNELS) HomeMode.FLOW else HomeMode.CHANNELS
+    store.updatePrefs { it.copy(home = it.home.copy(mode = next)) }
+    toasts.show(if (next == HomeMode.CHANNELS) "Home is now Channels" else "Home is now Flow")
+}
+
+/** "Switch to Channels" (or Flow) and "Home settings", for Home's option menus. */
+fun AppState.homeStyleActions(): List<MenuAction> {
+    val channels = store.prefs.value.home.mode == HomeMode.CHANNELS
+    return listOf(
+        MenuAction(
+            "style", if (channels) "Switch to Flow" else "Switch to Channels",
+            if (channels) FuseIcons.Rows else FuseIcons.Grid,
+            detail = if (channels) "Rows of games under a big title" else "A board of tiles you arrange",
+            onSelect = { closeOverlays(); switchHomeStyle() },
+        ),
+        MenuAction("home", "Home settings", FuseIcons.Dashboard, trailing = Trailing.Chevron, onSelect = { closeOverlays(); go(Route.Settings("home")) }),
+    )
 }
 
 /**
@@ -202,7 +227,12 @@ fun FlowHome(app: AppState) {
         }
     }
 
-    BoxWithConstraints(Modifier.fillMaxSize()) {
+    val arranging = reorder != null || movingSystem
+    BoxWithConstraints(
+        Modifier.fillMaxSize()
+            // A tap outside the tiles puts a carried shelf or system down.
+            .pointerInput(arranging) { if (arranging) detectTapGestures { reorder = null; movingSystem = false } },
+    ) {
         val maxH = maxHeight
         val stageHeight = (maxH * 0.3f).coerceIn(150.dp, 280.dp)
         val rows = rememberLazyListState()
@@ -237,8 +267,16 @@ fun FlowHome(app: AppState) {
                         feed = feed,
                         cartridge = cartridge,
                         clock24h = prefs.clock24h,
-                        modifier = Modifier.graphicsLayer { alpha = rowAlpha },
+                        modifier = Modifier
+                            .animateItem(fadeInSpec = null, fadeOutSpec = null)
+                            .graphicsLayer { alpha = rowAlpha },
                         onTap = { col ->
+                            if (arranging) {
+                                // A tap while arranging puts the carried shelf or system down.
+                                reorder = null
+                                movingSystem = false
+                                return@ShelfRow
+                            }
                             val wasSelected = sel.row == index && sel.column(s.key) == col
                             sel.row = index
                             sel.setColumn(s.key, col)
@@ -315,6 +353,20 @@ private fun ShelfRow(
         ) {
             itemsIndexed(shelf.items, key = { _, i -> i.key }) { col, item ->
                 val selected = col == selectedColumn
+                val carried = movingItem && selected
+                val lifted by animateFloatAsState(if (carried) 1f else 0f, Fuse.motion.focusSpring(), label = "carry")
+                // Tiles slide to their new places; a carried one floats a little above the row.
+                Box(
+                    Modifier
+                        .animateItem(fadeInSpec = null, fadeOutSpec = null)
+                        .zIndex(if (carried) 1f else 0f)
+                        .graphicsLayer {
+                            val scale = 1f + 0.05f * lifted
+                            scaleX = scale
+                            scaleY = scale
+                            translationY = -6.dp.toPx() * lifted
+                        },
+                ) {
                 when (item) {
                     is ShelfItem.Game -> if (shelf.style == ShelfStyle.WIDE) {
                         GameWideTile(item.card, selected, height = height, caption = item.caption, onClick = { onTap(col) }, onLongClick = { onLongPress(col) })
@@ -325,6 +377,7 @@ private fun ShelfRow(
                     is ShelfItem.App -> AppTile(item.card, selected, size = height, onClick = { onTap(col) }, onLongClick = { onLongPress(col) })
                     is ShelfItem.Collection -> CollectionTile(item.collection, selected, height = height, onClick = { onTap(col) }, onLongClick = { onLongPress(col) })
                     is ShelfItem.Widget -> WidgetCard(item.kind, item.span, feed, cartridge, selected, clock24h, onClick = { onTap(col) }, height = height)
+                }
                 }
             }
         }
@@ -380,6 +433,5 @@ private fun shelfMenu(app: AppState, shelf: Shelf, onArrange: () -> Unit): Conte
             }
             app.closeOverlays()
         }),
-        MenuAction("home", "Home settings", FuseIcons.Dashboard, onSelect = { app.closeOverlays(); app.go(Route.Settings("home")) }),
-    ),
+    ) + app.homeStyleActions(),
 )

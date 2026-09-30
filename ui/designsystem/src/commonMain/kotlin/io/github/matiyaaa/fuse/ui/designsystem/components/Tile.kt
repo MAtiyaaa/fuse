@@ -21,6 +21,7 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
@@ -99,9 +100,11 @@ fun Tile(
                 scaleX = scale
                 scaleY = scale
                 if (style == FocusStyle.GLOW) {
-                    shadowElevation = (6f + 22f * lift) * density
-                    spotShadowColor = glow
-                    ambientShadowColor = glow.copy(alpha = 0.5f)
+                    // A soft halo in the tile's own colour, darkened so it lifts the tile without
+                    // washing the row below in colour.
+                    shadowElevation = (4f + 12f * lift) * density
+                    spotShadowColor = lerp(glow, Color.Black, 0.45f)
+                    ambientShadowColor = lerp(glow, Color.Black, 0.7f).copy(alpha = 0.35f)
                 } else {
                     shadowElevation = (4f + 10f * lift) * density
                 }

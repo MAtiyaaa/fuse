@@ -56,6 +56,7 @@ private val docs = listOf(
     LicenceDoc("OFL-Sora.txt", "Sora typeface", "SIL Open Font License 1.1"),
     LicenceDoc("OFL-Manrope.txt", "Manrope typeface", "SIL Open Font License 1.1"),
     LicenceDoc("LICENSE-lucide.txt", "Lucide icons", "ISC License (and MIT for icons derived from Feather)"),
+    LicenceDoc("LGPL-2.1.txt", "JLayer", "GNU Lesser General Public License 2.1 or later: the MP3 decoder for menu music in the Linux app"),
     LicenceDoc(
         "art-book-next", "System art", "Art Book Next, CC BY-NC-SA 2.0. Downloaded when used, not part of Fuse",
         inline = SystemArtPack.ATTRIBUTION + "\n\n" +

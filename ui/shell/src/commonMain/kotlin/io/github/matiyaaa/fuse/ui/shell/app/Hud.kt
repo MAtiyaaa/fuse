@@ -30,6 +30,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
@@ -108,28 +111,33 @@ fun Hud(
 ) {
     val time = rememberClockText(clock24h)
     BoxWithConstraints(modifier.fillMaxWidth().height(Size.hudHeight).padding(horizontal = gutter)) {
-    // Room for every label: about 120dp per tab plus the mark, buttons and status.
-    val labels = maxWidth > 120.dp * destinations.size + 380.dp
+    // Room for every label: about 120dp per tab plus the mark, the LB/RB glyphs, buttons and status.
+    val labels = maxWidth > 120.dp * destinations.size + 430.dp
+    val glyphs by animateFloatAsState(if (tabsFocused) 1f else 0f, Fuse.motion.tween(Durations.FAST), label = "tab glyphs")
     Row(
         Modifier.fillMaxSize(),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         FuseMark(Modifier.size(22.dp))
         Spacer(Modifier.width(Space.l))
-        if (tabsFocused) {
-            ButtonGlyph(HintButton.PREV, size = 18.dp, color = Fuse.colors.textFaint)
+        // The tabs take what is left after the buttons and status, which never shrink. The LB/RB
+        // glyphs keep their place while hidden, so nothing moves when the stick reaches the tabs.
+        Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.alpha(glyphs)) { ButtonGlyph(HintButton.PREV, size = 18.dp, color = Fuse.colors.textFaint) }
             Spacer(Modifier.width(Space.s))
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(Space.xs), verticalAlignment = Alignment.CenterVertically) {
-            for (d in destinations) {
-                Tab(d, selected = d == active, focused = tabsFocused && focusedButton == null && d == active, showLabel = labels || d == active, onClick = { onSelect(d) })
+            Row(
+                Modifier.weight(1f, fill = false).clipHorizontally(),
+                horizontalArrangement = Arrangement.spacedBy(Space.xs),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                for (d in destinations) {
+                    Tab(d, selected = d == active, focused = tabsFocused && focusedButton == null && d == active, showLabel = labels || d == active, onClick = { onSelect(d) })
+                }
             }
-        }
-        if (tabsFocused) {
             Spacer(Modifier.width(Space.s))
-            ButtonGlyph(HintButton.NEXT, size = 18.dp, color = Fuse.colors.textFaint)
+            Box(Modifier.alpha(glyphs)) { ButtonGlyph(HintButton.NEXT, size = 18.dp, color = Fuse.colors.textFaint) }
         }
-        Spacer(Modifier.weight(1f))
+        Spacer(Modifier.width(Space.m))
         HudIconButton(FuseIcons.Search, "Search", focused = tabsFocused && focusedButton == HudButton.SEARCH) { onButton(HudButton.SEARCH) }
         Spacer(Modifier.width(Space.xs))
         HudIconButton(FuseIcons.Settings, "Settings", focused = tabsFocused && focusedButton == HudButton.SETTINGS) { onButton(HudButton.SETTINGS) }
@@ -274,4 +282,11 @@ fun formatDate(): String {
     val day = t.dayOfWeek.name.lowercase().replaceFirstChar { it.uppercase() }
     val month = t.month.name.lowercase().replaceFirstChar { it.uppercase() }
     return "$day, $month ${t.day}"
+}
+
+/** Clips sideways only, so focus outlines and the active tab's mark above and below still show. */
+private fun Modifier.clipHorizontally(): Modifier = drawWithContent {
+    clipRect(left = 0f, top = -size.height, right = size.width, bottom = size.height * 2) {
+        this@drawWithContent.drawContent()
+    }
 }

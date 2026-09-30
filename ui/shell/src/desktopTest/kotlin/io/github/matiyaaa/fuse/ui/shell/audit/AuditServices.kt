@@ -14,6 +14,7 @@ import io.github.matiyaaa.fuse.model.Host
 import io.github.matiyaaa.fuse.model.InstalledEmulator
 import io.github.matiyaaa.fuse.model.PerformanceMetric
 import io.github.matiyaaa.fuse.model.PlatformId
+import io.github.matiyaaa.fuse.ui.shell.platform.MenuMusicPlayer
 import io.github.matiyaaa.fuse.ui.shell.platform.HomeRole
 import io.github.matiyaaa.fuse.ui.shell.platform.PlatformFeatures
 import io.github.matiyaaa.fuse.ui.shell.platform.PlatformUi
@@ -209,6 +210,13 @@ internal class AuditPlatform(
         densityDpi = (size.density * 160).toInt(),
     )
     override val performance: StateFlow<List<PerformanceMetric>> = MutableStateFlow(metrics)
+
+    /** A silent player, so the Sound settings show what a device with audio shows. */
+    override val music: MenuMusicPlayer = object : MenuMusicPlayer {
+        override fun setSong(path: String?) = Unit
+        override fun setVolume(volume: Float) = Unit
+        override fun setPlaying(playing: Boolean) = Unit
+    }
 
     companion object {
         val SampleMetrics = listOf(

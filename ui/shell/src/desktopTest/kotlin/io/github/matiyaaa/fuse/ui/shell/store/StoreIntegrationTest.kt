@@ -129,9 +129,16 @@ class StoreIntegrationTest {
         val first = FakeServices(FuseData(DesktopDatabase.open(file)), cache)
         val store = createFuseStore(first, scope)
         assertTrue(!store.prefs.value.onboardingDone)
-        store.updatePrefs { it.copy(themeId = "crt", onboardingDone = true, clock24h = true, heroDim = 0.5f) }
+        assertEquals(MusicPrefs(), store.prefs.value.music)
+        store.updatePrefs {
+            it.copy(
+                themeId = "crt", onboardingDone = true, clock24h = true, heroDim = 0.5f,
+                music = MusicPrefs(enabled = false, volume = 0.4f, songPath = "/data/music/1.mp3", songName = "Fuse Menu Song"),
+                soundVolume = 0.3f,
+            )
+        }
         // Writes are asynchronous; wait for the database to have them.
-        withTimeout(10_000) { first.data.settings.settings.first { it.appearance.themeId == "crt" && it.onboarding.completed } }
+        withTimeout(10_000) { first.data.settings.settings.first { it.appearance.themeId == "crt" && it.onboarding.completed && it.music.songName != null } }
 
         val again = createFuseStore(FakeServices(FuseData(DesktopDatabase.open(file)), cache), scope)
         val prefs = again.prefs.value
@@ -139,6 +146,9 @@ class StoreIntegrationTest {
         assertTrue(prefs.onboardingDone)
         assertTrue(prefs.clock24h)
         assertEquals(0.5f, prefs.heroDim)
+        // Menu music and the sound effects volume are kept apart.
+        assertEquals(MusicPrefs(enabled = false, volume = 0.4f, songPath = "/data/music/1.mp3", songName = "Fuse Menu Song"), prefs.music)
+        assertEquals(0.3f, prefs.soundVolume)
     }
 
     @Test

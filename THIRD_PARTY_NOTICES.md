@@ -40,6 +40,7 @@ declared in the version catalog for the platform apps and not yet used by any mo
 | AndroidX Activity Compose | `androidx.activity:activity-compose` | 1.13.0 | Apache-2.0 | `app:android` | [activity](https://developer.android.com/jetpack/androidx/releases/activity) |
 | AndroidX Core KTX | `androidx.core:core-ktx` | 1.19.1 | Apache-2.0 | `app:android` | [core](https://developer.android.com/jetpack/androidx/releases/core) |
 | Media3 ExoPlayer and UI | `androidx.media3:media3-exoplayer`, `:media3-ui` | 1.11.1 | Apache-2.0 | Catalog only (planned for video previews) | [media](https://github.com/androidx/media) |
+| JLayer (MP3 decoder for menu music) | `javazoom:jlayer` | 1.0.1 | LGPL-2.1-or-later (the sources say "version 2 of the License, or any later version") | `app:desktop` | [JLayer](http://www.javazoom.net/javalayer/javalayer.html) |
 
 ### Build tools
 
@@ -106,6 +107,7 @@ cached on their device. None of it is part of Fuse's distribution.
 | MIT | Feather-derived Lucide icons, ES-DE (facts), rcheevos (reimplemented rules), Cartridge (approach) | Compatible. Permissive; the notices are kept in `files/licenses/LICENSE-lucide.txt` and credited above |
 | ISC | Lucide icons | Compatible. Permissive; the copyright and permission notice is kept in `files/licenses/LICENSE-lucide.txt` |
 | BSD-3-Clause | Skia inside Skiko (desktop) | Compatible. Permissive |
+| LGPL-2.1-or-later | JLayer (desktop only) | Compatible. The LGPL lets a covered library be combined with a program under any licence, and section 3 of LGPL-2.1 also allows applying the GPL to it. Fuse uses the unmodified jar, which the AppImage keeps as a separate file that can be replaced; its licence text ships with Fuse |
 | Public domain | SQLite | Compatible. No conditions |
 | SIL OFL 1.1 | Sora and Manrope fonts | Compatible for distribution. The fonts stay under the OFL and are not relicensed; the OFL explicitly allows bundling the fonts with software under any licence as long as the fonts are not sold on their own and the licence travels with them. Fuse does not modify the fonts, and neither declares a Reserved Font Name |
 | AGPL-3.0 | RomM | No code is used, only facts and names, which carry no licence obligations. (AGPL-3.0 and GPL-3.0 are also explicitly combinable under section 13 of each) |
@@ -116,8 +118,8 @@ cached on their device. None of it is part of Fuse's distribution.
 
 The licence texts live in `ui/designsystem/src/commonMain/composeResources/files/licenses/`:
 `GPL-3.0.txt` (Fuse's own licence, a copy of `LICENSE`), `Apache-2.0.txt` (the libraries under the
-Apache License), `OFL-Sora.txt` and `OFL-Manrope.txt` (SIL OFL 1.1 with each font's copyright line)
-and `LICENSE-lucide.txt` (Lucide's ISC licence and Feather's MIT licence). Because they are Compose
+Apache License), `OFL-Sora.txt` and `OFL-Manrope.txt` (SIL OFL 1.1 with each font's copyright line),
+`LICENSE-lucide.txt` (Lucide's ISC licence and Feather's MIT licence) and `LGPL-2.1.txt` (JLayer). Because they are Compose
 resources, they are packaged inside both the APK and the AppImage, and Settings > About > Open-source
 licences shows each of them. Libraries that carry their own NOTICE files keep them where their jars
 and AARs put them; collecting those into the licences screen is on the roadmap.

@@ -29,6 +29,8 @@ interface PlatformUi {
     val storage: StorageAccess
     val quick: QuickControls
     val video: VideoPreview?
+    /** Plays the menu music the user chose; null where Fuse can't play audio files. */
+    val music: MenuMusicPlayer? get() = null
     val appVersion: String
 
     /** Window and login controls on desktop Linux; null where the system manages Fuse's window. */
@@ -105,6 +107,9 @@ interface StorageAccess {
 
     /** Opens the platform image picker; returns a readable path (copied into Fuse's storage if needed), or null. */
     suspend fun pickImage(title: String): String?
+
+    /** Opens a picker for an audio file and copies it into Fuse's storage; returns that copy, or null. */
+    suspend fun pickAudio(title: String): PickedFile? = null
     fun refresh()
 }
 
@@ -148,4 +153,22 @@ interface WindowControls {
 
     /** Writes or removes the login entry. Only on the user's request. */
     fun setAutostart(enabled: Boolean): Result<Unit>
+}
+
+/** A file the user picked, as Fuse stored it, with the name it had. */
+data class PickedFile(val path: String, val name: String)
+
+/**
+ * Loops one song under Fuse's menus. Fuse says what it wants ([setSong], [setVolume], [setPlaying]);
+ * the platform also keeps it quiet while Fuse is in the background, and fades in and out.
+ */
+interface MenuMusicPlayer {
+    /** The file to loop, or null for silence. */
+    fun setSong(path: String?)
+
+    /** 0..1 */
+    fun setVolume(volume: Float)
+
+    /** False fades the music out (a game is starting or running); true fades it back in. */
+    fun setPlaying(playing: Boolean)
 }

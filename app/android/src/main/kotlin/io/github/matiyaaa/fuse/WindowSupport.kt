@@ -3,6 +3,7 @@ package io.github.matiyaaa.fuse
 import android.app.Activity
 import android.os.Build
 import android.view.Display
+import android.view.Window
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -15,9 +16,12 @@ import kotlin.math.abs
 internal const val INK_ARGB: Long = 0xFF0B0D12
 
 /** Hides status and navigation bars; a swipe shows them briefly (console-style immersive mode). */
-internal fun Activity.enterImmersive() {
-    WindowCompat.setDecorFitsSystemWindows(window, false)
-    WindowInsetsControllerCompat(window, window.decorView).apply {
+internal fun Activity.enterImmersive() = window.hideSystemBars()
+
+/** The same for any window (the second screen's Presentation). */
+internal fun Window.hideSystemBars() {
+    WindowCompat.setDecorFitsSystemWindows(this, false)
+    WindowInsetsControllerCompat(this, decorView).apply {
         systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         hide(WindowInsetsCompat.Type.systemBars())
     }

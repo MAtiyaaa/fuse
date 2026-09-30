@@ -4,6 +4,8 @@ import io.github.matiyaaa.fuse.model.CartridgeDownload
 import io.github.matiyaaa.fuse.model.CartridgeStatus
 import io.github.matiyaaa.fuse.model.Destination
 import io.github.matiyaaa.fuse.model.LibraryLayout
+import io.github.matiyaaa.fuse.model.MediaKind
+import io.github.matiyaaa.fuse.model.MediaOwner
 import io.github.matiyaaa.fuse.model.NavAction
 import io.github.matiyaaa.fuse.model.PadButton
 import io.github.matiyaaa.fuse.model.PlatformId
@@ -68,7 +70,7 @@ internal fun AuditDriver.openGame(title: String) {
     tap(PadButton.START)
     tap(PadButton.X)
     waitFor("Game Info")
-    choose(1)
+    choose(2)
     waitFor("Last played")
     settle()
 }
@@ -207,6 +209,38 @@ internal fun AuditDriver.systemsScreens(exhaustive: Boolean) {
         }
         grid.goTo(systems.lastIndex)
         shoot("last system focused")
+    }
+    scenario("systems", "grid with art") {
+        useLibrary()
+        // Pack-style art for a few systems (the pack itself is downloaded, so the audit draws its own).
+        val dir = File(cache, "system-art").apply { mkdirs() }
+        val systems = libraryStore.library.platforms.value.filter { it.gameCount > 0 }
+        val withArt = systems.take(4)
+        runBlocking {
+            for (card in withArt) {
+                val owner = MediaOwner.OfPlatform(card.platform.id)
+                val panel = File(dir, "${card.platform.id.value}-panel.png").also { AuditSystemArt.panel(it, card.platform.accent) }
+                val logo = File(dir, "${card.platform.id.value}-logo.png").also { AuditSystemArt.logo(it, card.platform.shortName) }
+                libraryStore.media.setFromFile(owner, MediaKind.BOXART, panel.absolutePath)
+                libraryStore.media.setFromFile(owner, MediaKind.LOGO, logo.absolutePath)
+            }
+        }
+        try {
+            tab(Destination.SYSTEMS)
+            waitFor("System options")
+            tap(PadButton.DPAD_LEFT)
+            settle(1_200)
+            shoot("art panel behind the grid, ${systems.first().platform.shortName}")
+            tap(PadButton.DPAD_RIGHT, withArt.size)
+            settle(1_200)
+            shoot("a system without art after ones with art")
+            hold(PadButton.A)
+            settle(600)
+            shoot("carrying a system")
+            tap(PadButton.B)
+        } finally {
+            runBlocking { withArt.forEach { libraryStore.media.reset(MediaOwner.OfPlatform(it.platform.id), null) } }
+        }
     }
     if (!exhaustive) return
 
@@ -389,10 +423,24 @@ internal fun AuditDriver.gameScreens(exhaustive: Boolean) {
 
     scenario("media", "game") {
         useLibrary()
-        openGame("Hollow Meridian")
-        tap(PadButton.DPAD_RIGHT, 4)
-        tap(PadButton.A)
+        // From the game's options: Play, then Manage Media.
+        search("Hollow Meridian")
+        tap(PadButton.START)
+        tap(PadButton.X)
+        waitFor("Game Info")
+        choose(1)
         waitFor("Manage media")
+        shoot("Search as row")
+        tap(PadButton.A)
+        settle(600)
+        shoot("Search as keyboard")
+        tap(PadButton.B)
+        tap(PadButton.DPAD_DOWN)
+        shoot("Identify game row")
+        tap(PadButton.A)
+        settle(1_500)
+        shoot("Identify game with no source set up")
+        tap(PadButton.DPAD_DOWN)
         shoot("Icon slot")
         tap(PadButton.DPAD_DOWN)
         tap(PadButton.A)

@@ -36,7 +36,9 @@ import io.github.matiyaaa.fuse.model.ScrapeQuery
 import io.github.matiyaaa.fuse.model.ScopedSettings
 import io.github.matiyaaa.fuse.ui.shell.store.ArtworkResult
 import io.github.matiyaaa.fuse.ui.shell.store.FillProgress
+import io.github.matiyaaa.fuse.ui.shell.store.IdentifyResult
 import io.github.matiyaaa.fuse.ui.shell.store.MediaOps
+import io.github.matiyaaa.fuse.ui.shell.store.SearchTitle
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
@@ -127,7 +129,7 @@ internal class DefaultMediaOps(
                     test()
                 } catch (e: CancellationException) {
                     throw e
-                } catch (e: Exception) {
+                } catch (e: Throwable) {
                     KeyCheck.Failed("The check could not run (${e::class.simpleName})")
                 }
                 checks.value = checks.value + (provider to result)
@@ -161,18 +163,32 @@ internal class DefaultMediaOps(
 
     private suspend fun query(game: Game): ScrapeQuery {
         val settings = ctx.settings.value.scraping
+        val searchAs = searchAs(game)
         return ScrapeQuery(
-            // The user's own name first, then a name a provider gave, then the cleaned file name.
-            title = game.titles.custom ?: game.titles.metadata ?: game.titles.cleaned ?: game.titles.original,
+            title = searchAs ?: defaultSearchTitle(game),
             platform = game.platformId,
             platformName = ctx.platformName(game.platformId),
-            fileName = FsPath.name(game.location.path),
+            // A name the user typed replaces the file name too, so a badly named file can't outrank it.
+            fileName = if (searchAs == null) FsPath.name(game.location.path) else null,
             regions = game.tags.regions,
             year = game.metadata.releaseYear,
             sizeBytes = game.location.sizeBytes.takeIf { it > 0 },
             preferredLanguage = settings.preferredLanguage,
             preferredRegion = settings.preferredRegion,
         )
+    }
+
+    /** The name the user set for searches, if any. */
+    private suspend fun searchAs(game: Game): String? =
+        ctx.data.scopedSettings.resolve(ScopedSettings.SearchTitle, game.platformId, game.id).value.trim().ifEmpty { null }
+
+    /** Their own name, then a name a provider gave, then the cleaned file name. */
+    private fun defaultSearchTitle(game: Game): String =
+        game.titles.custom ?: game.titles.metadata ?: game.titles.cleaned ?: game.titles.original
+
+    override suspend fun searchTitle(game: GameId): SearchTitle? {
+        val g = ctx.data.games.get(game) ?: return null
+        return SearchTitle(current = searchAs(g) ?: defaultSearchTitle(g), custom = searchAs(g) != null, default = defaultSearchTitle(g))
     }
 
     private suspend fun request(game: Game, kinds: Set<MediaKind>, metadata: Boolean, collectAll: Boolean): Pair<ScrapeRequest, ScrapeCoordinator> {
@@ -264,7 +280,7 @@ internal class DefaultMediaOps(
                         fillOne(g, mode, kinds)
                     } catch (e: CancellationException) {
                         throw e
-                    } catch (e: Exception) {
+                    } catch (e: Throwable) {
                         0
                     }
                 }
@@ -315,22 +331,30 @@ internal class DefaultMediaOps(
         return added
     }
 
-    override suspend fun candidates(game: GameId): List<ScrapeCandidate> {
-        val g = ctx.data.games.get(game) ?: return emptyList()
+    override suspend fun identify(game: GameId): IdentifyResult {
+        val g = ctx.data.games.get(game) ?: return IdentifyResult.Unavailable("This game is no longer in your library.")
         val (request, coordinator) = request(g, emptySet(), metadata = true, collectAll = false)
-        return when (val outcome = coordinator.scrape(request.copy(strictness = io.github.matiyaaa.fuse.model.MatchStrictness.EXACT))) {
-            is ScrapeOutcome.Accepted -> listOf(outcome.candidate)
-            is ScrapeOutcome.NeedsReview -> outcome.candidates
-            else -> emptyList()
+        // Only these search by name; the keyless sources look art up by file name.
+        if (request.configured.none { it in namedSearch }) {
+            return IdentifyResult.Unavailable("Identify game searches SteamGridDB, IGDB and TheGamesDB. Add a key for one of them in Settings, Media and Scraping.")
+        }
+        return when (val outcome = coordinator.candidates(request.copy(priority = request.priority.filter { it in namedSearch }, maxCandidates = 12))) {
+            is ScrapeOutcome.NeedsReview -> IdentifyResult.Matches(request.query.title, outcome.candidates)
+            is ScrapeOutcome.NotFound -> IdentifyResult.Unavailable(
+                if (outcome.searched.isEmpty()) "No source is set up. Add a SteamGridDB, IGDB or TheGamesDB key in Settings, Media and Scraping."
+                else "Nothing found for \"${request.query.title}\". Try another search name.",
+            )
+            is ScrapeOutcome.ProviderErrors -> IdentifyResult.Unavailable(outcome.errors.firstOrNull()?.let { "${it.provider.displayName}: ${it.failure.message}" } ?: "The sources couldn't be reached.")
+            is ScrapeOutcome.Accepted -> IdentifyResult.Matches(request.query.title, listOf(outcome.candidate))
         }
     }
 
-    override suspend fun acceptCandidate(game: GameId, candidate: ScrapeCandidate) {
-        val g = ctx.data.games.get(game) ?: return
+    override suspend fun acceptCandidate(game: GameId, candidate: ScrapeCandidate): Boolean {
+        val g = ctx.data.games.get(game) ?: return false
         val kinds = setOf(MediaKind.BOXART, MediaKind.GRID, MediaKind.HERO, MediaKind.LOGO, MediaKind.ICON, MediaKind.SCREENSHOT)
         val plan = FillPlanner.plan(media.get(MediaOwner.OfGame(game)), MediaFillMode.REPLACE_ALL, kinds)
         val (request, coordinator) = request(g, plan.fetch, metadata = true, collectAll = false)
-        val outcome = coordinator.accept(request, candidate) as? ScrapeOutcome.Accepted ?: return
+        val outcome = coordinator.accept(request, candidate) as? ScrapeOutcome.Accepted ?: return false
         store(g, outcome, MediaFillMode.REPLACE_ALL, plan.fetch)
         ctx.data.games.applyMetadata(
             game,
@@ -338,8 +362,11 @@ internal class DefaultMediaOps(
             titleFromMetadata = candidate.title,
             onlyFillEmpty = false,
         )
+        return true
     }
 }
+
+private val namedSearch = setOf(ScrapeProviderId.STEAMGRIDDB, ScrapeProviderId.IGDB, ScrapeProviderId.THEGAMESDB)
 
 private fun MediaKind.label(): String = when (this) {
     MediaKind.ICON -> "icons"

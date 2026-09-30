@@ -40,6 +40,7 @@ data class UiPrefs(
     val performanceOverlay: Boolean = false,
     val sound: SoundProfile = SoundProfile.SOFT,
     val soundVolume: Float = 0.6f,
+    val music: MusicPrefs = MusicPrefs(),
     val clock24h: Boolean = false,
     val showWifi: Boolean = true,
     val showBluetooth: Boolean = false,
@@ -59,4 +60,12 @@ data class UiPrefs(
     val autoRefreshFromCartridge: Boolean = true,
     val checkForUpdates: Boolean = true,
     val heroDim: Float = 0.3f,
+)
+
+/** Menu music: on or off, how loud, and the song the user chose (none is bundled). */
+data class MusicPrefs(
+    val enabled: Boolean = true,
+    val volume: Float = 0.2f,
+    val songPath: String? = null,
+    val songName: String? = null,
 )

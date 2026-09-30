@@ -6,12 +6,14 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.provider.DocumentsContract
+import android.provider.OpenableColumns
 import android.provider.Settings
 import android.webkit.MimeTypeMap
 import androidx.core.net.toUri
 import io.github.matiyaaa.fuse.ActivityHolder
 import io.github.matiyaaa.fuse.storage.StoragePaths
 import io.github.matiyaaa.fuse.storage.StorageVolumes
+import io.github.matiyaaa.fuse.ui.shell.platform.PickedFile
 import io.github.matiyaaa.fuse.ui.shell.platform.StorageAccess
 import io.github.matiyaaa.fuse.ui.shell.platform.StorageState
 import kotlinx.coroutines.CoroutineScope
@@ -81,6 +83,44 @@ class AndroidStorageAccess(
         return withContext(Dispatchers.IO) { copyImage(uri) }
     }
 
+    override suspend fun pickAudio(title: String): PickedFile? {
+        val requests = activities.requests ?: return null
+        val uri = withContext(Dispatchers.Main) { requests.pickAudio() } ?: return null
+        return withContext(Dispatchers.IO) { copyAudio(uri) }
+    }
+
+    /** Copies a picked song to files/music (one song at a time) and returns it with its display name. */
+    private fun copyAudio(uri: Uri): PickedFile? {
+        val resolver = appContext.contentResolver
+        val name = displayName(uri) ?: "Song"
+        val ext = (resolver.getType(uri)?.let { MimeTypeMap.getSingleton().getExtensionFromMimeType(it) } ?: name.substringAfterLast('.', ""))
+            .lowercase().takeIf { it.matches(Regex("[a-z0-9]{1,5}")) } ?: "audio"
+        val dir = File(appContext.filesDir, "music")
+        if (!dir.isDirectory && !dir.mkdirs()) return null
+        val out = File(dir, "${UUID.randomUUID()}.$ext")
+        return try {
+            val input = resolver.openInputStream(uri) ?: return null
+            input.use { src -> out.outputStream().use { dst -> copyLimited(src, dst) } }
+            // The previous song goes: only the chosen one is kept.
+            dir.listFiles()?.filter { it != out }?.forEach { it.delete() }
+            PickedFile(out.absolutePath, name.substringBeforeLast('.').ifBlank { name })
+        } catch (e: IOException) {
+            out.delete()
+            null
+        } catch (e: SecurityException) {
+            out.delete()
+            null
+        }
+    }
+
+    private fun displayName(uri: Uri): String? = try {
+        appContext.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c ->
+            if (c.moveToFirst()) c.getString(0) else null
+        }
+    } catch (e: RuntimeException) {
+        null
+    }
+
     private fun copyImage(uri: Uri): String? {
         val resolver = appContext.contentResolver
         val type = resolver.getType(uri)
@@ -110,12 +150,12 @@ class AndroidStorageAccess(
             val n = input.read(buffer)
             if (n < 0) break
             total += n
-            if (total > MAX_IMAGE_BYTES) throw IOException("Image too large")
+            if (total > MAX_COPY_BYTES) throw IOException("File too large")
             output.write(buffer, 0, n)
         }
     }
 
     private companion object {
-        const val MAX_IMAGE_BYTES = 64L * 1024 * 1024
+        const val MAX_COPY_BYTES = 64L * 1024 * 1024
     }
 }

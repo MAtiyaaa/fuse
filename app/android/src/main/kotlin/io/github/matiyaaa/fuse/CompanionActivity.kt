@@ -13,15 +13,7 @@ import androidx.activity.OnBackPressedCallback
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.lifecycleScope
-import io.github.matiyaaa.fuse.ui.shell.app.CompanionApp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -29,10 +21,11 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 /**
- * Fuse's second-screen window (dual-screen handhelds, external displays). Touch only: its window is
- * not focusable, so controller input stays with the main screen, and any key that still arrives is
- * forwarded there. [CompanionScreens] starts and stops it; it also closes itself when its display
- * has been gone or off for [CompanionScreens.GRACE_MS], rather than covering the main screen.
+ * The companion as an activity of its own on the second screen, for while a game runs (with Fuse in
+ * front, [CompanionPresentation] shows it instead). Touch only: its window is not focusable, so
+ * controller input stays with the main screen, and any key that still arrives is forwarded there.
+ * [CompanionScreens] starts and stops it; it also closes itself when its display has been gone or
+ * off for [CompanionScreens.GRACE_MS], rather than covering the main screen.
  */
 open class CompanionActivity : ComponentActivity() {
     private val app: FuseApplication get() = application as FuseApplication
@@ -73,17 +66,7 @@ open class CompanionActivity : ComponentActivity() {
             }
         }
 
-        setContent {
-            val startup by app.startup.collectAsState()
-            when (val s = startup) {
-                is Startup.Ready -> {
-                    val prefs by s.store.prefs.collectAsState()
-                    // With the setting off (only the Home instance runs then) this is the clock.
-                    CompanionApp(s.store, app.platformUi, prefs.display.mode)
-                }
-                else -> Box(Modifier.fillMaxSize().background(Color(INK_ARGB)))
-            }
-        }
+        setContent { CompanionContent(app) }
     }
 
     override fun onNewIntent(intent: Intent) {

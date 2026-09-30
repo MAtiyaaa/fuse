@@ -4,11 +4,11 @@ import android.app.Activity
 import android.app.ActivityOptions
 import android.content.ActivityNotFoundException
 import android.content.Intent
+import android.hardware.display.DisplayManager
 import android.os.Build
-import android.os.Handler
-import android.os.Looper
+import android.os.SystemClock
+import androidx.activity.ComponentActivity
 import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleOwner
 import io.github.matiyaaa.fuse.model.DisplayInfo
 import io.github.matiyaaa.fuse.model.DualScreenMode
 import io.github.matiyaaa.fuse.model.Support
@@ -17,7 +17,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
-import java.lang.ref.WeakReference
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 
@@ -38,76 +37,76 @@ object SecondScreenLog {
 }
 
 /**
- * Starts and stops [CompanionActivity] on the second screen to match the dual-screen setting, and
- * keeps it in front of whatever else is there (the vendor's second-screen launcher, a previous app)
- * each time Fuse comes back.
+ * Fuse's companion on the second screen, following the dual-screen setting.
  *
- * - A display Android refused, or that put the companion on the main screen, is not tried again
- *   this session, so there is no open and close loop.
- * - Losing the display is only acted on after [GRACE_MS]: second panels report DOZE, UNKNOWN or
- *   briefly disappear while they change state.
- * - While a game that uses both screens runs, the companion stays closed until Fuse resumes.
+ * - While Fuse is in front it is a [CompanionPresentation] owned by the main activity, the way
+ *   Cartridge does it: AYN handhelds show a Presentation on the second panel where a separate
+ *   activity never appeared. It closes when Fuse goes to the background, so games and other apps
+ *   get the second screen, and comes back with Fuse.
+ * - With "Game on the main screen, companion on the second", a game that uses one screen also gets
+ *   a [CompanionActivity] on the second screen, started just before the game (Android only lets a
+ *   visible app start activities). A display that refused it, or that put it on the main screen, is
+ *   not tried again this session.
+ * - While a game that uses both screens runs, nothing is shown there until Fuse resumes.
  * - A [CompanionHomeActivity] (Fuse as the second screen's Home) is never closed from here.
  */
 class CompanionScreens(private val app: FuseApplication) : DualScreenHandoff {
     private val refusedDisplays = mutableSetOf<Int>()
-    private val handler = Handler(Looper.getMainLooper())
-    private var fromRef: WeakReference<Activity>? = null
+    private val refusedPresentation = mutableSetOf<Int>()
+    private val closedBySystem = mutableMapOf<Int, MutableList<Long>>()
+    private var presentation: CompanionPresentation? = null
     private var mode: DualScreenMode = DualScreenMode.OFF
-    private var graceCheck: Runnable? = null
 
     /** True from the launch of a dual-screen game until Fuse's main screen resumes. */
     @Volatile private var suppressed = false
 
     private val monitor get() = app.platformUi.displayMonitor
 
-    /**
-     * Follows [mode] and the current displays. [bringToFront] also starts the companion again when it
-     * runs but is not in front on its display.
-     */
-    fun update(from: Activity, mode: DualScreenMode, bringToFront: Boolean = false) {
-        fromRef = WeakReference(from)
+    /** Follows [mode] and the current displays. Called on the main thread while [from] is started. */
+    fun update(from: Activity, mode: DualScreenMode) {
         this.mode = mode
-        val running = app.activities.companion
         if (!wants(mode)) {
-            cancelGrace()
-            if (running != null) finish(running, if (suppressed) "a game uses both screens" else "the second screen setting is off")
+            val reason = if (suppressed) "a game uses both screens" else "the second screen setting is off"
+            hidePresentation(reason)
+            app.activities.companion?.let { finish(it, reason) }
             return
         }
-        val runningOn = running?.displayIdCompat()
-        val target = monitor.secondary(preferredId = runningOn)
-        if (running != null && target?.id != runningOn) {
-            // Its display is gone, off or not usable: close it only if that lasts.
-            startGrace()
-            return
-        }
-        cancelGrace()
-        if (target == null) return
-        if (running != null) {
-            if (bringToFront && !running.isInFront()) launch(from, target, "brought back in front")
-            return
-        }
-        val home = app.activities.homeCompanion
-        if (home != null && home.displayIdCompat() == target.id && (!bringToFront || home.isInFront())) return
+        val main = from as? ComponentActivity ?: return
+        if (!main.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) return
+        // Fuse is in front: the Presentation takes over from a companion activity left by a game.
+        app.activities.companion?.let { finish(it, "Fuse is in front again") }
+        showPresentation(main)
+    }
+
+    /** Fuse's main screen resumed: games are over, and the companion comes back. */
+    fun onMainResumed(from: Activity, mode: DualScreenMode) {
+        if (suppressed) SecondScreenLog.add("Fuse resumed, companion allowed again")
+        suppressed = false
+        update(from, mode)
+    }
+
+    /** Fuse went to the background: the second screen is free for the game or app in front. */
+    fun onMainStopped() {
+        hidePresentation("Fuse went to the background")
+    }
+
+    /** A game that uses one screen is starting: in "companion during games" mode it gets the companion. */
+    override fun beforeGame() {
+        if (mode != DualScreenMode.GAME_COMPANION || suppressed || !ACTIVITY_SUPPORTED) return
+        val from = app.activities.main ?: return
+        val target = monitor.secondary() ?: return
         if (target.id in refusedDisplays) return
         if (target.canLaunchActivities == Support.NO) {
             refuse(target.id, "Android does not allow activities there")
             return
         }
-        launch(from, target, "started")
-    }
-
-    /** Fuse's main screen resumed: games are over, and the companion goes back in front. */
-    fun onMainResumed(from: Activity, mode: DualScreenMode) {
-        if (suppressed) SecondScreenLog.add("Fuse resumed, companion allowed again")
-        suppressed = false
-        update(from, mode, bringToFront = true)
+        launch(from, target, "started for the game")
     }
 
     /** A game that draws on both screens is starting: it gets the second screen until Fuse resumes. */
     override fun beforeDualScreenGame() {
         suppressed = true
-        cancelGrace()
+        hidePresentation("a game uses both screens")
         app.activities.companion?.let { finish(it, "a game uses both screens") }
     }
 
@@ -128,12 +127,64 @@ class CompanionScreens(private val app: FuseApplication) : DualScreenHandoff {
     }
 
     fun stop() {
-        cancelGrace()
+        hidePresentation("Fuse closed")
         app.activities.companion?.let { finish(it, "Fuse closed") }
     }
 
     private fun wants(mode: DualScreenMode): Boolean =
-        SUPPORTED && !suppressed && (mode == DualScreenMode.LIBRARY_COMPANION || mode == DualScreenMode.GAME_COMPANION)
+        !suppressed && (mode == DualScreenMode.LIBRARY_COMPANION || mode == DualScreenMode.GAME_COMPANION)
+
+    private fun showPresentation(main: ComponentActivity) {
+        presentation?.let { current ->
+            val id = current.display.displayId
+            // A dozing or switched-off panel keeps it: it is there again when the panel wakes.
+            if (current.isShowing && monitor.displays.value.any { it.id == id }) return
+            hidePresentation("display $id is gone")
+        }
+        val target = monitor.presentationTarget(mainDisplay = main.displayIdCompat()) ?: return
+        if (target.id in refusedPresentation) return
+        val display = app.getSystemService(DisplayManager::class.java)?.getDisplay(target.id) ?: return
+        val shown = CompanionPresentation(main, display) { CompanionContent(app) }
+        shown.setOnDismissListener {
+            // Closed by Android (display removed or changed), not by hidePresentation.
+            if (presentation === shown) {
+                presentation = null
+                closedBySystem(target.id)
+            }
+        }
+        try {
+            presentation = shown
+            shown.show()
+            SecondScreenLog.add("Companion shown on display ${target.id} (${target.name})")
+        } catch (e: RuntimeException) {
+            // InvalidDisplayException, BadTokenException: this display does not take it.
+            presentation = null
+            if (refusedPresentation.add(target.id)) SecondScreenLog.add("Display ${target.id} refused the companion: ${e::class.simpleName}")
+        }
+    }
+
+    private fun hidePresentation(reason: String) {
+        val current = presentation ?: return
+        presentation = null
+        SecondScreenLog.add("Companion closed on display ${current.display.displayId}: $reason")
+        try {
+            current.dismiss()
+        } catch (e: RuntimeException) {
+            // Its window is already gone with the display.
+        }
+    }
+
+    /** A display whose Presentation Android keeps closing is left alone, so there is no open and close loop. */
+    private fun closedBySystem(displayId: Int) {
+        val now = SystemClock.elapsedRealtime()
+        val recent = closedBySystem.getOrPut(displayId) { mutableListOf() }
+        recent.removeAll { now - it > LOOP_WINDOW_MS }
+        recent += now
+        SecondScreenLog.add("Android closed the companion on display $displayId")
+        if (recent.size >= LOOP_LIMIT && refusedPresentation.add(displayId)) {
+            SecondScreenLog.add("Display $displayId closed the companion $LOOP_LIMIT times: not tried again this session")
+        }
+    }
 
     private fun launch(from: Activity, target: DisplayInfo, what: String) {
         val intent = Intent(from, CompanionActivity::class.java)
@@ -162,39 +213,17 @@ class CompanionScreens(private val app: FuseApplication) : DualScreenHandoff {
         companion.finish()
     }
 
-    private fun startGrace() {
-        if (graceCheck != null) return
-        val check = Runnable {
-            graceCheck = null
-            val running = app.activities.companion ?: return@Runnable
-            val runningOn = running.displayIdCompat()
-            if (monitor.secondary(preferredId = runningOn)?.id == runningOn) return@Runnable
-            finish(running, "display $runningOn was gone or off for ${GRACE_MS / 1000} s")
-            // Another usable screen may be there: follow the setting on it.
-            fromRef?.get()?.takeUnless { it.isFinishing || it.isDestroyed }?.let { from ->
-                val started = (from as? LifecycleOwner)?.lifecycle?.currentState?.isAtLeast(Lifecycle.State.STARTED) ?: true
-                if (started) update(from, mode)
-            }
-        }
-        graceCheck = check
-        handler.postDelayed(check, GRACE_MS)
-    }
-
-    private fun cancelGrace() {
-        graceCheck?.let(handler::removeCallbacks)
-        graceCheck = null
-    }
-
-    private fun CompanionActivity.isInFront(): Boolean = lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)
-
     companion object {
-        /** How long a display may be missing or off before the companion on it closes. */
+        /** How long a display may be missing or off before a companion activity on it closes. */
         const val GRACE_MS = 2_000L
 
+        private const val LOOP_WINDOW_MS = 15_000L
+        private const val LOOP_LIMIT = 3
+
         /**
-         * Android 10+ keeps activities on both screens resumed at once. Before that, starting the
-         * companion would pause the main screen, so Fuse stays single-screen there.
+         * Android 10+ keeps activities on both screens resumed at once. Before that, a companion
+         * activity would pause the game, so only the Presentation (Fuse in front) is used there.
          */
-        val SUPPORTED: Boolean = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q
+        val ACTIVITY_SUPPORTED: Boolean = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q
     }
 }

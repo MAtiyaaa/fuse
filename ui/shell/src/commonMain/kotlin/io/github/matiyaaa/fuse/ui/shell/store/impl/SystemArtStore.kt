@@ -85,7 +85,7 @@ internal class SystemArtStore(private val ctx: StoreContext) {
                         fetch(platform, MediaFillMode.REPLACE_ALL)
                     } catch (e: CancellationException) {
                         throw e
-                    } catch (e: Exception) {
+                    } catch (e: Throwable) {
                         0
                     }
                 }
