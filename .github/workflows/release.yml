@@ -1,0 +1,295 @@
+# Publishes a GitHub release with the Android APK, the Linux AppImage and SHA256SUMS.txt.
+#
+# Runs when gradle.properties changes on main, when a v* tag is pushed, or by hand. The version and
+# release name come from fuse.version and fuse.releaseName in gradle.properties, and the release notes
+# from docs/releases/<version>.md. Nothing is published when release v<version> already exists,
+# unless the run was started by pushing that tag.
+#
+# A release created here with GITHUB_TOKEN also creates its tag; GitHub does not start new workflow
+# runs for events caused by GITHUB_TOKEN, so that tag does not trigger this workflow again.
+
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - gradle.properties
+    # Path filters are not applied to tag pushes, so every v* tag starts a run.
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  prepare:
+    name: Read version
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      release_name: ${{ steps.meta.outputs.release_name }}
+      tag: ${{ steps.meta.outputs.tag }}
+      publish: ${{ steps.meta.outputs.publish }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+
+      - name: Read version and check for an existing release
+        id: meta
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          version="$(sed -n 's/^fuse\.version=//p' gradle.properties | tr -d '[:space:]')"
+          release_name="$(sed -n 's/^fuse\.releaseName=//p' gradle.properties | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+          if ! printf '%s' "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+([-.+][0-9A-Za-z.]+)?$'; then
+            echo "::error file=gradle.properties::fuse.version is missing or not a version: '$version'"
+            exit 1
+          fi
+          if [ -z "$release_name" ]; then
+            echo "::error file=gradle.properties::fuse.releaseName is missing"
+            exit 1
+          fi
+          tag="v$version"
+          notes="docs/releases/$version.md"
+          if [ ! -f "$notes" ]; then
+            echo "::error::Release notes $notes are missing. Add them before releasing $tag."
+            exit 1
+          fi
+
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            if [ "$GITHUB_REF_NAME" != "$tag" ]; then
+              echo "::error::Tag $GITHUB_REF_NAME does not match fuse.version $version (expected $tag)."
+              exit 1
+            fi
+            publish=true
+          elif output="$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json tagName 2>&1)"; then
+            echo "::notice::Release $tag already exists; nothing to publish."
+            publish=false
+          elif printf '%s' "$output" | grep -qi 'not found'; then
+            publish=true
+          else
+            echo "::error::Could not check whether release $tag exists: $output"
+            exit 1
+          fi
+
+          {
+            echo "version=$version"
+            echo "release_name=$release_name"
+            echo "tag=$tag"
+            echo "publish=$publish"
+          } >> "$GITHUB_OUTPUT"
+          echo "Fuse $version - $release_name ($tag), publish: $publish"
+
+  android:
+    name: Android APK
+    needs: prepare
+    if: needs.prepare.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    concurrency:
+      group: release-${{ needs.prepare.outputs.tag }}-android
+      cancel-in-progress: false
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+
+      - name: Install Android platform 37
+        # compileSdk 37 is the "platforms;android-37.0" package. AGP downloads any other build tools
+        # it needs, since the SDK licences were accepted above.
+        run: sdkmanager --install "platforms;android-37.0" "build-tools;37.0.0"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Prepare the signing key
+        env:
+          KEYSTORE_BASE64: ${{ secrets.FUSE_KEYSTORE_BASE64 }}
+        run: |
+          set -euo pipefail
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            keystore="$RUNNER_TEMP/fuse-release.jks"
+            printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$keystore"
+            echo "FUSE_KEYSTORE_PATH=$keystore" >> "$GITHUB_ENV"
+          else
+            echo "::warning::The FUSE_KEYSTORE_BASE64 secret is not set, so the APK is not signed with the release key."
+          fi
+
+      - name: Build the release APK
+        env:
+          FUSE_KEYSTORE_PASSWORD: ${{ secrets.FUSE_KEYSTORE_PASSWORD }}
+          FUSE_KEY_ALIAS: ${{ secrets.FUSE_KEY_ALIAS }}
+          FUSE_KEY_PASSWORD: ${{ secrets.FUSE_KEY_PASSWORD }}
+        run: ./gradlew :app:android:assembleRelease --stacktrace
+
+      - name: Collect the APK
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          apks=(app/android/build/outputs/apk/release/*.apk)
+          if [ "${#apks[@]}" -eq 0 ]; then
+            echo "::error::No APK found in app/android/build/outputs/apk/release/"
+            exit 1
+          fi
+          apk="${apks[0]}"
+          if [ "${#apks[@]}" -gt 1 ]; then
+            universal=(app/android/build/outputs/apk/release/*universal*.apk)
+            if [ "${#universal[@]}" -ne 1 ]; then
+              echo "::error::Several APKs were built and none is a single universal APK: ${apks[*]}"
+              exit 1
+            fi
+            apk="${universal[0]}"
+          fi
+          case "$apk" in
+            *unsigned*) echo "::warning::$apk is not signed with the release key." ;;
+          esac
+          mkdir -p dist
+          cp "$apk" "dist/Fuse-$VERSION-android.apk"
+          ls -l dist
+
+      - name: Remove the signing key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/fuse-release.jks"
+
+      - name: Upload the APK
+        uses: actions/upload-artifact@v7
+        with:
+          name: fuse-android
+          path: dist/Fuse-${{ needs.prepare.outputs.version }}-android.apk
+          if-no-files-found: error
+          retention-days: 7
+
+  linux:
+    name: Linux AppImage
+    needs: prepare
+    if: needs.prepare.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    concurrency:
+      group: release-${{ needs.prepare.outputs.tag }}-linux
+      cancel-in-progress: false
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      # Gradle configures every module, including the Android ones, so the desktop build needs the SDK too.
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+
+      - name: Install Android platform 37
+        run: sdkmanager --install "platforms;android-37.0"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Install FUSE 2 for AppImage tools
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          # Ubuntu 24.04 and later call the package libfuse2t64; older releases call it libfuse2.
+          sudo apt-get install -y libfuse2t64 || sudo apt-get install -y libfuse2
+
+      - name: Build the AppImage
+        run: |
+          set -euo pipefail
+          if [ ! -f scripts/build-appimage.sh ]; then
+            echo "::error::scripts/build-appimage.sh is missing"
+            exit 1
+          fi
+          bash scripts/build-appimage.sh
+
+      - name: Collect the AppImage
+        run: |
+          set -euo pipefail
+          appimage="build/appimage/Fuse-$VERSION-x86_64.AppImage"
+          if [ ! -f "$appimage" ]; then
+            echo "::error::$appimage was not produced"
+            ls -l build/appimage || true
+            exit 1
+          fi
+          mkdir -p dist
+          cp "$appimage" dist/
+          chmod +x "dist/Fuse-$VERSION-x86_64.AppImage"
+          ls -l dist
+
+      - name: Upload the AppImage
+        uses: actions/upload-artifact@v7
+        with:
+          name: fuse-linux
+          path: dist/Fuse-${{ needs.prepare.outputs.version }}-x86_64.AppImage
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    name: Publish release
+    needs: [prepare, android, linux]
+    if: needs.prepare.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    concurrency:
+      group: release-${{ needs.prepare.outputs.tag }}-publish
+      cancel-in-progress: false
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+
+      - name: Download the builds
+        uses: actions/download-artifact@v8
+        with:
+          pattern: fuse-*
+          path: dist
+          merge-multiple: true
+
+      - name: Write SHA256SUMS.txt
+        run: |
+          set -euo pipefail
+          cd dist
+          for file in "Fuse-$VERSION-android.apk" "Fuse-$VERSION-x86_64.AppImage"; do
+            if [ ! -f "$file" ]; then
+              echo "::error::$file is missing"
+              exit 1
+            fi
+          done
+          sha256sum "Fuse-$VERSION-android.apk" "Fuse-$VERSION-x86_64.AppImage" > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Create the GitHub release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ needs.prepare.outputs.tag }}
+          name: Fuse ${{ needs.prepare.outputs.version }} - ${{ needs.prepare.outputs.release_name }}
+          body_path: docs/releases/${{ needs.prepare.outputs.version }}.md
+          target_commitish: ${{ github.sha }}
+          draft: false
+          prerelease: false
+          make_latest: "true"
+          fail_on_unmatched_files: true
+          files: |
+            dist/Fuse-${{ needs.prepare.outputs.version }}-android.apk
+            dist/Fuse-${{ needs.prepare.outputs.version }}-x86_64.AppImage
+            dist/SHA256SUMS.txt
