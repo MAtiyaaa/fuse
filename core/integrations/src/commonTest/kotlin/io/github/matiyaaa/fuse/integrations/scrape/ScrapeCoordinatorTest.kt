@@ -106,6 +106,16 @@ class ScrapeCoordinatorTest {
     }
 
     @Test
+    fun reviewCandidatesAreDeduplicatedPerProviderGame() = runTest {
+        // A provider that lists one game twice must not produce two picker rows with the same id.
+        val metroid = { id: String -> game(ScrapeProviderId.IGDB, id, "Super Metroid", listOf("SNES")) }
+        val igdb = StubSource(ScrapeProviderId.IGDB, true, ApiResult.Success(listOf(metroid("1"), metroid("1"), metroid("2"))))
+        val outcome = ScrapeCoordinator(listOf(igdb)).scrape(request(ScrapeProviderId.IGDB))
+        assertIs<ScrapeOutcome.NeedsReview>(outcome)
+        assertEquals(listOf("1", "2"), outcome.candidates.map { it.providerGameId }.sorted())
+    }
+
+    @Test
     fun unconfiguredProvidersAreSkippedAndFailuresReported() = runTest {
         val igdb = StubSource(ScrapeProviderId.IGDB, true, ApiResult.Success(emptyList()))
         val tgdb = StubSource(ScrapeProviderId.THEGAMESDB, true, ApiResult.NetworkError("offline"))
