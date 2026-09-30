@@ -83,6 +83,8 @@ class InputRouter(
         var modal: Boolean,
         var longPress: Boolean,
         var handler: (NavEvent) -> NavResult,
+        /** Actions beyond the directions that repeat while held here (the keyboard's delete and caret keys). */
+        var repeats: Set<NavAction> = emptySet(),
     )
 
     private val layers = mutableListOf<Layer>()
@@ -90,11 +92,12 @@ class InputRouter(
 
     /** Handle returned by [register]; keep it to update or remove the layer. */
     inner class Registration internal constructor(private val layer: Layer) {
-        fun update(enabled: Boolean, modal: Boolean, longPress: Boolean, handler: (NavEvent) -> NavResult) {
+        fun update(enabled: Boolean, modal: Boolean, longPress: Boolean, handler: (NavEvent) -> NavResult, repeats: Set<NavAction> = emptySet()) {
             layer.enabled = enabled
             layer.modal = modal
             layer.longPress = longPress
             layer.handler = handler
+            layer.repeats = repeats
         }
 
         fun remove() {
@@ -181,7 +184,7 @@ class InputRouter(
         val action = actionFor(button) ?: return
         _lastSource.value = source
         when {
-            action.repeats -> {
+            action.repeats || action in topRepeats() -> {
                 dispatch(action, source)
                 held[button] = scope.launch { repeatLoop(action, source) }
             }
@@ -239,6 +242,8 @@ class InputRouter(
     }
 
     private fun topWantsLongPress(): Boolean = orderedLayers().firstOrNull()?.longPress == true
+
+    private fun topRepeats(): Set<NavAction> = orderedLayers().firstOrNull()?.repeats.orEmpty()
 
     private val NavAction.repeats: Boolean
         get() = this == NavAction.UP || this == NavAction.DOWN || this == NavAction.LEFT ||
@@ -322,4 +327,11 @@ interface TextInput {
 
     /** Inserts the clipboard's text (Ctrl+V). */
     fun paste() {}
+
+    /** The Delete key: removes the character after the caret. */
+    fun deleteForward() {}
+
+    /** Home and End: the caret to the start or the end. */
+    fun home() {}
+    fun end() {}
 }

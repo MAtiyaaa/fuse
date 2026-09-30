@@ -33,8 +33,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import io.github.matiyaaa.fuse.model.NavAction
+import io.github.matiyaaa.fuse.ui.designsystem.components.EditableText
 import io.github.matiyaaa.fuse.ui.designsystem.components.FText
 import io.github.matiyaaa.fuse.ui.designsystem.components.Hint
+import io.github.matiyaaa.fuse.ui.designsystem.components.KeyboardField
 import io.github.matiyaaa.fuse.ui.designsystem.components.KeyboardState
 import io.github.matiyaaa.fuse.ui.designsystem.components.OnScreenKeyboard
 import io.github.matiyaaa.fuse.ui.designsystem.components.SectionLabel
@@ -52,14 +54,13 @@ import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
 import io.github.matiyaaa.fuse.ui.designsystem.theme.toColor
-import io.github.matiyaaa.fuse.ui.shell.app.activateGame
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
-import io.github.matiyaaa.fuse.ui.shell.app.pasteInto
 import io.github.matiyaaa.fuse.ui.shell.app.FocusZone
 import io.github.matiyaaa.fuse.ui.shell.app.KeyboardTarget
 import io.github.matiyaaa.fuse.ui.shell.app.Route
+import io.github.matiyaaa.fuse.ui.shell.app.activateGame
 import io.github.matiyaaa.fuse.ui.shell.app.gameMenu
-import io.github.matiyaaa.fuse.ui.shell.app.play
+import io.github.matiyaaa.fuse.ui.shell.app.pasteInto
 import io.github.matiyaaa.fuse.ui.shell.store.SearchResults
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.flatMapLatest
@@ -103,12 +104,15 @@ private sealed interface Hit {
 @OptIn(kotlinx.coroutines.FlowPreview::class)
 @Composable
 fun SearchScreen(app: AppState) {
-    var query by remember { mutableStateOf("") }
+    val field = remember { EditableText() }
+    val query = field.text
     var inResults by remember { mutableStateOf(false) }
     val keyboard = remember { KeyboardState() }
+    // Typing brings the focus back to the keyboard.
+    LaunchedEffect(query) { inResults = false }
     val sel = remember { LinearSelection() }
     val flow = remember {
-        androidx.compose.runtime.snapshotFlow { query }
+        androidx.compose.runtime.snapshotFlow { field.text }
             .debounce(90)
             .flatMapLatest { q -> if (q.isBlank()) flowOf(SearchResults()) else app.store.library.search(q.trim()) }
     }
@@ -120,13 +124,13 @@ fun SearchScreen(app: AppState) {
     sel.clamp(hits.size)
 
     DisposableEffect(Unit) {
-        app.keyboardTarget = KeyboardTarget({ query }, { query = it; inResults = false }, { if (hits.isNotEmpty()) inResults = true })
+        app.keyboardTarget = KeyboardTarget(field) { if (hits.isNotEmpty()) inResults = true }
         onDispose { app.keyboardTarget = null }
     }
     LaunchedEffect(inResults) {
         app.hero = null
         app.hints = if (inResults) listOf(Hint(HintButton.CONFIRM, "Open"), Hint(HintButton.OPTIONS, "Options"), Hint(HintButton.BACK, "Back"))
-        else listOf(Hint(HintButton.CONFIRM, "Type"), Hint(HintButton.OPTIONS, "Delete"), Hint(HintButton.SEARCH, "Space"), Hint(HintButton.NEXT, "Paste"), Hint(HintButton.MENU, "Results"))
+        else listOf(Hint(HintButton.CONFIRM, "Type"), Hint(HintButton.OPTIONS, "Delete"), Hint(HintButton.SEARCH, "Space"), Hint(HintButton.NEXT, "Cursor"), Hint(HintButton.MENU, "Results"))
     }
 
     fun open(hit: Hit) {
@@ -138,7 +142,10 @@ fun SearchScreen(app: AppState) {
         }
     }
 
-    InputLayer(enabled = app.focusZone == FocusZone.CONTENT && !app.overlayOpen) { e ->
+    InputLayer(
+        enabled = app.focusZone == FocusZone.CONTENT && !app.overlayOpen,
+        repeats = if (inResults) emptySet() else setOf(NavAction.CONTEXT, NavAction.PREVIOUS_SECTION, NavAction.NEXT_SECTION),
+    ) { e ->
         if (inResults) {
             when (e.action) {
                 NavAction.UP, NavAction.DOWN, NavAction.PAGE_UP, NavAction.PAGE_DOWN -> sel.move(e.action, hits.size, vertical = true).let { if (it == NavResult.IGNORED) NavResult.BLOCKED else it }
@@ -151,7 +158,7 @@ fun SearchScreen(app: AppState) {
                 else -> NavResult.IGNORED
             }
         } else {
-            val r = keyboard.handle(e, query, { query = it }, { if (hits.isNotEmpty()) inResults = true }, onPaste = { app.pasteInto({ query }, { query = it }) })
+            val r = keyboard.handle(e, field, { if (hits.isNotEmpty()) inResults = true }, onPaste = { app.pasteInto(field) })
             if (r == NavResult.BLOCKED && e.action == NavAction.RIGHT && hits.isNotEmpty()) { inResults = true; NavResult.MOVED } else r
         }
     }
@@ -160,16 +167,22 @@ fun SearchScreen(app: AppState) {
     Row(Modifier.fillMaxSize().padding(horizontal = Space.gutter)) {
         Column(Modifier.weight(1f).fillMaxHeight()) {
             Spacer(Modifier.height(Size.hudHeight + Space.l))
-            Row(
-                Modifier.fillMaxWidth().clip(RoundedCornerShape(Fuse.geometry.control)).background(c.text.copy(alpha = 0.08f)).padding(horizontal = Space.l, vertical = Space.m),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                FuseIcon(FuseIcons.Search, tint = c.textMuted)
-                Spacer(Modifier.width(Space.m))
-                FText(if (query.isEmpty()) "Games, systems, apps" else "$query|", Fuse.type.title, color = if (query.isEmpty()) c.textFaint else c.text, maxLines = 1)
-            }
+            KeyboardField(
+                field,
+                Modifier.fillMaxWidth(),
+                placeholder = "Games, systems, apps",
+                leading = FuseIcons.Search,
+                focused = !inResults,
+                onClear = { field.replaceAll("") },
+            )
             Spacer(Modifier.height(Space.l))
-            OnScreenKeyboard(keyboard, query, { query = it; inResults = false }, { if (hits.isNotEmpty()) inResults = true }, onPaste = { app.pasteInto({ query }, { query = it; inResults = false }) })
+            OnScreenKeyboard(
+                keyboard, field, { if (hits.isNotEmpty()) inResults = true },
+                doneLabel = "Results",
+                showFocus = !inResults,
+                onPaste = { app.pasteInto(field) },
+                onKey = { app.platform.haptics.tick() },
+            )
         }
         Spacer(Modifier.width(Space.xxl))
         Column(Modifier.weight(1f).fillMaxHeight()) {

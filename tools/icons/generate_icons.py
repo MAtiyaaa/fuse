@@ -53,6 +53,8 @@ ICONS = {
     "RefreshDot": "refresh-ccw-dot", "Import": "import", "Upload": "upload", "Share": "share-2",
     "QrCode": "qr-code", "Wrench": "wrench", "Blocks": "blocks", "ClipboardPaste": "clipboard-paste",
     "Filter": "list-filter", "Sort": "arrow-up-down", "FileQuestion": "file-question",
+    "Shift": "arrow-big-up", "CapsLock": "arrow-big-up-dash", "Backspace": "delete", "Return": "corner-down-left",
+    "SquareCheck": "square-check", "LibraryBig": "library-big", "LockKeyhole": "lock-keyhole", "Network": "network",
 }
 
 NUM = r"-?(?:\d+\.?\d*|\.\d+)(?:e-?\d+)?"

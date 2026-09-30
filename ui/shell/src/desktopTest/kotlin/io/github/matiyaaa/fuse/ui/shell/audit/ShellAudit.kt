@@ -70,14 +70,18 @@ internal fun AuditDriver.overlayScreens(exhaustive: Boolean) {
         waitFor("Continue playing")
         tap(PadButton.DPAD_LEFT)
         tap(PadButton.X)
-        waitFor("Rename Display Title")
-        choose(8)
+        tapText("Rename Display Title")
         waitFor("Display title")
         shoot("rename dialog with the on-screen keyboard")
         if (!exhaustive) return@scenario
         tap(PadButton.Y)
+        tap(PadButton.L1, 4)
+        shoot("caret moved back with LB")
         tap(PadButton.DPAD_DOWN, 4)
-        shoot("bottom row (Shift, Space, Delete, Done) focused")
+        shoot("bottom row (123, Paste, Space, Done) focused")
+        tap(PadButton.DPAD_LEFT, 6)
+        tap(PadButton.A)
+        shoot("numbers and punctuation page")
         tap(PadButton.B)
     }
 

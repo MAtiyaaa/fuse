@@ -23,7 +23,8 @@ val LocalInputRouter = staticCompositionLocalOf<InputRouter> { error("No InputRo
  * Registers a handler for navigation actions while this composable is on screen. The newest layer
  * of the highest [priority] receives actions first; a [modal] layer stops unhandled actions from
  * reaching the layers below it (dialogs, menus). Set [longPress] when holding confirm should become
- * [io.github.matiyaaa.fuse.model.NavAction.REORDER] here.
+ * [io.github.matiyaaa.fuse.model.NavAction.REORDER] here, and [repeats] for other actions that should
+ * repeat while their button is held (directions always do).
  */
 @Composable
 fun InputLayer(
@@ -31,6 +32,7 @@ fun InputLayer(
     enabled: Boolean = true,
     modal: Boolean = false,
     longPress: Boolean = false,
+    repeats: Set<io.github.matiyaaa.fuse.model.NavAction> = emptySet(),
     onAction: (NavEvent) -> NavResult,
 ) {
     val router = LocalInputRouter.current
@@ -38,14 +40,14 @@ fun InputLayer(
     val holder = remember { arrayOfNulls<InputRouter.Registration>(1) }
     DisposableEffect(router, priority) {
         val registration = router.register(priority, modal, longPress) { handler.value(it) }
-        registration.update(enabled, modal, longPress) { handler.value(it) }
+        registration.update(enabled, modal, longPress, { handler.value(it) }, repeats)
         holder[0] = registration
         onDispose {
             registration.remove()
             holder[0] = null
         }
     }
-    SideEffect { holder[0]?.update(enabled, modal, longPress) { handler.value(it) } }
+    SideEffect { holder[0]?.update(enabled, modal, longPress, { handler.value(it) }, repeats) }
 }
 
 /** Maps a Compose key to Fuse's physical button names (desktop keyboards, some Android keyboards). */
@@ -125,6 +127,18 @@ private fun InputRouter.typeInto(event: KeyEvent): Boolean {
         }
         Key.Enter, Key.NumPadEnter -> {
             if (down) input.submit()
+            return true
+        }
+        Key.Delete -> {
+            if (down) input.deleteForward()
+            return true
+        }
+        Key.MoveHome -> {
+            if (down) input.home()
+            return true
+        }
+        Key.MoveEnd -> {
+            if (down) input.end()
             return true
         }
     }

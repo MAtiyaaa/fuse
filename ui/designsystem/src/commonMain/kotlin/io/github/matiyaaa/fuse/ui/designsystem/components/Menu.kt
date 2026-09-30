@@ -26,6 +26,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -110,6 +112,8 @@ fun MenuRow(
             .clip(RoundedCornerShape(Fuse.geometry.control))
             .background(bg)
             .clickable(remember { MutableInteractionSource() }, null, enabled = available, onClick = onClick)
+            // Screen readers (and the UI audit) can tell which row the controller is on.
+            .semantics { this.selected = selected }
             .padding(end = Space.l),
         verticalAlignment = Alignment.CenterVertically,
     ) {

@@ -16,6 +16,8 @@ import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onFirst
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.printToString
 import io.github.matiyaaa.fuse.data.FuseData
@@ -230,6 +232,24 @@ internal class AuditDriver(
 
     fun hasText(text: String, ignoreCase: Boolean = true): Boolean =
         ui.onAllNodesWithText(text, substring = true, ignoreCase = ignoreCase, useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()
+
+    /**
+     * Chooses the menu row showing exactly [text] the way a player does (menus whose order changes
+     * between versions): Down until that row is the selected one, then A.
+     */
+    fun tapText(text: String) {
+        waitFor(text.take(1))
+        repeat(40) {
+            settle(STEP_MS)
+            val on = ui.onAllNodes(androidx.compose.ui.test.hasText(text) and androidx.compose.ui.test.isSelected()).fetchSemanticsNodes()
+            if (on.isNotEmpty()) {
+                tap(PadButton.A)
+                return
+            }
+            tap(PadButton.DPAD_DOWN)
+        }
+        throw NotCovered("\"$text\" was never selected")
+    }
 
     fun waitFor(text: String, timeoutMs: Long = 15_000, ignoreCase: Boolean = true) =
         pumpUntil("\"$text\"", timeoutMs) { hasText(text, ignoreCase) }

@@ -129,10 +129,13 @@ fun FuseApp(store: FuseStore, platform: PlatformUi, router: InputRouter) {
     DisposableEffect(router, keyboardTarget) {
         router.textInput = keyboardTarget?.let { target ->
             object : TextInput {
-                override fun type(text: String) = target.set(target.get() + text)
-                override fun backspace() = target.set(target.get().dropLast(1))
+                override fun type(text: String) = target.field.insert(text)
+                override fun backspace() = target.field.backspace()
                 override fun submit() = target.submit()
-                override fun paste() = app.pasteInto(target.get, target.set)
+                override fun paste() = app.pasteInto(target.field)
+                override fun deleteForward() = target.field.deleteForward()
+                override fun home() = target.field.setCaret(0)
+                override fun end() = target.field.setCaret(target.field.text.length)
             }
         }
         onDispose { router.textInput = null }
