@@ -56,13 +56,8 @@ object DesktopDatabase {
     private fun properties(foreignKeys: Boolean, wal: Boolean) = Properties().apply {
         setProperty("foreign_keys", foreignKeys.toString())
         setProperty("busy_timeout", "5000")
-        if (wal) {
-            setProperty("journal_mode", "WAL")
-            // A file database gives each thread its own connection. A deferred transaction that
-            // reads and then writes fails with SQLITE_BUSY_SNAPSHOT when another connection wrote in
-            // between (busy_timeout can't help), so transactions take the write lock up front and
-            // wait for it instead. The in-memory database has a single connection and needs none.
-            setProperty("transaction_mode", "IMMEDIATE")
-        }
+        // All database work runs on one thread (see ioDispatcher), so there is one connection in
+        // use and transactions never compete for the write lock.
+        if (wal) setProperty("journal_mode", "WAL")
     }
 }

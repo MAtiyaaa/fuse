@@ -19,6 +19,8 @@ kotlin {
         val desktopTest by getting {
             dependencies {
                 implementation(libs.ktor.client.mock)
+                implementation(libs.compose.ui.test)
+                implementation(compose.desktop.currentOs)
             }
         }
     }
