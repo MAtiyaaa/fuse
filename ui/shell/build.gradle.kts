@@ -42,7 +42,13 @@ tasks.register<Test>("desktopScreenshots") {
     testClassesDirs = desktopTest.testClassesDirs
     classpath = desktopTest.classpath
     filter { includeTestsMatching(screenshotTests) }
-    systemProperty("fuse.screenshots.dir", rootProject.layout.projectDirectory.dir("docs/assets/screenshots").asFile.absolutePath)
+    systemProperty(
+        "fuse.screenshots.dir",
+        providers.gradleProperty("fuse.screenshots.dir")
+            .getOrElse(rootProject.layout.projectDirectory.dir("docs/assets/screenshots").asFile.absolutePath),
+    )
+    // Rendering every screen takes a few minutes; the coroutine test default of one minute is too short.
+    systemProperty("kotlinx.coroutines.test.default_timeout", "20m")
     maxHeapSize = "1g"
     testLogging { showStandardStreams = true }
     outputs.upToDateWhen { false }

@@ -2,7 +2,9 @@ package io.github.matiyaaa.fuse.ui.shell.screenshots
 
 import io.github.matiyaaa.fuse.data.FuseData
 import io.github.matiyaaa.fuse.model.EmulatorId
+import io.github.matiyaaa.fuse.model.HomeWidget
 import io.github.matiyaaa.fuse.model.PlatformId
+import io.github.matiyaaa.fuse.model.WidgetKind
 import io.github.matiyaaa.fuse.ui.shell.store.FuseStore
 import io.github.matiyaaa.fuse.ui.shell.store.GameCard
 import java.io.File
@@ -100,6 +102,29 @@ internal object SampleLibrary {
         Session("Tanuki Trails", 600.0, 120),
     )
 
+    /** Collections the user made, by name, with their games. */
+    val collections = listOf(
+        "Couch Racers" to listOf("Cloudbound Racers", "Paper Kite Grand Prix", "Harbor Lights Rally", "Velocity Vandals"),
+        "Long Adventures" to listOf("Emberline Saga", "Hollow Meridian", "Static Bloom", "Glasswing Requiem", "Lanterns of Vell"),
+        "Pocket Picks" to listOf("Pixel Pilgrims", "Tinderbox Tales", "Stylus Stories", "Folded Maps"),
+    )
+
+    /**
+     * A Channels board as a user would arrange it in Settings, Home: the default list without the
+     * RetroAchievements and Cartridge widgets (neither is set up here), plus playtime, collections
+     * and the clock.
+     */
+    val channelBoard: List<HomeWidget> = listOf(
+        WidgetKind.CONTINUE_PLAYING,
+        WidgetKind.FAVORITES,
+        WidgetKind.SYSTEMS,
+        WidgetKind.PLAYTIME_WEEK,
+        WidgetKind.PLAYTIME_TOTAL,
+        WidgetKind.RECENTLY_ADDED,
+        WidgetKind.COLLECTIONS,
+        WidgetKind.CLOCK,
+    ).mapIndexed { i, k -> HomeWidget(id = k.name.lowercase(), kind = k, order = i) }
+
     val platformCount: Int get() = games.map { it.folder }.distinct().size
 
     /** Writes the sample files (tiny placeholders, never real game data) under [root]. */
@@ -115,12 +140,16 @@ internal object SampleLibrary {
         }
     }
 
-    /** Marks favourites and records the play sessions, oldest first. */
+    /** Marks favourites, makes the collections and records the play sessions, oldest first. */
     suspend fun applyHistory(store: FuseStore, data: FuseData, cards: List<GameCard>, now: Long) {
         val byTitle = cards.associateBy { it.title }
         for (g in games.filter { it.favorite }) {
             val card = byTitle[g.title] ?: error("Sample game not found in the library: ${g.title}")
             store.library.setFavorite(card.id, true)
+        }
+        for ((name, titles) in collections) {
+            val id = store.collections.create(name)
+            for (title in titles) store.collections.add(id, (byTitle[title] ?: error("Sample game not found in the library: $title")).id)
         }
         val emulators = ScreenshotServices.InstalledEmulators
         fun emulatorFor(platform: PlatformId): EmulatorId? = emulators.firstOrNull { platform in it.platforms }?.id

@@ -5,14 +5,15 @@ import androidx.compose.ui.graphics.toAwtImage
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onRoot
-import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.printToString
 import androidx.compose.ui.test.v2.runDesktopComposeUiTest
 import androidx.compose.ui.unit.Density
 import io.github.matiyaaa.fuse.data.FuseData
 import io.github.matiyaaa.fuse.data.db.DesktopDatabase
+import io.github.matiyaaa.fuse.model.HomeLayoutConfig
 import io.github.matiyaaa.fuse.model.HomeMode
 import io.github.matiyaaa.fuse.model.LibraryLayout
 import io.github.matiyaaa.fuse.model.LibrarySourceKind
@@ -24,9 +25,12 @@ import io.github.matiyaaa.fuse.ui.shell.app.FuseApp
 import io.github.matiyaaa.fuse.ui.shell.store.FuseStore
 import io.github.matiyaaa.fuse.ui.shell.store.GameQuery
 import io.github.matiyaaa.fuse.ui.shell.store.createFuseStore
+import java.awt.image.BufferedImage
 import java.io.File
 import java.nio.file.Files
+import javax.imageio.IIOImage
 import javax.imageio.ImageIO
+import javax.imageio.ImageWriteParam
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -61,7 +65,8 @@ class ReadmeScreenshots {
     fun setUp() {
         assumeTrue("Set -D$OUTPUT_PROPERTY=<folder> (or run :ui:shell:desktopScreenshots) to render screenshots", outDir != null)
         outDir!!.mkdirs()
-        root = Files.createTempDirectory("fuse-shots-lib").toFile()
+        // A fixed, readable folder name: the game page shows where a game's file is.
+        root = File(System.getProperty("java.io.tmpdir"), "fuse-sample-library").apply { deleteRecursively(); mkdirs() }
         cache = Files.createTempDirectory("fuse-shots-cache").toFile()
         scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     }
@@ -77,7 +82,7 @@ class ReadmeScreenshots {
     private fun newServices() =
         ScreenshotServices(FuseData(DesktopDatabase.open(File(cache, "fuse-${System.nanoTime()}.db").absolutePath)), cache)
 
-    /** The sample library scanned, with favourites and play history, and setup already done. */
+    /** The sample library scanned, with favourites, collections and play history, and setup done. */
     private fun libraryStore(): FuseStore = runBlocking {
         SampleLibrary.writeTo(root)
         val services = newServices()
@@ -93,7 +98,10 @@ class ReadmeScreenshots {
         SampleLibrary.applyHistory(store, services.data, cards, Clock.System.now().toEpochMilliseconds())
         withTimeout(30_000) {
             store.library.home.first { feed ->
-                feed.continuePlaying.size >= 8 && feed.favorites.size == SampleLibrary.games.count { it.favorite } && feed.playtime.weekSeconds > 0
+                feed.continuePlaying.size >= 8 &&
+                    feed.favorites.size == SampleLibrary.games.count { it.favorite } &&
+                    feed.collections.size == SampleLibrary.collections.size &&
+                    feed.playtime.weekSeconds > 0
             }
         }
         store
@@ -112,38 +120,44 @@ class ReadmeScreenshots {
 
         // Home, Flow mode: Continue Playing is the first shelf and its first game is in focus.
         pumpUntil { hasText("Continue playing", ignoreCase = true) }
-        settle()
+        // A press that goes nowhere (left of the first tile) so the hints show controller buttons.
+        router.tap(PadButton.DPAD_LEFT)
+        settle(3_000)
         shoot("home")
 
-        // Home, Channels mode.
-        store.updatePrefs { it.copy(home = it.home.copy(mode = HomeMode.CHANNELS)) }
+        // Home, Channels mode, arranged as a user would in Settings, Home.
+        store.updatePrefs { it.copy(home = HomeLayoutConfig(mode = HomeMode.CHANNELS, widgets = SampleLibrary.channelBoard)) }
         settle()
         shoot("home-channels")
-        store.updatePrefs { it.copy(home = it.home.copy(mode = HomeMode.FLOW)) }
+        store.updatePrefs { it.copy(home = HomeLayoutConfig()) }
         settle()
 
-        // Library, Icon layout (the default).
+        // Library, Icon layout (the default), on a game with play history.
         router.tap(PadButton.R1)
         settle()
-        router.tap(PadButton.DPAD_RIGHT)
-        router.tap(PadButton.DPAD_RIGHT)
-        router.tap(PadButton.DPAD_DOWN)
+        repeat(5) { router.tap(PadButton.DPAD_RIGHT) }
         settle()
         shoot("library-icons")
 
-        // Library, Cover Grid.
+        // Library, Cover Grid, on a game with an update and DLC next to it.
         store.updatePrefs { it.copy(defaultLayout = LibraryLayout.COVER_GRID) }
+        settle()
+        repeat(5) { router.tap(PadButton.DPAD_LEFT) }
         settle()
         shoot("library-covers")
 
-        // Systems.
+        // Systems, in the Crossbar theme, on a system in the second row.
         router.tap(PadButton.R1)
+        store.updatePrefs { it.copy(themeId = "crossbar") }
         settle()
+        router.tap(PadButton.DPAD_DOWN)
+        router.tap(PadButton.DPAD_RIGHT)
         router.tap(PadButton.DPAD_RIGHT)
         settle()
         shoot("systems")
+        store.updatePrefs { it.copy(themeId = "fuse") }
 
-        // A game page, opened from Home through the game's options.
+        // A game page, opened from Home through the game's options (Options, then Game Info).
         router.tap(PadButton.L1)
         router.tap(PadButton.L1)
         settle()
@@ -156,10 +170,18 @@ class ReadmeScreenshots {
         router.tap(PadButton.B)
         settle()
 
-        // Quick menu.
+        // Quick menu (Start).
         router.tap(PadButton.START)
         settle()
         shoot("quick-menu")
+
+        // Settings, from the quick menu: Appearance, with the theme row selected.
+        repeat(6) { router.tap(PadButton.DPAD_DOWN) }
+        router.tap(PadButton.A)
+        settle()
+        router.tap(PadButton.DPAD_RIGHT)
+        settle()
+        shoot("settings")
     }
 
     @Test
@@ -173,6 +195,7 @@ class ReadmeScreenshots {
             }
         }
         pumpUntil { hasText("Welcome to Fuse") }
+        router.tap(PadButton.DPAD_LEFT)
         settle(3_000)
         shoot("onboarding")
     }
@@ -181,22 +204,33 @@ class ReadmeScreenshots {
         onAllNodesWithText(text, substring = true, ignoreCase = ignoreCase, useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()
 
     /**
-     * Lets the interface settle: the clock moves frame by frame (the interface animates forever, so
-     * it never goes idle by itself) while real time passes for the store's background work.
+     * Lets the interface settle for at least [ms] of both real and test-clock time. The interface
+     * animates forever (clock, ambient light), so the test clock never goes idle by itself: it is
+     * moved frame by frame in step with real time, so the store's background work and the on-screen
+     * clocks agree with the frames, and it keeps going while frames render slowly until animations
+     * have had their full time.
      */
     private fun ComposeUiTest.settle(ms: Long = 2_000) {
-        var elapsed = 0L
-        while (elapsed < ms) {
-            mainClock.advanceTimeBy(FRAME_MS)
-            Thread.sleep(6)
-            elapsed += FRAME_MS
+        val start = System.nanoTime()
+        var last = start
+        var advanced = 0L
+        while (advanced < ms || (System.nanoTime() - start) / 1_000_000 < ms) {
+            val now = System.nanoTime()
+            val step = ((now - last) / 1_000_000).coerceIn(FRAME_MS, MAX_STEP_MS)
+            mainClock.advanceTimeBy(step)
+            advanced += step
+            last = now
+            Thread.sleep(4)
         }
     }
 
     private fun ComposeUiTest.pumpUntil(timeoutMs: Long = 20_000, condition: () -> Boolean) {
         val end = System.currentTimeMillis() + timeoutMs
+        var last = System.nanoTime()
         while (System.currentTimeMillis() < end) {
-            mainClock.advanceTimeBy(FRAME_MS)
+            val now = System.nanoTime()
+            mainClock.advanceTimeBy(((now - last) / 1_000_000).coerceIn(FRAME_MS, MAX_STEP_MS))
+            last = now
             if (condition()) return
             Thread.sleep(10)
         }
@@ -204,10 +238,26 @@ class ReadmeScreenshots {
         throw AssertionError("Condition not met within $timeoutMs ms. Screen:\n" + tree.lines().filter { "Text" in it }.joinToString("\n"))
     }
 
+    /** Writes the current frame as an opaque, maximally compressed PNG. */
     private fun ComposeUiTest.shoot(name: String) {
-        val image = onRoot().captureToImage().toAwtImage()
+        val frame = onRoot().captureToImage().toAwtImage()
+        val rgb = BufferedImage(frame.width, frame.height, BufferedImage.TYPE_INT_RGB)
+        rgb.createGraphics().apply { drawImage(frame, 0, 0, null); dispose() }
         val file = File(outDir, "$name.png")
-        ImageIO.write(image, "png", file)
+        file.parentFile.mkdirs()
+        file.delete()
+        val writer = ImageIO.getImageWritersByFormatName("png").next()
+        val param = writer.defaultWriteParam.apply {
+            if (canWriteCompressed()) {
+                compressionMode = ImageWriteParam.MODE_EXPLICIT
+                compressionQuality = 0f
+            }
+        }
+        ImageIO.createImageOutputStream(file).use { out ->
+            writer.output = out
+            writer.write(null, IIOImage(rgb, null, null), param)
+        }
+        writer.dispose()
         println("Screenshot: ${file.absolutePath} (${file.length() / 1024} KB)")
     }
 
@@ -224,5 +274,6 @@ class ReadmeScreenshots {
         private const val HEIGHT = 1080
         private const val DENSITY = 1.5f
         private const val FRAME_MS = 16L
+        private const val MAX_STEP_MS = 100L
     }
 }
