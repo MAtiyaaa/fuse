@@ -140,7 +140,10 @@ internal class DefaultCredentialOps(
     suspend fun get(key: String): String? = runCatching { secrets.get(key) }.getOrNull()?.takeIf { it.isNotBlank() }
 
     override suspend fun put(key: String, value: String) {
-        val trimmed = value.trim()
+        // API keys and client ids never contain spaces, so pasted line breaks and invisible
+        // characters go; user names and passwords are only trimmed.
+        val isKey = key.contains("apikey", ignoreCase = true) || key.contains("client", ignoreCase = true)
+        val trimmed = if (isKey) io.github.matiyaaa.fuse.integrations.sanitizeKey(value) else value.trim()
         if (trimmed.isEmpty()) return remove(key)
         secrets.put(key, trimmed)
         keys.value = keys.value + key

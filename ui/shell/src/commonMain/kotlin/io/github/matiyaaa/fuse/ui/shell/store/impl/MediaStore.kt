@@ -2,6 +2,7 @@ package io.github.matiyaaa.fuse.ui.shell.store.impl
 
 import io.github.matiyaaa.fuse.data.settings.SecretKeys
 import io.github.matiyaaa.fuse.integrations.ApiResult
+import io.github.matiyaaa.fuse.integrations.KeyCheck
 import io.github.matiyaaa.fuse.integrations.igdb.IgdbClient
 import io.github.matiyaaa.fuse.integrations.igdb.IgdbCredentials
 import io.github.matiyaaa.fuse.integrations.libretro.LibretroThumbnails
@@ -63,6 +64,18 @@ internal class DefaultMediaOps(
     private val progress = MutableStateFlow<FillProgress?>(null)
     override val fillProgress: StateFlow<FillProgress?> = progress
 
+    private val systemArt = SystemArtStore(ctx)
+    override val systemArtProgress: StateFlow<FillProgress?> = systemArt.progress
+
+    /** Starts fetching system art for systems that have none (see [SystemArtStore]). */
+    fun startSystemArt() = systemArt.start()
+
+    override fun downloadSystemArt() = systemArt.downloadAll()
+
+    private val checks = MutableStateFlow<Map<ScrapeProviderId, KeyCheck?>>(emptyMap())
+    override val keyChecks: StateFlow<Map<ScrapeProviderId, KeyCheck?>> = checks
+    private var checkJob: Job? = null
+
     override val providers: StateFlow<List<ProviderStatus>> = combine(ctx.settings, credentials.stored) { settings, keys ->
         val order = settings.scraping.effectiveOrder()
         val disabled = settings.scraping.disabledProviders.toSet()
@@ -87,9 +100,39 @@ internal class DefaultMediaOps(
         }
     }.resilient().stateIn(ctx.scope, SharingStarted.Eagerly, emptyList())
 
-    /** Drops cached clients after credentials change. */
+    /** Drops cached clients after credentials change, and tests the keys again shortly after. */
     fun invalidate() {
         cached = null
+        // A short wait lets the IGDB id and secret, saved one after the other, be tested together.
+        runChecks(delayMs = 800)
+    }
+
+    override fun checkKeys() = runChecks(delayMs = 0)
+
+    private fun runChecks(delayMs: Long) {
+        checkJob?.cancel()
+        checkJob = ctx.scope.launch {
+            kotlinx.coroutines.delay(delayMs)
+            val http = ctx.services.http
+            val tests = buildMap<ScrapeProviderId, suspend () -> KeyCheck> {
+                credentials.get(SecretKeys.SGDB_API_KEY)?.let { key -> put(ScrapeProviderId.STEAMGRIDDB) { SteamGridDbClient(http, key).verifyKey() } }
+                val id = credentials.get(SecretKeys.IGDB_CLIENT_ID)
+                val secret = credentials.get(SecretKeys.IGDB_CLIENT_SECRET)
+                if (id != null && secret != null) put(ScrapeProviderId.IGDB) { IgdbClient(http, IgdbCredentials(id, secret)).verifyCredentials() }
+                credentials.get(SecretKeys.TGDB_API_KEY)?.let { key -> put(ScrapeProviderId.THEGAMESDB) { TheGamesDbClient(http, key).verifyKey() } }
+            }
+            checks.value = tests.keys.associateWith { null }
+            for ((provider, test) in tests) {
+                val result = try {
+                    test()
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    KeyCheck.Failed("The check could not run (${e::class.simpleName})")
+                }
+                checks.value = checks.value + (provider to result)
+            }
+        }
     }
 
     private suspend fun coordinator(): Pair<Set<ScrapeProviderId>, ScrapeCoordinator> {
@@ -119,7 +162,8 @@ internal class DefaultMediaOps(
     private suspend fun query(game: Game): ScrapeQuery {
         val settings = ctx.settings.value.scraping
         return ScrapeQuery(
-            title = game.titles.metadata ?: game.titles.cleaned ?: game.titles.original,
+            // The user's own name first, then a name a provider gave, then the cleaned file name.
+            title = game.titles.custom ?: game.titles.metadata ?: game.titles.cleaned ?: game.titles.original,
             platform = game.platformId,
             platformName = ctx.platformName(game.platformId),
             fileName = FsPath.name(game.location.path),
@@ -149,8 +193,20 @@ internal class DefaultMediaOps(
     override fun media(owner: MediaOwner): Flow<MediaSet> = media.observe(owner)
 
     override suspend fun artworkOptions(owner: MediaOwner, kind: MediaKind): ArtworkResult {
+        if (owner is MediaOwner.OfPlatform) {
+            val platform = ctx.platform(owner.id) ?: return ArtworkResult.Unavailable("Fuse doesn't know this system.")
+            val options = systemArt.options(platform, kind)
+            return if (options.isNotEmpty()) {
+                ArtworkResult.Options(options)
+            } else {
+                ArtworkResult.Unavailable(
+                    if (kind == MediaKind.LOGO || kind == MediaKind.BOXART) "The system art pack has nothing for ${platform.name}, or it couldn't be reached."
+                    else "System art comes as a logo and a cover-style panel. For other slots, choose an image from a file.",
+                )
+            }
+        }
         val gameId = (owner as? MediaOwner.OfGame)?.id
-            ?: return ArtworkResult.Unavailable("Online artwork is found for games. For systems, choose an image from a file.")
+            ?: return ArtworkResult.Unavailable("Online artwork is found for games and systems. Here, choose an image from a file.")
         val game = ctx.data.games.get(gameId) ?: return ArtworkResult.Unavailable("This game is no longer in your library.")
         val (request, coordinator) = request(game, setOf(kind), metadata = false, collectAll = true)
         return when (val outcome = coordinator.scrape(request)) {
@@ -158,7 +214,12 @@ internal class DefaultMediaOps(
                 .let { if (it.isEmpty()) ArtworkResult.Unavailable("No ${kind.label()} found for this game.") else ArtworkResult.Options(it) }
             is ScrapeOutcome.NeedsReview -> ArtworkResult.NeedsMatch(outcome.candidates)
             is ScrapeOutcome.NotFound -> ArtworkResult.Unavailable(
-                if (outcome.searched.isEmpty()) "No artwork source is set up. Add a SteamGridDB key in Settings." else "No ${kind.label()} found for this game.",
+                when {
+                    outcome.searched.isEmpty() -> "No artwork source is set up. Add a SteamGridDB key in Settings."
+                    kind == MediaKind.ICON && ScrapeProviderId.STEAMGRIDDB !in outcome.searched ->
+                        "Icons come from SteamGridDB. Add a SteamGridDB key in Settings, Media and Scraping."
+                    else -> "No ${kind.label()} found for this game."
+                },
             )
             is ScrapeOutcome.ProviderErrors -> ArtworkResult.Unavailable(outcome.errors.firstOrNull()?.let { "${it.provider.displayName}: ${it.failure.message}" } ?: "The artwork sources couldn't be reached.")
         }
@@ -236,7 +297,8 @@ internal class DefaultMediaOps(
             ctx.data.games.applyMetadata(
                 game.id,
                 meta.copy(source = meta.source ?: outcome.candidate.provider.metadataSource()),
-                titleFromMetadata = null,
+                // A confident match also names the game properly; an existing name is kept when only filling.
+                titleFromMetadata = outcome.candidate.title,
                 onlyFillEmpty = mode == MediaFillMode.FILL_MISSING,
             )
         }

@@ -151,7 +151,7 @@ internal class AuditDriver(
             spec = ThemePresets.byId(prefs.themeId),
             motion = prefs.motion,
             quality = RenderQuality.of(prefs.performance, platform.device, prefs.lowPower),
-            glyphs = GlyphConfig(prefs.input.glyphs, prefs.input.nintendoLayout),
+            glyphs = GlyphConfig(prefs.input.glyphs, prefs.input.confirmOnRight),
             glass = prefs.glass,
             highContrastFocus = prefs.highContrastFocus,
         ) { ToastHost(extraToasts) }

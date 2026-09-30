@@ -1,6 +1,7 @@
 package io.github.matiyaaa.fuse.integrations.igdb
 
 import io.github.matiyaaa.fuse.integrations.ApiResult
+import io.github.matiyaaa.fuse.integrations.KeyCheck
 import io.github.matiyaaa.fuse.integrations.RateLimiter
 import io.github.matiyaaa.fuse.integrations.TestHttp
 import io.github.matiyaaa.fuse.integrations.bodyText
@@ -88,8 +89,8 @@ class IgdbTest {
     fun badCredentialsAreAuthErrorsWithoutTheSecret() = runTest {
         val (_, client, _) = harness(tokenStatus = { HttpStatusCode.BadRequest })
         val result = client.verifyCredentials()
-        assertIs<ApiResult.AuthError>(result)
-        assertFalse("TWITCH_SECRET_XYZ" in result.message)
+        assertIs<KeyCheck.Rejected>(result)
+        assertFalse("TWITCH_SECRET_XYZ" in result.reason)
         assertFalse("TWITCH_SECRET_XYZ" in IgdbCredentials("id", "TWITCH_SECRET_XYZ").toString())
     }
 

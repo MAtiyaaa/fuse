@@ -111,12 +111,12 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
 
     val actions = listOf(
         DetailAction("play", "Play", FuseIcons.Play, primary = true) { app.play(card) },
+        DetailAction("media", "Media", FuseIcons.Images) { app.go(Route.Media(MediaOwner.OfGame(game.id), game.displayTitle)) },
         DetailAction("emu", d.emulator.selected?.name ?: "Choose emulator", FuseIcons.Chip) { app.emulatorPicker(card) },
         DetailAction("fav", null, FuseIcons.Heart) {
             app.scope.launch { app.store.library.setFavorite(game.id, !game.favorite) }
         },
         DetailAction("col", null, FuseIcons.ListPlus) { app.collectionPicker(game.id, game.displayTitle) },
-        DetailAction("media", null, FuseIcons.Images) { app.go(Route.Media(MediaOwner.OfGame(game.id), game.displayTitle)) },
         DetailAction("more", null, FuseIcons.More) { app.openContextMenu(app.gameMenu(card, fromDetail = true)) },
     )
     val discs = game.discs

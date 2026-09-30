@@ -110,17 +110,23 @@ internal class DefaultLibraryOps(
             }
         }
 
+    private val systemOrder: Flow<Pair<List<String>, Map<String, Long>>> =
+        data.settings.settings.map { it.library.systemOrder to it.library.systemColors }.distinctUntilChanged()
+
     override val platforms: StateFlow<List<PlatformCard>> = combine(
         data.games.platformCounts(),
         ctx.installed,
         combine(engine.bios, engine.platformFolders, ::Pair),
         platformChoices,
-        platformArt,
-    ) { counts, installed, (bios, folders), choices, art ->
-        val catalogOrder = ctx.platforms.all.withIndex().associate { (i, p) -> p.id to i }
+        combine(platformArt, systemOrder, ::Pair),
+    ) { counts, installed, (bios, folders), choices, (art, orderAndColors) ->
+        val (order, colors) = orderAndColors
+        // The user's order first (hold confirm on a system to move it), then catalog order.
+        val catalogOrder = ctx.platforms.all.withIndex().associate { (i, p) -> p.id to i + order.size }
+        val userOrder = order.withIndex().associate { (i, id) -> PlatformId(id) to i }
         counts.filterValues { it > 0 }.keys
             .mapNotNull(ctx::platform)
-            .sortedBy { catalogOrder[it.id] ?: Int.MAX_VALUE }
+            .sortedBy { userOrder[it.id] ?: catalogOrder[it.id] ?: Int.MAX_VALUE }
             .map { p ->
                 val (chosen, layout) = choices[p.id] ?: ("" to p.defaultLayout)
                 val candidates = ctx.registry.forPlatform(p.id, ctx.host)
@@ -130,7 +136,8 @@ internal class DefaultLibraryOps(
                     ?: candidates.firstOrNull { it.id in installedIds }?.id
                 val effectiveInstalled = installed.firstOrNull { it.id == effective }
                 PlatformCard(
-                    platform = p,
+                    // A brand colour from the system art pack replaces Fuse's generated accent.
+                    platform = colors[p.id.value]?.let { p.copy(accent = it) } ?: p,
                     gameCount = counts[p.id] ?: 0,
                     art = art[p.id] ?: Art.None,
                     emulatorName = effectiveInstalled?.name ?: effective?.let { ctx.registry[it]?.name },
@@ -163,9 +170,21 @@ internal class DefaultLibraryOps(
         }
         .flowOn(Dispatchers.Default)
 
+    /**
+     * Played in the last two weeks, minus games taken off the shelf (until they are played again).
+     * The two-week window is recomputed hourly so it moves while Fuse stays open.
+     */
+    private val continuePlaying: Flow<List<GameCard>> = combine(
+        flow { while (true) { emit(Unit); kotlinx.coroutines.delay(HOUR_MS) } }
+            .flatMapLatest { ctx.cards(data.games.observeContinuePlaying(days = 14, limit = 40)) },
+        data.settings.settings.map { it.home.continueDismissed }.distinctUntilChanged(),
+    ) { cards, dismissed ->
+        cards.filter { c -> dismissed[c.id.value.toString()]?.let { at -> (c.lastPlayedAt ?: 0) > at } ?: true }.take(20)
+    }
+
     override val home: StateFlow<HomeFeed> = combine(
         listOf(
-            ctx.cards(data.games.observeContinuePlaying(days = 14, limit = 20)),
+            continuePlaying,
             ctx.cards(data.games.observeRecentlyPlayed(20)),
             ctx.cards(data.games.observeRecentlyAdded(20)),
             ctx.cards(data.games.observeFavorites()),
@@ -200,6 +219,14 @@ internal class DefaultLibraryOps(
 
     override fun games(query: GameQuery): Flow<List<GameCard>> {
         val games = data.games
+        if (query.set != io.github.matiyaaa.fuse.ui.shell.store.GameSet.LIBRARY) {
+            val set = when (query.set) {
+                io.github.matiyaaa.fuse.ui.shell.store.GameSet.MISSING -> games.observeMissing()
+                io.github.matiyaaa.fuse.ui.shell.store.GameSet.HIDDEN -> games.observeHidden()
+                else -> games.observeRemoved()
+            }
+            return ctx.cards(set.map { list -> list.filter { query.platform == null || it.platformId == query.platform }.sortedWith(query.sort.comparator()) })
+        }
         val summaries = when {
             query.collection != null -> data.collections.observeGames(CollectionKey.Manual(query.collection))
             query.favoritesOnly -> games.observeFavorites()
@@ -455,6 +482,15 @@ internal class DefaultLibraryOps(
 
     override suspend fun removeFromFuse(id: GameId) = data.games.removeFromFuse(id)
 
+    override suspend fun restore(id: GameId) {
+        data.games.restoreToFuse(id)
+        data.games.setHidden(id, false)
+    }
+
+    override suspend fun forgetMissing(id: GameId) {
+        data.games.forgetMissing(id)
+    }
+
     override suspend fun previewCleanNames(): List<Pair<String, String>> =
         data.titleCleanup.preview(DisplayNameCleaner::clean).map { it.before to it.after }
 
@@ -500,3 +536,5 @@ private fun SortOrder.comparator(): Comparator<io.github.matiyaaa.fuse.data.repo
     SortOrder.MOST_PLAYED -> compareByDescending<io.github.matiyaaa.fuse.data.repo.GameSummary> { it.totalSeconds }.thenBy { it.sortKey }
     SortOrder.RELEASE_YEAR -> compareBy<io.github.matiyaaa.fuse.data.repo.GameSummary> { it.releaseYear ?: Int.MAX_VALUE }.thenBy { it.sortKey }
 }
+
+private const val HOUR_MS = 3_600_000L

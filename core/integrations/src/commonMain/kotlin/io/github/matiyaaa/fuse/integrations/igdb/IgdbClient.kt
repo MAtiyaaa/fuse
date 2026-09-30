@@ -2,12 +2,14 @@ package io.github.matiyaaa.fuse.integrations.igdb
 
 import io.github.matiyaaa.fuse.integrations.ApiResult
 import io.github.matiyaaa.fuse.integrations.FlexLong
+import io.github.matiyaaa.fuse.integrations.KeyCheck
 import io.github.matiyaaa.fuse.integrations.LooseBoolean
 import io.github.matiyaaa.fuse.integrations.LooseLong
 import io.github.matiyaaa.fuse.integrations.ProviderHttp
 import io.github.matiyaaa.fuse.integrations.RateLimiter
 import io.github.matiyaaa.fuse.integrations.Secret
 import io.github.matiyaaa.fuse.integrations.flatMap
+import io.github.matiyaaa.fuse.integrations.sanitizeKey
 import io.github.matiyaaa.fuse.model.PlatformId
 import io.ktor.client.HttpClient
 import io.ktor.client.request.bearerAuth
@@ -28,9 +30,11 @@ import kotlinx.serialization.builtins.ListSerializer
  * The user's own Twitch application credentials for IGDB. Twitch's developer agreement forbids
  * shipping a client secret inside a public app, so Fuse never bundles one: each user registers an
  * application at dev.twitch.tv and pastes the Client ID and Secret. [toString] hides the secret.
+ * Both are passed through [sanitizeKey], so stray spaces or line breaks from pasting are dropped.
  */
-class IgdbCredentials(val clientId: String, clientSecret: String) {
-    internal val secret = Secret(clientSecret)
+class IgdbCredentials(clientId: String, clientSecret: String) {
+    val clientId: String = sanitizeKey(clientId)
+    internal val secret = Secret(sanitizeKey(clientSecret))
 
     override fun toString(): String = "IgdbCredentials(clientId=$clientId, clientSecret=***)"
     override fun equals(other: Any?): Boolean = other is IgdbCredentials && other.clientId == clientId && other.secret == secret
@@ -158,8 +162,8 @@ class IgdbClient(
     private val api = ProviderHttp(http, "IGDB", limiter, { listOfNotNull(credentials.secret, token) })
     private val twitch = ProviderHttp(http, "Twitch", null, { listOfNotNull(credentials.secret, token) })
 
-    /** Obtains a token; AuthError means the Client ID or Secret is wrong. */
-    suspend fun verifyCredentials(): ApiResult<Unit> = accessToken(forceRefresh = true).flatMap { ApiResult.Success(Unit) }
+    /** Obtains a fresh token; [KeyCheck.Rejected] means the Client ID or Secret is wrong or missing. */
+    suspend fun verifyCredentials(): KeyCheck = KeyCheck.from(accessToken(forceRefresh = true))
 
     /** Searches main games (no versions) by title, optionally limited to IGDB [platformIds]. */
     suspend fun searchGames(title: String, platformIds: List<Int> = emptyList(), limit: Int = 10): ApiResult<List<IgdbGame>> =

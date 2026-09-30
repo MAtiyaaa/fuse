@@ -31,6 +31,7 @@ class AndroidFuseServices(
     override val http: HttpClient,
     scope: CoroutineScope,
     activities: ActivityHolder,
+    dualScreen: DualScreenHandoff? = null,
 ) : FuseServices {
     private val appContext = context.applicationContext
     val volumes = StorageVolumes(appContext)
@@ -42,9 +43,14 @@ class AndroidFuseServices(
     override val cacheDir: String = appContext.cacheDir.absolutePath
 
     override val emulators: EmulatorDetector = AndroidEmulatorDetector(appContext, volumes)
-    override val launcher: GameLauncher = AndroidGameLauncher(appContext, activities, volumes) {
-        data.sources.all().filter { it.enabled }.map { SourceRoot(it.path, it.kind) }
-    }
+    override val launcher: GameLauncher = AndroidGameLauncher(
+        appContext,
+        activities,
+        volumes,
+        sources = { data.sources.all().filter { it.enabled }.map { SourceRoot(it.path, it.kind) } },
+        platformAt = { path -> data.games.idByPath(path)?.let { data.games.summary(it) }?.platformId?.value },
+        dualScreen = dualScreen,
+    )
     override val cartridge: CartridgeBridge = AndroidCartridgeBridge(appContext, activities)
     override val installer: ReleaseInstaller = AndroidReleaseInstaller(appContext, http, activities)
     override val apps: AppsProvider = AndroidAppsProvider(appContext, scope, activities)

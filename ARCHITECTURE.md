@@ -77,7 +77,7 @@ Namespaces follow the module path (`io.github.matiyaaa.fuse.core.model` for `:co
 | `core:model` | Serializable domain types shared by every layer. No logic beyond small derived properties | `Game.kt`, `Platform.kt`, `Launch.kt`, `Media.kt`, `Settings.kt` |
 | `core:library` | Reads library folders and turns them into `ScannedGame`s: platform detection, folder interpretation, disc grouping, filename parsing, local media, BIOS checks. Read-only | `scan/LibraryScanner.kt`, `scan/FolderInterpreter.kt`, `PlatformCatalog.kt`, `bios/BiosChecker.kt` |
 | `core:launch` | Emulator and launcher catalogs as data, installed-emulator detection helpers, and launch resolution into a `LaunchPlan`. Never starts anything | `LaunchResolver.kt`, `AdapterRegistry.kt`, `android/AndroidEmulatorCatalog.kt`, `linux/LinuxCatalog.kt` |
-| `core:integrations` | HTTP clients for RetroAchievements, SteamGridDB, IGDB, TheGamesDB, ScreenScraper, libretro thumbnails and GitHub Releases; the scrape coordinator and title matcher; the Cartridge bridge protocol | `scrape/ScrapeCoordinator.kt`, `cartridge/CartridgeProtocol.kt`, `FuseHttp.kt` |
+| `core:integrations` | HTTP clients for RetroAchievements, SteamGridDB, IGDB, TheGamesDB, ScreenScraper, libretro thumbnails, the Art Book Next system art pack and GitHub Releases; the scrape coordinator and title matcher; the Cartridge bridge protocol | `scrape/ScrapeCoordinator.kt`, `cartridge/CartridgeProtocol.kt`, `FuseHttp.kt` |
 | `core:data` | SQLDelight database, repositories, the library indexer that reconciles scans, app settings and scoped settings, the `SecretStore` contract | `FuseData.kt`, `repo/LibraryIndexer.kt`, `settings/AppSettings.kt` |
 | `ui:designsystem` | Tokens, colours, typography, shapes, motion, theme presets, focus and selection, input routing, components, icons, sounds, hero backdrop and generated art | `theme/`, `components/`, `input/InputRouter.kt` |
 | `ui:shell` | Every screen and overlay, navigation, onboarding and settings, written against the `FuseStore` and `PlatformUi` interfaces | `app/FuseApp.kt`, `store/FuseStore.kt`, `store/FuseServices.kt` |
@@ -262,8 +262,12 @@ All controller, keyboard and remote input goes through `InputRouter` (`ui:design
 `input/InputRouter.kt`). Platforms feed raw presses and releases of `PadButton`s, stick positions and
 trigger values; the router does the rest:
 
-- **Mapping.** Buttons map to `NavAction`s by position, with the Nintendo layout swapping A/B and X/Y,
-  and user remaps (`InputProfile.remap`) taking precedence.
+- **Mapping.** Buttons map to `NavAction`s by keycode. `InputProfile.glyphs` only says how the pad
+  is labelled (hint glyphs and their positions); `swapConfirmBack` swaps A/B and X/Y for pads that
+  report buttons by position. Android handhelds with Nintendo labels already send Nintendo keycodes,
+  so they need no swap. User remaps (`InputProfile.remap`) take precedence. System Back arrives as
+  `KEY_ESCAPE` through `press`, so capture and the button test see it; `exclusive` takes every press
+  while the test runs.
 - **Repeat.** Platform auto-repeat is ignored. Directions and page jumps repeat after
   `repeatDelayMs` (280 ms) every `repeatIntervalMs` (70 ms), accelerating by 10% per step after the
   fourth repeat down to half the interval. Repeats are never queued, so releasing stops movement at

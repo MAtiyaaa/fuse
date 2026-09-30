@@ -108,8 +108,12 @@ class ScrapeCoordinator(
             }
         }
         return when {
+            // A provider can list the same game twice (regional entries, paged results); show it once.
             review.isNotEmpty() -> ScrapeOutcome.NeedsReview(
-                review.sortedByDescending { it.candidate.confidence }.take(request.maxCandidates).map { it.candidate },
+                review.sortedByDescending { it.candidate.confidence }
+                    .distinctBy { it.candidate.provider to it.candidate.providerGameId }
+                    .take(request.maxCandidates)
+                    .map { it.candidate },
                 errors,
             )
             searched.isEmpty() && errors.isNotEmpty() -> ScrapeOutcome.ProviderErrors(errors)

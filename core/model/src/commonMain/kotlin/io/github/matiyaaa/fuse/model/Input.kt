@@ -39,9 +39,19 @@ enum class GlyphStyle { XBOX, NINTENDO, PLAYSTATION, KEYBOARD }
 
 @Serializable
 data class InputProfile(
-    /** Swap A/B and X/Y behaviour (Nintendo layout: confirm is the right face button). */
+    /**
+     * Before 0.0.2 this swapped A/B by keycode. Android handhelds with Nintendo labels already send
+     * the Nintendo keycodes, so that swapped them twice. It is now only read to migrate old settings
+     * (see [migrated]); [glyphs] says how the buttons are labelled and [swapConfirmBack] swaps keys.
+     */
     val nintendoLayout: Boolean = false,
+    /** How the face buttons are labelled on the pad, which decides the hint glyphs. */
     val glyphs: GlyphStyle = GlyphStyle.XBOX,
+    /**
+     * Swap A/B and X/Y behaviour. Only needed when the pad reports its buttons by position rather
+     * than by label; "Detect my buttons" sets it from the button the user presses to confirm.
+     */
+    val swapConfirmBack: Boolean = false,
     val autoGlyphs: Boolean = true,
     /** Delay before a held direction starts repeating. */
     val repeatDelayMs: Int = 280,
@@ -60,4 +70,11 @@ data class InputProfile(
     val soundsEnabled: Boolean = true,
     /** User remaps: button -> action. Empty means the defaults for the layout. */
     val remap: Map<PadButton, NavAction> = emptyMap(),
-)
+) {
+    /** Confirm is the right face button: Nintendo labels without a swap, or other labels with one. */
+    val confirmOnRight: Boolean get() = (glyphs == GlyphStyle.NINTENDO) != swapConfirmBack
+
+    /** Settings saved by 0.0.1 with the old Nintendo toggle become Nintendo labels without a swap. */
+    fun migrated(): InputProfile =
+        if (nintendoLayout) copy(nintendoLayout = false, glyphs = GlyphStyle.NINTENDO) else this
+}

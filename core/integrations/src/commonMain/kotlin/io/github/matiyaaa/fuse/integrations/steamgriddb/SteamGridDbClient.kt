@@ -2,6 +2,7 @@ package io.github.matiyaaa.fuse.integrations.steamgriddb
 
 import io.github.matiyaaa.fuse.integrations.ApiResult
 import io.github.matiyaaa.fuse.integrations.FlexLong
+import io.github.matiyaaa.fuse.integrations.KeyCheck
 import io.github.matiyaaa.fuse.integrations.LooseBoolean
 import io.github.matiyaaa.fuse.integrations.LooseInt
 import io.github.matiyaaa.fuse.integrations.LooseLong
@@ -11,6 +12,7 @@ import io.github.matiyaaa.fuse.integrations.Secret
 import io.github.matiyaaa.fuse.integrations.UrlCoding
 import io.github.matiyaaa.fuse.integrations.flatMap
 import io.github.matiyaaa.fuse.integrations.map
+import io.github.matiyaaa.fuse.integrations.sanitizeKey
 import io.github.matiyaaa.fuse.model.ArtworkOption
 import io.github.matiyaaa.fuse.model.MediaKind
 import io.github.matiyaaa.fuse.model.ScrapeProviderId
@@ -169,11 +171,12 @@ class SteamGridDbClient(
     limiter: RateLimiter = RateLimiter(minIntervalMillis = 100, maxConcurrency = 4),
     private val baseUrl: String = BASE_URL,
 ) {
-    private val key = Secret(apiKey)
+    private val key = Secret(sanitizeKey(apiKey))
     private val api = ProviderHttp(http, "SteamGridDB", limiter, { listOf(key) })
 
-    /** Checks the key with a real search call; AuthError means the key was rejected. */
-    suspend fun verifyKey(): ApiResult<Unit> = searchAutocomplete("fuse").map { }
+    /** Checks the key with a real search call. */
+    suspend fun verifyKey(): KeyCheck =
+        if (key.isBlank) KeyCheck.Rejected("Enter a SteamGridDB API key") else KeyCheck.from(searchAutocomplete("fuse"))
 
     /** `/search/autocomplete/{term}`. */
     suspend fun searchAutocomplete(term: String): ApiResult<List<SgdbGame>> =

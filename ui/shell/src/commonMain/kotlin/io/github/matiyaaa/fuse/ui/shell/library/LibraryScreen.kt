@@ -1,5 +1,23 @@
 package io.github.matiyaaa.fuse.ui.shell.library
 
+import io.github.matiyaaa.fuse.ui.designsystem.media.PrefetchArt
+
+import androidx.compose.foundation.rememberScrollState
+
+import androidx.compose.foundation.horizontalScroll
+
+import kotlinx.coroutines.flow.map
+
+import kotlinx.coroutines.flow.flowOf
+
+import kotlinx.coroutines.flow.combine
+
+import io.github.matiyaaa.fuse.ui.shell.app.ConfirmSpec
+
+import io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec
+
+import io.github.matiyaaa.fuse.ui.shell.store.GameSet
+
 import io.github.matiyaaa.fuse.ui.designsystem.components.fadingEdges
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -98,26 +116,40 @@ sealed interface LibraryScope {
     data class OfCollection(val collection: CollectionId, val name: String) : LibraryScope
 }
 
-/** Library filters for the All view. */
-private sealed interface LibraryFilter {
-    val label: String
-
-    data object All : LibraryFilter { override val label = "All" }
-    data object Favorites : LibraryFilter { override val label = "Favourites" }
-    data object Recent : LibraryFilter { override val label = "Recently played" }
-    data class Platform(val id: PlatformId, override val label: String) : LibraryFilter
+/**
+ * Views of the whole library. Missing, Hidden and Removed only appear while they have games; their
+ * games open a menu to restore or forget them instead of playing.
+ */
+enum class LibrarySegment(val label: String, val set: GameSet) {
+    ALL("All", GameSet.LIBRARY),
+    FAVORITES("Favourites", GameSet.LIBRARY),
+    RECENT("Recently played", GameSet.LIBRARY),
+    MISSING("Missing", GameSet.MISSING),
+    HIDDEN("Hidden", GameSet.HIDDEN),
+    REMOVED("Removed", GameSet.REMOVED),
 }
+
+/** The buttons at the end of the Library header. */
+enum class LibraryButton { SYSTEM, SORT, VIEW }
 
 /** Remembered per library view: which game was selected (by id, so re-sorting keeps it), and where focus was. */
 @Stable
 class LibraryViewState {
     val grid = GridSelection()
     var selectedId by mutableStateOf<GameId?>(null)
-    var filterIndex by mutableIntStateOf(0)
-    var inFilters by mutableStateOf(false)
+    var segment by mutableStateOf(LibrarySegment.ALL)
+    /** The system the whole library is narrowed to, or null for every system. */
+    var system by mutableStateOf<PlatformId?>(null)
+    var inHeader by mutableStateOf(false)
+    var headerIndex by mutableIntStateOf(0)
     var layoutOverride by mutableStateOf<LibraryLayout?>(null)
-    var sort by mutableStateOf(SortOrder.TITLE)
     var showHidden by mutableStateOf(false)
+}
+
+/** One item of the header row, for controller focus: a view, or a button. */
+private sealed interface HeaderItem {
+    data class View(val segment: LibrarySegment) : HeaderItem
+    data class Button(val button: LibraryButton) : HeaderItem
 }
 
 @Composable
@@ -131,25 +163,40 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
         is LibraryScope.OfCollection -> "lib.c.${scope.collection.value}"
     }
     val state = rememberRouteState(app.navigator, key) { LibraryViewState() }
+    val sort = prefs.librarySort
 
-    val filters = remember(platforms, scope) {
-        if (scope != LibraryScope.All) emptyList() else buildList {
-            add(LibraryFilter.All)
-            add(LibraryFilter.Favorites)
-            add(LibraryFilter.Recent)
-            platforms.filter { it.gameCount > 0 }.forEach { add(LibraryFilter.Platform(it.platform.id, it.platform.shortName)) }
+    // How many games the extra views hold, so they only show when there is something in them.
+    val extraCounts by remember(scope) {
+        if (scope != LibraryScope.All) {
+            flowOf(emptyMap())
+        } else {
+            combine(
+                listOf(LibrarySegment.MISSING, LibrarySegment.HIDDEN, LibrarySegment.REMOVED).map { s ->
+                    store.library.games(GameQuery(set = s.set)).map { s to it.size }
+                },
+            ) { it.toMap() }
         }
+    }.collectAsState(initial = emptyMap())
+    val segments = if (scope != LibraryScope.All) emptyList() else LibrarySegment.entries.filter { s ->
+        s.set == GameSet.LIBRARY || (extraCounts[s] ?: 0) > 0 || state.segment == s
     }
-    val filter = filters.getOrNull(state.filterIndex) ?: LibraryFilter.All
+    val buttons = buildList {
+        if (scope == LibraryScope.All) add(LibraryButton.SYSTEM)
+        add(LibraryButton.SORT)
+        add(LibraryButton.VIEW)
+    }
+    val header: List<HeaderItem> = segments.map { HeaderItem.View(it) } + buttons.map { HeaderItem.Button(it) }
+
+    val segment = state.segment
     val query = when (scope) {
-        LibraryScope.All -> when (filter) {
-            LibraryFilter.All -> GameQuery(sort = state.sort, includeHidden = state.showHidden)
-            LibraryFilter.Favorites -> GameQuery(favoritesOnly = true, sort = state.sort)
-            LibraryFilter.Recent -> GameQuery(sort = SortOrder.RECENTLY_PLAYED)
-            is LibraryFilter.Platform -> GameQuery(platform = filter.id, sort = state.sort)
+        LibraryScope.All -> when (segment) {
+            LibrarySegment.ALL -> GameQuery(platform = state.system, sort = sort, includeHidden = state.showHidden)
+            LibrarySegment.FAVORITES -> GameQuery(platform = state.system, favoritesOnly = true, sort = sort)
+            LibrarySegment.RECENT -> GameQuery(platform = state.system, sort = SortOrder.RECENTLY_PLAYED)
+            else -> GameQuery(platform = state.system, sort = sort, set = segment.set)
         }
-        is LibraryScope.OfPlatform -> GameQuery(platform = scope.platform, sort = state.sort, includeHidden = state.showHidden)
-        is LibraryScope.OfCollection -> GameQuery(collection = scope.collection, sort = state.sort)
+        is LibraryScope.OfPlatform -> GameQuery(platform = scope.platform, sort = sort, includeHidden = state.showHidden)
+        is LibraryScope.OfCollection -> GameQuery(collection = scope.collection, sort = sort)
     }
     val gamesFlow = remember(query) { store.library.games(query) }
     val games by gamesFlow.collectAsState(initial = null)
@@ -159,7 +206,8 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
     val resolvedLayout by layoutFlow.collectAsState(initial = null)
     val layout = state.layoutOverride ?: resolvedLayout?.value?.takeIf { resolvedLayout?.isDefault == false } ?: prefs.defaultLayout
 
-    val list = games
+    // Recently played only lists games that were played.
+    val list = games?.let { g -> if (scope == LibraryScope.All && segment == LibrarySegment.RECENT) g.filter { it.lastPlayedAt != null } else g }
     // Keep the same game selected when the list changes (new downloads, sorting, layout switches).
     LaunchedEffect(list) {
         if (list == null) return@LaunchedEffect
@@ -167,28 +215,64 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
         if (idx >= 0) state.grid.index = idx else state.grid.clamp(list.size)
     }
     val selectedCard = list?.getOrNull(state.grid.index)
-    LaunchedEffect(selectedCard?.id) {
+    PrefetchArt(remember(list) { list.orEmpty().map { it.art.icon ?: it.art.boxart ?: it.art.grid } }, state.grid.index)
+    val special = scope == LibraryScope.All && segment.set != GameSet.LIBRARY
+    LaunchedEffect(selectedCard?.id, special) {
         state.selectedId = selectedCard?.id
         app.hero = selectedCard?.let { HeroSource(it.id, it.art.hero ?: it.art.grid, it.accent.toColor(), it.art.heroFocusX, it.art.heroFocusY, it.art.video) }
-        app.hints = if (selectedCard != null) {
-            listOf(Hint(HintButton.CONFIRM, "Play"), Hint(HintButton.OPTIONS, "Options"), Hint(HintButton.SEARCH, "Search"))
-        } else emptyList()
+        app.hints = when {
+            selectedCard == null -> emptyList()
+            special -> listOf(Hint(HintButton.CONFIRM, "Choose"), Hint(HintButton.BACK, "Back"))
+            else -> listOf(Hint(HintButton.CONFIRM, "Play"), Hint(HintButton.OPTIONS, "Options"), Hint(HintButton.SEARCH, "Search"))
+        }
     }
 
     var columns by remember { mutableIntStateOf(6) }
 
     fun options(card: GameCard) {
+        if (special) {
+            app.openContextMenu(setMenu(app, card, segment))
+            return
+        }
         val base = app.gameMenu(card)
-        app.openContextMenu(base.copy(actions = base.actions + viewActions(app, state, platformId, layout)))
+        app.openContextMenu(base.copy(actions = base.actions + viewActions(app, state, platformId, layout, sort)))
+    }
+
+    fun press(button: LibraryButton) {
+        when (button) {
+            LibraryButton.SYSTEM -> app.choice = systemPicker(app, state, platforms)
+            LibraryButton.SORT -> app.choice = sortPicker(app, sort)
+            LibraryButton.VIEW -> app.choice = layoutPicker(app, state, platformId, layout)
+        }
+    }
+
+    fun choose(s: LibrarySegment) {
+        if (state.segment != s) {
+            state.segment = s
+            state.grid.index = 0
+            state.selectedId = null
+        }
     }
 
     InputLayer(enabled = app.focusZone == FocusZone.CONTENT && !app.overlayOpen) { e ->
         val count = list?.size ?: 0
-        if (state.inFilters && filters.isNotEmpty()) {
+        if (state.inHeader && header.isNotEmpty()) {
+            state.headerIndex = state.headerIndex.coerceIn(0, header.lastIndex)
+            fun focus(i: Int): NavResult {
+                if (i !in header.indices) return NavResult.BLOCKED
+                state.headerIndex = i
+                // Moving onto a view switches to it straight away, like tabs.
+                (header[i] as? HeaderItem.View)?.let { choose(it.segment) }
+                return NavResult.MOVED
+            }
             return@InputLayer when (e.action) {
-                NavAction.LEFT -> if (state.filterIndex > 0) { state.filterIndex--; state.grid.index = 0; NavResult.MOVED } else NavResult.BLOCKED
-                NavAction.RIGHT -> if (state.filterIndex < filters.lastIndex) { state.filterIndex++; state.grid.index = 0; NavResult.MOVED } else NavResult.BLOCKED
-                NavAction.DOWN, NavAction.SELECT -> { state.inFilters = false; NavResult.MOVED }
+                NavAction.LEFT -> focus(state.headerIndex - 1)
+                NavAction.RIGHT -> focus(state.headerIndex + 1)
+                NavAction.SELECT -> when (val item = header[state.headerIndex]) {
+                    is HeaderItem.Button -> { press(item.button); NavResult.ACTIVATED }
+                    is HeaderItem.View -> { state.inHeader = false; NavResult.MOVED }
+                }
+                NavAction.DOWN -> { state.inHeader = false; NavResult.MOVED }
                 else -> NavResult.IGNORED
             }
         }
@@ -211,17 +295,25 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
                     LibraryLayout.COMPACT_LIST -> state.grid.move(effective, count, columns = 1, pageRows = 8)
                     else -> state.grid.move(effective, count, columns)
                 }
-                if (r == NavResult.IGNORED && e.action == NavAction.UP && filters.isNotEmpty()) {
-                    state.inFilters = true
+                if (r == NavResult.IGNORED && e.action == NavAction.UP && header.isNotEmpty()) {
+                    state.inHeader = true
+                    state.headerIndex = header.indexOfFirst { it is HeaderItem.View && it.segment == state.segment }.coerceAtLeast(0)
                     NavResult.MOVED
                 } else if (r == NavResult.IGNORED && (e.action == NavAction.LEFT || e.action == NavAction.RIGHT || e.action == NavAction.DOWN)) {
                     NavResult.BLOCKED
                 } else r
             }
-            NavAction.SELECT -> { selectedCard?.let { app.play(it) }; if (selectedCard != null) NavResult.ACTIVATED else NavResult.BLOCKED }
+            NavAction.SELECT -> {
+                when {
+                    selectedCard == null -> Unit
+                    special -> options(selectedCard)
+                    else -> app.play(selectedCard)
+                }
+                if (selectedCard != null) NavResult.ACTIVATED else NavResult.BLOCKED
+            }
             NavAction.CONTEXT -> {
                 if (selectedCard != null) options(selectedCard)
-                else app.openContextMenu(ContextMenuSpec("Library", actions = viewActions(app, state, platformId, layout)))
+                else app.openContextMenu(ContextMenuSpec("Library", actions = viewActions(app, state, platformId, layout, sort)))
                 NavResult.ACTIVATED
             }
             else -> NavResult.IGNORED
@@ -232,12 +324,34 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
         val metrics = LocalTileMetrics.current
         val maxH = maxHeight
         val maxW = maxWidth
+        val gridFocused = !state.inHeader && app.focusZone == FocusZone.CONTENT
+        fun tapAt(i: Int, cards: List<GameCard>) {
+            app.focusZone = FocusZone.CONTENT
+            state.inHeader = false
+            when {
+                special -> { state.grid.index = i; options(cards[i]) }
+                state.grid.index == i -> app.play(cards[i])
+                else -> state.grid.index = i
+            }
+        }
         Column(Modifier.fillMaxSize()) {
             Spacer(Modifier.height(Size.hudHeight))
-            LibraryHeader(app, scope, platforms.firstOrNull { it.platform.id == platformId }, list?.size, filters.map { it.label }, state)
+            LibraryHeader(
+                app = app,
+                scope = scope,
+                platform = platforms.firstOrNull { it.platform.id == platformId },
+                system = platforms.firstOrNull { it.platform.id == state.system },
+                count = list?.size,
+                header = header,
+                sort = sort,
+                layout = layout,
+                state = state,
+                onView = { i, s -> state.headerIndex = i; choose(s); state.inHeader = false },
+                onButton = { i, b -> state.headerIndex = i; press(b) },
+            )
             when {
                 list == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Spinner() }
-                list.isEmpty() -> LibraryEmpty(scope, filter.label)
+                list.isEmpty() -> LibraryEmpty(scope, segment)
                 else -> when (layout) {
                     LibraryLayout.ICON -> {
                         Box(Modifier.fillMaxWidth().height((maxH * 0.22f).coerceIn(110.dp, 200.dp)).padding(horizontal = Space.gutter), contentAlignment = Alignment.BottomStart) {
@@ -246,7 +360,7 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
                         Spacer(Modifier.height(Space.l))
                         val cols = ((maxW - Space.gutter * 2 + metrics.gap) / (metrics.icon + metrics.gap)).toInt().coerceAtLeast(2)
                         columns = cols
-                        IconGrid(list, state, cols, metrics.icon, metrics.gap, onTap = { i -> tap(app, state, list, i) }, onLong = { i -> state.grid.index = i; options(list[i]) }, focused = !state.inFilters && app.focusZone == FocusZone.CONTENT)
+                        IconGrid(list, state, cols, metrics.icon, metrics.gap, onTap = { i -> tapAt(i, list) }, onLong = { i -> state.grid.index = i; options(list[i]) }, focused = gridFocused)
                     }
                     LibraryLayout.CAPSULE -> {
                         Box(Modifier.fillMaxWidth().weight(1f).padding(horizontal = Space.gutter), contentAlignment = Alignment.BottomStart) {
@@ -257,9 +371,9 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
                             items = list,
                             selected = state.grid.index,
                             itemWidth = metrics.capsuleWidth * 0.62f,
-                            onTap = { i -> tap(app, state, list, i) },
+                            onTap = { i -> tapAt(i, list) },
                             onLongPress = { i -> state.grid.index = i; options(list[i]) },
-                            focused = !state.inFilters && app.focusZone == FocusZone.CONTENT,
+                            focused = gridFocused,
                         )
                         Spacer(Modifier.height(Size.hintHeight + Space.l))
                     }
@@ -267,11 +381,11 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
                         val coverW = metrics.coverWidth
                         val cols = ((maxW - Space.gutter * 2 + metrics.gap) / (coverW + metrics.gap)).toInt().coerceAtLeast(2)
                         columns = cols
-                        CoverGrid(list, state, cols, coverW, metrics.gap, onTap = { i -> tap(app, state, list, i) }, onLong = { i -> state.grid.index = i; options(list[i]) }, focused = !state.inFilters && app.focusZone == FocusZone.CONTENT)
+                        CoverGrid(list, state, cols, coverW, metrics.gap, onTap = { i -> tapAt(i, list) }, onLong = { i -> state.grid.index = i; options(list[i]) }, focused = gridFocused)
                     }
                     LibraryLayout.COMPACT_LIST -> {
                         columns = 1
-                        CompactList(list, state, onTap = { i -> tap(app, state, list, i) }, onLong = { i -> state.grid.index = i; options(list[i]) }, focused = !state.inFilters && app.focusZone == FocusZone.CONTENT)
+                        CompactList(list, state, onTap = { i -> tapAt(i, list) }, onLong = { i -> state.grid.index = i; options(list[i]) }, focused = gridFocused)
                     }
                 }
             }
@@ -279,61 +393,188 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
     }
 }
 
-private fun tap(app: AppState, state: LibraryViewState, list: List<GameCard>, i: Int) {
-    app.focusZone = FocusZone.CONTENT
-    state.inFilters = false
-    if (state.grid.index == i) app.play(list[i]) else state.grid.index = i
-}
-
+/**
+ * One calm line: the views (All, Favourites, Recently played and, when they have games, Missing,
+ * Hidden and Removed) on the left, then the game count and System, Sort and View on the right.
+ * A system's own page shows its name instead of the views.
+ */
 @Composable
 private fun LibraryHeader(
     app: AppState,
     scope: LibraryScope,
     platform: io.github.matiyaaa.fuse.ui.shell.store.PlatformCard?,
+    system: io.github.matiyaaa.fuse.ui.shell.store.PlatformCard?,
     count: Int?,
-    filters: List<String>,
+    header: List<HeaderItem>,
+    sort: SortOrder,
+    layout: LibraryLayout,
     state: LibraryViewState,
+    onView: (Int, LibrarySegment) -> Unit,
+    onButton: (Int, LibraryButton) -> Unit,
 ) {
     val c = Fuse.colors
-    if (filters.isNotEmpty()) {
-        val listState = rememberLazyListState()
-        FollowSelection(listState, { state.filterIndex }, anchor = 0.3f)
-        LazyRow(
-            state = listState,
-            contentPadding = PaddingValues(horizontal = Space.gutter),
-            horizontalArrangement = Arrangement.spacedBy(Space.s),
-            modifier = Modifier.padding(top = Space.xs),
-        ) {
-            itemsIndexed(filters) { i, label ->
-                val focused = state.inFilters && app.focusZone == FocusZone.CONTENT && i == state.filterIndex
-                Box(
-                    Modifier
-                        .clip(PillShape)
-                        .clickable(remember { MutableInteractionSource() }, null) { state.filterIndex = i; state.grid.index = 0; state.inFilters = false }
-                        .then(if (focused) Modifier.background(c.text.copy(alpha = 0.001f)) else Modifier),
-                ) {
-                    Chip(label, selected = i == state.filterIndex, color = if (focused) c.text else c.textMuted, background = if (focused) c.text.copy(alpha = 0.2f) else c.text.copy(alpha = 0.08f))
+    fun focused(i: Int) = state.inHeader && app.focusZone == FocusZone.CONTENT && i == state.headerIndex
+    Row(
+        Modifier.fillMaxWidth().padding(start = Space.gutter, end = Space.gutter, top = Space.xs, bottom = Space.xs),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (scope == LibraryScope.All) {
+            val scroll = rememberScrollState()
+            Row(
+                Modifier.weight(1f).horizontalScroll(scroll).padding(vertical = Space.xs),
+                horizontalArrangement = Arrangement.spacedBy(Space.s),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                header.forEachIndexed { i, item ->
+                    if (item is HeaderItem.View) {
+                        val s = item.segment
+                        Chip(
+                            s.label,
+                            icon = if (s == LibrarySegment.MISSING) FuseIcons.FileQuestion else null,
+                            selected = s == state.segment,
+                            focused = focused(i),
+                            color = if (s == LibrarySegment.MISSING) c.warning else c.textMuted,
+                            background = c.text.copy(alpha = 0.08f),
+                            onClick = { onView(i, s) },
+                        )
+                    }
+                }
+            }
+        } else {
+            Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                val title = when (scope) {
+                    is LibraryScope.OfPlatform -> platform?.platform?.name ?: scope.platform.value
+                    is LibraryScope.OfCollection -> scope.name
+                    LibraryScope.All -> "Library"
+                }
+                FText(title, Fuse.type.titleSmall, maxLines = 1)
+                if (platform != null && !platform.emulatorInstalled) {
+                    Spacer(Modifier.width(Space.m))
+                    Chip("No emulator installed", icon = FuseIcons.Warning, color = c.warning)
                 }
             }
         }
-    } else {
-        Row(Modifier.padding(horizontal = Space.gutter, vertical = Space.xs), verticalAlignment = Alignment.CenterVertically) {
-            val title = when (scope) {
-                is LibraryScope.OfPlatform -> platform?.platform?.name ?: scope.platform.value
-                is LibraryScope.OfCollection -> scope.name
-                LibraryScope.All -> "Library"
-            }
-            FText(title, Fuse.type.titleSmall, maxLines = 1)
-            if (count != null) {
-                Spacer(Modifier.width(Space.m))
-                FText("$count ${if (count == 1) "game" else "games"}", Fuse.type.label, color = c.textMuted)
-            }
-            if (platform != null && !platform.emulatorInstalled) {
-                Spacer(Modifier.width(Space.m))
-                Chip("No emulator installed", icon = FuseIcons.Warning, color = c.warning)
+        if (count != null) {
+            Spacer(Modifier.width(Space.m))
+            FText("$count ${if (count == 1) "game" else "games"}", Fuse.type.label, color = c.textMuted, maxLines = 1)
+        }
+        header.forEachIndexed { i, item ->
+            if (item is HeaderItem.Button) {
+                Spacer(Modifier.width(Space.s))
+                val (label, icon) = when (item.button) {
+                    LibraryButton.SYSTEM -> (system?.platform?.shortName ?: "All systems") to FuseIcons.Filter
+                    LibraryButton.SORT -> sortLabel(sort) to FuseIcons.Sort
+                    LibraryButton.VIEW -> layoutLabel(layout) to layoutIcon(layout)
+                }
+                Chip(
+                    label,
+                    icon = icon,
+                    selected = item.button == LibraryButton.SYSTEM && system != null,
+                    focused = focused(i),
+                    color = c.text,
+                    background = c.text.copy(alpha = 0.08f),
+                    onClick = { onButton(i, item.button) },
+                )
             }
         }
     }
+}
+
+private fun sortLabel(s: SortOrder) = when (s) {
+    SortOrder.TITLE -> "Title"
+    SortOrder.RECENTLY_PLAYED -> "Recently played"
+    SortOrder.RECENTLY_ADDED -> "Recently added"
+    SortOrder.MOST_PLAYED -> "Most played"
+    SortOrder.RELEASE_YEAR -> "Release year"
+}
+
+private fun layoutLabel(l: LibraryLayout) = when (l) {
+    LibraryLayout.ICON -> "Icons"
+    LibraryLayout.CAPSULE -> "Capsules"
+    LibraryLayout.COVER_GRID -> "Cover grid"
+    LibraryLayout.COMPACT_LIST -> "List"
+}
+
+/** Narrows the whole library to one system, in the user's system order. */
+private fun systemPicker(app: AppState, state: LibraryViewState, platforms: List<io.github.matiyaaa.fuse.ui.shell.store.PlatformCard>): ChoiceSpec {
+    fun pick(id: PlatformId?) {
+        state.system = id
+        state.grid.index = 0
+        state.selectedId = null
+        state.inHeader = false
+        app.choice = null
+    }
+    val systems = platforms.filter { it.gameCount > 0 }
+    return ChoiceSpec(
+        title = "Show games from",
+        message = "Your library, narrowed to one system. Systems follow the order you gave them.",
+        options = listOf(
+            MenuAction("sys.all", "All systems", FuseIcons.Library, detail = "${systems.sumOf { it.gameCount }} games", trailing = Trailing.Check(state.system == null), onSelect = { pick(null) }),
+        ) + systems.map { p ->
+            MenuAction(
+                "sys.${p.platform.id.value}", p.platform.name, FuseIcons.Chip,
+                detail = listOfNotNull("${p.gameCount} ${if (p.gameCount == 1) "game" else "games"}", p.platform.manufacturer).joinToString("  ·  "),
+                trailing = Trailing.Check(state.system == p.platform.id),
+                onSelect = { pick(p.platform.id) },
+            )
+        },
+    )
+}
+
+private fun sortPicker(app: AppState, current: SortOrder) = ChoiceSpec(
+    title = "Sort by",
+    options = SortOrder.entries.map { s ->
+        MenuAction(s.name, sortLabel(s), FuseIcons.Sort, trailing = Trailing.Check(s == current), onSelect = {
+            app.store.updatePrefs { it.copy(librarySort = s) }
+            app.choice = null
+        })
+    },
+)
+
+private fun layoutPicker(app: AppState, state: LibraryViewState, platform: PlatformId?, current: LibraryLayout) = ChoiceSpec(
+    title = "View as",
+    message = if (platform != null) "Saved for this system" else "Saved as your default",
+    options = LibraryLayout.entries.map { l ->
+        MenuAction(l.name, layoutLabel(l), layoutIcon(l), trailing = Trailing.Check(l == current), onSelect = {
+            state.layoutOverride = l
+            app.scope.launch {
+                if (platform != null) app.store.settings.setLayout(platform, l)
+                else app.store.updatePrefs { it.copy(defaultLayout = l) }
+            }
+            app.choice = null
+        })
+    },
+)
+
+/** What can be done with a missing, hidden or removed game. Files are never touched. */
+private fun setMenu(app: AppState, card: GameCard, segment: LibrarySegment): ContextMenuSpec {
+    val lib = app.store.library
+    fun run(message: String, block: suspend () -> Unit) {
+        app.closeOverlays()
+        app.scope.launch { block(); app.toasts.show(message) }
+    }
+    val actions = when (segment) {
+        LibrarySegment.MISSING -> listOf(
+            MenuAction("rescan", "Scan for it again", FuseIcons.Refresh, detail = "If you moved it back, Fuse finds it and keeps its art and play time", onSelect = {
+                app.closeOverlays()
+                app.store.sources.rescan(io.github.matiyaaa.fuse.model.ScanScope.PLATFORM, card.platformId)
+                app.toasts.show("Rescanning ${card.platformShort}")
+            }),
+            MenuAction("forget", "Forget this game", FuseIcons.Trash, destructive = true, detail = "Removes its art, play time and collections from Fuse", onSelect = {
+                app.closeOverlays()
+                app.confirm = ConfirmSpec("Forget ${card.title}?", "Fuse removes what it kept for this game. Your files are not touched.", "Forget", destructive = true) {
+                    app.scope.launch { lib.forgetMissing(card.id); app.toasts.show("Forgot ${card.title}") }
+                }
+            }),
+        )
+        LibrarySegment.HIDDEN -> listOf(
+            MenuAction("show", "Show in the library again", FuseIcons.Eye, onSelect = { run("${card.title} is back in your library") { lib.restore(card.id) } }),
+        )
+        else -> listOf(
+            MenuAction("restore", "Restore to Fuse", FuseIcons.Undo, onSelect = { run("${card.title} is back in your library") { lib.restore(card.id) } }),
+        )
+    }
+    return ContextMenuSpec(title = card.title, subtitle = "${card.platformShort}  ·  ${segment.label}", art = card.art.icon, actions = actions)
 }
 
 @Composable
@@ -467,75 +708,39 @@ private fun CompactList(
 }
 
 @Composable
-private fun LibraryEmpty(scope: LibraryScope, filterLabel: String) {
+private fun LibraryEmpty(scope: LibraryScope, segment: LibrarySegment) {
     val c = Fuse.colors
+    val (title, body) = when (scope) {
+        is LibraryScope.OfCollection -> "This collection is empty" to "Add games from any game's options (Add to Collection)."
+        is LibraryScope.OfPlatform -> "No games for this system yet" to
+            "Put games in this system's folder, or get them from your RomM server with Cartridge. They appear here on their own."
+        LibraryScope.All -> when (segment) {
+            LibrarySegment.FAVORITES -> "No favourites yet" to "Mark games as favourites from their options."
+            LibrarySegment.RECENT -> "Nothing played yet" to "Games you play show up here, newest first."
+            LibrarySegment.MISSING -> "Nothing is missing" to "Games whose files disappear are listed here, so you can find them again or let Fuse forget them."
+            LibrarySegment.HIDDEN -> "No hidden games" to "Games you hide from their options wait here."
+            LibrarySegment.REMOVED -> "Nothing removed" to "Games you remove from Fuse wait here, in case you want them back."
+            LibrarySegment.ALL -> "Nothing here yet" to "Games you add show up here."
+        }
+    }
     Box(Modifier.fillMaxSize().padding(horizontal = Space.gutter), contentAlignment = Alignment.CenterStart) {
         Column(verticalArrangement = Arrangement.spacedBy(Space.s)) {
-            FText(
-                when (scope) {
-                    is LibraryScope.OfCollection -> "This collection is empty"
-                    is LibraryScope.OfPlatform -> "No games for this system yet"
-                    LibraryScope.All -> if (filterLabel == "Favourites") "No favourites yet" else "Nothing here yet"
-                },
-                Fuse.type.display,
-            )
-            FText(
-                when (scope) {
-                    is LibraryScope.OfCollection -> "Add games from any game's options (Add to Collection)."
-                    is LibraryScope.OfPlatform -> "Put games in this system's folder, or get them from your RomM server with Cartridge. They appear here on their own."
-                    LibraryScope.All -> if (filterLabel == "Favourites") "Mark games as favourites from their options." else "Games you add show up here."
-                },
-                Fuse.type.body,
-                color = c.textMuted,
-            )
+            FText(title, Fuse.type.display)
+            FText(body, Fuse.type.body, color = c.textMuted)
         }
     }
 }
 
 /** View options appended to the game menu inside a library: layout, sort, hidden games, rescan. */
-private fun viewActions(app: AppState, state: LibraryViewState, platform: PlatformId?, current: LibraryLayout): List<MenuAction> {
-    fun layoutLabel(l: LibraryLayout) = when (l) {
-        LibraryLayout.ICON -> "Icons"
-        LibraryLayout.CAPSULE -> "Capsules"
-        LibraryLayout.COVER_GRID -> "Cover grid"
-        LibraryLayout.COMPACT_LIST -> "List"
-    }
-    fun sortLabel(s: SortOrder) = when (s) {
-        SortOrder.TITLE -> "Title"
-        SortOrder.RECENTLY_PLAYED -> "Recently played"
-        SortOrder.RECENTLY_ADDED -> "Recently added"
-        SortOrder.MOST_PLAYED -> "Most played"
-        SortOrder.RELEASE_YEAR -> "Release year"
-    }
+private fun viewActions(app: AppState, state: LibraryViewState, platform: PlatformId?, current: LibraryLayout, sort: SortOrder): List<MenuAction> {
     return listOf(
         MenuAction("layout", "View as", FuseIcons.Grid, trailing = Trailing.Value(layoutLabel(current)), onSelect = {
             app.contextMenu = null
-            app.choice = io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec(
-                title = "View as",
-                message = if (platform != null) "Saved for this system" else "Saved as your default",
-                options = LibraryLayout.entries.map { l ->
-                    MenuAction(l.name, layoutLabel(l), layoutIcon(l), trailing = Trailing.Check(l == current), onSelect = {
-                        state.layoutOverride = l
-                        app.scope.launch {
-                            if (platform != null) app.store.settings.setLayout(platform, l)
-                            else app.store.updatePrefs { it.copy(defaultLayout = l) }
-                        }
-                        app.choice = null
-                    })
-                },
-            )
+            app.choice = layoutPicker(app, state, platform, current)
         }),
-        MenuAction("sort", "Sort by", FuseIcons.Sliders, trailing = Trailing.Value(sortLabel(state.sort)), onSelect = {
+        MenuAction("sort", "Sort by", FuseIcons.Sort, trailing = Trailing.Value(sortLabel(sort)), onSelect = {
             app.contextMenu = null
-            app.choice = io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec(
-                title = "Sort by",
-                options = SortOrder.entries.map { s ->
-                    MenuAction(s.name, sortLabel(s), FuseIcons.Sliders, trailing = Trailing.Check(s == state.sort), onSelect = {
-                        state.sort = s
-                        app.choice = null
-                    })
-                },
-            )
+            app.choice = sortPicker(app, sort)
         }),
         MenuAction("hidden", if (state.showHidden) "Hide hidden games" else "Show hidden games", FuseIcons.Eye, onSelect = {
             state.showHidden = !state.showHidden

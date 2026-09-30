@@ -12,7 +12,7 @@ Fuse gathers the games in your folders, dresses them in art and starts each one 
 already use, all from a console-style interface made for a gamepad. On Android it can even be your
 Home screen.
 
-<a href="https://github.com/MAtiyaaa/fuse/releases"><img src="https://img.shields.io/badge/release-0.0.1%20The%20First%20Update-FF6A3D?style=flat-square&labelColor=15171C" alt="Release 0.0.1, The First Update"></a>
+<a href="https://github.com/MAtiyaaa/fuse/releases"><img src="https://img.shields.io/badge/release-0.0.2%20The%20Polish%20Update-FF6A3D?style=flat-square&labelColor=15171C" alt="Release 0.0.2, The Polish Update"></a>
 <img src="https://img.shields.io/badge/runs%20on-Android%209%2B%20%C2%B7%20Linux-2B303B?style=flat-square&labelColor=15171C" alt="Runs on Android 9 or newer and Linux">
 <a href="LICENSE"><img src="https://img.shields.io/badge/licence-GPL--3.0--or--later-2B303B?style=flat-square&labelColor=15171C" alt="Licence: GPL-3.0-or-later"></a>
 <a href="#privacy"><img src="https://img.shields.io/badge/telemetry-none-2B303B?style=flat-square&labelColor=15171C" alt="Telemetry: none"></a>
@@ -24,7 +24,7 @@ Home screen.
 <a href="https://github.com/MAtiyaaa/fuse/releases/latest"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/brand/button-linux-dark.svg"><img src="docs/assets/brand/button-linux-light.svg" height="48" alt="Download for Linux"></picture></a>
 
 <sub>Android 9 or newer &nbsp;·&nbsp; 64-bit x86 Linux AppImage &nbsp;·&nbsp; <a href="#install">checksums and install notes</a></sub><br>
-<sub>0.0.1 is an early release that has not been tried on real devices yet. <a href="#where-fuse-stands">Here is where it stands.</a></sub>
+<sub>0.0.2 is an early release, polished after its first tests on a dual-screen Android handheld. <a href="#where-fuse-stands">Here is where it stands.</a></sub>
 
 <br>
 
@@ -256,9 +256,9 @@ Play.
 <br>
 
 - Custom **key repeat** that accelerates while held, **hold to reorder**, **stick navigation** with
-  deadzones, a **Nintendo button layout** option, and hint glyphs for Xbox, Nintendo, PlayStation or
-  keyboard.
-- A **button mapping** screen with capture and a live controller test.
+  deadzones, **Detect my buttons** (Xbox, Nintendo or PlayStation layout from two presses), and hint
+  glyphs for Xbox, Nintendo, PlayStation or keyboard.
+- A **button mapping** screen with capture and a live button test that no button can leave by accident.
 - **Home** as a flowing dashboard (Flow) or a board of tiles you arrange (Channels), with 19 kinds of
   widgets.
 - **Library** layouts from icons to capsules to covers to a compact list; **Systems**, **Apps**,
@@ -305,13 +305,14 @@ Play.
 ## Where Fuse stands
 
 > [!IMPORTANT]
-> **Fuse 0.0.1 "The First Update" is the first public version, and it is early.** The shared core
+> **Fuse 0.0.2 "The Polish Update" is still early.** It fixes what the first tests on a dual-screen
+> Android handheld turned up (see [the release notes](docs/releases/0.0.2.md)). The shared core
 > (library scanning, launch resolution, integrations and the database) and the interface are in place
-> and tested where it matters. The Android app builds and passes its unit tests and lint, but has not
-> been tried on a real device yet. The Linux app builds, passes its tests, packages as an AppImage and
+> and tested where it matters. The Android app builds and passes its unit tests and lint, and has
+> been tried on one handheld so far. The Linux app builds, passes its tests, packages as an AppImage and
 > starts in a virtual display. Expect rough edges and changes between versions.
 
-Not there yet: checks on real handhelds, video previews on the desktop, a storage mode without All
+Not there yet: checks on more handhelds, video previews on the desktop, a storage mode without All
 files access, translations (the interface is English only), RetroAchievements hashing for disc
 systems, DS and 3DS, and ScreenScraper credentials. [ROADMAP.md](ROADMAP.md) ticks a box only when the
 code is in this repository.

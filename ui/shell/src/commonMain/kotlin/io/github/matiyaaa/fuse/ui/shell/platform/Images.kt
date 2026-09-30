@@ -7,6 +7,7 @@ import coil3.disk.DiskCache
 import coil3.memory.MemoryCache
 import coil3.network.ktor3.KtorNetworkFetcherFactory
 import coil3.request.crossfade
+import coil3.svg.SvgDecoder
 import coil3.size.Precision
 import coil3.request.maxBitmapSize
 import coil3.size.Size
@@ -42,6 +43,8 @@ fun fuseImageLoader(
     }
     .components {
         add(KtorNetworkFetcherFactory(httpClient = { http }))
+        // System logos from the system art pack are SVG.
+        add(SvgDecoder.Factory())
         components()
     }
     .precision(Precision.INEXACT)

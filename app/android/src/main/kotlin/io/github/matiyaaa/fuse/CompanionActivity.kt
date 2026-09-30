@@ -1,6 +1,7 @@
 package io.github.matiyaaa.fuse
 
 import android.annotation.SuppressLint
+import android.content.Intent
 import android.graphics.Color as AndroidColor
 import android.os.Bundle
 import android.view.Display
@@ -21,15 +22,23 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.lifecycleScope
 import io.github.matiyaaa.fuse.ui.shell.app.CompanionApp
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 /**
  * Fuse's second-screen window (dual-screen handhelds, external displays). Touch only: its window is
  * not focusable, so controller input stays with the main screen, and any key that still arrives is
- * forwarded there. It closes itself when its display goes away rather than covering the main screen.
+ * forwarded there. [CompanionScreens] starts and stops it; it also closes itself when its display
+ * has been gone or off for [CompanionScreens.GRACE_MS], rather than covering the main screen.
  */
-class CompanionActivity : ComponentActivity() {
+open class CompanionActivity : ComponentActivity() {
     private val app: FuseApplication get() = application as FuseApplication
+
+    /** True for [CompanionHomeActivity], which Android starts as the second screen's Home and which never closes itself. */
+    open val isDisplayHome: Boolean get() = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge(
@@ -37,10 +46,9 @@ class CompanionActivity : ComponentActivity() {
             navigationBarStyle = SystemBarStyle.dark(AndroidColor.TRANSPARENT),
         )
         super.onCreate(savedInstanceState)
-        if (displayIdCompat() == Display.DEFAULT_DISPLAY) {
-            finish()
-            return
-        }
+        if (leaveMainScreen()) return
+        val role = if (isDisplayHome) "Home companion" else "Companion"
+        SecondScreenLog.add("$role running on display ${displayIdCompat()}")
         window.addFlags(WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE)
         enterImmersive()
         // A back swipe on the second screen must not close it; the setting controls it.
@@ -51,10 +59,17 @@ class CompanionActivity : ComponentActivity() {
             },
         )
 
-        lifecycleScope.launch {
-            app.platformUi.displays.collect { displays ->
-                val id = displayIdCompat()
-                if (id == Display.DEFAULT_DISPLAY || displays.none { it.id == id }) finish()
+        if (!isDisplayHome) {
+            lifecycleScope.launch {
+                app.platformUi.displays
+                    .map { displays -> displays.any { it.id == displayIdCompat() && it.isOn } }
+                    .distinctUntilChanged()
+                    .collectLatest { present ->
+                        if (present) return@collectLatest
+                        delay(CompanionScreens.GRACE_MS)
+                        SecondScreenLog.add("Companion closed: display ${displayIdCompat()} was gone or off")
+                        finish()
+                    }
             }
         }
 
@@ -63,6 +78,7 @@ class CompanionActivity : ComponentActivity() {
             when (val s = startup) {
                 is Startup.Ready -> {
                     val prefs by s.store.prefs.collectAsState()
+                    // With the setting off (only the Home instance runs then) this is the clock.
                     CompanionApp(s.store, app.platformUi, prefs.display.mode)
                 }
                 else -> Box(Modifier.fillMaxSize().background(Color(INK_ARGB)))
@@ -70,10 +86,27 @@ class CompanionActivity : ComponentActivity() {
         }
     }
 
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        leaveMainScreen()
+    }
+
     override fun onResume() {
         super.onResume()
         // A removed display moves its activities to the main screen: never stay there.
-        if (displayIdCompat() == Display.DEFAULT_DISPLAY) finish()
+        leaveMainScreen()
+    }
+
+    /**
+     * Finishes when this window is on the main screen, and tells [CompanionScreens] which display
+     * it was meant for so that display is not tried again. Returns true when it finished.
+     */
+    private fun leaveMainScreen(): Boolean {
+        if (isDisplayHome || isFinishing || displayIdCompat() != Display.DEFAULT_DISPLAY) return false
+        app.companions.onLandedOnMainScreen(intent?.getIntExtra(EXTRA_TARGET_DISPLAY, -1) ?: -1)
+        finish()
+        return true
     }
 
     @SuppressLint("RestrictedApi") // Lint false positive: Activity.dispatchKeyEvent is public API.
@@ -82,4 +115,20 @@ class CompanionActivity : ComponentActivity() {
 
     override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean =
         app.activities.main?.forwardMotion(event) == true || super.dispatchGenericMotionEvent(event)
+
+    companion object {
+        /** The display [CompanionScreens] asked for, to know which one refused when Android ignores it. */
+        const val EXTRA_TARGET_DISPLAY = "io.github.matiyaaa.fuse.extra.TARGET_DISPLAY"
+    }
+}
+
+/**
+ * The same companion, declared with a SECONDARY_HOME filter: while Fuse is the Home app, Android
+ * starts it on every secondary display that shows a Home. It is that display's Home, so it never
+ * closes itself (Android would only start it again), and it shows the clock when the second screen
+ * setting is off. A separate class because Android refuses a single-instance activity as a
+ * secondary Home, while Fuse's own companion must stay single-instance.
+ */
+class CompanionHomeActivity : CompanionActivity() {
+    override val isDisplayHome: Boolean get() = true
 }

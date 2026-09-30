@@ -158,9 +158,20 @@ class InputRouter(
      */
     var capture: ((PadButton) -> Unit)? = null
 
+    /**
+     * While set, every press and release goes only here and nothing becomes an action, not even
+     * Back. The controller test uses it so any button can be tried without leaving the screen.
+     */
+    var exclusive: ((PadButton, Boolean) -> Unit)? = null
+
     /** A physical button went down. Platform key repeats must not be forwarded. */
     fun press(button: PadButton, source: InputSource) {
         rawListener?.invoke(button, true)
+        exclusive?.let {
+            _lastSource.value = source
+            it(button, true)
+            return
+        }
         capture?.let {
             _lastSource.value = source
             it(button)
@@ -191,6 +202,13 @@ class InputRouter(
 
     fun release(button: PadButton, source: InputSource) {
         rawListener?.invoke(button, false)
+        exclusive?.let {
+            it(button, false)
+            // A button held since before the test started is let go without acting.
+            held.remove(button)?.cancel()
+            longPressConsumed.remove(button)
+            return
+        }
         if (!held.containsKey(button)) return
         val job = held.remove(button)
         job?.cancel()
@@ -226,10 +244,10 @@ class InputRouter(
         get() = this == NavAction.UP || this == NavAction.DOWN || this == NavAction.LEFT ||
             this == NavAction.RIGHT || this == NavAction.PAGE_UP || this == NavAction.PAGE_DOWN
 
-    /** Maps a physical button to an action, applying Nintendo layout and user remaps. */
+    /** Maps a physical button to an action, applying the confirm/back swap and user remaps. */
     fun actionFor(button: PadButton): NavAction? {
         profile.remap[button]?.let { return it }
-        val n = profile.nintendoLayout
+        val n = profile.swapConfirmBack
         return when (button) {
             PadButton.A -> if (n) NavAction.BACK else NavAction.SELECT
             PadButton.B -> if (n) NavAction.SELECT else NavAction.BACK
@@ -301,4 +319,7 @@ interface TextInput {
     fun type(text: String)
     fun backspace()
     fun submit()
+
+    /** Inserts the clipboard's text (Ctrl+V). */
+    fun paste() {}
 }

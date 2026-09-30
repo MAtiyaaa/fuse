@@ -3,6 +3,7 @@ package io.github.matiyaaa.fuse.integrations.thegamesdb
 import io.github.matiyaaa.fuse.integrations.ApiResult
 import io.github.matiyaaa.fuse.integrations.FlexLong
 import io.github.matiyaaa.fuse.integrations.FlexString
+import io.github.matiyaaa.fuse.integrations.KeyCheck
 import io.github.matiyaaa.fuse.integrations.LooseInt
 import io.github.matiyaaa.fuse.integrations.LooseLong
 import io.github.matiyaaa.fuse.integrations.ProviderHttp
@@ -12,6 +13,7 @@ import io.github.matiyaaa.fuse.integrations.Secret
 import io.github.matiyaaa.fuse.integrations.flatMap
 import io.github.matiyaaa.fuse.integrations.flexLong
 import io.github.matiyaaa.fuse.integrations.flexString
+import io.github.matiyaaa.fuse.integrations.sanitizeKey
 import io.github.matiyaaa.fuse.model.ArtworkOption
 import io.github.matiyaaa.fuse.model.MediaKind
 import io.github.matiyaaa.fuse.model.PlatformId
@@ -116,11 +118,12 @@ class TheGamesDbClient(
     limiter: RateLimiter = RateLimiter(minIntervalMillis = 250, maxConcurrency = 2),
     private val baseUrl: String = BASE_URL,
 ) {
-    private val key = Secret(apiKey)
+    private val key = Secret(sanitizeKey(apiKey))
     private val api = ProviderHttp(http, "TheGamesDB", limiter, { listOf(key) })
 
-    /** Checks the key with a real search; AuthError means it was rejected. */
-    suspend fun verifyKey(): ApiResult<TgdbAllowance> = searchByName("Tetris").flatMap { ApiResult.Success(it.allowance) }
+    /** Checks the key with a real search. An exhausted allowance is [KeyCheck.Failed], not a rejection. */
+    suspend fun verifyKey(): KeyCheck =
+        if (key.isBlank) KeyCheck.Rejected("Enter a TheGamesDB API key") else KeyCheck.from(searchByName("Tetris"))
 
     /** `/v1.1/Games/ByGameName` with overview/players/publishers/genres and included boxart + platform. */
     suspend fun searchByName(name: String, platformIds: List<Int> = emptyList(), page: Int? = null): ApiResult<TgdbSearchResult> =
@@ -157,7 +160,7 @@ class TheGamesDbClient(
 
     private inline fun <T> parse(block: () -> T): ApiResult<T> = try {
         ApiResult.Success(block())
-    } catch (e: IllegalArgumentException) {
+    } catch (e: Exception) {
         ApiResult.InvalidResponse(api.safe("TheGamesDB sent an unreadable response: ${e.message?.take(200)}"))
     }
 

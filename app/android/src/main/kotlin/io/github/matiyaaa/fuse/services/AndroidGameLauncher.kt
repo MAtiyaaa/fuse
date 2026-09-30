@@ -10,6 +10,7 @@ import android.net.Uri
 import android.provider.DocumentsContract
 import androidx.core.content.FileProvider
 import io.github.matiyaaa.fuse.ActivityHolder
+import io.github.matiyaaa.fuse.launch.DualScreenPlatforms
 import io.github.matiyaaa.fuse.launch.LaunchTokens
 import io.github.matiyaaa.fuse.launch.ResolvedLaunch
 import io.github.matiyaaa.fuse.launch.android.AndroidIntentAdapter
@@ -27,10 +28,20 @@ import java.io.File
 import android.view.Display
 import android.hardware.display.DisplayManager
 
+/** What the launcher tells Fuse's second-screen companion around a game that draws on both screens. */
+interface DualScreenHandoff {
+    /** On the main thread, just before such a game starts: the second screen is the game's now. */
+    fun beforeDualScreenGame()
+
+    /** The game did not start after all. */
+    fun dualScreenGameFailed()
+}
+
 /**
  * Starts emulators and apps from [ResolvedLaunch] plans, following the contract documented on
  * [AndroidIntentPlan]: Android-only tokens are filled here, activity candidates are verified, and
- * the launch animates out of Fuse with a clip reveal. Emulator settings are never changed.
+ * the launch animates out of Fuse with a clip reveal. Emulator settings are never changed. Games for
+ * dual-screen systems get the second screen: the companion closes first (see [DualScreenHandoff]).
  */
 class AndroidGameLauncher(
     context: Context,
@@ -38,6 +49,9 @@ class AndroidGameLauncher(
     private val volumes: StorageVolumes,
     /** Library sources, to find the per-system folder for `{SAF}` URIs. */
     private val sources: suspend () -> List<SourceRoot>,
+    /** The platform id of the library game at a path, when there is one. */
+    private val platformAt: suspend (path: String) -> String? = { null },
+    private val dualScreen: DualScreenHandoff? = null,
 ) : GameLauncher {
     private val appContext = context.applicationContext
     private val pm = appContext.packageManager
@@ -46,7 +60,8 @@ class AndroidGameLauncher(
     override suspend fun run(launch: ResolvedLaunch, displayId: Int?): RunResult = when (val plan = launch.plan) {
         is LaunchPlan.AndroidIntent -> {
             val full = launch.androidIntent ?: AndroidIntentPlan(intent = plan, activityCandidates = listOfNotNull(plan.activity))
-            start(full, displayId ?: full.launchDisplayId)
+            val both = dualScreen != null && usesBothScreens(launch, plan.target)
+            start(full, displayId ?: full.launchDisplayId, both)
         }
         is LaunchPlan.OpenAppOnly -> openApp(plan.appId, displayId)
         is LaunchPlan.Unsupported -> RunResult.Failed(plan.reason)
@@ -61,6 +76,33 @@ class AndroidGameLauncher(
         val presentation = displays.getDisplays(DisplayManager.DISPLAY_CATEGORY_PRESENTATION)
             .firstOrNull { it.displayId != Display.DEFAULT_DISPLAY }
         return (presentation ?: displays.displays.firstOrNull { it.displayId != Display.DEFAULT_DISPLAY })?.displayId
+    }
+
+    /**
+     * Whether the game is for a system with two screens. The adapter answers when it only runs such
+     * systems (or none); otherwise the library game at the target path does.
+     */
+    private suspend fun usesBothScreens(launch: ResolvedLaunch, target: LaunchTarget): Boolean {
+        val platforms = launch.adapter?.platforms.orEmpty().map { it.value }
+        if (platforms.isNotEmpty()) {
+            if (platforms.none { it in DUAL_SCREEN_PLATFORMS }) return false
+            if (platforms.all { it in DUAL_SCREEN_PLATFORMS }) return true
+        }
+        val path = when (target) {
+            is LaunchTarget.File -> target.path
+            is LaunchTarget.Directory -> target.path
+            is LaunchTarget.Playlist -> target.path
+            is LaunchTarget.Shortcut -> target.path
+            is LaunchTarget.TitleId, is LaunchTarget.App -> return false
+        }
+        val platform = withContext(Dispatchers.IO) {
+            try {
+                platformAt(path) ?: File(path).parent?.let { platformAt(it) }
+            } catch (e: Exception) {
+                null
+            }
+        }
+        return platform in DUAL_SCREEN_PLATFORMS
     }
 
     private suspend fun openApp(appId: String, displayId: Int?): RunResult {
@@ -86,7 +128,7 @@ class AndroidGameLauncher(
         }
     }
 
-    private suspend fun start(plan: AndroidIntentPlan, displayId: Int?): RunResult {
+    private suspend fun start(plan: AndroidIntentPlan, displayId: Int?, bothScreens: Boolean): RunResult {
         val spec = plan.intent
         val pkg = spec.packageName
         val name = appName(pkg)
@@ -115,7 +157,7 @@ class AndroidGameLauncher(
                 is RunResult.Started -> RunResult.OpenedAppInstead(prepared.reason)
                 else -> opened
             }
-            is Prepared.Launch -> startIntent(prepared.intent, displayId, name)
+            is Prepared.Launch -> startIntent(prepared.intent, displayId, name, bothScreens)
         }
     }
 
@@ -222,34 +264,45 @@ class AndroidGameLauncher(
         }
     }
 
-    private suspend fun startIntent(intent: Intent, displayId: Int?, name: String): RunResult = withContext(Dispatchers.Main) {
-        fun options(withDisplay: Boolean): ActivityOptions {
-            val options = activities.revealOptions() ?: ActivityOptions.makeBasic()
-            if (withDisplay && displayId != null) options.launchDisplayId = displayId
-            return options
-        }
-        try {
-            startWith(intent, options(withDisplay = true))
-            RunResult.Started(null)
-        } catch (e: ActivityNotFoundException) {
-            RunResult.NotInstalled
-        } catch (e: SecurityException) {
-            if (displayId != null) {
-                // Android refused the other screen: start on this one instead.
-                try {
-                    startWith(intent, options(withDisplay = false))
-                    RunResult.Started(null)
-                } catch (e2: ActivityNotFoundException) {
-                    RunResult.NotInstalled
-                } catch (e2: RuntimeException) {
-                    RunResult.Failed("Android didn't let Fuse start $name.")
-                }
-            } else {
+    private suspend fun startIntent(
+        intent: Intent,
+        displayId: Int?,
+        name: String,
+        bothScreens: Boolean = false,
+    ): RunResult = withContext(Dispatchers.Main) {
+        if (bothScreens) dualScreen?.beforeDualScreenGame()
+        val result = startOn(intent, displayId, name)
+        if (bothScreens && result !is RunResult.Started) dualScreen?.dualScreenGameFailed()
+        result
+    }
+
+    private fun startOn(intent: Intent, displayId: Int?, name: String): RunResult = try {
+        startWith(intent, options(displayId))
+        RunResult.Started(null)
+    } catch (e: ActivityNotFoundException) {
+        RunResult.NotInstalled
+    } catch (e: SecurityException) {
+        if (displayId != null) {
+            // Android refused the other screen: start on this one instead.
+            try {
+                startWith(intent, options(null))
+                RunResult.Started(null)
+            } catch (e2: ActivityNotFoundException) {
+                RunResult.NotInstalled
+            } catch (e2: RuntimeException) {
                 RunResult.Failed("Android didn't let Fuse start $name.")
             }
-        } catch (e: RuntimeException) {
-            RunResult.Failed("Fuse couldn't start $name.")
+        } else {
+            RunResult.Failed("Android didn't let Fuse start $name.")
         }
+    } catch (e: RuntimeException) {
+        RunResult.Failed("Fuse couldn't start $name.")
+    }
+
+    private fun options(displayId: Int?): ActivityOptions {
+        val options = activities.revealOptions() ?: ActivityOptions.makeBasic()
+        if (displayId != null) options.launchDisplayId = displayId
+        return options
     }
 
     private fun startWith(intent: Intent, options: ActivityOptions) {
@@ -274,5 +327,8 @@ class AndroidGameLauncher(
     private companion object {
         /** Android's uid range per user (UserHandle.PER_USER_RANGE). */
         const val PER_USER_RANGE = 100_000
+
+        /** Systems with two screens, as platform ids. */
+        val DUAL_SCREEN_PLATFORMS: Set<String> = DualScreenPlatforms.ids.map { it.value }.toSet()
     }
 }

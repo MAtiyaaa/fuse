@@ -4,6 +4,8 @@ import io.github.matiyaaa.fuse.model.CartridgeRoute
 import io.github.matiyaaa.fuse.model.FolderPolicy
 import io.github.matiyaaa.fuse.model.GameId
 import io.github.matiyaaa.fuse.model.MediaOwner
+import io.github.matiyaaa.fuse.model.MediaKind
+import io.github.matiyaaa.fuse.model.MediaFillMode
 import io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction
 import io.github.matiyaaa.fuse.ui.designsystem.components.ToastKind
 import io.github.matiyaaa.fuse.ui.designsystem.components.Trailing
@@ -64,7 +66,15 @@ fun AppState.play(card: GameCard, emulator: io.github.matiyaaa.fuse.model.Emulat
 }
 
 /** The options menu for a game (Context button, Select, or a long press). */
-fun AppState.gameMenu(card: GameCard, fromDetail: Boolean = false): ContextMenuSpec {
+/** Takes [card] off Continue Playing until it is played again. */
+fun AppState.dismissFromContinue(card: GameCard) {
+    val now = kotlin.time.Clock.System.now().toEpochMilliseconds()
+    store.updatePrefs { it.copy(continueDismissed = it.continueDismissed + (card.id.value.toString() to now)) }
+    toasts.show("Removed from Continue playing")
+}
+
+/** [extra] actions go right after Play, for the shelf or list the game was opened from. */
+fun AppState.gameMenu(card: GameCard, fromDetail: Boolean = false, extra: List<MenuAction> = emptyList()): ContextMenuSpec {
     val lib = store.library
     fun run(block: suspend () -> Unit) {
         closeOverlays()
@@ -72,6 +82,10 @@ fun AppState.gameMenu(card: GameCard, fromDetail: Boolean = false): ContextMenuS
     }
     val actions = buildList {
         add(MenuAction("play", "Play", FuseIcons.Play, onSelect = { closeOverlays(); play(card) }))
+        addAll(extra)
+        add(MenuAction("media", "Manage Media", FuseIcons.Images, trailing = Trailing.Chevron, onSelect = {
+            closeOverlays(); go(Route.Media(MediaOwner.OfGame(card.id), card.title))
+        }))
         if (!fromDetail) add(MenuAction("info", "Game Info", FuseIcons.Info, onSelect = { closeOverlays(); go(Route.GameInfo(card.id)) }))
         add(
             MenuAction(
@@ -82,11 +96,10 @@ fun AppState.gameMenu(card: GameCard, fromDetail: Boolean = false): ContextMenuS
         add(MenuAction("collection", "Add to Collection", FuseIcons.ListPlus, trailing = Trailing.Chevron, onSelect = { collectionPicker(card.id, card.title) }))
         add(MenuAction("pin", "Pin to Home", FuseIcons.Pin, onSelect = { run { lib.setPinned(card.id, true); toasts.show("Pinned to Home") } }))
         add(MenuAction("emulator", "Emulator", FuseIcons.Chip, trailing = Trailing.Chevron, onSelect = { emulatorPicker(card) }))
-        add(MenuAction("media", "Manage Media", FuseIcons.Images, trailing = Trailing.Chevron, onSelect = {
-            closeOverlays(); go(Route.Media(MediaOwner.OfGame(card.id), card.title))
-        }))
-        add(MenuAction("rescrape", "Find Metadata and Art", FuseIcons.Wand, onSelect = {
-            closeOverlays(); go(Route.Media(MediaOwner.OfGame(card.id), card.title))
+        add(MenuAction("rescrape", "Find Details and Art", FuseIcons.Wand, detail = "Fills what's missing, including a proper title. Your own art and names stay", onSelect = {
+            closeOverlays()
+            store.media.fill(MediaFillMode.FILL_MISSING, MediaKind.entries.filter { it != MediaKind.VIDEO && it != MediaKind.BORDER }.toSet(), game = card.id)
+            toasts.show("Looking for details and art for ${card.title}")
         }))
         add(MenuAction("rename", "Rename Display Title", FuseIcons.TextCursor, detail = "The file keeps its name", onSelect = {
             closeOverlays()

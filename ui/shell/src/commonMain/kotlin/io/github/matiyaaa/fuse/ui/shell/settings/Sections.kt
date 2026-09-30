@@ -18,6 +18,9 @@ import io.github.matiyaaa.fuse.model.SoundProfile
 import io.github.matiyaaa.fuse.model.Support
 import io.github.matiyaaa.fuse.model.WidgetKind
 import io.github.matiyaaa.fuse.model.CartridgeRoute
+import io.github.matiyaaa.fuse.integrations.KeyCheck
+import io.github.matiyaaa.fuse.integrations.systemart.SystemArtPack
+import io.github.matiyaaa.fuse.integrations.systemart.SystemArtStyle
 import io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction
 import io.github.matiyaaa.fuse.ui.designsystem.components.Trailing
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
@@ -81,10 +84,6 @@ fun appearanceRows(app: AppState): List<MenuAction> {
             add(app.percentRow("crt.vignette", "Vignette", FuseIcons.Contrast, p.crt.vignette) { v -> set { it.copy(crt = it.crt.copy(vignette = v)) } })
         }
         add(toggleRow("contrast", "High contrast focus", FuseIcons.Accessibility, p.highContrastFocus, "Adds an outline to everything that's selected") { v -> set { it.copy(highContrastFocus = v) } })
-        add(app.choiceRow(
-            "glyphs", "Button symbols", FuseIcons.Gamepad, if (p.input.autoGlyphs) null else p.input.glyphs,
-            listOf(null to "Automatic", GlyphStyle.XBOX to "A B X Y", GlyphStyle.NINTENDO to "Nintendo style", GlyphStyle.PLAYSTATION to "Shapes", GlyphStyle.KEYBOARD to "Keyboard"),
-        ) { v -> set { it.copy(input = it.input.copy(autoGlyphs = v == null, glyphs = v ?: it.input.glyphs)) } })
     }
 }
 
@@ -242,14 +241,55 @@ fun libraryRows(app: AppState): List<MenuAction> {
 @Composable
 fun systemsRows(app: AppState): List<MenuAction> {
     val platforms by app.store.library.platforms.collectAsState()
-    return platforms.filter { it.gameCount > 0 }.map { p ->
-        MenuAction(
-            "sys.${p.platform.id}", p.platform.name, FuseIcons.Chip,
-            detail = listOfNotNull("${p.gameCount} games", p.emulatorName ?: "No emulator").joinToString("  ·  "),
-            trailing = Trailing.Chevron,
-            onSelect = { app.go(Route.PlatformSettings(p.platform.id)) },
-        )
-    }.ifEmpty { listOf(infoRow("none", "No systems yet", detail = "Systems appear once Fuse finds games for them")) }
+    val prefs by app.store.prefs.collectAsState()
+    val systems = platforms.filter { it.gameCount > 0 }
+    val artProgress by app.store.media.systemArtProgress.collectAsState()
+    return buildList {
+        add(toggleRow("art.auto", "System art", FuseIcons.Image, prefs.systemArtAuto, "Logos, artwork and colours for each system from the Art Book Next pack, downloaded when a system has none") { v ->
+            app.store.updatePrefs { it.copy(systemArtAuto = v) }
+        })
+        add(app.choiceRow(
+            "art.style", "System art style", FuseIcons.Palette, prefs.systemArtStyle,
+            SystemArtStyle.entries.map { it.name to it.displayName },
+            detail = "Used the next time system art is downloaded",
+        ) { v ->
+            app.store.updatePrefs { it.copy(systemArtStyle = v) }
+            app.confirm = ConfirmSpec("Download in this style now?", "Fuse downloads art for every system again in the new style. Art you chose yourself stays.", "Download") {
+                app.store.media.downloadSystemArt()
+                app.toasts.show("Downloading system art")
+            }
+        })
+        val progress = artProgress
+        add(MenuAction(
+            "art.all", "Download system art for all systems", FuseIcons.CloudDownload,
+            detail = when {
+                progress == null -> "Fetches every system again in the chosen style. Art you chose yourself stays"
+                !progress.finished -> "Working: ${progress.current ?: ""} (${progress.done + 1} of ${progress.total})"
+                else -> "Done: ${progress.added} images for ${progress.total} systems"
+            },
+            onSelect = {
+                app.store.media.downloadSystemArt()
+                app.toasts.show("Downloading system art")
+            },
+        ))
+        add(infoRow("art.credit", "Art Book Next", detail = SystemArtPack.ATTRIBUTION, icon = FuseIcons.Info))
+        add(infoRow("order", "Arrange systems", detail = "Hold confirm on a system in Systems or on Home, then move it with the D-pad. The order is used everywhere"))
+        if (prefs.systemOrder.isNotEmpty()) {
+            add(MenuAction("order.reset", "Reset system order", FuseIcons.RotateCcw, detail = "Back to the order Fuse uses by default", onSelect = {
+                app.store.updatePrefs { it.copy(systemOrder = emptyList()) }
+                app.toasts.show("System order reset")
+            }))
+        }
+        systems.forEach { p ->
+            add(MenuAction(
+                "sys.${p.platform.id}", p.platform.name, FuseIcons.Chip,
+                detail = listOfNotNull("${p.gameCount} games", p.emulatorName ?: "No emulator").joinToString("  ·  "),
+                trailing = Trailing.Chevron,
+                onSelect = { app.go(Route.PlatformSettings(p.platform.id)) },
+            ))
+        }
+        if (systems.isEmpty()) add(infoRow("none", "No systems yet", detail = "Systems appear once Fuse finds games for them"))
+    }
 }
 
 @Composable
@@ -281,6 +321,7 @@ fun emulatorRows(app: AppState): List<MenuAction> {
 fun mediaRows(app: AppState): List<MenuAction> {
     val p by app.store.prefs.collectAsState()
     val providers by app.store.media.providers.collectAsState()
+    val checks by app.store.media.keyChecks.collectAsState()
     val stored by app.store.credentials.stored.collectAsState()
     val set = app.store::updatePrefs
     fun secretRow(key: String, label: String, detail: String) = app.textRow(
@@ -304,7 +345,25 @@ fun mediaRows(app: AppState): List<MenuAction> {
             )
         }))
         for (s in providers) {
-            add(infoRow("prov.${s.id}", s.id.displayName, if (s.configured) "Ready" else "Needs setup", detail = s.note, icon = if (s.configured) FuseIcons.CircleCheck else FuseIcons.Alert))
+            // Providers with a key show the result of the last real test, not just "a key is saved".
+            val tested = s.id in checks
+            val check = checks[s.id]
+            val (value, icon, detail) = when {
+                !s.configured -> Triple("Needs setup", FuseIcons.Alert, s.note)
+                tested && check == null -> Triple("Checking", FuseIcons.Hourglass, "Testing the key with a real request")
+                check is KeyCheck.Working -> Triple("Working", FuseIcons.CircleCheck, s.note ?: "The key was accepted")
+                check is KeyCheck.Rejected -> Triple("Key rejected", FuseIcons.CircleX, check.reason)
+                check is KeyCheck.Unreachable -> Triple("Offline", FuseIcons.WifiOff, "Couldn't reach it to test the key: ${check.reason}")
+                check is KeyCheck.Failed -> Triple("Not confirmed", FuseIcons.Warning, check.reason)
+                else -> Triple("Ready", FuseIcons.CircleCheck, s.note)
+            }
+            add(infoRow("prov.${s.id}", s.id.displayName, value, detail = detail, icon = icon))
+        }
+        if (checks.isNotEmpty() || stored.any { it.startsWith("sgdb.") || it.startsWith("igdb.") || it.startsWith("tgdb.") }) {
+            add(MenuAction("test", "Test keys", FuseIcons.ShieldCheck, detail = "Checks every key with a real request and shows the result above", onSelect = {
+                app.store.media.checkKeys()
+                app.toasts.show("Testing keys")
+            }))
         }
         add(secretRow("sgdb.apikey", "SteamGridDB API key", "Free from steamgriddb.com, Preferences, API. Stored encrypted on this device"))
         add(secretRow("igdb.clientId", "IGDB Client ID", "From your own Twitch developer app. IGDB doesn't allow apps to share one"))
@@ -395,7 +454,14 @@ fun inputRows(app: AppState): List<MenuAction> {
     val i = p.input
     fun setInput(t: (io.github.matiyaaa.fuse.model.InputProfile) -> io.github.matiyaaa.fuse.model.InputProfile) = app.store.updatePrefs { it.copy(input = t(it.input)) }
     return listOf(
-        toggleRow("nintendo", "Nintendo button layout", FuseIcons.Gamepad, i.nintendoLayout, "Confirm on the right button, back on the bottom; X and Y swap too") { v -> setInput { it.copy(nintendoLayout = v) } },
+        MenuAction("detect", "Detect my buttons", FuseIcons.ScanSearch, detail = "Press two buttons and Fuse sets the layout and confirm button for you", onSelect = { app.buttonDetect = true }),
+        app.choiceRow(
+            "layout", "Button layout", FuseIcons.Gamepad, i.glyphs,
+            listOf(GlyphStyle.XBOX to "Xbox (A at the bottom)", GlyphStyle.NINTENDO to "Nintendo (A on the right)", GlyphStyle.PLAYSTATION to "PlayStation (shapes)"),
+            detail = "The letters printed on your buttons. Hints use them",
+        ) { v -> setInput { it.copy(glyphs = v) } },
+        toggleRow("swap", "Swap confirm and back", FuseIcons.MoveHorizontal, i.swapConfirmBack, if (i.confirmOnRight) "Now: confirm is the right button" else "Now: confirm is the bottom button") { v -> setInput { it.copy(swapConfirmBack = v) } },
+        toggleRow("keyhints", "Keyboard hints when typing", FuseIcons.Keyboard, i.autoGlyphs, "Show keyboard keys in hints after a keyboard key is used") { v -> setInput { it.copy(autoGlyphs = v) } },
         app.choiceRow("delay", "Repeat delay", FuseIcons.Timer, i.repeatDelayMs, listOf(180, 220, 280, 350, 450).map { it to "$it ms" }, detail = "How long a held direction waits before repeating") { v -> setInput { it.copy(repeatDelayMs = v) } },
         app.choiceRow("speed", "Repeat speed", FuseIcons.Zap, i.repeatIntervalMs, listOf(40 to "Fastest", 55 to "Fast", 70 to "Normal", 100 to "Relaxed", 140 to "Slow")) { v -> setInput { it.copy(repeatIntervalMs = v) } },
         toggleRow("accel", "Speed up while held", FuseIcons.Rocket, i.repeatAccelerate) { v -> setInput { it.copy(repeatAccelerate = v) } },
@@ -413,6 +479,7 @@ fun inputRows(app: AppState): List<MenuAction> {
 fun displayRows(app: AppState): List<MenuAction> {
     val p by app.store.prefs.collectAsState()
     val displays by app.platform.displays.collectAsState()
+    val log by app.platform.secondScreenLog.collectAsState()
     val d = p.display
     return buildList {
         app.platform.windowControls?.let { w ->
@@ -438,6 +505,24 @@ fun displayRows(app: AppState): List<MenuAction> {
                 }
             },
         ) { v -> app.store.updatePrefs { it.copy(display = it.display.copy(mode = v)) } })
+        if (app.platform.features.secondScreen) {
+            add(infoRow(
+                "dual", "Games with two screens", icon = FuseIcons.DualScreen,
+                detail = "DS, DSi, 3DS and Wii U games get the second screen: the companion steps aside while they run and comes back with Fuse. With Fuse as your Home app, Fuse is also the second screen's Home",
+            ))
+            add(MenuAction(
+                "dual.log", "Second screen status", FuseIcons.Activity,
+                detail = log.lastOrNull() ?: "Nothing has happened on the second screen yet",
+                trailing = Trailing.Chevron,
+                onSelect = {
+                    app.choice = io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec(
+                        title = "Second screen status",
+                        message = log.takeLast(8).joinToString("\n").ifEmpty { "Nothing has happened on the second screen yet." },
+                        options = listOf(MenuAction("dual.ok", "Close", FuseIcons.Check, onSelect = { app.choice = null })),
+                    )
+                },
+            ))
+        }
         add(toggleRow("perf", "Show performance on the second screen", FuseIcons.Activity, d.companionShowsPerformance, "Only values the system really reports; nothing is estimated") { v -> app.store.updatePrefs { it.copy(display = it.display.copy(companionShowsPerformance = v)) } })
         add(toggleRow("touch", "Touch controls on the second screen", FuseIcons.Hand, d.companionTouchControls) { v -> app.store.updatePrefs { it.copy(display = it.display.copy(companionTouchControls = v)) } })
         for (disp in displays) {
@@ -463,9 +548,10 @@ fun performanceRows(app: AppState): List<MenuAction> {
         app.choiceRow(
             "profile", "Performance profile", FuseIcons.Gauge, p.performance,
             listOf(PerformanceProfile.AUTOMATIC to "Automatic", PerformanceProfile.LOW_POWER to "Low power", PerformanceProfile.BALANCED to "Balanced", PerformanceProfile.HIGH_QUALITY to "High quality"),
-            detail = "Automatic picks for this device: ${cap.tier.name.lowercase().replaceFirstChar { it.uppercase() }}",
+            detail = "Now: " + performanceSummary(p.performance, p.lowPower, cap, app.platform.host) +
+                "\nAutomatic picks for this device: ${cap.tier.name.lowercase().replaceFirstChar { it.uppercase() }}",
         ) { v -> app.store.updatePrefs { it.copy(performance = v) } },
-        toggleRow("low", "Low Power Mode", FuseIcons.Leaf, p.lowPower, "No video previews, blur, moving backgrounds or CRT; lighter artwork. Navigation stays quick") { v -> app.store.updatePrefs { it.copy(lowPower = v) } },
+        toggleRow("low", "Low Power Mode", FuseIcons.Leaf, p.lowPower, "60 Hz, no video previews, blur, moving backgrounds or CRT; lighter artwork and a smaller image cache. Navigation stays quick") { v -> app.store.updatePrefs { it.copy(lowPower = v) } },
         toggleRow("overlay", "Performance overlay", FuseIcons.Activity, p.performanceOverlay, "Fuse's own frame rate, memory and temperatures, only as the system reports them. Other apps' frame rates can't be read") { v -> app.store.updatePrefs { it.copy(performanceOverlay = v) } },
         infoRow("cpu", "Processor", "${cap.cpuCores} cores", icon = FuseIcons.Chip),
         infoRow("ram", "Memory", "${(cap.totalRamMb / 1024.0 * 10).toInt() / 10.0} GB", icon = FuseIcons.Memory),
@@ -531,7 +617,8 @@ fun updateRows(app: AppState): List<MenuAction> {
 }
 
 @Composable
-fun aboutRows(app: AppState): List<MenuAction> = listOf(
+fun aboutRows(app: AppState): List<MenuAction> = listOfNotNull(
+    app.platform.lastCrashReport()?.let { report -> crashRow(app, report) },
     infoRow("fuse", "Fuse ${app.store.updates.currentVersion}", detail = "A console-style home for your games. Free and open source (GPL-3.0-or-later)", icon = FuseIcons.Info),
     MenuAction("source", "Source code", FuseIcons.External, detail = "github.com/MAtiyaaa/fuse", onSelect = { app.platform.openUrl("https://github.com/MAtiyaaa/fuse") }),
     MenuAction("licences", "Open-source licences", FuseIcons.File, detail = "Fuse, its libraries, fonts and icons", trailing = Trailing.Chevron, onSelect = { app.go(Route.Licenses) }),
@@ -554,3 +641,25 @@ private fun autostartRow(app: AppState, w: WindowControls): MenuAction {
     }
 }
 
+/** The last crash Fuse recorded: what happened, where, and a way to clear it once it's been read. */
+private fun crashRow(app: AppState, report: String): MenuAction {
+    val lines = report.lines().map { it.trim() }.filter { it.isNotEmpty() }
+    // The exception line and the first frames that are Fuse's own say most.
+    val cause = lines.firstOrNull { it.contains("Exception") || it.contains("Error") } ?: lines.firstOrNull().orEmpty()
+    val frames = lines.filter { it.startsWith("at io.github.matiyaaa.fuse") }.take(4)
+    val summary = (listOfNotNull(lines.firstOrNull { it.startsWith("Time:") }, cause) + frames).joinToString("\n")
+    return MenuAction("crash", "Last crash report", FuseIcons.Warning, detail = cause.take(120), trailing = Trailing.Chevron, onSelect = {
+        app.choice = io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec(
+            title = "Last crash report",
+            message = summary,
+            options = listOf(
+                MenuAction("crash.clear", "Clear report", FuseIcons.Trash, detail = "Include this in a bug report first if you can", onSelect = {
+                    app.platform.clearCrashReport()
+                    app.choice = null
+                    app.toasts.show("Crash report cleared")
+                }),
+                MenuAction("crash.keep", "Keep", FuseIcons.Check, onSelect = { app.choice = null }),
+            ),
+        )
+    })
+}

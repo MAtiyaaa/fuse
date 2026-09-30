@@ -230,6 +230,27 @@
             android:resizeableActivity="true"
             android:taskAffinity="io.github.matiyaaa.fuse.companion" />
 
+        <!--
+          The companion as Home of secondary displays. Android only starts it while Fuse is the Home
+          app (it looks for SECONDARY_HOME in the Home app's package). Exported because the system
+          starts it; it only shows the companion screen. Not single-instance: Android refuses those
+          as a secondary Home.
+        -->
+        <activity
+            android:name=".CompanionHomeActivity"
+            android:configChanges="colorMode|density|fontScale|fontWeightAdjustment|grammaticalGender|keyboard|keyboardHidden|layoutDirection|locale|mcc|mnc|navigation|orientation|screenLayout|screenSize|smallestScreenSize|touchscreen|uiMode"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:resizeableActivity="true"
+            android:stateNotNeeded="true"
+            android:taskAffinity="io.github.matiyaaa.fuse.companion.home">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.SECONDARY_HOME" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
         <receiver
             android:name=".services.InstallResultReceiver"
             android:exported="false" />
@@ -244,7 +265,7 @@
                 android:resource="@xml/file_paths" />
         </provider>
 
-        <!-- Only used for benchmark tooling over adb; Fuse exports nothing besides its launcher entries. -->
+        <!-- Only used for benchmark tooling over adb; Fuse exports nothing besides its launcher and Home entries. -->
         <receiver
             android:name="androidx.profileinstaller.ProfileInstallReceiver"
             tools:ignore="MissingClass"

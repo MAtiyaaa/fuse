@@ -8,6 +8,8 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
 import kotlinx.coroutines.flow.collectLatest
 
@@ -54,17 +56,22 @@ suspend fun LazyGridState.follow(index: Int, anchor: Float = 0.2f, animate: Bool
     if (animate) animateScrollBy(delta, followSpec) else scrollBy(delta)
 }
 
-/** Follows [selected] whenever it changes. */
+/**
+ * Follows [selected] whenever it changes. The newest [selected] lambda is always used, so a caller
+ * may pass a plain value captured at composition (a shelf's column) and still be followed.
+ */
 @Composable
 fun FollowSelection(state: LazyListState, selected: () -> Int, anchor: Float = 0.12f, animate: Boolean = true) {
+    val current by rememberUpdatedState(selected)
     LaunchedEffect(state) {
-        snapshotFlow(selected).collectLatest { state.follow(it, anchor, animate) }
+        snapshotFlow { current() }.collectLatest { state.follow(it, anchor, animate) }
     }
 }
 
 @Composable
 fun FollowSelection(state: LazyGridState, selected: () -> Int, anchor: Float = 0.2f, animate: Boolean = true) {
+    val current by rememberUpdatedState(selected)
     LaunchedEffect(state) {
-        snapshotFlow(selected).collectLatest { state.follow(it, anchor, animate) }
+        snapshotFlow { current() }.collectLatest { state.follow(it, anchor, animate) }
     }
 }

@@ -27,6 +27,7 @@ import io.github.matiyaaa.fuse.model.ScanScope
 import io.github.matiyaaa.fuse.model.ScopeRef
 import io.github.matiyaaa.fuse.model.ScopedKey
 import io.github.matiyaaa.fuse.model.ScrapeCandidate
+import io.github.matiyaaa.fuse.model.ScrapeProviderId
 import io.github.matiyaaa.fuse.model.SortOrder
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
@@ -60,7 +61,11 @@ data class GameQuery(
     val favoritesOnly: Boolean = false,
     val includeHidden: Boolean = false,
     val sort: SortOrder = SortOrder.TITLE,
+    val set: GameSet = GameSet.LIBRARY,
 )
+
+/** Which games a [GameQuery] lists: the library, or games whose files are gone, hidden or removed. */
+enum class GameSet { LIBRARY, MISSING, HIDDEN, REMOVED }
 
 interface LibraryOps {
     val home: StateFlow<HomeFeed>
@@ -83,6 +88,10 @@ interface LibraryOps {
     suspend fun setFolderPolicy(id: GameId, policy: FolderPolicy?)
     /** Removes the entry from Fuse only. Files are never touched. */
     suspend fun removeFromFuse(id: GameId)
+    /** Brings back a hidden or removed game. */
+    suspend fun restore(id: GameId)
+    /** Forgets a game whose file is gone, with its art and play history. Files are never touched. */
+    suspend fun forgetMissing(id: GameId)
 
     /** Clean Display Names: preview, apply and undo. Files are never renamed. */
     suspend fun previewCleanNames(): List<Pair<String, String>>
@@ -132,6 +141,13 @@ interface MediaOps {
     suspend fun candidates(game: GameId): List<ScrapeCandidate>
     suspend fun acceptCandidate(game: GameId, candidate: ScrapeCandidate)
     val providers: StateFlow<List<ProviderStatus>>
+    /** The last key check per provider; empty until a check ran. Checks run after a key is saved. */
+    val keyChecks: StateFlow<Map<ScrapeProviderId, io.github.matiyaaa.fuse.integrations.KeyCheck?>>
+    /** Tests every provider key that is set with a real request; null marks a check in progress. */
+    fun checkKeys()
+    /** Fetches logos, artwork and colours from the system art pack for every system with games. */
+    fun downloadSystemArt()
+    val systemArtProgress: StateFlow<FillProgress?>
 }
 
 sealed interface ArtworkResult {

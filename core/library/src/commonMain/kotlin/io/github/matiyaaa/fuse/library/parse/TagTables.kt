@@ -160,6 +160,17 @@ internal object TagTables {
     /** Video standards: recognised (and hidden by the cleaner) but not stored. */
     val videoStandards: Set<String> = setOf("ntsc", "pal", "secam", "pal 60hz", "50hz", "60hz", "pal60")
 
+    /**
+     * Round-bracket tags naming how a game was re-released or what it is compatible with, lower
+     * case. They do not tell two games apart, so the display cleaner hides them. Editions that are
+     * products of their own ("(Collector's Edition)") and "(Bonus Disc)" are not listed.
+     */
+    val distributionTags: Set<String> = setOf(
+        "virtual console", "wii virtual console", "wii u virtual console", "3ds virtual console",
+        "switch online", "nintendo switch online", "classic mini", "np", "sgb enhanced", "gb compatible",
+        "rumble version", "evercade", "steam", "gog", "retro-bit", "limited run games",
+    )
+
     /** RomM provider id tags such as "(igdb-1234)". */
     val providerIdPrefixes: Set<String> = setOf(
         "igdb", "ra", "ssfr", "steam", "moby", "sgdb", "tgdb", "hltb", "launchbox", "hasheous", "flashpoint",

@@ -1,5 +1,7 @@
 package io.github.matiyaaa.fuse.ui.shell.store.impl
 
+import io.github.matiyaaa.fuse.library.parse.DisplayNameCleaner
+
 import io.github.matiyaaa.fuse.data.settings.SecretKeys
 import io.github.matiyaaa.fuse.model.ScopeRef
 import io.github.matiyaaa.fuse.model.ScopedSettings
@@ -78,6 +80,19 @@ internal class DefaultFuseStore private constructor(
         prefsState.value = settings.toUiPrefs(globalScoped(ctx))
     }
 
+    /**
+     * Clean names became the default in 0.0.2. Games already in the library get cleaned names once,
+     * recorded like any cleanup so Settings, Library can undo it; custom titles are never touched.
+     */
+    private suspend fun cleanExistingNamesOnce() {
+        val library = ctx.settings.value.library
+        if (!library.cleanDisplayNames || library.cleanedExistingNames) return
+        runCatching { data.titleCleanup.apply(DisplayNameCleaner::clean) }
+        writeLock.withLock {
+            ctx.settings.value = data.settings.update { it.copy(library = it.library.copy(cleanedExistingNames = true)) }
+        }
+    }
+
     private fun start() {
         engine.start()
         ctx.scope.launch {
@@ -92,7 +107,9 @@ internal class DefaultFuseStore private constructor(
         }
         ctx.scope.launch {
             library.recoverSession()
+            cleanExistingNamesOnce()
             credentials.load()
+            mediaOps.startSystemArt()
             achievements.load()
             emulators.detectNow()
             cartridge.start()

@@ -51,7 +51,8 @@ ICONS = {
     "Crosshair": "crosshair", "LogOut": "log-out", "Template": "layout-template", "Shapes": "shapes",
     "Contrast": "contrast", "Accessibility": "accessibility", "Chart": "chart-no-axes-column",
     "RefreshDot": "refresh-ccw-dot", "Import": "import", "Upload": "upload", "Share": "share-2",
-    "QrCode": "qr-code", "Wrench": "wrench", "Blocks": "blocks",
+    "QrCode": "qr-code", "Wrench": "wrench", "Blocks": "blocks", "ClipboardPaste": "clipboard-paste",
+    "Filter": "list-filter", "Sort": "arrow-up-down", "FileQuestion": "file-question",
 }
 
 NUM = r"-?(?:\d+\.?\d*|\.\d+)(?:e-?\d+)?"

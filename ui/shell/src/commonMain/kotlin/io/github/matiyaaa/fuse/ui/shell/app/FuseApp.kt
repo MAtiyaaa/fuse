@@ -21,9 +21,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import io.github.matiyaaa.fuse.ui.designsystem.components.ToastKind
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.graphicsLayer
 import io.github.matiyaaa.fuse.model.BackgroundStyle
 import io.github.matiyaaa.fuse.model.Destination
@@ -69,6 +72,10 @@ import io.github.matiyaaa.fuse.ui.shell.settings.PlatformSettingsScreen
 import io.github.matiyaaa.fuse.ui.shell.settings.SettingsScreen
 import io.github.matiyaaa.fuse.ui.shell.store.FuseStore
 import io.github.matiyaaa.fuse.ui.shell.systems.SystemsScreen
+import kotlinx.coroutines.CoroutineExceptionHandler
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import io.github.matiyaaa.fuse.ui.shell.components.TileBorders
 import io.github.matiyaaa.fuse.ui.shell.components.LocalTileBorders
@@ -90,9 +97,19 @@ import androidx.compose.ui.graphics.Brush
  */
 @Composable
 fun FuseApp(store: FuseStore, platform: PlatformUi, router: InputRouter) {
-    val scope = rememberCoroutineScope()
+    val base = rememberCoroutineScope()
     val prefs by store.prefs.collectAsState()
-    val app = remember { AppState(store, platform, scope, if (prefs.onboardingDone) Route.Root(Destination.HOME) else Route.Onboarding) }
+    val app = remember {
+        lateinit var state: AppState
+        // Everything screens start runs here. A failure shows a message; it never closes Fuse.
+        val scope = CoroutineScope(
+            base.coroutineContext + SupervisorJob(base.coroutineContext[Job]) + CoroutineExceptionHandler { _, t ->
+                state.toasts.show("Something went wrong (${t::class.simpleName ?: "error"}). Fuse kept running.", ToastKind.ERROR)
+            },
+        )
+        state = AppState(store, platform, scope, if (prefs.onboardingDone) Route.Root(Destination.HOME) else Route.Onboarding)
+        state
+    }
     val spec = ThemePresets.byId(prefs.themeId)
     val quality = RenderQuality.of(prefs.performance, platform.device, prefs.lowPower)
     val lastSource by router.lastSource.collectAsState()
@@ -112,6 +129,7 @@ fun FuseApp(store: FuseStore, platform: PlatformUi, router: InputRouter) {
                 override fun type(text: String) = target.set(target.get() + text)
                 override fun backspace() = target.set(target.get().dropLast(1))
                 override fun submit() = target.submit()
+                override fun paste() = app.pasteInto(target.get, target.set)
             }
         }
         onDispose { router.textInput = null }
@@ -148,7 +166,7 @@ fun FuseApp(store: FuseStore, platform: PlatformUi, router: InputRouter) {
         spec = spec,
         motion = prefs.motion,
         quality = quality,
-        glyphs = GlyphConfig(glyphStyle, prefs.input.nintendoLayout),
+        glyphs = GlyphConfig(glyphStyle, prefs.input.confirmOnRight),
         glass = prefs.glass,
         highContrastFocus = prefs.highContrastFocus,
     ) {
@@ -164,9 +182,11 @@ fun FuseApp(store: FuseStore, platform: PlatformUi, router: InputRouter) {
                     if (route != Route.Onboarding) {
                         val status by platform.status.collectAsState()
                         Hud(
-                            destinations = listOf(Destination.HOME) + prefs.destinations.filter { it != Destination.HOME },
+                            destinations = visibleTabs(app, prefs),
                             active = app.navigator.root?.destination,
                             tabsFocused = app.focusZone == FocusZone.TABS,
+                            focusedButton = app.hudButton,
+                            onButton = { app.focusZone = FocusZone.CONTENT; app.hudButton = null; app.runHudButton(it) },
                             status = status,
                             clock24h = prefs.clock24h,
                             showWifi = prefs.showWifi,
@@ -230,9 +250,13 @@ private fun Room(
             delay(videoDelay * 1000L)
             playVideo = true
         }
+        // Glass panels frost the art behind them, when the performance profile allows blur.
+        val blur = if (glass.enabled && quality.blur) maxOf(glass.heroBlur, glass.blur * 0.5f) else 0f
         HeroBackdrop(
             source = hero,
-            modifier = Modifier.fillMaxSize().graphicsLayer { alpha = if (glass.enabled) glass.backgroundOpacity else 1f },
+            modifier = Modifier.fillMaxSize()
+                .then(if (blur > 0f) Modifier.blur(blur.dp) else Modifier)
+                .graphicsLayer { alpha = if (glass.enabled) glass.backgroundOpacity else 1f },
             dim = if (glass.enabled) glass.overlayDarkness * 0.6f else dim,
             gradient = if (glass.enabled) glass.gradientStrength else 0.9f,
             brightness = if (glass.enabled) glass.heroBrightness else 1f,
@@ -282,6 +306,7 @@ private fun Pages(app: AppState) {
                     Destination.HOME -> HomeScreen(app)
                     Destination.LIBRARY -> LibraryScreen(app, LibraryScope.All)
                     Destination.SYSTEMS -> SystemsScreen(app)
+                    Destination.ACHIEVEMENTS -> io.github.matiyaaa.fuse.ui.shell.achievements.AchievementsScreen(app)
                     Destination.APPS -> AppsScreen(app)
                     Destination.CARTRIDGE -> CartridgeScreen(app)
                 }
@@ -308,7 +333,7 @@ private fun Pages(app: AppState) {
 @Composable
 private fun ShellInput(app: AppState) {
     val prefs by app.store.prefs.collectAsState()
-    val tabs = listOf(Destination.HOME) + prefs.destinations.filter { it != Destination.HOME }
+    val tabs = visibleTabs(app, prefs)
     val onboarding = app.navigator.current == Route.Onboarding
     InputLayer(priority = LayerPriority.SHELL) { e ->
         if (onboarding) return@InputLayer NavResult.IGNORED
@@ -320,11 +345,23 @@ private fun ShellInput(app: AppState) {
             return NavResult.MOVED
         }
         if (app.focusZone == FocusZone.TABS) {
+            val button = app.hudButton
+            fun leave(): NavResult { app.focusZone = FocusZone.CONTENT; app.hudButton = null; return NavResult.MOVED }
             return@InputLayer when (e.action) {
-                NavAction.LEFT -> cycle(-1)
-                NavAction.RIGHT -> cycle(1)
-                NavAction.DOWN, NavAction.SELECT -> { app.focusZone = FocusZone.CONTENT; NavResult.MOVED }
-                NavAction.BACK -> { app.focusZone = FocusZone.CONTENT; NavResult.CONSUMED }
+                // After the last tab the stick moves on to Search and Settings.
+                NavAction.LEFT -> when (button) {
+                    HudButton.SETTINGS -> { app.hudButton = HudButton.SEARCH; NavResult.MOVED }
+                    HudButton.SEARCH -> { app.hudButton = null; NavResult.MOVED }
+                    null -> cycle(-1)
+                }
+                NavAction.RIGHT -> when (button) {
+                    HudButton.SEARCH -> { app.hudButton = HudButton.SETTINGS; NavResult.MOVED }
+                    HudButton.SETTINGS -> NavResult.BLOCKED
+                    null -> if (tabs.lastOrNull() == active) { app.hudButton = HudButton.SEARCH; NavResult.MOVED } else cycle(1)
+                }
+                NavAction.SELECT -> if (button != null) { leave(); app.runHudButton(button); NavResult.ACTIVATED } else leave()
+                NavAction.DOWN -> leave()
+                NavAction.BACK -> { leave(); NavResult.CONSUMED }
                 NavAction.UP -> NavResult.BLOCKED
                 NavAction.PREVIOUS_SECTION -> cycle(-1)
                 NavAction.NEXT_SECTION -> cycle(1)
@@ -349,6 +386,19 @@ private fun ShellInput(app: AppState) {
             else -> NavResult.IGNORED
         }
     }
+}
+
+/** The tabs shown in the top line: Home first, then the user's order. Cartridge needs Cartridge. */
+@Composable
+private fun visibleTabs(app: AppState, prefs: io.github.matiyaaa.fuse.ui.shell.store.UiPrefs): List<Destination> {
+    val cartridge by app.store.cartridge.status.collectAsState()
+    return (listOf(Destination.HOME) + prefs.destinations.filter { it != Destination.HOME })
+        .filter { it != Destination.CARTRIDGE || cartridge.installed }
+}
+
+private fun AppState.runHudButton(button: HudButton) = when (button) {
+    HudButton.SEARCH -> go(Route.Search)
+    HudButton.SETTINGS -> go(Route.Settings())
 }
 
 /** A short, calm handoff while the emulator starts: the game's art fills the screen and dims away. */

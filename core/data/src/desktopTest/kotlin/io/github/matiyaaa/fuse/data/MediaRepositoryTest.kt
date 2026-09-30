@@ -79,6 +79,17 @@ class MediaRepositoryTest {
     }
 
     @Test
+    fun everySourceRoundTrips() = runBlocking {
+        TestDb().use { t ->
+            val owner = MediaOwner.OfPlatform(PlatformId("snes"))
+            val scraped = MediaSource.entries.filter { it != MediaSource.USER }
+            t.data.media.putScraped(owner, scraped.map { MediaItem(MediaKind.SCREENSHOT, it, remoteUrl = it.name) }, MediaFillMode.REPLACE_ALL)
+            assertEquals(scraped, t.data.media.get(owner).all(MediaKind.SCREENSHOT).map { it.source })
+            assertEquals(MediaSource.ART_PACK, t.data.media.get(owner).all(MediaKind.SCREENSHOT).single { it.remoteUrl == "ART_PACK" }.source)
+        }
+    }
+
+    @Test
     fun customMediaReplacesPreviousCustomOfSameKind() = runBlocking {
         TestDb().use { t ->
             val owner = MediaOwner.OfApp("org.example.app")

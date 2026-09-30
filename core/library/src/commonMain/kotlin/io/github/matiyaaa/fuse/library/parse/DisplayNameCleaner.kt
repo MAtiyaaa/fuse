@@ -34,7 +34,8 @@ data class CleanupPreview(
  * Rules, applied to a title without its extension:
  * 1. Recognised tags are removed: region, language, revision, version, disc, dump flags
  *    (`[!]`, `[b]`, `[h1]`, `[T+Eng]`...), serials, TOSEC year and publisher, video standards,
- *    RomM provider ids, update/DLC markers, and licensing tags (Unl, PD, Hack, Pirate).
+ *    RomM provider ids, update/DLC markers, licensing tags (Unl, PD, Hack, Pirate) and
+ *    re-release or compatibility notes ("(Virtual Console)", "(SGB Enhanced)", "(Evercade)").
  * 2. Release variants stay visible because they tell two entries apart: Beta, Alpha, Proto,
  *    Demo, Sample, Preview, Kiosk, Promo, Debug.
  * 3. Unknown round-bracket tags are kept verbatim, since they are usually part of the name
@@ -44,7 +45,16 @@ data class CleanupPreview(
  * 5. Trailing articles move to the front of each " - " segment:
  *    "Legend of Zelda, The - A Link to the Past" -> "The Legend of Zelda - A Link to the Past".
  * 6. Underscores become spaces when the title has no spaces at all; whitespace is collapsed.
- * 7. If nothing would be left, the original is returned unchanged and marked for review.
+ * 7. A list number in front is removed when it is three to five digits followed by ". "
+ *    ("001. Title"), or four or five digits followed by " - " that do not read as a year
+ *    1900..2099 ("0123 - Metroid Fusion"). Shorter numbers, years and numbers without a
+ *    separator stay, because they are usually the title: "12 - Title", "1943 - The Battle of
+ *    Midway", "007 - The World Is Not Enough", "1942", "2048".
+ * 8. A bare version at the very end is removed when it has a dot ("Title v1.1", "Title V1.0.3");
+ *    "Title v2" stays.
+ * 9. Separators left empty by removals are collapsed: "A - - B" becomes "A - B", and a
+ *    leading or trailing " -" is dropped.
+ * 10. If nothing would be left, the original is returned unchanged and marked for review.
  */
 object DisplayNameCleaner {
     private val articles = listOf("The", "A", "An", "Die", "Der", "Das", "Le", "La", "Les", "El", "Los", "Las", "Il")
@@ -54,6 +64,10 @@ object DisplayNameCleaner {
     )
     private val trailingElision = Regex("^(.+?),\\s*(L')$", RegexOption.IGNORE_CASE)
     private val whitespace = Regex("\\s+")
+    private val listNumberDot = Regex("^(\\d{3,5})\\s*\\.\\s+(?=\\S)")
+    private val listNumberDash = Regex("^(\\d{4,5})\\s*-\\s+(?=\\S)")
+    private val trailingVersion = Regex("\\s+[vV]\\d+(?:\\.\\d+)+[a-z]?$")
+    private val emptySeparators = Regex("(?<=\\s)-(?:\\s+-)+(?=\\s|$)")
 
     /** The cleaned display title for [original] (a title without extension). */
     fun clean(original: String): String = preview(original).cleaned
@@ -101,7 +115,16 @@ object DisplayNameCleaner {
         }
 
         if (!title.contains(' ') && title.contains('_')) title = title.replace('_', ' ')
-        title = invertArticles(collapse(title))
+        title = collapse(title)
+        listNumber(title)?.let { number ->
+            removed.add(number.value.trim())
+            title = title.substring(number.range.last + 1)
+        }
+        trailingVersion.find(title)?.takeIf { it.range.first > 0 }?.let { version ->
+            removed.add(version.value.trim())
+            title = title.substring(0, version.range.first)
+        }
+        title = invertArticles(collapseSeparators(title))
         if ('(' in title || ')' in title || '[' in title || ']' in title) {
             warnings.add("Unbalanced brackets left in the title")
         }
@@ -137,6 +160,17 @@ object DisplayNameCleaner {
         parsed.nameTags.sortedByDescending { it.range.first }.forEach { s = s.replaceRange(it.range, " ") }
         return s
     }
+
+    /** A list number in front of [title], per rule 7, or null. */
+    private fun listNumber(title: String): MatchResult? {
+        listNumberDot.find(title)?.let { return it }
+        val dash = listNumberDash.find(title) ?: return null
+        return dash.takeUnless { it.groupValues[1].length == 4 && it.groupValues[1].toInt() in 1900..2099 }
+    }
+
+    /** "A - - B" -> "A - B"; a leading or trailing " -" is dropped. */
+    private fun collapseSeparators(title: String): String =
+        collapse(title.replace(emptySeparators, "-")).removePrefix("- ").removeSuffix(" -").trim()
 
     private fun collapse(s: String): String = s.replace(whitespace, " ").trim()
 }

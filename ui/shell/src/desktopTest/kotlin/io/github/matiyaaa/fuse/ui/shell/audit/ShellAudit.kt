@@ -329,11 +329,11 @@ internal fun AuditDriver.lookScreens() {
     }
 
     scenario("hints", "nintendo layout") {
-        useLibrary { it.copy(input = it.input.copy(nintendoLayout = true)) }
+        useLibrary { it.copy(input = it.input.copy(swapConfirmBack = true)) }
         waitFor("Continue playing")
         tap(PadButton.DPAD_LEFT)
         shoot("Home, Xbox glyphs with the Nintendo layout")
-        useLibrary { it.copy(input = it.input.copy(nintendoLayout = true, glyphs = GlyphStyle.NINTENDO)) }
+        useLibrary { it.copy(input = it.input.copy(glyphs = GlyphStyle.NINTENDO)) }
         waitFor("Continue playing")
         tap(PadButton.DPAD_LEFT)
         shoot("Home, Nintendo glyphs")

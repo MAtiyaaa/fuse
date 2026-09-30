@@ -319,14 +319,12 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
         ))
         add(Step(
             "controller", "Controller", "Which button confirms?",
-            "Press a few buttons to check them. If your confirm button is on the right (Nintendo style), turn on Nintendo layout so A and B, X and Y swap.",
+            "Detect your buttons so Fuse knows how your pad is labelled and which button confirms. It takes two presses.",
             actions = listOf(
-                StepAction(if (prefs.input.nintendoLayout) "Nintendo layout: on" else "Nintendo layout: off") {
-                    store.updatePrefs { it.copy(input = it.input.copy(nintendoLayout = !it.input.nintendoLayout)) }
-                },
-                StepAction("Continue", primary = true, run = next),
+                StepAction("Detect my buttons", primary = true) { app.buttonDetect = true },
+                StepAction("Continue", run = next),
             ),
-            content = { ControllerTest() },
+            content = { ControllerTest(prefs.input.glyphs == io.github.matiyaaa.fuse.model.GlyphStyle.NINTENDO) },
         ))
         add(Step(
             "homestyle", "Home", "Pick a Home style",
@@ -424,9 +422,12 @@ private fun Ignition(lit: Boolean = false) {
     }
 }
 
-/** Live view of what the controller sends, so users can confirm their layout. */
+/**
+ * Live view of what the controller sends, so users can confirm their layout. [nintendoKeys] places
+ * the keycodes where a pad that sends Nintendo keycodes has them (A on the right).
+ */
 @Composable
-internal fun ControllerTest() {
+internal fun ControllerTest(nintendoKeys: Boolean = false) {
     val router = LocalInputRouter.current
     val pressed = remember { mutableStateListOf<PadButton>() }
     var last by remember { mutableStateOf<PadButton?>(null) }
@@ -450,12 +451,18 @@ internal fun ControllerTest() {
         Row(horizontalArrangement = Arrangement.spacedBy(Space.xxl)) {
             Key(PadButton.L1, "L"); Key(PadButton.R1, "R")
         }
-        Key(PadButton.Y, "N")
-        Row(horizontalArrangement = Arrangement.spacedBy(Space.x4)) { Key(PadButton.X, "W"); Key(PadButton.B, "E") }
-        Key(PadButton.A, "S")
+        if (nintendoKeys) {
+            Key(PadButton.X, "X")
+            Row(horizontalArrangement = Arrangement.spacedBy(Space.x4)) { Key(PadButton.Y, "Y"); Key(PadButton.A, "A") }
+            Key(PadButton.B, "B")
+        } else {
+            Key(PadButton.Y, "Y")
+            Row(horizontalArrangement = Arrangement.spacedBy(Space.x4)) { Key(PadButton.X, "X"); Key(PadButton.B, "B") }
+            Key(PadButton.A, "A")
+        }
         Spacer(Modifier.height(Space.m))
         FText(last?.let { "Last: ${it.name.replace('_', ' ').lowercase()}" } ?: "Press any button", Fuse.type.label, color = c.textMuted)
-        FText("S, E, W and N are the bottom, right, left and top face buttons", Fuse.type.caption, color = c.textFaint)
+        FText(if (nintendoKeys) "Laid out as a Nintendo pad" else "Laid out as an Xbox pad", Fuse.type.caption, color = c.textFaint)
     }
 }
 

@@ -29,13 +29,18 @@ interface ActivityRequests {
 class ActivityHolder(private val app: Application) : Application.ActivityLifecycleCallbacks {
     private var mainRef: WeakReference<MainActivity>? = null
     private var companionRef: WeakReference<CompanionActivity>? = null
+    private var homeCompanionRef: WeakReference<CompanionHomeActivity>? = null
     private var resumedRef: WeakReference<Activity>? = null
 
     /** Called when an activity of Fuse resumes (Home role, storage and volume state refresh then). */
     var onFuseResumed: (() -> Unit)? = null
 
     val main: MainActivity? get() = mainRef?.get()?.takeUnless { it.isFinishing || it.isDestroyed }
+    /** The companion Fuse started itself (see [CompanionScreens]). */
     val companion: CompanionActivity? get() = companionRef?.get()?.takeUnless { it.isFinishing || it.isDestroyed }
+
+    /** The companion Android started as the second screen's Home, while Fuse is the Home app. */
+    val homeCompanion: CompanionHomeActivity? get() = homeCompanionRef?.get()?.takeUnless { it.isFinishing || it.isDestroyed }
 
     /**
      * The activity to start things from: the main one. Never the companion, because an activity
@@ -83,6 +88,7 @@ class ActivityHolder(private val app: Application) : Application.ActivityLifecyc
     override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {
         when (activity) {
             is MainActivity -> mainRef = WeakReference(activity)
+            is CompanionHomeActivity -> homeCompanionRef = WeakReference(activity)
             is CompanionActivity -> companionRef = WeakReference(activity)
         }
     }
@@ -99,6 +105,7 @@ class ActivityHolder(private val app: Application) : Application.ActivityLifecyc
     override fun onActivityDestroyed(activity: Activity) {
         if (mainRef?.get() === activity) mainRef = null
         if (companionRef?.get() === activity) companionRef = null
+        if (homeCompanionRef?.get() === activity) homeCompanionRef = null
         if (resumedRef?.get() === activity) resumedRef = null
     }
 

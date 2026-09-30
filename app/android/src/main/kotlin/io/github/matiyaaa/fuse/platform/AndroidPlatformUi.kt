@@ -1,6 +1,7 @@
 package io.github.matiyaaa.fuse.platform
 
 import android.content.ActivityNotFoundException
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -8,6 +9,8 @@ import androidx.core.net.toUri
 import io.github.matiyaaa.fuse.ActivityHolder
 import io.github.matiyaaa.fuse.BuildConfig
 import io.github.matiyaaa.fuse.CompanionScreens
+import io.github.matiyaaa.fuse.CrashLog
+import io.github.matiyaaa.fuse.SecondScreenLog
 import io.github.matiyaaa.fuse.model.CapabilityProfile
 import io.github.matiyaaa.fuse.model.DisplayInfo
 import io.github.matiyaaa.fuse.model.Host
@@ -19,7 +22,9 @@ import io.github.matiyaaa.fuse.ui.shell.platform.PlatformUi
 import io.github.matiyaaa.fuse.ui.shell.platform.StorageAccess
 import io.github.matiyaaa.fuse.ui.shell.platform.VideoPreview
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.withContext
 
 /**
  * The Android side of the interface: status, displays, sounds, haptics, Home role, storage, quick
@@ -31,6 +36,7 @@ class AndroidPlatformUi(
     private val activities: ActivityHolder,
     scope: CoroutineScope,
     volumes: StorageVolumes,
+    private val crashLog: CrashLog,
 ) : PlatformUi {
     private val appContext = context.applicationContext
 
@@ -50,6 +56,7 @@ class AndroidPlatformUi(
     override val storage: AndroidStorageAccess = AndroidStorageAccess(appContext, activities, volumes, scope)
     override val quick: AndroidQuickControls = AndroidQuickControls(appContext, activities)
     override val video: VideoPreview = AndroidVideoPreview()
+    override val secondScreenLog: StateFlow<List<String>> = SecondScreenLog.entries
 
     private val hasBluetooth = appContext.packageManager.hasSystemFeature(PackageManager.FEATURE_BLUETOOTH)
 
@@ -101,6 +108,24 @@ class AndroidPlatformUi(
         }
         Runtime.getRuntime().exit(0)
     }
+
+    /** Reads on the main thread, while Fuse has focus: Android 10+ hides the clipboard from apps in the background. */
+    override suspend fun readClipboardText(): String? = withContext(Dispatchers.Main) {
+        try {
+            val clip = appContext.getSystemService(ClipboardManager::class.java)?.primaryClip
+            if (clip == null || clip.itemCount == 0) {
+                null
+            } else {
+                clip.getItemAt(0).coerceToText(activities.context)?.toString()?.takeIf { it.isNotEmpty() }
+            }
+        } catch (e: RuntimeException) {
+            null
+        }
+    }
+
+    override fun lastCrashReport(): String? = crashLog.read()
+
+    override fun clearCrashReport() = crashLog.clear()
 
     /** Leaves Fuse. Ignored while Fuse is Home, where there is nothing to exit to. */
     override fun exit() {

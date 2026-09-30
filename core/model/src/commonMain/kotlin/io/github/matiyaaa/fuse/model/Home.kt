@@ -2,9 +2,12 @@ package io.github.matiyaaa.fuse.model
 
 import kotlinx.serialization.Serializable
 
-/** Root destinations. The user can hide and reorder them (Settings -> Home). */
+/**
+ * Root destinations, in their default order. The user can hide and reorder them (Settings, Home).
+ * Cartridge only shows while Cartridge is installed.
+ */
 @Serializable
-enum class Destination { HOME, LIBRARY, SYSTEMS, APPS, CARTRIDGE }
+enum class Destination { HOME, SYSTEMS, LIBRARY, ACHIEVEMENTS, APPS, CARTRIDGE }
 
 @Serializable
 enum class HomeMode {

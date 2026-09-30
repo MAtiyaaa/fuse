@@ -38,7 +38,9 @@ import io.github.matiyaaa.fuse.ui.designsystem.components.OverlayEdge
 import io.github.matiyaaa.fuse.ui.designsystem.components.Panel
 import io.github.matiyaaa.fuse.ui.designsystem.components.handleMenuAction
 import io.github.matiyaaa.fuse.ui.designsystem.focus.LinearSelection
+import io.github.matiyaaa.fuse.ui.designsystem.icons.ButtonGlyph
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
+import io.github.matiyaaa.fuse.ui.designsystem.icons.HintButton
 import io.github.matiyaaa.fuse.ui.designsystem.input.InputLayer
 import io.github.matiyaaa.fuse.ui.designsystem.input.LayerPriority
 import io.github.matiyaaa.fuse.ui.designsystem.input.NavResult
@@ -54,6 +56,7 @@ fun OverlayHost(app: AppState) {
     ChoiceOverlay(app)
     ConfirmOverlay(app)
     TextInputOverlay(app)
+    io.github.matiyaaa.fuse.ui.shell.settings.ButtonDetectOverlay(app)
 }
 
 @Composable
@@ -117,7 +120,7 @@ private fun ChoiceOverlay(app: AppState) {
                 FText(s.title, Fuse.type.title, maxLines = 2)
                 s.message?.let {
                     Spacer(Modifier.height(Space.s))
-                    FText(it, Fuse.type.body, color = Fuse.colors.textMuted, maxLines = 5)
+                    FText(it, Fuse.type.body, color = Fuse.colors.textMuted, maxLines = 8)
                 }
                 Spacer(Modifier.height(Space.l))
                 MenuList(s.options, sel, modifier = Modifier.heightIn(max = 420.dp))
@@ -195,7 +198,7 @@ private fun TextInputOverlay(app: AppState) {
         InputLayer(priority = LayerPriority.DIALOG + 3, modal = true) { e ->
             when (e.action) {
                 NavAction.BACK -> { app.textInput = null; NavResult.CONSUMED }
-                else -> keyboard.handle(e, app.textDraft, { app.textDraft = it }, ::done)
+                else -> keyboard.handle(e, app.textDraft, { app.textDraft = it }, ::done, onPaste = { app.pasteInto({ app.textDraft }, { app.textDraft = it }) })
             }
         }
     }
@@ -218,10 +221,25 @@ private fun TextInputOverlay(app: AppState) {
                     )
                 }
                 Spacer(Modifier.height(Space.l))
-                OnScreenKeyboard(keyboard, app.textDraft, { app.textDraft = it }, ::done)
+                OnScreenKeyboard(keyboard, app.textDraft, { app.textDraft = it }, ::done, onPaste = { app.pasteInto({ app.textDraft }, { app.textDraft = it }) })
                 Spacer(Modifier.height(Space.s))
-                FText("X delete  ·  Y space  ·  Start done", Fuse.type.caption, color = Fuse.colors.textFaint)
+                Row(horizontalArrangement = Arrangement.spacedBy(Space.l), verticalAlignment = Alignment.CenterVertically) {
+                    KeyHint(HintButton.OPTIONS, "Delete")
+                    KeyHint(HintButton.SEARCH, "Space")
+                    KeyHint(HintButton.NEXT, "Paste")
+                    KeyHint(HintButton.MENU, "Done")
+                }
             }
         }
+    }
+}
+
+/** A small glyph and label under the keyboard, in the pad's own button style. */
+@Composable
+private fun KeyHint(button: HintButton, label: String) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        ButtonGlyph(button, size = 18.dp, color = Fuse.colors.textFaint)
+        Spacer(Modifier.width(Space.xs))
+        FText(label, Fuse.type.caption, color = Fuse.colors.textFaint)
     }
 }

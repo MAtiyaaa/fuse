@@ -1,6 +1,7 @@
 package io.github.matiyaaa.fuse.integrations.steamgriddb
 
 import io.github.matiyaaa.fuse.integrations.ApiResult
+import io.github.matiyaaa.fuse.integrations.KeyCheck
 import io.github.matiyaaa.fuse.integrations.RateLimiter
 import io.github.matiyaaa.fuse.integrations.TestHttp
 import io.github.matiyaaa.fuse.integrations.json
@@ -114,8 +115,8 @@ class SteamGridDbTest {
         val http = TestHttp { json("""{"success":false,"errors":["Unauthorized"]}""", HttpStatusCode.Unauthorized) }
         val client = SteamGridDbClient(http.client, "SGDB_SECRET_123", RateLimiter.unlimited())
         val result = client.verifyKey()
-        assertIs<ApiResult.AuthError>(result)
-        assertFalse("SGDB_SECRET_123" in result.message)
+        assertIs<KeyCheck.Rejected>(result)
+        assertFalse("SGDB_SECRET_123" in result.reason)
         assertFalse("SGDB_SECRET_123" in client.toString())
     }
 }

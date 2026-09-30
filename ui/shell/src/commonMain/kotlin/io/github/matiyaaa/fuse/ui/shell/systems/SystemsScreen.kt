@@ -21,6 +21,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -57,7 +60,7 @@ import io.github.matiyaaa.fuse.ui.shell.app.FocusZone
 import io.github.matiyaaa.fuse.ui.shell.app.Route
 import io.github.matiyaaa.fuse.ui.shell.app.rememberRouteState
 import io.github.matiyaaa.fuse.ui.shell.components.Stage
-import io.github.matiyaaa.fuse.ui.shell.components.SystemGlyph
+import io.github.matiyaaa.fuse.ui.shell.components.SystemCardArt
 import io.github.matiyaaa.fuse.ui.shell.components.stage
 import io.github.matiyaaa.fuse.ui.shell.store.PlatformCard
 import kotlinx.coroutines.launch
@@ -75,14 +78,35 @@ fun SystemsScreen(app: AppState) {
     sel.clamp(systems.size)
     val current = systems.getOrNull(sel.index)
     var columns = 4
+    // Holding confirm picks a system up; the D-pad moves it and the order is saved for Home too.
+    var moving by remember { mutableStateOf(false) }
 
     LaunchedEffect(current?.platform?.id) {
         app.hero = current?.let { HeroSource(it.platform.id, it.art.hero, it.platform.accent.toColor()) }
-        app.hints = listOf(Hint(HintButton.CONFIRM, "Open"), Hint(HintButton.OPTIONS, "System options"), Hint(HintButton.SEARCH, "Search"))
+    }
+    LaunchedEffect(moving) {
+        app.hints = if (moving) {
+            listOf(Hint(HintButton.DPAD, "Move"), Hint(HintButton.CONFIRM, "Done"))
+        } else {
+            listOf(Hint(HintButton.CONFIRM, "Open"), Hint(HintButton.HOLD_CONFIRM, "Hold to move"), Hint(HintButton.OPTIONS, "System options"))
+        }
     }
 
-    InputLayer(enabled = app.focusZone == FocusZone.CONTENT && !app.overlayOpen) { e ->
+    InputLayer(enabled = app.focusZone == FocusZone.CONTENT && !app.overlayOpen, longPress = true) { e ->
+        if (moving) {
+            val delta = when (e.action) {
+                NavAction.LEFT -> -1
+                NavAction.RIGHT -> 1
+                NavAction.UP -> -columns
+                NavAction.DOWN -> columns
+                NavAction.SELECT, NavAction.BACK, NavAction.REORDER -> { moving = false; return@InputLayer NavResult.CONSUMED }
+                else -> return@InputLayer NavResult.CONSUMED
+            }
+            val to = app.moveSystem(systems, sel.index, delta)
+            return@InputLayer if (to == sel.index) NavResult.BLOCKED else { sel.index = to; NavResult.MOVED }
+        }
         when (e.action) {
+            NavAction.REORDER -> { if (current != null) moving = true; NavResult.ACTIVATED }
             NavAction.UP, NavAction.DOWN, NavAction.LEFT, NavAction.RIGHT, NavAction.PAGE_UP, NavAction.PAGE_DOWN ->
                 sel.move(e.action, systems.size, columns).let { if (it == NavResult.IGNORED && e.action != NavAction.UP) NavResult.BLOCKED else it }
             NavAction.SELECT -> { current?.let { app.go(Route.PlatformGames(it.platform.id)) }; NavResult.ACTIVATED }
@@ -127,7 +151,7 @@ fun SystemsScreen(app: AppState) {
                         },
                         onLongClick = { sel.index = i; app.openContextMenu(app.systemMenu(card)) },
                     ) {
-                        Artwork(card.art.icon, Modifier.fillMaxSize(), fallback = { SystemGlyph(card, card.platform.accent.toColor(), large = false) })
+                        SystemCardArt(card)
                     }
                 }
             }
@@ -213,3 +237,15 @@ fun AppState.platformEmulatorPicker(card: PlatformCard) {
     )
 }
 
+/**
+ * Moves the system at [index] of [systems] by [delta] places and saves the whole order, so Home,
+ * Systems and the Library's system picker all follow it. Returns the system's new index.
+ */
+fun AppState.moveSystem(systems: List<PlatformCard>, index: Int, delta: Int): Int {
+    val target = index + delta
+    if (index !in systems.indices || target !in systems.indices) return index
+    val ids = systems.map { it.platform.id.value }.toMutableList()
+    ids.add(target, ids.removeAt(index))
+    store.updatePrefs { it.copy(systemOrder = ids + it.systemOrder.filterNot { id -> id in ids }) }
+    return target
+}

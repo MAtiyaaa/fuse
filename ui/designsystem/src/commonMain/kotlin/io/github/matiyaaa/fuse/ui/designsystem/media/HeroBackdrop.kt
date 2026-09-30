@@ -176,7 +176,9 @@ private fun HeroLayerView(layer: HeroLayer, brightness: Float, onReady: () -> Un
         return
     }
     val context = LocalPlatformContext.current
-    val request = remember(source.model, context) { ImageRequest.Builder(context).data(source.model).build() }
+    // Decoded no larger than the performance profile allows (smaller in Low Power).
+    val maxPx = Fuse.quality.heroMaxPx
+    val request = remember(source.model, context, maxPx) { ImageRequest.Builder(context).data(source.model).size(maxPx).build() }
     val painter = rememberAsyncImagePainter(request, contentScale = ContentScale.Crop)
     val state by painter.state.collectAsStateCompat()
     val done = state is AsyncImagePainter.State.Success || state is AsyncImagePainter.State.Error

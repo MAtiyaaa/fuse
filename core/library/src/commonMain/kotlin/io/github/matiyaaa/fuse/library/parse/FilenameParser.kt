@@ -23,6 +23,12 @@ enum class TagKind {
     PROVIDER_ID,
     CONTENT_MARKER,
 
+    /**
+     * A re-release channel or compatibility note that does not make it a different game:
+     * "(Virtual Console)", "(SGB Enhanced)", "(Evercade)". Recognised but not stored.
+     */
+    DISTRIBUTION,
+
     /** The tag holds the title itself, as in `BLUS30001-[Game Name]`. */
     TITLE,
 
@@ -347,6 +353,7 @@ object FilenameParser {
             return TagKind.YEAR
         }
         if (lower in TagTables.videoStandards) return TagKind.VIDEO
+        if (bracket == Bracket.ROUND && lower in TagTables.distributionTags) return TagKind.DISTRIBUTION
         providerRegex.matchEntire(text)?.let { m ->
             if (m.groupValues[1].lowercase() in TagTables.providerIdPrefixes) return TagKind.PROVIDER_ID
         }

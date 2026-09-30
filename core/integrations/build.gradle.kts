@@ -16,6 +16,8 @@ kotlin {
         }
         commonTest.dependencies {
             implementation(libs.ktor.client.mock)
+            // Only for checking the system art names against the whole platform catalog.
+            implementation(projects.core.library)
         }
     }
 }

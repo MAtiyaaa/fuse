@@ -1,5 +1,13 @@
 package io.github.matiyaaa.fuse.ui.shell.media
 
+import androidx.compose.foundation.rememberScrollState
+
+import androidx.compose.foundation.verticalScroll
+
+import androidx.compose.foundation.relocation.bringIntoViewRequester
+
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -47,6 +55,7 @@ import io.github.matiyaaa.fuse.model.MediaKind
 import io.github.matiyaaa.fuse.model.MediaOwner
 import io.github.matiyaaa.fuse.model.MediaSet
 import io.github.matiyaaa.fuse.model.MediaSource
+import io.github.matiyaaa.fuse.model.ScrapeProviderId
 import io.github.matiyaaa.fuse.model.NavAction
 import io.github.matiyaaa.fuse.ui.designsystem.components.Chip
 import io.github.matiyaaa.fuse.ui.designsystem.components.FText
@@ -74,6 +83,7 @@ import io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec
 import io.github.matiyaaa.fuse.ui.shell.app.ConfirmSpec
 import io.github.matiyaaa.fuse.ui.shell.app.FocusZone
 import io.github.matiyaaa.fuse.ui.shell.store.ArtworkResult
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 private val slots = listOf(
@@ -115,14 +125,22 @@ fun MediaScreen(app: AppState, owner: MediaOwner, title: String) {
         browser = Browser.Loading
         grid.index = 0
         app.scope.launch {
-            browser = when (val r = app.store.media.artworkOptions(owner, k)) {
+            val result = try {
+                app.store.media.artworkOptions(owner, k)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                ArtworkResult.Unavailable("Fuse couldn't search for art (${e::class.simpleName}). Try again, or check your keys in Settings, Media and Scraping.")
+            }
+            browser = when (val r = result) {
                 is ArtworkResult.Options -> if (r.options.isEmpty()) Browser.Message("No ${slotName(k).lowercase()} found. Try another source in Media and Scraping settings.") else Browser.Options(k, r.options)
                 is ArtworkResult.NeedsMatch -> {
                     app.choice = ChoiceSpec(
                         title = "Which game is this?",
                         message = "Fuse found several close matches. Pick the right one and art will be searched for it.",
-                        options = r.candidates.map { c ->
-                            MenuAction("c${c.providerGameId}", c.title, FuseIcons.Target, detail = listOfNotNull(c.platformName, c.year?.toString(), "${(c.confidence * 100).toInt()}% match").joinToString("  ·  "), onSelect = {
+                        // Ids include the provider and position: two providers can share a game number.
+                        options = r.candidates.mapIndexed { i, c ->
+                            MenuAction("c.${c.provider}.${c.providerGameId}.$i", c.title, FuseIcons.Target, detail = listOfNotNull(c.platformName, c.year?.toString(), "${(c.confidence * 100).toInt()}% match").joinToString("  ·  "), onSelect = {
                                 app.choice = null
                                 val game = (owner as? MediaOwner.OfGame)?.id
                                 if (game != null) app.scope.launch { app.store.media.acceptCandidate(game, c); browse(k) }
@@ -221,7 +239,9 @@ fun MediaScreen(app: AppState, owner: MediaOwner, title: String) {
 
     val c = Fuse.colors
     Row(Modifier.fillMaxSize().padding(horizontal = Space.gutter)) {
-        Column(Modifier.width(380.dp).fillMaxHeight()) {
+        val slotRequesters = remember { List(slots.size) { BringIntoViewRequester() } }
+        LaunchedEffect(sel.index) { slotRequesters[sel.index].bringIntoView() }
+        Column(Modifier.width(380.dp).fillMaxHeight().verticalScroll(rememberScrollState()).padding(bottom = Size.hintHeight + Space.l)) {
             Spacer(Modifier.height(Size.hudHeight + Space.l))
             FText("Manage media", Fuse.type.display)
             FText(title, Fuse.type.body, color = c.textMuted, maxLines = 1)
@@ -229,7 +249,7 @@ fun MediaScreen(app: AppState, owner: MediaOwner, title: String) {
             slots.forEachIndexed { i, (k, name) ->
                 val selected = i == sel.index && app.focusZone == FocusZone.CONTENT && adj == null && options == null
                 Row(
-                    Modifier.fillMaxWidth().clip(RoundedCornerShape(Fuse.geometry.control))
+                    Modifier.fillMaxWidth().bringIntoViewRequester(slotRequesters[i]).clip(RoundedCornerShape(Fuse.geometry.control))
                         .background(if (selected) c.text.copy(alpha = 0.1f) else Color.Transparent)
                         .clickable(remember { MutableInteractionSource() }, null) { sel.index = i; app.choice = ChoiceSpec(name, sourceLine(media, k), slotActions(k)) }
                         .padding(horizontal = Space.m, vertical = Space.s),
@@ -338,7 +358,12 @@ private fun ArtworkGrid(b: Browser.Options, grid: GridSelection, onPick: (Artwor
                     }
                     Spacer(Modifier.height(Space.xs))
                     FText(
-                        listOfNotNull(opt.provider.displayName, opt.style, opt.width?.let { "${it}x${opt.height}" }).joinToString("  ·  "),
+                        // System art pack options carry the pack's name as their author.
+                        listOfNotNull(
+                            if (opt.provider == ScrapeProviderId.LOCAL && opt.author != null) opt.author else opt.provider.displayName,
+                            opt.style,
+                            opt.width?.let { "${it}x${opt.height}" },
+                        ).joinToString("  ·  "),
                         Fuse.type.caption, color = Fuse.colors.textMuted, maxLines = 1,
                     )
                 }
@@ -365,6 +390,7 @@ private fun sourceName(s: MediaSource) = when (s) {
     MediaSource.THEGAMESDB -> "TheGamesDB"
     MediaSource.SCREENSCRAPER -> "ScreenScraper"
     MediaSource.LIBRETRO -> "Libretro thumbnails"
+    MediaSource.ART_PACK -> "Art Book Next"
     MediaSource.GENERATED -> "Generated"
 }
 

@@ -31,9 +31,21 @@ internal class ProviderHttp(
 ) {
     fun safe(text: String?): String = redact(text, secrets())
 
-    /** Sends the request described by [block] and reads the whole body. */
+    /**
+     * Sends the request described by [block] and reads the whole body. A request that cannot be
+     * built (a key with a line break makes an illegal header value) is a [ApiResult.NotConfigured]
+     * failure, not a crash; its message leaves out the exception text, which may quote the key.
+     */
     suspend fun execute(block: HttpRequestBuilder.() -> Unit): ApiResult<RawResponse> {
-        val builder = HttpRequestBuilder().apply(block)
+        val builder = try {
+            HttpRequestBuilder().apply(block)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Throwable) {
+            return ApiResult.NotConfigured(
+                "$provider: the request could not be built (${e::class.simpleName}); check the key for stray characters",
+            )
+        }
         val host = builder.url.host
         val run: suspend () -> RawResponse = {
             val response = http.request(builder)
@@ -61,11 +73,15 @@ internal class ProviderHttp(
         else -> ApiResult.HttpError(raw.status, "$provider answered HTTP ${raw.status}")
     }
 
-    /** Decodes [raw]'s body, mapping parse problems to [ApiResult.InvalidResponse]. */
+    /**
+     * Decodes [raw]'s body, mapping every parse problem to [ApiResult.InvalidResponse], not only
+     * SerializationException: a truncated or unexpected body can make a decoder throw anything.
+     */
     fun <T> decode(raw: RawResponse, deserializer: DeserializationStrategy<T>): ApiResult<T> = try {
         ApiResult.Success(json.decodeFromString(deserializer, raw.body))
-    } catch (e: IllegalArgumentException) {
-        // SerializationException is an IllegalArgumentException.
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Throwable) {
         ApiResult.InvalidResponse(safe("$provider sent an unreadable response: ${e.message?.take(240)}"))
     }
 

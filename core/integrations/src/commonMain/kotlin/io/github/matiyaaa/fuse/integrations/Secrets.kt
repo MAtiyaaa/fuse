@@ -17,6 +17,15 @@ class Secret(private val value: String) {
 
 internal const val REDACTED = "***"
 
+/**
+ * [raw] without whitespace, control or invisible formatting characters (zero-width spaces, byte
+ * order marks). Keys pasted from a web page or a password manager often carry a line break or a
+ * zero-width space, which the provider rejects or which cannot even be sent as a header. No
+ * provider Fuse talks to uses such characters inside a key.
+ */
+fun sanitizeKey(raw: String): String =
+    raw.filterNot { it.isWhitespace() || it.isISOControl() || it.category == CharCategory.FORMAT }
+
 private val secretQueryParam = Regex(
     "(?i)((?:^|[?&;\\s,(\\[])(?:y|apikey|api_key|key|client_secret|devid|devpassword|ssid|sspassword|password|access_token|token)=)" +
         "[^&\\s#\"',;\\]]*",

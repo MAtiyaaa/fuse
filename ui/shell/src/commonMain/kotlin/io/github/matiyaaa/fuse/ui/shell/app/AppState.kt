@@ -62,11 +62,17 @@ class AppState(
     val toasts = ToastState()
 
     var focusZone by mutableStateOf(FocusZone.CONTENT)
+
+    /** Search or Settings in the top line has controller focus (only while [focusZone] is TABS). */
+    var hudButton by mutableStateOf<HudButton?>(null)
     var quickMenuOpen by mutableStateOf(false)
     var contextMenu by mutableStateOf<ContextMenuSpec?>(null)
     var confirm by mutableStateOf<ConfirmSpec?>(null)
     var textInput by mutableStateOf<TextInputSpec?>(null)
     var choice by mutableStateOf<ChoiceSpec?>(null)
+
+    /** "Detect my buttons" is running; it takes every press until it finishes. */
+    var buttonDetect by mutableStateOf(false)
 
     /** Text being typed in the text input overlay (on-screen keyboard or a hardware keyboard). */
     var textDraft by mutableStateOf("")
@@ -84,7 +90,7 @@ class AppState(
     var launching by mutableStateOf<LaunchVeil?>(null)
 
     val overlayOpen: Boolean
-        get() = quickMenuOpen || contextMenu != null || confirm != null || textInput != null || choice != null
+        get() = quickMenuOpen || contextMenu != null || confirm != null || textInput != null || choice != null || buttonDetect
 
     fun openContextMenu(spec: ContextMenuSpec) {
         contextMenu = spec
@@ -96,6 +102,7 @@ class AppState(
         confirm = null
         textInput = null
         choice = null
+        buttonDetect = false
     }
 
     fun go(route: Route) {

@@ -34,7 +34,7 @@ internal fun AppSettings.toUiPrefs(scoped: GlobalScoped): UiPrefs {
         showLogo = scoped.showLogo,
         videoPreview = videoPreview.enabled,
         videoDelaySeconds = videoPreview.delaySeconds,
-        input = input,
+        input = input.migrated(),
         display = display,
         performance = performance.profile,
         lowPower = performance.lowPowerMode,
@@ -45,6 +45,11 @@ internal fun AppSettings.toUiPrefs(scoped: GlobalScoped): UiPrefs {
         showWifi = statusArea.showWifi,
         showBluetooth = statusArea.showBluetooth,
         cleanDisplayNames = library.cleanDisplayNames,
+        systemOrder = library.systemOrder,
+        continueDismissed = home.continueDismissed,
+        systemArtAuto = library.systemArtAuto,
+        librarySort = library.sort,
+        systemArtStyle = library.systemArtStyle,
         scraperOrder = scraping.providerOrder,
         scraperLanguage = scraping.preferredLanguage,
         scraperRegion = scraping.preferredRegion ?: ANY_REGION,
@@ -66,7 +71,7 @@ internal fun AppSettings.withUiPrefs(prefs: UiPrefs): AppSettings {
         Destination.entries.filterNot { it in visible }.map { DestinationSetting(it, visible = false) }
     return copy(
         onboarding = onboarding.copy(completed = prefs.onboardingDone),
-        home = home.copy(layout = prefs.home, destinations = destinations),
+        home = home.copy(layout = prefs.home, destinations = destinations, continueDismissed = prefs.continueDismissed),
         appearance = appearance.copy(
             themeId = theme.id,
             motion = prefs.motion,
@@ -85,7 +90,13 @@ internal fun AppSettings.withUiPrefs(prefs: UiPrefs): AppSettings {
             matching = prefs.matching,
         ),
         videoPreview = videoPreview.copy(enabled = prefs.videoPreview, delaySeconds = prefs.videoDelaySeconds.coerceIn(0, 60)),
-        library = library.copy(cleanDisplayNames = prefs.cleanDisplayNames),
+        library = library.copy(
+            cleanDisplayNames = prefs.cleanDisplayNames,
+            systemOrder = prefs.systemOrder,
+            systemArtAuto = prefs.systemArtAuto,
+            sort = prefs.librarySort,
+            systemArtStyle = prefs.systemArtStyle,
+        ),
         sound = sound.copy(
             enabled = prefs.sound != SoundProfile.OFF,
             volume = prefs.soundVolume.coerceIn(0f, 1f),

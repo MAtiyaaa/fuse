@@ -33,11 +33,11 @@ enum class HintButton { CONFIRM, BACK, OPTIONS, SEARCH, MENU, VIEW, PREV, NEXT, 
 /** Physical face-button positions. */
 private enum class Face { SOUTH, EAST, WEST, NORTH }
 
-private fun faceFor(button: HintButton, nintendoLayout: Boolean): Face? = when (button) {
-    HintButton.CONFIRM, HintButton.HOLD_CONFIRM -> if (nintendoLayout) Face.EAST else Face.SOUTH
-    HintButton.BACK -> if (nintendoLayout) Face.SOUTH else Face.EAST
-    HintButton.OPTIONS -> if (nintendoLayout) Face.NORTH else Face.WEST
-    HintButton.SEARCH -> if (nintendoLayout) Face.WEST else Face.NORTH
+private fun faceFor(button: HintButton, confirmOnRight: Boolean): Face? = when (button) {
+    HintButton.CONFIRM, HintButton.HOLD_CONFIRM -> if (confirmOnRight) Face.EAST else Face.SOUTH
+    HintButton.BACK -> if (confirmOnRight) Face.SOUTH else Face.EAST
+    HintButton.OPTIONS -> if (confirmOnRight) Face.NORTH else Face.WEST
+    HintButton.SEARCH -> if (confirmOnRight) Face.WEST else Face.NORTH
     else -> null
 }
 
@@ -125,7 +125,7 @@ fun ButtonGlyph(
             }
         }
         else -> {
-            val face = faceFor(button, glyphs.nintendoLayout) ?: Face.SOUTH
+            val face = faceFor(button, glyphs.confirmOnRight) ?: Face.SOUTH
             Box(
                 Modifier.size(size).background(fill, CircleShape),
                 contentAlignment = Alignment.Center,

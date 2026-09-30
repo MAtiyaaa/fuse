@@ -20,6 +20,7 @@ and redact credentials from every error message (`redact()`, see
 - [TheGamesDB](#thegamesdb)
 - [ScreenScraper](#screenscraper)
 - [Libretro thumbnails](#libretro-thumbnails)
+- [System art (Art Book Next)](#system-art-art-book-next)
 - [How scraping picks a match](#how-scraping-picks-a-match)
 - [RomM via Cartridge](#romm-via-cartridge)
 - [Cartridge bridge protocol](#cartridge-bridge-protocol)
@@ -36,6 +37,7 @@ and redact credentials from every error message (`redact()`, see
 | TheGamesDB | API key | Your key, game titles, TheGamesDB platform and game ids | When you fill metadata or artwork |
 | ScreenScraper | Developer credentials (not shipped yet) and optionally your account | Developer and account credentials, and either a file's CRC32/MD5 with its size, file name (no folders) and system id, or a title | When you fill metadata or artwork |
 | Libretro thumbnails | Nothing | The system folder name and candidate game names in image URLs | When you fill artwork |
+| System art (Art Book Next) | Nothing | The pack's system name (for example `snes`) in file URLs on raw.githubusercontent.com | When a platform's system art or the style picker is shown and the files are not cached yet |
 | GitHub Releases | Nothing | A request for the latest release of Fuse or Cartridge, your IP address and the User-Agent with Fuse's version | Update checks (automatic check can be turned off) and "Install Cartridge"; downloads only after you confirm |
 | Cartridge | Nothing | Nothing leaves the device: Fuse reads Cartridge's local status and opens it with deep links | On resume and when Cartridge reports a change |
 
@@ -105,6 +107,11 @@ platforms and apps.
 `/games/steam/{appId}`, and `/grids|heroes|logos|icons/game/{gameId}` with style, dimension, MIME and
 animation filters. NSFW, humour and epilepsy-warning assets are excluded by default. Requests are
 paced 100 ms apart, at most four at a time.
+
+**Key checks.** Saving a SteamGridDB, IGDB or TheGamesDB key (or choosing Test keys in Settings, Media
+and Scraping) makes one real request with it (`verifyKey` / `verifyCredentials`, returning a
+`KeyCheck`), so Settings can say Working, Key rejected or Offline. Keys and client ids are stripped of
+whitespace and invisible characters when saved.
 
 **Leaves the device.** Your key (in a header), the titles you look up, SteamGridDB game ids and Steam
 app ids. Images are downloaded from SteamGridDB's CDN.
@@ -185,6 +192,31 @@ The thumbnail repository has no licence file, so images are fetched at runtime a
 device only; nothing from it is bundled with Fuse.
 
 **Leaves the device.** The libretro system folder name and candidate game names, as part of the URLs.
+
+## System art (Art Book Next)
+
+**What for.** A logo, a tall artwork panel and a few facts (full name, maker, release year, hardware
+type and colours) for each platform, from [Art Book Next](https://github.com/anthonycaccese/art-book-next-es-de),
+Anthony Caccese's theme for ES-DE. The panels come in five styles: Classic, Outline, Noir, Circuit
+and Screenshots.
+
+**You provide.** Nothing; no key or account is needed.
+
+**How it works** (`systemart/`). `SystemArtNames` maps each Fuse platform to the pack's system name
+(for example `3ds` to `n3ds`, `ngc` to `gc`); PlayStation 5 and Switch 2 have no art in the pack.
+`SystemArtPackClient` reads files from one pinned commit of the repository under
+`https://raw.githubusercontent.com/anthonycaccese/art-book-next-es-de/<commit>/_inc/systems/`:
+`logos/<name>.svg`, `artwork/<name>.png` (Classic) or `artwork-outline/`, `artwork-noir/`,
+`artwork-circuit/` and `artwork-screenshots/`, and `_metadata-global/<name>.xml`. It checks with HEAD
+requests that the logo exists (without it the fetch fails) and that the chosen style has a panel for
+the system, falling back to Classic when it does not, then reads the metadata file and uses only its
+top-level variables. Requests are paced 50 ms apart, at most four at a time. The pack is licensed CC
+BY-NC-SA 2.0, so its files are fetched at runtime and cached on the device only; nothing from it is
+bundled with Fuse, and its credits (`SystemArtPack.ATTRIBUTION`) are shown with the art.
+
+**Leaves the device.** Only requests to raw.githubusercontent.com for the files above, which carry
+the pack's system name and nothing personal (no titles, paths or accounts). GitHub sees your IP address
+and the User-Agent with Fuse's version.
 
 ## How scraping picks a match
 
