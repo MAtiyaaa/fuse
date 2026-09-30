@@ -120,6 +120,79 @@ class DisplayNameCleanerTest {
     }
 
     @Test
+    fun stripsListNumbers() {
+        val preview = DisplayNameCleaner.preview("0123 - Metroid Fusion (USA)")
+        assertEquals("Metroid Fusion", preview.cleaned)
+        assertEquals(CleanupConfidence.SAFE, preview.confidence)
+        assertEquals(listOf("(USA)", "0123 -"), preview.removed)
+        assertEquals("Title", clean("001. Title"))
+        assertEquals("Title", clean("12345 - Title"))
+        assertEquals("The Legend of Zelda", clean("0456 - Legend of Zelda, The (Europe)"))
+    }
+
+    @Test
+    fun keepsNumbersThatArePartOfTheTitle() {
+        assertEquals("1942", clean("1942 (Japan, USA) (En)"))
+        assertEquals("2048", clean("2048"))
+        assertEquals("007 GoldenEye", clean("007 GoldenEye"))
+        assertEquals("007 - The World Is Not Enough", clean("007 - The World Is Not Enough (USA)"))
+        assertEquals("1943 - The Battle of Midway", clean("1943 - The Battle of Midway (USA)"))
+        assertEquals("2064 - Read Only Memories", clean("2064 - Read Only Memories"))
+        assertEquals("12 - Title", clean("12 - Title"))
+        assertEquals("0123", clean("0123 - "))
+    }
+
+    @Test
+    fun stripsATrailingVersion() {
+        assertEquals("Title", clean("Title v1.1"))
+        assertEquals("Title", clean("Title V1.02 (USA)"))
+        assertEquals("Title", clean("Title v1.0.3"))
+        assertEquals("Title v2", clean("Title v2"))
+        assertEquals("Title v1.1 Deluxe", clean("Title v1.1 Deluxe"))
+        assertEquals("v1.1", clean("v1.1"))
+    }
+
+    @Test
+    fun removesReReleaseAndCompatibilityTags() {
+        assertEquals("Super Mario Bros.", clean("Super Mario Bros. (World) (Virtual Console)"))
+        assertEquals("Pokemon - Red Version", clean("Pokemon - Red Version (USA, Europe) (SGB Enhanced)"))
+        assertEquals("Wario Land II", clean("Wario Land II (USA, Europe) (GB Compatible)"))
+        assertEquals("Game", clean("Game (Japan) (NP)"))
+        assertEquals("Pokemon Pinball", clean("Pokemon Pinball (USA) (Rumble Version)"))
+        assertEquals("Game", clean("Game (USA) (Switch Online)"))
+        assertEquals("Game", clean("Game (Europe) (Nintendo Switch Online)"))
+        assertEquals("Game", clean("Game (Classic Mini)"))
+        assertEquals("Game", clean("Game (Wii Virtual Console)"))
+        assertEquals("Game", clean("Game (Wii U Virtual Console)"))
+        assertEquals("Game", clean("Game (3DS Virtual Console)"))
+        assertEquals("Game", clean("Game (Evercade)"))
+        assertEquals("Game", clean("Game (USA) (Steam)"))
+        assertEquals("Game", clean("Game (GOG)"))
+        assertEquals("Game", clean("Game (Retro-Bit)"))
+        assertEquals("Game", clean("Game (Limited Run Games)"))
+        val preview = DisplayNameCleaner.preview("Game (USA) (Virtual Console)")
+        assertEquals(CleanupConfidence.SAFE, preview.confidence)
+        assertEquals(listOf("(USA)", "(Virtual Console)"), preview.removed)
+    }
+
+    @Test
+    fun keepsEditionsAndVariantsThatNameAProduct() {
+        assertEquals("Game (Collector's Edition)", clean("Game (USA) (Collector's Edition)"))
+        assertEquals("Game (Bonus Disc)", clean("Game (Bonus Disc) (Virtual Console)"))
+        assertEquals("Game (Beta) (Kiosk)", clean("Game (USA) (Beta) (Kiosk) (Evercade)"))
+        assertEquals("Game (Sample)", clean("Game (Japan) (Sample) (NP)"))
+    }
+
+    @Test
+    fun collapsesSeparatorsLeftBehind() {
+        assertEquals("Title - Subtitle", clean("Title - (USA) - Subtitle"))
+        assertEquals("Title", clean("Title - (Virtual Console)"))
+        assertEquals("Title", clean("Title - v1.1"))
+        assertEquals("Title - Subtitle", clean("0123 - Title - - Subtitle"))
+        assertEquals("Spider-Man - Edge of Time", clean("Spider-Man - Edge of Time (USA)"))
+    }
+
+    @Test
     fun previewAllKeepsOrderAndFlagsChanges() {
         val previews = DisplayNameCleaner.previewAll(listOf("Sonic (USA)", "Sonic", "Legend of Zelda, The"))
         assertEquals(listOf("Sonic", "Sonic", "The Legend of Zelda"), previews.map { it.cleaned })
