@@ -1,7 +1,6 @@
 package io.github.matiyaaa.fuse.ui.designsystem.components
 
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring

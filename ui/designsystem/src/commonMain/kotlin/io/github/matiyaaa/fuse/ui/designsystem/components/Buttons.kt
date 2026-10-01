@@ -54,7 +54,8 @@ private fun FuseColors.buttonColors(kind: ButtonKind, selected: Boolean): Pair<C
  *
  * Buttons are pills, or keep the theme's corners in sharp themes. At the standard [height] (48 dp)
  * the label is `bodyStrong` with a 20 dp icon; below 44 dp they step down to `label` and 16 dp.
- * [trailingIcon] sits after the label (an arrow for "opens elsewhere", a chevron for "more").
+ * [trailingIcon] sits after the label (an arrow for "opens elsewhere", a chevron for "more");
+ * [loading] swaps the icon for a small spinner while the work it started runs.
  */
 @Composable
 fun FuseButton(
@@ -67,6 +68,8 @@ fun FuseButton(
     enabled: Boolean = true,
     height: Dp = Size.touch,
     trailingIcon: ImageVector? = null,
+    /** Work this button started is running: a small spinner takes the icon's place. */
+    loading: Boolean = false,
 ) {
     val c = Fuse.colors
     val motion = Fuse.motion
@@ -126,11 +129,14 @@ fun FuseButton(
             .height(height)
             .defaultMinSize(minWidth = height * 2)
             // An icon reads as part of the label's weight, so its side sits a little tighter.
-            .padding(start = if (icon != null) pad - Space.xs else pad, end = if (trailingIcon != null) pad - Space.xs else pad),
+            .padding(start = if (icon != null || loading) pad - Space.xs else pad, end = if (trailingIcon != null) pad - Space.xs else pad),
         horizontalArrangement = Arrangement.spacedBy(Space.s, Alignment.CenterHorizontally),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (icon != null) FuseIcon(icon, size = iconSize, tint = fgAnim)
+        when {
+            loading -> Spinner(size = iconSize, color = fgAnim)
+            icon != null -> FuseIcon(icon, size = iconSize, tint = fgAnim)
+        }
         FText(label, if (compact) Fuse.type.label else Fuse.type.bodyStrong, color = fgAnim, maxLines = 1)
         if (trailingIcon != null) FuseIcon(trailingIcon, size = iconSize, tint = fgAnim.copy(alpha = fgAnim.alpha * 0.8f))
     }

@@ -18,6 +18,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
@@ -95,7 +97,13 @@ fun EmptyState(
             FuseIcon(icon, size = if (compact) Size.iconL else Size.iconXL, tint = tint.copy(alpha = if (tint == c.text) 0.86f else 1f))
         }
         Spacer(Modifier.height(if (compact) Space.m else Space.l))
-        FText(title, if (compact) Fuse.type.titleSmall else Fuse.type.title, align = TextAlign.Center, maxLines = 2, modifier = Modifier.widthIn(max = 520.dp))
+        FText(
+            title,
+            if (compact) Fuse.type.titleSmall else Fuse.type.title,
+            align = TextAlign.Center,
+            maxLines = 2,
+            modifier = Modifier.widthIn(max = 520.dp).semantics { heading() },
+        )
         if (message != null) {
             Spacer(Modifier.height(Space.s))
             FText(

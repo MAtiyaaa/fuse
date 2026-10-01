@@ -12,6 +12,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -49,7 +51,7 @@ fun FText(
 /**
  * Small uppercase section label ("CONTINUE PLAYING"). A quiet [count] may follow it in tabular
  * figures, an [icon] may lead it, and with [rule] a hairline runs on to the end of the row, for
- * sections in long pages that want a clear edge.
+ * sections in long pages that want a clear edge. Screen readers hear it as a heading.
  */
 @Composable
 fun SectionLabel(
@@ -61,11 +63,12 @@ fun SectionLabel(
     icon: ImageVector? = null,
     rule: Boolean = false,
 ) {
+    val heading = modifier.semantics { heading() }
     if (count == null && icon == null && !rule) {
-        FText(text.uppercase(), Fuse.type.overline, modifier, color, maxLines = 1)
+        FText(text.uppercase(), Fuse.type.overline, heading, color, maxLines = 1)
         return
     }
-    Row(modifier, verticalAlignment = Alignment.CenterVertically) {
+    Row(heading, verticalAlignment = Alignment.CenterVertically) {
         if (icon != null) {
             FuseIcon(icon, size = SECTION_ICON, tint = color)
             Spacer(Modifier.width(Space.s - Space.xxs))

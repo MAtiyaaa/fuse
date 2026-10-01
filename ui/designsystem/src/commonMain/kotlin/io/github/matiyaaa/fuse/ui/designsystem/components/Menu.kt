@@ -3,8 +3,11 @@ package io.github.matiyaaa.fuse.ui.designsystem.components
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -32,7 +35,6 @@ import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -68,6 +70,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.media.Artwork
 import io.github.matiyaaa.fuse.ui.designsystem.media.GeneratedArt
 import io.github.matiyaaa.fuse.ui.designsystem.shape.SquircleShape
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Durations
+import io.github.matiyaaa.fuse.ui.designsystem.theme.Easings
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.FuseColors
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
@@ -185,6 +188,7 @@ fun MenuRow(
     }
     val hover = c.hoverOverlay()
     val shape = RoundedCornerShape(Fuse.geometry.control)
+    val outline = if (highlight && selected && Fuse.look.highContrastFocus) c.focus else null
     Row(
         modifier
             .fillMaxWidth()
@@ -196,6 +200,7 @@ fun MenuRow(
             }
             .clip(shape)
             .background(bg)
+            .then(if (outline != null) Modifier.border(2.dp, outline, shape) else Modifier)
             .drawBehind { if (!selected && press.hovered > 0f) drawRect(hover, alpha = press.hovered) }
             .clickable(interaction, null, enabled = available, onClick = onClick)
             // Screen readers (and the UI audit) can tell which row the controller is on.
@@ -390,8 +395,9 @@ private fun LevelMeter(fraction: Float, selected: Boolean) {
 
 /**
  * The top of a menu or choice list: what it is about, as an [icon] in a well (or [leading] art,
- * such as a game's cover), a [title] and a quiet [subtitle], with a hairline under it. The icon lines
- * up with the rows' icons below.
+ * such as a game's cover, clipped to the same well), a [title] and a quiet [subtitle], with a
+ * hairline under it. Its icon lines up with the rows' icons below when both sit in the same padded
+ * column as the [MenuList].
  */
 @Composable
 fun MenuHeader(
@@ -401,6 +407,8 @@ fun MenuHeader(
     icon: ImageVector? = null,
     leading: (@Composable () -> Unit)? = null,
     divider: Boolean = true,
+    /** Choice lists that explain themselves may let the subtitle run longer. */
+    subtitleMaxLines: Int = 2,
 ) {
     val c = Fuse.colors
     Column(modifier.fillMaxWidth()) {
@@ -425,7 +433,7 @@ fun MenuHeader(
             }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Space.xxs)) {
                 FText(title, Fuse.type.titleSmall, maxLines = 2)
-                if (subtitle != null) FText(subtitle, Fuse.type.caption, color = c.textMuted, maxLines = 2)
+                if (subtitle != null) FText(subtitle, Fuse.type.caption, color = c.textMuted, maxLines = subtitleMaxLines)
             }
         }
         if (divider) {
@@ -522,6 +530,24 @@ fun MenuList(
     val accent = c.accent
     val danger = c.danger
     val corner = Fuse.geometry.control
+    val outline = if (Fuse.look.highContrastFocus) c.focus else null
+    // Rows rise into place and fade in once, a little after one another, when the list first
+    // appears (never again on changes or moves). Off under Reduced motion and in Low Power Mode.
+    val revealOn = !motion.reduced && Fuse.quality.animatedBackground
+    val reveal = remember { Animatable(if (revealOn) 0f else 1f) }
+    LaunchedEffect(Unit) {
+        if (reveal.value < 1f) reveal.animateTo(1f, tween(REVEAL_RISE_MS + REVEAL_STAGGER_MS * (REVEAL_ROWS - 1), easing = LinearEasing))
+    }
+    val revealAt: (Int) -> Float = { i ->
+        if (reveal.value >= 1f) {
+            1f
+        } else {
+            val elapsed = reveal.value * (REVEAL_RISE_MS + REVEAL_STAGGER_MS * (REVEAL_ROWS - 1))
+            val t = ((elapsed - REVEAL_STAGGER_MS * i.coerceAtMost(REVEAL_ROWS - 1)) / REVEAL_RISE_MS).coerceIn(0f, 1f)
+            Easings.Enter.transform(t)
+        }
+    }
+    val rise = 10.dp
     val selectedIsDestructive = actions.getOrNull(selection.index)?.destructive == true
     val danger01 by animateFloatAsState(if (selectedIsDestructive) 1f else 0f, motion.tween(Durations.FAST), label = "hlDanger")
 
@@ -535,9 +561,22 @@ fun MenuList(
             val h = b - t
             val r = corner.toPx().coerceAtMost(h / 2)
             val fillColor = lerp(lerp(fillSelected, fillDanger, danger01), fillQuiet, quiet)
+            val arrived = revealAt(target.toInt())
             clipRect {
-                drawRoundRect(fillColor, Offset(0f, t), size.copy(height = h), CornerRadius(r), alpha = shown)
-                val barAlpha = shown * (1f - quiet)
+                drawRoundRect(fillColor, Offset(0f, t), size.copy(height = h), CornerRadius(r), alpha = shown * arrived)
+                // High contrast focus outlines the selected row as well (not the quiet marker).
+                if (outline != null) {
+                    val sw = 2.dp.toPx()
+                    drawRoundRect(
+                        outline,
+                        Offset(sw / 2, t + sw / 2),
+                        androidx.compose.ui.geometry.Size(size.width - sw, h - sw),
+                        CornerRadius((r - sw / 2).coerceAtLeast(0f)),
+                        alpha = shown * arrived * (1f - quiet),
+                        style = Stroke(sw),
+                    )
+                }
+                val barAlpha = shown * arrived * (1f - quiet)
                 if (barAlpha > 0.01f) {
                     val bh = BAR_HEIGHT.toPx().coerceAtMost(h - 8.dp.toPx())
                     // On strongly rounded highlights (pill themes) the bar steps in to stay inside the curve.
@@ -558,12 +597,18 @@ fun MenuList(
     ) {
         if (header != null) item(key = "menu.header") { header() }
         actions.forEachIndexed { i, a ->
+            val arrive = Modifier.graphicsLayer {
+                val p = revealAt(i)
+                alpha = p
+                translationY = (1f - p) * rise.toPx()
+            }
             layout.sectionBefore(i)?.let { label ->
-                item(key = "menu.section.$i.${a.id}") { MenuSectionHeader(label, first = i == 0) }
+                item(key = "menu.section.$i.${a.id}") { Box(arrive) { MenuSectionHeader(label, first = i == 0) } }
             }
             item(key = a.id) {
                 MenuRow(
                     a,
+                    modifier = arrive,
                     selected = showSelection && !dimSelection && i == selection.index,
                     marked = showSelection && dimSelection && i == selection.index,
                     highlight = false,
@@ -674,6 +719,10 @@ private fun FuseColors.rowHighlight(destructive: Boolean): Color =
 
 /** The quieter fill of a row marked as current while focus is elsewhere. */
 private fun FuseColors.rowMarked(): Color = text.copy(alpha = if (isDark) 0.05f else 0.04f)
+
+private const val REVEAL_RISE_MS = 220
+private const val REVEAL_STAGGER_MS = 25
+private const val REVEAL_ROWS = 8
 
 private val MENU_ART_WIDTH = 104.dp
 private val MENU_ART_HEIGHT = 44.dp

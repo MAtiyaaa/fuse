@@ -44,6 +44,9 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import io.github.matiyaaa.fuse.model.CornerFamily
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
@@ -158,7 +161,7 @@ private fun ToastSlot(toast: Toast, vis: MutableTransitionState<Boolean>, depth:
         exit = if (motion.reduced) {
             fadeOut(motion.fade(Durations.INSTANT))
         } else {
-            fadeOut(motion.tween(Durations.FAST, Easings.Exit)) +
+            fadeOut(motion.tween(Durations.FAST, Easings.Standard)) +
                 scaleOut(motion.tween(Durations.FAST, Easings.Exit), targetScale = 0.94f) +
                 shrinkVertically(motion.tween(Durations.BASE, Easings.Standard), shrinkTowards = Alignment.Top)
         },
@@ -207,6 +210,7 @@ private fun ToastCard(toast: Toast, onDismiss: () -> Unit) {
         modifier = Modifier
             .widthIn(min = 240.dp, max = 640.dp)
             .clickable(interaction, null, onClick = onDismiss)
+            .semantics { liveRegion = LiveRegionMode.Polite }
             .drawWithContent {
                 drawContent()
                 // The time left: a hairline along the bottom edge that runs out towards the start.

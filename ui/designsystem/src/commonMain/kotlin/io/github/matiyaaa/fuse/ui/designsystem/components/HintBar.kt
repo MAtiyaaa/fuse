@@ -77,19 +77,23 @@ fun HintBar(hints: List<Hint>, modifier: Modifier = Modifier, flash: HintFlash? 
     val shown = remember { mutableStateListOf<HintEntry>() }
     LaunchedEffect(hints) {
         val next = ArrayList<HintEntry>(hints.size + shown.size)
+        val seen = HashMap<HintButton, Int>()
         for (h in hints) {
-            val existing = shown.firstOrNull { it.button == h.button }
+            // The same button may appear twice; each appearance is its own hint.
+            val nth = seen[h.button] ?: 0
+            seen[h.button] = nth + 1
+            val existing = shown.firstOrNull { it.button == h.button && it.nth == nth }
             if (existing != null) {
                 existing.label = h.label
                 existing.visible.targetState = true
                 next.add(existing)
             } else {
-                next.add(HintEntry(h.button, h.label, MutableTransitionState(false).apply { targetState = true }))
+                next.add(HintEntry(h.button, nth, h.label, MutableTransitionState(false).apply { targetState = true }))
             }
         }
         // Leaving hints keep roughly the place they had while they fold away.
         shown.forEachIndexed { i, e ->
-            if (hints.none { it.button == e.button }) {
+            if (next.none { it === e }) {
                 e.visible.targetState = false
                 next.add(i.coerceAtMost(next.size), e)
             }
@@ -103,7 +107,7 @@ fun HintBar(hints: List<Hint>, modifier: Modifier = Modifier, flash: HintFlash? 
         verticalAlignment = Alignment.CenterVertically,
     ) {
         for (entry in shown) {
-            key(entry.button) {
+            key(entry.button, entry.nth) {
                 HintItem(entry, flash = flash, onGone = { shown.remove(entry) })
             }
         }
@@ -112,7 +116,7 @@ fun HintBar(hints: List<Hint>, modifier: Modifier = Modifier, flash: HintFlash? 
 
 /** One hint on the line, with its own way in and out. */
 @Stable
-private class HintEntry(val button: HintButton, label: String, val visible: MutableTransitionState<Boolean>) {
+private class HintEntry(val button: HintButton, val nth: Int, label: String, val visible: MutableTransitionState<Boolean>) {
     var label by mutableStateOf(label)
 }
 
@@ -125,7 +129,7 @@ private fun HintItem(entry: HintEntry, flash: HintFlash?, onGone: () -> Unit) {
         onGone()
     }
     val pulse = remember { Animatable(0f) }
-    val count = flash?.pulses?.get(entry.button) ?: 0
+    val count = if (entry.nth == 0) flash?.pulses?.get(entry.button) ?: 0 else 0
     LaunchedEffect(count) {
         if (count == 0) return@LaunchedEffect
         pulse.snapTo(1f)
@@ -143,7 +147,7 @@ private fun HintItem(entry: HintEntry, flash: HintFlash?, onGone: () -> Unit) {
             fadeOut(motion.fade(Durations.INSTANT))
         } else {
             shrinkHorizontally(motion.tween(Durations.BASE, Easings.Standard), shrinkTowards = Alignment.End) +
-                fadeOut(motion.tween(Durations.FAST, Easings.Exit))
+                fadeOut(motion.tween(Durations.FAST, Easings.Standard))
         },
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {

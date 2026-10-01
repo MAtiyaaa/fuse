@@ -38,9 +38,10 @@ enum class OverlayEdge { END, BOTTOM, CENTER }
  *
  * The scrim fades in while the panel arrives: from its [edge] it travels a short way and settles
  * from 98% (a side or bottom sheet), or it grows from 96% when centred. Leaving is quicker than
- * arriving and accelerates away, so closing a menu never holds the player up. Under Reduced motion
- * both are short fades. A side sheet's scrim deepens towards its edge, so the sheet sits in its own
- * shadow. Panels inside take the overlay level of the elevation family (see [Panel]).
+ * arriving: it fades at once and accelerates away, so closing a menu never holds the player up.
+ * Under Reduced motion both are short fades. A side sheet's scrim deepens towards its edge, so the
+ * sheet sits in its own shadow. Panels inside take the overlay level of the elevation family (see
+ * [Panel]).
  */
 @Composable
 fun Overlay(
@@ -56,7 +57,7 @@ fun Overlay(
         AnimatedVisibility(
             visible = visible,
             enter = fadeIn(motion.tween(Durations.BASE, Easings.Fade)),
-            exit = fadeOut(motion.tween(Durations.FAST, Easings.Exit)),
+            exit = fadeOut(motion.tween(Durations.FAST, Easings.Standard)),
         ) {
             val scrim = c.scrim
             val shade = c.ink.copy(alpha = if (c.isDark) 0.4f else 0.18f)
@@ -114,9 +115,12 @@ private fun overlayEnter(edge: OverlayEdge, motion: FuseMotion): EnterTransition
     }
 }
 
-/** Departure: quicker than arrival, accelerating away, travelling less than it came. */
+/**
+ * Departure: quicker than arrival and travelling less than it came. It moves on the leaving curve
+ * (accelerating away) but fades from the first frame, so a closed menu never seems to hang.
+ */
 private fun overlayExit(edge: OverlayEdge, motion: FuseMotion): ExitTransition {
-    val fade = fadeOut(motion.tween(Durations.FAST, Easings.Exit))
+    val fade = fadeOut(motion.tween(Durations.FAST, Easings.Standard))
     if (motion.reduced) return fade
     val move = motion.tween<androidx.compose.ui.unit.IntOffset>(Durations.FAST, Easings.Exit)
     val shrink = motion.tween<Float>(Durations.FAST, Easings.Exit)
