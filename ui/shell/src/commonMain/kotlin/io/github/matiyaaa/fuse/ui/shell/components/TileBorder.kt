@@ -41,6 +41,9 @@ class TileBorders(private val byPlatform: Map<PlatformId, BorderStyle> = emptyMa
 
 val LocalTileBorders = staticCompositionLocalOf { TileBorders() }
 
+/** False inside a system's own page, where every tile would name the same system. */
+val LocalTileShowsSystem = staticCompositionLocalOf { true }
+
 /**
  * Draws a game tile's dynamic border inside the tile's clip: a frame in the platform's colour
  * (optionally a gradient), the user's own frame image, and an optional system badge.

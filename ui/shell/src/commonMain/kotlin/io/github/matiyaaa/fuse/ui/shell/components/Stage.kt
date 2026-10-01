@@ -22,6 +22,7 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import io.github.matiyaaa.fuse.ui.designsystem.components.FText
@@ -80,7 +81,13 @@ fun PlatformCard.stage(): StageInfo = StageInfo(
  * display face, with a quiet meta line underneath. Swaps with a short fade and lift.
  */
 @Composable
-fun Stage(info: StageInfo?, modifier: Modifier = Modifier, showLogo: Boolean = true, logoHeight: Dp = 104.dp) {
+fun Stage(
+    info: StageInfo?,
+    modifier: Modifier = Modifier,
+    showLogo: Boolean = true,
+    logoHeight: Dp = 104.dp,
+    titleStyle: TextStyle = Fuse.type.hero,
+) {
     val motion = Fuse.motion
     val c = Fuse.colors
     AnimatedContent(
@@ -106,7 +113,7 @@ fun Stage(info: StageInfo?, modifier: Modifier = Modifier, showLogo: Boolean = t
                 }
             }
             val title: @Composable () -> Unit = {
-                FText(s.title, Fuse.type.hero, color = c.text, maxLines = 2, modifier = Modifier.widthIn(max = 720.dp))
+                FText(s.title, titleStyle, color = c.text, maxLines = 2, modifier = Modifier.widthIn(max = 720.dp))
             }
             if (showLogo && s.logo != null) {
                 Artwork(

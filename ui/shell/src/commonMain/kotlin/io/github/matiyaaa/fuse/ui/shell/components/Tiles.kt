@@ -87,9 +87,9 @@ fun GameIconTile(
         SquareGameArt(
             art = card.art,
             modifier = Modifier.fillMaxSize().alpha(if (card.missing) 0.45f else 1f),
-            fallback = { GeneratedArt(card.title, accent, slot = ArtSlot.ICON, label = card.platformShort) },
+            fallback = { GeneratedArt(card.title, accent, slot = ArtSlot.ICON, label = card.platformShort.takeIf { LocalTileShowsSystem.current }) },
         )
-        TileBorder(LocalTileBorders.current.of(card.platformId), accent, Fuse.geometry.tileCornerFraction, card.platformShort)
+        TileBorder(LocalTileBorders.current.of(card.platformId), accent, Fuse.geometry.tileCornerFraction, card.platformShort.takeIf { LocalTileShowsSystem.current })
         TileBadges(card, Modifier.align(Alignment.TopEnd))
     }
 }
@@ -118,9 +118,9 @@ fun GameCoverTile(
         Artwork(
             model = card.art.boxart ?: card.art.grid ?: card.art.square ?: card.art.icon,
             modifier = Modifier.fillMaxSize().alpha(if (card.missing) 0.45f else 1f),
-            fallback = { GeneratedArt(card.title, accent, slot = ArtSlot.BOX, label = card.platformShort) },
+            fallback = { GeneratedArt(card.title, accent, slot = ArtSlot.BOX, label = card.platformShort.takeIf { LocalTileShowsSystem.current }) },
         )
-        TileBorder(LocalTileBorders.current.of(card.platformId), accent, Fuse.geometry.tileCornerFraction * 0.55f, card.platformShort)
+        TileBorder(LocalTileBorders.current.of(card.platformId), accent, Fuse.geometry.tileCornerFraction * 0.55f, card.platformShort.takeIf { LocalTileShowsSystem.current })
         TileBadges(card, Modifier.align(Alignment.TopEnd))
     }
 }

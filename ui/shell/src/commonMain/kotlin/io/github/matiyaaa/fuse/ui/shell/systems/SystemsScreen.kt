@@ -51,6 +51,8 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.layout
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
@@ -264,10 +266,19 @@ fun SystemsScreen(app: AppState) {
  * folds it away upwards (0 shows it all, 1 hides it), for a system's page scrolled down its games.
  */
 @Composable
-internal fun SystemHeader(card: PlatformCard?, compact: Boolean, modifier: Modifier = Modifier, widthFraction: Float = 0.62f, collapse: Float = 0f) {
+internal fun SystemHeader(
+    card: PlatformCard?,
+    compact: Boolean,
+    modifier: Modifier = Modifier,
+    widthFraction: Float = 0.62f,
+    collapse: Float = 0f,
+    /** The game count and emulator under the logo; the system's own page leaves them out. */
+    showMeta: Boolean = true,
+    logoHeight: Dp = if (compact) 40.dp else 64.dp,
+    nameStyle: TextStyle = if (compact) Fuse.type.title else Fuse.type.display,
+) {
     val c = Fuse.colors
     val motion = Fuse.motion
-    val logoHeight = if (compact) 40.dp else 64.dp
     AnimatedContent(
         targetState = card,
         modifier = modifier.fillMaxWidth(widthFraction).foldAway(collapse),
@@ -282,7 +293,7 @@ internal fun SystemHeader(card: PlatformCard?, compact: Boolean, modifier: Modif
         }
         Column(verticalArrangement = Arrangement.spacedBy(if (compact) Space.xs else Space.s)) {
             val name: @Composable () -> Unit = {
-                FText(s.platform.name, if (compact) Fuse.type.title else Fuse.type.display, color = c.text, maxLines = 1)
+                FText(s.platform.name, nameStyle, color = c.text, maxLines = 1)
             }
             if (s.art.logo != null) {
                 Artwork(
@@ -297,7 +308,7 @@ internal fun SystemHeader(card: PlatformCard?, compact: Boolean, modifier: Modif
             } else {
                 name()
             }
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s)) {
+            if (showMeta) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s)) {
                 Box(Modifier.size(7.dp).background(s.platform.accent.toColor(), CircleShape))
                 FText("${s.gameCount} ${if (s.gameCount == 1) "game" else "games"}", Fuse.type.body, color = c.textMuted, maxLines = 1)
                 FText("·", Fuse.type.body, color = c.textFaint)
