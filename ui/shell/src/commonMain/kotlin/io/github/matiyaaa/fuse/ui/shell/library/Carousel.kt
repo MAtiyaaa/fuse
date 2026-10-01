@@ -41,6 +41,10 @@ import kotlin.math.roundToInt
  *
  * A swipe glides the strip and a flick carries on with the finger's speed; where it comes to rest
  * is chosen with [onSettle], never [onTap], so a swipe can't start a game.
+ *
+ * With [start] the selected cover's left edge sits that far in (the page gutter), so it lines up
+ * with the stage's title above it; covers already passed slide out past the edge and fade as they
+ * go, and the ones to come wait on the right.
  */
 @Composable
 fun CoverCarousel(
@@ -53,6 +57,7 @@ fun CoverCarousel(
     modifier: Modifier = Modifier,
     anchor: Float = 0.16f,
     focused: Boolean = true,
+    start: Dp? = null,
 ) {
     val motion = Fuse.motion
     val position = remember { Animatable(selected.toFloat()) }
@@ -64,9 +69,11 @@ fun CoverCarousel(
         val width = constraints.maxWidth.toFloat()
         val density = androidx.compose.ui.platform.LocalDensity.current
         val step = with(density) { (itemWidth + Space.l).toPx() }
-        // How many covers fit either side of the anchor, plus one so edges never pop in.
-        val before = ceil(width * anchor / step).toInt() + 1
-        val after = ceil(width * (1 - anchor) / step).toInt() + 1
+        // Where the selected cover's left edge sits.
+        val origin = start?.let { with(density) { it.toPx() } } ?: (width * anchor)
+        // How many covers fit either side of it, plus one so edges never pop in.
+        val before = ceil(origin / step).toInt() + 1
+        val after = ceil((width - origin) / step).toInt() + 1
         val center by remember { derivedStateOf { position.value.roundToInt() } }
         val window = (center - before).coerceAtLeast(0)..(center + after).coerceAtMost(items.lastIndex)
 
@@ -110,14 +117,18 @@ fun CoverCarousel(
                                     d < 0 -> maxOf(d, -1f) * step * 0.18f
                                     else -> 0f
                                 }
-                                IntOffset((width * anchor + d * step + push).roundToInt(), 0)
+                                IntOffset((origin + d * step + push).roundToInt(), 0)
                             }
                             .graphicsLayer {
-                                val d = abs(i - position.value)
-                                val s = 1f - 0.12f * minOf(d, 1.5f)
+                                val signed = i - position.value
+                                val d = abs(signed)
+                                val s = 1f - NEIGHBOUR_SHRINK * minOf(d, 1.5f)
                                 scaleX = s
                                 scaleY = s
-                                alpha = (1f - 0.18f * (d - 1f).coerceAtLeast(0f)).coerceIn(0.25f, 1f)
+                                // Covers to come dim with distance; with a fixed start, covers already
+                                // passed fade out quickly as they slide past the edge.
+                                val ahead = (1f - DISTANCE_DIM * (d - 1f).coerceAtLeast(0f)).coerceIn(0.25f, 1f)
+                                alpha = if (start != null && signed < 0f) (1f + signed * PASSED_FADE).coerceIn(0f, 1f) else ahead
                                 transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 1f)
                             },
                     )
@@ -129,3 +140,12 @@ fun CoverCarousel(
 
 /** How far a flick carries the strip: the covers it would pass in this long at release speed. */
 private const val FLING_SECONDS = 0.18f
+
+/** Neighbours are this much smaller than the selected cover (up to one and a half covers away). */
+private const val NEIGHBOUR_SHRINK = 0.12f
+
+/** Each cover beyond the next one dims by this much. */
+private const val DISTANCE_DIM = 0.18f
+
+/** How quickly a passed cover fades as it leaves (fully gone a little before one cover away). */
+private const val PASSED_FADE = 1.25f

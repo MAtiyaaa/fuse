@@ -46,7 +46,8 @@ val LocalTileShowsSystem = staticCompositionLocalOf { true }
 
 /**
  * Draws a game tile's dynamic border inside the tile's clip: a frame in the platform's colour
- * (optionally a gradient), the user's own frame image, and an optional system badge.
+ * (optionally a gradient), the user's own frame image, and an optional system badge. The badge is
+ * the same small uppercase tag generated art carries, filled with the frame's colour.
  */
 @Composable
 fun BoxScope.TileBorder(style: BorderStyle, accent: Color, cornerFraction: Float, badge: String?) {
@@ -63,7 +64,7 @@ fun BoxScope.TileBorder(style: BorderStyle, accent: Color, cornerFraction: Float
         }
         Box(
             Modifier.fillMaxSize().drawWithCache {
-                val width = 3.dp.toPx()
+                val width = FRAME_WIDTH.toPx()
                 val outline = shape.createOutline(size, layoutDirection, this)
                 val brush = if (style.gradient) {
                     Brush.linearGradient(
@@ -88,10 +89,16 @@ fun BoxScope.TileBorder(style: BorderStyle, accent: Color, cornerFraction: Float
                 .align(Alignment.BottomStart)
                 .padding(Space.s)
                 .clip(PillShape)
-                .background(color.copy(alpha = 0.85f))
-                .padding(horizontal = Space.s, vertical = 2.dp),
+                .background(color.copy(alpha = BADGE_FILL))
+                .padding(horizontal = Space.s - Space.xxs, vertical = Space.xxs),
         ) {
-            FText(badge, Fuse.type.caption, color = Fuse.colors.ink, maxLines = 1)
+            FText(badge.uppercase(), Fuse.type.overline, color = Fuse.colors.ink, maxLines = 1)
         }
     }
 }
+
+/** Width of the frame inside the tile's edge. */
+private val FRAME_WIDTH = 3.dp
+
+/** The system badge's fill, a little translucent so the frame colour stays soft. */
+private const val BADGE_FILL = 0.88f
