@@ -76,6 +76,25 @@ enum class BackgroundStyle {
     STRIPES,
     /** A slow field of stars. */
     STARS,
+    /** Petals drifting down through a dusk glow. */
+    PETALS,
+    /** A neon sun setting behind a grid that runs to the horizon. */
+    HORIZON,
+    /** Fireflies blinking between the trees of a dark wood. */
+    FIREFLIES,
+    /** Light rippling through water, with soft rays from above. */
+    CAUSTICS,
+    /** A dot-matrix screen: a fine pixel grid, pixel hills and clouds that step by. */
+    LCD,
+    /** Soft colours that blend and shift like mother of pearl. */
+    MESH,
+    /** The contour lines of a quiet landscape, slowly rising. */
+    CONTOURS,
+    /** Warm dunes under a high sun, each crest casting a thin shadow. */
+    DUNES;
+
+    /** False for the backgrounds that never move (flat colour, and the room behind game art). */
+    val moves: Boolean get() = this != SOLID && this != HERO
 }
 
 @Serializable

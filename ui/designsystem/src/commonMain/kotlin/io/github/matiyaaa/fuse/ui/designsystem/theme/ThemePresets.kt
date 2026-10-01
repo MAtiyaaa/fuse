@@ -15,7 +15,8 @@ import io.github.matiyaaa.fuse.model.ThemeSpec
 /**
  * Built-in themes. All are original designs; DESIGN_SYSTEM.md notes the console eras that
  * inspired some of them. Names are Fuse's own and never use console trademarks. Each one is also a
- * starting point for community themes (docs/THEMES.md), which name it in `extends`.
+ * starting point for community themes (docs/THEMES.md), which name it in `extends`, so an id never
+ * changes once a theme has shipped.
  */
 object ThemePresets {
     /** The brand: a dark room lit by the game you're on, with an ember accent. */
@@ -207,7 +208,194 @@ object ThemePresets {
         ambient = AmbientSpec(secondary = 0xFF5BC8FF),
     )
 
-    val all: List<ThemeSpec> = listOf(Fuse, Glass, Starlight, Crossbar, Orbital, Wave, Blades, Channels, Crt, Daylight)
+    /** True black for screens that light each pixel: nothing moves, nothing glows, panels barely lift. */
+    val Pitch = ThemeSpec(
+        id = "pitch",
+        name = "Pitch",
+        tagline = "True black, kind to the battery",
+        palette = ThemePalette(
+            dark = true,
+            background = 0xFF000000, surface = 0xFF0D0D0F, surfaceRaised = 0xFF17171A,
+            accent = 0xFFEDEDED, accentSoft = 0x26EDEDED, onAccent = 0xFF0A0A0A,
+            textPrimary = 0xFFE8E8EA, textSecondary = 0xFF8E8E95, focusRing = 0xFFFFFFFF,
+        ),
+        background = BackgroundStyle.SOLID,
+        geometry = CornerFamily.SOFT,
+        focus = FocusStyle.RING,
+        motion = MotionProfile.MINIMAL,
+        sound = SoundProfile.SOFT,
+        ambient = AmbientSpec(intensity = 0f, speed = 0f),
+    )
+
+    /** Twilight indigo, pink petals drifting down and a peach glow where the sun went. */
+    val Blossom = ThemeSpec(
+        id = "blossom",
+        name = "Blossom",
+        tagline = "Petals drifting at dusk",
+        palette = ThemePalette(
+            dark = true,
+            background = 0xFF100D1D, surface = 0xFF1A1629, surfaceRaised = 0xFF242036,
+            accent = 0xFFFF9CC2, accentSoft = 0x33FF9CC2, onAccent = 0xFF2A0A19,
+            textPrimary = 0xFFF9F1F6, textSecondary = 0xFFBBB0C6, focusRing = 0xFFFFE3EE,
+        ),
+        background = BackgroundStyle.PETALS,
+        geometry = CornerFamily.ROUND,
+        focus = FocusStyle.GLOW,
+        motion = MotionProfile.ENHANCED,
+        sound = SoundProfile.CHIME,
+        ambient = AmbientSpec(secondary = 0xFFFFB892),
+    )
+
+    /** Deep teal water, light rippling across it and rays slanting down from the surface. */
+    val Lagoon = ThemeSpec(
+        id = "lagoon",
+        name = "Lagoon",
+        tagline = "Light rippling through clear water",
+        palette = ThemePalette(
+            dark = true,
+            background = 0xFF03141A, surface = 0xFF0A2129, surfaceRaised = 0xFF112D37,
+            accent = 0xFF43E3D3, accentSoft = 0x3343E3D3, onAccent = 0xFF02201D,
+            textPrimary = 0xFFECFAF9, textSecondary = 0xFF97BCBB, focusRing = 0xFFFFFFFF,
+        ),
+        background = BackgroundStyle.CAUSTICS,
+        geometry = CornerFamily.PILL,
+        focus = FocusStyle.GLOW,
+        motion = MotionProfile.STANDARD,
+        sound = SoundProfile.CHIME,
+        ambient = AmbientSpec(secondary = 0xFF7FC8FF),
+    )
+
+    /** A dark wood after sunset, mist between the trunks and fireflies blinking. */
+    val Canopy = ThemeSpec(
+        id = "canopy",
+        name = "Canopy",
+        tagline = "Fireflies in a quiet wood",
+        palette = ThemePalette(
+            dark = true,
+            background = 0xFF050C0A, surface = 0xFF0D1714, surfaceRaised = 0xFF15221D,
+            accent = 0xFFE3EE7A, accentSoft = 0x33E3EE7A, onAccent = 0xFF1A1E04,
+            textPrimary = 0xFFEEF5EC, textSecondary = 0xFF9FB4A6, focusRing = 0xFFF4FFC9,
+        ),
+        background = BackgroundStyle.FIREFLIES,
+        geometry = CornerFamily.SOFT,
+        focus = FocusStyle.GLOW,
+        motion = MotionProfile.STANDARD,
+        sound = SoundProfile.SOFT,
+        ambient = AmbientSpec(secondary = 0xFF5FCFA0),
+    )
+
+    /** Magenta and cyan: a neon sun going down behind a grid that runs to the horizon. */
+    val Sundown = ThemeSpec(
+        id = "sundown",
+        name = "Sundown",
+        tagline = "A neon sun over an endless grid",
+        palette = ThemePalette(
+            dark = true,
+            background = 0xFF0B0716, surface = 0xFF160F26, surfaceRaised = 0xFF211736,
+            accent = 0xFFFF4FA3, accentSoft = 0x33FF4FA3, onAccent = 0xFF2A0216,
+            textPrimary = 0xFFFBF2FF, textSecondary = 0xFFB9A8CF, focusRing = 0xFF7DF3FF,
+        ),
+        background = BackgroundStyle.HORIZON,
+        geometry = CornerFamily.SHARP,
+        focus = FocusStyle.RING,
+        motion = MotionProfile.ENHANCED,
+        sound = SoundProfile.CLICK,
+        ambient = AmbientSpec(secondary = 0xFF3EE6FF),
+    )
+
+    /** Pearl white, pastel light that blends and shifts, a deep iris accent. */
+    val Opal = ThemeSpec(
+        id = "opal",
+        name = "Opal",
+        tagline = "Pearl light that shifts as it settles",
+        palette = ThemePalette(
+            dark = false,
+            background = 0xFFF1EFF5, surface = 0xFFFFFFFF, surfaceRaised = 0xFFF8F6FB,
+            accent = 0xFF6A4CE0, accentSoft = 0x266A4CE0, onAccent = 0xFFFFFFFF,
+            textPrimary = 0xFF1C1A24, textSecondary = 0xFF5B5768, focusRing = 0xFF4D35C2,
+            success = 0xFF178A57, warning = 0xFFA86400, danger = 0xFFC92A3E,
+        ),
+        background = BackgroundStyle.MESH,
+        geometry = CornerFamily.PILL,
+        focus = FocusStyle.RING,
+        motion = MotionProfile.ENHANCED,
+        sound = SoundProfile.CHIME,
+        ambient = AmbientSpec(secondary = 0xFF4FD8C4),
+    )
+
+    /** Warm sand under a high sun, a deep turquoise accent like a stone in the desert. */
+    val Noon = ThemeSpec(
+        id = "noon",
+        name = "Noon",
+        tagline = "Warm dunes under a high sun",
+        palette = ThemePalette(
+            dark = false,
+            background = 0xFFF3E7D3, surface = 0xFFFFFBF4, surfaceRaised = 0xFFFAF3E7,
+            accent = 0xFF0D7672, accentSoft = 0x260D7672, onAccent = 0xFFFFFFFF,
+            textPrimary = 0xFF2B2016, textSecondary = 0xFF6D5C49, focusRing = 0xFF2B2016,
+            success = 0xFF2B7F4A, warning = 0xFF9C5F00, danger = 0xFFC2362B,
+        ),
+        background = BackgroundStyle.DUNES,
+        geometry = CornerFamily.ROUND,
+        focus = FocusStyle.RING,
+        motion = MotionProfile.STANDARD,
+        sound = SoundProfile.SOFT,
+        ambient = AmbientSpec(secondary = 0xFFE2A46A),
+    )
+
+    /** A survey map in graphite on paper: contour lines, every fifth one heavier, and ink for the spark. */
+    val Ridge = ThemeSpec(
+        id = "ridge",
+        name = "Ridge",
+        tagline = "Contour lines on a quiet map",
+        palette = ThemePalette(
+            dark = false,
+            background = 0xFFECECE7, surface = 0xFFFAFAF7, surfaceRaised = 0xFFF3F3EF,
+            accent = 0xFF2A2D31, accentSoft = 0x1F2A2D31, onAccent = 0xFFFFFFFF,
+            textPrimary = 0xFF17181A, textSecondary = 0xFF5A5D62, focusRing = 0xFF17181A,
+            success = 0xFF1E7F4E, warning = 0xFF9A6200, danger = 0xFFBF2C33,
+        ),
+        background = BackgroundStyle.CONTOURS,
+        geometry = CornerFamily.SOFT,
+        focus = FocusStyle.BAR,
+        motion = MotionProfile.STANDARD,
+        sound = SoundProfile.CLICK,
+    )
+
+    /** Four shades of olive on a dot-matrix screen: pixel hills, stepping clouds, no glow at all. */
+    val Olive = ThemeSpec(
+        id = "olive",
+        name = "Olive",
+        tagline = "Four shades on a dot-matrix screen",
+        palette = ThemePalette(
+            dark = false,
+            background = 0xFFD3DAAA, surface = 0xFFE3E9C4, surfaceRaised = 0xFFEBF0D3,
+            accent = 0xFF3A4B22, accentSoft = 0x293A4B22, onAccent = 0xFFE8EDCB,
+            textPrimary = 0xFF1D2712, textSecondary = 0xFF4C5A33, focusRing = 0xFF1D2712,
+            success = 0xFF2F6B1F, warning = 0xFF7A5200, danger = 0xFFA3291E,
+        ),
+        background = BackgroundStyle.LCD,
+        geometry = CornerFamily.SHARP,
+        focus = FocusStyle.BAR,
+        motion = MotionProfile.STANDARD,
+        sound = SoundProfile.CLICK,
+        ambient = AmbientSpec(secondary = 0xFF8E9E5E),
+    )
+
+    /**
+     * Every built-in theme in the order the gallery shows them: Fuse first (the default), then the
+     * dark rooms from the plainest to the most decorated, then the bright ones.
+     */
+    val all: List<ThemeSpec> = listOf(
+        Fuse, Glass, Pitch, Starlight, Orbital, Crossbar, Wave, Blossom, Lagoon, Canopy, Blades, Sundown, Crt,
+        Daylight, Channels, Opal, Noon, Ridge, Olive,
+    )
+
+    /** The dark rooms, in gallery order, for a gallery that shows them as a group. */
+    val dark: List<ThemeSpec> = all.filter { it.palette.dark }
+
+    /** The bright themes, in gallery order. */
+    val bright: List<ThemeSpec> = all.filter { !it.palette.dark }
 
     fun byId(id: String?): ThemeSpec = all.firstOrNull { it.id == id } ?: Fuse
 

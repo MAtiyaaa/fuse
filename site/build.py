@@ -59,7 +59,10 @@ def themes(out: Path):
     src = ROOT / "docs" / "themes"
     index = []
     presets = sorted((src / "presets").glob("*.json"))
-    order = ["fuse", "glass", "starlight", "crossbar", "orbital", "wave", "blades", "channels", "crt", "daylight"]
+    order = [
+        "fuse", "glass", "pitch", "starlight", "orbital", "crossbar", "wave", "blossom", "lagoon", "canopy", "blades",
+        "sundown", "crt", "daylight", "channels", "opal", "noon", "ridge", "olive",
+    ]
     presets.sort(key=lambda p: order.index(p.stem) if p.stem in order else len(order))
     for p in presets:
         copy(p, out / "themes" / "presets" / p.name)

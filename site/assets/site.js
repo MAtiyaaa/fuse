@@ -200,6 +200,8 @@
       bg.innerHTML = `<svg viewBox="0 0 320 90" preserveAspectRatio="none" aria-hidden="true">` +
         [0, 1, 2].map((i) => `<path d="M0 ${45 + i * 6} C 60 ${10 + i * 8}, 110 ${80 - i * 6}, 170 ${45 + i * 4} S 280 ${15 + i * 10}, 320 ${45 + i * 6}" fill="none" stroke="${i === 1 ? (t.secondary || "#fff") : t.colors.accent}" stroke-opacity="${0.55 - i * 0.12}" stroke-width="${1.4 + i * 0.5}"/>`).join("") +
         `</svg>`;
+    } else if (SCENES[t.style]) {
+      bg.innerHTML = SCENES[t.style](`scene${++sceneId}`);
     }
     preview.append(bg);
     preview.insertAdjacentHTML("beforeend", `<div class="hudline"><i></i><i></i><i></i><i></i><i></i></div><div class="minis"><i></i><i></i><i></i></div>`);
@@ -227,6 +229,120 @@
     card.dataset.activate = "copy";
     return card;
   }
+
+  // Backgrounds CSS can't draw alone, as small SVGs over the card (320 by 200, the card's shape).
+  // Colours come from the card's --t-* properties, so one drawing serves every theme that uses it.
+  let sceneId = 0;
+  const full = (body, cls = "") => `<svg class="scene ${cls}" viewBox="0 0 320 200" preserveAspectRatio="none" aria-hidden="true">${body}</svg>`;
+  const f1 = (v) => v.toFixed(1);
+  const PETAL = "M-5 0C-3.2-3.6 1.2-4.4 4.4-1.7Q5.3-.8 3.7 0Q5.3.8 4.4 1.7C1.2 4.4-3.2 3.6-5 0Z";
+  const SCENES = {
+    petals: () => full([
+      [34, 26, 7, 20], [88, 58, 6, -30], [150, 18, 8, 60], [206, 44, 9, 10], [262, 76, 8, -50], [300, 24, 6, 35],
+      [118, 104, 8, -15], [232, 128, 10, 40], [176, 158, 7, -70], [284, 168, 9, 15], [58, 146, 6, 50], [198, 96, 6, 80],
+    ].map(([x, y, k, a]) => `<path d="${PETAL}" transform="translate(${x} ${y}) rotate(${a}) scale(${f1(k / 7)})" style="fill:var(--t-accent)" opacity="${f1(0.4 + k / 20)}"/>`).join("")),
+
+    horizon: (id) => {
+      const hy = 128, sx = 224, sy = 116, r = 40;
+      const gaps = [0, 1, 2, 3, 4].map((i) => `<rect x="${sx - r}" y="${f1(sy - 8 + i * 5.4)}" width="${2 * r}" height="${f1(0.7 + i * 0.75)}" style="fill:var(--t-bg)"/>`).join("");
+      let grid = "";
+      for (let i = -8; i <= 8; i++) grid += `<line x1="${sx}" y1="${hy}" x2="${sx + i * 30}" y2="200"/>`;
+      for (let i = 1; i <= 8; i++) { const y = f1(hy + 72 * Math.pow(i / 8, 2.2)); grid += `<line x1="0" y1="${y}" x2="320" y2="${y}"/>`; }
+      return full(
+        `<defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFD36E"/><stop offset="1" style="stop-color:var(--t-accent)"/></linearGradient>` +
+        `<clipPath id="${id}c"><rect width="320" height="${hy}"/></clipPath></defs>` +
+        `<g clip-path="url(#${id}c)"><circle cx="${sx}" cy="${sy}" r="${r}" fill="url(#${id})"/>${gaps}</g>` +
+        `<polygon points="0,128 0,114 16,107 38,121 54,114 82,124 106,120 150,125 178,117 198,122 214,116 240,124 262,118 292,110 320,117 320,128" style="fill:var(--t-bg);stroke:var(--t-second)" stroke-opacity=".5" stroke-width=".8"/>` +
+        `<g style="stroke:var(--t-second)" stroke-opacity=".55" stroke-width=".8">${grid}</g>` +
+        `<line x1="0" y1="${hy}" x2="320" y2="${hy}" style="stroke:var(--t-accent)" stroke-width="1.4"/>`);
+    },
+
+    fireflies: () => {
+      const trunks = [[20, 7, 0.3], [62, 10, 0.55], [116, 6, 0.3], [178, 12, 0.55], [228, 7, 0.3], [262, 16, 0.8], [302, 8, 0.55]]
+        .map(([x, w, o]) => `<rect x="${x}" width="${w}" height="200" fill="#000" opacity="${o}"/>`).join("");
+      let floor = "M0 200V184";
+      for (let x = 0; x <= 320; x += 4) floor += `L${x} ${x % 8 ? 180 : 184}`;
+      const flies = [[48, 120], [96, 150], [140, 96], [190, 138], [214, 84], [248, 160], [282, 108], [160, 172], [300, 150], [118, 130]]
+        .map(([x, y], i) => `<circle cx="${x}" cy="${y}" r="5" style="fill:var(--t-accent)" opacity=".2"/><circle cx="${x}" cy="${y}" r="1.4" style="fill:var(--t-accent)" opacity="${i % 3 ? 1 : 0.45}"/>`).join("");
+      return full(`${trunks}<path d="${floor}L320 184V200Z" fill="#000" opacity=".75"/>${flies}`);
+    },
+
+    caustics: () => {
+      // A warped honeycomb, the warp a function of position so neighbouring cells still meet.
+      const R = 17, w = Math.sqrt(3) * R;
+      let d = "";
+      for (let row = -1; row < 10; row++) for (let col = -1; col < 12; col++) {
+        const cx = w * (col + (row & 1) / 2), cy = 1.5 * R * row;
+        const pts = [];
+        for (let k = 0; k < 6; k++) {
+          const a = Math.PI / 180 * (30 + 60 * k);
+          const x = cx + R * Math.cos(a), y = cy + R * Math.sin(a);
+          pts.push(`${f1(x + 7 * Math.sin(y * 0.07 + x * 0.02))} ${f1(y + 7 * Math.cos(x * 0.06 - y * 0.03))}`);
+        }
+        d += `M${pts.join("L")}Z`;
+      }
+      return full(`<path d="${d}" fill="none" style="stroke:color-mix(in srgb, var(--t-accent) 50%, #fff)" stroke-opacity=".16" stroke-width="3" stroke-linejoin="round"/>` +
+        `<path d="${d}" fill="none" style="stroke:color-mix(in srgb, var(--t-accent) 50%, #fff)" stroke-opacity=".42" stroke-width=".8" stroke-linejoin="round"/>`, "fade-tl");
+    },
+
+    lcd: (id) => {
+      const P = 5;
+      const hills = (base, a, f1x, f2x, ph) => {
+        let d = "M0 200";
+        for (let c = 0; c <= 64; c++) {
+          const top = 200 - P * Math.max(1, Math.round(base + a * Math.sin(c * f1x + ph) + a * 0.45 * Math.sin(c * f2x + ph * 2)));
+          d += `L${c * P} ${top}L${(c + 1) * P} ${top}`;
+        }
+        return `${d}L325 200Z`;
+      };
+      const cloud = ["....XXXX......", "..XXXXXXXX.XX.", ".XXXXXXXXXXXXX", "XXXXXXXXXXXXXX", ".XXXXXXXXXXXX."];
+      let px = "";
+      cloud.forEach((line, r) => [...line].forEach((ch, c) => { if (ch === "X") px += `<rect x="${150 + c * P}" y="${40 + r * P}" width="${P}" height="${P}"/>`; }));
+      return full(
+        `<defs><pattern id="${id}" width="${P}" height="${P}" patternUnits="userSpaceOnUse"><path d="M${P} 0V${P}H0" fill="none" stroke="#fff" stroke-opacity=".3" stroke-width=".7"/></pattern></defs>` +
+        `<g fill="#fff" opacity=".55">${px}</g>` +
+        `<path d="${hills(7, 2.5, 0.22, 0.55, 1.3)}" style="fill:color-mix(in srgb, var(--t-second) 40%, var(--t-bg))"/>` +
+        `<path d="${hills(3, 2, 0.35, 0.8, 4.1)}" style="fill:color-mix(in srgb, var(--t-second) 70%, var(--t-bg))"/>` +
+        `<rect width="320" height="200" fill="url(#${id})"/>`);
+    },
+
+    contours: () => {
+      let thin = "", bold = "";
+      for (const [cx, cy, s] of [[238, 128, 1], [110, 206, 0.7], [322, 18, 0.6]]) {
+        for (let k = 1; k <= 10; k++) {
+          const r = k * 10 * s;
+          let d = "";
+          for (let i = 0; i <= 40; i++) {
+            const a = (i / 40) * Math.PI * 2;
+            const rr = r * (1 + 0.14 * Math.sin(3 * a + k * 0.5) + 0.06 * Math.sin(5 * a - k));
+            d += `${i ? "L" : "M"}${f1(cx + 1.35 * rr * Math.cos(a))} ${f1(cy + rr * Math.sin(a))}`;
+          }
+          if (k % 5 === 0) bold += `${d}Z`; else thin += `${d}Z`;
+        }
+      }
+      return full(`<g fill="none" style="stroke:var(--t-text)"><path d="${thin}" stroke-opacity=".2" stroke-width=".7"/><path d="${bold}" stroke-opacity=".34" stroke-width="1.2"/></g>`, "fade-tl");
+    },
+
+    dunes: () => {
+      // The app's dune: a long sunlit face down from each crest, a steep shaded face back up.
+      const face = (u) => (u < 0.7 ? 0.5 + 0.5 * Math.cos(Math.PI * u / 0.7) : Math.pow((u - 0.7) / 0.3, 1.7));
+      const layers = [[0.6, 0.035, 0.5, 15], [0.68, 0.05, 0.68, 30], [0.79, 0.07, 0.9, 50], [0.92, 0.09, 1.3, 72]];
+      return full(layers.map(([base, amp, period, mix], n) => {
+        let crest = "", back = "";
+        for (let i = 0; i <= 64; i++) {
+          const x = 320 * i / 64;
+          const u = ((x / (320 * period) + n * 0.37) % 1 + 1) % 1;
+          const y = 200 * (base - amp * face(u));
+          const depth = u >= 0.7 ? 200 * amp * 1.1 * Math.min(1, (u - 0.7) / 0.1) : 0;
+          crest += `L${f1(x)} ${f1(y)}`;
+          back = `L${f1(x)} ${f1(y + depth)}` + back;
+        }
+        return `<path d="M0 200${crest}L320 200Z" style="fill:color-mix(in srgb, var(--t-second) ${mix}%, var(--t-bg))"/>` +
+          `<path d="M${crest.slice(1)}${back}Z" style="fill:color-mix(in srgb, var(--t-second) 50%, #6b3a1c)" opacity=".2"/>` +
+          `<path d="M${crest.slice(1)}" fill="none" stroke="#fff" stroke-opacity=".5" stroke-width=".7"/>`;
+      }).join(""));
+    },
+  };
 
   async function copyLink(t, button) {
     const link = SITE + t.path;

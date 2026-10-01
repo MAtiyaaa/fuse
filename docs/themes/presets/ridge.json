@@ -1,0 +1,44 @@
+{
+  "fuseTheme": 1,
+  "name": "Ridge",
+  "id": "ridge",
+  "tagline": "Contour lines on a quiet map",
+  "extends": "ridge",
+  "dark": false,
+  "colors": {
+    "background": "#ECECE7",
+    "surface": "#FAFAF7",
+    "surfaceRaised": "#F3F3EF",
+    "accent": "#2A2D31",
+    "accentSoft": "#2A2D311F",
+    "onAccent": "#FFFFFF",
+    "text": "#17181A",
+    "textMuted": "#5A5D62",
+    "focus": "#17181A",
+    "success": "#1E7F4E",
+    "warning": "#9A6200",
+    "danger": "#BF2C33"
+  },
+  "background": {
+    "style": "contours",
+    "intensity": 1.0,
+    "speed": 1.0
+  },
+  "corners": "soft",
+  "focus": "bar",
+  "motion": "standard",
+  "sound": "click",
+  "glass": {
+    "enabled": false,
+    "blur": 24.0,
+    "opacity": 0.72
+  },
+  "crt": {
+    "enabled": false,
+    "scanlines": 0.35,
+    "bloom": 0.15,
+    "curvature": 0.08,
+    "chromatic": 0.1,
+    "vignette": 0.3
+  }
+}
