@@ -48,11 +48,11 @@ img { display: block; }
 i { font-style: normal; color: var(--faint); margin: 0 .5em; }
 [hidden] { display: none !important; }
 
-/* The room: the home screen blurred behind everything, with a faint warm light low and a cool one high. */
+/* The room: a screen of Fuse blurred behind everything, with a faint warm light low and a cool one high. */
 .room { position: fixed; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; }
 .room-art {
   position: absolute; inset: -8%;
-  background: url("screenshots/home.webp") center 30% / cover no-repeat;
+  background: url("screenshots/library.webp") center 30% / cover no-repeat;
   filter: blur(48px) saturate(1.1) brightness(.42);
   transform: scale(1.08);
   opacity: .9;

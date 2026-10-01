@@ -118,13 +118,13 @@ cached on their device. None of it is part of Fuse's distribution.
 
 ### Screenshots
 
-The README and website screenshots (`docs/assets/screenshots`) show well-known games with the art
-Fuse fetched for them while the screenshots were made: box art from the
-[libretro thumbnails](https://github.com/libretro-thumbnails/libretro-thumbnails), collected by the
-libretro community, and system art from Art Book Next (CC BY-NC-SA 2.0, credited as below). The screenshots are documentation: they are not part
-of Fuse's code or of its downloads. The games, their names and their art belong to their owners, the
-Art Book Next art in them stays under CC BY-NC-SA 2.0, and they are shown only to illustrate what Fuse
-does with a library.
+The README and website screenshots (`docs/assets/screenshots`) are captures of Fuse running on an
+AYN Thor with its author's own library. The game art in them is what Fuse fetched for that library
+from the sources it fills art from, and the system art is from Art Book Next (CC BY-NC-SA 2.0,
+credited as below). The screenshots are documentation: they are not part of Fuse's code or of its
+downloads. The games, their names and their art belong to their owners, the Art Book Next art in
+them stays under CC BY-NC-SA 2.0, and they are shown only to illustrate what Fuse does with a
+library.
 
 ## Compatibility with GPL-3.0-or-later
 

@@ -29,9 +29,11 @@ kotlin {
     }
 }
 
-// README screenshots: the real interface over a library of well-known games whose art Fuse fetches
+// Screenshot renders: the real interface over a library of well-known games whose art Fuse fetches
 // (libretro thumbnails and Art Book Next; SteamGridDB too when STEAMGRIDDB_API_KEY is set), rendered
-// headless into docs/assets/screenshots. Never part of desktopTest, check or CI; run it on purpose:
+// headless into build/readme-screenshots. The README and website use captures from a device
+// (docs/assets/screenshots), so these never overwrite them unless asked with -Pfuse.screenshots.dir.
+// Never part of desktopTest, check or CI; run it on purpose:
 //     ./gradlew :ui:shell:desktopScreenshots [-Pfuse.screenshots.sources=STEAMGRIDDB,LIBRETRO]
 val screenshotTests = "io.github.matiyaaa.fuse.ui.shell.screenshots.*"
 
@@ -48,7 +50,7 @@ tasks.named<Test>("desktopTest") {
 }
 
 tasks.register<Test>("desktopScreenshots") {
-    description = "Renders the README screenshots into docs/assets/screenshots."
+    description = "Renders screenshots of the interface into build/readme-screenshots."
     group = "documentation"
     val desktopTest = tasks.named<Test>("desktopTest").get()
     testClassesDirs = desktopTest.testClassesDirs
@@ -57,7 +59,7 @@ tasks.register<Test>("desktopScreenshots") {
     systemProperty(
         "fuse.screenshots.dir",
         providers.gradleProperty("fuse.screenshots.dir")
-            .getOrElse(rootProject.layout.projectDirectory.dir("docs/assets/screenshots").asFile.absolutePath),
+            .getOrElse(layout.buildDirectory.dir("readme-screenshots").get().asFile.absolutePath),
     )
     systemProperty("fuse.screenshots.sources", providers.gradleProperty("fuse.screenshots.sources").getOrElse(""))
     // Filling the art and rendering every screen takes several minutes; the coroutine test default of one minute is too short.

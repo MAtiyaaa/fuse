@@ -55,55 +55,53 @@ Home screen.
 The game you are on sets the mood. Its art fills the room, its colour tints the glow, and the tile
 under your thumb lifts toward you with a single sweep of light.
 
-<a href="docs/assets/screenshots/home.webp"><img src="docs/assets/screenshots/home.webp" width="100%" alt="Fuse's Home screen in the Fuse theme. The Legend of Zelda: Breath of the Wild is in focus, told large with its year, play time, update and DLC. Below, a Continue playing row with Final Fantasy VII, Super Mario 64 and Metroid Prime over their box art, and a row of systems with their logos and artwork."></a>
+<a href="docs/assets/screenshots/library.webp"><img src="docs/assets/screenshots/library.webp" width="100%" alt="Fuse's Library on an AYN Thor: 2010 FIFA World Cup South Africa is in focus, its logo large over a stadium full of fans that fills the whole screen. Below, rows of square box art: 2014 FIFA World Cup Brazil, Animal Crossing, Assassin's Creed, Balatro, Cooking Mama and Crazy Taxi."></a>
 
-<sub><b>Home.</b> Continue where you left off, with your systems one row below.</sub>
+<sub><b>Library.</b> The game you're on fills the room.</sub>
 
 </div>
 
 <table>
   <tr>
     <td width="50%" valign="top">
-      <a href="docs/assets/screenshots/library-covers.webp"><img src="docs/assets/screenshots/library-covers.webp" width="100%" alt="The Library as a wall of tall covers of well-known games, Advance Wars in focus, with tabs for every game, favourites and recently played."></a>
-      <br><b>Your whole library</b>
-      <br><sub>Covers, square box art, capsules or a compact list, filtered by system, favourites or what you played last.</sub>
+      <a href="docs/assets/screenshots/home-channels.webp"><img src="docs/assets/screenshots/home-channels.webp" width="100%" alt="Home as a board of tiles: 14 systems and 49 games, a wide Continue playing tile with Geometry Dash and Cooking Mama, a Systems tile with Steam, PlayStation, PS2 and PS3, New in your library, and Recent achievements."></a>
+      <br><b>Home, a board you arrange</b>
+      <br><sub>Continue playing, your systems, what's new and your achievements, as tiles you place and resize yourself, or as a flowing Home if you like.</sub>
     </td>
     <td width="50%" valign="top">
-      <a href="docs/assets/screenshots/library-icons.webp"><img src="docs/assets/screenshots/library-icons.webp" width="100%" alt="The Library as a grid of square box art, Crazy Taxi in focus with its art filling the room, next to Chrono Trigger, Crash Bandicoot and Donkey Kong Country."></a>
-      <br><b>Art that fills itself in</b>
-      <br><sub>Box art, covers, logos and backgrounds for every game, found for you, and art of Fuse's own for any it can't find.</sub>
-    </td>
-  </tr>
-  <tr>
-    <td width="50%" valign="top">
-      <a href="docs/assets/screenshots/game.webp"><img src="docs/assets/screenshots/game.webp" width="100%" alt="The page of The Legend of Zelda: Breath of the Wild: its year, developer, genres and players, a Play button that says it starts in Ryujinx, its play time and what it's about."></a>
-      <br><b>A page for every game</b>
-      <br><sub>Its details, the emulator Fuse will start, your play time, and its discs, updates and DLC kept together.</sub>
-    </td>
-    <td width="50%" valign="top">
-      <a href="docs/assets/screenshots/systems.webp"><img src="docs/assets/screenshots/systems.webp" width="100%" alt="The Systems screen: every system with its own logo and artwork, Nintendo Switch in focus with its game count and its emulator, Ryujinx."></a>
+      <a href="docs/assets/screenshots/systems.webp"><img src="docs/assets/screenshots/systems.webp" width="100%" alt="The Systems screen: Steam in focus with 10 games that start in GameNative, then PlayStation, PS2, PS3, PSP, Nintendo 64, DS, 3DS, Game Boy, Game Boy Advance, Switch, Dreamcast, Xbox 360 and Android, each with its own logo and artwork."></a>
       <br><b>Systems, with art of their own</b>
-      <br><sub>Logos, artwork and colours for every system, and the emulator behind each one, per system or per game.</sub>
+      <br><sub>Logos, artwork and colours for every system, with its game count and the emulator behind it.</sub>
     </td>
   </tr>
   <tr>
     <td width="50%" valign="top">
-      <a href="docs/assets/screenshots/home-channels.webp"><img src="docs/assets/screenshots/home-channels.webp" width="100%" alt="Home as a board of tiles: Continue playing, Favourites, Systems with their logos, this week's play time as a bar chart, total play time and New in your library."></a>
-      <br><b>Or a board of tiles you arrange</b>
-      <br><sub>Channels turns Home into widgets you place and resize yourself, from 19 kinds.</sub>
+      <a href="docs/assets/screenshots/system-page.webp"><img src="docs/assets/screenshots/system-page.webp" width="100%" alt="The Nintendo Switch page: Animal Crossing: New Horizons in focus, its island art filling the screen, next to Mario Kart 8 Deluxe, Red Dead Redemption, Story of Seasons and Super Mario Odyssey."></a>
+      <br><b>A page for every system</b>
+      <br><sub>Its games over the art of the one you're on, sorted and laid out the way you like for that system.</sub>
     </td>
     <td width="50%" valign="top">
-      <a href="docs/assets/screenshots/onboarding.webp"><img src="docs/assets/screenshots/onboarding.webp" width="100%" alt="The first step of setup: Welcome to Fuse, a Begin button, and the Fuse mark."></a>
-      <br><b>A guided start</b>
-      <br><sub>Setup walks you through folders, emulators and, on Android, the optional Home screen.</sub>
+      <a href="docs/assets/screenshots/apps.webp"><img src="docs/assets/screenshots/apps.webp" width="100%" alt="Apps, Emulators: 15 found on the device, from ARMSX1, ARMSX2, ARMSX3, AzaharPlus, Cemu, Dolphin, DuckStation and Eden to Flycast, GameNative, melonDS, PPSSPP, RetroArch, Vita3K and XenDroid."></a>
+      <br><b>Your emulators, found for you</b>
+      <br><sub>On Android, every emulator on the device in one place, next to your pinned apps and an app drawer.</sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <a href="docs/assets/screenshots/quick-menu.webp"><img src="docs/assets/screenshots/quick-menu.webp" width="100%" alt="The quick menu over Home: the time and date, battery at 80 percent with 4 hours left, and tiles for Wi-Fi, Bluetooth, Screenshot, Display, Controller, Performance, Low Power, Find games and Cartridge."></a>
+      <br><b>Everything at a press</b>
+      <br><sub>The quick menu: time, battery left, Wi-Fi, screenshots and recordings, performance and more, from any screen.</sub>
+    </td>
+    <td width="50%" valign="top">
+      <a href="docs/assets/screenshots/keyboard.webp"><img src="docs/assets/screenshots/keyboard.webp" width="100%" alt="Search with Fuse's controller keyboard: a field for games, systems and apps above a full keyboard, with hints for type, delete, space, cursor and results on the controller's buttons."></a>
+      <br><b>Type with a controller</b>
+      <br><sub>A keyboard made for buttons and sticks, with a cursor, shortcuts on every face button, and paste.</sub>
     </td>
   </tr>
 </table>
 
-<p align="center"><sub>Every screenshot is a real render of Fuse's interface (the desktop build at 1920 x 1080), driven with
-controller input over a library of well-known games whose art Fuse found by itself: box art from the
-<a href="https://github.com/libretro-thumbnails/libretro-thumbnails">libretro thumbnails</a>, system art from <a href="https://github.com/anthonycaccese/art-book-next-es-de">Art Book Next</a>.
-Games with no art there (the Switch games here) show Fuse's own. The games, their names and their art belong to their owners.
+<p align="center"><sub>Screenshots taken with Fuse on an AYN Thor (1920 x 1080), with a real library and the art Fuse filled
+in for it; system art from <a href="https://github.com/anthonycaccese/art-book-next-es-de">Art Book Next</a>. The games, their names and their art belong to their owners.
 Fuse comes with no games and is not affiliated with them.</sub></p>
 
 <picture>
@@ -444,6 +442,8 @@ Fuse does not include emulators, BIOS files or games. Install the emulators you 
 automatically.
 
 ## RomM through Cartridge
+
+<a href="docs/assets/screenshots/cartridge.webp"><img src="docs/assets/screenshots/cartridge.webp" width="100%" alt="Fuse's Cartridge page, connected to RomM: Open Cartridge, Browse, Search, Upload, Downloads and Consoles, then Browse by system with Steam, PlayStation, PS2, PS3, PSP, Nintendo 64 and DS, and Recently downloaded games."></a>
 
 Fuse does not talk to RomM servers. [Cartridge](https://github.com/abdu2304/cartridge) by
 [abdu2304](https://github.com/abdu2304), a RomM companion app, signs in to your RomM server, keeps
