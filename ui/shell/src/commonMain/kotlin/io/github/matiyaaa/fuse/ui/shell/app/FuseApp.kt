@@ -61,10 +61,10 @@ import io.github.matiyaaa.fuse.ui.designsystem.theme.FuseTheme
 import io.github.matiyaaa.fuse.ui.designsystem.theme.GlyphConfig
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
-import io.github.matiyaaa.fuse.ui.designsystem.theme.ThemePresets
 import io.github.matiyaaa.fuse.ui.designsystem.theme.TileMetrics
 import io.github.matiyaaa.fuse.ui.shell.apps.AppsScreen
 import io.github.matiyaaa.fuse.ui.shell.cartridge.CartridgeScreen
+import io.github.matiyaaa.fuse.ui.shell.components.LocalGameArt
 import io.github.matiyaaa.fuse.ui.shell.components.LocalTileBorders
 import io.github.matiyaaa.fuse.ui.shell.components.LocalTileMetrics
 import io.github.matiyaaa.fuse.ui.shell.components.PerformanceOverlay
@@ -115,7 +115,7 @@ fun FuseApp(store: FuseStore, platform: PlatformUi, router: InputRouter, phoneLi
         state = AppState(store, platform, scope, if (prefs.onboardingDone) Route.Root(Destination.HOME) else Route.Onboarding, phoneLink)
         state
     }
-    val spec = ThemePresets.byId(prefs.themeId)
+    val spec = prefs.theme
     val quality = RenderQuality.of(prefs.performance, platform.device, prefs.lowPower)
     val lastSource by router.lastSource.collectAsState()
     val glyphStyle = when {
@@ -191,8 +191,8 @@ fun FuseApp(store: FuseStore, platform: PlatformUi, router: InputRouter, phoneLi
             BoxWithConstraints(Modifier.fillMaxSize().background(Fuse.colors.ink)) {
                 val metrics = remember(maxWidth, maxHeight) { TileMetrics.forHeight(maxHeight, maxWidth) }
                 val borders = rememberTileBorders(store)
-                CompositionLocalProvider(LocalTileMetrics provides metrics, LocalTileBorders provides borders) {
-                    Room(app, prefs.showHero, spec.background, prefs.heroDim, prefs.glass, prefs.videoPreview, prefs.videoDelaySeconds)
+                CompositionLocalProvider(LocalTileMetrics provides metrics, LocalTileBorders provides borders, LocalGameArt provides prefs.gameArt) {
+                    Room(app, prefs.showHero, spec.background, prefs.heroDim, prefs.glass, prefs.videoPreview, prefs.videoDelaySeconds, spec.ambient)
                     ArtWarmup(app)
                     ShellInput(app)
                     Pages(app)
@@ -253,11 +253,12 @@ private fun Room(
     glass: io.github.matiyaaa.fuse.model.GlassSettings,
     videoOn: Boolean,
     videoDelay: Int,
+    ambient: io.github.matiyaaa.fuse.model.AmbientSpec,
 ) {
     val quality = Fuse.quality
     val hero = app.hero
     // The theme's own room is always underneath, so art fading in or out never shows a bare screen.
-    AmbientBackground(if (style == BackgroundStyle.HERO) BackgroundStyle.SOLID else style, hero?.accent ?: Fuse.colors.accent, Modifier.fillMaxSize())
+    AmbientBackground(if (style == BackgroundStyle.HERO) BackgroundStyle.SOLID else style, hero?.accent ?: Fuse.colors.accent, Modifier.fillMaxSize(), ambient = ambient)
     if (showHero) {
         var videoReady by remember(hero?.id) { mutableStateOf(false) }
         var playVideo by remember(hero?.id) { mutableStateOf(false) }
@@ -340,6 +341,7 @@ private fun Pages(app: AppState) {
                 Route.Search -> SearchScreen(app)
                 Route.Controls -> io.github.matiyaaa.fuse.ui.shell.settings.ControlsScreen(app)
                 Route.Licenses -> io.github.matiyaaa.fuse.ui.shell.settings.LicensesScreen(app)
+                Route.Themes -> io.github.matiyaaa.fuse.ui.shell.settings.ThemesScreen(app)
                 Route.Onboarding -> OnboardingScreen(app)
                 is Route.FolderBrowser -> FolderBrowserScreen(app, route.game)
                 is Route.PickFile -> io.github.matiyaaa.fuse.ui.shell.files.FilePickerScreen(app, route.purpose, route.locate)

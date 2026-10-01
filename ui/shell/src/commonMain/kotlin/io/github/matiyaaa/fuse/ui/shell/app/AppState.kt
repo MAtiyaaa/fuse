@@ -91,6 +91,9 @@ class AppState(
     /** Where hardware keyboard typing goes (search field, rename dialog), or null for navigation keys. */
     var keyboardTarget by mutableStateOf<KeyboardTarget?>(null)
 
+    /** Settings groups that are open, by id. They stay open while Fuse runs. */
+    val openGroups = androidx.compose.runtime.mutableStateMapOf<String, Boolean>()
+
     /** What the room is lit by. Screens set it from their selection. */
     var hero by mutableStateOf<HeroSource?>(null)
 

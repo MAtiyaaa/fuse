@@ -5,25 +5,33 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import io.github.matiyaaa.fuse.model.CollectionKind
@@ -60,7 +68,10 @@ import io.github.matiyaaa.fuse.ui.shell.app.FocusZone
 import io.github.matiyaaa.fuse.ui.shell.app.Route
 import io.github.matiyaaa.fuse.ui.shell.app.TextInputSpec
 import io.github.matiyaaa.fuse.ui.shell.app.rememberRouteState
+import io.github.matiyaaa.fuse.ui.shell.components.ControlTile
 import io.github.matiyaaa.fuse.ui.shell.components.CoverCollage
+import io.github.matiyaaa.fuse.ui.shell.components.ViewTab
+import io.github.matiyaaa.fuse.ui.shell.components.ViewTabs
 import io.github.matiyaaa.fuse.ui.shell.store.GameCard
 import io.github.matiyaaa.fuse.ui.shell.store.GameQuery
 import kotlinx.coroutines.flow.first
@@ -72,21 +83,40 @@ private sealed interface CollectionItem {
     data class Of(val collection: GameCollection) : CollectionItem
 }
 
+/** The two views of the Collections tab. Your own collections come first. */
+private enum class CollectionsView(val label: String) { COLLECTIONS("Collections"), SERIES("Series") }
+
+/** Which view is showing, whether focus is on the tabs, and each view's own place. */
+private class CollectionsViewState {
+    var view by mutableStateOf(CollectionsView.COLLECTIONS)
+    var inTabs by mutableStateOf(false)
+    private val selections = mutableMapOf<CollectionsView, GridSelection>()
+    fun selection(v: CollectionsView): GridSelection = selections.getOrPut(v) { GridSelection() }
+}
+
 /**
- * Every collection as a card made of its games' art: the user's own first (after a card to make a
- * new one), then the series Fuse found. A tap or A opens one; X has its options.
+ * Collections in two views: your own (after a card to make a new one), and the series Fuse found.
+ * Each is a grid of cards made of the games' art. A tap or A opens one; X has its options. Up from
+ * the first row reaches the views, and Left and Right switch them.
  */
 @Composable
 fun CollectionsScreen(app: AppState) {
     val store = app.store
+    val prefs by store.prefs.collectAsState()
     val all by store.collections.collections.collectAsState()
     val mine = all.filter { it.kind != CollectionKind.SERIES }
     val series = all.filter { it.kind == CollectionKind.SERIES }.sortedBy { it.name.lowercase() }
-    val items: List<CollectionItem> = listOf(CollectionItem.New) + (mine + series).map { CollectionItem.Of(it) }
-    val sel = rememberRouteState(app.navigator, "collections") { GridSelection() }
+    val state = rememberRouteState(app.navigator, "collections") { CollectionsViewState() }
+    val view = state.view
+    val inTabs = state.inTabs && app.focusZone == FocusZone.CONTENT
+    val items: List<CollectionItem> = when (view) {
+        CollectionsView.COLLECTIONS -> listOf(CollectionItem.New) + mine.map { CollectionItem.Of(it) }
+        CollectionsView.SERIES -> series.map { CollectionItem.Of(it) }
+    }
+    val sel = state.selection(view)
     sel.clamp(items.size)
     var columns = 4
-    val current = (items.getOrNull(sel.index) as? CollectionItem.Of)?.collection
+    val current = (items.getOrNull(sel.index) as? CollectionItem.Of)?.collection?.takeIf { !inTabs }
 
     // The room is lit by the focused collection: its own background, else its first game's.
     val currentGames by remember(current?.id) {
@@ -96,13 +126,15 @@ fun CollectionsScreen(app: AppState) {
         current?.let { store.media.media(MediaOwner.OfCollection(it.id)) } ?: kotlinx.coroutines.flow.flowOf(MediaSet.Empty)
     }.collectAsState(initial = MediaSet.Empty)
     val accent = Fuse.colors.accent
-    LaunchedEffect(current?.id, currentGames.firstOrNull()?.id, currentMedia) {
+    LaunchedEffect(current?.id, currentGames.firstOrNull()?.id, currentMedia, inTabs, items.isEmpty()) {
         val first = currentGames.firstOrNull()
         app.hero = current?.let { c ->
             HeroSource(c.id, currentMedia.hero()?.model() ?: first?.art?.hero ?: first?.art?.grid, first?.accent?.toColor() ?: accent)
         }
-        app.hints = when (items.getOrNull(sel.index)) {
-            CollectionItem.New -> listOf(Hint(HintButton.CONFIRM, "New collection"))
+        app.hints = when {
+            inTabs -> listOf(Hint(HintButton.CONFIRM, "Choose"))
+            items.isEmpty() -> if (prefs.autoSeries) emptyList() else listOf(Hint(HintButton.CONFIRM, "Turn on Automatic series"))
+            items.getOrNull(sel.index) == CollectionItem.New -> listOf(Hint(HintButton.CONFIRM, "New collection"))
             else -> listOf(Hint(HintButton.CONFIRM, "Open"), Hint(HintButton.OPTIONS, "Options"))
         }
     }
@@ -113,12 +145,35 @@ fun CollectionsScreen(app: AppState) {
             is CollectionItem.Of -> app.go(Route.CollectionGames(item.collection.id, item.collection.name))
         }
     }
+    fun show(v: CollectionsView) {
+        app.focusZone = FocusZone.CONTENT
+        state.view = v
+    }
+    fun turnOnSeries() = app.scope.launch { store.updatePrefs { it.copy(autoSeries = true) } }
 
     InputLayer(enabled = app.focusZone == FocusZone.CONTENT && !app.overlayOpen) { e ->
+        val views = CollectionsView.entries
+        if (inTabs) {
+            return@InputLayer when (e.action) {
+                NavAction.LEFT -> if (view.ordinal > 0) { show(views[view.ordinal - 1]); NavResult.MOVED } else NavResult.BLOCKED
+                NavAction.RIGHT -> if (view.ordinal < views.lastIndex) { show(views[view.ordinal + 1]); NavResult.MOVED } else NavResult.BLOCKED
+                NavAction.DOWN, NavAction.SELECT -> { state.inTabs = false; NavResult.MOVED }
+                else -> NavResult.IGNORED
+            }
+        }
         when (e.action) {
-            NavAction.UP, NavAction.DOWN, NavAction.LEFT, NavAction.RIGHT, NavAction.PAGE_UP, NavAction.PAGE_DOWN ->
-                sel.move(e.action, items.size, columns).let { if (it == NavResult.IGNORED && e.action != NavAction.UP) NavResult.BLOCKED else it }
-            NavAction.SELECT -> { items.getOrNull(sel.index)?.let(::open); NavResult.ACTIVATED }
+            NavAction.UP, NavAction.DOWN, NavAction.LEFT, NavAction.RIGHT, NavAction.PAGE_UP, NavAction.PAGE_DOWN -> {
+                val r = if (items.isEmpty()) NavResult.IGNORED else sel.move(e.action, items.size, columns)
+                when {
+                    r == NavResult.IGNORED && e.action == NavAction.UP -> { state.inTabs = true; NavResult.MOVED }
+                    r == NavResult.IGNORED -> NavResult.BLOCKED
+                    else -> r
+                }
+            }
+            NavAction.SELECT -> {
+                if (items.isEmpty()) { if (view == CollectionsView.SERIES && !prefs.autoSeries) turnOnSeries() } else items.getOrNull(sel.index)?.let(::open)
+                NavResult.ACTIVATED
+            }
             NavAction.CONTEXT -> { current?.let { app.openContextMenu(app.collectionMenu(it)) }; NavResult.ACTIVATED }
             else -> NavResult.IGNORED
         }
@@ -134,45 +189,81 @@ fun CollectionsScreen(app: AppState) {
         val cardWidth = (usable - gap * (columns - 1)) / columns
         val artHeight = cardWidth / Aspect.SYSTEM_CARD
         Column(Modifier.fillMaxSize()) {
-            Spacer(Modifier.height(Size.hudHeight + if (compact) Space.s else Space.l))
-            Row(Modifier.padding(horizontal = Space.gutter), verticalAlignment = Alignment.Bottom) {
-                FText("Collections", if (compact) Fuse.type.title else Fuse.type.display, maxLines = 1)
-                Spacer(Modifier.width(Space.l))
-                FText(
-                    listOfNotNull(
-                        "${mine.size} yours",
-                        series.size.takeIf { it > 0 }?.let { "$it ${if (it == 1) "series" else "series"} found" },
-                    ).joinToString("  ·  "),
-                    Fuse.type.body, color = Fuse.colors.textMuted, maxLines = 1,
-                    modifier = Modifier.padding(bottom = Space.xs),
-                )
+            Spacer(Modifier.height(Size.hudHeight + if (compact) Space.xs else Space.m))
+            ViewTabs(
+                items = listOf(
+                    ViewTab(CollectionsView.COLLECTIONS.label, icon = FuseIcons.Bookmark, badge = mine.size.toString()),
+                    ViewTab(CollectionsView.SERIES.label, icon = FuseIcons.Sparkles, badge = series.size.takeIf { it > 0 }?.toString()),
+                ),
+                active = view.ordinal,
+                focused = view.ordinal.takeIf { inTabs },
+                onSelect = { i -> show(CollectionsView.entries[i]); state.inTabs = false },
+            )
+            if (items.isEmpty()) {
+                SeriesEmpty(prefs.autoSeries, selected = !inTabs && app.focusZone == FocusZone.CONTENT, onTurnOn = ::turnOnSeries)
+                return@Column
             }
-            val grid = rememberLazyGridState()
-            FollowSelection(grid, { sel.index }, anchor = 0.2f)
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(columns),
-                state = grid,
-                modifier = Modifier.weight(1f).fadingEdges(top = if (grid.canScrollBackward) 24.dp else 0.dp),
-                contentPadding = PaddingValues(start = Space.gutter, end = Space.gutter, top = Space.l, bottom = Size.hintHeight + Space.x4),
-                horizontalArrangement = Arrangement.spacedBy(gap),
-                verticalArrangement = Arrangement.spacedBy(Space.l),
-            ) {
-                itemsIndexed(items, key = { _, item -> if (item is CollectionItem.Of) item.collection.id.value else -1L }) { i, item ->
-                    val selected = i == sel.index && app.focusZone == FocusZone.CONTENT
-                    val tap = {
-                        app.focusZone = FocusZone.CONTENT
-                        if (sel.index == i) open(item) else sel.index = i
-                    }
-                    when (item) {
-                        CollectionItem.New -> NewCollectionCard(selected, artHeight, tap)
-                        is CollectionItem.Of -> CollectionCard(
-                            app, item.collection, selected, artHeight, tap,
-                            onLongClick = { sel.index = i; app.openContextMenu(app.collectionMenu(item.collection)) },
-                        )
+            // Each view keeps its own scroll, so switching back finds you where you were.
+            key(view) {
+                val grid = rememberLazyGridState()
+                FollowSelection(grid, { sel.index }, anchor = 0.2f)
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(columns),
+                    state = grid,
+                    modifier = Modifier.weight(1f).fadingEdges(top = if (grid.canScrollBackward) 24.dp else 0.dp),
+                    contentPadding = PaddingValues(start = Space.gutter, end = Space.gutter, top = Space.l, bottom = Size.hintHeight + Space.x4),
+                    horizontalArrangement = Arrangement.spacedBy(gap),
+                    verticalArrangement = Arrangement.spacedBy(Space.l),
+                ) {
+                    itemsIndexed(items, key = { _, item -> if (item is CollectionItem.Of) item.collection.id.value else -1L }) { i, item ->
+                        val selected = !inTabs && i == sel.index && app.focusZone == FocusZone.CONTENT
+                        val tap = {
+                            app.focusZone = FocusZone.CONTENT
+                            state.inTabs = false
+                            sel.index = i
+                            open(item)
+                        }
+                        when (item) {
+                            CollectionItem.New -> NewCollectionCard(selected, artHeight, tap)
+                            is CollectionItem.Of -> CollectionCard(
+                                app, item.collection, selected, artHeight, tap,
+                                onLongClick = { state.inTabs = false; sel.index = i; app.openContextMenu(app.collectionMenu(item.collection)) },
+                            )
+                        }
                     }
                 }
             }
         }
+    }
+}
+
+/** The Series view with nothing in it: what it is for, and the switch when it is off. */
+@Composable
+private fun ColumnScope.SeriesEmpty(on: Boolean, selected: Boolean, onTurnOn: () -> Unit) {
+    val c = Fuse.colors
+    Column(
+        Modifier.weight(1f).fillMaxWidth().padding(horizontal = Space.gutter, vertical = Space.xl),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Box(Modifier.size(64.dp).clip(CircleShape).background(c.text.copy(alpha = 0.06f)), contentAlignment = Alignment.Center) {
+            FuseIcon(FuseIcons.Sparkles, size = 26.dp, tint = c.textMuted)
+        }
+        Spacer(Modifier.height(Space.m))
+        FText(if (on) "No series yet" else "Automatic series is off", Fuse.type.title, maxLines = 1)
+        Spacer(Modifier.height(Space.xs))
+        FText(
+            if (on) "Fuse gathers games of one series into a collection, once it finds two or more of them." else "Turn it on and Fuse gathers games of one series into collections of their own.",
+            Fuse.type.body, color = c.textMuted, maxLines = 2, align = TextAlign.Center, modifier = Modifier.widthIn(max = 520.dp),
+        )
+        if (!on) {
+            Spacer(Modifier.height(Space.l))
+            ControlTile(
+                "Turn on Automatic series", FuseIcons.Sparkles, selected = selected,
+                modifier = Modifier.width(240.dp).height(80.dp), active = true, onClick = onTurnOn,
+            )
+        }
+        Spacer(Modifier.height(Size.hintHeight))
     }
 }
 
@@ -241,14 +332,7 @@ private fun CollectionCard(
         }
         Spacer(Modifier.height(Space.s))
         FText(collection.name, Fuse.type.label, color = if (selected) c.text else c.text.copy(alpha = 0.9f), maxLines = 1)
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
-            // A series Fuse found says so quietly, next to its count.
-            if (collection.kind == CollectionKind.SERIES) FuseIcon(FuseIcons.Sparkles, size = 12.dp, tint = c.textMuted)
-            FText(
-                listOfNotNull("${collection.gameCount} ${if (collection.gameCount == 1) "game" else "games"}", "Series".takeIf { collection.kind == CollectionKind.SERIES }).joinToString("  ·  "),
-                Fuse.type.caption, color = c.textMuted, maxLines = 1,
-            )
-        }
+        FText("${collection.gameCount} ${if (collection.gameCount == 1) "game" else "games"}", Fuse.type.caption, color = c.textMuted, maxLines = 1)
     }
 }
 

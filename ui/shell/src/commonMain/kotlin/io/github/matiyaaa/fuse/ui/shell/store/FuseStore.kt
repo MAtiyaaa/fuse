@@ -57,9 +57,34 @@ interface FuseStore {
     val credentials: CredentialOps
     val updates: UpdateOps
     val storage: StorageOps
+    val themes: ThemeOps
 
     /** A song that ships with Fuse ([io.github.matiyaaa.fuse.ui.shell.music.BundledMusic]) as a file the player can open. */
     suspend fun bundledTrack(id: String): String? = null
+}
+
+/**
+ * Themes added by the user, from a link, a file or pasted text (docs/THEMES.md). Nothing is applied
+ * or kept until [add]; removing one only forgets it on this device.
+ */
+interface ThemeOps {
+    /** The text behind [url]: https only, at most 64 KB; GitHub and gist pages lead to their files. */
+    suspend fun fetch(url: String): Result<String>
+
+    /** The text of a theme file at [path], at most 64 KB. */
+    suspend fun readFile(path: String): Result<String>
+
+    /** Reads a theme, repairing what it can (see [io.github.matiyaaa.fuse.model.ThemeCodec]). */
+    fun parse(text: String): io.github.matiyaaa.fuse.model.ThemeCodec.Result
+
+    /** Keeps [spec] (as the file [json] it came from), replacing one with the same id, and uses it when [apply]. */
+    suspend fun add(spec: io.github.matiyaaa.fuse.model.ThemeSpec, json: String, source: String?, apply: Boolean)
+
+    /** Forgets the added theme [id]; Fuse goes back to its own theme if it was in use. */
+    suspend fun remove(id: String)
+
+    /** [spec] as a theme file: the file it was added from, or a new one for a built-in theme. */
+    fun export(spec: io.github.matiyaaa.fuse.model.ThemeSpec): String
 }
 
 /**

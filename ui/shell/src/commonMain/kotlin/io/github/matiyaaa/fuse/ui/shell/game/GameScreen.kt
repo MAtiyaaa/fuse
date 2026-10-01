@@ -205,7 +205,7 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
                         game.metadata.developer,
                         game.metadata.franchise?.takeIf { it.isNotBlank() && !game.displayTitle.startsWith(it, ignoreCase = true) }?.let { "$it series" },
                         game.metadata.genres.take(2).joinToString(", ").ifBlank { null },
-                        game.metadata.players?.let { "$it players" },
+                        game.metadata.players?.let(::playersLabel),
                     )
                     if (meta.isNotEmpty()) FText(meta.joinToString("  ·  "), Fuse.type.body, color = c.textMuted, maxLines = 1)
                     Spacer(Modifier.height(Space.xl))
@@ -333,7 +333,7 @@ private fun Stat(label: String, value: String) {
 @Composable
 private fun Section(title: String, content: @Composable () -> Unit) {
     Spacer(Modifier.height(Space.xxl))
-    SectionLabel(title)
+    SectionLabel(title, Modifier.fillMaxWidth())
     Spacer(Modifier.height(Space.m))
     content()
 }
@@ -447,3 +447,13 @@ fun GameDetail.toCard(): GameCard = GameCard(
     rommRomId = game.links.rommRomId,
 )
 
+/** How many can play: "1 player", "1-4 players", or a source's own words ("Single player"). */
+internal fun playersLabel(players: String): String? {
+    val p = players.trim()
+    return when {
+        p.isEmpty() -> null
+        p == "1" -> "1 player"
+        p.any(Char::isLetter) -> p
+        else -> "$p players"
+    }
+}

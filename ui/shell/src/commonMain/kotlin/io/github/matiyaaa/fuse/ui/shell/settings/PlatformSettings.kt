@@ -112,7 +112,7 @@ fun PlatformSettingsScreen(app: AppState, platformId: PlatformId) {
             FolderPolicy.FOLDER_BROWSER to "Open as a folder", FolderPolicy.FILE to "Files only",
         ), detail = "How folders inside ${p.shortName}'s folder are read. Nothing on disk changes"))
         add(app.scopedRow(ScopedSettings.Layout, platformId, "View", FuseIcons.Grid, LibraryLayout.entries.map { it to when (it) {
-            LibraryLayout.ICON -> "Box art"; LibraryLayout.CAPSULE -> "Capsules"; LibraryLayout.COVER_GRID -> "Cover grid"; LibraryLayout.COMPACT_LIST -> "List"
+            LibraryLayout.ICON -> "Grid"; LibraryLayout.CAPSULE -> "Capsules"; LibraryLayout.COVER_GRID -> "Cover grid"; LibraryLayout.COMPACT_LIST -> "List"
         } }))
         add(app.scopedRow(ScopedSettings.ShowHero, platformId, "Background art", FuseIcons.Image, on))
         add(app.scopedRow(ScopedSettings.ShowLogo, platformId, "Title logos", FuseIcons.Type, on))

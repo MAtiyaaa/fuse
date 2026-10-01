@@ -1,0 +1,16 @@
+{
+  "fuseTheme": 1,
+  "name": "Ember Night",
+  "author": "Fuse",
+  "tagline": "Starlight with a warmer spark",
+  "extends": "starlight",
+  "colors": {
+    "accent": "#FF8A5B",
+    "onAccent": "#1F0A03"
+  },
+  "background": {
+    "style": "stars",
+    "intensity": 1.2,
+    "secondary": "#FFC46B"
+  }
+}

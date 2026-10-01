@@ -68,6 +68,41 @@ class StoreIntegrationTest {
     }
 
     @Test
+    fun addedThemesAreKeptUsedAndForgotten(): Unit = runBlocking {
+        val services = FakeServices(FuseData(DesktopDatabase.open(freshDb())), cache)
+        val store = createFuseStore(services, scope)
+        val text = """{"name": "Night Ember", "extends": "starlight", "colors": {"accent": "#FF7A59"}}"""
+        val parsed = assertIs<io.github.matiyaaa.fuse.model.ThemeCodec.Imported>(store.themes.parse(text))
+        store.themes.add(parsed.spec, text, source = null, apply = true)
+        withTimeout(5_000) { store.prefs.first { it.themeId == "custom.night-ember" } }
+        assertEquals(0xFFFF7A59, store.prefs.value.theme.palette.accent)
+        assertEquals(io.github.matiyaaa.fuse.model.BackgroundStyle.STARS, store.prefs.value.theme.background)
+        // Kept as it was written, and in use after a restart.
+        withTimeout(5_000) { while (services.data.settings.current().appearance.themeId != "custom.night-ember") kotlinx.coroutines.delay(20) }
+        assertEquals(text, services.data.settings.current().appearance.customThemes.single().json)
+        val again = createFuseStore(services, scope)
+        assertEquals("Night Ember", again.prefs.value.theme.name)
+        // Removing the theme in use goes back to Fuse's own.
+        store.themes.remove("custom.night-ember")
+        assertEquals("fuse", store.prefs.value.themeId)
+        assertTrue(store.prefs.value.customThemes.isEmpty())
+        withTimeout(5_000) { while (services.data.settings.current().appearance.themeId != "fuse") kotlinx.coroutines.delay(20) }
+        assertTrue(services.data.settings.current().appearance.customThemes.isEmpty())
+    }
+
+    @Test
+    fun themesComeFromSharedLinks(): Unit = runBlocking {
+        val services = FakeServices(FuseData(DesktopDatabase.open(freshDb())), cache)
+        val store = createFuseStore(services, scope)
+        // A GitHub page link leads to the file behind it.
+        val text = store.themes.fetch("https://github.com/someone/themes/blob/main/ember.json").getOrThrow()
+        assertEquals("Ember", assertIs<io.github.matiyaaa.fuse.model.ThemeCodec.Imported>(store.themes.parse(text)).spec.name)
+        assertTrue(store.themes.fetch("https://raw.githubusercontent.com/someone/themes/main/big.json").isFailure, "over 64 KB")
+        assertTrue(store.themes.fetch("http://example.com/theme.json").isFailure, "not https")
+        assertTrue(store.themes.fetch("https://raw.githubusercontent.com/someone/themes/main/missing.json").isFailure)
+    }
+
+    @Test
     fun scansLaunchesAndTracksPlaytime() = runBlocking {
         val services = FakeServices(FuseData(DesktopDatabase.open(freshDb())), cache)
         val store = createFuseStore(services, scope)

@@ -176,12 +176,43 @@ selected state is shown several ways at once, so it never relies on colour:
 | Tinted glow | In the `GLOW` focus style the shadow rises from 6 to 28 dp of elevation and is tinted with the tile's colour (the art's or platform's), ambient shadow at half strength. Other styles use a neutral shadow from 4 to 14 dp |
 | Light edge | A 1 dp squircle hairline along the top, white fading from 16% (30% when focused) to transparent, so the tile reads as a raised object |
 | Sweep | When focus arrives, one band of light (55% of the tile's width, white at 22%) sweeps across the tile once, in 520 ms, clipped to its shape. Standard and Enhanced motion only, and never in Low Power Mode |
-| Accent bar | A 28 x 3 dp rounded bar in the accent colour, 7 dp below the tile, for the `GLOW` and `BAR` styles (1.4 x wider and 1.3 x taller in `BAR`) |
+| Accent bar | A 28 x 3 dp rounded bar in the accent colour, 7 dp below the tile, for the `GLOW` and `BAR` styles (1.4 x wider and 1.3 x taller in `BAR`). It grows out from its middle as the tile lifts |
 | Ring | A 2 dp outline in the focus colour, 3 dp outside the tile, for the `RING` style, and added to every style when High contrast focus is on |
 
 Buttons follow the same rule: the selected primary button gets a ring, and every selected button gets
 one with High contrast focus. HUD tabs show focus as an outline, and the active tab as its label plus
-an accent underline.
+a short accent underline.
+
+### Crisp accents
+
+The accent is a colour, never a light. Every accent shape is solid with clean edges (no halo, bloom
+or glow), so the screen reads as a calm, finished object and the art does the lighting:
+
+| Shape | Where |
+|---|---|
+| A short rounded bar | Under the focused tile and the active tab |
+| A solid fill with round ends on a quiet track (`ProgressBar`); a short segment gliding along the track when the length isn't known (resting in the middle under Reduced motion) | Fills, downloads, updates, achievements |
+| A round-capped arc on a faint ring (`ProgressRing`, `Spinner`) | Downloads, achievement completion, loading |
+
+Section titles (`SectionLabel`) are small uppercase labels with an optional quiet count after them.
+
+Panels share the tiles' lit top edge, so menus, dialogs and cards read as the same family of objects.
+
+### Moving things by touch
+
+`designsystem/focus/DragReorder.kt` moves items in any lazy list or grid the way a phone does:
+
+- **Lift.** A hold of 0.7 times the long press (300 to 450 ms) lifts the item, 1.08 times bigger,
+  over a 20 dp shadow.
+- **Make room.** The others slide out of its way on a spring (damping 0.86, stiffness 420).
+- **Let go.** The item glides into place (damping 0.78, stiffness 520).
+- **Haptics.** Lifting, passing a place and dropping each have their own.
+- **No flicker.** An item just passed waits until the finger leaves it before it can swap back. In a
+  single row or column the held item slides along it only.
+- **Edges.** Near the list's ends the list scrolls by itself. The held item takes the nearest place,
+  and the scroll is pinned by index, so the list never jumps.
+- **Handles.** With handles, only part of an item lifts it: a Home shelf by its title. Its own items
+  keep their holds.
 
 ## Motion
 
@@ -267,13 +298,19 @@ content's scroll. Art-less items get a lit radial gradient in their colour inste
 
 - **Artwork slots** (`MediaKind`): icon (1:1), box art (0.72), grid (460:215), hero (1920:620), logo,
   screenshot, video, border. Users can set a focal point and zoom so a hero crops where they want.
+- **Game art** (Settings, Appearance): game tiles show square box art (the default) or posters, 2:3
+  tiles of about the same area (0.8 times as wide, 1.2 times as tall) that show the portrait cover,
+  else the square art drawn whole over a soft copy of itself.
+- **Fitted art** (logos, icons, badges) is decoded at the size it is laid out in, so SVG logos stay
+  sharp at any size.
 - **Generated art** (`designsystem/media/GeneratedArt.kt`) fills any slot without art. It is
   deterministic: the same title always gives the same composition. A gradient from the platform accent
   into near-black, a soft light whose position comes from the title, and faint diagonal lines for
   texture. Icon and system slots show two initials in the display face, skipping small words ("The
   Legend of Zelda" becomes LZ, "Tetris" becomes TE); box, wide and hero slots set the full title.
-- **Theme backgrounds** (`designsystem/background/AmbientBackground.kt`): Wave, Aurora, Orbital, Grid
-  and Solid, all drawn in code with no image assets. They animate slowly at no more than 30 frames per
+- **Theme backgrounds** (`designsystem/background/AmbientBackground.kt`): Wave, Aurora, Orbital,
+  Grid, Stars, Stripes and Solid, all drawn in code with no image assets. A theme sets how bright and
+  how fast its background is, and a second colour to blend with the accent. They animate slowly at no more than 30 frames per
   second and are drawn once and left still when motion or power settings say so.
 - **CRT overlay** (`CrtOverlay`): scanlines, a phosphor stripe mask, centre glow and edge darkening as
   one cached, static layer. Every strength is capped so text stays readable, and it is skipped in Low
@@ -353,14 +390,26 @@ uses console trademarks or artwork.
 | Theme | Tagline | Mode | Accent | Background | Corners | Focus | Motion | Sound | Extras |
 |---|---|---|---|---|---|---|---|---|---|
 | Fuse (default) | Dark room, lit by the game you're on | Dark | `#FF6A3D` | Hero | Soft | Glow | Standard | Soft | |
-| Glass | Frosted panels over your art | Dark | `#7CC4FF` | Hero | Round | Ring | Standard | Soft | Glass panels |
-| Crossbar | Sections across, items down | Dark | `#9FC3FF` | Wave | Sharp | Bar | Standard | Chime | Crossbar navigation |
-| Orbital | Quiet light circling in the dark | Dark | `#7C8CFF` | Orbital | Soft | Glow | Enhanced | Soft | |
-| Wave | A slow ribbon of light | Dark | `#DDE2EE` | Wave | Soft | Bar | Standard | Chime | |
-| Blades | Bold panels, sharp edges, green light | Dark | `#86DC5C` | Aurora | Sharp | Ring | Standard | Click | |
-| Channels | Bright tiles you arrange yourself | Light | `#2B9FDB` | Grid | Pill | Ring | Standard | Soft | |
+| Glass | Frosted panels over your art | Dark | `#8CCBFF` | Hero | Round | Ring | Standard | Soft | Glass panels (blur 28, opacity 0.64), violet second light |
+| Starlight | A slow drift of stars | Dark | `#B79CFF` | Stars | Round | Glow | Standard | Chime | Sky-blue nebula |
+| Crossbar | Sections across, items down | Dark | `#9FC3FF` | Wave | Sharp | Bar | Standard | Chime | Crossbar navigation, brighter ribbon |
+| Orbital | Quiet light circling in the dark | Dark | `#7C8CFF` | Orbital | Soft | Glow | Enhanced | Soft | A far field of stars |
+| Wave | A slow ribbon of light at dusk | Dark | `#FF8F7A` | Wave | Soft | Glow | Standard | Chime | Plum room, gold ribbons |
+| Blades | Bold panels, sharp edges, green light | Dark | `#86DC5C` | Aurora | Sharp | Ring | Standard | Click | Teal second light |
+| Channels | Bright tiles you arrange yourself | Light | `#1779BC` | Stripes | Pill | Ring | Standard | Soft | |
 | CRT | Scanlines and phosphor glow | Dark | `#FFB02E` | Grid | Sharp | Bar | Standard | Click | CRT overlay |
-| Daylight | Fuse in a bright room | Light | `#E9522B` | Hero | Soft | Ring | Standard | Soft | |
+| Daylight | Fuse in a bright room | Light | `#C9431F` | Hero | Soft | Ring | Standard | Soft | Warm paper |
+
+Every preset meets the contrast the theme format asks of community themes (text 4.5:1 on the room
+and on panels, muted text 3:1, text on the accent 4.5:1, the focus outline 3:1), checked by a test.
+
+### Community themes
+
+Anyone can write a theme: a small JSON file that names a preset in `extends` and changes what it
+likes. The format, its limits and the repairs Fuse makes are in [docs/THEMES.md](docs/THEMES.md);
+the codec is `ThemeCodec` in `core:model`. Settings, Appearance, Theme shows every theme as a live
+preview drawn in that theme, and adds one from a link, pasted text or a file. Added themes are kept
+as they were written (`AppearanceSettings.customThemes`), so parts a later Fuse understands survive.
 
 What inspired some of them, in general terms: **Crossbar** and **Wave** recall the horizontal
 cross-menus and flowing light ribbons of mid-2000s media consoles; **Blades** recalls the bold,

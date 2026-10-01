@@ -47,7 +47,6 @@ import io.github.matiyaaa.fuse.model.NavAction
 import io.github.matiyaaa.fuse.model.PadButton
 import io.github.matiyaaa.fuse.model.PerformanceProfile
 import io.github.matiyaaa.fuse.model.ScanPhase
-import io.github.matiyaaa.fuse.ui.designsystem.background.AmbientBackground
 import io.github.matiyaaa.fuse.ui.designsystem.components.Chip
 import io.github.matiyaaa.fuse.ui.designsystem.components.FText
 import io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction
@@ -64,7 +63,6 @@ import io.github.matiyaaa.fuse.ui.designsystem.input.NavResult
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
 import io.github.matiyaaa.fuse.ui.designsystem.theme.ThemePresets
-import io.github.matiyaaa.fuse.ui.designsystem.theme.toColor
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.ConfirmSpec
 import io.github.matiyaaa.fuse.ui.shell.app.Route
@@ -344,7 +342,7 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
                 when (e.action) {
                     NavAction.UP, NavAction.DOWN -> {
                         val nextIndex = (themeIndex + if (e.action == NavAction.DOWN) 1 else -1 + themes.size) % themes.size
-                        store.updatePrefs { it.copy(themeId = themes[nextIndex].id) }
+                        store.updatePrefs { it.withTheme(themes[nextIndex]) }
                         NavResult.MOVED
                     }
                     else -> NavResult.IGNORED
@@ -503,20 +501,12 @@ private fun HomeStylePreview(mode: HomeMode) {
 
 @Composable
 private fun ThemePreview(index: Int) {
-    val theme = ThemePresets.all[index]
-    Box(Modifier.widthIn(max = 520.dp).fillMaxWidth().aspectRatio(16f / 10f).clip(RoundedCornerShape(Fuse.geometry.panel))) {
-        AmbientBackground(theme.background, theme.palette.accent.toColor(), Modifier.matchParentSizeSafe())
-        Column(Modifier.align(Alignment.BottomStart).padding(Space.l)) {
-            FText(theme.name, Fuse.type.display, color = theme.palette.textPrimary.toColor())
-            FText(theme.tagline, Fuse.type.body, color = theme.palette.textSecondary.toColor())
-            Spacer(Modifier.height(Space.s))
-            Row(horizontalArrangement = Arrangement.spacedBy(Space.s)) {
-                for (col in listOf(theme.palette.accent, theme.palette.surface, theme.palette.surfaceRaised, theme.palette.textPrimary)) {
-                    Box(Modifier.size(20.dp).clip(RoundedCornerShape(10.dp)).background(col.toColor()))
-                }
-            }
-        }
-    }
+    // The same live picture as Settings, Themes, drawn in the theme's own colours and shapes.
+    io.github.matiyaaa.fuse.ui.shell.settings.ThemePreview(
+        ThemePresets.all[index],
+        animate = true,
+        modifier = Modifier.widthIn(max = 520.dp).fillMaxWidth().aspectRatio(16f / 10f).clip(RoundedCornerShape(Fuse.geometry.panel)),
+    )
 }
 
 private fun Modifier.matchParentSizeSafe(): Modifier = this.then(Modifier.fillMaxWidth().heightIn(min = 1.dp).aspectRatio(16f / 10f))

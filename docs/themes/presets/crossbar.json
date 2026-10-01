@@ -1,0 +1,42 @@
+{
+  "fuseTheme": 1,
+  "name": "Crossbar",
+  "id": "crossbar",
+  "tagline": "Sections across, items down",
+  "extends": "crossbar",
+  "dark": true,
+  "colors": {
+    "background": "#071027",
+    "surface": "#0F1B3A",
+    "surfaceRaised": "#17284D",
+    "accent": "#9FC3FF",
+    "accentSoft": "#9FC3FF33",
+    "onAccent": "#061022",
+    "text": "#F2F6FF",
+    "textMuted": "#A9B8D6",
+    "focus": "#FFFFFF"
+  },
+  "background": {
+    "style": "wave",
+    "intensity": 1.15,
+    "speed": 1.0,
+    "secondary": "#E6F2FF"
+  },
+  "corners": "sharp",
+  "focus": "bar",
+  "motion": "standard",
+  "sound": "chime",
+  "glass": {
+    "enabled": false,
+    "blur": 24.0,
+    "opacity": 0.72
+  },
+  "crt": {
+    "enabled": false,
+    "scanlines": 0.35,
+    "bloom": 0.15,
+    "curvature": 0.08,
+    "chromatic": 0.1,
+    "vignette": 0.3
+  }
+}

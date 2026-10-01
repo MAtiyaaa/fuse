@@ -1,0 +1,41 @@
+{
+  "fuseTheme": 1,
+  "name": "CRT",
+  "id": "crt",
+  "tagline": "Scanlines and phosphor glow",
+  "extends": "crt",
+  "dark": true,
+  "colors": {
+    "background": "#050806",
+    "surface": "#0D130F",
+    "surfaceRaised": "#142019",
+    "accent": "#FFB02E",
+    "accentSoft": "#FFB02E33",
+    "onAccent": "#1A1002",
+    "text": "#EAF5EC",
+    "textMuted": "#9DB3A2",
+    "focus": "#FFE3A8"
+  },
+  "background": {
+    "style": "grid",
+    "intensity": 0.8,
+    "speed": 1.0
+  },
+  "corners": "sharp",
+  "focus": "bar",
+  "motion": "standard",
+  "sound": "click",
+  "glass": {
+    "enabled": false,
+    "blur": 24.0,
+    "opacity": 0.72
+  },
+  "crt": {
+    "enabled": true,
+    "scanlines": 0.35,
+    "bloom": 0.15,
+    "curvature": 0.08,
+    "chromatic": 0.1,
+    "vignette": 0.3
+  }
+}

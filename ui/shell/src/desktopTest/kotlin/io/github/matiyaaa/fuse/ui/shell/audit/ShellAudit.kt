@@ -157,6 +157,17 @@ internal fun AuditDriver.settingsScreens(exhaustive: Boolean) {
             if (moved >= 5) shoot("last row focused")
         }
     }
+    scenario("settings", "media sources") {
+        useLibrary()
+        openSettings()
+        tap(PadButton.DPAD_DOWN, sectionIndex("media"))
+        tap(PadButton.DPAD_RIGHT)
+        waitFor("Fill missing art")
+        shoot("filling first, sources folded")
+        tapText("Sources and keys")
+        waitFor("Source order")
+        shoot("sources and keys open")
+    }
     scenario("settings", "phone link") {
         phoneLink.state.value = io.github.matiyaaa.fuse.ui.shell.store.PhoneLinkState(
             running = true,
@@ -477,6 +488,32 @@ internal fun AuditDriver.lookScreens() {
             waitFor("Last played")
             shoot("game page")
         }
+    }
+
+    scenario("settings", "themes gallery") {
+        useLibrary()
+        // A theme someone shared, added as if from its link.
+        val shared = """{"fuseTheme": 1, "name": "Deep Sea", "author": "a friend", "extends": "wave", "colors": {"background": "#051216", "surface": "#0C1E24", "surfaceRaised": "#132A31", "accent": "#3FD6C6", "onAccent": "#03201C", "text": "#ECF8F7", "textMuted": "#9DB8B6"}, "background": {"style": "wave", "secondary": "#7FB2FF"}, "focus": "glow"}"""
+        val parsed = libraryStore.themes.parse(shared) as io.github.matiyaaa.fuse.model.ThemeCodec.Imported
+        kotlinx.coroutines.runBlocking { libraryStore.themes.add(parsed.spec, shared, "https://example.com/deep-sea.json", apply = false) }
+        openSettings()
+        tap(PadButton.DPAD_DOWN, sectionIndex("appearance"))
+        tap(PadButton.DPAD_RIGHT)
+        waitFor("Game art")
+        tapText("Theme")
+        waitFor("built in")
+        shoot("every theme, the one in use chosen", 1_500)
+        tap(PadButton.X)
+        waitFor("Copy as a theme file")
+        shoot("a theme's options")
+        tap(PadButton.B)
+        tap(PadButton.DPAD_DOWN, 3)
+        tap(PadButton.DPAD_RIGHT, 4)
+        shoot("the added theme and the card that adds one", 1_200)
+        tap(PadButton.A)
+        waitFor("From a link or text")
+        shoot("ways to add a theme")
+        tap(PadButton.B)
     }
 
     scenario("effects", "performance overlay") {

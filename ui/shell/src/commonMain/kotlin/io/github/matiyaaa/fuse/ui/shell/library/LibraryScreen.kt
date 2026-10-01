@@ -103,6 +103,8 @@ import io.github.matiyaaa.fuse.ui.shell.collections.addGamesPicker
 import io.github.matiyaaa.fuse.ui.shell.components.GameCoverTile
 import io.github.matiyaaa.fuse.ui.shell.components.GameIconTile
 import io.github.matiyaaa.fuse.ui.shell.components.LocalTileMetrics
+import io.github.matiyaaa.fuse.ui.shell.components.tileSize
+import io.github.matiyaaa.fuse.ui.shell.components.LocalGameArt
 import io.github.matiyaaa.fuse.ui.shell.components.LocalTileShowsSystem
 import io.github.matiyaaa.fuse.ui.shell.components.SquareGameArt
 import io.github.matiyaaa.fuse.ui.shell.components.Stage
@@ -438,6 +440,8 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
                 state = state,
                 onView = { i, s -> state.headerIndex = i; choose(s); state.inHeader = false },
                 onButton = { i, b -> state.headerIndex = i; press(b) },
+                // The box art view's stage keeps room on its right for the toolbar once folded.
+                foldTools = inSystem && layout == LibraryLayout.ICON,
             )
             when {
                 list == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Spinner() }
@@ -446,18 +450,31 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
                   when (layout) {
                     LibraryLayout.ICON -> {
                         // The game's logo moves up with the folding header and makes room for another row.
-                        // Inside a system the stage is smaller, so more games fit from the start.
+                        // Inside a system the stage is smaller, so more games fit from the start, and
+                        // folded it shrinks to one line beside the toolbar, so the games get the height.
                         val stage = if (inSystem) (maxH * 0.14f).coerceIn(92.dp, 124.dp) else (maxH * 0.22f).coerceIn(110.dp, 200.dp)
                         val logo = when {
                             !inSystem -> lerp(84.dp, 60.dp, collapse)
-                            compactHeader -> lerp(56.dp, 36.dp, collapse)
-                            else -> lerp(64.dp, 48.dp, collapse)
+                            compactHeader -> lerp(56.dp, 32.dp, collapse)
+                            else -> lerp(64.dp, 40.dp, collapse)
                         }
-                        Box(Modifier.fillMaxWidth().height(lerp(stage, stage * 0.66f, collapse)).padding(horizontal = Space.gutter), contentAlignment = Alignment.BottomStart) {
-                            Stage(stageOf(selectedCard), showLogo = prefs.showLogo, logoHeight = logo, titleStyle = if (inSystem) Fuse.type.display else Fuse.type.hero)
+                        val foldedStage = if (inSystem) logo + 4.dp else stage * 0.66f
+                        Box(
+                            Modifier
+                                .fillMaxWidth()
+                                .height(lerp(stage, foldedStage, collapse))
+                                .padding(start = Space.gutter, end = Space.gutter + if (inSystem) lerp(0.dp, 320.dp, collapse) else 0.dp),
+                            contentAlignment = Alignment.BottomStart,
+                        ) {
+                            Stage(
+                                stageOf(selectedCard), showLogo = prefs.showLogo, logoHeight = logo,
+                                titleStyle = if (inSystem) androidx.compose.ui.text.lerp(Fuse.type.display, Fuse.type.title, collapse) else Fuse.type.hero,
+                                fold = if (inSystem) collapse else 0f,
+                            )
                         }
                         Spacer(Modifier.height(if (inSystem) lerp(Space.m, Space.s, collapse) else lerp(Space.l, Space.s, collapse)))
-                        val cols = ((maxW - Space.gutter * 2 + metrics.gap) / (metrics.icon + metrics.gap)).toInt().coerceAtLeast(2)
+                        val tileW = LocalGameArt.current.tileSize(metrics.icon).width
+                        val cols = ((maxW - Space.gutter * 2 + metrics.gap) / (tileW + metrics.gap)).toInt().coerceAtLeast(2)
                         columns = cols
                         IconGrid(list, state, gridState, cols, metrics.icon, metrics.gap, onTap = { i -> tapAt(i, list) }, onLong = { i -> state.pick(i, list); options(list[i]) }, focused = gridFocused)
                     }
@@ -472,6 +489,11 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
                             itemWidth = metrics.capsuleWidth * 0.62f,
                             onTap = { i -> tapAt(i, list) },
                             onLongPress = { i -> state.pick(i, list); options(list[i]) },
+                            onSettle = { i ->
+                                app.focusZone = FocusZone.CONTENT
+                                state.inHeader = false
+                                state.pick(i, list)
+                            },
                             focused = gridFocused,
                         )
                         Spacer(Modifier.height(Size.hintHeight + Space.l))
@@ -502,7 +524,7 @@ internal fun sortLabel(s: SortOrder) = when (s) {
 }
 
 internal fun layoutLabel(l: LibraryLayout) = when (l) {
-    LibraryLayout.ICON -> "Box art"
+    LibraryLayout.ICON -> "Grid"
     LibraryLayout.CAPSULE -> "Capsules"
     LibraryLayout.COVER_GRID -> "Cover grid"
     LibraryLayout.COMPACT_LIST -> "List"

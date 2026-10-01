@@ -211,7 +211,7 @@ private fun <T> Section(title: String, column: Int, items: List<T>, card: @Compo
     val row = rememberLazyListState()
     FollowSelection(row, { column }, anchor = 0f)
     Column {
-        SectionLabel(title, Modifier.padding(horizontal = Space.gutter))
+        SectionLabel(title, Modifier.fillMaxWidth().padding(horizontal = Space.gutter), count = items.size.toString())
         Spacer(Modifier.height(Space.m))
         LazyRow(
             state = row,

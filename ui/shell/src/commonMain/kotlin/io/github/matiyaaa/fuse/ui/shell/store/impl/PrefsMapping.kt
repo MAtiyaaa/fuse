@@ -2,9 +2,12 @@ package io.github.matiyaaa.fuse.ui.shell.store.impl
 
 import io.github.matiyaaa.fuse.data.settings.AppSettings
 import io.github.matiyaaa.fuse.data.settings.DestinationSetting
+import io.github.matiyaaa.fuse.data.settings.StoredTheme
 import io.github.matiyaaa.fuse.model.Destination
 import io.github.matiyaaa.fuse.model.LibraryLayout
 import io.github.matiyaaa.fuse.model.SoundProfile
+import io.github.matiyaaa.fuse.model.ThemeCodec
+import io.github.matiyaaa.fuse.model.ThemeSpec
 import io.github.matiyaaa.fuse.ui.designsystem.theme.ThemePresets
 import io.github.matiyaaa.fuse.ui.shell.music.BundledMusic
 import io.github.matiyaaa.fuse.ui.shell.store.MusicPrefs
@@ -20,11 +23,21 @@ internal data class GlobalScoped(
 /** Region choices the settings screen offers; stored null means "any region". */
 private const val ANY_REGION = "any"
 
+/** An added theme, ready to use; null if its file no longer reads as a theme. */
+internal fun StoredTheme.spec(): ThemeSpec? =
+    (ThemeCodec.parse(json, ThemePresets::find, ThemePresets.Fuse) as? ThemeCodec.Imported)?.spec?.copy(id = id)
+
+/** The theme with [id]: built in, else added, else Fuse. */
+internal fun resolveTheme(id: String?, custom: List<ThemeSpec>): ThemeSpec =
+    ThemePresets.find(id) ?: custom.firstOrNull { it.id == id } ?: ThemePresets.Fuse
+
 internal fun AppSettings.toUiPrefs(scoped: GlobalScoped): UiPrefs {
-    val theme = ThemePresets.byId(appearance.themeId)
+    val custom = appearance.customThemes.mapNotNull { it.spec() }
+    val theme = resolveTheme(appearance.themeId, custom)
     return UiPrefs(
         onboardingDone = onboarding.completed,
         themeId = theme.id,
+        customThemes = custom,
         motion = appearance.motion,
         glass = appearance.glass ?: theme.glass,
         crt = appearance.crt ?: theme.crt,
@@ -32,6 +45,7 @@ internal fun AppSettings.toUiPrefs(scoped: GlobalScoped): UiPrefs {
         home = home.layout,
         destinations = home.visibleDestinations(),
         defaultLayout = scoped.layout,
+        gameArt = library.gameArt,
         showHero = scoped.showHero,
         showLogo = scoped.showLogo,
         videoPreview = videoPreview.enabled,
@@ -80,7 +94,7 @@ internal fun AppSettings.toUiPrefs(scoped: GlobalScoped): UiPrefs {
  * as "follow the theme", so switching themes later still changes them.
  */
 internal fun AppSettings.withUiPrefs(prefs: UiPrefs): AppSettings {
-    val theme = ThemePresets.byId(prefs.themeId)
+    val theme = resolveTheme(prefs.themeId, prefs.customThemes)
     val visible = prefs.destinations.distinct()
     val destinations = visible.map { DestinationSetting(it, visible = true) } +
         Destination.entries.filterNot { it in visible }.map { DestinationSetting(it, visible = false) }
@@ -118,6 +132,7 @@ internal fun AppSettings.withUiPrefs(prefs: UiPrefs): AppSettings {
             autoSeries = prefs.autoSeries,
             hiddenSeries = prefs.hiddenSeries,
             appsFilter = prefs.appsFilter,
+            gameArt = prefs.gameArt,
         ),
         sound = sound.copy(
             enabled = prefs.sound != SoundProfile.OFF,

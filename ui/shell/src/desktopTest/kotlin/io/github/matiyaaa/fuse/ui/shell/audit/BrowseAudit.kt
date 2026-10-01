@@ -27,7 +27,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 
 private fun LibraryLayout.words(): String = when (this) {
-    LibraryLayout.ICON -> "Box art"
+    LibraryLayout.ICON -> "Grid"
     LibraryLayout.CAPSULE -> "Capsule"
     LibraryLayout.COVER_GRID -> "Cover Grid"
     LibraryLayout.COMPACT_LIST -> "Compact List"
@@ -273,6 +273,15 @@ internal fun AuditDriver.libraryScreens(exhaustive: Boolean) {
         waitFor("Select games to add")
         shoot("picking its games")
         tap(PadButton.B)
+        waitFor("New collection")
+        // Up from the first row reaches the views; Right shows the series.
+        tap(PadButton.DPAD_LEFT, 3)
+        if (nav(NavAction.UP) != NavResult.MOVED) throw NotCovered("Up did not reach the Collections views")
+        shoot("the views focused")
+        tap(PadButton.DPAD_RIGHT)
+        tap(PadButton.DPAD_DOWN)
+        settle(1_200)
+        shoot("the series view")
     }
 
     scenario("library", "system without emulator") {

@@ -1,0 +1,335 @@
+/* Fuse's website, drawn like the app: the room, the top line, the stage and shelves of tiles. Quiet
+   surfaces, crisp edges and one accent; light comes from the art, never from glows. */
+
+@font-face { font-family: "Sora"; src: url("fonts/sora_bold.ttf") format("truetype"); font-weight: 700; font-display: swap; }
+@font-face { font-family: "Sora"; src: url("fonts/sora_semibold.ttf") format("truetype"); font-weight: 600; font-display: swap; }
+@font-face { font-family: "Sora"; src: url("fonts/sora_medium.ttf") format("truetype"); font-weight: 500; font-display: swap; }
+@font-face { font-family: "Manrope"; src: url("fonts/manrope_regular.ttf") format("truetype"); font-weight: 400; font-display: swap; }
+@font-face { font-family: "Manrope"; src: url("fonts/manrope_medium.ttf") format("truetype"); font-weight: 500; font-display: swap; }
+@font-face { font-family: "Manrope"; src: url("fonts/manrope_semibold.ttf") format("truetype"); font-weight: 600; font-display: swap; }
+@font-face { font-family: "Manrope"; src: url("fonts/manrope_bold.ttf") format("truetype"); font-weight: 700; font-display: swap; }
+
+:root {
+  /* The Fuse theme's tokens (ui/designsystem, ThemePresets.Fuse). */
+  --ink: #07080B;
+  --surface: #111319;
+  --raised: #1A1D25;
+  --accent: #FF6A3D;
+  --text: #F3F4F6;
+  --muted: #A6ACB8;
+  --faint: rgba(166, 172, 184, .62);
+  --hairline: rgba(243, 244, 246, .09);
+  --success: #3DD68C;
+  --warning: #FFB547;
+  --r-s: 8px;
+  --r-m: 12px;
+  --r-l: 18px;
+  --r-xl: 26px;
+  --ease: cubic-bezier(.2, 0, 0, 1);
+  --spring: cubic-bezier(.34, 1.36, .5, 1);
+  --gutter: clamp(16px, 4.2vw, 64px);
+  --tile: clamp(136px, 15vw, 196px);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 96px; -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--ink);
+  color: var(--text);
+  font: 400 16px/1.5 "Manrope", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+a { color: inherit; }
+img { display: block; }
+i { font-style: normal; color: var(--faint); margin: 0 .5em; }
+[hidden] { display: none !important; }
+
+/* The room: the home screen blurred behind everything, with a faint warm light low and a cool one high. */
+.room { position: fixed; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; }
+.room-art {
+  position: absolute; inset: -8%;
+  background: url("screenshots/home.webp") center 30% / cover no-repeat;
+  filter: blur(48px) saturate(1.1) brightness(.42);
+  transform: scale(1.08);
+  opacity: .9;
+}
+.room-glow {
+  position: absolute; inset: 0;
+  background:
+    radial-gradient(60% 70% at 18% 104%, rgba(255, 106, 61, .14), rgba(255, 106, 61, .04) 45%, transparent 70%),
+    radial-gradient(45% 50% at 92% -8%, rgba(61, 123, 255, .07), transparent 70%);
+  animation: breathe 14s var(--ease) infinite alternate;
+}
+.room-vignette {
+  position: absolute; inset: 0;
+  background:
+    linear-gradient(180deg, rgba(7, 8, 11, .55) 0%, rgba(7, 8, 11, .2) 30%, rgba(7, 8, 11, .65) 78%, var(--ink) 100%),
+    radial-gradient(120% 90% at 50% 40%, transparent 50%, rgba(7, 8, 11, .7) 100%);
+}
+@keyframes breathe { from { opacity: .82; } to { opacity: 1; } }
+
+/* The top line, as in the app. */
+.hud {
+  position: sticky; top: 0; z-index: 10;
+  display: flex; align-items: center; gap: clamp(12px, 3vw, 40px);
+  padding: 18px var(--gutter);
+  background: linear-gradient(180deg, rgba(7, 8, 11, .82), rgba(7, 8, 11, .35) 70%, transparent);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+.brand { display: flex; align-items: center; gap: 12px; text-decoration: none; font: 700 22px/1 "Sora", sans-serif; letter-spacing: -.01em; }
+.brand img { border-radius: 9px; box-shadow: 0 0 0 1px rgba(255, 255, 255, .08); }
+.tabs { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; flex: 1; }
+.tabs::-webkit-scrollbar { display: none; }
+.tab {
+  position: relative; display: flex; align-items: center; gap: 9px;
+  padding: 10px 16px; border-radius: 999px;
+  text-decoration: none; white-space: nowrap;
+  color: rgba(243, 244, 246, .55); font: 600 16px/1 "Manrope", sans-serif;
+  transition: color .18s var(--ease), background .18s var(--ease);
+}
+.tab svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.tab:hover, .tab:focus-visible { color: var(--text); background: rgba(243, 244, 246, .1); outline: none; }
+.tab:focus-visible { box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, .8); }
+.tab.is-active { color: var(--text); }
+.tab.is-active::after {
+  /* A short bar under the section you're in, as in the app. */
+  content: ""; position: absolute; left: 50%; bottom: 2px; width: 18px; height: 3px; margin-left: -9px; border-radius: 2px;
+  background: var(--accent);
+}
+.status { display: flex; align-items: center; gap: 14px; }
+.chip {
+  padding: 5px 10px; border-radius: 999px; font: 600 13px/1 "Manrope", sans-serif; color: var(--muted);
+  background: rgba(243, 244, 246, .07); border: 1px solid var(--hairline);
+}
+.clock { font: 700 22px/1 "Sora", sans-serif; font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+
+main { padding: 0 0 120px; }
+
+/* The stage: the selected thing, told big. */
+.stage { padding: clamp(48px, 12vh, 140px) var(--gutter) clamp(28px, 6vh, 56px); max-width: 1100px; }
+.release-pill {
+  display: inline-flex; align-items: center; gap: 10px; margin: 0 0 clamp(22px, 3.4vh, 34px); padding: 5px 12px 5px 5px;
+  border-radius: 999px; border: 1px solid var(--hairline); background: rgba(243, 244, 246, .05);
+  font: 600 14px/1 "Manrope", sans-serif; color: var(--muted); text-decoration: none;
+  transition: background .18s var(--ease), color .18s var(--ease), border-color .18s var(--ease);
+}
+.release-pill .tag {
+  padding: 5px 9px; border-radius: 999px; background: var(--text); color: var(--ink);
+  font: 700 12px/1 "Sora", sans-serif; letter-spacing: .01em;
+}
+.release-pill svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; transition: transform .18s var(--ease); }
+.release-pill:hover, .release-pill:focus-visible { color: var(--text); background: rgba(243, 244, 246, .09); border-color: rgba(243, 244, 246, .16); outline: none; }
+.release-pill:hover svg, .release-pill:focus-visible svg { transform: translateX(2px); }
+.title { margin: 0; line-height: 0; }
+.title img { height: clamp(58px, 9.6vw, 118px); width: auto; }
+.tagline { margin: clamp(22px, 3vh, 30px) 0 0; max-width: 34ch; font: 500 clamp(19px, 2.2vw, 26px)/1.35 "Manrope", sans-serif; color: rgba(243, 244, 246, .92); }
+.meta { margin: 14px 0 0; color: var(--muted); font-size: 16px; }
+
+/* Shelves: a small title, then a row of tiles. */
+.shelf { padding: 26px 0 8px; }
+.label {
+  margin: 0 var(--gutter) 16px;
+  font: 600 13px/1 "Sora", sans-serif; letter-spacing: .14em; text-transform: uppercase; color: var(--muted);
+}
+.lede { margin: -4px var(--gutter) 18px; max-width: 70ch; color: var(--muted); }
+.lede a, .also a, .release-line a, .foot a { color: var(--text); text-decoration-color: rgba(243, 244, 246, .3); text-underline-offset: 3px; transition: text-decoration-color .18s var(--ease); }
+.lede a:hover, .also a:hover, .release-line a:hover, .foot a:hover { text-decoration-color: currentColor; }
+.row {
+  display: flex; gap: clamp(14px, 1.6vw, 24px);
+  padding: 14px var(--gutter) 34px;
+  overflow-x: auto; scroll-snap-type: x proximity; scroll-padding: 0 var(--gutter);
+  scrollbar-width: none;
+}
+.row::-webkit-scrollbar { display: none; }
+
+/* A tile: an object you can pick up. A light top edge and a soft shadow; chosen, it lifts over the
+   accent bar, as in the app. */
+.tile {
+  position: relative; flex: none; display: flex; flex-direction: column;
+  border-radius: 22%;
+  background: linear-gradient(180deg, #191C23, #0F1116);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .1), inset 0 0 0 1px rgba(255, 255, 255, .05), 0 8px 24px rgba(0, 0, 0, .35);
+  text-decoration: none; color: var(--text);
+  scroll-snap-align: start;
+  transition: transform .34s var(--spring), box-shadow .34s var(--ease);
+  outline: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.tile::before {
+  /* The sweep of light when a tile is chosen. */
+  content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  background: linear-gradient(105deg, transparent 35%, rgba(255, 255, 255, .1) 50%, transparent 65%) no-repeat;
+  background-size: 250% 100%; background-position: 160% 0; opacity: 0;
+}
+.tile::after {
+  /* The focus bar. */
+  content: ""; position: absolute; left: 50%; bottom: -15px; width: 24px; height: 4px; margin-left: -12px; border-radius: 2px;
+  background: var(--accent);
+  transform: scaleX(0); opacity: 0;
+  transition: transform .34s var(--spring), opacity .2s var(--ease);
+}
+.tile.is-focused, .tile:focus-visible {
+  transform: translateY(-5px) scale(1.05);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .22), inset 0 0 0 1px rgba(255, 255, 255, .1),
+    0 22px 48px rgba(0, 0, 0, .55), 0 6px 14px rgba(0, 0, 0, .3);
+  z-index: 1;
+}
+.tile.is-focused::after, .tile:focus-visible::after { transform: scaleX(1); opacity: 1; }
+.tile.is-focused::before, .tile:focus-visible::before { animation: sweep .8s var(--ease) 1; }
+.tile:active { transform: translateY(-3px) scale(1.03); }
+@keyframes sweep { 0% { opacity: 1; background-position: 160% 0; } 100% { opacity: 1; background-position: -60% 0; } }
+
+/* Platforms. */
+.platform {
+  width: var(--tile); height: var(--tile); padding: 18px 18px 16px;
+  align-items: flex-start; justify-content: space-between;
+}
+.glyph { width: 34%; height: 34%; margin: 2px 0 auto; color: var(--text); }
+.glyph svg { width: 100%; height: 100%; display: block; }
+.platform .name { margin-top: 10px; font: 700 clamp(18px, 1.8vw, 23px)/1.1 "Sora", sans-serif; letter-spacing: -.01em; }
+.platform .detail { margin-top: 5px; font: 500 13px/1.3 "Manrope", sans-serif; color: var(--muted); }
+.platform .detail.is-waiting { color: var(--warning); }
+.here {
+  position: absolute; top: 16px; right: 16px; padding: 5px 9px; border-radius: 999px;
+  font: 700 11px/1 "Manrope", sans-serif; letter-spacing: .02em; color: var(--text);
+  background: rgba(243, 244, 246, .1); box-shadow: inset 0 0 0 1px rgba(243, 244, 246, .12);
+  opacity: 0; transform: translateY(-2px);
+}
+.platform.is-here .here { opacity: 1; transform: none; }
+.also, .release-line { margin: 0 var(--gutter); color: var(--muted); font-size: 15px; }
+.release-line { margin-top: 8px; color: var(--faint); }
+
+/* The product, big: Home as it looks on a handheld. */
+.showcase {
+  margin: clamp(28px, 5vh, 52px) var(--gutter) clamp(20px, 4vh, 40px); max-width: 1280px;
+  border-radius: clamp(12px, 1.6vw, 22px); overflow: hidden;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, .08), 0 2px 0 rgba(255, 255, 255, .06) inset, 0 40px 100px rgba(0, 0, 0, .6), 0 12px 30px rgba(0, 0, 0, .35);
+  background: var(--surface);
+}
+.showcase img { width: 100%; height: auto; }
+
+/* What's new: wide cards with the release's headlines. */
+.highlight {
+  width: clamp(250px, 27vw, 340px); min-height: 150px; padding: 22px 22px 20px; border-radius: var(--r-xl);
+  justify-content: flex-start; gap: 10px;
+}
+.highlight b { font: 600 clamp(17px, 1.6vw, 20px)/1.25 "Sora", sans-serif; letter-spacing: -.01em; }
+.highlight span {
+  color: var(--muted); font-size: 14px; line-height: 1.45;
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+}
+
+/* Features. */
+.feature { width: clamp(200px, 19vw, 248px); padding: 20px; border-radius: var(--r-xl); gap: 8px; }
+.feature img { width: 56px; height: 56px; margin-bottom: 6px; border-radius: 14px; }
+.feature b { font: 600 18px/1.25 "Sora", sans-serif; letter-spacing: -.01em; }
+.feature span { color: var(--muted); font-size: 14px; line-height: 1.45; }
+
+/* Screenshots. */
+.screen { width: clamp(280px, 34vw, 480px); aspect-ratio: 16 / 9; border-radius: var(--r-l); overflow: hidden; }
+.screen img { width: 100%; height: 100%; object-fit: cover; }
+.screen span {
+  position: absolute; left: 0; right: 0; bottom: 0; padding: 40px 18px 14px;
+  font: 600 16px/1 "Sora", sans-serif;
+  background: linear-gradient(180deg, transparent, rgba(0, 0, 0, .72));
+}
+.screen::after { bottom: -16px; }
+
+/* Themes: each card drawn in the theme's own colours. */
+.theme { width: clamp(240px, 24vw, 320px); border-radius: var(--r-l); background: none; box-shadow: none; gap: 12px; }
+.theme.is-focused, .theme:focus-visible { box-shadow: none; }
+.preview {
+  position: relative; aspect-ratio: 16 / 10; border-radius: var(--r-l); overflow: hidden;
+  background: var(--t-bg);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .14), 0 8px 24px rgba(0, 0, 0, .35);
+  transition: box-shadow .34s var(--ease);
+}
+.theme.is-focused .preview, .theme:focus-visible .preview {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .22), 0 22px 48px rgba(0, 0, 0, .55), 0 6px 14px rgba(0, 0, 0, .3);
+}
+.theme::after { bottom: auto; top: calc((100% - 62px)); }
+.preview .bg { position: absolute; inset: 0; }
+.bg-hero, .bg-solid { background: radial-gradient(70% 80% at 15% 110%, color-mix(in srgb, var(--t-accent) 26%, transparent), transparent 65%), radial-gradient(50% 60% at 95% -10%, color-mix(in srgb, var(--t-second) 18%, transparent), transparent 70%); }
+.bg-aurora { background: radial-gradient(45% 60% at 30% 40%, color-mix(in srgb, var(--t-accent) 34%, transparent), transparent 70%), radial-gradient(45% 60% at 70% 30%, color-mix(in srgb, var(--t-second) 30%, transparent), transparent 70%); filter: blur(4px); }
+.bg-stars { background: radial-gradient(1px 1px at 12% 22%, #fff, transparent), radial-gradient(1px 1px at 34% 64%, #fff, transparent), radial-gradient(1.5px 1.5px at 58% 18%, #fff, transparent), radial-gradient(1px 1px at 72% 46%, #fff, transparent), radial-gradient(1px 1px at 86% 78%, #fff, transparent), radial-gradient(1px 1px at 22% 84%, #fff, transparent), radial-gradient(1.5px 1.5px at 46% 38%, #fff, transparent), radial-gradient(1px 1px at 92% 14%, #fff, transparent), radial-gradient(60% 60% at 80% 25%, color-mix(in srgb, var(--t-accent) 24%, transparent), transparent 70%), radial-gradient(60% 60% at 15% 85%, color-mix(in srgb, var(--t-second) 18%, transparent), transparent 70%); }
+.bg-orbital { background: repeating-radial-gradient(ellipse 48% 20% at 72% 52%, transparent 0 14px, color-mix(in srgb, var(--t-accent) 30%, transparent) 14px 15px), radial-gradient(25% 25% at 72% 52%, color-mix(in srgb, var(--t-accent) 30%, transparent), transparent 70%); }
+.bg-grid { background: linear-gradient(transparent 49%, color-mix(in srgb, var(--t-accent) 25%, transparent) 52%, transparent 58%), repeating-linear-gradient(90deg, color-mix(in srgb, var(--t-accent) 22%, transparent) 0 1px, transparent 1px 22px); mask: linear-gradient(transparent 45%, #000 60%); -webkit-mask: linear-gradient(transparent 45%, #000 60%); }
+.bg-stripes { background: linear-gradient(180deg, rgba(255, 255, 255, .55), transparent 60%), repeating-linear-gradient(135deg, color-mix(in srgb, var(--t-text) 5%, transparent) 0 1px, transparent 1px 14px); }
+.bg-wave svg { position: absolute; left: 0; right: 0; top: 40%; width: 100%; height: 45%; }
+.preview .hudline { position: absolute; top: 10px; left: 12px; right: 12px; display: flex; gap: 6px; align-items: center; }
+.preview .hudline i { display: block; margin: 0; width: 16px; height: 4px; border-radius: 2px; background: var(--t-text); opacity: .35; }
+.preview .hudline i:first-child { width: 8px; height: 8px; border-radius: 2px; opacity: .9; margin-right: 4px; }
+.preview .hudline i:nth-child(2) { opacity: 1; width: 20px; }
+.preview .hudline i:last-child { margin-left: auto; width: 14px; opacity: .6; }
+.preview .pname { position: absolute; left: 12px; bottom: 44px; font: 700 15px/1 "Sora", sans-serif; color: var(--t-text); }
+.preview .minis { position: absolute; left: 12px; bottom: 12px; display: flex; gap: 6px; align-items: flex-end; }
+.preview .minis i { display: block; margin: 0; width: 24px; height: 24px; border-radius: var(--t-corner); background: linear-gradient(135deg, var(--t-raised), var(--t-surface)); }
+.preview .minis i:nth-child(2) { width: 28px; height: 28px; background: linear-gradient(135deg, color-mix(in srgb, var(--t-accent) 60%, transparent), var(--t-raised)); position: relative; }
+.preview .minis i:nth-child(2)::after { content: ""; position: absolute; left: 30%; right: 30%; bottom: -6px; height: 2px; border-radius: 1px; background: var(--t-accent); }
+.theme .meta-line { display: flex; align-items: center; gap: 10px; }
+.theme b { font: 600 16px/1.2 "Sora", sans-serif; }
+.theme small { display: block; color: var(--muted); font-size: 13px; }
+.copy {
+  margin-left: auto; padding: 7px 12px; border-radius: 999px; border: 1px solid var(--hairline);
+  background: rgba(243, 244, 246, .06); color: var(--text); font: 600 13px/1 "Manrope", sans-serif; cursor: pointer;
+  transition: background .18s var(--ease);
+}
+.copy:hover, .copy:focus-visible { background: rgba(243, 244, 246, .14); outline: none; }
+
+/* The footer and the hint line, as in the app. */
+.foot { padding: 32px var(--gutter) 110px; color: var(--muted); border-top: 1px solid var(--hairline); }
+.foot p { margin: 0 0 8px; }
+.foot .small { font-size: 13px; color: var(--faint); max-width: 90ch; }
+.hints {
+  position: fixed; right: var(--gutter); bottom: 22px; z-index: 20; display: flex; gap: 22px;
+  padding: 10px 16px; border-radius: 999px; background: rgba(7, 8, 11, .7); border: 1px solid var(--hairline);
+  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  opacity: 0; transform: translateY(10px); pointer-events: none;
+  transition: opacity .24s var(--ease), transform .24s var(--ease);
+}
+body.uses-pad .hints { opacity: 1; transform: none; }
+.hint { display: flex; align-items: center; gap: 9px; font: 600 15px/1 "Manrope", sans-serif; color: var(--text); }
+.btn { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: var(--text); color: var(--ink); font: 700 13px/1 "Sora", sans-serif; }
+.btn.dpad { background: rgba(243, 244, 246, .14); }
+.btn.dpad svg { width: 16px; height: 16px; fill: var(--text); }
+.toast {
+  position: fixed; left: 50%; bottom: 84px; z-index: 30; padding: 12px 18px; border-radius: 999px;
+  transform: translate(-50%, 12px); opacity: 0; pointer-events: none;
+  background: var(--raised); border: 1px solid var(--hairline); box-shadow: 0 12px 34px rgba(0, 0, 0, .45);
+  font: 600 15px/1 "Manrope", sans-serif; transition: opacity .2s var(--ease), transform .2s var(--ease);
+}
+.toast.is-shown { opacity: 1; transform: translate(-50%, 0); }
+
+@media (max-width: 720px) {
+  .hud { padding: 12px var(--gutter); gap: 10px; }
+  .eyebrow { font-size: 11px; letter-spacing: .1em; }
+  /* On a phone the downloads sit two by two, no sideways scrolling. */
+  .row.platforms { display: grid; grid-template-columns: 1fr 1fr; row-gap: 34px; overflow: visible; }
+  .platform { width: auto; height: auto; aspect-ratio: 1; }
+  /* No room beside the glyph: the chip sits just above the name instead. */
+  .platform .here { position: static; order: 1; align-self: flex-start; margin: 0 0 8px; transform: none; }
+  .platform:not(.is-here) .here { display: none; }
+  .platform .name { order: 2; margin-top: 0; }
+  .platform .detail { order: 3; }
+  .brand span, .tab span, .chip { display: none; }
+  .tab { padding: 10px 12px; }
+  .clock { font-size: 18px; }
+  .stage { padding-top: 40px; }
+  .release-pill { font-size: 13px; }
+  .showcase { margin-top: 8px; }
+  .hints { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .room-glow { animation: none; }
+  .tile, .tile::after, .preview, .toast, .hints { transition: none; }
+  .tile.is-focused, .tile:focus-visible { transform: none; }
+  .tile.is-focused::before, .tile:focus-visible::before { animation: none; }
+}

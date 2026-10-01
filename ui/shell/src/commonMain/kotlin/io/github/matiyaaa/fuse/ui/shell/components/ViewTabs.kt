@@ -100,10 +100,11 @@ fun ViewTabs(
                 if (lineW <= 0f) return@drawBehind
                 val h = 3.dp.toPx()
                 val inset = Space.m.toPx()
+                val lineWidth = (lineW - inset * 2).coerceAtLeast(h)
                 drawRoundRect(
                     c.accent.copy(alpha = lineAlpha),
                     topLeft = Offset(lineX + inset, size.height - h),
-                    size = androidx.compose.ui.geometry.Size((lineW - inset * 2).coerceAtLeast(h), h),
+                    size = androidx.compose.ui.geometry.Size(lineWidth, h),
                     cornerRadius = CornerRadius(h / 2),
                 )
             },

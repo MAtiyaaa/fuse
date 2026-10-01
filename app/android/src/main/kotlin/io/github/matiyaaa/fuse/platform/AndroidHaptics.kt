@@ -29,8 +29,11 @@ class AndroidHaptics(context: Context) : Haptics {
     override fun tick() = vibrate(Kind.TICK)
     override fun confirm() = vibrate(Kind.CONFIRM)
     override fun reject() = vibrate(Kind.REJECT)
+    override fun lift() = vibrate(Kind.LIFT)
+    override fun slot() = vibrate(Kind.SLOT)
+    override fun drop() = vibrate(Kind.DROP)
 
-    private enum class Kind { TICK, CONFIRM, REJECT }
+    private enum class Kind { TICK, CONFIRM, REJECT, LIFT, SLOT, DROP }
 
     private fun vibrate(kind: Kind) {
         val v = vibrator ?: return
@@ -50,32 +53,40 @@ class AndroidHaptics(context: Context) : Haptics {
 
     private fun effect(v: Vibrator, kind: Kind, scale: Float): VibrationEffect? {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            val lowTick = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                VibrationEffect.Composition.PRIMITIVE_LOW_TICK
+            } else {
+                VibrationEffect.Composition.PRIMITIVE_TICK
+            }
             val primitive = when (kind) {
-                Kind.TICK -> VibrationEffect.Composition.PRIMITIVE_TICK
-                Kind.CONFIRM -> VibrationEffect.Composition.PRIMITIVE_CLICK
-                Kind.REJECT -> if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                    VibrationEffect.Composition.PRIMITIVE_LOW_TICK
-                } else {
-                    VibrationEffect.Composition.PRIMITIVE_TICK
-                }
+                Kind.TICK, Kind.DROP -> VibrationEffect.Composition.PRIMITIVE_TICK
+                Kind.CONFIRM, Kind.LIFT -> VibrationEffect.Composition.PRIMITIVE_CLICK
+                Kind.REJECT, Kind.SLOT -> lowTick
             }
             if (v.areAllPrimitivesSupported(primitive)) {
-                val composition = VibrationEffect.startComposition().addPrimitive(primitive, scale)
+                // A slot passing under the finger is the lightest touch; a lift the firmest.
+                val strength = when (kind) {
+                    Kind.SLOT -> scale * 0.5f
+                    Kind.LIFT -> (scale * 1.2f).coerceAtMost(1f)
+                    else -> scale
+                }
+                val composition = VibrationEffect.startComposition().addPrimitive(primitive, strength)
                 if (kind == Kind.REJECT) composition.addPrimitive(primitive, scale, 60)
                 return composition.compose()
             }
         }
         val (millis, base) = when (kind) {
-            Kind.TICK -> 8L to 90
-            Kind.CONFIRM -> 16L to 170
+            Kind.TICK, Kind.DROP -> 8L to 90
+            Kind.SLOT -> 5L to 50
+            Kind.CONFIRM, Kind.LIFT -> 16L to 170
             Kind.REJECT -> 28L to 120
         }
         return when {
             v.hasAmplitudeControl() -> VibrationEffect.createOneShot(millis, (base * scale).toInt().coerceIn(1, 255))
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q -> VibrationEffect.createPredefined(
                 when (kind) {
-                    Kind.TICK -> VibrationEffect.EFFECT_TICK
-                    Kind.CONFIRM -> VibrationEffect.EFFECT_CLICK
+                    Kind.TICK, Kind.SLOT, Kind.DROP -> VibrationEffect.EFFECT_TICK
+                    Kind.CONFIRM, Kind.LIFT -> VibrationEffect.EFFECT_CLICK
                     Kind.REJECT -> VibrationEffect.EFFECT_DOUBLE_CLICK
                 },
             )

@@ -42,7 +42,12 @@ fun Panel(
                     listOf(Color.White.copy(alpha = if (c.isDark) 0.035f else 0f), Color.Transparent),
                 ),
             )
-            .border(1.dp(), c.hairline, shape),
+            // The top edge catches the light, like a tile's, so every surface reads as one family.
+            .border(
+                1.dp(),
+                Brush.verticalGradient(0f to Color.White.copy(alpha = if (c.isDark) 0.13f else 0.5f), 0.3f to c.hairline, 1f to c.hairline),
+                shape,
+            ),
         content = content,
     )
 }

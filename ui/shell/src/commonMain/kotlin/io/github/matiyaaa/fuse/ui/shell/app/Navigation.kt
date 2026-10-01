@@ -31,6 +31,7 @@ sealed interface Route {
     data object Search : Route
     data object Controls : Route
     data object Licenses : Route
+    data object Themes : Route
     data object Onboarding : Route
     data class FolderBrowser(val game: GameId) : Route
     /** Fuse's own file picker, for "Add a game" and for locating an emulator ([locate]). */
@@ -38,7 +39,7 @@ sealed interface Route {
 }
 
 /** What a file is picked for. */
-enum class FilePurpose { APK, GAME, EMULATOR }
+enum class FilePurpose { APK, GAME, EMULATOR, THEME }
 
 /**
  * An emulator to locate, and what then uses it: a system ([platform]) or a game ([game]) the user

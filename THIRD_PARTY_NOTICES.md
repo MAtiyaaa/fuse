@@ -73,6 +73,12 @@ from the same project).
 | Menu music: the album "jam channel" by boipurple (10 songs: soiree, dewwy, puddleworld, alright apothecary, chachuu, beamrider, mirth, comeaux, wub time, sighonara), re-encoded to 128 kbps MP3 | `ui/designsystem/src/commonMain/composeResources/files/music/*.mp3` | Not under Fuse's licence; all rights remain with the artist. Included at the request of Fuse's maintainer, who supplied the files | boipurple | Credited in Settings, Sound and in Settings, About, Open-source licences, Music |
 | Lucide icons 1.49.0 (169 icons, converted to path data) | `ui/designsystem/src/commonMain/kotlin/io/github/matiyaaa/fuse/ui/designsystem/icons/FuseIcons.kt` | ISC; the icons Lucide derived from Feather are also under MIT | Copyright (c) 2026 Lucide Icons and Contributors; Copyright (c) 2013-present Cole Bemis (Feather) | [licenses/LICENSE-lucide.txt](ui/designsystem/src/commonMain/composeResources/files/licenses/LICENSE-lucide.txt) |
 
+The website ([`site/`](site), published at matiyaaa.github.io/fuse) uses the same fonts, icons and
+brand art, and three platform marks from [Simple Icons](https://simpleicons.org) (Android, Apple and
+Tux, in `site/assets/platforms/`), released under CC0 1.0. The marks belong to their owners and only
+label which download is for which system; the Windows mark there is four plain squares drawn for
+Fuse.
+
 Everything else visible or audible in Fuse (the Fuse mark, controller and status glyphs, theme
 backgrounds, generated placeholder art and interface sounds) is original work drawn or synthesised in
 code and is part of Fuse under GPL-3.0-or-later. The menu music is the one exception: it is
@@ -110,6 +116,16 @@ cached on their device. None of it is part of Fuse's distribution.
 | Art Book Next system art | [Repository](https://github.com/anthonycaccese/art-book-next-es-de), [CC BY-NC-SA 2.0](https://creativecommons.org/licenses/by-nc-sa/2.0/). Theme by Anthony Caccese; system logos modified from Dan Patrick's console logos; Noir artwork set by tenlevels with help from f8less; Outline artwork set by Joppa Fallston; some artwork by theUnBurn. Fetched at runtime from a pinned commit, never bundled, credited wherever it is shown |
 | GitHub REST API | [Releases API](https://docs.github.com/en/rest/releases/releases), [GitHub Terms of Service](https://docs.github.com/en/site-policy/github-terms/github-terms-of-service) |
 
+### Screenshots
+
+The README and website screenshots (`docs/assets/screenshots`) show well-known games with the art
+Fuse fetched for them while the screenshots were made: box art from the
+[libretro thumbnails](https://github.com/libretro-thumbnails/libretro-thumbnails), collected by the
+libretro community, and system art from Art Book Next (CC BY-NC-SA 2.0, credited as below). The screenshots are documentation: they are not part
+of Fuse's code or of its downloads. The games, their names and their art belong to their owners, the
+Art Book Next art in them stays under CC BY-NC-SA 2.0, and they are shown only to illustrate what Fuse
+does with a library.
+
 ## Compatibility with GPL-3.0-or-later
 
 | Licence | Where | Conclusion |
@@ -124,8 +140,8 @@ cached on their device. None of it is part of Fuse's distribution.
 | Public domain | SQLite | Compatible. No conditions |
 | SIL OFL 1.1 | Sora and Manrope fonts | Compatible for distribution. The fonts stay under the OFL and are not relicensed; the OFL explicitly allows bundling the fonts with software under any licence as long as the fonts are not sold on their own and the licence travels with them. Fuse does not modify the fonts, and neither declares a Reserved Font Name |
 | AGPL-3.0 | RomM | No code is used, only facts and names, which carry no licence obligations. (AGPL-3.0 and GPL-3.0 are also explicitly combinable under section 13 of each) |
-| No licence | Daijisho files, community configs, libretro thumbnails | Nothing is copied or bundled |
-| CC BY-NC-SA 2.0 | Art Book Next system art | Not combined with Fuse. The files are downloaded by each user at runtime and cached on their device, never bundled or redistributed, so the NonCommercial and ShareAlike terms do not reach Fuse's own licence. Fuse shows the required attribution with the art |
+| No licence | Daijisho files, community configs, libretro thumbnails | Nothing is copied or bundled with Fuse. The documentation screenshots show some libretro thumbnails, credited there (see Screenshots) |
+| CC BY-NC-SA 2.0 | Art Book Next system art | Not combined with Fuse. The files are downloaded by each user at runtime and cached on their device, never bundled with Fuse, so the NonCommercial and ShareAlike terms do not reach Fuse's own licence. Fuse shows the required attribution with the art. The documentation screenshots that show some of it credit it and leave it under its licence (see Screenshots) |
 
 ### Licence texts
 

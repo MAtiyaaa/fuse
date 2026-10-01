@@ -16,3 +16,6 @@ local.properties
 /.claude/worktrees/
 *.p12
 *.pfx
+
+# The website, built by site/build.py
+_site/

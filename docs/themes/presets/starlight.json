@@ -1,0 +1,42 @@
+{
+  "fuseTheme": 1,
+  "name": "Starlight",
+  "id": "starlight",
+  "tagline": "A slow drift of stars",
+  "extends": "starlight",
+  "dark": true,
+  "colors": {
+    "background": "#05050C",
+    "surface": "#0F0F1C",
+    "surfaceRaised": "#181828",
+    "accent": "#B79CFF",
+    "accentSoft": "#B79CFF33",
+    "onAccent": "#120A26",
+    "text": "#F1EFFA",
+    "textMuted": "#A5A2BD",
+    "focus": "#FFFFFF"
+  },
+  "background": {
+    "style": "stars",
+    "intensity": 1.0,
+    "speed": 1.0,
+    "secondary": "#5BC8FF"
+  },
+  "corners": "round",
+  "focus": "glow",
+  "motion": "standard",
+  "sound": "chime",
+  "glass": {
+    "enabled": false,
+    "blur": 24.0,
+    "opacity": 0.72
+  },
+  "crt": {
+    "enabled": false,
+    "scanlines": 0.35,
+    "bloom": 0.15,
+    "curvature": 0.08,
+    "chromatic": 0.1,
+    "vignette": 0.3
+  }
+}

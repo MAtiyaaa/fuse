@@ -26,7 +26,9 @@ import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
+import io.github.matiyaaa.fuse.model.GameArtStyle
 import io.github.matiyaaa.fuse.ui.designsystem.components.FText
 import io.github.matiyaaa.fuse.ui.designsystem.components.Tile
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
@@ -45,6 +47,37 @@ import io.github.matiyaaa.fuse.ui.shell.store.GameCard
 import io.github.matiyaaa.fuse.ui.shell.store.PlatformCard
 
 val LocalTileMetrics = staticCompositionLocalOf { TileMetrics.forHeight(720.dp, 1280.dp) }
+
+/** Square box art or tall posters on game tiles (Settings, Appearance, Game art). */
+val LocalGameArt = staticCompositionLocalOf { GameArtStyle.BOX_ART }
+
+/**
+ * The size of a game tile for a [base] size: a square, or a 2:3 poster of about the same area
+ * (a little narrower, a little taller), so a row of posters reads as a shelf of cases.
+ */
+fun GameArtStyle.tileSize(base: Dp): DpSize = when (this) {
+    GameArtStyle.BOX_ART -> DpSize(base, base)
+    GameArtStyle.POSTER -> DpSize(base * 0.8f, base * 1.2f)
+}
+
+/**
+ * A game's art as a poster: its portrait cover, else its square art or icon drawn whole over a soft
+ * copy of itself, else its wide art the same way.
+ */
+@Composable
+fun PosterGameArt(art: Art, modifier: Modifier = Modifier, fallback: @Composable () -> Unit = {}) {
+    if (art.boxart != null) {
+        Artwork(model = art.boxart, modifier = modifier, fallback = fallback)
+    } else {
+        Artwork(
+            model = art.square ?: art.icon ?: art.grid,
+            modifier = modifier,
+            backdrop = true,
+            backdropBlur = if (Fuse.quality.blur) 14.dp else 0.dp,
+            fallback = fallback,
+        )
+    }
+}
 
 /**
  * A game's art in a square: its square box art, else its icon, else its portrait cover drawn whole
@@ -66,7 +99,10 @@ fun SquareGameArt(art: Art, modifier: Modifier = Modifier, fallback: @Composable
     }
 }
 
-/** Square game tile, drawn with its box art: the tile of the Box art layout and most Home shelves. */
+/**
+ * A game tile: its square box art, or its poster when Game art is set to posters (sized by
+ * [tileSize]). The tile of the Grid layout, most Home shelves and Cartridge's downloads.
+ */
 @Composable
 fun GameIconTile(
     card: GameCard,
@@ -77,19 +113,27 @@ fun GameIconTile(
     onLongClick: (() -> Unit)? = null,
 ) {
     val accent = card.accent.toColor()
+    val style = LocalGameArt.current
+    val poster = style == GameArtStyle.POSTER
+    // Posters have softer corners for their size, like a game case.
+    val corner = if (poster) Fuse.geometry.tileCornerFraction * 0.62f else Fuse.geometry.tileCornerFraction
     Tile(
         selected = selected,
         glow = accent,
-        modifier = modifier.size(size),
+        modifier = modifier.size(style.tileSize(size)),
+        shape = io.github.matiyaaa.fuse.ui.designsystem.shape.SquircleShape.fraction(corner),
+        cornerFraction = corner,
         onClick = onClick,
         onLongClick = onLongClick,
     ) {
-        SquareGameArt(
-            art = card.art,
-            modifier = Modifier.fillMaxSize().alpha(if (card.missing) 0.45f else 1f),
-            fallback = { GeneratedArt(card.title, accent, slot = ArtSlot.ICON, label = card.platformShort.takeIf { LocalTileShowsSystem.current }) },
-        )
-        TileBorder(LocalTileBorders.current.of(card.platformId), accent, Fuse.geometry.tileCornerFraction, card.platformShort.takeIf { LocalTileShowsSystem.current })
+        val art = Modifier.fillMaxSize().alpha(if (card.missing) 0.45f else 1f)
+        val label = card.platformShort.takeIf { LocalTileShowsSystem.current }
+        if (poster) {
+            PosterGameArt(card.art, art, fallback = { GeneratedArt(card.title, accent, slot = ArtSlot.BOX, label = label) })
+        } else {
+            SquareGameArt(card.art, art, fallback = { GeneratedArt(card.title, accent, slot = ArtSlot.ICON, label = label) })
+        }
+        TileBorder(LocalTileBorders.current.of(card.platformId), accent, corner, label)
         TileBadges(card, Modifier.align(Alignment.TopEnd))
     }
 }

@@ -19,6 +19,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.util.VelocityTracker
+import androidx.compose.ui.input.pointer.util.addPointerInputChange
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -36,6 +38,9 @@ import kotlin.math.roundToInt
  * width) and the strip glides beneath it on a spring, so holding a direction flows instead of
  * stepping. Only covers near the window are composed, so a 5,000-game system costs the same as ten.
  * Neighbours shrink and fade with distance; nothing is laid out or recomposed per animation frame.
+ *
+ * A swipe glides the strip and a flick carries on with the finger's speed; where it comes to rest
+ * is chosen with [onSettle], never [onTap], so a swipe can't start a game.
  */
 @Composable
 fun CoverCarousel(
@@ -44,6 +49,7 @@ fun CoverCarousel(
     itemWidth: Dp,
     onTap: (Int) -> Unit,
     onLongPress: (Int) -> Unit,
+    onSettle: (Int) -> Unit,
     modifier: Modifier = Modifier,
     anchor: Float = 0.16f,
     focused: Boolean = true,
@@ -52,7 +58,7 @@ fun CoverCarousel(
     val position = remember { Animatable(selected.toFloat()) }
     val scope = rememberCoroutineScope()
     LaunchedEffect(selected) { position.animateTo(selected.toFloat(), motion.followSpring()) }
-    val latestTap by rememberUpdatedState(onTap)
+    val latestSettle by rememberUpdatedState(onSettle)
 
     BoxWithConstraints(modifier.fillMaxWidth().height(itemWidth * 1.5f * 1.22f)) {
         val width = constraints.maxWidth.toFloat()
@@ -68,12 +74,19 @@ fun CoverCarousel(
             Modifier
                 .fillMaxWidth()
                 .pointerInput(items.size) {
+                    val tracker = VelocityTracker()
+                    fun settle(fling: Float) {
+                        // The strip carries on for a moment at the finger's speed, then rests on a cover.
+                        val target = (position.value - fling / step * FLING_SECONDS).roundToInt().coerceIn(0, items.lastIndex)
+                        latestSettle(target)
+                        scope.launch { position.animateTo(target.toFloat(), motion.followSpring()) }
+                    }
                     detectHorizontalDragGestures(
-                        onDragEnd = {
-                            val target = position.value.roundToInt().coerceIn(0, items.lastIndex)
-                            latestTap(target)
-                        },
-                    ) { _, drag ->
+                        onDragStart = { tracker.resetTracking() },
+                        onDragEnd = { settle(tracker.calculateVelocity().x) },
+                        onDragCancel = { settle(0f) },
+                    ) { change, drag ->
+                        tracker.addPointerInputChange(change)
                         scope.launch { position.snapTo((position.value - drag / step).coerceIn(0f, items.lastIndex.toFloat())) }
                     }
                 },
@@ -113,3 +126,6 @@ fun CoverCarousel(
         }
     }
 }
+
+/** How far a flick carries the strip: the covers it would pass in this long at release speed. */
+private const val FLING_SECONDS = 0.18f

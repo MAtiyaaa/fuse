@@ -1,0 +1,22 @@
+{
+  "fuseTheme": 1,
+  "name": "Deep Sea",
+  "author": "Fuse",
+  "tagline": "Slow currents in teal and blue",
+  "extends": "wave",
+  "colors": {
+    "background": "#051216",
+    "surface": "#0C1E24",
+    "surfaceRaised": "#132A31",
+    "accent": "#3FD6C6",
+    "onAccent": "#03201C",
+    "text": "#ECF8F7",
+    "textMuted": "#9DB8B6"
+  },
+  "background": {
+    "style": "wave",
+    "speed": 0.7,
+    "secondary": "#7FB2FF"
+  },
+  "focus": "glow"
+}

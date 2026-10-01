@@ -44,7 +44,7 @@ the static files, `GET /api/session` and `POST /api/login` needs a session (401
 ### Session
 | Route | Body | Result |
 |---|---|---|
-| `GET /api/session` | | `{"signedIn": bool, "device": "AYN Thor", "version": "0.1.1"}` |
+| `GET /api/session` | | `{"signedIn": bool, "device": "AYN Thor", "version": "0.1.2"}` |
 | `POST /api/login` | `{"username", "password"}` | 200 `{"ok": true}` and the cookie; 401 wrong; 429 `{"error", "retryAfterSeconds"}` |
 | `POST /api/logout` | | `{"ok": true}` |
 

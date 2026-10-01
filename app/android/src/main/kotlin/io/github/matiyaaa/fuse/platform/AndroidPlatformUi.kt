@@ -125,6 +125,16 @@ class AndroidPlatformUi(
         }
     }
 
+    override suspend fun writeClipboardText(text: String): Boolean = withContext(Dispatchers.Main) {
+        try {
+            val clipboard = appContext.getSystemService(ClipboardManager::class.java) ?: return@withContext false
+            clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Fuse theme", text))
+            true
+        } catch (e: RuntimeException) {
+            false
+        }
+    }
+
     override fun lastCrashReport(): String? = crashLog.read()
 
     override fun clearCrashReport() = crashLog.clear()

@@ -1,6 +1,7 @@
 package io.github.matiyaaa.fuse.ui.designsystem.components
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -42,6 +43,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
@@ -85,23 +87,39 @@ fun Toggle(on: Boolean, modifier: Modifier = Modifier, enabled: Boolean = true) 
 
 private fun Color.luminanceApprox(): Float = 0.2126f * red + 0.7152f * green + 0.0722f * blue
 
-/** A thin progress bar. [value] null shows an indeterminate shimmer. */
+/**
+ * A thin progress bar: a quiet track and a solid fill with round ends. With [value] null the length
+ * isn't known, and a short segment glides along the track instead (it rests in the middle when
+ * motion is reduced).
+ */
 @Composable
 fun ProgressBar(value: Float?, modifier: Modifier = Modifier, color: Color = Fuse.colors.accent, height: Dp = 4.dp) {
-    val c = Fuse.colors
-    Box(modifier.height(height).clip(PillShape).background(c.text.copy(alpha = 0.12f))) {
-        if (value != null) {
-            val v by animateFloatAsState(value.coerceIn(0f, 1f), Fuse.motion.tween(Durations.SLOW), label = "progress")
-            Box(Modifier.fillMaxHeight().fillMaxWidth(v).clip(PillShape).background(color))
+    val track = Fuse.colors.text.copy(alpha = 0.12f)
+    val motion = Fuse.motion
+    if (value != null) {
+        val v by animateFloatAsState(value.coerceIn(0f, 1f), motion.tween(Durations.SLOW), label = "progress")
+        Canvas(modifier.height(height)) {
+            val r = CornerRadius(size.height / 2)
+            drawRoundRect(track, cornerRadius = r)
+            if (v > 0f) drawRoundRect(color, size = size.copy(width = (size.width * v).coerceAtLeast(size.height)), cornerRadius = r)
+        }
+    } else {
+        val phase = if (motion.reduced) {
+            0.5f
         } else {
-            val phase by rememberInfiniteTransition(label = "indet").animateFloat(
-                0f, 1f, infiniteRepeatable(tween(1100, easing = LinearEasing), RepeatMode.Restart), label = "phase",
+            val p by rememberInfiniteTransition(label = "indeterminate").animateFloat(
+                0f, 1f, infiniteRepeatable(tween(1400, easing = FastOutSlowInEasing), RepeatMode.Restart), label = "phase",
             )
-            Canvas(Modifier.fillMaxWidth().fillMaxHeight()) {
-                val w = size.width * 0.3f
-                val x = -w + (size.width + w) * phase
-                drawLine(color, Offset(x, size.height / 2), Offset(x + w, size.height / 2), size.height, StrokeCap.Round)
-            }
+            p
+        }
+        Canvas(modifier.height(height)) {
+            val r = CornerRadius(size.height / 2)
+            drawRoundRect(track, cornerRadius = r)
+            val segment = size.width * 0.3f
+            val x = -segment + (size.width + segment) * phase
+            val left = x.coerceAtLeast(0f)
+            val right = (x + segment).coerceAtMost(size.width)
+            if (right > left) drawRoundRect(color, Offset(left, 0f), size.copy(width = right - left), r)
         }
     }
 }

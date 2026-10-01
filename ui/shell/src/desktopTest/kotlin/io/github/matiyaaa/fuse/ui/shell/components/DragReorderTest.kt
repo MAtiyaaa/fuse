@@ -4,6 +4,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.aspectRatio
@@ -13,6 +15,9 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -27,6 +32,7 @@ import androidx.compose.ui.test.v2.runComposeUiTest
 import androidx.compose.ui.unit.dp
 import io.github.matiyaaa.fuse.ui.designsystem.focus.dragReorder
 import io.github.matiyaaa.fuse.ui.designsystem.focus.rememberDragReorderState
+import io.github.matiyaaa.fuse.ui.designsystem.focus.reorderHandle
 import io.github.matiyaaa.fuse.ui.designsystem.focus.reorderItem
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -172,5 +178,79 @@ class DragReorderTest {
         onRoot().performTouchInput { up() }
         mainClock.advanceTimeBy(300)
         assertEquals(listOf<Any>("b"), events.held)
+    }
+
+    /** A list of rows, each lifted only by the strip along its top (like a Home shelf's title). */
+    private fun ComposeUiTest.shelves(events: Events, items: MutableList<String>, armed: String? = null) {
+        setContent {
+            val state = rememberDragReorderState()
+            val list = rememberLazyListState()
+            val shown = state.arrange(items) { it }
+            androidx.compose.runtime.LaunchedEffect(Unit) { if (armed != null) state.arm(armed) }
+            Box(Modifier.size(400.dp, 600.dp)) {
+                LazyColumn(
+                    state = list,
+                    modifier = Modifier.dragReorder(
+                        state,
+                        visibleKeys = { list.layoutInfo.visibleItemsInfo.map { it.key } },
+                        scrollBy = { list.scrollBy(it) },
+                        longPressMs = 300,
+                        requireHandle = true,
+                        onHoldReleased = { events.held += it },
+                        onDrop = { key, to ->
+                            events.dropped += key to to
+                            items.add(to, items.removeAt(items.indexOf(key)))
+                        },
+                    ),
+                ) {
+                    items(shown, key = { it }) { k ->
+                        Column(Modifier.animateItem(placementSpec = null).reorderItem(state, k).fillMaxWidth()) {
+                            Box(Modifier.fillMaxWidth().height(30.dp).background(Color.DarkGray).reorderHandle(state, k).testTag("h-$k"))
+                            Box(Modifier.fillMaxWidth().height(90.dp).background(Color.Gray).testTag(k))
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private fun ComposeUiTest.drag(from: Offset, to: Offset, holdMs: Long) {
+        mainClock.autoAdvance = false
+        onRoot().performTouchInput { down(from) }
+        mainClock.advanceTimeBy(holdMs)
+        onRoot().performTouchInput { moveTo(from + Offset(0f, 20f)) }
+        mainClock.advanceTimeBy(50)
+        onRoot().performTouchInput { moveTo((from + to) / 2f) }
+        mainClock.advanceTimeBy(50)
+        onRoot().performTouchInput { moveTo(to) }
+        mainClock.advanceTimeBy(300)
+        onRoot().performTouchInput { up() }
+        mainClock.advanceTimeBy(1_000)
+    }
+
+    @Test
+    fun aListWithHandlesLiftsOnlyByTheHandle() = runComposeUiTest {
+        val events = Events()
+        val items = mutableStateListOf("a", "b", "c", "d")
+        shelves(events, items)
+        waitForIdle()
+        // Held by its body, a row stays put: that hold belongs to what is inside the row.
+        drag(centre("a"), centre("c"), holdMs = 600)
+        assertEquals(listOf("a", "b", "c", "d"), items.toList())
+        assertTrue(events.dropped.isEmpty() && events.held.isEmpty())
+        // Held by its handle, it moves.
+        drag(centre("h-a"), centre("c"), holdMs = 600)
+        assertEquals(listOf("b", "c", "a", "d"), items.toList())
+    }
+
+    @Test
+    fun anArmedItemMovesWithoutTheHold() = runComposeUiTest {
+        val events = Events()
+        val items = mutableStateListOf("a", "b", "c", "d")
+        shelves(events, items, armed = "a")
+        waitForIdle()
+        // "Move this shelf" armed it: the first touch on any part of it drags straight away.
+        drag(centre("a"), centre("c"), holdMs = 16)
+        assertEquals(listOf<Pair<Any, Int>>("a" to 2), events.dropped)
     }
 }

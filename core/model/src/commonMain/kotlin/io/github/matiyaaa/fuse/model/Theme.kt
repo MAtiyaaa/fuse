@@ -21,6 +21,22 @@ data class ThemeSpec(
     val sound: SoundProfile = SoundProfile.SOFT,
     val glass: GlassSettings = GlassSettings(),
     val crt: CrtSettings = CrtSettings(),
+    /** Who made it, for themes added from the community. */
+    val author: String? = null,
+    /** How strongly and how fast the background glows and moves. */
+    val ambient: AmbientSpec = AmbientSpec(),
+)
+
+/**
+ * The background's character: [intensity] scales its light (0 to 1.5), [speed] its movement
+ * (0 holds it still, up to 2), and [secondary] is a second colour some backgrounds blend with the
+ * accent (ARGB, null for the background's own).
+ */
+@Serializable
+data class AmbientSpec(
+    val intensity: Float = 1f,
+    val speed: Float = 1f,
+    val secondary: Long? = null,
 )
 
 @Serializable
@@ -36,6 +52,10 @@ data class ThemePalette(
     val textPrimary: Long,
     val textSecondary: Long,
     val focusRing: Long,
+    /** Status colours; null keeps Fuse's own green, amber and red. */
+    val success: Long? = null,
+    val warning: Long? = null,
+    val danger: Long? = null,
 )
 
 @Serializable
@@ -52,6 +72,10 @@ enum class BackgroundStyle {
     GRID,
     /** Clean flat colour. */
     SOLID,
+    /** Soft pinstripes under a top light, for bright themes. */
+    STRIPES,
+    /** A slow field of stars. */
+    STARS,
 }
 
 @Serializable

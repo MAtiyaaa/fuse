@@ -98,6 +98,20 @@ data class AppearanceSettings(
     val heroDim: Float = 0.3f,
     /** Adds an outline to the focused element on top of the glow. */
     val highContrastFocus: Boolean = false,
+    /** Themes added from a link, a file or pasted text, kept as they were written. */
+    val customThemes: List<StoredTheme> = emptyList(),
+)
+
+/**
+ * An added theme: its id (always starting "custom."), the theme file as it was given (so parts a
+ * later Fuse understands are kept), where it came from and when.
+ */
+@Serializable
+data class StoredTheme(
+    val id: String,
+    val json: String,
+    val source: String? = null,
+    val addedAt: Long = 0,
 )
 
 @Serializable
@@ -181,6 +195,8 @@ data class LibraryPreferences(
     val systemColors: Map<String, Long> = emptyMap(),
     /** Which of its lists the Apps tab opens on. */
     val appsFilter: io.github.matiyaaa.fuse.model.AppFilter = io.github.matiyaaa.fuse.model.AppFilter.ALL,
+    /** Square box art or tall posters on game tiles. */
+    val gameArt: io.github.matiyaaa.fuse.model.GameArtStyle = io.github.matiyaaa.fuse.model.GameArtStyle.BOX_ART,
 )
 
 /**

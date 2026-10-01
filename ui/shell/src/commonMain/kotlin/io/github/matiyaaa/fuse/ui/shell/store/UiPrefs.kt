@@ -13,6 +13,8 @@ import io.github.matiyaaa.fuse.model.MotionProfile
 import io.github.matiyaaa.fuse.model.PerformanceProfile
 import io.github.matiyaaa.fuse.model.ScrapeProviderId
 import io.github.matiyaaa.fuse.model.SoundProfile
+import io.github.matiyaaa.fuse.model.ThemeSpec
+import io.github.matiyaaa.fuse.ui.designsystem.theme.ThemePresets
 
 /**
  * The interface's view of the user's settings. The store maps it to and from persistent settings,
@@ -29,6 +31,8 @@ data class UiPrefs(
     val home: HomeLayoutConfig = HomeLayoutConfig(),
     val destinations: List<Destination> = Destination.entries,
     val defaultLayout: LibraryLayout = LibraryLayout.ICON,
+    /** Square box art or tall posters on game tiles. */
+    val gameArt: io.github.matiyaaa.fuse.model.GameArtStyle = io.github.matiyaaa.fuse.model.GameArtStyle.BOX_ART,
     val showHero: Boolean = true,
     val showLogo: Boolean = true,
     val videoPreview: Boolean = true,
@@ -78,7 +82,27 @@ data class UiPrefs(
     val heroDim: Float = 0.3f,
     /** Which of its lists the Apps tab opens on: Pinned, Emulators or All apps. */
     val appsFilter: io.github.matiyaaa.fuse.model.AppFilter = io.github.matiyaaa.fuse.model.AppFilter.ALL,
-)
+    /** Themes added from a link, a file or pasted text, ready to use. */
+    val customThemes: List<ThemeSpec> = emptyList(),
+) {
+    /** The theme in use: a built-in one, else an added one, else Fuse (an added theme was removed). */
+    val theme: ThemeSpec
+        get() = ThemePresets.find(themeId) ?: customThemes.firstOrNull { it.id == themeId } ?: ThemePresets.Fuse
+
+    /**
+     * Switches to [next]. Glass, CRT and sounds that still match the current theme's own follow
+     * the new theme's; ones the user changed are kept.
+     */
+    fun withTheme(next: ThemeSpec): UiPrefs {
+        val old = theme
+        return copy(
+            themeId = next.id,
+            glass = if (glass == old.glass) next.glass else glass,
+            crt = if (crt == old.crt) next.crt else crt,
+            sound = if (sound == old.sound) next.sound else sound,
+        )
+    }
+}
 
 /**
  * Menu music: on or off, how loud, and which song. [track] is a bundled song's id

@@ -196,6 +196,15 @@ class DesktopPlatformUi(
         }
     }
 
+    override suspend fun writeClipboardText(text: String): Boolean = kotlinx.coroutines.withContext(Dispatchers.IO) {
+        try {
+            Toolkit.getDefaultToolkit().systemClipboard.setContents(java.awt.datatransfer.StringSelection(text), null)
+            true
+        } catch (e: Exception) {
+            false
+        }
+    }
+
     override fun lastCrashReport(): String? = crashLog.read()
 
     override fun clearCrashReport() = crashLog.clear()

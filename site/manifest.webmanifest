@@ -1,0 +1,9 @@
+{
+  "name": "Fuse",
+  "short_name": "Fuse",
+  "start_url": "/fuse/",
+  "display": "standalone",
+  "background_color": "#07080B",
+  "theme_color": "#07080B",
+  "icons": [{ "src": "assets/brand/icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+}

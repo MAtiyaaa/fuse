@@ -21,6 +21,8 @@ import okio.Path.Companion.toPath
  * Fuse's own components, so Coil's is off.
  *
  * @param lowMemory Smaller memory cache and bitmap limit for low-end devices and Low Power Mode.
+ * @param svgDensity Pixels per SVG unit when an SVG is asked for at its own size, so a logo drawn
+ *   without a known size is still sharp on a dense screen.
  * @param components Platform extras, for example the Android app-icon fetcher.
  */
 fun fuseImageLoader(
@@ -28,6 +30,7 @@ fun fuseImageLoader(
     cacheDir: String,
     http: HttpClient,
     lowMemory: Boolean,
+    svgDensity: Float = 2f,
     components: ComponentRegistry.Builder.() -> Unit = {},
 ): ImageLoader = ImageLoader.Builder(context)
     .memoryCache {
@@ -45,7 +48,7 @@ fun fuseImageLoader(
     .components {
         add(KtorNetworkFetcherFactory(httpClient = { http }))
         // System logos from the system art pack are SVG.
-        add(SvgDecoder.Factory())
+        add(SvgDecoder.Factory(density = { svgDensity }))
         components()
     }
     .precision(Precision.INEXACT)

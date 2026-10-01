@@ -15,7 +15,6 @@ import io.github.matiyaaa.fuse.ui.shell.home.ShelfItem
 import io.github.matiyaaa.fuse.ui.shell.home.ShelfStyle
 import io.github.matiyaaa.fuse.ui.shell.home.buildShelves
 import io.github.matiyaaa.fuse.ui.shell.home.title
-import io.github.matiyaaa.fuse.ui.shell.screenshots.SampleLibrary
 import io.github.matiyaaa.fuse.ui.shell.store.FuseStore
 import java.io.File
 import kotlinx.coroutines.runBlocking
@@ -118,12 +117,40 @@ internal fun AuditDriver.homeFlow(exhaustive: Boolean) {
         tap(PadButton.A)
         shoot("put down")
     }
+    scenario("home", "posters") {
+        useLibrary { it.copy(gameArt = io.github.matiyaaa.fuse.model.GameArtStyle.POSTER) }
+        waitFor("Continue playing")
+        tap(PadButton.DPAD_DOWN, 2)
+        shoot("Home with posters, a poster shelf focused")
+        tab(io.github.matiyaaa.fuse.model.Destination.LIBRARY)
+        waitFor("All")
+        tap(PadButton.DPAD_DOWN)
+        shoot("the library grid with posters")
+    }
+    scenario("home", "flow drag by touch") {
+        useLibrary()
+        waitFor("Continue playing")
+        // A shelf's title (set in capitals) is its handle: Continue playing goes below Systems.
+        val from = textCentre("CONTINUE PLAYING")
+        val to = textCentre("SYSTEMS") + androidx.compose.ui.geometry.Offset(0f, 60f)
+        touch { down(from) }
+        advanceExactly(600)
+        shoot("held by its title, the shelf lifts on a panel")
+        touch { moveTo(from + (to - from) * 0.5f) }
+        settle(150)
+        touch { moveTo(to) }
+        settle(500)
+        shoot("dragged down, the shelves below make room")
+        touch { up() }
+        settle(1_200)
+        shoot("dropped in its new place")
+    }
 }
 
 /** Home in Channels mode: the board, moving around it, and carrying a channel. */
 internal fun AuditDriver.homeChannels(exhaustive: Boolean) {
     scenario("home", "channels") {
-        useLibrary { it.copy(home = HomeLayoutConfig(mode = HomeMode.CHANNELS, widgets = SampleLibrary.channelBoard)) }
+        useLibrary { it.copy(home = HomeLayoutConfig(mode = HomeMode.CHANNELS, widgets = AuditSamples.channelBoard)) }
         waitFor("Continue playing")
         tap(PadButton.DPAD_LEFT)
         shoot("board, default focus", 2_000)
@@ -139,6 +166,25 @@ internal fun AuditDriver.homeChannels(exhaustive: Boolean) {
         shoot("carried channel moved right")
         tap(PadButton.A)
         shoot("put down")
+    }
+    scenario("home", "channels drag by touch") {
+        useLibrary { it.copy(home = HomeLayoutConfig(mode = HomeMode.CHANNELS, widgets = AuditSamples.channelBoard)) }
+        waitFor("Continue playing")
+        // Hold the channel's tile, just above its name.
+        val from = textCentre("Continue playing") + androidx.compose.ui.geometry.Offset(0f, -80f)
+        // Past the middle of the next channel along, so it takes that place.
+        val to = from + androidx.compose.ui.geometry.Offset(1_100f, 0f)
+        touch { down(from) }
+        advanceExactly(600)
+        shoot("held, the channel floats over its shadow")
+        touch { moveTo(from + (to - from) * 0.5f) }
+        settle(150)
+        touch { moveTo(to) }
+        settle(500)
+        shoot("dragged right, the others slide over")
+        touch { up() }
+        settle(1_200)
+        shoot("dropped")
     }
     if (!exhaustive) return
     scenario("home", "channels default widgets") {

@@ -6,8 +6,8 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -56,8 +56,13 @@ import io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction
 import io.github.matiyaaa.fuse.ui.designsystem.components.Tile
 import io.github.matiyaaa.fuse.ui.designsystem.components.fadingEdges
 import io.github.matiyaaa.fuse.ui.designsystem.focus.FollowSelection
+import io.github.matiyaaa.fuse.ui.designsystem.focus.ReorderDefaults
 import io.github.matiyaaa.fuse.ui.designsystem.focus.SpatialSelection
+import io.github.matiyaaa.fuse.ui.designsystem.focus.carried
+import io.github.matiyaaa.fuse.ui.designsystem.focus.dragReorder
 import io.github.matiyaaa.fuse.ui.designsystem.focus.packCells
+import io.github.matiyaaa.fuse.ui.designsystem.focus.rememberDragReorderState
+import io.github.matiyaaa.fuse.ui.designsystem.focus.reorderItem
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
 import io.github.matiyaaa.fuse.ui.designsystem.icons.HintButton
 import io.github.matiyaaa.fuse.ui.designsystem.input.InputLayer
@@ -96,8 +101,9 @@ private const val BOARD_COLUMNS = 4
  * Channel Mode: Home as a board of tiles you arrange yourself. A spotlight across the top tells the
  * focused channel's story (its game's logo, what it holds, the covers that come next) over that
  * game's art, and each channel below is a collage of what is inside it: stacked covers, system
- * logos, app icons or a live widget. Hold confirm (or long press) on a channel to pick it up, move
- * it with the D-pad and put it down again. The time lives in the top bar.
+ * logos, app icons or a live widget. Hold a channel and drag it into place by touch, or hold confirm
+ * to pick it up and move it with the D-pad; the others slide out of its way. The time lives in the
+ * top bar.
  */
 @Composable
 fun ChannelHome(app: AppState) {
@@ -109,7 +115,10 @@ fun ChannelHome(app: AppState) {
     val widgets = prefs.home.widgets.filter {
         it.visible && app.offers(it.kind) && (it.kind != WidgetKind.CARTRIDGE_DOWNLOADS || cartridge.installed) && (it.kind != WidgetKind.COLLECTIONS || prefs.collectionsEnabled)
     }.sortedBy { it.order }
-    val cells = remember(widgets) { packCells(widgets.map { channelSpan(it).columns }, BOARD_COLUMNS) }
+    val drag = rememberDragReorderState()
+    // While a channel is held, the board shows the order it would land in.
+    val shown = drag.arrange(widgets) { it.id }
+    val cells = remember(shown) { packCells(shown.map { channelSpan(it).columns }, BOARD_COLUMNS) }
     val sel = rememberRouteState(app.navigator, "home.channels") { SpatialSelection() }
     sel.clamp(widgets.size)
     var carrying by remember { mutableStateOf(false) }
@@ -126,21 +135,27 @@ fun ChannelHome(app: AppState) {
         }
     }
 
-    fun swap(target: Int) {
-        if (target !in widgets.indices || target == sel.index) return
-        val a = widgets[sel.index]
-        val b = widgets[target]
-        store.updatePrefs { p ->
-            p.copy(home = p.home.copy(widgets = p.home.widgets.map {
-                when (it.id) {
-                    a.id -> it.copy(order = b.order)
-                    b.id -> it.copy(order = a.order)
-                    else -> it
-                }
-            }))
-        }
-        sel.index = target
+    /** Moves the channel at [from] to [to]; the ones between slide over by one. */
+    fun moveTo(from: Int, to: Int) {
+        if (from !in widgets.indices || to !in widgets.indices || from == to) return
+        val ids = widgets.map { it.id }
+        store.updatePrefs { p -> p.copy(home = p.home.copy(widgets = HomeArrange.moveOne(p.home.widgets, ids, ids[from], to))) }
+        sel.index = to
     }
+
+    fun menu(w: HomeWidget?) = ContextMenuSpec(
+        title = w?.kind?.title() ?: "Home",
+        subtitle = "Home",
+        actions = listOfNotNull(
+            w?.let {
+                MenuAction("move", "Move this channel", FuseIcons.Move, detail = "Then drag it, or use the D-pad", onSelect = {
+                    app.closeOverlays()
+                    carrying = true
+                    drag.arm(it.id)
+                })
+            },
+        ) + app.homeStyleActions(),
+    )
 
     fun open(w: HomeWidget) {
         when (w.kind) {
@@ -160,15 +175,15 @@ fun ChannelHome(app: AppState) {
     InputLayer(enabled = app.focusZone == FocusZone.CONTENT && !app.overlayOpen, longPress = true) { e ->
         if (carrying) {
             return@InputLayer when (e.action) {
-                NavAction.LEFT -> { swap(sel.index - 1); NavResult.MOVED }
-                NavAction.RIGHT -> { swap(sel.index + 1); NavResult.MOVED }
-                // Up and down trade places with the channel above or below, the same one plain moves land on.
+                NavAction.LEFT -> { moveTo(sel.index, sel.index - 1); NavResult.MOVED }
+                NavAction.RIGHT -> { moveTo(sel.index, sel.index + 1); NavResult.MOVED }
+                // Up and down take the place of the channel above or below, the same one plain moves land on.
                 NavAction.UP, NavAction.DOWN -> {
                     val probe = SpatialSelection(sel.index)
-                    if (probe.move(e.action, cells) == NavResult.MOVED) swap(probe.index)
+                    if (probe.move(e.action, cells) == NavResult.MOVED) moveTo(sel.index, probe.index)
                     NavResult.MOVED
                 }
-                NavAction.SELECT, NavAction.BACK, NavAction.REORDER -> { carrying = false; NavResult.CONSUMED }
+                NavAction.SELECT, NavAction.BACK, NavAction.REORDER -> { carrying = false; drag.arm(null); NavResult.CONSUMED }
                 else -> NavResult.CONSUMED
             }
         }
@@ -176,18 +191,7 @@ fun ChannelHome(app: AppState) {
             NavAction.UP, NavAction.DOWN, NavAction.LEFT, NavAction.RIGHT -> sel.move(e.action, cells)
             NavAction.SELECT -> { current?.let(::open); NavResult.ACTIVATED }
             NavAction.REORDER -> { carrying = true; NavResult.ACTIVATED }
-            NavAction.CONTEXT -> {
-                app.openContextMenu(
-                    ContextMenuSpec(
-                        title = current?.kind?.title() ?: "Home",
-                        subtitle = "Home",
-                        actions = listOfNotNull(
-                            current?.let { MenuAction("move", "Move this channel", FuseIcons.Move, detail = "Or hold the confirm button on it", onSelect = { app.closeOverlays(); carrying = true }) },
-                        ) + app.homeStyleActions(),
-                    ),
-                )
-                NavResult.ACTIVATED
-            }
+            NavAction.CONTEXT -> { app.openContextMenu(menu(current)); NavResult.ACTIVATED }
             else -> NavResult.IGNORED
         }
     }
@@ -195,13 +199,13 @@ fun ChannelHome(app: AppState) {
     BoxWithConstraints(
         Modifier.fillMaxSize()
             // A tap outside the channels puts a carried one down.
-            .pointerInput(carrying) { if (carrying) detectTapGestures { carrying = false } },
+            .pointerInput(carrying) { if (carrying) detectTapGestures { carrying = false; drag.arm(null) } },
     ) {
         val compact = maxHeight < 560.dp
         val spotlightHeight = (maxHeight * 0.3f).coerceIn(118.dp, 250.dp)
         val unit = ((maxWidth - Space.gutter * 2 - Space.l * (BOARD_COLUMNS - 1)) / BOARD_COLUMNS).coerceAtMost(maxHeight * 0.26f)
         val grid = rememberLazyGridState()
-        FollowSelection(grid, { sel.index }, anchor = 0.25f)
+        FollowSelection(grid, { sel.index }, anchor = 0.25f, enabled = { drag.heldKey == null })
         val time = rememberClockText(prefs.clock24h)
         Column(Modifier.fillMaxSize()) {
             Spacer(Modifier.height(Size.hudHeight))
@@ -219,17 +223,43 @@ fun ChannelHome(app: AppState) {
                 contentPadding = PaddingValues(start = Space.gutter, end = Space.gutter, top = if (compact) Space.m else Space.l, bottom = Size.hintHeight + Space.xxl),
                 horizontalArrangement = Arrangement.spacedBy(Space.l),
                 verticalArrangement = Arrangement.spacedBy(if (compact) Space.m else Space.xl),
-                modifier = Modifier.weight(1f).fadingEdges(top = if (grid.canScrollBackward) 40.dp else 0.dp),
+                modifier = Modifier
+                    .weight(1f)
+                    .fadingEdges(top = if (grid.canScrollBackward) 40.dp else 0.dp)
+                    .dragReorder(
+                        drag,
+                        visibleKeys = { grid.layoutInfo.visibleItemsInfo.map { it.key } },
+                        scrollBy = { grid.scrollBy(it) },
+                        keepScroll = { grid.requestScrollToItem(grid.firstVisibleItemIndex, grid.firstVisibleItemScrollOffset) },
+                        longPressMs = ReorderDefaults.liftMs(prefs.input.longPressMs.toLong()),
+                        endInset = Size.hintHeight,
+                        onLift = { key ->
+                            app.focusZone = FocusZone.CONTENT
+                            sel.index = widgets.indexOfFirst { it.id == key }.coerceAtLeast(0)
+                            app.platform.haptics.lift()
+                        },
+                        onTarget = { app.platform.haptics.slot() },
+                        // A hold let go where it started opens the channel's options.
+                        onHoldReleased = { key -> widgets.firstOrNull { it.id == key }?.let { app.openContextMenu(menu(it)) } },
+                        onDrop = { key, to ->
+                            moveTo(widgets.indexOfFirst { it.id == key }, to)
+                            sel.index = to
+                            carrying = false
+                            app.platform.haptics.drop()
+                        },
+                    ),
             ) {
-                itemsIndexed(widgets, key = { _, w -> w.id }, span = { _, w -> GridItemSpan(channelSpan(w).columns.coerceAtMost(BOARD_COLUMNS)) }) { i, w ->
+                itemsIndexed(shown, key = { _, w -> w.id }, span = { _, w -> GridItemSpan(channelSpan(w).columns.coerceAtMost(BOARD_COLUMNS)) }) { _, w ->
+                    val i = widgets.indexOf(w)
                     val selected = i == sel.index && app.focusZone == FocusZone.CONTENT
-                    val lift by animateFloatAsState(if (selected && carrying) 1f else 0f, Fuse.motion.focusSpring(), label = "carry")
+                    val held = drag.heldKey == w.id
+                    val lift by animateFloatAsState(if ((selected && carrying) || held) 1f else 0f, Fuse.motion.focusSpring(), label = "carry")
                     Box(
                         Modifier
-                            // Channels slide into their new places as one is carried past them.
-                            .animateItem(fadeInSpec = null, fadeOutSpec = null)
-                            .zIndex(if (selected && carrying) 1f else 0f)
-                            .graphicsLayer { translationY = -10.dp.toPx() * lift; rotationZ = -1.2f * lift },
+                            // Channels slide into their new places as one is carried past them; the held one follows the finger.
+                            .animateItem(fadeInSpec = null, fadeOutSpec = null, placementSpec = if (held) null else ReorderDefaults.Placement)
+                            .reorderItem(drag, w.id, liftScale = 1f)
+                            .zIndex(if (selected && carrying) 1f else 0f),
                     ) {
                         Channel(
                             widget = w,
@@ -238,16 +268,16 @@ fun ChannelHome(app: AppState) {
                             clock24h = prefs.clock24h,
                             selected = selected,
                             height = unit * 0.78f,
-                            carrying = selected && carrying,
+                            lift = { lift },
                             onClick = {
                                 app.focusZone = FocusZone.CONTENT
                                 when {
                                     carrying -> carrying = false
-                                    sel.index == i -> open(w)
+                                    // Channels that play a game show it first; the rest open at once.
+                                    sel.index == i || w.kind !in playChannels -> { sel.index = i; open(w) }
                                     else -> sel.index = i
                                 }
                             },
-                            onLongClick = { sel.index = i; carrying = true },
                         )
                     }
                 }
@@ -275,6 +305,11 @@ private fun channelGames(kind: WidgetKind, feed: HomeFeed): List<GameCard> = whe
     WidgetKind.CURRENT_GAME -> listOfNotNull(feed.playtime.currentGame)
     else -> emptyList()
 }
+
+/** Channels whose confirm plays a game, so a first tap only shows it. */
+private val playChannels = setOf(
+    WidgetKind.CONTINUE_PLAYING, WidgetKind.RECENTLY_PLAYED, WidgetKind.PINNED_GAMES, WidgetKind.CURRENT_GAME,
+)
 
 private val gameChannels = setOf(
     WidgetKind.CONTINUE_PLAYING, WidgetKind.RECENTLY_PLAYED, WidgetKind.FAVORITES, WidgetKind.RECENTLY_ADDED,
@@ -434,9 +469,8 @@ private fun Channel(
     clock24h: Boolean,
     selected: Boolean,
     height: androidx.compose.ui.unit.Dp,
-    carrying: Boolean,
+    lift: () -> Float,
     onClick: () -> Unit,
-    onLongClick: () -> Unit,
 ) {
     val c = Fuse.colors
     val kind = widget.kind
@@ -446,15 +480,15 @@ private fun Channel(
         WidgetKind.PINNED_GAMES, WidgetKind.MOST_PLAYED,
     )
     Column {
+        val shape = io.github.matiyaaa.fuse.ui.designsystem.shape.SquircleShape.fraction(Fuse.geometry.tileCornerFraction * 0.6f)
         Tile(
             selected = selected,
-            modifier = Modifier.fillMaxWidth().height(height)
-                .then(if (carrying) Modifier.border(2.dp, c.accent, io.github.matiyaaa.fuse.ui.designsystem.shape.SquircleShape.fraction(Fuse.geometry.tileCornerFraction * 0.6f)) else Modifier),
+            // Held or carried, a channel floats over a soft shadow, the same by touch or controller.
+            modifier = Modifier.fillMaxWidth().height(height).carried(lift, shape),
             cornerFraction = Fuse.geometry.tileCornerFraction * 0.6f,
-            shape = io.github.matiyaaa.fuse.ui.designsystem.shape.SquircleShape.fraction(Fuse.geometry.tileCornerFraction * 0.6f),
+            shape = shape,
             glow = game?.accent?.toColor() ?: c.accent,
             onClick = onClick,
-            onLongClick = onLongClick,
         ) {
             when {
                 gameShelf && game != null -> CoverCollage(channelGames(kind, feed), height)

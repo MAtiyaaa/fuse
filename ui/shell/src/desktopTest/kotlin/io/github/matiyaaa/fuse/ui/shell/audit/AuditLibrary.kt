@@ -7,7 +7,6 @@ import io.github.matiyaaa.fuse.model.EmulatorId
 import io.github.matiyaaa.fuse.model.LibrarySourceKind
 import io.github.matiyaaa.fuse.model.PlatformId
 import io.github.matiyaaa.fuse.model.ScanPhase
-import io.github.matiyaaa.fuse.ui.shell.screenshots.SampleLibrary
 import io.github.matiyaaa.fuse.ui.shell.store.FuseStore
 import io.github.matiyaaa.fuse.ui.shell.store.GameCard
 import io.github.matiyaaa.fuse.ui.shell.store.GameQuery
@@ -37,8 +36,8 @@ internal object AuditLibrary {
     /** PSP games; no PSP emulator is installed. */
     val pspGames = listOf("Waystation Nine", "Driftwood Courier", "Neon Almanac")
 
-    val gameCount: Int get() = SampleLibrary.games.size + pspGames.size
-    val platformCount: Int get() = SampleLibrary.platformCount + 1
+    val gameCount: Int get() = AuditSamples.games.size + pspGames.size
+    val platformCount: Int get() = AuditSamples.platformCount + 1
 
     /** A game set to Citron, which Fuse can only open, not start a game in. */
     const val OPENS_APP_ONLY = "Tanuki Trails"
@@ -46,7 +45,7 @@ internal object AuditLibrary {
     const val STATION_COLLECTION = "Station Stops"
 
     fun writeTo(root: File) {
-        SampleLibrary.writeTo(root)
+        AuditSamples.writeTo(root)
         val psp = File(root, "psp").apply { mkdirs() }
         pspGames.forEachIndexed { i, title -> File(psp, "$title.${if (i == 1) "cso" else "iso"}").writeBytes(ByteArray(512)) }
         // Firmware: an empty PS1 folder (missing), a full-size PS2 dump name (ready), half of Dreamcast's pair (partial).
@@ -81,7 +80,7 @@ internal object AuditLibrary {
             store.emulators.installed.first { it.isNotEmpty() }
         }
         val cards = withTimeout(30_000) { store.library.games(GameQuery()).first { it.size == gameCount } }
-        SampleLibrary.applyHistory(store, services.data, cards, Clock.System.now().toEpochMilliseconds())
+        AuditSamples.applyHistory(store, services.data, cards, Clock.System.now().toEpochMilliseconds())
         val byTitle = cards.associateBy { it.title }
         fun card(title: String): GameCard = byTitle[title] ?: error("Audit game not found: $title")
 
@@ -97,7 +96,7 @@ internal object AuditLibrary {
         withTimeout(60_000) {
             store.library.home.first { feed ->
                 feed.continuePlaying.size >= 8 &&
-                    feed.collections.size == SampleLibrary.collections.size + 2 &&
+                    feed.collections.size == AuditSamples.collections.size + 2 &&
                     feed.pinnedGames.size == 3 &&
                     feed.pinnedApps.size == pinnedApps.size &&
                     feed.playtime.weekSeconds > 0
