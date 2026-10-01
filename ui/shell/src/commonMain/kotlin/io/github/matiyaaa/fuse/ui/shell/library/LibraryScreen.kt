@@ -235,6 +235,10 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
     }
     PrefetchArt(tileArt, state.grid.index, size = LocalTileMetrics.current.icon * 1.4f)
     PrefetchArt(remember(list) { list.orEmpty().map { it.art.logo } }, state.grid.index, size = 360.dp)
+    // The backgrounds of the games next to the selection, so moving on shows them at once.
+    val screen = androidx.compose.ui.platform.LocalWindowInfo.current.containerSize
+    val screenDp = with(androidx.compose.ui.platform.LocalDensity.current) { maxOf(screen.width, screen.height).toDp() }
+    PrefetchArt(remember(list) { list.orEmpty().map { it.art.hero } }, state.grid.index, size = screenDp, limit = 2, fill = true)
     val special = scope == LibraryScope.All && segment.set != GameSet.LIBRARY
     val systemCard = platforms.firstOrNull { it.platform.id == platformId }
     // A game with its own background image shows it; any other game shows its system's background,

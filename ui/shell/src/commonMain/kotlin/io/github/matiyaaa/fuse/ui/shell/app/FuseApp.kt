@@ -193,6 +193,7 @@ fun FuseApp(store: FuseStore, platform: PlatformUi, router: InputRouter, phoneLi
                 val borders = rememberTileBorders(store)
                 CompositionLocalProvider(LocalTileMetrics provides metrics, LocalTileBorders provides borders) {
                     Room(app, prefs.showHero, spec.background, prefs.heroDim, prefs.glass, prefs.videoPreview, prefs.videoDelaySeconds)
+                    ArtWarmup(app, maxWidth, maxHeight)
                     ShellInput(app)
                     Pages(app)
                     val route = app.navigator.current

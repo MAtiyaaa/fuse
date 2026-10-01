@@ -32,7 +32,8 @@ fun fuseImageLoader(
 ): ImageLoader = ImageLoader.Builder(context)
     .memoryCache {
         MemoryCache.Builder()
-            .maxSizePercent(context, if (lowMemory) 0.15 else 0.25)
+            // A third of the app's memory: enough for every system's tiles to stay decoded (see ArtWarmup).
+            .maxSizePercent(context, if (lowMemory) 0.15 else 0.33)
             .build()
     }
     .diskCache {
