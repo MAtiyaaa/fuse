@@ -105,6 +105,12 @@ Builds, passes its unit tests, packages as a Deb and an AppImage, and starts und
 - [x] Top or bottom screen for games and apps on dual-screen devices, asked or remembered (0.0.5)
 - [x] Uploading games to RomM, with their discs, DLC and updates, through Cartridge's bridge protocol 3 (0.0.5; needs the next Cartridge)
 - [x] Art that fills itself after scans, searches other names and falls back when a source runs out (0.0.5)
+- [x] Android games in the Android system, with each app a game, an app or an emulator (0.0.6)
+- [x] Changing a game's system, kept across rescans (0.0.6)
+- [x] Adding a game from anywhere: an installed app, an APK or a game file, with a controller file picker (0.0.6)
+- [x] Fuse in recent apps while it is the Home app (0.0.6)
+- [x] Art decoded ahead of time so systems and games show their art at once (0.0.6)
+- [x] Matching that finds games named in every common ROM style, with exact names winning (0.0.6)
 - [ ] SAF-only storage mode that works without All files access (emulators that need FileProvider URIs would then be limited)
 - [ ] R8 minification and resource shrinking for release APKs
 - [ ] Screenshot tests for the design system and main screens

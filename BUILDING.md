@@ -67,9 +67,9 @@ It needs `curl` and network access the first time, to fetch `appimagetool`. Runn
 
 | Property | Current value | Used for |
 |---|---|---|
-| `fuse.version` | `0.0.5` | Android `versionName`, the release tag `v0.0.5`, file names |
-| `fuse.versionCode` | `5` | Android `versionCode`; must grow with every release |
-| `fuse.releaseName` | `The Box Art Update` | Release title |
+| `fuse.version` | `0.0.6` | Android `versionName`, the release tag `v0.0.6`, file names |
+| `fuse.versionCode` | `6` | Android `versionCode`; must grow with every release |
+| `fuse.releaseName` | `The Android Games Update` | Release title |
 
 ## Release signing
 

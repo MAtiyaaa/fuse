@@ -155,7 +155,9 @@ Everything in this section is in `core:library` and `core:data` and covered by t
    none matches they stay games of their own, so nothing disappears.
 5. **Parse names** (`FilenameParser`, `TagTables`, `Serials`, `DisplayNameCleaner`). Regions,
    languages, revision, version, disc number, dump flags and PlayStation-style serials become
-   `FilenameTags`. Display-name cleanup is optional (off by default) and reversible.
+   `FilenameTags`. Display-name cleanup is optional (off by default) and reversible. `SearchTitles`
+   makes the stricter name art and details are searched by (serials, title ids, versions and
+   release groups removed in every common naming style).
 6. **Find local media** (`MediaLocator`): type folders inside the platform folder or its `media/` or
    `downloaded_media/` folder, ES-DE's global `downloaded_media/<system>/<type>/` layout, and
    Batocera's `images/<name>-thumb.png` style suffixes. Square box art comes from `squares/` (or
@@ -340,7 +342,9 @@ presses.
 `core:data` owns one SQLDelight database, `FuseDatabase`, with its schema in
 `core/data/src/commonMain/sqldelight/io/github/matiyaaa/fuse/data/db/*.sq`.
 
-- **Tables** (schema version 1): `library_source`, `game`, `game_content`, `game_disc`, `game_genre`,
+- **Tables** (schema version 2; `migrations/1.sqm` added a game's chosen system, `platform_override`
+  next to `platform_scanned`, the app type in `app_override.kind`, and `folder_path` in
+  `game_summary`): `library_source`, `game`, `game_content`, `game_disc`, `game_genre`,
   `folder_state`, `media`, `play_session`, `game_collection`, `collection_game`, `setting`,
   `app_override`, `kv_cache`, `title_cleanup_history`, and the view `game_summary`.
 - **Migrations.** The schema snapshot for each released version is kept in

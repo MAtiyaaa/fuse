@@ -12,7 +12,7 @@ Fuse gathers the games in your folders, dresses them in art and starts each one 
 already use, all from a console-style interface made for a gamepad. On Android it can even be your
 Home screen.
 
-<a href="https://github.com/MAtiyaaa/fuse/releases"><img src="https://img.shields.io/badge/release-0.0.5%20The%20Box%20Art%20Update-FF6A3D?style=flat-square&labelColor=15171C" alt="Release 0.0.5, The Box Art Update"></a>
+<a href="https://github.com/MAtiyaaa/fuse/releases"><img src="https://img.shields.io/badge/release-0.0.6%20The%20Android%20Games%20Update-FF6A3D?style=flat-square&labelColor=15171C" alt="Release 0.0.6, The Android Games Update"></a>
 <img src="https://img.shields.io/badge/runs%20on-Android%209%2B%20%C2%B7%20Linux-2B303B?style=flat-square&labelColor=15171C" alt="Runs on Android 9 or newer and Linux">
 <a href="LICENSE"><img src="https://img.shields.io/badge/licence-GPL--3.0--or--later-2B303B?style=flat-square&labelColor=15171C" alt="Licence: GPL-3.0-or-later"></a>
 <a href="#privacy"><img src="https://img.shields.io/badge/telemetry-none-2B303B?style=flat-square&labelColor=15171C" alt="Telemetry: none"></a>
@@ -24,7 +24,7 @@ Home screen.
 <a href="https://github.com/MAtiyaaa/fuse/releases/latest"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/brand/button-linux-dark.svg"><img src="docs/assets/brand/button-linux-light.svg" height="48" alt="Download for Linux"></picture></a>
 
 <sub>Android 9 or newer &nbsp;·&nbsp; 64-bit x86 Linux AppImage &nbsp;·&nbsp; <a href="#install">checksums and install notes</a></sub><br>
-<sub>0.0.5 is an early release, shaped by hands-on tests on a dual-screen Android handheld. <a href="#where-fuse-stands">Here is where it stands.</a></sub>
+<sub>0.0.6 is an early release, shaped by hands-on tests on a dual-screen Android handheld. <a href="#where-fuse-stands">Here is where it stands.</a></sub>
 
 <br>
 
@@ -225,6 +225,11 @@ Play.
   translations and more) and loose Switch updates are each grouped into one game.
 - **Folder behaviour you control**: Auto, File, Folder as game or Folder browser, set globally, per
   system or per game.
+- **Android games** in their own system: any installed app can be a game, an app or an emulator, and
+  games get box art, details and play time like the rest.
+- **A game in the wrong system** moves to the right one from its options, and stays there.
+- **Add a game from anywhere**: an installed app, an APK file, or a game file outside your library
+  folders, picked with Fuse's own file picker.
 - **Quick rescans** only read the folders that changed.
 - **Your files, left alone.** Fuse never moves or renames your files, and deletes a game's files only
   when you ask in Settings, Storage and confirm (never from Phone Link). Missing games are marked,
@@ -266,6 +271,8 @@ Play.
   service needs one, by themselves after a scan if you like. When a source runs out of requests,
   the others take over. The ScreenScraper client is built in and waits for developer credentials, so in
   0.0.1 it makes no requests.
+- **Found however the file is named**: No-Intro, Redump, GoodTools, TOSEC and scene names, serials
+  and title ids anywhere in the name, list numbers and versions; exact names always win.
 - Uncertain matches are **shown to you** before anything is saved.
 - **Art you choose yourself is never replaced**, except when you ask to reset it.
 - Games without art get **generated placeholder art** instead of a blank tile.
@@ -300,7 +307,7 @@ Play.
       <img src="docs/assets/icons/android.svg" width="40" height="40" alt=""><br>
       <b>Android</b> <sub>9 or newer</sub>
       <ul>
-        <li>Optional Home screen mode and an app drawer</li>
+        <li>Optional Home screen mode and an app drawer, with Fuse kept in recent apps</li>
         <li>A companion screen on a second display (Android 10 and later)</li>
         <li>In-app updates, downloaded only after you confirm and checked against their SHA-256 digest</li>
         <li>Keys and passwords kept in the Android Keystore</li>
@@ -326,10 +333,11 @@ Play.
 ## Where Fuse stands
 
 > [!IMPORTANT]
-> **Fuse 0.0.5 "The Box Art Update" is still early.** It answers the fourth round of tests on a
-> dual-screen Android handheld with square box art, menu music, a choice of screen for games and
-> apps, uploads to RomM through Cartridge and art that finds itself (see
-> [the release notes](docs/releases/0.0.5.md)). The shared core (library scanning, launch resolution,
+> **Fuse 0.0.6 "The Android Games Update" is still early.** It answers the fifth round of tests on
+> a dual-screen Android handheld with Android games in their own system, a game's system you can
+> change, adding a game from anywhere, Fuse in recent apps as the Home app, art that is ready before
+> it is shown and matching that finds games however their files are named (see
+> [the release notes](docs/releases/0.0.6.md)). The shared core (library scanning, launch resolution,
 > integrations and the database) and the interface are in place and tested where it matters. The
 > Android app builds and passes its unit tests and lint, and has been tried on one handheld so far.
 > The Linux app builds, passes its tests, packages as an AppImage and starts in a virtual display.
