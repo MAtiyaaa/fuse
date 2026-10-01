@@ -51,6 +51,9 @@ interface PlatformUi {
     /** Text on the system clipboard, or null when it is empty, not text or can't be read. */
     suspend fun readClipboardText(): String? = null
 
+    /** Puts [text] on the system clipboard; false where that isn't possible. */
+    suspend fun writeClipboardText(text: String): Boolean = false
+
     /** The last crash Fuse recorded (time, version, thread, stack trace), or null when there is none. */
     fun lastCrashReport(): String? = null
 

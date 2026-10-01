@@ -1,0 +1,42 @@
+{
+  "fuseTheme": 1,
+  "name": "Glass",
+  "id": "glass",
+  "tagline": "Frosted panels over your art",
+  "extends": "glass",
+  "dark": true,
+  "colors": {
+    "background": "#0A0D13",
+    "surface": "#151A24",
+    "surfaceRaised": "#1E2532",
+    "accent": "#8CCBFF",
+    "accentSoft": "#8CCBFF33",
+    "onAccent": "#04121F",
+    "text": "#F1F5FA",
+    "textMuted": "#A6B3C5",
+    "focus": "#FFFFFF"
+  },
+  "background": {
+    "style": "hero",
+    "intensity": 1.0,
+    "speed": 1.0,
+    "secondary": "#B79CFF"
+  },
+  "corners": "round",
+  "focus": "ring",
+  "motion": "standard",
+  "sound": "soft",
+  "glass": {
+    "enabled": true,
+    "blur": 28.0,
+    "opacity": 0.64
+  },
+  "crt": {
+    "enabled": false,
+    "scanlines": 0.35,
+    "bloom": 0.15,
+    "curvature": 0.08,
+    "chromatic": 0.1,
+    "vignette": 0.3
+  }
+}

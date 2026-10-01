@@ -19,7 +19,6 @@ import io.github.matiyaaa.fuse.model.HomeMode
 import io.github.matiyaaa.fuse.model.LaunchDisplay
 import io.github.matiyaaa.fuse.model.LibraryLayout
 import io.github.matiyaaa.fuse.model.MatchStrictness
-import io.github.matiyaaa.fuse.model.ScrapeProviderId
 import io.github.matiyaaa.fuse.model.MediaFillMode
 import io.github.matiyaaa.fuse.model.MediaKind
 import io.github.matiyaaa.fuse.model.MediaOwner
@@ -28,13 +27,13 @@ import io.github.matiyaaa.fuse.model.PerformanceProfile
 import io.github.matiyaaa.fuse.model.ScanScope
 import io.github.matiyaaa.fuse.model.ScopeRef
 import io.github.matiyaaa.fuse.model.ScopedSettings
+import io.github.matiyaaa.fuse.model.ScrapeProviderId
 import io.github.matiyaaa.fuse.model.SoundProfile
 import io.github.matiyaaa.fuse.model.Support
 import io.github.matiyaaa.fuse.model.WidgetKind
 import io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction
 import io.github.matiyaaa.fuse.ui.designsystem.components.Trailing
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
-import io.github.matiyaaa.fuse.ui.designsystem.theme.ThemePresets
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec
 import io.github.matiyaaa.fuse.ui.shell.app.ConfirmSpec
@@ -78,9 +77,12 @@ fun appearanceRows(app: AppState): List<MenuAction> {
     val p by app.store.prefs.collectAsState()
     val set = app.store::updatePrefs
     return buildList {
-        add(app.choiceRow("theme", "Theme", FuseIcons.Palette, p.themeId, ThemePresets.all.map { it.id to it.name }, optionDetail = { id -> ThemePresets.byId(id).tagline }) { v ->
-            set { it.copy(themeId = v, crt = if (ThemePresets.byId(v).crt.enabled) it.crt.copy(enabled = true) else it.crt) }
-        })
+        add(MenuAction(
+            "theme", "Theme", FuseIcons.Palette,
+            detail = "Built-in themes and ones you add from a link or a file",
+            trailing = Trailing.Value(p.theme.name),
+            onSelect = { app.go(Route.Themes) },
+        ))
         add(app.choiceRow(
             "art", "Game art", FuseIcons.Image, p.gameArt,
             listOf(GameArtStyle.BOX_ART to "Box art", GameArtStyle.POSTER to "Posters"),

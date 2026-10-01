@@ -34,6 +34,7 @@ object FuseIcons {
     val Carousel: ImageVector by lazy { lineIcon("Carousel", "M2 7v10", "M6 5v14", "M12 3h8a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2h-8a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2Z") }
     val Chart: ImageVector by lazy { lineIcon("Chart", "M5 21v-6", "M12 21V3", "M19 21V9") }
     val Check: ImageVector by lazy { lineIcon("Check", "M20 6 9 17l-5-5") }
+    val Copy: ImageVector by lazy { lineIcon("Copy", "M10 8h10a2 2 0 0 1 2 2v10a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-10a2 2 0 0 1 2 -2Z", "M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2") }
     val ChevronDown: ImageVector by lazy { lineIcon("ChevronDown", "m6 9 6 6 6-6") }
     val ChevronLeft: ImageVector by lazy { lineIcon("ChevronLeft", "m15 18-6-6 6-6") }
     val ChevronRight: ImageVector by lazy { lineIcon("ChevronRight", "m9 18 6-6-6-6") }

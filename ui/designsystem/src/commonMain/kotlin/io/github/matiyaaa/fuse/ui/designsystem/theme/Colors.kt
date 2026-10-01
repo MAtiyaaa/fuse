@@ -53,9 +53,9 @@ data class FuseColors(
                 accentSoft = Color(p.accentSoft),
                 onAccent = Color(p.onAccent),
                 focus = Color(p.focusRing),
-                success = Color(0xFF3DD68C),
-                warning = Color(0xFFFFB547),
-                danger = Color(0xFFFF5D6C),
+                success = Color(p.success ?: 0xFF3DD68C),
+                warning = Color(p.warning ?: 0xFFFFB547),
+                danger = Color(p.danger ?: 0xFFFF5D6C),
                 scrim = Color(p.background).copy(alpha = 0.72f),
                 isDark = p.dark,
             )

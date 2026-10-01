@@ -68,7 +68,6 @@ import io.github.matiyaaa.fuse.ui.designsystem.theme.Easings
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.FuseTheme
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
-import io.github.matiyaaa.fuse.ui.designsystem.theme.ThemePresets
 import io.github.matiyaaa.fuse.ui.shell.components.CoverCollage
 import io.github.matiyaaa.fuse.ui.shell.components.playtimeText
 import io.github.matiyaaa.fuse.ui.shell.platform.PlatformUi
@@ -139,7 +138,7 @@ internal object CompanionPage {
 @Composable
 fun CompanionApp(store: FuseStore, platform: PlatformUi, mode: DualScreenMode) {
     val prefs by store.prefs.collectAsState()
-    val spec = ThemePresets.byId(prefs.themeId)
+    val spec = prefs.theme
     FuseTheme(
         spec = spec,
         motion = prefs.motion,

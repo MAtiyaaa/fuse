@@ -1,0 +1,19 @@
+{
+  "fuseTheme": 1,
+  "name": "Paper Mint",
+  "author": "Fuse",
+  "tagline": "A bright desk with a cool green accent",
+  "extends": "daylight",
+  "colors": {
+    "background": "#F3F5F1",
+    "surface": "#FFFFFF",
+    "surfaceRaised": "#F7F9F5",
+    "accent": "#11795A",
+    "onAccent": "#FFFFFF",
+    "text": "#16201B",
+    "textMuted": "#55615B",
+    "focus": "#16201B"
+  },
+  "background": "stripes",
+  "corners": "round"
+}

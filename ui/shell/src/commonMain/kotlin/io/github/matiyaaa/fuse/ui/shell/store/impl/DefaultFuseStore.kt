@@ -1,16 +1,27 @@
 package io.github.matiyaaa.fuse.ui.shell.store.impl
 
 import io.github.matiyaaa.fuse.data.settings.SecretKeys
+import io.github.matiyaaa.fuse.data.settings.StoredTheme
 import io.github.matiyaaa.fuse.library.parse.DisplayNameCleaner
 import io.github.matiyaaa.fuse.model.ScanPhase
 import io.github.matiyaaa.fuse.model.ScanScope
 import io.github.matiyaaa.fuse.model.ScopeRef
 import io.github.matiyaaa.fuse.model.ScopedSettings
+import io.github.matiyaaa.fuse.model.ThemeCodec
+import io.github.matiyaaa.fuse.model.ThemeLinks
+import io.github.matiyaaa.fuse.model.ThemeSpec
+import io.github.matiyaaa.fuse.ui.designsystem.theme.ThemePresets
 import io.github.matiyaaa.fuse.ui.designsystem.res.Res
 import io.github.matiyaaa.fuse.ui.shell.music.BundledMusic
 import io.github.matiyaaa.fuse.ui.shell.store.FuseServices
 import io.github.matiyaaa.fuse.ui.shell.store.FuseStore
+import io.github.matiyaaa.fuse.ui.shell.store.ThemeOps
 import io.github.matiyaaa.fuse.ui.shell.store.UiPrefs
+import io.ktor.client.request.get
+import io.ktor.client.statement.bodyAsChannel
+import io.ktor.http.isSuccess
+import io.ktor.utils.io.readRemaining
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
@@ -21,6 +32,8 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeout
+import kotlinx.io.readByteArray
 
 /**
  * The store over Fuse's core modules. Preferences change in memory first (so the interface reacts
@@ -64,6 +77,64 @@ internal class DefaultFuseStore private constructor(
     }
 
     override val media get() = mediaOps
+
+    override val themes = object : ThemeOps {
+        override suspend fun fetch(url: String): Result<String> {
+            val link = ThemeLinks.normalize(url) ?: return Result.failure(IllegalArgumentException("Only https links can be added."))
+            return try {
+                withTimeout(FETCH_TIMEOUT_MS) {
+                    val response = ctx.services.http.get(link)
+                    if (!response.status.isSuccess()) return@withTimeout Result.failure(IllegalStateException("The link answered ${response.status.value}. Check that it points at the theme file."))
+                    val bytes = response.bodyAsChannel().readRemaining(ThemeCodec.MAX_BYTES + 1L).readByteArray()
+                    if (bytes.size > ThemeCodec.MAX_BYTES) Result.failure(IllegalStateException("This theme is larger than 64 KB.")) else Result.success(bytes.decodeToString())
+                }
+            } catch (e: CancellationException) {
+                if (e is kotlinx.coroutines.TimeoutCancellationException) Result.failure(IllegalStateException("The link took too long to answer.")) else throw e
+            } catch (e: Exception) {
+                Result.failure(IllegalStateException("Couldn't reach that link. Check your connection."))
+            }
+        }
+
+        override suspend fun readFile(path: String): Result<String> {
+            val text = ctx.services.fs.readText(path, ThemeCodec.MAX_BYTES + 1)
+                ?: return Result.failure(IllegalStateException("Couldn't read that file."))
+            return if (text.encodeToByteArray().size > ThemeCodec.MAX_BYTES) Result.failure(IllegalStateException("This theme is larger than 64 KB.")) else Result.success(text)
+        }
+
+        override fun parse(text: String): ThemeCodec.Result = ThemeCodec.parse(text, ThemePresets::find, ThemePresets.Fuse)
+
+        override suspend fun add(spec: ThemeSpec, json: String, source: String?, apply: Boolean) {
+            writeLock.withLock {
+                val settings = data.settings.update { s ->
+                    val kept = s.appearance.customThemes.filterNot { it.id == spec.id }
+                    val all = (kept + StoredTheme(spec.id, json.trim(), source, ctx.now())).takeLast(MAX_THEMES)
+                    s.copy(appearance = s.appearance.copy(customThemes = all))
+                }
+                ctx.settings.value = settings
+                prefsState.value = prefsState.value.copy(customThemes = settings.appearance.customThemes.mapNotNull { it.spec() })
+            }
+            if (apply) updatePrefs { it.withTheme(it.customThemes.firstOrNull { t -> t.id == spec.id } ?: spec) }
+        }
+
+        override suspend fun remove(id: String) {
+            if (prefsState.value.themeId == id) updatePrefs { it.withTheme(ThemePresets.Fuse) }
+            writeLock.withLock {
+                val settings = data.settings.update { s ->
+                    s.copy(
+                        appearance = s.appearance.copy(
+                            customThemes = s.appearance.customThemes.filterNot { it.id == id },
+                            themeId = if (s.appearance.themeId == id) ThemePresets.Fuse.id else s.appearance.themeId,
+                        ),
+                    )
+                }
+                ctx.settings.value = settings
+                prefsState.value = prefsState.value.copy(customThemes = settings.appearance.customThemes.mapNotNull { it.spec() })
+            }
+        }
+
+        override fun export(spec: ThemeSpec): String =
+            ctx.settings.value.appearance.customThemes.firstOrNull { it.id == spec.id }?.json ?: ThemeCodec.encode(spec)
+    }
 
     override suspend fun bundledTrack(id: String): String? {
         if (BundledMusic.byId(id) == null) return null
@@ -161,6 +232,8 @@ internal class DefaultFuseStore private constructor(
     companion object {
         /** Version of [DisplayNameCleaner]'s rules; existing names are cleaned again when it grows. */
         const val CLEAN_RULES = 2
+        const val MAX_THEMES = 32
+        const val FETCH_TIMEOUT_MS = 10_000L
 
         /** How long after a scan (or a new key) the automatic fill starts. */
         const val AUTO_FILL_DELAY_MS = 5_000L

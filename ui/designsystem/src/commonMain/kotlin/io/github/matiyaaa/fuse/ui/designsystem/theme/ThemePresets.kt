@@ -1,5 +1,6 @@
 package io.github.matiyaaa.fuse.ui.designsystem.theme
 
+import io.github.matiyaaa.fuse.model.AmbientSpec
 import io.github.matiyaaa.fuse.model.BackgroundStyle
 import io.github.matiyaaa.fuse.model.CornerFamily
 import io.github.matiyaaa.fuse.model.CrtSettings
@@ -13,9 +14,11 @@ import io.github.matiyaaa.fuse.model.ThemeSpec
 
 /**
  * Built-in themes. All are original designs; DESIGN_SYSTEM.md notes the console eras that
- * inspired some of them. Names are Fuse's own and never use console trademarks.
+ * inspired some of them. Names are Fuse's own and never use console trademarks. Each one is also a
+ * starting point for community themes (docs/THEMES.md), which name it in `extends`.
  */
 object ThemePresets {
+    /** The brand: a dark room lit by the game you're on, with an ember accent. */
     val Fuse = ThemeSpec(
         id = "fuse",
         name = "Fuse",
@@ -32,22 +35,26 @@ object ThemePresets {
         motion = MotionProfile.STANDARD,
     )
 
+    /** Fuse in a bright room: warm paper, ink outlines, the same ember. */
     val Daylight = ThemeSpec(
         id = "daylight",
         name = "Daylight",
         tagline = "Fuse in a bright room",
         palette = ThemePalette(
             dark = false,
-            background = 0xFFF2F1EE, surface = 0xFFFFFFFF, surfaceRaised = 0xFFF7F6F3,
-            accent = 0xFFE9522B, accentSoft = 0x26E9522B, onAccent = 0xFFFFFFFF,
-            textPrimary = 0xFF15171C, textSecondary = 0xFF5B616D, focusRing = 0xFF15171C,
+            background = 0xFFF4F2EE, surface = 0xFFFFFFFF, surfaceRaised = 0xFFF9F7F3,
+            accent = 0xFFC9431F, accentSoft = 0x26C9431F, onAccent = 0xFFFFFFFF,
+            textPrimary = 0xFF15171C, textSecondary = 0xFF565C68, focusRing = 0xFF15171C,
+            success = 0xFF16935A, warning = 0xFFB86E00, danger = 0xFFD12D3E,
         ),
         background = BackgroundStyle.HERO,
         geometry = CornerFamily.SOFT,
         focus = FocusStyle.RING,
         motion = MotionProfile.STANDARD,
+        ambient = AmbientSpec(secondary = 0xFFFFC08A),
     )
 
+    /** Frosted panels over your art, in cold blue and violet light. */
     val Glass = ThemeSpec(
         id = "glass",
         name = "Glass",
@@ -55,23 +62,25 @@ object ThemePresets {
         palette = ThemePalette(
             dark = true,
             background = 0xFF0A0D13, surface = 0xFF151A24, surfaceRaised = 0xFF1E2532,
-            accent = 0xFF7CC4FF, accentSoft = 0x337CC4FF, onAccent = 0xFF04121F,
-            textPrimary = 0xFFF1F5FA, textSecondary = 0xFFA3B0C2, focusRing = 0xFFFFFFFF,
+            accent = 0xFF8CCBFF, accentSoft = 0x338CCBFF, onAccent = 0xFF04121F,
+            textPrimary = 0xFFF1F5FA, textSecondary = 0xFFA6B3C5, focusRing = 0xFFFFFFFF,
         ),
         background = BackgroundStyle.HERO,
         geometry = CornerFamily.ROUND,
         focus = FocusStyle.RING,
         motion = MotionProfile.STANDARD,
-        glass = GlassSettings(enabled = true),
+        glass = GlassSettings(enabled = true, blur = 28f, surfaceOpacity = 0.64f),
+        ambient = AmbientSpec(secondary = 0xFFB79CFF),
     )
 
+    /** Deep navy, a ribbon of light in two blues, items crossing sections. */
     val Crossbar = ThemeSpec(
         id = "crossbar",
         name = "Crossbar",
         tagline = "Sections across, items down",
         palette = ThemePalette(
             dark = true,
-            background = 0xFF081028, surface = 0xFF101C3C, surfaceRaised = 0xFF18284F,
+            background = 0xFF071027, surface = 0xFF0F1B3A, surfaceRaised = 0xFF17284D,
             accent = 0xFF9FC3FF, accentSoft = 0x339FC3FF, onAccent = 0xFF061022,
             textPrimary = 0xFFF2F6FF, textSecondary = 0xFFA9B8D6, focusRing = 0xFFFFFFFF,
         ),
@@ -81,8 +90,10 @@ object ThemePresets {
         motion = MotionProfile.STANDARD,
         navigation = NavigationStyle.CROSSBAR,
         sound = SoundProfile.CHIME,
+        ambient = AmbientSpec(intensity = 1.15f, secondary = 0xFFE6F2FF),
     )
 
+    /** Quiet light circling in the dark, over a far field of stars. */
     val Orbital = ThemeSpec(
         id = "orbital",
         name = "Orbital",
@@ -97,32 +108,36 @@ object ThemePresets {
         geometry = CornerFamily.SOFT,
         focus = FocusStyle.GLOW,
         motion = MotionProfile.ENHANCED,
+        ambient = AmbientSpec(secondary = 0xFF4FD1FF),
     )
 
+    /** Plum dusk, a coral accent and gold ribbons drifting across. */
     val Wave = ThemeSpec(
         id = "wave",
         name = "Wave",
-        tagline = "A slow ribbon of light",
+        tagline = "A slow ribbon of light at dusk",
         palette = ThemePalette(
             dark = true,
-            background = 0xFF0B0B11, surface = 0xFF15151E, surfaceRaised = 0xFF1F1F2B,
-            accent = 0xFFDDE2EE, accentSoft = 0x26DDE2EE, onAccent = 0xFF0B0B11,
-            textPrimary = 0xFFF5F6FA, textSecondary = 0xFFA5A8B6, focusRing = 0xFFFFFFFF,
+            background = 0xFF0E0B12, surface = 0xFF19141F, surfaceRaised = 0xFF241D2C,
+            accent = 0xFFFF8F7A, accentSoft = 0x33FF8F7A, onAccent = 0xFF220A06,
+            textPrimary = 0xFFF7F2F5, textSecondary = 0xFFB2A7B5, focusRing = 0xFFFFFFFF,
         ),
         background = BackgroundStyle.WAVE,
         geometry = CornerFamily.SOFT,
-        focus = FocusStyle.BAR,
+        focus = FocusStyle.GLOW,
         motion = MotionProfile.STANDARD,
         sound = SoundProfile.CHIME,
+        ambient = AmbientSpec(secondary = 0xFFFFC46B),
     )
 
+    /** Bold panels, sharp edges and green northern light. */
     val Blades = ThemeSpec(
         id = "blades",
         name = "Blades",
         tagline = "Bold panels, sharp edges, green light",
         palette = ThemePalette(
             dark = true,
-            background = 0xFF0B100C, surface = 0xFF141C16, surfaceRaised = 0xFF1D2920,
+            background = 0xFF0A0F0B, surface = 0xFF131B15, surfaceRaised = 0xFF1C281F,
             accent = 0xFF86DC5C, accentSoft = 0x3386DC5C, onAccent = 0xFF08140A,
             textPrimary = 0xFFF1F6F0, textSecondary = 0xFFA2B0A0, focusRing = 0xFFFFFFFF,
         ),
@@ -131,25 +146,29 @@ object ThemePresets {
         focus = FocusStyle.RING,
         motion = MotionProfile.STANDARD,
         sound = SoundProfile.CLICK,
+        ambient = AmbientSpec(intensity = 1.1f, secondary = 0xFF2BD9A5),
     )
 
+    /** Bright tiles on soft pinstripes, a clear sky blue. */
     val Channels = ThemeSpec(
         id = "channels",
         name = "Channels",
         tagline = "Bright tiles you arrange yourself",
         palette = ThemePalette(
             dark = false,
-            background = 0xFFEDF0F3, surface = 0xFFFFFFFF, surfaceRaised = 0xFFF5F7F9,
-            accent = 0xFF2B9FDB, accentSoft = 0x262B9FDB, onAccent = 0xFFFFFFFF,
-            textPrimary = 0xFF1E232D, textSecondary = 0xFF5D6574, focusRing = 0xFF2B9FDB,
+            background = 0xFFEDF1F5, surface = 0xFFFFFFFF, surfaceRaised = 0xFFF5F8FA,
+            accent = 0xFF1779BC, accentSoft = 0x261779BC, onAccent = 0xFFFFFFFF,
+            textPrimary = 0xFF1A202B, textSecondary = 0xFF56606F, focusRing = 0xFF1471AA,
+            success = 0xFF17955C, warning = 0xFFB86E00, danger = 0xFFD12D3E,
         ),
-        background = BackgroundStyle.GRID,
+        background = BackgroundStyle.STRIPES,
         geometry = CornerFamily.PILL,
         focus = FocusStyle.RING,
         motion = MotionProfile.STANDARD,
         sound = SoundProfile.SOFT,
     )
 
+    /** A glowing tube: scanlines, phosphor green text, an amber spark. */
     val Crt = ThemeSpec(
         id = "crt",
         name = "CRT",
@@ -166,9 +185,32 @@ object ThemePresets {
         motion = MotionProfile.STANDARD,
         sound = SoundProfile.CLICK,
         crt = CrtSettings(enabled = true),
+        ambient = AmbientSpec(intensity = 0.8f),
     )
 
-    val all: List<ThemeSpec> = listOf(Fuse, Glass, Crossbar, Orbital, Wave, Blades, Channels, Crt, Daylight)
+    /** Night sky: drifting stars and a violet nebula. */
+    val Starlight = ThemeSpec(
+        id = "starlight",
+        name = "Starlight",
+        tagline = "A slow drift of stars",
+        palette = ThemePalette(
+            dark = true,
+            background = 0xFF05050C, surface = 0xFF0F0F1C, surfaceRaised = 0xFF181828,
+            accent = 0xFFB79CFF, accentSoft = 0x33B79CFF, onAccent = 0xFF120A26,
+            textPrimary = 0xFFF1EFFA, textSecondary = 0xFFA5A2BD, focusRing = 0xFFFFFFFF,
+        ),
+        background = BackgroundStyle.STARS,
+        geometry = CornerFamily.ROUND,
+        focus = FocusStyle.GLOW,
+        motion = MotionProfile.STANDARD,
+        sound = SoundProfile.CHIME,
+        ambient = AmbientSpec(secondary = 0xFF5BC8FF),
+    )
+
+    val all: List<ThemeSpec> = listOf(Fuse, Glass, Starlight, Crossbar, Orbital, Wave, Blades, Channels, Crt, Daylight)
 
     fun byId(id: String?): ThemeSpec = all.firstOrNull { it.id == id } ?: Fuse
+
+    /** The built-in theme with [id], or null. */
+    fun find(id: String?): ThemeSpec? = all.firstOrNull { it.id == id }
 }

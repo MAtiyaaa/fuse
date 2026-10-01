@@ -56,6 +56,11 @@ internal class FakeServices(
         requestHosts += request.url.host
         if (latestRelease != null && request.url.encodedPath.endsWith("/releases/latest")) {
             respond(latestRelease, HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
+        } else if (request.url.host == "raw.githubusercontent.com" && request.url.encodedPath == "/someone/themes/main/ember.json") {
+            // A shared theme, as GitHub serves the file behind a page link.
+            respond("""{"fuseTheme": 1, "name": "Ember", "colors": {"accent": "#FF7A59"}}""", HttpStatusCode.OK)
+        } else if (request.url.host == "raw.githubusercontent.com" && request.url.encodedPath.endsWith("/big.json")) {
+            respond("x".repeat(70_000), HttpStatusCode.OK)
         } else {
             respondError(HttpStatusCode.NotFound)
         }
