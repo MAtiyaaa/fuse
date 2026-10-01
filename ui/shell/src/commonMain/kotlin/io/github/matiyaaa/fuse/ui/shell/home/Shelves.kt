@@ -46,7 +46,16 @@ data class Shelf(
     val items: List<ShelfItem>,
     /** The widgets that produced this shelf (several small widgets share one "At a glance" shelf). */
     val widgets: List<HomeWidget>,
-)
+) {
+    /** The widget kind this shelf shows (the first one, for an "At a glance" shelf). */
+    val kind: WidgetKind? get() = widgets.firstOrNull()?.kind
+
+    /**
+     * How many things the shelf holds, for the quiet count after its title; none for widget shelves,
+     * where a number would only count the cards.
+     */
+    val count: Int? get() = if (style == ShelfStyle.WIDGETS) null else items.size
+}
 
 private val glanceKinds = setOf(
     WidgetKind.RECENT_ACHIEVEMENT, WidgetKind.ACHIEVEMENT_PROGRESS, WidgetKind.RECENTLY_MASTERED,
