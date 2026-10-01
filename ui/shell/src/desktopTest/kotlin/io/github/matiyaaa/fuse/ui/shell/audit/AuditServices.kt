@@ -13,6 +13,7 @@ import io.github.matiyaaa.fuse.model.EmulatorId
 import io.github.matiyaaa.fuse.model.Host
 import io.github.matiyaaa.fuse.model.InstalledEmulator
 import io.github.matiyaaa.fuse.model.PerformanceMetric
+import io.github.matiyaaa.fuse.model.SystemStatus
 import io.github.matiyaaa.fuse.model.PlatformId
 import io.github.matiyaaa.fuse.ui.shell.platform.MenuMusicPlayer
 import io.github.matiyaaa.fuse.ui.shell.platform.HomeRole
@@ -251,6 +252,10 @@ internal class AuditPlatform(
     )
     override val performance: StateFlow<List<PerformanceMetric>> = MutableStateFlow(metrics)
 
+    /** Settable, for battery states (charging, full, low). */
+    val statusFlow = MutableStateFlow(ScreenshotPlatform.status.value)
+    override val status: StateFlow<SystemStatus> = statusFlow
+
     /** A silent player, so the Sound settings show what a device with audio shows. */
     override val music: MenuMusicPlayer = object : MenuMusicPlayer {
         override fun setSong(path: String?) = Unit
@@ -259,11 +264,13 @@ internal class AuditPlatform(
     }
 
     companion object {
+        /** The keys real devices report: a Linux handheld's processor and memory, Android's battery and frame rate. */
         val SampleMetrics = listOf(
-            PerformanceMetric("fps", "Fuse frame rate", "60 fps", 1f, source = "Compose frame clock"),
-            PerformanceMetric("mem", "Memory", "412 MB of 16 GB", 0.025f, source = "JVM"),
-            PerformanceMetric("cpu", "CPU temperature", "48 °C", 0.48f, source = "thermal zone 0"),
-            PerformanceMetric("battery", "Battery", "78%", 0.78f, source = "power supply"),
+            PerformanceMetric("cpu", "Processor", "34%", 0.34f, source = "/proc/stat"),
+            PerformanceMetric("memory", "Memory", "5.2 / 16.0 GB", 0.33f, source = "/proc/meminfo"),
+            PerformanceMetric("cpu-temp", "CPU temperature", "48 °C", 0.48f, source = "thermal zone 0"),
+            PerformanceMetric("battery_temp", "Battery", "31.5 °C", source = "battery broadcast"),
+            PerformanceMetric("fuse_fps", "Fuse frame rate", "60 fps", source = "Compose frame clock"),
         )
 
         /** A device that could make Fuse its Home screen, not yet chosen. */

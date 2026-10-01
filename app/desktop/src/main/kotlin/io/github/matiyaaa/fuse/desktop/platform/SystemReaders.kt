@@ -17,6 +17,18 @@ private fun readSys(path: String): String? = try {
     null
 }
 
+/** One reading of the system battery. [minutes] is the time to full while [charging], to empty otherwise. */
+internal data class BatteryReading(
+    val percent: Int?,
+    val charging: Boolean,
+    val minutes: Int? = null,
+    val full: Boolean = false,
+) {
+    companion object {
+        val NONE = BatteryReading(null, false)
+    }
+}
+
 /**
  * Battery, network and Bluetooth state from sysfs and procfs. Every read is a few tiny files; values
  * that can't be read are left out (null or UNKNOWN), never guessed.
@@ -24,11 +36,13 @@ private fun readSys(path: String): String? = try {
 internal object StatusReader {
     fun read(): SystemStatus {
         if (DesktopOs.current != DesktopOs.LINUX) return OtherStatus.read()
-        val (battery, charging) = battery()
+        val battery = readLinuxBattery(smooth = ::smoothRate)
         val net = network()
         return SystemStatus(
-            batteryPercent = battery,
-            charging = charging,
+            batteryPercent = battery.percent,
+            charging = battery.charging,
+            batteryMinutes = battery.minutes,
+            batteryFull = battery.full,
             wifi = net.wifi,
             wifiStrength = net.wifiStrength,
             bluetooth = bluetooth(),
@@ -36,19 +50,63 @@ internal object StatusReader {
         )
     }
 
-    /** System batteries only (`scope=Device` marks controller and mouse batteries). */
-    private fun battery(): Pair<Int?, Boolean> {
-        val supplies = File("/sys/class/power_supply").listFiles() ?: return null to false
-        val batteries = supplies.filter { s ->
-            readSys("${s.path}/type") == "Battery" && readSys("${s.path}/scope") != "Device" && readSys("${s.path}/present") != "0"
-        }
-        val levels = batteries.mapNotNull { readSys("${it.path}/capacity")?.toIntOrNull()?.coerceIn(0, 100) }
-        if (levels.isEmpty()) return null to false
-        val statuses = batteries.mapNotNull { readSys("${it.path}/status") }
-        val acOnline = supplies.any { s -> readSys("${s.path}/type") == "Mains" && readSys("${s.path}/online") == "1" }
-        val charging = statuses.any { it == "Charging" } || (acOnline && statuses.all { it == "Full" || it == "Not charging" })
-        return levels.average().roundToInt() to charging
+    @Volatile private var smoothed: Double? = null
+    @Volatile private var smoothedCharging: Boolean? = null
+
+    /** Power readings move every poll; a moving average keeps the estimate steady. Reset when charging starts or stops. */
+    private fun smoothRate(rate: Double, charging: Boolean): Double {
+        val last = smoothed
+        val next = if (last == null || smoothedCharging != charging) rate else last + RATE_SMOOTHING * (rate - last)
+        smoothed = next
+        smoothedCharging = charging
+        return next
     }
+
+    /**
+     * System batteries only (`scope=Device` marks controller and mouse batteries). The time comes
+     * from the kernel's `time_to_*_now` when it has them, else from the energy (or charge) left and
+     * the power (or current) drawn, summed over every battery.
+     */
+    internal fun readLinuxBattery(
+        root: File = File("/sys/class/power_supply"),
+        smooth: (rate: Double, charging: Boolean) -> Double = { r, _ -> r },
+    ): BatteryReading {
+        fun read(dir: File, name: String) = readSys("${dir.path}/$name")
+        fun number(dir: File, name: String) = read(dir, name)?.toLongOrNull()
+        val supplies = root.listFiles() ?: return BatteryReading.NONE
+        val batteries = supplies.filter { s ->
+            read(s, "type") == "Battery" && read(s, "scope") != "Device" && read(s, "present") != "0"
+        }
+        val levels = batteries.mapNotNull { number(it, "capacity")?.toInt()?.coerceIn(0, 100) }
+        if (levels.isEmpty()) return BatteryReading.NONE
+        val level = levels.average().roundToInt()
+        val statuses = batteries.mapNotNull { read(it, "status") }
+        val acOnline = supplies.any { s -> read(s, "type") == "Mains" && read(s, "online") == "1" }
+        val charging = statuses.any { it == "Charging" } || (acOnline && statuses.all { it == "Full" || it == "Not charging" })
+        val full = statuses.isNotEmpty() && (statuses.all { it == "Full" } || (acOnline && level >= 95 && statuses.all { it == "Full" || it == "Not charging" }))
+        if (full) return BatteryReading(level, charging = true, full = true)
+
+        val kernel = if (batteries.size == 1) number(batteries[0], if (charging) "time_to_full_now" else "time_to_empty_now") else null
+        if (kernel != null && kernel > 0) return BatteryReading(level, charging, minutes = ((kernel + 59) / 60).toInt().takeIf { it in 1..MAX_MINUTES })
+
+        // Energy in microwatt hours and power in microwatts, else charge in microamp hours and current in microamps.
+        fun sum(name: String) = batteries.mapNotNull { number(it, name) }.takeIf { it.size == batteries.size }?.sum()
+        val energy = sum("energy_now")?.let { Triple(it, sum("energy_full"), sum("power_now")?.let { kotlin.math.abs(it) }) }
+            ?: sum("charge_now")?.let { Triple(it, sum("charge_full"), sum("current_now")?.let { kotlin.math.abs(it) }) }
+            ?: return BatteryReading(level, charging)
+        val (now, fullAt, rawRate) = energy
+        val minRate = if (sum("energy_now") != null) MIN_POWER_UW else MIN_CURRENT_UA
+        if (rawRate == null || rawRate < minRate) return BatteryReading(level, charging)
+        val rate = smooth(rawRate.toDouble(), charging)
+        val hours = if (charging) ((fullAt ?: return BatteryReading(level, charging)) - now).coerceAtLeast(0) / rate else now / rate
+        val minutes = ceil(hours * 60).toInt().takeIf { it in 1..MAX_MINUTES }
+        return BatteryReading(level, charging, minutes)
+    }
+
+    private const val RATE_SMOOTHING = 0.25
+    private const val MIN_POWER_UW = 300_000L
+    private const val MIN_CURRENT_UA = 30_000L
+    private const val MAX_MINUTES = 2880
 
     private class Net(val network: ConnectionState, val wifi: ConnectionState, val wifiStrength: Int?)
 
@@ -200,17 +258,25 @@ internal object OtherStatus {
     val osBean: com.sun.management.OperatingSystemMXBean? =
         java.lang.management.ManagementFactory.getOperatingSystemMXBean() as? com.sun.management.OperatingSystemMXBean
 
-    @Volatile private var battery: Pair<Int?, Boolean> = null to false
+    @Volatile private var battery: BatteryReading = BatteryReading.NONE
     @Volatile private var batteryAt = 0L
     private val wifiDevice: String? by lazy { if (DesktopOs.isMac) macWifiDevice() else null }
 
     fun read(): SystemStatus {
-        val (level, charging) = batteryNow()
+        val b = batteryNow()
         val (network, wifi) = network()
-        return SystemStatus(batteryPercent = level, charging = charging, wifi = wifi, network = network, bluetooth = ConnectionState.UNKNOWN)
+        return SystemStatus(
+            batteryPercent = b.percent,
+            charging = b.charging,
+            batteryMinutes = b.minutes,
+            batteryFull = b.full,
+            wifi = wifi,
+            network = network,
+            bluetooth = ConnectionState.UNKNOWN,
+        )
     }
 
-    private fun batteryNow(): Pair<Int?, Boolean> {
+    private fun batteryNow(): BatteryReading {
         val now = System.currentTimeMillis()
         val ttl = if (DesktopOs.isWindows) 60_000L else 10_000L
         if (now - batteryAt < ttl) return battery
@@ -219,33 +285,54 @@ internal object OtherStatus {
         return battery
     }
 
-    private fun macBattery(): Pair<Int?, Boolean> {
-        val out = Processes.run(listOf("/usr/bin/pmset", "-g", "batt"), timeoutMs = 3_000)?.takeIf { it.exitCode == 0 } ?: return null to false
+    private fun macBattery(): BatteryReading {
+        val out = Processes.run(listOf("/usr/bin/pmset", "-g", "batt"), timeoutMs = 3_000)?.takeIf { it.exitCode == 0 } ?: return BatteryReading.NONE
         return parsePmset(out.stdout)
     }
 
-    /** "Now drawing from 'AC Power'" and " -InternalBattery-0 (id=1)	85%; charging; 0:42 remaining". */
-    internal fun parsePmset(text: String): Pair<Int?, Boolean> {
-        val line = text.lineSequence().firstOrNull { "InternalBattery" in it } ?: return null to false
+    /**
+     * "Now drawing from 'AC Power'" and " -InternalBattery-0 (id=1)	85%; charging; 0:42 remaining".
+     * The time is to full while charging, to empty otherwise; "(no estimate)" while macOS measures.
+     */
+    internal fun parsePmset(text: String): BatteryReading {
+        val line = text.lineSequence().firstOrNull { "InternalBattery" in it } ?: return BatteryReading.NONE
         val level = Regex("""(\d{1,3})%""").find(line)?.groupValues?.get(1)?.toIntOrNull()?.coerceIn(0, 100)
         val onAc = "AC Power" in text
         val state = line.substringAfter(';', "").substringBefore(';').trim()
-        return level to (state == "charging" || state == "finishing charge" || (onAc && state == "charged"))
+        val full = onAc && state == "charged"
+        val charging = state == "charging" || state == "finishing charge" || full
+        val minutes = if (full) null else Regex("""(\d+):(\d{2}) remaining""").find(line)?.let { m ->
+            m.groupValues[1].toInt() * 60 + m.groupValues[2].toInt()
+        }?.takeIf { it in 1..2880 }
+        return BatteryReading(level, charging = level != null && charging, minutes = minutes.takeIf { level != null }, full = level != null && full)
     }
 
-    private fun windowsBattery(): Pair<Int?, Boolean> {
+    private fun windowsBattery(): BatteryReading {
         val script = "\$b = Get-CimInstance -ClassName Win32_Battery | Select-Object -First 1; " +
-            "if (\$b) { [Console]::Out.Write([string]\$b.EstimatedChargeRemaining + ',' + [string]\$b.BatteryStatus) }"
-        val out = PowerShell.run(script, timeoutMs = 8_000)?.takeIf { it.exitCode == 0 } ?: return null to false
+            "if (\$b) { [Console]::Out.Write([string]\$b.EstimatedChargeRemaining + ',' + [string]\$b.BatteryStatus + ',' + " +
+            "[string]\$b.EstimatedRunTime + ',' + [string]\$b.TimeToFullCharge) }"
+        val out = PowerShell.run(script, timeoutMs = 8_000)?.takeIf { it.exitCode == 0 } ?: return BatteryReading.NONE
         return parseWin32Battery(out.stdout)
     }
 
-    /** "85,2": the charge, then Win32_Battery's BatteryStatus (1, 4 and 5 run on the battery). */
-    internal fun parseWin32Battery(text: String): Pair<Int?, Boolean> {
+    /**
+     * "85,2,190,": the charge, Win32_Battery's BatteryStatus (1, 4 and 5 run on the battery, 3 is
+     * full), its EstimatedRunTime in minutes (71582788 when Windows doesn't know) and its
+     * TimeToFullCharge in minutes (often empty).
+     */
+    internal fun parseWin32Battery(text: String): BatteryReading {
         val parts = text.trim().split(',')
-        val level = parts.getOrNull(0)?.trim()?.toIntOrNull()?.coerceIn(0, 100) ?: return null to false
+        val level = parts.getOrNull(0)?.trim()?.toIntOrNull()?.coerceIn(0, 100) ?: return BatteryReading.NONE
         val status = parts.getOrNull(1)?.trim()?.toIntOrNull()
-        return level to (status != null && status !in setOf(1, 4, 5))
+        val charging = status != null && status !in setOf(1, 4, 5)
+        val full = status == 3
+        fun minutes(i: Int) = parts.getOrNull(i)?.trim()?.toIntOrNull()?.takeIf { it in 1..2880 }
+        val minutes = when {
+            full -> null
+            charging -> minutes(3)
+            else -> minutes(2)
+        }
+        return BatteryReading(level, charging, minutes, full)
     }
 
     private fun network(): Pair<ConnectionState, ConnectionState> {

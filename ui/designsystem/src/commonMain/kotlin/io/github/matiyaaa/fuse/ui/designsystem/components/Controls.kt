@@ -14,8 +14,11 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.awaitHorizontalTouchSlopOrCancellation
 import androidx.compose.foundation.gestures.drag
+import androidx.compose.foundation.gestures.horizontalDrag
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -27,6 +30,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -53,6 +57,8 @@ import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
 import io.github.matiyaaa.fuse.ui.designsystem.shape.PillShape
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Durations
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
+import io.github.matiyaaa.fuse.ui.designsystem.theme.Radius
+import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
 
 /** On/off switch. The knob position and a check mark carry the state, not only colour. */
@@ -178,6 +184,74 @@ fun SliderBar(
                     .background(Color.White, CircleShape)
                     .then(if (selected) Modifier.border(3.dp, c.accent.copy(alpha = 0.5f), CircleShape) else Modifier),
             )
+        }
+    }
+}
+
+/**
+ * A large touch slider for status and control pages: the whole bar fills with the value, with its
+ * icon, label and value inside. Dragging moves the value by how far the finger travels (not to where
+ * it lands), so a tap never jumps it; a sideways drag is the slider's, so a pager around it doesn't
+ * turn the page. [enabled] false dims it and ignores touches.
+ */
+@Composable
+fun FillSlider(
+    value: Float,
+    onChange: (Float) -> Unit,
+    icon: ImageVector,
+    label: String,
+    valueText: String,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+) {
+    val c = Fuse.colors
+    var dragging by remember { mutableStateOf(false) }
+    val eased by animateFloatAsState(value.coerceIn(0f, 1f), Fuse.motion.focusSpring(), label = "fill")
+    val v = if (dragging) value.coerceIn(0f, 1f) else eased
+    val current by rememberUpdatedState(value)
+    val change by rememberUpdatedState(onChange)
+    val shape = RoundedCornerShape(Radius.l)
+    Box(
+        modifier
+            .clip(shape)
+            .background(c.text.copy(alpha = 0.08f))
+            .alpha(if (enabled) 1f else 0.45f)
+            .then(
+                if (!enabled) Modifier else Modifier.pointerInput(Unit) {
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false)
+                        val width = size.width.toFloat().coerceAtLeast(1f)
+                        var start = current
+                        var startX = down.position.x
+                        val slop = awaitHorizontalTouchSlopOrCancellation(down.id) { moved, _ ->
+                            moved.consume()
+                            start = current
+                            startX = moved.position.x
+                        } ?: return@awaitEachGesture
+                        dragging = true
+                        horizontalDrag(slop.id) { moved ->
+                            moved.consume()
+                            change((start + (moved.position.x - startX) / width).coerceIn(0f, 1f))
+                        }
+                        dragging = false
+                    }
+                },
+            ),
+        contentAlignment = Alignment.CenterStart,
+    ) {
+        Box(
+            Modifier.fillMaxHeight().fillMaxWidth(v).background(
+                androidx.compose.ui.graphics.Brush.horizontalGradient(listOf(c.accent.copy(alpha = 0.78f), c.accent)),
+            ),
+        )
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = Space.l),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(Space.m),
+        ) {
+            FuseIcon(icon, tint = c.text, size = Size.iconM)
+            FText(label, Fuse.type.bodyStrong, color = c.text, maxLines = 1, modifier = Modifier.weight(1f))
+            FText(valueText, Fuse.type.numeric, color = c.text, maxLines = 1)
         }
     }
 }

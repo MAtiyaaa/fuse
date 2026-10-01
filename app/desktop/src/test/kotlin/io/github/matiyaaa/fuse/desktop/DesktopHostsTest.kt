@@ -2,7 +2,9 @@ package io.github.matiyaaa.fuse.desktop
 
 import io.github.matiyaaa.fuse.desktop.input.PadSnapshot
 import io.github.matiyaaa.fuse.desktop.platform.Autostart
+import io.github.matiyaaa.fuse.desktop.platform.BatteryReading
 import io.github.matiyaaa.fuse.desktop.platform.OtherStatus
+import io.github.matiyaaa.fuse.desktop.platform.StatusReader
 import io.github.matiyaaa.fuse.desktop.services.DesktopLauncher
 import io.github.matiyaaa.fuse.desktop.services.EmulatorLocations
 import io.github.matiyaaa.fuse.desktop.system.DesktopOs
@@ -85,13 +87,66 @@ class DesktopHostsTest {
     @Test
     fun batteriesParse() {
         val pmset = "Now drawing from 'AC Power'\n -InternalBattery-0 (id=4653155)\t85%; charging; 0:42 remaining present: true\n"
-        assertEquals(85 to true, OtherStatus.parsePmset(pmset))
-        assertEquals(40 to false, OtherStatus.parsePmset("Now drawing from 'Battery Power'\n -InternalBattery-0 (id=1)\t40%; discharging; 3:10 remaining present: true"))
-        assertEquals(100 to true, OtherStatus.parsePmset("Now drawing from 'AC Power'\n -InternalBattery-0 (id=1)\t100%; charged; 0:00 remaining present: true"))
-        assertEquals(null to false, OtherStatus.parsePmset("Now drawing from 'AC Power'\n"))
-        assertEquals(72 to false, OtherStatus.parseWin32Battery("72,1"))
-        assertEquals(95 to true, OtherStatus.parseWin32Battery("95,2"))
-        assertEquals(null to false, OtherStatus.parseWin32Battery(""))
+        assertEquals(BatteryReading(85, true, minutes = 42), OtherStatus.parsePmset(pmset))
+        assertEquals(
+            BatteryReading(40, false, minutes = 190),
+            OtherStatus.parsePmset("Now drawing from 'Battery Power'\n -InternalBattery-0 (id=1)\t40%; discharging; 3:10 remaining present: true"),
+        )
+        assertEquals(
+            BatteryReading(100, true, full = true),
+            OtherStatus.parsePmset("Now drawing from 'AC Power'\n -InternalBattery-0 (id=1)\t100%; charged; 0:00 remaining present: true"),
+        )
+        assertEquals(
+            BatteryReading(63, false),
+            OtherStatus.parsePmset("Now drawing from 'Battery Power'\n -InternalBattery-0 (id=1)\t63%; discharging; (no estimate) present: true"),
+        )
+        assertEquals(BatteryReading.NONE, OtherStatus.parsePmset("Now drawing from 'AC Power'\n"))
+        assertEquals(BatteryReading(72, false), OtherStatus.parseWin32Battery("72,1"))
+        assertEquals(BatteryReading(95, true), OtherStatus.parseWin32Battery("95,2"))
+        assertEquals(BatteryReading(72, false, minutes = 190), OtherStatus.parseWin32Battery("72,1,190,"))
+        // 71582788 is Windows for "don't know".
+        assertEquals(BatteryReading(72, false), OtherStatus.parseWin32Battery("72,1,71582788,"))
+        assertEquals(BatteryReading(60, true, minutes = 50), OtherStatus.parseWin32Battery("60,6,71582788,50"))
+        assertEquals(BatteryReading(100, true, full = true), OtherStatus.parseWin32Battery("100,3,71582788,"))
+        assertEquals(BatteryReading.NONE, OtherStatus.parseWin32Battery(""))
+    }
+
+    private fun supply(name: String, vararg files: Pair<String, String>) {
+        val dir = File(tmp, "power/$name").apply { mkdirs() }
+        files.forEach { (f, v) -> File(dir, f).writeText("$v\n") }
+    }
+
+    @Test
+    fun linuxBatteryTimes() {
+        val root = File(tmp, "power")
+        supply("AC", "type" to "Mains", "online" to "0")
+        // 30 Wh left of 60, drawing 10 W: three hours.
+        supply("BAT0", "type" to "Battery", "present" to "1", "capacity" to "50", "status" to "Discharging", "energy_now" to "30000000", "energy_full" to "60000000", "power_now" to "10000000")
+        // A controller's battery is never the system's.
+        supply("hidpp_battery_0", "type" to "Battery", "scope" to "Device", "capacity" to "10", "status" to "Discharging")
+        assertEquals(BatteryReading(50, false, minutes = 180), StatusReader.readLinuxBattery(root))
+
+        // Charging at 15 W with 30 Wh to go: two hours.
+        supply("AC", "type" to "Mains", "online" to "1")
+        supply("BAT0", "type" to "Battery", "present" to "1", "capacity" to "50", "status" to "Charging", "energy_now" to "30000000", "energy_full" to "60000000", "power_now" to "15000000")
+        assertEquals(BatteryReading(50, true, minutes = 120), StatusReader.readLinuxBattery(root))
+
+        // The kernel's own estimate wins.
+        File(tmp, "power/BAT0/time_to_full_now").writeText("2700\n")
+        assertEquals(BatteryReading(50, true, minutes = 45), StatusReader.readLinuxBattery(root))
+
+        // Charge and current instead of energy and power, and almost no draw: no time.
+        File(tmp, "power/BAT0").deleteRecursively()
+        supply("AC", "type" to "Mains", "online" to "0")
+        supply("BAT0", "type" to "Battery", "capacity" to "80", "status" to "Discharging", "charge_now" to "4000000", "charge_full" to "5000000", "current_now" to "2000000")
+        assertEquals(BatteryReading(80, false, minutes = 120), StatusReader.readLinuxBattery(root))
+        supply("BAT0", "type" to "Battery", "capacity" to "80", "status" to "Discharging", "charge_now" to "4000000", "charge_full" to "5000000", "current_now" to "1000")
+        assertEquals(BatteryReading(80, false), StatusReader.readLinuxBattery(root))
+
+        // Plugged in and full.
+        supply("AC", "type" to "Mains", "online" to "1")
+        supply("BAT0", "type" to "Battery", "capacity" to "100", "status" to "Full", "charge_now" to "5000000", "charge_full" to "5000000", "current_now" to "0")
+        assertEquals(BatteryReading(100, true, full = true), StatusReader.readLinuxBattery(root))
     }
 
     @Test
