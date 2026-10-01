@@ -44,11 +44,21 @@ data class AppSettings(
     val cartridge: CartridgeSettings = CartridgeSettings(),
     val privacy: PrivacySettings = PrivacySettings(),
     val updates: UpdateSettings = UpdateSettings(),
+    val capture: CaptureSettings = CaptureSettings(),
 ) {
     companion object {
         const val CURRENT_VERSION = 2
     }
 }
+
+/** Screenshots and recordings of Fuse's own screen. */
+@Serializable
+data class CaptureSettings(
+    /** L3 + R3 takes a screenshot; held, it starts or stops a recording. */
+    val combo: Boolean = true,
+    /** Recordings include Fuse's own sound (the menu music) where the system allows it. */
+    val sound: Boolean = true,
+)
 
 @Serializable
 data class OnboardingState(

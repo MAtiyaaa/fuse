@@ -84,6 +84,8 @@ internal fun AppSettings.toUiPrefs(scoped: GlobalScoped): UiPrefs {
         cartridgeRommDetails = cartridge.rommDetails,
         cartridgeEnabled = cartridge.enabled,
         checkForUpdates = updates.checkForUpdates,
+        captureCombo = capture.combo,
+        captureSound = capture.sound,
         heroDim = appearance.heroDim,
         appsFilter = library.appsFilter,
     )
@@ -153,5 +155,6 @@ internal fun AppSettings.withUiPrefs(prefs: UiPrefs): AppSettings {
         ),
         cartridge = cartridge.copy(autoRefreshOnReturn = prefs.autoRefreshFromCartridge, enabled = prefs.cartridgeEnabled, rommDetails = prefs.cartridgeRommDetails),
         updates = updates.copy(checkForUpdates = prefs.checkForUpdates),
+        capture = capture.copy(combo = prefs.captureCombo, sound = prefs.captureSound),
     )
 }

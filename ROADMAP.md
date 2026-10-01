@@ -131,6 +131,8 @@ yet tried by hand on a PC or a Mac.
 - [x] Moving systems by touch, and Fuse in recent apps as a normal task (0.1.1)
 - [x] Moving Home's shelves and channels by touch, the way a phone does (0.1.2)
 - [x] Community themes from a link or a file, a Posters option, and a website (0.1.2)
+- [x] Screenshots and recordings of Fuse on Android, from the quick menu or L3 + R3 (0.1.3)
+- [ ] Screenshots and recordings on Linux, Windows and macOS (the interface is ready; each needs its own capture and encoder)
 - [ ] SAF-only storage mode that works without All files access (emulators that need FileProvider URIs would then be limited)
 - [ ] R8 minification and resource shrinking for release APKs
 - [ ] Screenshot tests for the design system and main screens

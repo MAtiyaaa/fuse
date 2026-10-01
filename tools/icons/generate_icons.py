@@ -56,6 +56,7 @@ ICONS = {
     "Filter": "list-filter", "Sort": "arrow-up-down", "FileQuestion": "file-question",
     "Shift": "arrow-big-up", "CapsLock": "arrow-big-up-dash", "Backspace": "delete", "Return": "corner-down-left",
     "SquareCheck": "square-check", "LibraryBig": "library-big", "LockKeyhole": "lock-keyhole", "Network": "network",
+    "Copy": "copy", "Camera": "camera",
 }
 
 NUM = r"-?(?:\d+\.?\d*|\.\d+)(?:e-?\d+)?"

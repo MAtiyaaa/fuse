@@ -46,6 +46,9 @@ object LayerPriority {
     const val SYSTEM = 40
 }
 
+/** What pressing both sticks in together (L3 + R3) did: a quick press, or a hold. */
+enum class ComboGesture { TAP, HOLD }
+
 /** Receives feedback events so the app can play sounds and haptics. */
 fun interface InputFeedback {
     fun onResult(event: NavEvent, result: NavResult)
@@ -167,6 +170,20 @@ class InputRouter(
      */
     var exclusive: ((PadButton, Boolean) -> Unit)? = null
 
+    /**
+     * Called when both sticks are pressed in together (L3 + R3): [ComboGesture.TAP] when let go
+     * quickly, [ComboGesture.HOLD] once held for [COMBO_HOLD_MS]. Null turns the combo off, and the
+     * sticks act on their own. Never called while [capture] or [exclusive] is set.
+     */
+    var onCaptureCombo: ((ComboGesture) -> Unit)? = null
+
+    private val sticksDown = mutableSetOf<PadButton>()
+    private var comboHold: Job? = null
+
+    /** Both sticks went down together; stays set until both are up, so neither acts on its own. */
+    private var comboActive = false
+    private var comboDone = false
+
     /** A physical button went down. Platform key repeats must not be forwarded. */
     fun press(button: PadButton, source: InputSource) {
         rawListener?.invoke(button, true)
@@ -180,6 +197,7 @@ class InputRouter(
             it(button)
             return
         }
+        if (button.isStick && comboPress(button, source)) return
         if (held.containsKey(button)) return
         val action = actionFor(button) ?: return
         _lastSource.value = source
@@ -212,6 +230,7 @@ class InputRouter(
             longPressConsumed.remove(button)
             return
         }
+        if (button.isStick && comboRelease(button)) return
         if (!held.containsKey(button)) return
         val job = held.remove(button)
         job?.cancel()
@@ -227,6 +246,48 @@ class InputRouter(
         held.clear()
         longPressConsumed.clear()
         stickDirection = null
+        sticksDown.clear()
+        comboHold?.cancel()
+        comboHold = null
+        comboActive = false
+        comboDone = false
+    }
+
+    private val PadButton.isStick: Boolean get() = this == PadButton.L3 || this == PadButton.R3
+
+    /** Returns true when the press belongs to the combo and must not act on its own. */
+    private fun comboPress(button: PadButton, source: InputSource): Boolean {
+        sticksDown += button
+        if (comboActive) return true
+        val listener = onCaptureCombo ?: return false
+        if (sticksDown.size < 2) return false
+        _lastSource.value = source
+        comboActive = true
+        comboDone = false
+        comboHold = scope.launch {
+            delay(COMBO_HOLD_MS)
+            comboDone = true
+            listener(ComboGesture.HOLD)
+        }
+        return true
+    }
+
+    /** Returns true when the release belongs to the combo. The first stick let go decides a tap. */
+    private fun comboRelease(button: PadButton): Boolean {
+        sticksDown -= button
+        if (!comboActive) return false
+        // A stick that acted on its own before the combo formed is let go quietly.
+        held.remove(button)?.cancel()
+        if (!comboDone) {
+            comboDone = true
+            comboHold?.cancel()
+            onCaptureCombo?.invoke(ComboGesture.TAP)
+        }
+        if (sticksDown.isEmpty()) {
+            comboActive = false
+            comboHold = null
+        }
+        return true
     }
 
     private suspend fun repeatLoop(action: NavAction, source: InputSource) {
@@ -316,6 +377,11 @@ class InputRouter(
         if (triggers[button] == down) return
         triggers[button] = down
         if (down) press(button, source) else release(button, source)
+    }
+
+    companion object {
+        /** How long both sticks stay pressed in before the combo counts as a hold. */
+        const val COMBO_HOLD_MS = 600L
     }
 }
 

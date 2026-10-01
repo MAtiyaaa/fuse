@@ -8,6 +8,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import androidx.activity.result.ActivityResult
 import java.lang.ref.WeakReference
 
 /**
@@ -20,6 +21,9 @@ interface ActivityRequests {
     suspend fun pickAudio(): Uri?
     suspend fun requestRole(intent: Intent): Boolean
     suspend fun requestPermission(permission: String): Boolean
+
+    /** Android's screen recording prompt; the granted result, or null when the user said no. */
+    suspend fun requestScreenCapture(intent: Intent): ActivityResult?
 }
 
 /**

@@ -2,12 +2,14 @@ package io.github.matiyaaa.fuse.ui.shell.platform
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.ImageBitmap
 import io.github.matiyaaa.fuse.model.CapabilityProfile
 import io.github.matiyaaa.fuse.model.DisplayInfo
 import io.github.matiyaaa.fuse.model.Host
 import io.github.matiyaaa.fuse.model.PerformanceMetric
 import io.github.matiyaaa.fuse.model.SystemStatus
 import io.github.matiyaaa.fuse.ui.designsystem.sound.UiSounds
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
@@ -35,6 +37,9 @@ interface PlatformUi {
 
     /** Window and login controls on desktop Linux; null where the system manages Fuse's window. */
     val windowControls: WindowControls? get() = null
+
+    /** Screenshots and recordings of Fuse's own screen; null where Fuse can't capture it (desktop for now). */
+    val capture: ScreenCapture? get() = null
 
     /**
      * Recent second-screen events (companion started or closed and why, refused displays, display
@@ -100,6 +105,65 @@ interface Haptics {
         override fun reject() = Unit
     }
 }
+
+/**
+ * Screenshots and recordings of what Fuse shows, saved where the system keeps pictures and videos.
+ * Only Fuse's own screen is captured, never another app.
+ */
+interface ScreenCapture {
+    /** Where screenshots go, for people ("Pictures/Fuse"). */
+    val picturesPlace: String
+
+    /** Where recordings go, for people ("Movies/Fuse"). */
+    val videosPlace: String
+
+    /** Saves what Fuse shows right now as a picture called [name]. */
+    suspend fun screenshot(name: String): CaptureResult
+
+    /**
+     * Gets what a recording needs: the system's permission to record the screen (asked every time),
+     * and with [withSound] the permission to capture Fuse's own sound.
+     */
+    suspend fun prepareRecording(withSound: Boolean): RecordingReady
+
+    /** Starts recording into [name] after [prepareRecording] said it may. */
+    fun startRecording(name: String)
+
+    /** Stops and saves the recording; null when none was running. */
+    suspend fun stopRecording(): CaptureResult?
+
+    /** Recordings stopped by something else (the notification, the system), already saved. */
+    val stoppedElsewhere: Flow<CaptureResult>
+
+    /** Fuse left the screen (a game started, Home was pressed); only Fuse is ever captured. */
+    val leftFuse: Flow<Unit>
+
+    /** Free space where captures are saved, in bytes; null when unknown. */
+    fun freeBytes(): Long? = null
+}
+
+enum class RecordingReady {
+    READY,
+
+    /** It may record, but without sound: the permission for sound was refused. */
+    READY_SILENT,
+
+    /** The user said no to recording the screen. */
+    REFUSED,
+
+    /** Recording can't start here (no encoder, already in use). */
+    UNAVAILABLE,
+}
+
+/** A saved capture. */
+data class CaptureResult(
+    /** Where it was saved, for people ("Pictures/Fuse"). */
+    val place: String,
+    val preview: ImageBitmap? = null,
+    val video: Boolean = false,
+    /** Why nothing was saved; null when it was. */
+    val failure: String? = null,
+)
 
 interface HomeRole {
     val isHome: StateFlow<Boolean>

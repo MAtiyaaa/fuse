@@ -24,6 +24,19 @@ import kotlin.time.Clock
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 
+/**
+ * Settles until [text] is [shown] (or gone). Unlike [AuditDriver.waitFor] it lets the app's own
+ * timers run between looks, which the capture countdown and its saved card need.
+ */
+private fun AuditDriver.settleUntil(text: String, shown: Boolean = true, timeoutMs: Long = 150_000) {
+    val end = System.currentTimeMillis() + timeoutMs
+    while (System.currentTimeMillis() < end) {
+        settle(500)
+        if (hasText(text) == shown) return
+    }
+    throw NotCovered("Waited ${timeoutMs / 1000} s for \"$text\" to ${if (shown) "show" else "go away"}")
+}
+
 /** Quick menu (Start), then its Settings row. */
 internal fun AuditDriver.openSettings() {
     home()
@@ -48,6 +61,48 @@ private fun sectionIndex(id: String) = settingsSections.indexOfFirst { it.id == 
 // ----------------------------------------------------------------------------------- overlays
 
 internal fun AuditDriver.overlayScreens(exhaustive: Boolean) {
+    scenario("overlays", "capture") {
+        useLibrary(capturePlatform)
+        waitFor("Continue playing")
+        tap(PadButton.START)
+        waitFor("Arrange Home")
+        focusText("Screenshot") { if (nav(NavAction.RIGHT) != NavResult.MOVED) { nav(NavAction.DOWN); nav(NavAction.LEFT); nav(NavAction.LEFT) } }
+        shoot("quick menu, Screenshot tile focused")
+        tap(PadButton.A)
+        settle(400)
+        shoot("countdown, 3")
+        // Frames render slower than real time here, so wait for what shows rather than for a time.
+        settleUntil("Screenshot saved")
+        shoot("saved card after the screenshot")
+        settleUntil("Screenshot saved", shown = false)
+        // L3 + R3 held: a recording, shown in the top line.
+        router.press(PadButton.L3, InputSource.GAMEPAD)
+        router.press(PadButton.R3, InputSource.GAMEPAD)
+        settle(3_000)
+        router.release(PadButton.L3, InputSource.GAMEPAD)
+        router.release(PadButton.R3, InputSource.GAMEPAD)
+        settle(1_500)
+        shoot("recording, the top line's chip")
+        tap(PadButton.START)
+        settleUntil("recorded")
+        shoot("quick menu while recording")
+        tap(PadButton.B)
+        // L3 + R3 tapped stops it.
+        router.press(PadButton.L3, InputSource.GAMEPAD)
+        router.press(PadButton.R3, InputSource.GAMEPAD)
+        router.release(PadButton.L3, InputSource.GAMEPAD)
+        router.release(PadButton.R3, InputSource.GAMEPAD)
+        settleUntil("Recording saved")
+        shoot("saved card after a recording")
+        // The settings for it, in Inputs.
+        openSettings()
+        tap(PadButton.DPAD_DOWN, sectionIndex("inputs"))
+        tap(PadButton.DPAD_RIGHT)
+        tapText("Screenshots and recordings")
+        settle()
+        shoot("Inputs, Screenshots and recordings open")
+    }
+
     scenario("overlays", "quick menu") {
         useLibrary()
         waitFor("Continue playing")

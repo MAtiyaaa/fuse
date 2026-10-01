@@ -760,7 +760,30 @@ fun inputRows(app: AppState): List<MenuAction> {
         app.choiceRow("long", "Hold time", FuseIcons.Hand, i.longPressMs, listOf(400, 550, 700, 900).map { it to "$it ms" }, detail = "Holding confirm (or a long touch) arranges Home and opens options") { v -> setInput { it.copy(longPressMs = v) } },
         app.percentRow("vibration", "Vibration", FuseIcons.Vibrate, i.vibration) { v -> setInput { it.copy(vibration = v) } },
         MenuAction("mapping", "Button mapping and test", FuseIcons.Joystick, detail = if (i.remap.isEmpty()) "Standard layout. See what Fuse receives from each button" else "${i.remap.size} custom mappings", trailing = Trailing.Chevron, onSelect = { app.go(Route.Controls) }),
-    )
+    ) + captureRows(app, p)
+}
+
+/** Screenshots and recordings, where Fuse can capture its screen. */
+private fun captureRows(app: AppState, p: io.github.matiyaaa.fuse.ui.shell.store.UiPrefs): List<MenuAction> {
+    val capture = app.capture ?: return emptyList()
+    val (pictures, videos) = capture.places
+    return app.group(
+        "capture", "Screenshots and recordings", FuseIcons.Camera,
+        summary = if (p.captureCombo) "L3 + R3" else "Quick menu only",
+        detail = "From the quick menu, or by pressing both sticks in",
+    ) {
+        listOf(
+            toggleRow(
+                "capture.combo", "L3 + R3", FuseIcons.Gamepad, p.captureCombo,
+                "Press both sticks in for a screenshot; hold them to start or stop a recording",
+            ) { v -> app.store.updatePrefs { it.copy(captureCombo = v) } },
+            toggleRow(
+                "capture.sound", "Record sound", FuseIcons.Volume, p.captureSound,
+                "Recordings include Fuse's music. Button sounds are never recorded",
+            ) { v -> app.store.updatePrefs { it.copy(captureSound = v) } },
+            infoRow("capture.where", "Where they go", detail = "Screenshots in $pictures, recordings in $videos. Only Fuse's own screen is captured"),
+        )
+    }
 }
 
 @Composable

@@ -61,6 +61,7 @@ import io.github.matiyaaa.fuse.ui.shell.app.applyUpdate
 import io.github.matiyaaa.fuse.ui.shell.app.formatDate
 import io.github.matiyaaa.fuse.ui.shell.app.offers
 import io.github.matiyaaa.fuse.ui.shell.app.rememberClockText
+import io.github.matiyaaa.fuse.ui.shell.capture.rememberRecordingTime
 import io.github.matiyaaa.fuse.ui.shell.components.ControlTile
 import io.github.matiyaaa.fuse.ui.shell.components.batteryTimeText
 import io.github.matiyaaa.fuse.ui.shell.home.switchHomeStyle
@@ -68,8 +69,19 @@ import io.github.matiyaaa.fuse.ui.shell.settings.next
 import io.github.matiyaaa.fuse.ui.shell.settings.performanceLabel
 import io.github.matiyaaa.fuse.ui.shell.store.UpdateState
 
-/** A tile; a [toggle] says On or Off under its name and is lit while [active]. */
-private data class QuickTile(val label: String, val icon: ImageVector, val active: Boolean = false, val detail: String? = null, val toggle: Boolean = false, val run: () -> Unit)
+/**
+ * A tile; a [toggle] says On or Off under its name and is lit while [active]. [hold] is what holding
+ * it does (A held, or a long press); without it a hold is an ordinary press.
+ */
+private data class QuickTile(
+    val label: String,
+    val icon: ImageVector,
+    val active: Boolean = false,
+    val detail: String? = null,
+    val toggle: Boolean = false,
+    val hold: (() -> Unit)? = null,
+    val run: () -> Unit,
+)
 
 private sealed interface QuickRow {
     data class Tiles(val tiles: List<QuickTile>) : QuickRow
@@ -99,10 +111,23 @@ fun QuickMenu(app: AppState) {
     val updateState by app.store.updates.state.collectAsState()
     val scan by app.store.sources.scan.collectAsState()
     val scanning = scan.phase == ScanPhase.DISCOVERING || scan.phase == ScanPhase.SCANNING || scan.phase == ScanPhase.SAVING
+    val capture = app.capture
+    val recordingTime = rememberRecordingTime(capture)
 
     val tiles = buildList {
         if (features.wifiSettings) add(QuickTile("Wi-Fi", FuseIcons.Wifi) { platform.quick.openWifi() })
         if (features.bluetoothSettings) add(QuickTile("Bluetooth", FuseIcons.Bluetooth) { platform.quick.openBluetooth() })
+        // A screenshot three seconds after the menu closes; held, a recording after the same wait.
+        if (capture != null) {
+            if (recordingTime != null) {
+                add(QuickTile("Stop", FuseIcons.Square, active = true, detail = "$recordingTime recorded") { close(); capture.stopRecording() })
+            } else {
+                add(QuickTile(
+                    "Screenshot", FuseIcons.Camera, detail = "Hold to record",
+                    hold = { close(); capture.toggleRecording(delayed = true) },
+                ) { close(); capture.screenshot(delayed = true) })
+            }
+        }
         add(QuickTile("Display", FuseIcons.Monitor) { close(); app.go(Route.Settings("displays")) })
         add(QuickTile("Controller", FuseIcons.Gamepad) { close(); app.go(Route.Settings("inputs")) })
         add(QuickTile("Performance", FuseIcons.Gauge, detail = performanceLabel(prefs.performance)) {
@@ -192,7 +217,8 @@ fun QuickMenu(app: AppState) {
     LaunchedEffect(row, open) { if (open) requesters.getOrNull(row)?.bringIntoView() }
 
     if (open) {
-        InputLayer(priority = LayerPriority.OVERLAY, modal = true) { e ->
+        // Holding A turns into REORDER: the Screenshot tile records, everything else just runs.
+        InputLayer(priority = LayerPriority.OVERLAY, modal = true, longPress = true) { e ->
             val r = rows.getOrNull(row) ?: return@InputLayer NavResult.IGNORED
             when (e.action) {
                 NavAction.BACK, NavAction.QUICK_MENU -> { close(); platform.sounds.play(SoundCue.CLOSE); NavResult.CONSUMED }
@@ -206,9 +232,12 @@ fun QuickMenu(app: AppState) {
                     is QuickRow.Slider -> { r.set((r.value + if (e.action == NavAction.LEFT) -0.05f else 0.05f).coerceIn(0f, 1f)); NavResult.MOVED }
                     is QuickRow.Item -> NavResult.BLOCKED
                 }
-                NavAction.SELECT -> {
+                NavAction.SELECT, NavAction.REORDER -> {
                     when (r) {
-                        is QuickRow.Tiles -> r.tiles.getOrNull(col)?.run?.invoke()
+                        is QuickRow.Tiles -> r.tiles.getOrNull(col)?.let { t ->
+                            val hold = t.hold
+                            if (e.action == NavAction.REORDER && hold != null) hold() else t.run()
+                        }
                         is QuickRow.Item -> r.action.onSelect()
                         is QuickRow.Slider -> Unit
                     }
@@ -245,6 +274,7 @@ fun QuickMenu(app: AppState) {
                                         t.label, t.icon, selected = i == row && j == col,
                                         modifier = Modifier.weight(1f).aspectRatio(1.1f),
                                         active = t.active, detail = t.detail, toggle = t.toggle,
+                                        onLongClick = t.hold?.let { hold -> { row = i; col = j; hold() } },
                                     ) { row = i; col = j; t.run() }
                                 }
                                 repeat(3 - r.tiles.size) { Spacer(Modifier.weight(1f)) }

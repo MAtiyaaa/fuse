@@ -22,6 +22,19 @@
     <uses-permission
         android:name="android.permission.BLUETOOTH"
         android:maxSdkVersion="30" />
+    <!--
+      Screen recordings of Fuse's own screen (Settings, Inputs): the foreground service Android
+      requires while recording, its notification with a Stop button, and Fuse's own sound through
+      Android's playback capture, which asks for the microphone permission but records no microphone.
+      Android 9 saves captures as plain files in Pictures and Movies, which needs the storage permission.
+    -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="28" />
     <!-- Cartridge's read-only status provider. -->
     <uses-permission android:name="io.github.abdu2304.cartridge.permission.READ_STATUS" />
 
@@ -29,6 +42,7 @@
     <uses-feature android:name="android.hardware.gamepad" android:required="false" />
     <uses-feature android:name="android.hardware.bluetooth" android:required="false" />
     <uses-feature android:name="android.hardware.wifi" android:required="false" />
+    <uses-feature android:name="android.hardware.microphone" android:required="false" />
 
     <!--
       Package visibility (Android 11+). Launcher apps cover most emulators; the explicit list is every
@@ -285,6 +299,12 @@
         <receiver
             android:name=".services.InstallResultReceiver"
             android:exported="false" />
+
+        <!-- Runs only while Fuse records its screen (see CaptureService). -->
+        <service
+            android:name=".capture.CaptureService"
+            android:exported="false"
+            android:foregroundServiceType="mediaProjection" />
 
         <provider
             android:name="androidx.core.content.FileProvider"

@@ -3,7 +3,7 @@ package io.github.matiyaaa.fuse.ui.shell.components
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -53,6 +53,8 @@ fun ControlTile(
     toggle: Boolean = false,
     compact: Boolean = false,
     unavailable: Boolean = false,
+    /** What a long press does (the Screenshot tile records); null leaves long presses alone. */
+    onLongClick: (() -> Unit)? = null,
     onClick: () -> Unit,
 ) {
     val c = Fuse.colors
@@ -90,7 +92,7 @@ fun ControlTile(
             }
             .clip(RoundedCornerShape(corner))
             .background(bg)
-            .clickable(remember { MutableInteractionSource() }, null, onClick = onClick)
+            .combinedClickable(remember { MutableInteractionSource() }, null, onLongClick = onLongClick, onClick = onClick)
             .semantics { this.selected = selected }
             .padding(if (compact) 10.dp else Space.m),
     ) {

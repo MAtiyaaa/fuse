@@ -69,6 +69,17 @@ class AppState(
     val navigator = Navigator(start)
     val toasts = ToastState()
 
+    /** Screenshots and recordings of Fuse's screen; null where the platform can't capture it. */
+    val capture: io.github.matiyaaa.fuse.ui.shell.capture.CaptureController? = platform.capture?.let { c ->
+        io.github.matiyaaa.fuse.ui.shell.capture.CaptureController(
+            capture = c,
+            scope = scope,
+            haptics = platform.haptics,
+            notify = { message, kind -> toasts.show(message, kind) },
+            withSound = { store.prefs.value.captureSound },
+        )
+    }
+
     var focusZone by mutableStateOf(FocusZone.CONTENT)
 
     /** Search or Settings in the top line has controller focus (only while [focusZone] is TABS). */

@@ -41,6 +41,9 @@ import io.github.matiyaaa.fuse.ui.designsystem.background.AmbientBackground
 import io.github.matiyaaa.fuse.ui.designsystem.background.CrtOverlay
 import io.github.matiyaaa.fuse.ui.designsystem.components.HintBar
 import io.github.matiyaaa.fuse.ui.designsystem.components.ToastHost
+import io.github.matiyaaa.fuse.ui.shell.capture.CaptureController
+import io.github.matiyaaa.fuse.ui.shell.capture.CaptureOverlay
+import io.github.matiyaaa.fuse.ui.shell.capture.rememberRecordingTime
 import io.github.matiyaaa.fuse.ui.designsystem.components.ToastKind
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
 import io.github.matiyaaa.fuse.ui.designsystem.input.InputFeedback
@@ -126,6 +129,12 @@ fun FuseApp(store: FuseStore, platform: PlatformUi, router: InputRouter, phoneLi
 
     // Input settings, sounds and haptics follow preferences.
     LaunchedEffect(prefs.input) { router.profile = prefs.input }
+    // L3 + R3: a screenshot, or held, a recording (where Fuse can capture its screen).
+    val capture = app.capture
+    DisposableEffect(router, capture, prefs.captureCombo) {
+        router.onCaptureCombo = if (capture != null && prefs.captureCombo) capture::onCombo else null
+        onDispose { router.onCaptureCombo = null }
+    }
     // A hardware keyboard types into whichever text field is open.
     val keyboardTarget = app.keyboardTarget
     DisposableEffect(router, keyboardTarget) {
@@ -232,6 +241,7 @@ fun FuseApp(store: FuseStore, platform: PlatformUi, router: InputRouter, phoneLi
                     QuickMenu(app)
                     OverlayHost(app)
                     ToastHost(app.toasts)
+                    app.capture?.let { CaptureOverlay(it) }
                     LaunchVeilView(app)
                     if (prefs.crt.enabled && quality.crtShader) CrtOverlay(prefs.crt)
                 }
@@ -516,7 +526,18 @@ private fun hudActivities(app: AppState): List<HudActivity> {
     val available by app.store.updates.available.collectAsState()
     val cartridge by app.store.cartridge.status.collectAsState()
     val fill by app.store.media.fillProgress.collectAsState()
+    val recordingTime = rememberRecordingTime(app.capture)
     return buildList {
+        // A recording runs: the ring fills toward its 30 minute limit, and a press stops it.
+        if (recordingTime != null) {
+            val since = (app.capture?.state as? CaptureController.State.Recording)?.since
+            val elapsed = since?.let { kotlin.time.Clock.System.now().toEpochMilliseconds() - it } ?: 0L
+            add(HudActivity(
+                "record", FuseIcons.CircleDot, "Recording $recordingTime. Select to stop",
+                progress = (elapsed.toFloat() / CaptureController.MAX_RECORDING_MS).coerceIn(0f, 1f),
+                attention = true,
+            ) { app.capture?.stopRecording() })
+        }
         fill?.takeIf { !it.finished }?.let { f ->
             add(HudActivity(
                 "fill", FuseIcons.Wand, "${if (f.automatic) "Finding art" else "Filling art and details"}: ${f.done} of ${f.total}",
