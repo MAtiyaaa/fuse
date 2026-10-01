@@ -61,6 +61,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
+import io.github.matiyaaa.fuse.model.BiosState
 import io.github.matiyaaa.fuse.model.CartridgeRoute
 import io.github.matiyaaa.fuse.model.MediaFillMode
 import io.github.matiyaaa.fuse.model.MediaKind
@@ -408,6 +409,13 @@ private fun Modifier.panelBlend(): Modifier = this
 
 internal fun gamesText(n: Int) = "$n ${if (n == 1) "game" else "games"}"
 
+/** What is wrong with a system's firmware, when Fuse looked and knows: missing or partly found. */
+private fun firmwareProblem(card: PlatformCard): String? = when (card.bios.state) {
+    BiosState.MISSING -> "Firmware missing"
+    BiosState.PARTIAL -> "Firmware partly found"
+    else -> null
+}
+
 /**
  * The focused system, told big: its maker and year as a small line on top, its logo (or name), then
  * how many games it has and the emulator they start in, or a warning when none is installed.
@@ -478,6 +486,12 @@ internal fun SystemHeader(
                 } else {
                     FuseIcon(FuseIcons.Warning, size = Size.iconS, tint = c.warning)
                     FText("No emulator installed", Fuse.type.body, color = c.warning, maxLines = 1)
+                }
+                // Only firmware Fuse knows is missing is told here; one it can't check is never a warning.
+                firmwareProblem(s)?.let { problem ->
+                    FText("·", Fuse.type.body, color = c.textFaint)
+                    FuseIcon(FuseIcons.Key, size = Size.iconS, tint = c.warning)
+                    FText(problem, Fuse.type.body, color = c.warning, maxLines = 1)
                 }
             }
         }

@@ -295,6 +295,8 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
                                     a.label, selected = selected, icon = a.icon,
                                     kind = if (a.primary) ButtonKind.PRIMARY else ButtonKind.SECONDARY,
                                     height = if (a.primary) Size.row else Size.touch,
+                                    // The emulator reads as a choice: its name, and a chevron for "pick another".
+                                    trailingIcon = if (a.id == "emu") FuseIcons.ChevronDown else null,
                                     // Play stays pressable without an emulator: pressing it explains what to install.
                                     enabled = !a.primary || d.emulator.canLaunch || d.emulator.selected != null,
                                     modifier = Modifier.align(Alignment.CenterVertically)
@@ -496,8 +498,9 @@ private fun GameTitle(d: GameDetail, layout: GameLayout, showLogo: Boolean, modi
 
 /**
  * What Fuse knows about the game, as a line of quiet chips: its system first (with its colour),
- * then year, players and genre when a source said so, then how much you have played it and when.
- * Nothing is guessed: a fact Fuse doesn't have is simply left out.
+ * then year, players and genre when a source said so, then how much you have played it and when,
+ * and the collections it is in. Nothing is guessed: a fact Fuse doesn't have is simply left out.
+ * The finer play history (this week, sessions) waits in its card further down.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -515,7 +518,6 @@ private fun FactChips(d: GameDetail, modifier: Modifier) {
             FactChip("Not played yet", FuseIcons.Sparkle)
         }
         game.play.lastPlayedAt?.let { FactChip("Played ${agoText(it)}", FuseIcons.History) }
-        if (d.secondsThisWeek > 0) FactChip("${playtimeText(d.secondsThisWeek)} this week", FuseIcons.TrendingUp)
         when (d.collections.size) {
             0 -> Unit
             1, 2 -> d.collections.forEach { FactChip(it.name, FuseIcons.Bookmark) }

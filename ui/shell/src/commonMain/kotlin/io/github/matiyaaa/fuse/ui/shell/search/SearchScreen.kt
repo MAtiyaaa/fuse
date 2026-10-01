@@ -45,6 +45,7 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -296,8 +297,6 @@ private fun ColumnScope.ResultsPane(
     onTap: (Int, Hit) -> Unit,
     modifier: Modifier,
 ) {
-    val c = Fuse.colors
-    val motion = Fuse.motion
     val blank = query.isBlank()
     val nothing = !blank && hits.isEmpty() && settledQuery.isNotBlank()
     Box(modifier.weight(1f).fillMaxWidth()) {
@@ -425,7 +424,7 @@ private fun ResultList(
                     Spacer(Modifier.width(Space.m))
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Space.xxs)) {
                         val titleMatches = remember(h.title, query) { highlight(h.title, query, Color.Unspecified).spanStyles.isNotEmpty() }
-                        Highlighted(h.title, query, Fuse.type.bodyStrong, base = if (selected) c.text else c.text.copy(alpha = 0.9f), mark = c.accent, maxLines = 1)
+                        Highlighted(h.title, query, Fuse.type.bodyStrong, base = if (selected) c.text else c.text.copy(alpha = 0.86f), mark = c.text, maxLines = 1, underline = c.accent)
                         // The detail is picked out only when it is why the result is here (a system found by its short name).
                         Highlighted(h.detail, if (titleMatches) "" else query, Fuse.type.caption, base = c.textMuted, mark = c.text, maxLines = 1)
                     }
@@ -458,12 +457,30 @@ private fun HitThumb(h: Hit, size: androidx.compose.ui.unit.Dp) {
 
 /**
  * [text] with every part that matches a word of [query] picked out in [mark] (and a touch bolder),
- * so it is clear why each result is here.
+ * so it is clear why each result is here. With an [underline] colour each match also sits on a
+ * short rounded stroke under its letters: clear at a glance, without painting whole words in the
+ * accent. Matches hidden by the ellipsis get no stroke.
  */
 @Composable
-private fun Highlighted(text: String, query: String, style: TextStyle, base: Color, mark: Color, maxLines: Int) {
+private fun Highlighted(text: String, query: String, style: TextStyle, base: Color, mark: Color, maxLines: Int, underline: Color? = null) {
     val annotated = remember(text, query, base, mark) { highlight(text, query, mark) }
-    BasicText(annotated, style = style.copy(color = base), maxLines = maxLines, overflow = TextOverflow.Ellipsis)
+    val ranges = remember(annotated) { annotated.spanStyles.map { it.start until it.end } }
+    var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
+    val strokes = if (underline == null || ranges.isEmpty()) Modifier else Modifier.drawBehind {
+        val l = layout ?: return@drawBehind
+        val h = Size.focusStroke.toPx()
+        val below = Space.xxs.toPx()
+        for (r in ranges) {
+            val line = l.getLineForOffset(r.first)
+            val visibleEnd = l.getLineEnd(line, visibleEnd = true)
+            if (r.first >= visibleEnd) continue
+            val end = minOf(r.last + 1, visibleEnd)
+            val left = l.getHorizontalPosition(r.first, usePrimaryDirection = true)
+            val right = l.getHorizontalPosition(end, usePrimaryDirection = true)
+            drawRoundRect(underline, Offset(minOf(left, right), l.getLineBaseline(line) + below), androidx.compose.ui.geometry.Size(abs(right - left), h), CornerRadius(h / 2))
+        }
+    }
+    BasicText(annotated, strokes, style = style.copy(color = base), maxLines = maxLines, overflow = TextOverflow.Ellipsis, onTextLayout = { layout = it })
 }
 
 private fun highlight(text: String, query: String, mark: Color): AnnotatedString {
