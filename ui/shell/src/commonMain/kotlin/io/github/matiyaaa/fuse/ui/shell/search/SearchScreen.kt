@@ -41,6 +41,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
@@ -51,6 +53,7 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.Dp
 import io.github.matiyaaa.fuse.model.CollectionKind
 import io.github.matiyaaa.fuse.model.NavAction
 import io.github.matiyaaa.fuse.ui.designsystem.components.EditableText
@@ -78,6 +81,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.media.GeneratedArt
 import io.github.matiyaaa.fuse.ui.designsystem.shape.SquircleShape
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Durations
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
+import io.github.matiyaaa.fuse.ui.designsystem.theme.Radius
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
 import io.github.matiyaaa.fuse.ui.designsystem.theme.toColor
@@ -248,6 +252,10 @@ fun SearchScreen(app: AppState) {
                 onKey = { app.platform.haptics.tick() },
             )
         }
+        // Side by side, a message in the results pane centres on the keys beside it, not on the
+        // empty space under them.
+        var inputsHeight by remember { mutableStateOf<Dp?>(null) }
+        val density = LocalDensity.current
         val pane: @Composable ColumnScope.() -> Unit = {
             ResultsPane(
                 app, hits, query, settledQuery, sel,
@@ -255,6 +263,7 @@ fun SearchScreen(app: AppState) {
                 compact = compact || stacked,
                 onTap = { i, h -> sel.index = i; inResults = true; open(h) },
                 modifier = Modifier.reveal(reveal, 2),
+                messageHeight = if (stacked) null else inputsHeight,
             )
         }
         val top = Size.hudHeight + if (compact) Space.s else Space.l
@@ -269,7 +278,7 @@ fun SearchScreen(app: AppState) {
             Row(Modifier.fillMaxSize().padding(horizontal = Space.gutter)) {
                 Column(Modifier.weight(1f).fillMaxHeight()) {
                     Spacer(Modifier.height(top))
-                    inputs()
+                    Column(Modifier.onSizeChanged { inputsHeight = with(density) { it.height.toDp() } }) { inputs() }
                 }
                 Spacer(Modifier.width(Space.xxl))
                 Column(Modifier.weight(1f).fillMaxHeight()) {
@@ -296,12 +305,19 @@ private fun ColumnScope.ResultsPane(
     compact: Boolean,
     onTap: (Int, Hit) -> Unit,
     modifier: Modifier,
+    /** Height of the keys beside the pane, to centre a message on; null centres it in the pane. */
+    messageHeight: Dp? = null,
 ) {
     val blank = query.isBlank()
+    val message = if (messageHeight != null) {
+        Modifier.fillMaxWidth().height(messageHeight)
+    } else {
+        Modifier.fillMaxSize().padding(bottom = Size.hintHeight + Space.xl)
+    }
     val nothing = !blank && hits.isEmpty() && settledQuery.isNotBlank()
     Box(modifier.weight(1f).fillMaxWidth()) {
         when {
-            blank -> Box(Modifier.fillMaxSize().padding(bottom = Size.hintHeight + Space.xl), contentAlignment = Alignment.Center) {
+            blank -> Box(message, contentAlignment = Alignment.Center) {
                 EmptyState(
                     FuseIcons.Search,
                     "Search your library",
@@ -309,7 +325,7 @@ private fun ColumnScope.ResultsPane(
                     compact = true,
                 )
             }
-            nothing -> Box(Modifier.fillMaxSize().padding(bottom = Size.hintHeight + Space.xl), contentAlignment = Alignment.Center) {
+            nothing -> Box(message, contentAlignment = Alignment.Center) {
                 EmptyState(
                     FuseIcons.SearchX,
                     "Nothing matches “${query.trim()}”",
@@ -365,6 +381,8 @@ private fun ResultList(
     }
     val fill = c.text.copy(alpha = if (c.isDark) 0.1f else 0.07f)
     val accent = c.accent
+    // The wash behind matched letters: the accent, faint enough that the words keep full contrast.
+    val marker = c.accent.copy(alpha = if (c.isDark) 0.26f else 0.18f)
     val corner = Fuse.geometry.control
     val outline = if (Fuse.look.highContrastFocus) c.focus else null
     val rowShape = androidx.compose.foundation.shape.RoundedCornerShape(corner)
@@ -424,7 +442,7 @@ private fun ResultList(
                     Spacer(Modifier.width(Space.m))
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Space.xxs)) {
                         val titleMatches = remember(h.title, query) { highlight(h.title, query, Color.Unspecified).spanStyles.isNotEmpty() }
-                        Highlighted(h.title, query, Fuse.type.bodyStrong, base = if (selected) c.text else c.text.copy(alpha = 0.86f), mark = c.text, maxLines = 1, underline = c.accent)
+                        Highlighted(h.title, query, Fuse.type.bodyStrong, base = if (selected) c.text else c.text.copy(alpha = 0.86f), mark = c.text, maxLines = 1, marker = marker)
                         // The detail is picked out only when it is why the result is here (a system found by its short name).
                         Highlighted(h.detail, if (titleMatches) "" else query, Fuse.type.caption, base = c.textMuted, mark = c.text, maxLines = 1)
                     }
@@ -457,30 +475,36 @@ private fun HitThumb(h: Hit, size: androidx.compose.ui.unit.Dp) {
 
 /**
  * [text] with every part that matches a word of [query] picked out in [mark] (and a touch bolder),
- * so it is clear why each result is here. With an [underline] colour each match also sits on a
- * short rounded stroke under its letters: clear at a glance, without painting whole words in the
- * accent. Matches hidden by the ellipsis get no stroke.
+ * so it is clear why each result is here. With a [marker] colour each match also sits on a soft
+ * rounded wash, like a highlighter pen: clear at a glance, without painting whole words in the
+ * accent or looking like a link. Matches hidden by the ellipsis get no wash.
  */
 @Composable
-private fun Highlighted(text: String, query: String, style: TextStyle, base: Color, mark: Color, maxLines: Int, underline: Color? = null) {
+private fun Highlighted(text: String, query: String, style: TextStyle, base: Color, mark: Color, maxLines: Int, marker: Color? = null) {
     val annotated = remember(text, query, base, mark) { highlight(text, query, mark) }
     val ranges = remember(annotated) { annotated.spanStyles.map { it.start until it.end } }
     var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
-    val strokes = if (underline == null || ranges.isEmpty()) Modifier else Modifier.drawBehind {
+    val washes = if (marker == null || ranges.isEmpty()) Modifier else Modifier.drawBehind {
         val l = layout ?: return@drawBehind
-        val h = Size.focusStroke.toPx()
-        val below = Space.xxs.toPx()
+        val pad = Space.xxs.toPx()
+        val corner = CornerRadius(Radius.xs.toPx())
         for (r in ranges) {
             val line = l.getLineForOffset(r.first)
             val visibleEnd = l.getLineEnd(line, visibleEnd = true)
             if (r.first >= visibleEnd) continue
             val end = minOf(r.last + 1, visibleEnd)
-            val left = l.getHorizontalPosition(r.first, usePrimaryDirection = true)
-            val right = l.getHorizontalPosition(end, usePrimaryDirection = true)
-            drawRoundRect(underline, Offset(minOf(left, right), l.getLineBaseline(line) + below), androidx.compose.ui.geometry.Size(abs(right - left), h), CornerRadius(h / 2))
+            val a = l.getHorizontalPosition(r.first, usePrimaryDirection = true)
+            val b = l.getHorizontalPosition(end, usePrimaryDirection = true)
+            val top = l.getLineTop(line)
+            drawRoundRect(
+                marker,
+                Offset(minOf(a, b) - pad, top),
+                androidx.compose.ui.geometry.Size(abs(b - a) + pad * 2, l.getLineBottom(line) - top),
+                corner,
+            )
         }
     }
-    BasicText(annotated, strokes, style = style.copy(color = base), maxLines = maxLines, overflow = TextOverflow.Ellipsis, onTextLayout = { layout = it })
+    BasicText(annotated, washes, style = style.copy(color = base), maxLines = maxLines, overflow = TextOverflow.Ellipsis, onTextLayout = { layout = it })
 }
 
 private fun highlight(text: String, query: String, mark: Color): AnnotatedString {

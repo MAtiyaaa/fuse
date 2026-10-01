@@ -193,7 +193,10 @@ fun SystemsScreen(app: AppState) {
         if (current?.art?.hero == null) SystemShowcase(current, Modifier.align(Alignment.CenterEnd).fillMaxHeight().width(maxHeight * 0.46f))
         Column(Modifier.fillMaxSize()) {
             Spacer(Modifier.height(Size.hudHeight + if (compactHeader) Space.s else Space.xl))
-            SystemHeader(current, compactHeader, Modifier.padding(horizontal = Space.gutter).reveal(reveal, 0))
+            SystemHeader(
+                current, compactHeader, Modifier.padding(horizontal = Space.gutter).reveal(reveal, 0),
+                moving = if (moving && systems.isNotEmpty()) "Moving, place ${sel.index + 1} of ${systems.size}" else null,
+            )
             Spacer(Modifier.height(if (compactHeader) Space.xs else Space.m))
             if (systems.isEmpty()) {
                 Box(Modifier.weight(1f).fillMaxWidth().padding(horizontal = Space.gutter, vertical = Space.xl), contentAlignment = Alignment.Center) {
@@ -436,6 +439,8 @@ internal fun SystemHeader(
     showMeta: Boolean = true,
     logoHeight: Dp = if (compact) Size.touch - Space.s else Size.touch + Space.l,
     nameStyle: TextStyle = if (compact) Fuse.type.title else Fuse.type.display,
+    /** Said in place of the maker line while the system is being moved ("Moving, place 3 of 11"). */
+    moving: String? = null,
 ) {
     val c = Fuse.colors
     val motion = Fuse.motion
@@ -454,9 +459,15 @@ internal fun SystemHeader(
         Column(verticalArrangement = Arrangement.spacedBy(if (compact) Space.xs else Space.s)) {
             if (showMeta) {
                 val eyebrow = listOfNotNull(s.platform.manufacturer?.uppercase(), s.platform.releaseYear?.toString()).joinToString("  ·  ")
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s)) {
-                    Box(Modifier.size(Size.dot).background(s.platform.accent.toColor(), CircleShape))
-                    FText(eyebrow.ifEmpty { "SYSTEM" }, Fuse.type.overline.tabular(), color = c.textMuted, maxLines = 1)
+                Row(Modifier.height(Size.iconS), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s)) {
+                    if (moving != null) {
+                        // Carried: the line says where it is now, so each step of the D-pad is felt.
+                        FuseIcon(FuseIcons.Move, size = Size.iconS, tint = c.text)
+                        FText(moving.uppercase(), Fuse.type.overline.tabular(), color = c.text, maxLines = 1)
+                    } else {
+                        Box(Modifier.size(Size.dot).background(s.platform.accent.toColor(), CircleShape))
+                        FText(eyebrow.ifEmpty { "SYSTEM" }, Fuse.type.overline.tabular(), color = c.textMuted, maxLines = 1)
+                    }
                 }
             }
             val name: @Composable () -> Unit = {
@@ -561,9 +572,6 @@ fun AppState.systemMenu(card: PlatformCard, onMove: (() -> Unit)? = null): Conte
         art = card.art.square ?: card.art.icon,
         actions = listOfNotNull(
             MenuAction("open", "Open", FuseIcons.Grid, onSelect = { closeOverlays(); go(Route.PlatformGames(p.id)) }),
-            onMove?.let { move ->
-                MenuAction("move", "Move this system", FuseIcons.Move, detail = "Or hold confirm. By touch, hold it and drag", onSelect = { closeOverlays(); move() })
-            },
             MenuAction("settings", "System Settings", FuseIcons.Settings, trailing = Trailing.Chevron, onSelect = { closeOverlays(); go(Route.PlatformSettings(p.id)) }),
             MenuAction("media", "Change System Media", FuseIcons.Image, detail = "Icon, background and logo for ${p.shortName}", trailing = Trailing.Chevron, onSelect = {
                 closeOverlays(); go(Route.Media(owner, p.name))
@@ -587,6 +595,11 @@ fun AppState.systemMenu(card: PlatformCard, onMove: (() -> Unit)? = null): Conte
             if (!store.cartridge.status.value.installed) null else MenuAction("cartridge", "Browse in Cartridge", FuseIcons.CloudDownload, onSelect = {
                 closeOverlays(); store.cartridge.open(CartridgeRoute.Platform(p.id.value))
             }),
+            // Arranging is about the screen, not the system, so it sits apart at the foot (holding
+            // confirm on the card does the same).
+            onMove?.let { move ->
+                MenuAction("move", "Move this system", FuseIcons.Move, detail = "Or hold confirm. By touch, hold it and drag", section = "Arrange", onSelect = { closeOverlays(); move() })
+            },
         ),
     )
 }

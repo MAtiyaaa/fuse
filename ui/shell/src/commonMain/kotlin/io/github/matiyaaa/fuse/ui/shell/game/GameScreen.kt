@@ -518,6 +518,13 @@ private fun FactChips(d: GameDetail, modifier: Modifier) {
             FactChip("Not played yet", FuseIcons.Sparkle)
         }
         game.play.lastPlayedAt?.let { FactChip("Played ${agoText(it)}", FuseIcons.History) }
+        // Updates and DLC found beside it, as a store page would list them; the card below says more.
+        val updates = game.content.count { it.kind == ContentKind.UPDATE }
+        val dlc = game.content.count { it.kind == ContentKind.DLC }
+        listOfNotNull(
+            updates.takeIf { it > 0 }?.let { if (it == 1) "1 update" else "$it updates" },
+            dlc.takeIf { it > 0 }?.let { "$it DLC" },
+        ).joinToString(", ").ifEmpty { null }?.let { FactChip(it, FuseIcons.Package) }
         when (d.collections.size) {
             0 -> Unit
             1, 2 -> d.collections.forEach { FactChip(it.name, FuseIcons.Bookmark) }
@@ -554,13 +561,18 @@ private fun FactChip(text: String, icon: ImageVector? = null, dot: Color? = null
 @Composable
 private fun LaunchNote(d: GameDetail, modifier: Modifier) {
     val c = Fuse.colors
-    val summary = d.emulator.launchSummary ?: return
+    val summary = launchNote(d) ?: return
     val missing = d.emulator.selected == null
-    if (!missing && summary.startsWith("Starts")) return
     Row(modifier.padding(top = Space.m), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s)) {
         FuseIcon(if (missing) FuseIcons.Warning else FuseIcons.Info, size = Size.iconS, tint = if (missing) c.warning else c.textMuted)
         FText(summary, Fuse.type.caption, color = if (missing) c.text else c.textMuted, maxLines = 2)
     }
+}
+
+/** What [LaunchNote] says under the buttons, or null when the launch is simply "starts in X". */
+private fun launchNote(d: GameDetail): String? {
+    val summary = d.emulator.launchSummary ?: return null
+    return summary.takeIf { d.emulator.selected == null || !summary.startsWith("Starts") }
 }
 
 /** A titled section of the page's lower half. */
@@ -601,17 +613,28 @@ private fun StartsCard(d: GameDetail, selected: Boolean, onClick: () -> Unit, mo
     InfoPanel("Starts in", FuseIcons.Chip, selected, onClick, modifier, actionable = true) {
         val name = e.selected?.name
         FText(name ?: "No emulator yet", Fuse.type.titleSmall, color = if (name == null) c.warning else c.text, maxLines = 1)
-        // How it starts, unless that only repeats the name ("Starts in RetroArch").
-        e.launchSummary?.takeIf { it != "Starts in $name" }?.let { FText(it, Fuse.type.caption, color = c.textMuted, maxLines = 3) }
-        val why = when (e.source) {
-            "Game" -> "Chosen for this game"
-            "Platform" -> "Chosen for every ${d.platform.shortName} game"
-            "Automatic" -> "Fuse's first choice of the emulators you have"
+        // Why this one, right under its name.
+        val why = when {
+            name == null -> null
+            e.source == "Game" -> "Chosen for this game"
+            e.source == "Platform" -> "Chosen for every ${d.platform.shortName} game"
+            e.source == "Automatic" -> "Fuse's first choice of the emulators you have"
             else -> null
         }
-        if (why != null) {
+        if (why != null) FText(why, Fuse.type.caption, color = c.textMuted, maxLines = 1)
+        // How it starts, unless that only repeats the name ("Starts in RetroArch") or the note
+        // under the buttons already says it.
+        e.launchSummary?.takeIf { it != "Starts in $name" && launchNote(d) == null }?.let {
+            FText(it, Fuse.type.caption, color = if (name == null) c.text else c.textMuted, maxLines = 3, modifier = Modifier.padding(top = Space.xs))
+        }
+        // The other emulators that could run it, so the chevron's promise is concrete.
+        val others = e.alternatives.map { it.name }.filter { it != name }.distinct()
+        if (others.isNotEmpty()) {
             Spacer(Modifier.weight(1f))
-            FText(why, Fuse.type.caption, color = c.textFaint, maxLines = 1, modifier = Modifier.padding(top = Space.s))
+            FText(
+                "Also installed: ${others.take(3).joinToString(", ")}${if (others.size > 3) " and ${others.size - 3} more" else ""}",
+                Fuse.type.caption, color = c.textFaint, maxLines = 2, modifier = Modifier.padding(top = Space.s),
+            )
         }
     }
 }
