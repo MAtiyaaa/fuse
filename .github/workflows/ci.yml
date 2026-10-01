@@ -97,6 +97,8 @@ jobs:
         uses: android-actions/setup-android@v4
 
       - name: Install Android platform 37
+        # sdkmanager is a .bat file, which bash doesn't run by its bare name.
+        shell: pwsh
         run: sdkmanager --install "platforms;android-37.0"
 
       - name: Set up Gradle
