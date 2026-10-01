@@ -880,11 +880,21 @@ internal fun AuditDriver.cartridgeScreens(exhaustive: Boolean) {
         shoot("active download and recent downloads matched to games")
         if (!exhaustive) return@scenario
         tap(PadButton.DPAD_DOWN)
+        shoot("a system focused, to browse it on RomM")
+        tap(PadButton.X)
+        waitFor("Search")
+        shoot("a system's options")
+        tap(PadButton.B)
+        tap(PadButton.DPAD_DOWN)
         shoot("recent download focused")
-        tap(PadButton.DPAD_DOWN, 3)
-        shoot("download not in the library yet focused, the page scrolled with it")
-        tap(PadButton.DPAD_UP, 5)
-        shoot("back on the buttons, the page at the top")
+        tap(PadButton.DPAD_RIGHT, 3)
+        shoot("download not in the library yet focused")
+        tap(PadButton.DPAD_UP, 2)
+        tap(PadButton.DPAD_RIGHT, 2)
+        tap(PadButton.A)
+        waitFor("Search RomM")
+        shoot("search RomM with the keyboard")
+        tap(PadButton.B)
     }
 
     scenario("cartridge", "uploads") {
@@ -904,11 +914,11 @@ internal fun AuditDriver.cartridgeScreens(exhaustive: Boolean) {
         waitFor("Uploading to RomM")
         tap(PadButton.DPAD_LEFT)
         shoot("an upload going, one done and one failed")
-        tap(PadButton.DPAD_RIGHT, 5)
-        shoot("last button focused, the row scrolled")
+        tap(PadButton.DPAD_RIGHT, 6)
+        shoot("last action focused, the row scrolled")
         if (!exhaustive) return@scenario
-        // Sync library, Consoles, then Upload a game
-        tap(PadButton.DPAD_LEFT, 2)
+        // Sync, Consoles, Downloads, then Upload
+        tap(PadButton.DPAD_LEFT, 3)
         tap(PadButton.A)
         waitFor("Upload a game to RomM")
         shoot("pick a system to upload from")
@@ -920,7 +930,15 @@ internal fun AuditDriver.cartridgeScreens(exhaustive: Boolean) {
 
     scenario("cartridge", "not installed") {
         useLibrary()
-        tab(Destination.CARTRIDGE)
+        // The tab shows once Cartridge is installed; before that the quick menu's tile opens the page.
+        home()
+        tap(PadButton.START)
+        waitFor("Find games")
+        val tile = textCentre("Cartridge")
+        touch {
+            down(tile)
+            up()
+        }
         waitFor("How it works")
         tap(PadButton.DPAD_LEFT)
         shoot("not installed")
