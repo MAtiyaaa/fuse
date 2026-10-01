@@ -32,6 +32,7 @@
     <span>Fuse</span>
   </a>
   <nav class="tabs" aria-label="Sections">
+    <span class="tab-glide" aria-hidden="true"></span>
     <a class="tab" href="#download" data-tab="download">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></svg>
       <span>Download</span>
@@ -144,9 +145,15 @@
   </section>
 
   <section id="themes" class="shelf" aria-labelledby="themes-title">
-    <h2 id="themes-title" class="label">Themes</h2>
+    <h2 id="themes-title" class="label">Themes <span class="count" data-theme-count></span></h2>
     <p class="lede">Every theme is a small file anyone can write. Copy a link, then in Fuse open Settings, Appearance, Theme, Add a theme. <a href="https://github.com/MAtiyaaa/fuse/blob/main/docs/THEMES.md">Make your own</a>.</p>
-    <div class="row themes" data-row data-themes></div>
+    <div class="seg" role="group" aria-label="Show themes" data-theme-filter hidden>
+      <span class="seg-glide" aria-hidden="true"></span>
+      <button class="seg-btn" type="button" data-filter="all" aria-pressed="true">All <b data-count="all"></b></button>
+      <button class="seg-btn" type="button" data-filter="dark" aria-pressed="false">Dark <b data-count="dark"></b></button>
+      <button class="seg-btn" type="button" data-filter="bright" aria-pressed="false">Bright <b data-count="bright"></b></button>
+    </div>
+    <div class="grid themes" data-row data-themes></div>
   </section>
 </main>
 
