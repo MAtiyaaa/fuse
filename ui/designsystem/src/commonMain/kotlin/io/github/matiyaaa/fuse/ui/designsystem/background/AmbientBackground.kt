@@ -14,23 +14,25 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.lerp
 import io.github.matiyaaa.fuse.model.AmbientSpec
 import io.github.matiyaaa.fuse.model.BackgroundStyle
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
-import kotlin.math.PI
-import kotlin.math.cos
-import kotlin.math.sin
+import io.github.matiyaaa.fuse.ui.designsystem.theme.FuseColors
+import kotlin.math.exp
+import kotlin.math.min
+import kotlin.math.sqrt
 
 /**
  * Theme backgrounds drawn in code (no image assets), all original. When animation is allowed they
  * move slowly and are throttled to [fps] so an idle home screen costs almost nothing; otherwise they
- * are drawn once and never invalidate. [ambient] sets how bright and how fast each one is, and the
- * second colour some of them blend with the accent.
+ * are drawn once, at their first frame, and never invalidate. [ambient] sets how bright and how fast
+ * each one is, and the second colour some of them blend with the accent.
+ *
+ * Each style is a [Scene] that builds its paths, brushes and seeded particles once per size and
+ * then only moves them, so a frame allocates nothing.
  */
 @Composable
 fun AmbientBackground(
@@ -43,10 +45,15 @@ fun AmbientBackground(
 ) {
     val colors = Fuse.colors
     var time by remember { mutableFloatStateOf(0f) }
-    val moves = style != BackgroundStyle.SOLID && style != BackgroundStyle.HERO && ambient.speed > 0f
-    if (animate && moves) {
-        LaunchedEffect(fps, ambient.speed) {
-            val frame = 1000L / fps
+    val k = ambient.intensity.coerceIn(0f, 1.5f)
+    val scene = remember(style, accent, ambient.secondary, colors, k) {
+        sceneFor(style, SceneLook(accent, ambient.secondary?.let { Color(it) }, colors, k))
+    }
+    if (animate && style.moves && ambient.speed > 0f && k > 0f) {
+        // Slow scenes ask for fewer frames than the caller allows; nothing moves faster than it needs.
+        val rate = minOf(fps, scene.fps).coerceAtLeast(1)
+        LaunchedEffect(rate, ambient.speed) {
+            val frame = 1000L / rate
             var last = 0L
             val start = withFrameMillis { it }
             while (true) {
@@ -59,204 +66,145 @@ fun AmbientBackground(
             }
         }
     }
-    val k = ambient.intensity.coerceIn(0f, 1.5f)
-    val second = ambient.secondary?.let { Color(it) }
     Canvas(modifier.fillMaxSize().graphicsLayer()) {
         drawRect(colors.ink)
-        when (style) {
-            BackgroundStyle.WAVE -> wave(time, accent, second, colors.isDark, k)
-            BackgroundStyle.AURORA -> aurora(time, accent, second, k)
-            BackgroundStyle.ORBITAL -> orbital(time, accent, second, k)
-            BackgroundStyle.GRID -> grid(time, accent, colors.isDark, k)
-            BackgroundStyle.STARS -> stars(time, accent, second, k)
-            BackgroundStyle.STRIPES -> stripes(time, accent, colors.text, colors.isDark, k)
-            BackgroundStyle.SOLID, BackgroundStyle.HERO -> vignette(accent, second, colors.isDark, k)
+        scene.draw(this, time)
+    }
+}
+
+private fun sceneFor(style: BackgroundStyle, look: SceneLook): Scene = when (style) {
+    BackgroundStyle.HERO, BackgroundStyle.SOLID -> RoomScene(look)
+    BackgroundStyle.WAVE -> WaveScene(look)
+    BackgroundStyle.AURORA -> AuroraScene(look)
+    BackgroundStyle.ORBITAL -> OrbitalScene(look)
+    BackgroundStyle.GRID -> GridScene(look)
+    BackgroundStyle.STRIPES -> StripesScene(look)
+    BackgroundStyle.STARS -> StarsScene(look)
+    BackgroundStyle.PETALS -> PetalsScene(look)
+    BackgroundStyle.HORIZON -> HorizonScene(look)
+    BackgroundStyle.FIREFLIES -> FirefliesScene(look)
+    BackgroundStyle.CAUSTICS -> CausticsScene(look)
+    BackgroundStyle.LCD -> LcdScene(look)
+    BackgroundStyle.MESH -> MeshScene(look)
+    BackgroundStyle.CONTOURS -> ContoursScene(look)
+    BackgroundStyle.DUNES -> DunesScene(look)
+}
+
+/**
+ * What a scene is lit with: [accent] (the theme's, or the focused game's), the theme's [second]
+ * colour if it has one, its roles and the intensity [k] (0 to 1.5).
+ */
+internal class SceneLook(val accent: Color, val second: Color?, val colors: FuseColors, val k: Float) {
+    val ink: Color get() = colors.ink
+    val text: Color get() = colors.text
+    val dark: Boolean get() = colors.isDark
+}
+
+/**
+ * One background. [build] runs when the size changes and makes everything that depends on it;
+ * [paint] runs every frame at time `t` (seconds scaled by the theme's speed) and must not allocate.
+ * At `t = 0` a scene shows its resting picture, which is all a still background ever shows.
+ */
+internal abstract class Scene(protected val look: SceneLook) {
+    private var built = Size.Zero
+
+    fun draw(scope: DrawScope, t: Float) {
+        with(scope) {
+            if (size.width <= 0f || size.height <= 0f) return
+            if (size != built) {
+                built = size
+                build()
+            }
+            paint(t)
+        }
+    }
+
+    /** The most frames a second this scene needs to look smooth; slow scenes ask for fewer. */
+    open val fps: Int = 30
+
+    protected open fun DrawScope.build() {}
+
+    protected abstract fun DrawScope.paint(t: Float)
+
+    protected val k: Float get() = look.k
+
+    /**
+     * How large marks drawn in dp (petals, fireflies, cells) should be on this canvas: 1 on a
+     * screen, down to 0.45 on a small preview card, so a gallery card looks like the screen, only
+     * smaller.
+     */
+    protected val DrawScope.fit: Float get() = (size.minDimension / (480f * density)).coerceIn(0.45f, 1f)
+}
+
+/**
+ * A soft round light that falls off like a gaussian (no visible rim, less banding than a straight
+ * ramp). The brush is made once around the origin and placed, sized and stretched with a transform,
+ * so drawing one costs no allocation.
+ */
+internal class Glow(color: Color) {
+    val brush: Brush = Brush.radialGradient(
+        colorStops = *Array(FALLOFF.size) { i -> FALLOFF[i].first to color.copy(alpha = color.alpha * FALLOFF[i].second) },
+        center = Offset.Zero,
+        radius = UNIT,
+    )
+
+    /** Draws the light centred on ([x], [y]) with radii [rx] and [ry], turned by [degrees]. */
+    fun draw(scope: DrawScope, x: Float, y: Float, rx: Float, ry: Float = rx, alpha: Float = 1f, degrees: Float = 0f) {
+        if (alpha <= 0.002f || rx <= 0f || ry <= 0f) return
+        scope.withTransform({
+            translate(x, y)
+            if (degrees != 0f) rotate(degrees, Offset.Zero)
+            scale(rx / UNIT, ry / UNIT, Offset.Zero)
+        }) {
+            drawCircle(brush, radius = UNIT, center = Offset.Zero, alpha = alpha.coerceAtMost(1f))
+        }
+    }
+
+    companion object {
+        const val UNIT = 64f
+
+        /** exp(-4.5 t²), shifted to reach zero at the rim. */
+        private val FALLOFF: List<Pair<Float, Float>> = List(9) { i ->
+            val t = i / 8f
+            val e = exp(-4.5f)
+            t to ((exp(-4.5f * t * t) - e) / (1f - e)).coerceAtLeast(0f)
         }
     }
 }
 
-/** A room without art: an ember glow low on the left and a faint cool light high on the right, for depth. */
-private fun DrawScope.vignette(accent: Color, second: Color?, dark: Boolean, k: Float) {
-    drawRect(
-        Brush.radialGradient(
-            listOf(accent.copy(alpha = 0.12f * k), accent.copy(alpha = 0.04f * k), Color.Transparent),
-            center = Offset(size.width * 0.2f, size.height * 1.02f),
-            radius = size.maxDimension * 0.8f,
-        ),
-    )
-    val cool = second ?: lerp(accent, Color(0xFF3D7BFF), 0.85f)
-    drawRect(
-        Brush.radialGradient(
-            listOf(cool.copy(alpha = (if (dark) 0.07f else 0.035f) * k), Color.Transparent),
-            center = Offset(size.width * 0.9f, -size.height * 0.1f),
-            radius = size.maxDimension * 0.6f,
-        ),
-    )
-}
+/** Deterministic pseudo-random numbers (xorshift), so a scene looks the same on every device and every run. */
+internal class Seeded(seed: Int) {
+    private var s = if (seed == 0) 0x2F6E2B1 else seed
 
-private fun DrawScope.wave(t: Float, accent: Color, second: Color?, dark: Boolean, k: Float) {
-    drawRect(
-        Brush.verticalGradient(
-            listOf(lerp(Color.Black, accent, if (dark) 0.10f else 0.04f).copy(alpha = k.coerceAtMost(1f)), Color.Transparent),
-        ),
-    )
-    val w = size.width
-    val h = size.height
-    val core = second ?: Color.White
-    for (layer in 0 until 4) {
-        val path = Path()
-        val amp = h * (0.05f + 0.02f * layer)
-        val baseY = h * (0.58f + 0.035f * layer)
-        val freq = 1.4f + 0.35f * layer
-        val phase = t * (0.18f + 0.05f * layer) + layer * 1.7f
-        var x = 0f
-        path.moveTo(0f, baseY)
-        while (x <= w) {
-            val u = x / w
-            val y = baseY + sin((u * freq * 2 * PI + phase).toFloat()) * amp * (0.6f + 0.4f * sin((u * PI).toFloat()))
-            path.lineTo(x, y)
-            x += w / 64f
-        }
-        drawPath(
-            path,
-            Brush.horizontalGradient(
-                listOf(
-                    Color.Transparent,
-                    accent.copy(alpha = ((0.45f - 0.08f * layer) * k).coerceIn(0f, 1f)),
-                    core.copy(alpha = ((0.38f - 0.07f * layer) * k).coerceIn(0f, 1f)),
-                    Color.Transparent,
-                ),
-            ),
-            style = Stroke(width = (1.2f + layer * 0.6f) * density),
-        )
-    }
-}
-
-private fun DrawScope.aurora(t: Float, accent: Color, second: Color?, k: Float) {
-    val w = size.width
-    val h = size.height
-    val tints = listOf(accent, second ?: lerp(accent, Color(0xFF2A7BFF), 0.5f), lerp(accent, Color.White, 0.3f))
-    for ((i, tint) in tints.withIndex()) {
-        val cx = w * (0.3f + 0.25f * sin(t * 0.07f + i * 2.1f))
-        val cy = h * (0.35f + 0.2f * cos(t * 0.05f + i * 1.3f))
-        drawCircle(
-            Brush.radialGradient(listOf(tint.copy(alpha = (0.22f * k).coerceAtMost(1f)), Color.Transparent), center = Offset(cx, cy), radius = size.maxDimension * 0.55f),
-            radius = size.maxDimension * 0.55f,
-            center = Offset(cx, cy),
-        )
-    }
-}
-
-private fun DrawScope.orbital(t: Float, accent: Color, second: Color?, k: Float) {
-    starField(t, second ?: accent, k * 0.6f, count = 60)
-    val center = Offset(size.width * 0.72f, size.height * 0.5f)
-    val base = size.minDimension * 0.18f
-    for (i in 0 until 6) {
-        val rx = base * (1f + i * 0.55f)
-        val ry = rx * 0.42f
-        drawOval(
-            accent.copy(alpha = ((0.16f - i * 0.02f) * k).coerceIn(0f, 1f)),
-            topLeft = Offset(center.x - rx, center.y - ry),
-            size = Size(rx * 2, ry * 2),
-            style = Stroke(width = density),
-        )
-        val a = t * (0.25f - i * 0.03f) + i * 1.1f
-        val dot = Offset(center.x + cos(a) * rx, center.y + sin(a) * ry)
-        val glow = if (i % 2 == 0) Color.White else (second ?: Color.White)
-        drawCircle(Brush.radialGradient(listOf(glow.copy(alpha = (0.8f * k).coerceAtMost(1f)), Color.Transparent), center = dot, radius = 10f * density), radius = 10f * density, center = dot)
-    }
-    drawCircle(
-        Brush.radialGradient(listOf(accent.copy(alpha = (0.25f * k).coerceAtMost(1f)), Color.Transparent), center = center, radius = base * 1.4f),
-        radius = base * 1.4f,
-        center = center,
-    )
-}
-
-/** A deep field of stars that drift and twinkle, with a nebula glow in the accent and second colour. */
-private fun DrawScope.stars(t: Float, accent: Color, second: Color?, k: Float) {
-    val tint = second ?: lerp(accent, Color(0xFF3D7BFF), 0.6f)
-    drawRect(
-        Brush.radialGradient(
-            listOf(accent.copy(alpha = 0.14f * k), Color.Transparent),
-            center = Offset(size.width * 0.78f, size.height * 0.28f),
-            radius = size.maxDimension * 0.5f,
-        ),
-    )
-    drawRect(
-        Brush.radialGradient(
-            listOf(tint.copy(alpha = 0.10f * k), Color.Transparent),
-            center = Offset(size.width * 0.15f, size.height * 0.85f),
-            radius = size.maxDimension * 0.55f,
-        ),
-    )
-    starField(t, Color.White, k, count = 110)
-}
-
-/** Seeded stars (the same every frame), drifting left very slowly and twinkling. */
-private fun DrawScope.starField(t: Float, tint: Color, k: Float, count: Int) {
-    val w = size.width
-    val h = size.height
-    var seed = 0x2F6E2B1
+    /** 0 until 1. */
     fun next(): Float {
-        seed = seed xor (seed shl 13)
-        seed = seed xor (seed ushr 17)
-        seed = seed xor (seed shl 5)
-        return (seed ushr 8) / 16_777_216f
+        s = s xor (s shl 13)
+        s = s xor (s ushr 17)
+        s = s xor (s shl 5)
+        return (s ushr 8) / 16_777_216f
     }
-    for (i in 0 until count) {
-        val x0 = next()
-        val y = next() * h
-        val depth = 0.3f + next() * 0.7f
-        val phase = next() * 6.28f
-        val x = ((x0 * w - t * 6f * density * depth) % w + w) % w
-        val twinkle = 0.55f + 0.45f * sin(t * (0.8f + depth) + phase)
-        val r = (0.6f + depth * 1.1f) * density
-        val c = if (i % 7 == 0) tint else Color.White
-        drawCircle(c.copy(alpha = (0.75f * depth * twinkle * k).coerceIn(0f, 1f)), radius = r, center = Offset(x, y))
-    }
+
+    fun between(a: Float, b: Float): Float = a + (b - a) * next()
 }
 
-/** Bright themes: light from the top over soft diagonal pinstripes that drift very slowly. */
-private fun DrawScope.stripes(t: Float, accent: Color, text: Color, dark: Boolean, k: Float) {
-    val w = size.width
-    val h = size.height
-    drawRect(Brush.verticalGradient(listOf(Color.White.copy(alpha = if (dark) 0.04f * k else 0.55f * k), Color.Transparent), endY = h * 0.6f))
-    val gap = 22f * density
-    val shift = (t * 4f * density) % gap
-    val line = text.copy(alpha = (if (dark) 0.035f else 0.045f) * k)
-    var x = -h + shift
-    while (x < w) {
-        drawLine(line, Offset(x, h), Offset(x + h, 0f), strokeWidth = density)
-        x += gap
-    }
-    drawRect(
-        Brush.radialGradient(
-            listOf(accent.copy(alpha = 0.10f * k), Color.Transparent),
-            center = Offset(w * 0.85f, h * 1.05f),
-            radius = size.maxDimension * 0.6f,
-        ),
-    )
+internal fun smooth(edge0: Float, edge1: Float, x: Float): Float {
+    val t = ((x - edge0) / (edge1 - edge0)).coerceIn(0f, 1f)
+    return t * t * (3f - 2f * t)
 }
 
-private fun DrawScope.grid(t: Float, accent: Color, dark: Boolean, k: Float) {
-    val w = size.width
-    val h = size.height
-    val horizon = h * 0.52f
-    val line = (if (dark) accent.copy(alpha = 0.22f) else accent.copy(alpha = 0.18f)).let { it.copy(alpha = (it.alpha * k).coerceAtMost(1f)) }
-    drawRect(
-        Brush.verticalGradient(0f to Color.Transparent, 0.5f to accent.copy(alpha = 0.12f * k), 0.52f to accent.copy(alpha = (0.2f * k).coerceAtMost(1f)), 1f to Color.Transparent),
-    )
-    // Vertical lines converge on a vanishing point.
-    val vp = Offset(w / 2, horizon)
-    for (i in -12..12) {
-        val xBottom = w / 2 + i * w / 8f
-        drawLine(line, vp, Offset(xBottom, h), strokeWidth = density)
-    }
-    // Horizontal lines scroll toward the viewer.
-    val scroll = (t * 0.25f) % 1f
-    for (i in 0 until 12) {
-        val z = (i + scroll) / 12f
-        val y = horizon + (h - horizon) * z * z
-        drawLine(line.copy(alpha = line.alpha * z), Offset(0f, y), Offset(w, y), strokeWidth = density)
-    }
+/** [v] wrapped into 0 until [span]. */
+internal fun wrap(v: Float, span: Float): Float = ((v % span) + span) % span
+
+/**
+ * How much light a point may carry, 0.2 to 1: low over the title area at the top left and along
+ * the HUD line at the top, full elsewhere. Scenes scale their brightest marks by it so text over
+ * any background reads.
+ */
+internal fun DrawScope.calm(x: Float, y: Float): Float {
+    val u = x / size.width
+    val v = y / size.height
+    val d = sqrt((u / 0.5f) * (u / 0.5f) + (v / 0.45f) * (v / 0.45f))
+    val corner = 0.2f + 0.8f * smooth(0.55f, 1.3f, d)
+    val hud = 0.4f + 0.6f * smooth(0.03f, 0.16f, v)
+    return min(corner, hud)
 }

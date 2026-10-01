@@ -1,0 +1,45 @@
+{
+  "fuseTheme": 1,
+  "name": "Olive",
+  "id": "olive",
+  "tagline": "Four shades on a dot-matrix screen",
+  "extends": "olive",
+  "dark": false,
+  "colors": {
+    "background": "#D3DAAA",
+    "surface": "#E3E9C4",
+    "surfaceRaised": "#EBF0D3",
+    "accent": "#3A4B22",
+    "accentSoft": "#3A4B2229",
+    "onAccent": "#E8EDCB",
+    "text": "#1D2712",
+    "textMuted": "#4C5A33",
+    "focus": "#1D2712",
+    "success": "#2F6B1F",
+    "warning": "#7A5200",
+    "danger": "#A3291E"
+  },
+  "background": {
+    "style": "lcd",
+    "intensity": 1.0,
+    "speed": 1.0,
+    "secondary": "#8E9E5E"
+  },
+  "corners": "sharp",
+  "focus": "bar",
+  "motion": "standard",
+  "sound": "click",
+  "glass": {
+    "enabled": false,
+    "blur": 24.0,
+    "opacity": 0.72
+  },
+  "crt": {
+    "enabled": false,
+    "scanlines": 0.35,
+    "bloom": 0.15,
+    "curvature": 0.08,
+    "chromatic": 0.1,
+    "vignette": 0.3
+  }
+}

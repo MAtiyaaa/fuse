@@ -41,7 +41,7 @@ out).
 | `id` | Keeps one theme apart from another when names change | Letters, digits and dashes; made from the name when left out |
 | `author` | Shown as "by ..." | Up to 40 characters |
 | `tagline` | One line under the name | Up to 80 characters |
-| `extends` | The built-in theme to start from | `fuse`, `glass`, `starlight`, `crossbar`, `orbital`, `wave`, `blades`, `channels`, `crt`, `daylight` |
+| `extends` | The built-in theme to start from | See [Built-in themes](#built-in-themes) |
 | `dark` | A dark or a bright theme | `true` or `false`; worked out from the background when left out |
 | `colors` | See [Colours](#colours) | |
 | `background` | A style name, or an object: see [Background](#background) | |
@@ -77,10 +77,58 @@ Colours are written as on the web: `#RGB`, `#RRGGBB`, or `#RRGGBBAA` with the tr
 
 | Key | What it is | Values |
 |---|---|---|
-| `style` | The background | `hero` (the game's art), `solid`, `wave`, `aurora`, `orbital`, `grid`, `stars`, `stripes` |
-| `intensity` | How bright it glows | 0 to 1.5 |
+| `style` | The background | One of the styles below |
+| `intensity` | How bright it glows; 0 leaves the plain room | 0 to 1.5 |
 | `speed` | How fast it moves; 0 holds it still | 0 to 2 |
 | `secondary` | A second colour some backgrounds blend with the accent | A colour |
+
+Every background is drawn by Fuse itself, from the theme's colours. Where game art is shown, it
+lights the room instead.
+
+| Style | What it shows | What `secondary` colours |
+|---|---|---|
+| `hero` | The selected game's art; the plain room where there is none | The cool light high on the right |
+| `solid` | The plain room: a soft glow low on the left and a cool light high on the right | The cool light |
+| `wave` | Slow ribbons of light crossing the lower half | The ribbons' bright core |
+| `aurora` | Soft fields of light wandering | One of the lights |
+| `orbital` | Orbit lines and travelling lights over far stars | Every other light |
+| `grid` | A fine grid running to a lit horizon | Not used |
+| `stars` | A slow drift of stars and a nebula | The far nebula |
+| `stripes` | Soft pinstripes under a top light, for bright themes | Not used |
+| `petals` | Petals drifting down through a dusk sky | The glow low on the right where the sun went |
+| `horizon` | A neon sun behind low mountains, over a grid that runs to the horizon | The grid and the mountain edges |
+| `fireflies` | Fireflies blinking between the trees of a misty wood | The mist and the moonlight |
+| `caustics` | Light rippling through clear water, with rays from above | The rays and the surface light |
+| `lcd` | A dot-matrix screen: a pixel grid, pixel hills and clouds, in the theme's own tones | The hills |
+| `mesh` | Pastel lights blending like mother of pearl | One of the lights |
+| `contours` | The contour lines of a quiet landscape, drawn in the text colour | Not used |
+| `dunes` | Warm dunes under a high sun | The sand |
+
+## Built-in themes
+
+Each built-in theme can be named in `extends`. They are listed as the gallery shows them.
+
+| `extends` | Name | Mood | Background |
+|---|---|---|---|
+| `fuse` | Fuse | Dark room, lit by the game you're on | `hero` |
+| `glass` | Glass | Frosted panels over your art | `hero` |
+| `pitch` | Pitch | True black, kind to the battery | `solid`, at intensity 0 |
+| `starlight` | Starlight | A slow drift of stars | `stars` |
+| `orbital` | Orbital | Quiet light circling in the dark | `orbital` |
+| `crossbar` | Crossbar | Sections across, items down | `wave` |
+| `wave` | Wave | A slow ribbon of light at dusk | `wave` |
+| `blossom` | Blossom | Petals drifting at dusk | `petals` |
+| `lagoon` | Lagoon | Light rippling through clear water | `caustics` |
+| `canopy` | Canopy | Fireflies in a quiet wood | `fireflies` |
+| `blades` | Blades | Bold panels, sharp edges, green light | `aurora` |
+| `sundown` | Sundown | A neon sun over an endless grid | `horizon` |
+| `crt` | CRT | Scanlines and phosphor glow | `grid` |
+| `daylight` | Daylight (bright) | Fuse in a bright room | `hero` |
+| `channels` | Channels (bright) | Bright tiles you arrange yourself | `stripes` |
+| `opal` | Opal (bright) | Pearl light that shifts as it settles | `mesh` |
+| `noon` | Noon (bright) | Warm dunes under a high sun | `dunes` |
+| `ridge` | Ridge (bright) | Contour lines on a quiet map | `contours` |
+| `olive` | Olive (bright) | Four shades on a dot-matrix screen | `lcd` |
 
 ## Readable by design
 

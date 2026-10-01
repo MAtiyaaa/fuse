@@ -95,6 +95,72 @@ class ThemeCodecTest {
     }
 
     @Test
+    fun everyBackgroundLoadsByName() {
+        for (style in BackgroundStyle.entries) {
+            val name = style.name.lowercase()
+            val plain = ok("""{"name": "Bg $name", "background": "$name"}""")
+            assertEquals(style, plain.spec.background, name)
+            assertTrue(plain.notes.isEmpty(), "$name: ${plain.notes}")
+            // In the object form too, and whatever the case.
+            val full = ok("""{"name": "Bg $name", "background": {"style": "${name.uppercase()}", "intensity": 0.8, "speed": 0.5, "secondary": "#FFC46B"}}""")
+            assertEquals(style, full.spec.background, name)
+            assertEquals(0.8f, full.spec.ambient.intensity)
+            assertEquals(0xFFFFC46B, full.spec.ambient.secondary)
+            assertTrue(full.notes.isEmpty(), "$name: ${full.notes}")
+        }
+    }
+
+    @Test
+    fun aThemeFileCanUseTheNewBackgrounds() {
+        val t = ok(
+            """{"fuseTheme": 1, "name": "Night Bloom", "extends": "blossom",
+               "colors": {"accent": "#FFB3D1"},
+               "background": {"style": "fireflies", "intensity": 1.2, "speed": 0.7, "secondary": "#7FE0B0"}}""",
+        )
+        assertEquals(BackgroundStyle.FIREFLIES, t.spec.background)
+        assertEquals(1.2f, t.spec.ambient.intensity)
+        assertEquals(0.7f, t.spec.ambient.speed)
+        assertEquals(0xFF7FE0B0, t.spec.ambient.secondary)
+        // The rest comes from Blossom.
+        assertEquals(ThemePresets.Blossom.geometry, t.spec.geometry)
+        assertEquals(ThemePresets.Blossom.palette.background, t.spec.palette.background)
+        assertTrue(t.notes.isEmpty(), t.notes.toString())
+        // Encoding writes the style's name, and it reads back.
+        assertTrue(ThemeCodec.encode(t.spec).contains("\"style\": \"fireflies\""))
+        assertEquals(BackgroundStyle.FIREFLIES, ok(ThemeCodec.encode(t.spec, extends = "blossom")).spec.background)
+    }
+
+    @Test
+    fun builtInThemesAreDistinctAndInOrder() {
+        val all = ThemePresets.all
+        assertEquals(ThemePresets.Fuse, all.first(), "Fuse, the default, comes first")
+        assertEquals(all.size, all.map { it.id }.toSet().size, "ids are unique")
+        assertEquals(all.size, all.map { it.name.lowercase() }.toSet().size, "names are unique")
+        assertEquals(all.size, all.map { it.tagline }.toSet().size, "taglines are unique")
+        // Dark rooms first, then the bright ones.
+        val firstBright = all.indexOfFirst { !it.palette.dark }
+        assertTrue(all.drop(firstBright).none { it.palette.dark }, "bright themes come after every dark one")
+        assertTrue(all.count { !it.palette.dark } >= 4, "a real choice of bright themes")
+        // Ids people may have selected never change.
+        for (id in listOf("fuse", "glass", "starlight", "crossbar", "orbital", "wave", "blades", "channels", "crt", "daylight")) {
+            assertEquals(id, ThemePresets.find(id)?.id, id)
+        }
+        // Every background style is shown by at least one built-in theme, the room behind art aside.
+        val shown = all.map { it.background }.toSet()
+        assertTrue(BackgroundStyle.entries.filter { it != BackgroundStyle.HERO && it != BackgroundStyle.SOLID }.all { it in shown })
+    }
+
+    @Test
+    fun pitchIsATrueBlackRoomThatNeverMoves() {
+        val pitch = ThemePresets.Pitch
+        assertEquals(0xFF000000, pitch.palette.background)
+        assertTrue(pitch.palette.dark)
+        assertTrue(!pitch.background.moves)
+        assertEquals(0f, pitch.ambient.intensity)
+        assertTrue(!pitch.glass.enabled && !pitch.crt.enabled)
+    }
+
+    @Test
     fun aNewerFileStillLoadsWithANote() {
         val t = ok("""{"fuseTheme": 9, "name": "Future", "corners": "pill"}""")
         assertEquals(CornerFamily.PILL, t.spec.geometry)
