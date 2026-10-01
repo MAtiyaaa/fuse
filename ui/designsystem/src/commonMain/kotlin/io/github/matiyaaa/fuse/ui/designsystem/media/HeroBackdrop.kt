@@ -1,7 +1,7 @@
 package io.github.matiyaaa.fuse.ui.designsystem.media
 
 import androidx.compose.animation.core.Animatable
-import androidx.compose.foundation.Canvas
+import androidx.compose.animation.core.withInfiniteAnimationFrameMillis
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxSize
@@ -9,6 +9,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -18,12 +19,12 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.BlurredEdgeTreatment
 import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.paint
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.layout.ContentScale
@@ -39,7 +40,11 @@ import io.github.matiyaaa.fuse.model.RenderQuality
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Durations
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Easings
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
+import io.github.matiyaaa.fuse.ui.designsystem.theme.ambientOn
+import kotlin.math.PI
+import kotlin.math.cos
 import kotlin.math.roundToInt
+import kotlin.math.sin
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.debounce
@@ -77,6 +82,13 @@ private const val HERO_DECODE_SHARE = 0.7f
 /** How long a new background may take before the room shows its placeholder instead of the old one. */
 private const val PLACEHOLDER_MS = 120L
 
+/** The Enhanced drift: how far the art zooms and pans (of its size) at the end of a leg. */
+private const val DRIFT_ZOOM = 0.045f
+private const val DRIFT_PAN = 0.012f
+
+/** The drift moves about a pixel a second, so 30 updates a second are more than enough. */
+private const val DRIFT_FRAME_MS = 33L
+
 private class HeroLayer(val source: HeroSource) {
     val alpha = Animatable(0f)
     var ready = false
@@ -88,12 +100,20 @@ private class HeroLayer(val source: HeroSource) {
  * The room the interface lives in. The focused item's hero art fills the screen behind everything,
  * softened by scrims so text stays readable.
  *
- * Transitions never flash and never show the wrong art: new art fades and settles in over the old
- * once it has decoded, and art that takes longer than a moment first shows a placeholder (the
- * system's background, or a glow in the item's colour) so the previous item's art never lingers.
- * A screen without a background ([source] null) fades the room back to the theme's own. While the
- * user is moving quickly the backdrop waits for the selection to rest ([settleMs]) so fast scrolling
- * never queues dozens of decodes.
+ * Transitions never flash and never show the wrong art: new art crossfades in over the old once it
+ * has decoded, settling from a slight zoom, and art that takes longer than a moment first shows a
+ * placeholder (the system's background, or a lit room in the item's colour) so the previous item's
+ * art never lingers. A screen without a background ([source] null) fades the room back to the
+ * theme's own. While the user is moving quickly the backdrop waits for the selection to rest
+ * ([settleMs]) so fast scrolling never queues dozens of decodes.
+ *
+ * In Enhanced motion the art that is resting drifts and zooms very slowly, like a camera breathing
+ * (never in Low Power Mode, and only about 30 times a second, since it moves a pixel or so a
+ * second).
+ *
+ * The scrims are eased curves rather than straight ramps, so they never show a band: the left one
+ * keeps the stage title readable over any art, the bottom one carries the tiles and hint line, and
+ * a soft top one keeps the top line clear.
  */
 @OptIn(FlowPreview::class)
 @Composable
@@ -167,44 +187,73 @@ fun HeroBackdrop(
             overlay()
         }
         val accent = layers.lastOrNull { !it.leaving }?.source?.accent ?: colors.accent
-        Canvas(Modifier.fillMaxSize()) {
-            // Readability: art fades into the room at the left and bottom, softly at the top.
-            drawRect(Color.Black.copy(alpha = dim))
-            drawRect(
-                Brush.horizontalGradient(
-                    0f to colors.ink.copy(alpha = 0.92f * gradient),
-                    0.38f to colors.ink.copy(alpha = 0.55f * gradient),
-                    0.7f to Color.Transparent,
-                ),
-            )
-            drawRect(
-                Brush.verticalGradient(
-                    0f to colors.ink.copy(alpha = 0.55f * gradient),
-                    0.18f to Color.Transparent,
-                    0.55f to Color.Transparent,
-                    1f to colors.ink.copy(alpha = 0.96f * gradient),
-                ),
-            )
-            // The room is lit by the game: a low, wide glow in its colour.
-            drawRect(
-                Brush.radialGradient(
-                    listOf(lerp(accent, Color.Transparent, 0.35f).copy(alpha = 0.28f), Color.Transparent),
+        val ink = colors.ink
+        Box(
+            Modifier.fillMaxSize().drawWithCache {
+                val left = Brush.horizontalGradient(*scrim(ink, 0.94f * gradient, LEFT_SCRIM))
+                val top = Brush.verticalGradient(*scrim(ink, 0.6f * gradient, TOP_SCRIM))
+                val bottom = Brush.verticalGradient(*scrim(ink, 0.97f * gradient, BOTTOM_SCRIM))
+                // The room is lit by the game: a low, wide glow in its colour.
+                val glow = Brush.radialGradient(
+                    0f to lerp(accent, Color.Transparent, 0.35f).copy(alpha = 0.28f),
+                    0.55f to lerp(accent, Color.Transparent, 0.35f).copy(alpha = 0.09f),
+                    1f to Color.Transparent,
                     center = Offset(size.width * 0.12f, size.height * 1.05f),
                     radius = size.maxDimension * 0.7f,
-                ),
-            )
-        }
+                )
+                onDrawBehind {
+                    drawRect(Color.Black.copy(alpha = dim))
+                    drawRect(left)
+                    drawRect(top)
+                    drawRect(bottom)
+                    drawRect(glow)
+                }
+            },
+        )
     }
 }
 
-/** A glow in [accent]: the room of an item without art, and the placeholder while art loads. */
-private fun DrawScope.glow(accent: Color) {
-    drawRect(
-        Brush.radialGradient(
-            listOf(lerp(Color.Black, accent, 0.55f), Color.Black),
-            center = Offset(size.width * 0.72f, size.height * 0.3f),
-            radius = size.maxDimension * 0.8f,
-        ),
+/**
+ * Scrim curves as (position, strength) pairs: strong at the edge, easing out over a long tail.
+ * Left: the stage title sits in the first 45%. Top: under the top line. Bottom: tiles and hints.
+ */
+private val LEFT_SCRIM = floatArrayOf(0f, 1f, 0.12f, 0.92f, 0.24f, 0.77f, 0.36f, 0.59f, 0.48f, 0.37f, 0.6f, 0.18f, 0.7f, 0.07f, 0.8f, 0f)
+private val TOP_SCRIM = floatArrayOf(0f, 1f, 0.06f, 0.72f, 0.12f, 0.4f, 0.18f, 0.16f, 0.24f, 0f)
+private val BOTTOM_SCRIM = floatArrayOf(0.48f, 0f, 0.58f, 0.1f, 0.68f, 0.3f, 0.78f, 0.56f, 0.88f, 0.8f, 1f, 1f)
+
+private fun scrim(color: Color, strength: Float, curve: FloatArray): Array<Pair<Float, Color>> =
+    Array(curve.size / 2) { i -> curve[i * 2] to color.copy(alpha = strength * curve[i * 2 + 1]) }
+
+/**
+ * The room of an item without art, and the placeholder while art loads: a key light in [accent]
+ * high on the right, a softer bounce from the lower left in a cooler shade, and night between.
+ */
+@Composable
+private fun LitRoom(accent: Color, modifier: Modifier = Modifier) {
+    Box(
+        modifier.fillMaxSize().drawWithCache {
+            val w = size.width
+            val h = size.height
+            val night = Brush.verticalGradient(listOf(lerp(Color.Black, accent, 0.16f), Color.Black))
+            val key = Brush.radialGradient(
+                0f to lerp(Color.Black, accent, 0.62f),
+                0.45f to lerp(Color.Black, accent, 0.26f).copy(alpha = 0.7f),
+                1f to Color.Transparent,
+                center = Offset(w * 0.72f, h * 0.28f),
+                radius = size.maxDimension * 0.75f,
+            )
+            val bounce = Brush.radialGradient(
+                0f to lerp(accent, Color(0xFF3A4C8C), 0.45f).copy(alpha = 0.3f),
+                1f to Color.Transparent,
+                center = Offset(w * 0.1f, h * 1.1f),
+                radius = size.maxDimension * 0.6f,
+            )
+            onDrawBehind {
+                drawRect(night)
+                drawRect(key)
+                drawRect(bounce)
+            }
+        },
     )
 }
 
@@ -212,14 +261,14 @@ private fun DrawScope.glow(accent: Color) {
 private fun HeroLayerView(layer: HeroLayer, brightness: Float, onReady: () -> Unit, onShown: () -> Unit) {
     val motion = Fuse.motion
     val source = layer.source
-    val settle = remember { Animatable(1.035f) }
+    val settle = remember { Animatable(1.04f) }
     if (source.model == null) {
         LaunchedEffect(layer) {
             onReady()
             layer.alpha.animateTo(1f, motion.tween(Durations.HERO, Easings.Fade))
             onShown()
         }
-        Canvas(Modifier.fillMaxSize().graphicsLayer { alpha = layer.alpha.value }) { glow(source.accent) }
+        LitRoom(source.accent, Modifier.graphicsLayer { alpha = layer.alpha.value })
         return
     }
     val context = LocalPlatformContext.current
@@ -239,8 +288,8 @@ private fun HeroLayerView(layer: HeroLayer, brightness: Float, onReady: () -> Un
             onReady()
             if (!motion.reduced) {
                 coroutineScope {
-                    launch { settle.animateTo(1f, motion.tween(Durations.DELIBERATE + 200, Easings.Enter)) }
-                    layer.alpha.animateTo(1f, motion.tween(Durations.HERO, Easings.Fade))
+                    launch { settle.animateTo(1f, motion.tween(Durations.DELIBERATE + 300, Easings.Enter)) }
+                    layer.alpha.animateTo(1f, motion.tween(Durations.HERO + 80, Easings.Fade))
                 }
             } else {
                 layer.alpha.animateTo(1f, motion.tween(Durations.FAST, Easings.Fade))
@@ -258,13 +307,38 @@ private fun HeroLayerView(layer: HeroLayer, brightness: Float, onReady: () -> Un
         }
     }
     val failed = state is AsyncImagePainter.State.Error
+    // Enhanced motion: once shown, the art breathes, drifting and zooming very slowly.
+    var drift by remember { mutableFloatStateOf(0f) }
+    val drifting = motion.drift && motion.ambientOn(Fuse.quality)
+    if (drifting) {
+        LaunchedEffect(layer) {
+            snapshotFlow { layer.alpha.value >= 1f }.first { it }
+            val start = withInfiniteAnimationFrameMillis { it }
+            var last = start
+            while (true) {
+                val now = withInfiniteAnimationFrameMillis { it }
+                if (now - last < DRIFT_FRAME_MS) continue
+                last = now
+                // 0 to 1 and back, eased at both ends, one leg per Durations.DRIFT.
+                val t = ((now - start) % (Durations.DRIFT * 2L)).toFloat() / Durations.DRIFT
+                drift = (1f - cos(PI.toFloat() * t)) / 2f
+            }
+        }
+    }
+    val angle = remember(source.id) { (source.id.hashCode() and 0xFFFF) / 65_535f * 2f * PI.toFloat() }
     Box(
         Modifier
             .fillMaxSize()
             .graphicsLayer {
                 alpha = layer.alpha.value
-                scaleX = settle.value
-                scaleY = settle.value
+                val d = if (drifting) drift else 0f
+                val zoom = settle.value * (1f + DRIFT_ZOOM * d)
+                scaleX = zoom
+                scaleY = zoom
+                if (d > 0f) {
+                    translationX = cos(angle) * size.width * DRIFT_PAN * d
+                    translationY = sin(angle) * size.height * DRIFT_PAN * d
+                }
             }
             .drawWithContent {
                 drawContent()
@@ -272,7 +346,7 @@ private fun HeroLayerView(layer: HeroLayer, brightness: Float, onReady: () -> Un
             },
     ) {
         if (placeholder || failed) {
-            Canvas(Modifier.fillMaxSize()) { glow(source.accent) }
+            LitRoom(source.accent)
             val ph = source.placeholder
             if (ph != null && ph != source.model && !failed) {
                 val phRequest = remember(ph, context, px) { heroRequest(context, ph, px) }
