@@ -15,6 +15,7 @@ import android.provider.Settings
 import android.view.Display
 import androidx.core.net.toUri
 import io.github.matiyaaa.fuse.ActivityHolder
+import io.github.matiyaaa.fuse.RecentsCard
 import io.github.matiyaaa.fuse.model.AppEntry
 import io.github.matiyaaa.fuse.ui.shell.store.ApkInstall
 import io.github.matiyaaa.fuse.ui.shell.store.AppIconModel
@@ -115,12 +116,12 @@ class AndroidAppsProvider(
             val other = displayId != null && displayId != Display.DEFAULT_DISPLAY
             if (other) dualScreen?.beforeSecondScreenLaunch()
             try {
-                apps.startMainActivity(component, user, null, options(displayId).toBundle())
+                start(apps, component, displayId)
             } catch (e: SecurityException) {
                 // Android refused the other screen: open on this one instead.
                 if (!other) throw e
                 dualScreen?.dualScreenGameFailed()
-                apps.startMainActivity(component, user, null, options(null).toBundle())
+                start(apps, component, null)
             }
             RunResult.Started(null)
         } catch (e: ActivityNotFoundException) {
@@ -130,6 +131,21 @@ class AndroidAppsProvider(
         } catch (e: IllegalArgumentException) {
             RunResult.NotInstalled
         }
+    }
+
+    /**
+     * Opens [component] like a launcher does. From Fuse's window, while Fuse is the Home app, Fuse's
+     * card in recent apps goes right behind it ([RecentsCard]).
+     */
+    private fun start(apps: LauncherApps, component: ComponentName, displayId: Int?) {
+        val activity = activities.current
+        if (activity == null) {
+            apps.startMainActivity(component, user, null, options(displayId).toBundle())
+            return
+        }
+        val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER).setComponent(component)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)
+        RecentsCard.start(activity, intent, options(displayId).toBundle(), displayId)
     }
 
     private fun options(displayId: Int?): ActivityOptions {
