@@ -275,10 +275,10 @@ local only, read-only for Fuse, and never carries a server address, token or pas
 | Link scheme | `cartridge://` |
 | Release source for "Install Cartridge" | [MAtiyaaa/cartridge](https://github.com/MAtiyaaa/cartridge) releases, assets `Cartridge-android.apk` and `Cartridge-x86_64.AppImage` (upstream: [abdu2304/cartridge](https://github.com/abdu2304/cartridge)) |
 
-Cartridge 0.9.10 adds the provider, status file and links below (protocol 1). Protocol 2 adds the
-download queue game by game and the downloaded games with RomM's details and pictures (in review as
-[MAtiyaaa/cartridge#30](https://github.com/MAtiyaaa/cartridge/pull/30)). Protocol 3 adds uploads (in
-review as [MAtiyaaa/cartridge#31](https://github.com/MAtiyaaa/cartridge/pull/31)). Cartridge's own
+Cartridge 0.9.10 adds the provider, status file and links below (protocol 1). Cartridge 0.9.11 "The
+Bridge Expansion" (in review as [MAtiyaaa/cartridge#30](https://github.com/MAtiyaaa/cartridge/pull/30))
+speaks protocol 3: protocol 2 adds the download queue game by game and the downloaded games with
+RomM's details and pictures, and protocol 3 adds uploads. Cartridge's own
 `docs/FUSE_BRIDGE.md` is the full contract. With an older Cartridge, Fuse only knows it is
 installed and its version (`installedWithoutBridge`).
 

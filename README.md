@@ -399,10 +399,9 @@ flowchart LR
 To pair them:
 
 1. Install Cartridge 0.9.10 or newer (Settings, Cartridge in Fuse can install it from Cartridge's
-   GitHub releases after you confirm). RomM's details and each game's download progress need the
-   next Cartridge, with bridge protocol 2 (in review as
-   [MAtiyaaa/cartridge#30](https://github.com/MAtiyaaa/cartridge/pull/30)), and uploading games to
-   RomM needs protocol 3 ([MAtiyaaa/cartridge#31](https://github.com/MAtiyaaa/cartridge/pull/31)).
+   GitHub releases after you confirm). RomM's details, each game's download progress and uploading
+   games to RomM need Cartridge 0.9.11 "The Bridge Expansion", with bridge protocols 2 and 3 (in
+   review as [MAtiyaaa/cartridge#30](https://github.com/MAtiyaaa/cartridge/pull/30)).
 2. Sign in to RomM inside Cartridge and download some games.
 3. In Fuse, add the folder Cartridge saves to as a library, if setup did not suggest it already.
 

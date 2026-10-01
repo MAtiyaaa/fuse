@@ -26,8 +26,8 @@ and art that finds itself. Thank you for the reports, and keep them coming.
   game". Fuse hands the game to Cartridge with every file it has: other discs and tracks, and for
   folder games DLC and updates in their own folders. Cartridge shows what it would send and uploads
   only after you press Upload there; the Cartridge tab, a ring in the top line and a message follow
-  the upload. It needs a Cartridge with the new bridge
-  ([MAtiyaaa/cartridge#31](https://github.com/MAtiyaaa/cartridge/pull/31)), and RomM 5.3 or newer for
+  the upload. It needs Cartridge 0.9.11 "The Bridge Expansion"
+  ([MAtiyaaa/cartridge#30](https://github.com/MAtiyaaa/cartridge/pull/30)), and RomM 5.3 or newer for
   games with several files; with an older Cartridge Fuse says so and offers to update it.
 - **Art that finds itself.** Settings, Media and Scraping, "Find art by itself" (on by default): a
   few seconds after a scan, or after you save a key, Fuse looks for missing art and details on its
