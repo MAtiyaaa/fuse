@@ -29,7 +29,7 @@ Home screen.
 <a href="https://github.com/MAtiyaaa/fuse/releases/latest"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/brand/button-macos-dark.svg"><img src="docs/assets/brand/button-macos-light.svg" height="48" alt="Download for macOS"></picture></a>
 
 <sub>Android 9 or newer &nbsp;·&nbsp; 64-bit x86 Linux AppImage &nbsp;·&nbsp; Windows 10 and 11 &nbsp;·&nbsp; macOS on Apple silicon and Intel &nbsp;·&nbsp; <a href="#install">checksums and install notes</a></sub><br>
-<sub>0.1.2 is the Visual Update: touch that moves like a phone, a look of its own and themes anyone can share. <a href="#where-fuse-stands">Here is where it stands.</a></sub><br>
+<sub>0.1.3 is the Capture Update: screenshots and recordings of Fuse on Android, from the quick menu or L3 + R3. <a href="#where-fuse-stands">Here is where it stands.</a></sub><br>
 <sub>Or download from <a href="https://matiyaaa.github.io/fuse/">Fuse's website</a>, which always offers the latest version for your system.</sub>
 
 <br>
@@ -297,6 +297,8 @@ Play.
   box art or tall posters, four motion levels including Reduced, High contrast focus, optional glass
   panels and CRT effect, and interface sounds synthesised on the fly.
 - A **performance overlay** that only shows metrics the device can really measure.
+- **Screenshots and recordings** of Fuse on Android: from the quick menu after a 3 second countdown,
+  or at once with L3 + R3 (hold to record), saved to Pictures/Fuse and Movies/Fuse with Fuse's music.
 
 </details>
 
@@ -315,6 +317,7 @@ Play.
         <li>In-app updates, downloaded only after you confirm and checked against their SHA-256 digest</li>
         <li>Keys and passwords kept in the Android Keystore</li>
         <li>Interface sounds and haptics</li>
+        <li>Screenshots and screen recordings of Fuse</li>
       </ul>
     </td>
     <td width="50%" valign="top">
@@ -363,9 +366,9 @@ Linux app, isn't offered on Windows and macOS.
 ## Where Fuse stands
 
 > [!IMPORTANT]
-> **Fuse 0.1.2 "The Visual Update" is still early.** It lets you move shelves, channels and systems
-> by touch the way a phone does, gives every screen Fuse's own look, adds community themes and a
-> Posters option, and brings a website (see [the release notes](docs/releases/0.1.2.md)); 0.1.1
+> **Fuse 0.1.3 "The Capture Update" is still early.** It takes screenshots and recordings of Fuse on
+> Android, from the quick menu or with L3 + R3 (see [the release notes](docs/releases/0.1.3.md));
+> 0.1.2 brought moving things by touch, Fuse's own look, community themes and a website, 0.1.1
 > redesigned the bottom screen of dual-screen handhelds, and 0.1.0 brought Fuse to Windows and macOS. The
 > shared core (library scanning, launch resolution, integrations and the database) and the interface
 > are in place and tested where it matters. The Android app builds and passes its unit tests and lint, and has been tried on one
@@ -375,7 +378,7 @@ Linux app, isn't offered on Windows and macOS.
 > changes between versions.
 
 Not there yet: checks on more handhelds and on Windows and Mac computers, signed Windows and macOS
-builds, video previews on the desktop, a storage mode without All files access, translations (the
+builds, video previews and screen capture on the desktop, a storage mode without All files access, translations (the
 interface is English only), RetroAchievements hashing for 3DS, Saturn, Dreamcast and compressed disc
 images, and ScreenScraper credentials. [ROADMAP.md](ROADMAP.md) ticks a box only when the
 code is in this repository.

@@ -340,6 +340,18 @@ content's scroll. Art-less items get a lit radial gradient in their colour inste
 Fuse draws its own focus and press feedback, so Compose's ripple indication is turned off everywhere
 (`NoIndication`).
 
+### Screenshots and recordings
+
+`shell/capture/CaptureOverlay.kt` draws what a capture shows of its own. None of it is ever in the
+picture: the controller hides it and waits 150 ms before a screenshot or a recording starts.
+
+| Piece | Look |
+|---|---|
+| Countdown | A 132 dp ink circle in the middle of the screen, a 64 sp numeral that scales in as it changes (fades only under Reduced motion), and a thin accent ring that runs down once each second. Under it, a pill says Screenshot or Recording starts, with the Camera or CircleDot icon. Shown and hidden at once, never faded, so it can't linger into the picture |
+| Flash | White at 32 % fading out over 340 ms after each screenshot, like a shutter. Left out under Reduced motion |
+| Saved card | Bottom left above the hint line: a 128 x 72 dp picture of the capture (a play badge on recordings), a success check, "Screenshot saved" or "Recording saved" and where it went. It stays 3.5 s |
+| Recording chip | The top line's activity chip with the CircleDot icon, an attention dot and a ring filling towards the 30 minute limit; selecting it stops the recording |
+
 ## Iconography and glyphs
 
 - **One icon set.** Interface icons are [Lucide](https://lucide.dev/license) line icons (ISC; a few
