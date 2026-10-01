@@ -15,6 +15,20 @@ internal class KnownFolders(private val home: String) {
 
     private fun dir(path: String): String? = File(path).takeIf { it.isDirectory }?.absolutePath
 
+    /** Where Fuse's file picker starts: the home folder, then mounted drives and SD cards, then the whole computer. */
+    fun storageRoots(): List<Found> {
+        val out = ArrayList<Found>()
+        dir(home)?.let { out += Found(it, "Home") }
+        val user = File(home).name
+        for (base in listOf("/run/media/$user", "/media/$user", "/media", "/mnt")) {
+            File(base).listFiles()?.filter { it.isDirectory && !it.isHidden }?.sortedBy { it.name.lowercase() }?.forEach { d ->
+                if (out.none { it.path == d.absolutePath } && d.absolutePath != "/media/$user") out += Found(d.absolutePath, d.name)
+            }
+        }
+        out += Found("/", "This computer")
+        return out
+    }
+
     /** ROM roots: ES-DE, EmuDeck, RetroDECK, plus the same layouts on SD cards and removable drives. */
     fun romRoots(): List<Found> {
         val out = ArrayList<Found>()

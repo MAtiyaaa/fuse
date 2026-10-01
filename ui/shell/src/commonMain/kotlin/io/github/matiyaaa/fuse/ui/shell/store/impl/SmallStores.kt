@@ -1,27 +1,20 @@
 package io.github.matiyaaa.fuse.ui.shell.store.impl
 
-import io.github.matiyaaa.fuse.data.repo.AppOverrideRepository
 import io.github.matiyaaa.fuse.data.settings.SecretKeys
 import io.github.matiyaaa.fuse.library.series.SeriesDetector
 import io.github.matiyaaa.fuse.library.series.SeriesInput
-import io.github.matiyaaa.fuse.model.AppEntry
-import io.github.matiyaaa.fuse.model.AppFilter
 import io.github.matiyaaa.fuse.model.BorderStyle
 import io.github.matiyaaa.fuse.model.CollectionId
 import io.github.matiyaaa.fuse.model.CollectionKind
 import io.github.matiyaaa.fuse.model.GameCollection
 import io.github.matiyaaa.fuse.model.GameId
-import io.github.matiyaaa.fuse.model.LaunchDisplay
 import io.github.matiyaaa.fuse.model.LibraryLayout
-import io.github.matiyaaa.fuse.model.MediaOwner
 import io.github.matiyaaa.fuse.model.PlatformId
 import io.github.matiyaaa.fuse.model.Resolved
 import io.github.matiyaaa.fuse.model.ScopeRef
 import io.github.matiyaaa.fuse.model.ScopedKey
 import io.github.matiyaaa.fuse.model.ScopedSettings
 import io.github.matiyaaa.fuse.model.SettingScope
-import io.github.matiyaaa.fuse.ui.shell.store.AppCard
-import io.github.matiyaaa.fuse.ui.shell.store.AppOps
 import io.github.matiyaaa.fuse.ui.shell.store.CollectionOps
 import io.github.matiyaaa.fuse.ui.shell.store.CredentialOps
 import io.github.matiyaaa.fuse.ui.shell.store.ScopedSettingsOps
@@ -34,8 +27,6 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -93,73 +84,6 @@ internal class DefaultCollectionOps(private val ctx: StoreContext) : CollectionO
             // The user's own collection with the same name wins.
             .filter { s -> collections.value.none { it.kind != CollectionKind.SERIES && it.name.equals(s.name, ignoreCase = true) } }
         repo.syncSeries(found.associate { it.name to it.members })
-    }
-}
-
-internal class DefaultAppOps(private val ctx: StoreContext) : AppOps {
-    private val provider = ctx.services.apps
-    private val overrides = ctx.data.apps
-    override val supported: Boolean = provider != null
-
-    private val entries: Flow<List<AppEntry>> = if (provider == null) {
-        flowOf(emptyList())
-    } else {
-        combine(provider.apps, overrides.observeAll()) { apps, o -> AppOverrideRepository.applyTo(apps, o) }
-    }
-
-    private val all: StateFlow<List<AppEntry>> = entries.resilient().stateIn(ctx.scope, SharingStarted.Eagerly, emptyList())
-
-    /** Icons the user set for apps (Customise Artwork), by app id. They win over the app's own icon. */
-    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
-    private val customIcons: StateFlow<Map<String, Any>> = all
-        .map { list -> list.map { it.id } }
-        .distinctUntilChanged()
-        .flatMapLatest { ids ->
-            ctx.data.media.observeFor(ids.map { MediaOwner.OfApp(it) }).map { media ->
-                media.mapNotNull { (owner, set) ->
-                    val id = (owner as? MediaOwner.OfApp)?.packageName ?: return@mapNotNull null
-                    (set.icon ?: set.square ?: set.boxart ?: set.grid)?.model?.let { id to (it as Any) }
-                }.toMap()
-            }
-        }
-        .resilient()
-        .stateIn(ctx.scope, SharingStarted.Eagerly, emptyMap())
-
-    override fun apps(filter: AppFilter): Flow<List<AppCard>> = combine(all, customIcons) { list, icons ->
-        val f = filter
-        val visible = list.filterNot { it.hidden }
-        when (f) {
-            AppFilter.PINNED -> visible.filter { it.pinned }
-            AppFilter.GAMES -> visible.filter { it.isGame }.sortedBy { it.displayTitle.lowercase() }
-            AppFilter.ALL -> visible.sortedBy { it.displayTitle.lowercase() }
-        }.map { card(it, icons) }
-    }
-
-    fun search(query: String): List<AppCard> =
-        all.value.filter { !it.hidden && it.displayTitle.contains(query, ignoreCase = true) }.take(20).map { card(it, customIcons.value) }
-
-    fun refreshInstalled() {
-        provider?.refresh()
-    }
-
-    private fun card(entry: AppEntry, icons: Map<String, Any>) = AppCard(entry, icons[entry.id] ?: provider?.iconModel(entry))
-
-    override suspend fun launch(app: AppCard, display: LaunchDisplay?) {
-        val p = provider ?: return
-        val displayId = if (display == LaunchDisplay.SECONDARY) ctx.services.launcher.secondaryDisplayId() else null
-        p.launch(app.entry, displayId)
-        overrides.markUsed(app.entry.id, ctx.now())
-    }
-
-    override suspend fun setPinned(app: AppCard, pinned: Boolean) = overrides.setPinned(app.entry.id, pinned)
-
-    override suspend fun setHidden(app: AppCard, hidden: Boolean) = overrides.setHidden(app.entry.id, hidden)
-
-    override suspend fun rename(app: AppCard, title: String?) =
-        overrides.setCustomTitle(app.entry.id, title?.trim()?.takeIf { it.isNotEmpty() })
-
-    override suspend fun openInfo(app: AppCard) {
-        provider?.openInfo(app.entry)
     }
 }
 

@@ -18,7 +18,7 @@ import io.github.matiyaaa.fuse.integrations.steamgriddb.SteamGridDbClient
 import io.github.matiyaaa.fuse.integrations.thegamesdb.TheGamesDbClient
 import io.github.matiyaaa.fuse.library.FsPath
 import io.github.matiyaaa.fuse.library.parse.DisplayNameCleaner
-import io.github.matiyaaa.fuse.library.parse.LeadingNumbers
+import io.github.matiyaaa.fuse.library.parse.SearchTitles
 import io.github.matiyaaa.fuse.model.ArtworkOption
 import io.github.matiyaaa.fuse.model.Game
 import io.github.matiyaaa.fuse.model.GameId
@@ -194,16 +194,19 @@ internal class DefaultMediaOps(
         )
     }
 
-    /** The game's other names, searched when its search name finds nothing sure. */
+    /**
+     * The game's other names, searched when its search name finds nothing sure: the names it was
+     * given, the file name as a search name and its other spellings ([SearchTitles.alternatives]),
+     * then the display names.
+     */
     private fun otherNames(game: Game): List<String> {
         val title = defaultSearchTitle(game)
-        return listOfNotNull(
-            game.titles.metadata,
-            game.titles.custom,
-            game.titles.cleaned,
-            LeadingNumbers.strip(DisplayNameCleaner.clean(game.titles.original)),
-            DisplayNameCleaner.clean(game.titles.original),
-        ).map { it.trim() }.filter { it.isNotEmpty() && !it.equals(title, ignoreCase = true) }.distinct()
+        val original = game.titles.original
+        return (
+            listOfNotNull(game.titles.metadata, game.titles.custom, SearchTitles.clean(original)) +
+                SearchTitles.alternatives(original) +
+                listOfNotNull(game.titles.cleaned, DisplayNameCleaner.clean(original))
+            ).map { it.trim() }.filter { it.isNotEmpty() && !it.equals(title, ignoreCase = true) }.distinct()
     }
 
     /** The name the user set for searches, if any. */
@@ -211,12 +214,12 @@ internal class DefaultMediaOps(
         ctx.data.scopedSettings.resolve(ScopedSettings.SearchTitle, game.platformId, game.id).value.trim().ifEmpty { null }
 
     /**
-     * Their own name, then a name a provider gave, then the file name cleaned with today's rules
-     * (a stored cleaned name may predate them), without a list number or code in front.
+     * Their own name, then a name a provider gave, then the file name made into a search name with
+     * today's rules ([SearchTitles]: tags, serials, versions, release groups and list numbers go).
      */
     private fun defaultSearchTitle(game: Game): String =
         game.titles.custom ?: game.titles.metadata
-            ?: LeadingNumbers.strip(DisplayNameCleaner.clean(game.titles.original)).ifBlank { game.titles.cleaned ?: game.titles.original }
+            ?: SearchTitles.clean(game.titles.original).ifBlank { game.titles.cleaned ?: game.titles.original }
 
     override suspend fun searchTitle(game: GameId): SearchTitle? {
         val g = ctx.data.games.get(game) ?: return null
@@ -334,7 +337,8 @@ internal class DefaultMediaOps(
             val listed: List<GameId> = when {
                 job.game != null -> listOf(job.game)
                 job.everything -> gamesIn(job.platform)
-                job.mode == MediaFillMode.FILL_MISSING -> if (kinds.isEmpty()) emptyList() else media.gamesMissing(kinds, job.platform).keys.toList()
+                // Missing screenshots alone don't make a game worth searching for.
+                job.mode == MediaFillMode.FILL_MISSING -> if (kinds.isEmpty()) emptyList() else media.gamesMissing(MediaKind.needed(kinds), job.platform).keys.toList()
                 else -> gamesIn(job.platform)
             }
             // A bulk "fill missing" leaves out games it recently looked for and can't do better on,
@@ -415,10 +419,11 @@ internal class DefaultMediaOps(
         if (!job.remembers) return null
         if (!ctx.data.scopedSettings.resolve(ScopedSettings.ScrapeEnabled, game.platformId, game.id).value) return Tried.Skip
         val plan = FillPlanner.plan(media.get(MediaOwner.OfGame(game.id)), job.mode, kinds)
+        val needed = plan.fetch intersect MediaKind.needed(kinds)
         val wantDetails = detailSources && job.wantsDetails && game.metadata.lacksDetails()
-        if (plan.isEmpty && !wantDetails) return Tried.Skip
-        val tried = ctx.data.cache.getOrNull(TRIED, game.id.value.toString(), ctx.now())?.let(Tried::decode) ?: return null
-        return tried.takeIf { it.covers(searchAs(game) ?: defaultSearchTitle(game), configured, plan.fetch, wantDetails) }
+        if (needed.isEmpty() && !wantDetails) return Tried.Skip
+        val tried = ctx.data.cache.getOrNull(FILL_TRIED, game.id.value.toString(), ctx.now())?.let(Tried::decode) ?: return null
+        return tried.takeIf { it.covers(searchAs(game) ?: defaultSearchTitle(game), configured, needed, wantDetails) }
     }
 
     /**
@@ -430,36 +435,38 @@ internal class DefaultMediaOps(
     private suspend fun fillOne(game: Game, job: FillJob, kinds: Set<MediaKind>, detailSources: Boolean, configured: Set<ScrapeProviderId>): GameFill {
         val owner = MediaOwner.OfGame(game.id)
         val plan = FillPlanner.plan(media.get(owner), job.mode, kinds)
+        // Screenshots come along when the game is searched anyway, but never cause a search.
+        val needed = if (job.mode == MediaFillMode.FILL_MISSING) plan.fetch intersect MediaKind.needed(kinds) else plan.fetch
         val wantDetails = detailSources && job.wantsDetails && game.metadata.lacksDetails()
-        if (plan.isEmpty && !wantDetails) return GameFill()
+        if (needed.isEmpty() && !wantDetails) return GameFill()
         val (request, coordinator) = request(game, plan.fetch, metadata = true, collectAll = false)
         val remember = job.remembers
         val key = game.id.value.toString()
-        if (job.game != null) ctx.data.cache.remove(TRIED, key)
+        if (job.game != null) ctx.data.cache.remove(FILL_TRIED, key)
         if (remember) {
-            val tried = ctx.data.cache.getOrNull(TRIED, key, ctx.now())?.let(Tried::decode)
-            if (tried != null && tried.covers(request.query.title, configured, plan.fetch, wantDetails)) return GameFill(needsChoice = tried.choice)
+            val tried = ctx.data.cache.getOrNull(FILL_TRIED, key, ctx.now())?.let(Tried::decode)
+            if (tried != null && tried.covers(request.query.title, configured, needed, wantDetails)) return GameFill(needsChoice = tried.choice)
         }
         return when (val outcome = coordinator.scrape(request)) {
             is ScrapeOutcome.Accepted -> {
                 val added = store(game, outcome, job.mode, plan.fetch)
                 val found = outcome.artwork.map { it.kind }.toSet()
-                val missing = plan.fetch - found
+                val missing = needed - found
                 when {
                     !remember -> Unit
-                    outcome.errors.isNotEmpty() -> ctx.data.cache.remove(TRIED, key)
+                    outcome.errors.isNotEmpty() -> ctx.data.cache.remove(FILL_TRIED, key)
                     missing.isNotEmpty() || (wantDetails && outcome.metadata == null) ->
                         remember(key, Tried(request.query.title, configured, missing, details = wantDetails && outcome.metadata == null, choice = false))
-                    else -> ctx.data.cache.remove(TRIED, key)
+                    else -> ctx.data.cache.remove(FILL_TRIED, key)
                 }
                 GameFill(added, details = outcome.metadata != null && wantDetails)
             }
             is ScrapeOutcome.NeedsReview -> {
-                if (remember && outcome.errors.isEmpty()) remember(key, Tried(request.query.title, configured, plan.fetch, details = wantDetails, choice = true))
+                if (remember && outcome.errors.isEmpty()) remember(key, Tried(request.query.title, configured, needed, details = wantDetails, choice = true))
                 GameFill(needsChoice = true)
             }
             is ScrapeOutcome.NotFound -> {
-                if (remember && outcome.errors.isEmpty()) remember(key, Tried(request.query.title, configured, plan.fetch, details = wantDetails, choice = false))
+                if (remember && outcome.errors.isEmpty()) remember(key, Tried(request.query.title, configured, needed, details = wantDetails, choice = false))
                 GameFill()
             }
             // Offline, a quota or every source resting: nothing to remember, the next fill tries again.
@@ -468,7 +475,7 @@ internal class DefaultMediaOps(
     }
 
     private suspend fun remember(key: String, tried: Tried) =
-        ctx.data.cache.put(TRIED, key, tried.encode(), ctx.now(), TRIED_DAYS * 24L * 60 * 60 * 1000)
+        ctx.data.cache.put(FILL_TRIED, key, tried.encode(), ctx.now(), TRIED_DAYS * 24L * 60 * 60 * 1000)
 
     private suspend fun store(game: Game, outcome: ScrapeOutcome.Accepted, mode: MediaFillMode, kinds: Set<MediaKind>): Int {
         val items = outcome.artwork
@@ -524,7 +531,7 @@ internal class DefaultMediaOps(
         val plan = FillPlanner.plan(media.get(MediaOwner.OfGame(game)), MediaFillMode.REPLACE_ALL, FILLABLE)
         val (request, coordinator) = request(g, plan.fetch, metadata = true, collectAll = false)
         val outcome = coordinator.accept(request, candidate) as? ScrapeOutcome.Accepted ?: return false
-        ctx.data.cache.remove(TRIED, game.value.toString())
+        ctx.data.cache.remove(FILL_TRIED, game.value.toString())
         store(g, outcome, MediaFillMode.REPLACE_ALL, plan.fetch)
         ctx.data.games.applyMetadata(
             game,
@@ -545,7 +552,7 @@ internal val FILLABLE = MediaKind.Fillable
 private const val FILL_WORKERS = 3
 
 /** Cache namespace of what a fill looked for and didn't find, per game. */
-private const val TRIED = "fill.tried"
+internal const val FILL_TRIED = "fill.tried"
 private const val TRIED_DAYS = 14
 
 private data class FillJob(

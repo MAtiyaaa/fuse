@@ -32,7 +32,12 @@ sealed interface Route {
     data object Licenses : Route
     data object Onboarding : Route
     data class FolderBrowser(val game: GameId) : Route
+    /** Fuse's own file picker, for "Add a game". */
+    data class PickFile(val purpose: FilePurpose) : Route
 }
+
+/** What a file is picked for. */
+enum class FilePurpose { APK, GAME }
 
 /** Which way the last navigation went, so transitions can move forward or reverse. */
 enum class NavDirection { FORWARD, BACK, LATERAL }

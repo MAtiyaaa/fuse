@@ -161,41 +161,104 @@ object Similarity {
     /** Levenshtein ratio of the tokens sorted alphabetically (word order does not matter). */
     fun tokenSortRatio(a: List<String>, b: List<String>): Double =
         levenshteinRatio(a.sorted().joinToString(" "), b.sorted().joinToString(" "))
+}
 
-    /**
-     * Jaccard overlap of the token sets where near-identical words (typos, Jaro-Winkler >= 0.88,
-     * both longer than three letters) count by their similarity. Numbers must match exactly.
-     */
-    fun softTokenSet(a: List<String>, b: List<String>): Double {
-        val sa = a.distinct()
-        val sb = b.distinct()
-        if (sa.isEmpty() && sb.isEmpty()) return 1.0
-        val used = BooleanArray(sb.size)
-        var weight = 0.0
-        var matched = 0
-        for (t in sa) {
-            var best = -1
-            var bestScore = 0.0
-            for (j in sb.indices) {
-                if (used[j]) continue
-                val u = sb[j]
-                val score = when {
-                    t == u -> 1.0
-                    t.length <= 3 || u.length <= 3 || t.any { it.isDigit() } || u.any { it.isDigit() } -> 0.0
-                    else -> jaroWinkler(t, u)
-                }
-                if (score > bestScore) {
-                    bestScore = score
-                    best = j
-                }
-            }
-            if (best >= 0 && bestScore >= 0.88) {
-                used[best] = true
-                weight += bestScore
-                matched++
-            }
+/**
+ * How the words of two normalised titles ([TitleNormalizer.tokens]) line up, for
+ * [TitleMatcher.titleSimilarity]. Words are compared whole. A typo is forgiven only in words of five
+ * letters or more that differ by one letter or one swap of neighbouring letters ("metriod" and
+ * "metroid"); a word with letters added is another word ("dredge" and "dredgers", "zelda" and
+ * "zeldas"). Two neighbouring words also match the same two written together ("fire red" and
+ * "firered"). Numbers must be equal.
+ */
+object TitleWords {
+    /** Articles and small words. */
+    val filler: Set<String> = setOf("the", "a", "an", "of", "and", "in", "to", "for", "on")
+
+    /** Words that name an edition of a game rather than the game. */
+    val edition: Set<String> = setOf(
+        "edition", "version", "remastered", "remaster", "deluxe", "complete", "definitive", "hd", "goty",
+        "enhanced", "ultimate", "collection", "anniversary",
+    )
+
+    // Phrases whose words are all weak ("Director's Cut" loses its apostrophe when normalised).
+    private val phrases = listOf(listOf("game", "of", "the", "year"), listOf("directors", "cut"), listOf("director", "cut"))
+    private val digits = Regex("\\d+")
+
+    /** Which of [tokens] are weak: [filler], [edition] words and edition phrases ("game of the year"). */
+    fun weak(tokens: List<String>): BooleanArray {
+        val out = BooleanArray(tokens.size) { tokens[it] in filler || tokens[it] in edition }
+        for (p in phrases) for (i in 0..tokens.size - p.size) {
+            if (p.indices.all { tokens[i + it] == p[it] }) p.indices.forEach { out[i + it] = true }
         }
-        val union = sa.size + sb.size - matched
-        return if (union == 0) 1.0 else weight / union
+        return out
+    }
+
+    /** Every number in [tokens] without leading zeros; one inside a word counts too ("x4" has 4). */
+    fun numbers(tokens: List<String>): Set<String> =
+        tokens.flatMapTo(HashSet()) { t -> digits.findAll(t).map { it.value.trimStart('0').ifEmpty { "0" } } }
+
+    /** One substituted letter or one swap of neighbouring letters, in letter-only words of five or more. */
+    fun isTypo(a: String, b: String): Boolean {
+        if (a.length != b.length || a.length < 5 || a == b) return false
+        if (!a.all { it.isLetter() } || !b.all { it.isLetter() }) return false
+        val diff = a.indices.filter { a[it] != b[it] }
+        return when (diff.size) {
+            1 -> true
+            2 -> diff[1] == diff[0] + 1 && a[diff[0]] == b[diff[1]] && a[diff[1]] == b[diff[0]]
+            else -> false
+        }
+    }
+
+    /** [a] and [b] word by word: which words found a partner, how many by a typo, and whether the order changed. */
+    fun align(a: List<String>, b: List<String>): WordAlignment {
+        val inA = BooleanArray(a.size)
+        val inB = BooleanArray(b.size)
+        val pairs = ArrayList<Pair<Int, Int>>()
+        fun pair(i: Int, j: Int) {
+            inA[i] = true
+            inB[j] = true
+            pairs += i to j
+        }
+        // Equal words, keeping the order where the title allows it.
+        var last = -1
+        for (i in a.indices) {
+            val j = (last + 1 until b.size).firstOrNull { !inB[it] && b[it] == a[i] }
+                ?: b.indices.firstOrNull { !inB[it] && b[it] == a[i] }
+                ?: continue
+            pair(i, j)
+            last = j
+        }
+        // Two words written as one ("fire red" and "firered"), either way round.
+        for (i in 0 until a.size - 1) {
+            if (inA[i] || inA[i + 1]) continue
+            val j = b.indices.firstOrNull { !inB[it] && b[it] == a[i] + a[i + 1] } ?: continue
+            pair(i, j)
+            pair(i + 1, j)
+        }
+        for (j in 0 until b.size - 1) {
+            if (inB[j] || inB[j + 1]) continue
+            val i = a.indices.firstOrNull { !inA[it] && a[it] == b[j] + b[j + 1] } ?: continue
+            pair(i, j)
+            pair(i, j + 1)
+        }
+        var typos = 0
+        for (i in a.indices) {
+            if (inA[i]) continue
+            val j = b.indices.firstOrNull { !inB[it] && isTypo(a[i], b[it]) } ?: continue
+            pair(i, j)
+            typos++
+        }
+        val order = pairs.sortedWith(compareBy({ it.first }, { it.second })).map { it.second }
+        val reordered = order.zipWithNext().any { (x, y) -> y < x }
+        return WordAlignment(inA, inB, typos, reordered)
     }
 }
+
+/** The result of [TitleWords.align]. [matchedA] and [matchedB] mark the words that found a partner. */
+class WordAlignment(
+    val matchedA: BooleanArray,
+    val matchedB: BooleanArray,
+    val typos: Int,
+    val reordered: Boolean,
+)

@@ -5,9 +5,11 @@ import app.cash.sqldelight.coroutines.mapToList
 import io.github.matiyaaa.fuse.data.asBool
 import io.github.matiyaaa.fuse.data.db.App_override
 import io.github.matiyaaa.fuse.data.db.FuseDatabase
+import io.github.matiyaaa.fuse.data.enumOrNull
 import io.github.matiyaaa.fuse.data.ioDispatcher
 import io.github.matiyaaa.fuse.data.toDb
 import io.github.matiyaaa.fuse.model.AppEntry
+import io.github.matiyaaa.fuse.model.AppKind
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOn
@@ -23,6 +25,8 @@ data class AppOverride(
     /** Position among pinned apps, or null for default ordering. */
     val sortOrder: Int? = null,
     val lastUsedAt: Long? = null,
+    /** What the user says the app is, or null to let Fuse decide. */
+    val kind: AppKind? = null,
 )
 
 /**
@@ -63,6 +67,9 @@ class AppOverrideRepository(
 
     suspend fun setHidden(appId: String, hidden: Boolean) = upsert(appId) { q.setHidden(hidden.toDb(), appId) }
 
+    /** Says what the app is (null lets Fuse decide again). */
+    suspend fun setKind(appId: String, kind: AppKind?) = upsert(appId) { q.setKind(kind?.name, appId) }
+
     suspend fun markUsed(appId: String, now: Long) = upsert(appId) { q.setLastUsed(now, appId) }
 
     /** Orders pinned apps as in [ordered]. */
@@ -89,7 +96,7 @@ class AppOverrideRepository(
     }
 
     companion object {
-        /** Applies [overrides] to installed [entries] (title, pinned, hidden, last used). */
+        /** Applies [overrides] to installed [entries] (title, pinned, hidden, last used, kind). */
         fun applyTo(entries: List<AppEntry>, overrides: Map<String, AppOverride>): List<AppEntry> = entries.map { entry ->
             val o = overrides[entry.id] ?: return@map entry
             entry.copy(
@@ -97,6 +104,7 @@ class AppOverrideRepository(
                 pinned = o.pinned,
                 hidden = o.hidden,
                 lastUsedAt = o.lastUsedAt ?: entry.lastUsedAt,
+                chosenKind = o.kind,
             )
         }
     }
@@ -109,4 +117,5 @@ private fun App_override.toModel() = AppOverride(
     hidden = hidden.asBool(),
     sortOrder = sort_order?.toInt(),
     lastUsedAt = last_used_at,
+    kind = enumOrNull<AppKind>(kind),
 )

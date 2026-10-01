@@ -117,6 +117,14 @@ internal object AuditLibrary {
         return store
     }
 
+    /** An Android device with no library folder: the audit's apps, the games among them in the Android system. */
+    suspend fun androidStore(cache: File, controls: AuditControls, scope: CoroutineScope): FuseStore {
+        val store = createFuseStore(AuditServices.create(cache, controls, io.github.matiyaaa.fuse.model.Host.ANDROID), scope)
+        store.updatePrefs { it.copy(onboardingDone = true) }
+        withTimeout(30_000) { store.library.platforms.first { list -> list.any { it.platform.id.value == "android" } } }
+        return store
+    }
+
     /** A first run: nothing set up, two library folders to suggest. */
     suspend fun firstRunStore(root: File, sd: File, cache: File, controls: AuditControls, scope: CoroutineScope): FuseStore {
         writeTo(root)

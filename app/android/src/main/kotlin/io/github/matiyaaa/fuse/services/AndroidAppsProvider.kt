@@ -15,7 +15,9 @@ import android.provider.Settings
 import android.view.Display
 import androidx.core.net.toUri
 import io.github.matiyaaa.fuse.ActivityHolder
+import io.github.matiyaaa.fuse.RecentsCard
 import io.github.matiyaaa.fuse.model.AppEntry
+import io.github.matiyaaa.fuse.ui.shell.store.ApkInstall
 import io.github.matiyaaa.fuse.ui.shell.store.AppIconModel
 import io.github.matiyaaa.fuse.ui.shell.store.AppsProvider
 import io.github.matiyaaa.fuse.ui.shell.store.RunResult
@@ -28,6 +30,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
 
 /**
  * Launchable apps from [LauncherApps] for this user, excluding Fuse. The list is refreshed when apps
@@ -39,6 +42,8 @@ class AndroidAppsProvider(
     private val activities: ActivityHolder,
     /** Frees the second screen for an app opened there. */
     private val dualScreen: DualScreenHandoff? = null,
+    /** Hands an APK on the device to the system installer (see [AndroidReleaseInstaller.installLocal]). */
+    private val installLocal: suspend (File) -> Result<Unit> = { Result.failure(IllegalStateException()) },
 ) : AppsProvider {
     private val appContext = context.applicationContext
     private val launcherApps = appContext.getSystemService(LauncherApps::class.java)
@@ -111,12 +116,12 @@ class AndroidAppsProvider(
             val other = displayId != null && displayId != Display.DEFAULT_DISPLAY
             if (other) dualScreen?.beforeSecondScreenLaunch()
             try {
-                apps.startMainActivity(component, user, null, options(displayId).toBundle())
+                start(apps, component, displayId)
             } catch (e: SecurityException) {
                 // Android refused the other screen: open on this one instead.
                 if (!other) throw e
                 dualScreen?.dualScreenGameFailed()
-                apps.startMainActivity(component, user, null, options(null).toBundle())
+                start(apps, component, null)
             }
             RunResult.Started(null)
         } catch (e: ActivityNotFoundException) {
@@ -128,10 +133,49 @@ class AndroidAppsProvider(
         }
     }
 
+    /**
+     * Opens [component] like a launcher does. From Fuse's window, while Fuse is the Home app, Fuse's
+     * card in recent apps goes right behind it ([RecentsCard]).
+     */
+    private fun start(apps: LauncherApps, component: ComponentName, displayId: Int?) {
+        val activity = activities.current
+        if (activity == null) {
+            apps.startMainActivity(component, user, null, options(displayId).toBundle())
+            return
+        }
+        val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER).setComponent(component)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)
+        RecentsCard.start(activity, intent, options(displayId).toBundle(), displayId)
+    }
+
     private fun options(displayId: Int?): ActivityOptions {
         val options = activities.revealOptions() ?: ActivityOptions.makeBasic()
         if (displayId != null) options.launchDisplayId = displayId
         return options
+    }
+
+    /** Reads the APK's package and name, then hands it to Android's installer, which asks the user. */
+    override suspend fun installApk(path: String): ApkInstall {
+        val file = File(path)
+        val info = withContext(Dispatchers.IO) {
+            try {
+                @Suppress("DEPRECATION")
+                appContext.packageManager.getPackageArchiveInfo(path, 0)?.also { pi ->
+                    // Needed for the label and icon of an APK that isn't installed.
+                    pi.applicationInfo?.sourceDir = path
+                    pi.applicationInfo?.publicSourceDir = path
+                }
+            } catch (e: RuntimeException) {
+                null
+            }
+        } ?: return ApkInstall.Failed("${file.name} isn't an app Android can read.")
+        val label = withContext(Dispatchers.IO) {
+            info.applicationInfo?.loadLabel(appContext.packageManager)?.toString()?.trim()?.ifEmpty { null }
+        } ?: file.nameWithoutExtension
+        return installLocal(file).fold(
+            onSuccess = { ApkInstall.Started(info.packageName, label) },
+            onFailure = { ApkInstall.Failed(it.message ?: "Android couldn't start the installation.") },
+        )
     }
 
     override fun openInfo(entry: AppEntry) {

@@ -1,5 +1,6 @@
 package io.github.matiyaaa.fuse.integrations.scrape
 
+import io.github.matiyaaa.fuse.integrations.match.TitleWords
 import io.github.matiyaaa.fuse.model.ScrapeQuery
 
 /**
@@ -9,9 +10,19 @@ import io.github.matiyaaa.fuse.model.ScrapeQuery
  * Roman numerals as digits and digits as Roman numerals, without a leading "The" (or with a No-Intro
  * ", The" moved to the front), and without accents. Names that differ only in case, spacing or
  * punctuation are asked once.
+ *
+ * Keyword searches come last ([keywords]): the title without numbers and codes, then its longest
+ * words. A search that misses an oddly written name usually still finds the game by these, and
+ * what they return is still scored against the game's real names.
  */
 object SearchNames {
+    /** The searches for one game: [names] first, then [keywords] when the names found nothing sure. */
+    data class Plan(val names: List<String>, val keywords: List<String>) {
+        val all: List<String> get() = names + keywords
+    }
+
     private val spaces = Regex("\\s+")
+    private val wordBreaks = Regex("[\\s_:;,/()\\[\\]{}]+")
     private val subtitle = Regex("\\s*(:|\\s-\\s)\\s*")
     private val ampersand = Regex("\\s*&\\s*")
     private val andWord = Regex("\\s+and\\s+", RegexOption.IGNORE_CASE)
@@ -42,19 +53,53 @@ object SearchNames {
         "ýÿ".forEach { put(it, 'y') }
     }
 
-    /** Up to [max] names for [query], its title first. */
-    fun of(query: ScrapeQuery, max: Int = MAX): List<String> {
+    /** Up to [max] names for [query], its title first and keyword searches last. */
+    fun of(query: ScrapeQuery, max: Int = MAX): List<String> = plan(query, max).all
+
+    /**
+     * Up to [max] searches for [query], split into names and keywords. Up to [KEYWORDS] keyword
+     * searches (never more than half of the places after the title) take the last places, so they
+     * are reached even when the game has many names.
+     */
+    fun plan(query: ScrapeQuery, max: Int = MAX): Plan {
+        val limit = max.coerceAtLeast(1)
+        val names = distinct(listOf(query.title) + query.alsoKnownAs + variants(query.title))
+        val keywords = distinct(keywords(query.title))
+        fun fresh(kept: List<String>) = keywords.filter { k -> kept.none { key(it) == key(k) } }
+        val reserved = minOf(fresh(names.take(limit)).size, KEYWORDS, (limit - 1) / 2)
+        val kept = names.take(limit - reserved)
+        return Plan(kept, fresh(kept).take(limit - kept.size))
+    }
+
+    /** [names] cleaned up, each search asked once. */
+    private fun distinct(names: List<String>): List<String> {
         val out = LinkedHashMap<String, String>()
-        fun add(name: String?) {
-            val n = name?.let { spaces.replace(it, " ").trim() } ?: return
-            if (n.length < 2) return
+        for (name in names) {
+            val n = spaces.replace(name, " ").trim()
+            if (n.length < 2) continue
             val key = key(n)
             if (key.isNotEmpty()) out.getOrPut(key) { n }
         }
-        add(query.title)
-        query.alsoKnownAs.forEach(::add)
-        variants(query.title).forEach(::add)
-        return out.values.take(max.coerceAtLeast(1))
+        return out.values.toList()
+    }
+
+    /**
+     * Keyword searches for [title]: the title without numbers and codes ("12 Contra" -> "Contra",
+     * "Crash Bandicoot SCUS-94900" -> "Crash Bandicoot"), then its three longest words that are not
+     * small or edition words ("The Legend of Zelda: Ocarina of Time" -> "Legend Zelda Ocarina",
+     * "Dredge Deluxe Edition" -> "Dredge"). Only searches that leave something out are listed.
+     */
+    internal fun keywords(title: String): List<String> {
+        val words = wordBreaks.split(title).map { it.trim('.', '-', '\'', '!', '?', '&', '+') }.filter { it.isNotEmpty() }
+        // Digits make a number, a serial or a version; a Roman numeral of two letters or more is a number too.
+        val plain = words.filterNot { w -> w.any { it.isDigit() } || (w.length >= 2 && w in romanValue) }
+        val meaningful = plain.filter { it.lowercase() !in TitleWords.filler }
+        val strong = meaningful.filter { it.length >= 3 && it.lowercase() !in TitleWords.edition }
+        val longest = strong.withIndex().sortedByDescending { it.value.length }.take(3).sortedBy { it.index }.map { it.value }
+        return buildList {
+            if (plain.size < words.size && strong.isNotEmpty()) add(plain.joinToString(" "))
+            if (longest.isNotEmpty() && longest.size < meaningful.size) add(longest.joinToString(" "))
+        }
     }
 
     /** Other spellings of [title], most useful first. */
@@ -82,6 +127,9 @@ object SearchNames {
     /** What counts as the same search: lower case, spaces for everything but ASCII letters and digits. */
     private fun key(name: String): String = nonAlphanumeric.replace(name.lowercase(), " ").trim()
 
-    /** Names asked per provider for one game. */
-    const val MAX = 3
+    /** Searches per provider for one game, keywords included. */
+    const val MAX = 5
+
+    /** Keyword searches per provider for one game, at most. */
+    const val KEYWORDS = 2
 }

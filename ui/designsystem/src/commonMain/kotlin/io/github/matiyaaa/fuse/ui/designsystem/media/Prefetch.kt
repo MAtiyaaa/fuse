@@ -11,6 +11,7 @@ import coil3.compose.LocalPlatformContext
 import coil3.request.CachePolicy
 import coil3.request.ImageRequest
 import coil3.size.Precision
+import coil3.size.Scale
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import kotlinx.coroutines.launch
 
@@ -24,8 +25,16 @@ import kotlinx.coroutines.launch
  * once.
  */
 @Composable
-fun PrefetchArt(models: List<Any?>, index: Int, size: Dp? = null) {
-    val depth = Fuse.quality.prefetchDepth
+fun PrefetchArt(
+    models: List<Any?>,
+    index: Int,
+    size: Dp? = null,
+    /** At most this many on each side, for large art such as backgrounds. */
+    limit: Int = Int.MAX_VALUE,
+    /** The art fills (crops to) its space, like a background, instead of fitting in it. */
+    fill: Boolean = false,
+) {
+    val depth = Fuse.quality.prefetchDepth.coerceAtMost(limit)
     val context = LocalPlatformContext.current
     val px = size?.let { with(LocalDensity.current) { it.roundToPx() } }
     val scope = rememberCoroutineScope()
@@ -41,7 +50,7 @@ fun PrefetchArt(models: List<Any?>, index: Int, size: Dp? = null) {
             if (!asked.add(model)) continue
             val request = ImageRequest.Builder(context).data(model)
             if (px != null) {
-                request.size(px, px).precision(Precision.INEXACT)
+                request.size(px, px).precision(Precision.INEXACT).scale(if (fill) Scale.FILL else Scale.FIT)
             } else {
                 request.memoryCachePolicy(CachePolicy.DISABLED)
             }

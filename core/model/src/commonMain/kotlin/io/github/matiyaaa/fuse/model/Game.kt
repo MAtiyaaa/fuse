@@ -27,8 +27,15 @@ data class Game(
     val emulatorOverride: EmulatorId? = null,
     /** Per-game folder behaviour. Null means "use the platform's". */
     val folderPolicyOverride: FolderPolicy? = null,
+    /** The system the user chose ("System" in the game's options); [platformId] follows it. */
+    val platformOverride: PlatformId? = null,
+    /** The system the game's folder says, which [platformOverride] replaces. */
+    val scannedPlatformId: PlatformId? = null,
 ) {
     val displayTitle: String get() = titles.display
+
+    /** The installed app this game is ([AppGames]), or null for a game on disk. */
+    val appId: String? get() = AppGames.appId(location.path)
 }
 
 /**

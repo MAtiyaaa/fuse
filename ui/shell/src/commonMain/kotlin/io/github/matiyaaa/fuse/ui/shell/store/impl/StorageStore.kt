@@ -27,7 +27,8 @@ internal class DefaultStorageOps(private val ctx: StoreContext) : StorageOps {
         job?.cancel()
         job = ctx.scope.launch {
             val sources = ctx.data.sources.all().filter { it.enabled }
-            val summaries = ctx.data.games.observeAll().first()
+            // Android games are apps: Android's own storage settings measure them.
+            val summaries = ctx.data.games.observeAll().first().filterNot { it.isApp }
             val cards = ctx.cardsOnce(summaries).associateBy { it.id }
             val volumes = volumesOf(sources)
             val sizes = ArrayList<GameSize>()

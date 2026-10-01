@@ -163,6 +163,13 @@ class GameRepository(
     suspend fun setFolderPolicyOverride(id: GameId, policy: FolderPolicy?) =
         write { q.setFolderPolicyOverride(policy?.name, clock(), id.value) }
 
+    /**
+     * Files the game under [platform] for good (a rescan keeps it), or back under the system its
+     * folder says when null. The emulator chosen for the old system goes with it.
+     */
+    suspend fun setPlatformOverride(id: GameId, platform: PlatformId?) =
+        write { q.setPlatformOverride(platform?.value, clock(), id.value) }
+
     /** Replaces every external id. */
     /** Per-game folder policy overrides by game path, for the scanner's folder policy resolver. */
     suspend fun folderPolicyOverrides(): Map<String, FolderPolicy> = withContext(dispatcher) {

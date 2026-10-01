@@ -55,8 +55,9 @@ class AndroidFuseServices(
         dualScreen = dualScreen,
     )
     override val cartridge: CartridgeBridge = AndroidCartridgeBridge(appContext, activities)
-    override val installer: ReleaseInstaller = AndroidReleaseInstaller(appContext, http, activities)
-    override val apps: AppsProvider = AndroidAppsProvider(appContext, scope, activities, dualScreen)
+    private val releaseInstaller = AndroidReleaseInstaller(appContext, http, activities)
+    override val installer: ReleaseInstaller = releaseInstaller
+    override val apps: AppsProvider = AndroidAppsProvider(appContext, scope, activities, dualScreen, releaseInstaller::installLocal)
     override val locations: DeviceLocations = AndroidDeviceLocations(volumes)
 
     override fun writeCacheFile(relativePath: String, content: String): String? =

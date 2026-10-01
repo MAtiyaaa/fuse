@@ -32,9 +32,11 @@ data class MatchInput(
 data class ScoredMatch(
     val input: MatchInput,
     val candidate: ScrapeCandidate,
-    /** Normalised titles are equal (or the checksum matched). */
+    /** Normalised titles are equal, also with spaces removed (or the checksum matched). */
     val titleExact: Boolean,
     val platform: PlatformEvidence,
+    /** The confidence before it is clamped to 0..1, for ranking and the gap rules. */
+    val score: Double = candidate.confidence.toDouble(),
 )
 
 /** What to do with a ranked candidate list. */
@@ -51,16 +53,36 @@ sealed interface MatchDecision {
 /**
  * Scores provider results against a [ScrapeQuery] and decides whether one can be accepted.
  *
- * Title similarity (1.0 only for equal normalised titles or a checksum match) blends Jaro-Winkler on
- * the normalised titles (50%), a token-sort Levenshtein ratio (30%) and a typo-tolerant token-set
- * overlap (20%); a different sequel number multiplies it by 0.75. Confidence is 0.90 x title, then
- * same platform +0.06, different platform -0.30, same year +0.03, one year off +0.01, three or more
- * years off -0.10, preferred region +0.01, clamped to 0..1. So an equal title alone scores 0.90, with
- * the platform confirmed 0.96, and with the year too 0.99.
+ * Title similarity compares the normalised titles ([TitleNormalizer]) word by word ([TitleWords]),
+ * taking the best pair of the query's names and the candidate's:
+ * - 1.0 (exact) when the words are equal, also with the spaces removed ("FireRed" and "Fire Red"),
+ *   or when the ROM checksum matched.
+ * - 0.95 when the only difference is weak words on one side: articles and small words (the, a, an,
+ *   of, and, in, to, for, on) and edition words (edition, version, remastered, remaster, deluxe,
+ *   complete, definitive, HD, GOTY, game of the year, director's cut, enhanced, ultimate,
+ *   collection, anniversary). 0.92 when both sides have some. "Gold" or "Special" alone is a name
+ *   ("Pokemon Gold"), not an edition.
+ * - Between 0.9 and 0.8 when one side has every word of the other but small words and adds
+ *   significant ones (a series name, a subtitle, leftover junk): 0.9 minus 0.1 x the share of its
+ *   significant words that are added, and 0.02 less when the other side has small words of its own.
+ * - Otherwise (both sides have words the other lacks, an edition word counting too, as in "Pokemon
+ *   Gold" and "Pokemon Silver") 0.45 x the share of significant words in common plus 0.25 x the
+ *   Jaro-Winkler similarity of the titles, so titles that only look alike ("Dredge" and "Dredgers")
+ *   stay under 0.3.
+ * Each forgiven typo and a changed word order take 0.05 off. A different sequel number (both have
+ * numbers that differ, or one has a number other than 1 that the other lacks) multiplies the result
+ * by 0.6. Anything short of exact stays at or below 0.97.
+ *
+ * Confidence is 0.95 x title, then same platform +0.04, different platform -0.30, same year +0.03,
+ * one year off +0.01, three or more years off -0.10, preferred region +0.01. So an equal title alone
+ * shows 0.95 and, with the platform confirmed, 0.99. It is shown clamped to 0..1; ranking and the
+ * gap rules use the unclamped sum, so a matching year still tells two equal titles apart.
  *
  * Auto-accept rules: EXACT needs equal titles and a confirmed platform with no equally exact rival;
- * NORMAL needs >= 0.9 and a lead of >= 0.1 over the next candidate; AGGRESSIVE needs >= 0.75 and a
- * strict lead (and returns a warning). A different platform is never auto-accepted.
+ * NORMAL needs >= 0.9 and either a lead of >= 0.1 over the next candidate or an equal title that no
+ * other candidate on a possible platform shares; AGGRESSIVE needs >= 0.75 and a strict lead (and
+ * returns a warning when NORMAL would not have accepted). A different platform is never
+ * auto-accepted.
  */
 class TitleMatcher(
     val normalThreshold: Float = 0.9f,
@@ -104,7 +126,7 @@ class TitleMatcher(
         var confidence = TITLE_WEIGHT * title
         when (platform) {
             PlatformEvidence.MATCH -> {
-                confidence += 0.06
+                confidence += PLATFORM_BONUS
                 reasons += "Same platform"
             }
             PlatformEvidence.MISMATCH -> {
@@ -147,6 +169,7 @@ class TitleMatcher(
             ),
             titleExact = exact,
             platform = platform,
+            score = confidence,
         )
     }
 
@@ -154,24 +177,27 @@ class TitleMatcher(
     fun rank(query: ScrapeQuery, inputs: List<MatchInput>): List<ScoredMatch> = inputs
         .distinctBy { it.provider to it.providerGameId }
         .map { score(query, it) }
-        .sortedWith(compareByDescending<ScoredMatch> { it.candidate.confidence }.thenByDescending { it.titleExact })
+        .sortedWith(compareByDescending<ScoredMatch> { it.score }.thenByDescending { it.titleExact })
 
     /** Applies the [strictness] rules to a list from [rank]. */
     fun decide(ranked: List<ScoredMatch>, strictness: MatchStrictness): MatchDecision {
         val top = ranked.firstOrNull() ?: return MatchDecision.NoCandidates
         val runnerUp = ranked.getOrNull(1)
-        val best = top.candidate.confidence
-        val next = runnerUp?.candidate?.confidence ?: 0f
+        val best = top.score
+        val next = runnerUp?.score ?: 0.0
+        // An equal title wins unless another candidate on a possible platform has it too.
+        val onlyExact = top.titleExact && ranked.drop(1).none { it.titleExact && it.platform != PlatformEvidence.MISMATCH }
+        val normal = best >= normalThreshold && (best - next >= normalGap - EPSILON || onlyExact)
         val accepted = top.platform != PlatformEvidence.MISMATCH && best >= aggressiveThreshold && when (strictness) {
             MatchStrictness.EXACT ->
                 top.titleExact && top.platform == PlatformEvidence.MATCH &&
                     !(runnerUp != null && runnerUp.titleExact && runnerUp.platform == PlatformEvidence.MATCH)
-            MatchStrictness.NORMAL -> best >= normalThreshold && best - next >= normalGap - EPSILON
+            MatchStrictness.NORMAL -> normal
             MatchStrictness.AGGRESSIVE -> best > next
         }
         if (!accepted) return MatchDecision.NeedsReview(ranked.take(maxReviewCandidates))
-        val warning = if (strictness == MatchStrictness.AGGRESSIVE && (best < normalThreshold || best - next < normalGap)) {
-            "Accepted by aggressive matching at ${(best * 100).roundToInt()}% confidence; check it"
+        val warning = if (strictness == MatchStrictness.AGGRESSIVE && !normal) {
+            "Accepted by aggressive matching at ${(top.candidate.confidence * 100).roundToInt()}% confidence; check it"
         } else {
             null
         }
@@ -192,25 +218,61 @@ class TitleMatcher(
     data class TitleScore(val score: Double, val exact: Boolean, val numbersDiffer: Boolean)
 
     companion object {
-        private const val EPSILON = 1e-4f
-        private const val TITLE_WEIGHT = 0.90
+        private const val EPSILON = 1e-4
+        private const val TITLE_WEIGHT = 0.95
+        private const val PLATFORM_BONUS = 0.04
+        private const val MAX_INEXACT = 0.97
+        private const val SEQUEL_FACTOR = 0.6
 
-        /** Title-only similarity of two raw titles (0..1, 1 only when the normalised forms are equal). */
+        /** Title-only similarity of two raw titles (0..1, 1 only when they are equal once normalised). */
         fun titleSimilarity(a: String, b: String): TitleScore {
             val ta = TitleNormalizer.tokens(a)
             val tb = TitleNormalizer.tokens(b)
             if (ta.isEmpty() || tb.isEmpty()) return TitleScore(0.0, false, false)
-            if (ta == tb) return TitleScore(1.0, true, false)
-            val na = ta.joinToString(" ")
-            val nb = tb.joinToString(" ")
-            var s = 0.5 * Similarity.jaroWinkler(na, nb) +
-                0.3 * Similarity.tokenSortRatio(ta, tb) +
-                0.2 * Similarity.softTokenSet(ta, tb)
-            val numbersA = ta.filter { t -> t.all { it.isDigit() } }.toSet()
-            val numbersB = tb.filter { t -> t.all { it.isDigit() } }.toSet()
-            val numbersDiffer = numbersA != numbersB
-            if (numbersDiffer) s *= 0.75
-            return TitleScore(s.coerceAtMost(0.97), false, numbersDiffer)
+            if (ta == tb || ta.joinToString("") == tb.joinToString("")) return TitleScore(1.0, true, false)
+
+            val words = TitleWords.align(ta, tb)
+            // A title made only of weak words ("The Collection") counts them all.
+            val weakA = TitleWords.weak(ta).takeUnless { w -> w.all { it } } ?: BooleanArray(ta.size)
+            val weakB = TitleWords.weak(tb).takeUnless { w -> w.all { it } } ?: BooleanArray(tb.size)
+            val extraA = ta.indices.filter { !words.matchedA[it] }
+            val extraB = tb.indices.filter { !words.matchedB[it] }
+            val strongA = extraA.count { !weakA[it] }
+            val strongB = extraB.count { !weakB[it] }
+            val editionA = extraA.count { weakA[it] && ta[it] !in TitleWords.filler }
+            val editionB = extraB.count { weakB[it] && tb[it] !in TitleWords.filler }
+            val weakOnlyA = extraA.size - strongA
+            val weakOnlyB = extraB.size - strongB
+
+            var s = when {
+                strongA == 0 && strongB == 0 -> when {
+                    weakOnlyA == 0 && weakOnlyB == 0 -> 1.0
+                    weakOnlyA == 0 || weakOnlyB == 0 -> 0.95
+                    else -> 0.92
+                }
+                // One side has every significant word of the other and adds some. An edition word left
+                // over on the other side means a word was swapped instead ("Pokemon Gold" and "Pokemon Silver").
+                (strongA == 0 && editionA == 0) || (strongB == 0 && editionB == 0) -> {
+                    val aInB = strongA == 0 && editionA == 0
+                    val total = if (aInB) weakB.count { !it } else weakA.count { !it }
+                    val small = if (aInB) weakOnlyA else weakOnlyB
+                    0.9 - 0.1 * (strongA + strongB) / total - if (small > 0) 0.02 else 0.0
+                }
+                else -> {
+                    val shared = ta.indices.count { words.matchedA[it] && !weakA[it] }
+                    val overlap = shared.toDouble() / (shared + strongA + strongB)
+                    0.45 * overlap + 0.25 * Similarity.jaroWinkler(ta.joinToString(" "), tb.joinToString(" "))
+                }
+            }
+            s -= 0.05 * words.typos + if (words.reordered) 0.05 else 0.0
+
+            val numbersA = TitleWords.numbers(ta)
+            val numbersB = TitleWords.numbers(tb)
+            val onlyA = numbersA - numbersB
+            val onlyB = numbersB - numbersA
+            val numbersDiffer = (onlyA.isNotEmpty() && onlyB.isNotEmpty()) || (onlyA + onlyB).any { it != "1" }
+            if (numbersDiffer) s *= SEQUEL_FACTOR
+            return TitleScore(s.coerceIn(0.0, MAX_INEXACT), false, numbersDiffer)
         }
     }
 }

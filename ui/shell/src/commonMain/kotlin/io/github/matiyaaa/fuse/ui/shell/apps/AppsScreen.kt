@@ -26,6 +26,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import io.github.matiyaaa.fuse.model.AppFilter
+import io.github.matiyaaa.fuse.model.AppKind
 import io.github.matiyaaa.fuse.model.NavAction
 import io.github.matiyaaa.fuse.ui.designsystem.components.Chip
 import io.github.matiyaaa.fuse.ui.designsystem.components.FText
@@ -45,6 +46,7 @@ import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.ContextMenuSpec
 import io.github.matiyaaa.fuse.ui.shell.app.FocusZone
 import io.github.matiyaaa.fuse.ui.shell.app.TextInputSpec
+import io.github.matiyaaa.fuse.ui.shell.app.appKindPicker
 import io.github.matiyaaa.fuse.ui.shell.app.appScreenPicker
 import io.github.matiyaaa.fuse.ui.shell.app.hasTwoScreens
 import io.github.matiyaaa.fuse.ui.shell.app.openApp
@@ -54,7 +56,7 @@ import io.github.matiyaaa.fuse.ui.shell.components.LocalTileMetrics
 import io.github.matiyaaa.fuse.ui.shell.store.AppCard
 import kotlinx.coroutines.launch
 
-private val filters = listOf(AppFilter.PINNED to "Pinned", AppFilter.GAMES to "Games", AppFilter.ALL to "All apps")
+private val filters = listOf(AppFilter.PINNED to "Pinned", AppFilter.GAMES to "Games", AppFilter.EMULATORS to "Emulators", AppFilter.ALL to "All apps")
 
 /**
  * Android apps (or Linux applications) Fuse can open, so you rarely need the system launcher:
@@ -128,7 +130,12 @@ fun AppsScreen(app: AppState) {
             Spacer(Modifier.height(Space.xl))
             if (apps.isEmpty()) {
                 FText(
-                    if (filter == AppFilter.PINNED) "Pin apps from their options to keep them here." else "No apps found.",
+                    when (filter) {
+                        AppFilter.PINNED -> "Pin apps from their options to keep them here."
+                        AppFilter.GAMES -> "No games here yet. Set an app's Type to Game in its options."
+                        AppFilter.EMULATORS -> "No emulators found. Set an app's Type to Emulator in its options."
+                        AppFilter.ALL -> "No apps found."
+                    },
                     Fuse.type.body, color = Fuse.colors.textMuted, modifier = Modifier.padding(horizontal = Space.gutter),
                 )
             }
@@ -181,6 +188,22 @@ fun AppState.appMenu(app: AppCard): ContextMenuSpec {
         ) + listOfNotNull(
             if (hasTwoScreens) MenuAction("screen", "Screen", FuseIcons.DualScreen, detail = "Top, bottom, or ask when it opens", trailing = Trailing.Chevron, onSelect = { appScreenPicker(app) }) else null,
         ) + listOf(
+            MenuAction(
+                "type", "Type", when (app.entry.kind) {
+                    AppKind.GAME -> FuseIcons.Gamepad
+                    AppKind.APP -> FuseIcons.AppWindow
+                    AppKind.EMULATOR -> FuseIcons.Chip
+                },
+                detail = if (store.apps.gamesInLibrary) "Game, app or emulator. Games join the Android system" else "Game, app or emulator",
+                trailing = Trailing.Value(
+                    when (app.entry.kind) {
+                        AppKind.GAME -> "Game"
+                        AppKind.APP -> "App"
+                        AppKind.EMULATOR -> "Emulator"
+                    },
+                ),
+                onSelect = { appKindPicker(app) },
+            ),
             MenuAction("pin", if (app.entry.pinned) "Unpin" else "Pin", FuseIcons.Pin, onSelect = {
                 closeOverlays(); scope.launch { ops.setPinned(app, !app.entry.pinned) }
             }),

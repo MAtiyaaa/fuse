@@ -16,6 +16,7 @@ import android.provider.DocumentsContract
 import android.view.Display
 import androidx.core.content.FileProvider
 import io.github.matiyaaa.fuse.ActivityHolder
+import io.github.matiyaaa.fuse.RecentsCard
 import io.github.matiyaaa.fuse.launch.DualScreenPlatforms
 import io.github.matiyaaa.fuse.launch.LaunchTokens
 import io.github.matiyaaa.fuse.launch.ResolvedLaunch
@@ -341,7 +342,7 @@ class AndroidGameLauncher(
     }
 
     private fun startOn(intent: Intent, displayId: Int?, name: String): RunResult = try {
-        startWith(intent, options(displayId))
+        startWith(intent, options(displayId), displayId)
         RunResult.Started(null)
     } catch (e: ActivityNotFoundException) {
         RunResult.NotInstalled
@@ -349,7 +350,7 @@ class AndroidGameLauncher(
         if (displayId != null) {
             // Android refused the other screen: start on this one instead.
             try {
-                startWith(intent, options(null))
+                startWith(intent, options(null), null)
                 RunResult.Started(null)
             } catch (e2: ActivityNotFoundException) {
                 RunResult.NotInstalled
@@ -369,10 +370,11 @@ class AndroidGameLauncher(
         return options
     }
 
-    private fun startWith(intent: Intent, options: ActivityOptions) {
+    /** Starts [intent]; while Fuse is the Home app, Fuse's card in recent apps goes right behind it. */
+    private fun startWith(intent: Intent, options: ActivityOptions, displayId: Int?) {
         val activity = activities.current
         if (activity != null) {
-            activity.startActivity(intent, options.toBundle())
+            RecentsCard.start(activity, intent, options.toBundle(), displayId)
         } else {
             appContext.startActivity(Intent(intent).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), options.toBundle())
         }

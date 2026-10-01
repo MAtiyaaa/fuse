@@ -27,45 +27,19 @@ fun screenName(display: LaunchDisplay): String = when (display) {
 }
 
 /**
- * Asks which screen to open [subject] on. The last row changes how long the answer is kept; the
- * choice list stays open while it does.
+ * Asks which screen to open [subject] on ([ScreenPromptOverlay]): the two screens side by side, and
+ * ticks to keep the answer for [itemLabel] or [groupLabel].
  */
 fun AppState.askScreen(
-    title: String,
+    verb: String,
     subject: String,
+    art: Any?,
+    accent: Long,
     itemLabel: String,
     groupLabel: String,
-    memory: ScreenMemory = ScreenMemory.ONCE,
     onPick: (LaunchDisplay, ScreenMemory) -> Unit,
 ) {
-    val keep = when (memory) {
-        ScreenMemory.ONCE -> "Just this time"
-        ScreenMemory.ITEM -> itemLabel
-        ScreenMemory.GROUP -> groupLabel
-    }
-    choice = ChoiceSpec(
-        title = title,
-        message = subject,
-        options = listOf(
-            MenuAction("top", screenName(LaunchDisplay.PRIMARY), FuseIcons.PanelTop, detail = "The main screen", onSelect = {
-                choice = null
-                onPick(LaunchDisplay.PRIMARY, memory)
-            }),
-            MenuAction("bottom", screenName(LaunchDisplay.SECONDARY), FuseIcons.PanelBottom, detail = "The second screen", onSelect = {
-                choice = null
-                onPick(LaunchDisplay.SECONDARY, memory)
-            }),
-            MenuAction(
-                "remember", "Remember", FuseIcons.Pin,
-                detail = "Select to change. Settings, Displays changes it later",
-                trailing = Trailing.Value(keep),
-                onSelect = {
-                    val next = ScreenMemory.entries[(memory.ordinal + 1) % ScreenMemory.entries.size]
-                    askScreen(title, subject, itemLabel, groupLabel, next, onPick)
-                },
-            ),
-        ),
-    )
+    screenPrompt = ScreenPromptSpec(verb, subject, art, accent, itemLabel, groupLabel, onPick)
 }
 
 /**
@@ -83,8 +57,10 @@ internal fun AppState.playOnChosenScreen(card: GameCard, start: (LaunchDisplay?)
             start(stored)
             return@launch
         }
-        val system = store.library.platforms.value.firstOrNull { it.platform.id == card.platformId }?.platform?.name ?: card.platformShort
-        askScreen("Play on which screen?", card.title, "For this game", "For all $system games") { display, memory ->
+        // A long system name gives way to its short one, so the tick fits.
+        val system = store.library.platforms.value.firstOrNull { it.platform.id == card.platformId }?.platform?.name
+            ?.takeIf { it.length <= 18 } ?: card.platformShort
+        askScreen("Play", card.title, card.art.hero ?: card.art.tile, card.accent, "Always for this game", "Always for $system") { display, memory ->
             when (memory) {
                 ScreenMemory.ONCE -> Unit
                 ScreenMemory.ITEM -> scope.launch { store.settings.set(ScopedSettings.LaunchScreen, ScopeRef.game(card.id), display) }
@@ -107,7 +83,7 @@ fun AppState.openApp(app: AppCard) {
         scope.launch { store.apps.launch(app, stored) }
         return
     }
-    askScreen("Open on which screen?", app.entry.displayTitle, "For this app", "For all apps") { display, memory ->
+    askScreen("Open", app.entry.displayTitle, app.icon, ACCENT_APPS, "Always for this app", "Always for all apps") { display, memory ->
         when (memory) {
             ScreenMemory.ONCE -> Unit
             ScreenMemory.ITEM -> store.updatePrefs { it.copy(display = it.display.copy(appScreens = it.display.appScreens + (app.entry.id to display))) }
@@ -162,6 +138,9 @@ fun AppState.appScreenPicker(app: AppCard) {
         },
     )
 }
+
+/** The glow an app's screen gets (apps have no system colour). */
+private const val ACCENT_APPS = 0xFF7C8CFF
 
 fun screenIcon(display: LaunchDisplay) = when (display) {
     LaunchDisplay.PRIMARY -> FuseIcons.PanelTop

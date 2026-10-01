@@ -73,6 +73,8 @@ data class GameCard(
     val missing: Boolean = false,
     /** RomM rom id when Cartridge downloaded it (enables "Open in Cartridge"). */
     val rommRomId: Long? = null,
+    /** An installed app played as a game (Android), not a file: no files to upload or delete. */
+    val isApp: Boolean = false,
 )
 
 @Immutable

@@ -251,6 +251,23 @@
             </intent-filter>
         </activity>
 
+        <!--
+          Fuse's card in recent apps while Fuse is the Home app (Android never lists the Home app
+          there). Filed behind each game or app Fuse starts; picking it brings Fuse back. Its own
+          task, never seen.
+        -->
+        <activity
+            android:name=".RecentsCardActivity"
+            android:configChanges="colorMode|density|fontScale|fontWeightAdjustment|grammaticalGender|keyboard|keyboardHidden|layoutDirection|locale|mcc|mnc|navigation|orientation|screenLayout|screenSize|smallestScreenSize|touchscreen|uiMode"
+            android:excludeFromRecents="false"
+            android:exported="false"
+            android:label="Fuse"
+            android:launchMode="singleTask"
+            android:resizeableActivity="true"
+            android:stateNotNeeded="true"
+            android:taskAffinity="io.github.matiyaaa.fuse.recents"
+            android:theme="@style/Theme.Fuse.RecentsCard" />
+
         <receiver
             android:name=".services.InstallResultReceiver"
             android:exported="false" />

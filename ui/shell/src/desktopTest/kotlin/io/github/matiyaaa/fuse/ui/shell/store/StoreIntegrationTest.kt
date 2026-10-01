@@ -2,9 +2,14 @@ package io.github.matiyaaa.fuse.ui.shell.store
 
 import io.github.matiyaaa.fuse.data.FuseData
 import io.github.matiyaaa.fuse.data.db.DesktopDatabase
+import io.github.matiyaaa.fuse.model.AppEntry
+import io.github.matiyaaa.fuse.model.AppFilter
+import io.github.matiyaaa.fuse.model.AppKind
 import io.github.matiyaaa.fuse.model.CartridgeStatus
 import io.github.matiyaaa.fuse.model.CollectionKind
 import io.github.matiyaaa.fuse.model.EmulatorId
+import io.github.matiyaaa.fuse.model.Host
+import io.github.matiyaaa.fuse.model.InstalledEmulator
 import io.github.matiyaaa.fuse.model.LaunchPlan
 import io.github.matiyaaa.fuse.model.LaunchTarget
 import io.github.matiyaaa.fuse.model.LibrarySourceKind
@@ -383,6 +388,97 @@ class StoreIntegrationTest {
      * A new database file per store, like the desktop app uses. (The in-memory database shares one
      * connection between threads, which the app never does.)
      */
+    @Test
+    fun appsThatAreGamesJoinTheAndroidSystemAndLeaveWhenTheyAreAppsAgain() = runBlocking {
+        val dredge = AppEntry("com.blackrock.dredge/com.unity3d.player.UnityPlayerActivity", "DREDGE", "com.blackrock.dredge", isGame = false)
+        val genshin = AppEntry("com.miHoYo.GenshinImpact/com.miHoYo.GetMobileInfo.MainActivity", "Genshin Impact", "com.miHoYo.GenshinImpact", isGame = true)
+        val retroarch = AppEntry("com.retroarch/com.retroarch.browser.mainmenu.MainMenuActivity", "RetroArch", "com.retroarch", isGame = true)
+        val chrome = AppEntry("com.android.chrome/com.google.android.apps.chrome.Main", "Chrome", "com.android.chrome", isGame = false)
+        val services = FakeServices(
+            FuseData(DesktopDatabase.open(freshDb())), cache,
+            host = Host.ANDROID,
+            apps = FakeApps(listOf(chrome, dredge, genshin, retroarch)),
+            installedEmulators = listOf(
+                InstalledEmulator(EmulatorId("retroarch"), "RetroArch", Host.ANDROID, "com.retroarch", platforms = setOf(PlatformId("snes")), detectedVia = "Package"),
+            ),
+        )
+        val store = createFuseStore(services, scope)
+        val android = PlatformId("android")
+        suspend fun androidGames(count: Int) = withTimeout(10_000) {
+            store.library.games(GameQuery(platform = android)).first { it.size == count }
+        }
+
+        // What an app says about itself counts, except for an emulator Fuse detected.
+        assertEquals(listOf("Genshin Impact"), androidGames(1).map { it.title })
+        assertEquals(listOf("RetroArch"), withTimeout(10_000) { store.apps.apps(AppFilter.EMULATORS).first { it.isNotEmpty() } }.map { it.entry.displayTitle })
+
+        store.apps.setKind(dredge.id, AppKind.GAME)
+        val game = androidGames(2).first { it.title == "DREDGE" }
+        assertTrue(game.isApp)
+        // The app's icon until art is found.
+        assertEquals(AppIconModel("com.blackrock.dredge"), game.art.icon)
+
+        // It starts as the app, whatever system it is filed under.
+        store.library.setPlatform(game.id, PlatformId("win"))
+        assertEquals(LaunchOutcome.Started, store.library.launch(game.id))
+        assertEquals(LaunchTarget.App(dredge.id), services.launched.last().target)
+        store.library.setPlatform(game.id, android)
+
+        // Not a game after all: it leaves the games, and isn't listed as missing or removed either.
+        store.library.removeFromFuse(game.id)
+        assertEquals(listOf("Genshin Impact"), androidGames(1).map { it.title })
+        assertEquals(AppKind.APP, store.apps.apps(AppFilter.ALL).first().first { it.entry.id == dredge.id }.entry.kind)
+        assertTrue(store.library.games(GameQuery(set = GameSet.MISSING)).first().isEmpty())
+        assertTrue(store.library.games(GameQuery(set = GameSet.REMOVED)).first().isEmpty())
+
+        // A game again: back with its play history.
+        store.apps.setKind(dredge.id, AppKind.GAME)
+        assertEquals(game.id, androidGames(2).first { it.title == "DREDGE" }.id)
+    }
+
+    @Test
+    fun aGameMovedToAnotherSystemStaysAndAFileFromAnywhereCanBeAdded() = runBlocking {
+        val services = FakeServices(FuseData(DesktopDatabase.open(freshDb())), cache)
+        val store = createFuseStore(services, scope)
+        store.sources.add(root.absolutePath, LibrarySourceKind.ROMS_ROOT)
+        awaitScan(store)
+        val wars = store.library.games(GameQuery(platform = PlatformId("gba"))).first().single()
+
+        store.library.setPlatform(wars.id, PlatformId("gbc"))
+        store.sources.rescan(ScanScope.FULL)
+        withTimeout(20_000) { store.sources.scan.first { it.phase == ScanPhase.DONE } }
+        val systems = withTimeout(10_000) { store.library.platforms.first { list -> list.any { it.platform.id.value == "gbc" } } }
+        assertEquals(setOf("gbc", "psx"), systems.map { it.platform.id.value }.toSet())
+        assertEquals(wars.id, store.library.games(GameQuery(platform = PlatformId("gbc"))).first().single().id)
+
+        // A file outside every library folder, found with Fuse's file picker.
+        val elsewhere = Files.createTempDirectory("fuse-elsewhere").toFile()
+        try {
+            File(elsewhere, "Downloads").mkdirs()
+            val tetris = File(elsewhere, "Downloads/Tetris (World) (Rev 1).gb").apply { writeBytes(ByteArray(32)) }
+            services.storageRoots = listOf(io.github.matiyaaa.fuse.ui.shell.store.LocationHint(elsewhere.absolutePath, "Internal storage"))
+            val roots = store.library.browse(null)
+            assertEquals(listOf("Internal storage"), roots.entries.map { it.name })
+            val top = store.library.browse(elsewhere.absolutePath)
+            assertEquals(null, top.parent)
+            assertEquals(listOf("Downloads"), top.entries.map { it.name })
+            val inside = store.library.browse(top.entries.single().path)
+            assertEquals(elsewhere.absolutePath, inside.parent)
+            assertEquals(listOf(tetris.name), inside.entries.map { it.name })
+
+            val id = assertNotNull(store.library.addGameFile(tetris.absolutePath, PlatformId("gb")))
+            val added = withTimeout(10_000) { store.library.games(GameQuery(platform = PlatformId("gb"))).first { it.isNotEmpty() } }.single()
+            assertEquals(id, added.id)
+            assertEquals("Tetris", added.title)
+            // Scans of the library leave it alone.
+            store.sources.rescan(ScanScope.FULL)
+            withTimeout(20_000) { store.sources.scan.first { it.phase == ScanPhase.DONE } }
+            assertEquals(listOf(id), store.library.games(GameQuery(platform = PlatformId("gb"))).first().map { it.id })
+        } finally {
+            elsewhere.deleteRecursively()
+        }
+    }
+
     private fun freshDb(): String = File(cache, "fuse-${System.nanoTime()}.db").absolutePath
 
     /** Waits until the scan's results are in the library (a follow-up quick scan may already run). */

@@ -29,6 +29,8 @@ data class GameSummary(
     val dlcCount: Int,
     val updateCount: Int,
     val discCount: Int,
+    /** An installed app played as a game ([io.github.matiyaaa.fuse.model.AppGames]), not a file. */
+    val isApp: Boolean = false,
 ) {
     val displayTitle: String get() = titles.display
     val sortKey: String get() = titles.sortKey

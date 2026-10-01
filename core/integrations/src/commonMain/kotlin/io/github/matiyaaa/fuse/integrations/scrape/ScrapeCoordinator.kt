@@ -70,7 +70,9 @@ sealed interface ScrapeOutcome {
  *
  * Identification tries metadata providers first (in priority order), then artwork-only ones. Each
  * provider is searched by the game's title and, while nothing sure turns up, by its other names
- * ([SearchNames]). The first provider whose results the [TitleMatcher] auto-accepts under the
+ * ([SearchNames]); only when no provider found the game by any name are they searched again by
+ * its keywords. Every result is scored against the game's own names, never against the search
+ * that found it. The first provider whose results the [TitleMatcher] auto-accepts under the
  * request's strictness wins; otherwise every candidate seen is returned for review. Artwork for an
  * accepted game comes from the winning provider and from each other configured provider that also
  * confidently matches the accepted title, until every kind asked for has an option.
@@ -112,34 +114,39 @@ class ScrapeCoordinator(
         val errors = ArrayList<ProviderError>()
         val review = ArrayList<ScoredMatch>()
         val searched = ArrayList<ScrapeProviderId>()
-        val names = SearchNames.of(request.query)
-        for (source in ordered) {
-            var answered = false
-            for (name in names) {
-                val games = when (val r = call(source.id) { source.search(request.query.named(name)) }) {
-                    is ApiResult.Failure -> {
-                        errors += ProviderError(source.id, r)
-                        break
+        val failed = HashSet<ScrapeProviderId>()
+        val plan = SearchNames.plan(request.query)
+        // Every provider by the names first; keywords only when none of them found the game for sure.
+        for ((round, keywords) in listOf(plan.names to false, plan.keywords to true)) {
+            for (source in ordered) {
+                if (source.id in failed || (keywords && !source.searchesByKeyword)) continue
+                for (name in round) {
+                    val games = when (val r = call(source.id) { source.search(request.query.named(name)) }) {
+                        is ApiResult.Failure -> {
+                            errors += ProviderError(source.id, r)
+                            failed += source.id
+                            break
+                        }
+                        is ApiResult.Success -> r.value.take(request.maxCandidates)
                     }
-                    is ApiResult.Success -> r.value.take(request.maxCandidates)
-                }
-                answered = true
-                val ranked = matcher.rank(request.query, games.map { it.toMatchInput() })
-                when (val decision = matcher.decide(ranked, request.strictness)) {
-                    is MatchDecision.AutoAccept -> {
-                        val game = games.first { it.providerGameId == decision.match.input.providerGameId }
-                        return finish(request, source, game, decision.match.candidate, decision.warning, active, errors)
+                    if (source.id !in searched) searched += source.id
+                    // Whatever a name or keyword finds is scored against the game's own names.
+                    val ranked = matcher.rank(request.query, games.map { it.toMatchInput() })
+                    when (val decision = matcher.decide(ranked, request.strictness)) {
+                        is MatchDecision.AutoAccept -> {
+                            val game = games.first { it.providerGameId == decision.match.input.providerGameId }
+                            return finish(request, source, game, decision.match.candidate, decision.warning, active, errors)
+                        }
+                        is MatchDecision.NeedsReview -> review += decision.candidates
+                        MatchDecision.NoCandidates -> Unit
                     }
-                    is MatchDecision.NeedsReview -> review += decision.candidates
-                    MatchDecision.NoCandidates -> Unit
                 }
             }
-            if (answered) searched += source.id
         }
         return when {
             // A provider can list the same game twice (regional entries, paged results); show it once.
             review.isNotEmpty() -> ScrapeOutcome.NeedsReview(
-                review.sortedByDescending { it.candidate.confidence }
+                review.sortedByDescending { it.score }
                     .distinctBy { it.candidate.provider to it.candidate.providerGameId }
                     .take(request.maxCandidates)
                     .map { it.candidate },
@@ -152,8 +159,11 @@ class ScrapeCoordinator(
 
     /**
      * Every game the active providers list for the query, ranked, without accepting any of them: for
-     * "Identify game", where the user always picks. Returns [ScrapeOutcome.NeedsReview] with the
-     * matches (best first), [ScrapeOutcome.NotFound] when none had anything, or
+     * "Identify game", where the user always picks. Each provider is searched by the game's names and
+     * then its keywords ([SearchNames]) until one search finds a match the request's strictness
+     * would accept, so an oddly named game still turns up; each provider adds up to
+     * [ScrapeRequest.maxCandidates] games. Returns [ScrapeOutcome.NeedsReview] with the matches
+     * (best first, each game once), [ScrapeOutcome.NotFound] when none had anything, or
      * [ScrapeOutcome.ProviderErrors] when every provider failed.
      */
     suspend fun candidates(request: ScrapeRequest): ScrapeOutcome {
@@ -162,9 +172,10 @@ class ScrapeCoordinator(
         val errors = ArrayList<ProviderError>()
         val found = ArrayList<ScoredMatch>()
         val searched = ArrayList<ScrapeProviderId>()
-        val names = SearchNames.of(request.query)
+        val plan = SearchNames.plan(request.query)
         for (source in active) {
-            // Other names only when the title found nothing at all here.
+            val names = if (source.searchesByKeyword) plan.all else plan.names
+            val here = ArrayList<ScoredMatch>()
             for (name in names) {
                 val games = when (val r = call(source.id) { source.search(request.query.named(name)) }) {
                     is ApiResult.Failure -> {
@@ -174,13 +185,18 @@ class ScrapeCoordinator(
                     is ApiResult.Success -> r.value.take(request.maxCandidates)
                 }
                 if (source.id !in searched) searched += source.id
-                found += matcher.rank(request.query, games.map { it.toMatchInput() })
-                if (games.isNotEmpty()) break
+                val ranked = matcher.rank(request.query, games.map { it.toMatchInput() })
+                here += ranked
+                // Other names and keywords only while nothing sure turned up here.
+                if (matcher.decide(ranked, request.strictness) is MatchDecision.AutoAccept) break
             }
+            found += here.sortedByDescending { it.score }
+                .distinctBy { it.candidate.providerGameId }
+                .take(request.maxCandidates)
         }
         return when {
             found.isNotEmpty() -> ScrapeOutcome.NeedsReview(
-                found.sortedByDescending { it.candidate.confidence }
+                found.sortedByDescending { it.score }
                     .distinctBy { it.candidate.provider to it.candidate.providerGameId }
                     .map { it.candidate },
                 errors,
