@@ -1,0 +1,90 @@
+# Fuse's website on GitHub Pages (https://matiyaaa.github.io/fuse/).
+#
+# The site in site/ is put together with the brand art, icons, screenshots, fonts and theme files
+# from the repository, and the latest release is written into it, so it shows the right version and
+# links straight to each download. It is rebuilt when the site or its art changes on main, after
+# every Release run (releases are made with GITHUB_TOKEN, which never starts a `release` event, so
+# this follows the workflow instead), and by hand. The page also asks GitHub for the latest release
+# when it opens, so a release shows up even before the next rebuild.
+#
+# One-time setup: Settings, Pages, Build and deployment, Source: GitHub Actions.
+
+name: Website
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "site/**"
+      - "docs/assets/**"
+      - "docs/themes/**"
+      - "gradle.properties"
+      - ".github/workflows/pages.yml"
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build the site
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+
+      - name: Read the latest release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if ! gh api "repos/$GITHUB_REPOSITORY/releases/latest" > "$RUNNER_TEMP/release.json"; then
+            echo "No release yet; the site shows the version in gradle.properties."
+            echo '{}' > "$RUNNER_TEMP/release.json"
+          fi
+
+      - name: Build
+        run: python3 site/build.py --out _site --release "$RUNNER_TEMP/release.json"
+
+      - name: Check for dashes and emoji
+        # The site follows the app's writing rules.
+        shell: python3 {0}
+        run: |
+          import pathlib, re, sys
+          bad = re.compile("[\u2013\u2014\U0001F300-\U0001FAFF]")
+          found = [f"{p}:{n}" for p in pathlib.Path("_site").rglob("*") if p.suffix in {".html", ".js", ".css", ".json"}
+                   for n, line in enumerate(p.read_text(encoding="utf-8").splitlines(), 1) if bad.search(line)]
+          if found:
+              print("::error::The site contains an en or em dash, or an emoji: " + ", ".join(found))
+              sys.exit(1)
+
+      - name: Set up Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload the site
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: _site
+
+  deploy:
+    name: Publish
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
