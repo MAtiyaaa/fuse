@@ -368,6 +368,33 @@ internal fun AuditDriver.systemsScreens(exhaustive: Boolean) {
             runBlocking { withArt.forEach { libraryStore.media.reset(MediaOwner.OfPlatform(it.platform.id), null) } }
         }
     }
+    scenario("systems", "move by touch") {
+        useLibrary()
+        tab(Destination.SYSTEMS)
+        waitFor("System options")
+        val systems = libraryStore.library.platforms.value.filter { it.gameCount > 0 }
+        val from = textCentre(systems[0].platform.shortName)
+        val to = textCentre(systems[2].platform.shortName)
+        touch { down(from) }
+        advanceExactly(800)
+        shoot("held, lifted under the finger")
+        touch { moveTo(from + (to - from) * 0.5f) }
+        settle(150)
+        touch { moveTo(to) }
+        settle(500)
+        shoot("dragged over the third system, the others make room")
+        touch { up() }
+        settle(1_200)
+        shoot("dropped in its new place")
+        // A hold let go where it started opens the options, which can move it too.
+        touch { down(textCentre(systems[1].platform.shortName)) }
+        advanceExactly(800)
+        touch { up() }
+        waitFor("Move this system")
+        shoot("a hold let go opens the options")
+        tap(PadButton.B)
+    }
+
     if (!exhaustive) return
 
     scenario("systems", "options menu") {
