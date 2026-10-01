@@ -64,9 +64,12 @@ import kotlinx.coroutines.delay
 @Composable
 fun BoxScope.CaptureOverlay(capture: CaptureController) {
     val state = capture.state
+    // While a capture is being taken the flash and the last capture's card are not drawn at all:
+    // left to fade out they could still be on screen, faintly, in the next picture.
+    val capturing = state == CaptureController.State.Capturing
     Countdown(state as? CaptureController.State.Countdown, Modifier.align(Alignment.Center))
-    Flash(capture.shots)
-    SavedCard(capture.saved, Modifier.align(Alignment.BottomStart).padding(start = Space.gutter, bottom = Size.hintHeight + Space.m))
+    Flash(capture.shots, hidden = capturing)
+    SavedCard(capture.saved, hidden = capturing, Modifier.align(Alignment.BottomStart).padding(start = Space.gutter, bottom = Size.hintHeight + Space.m))
 }
 
 @Composable
@@ -131,7 +134,7 @@ private fun SecondRing(second: Int) {
 
 /** A brief white flash after each screenshot, like a shutter. Left out under Reduced motion. */
 @Composable
-private fun Flash(shots: Int) {
+private fun Flash(shots: Int, hidden: Boolean) {
     if (Fuse.motion.reduced) return
     val alpha = remember { Animatable(0f) }
     LaunchedEffect(shots) {
@@ -139,12 +142,15 @@ private fun Flash(shots: Int) {
         alpha.snapTo(0.32f)
         alpha.animateTo(0f, tween(340))
     }
-    if (alpha.value > 0f) Box(Modifier.fillMaxSize().graphicsLayer { this.alpha = alpha.value }.background(Color.White))
+    if (alpha.value > 0f && !hidden) Box(Modifier.fillMaxSize().graphicsLayer { this.alpha = alpha.value }.background(Color.White))
 }
 
-/** The capture just saved, with a small picture of it and where it went. */
+/**
+ * The capture just saved, with a small picture of it and where it went. [hidden] draws nothing at
+ * once, even mid-animation, while the next capture is taken; the card still slides in afterwards.
+ */
 @Composable
-private fun SavedCard(saved: CaptureResult?, modifier: Modifier) {
+private fun SavedCard(saved: CaptureResult?, hidden: Boolean, modifier: Modifier) {
     val c = Fuse.colors
     // Keeps the last card on screen while it slides away.
     val shown = remember { arrayOfNulls<CaptureResult>(1) }
@@ -156,6 +162,7 @@ private fun SavedCard(saved: CaptureResult?, modifier: Modifier) {
         exit = fadeOut(tween(160)) + slideOutVertically(tween(200)) { it / 3 },
     ) {
         val card = shown[0] ?: return@AnimatedVisibility
+        if (hidden) return@AnimatedVisibility
         Row(
             Modifier
                 .shadow(18.dp, RoundedCornerShape(Fuse.geometry.panel), clip = false)

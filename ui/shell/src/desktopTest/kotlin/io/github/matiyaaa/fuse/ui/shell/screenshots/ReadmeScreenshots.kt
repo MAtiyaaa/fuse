@@ -46,7 +46,8 @@ import org.jetbrains.skia.Image
 import org.junit.Assume.assumeTrue
 
 /**
- * Renders the README screenshots from the real interface over the real store: a library of
+ * Renders screenshots from the real interface over the real store (the README and website now use
+ * captures from a device; these renders are for checking screens at a glance): a library of
  * well-known games ([SampleLibrary]) is scanned from a temporary folder and given its details, Fuse
  * fills its art over the network the way it does on a device (libretro thumbnails for games, Art
  * Book Next for systems), the app is driven with controller presses, and each settled frame is
