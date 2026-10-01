@@ -4,7 +4,16 @@ import kotlinx.serialization.Serializable
 
 /** Which operating system an adapter runs on. */
 @Serializable
-enum class Host { ANDROID, LINUX }
+enum class Host {
+    ANDROID,
+    LINUX,
+    WINDOWS,
+    MACOS,
+    ;
+
+    /** Windows, macOS and Linux: emulators are programs Fuse starts, and there is no app list. */
+    val isDesktop: Boolean get() = this != ANDROID
+}
 
 /**
  * What an emulator is actually given. Adapters turn a [Game] into one of these, and then into a

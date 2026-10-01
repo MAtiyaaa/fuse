@@ -91,4 +91,25 @@ class GitHubReleasesTest {
         assertEquals("Fuse-universal.apk", GitHubReleases.pickAsset(release, ReleasePlatform.ANDROID)?.name)
         assertNull(GitHubReleases.pickAsset(release, ReleasePlatform.LINUX_X86_64))
     }
+
+    @Test
+    fun pickAssetForWindowsAndBothMacs() {
+        fun release(vararg names: String) = io.github.matiyaaa.fuse.model.ReleaseInfo(
+            tag = "v0.1.0", name = "v0.1.0", notes = "", publishedAt = null, htmlUrl = "",
+            assets = names.map { io.github.matiyaaa.fuse.model.ReleaseAsset(it, "u/$it", 1) },
+        )
+        val all = release(
+            "Fuse-0.1.0-android.apk", "Fuse-0.1.0-x86_64.AppImage", "Fuse-0.1.0-windows-x64.zip", "Fuse-0.1.0-windows-x64.msi",
+            "Fuse-0.1.0-macos-arm64.dmg", "Fuse-0.1.0-macos-x64.dmg",
+        )
+        assertEquals("Fuse-0.1.0-windows-x64.msi", GitHubReleases.pickAsset(all, ReleasePlatform.WINDOWS_X64)?.name)
+        assertEquals("Fuse-0.1.0-macos-arm64.dmg", GitHubReleases.pickAsset(all, ReleasePlatform.MACOS_ARM64)?.name)
+        assertEquals("Fuse-0.1.0-macos-x64.dmg", GitHubReleases.pickAsset(all, ReleasePlatform.MACOS_X64)?.name)
+        // The portable zip stands in when the installer is missing; an APK-only release has nothing for a PC or Mac.
+        assertEquals("Fuse-0.1.0-windows-x64.zip", GitHubReleases.pickAsset(release("Fuse-0.1.0-windows-x64.zip"), ReleasePlatform.WINDOWS_X64)?.name)
+        val apkOnly = release("Fuse-0.1.0-android.apk")
+        for (p in listOf(ReleasePlatform.WINDOWS_X64, ReleasePlatform.MACOS_ARM64, ReleasePlatform.MACOS_X64, ReleasePlatform.LINUX_X86_64)) {
+            assertNull(GitHubReleases.pickAsset(apkOnly, p))
+        }
+    }
 }

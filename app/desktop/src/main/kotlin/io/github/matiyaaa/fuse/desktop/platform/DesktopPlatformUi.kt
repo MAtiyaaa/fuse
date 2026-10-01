@@ -5,6 +5,7 @@ import io.github.matiyaaa.fuse.desktop.FuseDirs
 import io.github.matiyaaa.fuse.desktop.Log
 import io.github.matiyaaa.fuse.desktop.WindowMode
 import io.github.matiyaaa.fuse.desktop.services.UpdateHandoff
+import io.github.matiyaaa.fuse.desktop.system.DesktopOs
 import io.github.matiyaaa.fuse.desktop.system.Processes
 import io.github.matiyaaa.fuse.model.CapabilityProfile
 import io.github.matiyaaa.fuse.model.DisplayInfo
@@ -50,9 +51,11 @@ interface WindowActions : DialogHost {
 }
 
 /**
- * [PlatformUi] for Linux. Status, displays and performance numbers come from sysfs, procfs and AWT;
- * anything the system doesn't report is left out. Android-only features (Home role, launching on
- * another display, video previews) are reported as unavailable so their screens stay hidden.
+ * [PlatformUi] for Linux, Windows and macOS. Status, displays and performance numbers come from
+ * sysfs, procfs and AWT on Linux, and from the system's own tools elsewhere; anything the system
+ * doesn't report is left out. Android-only features (Home role, launching on another display, video
+ * previews) are reported as unavailable so their screens stay hidden, and Cartridge only exists on
+ * Linux.
  */
 class DesktopPlatformUi(
     private val dirs: FuseDirs,
@@ -60,7 +63,8 @@ class DesktopPlatformUi(
     private val window: WindowActions,
     private val args: List<String>,
 ) : PlatformUi, AutoCloseable {
-    override val host: Host = Host.LINUX
+    private val os = DesktopOs.current
+    override val host: Host = os.host
     override val appVersion: String = BuildInfo.VERSION
 
     private val quickControls = DesktopQuickControls(scope)
@@ -79,6 +83,7 @@ class DesktopPlatformUi(
         bluetoothSettings = quickControls.settingsAvailable,
         canExit = true,
         windowModes = true,
+        cartridge = os == DesktopOs.LINUX,
     )
 
     override val device: CapabilityProfile = measureDevice()

@@ -7,10 +7,11 @@ import androidx.compose.ui.awt.ComposeWindow
 import androidx.compose.ui.window.WindowPlacement
 import androidx.compose.ui.window.WindowState
 import io.github.matiyaaa.fuse.desktop.input.GamepadSink
-import io.github.matiyaaa.fuse.desktop.input.LinuxGamepads
+import io.github.matiyaaa.fuse.desktop.input.Gamepads
 import io.github.matiyaaa.fuse.desktop.platform.DesktopPlatformUi
 import io.github.matiyaaa.fuse.desktop.platform.WindowActions
 import io.github.matiyaaa.fuse.desktop.services.DesktopFuseServices
+import io.github.matiyaaa.fuse.desktop.system.DesktopOs
 import io.github.matiyaaa.fuse.link.PhoneLinkServer
 import io.github.matiyaaa.fuse.model.PadButton
 import io.github.matiyaaa.fuse.ui.designsystem.input.InputRouter
@@ -72,7 +73,9 @@ class DesktopSession(
         private set
 
     val platform = DesktopPlatformUi(dirs, scope, this, args)
-    private val gamepads = LinuxGamepads(GamepadBridge())
+
+    /** Controllers: the kernel's joystick devices on Linux, SDL on Windows and macOS. */
+    private val gamepads: Gamepads = Gamepads.forOs(DesktopOs.current, GamepadBridge())
     private val closed = AtomicBoolean(false)
 
     init {

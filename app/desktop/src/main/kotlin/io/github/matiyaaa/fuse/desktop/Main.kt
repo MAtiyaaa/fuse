@@ -31,6 +31,7 @@ import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import coil3.compose.setSingletonImageLoaderFactory
 import coil3.svg.SvgDecoder
+import io.github.matiyaaa.fuse.desktop.system.DesktopOs
 import io.github.matiyaaa.fuse.desktop.ui.FuseMarkPainter
 import io.github.matiyaaa.fuse.desktop.ui.Splash
 import io.github.matiyaaa.fuse.model.DeviceTier
@@ -47,6 +48,7 @@ import java.awt.event.WindowFocusListener
 import java.awt.image.BufferedImage
 
 fun main(args: Array<String>) {
+    if ("--self-test" in args) kotlin.system.exitProcess(SelfTest.run())
     setX11WmClass()
     val dirs = FuseDirs.fromEnvironment()
     dirs.ensure()
@@ -117,6 +119,7 @@ private fun ApplicationScope.FuseWindow(session: DesktopSession) {
                         val lowMemory = session.platform.device.tier == DeviceTier.LOW
                         setSingletonImageLoaderFactory { context ->
                             fuseImageLoader(context, s.services.cacheDir, s.services.http, lowMemory) {
+                                if (DesktopOs.isWindows) add(WindowsImagePaths)
                                 add(SvgDecoder.Factory())
                             }
                         }

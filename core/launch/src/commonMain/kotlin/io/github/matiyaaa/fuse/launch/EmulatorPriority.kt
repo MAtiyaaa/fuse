@@ -1,5 +1,7 @@
 package io.github.matiyaaa.fuse.launch
 
+import io.github.matiyaaa.fuse.launch.desktop.MacCatalog
+import io.github.matiyaaa.fuse.launch.desktop.WindowsCatalog
 import io.github.matiyaaa.fuse.model.EmulatorId
 import io.github.matiyaaa.fuse.model.Host
 import io.github.matiyaaa.fuse.model.PlatformId
@@ -119,6 +121,44 @@ object EmulatorPriority {
         ) to ids(LRA, LRAS),
     )
 
-    fun forPlatform(host: Host, platform: PlatformId): List<EmulatorId> =
-        (if (host == Host.ANDROID) android else linux)[platform].orEmpty()
+    /**
+     * Linux's order with each host's ids, keeping the emulators that host has; [own] replaces the
+     * lists for platforms the host runs differently (PC games, Steam).
+     */
+    private fun port(prefix: String, has: Set<String>, own: Map<PlatformId, List<EmulatorId>>): Map<PlatformId, List<EmulatorId>> =
+        linux.mapValues { (_, list) ->
+            list.map { EmulatorId(prefix + "." + it.value.removePrefix("linux.")) }.filter { it.value in has }
+        }.filterValues { it.isNotEmpty() } + own
+
+    val windows: Map<PlatformId, List<EmulatorId>> by lazy {
+        port(
+            "windows",
+            WindowsCatalog.defs.map { it.def.id }.toSet(),
+            expand(
+                listOf("win") to ids("windows.shortcut", "windows.steam"),
+                listOf("steam") to ids("windows.steam", "windows.shortcut"),
+            ),
+        )
+    }
+
+    val macos: Map<PlatformId, List<EmulatorId>> by lazy {
+        port(
+            "macos",
+            MacCatalog.defs.map { it.def.id }.toSet(),
+            expand(
+                listOf("steam") to ids("macos.steam-url", "macos.open"),
+                listOf("win") to ids("macos.open", "macos.steam-url"),
+            ),
+        )
+    }
+
+    /** The order for [host]: Android's own, Linux's, or Linux's carried over to Windows and macOS. */
+    fun map(host: Host): Map<PlatformId, List<EmulatorId>> = when (host) {
+        Host.ANDROID -> android
+        Host.LINUX -> linux
+        Host.WINDOWS -> windows
+        Host.MACOS -> macos
+    }
+
+    fun forPlatform(host: Host, platform: PlatformId): List<EmulatorId> = map(host)[platform].orEmpty()
 }

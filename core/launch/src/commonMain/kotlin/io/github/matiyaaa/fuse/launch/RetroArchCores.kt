@@ -91,6 +91,7 @@ object RetroArchCores {
         )
         ).mapKeys { PlatformId(it.key) }
 
+    /** Windows and macOS builds name their cores as Linux does (ES-DE's windows and macos systems). */
     fun coresFor(host: Host, platform: PlatformId): List<String> =
         (if (host == Host.ANDROID) android else linux)[platform].orEmpty()
 
@@ -101,6 +102,14 @@ object RetroArchCores {
 
     /** File name of [core] on Linux. */
     fun linuxCoreFile(core: String): String = "${core}_libretro.so"
+
+    /** File name of [core] in a desktop RetroArch's cores folder: `.so`, `.dll` on Windows, `.dylib` on macOS. */
+    fun coreFile(host: Host, core: String): String = when (host) {
+        Host.ANDROID -> androidCoreFile(core)
+        Host.LINUX -> linuxCoreFile(core)
+        Host.WINDOWS -> "${core}_libretro.dll"
+        Host.MACOS -> "${core}_libretro.dylib"
+    }
 }
 
 private val GB = listOf("gambatte", "sameboy", "mgba", "gearboy", "tgbdual", "mesen2", "bsnes", "vbam", "skyemu")

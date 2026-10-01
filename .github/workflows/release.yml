@@ -1,9 +1,13 @@
-# Publishes a GitHub release with the Android APK, the Linux AppImage and SHA256SUMS.txt.
+# Publishes a GitHub release: the Android APK first, as soon as it is built, then the Linux AppImage,
+# the Windows installer and portable zip, and the macOS disk images (Apple silicon and Intel) as each
+# finishes, and finally SHA256SUMS.txt for everything there.
 #
 # Runs when gradle.properties or docs/releases/ changes on main, when a v* tag is pushed, or by hand. The version and
 # release name come from fuse.version and fuse.releaseName in gradle.properties, and the release notes
 # from docs/releases/<version>.md. Nothing is published when release v<version> already exists,
-# unless the run was started by pushing that tag.
+# unless the run was started by pushing that tag. Started by hand with "desktop_only", it builds the
+# Linux, Windows and macOS packages again and adds them to the existing release (a failed or late
+# desktop build), leaving the APK alone.
 #
 # A release created here with GITHUB_TOKEN also creates its tag; GitHub does not start new workflow
 # runs for events caused by GITHUB_TOKEN, so that tag does not trigger this workflow again.
@@ -23,6 +27,11 @@ on:
     tags:
       - "v*"
   workflow_dispatch:
+    inputs:
+      desktop_only:
+        description: "Add the Linux, Windows and macOS builds to the existing release of this version"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -37,6 +46,7 @@ jobs:
       release_name: ${{ steps.meta.outputs.release_name }}
       tag: ${{ steps.meta.outputs.tag }}
       publish: ${{ steps.meta.outputs.publish }}
+      desktop: ${{ steps.meta.outputs.desktop }}
     steps:
       - name: Check out
         uses: actions/checkout@v7
@@ -45,6 +55,7 @@ jobs:
         id: meta
         env:
           GH_TOKEN: ${{ github.token }}
+          DESKTOP_ONLY: ${{ inputs.desktop_only || false }}
         run: |
           set -euo pipefail
           version="$(sed -n 's/^fuse\.version=//p' gradle.properties | tr -d '[:space:]')"
@@ -80,13 +91,24 @@ jobs:
             exit 1
           fi
 
+          # Desktop builds go with a new release, or into an existing one when asked to.
+          desktop="$publish"
+          if [ "$DESKTOP_ONLY" = "true" ]; then
+            if [ "$publish" = "true" ]; then
+              echo "::error::desktop_only adds builds to an existing release, but $tag doesn't exist yet."
+              exit 1
+            fi
+            desktop=true
+          fi
+
           {
             echo "version=$version"
             echo "release_name=$release_name"
             echo "tag=$tag"
             echo "publish=$publish"
+            echo "desktop=$desktop"
           } >> "$GITHUB_OUTPUT"
-          echo "Fuse $version - $release_name ($tag), publish: $publish"
+          echo "Fuse $version - $release_name ($tag), publish: $publish, desktop builds: $desktop"
 
   android:
     name: Android APK
@@ -216,10 +238,58 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+  release:
+    name: Publish release (APK)
+    needs: [prepare, android]
+    if: needs.prepare.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    concurrency:
+      group: release-${{ needs.prepare.outputs.tag }}-publish
+      cancel-in-progress: false
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+
+      - name: Download the APK
+        uses: actions/download-artifact@v8
+        with:
+          name: fuse-android
+          path: dist
+
+      - name: Write SHA256SUMS.txt
+        # The APK's for now; the checksums job rewrites it once the desktop builds are attached.
+        run: |
+          set -euo pipefail
+          cd dist
+          if [ ! -f "Fuse-$VERSION-android.apk" ]; then
+            echo "::error::Fuse-$VERSION-android.apk is missing"
+            exit 1
+          fi
+          sha256sum "Fuse-$VERSION-android.apk" > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Create the GitHub release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ needs.prepare.outputs.tag }}
+          name: Fuse ${{ needs.prepare.outputs.version }} - ${{ needs.prepare.outputs.release_name }}
+          body_path: docs/releases/${{ needs.prepare.outputs.version }}.md
+          target_commitish: ${{ github.sha }}
+          draft: false
+          prerelease: false
+          make_latest: "true"
+          fail_on_unmatched_files: true
+          files: |
+            dist/Fuse-${{ needs.prepare.outputs.version }}-android.apk
+            dist/SHA256SUMS.txt
+
   linux:
     name: Linux AppImage
     needs: prepare
-    if: needs.prepare.outputs.publish == 'true'
+    if: needs.prepare.outputs.desktop == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     concurrency:
@@ -285,53 +355,182 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-  publish:
-    name: Publish release
-    needs: [prepare, android, linux]
-    if: needs.prepare.outputs.publish == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
+  windows:
+    name: Windows installer and zip
+    needs: prepare
+    if: needs.prepare.outputs.desktop == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 60
     concurrency:
-      group: release-${{ needs.prepare.outputs.tag }}-publish
+      group: release-${{ needs.prepare.outputs.tag }}-windows
       cancel-in-progress: false
-    env:
-      VERSION: ${{ needs.prepare.outputs.version }}
+    defaults:
+      run:
+        shell: bash
     steps:
       - name: Check out
         uses: actions/checkout@v7
 
-      - name: Download the builds
-        uses: actions/download-artifact@v8
+      - name: Set up JDK 17
+        uses: actions/setup-java@v6
         with:
-          pattern: fuse-*
-          path: dist
-          merge-multiple: true
+          distribution: temurin
+          java-version: "17"
 
-      - name: Write SHA256SUMS.txt
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+
+      - name: Install Android platform 37
+        run: sdkmanager --install "platforms;android-37.0"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Build the installer and the portable zip
+        # The Compose plugin downloads the WiX toolset it builds the .msi with.
+        run: bash scripts/build-windows.sh
+
+      - name: Upload the Windows builds
+        uses: actions/upload-artifact@v7
+        with:
+          name: fuse-windows
+          path: |
+            build/windows/Fuse-${{ needs.prepare.outputs.version }}-windows-x64.msi
+            build/windows/Fuse-${{ needs.prepare.outputs.version }}-windows-x64.zip
+          if-no-files-found: error
+          retention-days: 7
+
+  macos:
+    name: macOS ${{ matrix.arch }}
+    needs: prepare
+    if: needs.prepare.outputs.desktop == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            runner: macos-15
+          - arch: x64
+            runner: macos-15-intel
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    concurrency:
+      group: release-${{ needs.prepare.outputs.tag }}-macos-${{ matrix.arch }}
+      cancel-in-progress: false
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+
+      - name: Set up JDK 17
+        # The runner's own architecture, which jpackage bundles into Fuse.app.
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+
+      - name: Install Android platform 37
+        run: sdkmanager --install "platforms;android-37.0"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Build the disk image
         run: |
           set -euo pipefail
-          cd dist
-          for file in "Fuse-$VERSION-android.apk" "Fuse-$VERSION-x86_64.AppImage"; do
-            if [ ! -f "$file" ]; then
-              echo "::error::$file is missing"
-              exit 1
-            fi
-          done
-          sha256sum "Fuse-$VERSION-android.apk" "Fuse-$VERSION-x86_64.AppImage" > SHA256SUMS.txt
-          cat SHA256SUMS.txt
+          bash scripts/build-macos.sh
+          test -f "build/macos/Fuse-${{ needs.prepare.outputs.version }}-macos-${{ matrix.arch }}.dmg"
 
-      - name: Create the GitHub release
-        uses: softprops/action-gh-release@v3
+      - name: Upload the disk image
+        uses: actions/upload-artifact@v7
         with:
-          tag_name: ${{ needs.prepare.outputs.tag }}
-          name: Fuse ${{ needs.prepare.outputs.version }} - ${{ needs.prepare.outputs.release_name }}
-          body_path: docs/releases/${{ needs.prepare.outputs.version }}.md
-          target_commitish: ${{ github.sha }}
-          draft: false
-          prerelease: false
-          make_latest: "true"
-          fail_on_unmatched_files: true
-          files: |
-            dist/Fuse-${{ needs.prepare.outputs.version }}-android.apk
-            dist/Fuse-${{ needs.prepare.outputs.version }}-x86_64.AppImage
-            dist/SHA256SUMS.txt
+          name: fuse-macos-${{ matrix.arch }}
+          path: build/macos/Fuse-${{ needs.prepare.outputs.version }}-macos-${{ matrix.arch }}.dmg
+          if-no-files-found: error
+          retention-days: 7
+
+  # Each desktop build joins the release once it and the release are both there. With desktop_only
+  # there is no release job; the release already exists.
+  attach-linux:
+    name: Attach Linux
+    needs: [prepare, release, linux]
+    if: always() && needs.linux.result == 'success' && (needs.release.result == 'success' || needs.prepare.outputs.publish == 'false')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Download the AppImage
+        uses: actions/download-artifact@v8
+        with:
+          name: fuse-linux
+          path: dist
+      - name: Add it to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ needs.prepare.outputs.tag }}" dist/* --clobber --repo "$GITHUB_REPOSITORY"
+
+  attach-windows:
+    name: Attach Windows
+    needs: [prepare, release, windows]
+    if: always() && needs.windows.result == 'success' && (needs.release.result == 'success' || needs.prepare.outputs.publish == 'false')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Download the Windows builds
+        uses: actions/download-artifact@v8
+        with:
+          name: fuse-windows
+          path: dist
+      - name: Add them to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ needs.prepare.outputs.tag }}" dist/* --clobber --repo "$GITHUB_REPOSITORY"
+
+  attach-macos:
+    name: Attach macOS
+    needs: [prepare, release, macos]
+    # Whichever Mac builds finished: one failing doesn't hold back the other.
+    if: always() && needs.prepare.outputs.desktop == 'true' && (needs.release.result == 'success' || needs.prepare.outputs.publish == 'false')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Download the disk images
+        uses: actions/download-artifact@v8
+        with:
+          pattern: fuse-macos-*
+          path: dist
+          merge-multiple: true
+      - name: Add them to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          files=(dist/*.dmg)
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "::warning::No macOS build finished; nothing to attach."
+            exit 0
+          fi
+          gh release upload "${{ needs.prepare.outputs.tag }}" "${files[@]}" --clobber --repo "$GITHUB_REPOSITORY"
+
+  checksums:
+    name: Update SHA256SUMS.txt
+    needs: [prepare, release, attach-linux, attach-windows, attach-macos]
+    if: always() && needs.prepare.outputs.desktop == 'true' && (needs.release.result == 'success' || needs.prepare.outputs.publish == 'false')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+    steps:
+      - name: Checksum every build in the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          cd dist
+          gh release download "${{ needs.prepare.outputs.tag }}" --repo "$GITHUB_REPOSITORY" --pattern "Fuse-$VERSION-*"
+          sha256sum Fuse-"$VERSION"-* > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+          gh release upload "${{ needs.prepare.outputs.tag }}" SHA256SUMS.txt --clobber --repo "$GITHUB_REPOSITORY"

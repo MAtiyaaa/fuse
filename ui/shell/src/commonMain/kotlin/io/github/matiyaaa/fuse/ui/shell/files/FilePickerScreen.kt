@@ -45,8 +45,10 @@ import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.FilePurpose
 import io.github.matiyaaa.fuse.ui.shell.app.FocusZone
+import io.github.matiyaaa.fuse.ui.shell.app.LocateRequest
 import io.github.matiyaaa.fuse.ui.shell.app.addGameFile
 import io.github.matiyaaa.fuse.ui.shell.app.installApkGame
+import io.github.matiyaaa.fuse.ui.shell.app.locateEmulator
 import io.github.matiyaaa.fuse.ui.shell.app.rememberRouteState
 import io.github.matiyaaa.fuse.ui.shell.home.bytesText
 import io.github.matiyaaa.fuse.ui.shell.store.BrowseEntry
@@ -61,10 +63,11 @@ private class PickerPlace {
 /**
  * Fuse's own file picker, made for a controller: storage places, then folders and files, folders
  * first. B goes up a folder. Picking an APK installs it as a game; picking a game file asks for its
- * system, then adds it to the library.
+ * system, then adds it to the library; picking a program ([locate]) tells Fuse where that emulator
+ * is (a macOS app is picked like a file).
  */
 @Composable
-fun FilePickerScreen(app: AppState, purpose: FilePurpose) {
+fun FilePickerScreen(app: AppState, purpose: FilePurpose, locate: LocateRequest? = null) {
     val place = rememberRouteState(app.navigator, "pickfile.$purpose") { PickerPlace() }
     val sel = place.selection
     var listing by androidx.compose.runtime.remember { mutableStateOf<BrowseListing?>(null) }
@@ -91,8 +94,10 @@ fun FilePickerScreen(app: AppState, purpose: FilePurpose) {
     val l = listing
     fun open(entry: BrowseEntry) {
         when {
+            purpose == FilePurpose.EMULATOR && isProgram(entry) -> locate?.let { app.locateEmulator(it, entry.path) }
             entry.isDirectory -> { place.path = entry.path; sel.index = 0 }
             purpose == FilePurpose.APK -> app.installApkGame(entry.path)
+            purpose == FilePurpose.EMULATOR -> Unit
             else -> app.addGameFile(entry.path)
         }
     }
@@ -100,13 +105,22 @@ fun FilePickerScreen(app: AppState, purpose: FilePurpose) {
         cameFrom = l?.path
         place.path = l?.parent
     }
-    val shown = l?.entries.orEmpty().filter { e -> e.isDirectory || purpose == FilePurpose.GAME || FsPath.extension(e.name) == "apk" }
+    val shown = l?.entries.orEmpty().filter { e ->
+        when (purpose) {
+            FilePurpose.GAME -> true
+            FilePurpose.APK -> e.isDirectory || FsPath.extension(e.name) == "apk"
+            FilePurpose.EMULATOR -> e.isDirectory || isProgram(e)
+        }
+    }
     val rows = buildList {
         if (l?.path != null) add(MenuAction("up", "Up a folder", FuseIcons.ArrowLeft, detail = l.parent?.let(FsPath::name)?.ifEmpty { "/" } ?: "Storage", onSelect = ::up))
         shown.forEach { e ->
             add(
                 when {
                     l?.path == null -> MenuAction("r.${e.path}", e.name, FuseIcons.HardDrive, detail = e.path, trailing = Trailing.Chevron, onSelect = { open(e) })
+                    purpose == FilePurpose.EMULATOR && isProgram(e) -> MenuAction(
+                        "f.${e.path}", e.name, FuseIcons.Joystick, detail = if (e.isDirectory) "App" else "Program", onSelect = { open(e) },
+                    )
                     e.isDirectory -> MenuAction("d.${e.path}", e.name, FuseIcons.Folder, trailing = Trailing.Chevron, onSelect = { open(e) })
                     else -> MenuAction(
                         "f.${e.path}", e.name, if (purpose == FilePurpose.APK) FuseIcons.Package else FuseIcons.File,
@@ -132,7 +146,14 @@ fun FilePickerScreen(app: AppState, purpose: FilePurpose) {
         val wide = maxWidth > 820.dp
         Column(Modifier.fillMaxSize().padding(horizontal = Space.gutter)) {
             Spacer(Modifier.height(Size.hudHeight + Space.m))
-            FText(if (purpose == FilePurpose.APK) "Choose an APK" else "Choose a game file", Fuse.type.title, maxLines = 1)
+            FText(
+                when (purpose) {
+                    FilePurpose.APK -> "Choose an APK"
+                    FilePurpose.EMULATOR -> "Where is ${locate?.name ?: "the emulator"}?"
+                    FilePurpose.GAME -> "Choose a game file"
+                },
+                Fuse.type.title, maxLines = 1,
+            )
             Spacer(Modifier.height(Space.xs))
             Trail(l)
             Spacer(Modifier.height(Space.l))
@@ -152,7 +173,7 @@ fun FilePickerScreen(app: AppState, purpose: FilePurpose) {
                         )
                     }
                 }
-                if (wide) Guide(purpose, selected, Modifier.weight(0.38f))
+                if (wide) Guide(purpose, selected, Modifier.weight(0.38f), locate)
             }
         }
     }
@@ -176,6 +197,12 @@ private fun Trail(l: BrowseListing?) {
     }
 }
 
+/** A program Fuse can run: a Windows .exe, a macOS app (a folder), or a file without an extension. */
+private fun isProgram(e: BrowseEntry): Boolean {
+    val ext = FsPath.extension(e.name)
+    return if (e.isDirectory) ext == "app" else ext == "exe" || ext.isEmpty()
+}
+
 /** For a game file: the systems that take it; for an APK, nothing extra. */
 private fun fileDetail(e: BrowseEntry, purpose: FilePurpose): String? {
     if (purpose == FilePurpose.APK) return "Android app"
@@ -195,6 +222,7 @@ private fun Empty(l: BrowseListing, purpose: FilePurpose) {
             l.error != null -> l.error
             l.path == null -> "Fuse can't see any storage. Allow All files access in Settings, Library."
             purpose == FilePurpose.APK -> "No APK files or folders here."
+            purpose == FilePurpose.EMULATOR -> "No programs or folders here."
             else -> "This folder is empty."
         },
         Fuse.type.body,
@@ -205,7 +233,7 @@ private fun Empty(l: BrowseListing, purpose: FilePurpose) {
 
 /** What happens with the file, and what the selected row is. */
 @Composable
-private fun Guide(purpose: FilePurpose, selected: MenuAction?, modifier: Modifier) {
+private fun Guide(purpose: FilePurpose, selected: MenuAction?, modifier: Modifier, locate: LocateRequest?) {
     val c = Fuse.colors
     Panel(modifier.padding(bottom = Size.hintHeight + Space.s)) {
         Column(Modifier.padding(Space.xl), verticalArrangement = Arrangement.spacedBy(Space.m)) {
@@ -213,14 +241,31 @@ private fun Guide(purpose: FilePurpose, selected: MenuAction?, modifier: Modifie
                 Modifier.size(56.dp).background(c.accent.copy(alpha = 0.14f), RoundedCornerShape(Fuse.geometry.control)),
                 contentAlignment = Alignment.Center,
             ) {
-                FuseIcon(if (purpose == FilePurpose.APK) FuseIcons.Package else FuseIcons.Gamepad, size = 28.dp, tint = c.accent)
+                FuseIcon(
+                    when (purpose) {
+                        FilePurpose.APK -> FuseIcons.Package
+                        FilePurpose.EMULATOR -> FuseIcons.Joystick
+                        FilePurpose.GAME -> FuseIcons.Gamepad
+                    },
+                    size = 28.dp, tint = c.accent,
+                )
             }
-            FText(if (purpose == FilePurpose.APK) "Install a game from its APK" else "Add a game from anywhere", Fuse.type.titleSmall)
             FText(
-                if (purpose == FilePurpose.APK) {
-                    "Android asks you to confirm the install. Then the game joins the Android system with box art, details and play time. The APK stays where it is."
-                } else {
-                    "Pick the file, then the system it's for. It joins your library with art and details, and stays where it is on your storage."
+                when (purpose) {
+                    FilePurpose.APK -> "Install a game from its APK"
+                    FilePurpose.EMULATOR -> "Show Fuse where ${locate?.name ?: "it"} is"
+                    FilePurpose.GAME -> "Add a game from anywhere"
+                },
+                Fuse.type.titleSmall,
+            )
+            FText(
+                when (purpose) {
+                    FilePurpose.APK ->
+                        "Android asks you to confirm the install. Then the game joins the Android system with box art, details and play time. The APK stays where it is."
+                    FilePurpose.EMULATOR ->
+                        "Pick its program (a .exe on Windows, the app on a Mac). Fuse remembers it and starts games with it from there."
+                    FilePurpose.GAME ->
+                        "Pick the file, then the system it's for. It joins your library with art and details, and stays where it is on your storage."
                 },
                 Fuse.type.body,
                 color = c.textMuted,

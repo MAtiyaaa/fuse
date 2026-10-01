@@ -108,6 +108,17 @@ internal class AuditDriver(
     val androidStore: FuseStore
         get() = android ?: runBlocking { AuditLibrary.androidStore(cache, controls, scope) }.also { android = it }
 
+    private var windows: FuseStore? = null
+
+    /** A Windows PC (see [AuditLibrary.windowsStore]), built on first use. */
+    val windowsStore: FuseStore
+        get() = windows ?: runBlocking { AuditLibrary.windowsStore(cache, controls, scope) }.also { windows = it }
+
+    /** The audit device as a Windows PC: Cartridge doesn't run there. */
+    val windowsPlatform: PlatformUi by lazy {
+        AuditPlatform(size, features = io.github.matiyaaa.fuse.ui.shell.screenshots.ScreenshotPlatform.features.copy(cartridge = false))
+    }
+
     /** A first run with two library folders to suggest, built on first use. */
     val firstRunStore: FuseStore
         get() = firstRun ?: runBlocking { AuditLibrary.firstRunStore(root, sd, cache, controls, scope) }.also { firstRun = it }

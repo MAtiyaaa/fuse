@@ -342,7 +342,7 @@ private fun Pages(app: AppState) {
                 Route.Licenses -> io.github.matiyaaa.fuse.ui.shell.settings.LicensesScreen(app)
                 Route.Onboarding -> OnboardingScreen(app)
                 is Route.FolderBrowser -> FolderBrowserScreen(app, route.game)
-                is Route.PickFile -> io.github.matiyaaa.fuse.ui.shell.files.FilePickerScreen(app, route.purpose)
+                is Route.PickFile -> io.github.matiyaaa.fuse.ui.shell.files.FilePickerScreen(app, route.purpose, route.locate)
             }
         }
     }
@@ -410,12 +410,12 @@ private fun ShellInput(app: AppState) {
     }
 }
 
-/** The tabs shown in the top line: Home first, then the user's order. Cartridge needs Cartridge. */
+/** The tabs shown in the top line: Home first, then the user's order. Cartridge needs Cartridge, Apps an app list. */
 @Composable
 private fun visibleTabs(app: AppState, prefs: io.github.matiyaaa.fuse.ui.shell.store.UiPrefs): List<Destination> {
     val cartridge by app.store.cartridge.status.collectAsState()
     return (listOf(Destination.HOME) + prefs.destinations.filter { it != Destination.HOME })
-        .filter { it != Destination.CARTRIDGE || cartridge.installed }
+        .filter { app.offers(it) && (it != Destination.CARTRIDGE || cartridge.installed) }
 }
 
 private fun AppState.runHudButton(button: HudButton) = when (button) {

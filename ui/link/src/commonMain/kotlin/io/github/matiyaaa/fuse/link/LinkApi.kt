@@ -361,7 +361,7 @@ internal class LinkApi(
     suspend fun image(token: String): Pair<ContentType, ByteArray>? {
         val model = images.resolve(token) ?: return null
         val bytes = when {
-            model.startsWith("/") -> readFile(model, MAX_IMAGE)
+            FsPath.isAbsolute(model) -> readFile(model, MAX_IMAGE)
             model.startsWith("file://") -> readFile(model.removePrefix("file://"), MAX_IMAGE)
             model.startsWith("content://") -> readUri?.invoke(model)?.takeIf { it.size <= MAX_IMAGE }
             else -> null
@@ -374,7 +374,7 @@ internal class LinkApi(
         val m = (model as? String)?.takeIf { it.isNotBlank() } ?: return null
         return when {
             m.startsWith("https://") -> m
-            m.startsWith("/") || m.startsWith("file://") || m.startsWith("content://") -> "/api/img/${images.tokenFor(m)}"
+            FsPath.isAbsolute(m) || m.startsWith("file://") || m.startsWith("content://") -> "/api/img/${images.tokenFor(m)}"
             else -> null
         }
     }

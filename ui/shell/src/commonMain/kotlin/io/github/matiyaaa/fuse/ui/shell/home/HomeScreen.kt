@@ -63,6 +63,7 @@ import io.github.matiyaaa.fuse.ui.shell.app.activateGame
 import io.github.matiyaaa.fuse.ui.shell.app.dismissFromContinue
 import io.github.matiyaaa.fuse.ui.shell.app.gameConfirmLabel
 import io.github.matiyaaa.fuse.ui.shell.app.gameMenu
+import io.github.matiyaaa.fuse.ui.shell.app.offers
 import io.github.matiyaaa.fuse.ui.shell.app.openApp
 import io.github.matiyaaa.fuse.ui.shell.app.play
 import io.github.matiyaaa.fuse.ui.shell.app.rememberRouteState
@@ -121,7 +122,7 @@ fun FlowHome(app: AppState) {
     val cartridge by store.cartridge.status.collectAsState()
     val achievementsOn by store.achievements.configured.collectAsState()
     val shelves = remember(prefs.home, feed, achievementsOn, cartridge.installed) {
-        buildShelves(prefs.home.widgets, if (prefs.collectionsEnabled) feed else feed.copy(collections = emptyList()), achievementsOn, cartridge.installed)
+        buildShelves(prefs.home.widgets.filter { app.offers(it.kind) }, if (prefs.collectionsEnabled) feed else feed.copy(collections = emptyList()), achievementsOn, cartridge.installed)
     }
     val sel = rememberRouteState(app.navigator, "home.flow") { ShelfSelection() }
     val keys = shelves.map { it.key }

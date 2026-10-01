@@ -17,7 +17,10 @@ import io.github.matiyaaa.fuse.model.PlatformId
 import io.github.matiyaaa.fuse.model.ReleaseAsset
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
+import io.ktor.client.engine.mock.respond
 import io.ktor.client.engine.mock.respondError
+import io.ktor.http.HttpHeaders
+import io.ktor.http.headersOf
 import io.ktor.http.HttpStatusCode
 import java.io.File
 import kotlin.test.Test
@@ -33,6 +36,8 @@ internal class FakeServices(
     override val apps: AppsProvider? = null,
     /** Emulators the fake detects; the Linux ones by default. */
     private val installedEmulators: List<InstalledEmulator>? = null,
+    /** GitHub's answer for Fuse's latest release, as JSON; null answers 404 like everything else. */
+    private val latestRelease: String? = null,
 ) : FuseServices {
     init {
         // Tests start fills themselves; the automatic one runs only where a test turns it on.
@@ -49,7 +54,11 @@ internal class FakeServices(
     val requestHosts: MutableList<String> = java.util.Collections.synchronizedList(mutableListOf())
     override val http = HttpClient(MockEngine { request ->
         requestHosts += request.url.host
-        respondError(HttpStatusCode.NotFound)
+        if (latestRelease != null && request.url.encodedPath.endsWith("/releases/latest")) {
+            respond(latestRelease, HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
+        } else {
+            respondError(HttpStatusCode.NotFound)
+        }
     })
     override val cacheDir: String = cache.absolutePath
 

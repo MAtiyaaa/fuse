@@ -20,7 +20,8 @@ data class RepoRef(val owner: String, val repo: String) {
 }
 
 /** Which build of a release the device needs. */
-enum class ReleasePlatform { ANDROID, LINUX_X86_64 }
+/** Which build of a release this device takes. */
+enum class ReleasePlatform { ANDROID, LINUX_X86_64, WINDOWS_X64, MACOS_ARM64, MACOS_X64 }
 
 @Serializable
 internal data class GhAsset(
@@ -83,7 +84,8 @@ class GitHubReleases(
 
         /**
          * The asset for [platform]: an `.apk` on Android (a universal or "android" build preferred),
-         * the `x86_64.AppImage` on Linux. Null when the release has none.
+         * the `x86_64.AppImage` on Linux, the `windows-x64.msi` (else its portable zip) on Windows,
+         * and the `macos-arm64.dmg` or `macos-x64.dmg` on a Mac. Null when the release has none.
          */
         fun pickAsset(release: ReleaseInfo, platform: ReleasePlatform): ReleaseAsset? = when (platform) {
             ReleasePlatform.ANDROID -> {
@@ -94,6 +96,11 @@ class GitHubReleases(
             }
             ReleasePlatform.LINUX_X86_64 ->
                 release.assets.firstOrNull { it.name.endsWith("x86_64.AppImage", ignoreCase = true) }
+            ReleasePlatform.WINDOWS_X64 ->
+                release.assets.firstOrNull { it.name.endsWith("windows-x64.msi", ignoreCase = true) }
+                    ?: release.assets.firstOrNull { it.name.endsWith("windows-x64.zip", ignoreCase = true) }
+            ReleasePlatform.MACOS_ARM64 -> release.assets.firstOrNull { it.name.endsWith("macos-arm64.dmg", ignoreCase = true) }
+            ReleasePlatform.MACOS_X64 -> release.assets.firstOrNull { it.name.endsWith("macos-x64.dmg", ignoreCase = true) }
         }
     }
 }

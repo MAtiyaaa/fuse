@@ -223,6 +223,43 @@ internal fun AuditDriver.settingsScreens(exhaustive: Boolean) {
         tap(PadButton.B)
     }
 
+    scenario("settings", "windows: tabs, emulators and locate") {
+        val folder = File(root.parentFile, "audit-emulators").apply { mkdirs() }
+        File(folder, "PPSSPP").mkdirs()
+        File(folder, "PPSSPP/PPSSPPWindows64.exe").writeBytes(ByteArray(1024))
+        File(folder, "PPSSPP/ppsspp.ini").writeText("")
+        File(folder, "Downloads").mkdirs()
+        controls.storageRoots = listOf(LocationHint(folder.absolutePath, "Local Disk (D:)"))
+        show(windowsStore, windowsPlatform)
+        shoot("home: no Apps or Cartridge tab")
+        openSettings()
+        settle()
+        shoot("sections: no Cartridge")
+        tap(PadButton.DPAD_DOWN, sectionIndex("emulators"))
+        tap(PadButton.DPAD_RIGHT)
+        waitFor("Locate an emulator")
+        settle()
+        shoot("emulators: locate and folders")
+        tapText("Locate an emulator")
+        waitFor("If it missed one")
+        settle()
+        shoot("every emulator, found or not")
+        tapText("PPSSPP")
+        waitFor("Where is PPSSPP?")
+        settle()
+        shoot("picker: storage")
+        tap(PadButton.A)
+        waitFor("PPSSPP")
+        tapText("PPSSPP")
+        waitFor("PPSSPPWindows64.exe")
+        settle()
+        shoot("picker: only programs")
+        tapText("PPSSPPWindows64.exe")
+        waitFor("PPSSPP is ready")
+        settle(800)
+        shoot("located")
+    }
+
     scenario("settings", "add an apk") {
         storageForPicker()
         show(androidStore)

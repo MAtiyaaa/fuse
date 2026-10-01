@@ -39,4 +39,19 @@ class FsPathTest {
         assertTrue(FsPath.isWithin("/storage/Android/data/x", "/storage/Android/data"))
         assertFalse(FsPath.isWithin("/storage/Android/database", "/storage/Android/data"))
     }
+
+    @Test
+    fun windowsDrivesAreRoots() {
+        assertEquals("C:/Games", FsPath.join("C:/", "Games"))
+        assertEquals("C:/", FsPath.parent("C:/Games"))
+        assertNull(FsPath.parent("C:/"))
+        assertEquals("C:/Games", FsPath.parent("C:/Games/x.iso"))
+        assertEquals("C:/x", FsPath.normalize("C:/Games/../x"))
+        assertEquals("C:/", FsPath.normalize("C:/.."))
+        assertEquals("D:/ROMs/psx/Disc 1/g.bin", FsPath.resolve("C:/ROMs/psx", "D:\\ROMs\\psx\\Disc 1\\g.bin"))
+        assertTrue(FsPath.isWithin("C:/Games/x", "C:/"))
+        assertTrue(FsPath.isWithin("C:/Games/x", "C:/Games"))
+        assertFalse(FsPath.isWithin("D:/Games", "C:/"))
+        assertTrue(FsPath.isAbsolute("C:/x") && FsPath.isAbsolute("/x") && !FsPath.isAbsolute("x/y") && !FsPath.isAbsolute("C:x"))
+    }
 }

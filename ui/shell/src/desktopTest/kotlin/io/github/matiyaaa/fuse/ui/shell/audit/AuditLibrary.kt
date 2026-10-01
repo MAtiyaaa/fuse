@@ -125,6 +125,14 @@ internal object AuditLibrary {
         return store
     }
 
+    /** A Windows PC: no Apps, no Cartridge, emulators found in folders and one to locate. */
+    suspend fun windowsStore(cache: File, controls: AuditControls, scope: CoroutineScope): FuseStore {
+        val store = createFuseStore(AuditServices.create(cache, controls, io.github.matiyaaa.fuse.model.Host.WINDOWS), scope)
+        store.updatePrefs { it.copy(onboardingDone = true) }
+        withTimeout(30_000) { store.emulators.installed.first { it.isNotEmpty() } }
+        return store
+    }
+
     /** A first run: nothing set up, two library folders to suggest. */
     suspend fun firstRunStore(root: File, sd: File, cache: File, controls: AuditControls, scope: CoroutineScope): FuseStore {
         writeTo(root)

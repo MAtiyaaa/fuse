@@ -1,10 +1,12 @@
 package io.github.matiyaaa.fuse.desktop.services
 
 import io.github.matiyaaa.fuse.desktop.Log
+import io.github.matiyaaa.fuse.desktop.system.DesktopOs
 import io.github.matiyaaa.fuse.desktop.system.Processes
 import io.github.matiyaaa.fuse.launch.ResolvedLaunch
 import io.github.matiyaaa.fuse.launch.linux.DesktopExec
 import io.github.matiyaaa.fuse.launch.pc.ShortcutParser
+import io.github.matiyaaa.fuse.library.FsPath
 import io.github.matiyaaa.fuse.model.LaunchPlan
 import io.github.matiyaaa.fuse.ui.shell.store.GameLauncher
 import io.github.matiyaaa.fuse.ui.shell.store.RunResult
@@ -43,13 +45,16 @@ internal class DesktopLauncher(
         appId.isBlank() || appId == "builtin" || baseName(appId) == "gio" ->
             RunResult.Failed("Desktop shortcuts have no app of their own to open.")
         appId.endsWith(".desktop") -> {
-            val path = if (appId.startsWith("/")) appId.takeIf { File(it).isFile } else desktopFiles.pathFor(appId)
+            val path = if (FsPath.isAbsolute(appId)) appId.takeIf { File(it).isFile } else desktopFiles.pathFor(appId)
             if (path == null) RunResult.NotInstalled else launchDesktopFile(path)
         }
-        appId.startsWith("/") -> when {
+        // A macOS emulator is the program inside its app; opening the app itself shows it properly.
+        DesktopOs.isMac && macApp(appId) != null -> start(listOf("/usr/bin/open", macApp(appId)!!), null, emptyMap(), baseName(appId))
+        FsPath.isAbsolute(appId) -> when {
             !File(appId).exists() -> RunResult.NotInstalled
             !Processes.isExecutable(appId) -> RunResult.Failed("${baseName(appId)} is not marked as executable.")
-            else -> start(listOf(appId), null, emptyMap(), baseName(appId))
+            // The emulator's own folder, where portable Windows emulators keep their settings.
+            else -> start(listOf(appId), FsPath.parent(appId), emptyMap(), baseName(appId))
         }
         isFlatpakId(appId) -> {
             val flatpak = Processes.which("flatpak")
@@ -77,13 +82,15 @@ internal class DesktopLauncher(
                     .apply { workingDir?.let { d -> File(d).takeIf { it.isDirectory }?.let { directory(it) } } }
                     .apply { environment().putAll(env) }
                     .redirectOutput(ProcessBuilder.Redirect.DISCARD)
-                    .redirectInput(ProcessBuilder.Redirect.from(File("/dev/null")))
+                    .redirectInput(ProcessBuilder.Redirect.from(DesktopOs.nullDevice))
                     .start()
             } catch (e: IOException) {
                 val msg = e.message.orEmpty()
                 return@withContext when {
-                    "error=2," in msg || "No such file" in msg -> RunResult.NotInstalled
+                    "error=2," in msg || "error=3," in msg || "No such file" in msg -> RunResult.NotInstalled
                     "error=13," in msg -> RunResult.Failed("$name is not marked as executable.")
+                    "error=5," in msg -> RunResult.Failed("Windows did not allow $name to start.")
+                    "error=740," in msg -> RunResult.Failed("$name asks to run as administrator. Fuse starts programs as you.")
                     else -> RunResult.Failed("$name could not start: ${msg.substringAfterLast(": ").ifEmpty { "unknown error" }}")
                 }
             }
@@ -140,17 +147,26 @@ internal class DesktopLauncher(
 
     companion object {
         private const val QUICK_FAIL_MS = 600L
-        private val HANDOFF = setOf("gio", "xdg-open", "steam", "kde-open", "kde-open5", "gnome-open", "exo-open")
+        private val HANDOFF = setOf("gio", "xdg-open", "steam", "kde-open", "kde-open5", "gnome-open", "exo-open", "explorer")
 
         fun baseName(path: String): String = path.trimEnd('/').substringAfterLast('/')
+
+        /** The `X.app` around a program at `X.app/Contents/MacOS/x`, or null. */
+        fun macApp(path: String): String? {
+            val marker = ".app/Contents/MacOS/"
+            val at = path.indexOf(marker)
+            return if (at < 0) null else path.substring(0, at + 4)
+        }
 
         /** Flatpak application ids look like reverse DNS: at least two dots, no slash. */
         fun isFlatpakId(id: String): Boolean =
             id.count { it == '.' } >= 2 && '/' !in id && ' ' !in id && !id.endsWith(".desktop")
 
         fun isHandoff(argv: List<String>): Boolean {
-            val first = baseName(argv.firstOrNull() ?: return false)
+            val first = baseName(argv.firstOrNull() ?: return false).lowercase().removeSuffix(".exe")
             if (first in HANDOFF) return true
+            // macOS `open` returns at once unless told to wait (-W).
+            if (first == "open") return "-W" !in argv
             if (first == "flatpak") return argv.any { it == "com.valvesoftware.Steam" }
             return false
         }

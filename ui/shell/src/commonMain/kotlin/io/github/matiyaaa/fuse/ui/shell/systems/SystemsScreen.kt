@@ -81,8 +81,10 @@ import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec
 import io.github.matiyaaa.fuse.ui.shell.app.ContextMenuSpec
 import io.github.matiyaaa.fuse.ui.shell.app.FocusZone
+import io.github.matiyaaa.fuse.ui.shell.app.LocateRequest
 import io.github.matiyaaa.fuse.ui.shell.app.Route
 import io.github.matiyaaa.fuse.ui.shell.app.rememberRouteState
+import io.github.matiyaaa.fuse.ui.shell.app.startLocate
 import io.github.matiyaaa.fuse.ui.shell.components.SystemCardArt
 import io.github.matiyaaa.fuse.ui.shell.store.PlatformCard
 import kotlin.math.roundToInt
@@ -361,13 +363,19 @@ fun AppState.platformEmulatorPicker(card: PlatformCard) {
                 choice = null
             }),
         ) + options.map { o ->
+            // Where Fuse can be shown an emulator, one it didn't find can be located instead.
+            val locate = !o.installed && store.emulators.canLocate
             MenuAction(
                 "e${o.id}", o.name, FuseIcons.Chip,
-                detail = o.note,
-                unavailableReason = if (o.installed) null else "Not installed",
+                detail = if (locate) "Not found. Show Fuse where it is" else o.note,
+                unavailableReason = if (o.installed || locate) null else "Not installed",
                 onSelect = {
-                    scope.launch { store.emulators.setPlatformEmulator(card.platform.id, o.id) }
-                    choice = null
+                    if (locate) {
+                        startLocate(LocateRequest(o.id, o.name, platform = card.platform.id))
+                    } else {
+                        scope.launch { store.emulators.setPlatformEmulator(card.platform.id, o.id) }
+                        choice = null
+                    }
                 },
             )
         },

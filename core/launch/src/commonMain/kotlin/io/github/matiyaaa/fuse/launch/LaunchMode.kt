@@ -72,7 +72,17 @@ object Paths {
         return if (dot <= 0) name else name.substring(0, dot)
     }
 
-    fun parent(path: String): String = path.trimEnd('/').substringBeforeLast('/', "")
+    /** The folder holding [path]. A Windows drive root keeps its slash ("C:/x.iso" gives "C:/"). */
+    fun parent(path: String): String {
+        val parent = path.trimEnd('/').substringBeforeLast('/', "")
+        return if (isDriveLetter(parent)) "$parent/" else parent
+    }
+
+    /** True for "/usr/bin/x" and, from Windows, "C:/Emulators/x.exe" (paths use forward slashes). */
+    fun isAbsolute(path: String): Boolean =
+        path.startsWith("/") || (path.length >= 3 && isDriveLetter(path.substring(0, 2)) && (path[2] == '/' || path[2] == '\\'))
+
+    private fun isDriveLetter(s: String): Boolean = s.length == 2 && s[1] == ':' && s[0].let { it in 'A'..'Z' || it in 'a'..'z' }
 
     /** True when [child] is strictly inside [dir]. */
     fun isInside(child: String, dir: String): Boolean {

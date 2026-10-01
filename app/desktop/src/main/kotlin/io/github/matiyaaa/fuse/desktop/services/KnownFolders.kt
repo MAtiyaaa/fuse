@@ -1,23 +1,56 @@
 package io.github.matiyaaa.fuse.desktop.services
 
+import io.github.matiyaaa.fuse.desktop.system.DesktopOs
+import io.github.matiyaaa.fuse.desktop.system.fusePath
 import io.github.matiyaaa.fuse.launch.linux.LinuxInstallKind
+import io.github.matiyaaa.fuse.library.FsPath
 import io.github.matiyaaa.fuse.model.InstalledEmulator
 import java.io.File
 
 /**
- * Where Linux emulation setups keep games and firmware. Only folders that exist are returned, and
- * only configuration files are read (never written).
+ * Where emulation setups keep games and firmware: ES-DE, EmuDeck and RetroDECK on Linux; ES-DE,
+ * EmuDeck, RetroBat and LaunchBox on Windows; ES-DE on macOS. Only folders that exist are returned
+ * (with forward slashes), and only configuration files are read (never written).
  */
-internal class KnownFolders(private val home: String) {
+internal class KnownFolders(private val home: String, private val os: DesktopOs = DesktopOs.current) {
 
     /** A folder with the setup it belongs to. */
     data class Found(val path: String, val label: String)
 
-    private fun dir(path: String): String? = File(path).takeIf { it.isDirectory }?.absolutePath
+    private fun dir(path: String): String? = File(path).takeIf { it.isDirectory }?.absoluteFile?.fusePath
+
+    /** Windows drive roots ("C:/", "D:/") that are there right now. */
+    private fun drives(): List<String> = File.listRoots().orEmpty().filter { it.isDirectory }.map { it.fusePath.trimEnd('/') + "/" }
+
+    /** A drive's name: its volume label, else "Drive D:". */
+    private fun driveLabel(root: String): String {
+        val letter = root.trimEnd('/')
+        val label = try {
+            java.nio.file.Files.getFileStore(java.nio.file.Paths.get(root)).name()
+        } catch (e: Exception) {
+            null
+        }
+        return if (label.isNullOrBlank()) "Drive $letter" else "$label ($letter)"
+    }
 
     /** Where Fuse's file picker starts: the home folder, then mounted drives and SD cards, then the whole computer. */
     fun storageRoots(): List<Found> {
         val out = ArrayList<Found>()
+        when (os) {
+            DesktopOs.WINDOWS -> {
+                dir(home)?.let { out += Found(it, "Home") }
+                drives().forEach { out += Found(it, driveLabel(it)) }
+                return out
+            }
+            DesktopOs.MACOS -> {
+                dir(home)?.let { out += Found(it, "Home") }
+                File("/Volumes").listFiles()?.filter { it.isDirectory && !it.isHidden && !java.nio.file.Files.isSymbolicLink(it.toPath()) }
+                    ?.sortedBy { it.name.lowercase() }?.forEach { out += Found(it.fusePath, it.name) }
+                out += Found("/", "This Mac")
+                return out
+            }
+            DesktopOs.LINUX -> Unit
+        }
         dir(home)?.let { out += Found(it, "Home") }
         val user = File(home).name
         for (base in listOf("/run/media/$user", "/media/$user", "/media", "/mnt")) {
@@ -35,6 +68,31 @@ internal class KnownFolders(private val home: String) {
         fun add(path: String?, label: String) {
             val d = path?.let(::dir) ?: return
             if (out.none { it.path == d }) out += Found(d, label)
+        }
+        when (os) {
+            DesktopOs.WINDOWS -> {
+                // ES-DE's default is %USERPROFILE%\ROMs; EmuDeck and RetroBat keep theirs at a drive's root.
+                add("$home/ROMs", "ROMs (ES-DE)")
+                add("$home/Emulation/roms", "EmuDeck")
+                for (d in drives()) {
+                    val name = d.trimEnd('/')
+                    add("${d}Emulation/roms", "EmuDeck on $name")
+                    add("${d}RetroBat/roms", "RetroBat on $name")
+                    add("${d}ROMs", "ROMs on $name")
+                    add("${d}LaunchBox/Games", "LaunchBox on $name")
+                }
+                return out
+            }
+            DesktopOs.MACOS -> {
+                add("$home/ROMs", "ROMs (ES-DE)")
+                add("$home/Emulation/roms", "Emulation")
+                File("/Volumes").listFiles()?.filter { it.isDirectory }?.forEach { v ->
+                    add("${v.fusePath}/ROMs", "ROMs on ${v.name}")
+                    add("${v.fusePath}/Emulation/roms", "Emulation on ${v.name}")
+                }
+                return out
+            }
+            DesktopOs.LINUX -> Unit
         }
         // ES-DE's default on Linux is ~/ROMs; the lower-case variants are common hand-made layouts.
         add("$home/ROMs", "ROMs (ES-DE)")
@@ -58,6 +116,17 @@ internal class KnownFolders(private val home: String) {
         fun add(path: String?) {
             path?.let(::dir)?.let(out::add)
         }
+        if (os != DesktopOs.LINUX) {
+            add("$home/BIOS")
+            add("$home/Emulation/bios")
+            if (os == DesktopOs.WINDOWS) {
+                for (d in drives()) {
+                    add("${d}Emulation/bios")
+                    add("${d}RetroBat/bios")
+                }
+            }
+            return out.toList()
+        }
         emuDeckSetting("biosPath")?.let(::add)
         add("$home/Emulation/bios")
         retroDeckSetting(listOf("bios_folder", "bios_path"))?.let(::add)
@@ -75,6 +144,17 @@ internal class KnownFolders(private val home: String) {
      * default `system` folder next to it. [installed] adds the portable folder of an AppImage install.
      */
     fun retroArchSystemDirs(installed: List<InstalledEmulator> = emptyList()): List<String> {
+        when (os) {
+            DesktopOs.WINDOWS -> {
+                // retroarch.cfg sits next to retroarch.exe; ":\system" there means its own system folder.
+                val configDirs = LinkedHashSet<String>()
+                installed.filter { it.id.value == "windows.retroarch" }.forEach { configDirs += File(it.appId).parentFile.fusePath }
+                System.getenv("APPDATA")?.let { configDirs += "${File(it).fusePath}/RetroArch" }
+                return systemDirs(configDirs)
+            }
+            DesktopOs.MACOS -> return systemDirs(listOf("$home/Library/Application Support/RetroArch"), cfgFolder = "config")
+            DesktopOs.LINUX -> Unit
+        }
         val configDirs = LinkedHashSet<String>()
         configDirs += "$home/.config/retroarch"
         configDirs += "$home/.var/app/org.libretro.RetroArch/config/retroarch"
@@ -87,21 +167,29 @@ internal class KnownFolders(private val home: String) {
                 else -> Unit
             }
         }
+        return systemDirs(configDirs)
+    }
+
+    /** Each RetroArch's `system_directory` from its retroarch.cfg (in [cfgFolder] when set), else its `system` folder. */
+    private fun systemDirs(configDirs: Collection<String>, cfgFolder: String? = null): List<String> {
         val out = LinkedHashSet<String>()
         for (config in configDirs) {
-            val cfg = File("$config/retroarch.cfg")
+            val cfg = File(cfgFolder?.let { "$config/$it/retroarch.cfg" } ?: "$config/retroarch.cfg")
             val configured = if (cfg.isFile) cfgValue(cfg, "system_directory")?.let { expand(it, config) } else null
             (configured?.let(::dir) ?: dir("$config/system"))?.let(out::add)
         }
         return out.toList()
     }
 
-    private fun expand(value: String, configDir: String): String? = when {
-        value.isBlank() || value == "default" -> null
-        value.startsWith("~/") -> home + value.substring(1)
-        value.startsWith(":/") -> configDir + value.substring(1)
-        value.startsWith("/") -> value
-        else -> null
+    private fun expand(value: String, configDir: String): String? {
+        val v = value.replace('\\', '/')
+        return when {
+            v.isBlank() || v == "default" -> null
+            v.startsWith("~/") -> home + v.substring(1)
+            v.startsWith(":/") -> configDir + v.substring(1)
+            FsPath.isAbsolute(v) -> v
+            else -> null
+        }
     }
 
     /** `key = "value"` from a RetroArch config file. */

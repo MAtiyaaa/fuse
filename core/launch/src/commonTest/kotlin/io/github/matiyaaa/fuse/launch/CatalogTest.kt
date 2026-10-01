@@ -1,6 +1,8 @@
 package io.github.matiyaaa.fuse.launch
 
 import io.github.matiyaaa.fuse.launch.android.AndroidEmulatorCatalog
+import io.github.matiyaaa.fuse.launch.desktop.MacCatalog
+import io.github.matiyaaa.fuse.launch.desktop.WindowsCatalog
 import io.github.matiyaaa.fuse.launch.linux.LinuxCatalog
 import io.github.matiyaaa.fuse.launch.pc.ShortcutParser
 import io.github.matiyaaa.fuse.model.Host
@@ -21,14 +23,15 @@ class CatalogTest {
         assertEquals(ids.distinct(), ids)
         assertEquals(AndroidEmulatorCatalog.defs.map { it.id }.distinct().size, AndroidEmulatorCatalog.defs.size)
         assertEquals(LinuxCatalog.defs.map { it.id }.distinct().size, LinuxCatalog.defs.size)
+        assertEquals(WindowsCatalog.defs.map { it.def.id }.distinct().size, WindowsCatalog.defs.size)
+        assertEquals(MacCatalog.defs.map { it.def.id }.distinct().size, MacCatalog.defs.size)
         assertTrue(runCatching { AdapterRegistry(registry.adapters + registry.adapters.first()) }.isFailure)
     }
 
     @Test
     fun priorityListsPointAtRealAdaptersOfTheRightHost() {
         for (host in Host.entries) {
-            val map = if (host == Host.ANDROID) EmulatorPriority.android else EmulatorPriority.linux
-            for ((platform, ids) in map) {
+            for ((platform, ids) in EmulatorPriority.map(host)) {
                 assertTrue(Platforms.isKnown(platform), "unknown platform $platform")
                 assertEquals(ids.distinct(), ids, "duplicates for $platform")
                 for (id in ids) {

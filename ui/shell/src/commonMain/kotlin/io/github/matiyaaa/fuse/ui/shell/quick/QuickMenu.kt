@@ -73,6 +73,7 @@ import io.github.matiyaaa.fuse.ui.shell.app.ConfirmSpec
 import io.github.matiyaaa.fuse.ui.shell.app.Route
 import io.github.matiyaaa.fuse.ui.shell.app.applyUpdate
 import io.github.matiyaaa.fuse.ui.shell.app.formatDate
+import io.github.matiyaaa.fuse.ui.shell.app.offers
 import io.github.matiyaaa.fuse.ui.shell.app.rememberClockText
 import io.github.matiyaaa.fuse.ui.shell.home.switchHomeStyle
 import io.github.matiyaaa.fuse.ui.shell.store.UpdateState
@@ -149,7 +150,7 @@ fun QuickMenu(app: AppState) {
                 app.toasts.show("Looking for new games")
             }
         })
-        if (prefs.cartridgeEnabled) add(QuickTile("Cartridge", FuseIcons.CloudDownload) { close(); app.selectTab(Destination.CARTRIDGE) })
+        if (prefs.cartridgeEnabled && app.offers(Destination.CARTRIDGE)) add(QuickTile("Cartridge", FuseIcons.CloudDownload) { close(); app.selectTab(Destination.CARTRIDGE) })
         // Search has its own button in the top line; Home's style is one press here.
         add(QuickTile("Home", if (prefs.home.mode == HomeMode.CHANNELS) FuseIcons.Grid else FuseIcons.Rows, detail = if (prefs.home.mode == HomeMode.CHANNELS) "Channels" else "Flow") {
             app.switchHomeStyle()
@@ -163,7 +164,12 @@ fun QuickMenu(app: AppState) {
         if (features.brightness) brightness?.let { add(QuickRow.Slider("Brightness", FuseIcons.Sun, it) { v -> platform.quick.setBrightness(v) }) }
         if (features.volume) volume?.let { add(QuickRow.Slider("Volume", FuseIcons.Volume, it) { v -> platform.quick.setVolume(v) }) }
         val release = updateAvailable
-        if (release != null) {
+        if (release != null && !app.store.updates.inPlace) {
+            add(QuickRow.Item(MenuAction(
+                "update", "Get ${release.name}", FuseIcons.External, detail = "Opens its release page",
+                onSelect = { close(); app.go(Route.Settings("updates")) },
+            )))
+        } else if (release != null) {
             val ready = updateState is UpdateState.Ready
             add(QuickRow.Item(MenuAction(
                 "update", if (ready) "Restart and update" else "Update to ${release.name}", if (ready) FuseIcons.Refresh else FuseIcons.Download,

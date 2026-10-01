@@ -1,5 +1,6 @@
 package io.github.matiyaaa.fuse.desktop.platform
 
+import io.github.matiyaaa.fuse.desktop.system.DesktopOs
 import io.github.matiyaaa.fuse.desktop.system.Processes
 import io.github.matiyaaa.fuse.ui.shell.platform.QuickControls
 import kotlinx.coroutines.CoroutineScope
@@ -9,23 +10,27 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.io.File
 import java.util.Locale
 
 /**
- * Quick controls backed by the desktop's own tools, each only when present: volume through PipeWire
- * (`wpctl`) or PulseAudio (`pactl`), backlight through `brightnessctl`, and settings panels through
- * GNOME Settings or KDE System Settings. Missing tools leave the control out (null value).
+ * Quick controls backed by the system's own tools, each only when present. Linux: volume through
+ * PipeWire (`wpctl`) or PulseAudio (`pactl`), backlight through `brightnessctl`, and settings panels
+ * through GNOME Settings or KDE System Settings. macOS: volume through `osascript` and System
+ * Settings panes. Windows: the Settings app's pages. Missing tools leave the control out (null value).
  */
-internal class DesktopQuickControls(private val scope: CoroutineScope) : QuickControls {
-    private val wpctl = Processes.which("wpctl")
-    private val pactl = Processes.which("pactl")
-    private val brightnessctl = Processes.which("brightnessctl")
-    private val gnomeSettings = Processes.which("gnome-control-center")
-    private val kdeSettings = Processes.which("systemsettings") ?: Processes.which("systemsettings5")
+internal class DesktopQuickControls(private val scope: CoroutineScope, private val os: DesktopOs = DesktopOs.current) : QuickControls {
+    private val linux = os == DesktopOs.LINUX
+    private val wpctl = if (linux) Processes.which("wpctl") else null
+    private val pactl = if (linux) Processes.which("pactl") else null
+    private val brightnessctl = if (linux) Processes.which("brightnessctl") else null
+    private val gnomeSettings = if (linux) Processes.which("gnome-control-center") else null
+    private val kdeSettings = if (linux) Processes.which("systemsettings") ?: Processes.which("systemsettings5") else null
+    private val osascript = "/usr/bin/osascript".takeIf { os == DesktopOs.MACOS && File(it).canExecute() }
 
-    val volumeAvailable: Boolean get() = wpctl != null || pactl != null
+    val volumeAvailable: Boolean get() = wpctl != null || pactl != null || osascript != null
     val brightnessAvailable: Boolean get() = brightnessctl != null
-    val settingsAvailable: Boolean get() = gnomeSettings != null || kdeSettings != null
+    val settingsAvailable: Boolean get() = gnomeSettings != null || kdeSettings != null || os != DesktopOs.LINUX
 
     private val _brightness = MutableStateFlow<Float?>(null)
     private val _volume = MutableStateFlow<Float?>(null)
@@ -66,6 +71,10 @@ internal class DesktopQuickControls(private val scope: CoroutineScope) : QuickCo
     }
 
     private fun readVolume(): Float? {
+        osascript?.let { tool ->
+            val out = Processes.run(listOf(tool, "-e", "output volume of (get volume settings)"), timeoutMs = 3_000)
+            return out?.takeIf { it.exitCode == 0 }?.stdout?.trim()?.toIntOrNull()?.let { (it / 100f).coerceIn(0f, 1f) }
+        }
         wpctl?.let { tool ->
             val out = Processes.run(listOf(tool, "get-volume", "@DEFAULT_AUDIO_SINK@"), timeoutMs = 3_000)
             if (out?.exitCode == 0) {
@@ -84,6 +93,10 @@ internal class DesktopQuickControls(private val scope: CoroutineScope) : QuickCo
 
     private fun writeVolume(v: Float) {
         val pct = (v * 100).toInt()
+        osascript?.let { tool ->
+            Processes.run(listOf(tool, "-e", "set volume output volume $pct"), timeoutMs = 3_000)
+            return
+        }
         wpctl?.let { tool ->
             val out = Processes.run(listOf(tool, "set-volume", "-l", "1.0", "@DEFAULT_AUDIO_SINK@", String.format(Locale.ROOT, "%.2f", v)), timeoutMs = 3_000)
             if (out?.exitCode == 0) return
@@ -109,16 +122,32 @@ internal class DesktopQuickControls(private val scope: CoroutineScope) : QuickCo
         if (out?.exitCode != 0) _brightness.value = readBrightness()
     }
 
-    override fun openWifi() = openPanel(gnome = "wifi", kde = "kcm_networkmanagement")
-    override fun openBluetooth() = openPanel(gnome = "bluetooth", kde = "kcm_bluetooth")
-    override fun openDisplaySettings() = openPanel(gnome = "display", kde = "kcm_kscreen")
-    override fun openSoundSettings() = openPanel(gnome = "sound", kde = "kcm_pulseaudio")
-    override fun openSystemSettings() = openPanel(gnome = null, kde = null)
+    override fun openWifi() = openPanel(gnome = "wifi", kde = "kcm_networkmanagement", windows = "network-wifi", mac = "com.apple.wifi-settings-extension")
+    override fun openBluetooth() = openPanel(gnome = "bluetooth", kde = "kcm_bluetooth", windows = "bluetooth", mac = "com.apple.BluetoothSettings")
+    override fun openDisplaySettings() = openPanel(gnome = "display", kde = "kcm_kscreen", windows = "display", mac = "com.apple.Displays-Settings.extension")
+    override fun openSoundSettings() = openPanel(gnome = "sound", kde = "kcm_pulseaudio", windows = "sound", mac = "com.apple.Sound-Settings.extension")
+    override fun openSystemSettings() = openPanel(gnome = null, kde = null, windows = "", mac = "")
 
     /** Plasma 6 has a game controller page; GNOME has none, so its settings open at the start. */
-    override fun openControllerSettings() = openPanel(gnome = null, kde = "kcm_gamecontroller")
+    override fun openControllerSettings() =
+        openPanel(gnome = null, kde = "kcm_gamecontroller", windows = "devices", mac = "com.apple.Game-Controller-Settings.extension")
 
-    private fun openPanel(gnome: String?, kde: String?) {
+    /**
+     * Opens a settings page: `ms-settings:<page>` on Windows, `x-apple.systempreferences:<pane>` on
+     * macOS (an unknown pane opens System Settings at its start), else GNOME or KDE.
+     */
+    private fun openPanel(gnome: String?, kde: String?, windows: String, mac: String) {
+        when (os) {
+            DesktopOs.WINDOWS -> {
+                scope.launch(Dispatchers.IO) { Processes.spawn(listOf("explorer.exe", "ms-settings:$windows")) }
+                return
+            }
+            DesktopOs.MACOS -> {
+                scope.launch(Dispatchers.IO) { Processes.spawn(listOf("/usr/bin/open", "x-apple.systempreferences:$mac")) }
+                return
+            }
+            DesktopOs.LINUX -> Unit
+        }
         val onKde = (System.getenv("XDG_CURRENT_DESKTOP") ?: "").contains("KDE", ignoreCase = true)
         val argv = when {
             kdeSettings != null && (onKde || gnomeSettings == null) -> listOfNotNull(kdeSettings, kde)

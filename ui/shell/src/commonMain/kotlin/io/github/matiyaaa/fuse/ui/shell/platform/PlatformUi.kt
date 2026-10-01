@@ -73,6 +73,8 @@ data class PlatformFeatures(
     val bluetoothSettings: Boolean = false,
     val canExit: Boolean = true,
     val windowModes: Boolean = false,
+    /** Cartridge runs here (Android, and Linux next to it); off on Windows and macOS. */
+    val cartridge: Boolean = true,
 )
 
 interface Haptics {

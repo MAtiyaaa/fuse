@@ -126,5 +126,7 @@ object Sources {
     const val ESDE = "ES-DE es_find_rules.xml / es_systems.xml master $ESDE_COMMIT (MIT)"
     const val ESDE_ANDROID = "ES-DE resources/systems/android es_find_rules.xml + es_systems.xml master $ESDE_COMMIT (MIT)"
     const val ESDE_LINUX = "ES-DE resources/systems/linux es_find_rules.xml + es_systems.xml master $ESDE_COMMIT (MIT)"
+    const val ESDE_WINDOWS = "ES-DE resources/systems/windows es_find_rules.xml + es_systems.xml master, October 2026 (MIT)"
+    const val ESDE_MACOS = "ES-DE resources/systems/macos es_find_rules.xml + es_systems.xml master, October 2026 (MIT)"
     const val RESEARCH = "docs/research/emulators.md"
 }

@@ -14,11 +14,21 @@ object Processes {
 
     class Output(val exitCode: Int, val stdout: String)
 
-    /** Absolute path of [name] on `$PATH`, or null. */
+    /**
+     * Absolute path of [name] on `$PATH`, or null. On Windows the folders are split on ";" and each
+     * PATHEXT extension is tried ("powershell" finds powershell.exe).
+     */
     fun which(name: String): String? {
-        if (name.startsWith("/")) return name.takeIf { isExecutable(it) }
+        if (File(name).isAbsolute) return name.takeIf { isExecutable(it) }
         val path = System.getenv("PATH") ?: return null
-        return path.split(':').filter { it.isNotEmpty() }.map { "${it.trimEnd('/')}/$name" }.firstOrNull(::isExecutable)
+        val names = if (DesktopOs.isWindows && '.' !in name) {
+            (System.getenv("PATHEXT") ?: ".COM;.EXE;.BAT;.CMD").split(';').filter { it.isNotEmpty() }.map { name + it.lowercase() }
+        } else {
+            listOf(name)
+        }
+        return path.split(File.pathSeparatorChar).filter { it.isNotEmpty() }
+            .flatMap { dir -> names.map { File(dir, it).path } }
+            .firstOrNull(::isExecutable)?.let { File(it).fusePath }
     }
 
     fun isExecutable(path: String): Boolean {
@@ -26,9 +36,12 @@ object Processes {
         return f.isFile && f.canExecute()
     }
 
-    /** A ProcessBuilder with Fuse's AppImage variables removed from the environment. */
+    /**
+     * A ProcessBuilder with Fuse's AppImage variables removed from the environment. On Windows,
+     * paths in the arguments are given with backslashes, as Windows programs expect.
+     */
     fun builder(argv: List<String>): ProcessBuilder {
-        val pb = ProcessBuilder(argv)
+        val pb = ProcessBuilder(if (DesktopOs.isWindows) argv.map(::windowsArgument) else argv)
         val env = pb.environment()
         APPIMAGE_VARS.forEach { env.remove(it) }
         return pb
@@ -43,7 +56,7 @@ object Processes {
         val process = try {
             builder(argv)
                 .redirectError(ProcessBuilder.Redirect.DISCARD)
-                .apply { if (stdin == null) redirectInput(ProcessBuilder.Redirect.from(File("/dev/null"))) }
+                .apply { if (stdin == null) redirectInput(ProcessBuilder.Redirect.from(DesktopOs.nullDevice)) }
                 .start()
         } catch (e: IOException) {
             return null
@@ -96,7 +109,7 @@ object Processes {
             .apply { environment().putAll(env) }
             .redirectOutput(ProcessBuilder.Redirect.DISCARD)
             .redirectError(ProcessBuilder.Redirect.DISCARD)
-            .redirectInput(ProcessBuilder.Redirect.from(File("/dev/null")))
+            .redirectInput(ProcessBuilder.Redirect.from(DesktopOs.nullDevice))
             .start()
     } catch (e: IOException) {
         Log.warn("could not start ${argv.firstOrNull()}", e)

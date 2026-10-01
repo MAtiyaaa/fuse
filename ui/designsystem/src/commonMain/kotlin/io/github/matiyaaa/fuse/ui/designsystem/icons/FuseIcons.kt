@@ -71,6 +71,7 @@ object FuseIcons {
     val Filter: ImageVector by lazy { lineIcon("Filter", "M2 5h20", "M6 12h12", "M9 19h6") }
     val Flame: ImageVector by lazy { lineIcon("Flame", "M12 3q1 4 4 6.5t3 5.5a1 1 0 0 1-14 0 5 5 0 0 1 1-3 1 1 0 0 0 5 0c0-2-1.5-3-1.5-5q0-2 2.5-4") }
     val Folder: ImageVector by lazy { lineIcon("Folder", "M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z") }
+    val FolderPlus: ImageVector by lazy { lineIcon("FolderPlus", "M12 10v6", "M9 13h6", "M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z") }
     val FolderOpen: ImageVector by lazy { lineIcon("FolderOpen", "m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2") }
     val FolderSearch: ImageVector by lazy { lineIcon("FolderSearch", "M10.7 20H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H20a2 2 0 0 1 2 2v4.1", "m21 21-1.9-1.9", "M14 17a3 3 0 1 0 6 0a3 3 0 1 0 -6 0Z") }
     val GalleryVertical: ImageVector by lazy { lineIcon("GalleryVertical", "M7 2h10", "M5 6h14", "M5 10h14a2 2 0 0 1 2 2v8a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-8a2 2 0 0 1 2 -2Z") }

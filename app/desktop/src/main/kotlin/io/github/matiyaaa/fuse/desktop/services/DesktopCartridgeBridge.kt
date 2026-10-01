@@ -140,3 +140,13 @@ internal class DesktopCartridgeBridge(private val dirs: FuseDirs) : CartridgeBri
         return watcher
     }
 }
+
+/**
+ * Windows and macOS: Cartridge is an Android and Linux app, so it is never installed here and every
+ * Cartridge screen and entry stays hidden.
+ */
+internal object NoCartridgeBridge : CartridgeBridge {
+    override suspend fun read(): CartridgeStatus = CartridgeStatus(installed = false)
+
+    override fun open(route: CartridgeRoute, link: String): Boolean = false
+}
