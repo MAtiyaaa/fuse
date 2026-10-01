@@ -222,6 +222,7 @@ class ScrapeCoordinatorTest {
         override val providesMetadata: Boolean,
         private val byName: (String) -> ApiResult<List<ProviderGame>>,
         private val art: List<ArtworkOption> = emptyList(),
+        override val searchesByKeyword: Boolean = true,
     ) : ScrapeSource {
         val asked = ArrayList<String>()
         override suspend fun search(query: ScrapeQuery): ApiResult<List<ProviderGame>> {
@@ -255,6 +256,80 @@ class ScrapeCoordinatorTest {
         val outcome = ScrapeCoordinator(listOf(igdb)).scrape(ScrapeRequest(q, listOf(ScrapeProviderId.IGDB), setOf(ScrapeProviderId.IGDB)))
         assertIs<ScrapeOutcome.Accepted>(outcome)
         assertEquals(listOf("pepsi_man_final", "Pepsiman"), igdb.asked)
+    }
+
+    private val ocarina = ScrapeQuery("The Legend of Zelda: Ocarina of Time", PlatformId("n64"), "Nintendo 64", fileName = null)
+    private val ocarinaNames = listOf("The Legend of Zelda: Ocarina of Time", "The Legend of Zelda", "Legend of Zelda: Ocarina of Time")
+    private fun ocarinaRequest(vararg priority: ScrapeProviderId) = ScrapeRequest(ocarina, priority.toList(), priority.toSet())
+
+    @Test
+    fun aKeywordSearchFindsWhatNoNameFinds() = runTest {
+        // This search only knows the game by its keywords; the result still has to match the real title.
+        val oot = game(ScrapeProviderId.IGDB, "1029", "The Legend of Zelda: Ocarina of Time", listOf("Nintendo 64"))
+        val igdb = ScriptedSource(ScrapeProviderId.IGDB, true, { name ->
+            ApiResult.Success(if (name == "Legend Zelda Ocarina") listOf(game(ScrapeProviderId.IGDB, "7", "Zelda Ocarina Tribute", listOf("Nintendo 64")), oot) else emptyList())
+        })
+        val outcome = ScrapeCoordinator(listOf(igdb)).scrape(ocarinaRequest(ScrapeProviderId.IGDB))
+        assertIs<ScrapeOutcome.Accepted>(outcome)
+        assertEquals("1029", outcome.candidate.providerGameId)
+        assertEquals(ocarinaNames + "Legend Zelda Ocarina", igdb.asked)
+    }
+
+    @Test
+    fun aKeywordResultThatIsNotTheGameIsOnlyOffered() = runTest {
+        val igdb = ScriptedSource(ScrapeProviderId.IGDB, true, { name ->
+            ApiResult.Success(if (name == "Legend Zelda Ocarina") listOf(game(ScrapeProviderId.IGDB, "7", "Zelda Ocarina Tribute", listOf("Nintendo 64"))) else emptyList())
+        })
+        for (strictness in MatchStrictness.entries) {
+            val outcome = ScrapeCoordinator(listOf(igdb)).scrape(ocarinaRequest(ScrapeProviderId.IGDB).copy(strictness = strictness))
+            assertIs<ScrapeOutcome.NeedsReview>(outcome, "strictness $strictness")
+            assertEquals(listOf("7"), outcome.candidates.map { it.providerGameId })
+        }
+    }
+
+    @Test
+    fun keywordsWaitUntilEveryProviderWasAskedByName() = runTest {
+        val oot = { p: ScrapeProviderId -> game(p, "1029", "The Legend of Zelda: Ocarina of Time", listOf("Nintendo 64")) }
+        val igdb = ScriptedSource(ScrapeProviderId.IGDB, true, { ApiResult.Success(emptyList()) })
+        val tgdb = ScriptedSource(ScrapeProviderId.THEGAMESDB, true, { name ->
+            ApiResult.Success(if (name == ocarina.title) listOf(oot(ScrapeProviderId.THEGAMESDB)) else emptyList())
+        })
+        val outcome = ScrapeCoordinator(listOf(igdb, tgdb)).scrape(ocarinaRequest(ScrapeProviderId.IGDB, ScrapeProviderId.THEGAMESDB))
+        assertIs<ScrapeOutcome.Accepted>(outcome)
+        assertEquals(ScrapeProviderId.THEGAMESDB, outcome.candidate.provider)
+        assertEquals(ocarinaNames, igdb.asked)
+        assertEquals(listOf(ocarina.title), tgdb.asked)
+
+        // Sources that look names up exactly are never asked by keyword.
+        val exact = ScriptedSource(ScrapeProviderId.LIBRETRO, false, { ApiResult.Success(emptyList()) }, searchesByKeyword = false)
+        val none = ScrapeCoordinator(listOf(exact)).scrape(ocarinaRequest(ScrapeProviderId.LIBRETRO))
+        assertIs<ScrapeOutcome.NotFound>(none)
+        assertEquals(ocarinaNames, exact.asked)
+    }
+
+    @Test
+    fun identifySearchesOtherNamesAndKeywordsUntilSomethingIsSure() = runTest {
+        val tribute = game(ScrapeProviderId.IGDB, "7", "Zelda Ocarina Tribute", listOf("Nintendo 64"))
+        val oot = game(ScrapeProviderId.IGDB, "1029", "The Legend of Zelda: Ocarina of Time", listOf("Nintendo 64"))
+        val igdb = ScriptedSource(ScrapeProviderId.IGDB, true, { name ->
+            ApiResult.Success(
+                when (name) {
+                    ocarina.title -> listOf(tribute)
+                    "Legend Zelda Ocarina" -> listOf(tribute, oot)
+                    else -> emptyList()
+                },
+            )
+        })
+        val outcome = ScrapeCoordinator(listOf(igdb)).candidates(ocarinaRequest(ScrapeProviderId.IGDB))
+        assertIs<ScrapeOutcome.NeedsReview>(outcome)
+        // Best first, each game once.
+        assertEquals(listOf("1029", "7"), outcome.candidates.map { it.providerGameId })
+        assertEquals(ocarinaNames + "Legend Zelda Ocarina", igdb.asked)
+
+        // A sure match ends the search there.
+        val sure = ScriptedSource(ScrapeProviderId.IGDB, true, { ApiResult.Success(listOf(oot)) })
+        ScrapeCoordinator(listOf(sure)).candidates(ocarinaRequest(ScrapeProviderId.IGDB))
+        assertEquals(listOf(ocarina.title), sure.asked)
     }
 
     @Test

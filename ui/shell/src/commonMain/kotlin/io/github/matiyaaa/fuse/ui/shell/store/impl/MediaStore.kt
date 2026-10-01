@@ -18,7 +18,7 @@ import io.github.matiyaaa.fuse.integrations.steamgriddb.SteamGridDbClient
 import io.github.matiyaaa.fuse.integrations.thegamesdb.TheGamesDbClient
 import io.github.matiyaaa.fuse.library.FsPath
 import io.github.matiyaaa.fuse.library.parse.DisplayNameCleaner
-import io.github.matiyaaa.fuse.library.parse.LeadingNumbers
+import io.github.matiyaaa.fuse.library.parse.SearchTitles
 import io.github.matiyaaa.fuse.model.ArtworkOption
 import io.github.matiyaaa.fuse.model.Game
 import io.github.matiyaaa.fuse.model.GameId
@@ -194,16 +194,19 @@ internal class DefaultMediaOps(
         )
     }
 
-    /** The game's other names, searched when its search name finds nothing sure. */
+    /**
+     * The game's other names, searched when its search name finds nothing sure: the names it was
+     * given, the file name as a search name and its other spellings ([SearchTitles.alternatives]),
+     * then the display names.
+     */
     private fun otherNames(game: Game): List<String> {
         val title = defaultSearchTitle(game)
-        return listOfNotNull(
-            game.titles.metadata,
-            game.titles.custom,
-            game.titles.cleaned,
-            LeadingNumbers.strip(DisplayNameCleaner.clean(game.titles.original)),
-            DisplayNameCleaner.clean(game.titles.original),
-        ).map { it.trim() }.filter { it.isNotEmpty() && !it.equals(title, ignoreCase = true) }.distinct()
+        val original = game.titles.original
+        return (
+            listOfNotNull(game.titles.metadata, game.titles.custom, SearchTitles.clean(original)) +
+                SearchTitles.alternatives(original) +
+                listOfNotNull(game.titles.cleaned, DisplayNameCleaner.clean(original))
+            ).map { it.trim() }.filter { it.isNotEmpty() && !it.equals(title, ignoreCase = true) }.distinct()
     }
 
     /** The name the user set for searches, if any. */
@@ -211,12 +214,12 @@ internal class DefaultMediaOps(
         ctx.data.scopedSettings.resolve(ScopedSettings.SearchTitle, game.platformId, game.id).value.trim().ifEmpty { null }
 
     /**
-     * Their own name, then a name a provider gave, then the file name cleaned with today's rules
-     * (a stored cleaned name may predate them), without a list number or code in front.
+     * Their own name, then a name a provider gave, then the file name made into a search name with
+     * today's rules ([SearchTitles]: tags, serials, versions, release groups and list numbers go).
      */
     private fun defaultSearchTitle(game: Game): String =
         game.titles.custom ?: game.titles.metadata
-            ?: LeadingNumbers.strip(DisplayNameCleaner.clean(game.titles.original)).ifBlank { game.titles.cleaned ?: game.titles.original }
+            ?: SearchTitles.clean(game.titles.original).ifBlank { game.titles.cleaned ?: game.titles.original }
 
     override suspend fun searchTitle(game: GameId): SearchTitle? {
         val g = ctx.data.games.get(game) ?: return null

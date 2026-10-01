@@ -71,6 +71,9 @@ interface ScrapeSource {
     /** The art kinds this source can ever return, so a fill never asks for what it can't have. */
     val artworkKinds: Set<MediaKind> get() = MediaKind.entries.toSet()
 
+    /** False for sources that look names up exactly, where a keyword search ([SearchNames.keywords]) never hits. */
+    val searchesByKeyword: Boolean get() = true
+
     /** Finds games for [query]. */
     suspend fun search(query: ScrapeQuery): ApiResult<List<ProviderGame>>
 
@@ -299,6 +302,7 @@ class LibretroSource(private val thumbnails: LibretroThumbnails) : ScrapeSource 
     override val id = ScrapeProviderId.LIBRETRO
     override val providesMetadata = false
     override val artworkKinds = LibretroThumbnailType.entries.map { it.kind }.toSet()
+    override val searchesByKeyword = false
 
     override suspend fun search(query: ScrapeQuery): ApiResult<List<ProviderGame>> =
         thumbnails.find(query.platform, query.title, query.fileName, searched)
