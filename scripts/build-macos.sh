@@ -55,6 +55,18 @@ STAGE="$OUT_DIR/stage"
 mkdir -p "$STAGE"
 cp -R "$APP" "$STAGE/Fuse.app"
 ln -s /Applications "$STAGE/Applications"
-hdiutil create -volname "Fuse $VERSION" -srcfolder "$STAGE" -fs HFS+ -format UDZO -ov "$OUT_DIR/$NAME.dmg"
+# On a fresh machine hdiutil sometimes finds the new volume busy ("Resource busy") while Spotlight or
+# XProtect is still looking at it; a few seconds later it works.
+for attempt in 1 2 3 4 5; do
+  if hdiutil create -volname "Fuse $VERSION" -srcfolder "$STAGE" -fs HFS+ -format UDZO -ov "$OUT_DIR/$NAME.dmg"; then
+    break
+  fi
+  if [ "$attempt" -eq 5 ]; then
+    echo "hdiutil could not make the disk image after 5 tries" >&2
+    exit 1
+  fi
+  echo "hdiutil was busy; trying again in $((attempt * 5)) s ($attempt of 5)"
+  sleep $((attempt * 5))
+done
 rm -rf "$STAGE"
 ls -l "$OUT_DIR"
