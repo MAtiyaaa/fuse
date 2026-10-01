@@ -9,7 +9,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -28,8 +27,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.layout.Placeable
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import io.github.matiyaaa.fuse.ui.designsystem.components.FText
@@ -99,7 +101,8 @@ fun PlatformCard.stage(): StageInfo = StageInfo(
  * display face, with a quiet meta line underneath and any [StageInfo.tags] after it. An eyebrow (the
  * system, with a dot in its colour) sits above. Swaps with a short fade and lift (a fade only under
  * Reduced motion). [fold] (0..1) tucks the meta line away, for a page that is giving its height to
- * the grid.
+ * the grid. With [inlineEyebrow] (short screens) the eyebrow leads the meta line instead of taking a
+ * line of its own above the title.
  */
 @Composable
 fun Stage(
@@ -109,6 +112,7 @@ fun Stage(
     logoHeight: Dp = 104.dp,
     titleStyle: TextStyle = Fuse.type.hero,
     fold: Float = 0f,
+    inlineEyebrow: Boolean = false,
 ) {
     val motion = Fuse.motion
     val c = Fuse.colors
@@ -128,7 +132,7 @@ fun Stage(
             return@AnimatedContent
         }
         Column {
-            if (s.eyebrow != null) {
+            if (s.eyebrow != null && !inlineEyebrow) {
                 Row(Modifier.padding(bottom = Space.s), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s)) {
                     Box(Modifier.size(Size.dot).background(s.accent.toColor(), CircleShape))
                     FText(s.eyebrow.uppercase(), Fuse.type.overline, color = c.textMuted, maxLines = 1)
@@ -149,8 +153,9 @@ fun Stage(
             } else {
                 title()
             }
-            if ((s.meta.isNotEmpty() || s.tags.isNotEmpty()) && fold < 1f) {
-                MetaLine(s, Fuse.type.body, Modifier.foldDown(fold).padding(top = Space.s), wrap = true)
+            val meta = if (inlineEyebrow && s.eyebrow != null) s.copy(meta = listOf(s.eyebrow) + s.meta) else s
+            if ((meta.meta.isNotEmpty() || meta.tags.isNotEmpty()) && fold < 1f) {
+                MetaLine(meta, Fuse.type.body, Modifier.foldDown(fold).padding(top = Space.s), wrap = true)
             }
         }
     }
@@ -192,12 +197,7 @@ fun StageLine(info: StageInfo?, modifier: Modifier = Modifier) {
 private fun MetaLine(s: StageInfo, style: TextStyle, modifier: Modifier, wrap: Boolean = false) {
     val c = Fuse.colors
     if (wrap) {
-        FlowRow(
-            modifier,
-            horizontalArrangement = Arrangement.spacedBy(Space.s),
-            verticalArrangement = Arrangement.spacedBy(Space.xs),
-            itemVerticalAlignment = Alignment.CenterVertically,
-        ) {
+        MetaFlow(modifier) {
             if (s.meta.isNotEmpty()) {
                 FText(
                     s.meta.joinToString("  ·  "),
@@ -224,6 +224,49 @@ private fun MetaLine(s: StageInfo, style: TextStyle, modifier: Modifier, wrap: B
         for ((i, tag) in s.tags.withIndex()) {
             Spacer(Modifier.width(if (i == 0 && s.meta.isNotEmpty()) Space.m else Space.s))
             StageTagPill(tag)
+        }
+    }
+}
+
+/**
+ * Lays its children along a line and starts a new line whenever the next one would not fit. Each is
+ * measured at the whole width, so the meta words always come first and whole, and the tags move
+ * down rather than squeezing them. Items on a line are centred on each other.
+ */
+@Composable
+private fun MetaFlow(modifier: Modifier, content: @Composable () -> Unit) {
+    Layout(content, modifier) { measurables, constraints ->
+        val gap = Space.s.roundToPx()
+        val lineGap = Space.xs.roundToPx()
+        val max = constraints.maxWidth
+        val items = measurables.map { it.measure(Constraints(maxWidth = max)) }
+        val lines = mutableListOf<MutableList<Placeable>>()
+        var x = 0
+        for (p in items) {
+            val fresh = lines.isEmpty() || (max != Constraints.Infinity && x > 0 && x + gap + p.width > max)
+            if (fresh) {
+                lines.add(mutableListOf())
+                x = 0
+            } else {
+                x += gap
+            }
+            lines.last().add(p)
+            x += p.width
+        }
+        val widths = lines.map { line -> line.sumOf { it.width } + gap * (line.size - 1).coerceAtLeast(0) }
+        val heights = lines.map { line -> line.maxOf { it.height } }
+        val width = (widths.maxOrNull() ?: 0).coerceIn(constraints.minWidth, max)
+        val height = heights.sum() + lineGap * (lines.size - 1).coerceAtLeast(0)
+        layout(width, height.coerceAtLeast(constraints.minHeight)) {
+            var y = 0
+            for ((i, line) in lines.withIndex()) {
+                var lx = 0
+                for (p in line) {
+                    p.place(lx, y + (heights[i] - p.height) / 2)
+                    lx += p.width + gap
+                }
+                y += heights[i] + lineGap
+            }
         }
     }
 }

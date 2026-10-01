@@ -24,14 +24,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
@@ -41,7 +38,6 @@ import io.github.matiyaaa.fuse.ui.designsystem.components.FText
 import io.github.matiyaaa.fuse.ui.designsystem.effects.fuseClickable
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
-import io.github.matiyaaa.fuse.ui.designsystem.shape.PillShape
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Durations
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
@@ -51,6 +47,9 @@ import io.github.matiyaaa.fuse.ui.shell.app.FocusZone
 import io.github.matiyaaa.fuse.ui.shell.components.CountPill
 import io.github.matiyaaa.fuse.ui.shell.components.ViewTab
 import io.github.matiyaaa.fuse.ui.shell.components.ViewTabs
+import io.github.matiyaaa.fuse.ui.shell.components.lineFocus
+import io.github.matiyaaa.fuse.ui.shell.components.lineFocusFill
+import io.github.matiyaaa.fuse.ui.shell.components.rememberLineShape
 import io.github.matiyaaa.fuse.ui.shell.store.PlatformCard
 import io.github.matiyaaa.fuse.ui.shell.systems.SystemHeader
 import kotlin.math.roundToInt
@@ -126,7 +125,7 @@ internal fun LibraryHeader(
                     val (label, icon) = when (button) {
                         LibraryButton.COLLECTIONS -> "Collections" to FuseIcons.LibraryBig
                         LibraryButton.ADD_GAMES -> "Add or remove games" to FuseIcons.ListPlus
-                        LibraryButton.EMULATOR -> "No emulator" to FuseIcons.Warning
+                        LibraryButton.EMULATOR -> "No emulator installed" to FuseIcons.Warning
                         LibraryButton.SYSTEM -> (system?.platform?.shortName ?: "All systems") to FuseIcons.Filter
                         LibraryButton.SORT -> sortLabel(sort) to FuseIcons.Sort
                         LibraryButton.VIEW -> layoutLabel(layout) to layoutIcon(layout)
@@ -157,7 +156,7 @@ internal fun LibraryHeader(
                     .fillMaxWidth()
                     .then(if (foldTools && platform != null) Modifier.foldKeepingTop(collapse) else Modifier)
                     .padding(end = Space.gutter, top = if (platform != null) 0.dp else Space.xxs, bottom = Space.xxs),
-                verticalAlignment = if (platform != null) Alignment.Bottom else Alignment.CenterVertically,
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 Box(Modifier.weight(1f)) { title() }
                 if (tools.isNotEmpty()) {
@@ -229,17 +228,18 @@ private fun LibraryTabs(
 }
 
 /**
- * The toolbar's group: one quiet pill with a hairline edge, so its buttons read as a set of controls
- * rather than loose words on the art.
+ * The toolbar's group: one quiet well with a hairline edge, so its buttons read as a set of controls
+ * rather than loose words on the art. Pill shaped, or square cornered in sharp themes.
  */
 @Composable
 private fun Toolbar(content: @Composable () -> Unit) {
     val c = Fuse.colors
+    val shape = rememberLineShape()
     Row(
         Modifier
-            .clip(PillShape)
+            .clip(shape)
             .background(c.text.copy(alpha = if (c.isDark) GROUP_FILL else GROUP_FILL_LIGHT))
-            .border(Size.stroke, c.hairline, PillShape)
+            .border(Size.stroke, c.hairline, shape)
             .padding(Space.xs),
         horizontalArrangement = Arrangement.spacedBy(Space.xxs),
         verticalAlignment = Alignment.CenterVertically,
@@ -264,7 +264,9 @@ private enum class ToolTone { PLAIN, ON, WARNING }
 
 /**
  * A button in the header toolbar: an icon and its current value. Hover and press come from
- * [fuseClickable]; controller focus fills it softly and outlines it in the focus colour.
+ * [fuseClickable]; controller focus is the tabs' (and the top line's): a quiet fill and an outline.
+ * A filter in use keeps a soft accent tint, a warning a soft warning one, so their state reads
+ * without focus.
  */
 @Composable
 private fun ToolButton(label: String, icon: ImageVector, focused: Boolean, tone: ToolTone, showLabel: Boolean, onClick: () -> Unit) {
@@ -275,14 +277,10 @@ private fun ToolButton(label: String, icon: ImageVector, focused: Boolean, tone:
         ToolTone.ON -> c.accent
         ToolTone.WARNING -> c.warning
     }
-    val bg by animateColorAsState(
-        when {
-            focused -> c.text.copy(alpha = FOCUS_FILL)
-            tone != ToolTone.PLAIN -> toneColor.copy(alpha = TONE_FILL)
-            else -> Color.Transparent
-        },
+    val wash by animateColorAsState(
+        if (tone != ToolTone.PLAIN) toneColor.copy(alpha = TONE_FILL) else Color.Transparent,
         motion.tween(Durations.FAST),
-        label = "tool bg",
+        label = "tool wash",
     )
     val tint by animateColorAsState(
         when {
@@ -293,27 +291,18 @@ private fun ToolButton(label: String, icon: ImageVector, focused: Boolean, tone:
         motion.tween(Durations.FAST),
         label = "tool tint",
     )
-    val ring by animateFloatAsState(if (focused) 1f else 0f, motion.focusSpring(), label = "tool ring")
-    val focus = c.focus
+    val focus by animateFloatAsState(if (focused) 1f else 0f, motion.tween(Durations.FAST), label = "tool focus")
+    val shape = rememberLineShape()
     Row(
         Modifier
             .height(Size.chip)
-            .drawBehind {
-                drawRoundRect(bg, cornerRadius = CornerRadius(size.height / 2))
-                if (ring > 0.01f) {
-                    val w = Size.focusStroke.toPx()
-                    drawRoundRect(
-                        focus,
-                        topLeft = Offset(w / 2, w / 2),
-                        size = androidx.compose.ui.geometry.Size(size.width - w, size.height - w),
-                        cornerRadius = CornerRadius((size.height - w) / 2),
-                        alpha = ring.coerceIn(0f, 1f),
-                        style = Stroke(w),
-                    )
-                }
+            .fuseClickable(shape = shape, role = Role.Button, onClick = onClick)
+            .background(wash, shape)
+            .lineFocus(shape, { focus }, lineFocusFill(), c.focus)
+            .semantics {
+                this.selected = focused
+                if (!showLabel) contentDescription = label
             }
-            .fuseClickable(shape = PillShape, role = Role.Button, onClick = onClick)
-            .semantics { this.selected = focused }
             .padding(horizontal = Space.m),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -341,6 +330,5 @@ internal val STACK_WIDTH = 600.dp
 private const val GROUP_FILL = 0.06f
 private const val GROUP_FILL_LIGHT = 0.05f
 
-/** Fill behind a focused button, and behind a tinted one. */
-private const val FOCUS_FILL = 0.12f
+/** Fill behind a tinted button (a filter in use, a warning). */
 private const val TONE_FILL = 0.14f

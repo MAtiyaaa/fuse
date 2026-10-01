@@ -307,7 +307,7 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
         }
     }
     PrefetchArt(tileArt, state.grid.index, size = LocalTileMetrics.current.icon * 1.4f)
-    PrefetchArt(remember(list) { list.orEmpty().map { it.art.logo } }, state.grid.index, size = 360.dp)
+    PrefetchArt(remember(list) { list.orEmpty().map { it.art.logo } }, state.grid.index, size = LOGO_PREFETCH)
     val special = scope == LibraryScope.All && segment.set != GameSet.LIBRARY
     // A game with its own background image shows it; any other game shows its system's background,
     // so a system's page keeps one room while moving between its games.
@@ -490,7 +490,7 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
                 else -> state.pick(i, cards)
             }
         }
-        val compactHeader = maxH < 560.dp
+        val compactHeader = maxH < SHORT_SCREEN
         // Inside a system, saying which system each game is for says nothing.
         val inSystem = systemCard != null
         fun stageOf(card: GameCard?) = card?.stage()?.let { if (inSystem) it.copy(eyebrow = null) else it }
@@ -518,10 +518,10 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
         // A folded system page lets its toolbar hang beside the one-line stage, where there is room.
         val foldTools = inSystem && layout == LibraryLayout.ICON && maxW >= STACK_WIDTH
         val stageHeight = when {
-            inSystem -> (maxH * 0.14f).coerceIn(92.dp, 124.dp)
+            inSystem -> (maxH * SYSTEM_STAGE_SHARE).coerceIn(SYSTEM_STAGE_MIN, SYSTEM_STAGE_MAX)
             // A short screen (a handheld) sets the title in the display face, so it keeps clear of the tabs.
-            compactHeader -> (maxH * 0.22f).coerceIn(100.dp, 120.dp)
-            else -> (maxH * 0.22f).coerceIn(110.dp, 200.dp)
+            compactHeader -> (maxH * STAGE_SHARE).coerceIn(SHORT_STAGE_MIN, SHORT_STAGE_MAX)
+            else -> (maxH * STAGE_SHARE).coerceIn(STAGE_MIN, STAGE_MAX)
         }
         // The stage's title: the hero face where there is room for it.
         val stageTitle = if (compactHeader) Fuse.type.display else Fuse.type.hero
@@ -563,10 +563,10 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
                     LibraryLayout.ICON -> {
                         // The game's logo moves up with the folding header and makes room for another row.
                         val logo = when {
-                            !inSystem && compactHeader -> 56.dp
-                            !inSystem -> lerp(84.dp, 60.dp, collapse)
-                            compactHeader -> lerp(56.dp, 32.dp, collapse)
-                            else -> lerp(64.dp, 40.dp, collapse)
+                            !inSystem && compactHeader -> STAGE_LOGO_SHORT
+                            !inSystem -> STAGE_LOGO
+                            compactHeader -> lerp(STAGE_LOGO_SHORT, Space.xxl, collapse)
+                            else -> lerp(Space.x4, Space.xxl + Space.s, collapse)
                         }
                         val foldedStage = if (inSystem) logo + Space.xs else stageHeight * 0.66f
                         Box(
@@ -581,6 +581,8 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
                                 stageOf(selectedCard), showLogo = prefs.showLogo, logoHeight = logo,
                                 titleStyle = if (inSystem) androidx.compose.ui.text.lerp(Fuse.type.display, Fuse.type.title, collapse) else stageTitle,
                                 fold = if (inSystem) collapse else 0f,
+                                // A short screen keeps the stage to two lines, clear of the tabs.
+                                inlineEyebrow = compactHeader,
                             )
                         }
                         Spacer(Modifier.height(if (inSystem) lerp(Space.m, Space.s, collapse) else lerp(Space.l, Space.s, collapse)))
@@ -797,7 +799,7 @@ private fun CoverGrid(
     Column {
         StageLine(
             selected?.stage()?.let { if (showsSystem) it else it.copy(eyebrow = null) },
-            Modifier.fillMaxWidth().padding(start = Space.gutter, end = Space.gutter, top = Space.s, bottom = Space.xs).reveal(reveal, 1),
+            Modifier.fillMaxWidth().padding(start = Space.gutter, end = Space.gutter, top = CONTENT_TOP, bottom = Space.s).reveal(reveal, 1),
         )
         LazyVerticalGrid(
             columns = GridCells.Fixed(columns),
@@ -941,7 +943,7 @@ private fun GlidingList(
                     )
                 }
             },
-        contentPadding = PaddingValues(top = Space.s, bottom = Space.xl),
+        contentPadding = PaddingValues(top = CONTENT_TOP, bottom = Space.xl),
         verticalArrangement = Arrangement.spacedBy(Space.xxs),
     ) {
         itemsIndexed(list, key = { _, g -> g.id.value }) { i, card ->
@@ -1032,15 +1034,16 @@ private fun GameRow(card: GameCard, selected: Boolean, showsSystem: Boolean, mod
 private fun ListPreview(card: GameCard, showsSystem: Boolean, modifier: Modifier) {
     val corner = coverCornerFraction()
     val shape = remember(corner) { SquircleShape.fraction(corner) }
-    BoxWithConstraints(modifier.padding(top = Space.s, bottom = Size.hintHeight + Space.l)) {
+    BoxWithConstraints(modifier.padding(top = CONTENT_TOP, bottom = Size.hintHeight + Space.l)) {
         val coverHeight = (maxHeight * PREVIEW_COVER).coerceAtMost(maxWidth / Aspect.BOX)
         Column {
             Tile(selected = false, modifier = Modifier.height(coverHeight).aspectRatio(Aspect.BOX), shape = shape, cornerFraction = corner, showSpark = false) {
                 Artwork(
                     card.art.boxart ?: card.art.grid ?: card.art.square ?: card.art.icon,
                     Modifier.fillMaxSize(),
-                    // The stage underneath names the game, so a generated cover stays a picture.
-                    fallback = { GeneratedArt(card.title, card.accent.toColor(), slot = ArtSlot.BOX, showText = false) },
+                    // The stage underneath names the game, so a generated cover carries its initials,
+                    // as its row's thumbnail does, rather than the title twice.
+                    fallback = { GeneratedArt(card.title, card.accent.toColor(), slot = ArtSlot.ICON) },
                 )
             }
             Spacer(Modifier.height(Space.l))
@@ -1059,7 +1062,7 @@ private fun ListPreview(card: GameCard, showsSystem: Boolean, modifier: Modifier
  * when the games arrive.
  */
 @Composable
-private fun LibrarySkeleton(layout: LibraryLayout, metrics: TileMetrics, maxW: Dp, maxH: Dp, stageHeight: Dp) {
+internal fun LibrarySkeleton(layout: LibraryLayout, metrics: TileMetrics, maxW: Dp, maxH: Dp, stageHeight: Dp) {
     val bar = RoundedCornerShape(BAR_RADIUS)
     Column(Modifier.fillMaxSize().clipToBounds()) {
         when (layout) {
@@ -1078,7 +1081,7 @@ private fun LibrarySkeleton(layout: LibraryLayout, metrics: TileMetrics, maxW: D
                 }
             }
             LibraryLayout.COVER_GRID -> {
-                Box(Modifier.padding(start = Space.gutter, top = Space.s + Space.xs, bottom = Space.xs + Space.xs).width(maxW * 0.3f).height(Space.l + Space.xs).skeleton(bar))
+                Box(Modifier.padding(start = Space.gutter, top = CONTENT_TOP + Space.xs, bottom = Space.s + Space.xs).width(maxW * 0.3f).height(Space.l + Space.xs).skeleton(bar))
                 val cols = ((maxW - Space.gutter * 2 + metrics.gap) / (metrics.coverWidth + metrics.gap)).toInt().coerceAtLeast(2)
                 Row(Modifier.padding(start = Space.gutter, top = Space.m), horizontalArrangement = Arrangement.spacedBy(metrics.gap)) {
                     repeat(cols) { GameTileSkeleton(Modifier.width(metrics.coverWidth).aspectRatio(Aspect.BOX), coverCornerFraction()) }
@@ -1100,7 +1103,7 @@ private fun LibrarySkeleton(layout: LibraryLayout, metrics: TileMetrics, maxW: D
                 Spacer(Modifier.height(Size.hintHeight + Space.l))
             }
             LibraryLayout.COMPACT_LIST -> {
-                Column(Modifier.padding(start = Space.gutter, end = Space.gutter, top = Space.s), verticalArrangement = Arrangement.spacedBy(Space.xxs)) {
+                Column(Modifier.padding(start = Space.gutter, end = Space.gutter, top = CONTENT_TOP), verticalArrangement = Arrangement.spacedBy(Space.xxs)) {
                     val rows = ((maxH - Size.hudHeight) / (Size.row + Space.xxs)).toInt().coerceIn(1, SKELETON_LIST_ROWS)
                     repeat(rows) { i ->
                         Row(
@@ -1253,6 +1256,9 @@ private const val SKELETON_LIST_ROWS = 14
 /** Widths of the list skeleton's title bars, so the column reads as names of different lengths. */
 private val SKELETON_TITLE = floatArrayOf(0.42f, 0.56f, 0.34f, 0.5f, 0.38f, 0.6f, 0.46f)
 
+/** Room between the header and a layout that starts right under it (the Cover grid, the List). */
+private val CONTENT_TOP = Space.m
+
 /** Placeholder text bars are rounded like a line of type. */
 private val BAR_RADIUS = Space.s
 
@@ -1261,6 +1267,26 @@ private val BAR_RADIUS = Space.s
  * softens over this much while more games wait below.
  */
 private val BOTTOM_FADE = Space.xxl + Space.s
+
+/** Screens shorter than this get the compact header and stage (handhelds in landscape). */
+private val SHORT_SCREEN = 560.dp
+
+/** The stage's height as a share of the screen's, and its bounds; inside a system it is smaller. */
+private const val STAGE_SHARE = 0.22f
+private val STAGE_MIN = 110.dp
+private val STAGE_MAX = 200.dp
+private val SHORT_STAGE_MIN = 100.dp
+private val SHORT_STAGE_MAX = 120.dp
+private const val SYSTEM_STAGE_SHARE = 0.14f
+private val SYSTEM_STAGE_MIN = 92.dp
+private val SYSTEM_STAGE_MAX = 124.dp
+
+/** The selected game's logo on the stage, and on a short screen. */
+private val STAGE_LOGO = 84.dp
+private val STAGE_LOGO_SHORT = 56.dp
+
+/** Logos ahead of the selection are decoded at this size, ready for the stage. */
+private val LOGO_PREFETCH = 360.dp
 
 /** Room a folded system stage keeps on its right for the toolbar hanging beside it. */
 private val FOLDED_TOOLBAR_ROOM = 320.dp

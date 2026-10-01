@@ -155,16 +155,18 @@ fun GameIconTile(
     ) {
         val art = Modifier.fillMaxSize().alpha(if (card.missing) MISSING_ART_ALPHA else 1f)
         val label = card.platformShort.takeIf { LocalTileShowsSystem.current }
+        val border = LocalTileBorders.current.of(card.platformId)
+        // A border that names the system takes the tag; generated art then leaves it out.
+        val artLabel = label.takeUnless { border.carriesTag }
         if (poster) {
-            PosterGameArt(card.art, art, fallback = { GeneratedArt(card.title, accent, slot = ArtSlot.BOX, label = label) })
+            PosterGameArt(card.art, art, fallback = { GeneratedArt(card.title, accent, slot = ArtSlot.BOX, label = artLabel) })
         } else {
-            SquareGameArt(card.art, art, fallback = { GeneratedArt(card.title, accent, slot = ArtSlot.ICON, label = label) })
+            SquareGameArt(card.art, art, fallback = { GeneratedArt(card.title, accent, slot = ArtSlot.ICON, label = artLabel) })
         }
-        TileBorder(LocalTileBorders.current.of(card.platformId), accent, corner, label)
-        GameMarks(
-            card, Modifier.align(Alignment.TopEnd), inset = markInset(minOf(dims.width, dims.height), corner),
-            maxShare = if (poster && label != null) SHARED_TOP else 1f,
-        )
+        val inset = markInset(minOf(dims.width, dims.height), corner)
+        TileBorder(border, accent, corner, label, inset, badgeAt = if (poster) Alignment.TopStart else Alignment.BottomStart)
+        // On posters the tag shares the top edge with the marks.
+        GameMarks(card, Modifier.align(Alignment.TopEnd), inset = inset, maxShare = if (poster && label != null) SHARED_TOP else 1f)
     }
 }
 
@@ -183,6 +185,8 @@ fun GameCoverTile(
     val corner = coverCornerFraction()
     val shape = remember(corner) { SquircleShape.fraction(corner) }
     val label = card.platformShort.takeIf { LocalTileShowsSystem.current }
+    val border = LocalTileBorders.current.of(card.platformId)
+    val artLabel = label.takeUnless { border.carriesTag }
     Tile(
         selected = selected,
         glow = accent,
@@ -195,10 +199,11 @@ fun GameCoverTile(
         Artwork(
             model = card.art.boxart ?: card.art.grid ?: card.art.square ?: card.art.icon,
             modifier = Modifier.fillMaxSize().alpha(if (card.missing) MISSING_ART_ALPHA else 1f),
-            fallback = { GeneratedArt(card.title, accent, slot = ArtSlot.BOX, label = label) },
+            fallback = { GeneratedArt(card.title, accent, slot = ArtSlot.BOX, label = artLabel) },
         )
-        TileBorder(LocalTileBorders.current.of(card.platformId), accent, corner, label)
-        GameMarks(card, Modifier.align(Alignment.TopEnd), inset = markInset(width, corner), maxShare = if (label != null) SHARED_TOP else 1f)
+        val inset = markInset(width, corner)
+        TileBorder(border, accent, corner, label, inset, badgeAt = Alignment.TopStart)
+        GameMarks(card, Modifier.align(Alignment.TopEnd), inset = inset, maxShare = if (label != null) SHARED_TOP else 1f)
     }
 }
 
