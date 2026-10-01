@@ -1,21 +1,25 @@
 package io.github.matiyaaa.fuse.ui.shell.quick
 
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -27,15 +31,19 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.onPlaced
+import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import io.github.matiyaaa.fuse.model.ConnectionState
 import io.github.matiyaaa.fuse.model.Destination
 import io.github.matiyaaa.fuse.model.HomeMode
 import io.github.matiyaaa.fuse.model.NavAction
 import io.github.matiyaaa.fuse.model.ScanPhase
 import io.github.matiyaaa.fuse.model.ScanScope
+import io.github.matiyaaa.fuse.model.SystemStatus
 import io.github.matiyaaa.fuse.ui.designsystem.components.BatteryGlyph
 import io.github.matiyaaa.fuse.ui.designsystem.components.FText
 import io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction
@@ -46,13 +54,18 @@ import io.github.matiyaaa.fuse.ui.designsystem.components.Panel
 import io.github.matiyaaa.fuse.ui.designsystem.components.SectionLabel
 import io.github.matiyaaa.fuse.ui.designsystem.components.SliderBar
 import io.github.matiyaaa.fuse.ui.designsystem.components.Trailing
+import io.github.matiyaaa.fuse.ui.designsystem.components.fadingEdges
+import io.github.matiyaaa.fuse.ui.designsystem.effects.rememberReveal
+import io.github.matiyaaa.fuse.ui.designsystem.effects.reveal
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
 import io.github.matiyaaa.fuse.ui.designsystem.input.InputLayer
 import io.github.matiyaaa.fuse.ui.designsystem.input.LayerPriority
 import io.github.matiyaaa.fuse.ui.designsystem.input.NavResult
 import io.github.matiyaaa.fuse.ui.designsystem.sound.SoundCue
+import io.github.matiyaaa.fuse.ui.designsystem.theme.Durations
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
+import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.ConfirmSpec
@@ -63,11 +76,15 @@ import io.github.matiyaaa.fuse.ui.shell.app.offers
 import io.github.matiyaaa.fuse.ui.shell.app.rememberClockText
 import io.github.matiyaaa.fuse.ui.shell.capture.rememberRecordingTime
 import io.github.matiyaaa.fuse.ui.shell.components.ControlTile
+import io.github.matiyaaa.fuse.ui.shell.components.ROW_CONTENT_START
+import io.github.matiyaaa.fuse.ui.shell.components.rememberRowHighlight
 import io.github.matiyaaa.fuse.ui.shell.components.batteryTimeText
+import io.github.matiyaaa.fuse.ui.shell.components.controlWellShape
 import io.github.matiyaaa.fuse.ui.shell.home.switchHomeStyle
 import io.github.matiyaaa.fuse.ui.shell.settings.next
 import io.github.matiyaaa.fuse.ui.shell.settings.performanceLabel
 import io.github.matiyaaa.fuse.ui.shell.store.UpdateState
+import kotlin.math.roundToInt
 
 /**
  * A tile; a [toggle] says On or Off under its name and is lit while [active]. [hold] is what holding
@@ -115,8 +132,20 @@ fun QuickMenu(app: AppState) {
     val recordingTime = rememberRecordingTime(capture)
 
     val tiles = buildList {
-        if (features.wifiSettings) add(QuickTile("Wi-Fi", FuseIcons.Wifi) { platform.quick.openWifi() })
-        if (features.bluetoothSettings) add(QuickTile("Bluetooth", FuseIcons.Bluetooth) { platform.quick.openBluetooth() })
+        // Both open the system's panel; the tile says how things stand where the platform reports it.
+        if (features.wifiSettings) {
+            add(QuickTile(
+                "Wi-Fi", if (status.wifi == ConnectionState.OFF) FuseIcons.WifiOff else FuseIcons.Wifi,
+                active = status.wifi == ConnectionState.CONNECTED, detail = connectionText(status.wifi),
+            ) { platform.quick.openWifi() })
+        }
+        if (features.bluetoothSettings) {
+            add(QuickTile(
+                "Bluetooth", if (status.bluetooth == ConnectionState.OFF) FuseIcons.BluetoothOff else FuseIcons.Bluetooth,
+                active = status.bluetooth == ConnectionState.CONNECTED || status.bluetooth == ConnectionState.ON,
+                detail = connectionText(status.bluetooth),
+            ) { platform.quick.openBluetooth() })
+        }
         // A screenshot three seconds after the menu closes; held, a recording after the same wait.
         if (capture != null) {
             if (recordingTime != null) {
@@ -162,7 +191,8 @@ fun QuickMenu(app: AppState) {
         add(QuickTile("Home", if (prefs.home.mode == HomeMode.CHANNELS) FuseIcons.Grid else FuseIcons.Rows, detail = if (prefs.home.mode == HomeMode.CHANNELS) "Channels" else "Flow") {
             app.switchHomeStyle()
         })
-        add(QuickTile("Sound", FuseIcons.Volume, active = prefs.sound != io.github.matiyaaa.fuse.model.SoundProfile.OFF, toggle = true) {
+        val soundOn = prefs.sound != io.github.matiyaaa.fuse.model.SoundProfile.OFF
+        add(QuickTile("Sound", if (soundOn) FuseIcons.Volume else FuseIcons.VolumeOff, active = soundOn, toggle = true) {
             app.store.updatePrefs { it.copy(sound = if (it.sound == io.github.matiyaaa.fuse.model.SoundProfile.OFF) io.github.matiyaaa.fuse.model.SoundProfile.SOFT else io.github.matiyaaa.fuse.model.SoundProfile.OFF) }
         })
     }
@@ -248,65 +278,167 @@ fun QuickMenu(app: AppState) {
         }
     }
 
+    val reveal = rememberReveal(open)
+    val highlight = rememberRowHighlight()
+    val target = highlight.bounds[row]?.takeIf { open && rows.getOrNull(row) !is QuickRow.Tiles }
+    highlight.Follow(target)
+
     Overlay(visible = open, onDismiss = ::close, edge = OverlayEdge.END) {
         val c = Fuse.colors
         val time = rememberClockText(prefs.clock24h)
-        Panel(Modifier.width(400.dp).fillMaxHeight().padding(vertical = Space.l).padding(end = Space.l)) {
-            Column(Modifier.padding(Space.l).verticalScroll(rememberScrollState())) {
-                FText(time, Fuse.type.numericLarge)
-                FText(formatDate(), Fuse.type.body, color = c.textMuted)
-                Spacer(Modifier.height(Space.m))
-                status.batteryPercent?.let { pct ->
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s)) {
-                        BatteryGlyph(pct, status.charging)
-                        val state = batteryTimeText(status) ?: if (status.charging) "Charging" else null
-                        FText(listOfNotNull("$pct%", state).joinToString("  ·  "), Fuse.type.label, color = c.textMuted)
-                    }
-                }
-                Spacer(Modifier.height(Space.l))
-                rows.forEachIndexed { i, r ->
-                  Column(Modifier.bringIntoViewRequester(requesters[i])) {
-                    when (r) {
-                        is QuickRow.Tiles -> {
-                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.s)) {
-                                r.tiles.forEachIndexed { j, t ->
-                                    ControlTile(
-                                        t.label, t.icon, selected = i == row && j == col,
-                                        modifier = Modifier.weight(1f).aspectRatio(1.1f),
-                                        active = t.active, detail = t.detail, toggle = t.toggle,
-                                        onLongClick = t.hold?.let { hold -> { row = i; col = j; hold() } },
-                                    ) { row = i; col = j; t.run() }
+        val scroll = rememberScrollState()
+        BoxWithConstraints {
+            // A side sheet the height of the screen; a narrow screen gives it all but a margin.
+            val width = minOf(QUICK_MENU_WIDTH, maxWidth - Space.l)
+            Panel(Modifier.width(width).fillMaxHeight().padding(vertical = Space.l).padding(end = Space.l)) {
+                Column(Modifier.fillMaxSize()) {
+                    // The clock and battery stay put; the controls scroll under them.
+                    QuickHeader(time, status, Modifier.padding(start = Space.l, end = Space.l, top = Space.l).reveal(reveal, 0))
+                    Spacer(Modifier.height(Space.m))
+                    Box(Modifier.fillMaxWidth().padding(horizontal = Space.l).height(Size.divider).background(c.hairline))
+                    Column(
+                        Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                            .fadingEdges(scroll, top = Space.l, bottom = Space.xl)
+                            .verticalScroll(scroll)
+                            // Room for a lifted tile's ring at the top and the sheet's corner at the bottom.
+                            .padding(horizontal = Space.l)
+                            .padding(top = Space.l, bottom = Space.l)
+                            .then(highlight.drawModifier()),
+                    ) {
+                        rows.forEachIndexed { i, r ->
+                            val prev = rows.getOrNull(i - 1)
+                            when {
+                                prev == null -> Unit
+                                r is QuickRow.Tiles -> Spacer(Modifier.height(TILE_GAP))
+                                r is QuickRow.Slider && prev is QuickRow.Tiles -> Spacer(Modifier.height(Space.l))
+                                r is QuickRow.Item && prev !is QuickRow.Item -> {
+                                    Spacer(Modifier.height(Space.l))
+                                    SectionLabel("Fuse", Modifier.padding(start = ROW_CONTENT_START).reveal(reveal, i + 1))
+                                    Spacer(Modifier.height(Space.s))
                                 }
-                                repeat(3 - r.tiles.size) { Spacer(Modifier.weight(1f)) }
+                                else -> Spacer(Modifier.height(Space.xxs))
                             }
-                            Spacer(Modifier.height(Space.s))
-                        }
-                        is QuickRow.Slider -> {
-                            if (i > 0 && rows[i - 1] is QuickRow.Tiles) Spacer(Modifier.height(Space.m))
-                            val selected = i == row
-                            Row(
-                                Modifier.fillMaxWidth().clip(RoundedCornerShape(Fuse.geometry.control))
-                                    .background(if (selected) c.text.copy(alpha = 0.08f) else Color.Transparent)
-                                    .padding(horizontal = Space.m, vertical = Space.s),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                FuseIcon(r.icon, tint = c.textMuted)
-                                Spacer(Modifier.width(Space.m))
-                                SliderBar(r.value, selected, Modifier.weight(1f))
+                            val placed = Modifier
+                                .bringIntoViewRequester(requesters[i])
+                                .reveal(reveal, i + 1)
+                                .onPlaced { coords ->
+                                    // Where the row sits in the list, for the highlight gliding between rows.
+                                    val y = coords.positionInParent().y
+                                    highlight.place(i, y, y + coords.size.height)
+                                }
+                            when (r) {
+                                is QuickRow.Tiles -> Row(placed.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TILE_GAP)) {
+                                    r.tiles.forEachIndexed { j, t ->
+                                        ControlTile(
+                                            t.label, t.icon, selected = i == row && j == col,
+                                            modifier = Modifier.weight(1f).aspectRatio(TILE_ASPECT),
+                                            active = t.active, detail = t.detail, toggle = t.toggle,
+                                            onLongClick = t.hold?.let { hold -> { row = i; col = j; hold() } },
+                                        ) { row = i; col = j; t.run() }
+                                    }
+                                    repeat(3 - r.tiles.size) { Spacer(Modifier.weight(1f)) }
+                                }
+                                is QuickRow.Slider -> SliderRow(r, selected = i == row, placed) { v -> row = i; r.set(v) }
+                                is QuickRow.Item -> MenuRow(r.action, selected = i == row, modifier = placed, highlight = false, onClick = { row = i; r.action.onSelect() })
                             }
-                        }
-                        is QuickRow.Item -> {
-                            if (i > 0 && rows[i - 1] !is QuickRow.Item) {
-                                Spacer(Modifier.height(Space.l))
-                                SectionLabel("Fuse")
-                                Spacer(Modifier.height(Space.s))
-                            }
-                            MenuRow(r.action, selected = i == row)
                         }
                     }
-                  }
                 }
             }
         }
     }
+}
+
+/** The sheet's width, the same as the context menu's side sheet; narrower screens give it all but a margin. */
+private val QUICK_MENU_WIDTH = 420.dp
+
+/** Between control tiles, wide enough that a focused tile's ring never meets its neighbours. */
+private val TILE_GAP = Space.m
+
+/** Control tiles are a little wider than tall, so two lines of text sit under the icon. */
+private const val TILE_ASPECT = 1.1f
+
+/**
+ * The quick menu's top line: the time large (with AM or PM set smaller beside it), the date under it,
+ * and on the right the battery with what is left of it. Anything the platform doesn't report is left
+ * out.
+ */
+@Composable
+private fun QuickHeader(time: String, status: SystemStatus, modifier: Modifier = Modifier) {
+    val c = Fuse.colors
+    Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
+        Column(Modifier.weight(1f)) {
+            val suffix = time.substringAfterLast(' ', "").takeIf { it.isNotEmpty() && it.all(Char::isLetter) }
+            Row {
+                FText(if (suffix != null) time.substringBeforeLast(' ') else time, Fuse.type.numericLarge, maxLines = 1, modifier = Modifier.alignByBaseline())
+                if (suffix != null) {
+                    Spacer(Modifier.width(Space.xs + Space.xxs))
+                    FText(suffix, Fuse.type.titleSmall, color = c.textMuted, maxLines = 1, modifier = Modifier.alignByBaseline())
+                }
+            }
+            Spacer(Modifier.height(Space.xxs))
+            FText(formatDate(), Fuse.type.body, color = c.textMuted, maxLines = 1)
+        }
+        status.batteryPercent?.let { pct ->
+            Spacer(Modifier.width(Space.m))
+            Column(horizontalAlignment = Alignment.End) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    BatteryGlyph(pct, status.charging)
+                    Spacer(Modifier.width(Space.s))
+                    FText("$pct%", Fuse.type.numeric, maxLines = 1)
+                }
+                (batteryTimeText(status) ?: if (status.charging) "Charging" else null)?.let { state ->
+                    Spacer(Modifier.height(Space.xxs))
+                    FText(state, Fuse.type.body, color = c.textMuted, maxLines = 1)
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Brightness or volume: the same anatomy as a menu row (the selection bar's room, an icon in a well,
+ * then the slider and its value), so the gliding highlight sits on it like on any row. Dragging the
+ * bar sets the value by touch.
+ */
+@Composable
+private fun SliderRow(r: QuickRow.Slider, selected: Boolean, modifier: Modifier, onChange: (Float) -> Unit) {
+    Row(
+        modifier.fillMaxWidth().heightIn(min = Size.row).padding(end = Space.l).semantics { this.selected = selected },
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Spacer(Modifier.width(ROW_CONTENT_START))
+        val icon = when {
+            r.icon == FuseIcons.Volume && r.value <= 0.001f -> FuseIcons.VolumeOff
+            r.icon == FuseIcons.Sun && r.value < 0.5f -> FuseIcons.SunDim
+            else -> r.icon
+        }
+        RowWell(icon, selected)
+        Spacer(Modifier.width(Space.m))
+        SliderBar(r.value, selected, Modifier.weight(1f), onChange = onChange, valueText = "${(r.value * 100).roundToInt()}%")
+    }
+}
+
+/** A row's icon in a quiet well, the same size and shape as a [MenuRow]'s. */
+@Composable
+private fun RowWell(icon: ImageVector, selected: Boolean) {
+    val c = Fuse.colors
+    val fill by animateColorAsState(
+        c.text.copy(alpha = if (selected) (if (c.isDark) 0.13f else 0.1f) else (if (c.isDark) 0.07f else 0.055f)),
+        Fuse.motion.tween(Durations.FAST),
+        label = "well",
+    )
+    Box(Modifier.size(Size.iconXL).clip(controlWellShape()).background(fill), contentAlignment = Alignment.Center) {
+        FuseIcon(icon, size = Size.glyphS, tint = if (selected) c.text else c.text.copy(alpha = 0.82f))
+    }
+}
+
+/** How a connection stands, for a tile's state line; nothing when the platform doesn't say. */
+private fun connectionText(state: ConnectionState): String? = when (state) {
+    ConnectionState.CONNECTED -> "Connected"
+    ConnectionState.ON -> "On"
+    ConnectionState.OFF -> "Off"
+    ConnectionState.UNKNOWN -> null
 }

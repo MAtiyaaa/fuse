@@ -1,14 +1,18 @@
 package io.github.matiyaaa.fuse.ui.shell.apps
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyGridState
@@ -25,20 +29,36 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import io.github.matiyaaa.fuse.model.AppFilter
 import io.github.matiyaaa.fuse.model.AppKind
 import io.github.matiyaaa.fuse.model.NavAction
-import io.github.matiyaaa.fuse.ui.designsystem.components.Chip
+import io.github.matiyaaa.fuse.ui.designsystem.components.EmptyState
 import io.github.matiyaaa.fuse.ui.designsystem.components.FText
 import io.github.matiyaaa.fuse.ui.designsystem.components.Hint
+import io.github.matiyaaa.fuse.ui.designsystem.components.IconBadge
 import io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction
+import io.github.matiyaaa.fuse.ui.designsystem.components.Skeleton
+import io.github.matiyaaa.fuse.ui.designsystem.components.SkeletonText
+import io.github.matiyaaa.fuse.ui.designsystem.components.Tile
 import io.github.matiyaaa.fuse.ui.designsystem.components.Trailing
+import io.github.matiyaaa.fuse.ui.designsystem.components.fadingEdges
+import io.github.matiyaaa.fuse.ui.designsystem.effects.rememberReveal
+import io.github.matiyaaa.fuse.ui.designsystem.effects.reveal
 import io.github.matiyaaa.fuse.ui.designsystem.focus.FollowSelection
 import io.github.matiyaaa.fuse.ui.designsystem.focus.GridSelection
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
 import io.github.matiyaaa.fuse.ui.designsystem.icons.HintButton
 import io.github.matiyaaa.fuse.ui.designsystem.input.InputLayer
 import io.github.matiyaaa.fuse.ui.designsystem.input.NavResult
+import io.github.matiyaaa.fuse.ui.designsystem.media.ArtSlot
+import io.github.matiyaaa.fuse.ui.designsystem.media.Artwork
+import io.github.matiyaaa.fuse.ui.designsystem.media.GeneratedArt
+import io.github.matiyaaa.fuse.ui.designsystem.shape.SquircleShape
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
@@ -51,7 +71,6 @@ import io.github.matiyaaa.fuse.ui.shell.app.appScreenPicker
 import io.github.matiyaaa.fuse.ui.shell.app.hasTwoScreens
 import io.github.matiyaaa.fuse.ui.shell.app.openApp
 import io.github.matiyaaa.fuse.ui.shell.app.rememberRouteState
-import io.github.matiyaaa.fuse.ui.shell.components.AppTile
 import io.github.matiyaaa.fuse.ui.shell.components.LocalTileMetrics
 import io.github.matiyaaa.fuse.ui.shell.components.ViewTab
 import io.github.matiyaaa.fuse.ui.shell.components.ViewTabs
@@ -81,8 +100,9 @@ class AppsViewState(initial: AppFilter) {
 fun AppsScreen(app: AppState) {
     val store = app.store
     if (!store.apps.supported) {
-        Box(Modifier.fillMaxSize().padding(horizontal = Space.gutter), contentAlignment = Alignment.CenterStart) {
-            FText("Apps aren't available on this system.", Fuse.type.display)
+        LaunchedEffect(Unit) { app.hints = emptyList() }
+        Box(Modifier.fillMaxSize().padding(horizontal = Space.gutter).padding(top = Size.hudHeight, bottom = Size.hintHeight), contentAlignment = Alignment.Center) {
+            EmptyState(FuseIcons.AppWindow, "Apps aren't available on this system")
         }
         return
     }
@@ -98,9 +118,11 @@ fun AppsScreen(app: AppState) {
     if (loaded != null) sel.clamp(apps.size)
     var columns by remember { mutableIntStateOf(7) }
 
-    LaunchedEffect(Unit) {
-        app.hero = null
-        app.hints = listOf(Hint(HintButton.CONFIRM, "Open"), Hint(HintButton.OPTIONS, "Options"))
+    LaunchedEffect(Unit) { app.hero = null }
+    // Open and Options only while there is an app to open.
+    val any = apps.isNotEmpty()
+    LaunchedEffect(any) {
+        app.hints = if (any) listOf(Hint(HintButton.CONFIRM, "Open"), Hint(HintButton.OPTIONS, "Options")) else emptyList()
     }
 
     InputLayer(enabled = app.focusZone == FocusZone.CONTENT && !app.overlayOpen) { e ->
@@ -126,6 +148,8 @@ fun AppsScreen(app: AppState) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val size = LocalTileMetrics.current.icon * 0.82f
         columns = ((maxWidth - Space.gutter * 2 + Space.xl) / (size + Space.xl)).toInt().coerceAtLeast(3)
+        // Each list is its own entry: its first rows rise in as it opens.
+        val reveal = rememberReveal(filter)
         Column(Modifier.fillMaxSize()) {
             Spacer(Modifier.height(Size.hudHeight + Space.m))
             ViewTabs(
@@ -137,56 +161,128 @@ fun AppsScreen(app: AppState) {
                     view.filter = filters[i].first
                     view.inFilters = false
                 },
+                modifier = Modifier.reveal(reveal, 0),
             )
-            Spacer(Modifier.height(Space.l))
-            if (loaded != null && apps.isEmpty()) {
-                FText(
+            Spacer(Modifier.height(Space.xs))
+            when {
+                loaded == null -> AppsLoading(columns, size)
+                apps.isEmpty() -> Box(
+                    Modifier.fillMaxWidth().weight(1f).padding(horizontal = Space.gutter).padding(bottom = Size.hintHeight + Space.xl),
+                    contentAlignment = Alignment.Center,
+                ) {
                     when (filter) {
-                        AppFilter.PINNED -> "Pin apps from their options to keep them here."
-                        AppFilter.EMULATORS -> "No emulators found. Set an app's Type to Emulator in its options."
-                        else -> "No apps found."
-                    },
-                    Fuse.type.body, color = Fuse.colors.textMuted, modifier = Modifier.padding(horizontal = Space.gutter),
-                )
-            }
-            // A fresh grid per list; following the selection brings back where you were in it.
-            val grid = remember(filter) { LazyGridState() }
-            FollowSelection(grid, { sel.index }, anchor = 0.1f)
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(columns),
-                state = grid,
-                contentPadding = PaddingValues(start = Space.gutter, end = Space.gutter, bottom = Size.hintHeight + Space.x4),
-                horizontalArrangement = Arrangement.spacedBy(Space.xl),
-                verticalArrangement = Arrangement.spacedBy(Space.xl),
-            ) {
-                itemsIndexed(apps, key = { _, a -> a.entry.id }) { i, a ->
-                    val selected = !inFilters && i == sel.index && app.focusZone == FocusZone.CONTENT
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        AppTile(
-                            a, selected, size = size,
-                            onClick = {
-                                app.focusZone = FocusZone.CONTENT
-                                view.inFilters = false
-                                // A tap opens the app straight away, like any launcher.
-                                sel.index = i
-                                app.openApp(a)
-                            },
-                            onLongClick = { sel.index = i; app.openContextMenu(app.appMenu(a)) },
-                        )
-                        Spacer(Modifier.height(Space.m))
-                        FText(
-                            a.entry.displayTitle, Fuse.type.label,
-                            color = if (selected) Fuse.colors.text else Fuse.colors.textMuted,
-                            maxLines = 1,
-                            modifier = Modifier.width(size + Space.l),
-                            align = androidx.compose.ui.text.style.TextAlign.Center,
-                        )
+                        AppFilter.PINNED -> EmptyState(FuseIcons.Pin, "Nothing pinned yet", message = "Pin apps from their options to keep them here.")
+                        AppFilter.EMULATORS -> EmptyState(FuseIcons.Chip, "No emulators found", message = "Set an app's Type to Emulator in its options, and it shows up here.")
+                        else -> EmptyState(FuseIcons.AppWindow, "No apps found")
+                    }
+                }
+                else -> {
+                    // A fresh grid per list; following the selection brings back where you were in it.
+                    val grid = remember(filter) { LazyGridState() }
+                    FollowSelection(grid, { sel.index }, anchor = 0.1f)
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(columns),
+                        state = grid,
+                        modifier = Modifier.fadingEdges(grid, top = Space.l, bottom = 0.dp),
+                        // Room above the first row for a lifted tile, and below the last for the hints.
+                        contentPadding = PaddingValues(start = Space.gutter, end = Space.gutter, top = Space.l, bottom = Size.hintHeight + Space.x4),
+                        horizontalArrangement = Arrangement.spacedBy(Space.xl),
+                        verticalArrangement = Arrangement.spacedBy(Space.xl),
+                    ) {
+                        itemsIndexed(apps, key = { _, a -> a.entry.id }) { i, a ->
+                            val selected = !inFilters && i == sel.index && app.focusZone == FocusZone.CONTENT
+                            AppDrawerItem(
+                                a, selected, size,
+                                // Pins are marked where they aren't the whole list.
+                                pinMark = filter != AppFilter.PINNED && a.entry.pinned,
+                                // The first rows arrive as a soft diagonal wave from the top left.
+                                modifier = Modifier.reveal(reveal, 1 + i / columns + i % columns),
+                                onClick = {
+                                    app.focusZone = FocusZone.CONTENT
+                                    view.inFilters = false
+                                    // A tap opens the app straight away, like any launcher.
+                                    sel.index = i
+                                    app.openApp(a)
+                                },
+                                onLongClick = { sel.index = i; app.openContextMenu(app.appMenu(a)) },
+                            )
+                        }
                     }
                 }
             }
         }
     }
 }
+
+/**
+ * One app in the drawer: its icon centred on the tile's plate (an app without an icon gets a
+ * generated one in an icon's own rounded shape, so every plate holds the same kind of mark), and its
+ * name under it, clear of the focused tile's spark bar.
+ */
+@Composable
+private fun AppDrawerItem(
+    card: AppCard,
+    selected: Boolean,
+    size: Dp,
+    pinMark: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+) {
+    val c = Fuse.colors
+    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+        Tile(selected = selected, glow = c.accent, modifier = Modifier.size(size), onClick = onClick, onLongClick = onLongClick) {
+            Box(Modifier.fillMaxSize().background(c.surfaceRaised), contentAlignment = Alignment.Center) {
+                val mark = Modifier.fillMaxSize(APP_ICON_SHARE)
+                Artwork(
+                    model = card.icon,
+                    modifier = mark,
+                    contentScale = ContentScale.Fit,
+                    fallback = {
+                        GeneratedArt(card.entry.displayTitle, c.accent, Modifier.fillMaxSize().clip(SquircleShape.fraction(APP_ICON_CORNER)), slot = ArtSlot.ICON)
+                    },
+                )
+                if (pinMark) IconBadge(FuseIcons.Pin, Modifier.align(Alignment.TopEnd).padding(Space.s), tint = c.onArt, background = c.artScrim, size = Size.badge)
+            }
+        }
+        Spacer(Modifier.height(Size.sparkClearance))
+        FText(
+            card.entry.displayTitle, Fuse.type.label,
+            color = if (selected) c.text else c.textMuted,
+            maxLines = 1,
+            modifier = Modifier.width(size + Space.l),
+            align = TextAlign.Center,
+        )
+    }
+}
+
+/** The drawer's shape while its list loads: plates and name bars where the first rows will be. */
+@Composable
+private fun AppsLoading(columns: Int, size: Dp) {
+    val plate = SquircleShape.fraction(Fuse.geometry.tileCornerFraction)
+    Column(
+        Modifier.padding(start = Space.gutter, end = Space.gutter, top = Space.l),
+        verticalArrangement = Arrangement.spacedBy(Space.xl),
+    ) {
+        repeat(2) {
+            Row(horizontalArrangement = Arrangement.spacedBy(Space.xl)) {
+                repeat(columns) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Skeleton(Modifier.size(size), shape = plate)
+                        Spacer(Modifier.height(Size.sparkClearance))
+                        SkeletonText(Modifier.width(size * 0.7f), lines = 1, style = Fuse.type.label)
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** How much of the plate an app's icon covers. */
+private const val APP_ICON_SHARE = 0.62f
+
+/** The rounded square a generated app icon takes, close to the shape launchers give app icons. */
+private const val APP_ICON_CORNER = 0.24f
 
 fun AppState.appMenu(app: AppCard): ContextMenuSpec {
     val ops = store.apps
