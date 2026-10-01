@@ -129,7 +129,24 @@ interface QuickControls {
     fun openSoundSettings()
     fun openSystemSettings()
     fun openControllerSettings()
+
+    /** The second screen's brightness (Fuse's window there), or null where Fuse can't set it. */
+    val secondBrightness: StateFlow<Float?> get() = NO_VALUE
+    fun setSecondBrightness(value: Float) = Unit
+
+    /**
+     * True when [setBrightness] changes the screen itself (Android's "Modify system settings" was
+     * allowed), so it holds in games too; false when it only brightens Fuse's own window.
+     */
+    val systemBrightness: StateFlow<Boolean> get() = NOT_ALLOWED
+
+    /** Asks to change the screen's brightness itself (opens the system page that allows it), where that exists. */
+    val canAskSystemBrightness: Boolean get() = false
+    fun askSystemBrightness() = Unit
 }
+
+private val NO_VALUE: StateFlow<Float?> = kotlinx.coroutines.flow.MutableStateFlow(null)
+private val NOT_ALLOWED: StateFlow<Boolean> = kotlinx.coroutines.flow.MutableStateFlow(false)
 
 /** Muted gameplay previews behind the interface (Android Media3). */
 interface VideoPreview {

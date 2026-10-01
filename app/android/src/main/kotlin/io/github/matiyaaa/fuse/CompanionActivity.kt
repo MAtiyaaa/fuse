@@ -5,6 +5,7 @@ import android.content.Intent
 import android.graphics.Color as AndroidColor
 import android.os.Bundle
 import android.view.Display
+import android.view.InputDevice
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.WindowManager
@@ -42,7 +43,8 @@ open class CompanionActivity : ComponentActivity() {
         if (leaveMainScreen()) return
         val role = if (isDisplayHome) "Home companion" else "Companion"
         SecondScreenLog.add("$role running on display ${displayIdCompat()}")
-        window.addFlags(WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE)
+        window.addFlags(WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH)
+        app.platformUi.quick.attachSecond(window)
         enterImmersive()
         // A back swipe on the second screen must not close it; the setting controls it.
         onBackPressedDispatcher.addCallback(
@@ -92,9 +94,26 @@ open class CompanionActivity : ComponentActivity() {
         return true
     }
 
+    override fun onDestroy() {
+        app.platformUi.quick.detachSecond(window)
+        super.onDestroy()
+    }
+
+    override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+        SecondScreenTouch.touched()
+        return super.dispatchTouchEvent(ev)
+    }
+
+    /**
+     * Controller keys go to the main screen. Back from this screen itself (its navigation bar or
+     * gesture, not a controller) does nothing: the second screen never moves Fuse back.
+     */
     @SuppressLint("RestrictedApi") // Lint false positive: Activity.dispatchKeyEvent is public API.
-    override fun dispatchKeyEvent(event: KeyEvent): Boolean =
-        app.activities.main?.forwardKey(event) == true || super.dispatchKeyEvent(event)
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        val controller = event.isFromSource(InputDevice.SOURCE_GAMEPAD) || event.isFromSource(InputDevice.SOURCE_JOYSTICK)
+        if (event.keyCode == KeyEvent.KEYCODE_BACK && !controller) return true
+        return app.activities.main?.forwardKey(event) == true || super.dispatchKeyEvent(event)
+    }
 
     override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean =
         app.activities.main?.forwardMotion(event) == true || super.dispatchGenericMotionEvent(event)

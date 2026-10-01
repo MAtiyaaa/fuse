@@ -11,6 +11,7 @@ import io.github.matiyaaa.fuse.model.ScanPhase
 import io.github.matiyaaa.fuse.ui.designsystem.input.InputSource
 import io.github.matiyaaa.fuse.ui.designsystem.input.NavResult
 import io.github.matiyaaa.fuse.ui.designsystem.theme.ThemePresets
+import io.github.matiyaaa.fuse.ui.shell.app.CompanionPage
 import io.github.matiyaaa.fuse.ui.shell.app.Spotlight
 import io.github.matiyaaa.fuse.ui.shell.screenshots.ScreenshotPlatform
 import io.github.matiyaaa.fuse.ui.shell.settings.settingsSections
@@ -26,7 +27,7 @@ internal fun AuditDriver.openSettings() {
     home()
     tap(PadButton.START)
     waitFor("Arrange Home")
-    choose(6)
+    tapText("Settings")
     waitFor("Theme, motion, glass, CRT")
     settle()
 }
@@ -51,10 +52,29 @@ internal fun AuditDriver.overlayScreens(exhaustive: Boolean) {
         tap(PadButton.START)
         waitFor("Arrange Home")
         shoot("open, first tile focused")
+        // Low Power shows whether it is on while focused, before and after pressing it.
+        val nextTile = {
+            if (nav(NavAction.RIGHT) != NavResult.MOVED) {
+                nav(NavAction.DOWN)
+                nav(NavAction.LEFT)
+                nav(NavAction.LEFT)
+            }
+        }
+        focusText("Low Power", step = nextTile)
+        shoot("Low Power focused, off")
+        tap(PadButton.A)
+        settle(500)
+        shoot("Low Power focused, on")
+        tap(PadButton.A)
+        focusText("Find games", step = nextTile)
+        shoot("Find games focused")
+        tap(PadButton.B)
         if (!exhaustive) return@scenario
-        tap(PadButton.DPAD_DOWN, 3)
+        tap(PadButton.START)
+        waitFor("Arrange Home")
+        tap(PadButton.DPAD_DOWN, 4)
         shoot("brightness slider focused")
-        tap(PadButton.DPAD_DOWN, 5)
+        tap(PadButton.DPAD_DOWN, 6)
         shoot("last row (Exit Fuse) focused")
         tap(PadButton.A)
         waitFor("Exit Fuse?")
@@ -240,6 +260,11 @@ internal fun AuditDriver.settingsScreens(exhaustive: Boolean) {
         tap(PadButton.A)
         settle(600)
         shoot("two games picked")
+        // The drives follow the list down, for screens without touch.
+        tap(PadButton.DPAD_DOWN, 12)
+        settle(900)
+        shoot("further down the games, the drives scrolled along")
+        tap(PadButton.DPAD_UP, 12)
         tapText("Delete 2 games", step = PadButton.DPAD_UP, substring = true)
         waitFor("This can't be undone")
         shoot("delete confirmation naming what goes")
@@ -287,7 +312,7 @@ internal fun AuditDriver.settingsScreens(exhaustive: Boolean) {
         home()
         tap(PadButton.START)
         waitFor("Arrange Home")
-        choose(5)
+        tapText("Arrange Home")
         waitFor("Style, shelves, sections")
         shoot("Arrange Home from the quick menu")
     }
@@ -520,6 +545,35 @@ internal fun AuditDriver.companionScreens() {
         }
         Spotlight.set(PlatformId("psp"))
         shoot("system focused (no emulator)", 2_000)
+        Spotlight.set(null)
+    }
+
+    scenario("companion", "pages") {
+        val store = libraryStore
+        val cards = runBlocking { store.library.games(GameQuery()).first() }
+        CompanionPage.current.value = 0
+        view = AuditView.Companion(store, platform, DualScreenMode.LIBRARY_COMPANION)
+        settle(1_200)
+        Spotlight.set(cards.first { it.title == "Hollow Meridian" }.id)
+        shoot("page 1, the focused game's logo over its room", 2_000)
+        // A game with a logo of its own.
+        val logo = java.io.File(cache, "companion-logo.png").also { AuditSystemArt.logo(it, "Velvet Orbit") }
+        val velvet = cards.first { it.title == "Velvet Orbit" }
+        runBlocking { store.media.setFromFile(io.github.matiyaaa.fuse.model.MediaOwner.OfGame(velvet.id), io.github.matiyaaa.fuse.model.MediaKind.LOGO, logo.absolutePath) }
+        try {
+            Spotlight.set(velvet.id)
+            shoot("page 1, a game with its logo", 2_000)
+        } finally {
+            runBlocking { store.media.reset(io.github.matiyaaa.fuse.model.MediaOwner.OfGame(velvet.id), io.github.matiyaaa.fuse.model.MediaKind.LOGO) }
+        }
+        val collection = store.collections.collections.value.first { it.gameCount > 0 }
+        Spotlight.set(collection.id)
+        shoot("page 1, a collection focused", 2_000)
+        CompanionPage.current.value = 1
+        shoot("page 2, status", 1_500)
+        CompanionPage.current.value = 2
+        shoot("page 3, controls", 1_500)
+        CompanionPage.current.value = 0
         Spotlight.set(null)
     }
 

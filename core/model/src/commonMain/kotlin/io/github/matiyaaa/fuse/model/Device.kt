@@ -118,6 +118,8 @@ data class DisplayProfile(
     val appScreen: LaunchDisplay = LaunchDisplay.ASK,
     /** Screens chosen for single apps, by app id ("package/activity"). */
     val appScreens: Map<String, LaunchDisplay> = emptyMap(),
+    /** The second screen's page: 0 what the main screen shows, 1 status, 2 controls. */
+    val companionPage: Int = 0,
 )
 
 /** Live system status for the status area. Fields are null when the platform doesn't report them. */
