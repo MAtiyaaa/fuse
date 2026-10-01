@@ -174,8 +174,15 @@ fun StorageScreen(app: AppState) {
             }
             Spacer(Modifier.height(Space.l))
             if (wide) {
+                // The drives scroll along with the list: moving down the games moves down the drives
+                // by the same share, so every part of them can be read without touching the screen.
+                val drives = rememberScrollState()
+                LaunchedEffect(sel.index, rows.size, drives.maxValue) {
+                    val share = if (rows.size <= 1) 0f else sel.index.toFloat() / (rows.size - 1)
+                    drives.animateScrollTo((drives.maxValue * share).toInt())
+                }
                 Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(Space.xl)) {
-                    Column(Modifier.weight(0.4f).fillMaxHeight().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(Space.l)) {
+                    Column(Modifier.weight(0.4f).fillMaxHeight().verticalScroll(drives), verticalArrangement = Arrangement.spacedBy(Space.l)) {
                         Volumes(u)
                         Spacer(Modifier.height(Size.hintHeight + Space.l))
                     }

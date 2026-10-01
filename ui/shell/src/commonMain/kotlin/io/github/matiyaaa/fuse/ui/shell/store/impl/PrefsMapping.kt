@@ -71,6 +71,7 @@ internal fun AppSettings.toUiPrefs(scoped: GlobalScoped): UiPrefs {
         cartridgeEnabled = cartridge.enabled,
         checkForUpdates = updates.checkForUpdates,
         heroDim = appearance.heroDim,
+        appsFilter = library.appsFilter,
     )
 }
 
@@ -116,6 +117,7 @@ internal fun AppSettings.withUiPrefs(prefs: UiPrefs): AppSettings {
             phoneLinkEnabled = prefs.phoneLinkEnabled,
             autoSeries = prefs.autoSeries,
             hiddenSeries = prefs.hiddenSeries,
+            appsFilter = prefs.appsFilter,
         ),
         sound = sound.copy(
             enabled = prefs.sound != SoundProfile.OFF,

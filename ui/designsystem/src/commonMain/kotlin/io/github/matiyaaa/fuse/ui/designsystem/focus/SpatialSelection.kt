@@ -32,9 +32,10 @@ fun packCells(spans: List<Int>, columns: Int): List<GridCell> {
 }
 
 /**
- * Deterministic spatial navigation over arbitrary cells (tiles of different sizes). Moving picks the
- * nearest cell in that direction that overlaps the current one on the other axis; if none overlaps,
- * the nearest by distance. The same press always lands on the same tile.
+ * Deterministic spatial navigation over arbitrary cells (tiles of different sizes). Up and down go to
+ * the very next row, never past it: inside that row they pick the cell that overlaps the current one
+ * on the other axis, else the closest one. Left and right stay in the row when they can, else go to
+ * the nearest cell by distance. The same press always lands on the same tile.
  */
 @Stable
 class SpatialSelection(initial: Int = 0) {
@@ -57,12 +58,20 @@ class SpatialSelection(initial: Int = 0) {
         }
         if (candidates.isEmpty()) return NavResult.IGNORED
         val horizontal = action == NavAction.LEFT || action == NavAction.RIGHT
+        // Up and down only look at the nearest row, so a short row is never skipped over.
+        val near = if (horizontal) {
+            candidates
+        } else {
+            fun gap(c: GridCell) = if (action == NavAction.UP) from.row - (c.row + c.rowSpan) else c.row - (from.row + from.rowSpan)
+            val nearest = candidates.minOf { gap(it.value) }
+            candidates.filter { gap(it.value) == nearest }
+        }
         fun overlaps(c: GridCell) = if (horizontal) {
             c.row < from.row + from.rowSpan && from.row < c.row + c.rowSpan
         } else {
             c.column < from.column + from.columnSpan && from.column < c.column + c.columnSpan
         }
-        val pool = candidates.filter { overlaps(it.value) }.ifEmpty { candidates }
+        val pool = near.filter { overlaps(it.value) }.ifEmpty { near }
         val best = pool.minBy { (_, c) ->
             val primary = if (horizontal) abs(c.centerX - from.centerX) else abs(c.centerY - from.centerY)
             val secondary = if (horizontal) abs(c.centerY - from.centerY) else abs(c.centerX - from.centerX)

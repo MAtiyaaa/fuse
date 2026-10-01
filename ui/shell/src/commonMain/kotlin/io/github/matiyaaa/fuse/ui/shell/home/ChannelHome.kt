@@ -161,8 +161,12 @@ fun ChannelHome(app: AppState) {
             return@InputLayer when (e.action) {
                 NavAction.LEFT -> { swap(sel.index - 1); NavResult.MOVED }
                 NavAction.RIGHT -> { swap(sel.index + 1); NavResult.MOVED }
-                NavAction.UP -> { swap((sel.index - BOARD_COLUMNS).coerceAtLeast(0)); NavResult.MOVED }
-                NavAction.DOWN -> { swap((sel.index + BOARD_COLUMNS).coerceAtMost(widgets.lastIndex)); NavResult.MOVED }
+                // Up and down trade places with the channel above or below, the same one plain moves land on.
+                NavAction.UP, NavAction.DOWN -> {
+                    val probe = SpatialSelection(sel.index)
+                    if (probe.move(e.action, cells) == NavResult.MOVED) swap(probe.index)
+                    NavResult.MOVED
+                }
                 NavAction.SELECT, NavAction.BACK, NavAction.REORDER -> { carrying = false; NavResult.CONSUMED }
                 else -> NavResult.CONSUMED
             }

@@ -179,6 +179,8 @@ data class LibraryPreferences(
     val hiddenSeries: List<String> = emptyList(),
     /** Brand colours from the system art pack (opaque ARGB), by platform id. */
     val systemColors: Map<String, Long> = emptyMap(),
+    /** Which of its lists the Apps tab opens on. */
+    val appsFilter: io.github.matiyaaa.fuse.model.AppFilter = io.github.matiyaaa.fuse.model.AppFilter.ALL,
 )
 
 /**

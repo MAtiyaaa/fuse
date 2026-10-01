@@ -265,6 +265,18 @@ internal class AuditDriver(
         throw NotCovered("\"$text\" was never selected")
     }
 
+    /** Moves with [step] until the item showing [text] is the selected one, without pressing it. */
+    fun focusText(text: String, substring: Boolean = false, step: () -> Unit = { tap(PadButton.DPAD_DOWN) }) {
+        waitFor(text.take(1))
+        repeat(40) {
+            settle(STEP_MS)
+            val on = ui.onAllNodes(androidx.compose.ui.test.hasText(text, substring = substring) and androidx.compose.ui.test.isSelected()).fetchSemanticsNodes()
+            if (on.isNotEmpty()) return
+            step()
+        }
+        throw NotCovered("\"$text\" was never selected")
+    }
+
     fun waitFor(text: String, timeoutMs: Long = 15_000, ignoreCase: Boolean = true) =
         pumpUntil("\"$text\"", timeoutMs) { hasText(text, ignoreCase) }
 

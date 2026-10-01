@@ -30,6 +30,8 @@ data class Art(
     val heroFocusX: Float = 0.5f,
     val heroFocusY: Float = 0.35f,
     val video: String? = null,
+    /** The first screenshot, a background for games without one of their own. */
+    val screenshot: Any? = null,
 ) {
     /** Art for a small square (thumbnails, menus): square box art, then icon, cover and wide art. */
     val tile: Any? get() = square ?: icon ?: boxart ?: grid
@@ -47,6 +49,7 @@ data class Art(
             heroFocusX = media.hero?.focusX ?: 0.5f,
             heroFocusY = media.hero?.focusY ?: 0.35f,
             video = media.video?.model,
+            screenshot = media.screenshots.firstOrNull()?.model,
         )
     }
 }

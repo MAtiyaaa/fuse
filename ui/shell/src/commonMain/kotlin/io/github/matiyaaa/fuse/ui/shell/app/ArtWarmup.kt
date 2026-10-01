@@ -5,7 +5,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil3.PlatformContext
 import coil3.SingletonImageLoader
@@ -15,6 +14,9 @@ import coil3.request.ImageRequest
 import coil3.size.Precision
 import coil3.size.Scale
 import io.github.matiyaaa.fuse.model.LibraryLayout
+import io.github.matiyaaa.fuse.ui.designsystem.media.heroDecodePx
+import io.github.matiyaaa.fuse.ui.designsystem.media.heroRequest
+import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.shell.components.LocalTileMetrics
 import io.github.matiyaaa.fuse.ui.shell.store.GameCard
 import io.github.matiyaaa.fuse.ui.shell.store.GameQuery
@@ -32,12 +34,15 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 
 /** The sizes art is drawn at, in pixels (each a square the image fits in). */
-private data class WarmSizes(val icon: Int, val cover: Int, val capsule: Int, val logo: Int, val panel: Int, val screen: Int, val small: Int)
+private data class WarmSizes(val icon: Int, val cover: Int, val capsule: Int, val logo: Int, val panel: Int, val hero: Int, val small: Int)
 
-/** One image to get ready: decoded into memory at [px], or only fetched to disk ([memory] false). */
-private data class Warm(val model: Any, val px: Int, val memory: Boolean, val fill: Boolean = false) {
-    /** What the decoded bitmap may take (an upper bound: art is rarely square). */
-    val bytes: Long get() = px.toLong() * px * 4
+/**
+ * One image to get ready: decoded into memory at [px], or only fetched to disk ([memory] false). A
+ * [hero] is decoded exactly as the background decodes it, so it is found in memory there.
+ */
+private data class Warm(val model: Any, val px: Int, val memory: Boolean, val hero: Boolean = false) {
+    /** What the decoded bitmap may take (an upper bound: art is rarely square, backgrounds are wide). */
+    val bytes: Long get() = if (hero) px.toLong() * px * 9 / 16 * 4 else px.toLong() * px * 4
 }
 
 /**
@@ -50,12 +55,13 @@ private data class Warm(val model: Any, val px: Int, val memory: Boolean, val fi
  */
 @OptIn(FlowPreview::class)
 @Composable
-internal fun ArtWarmup(app: AppState, screenWidth: Dp, screenHeight: Dp) {
+internal fun ArtWarmup(app: AppState) {
     val context = LocalPlatformContext.current
     val density = LocalDensity.current
     val metrics = LocalTileMetrics.current
     val prefs by app.store.prefs.collectAsState()
     val lowPower = prefs.lowPower
+    val heroPx = Fuse.quality.heroDecodePx
     val sizes = with(density) {
         WarmSizes(
             icon = (metrics.icon * 1.4f).roundToPx(),
@@ -63,7 +69,7 @@ internal fun ArtWarmup(app: AppState, screenWidth: Dp, screenHeight: Dp) {
             capsule = (metrics.capsuleWidth * 1.3f).roundToPx(),
             logo = 360.dp.roundToPx(),
             panel = 480.dp.roundToPx(),
-            screen = maxOf(screenWidth, screenHeight).roundToPx(),
+            hero = heroPx,
             small = 160.dp.roundToPx(),
         )
     }
@@ -94,7 +100,7 @@ internal fun ArtWarmup(app: AppState, screenWidth: Dp, screenHeight: Dp) {
                         gate.acquire()
                         launch {
                             try {
-                                loader.execute(request(context, w, memory, sizes.small))
+                                loader.execute(if (memory && w.hero) heroRequest(context, w.model, w.px) else request(context, w, memory, sizes.small))
                             } catch (e: CancellationException) {
                                 throw e
                             } catch (e: Throwable) {
@@ -109,22 +115,29 @@ internal fun ArtWarmup(app: AppState, screenWidth: Dp, screenHeight: Dp) {
     }
 }
 
-/** Everything to get ready, most needed first. */
+/**
+ * Everything to get ready, most needed first: systems' logos and art, Home's games (tiles, logos,
+ * then the backgrounds their rooms show), then each system's games in the order systems are shown
+ * (tiles and first logos, then the rooms of the first games). The rest goes to disk.
+ */
 private suspend fun plan(app: AppState, systems: List<PlatformCard>, home: HomeFeed, px: WarmSizes, lowPower: Boolean): List<Warm> = buildList {
-    // Systems: what Systems and each system's page show first.
+    val bySystem = systems.associateBy { it.platform.id }
+    // Systems: what Systems and each system's page show first. A system's background is also every
+    // one of its games' placeholder, so it goes into memory.
     for (s in systems) {
         s.art.logo?.let { add(Warm(it, px.logo, memory = true)) }
         s.art.boxart?.let { add(Warm(it, px.panel, memory = true)) }
-        s.art.hero?.let { add(Warm(it, px.screen, memory = false, fill = true)) }
     }
-    // Home: its games' tiles and logos, and the first background.
+    for (s in systems) s.art.hero?.let { add(Warm(it, px.hero, memory = !lowPower, hero = true)) }
+    // Home: its games' tiles and logos, then the backgrounds of their rooms.
     val homeGames = (home.continuePlaying + home.pinnedGames + home.recentlyPlayed + home.favorites + home.recentlyAdded + home.mostPlayed).distinctBy { it.id }
-    homeGames.firstOrNull()?.art?.hero?.let { add(Warm(it, px.screen, memory = !lowPower, fill = true)) }
     for (g in homeGames) {
         tileArt(g, LibraryLayout.ICON)?.let { add(Warm(it, px.icon, memory = true)) }
         g.art.logo?.let { add(Warm(it, px.logo, memory = true)) }
     }
+    homeGames.take(if (lowPower) 2 else HOME_ROOMS).forEach { g -> roomArt(g.art, bySystem[g.platformId])?.let { add(Warm(it, px.hero, memory = true, hero = true)) } }
     // Each system's games, in the order systems are shown.
+    val rooms = ArrayList<Warm>()
     val later = ArrayList<Warm>()
     for (s in systems) {
         val games = app.store.library.games(GameQuery(platform = s.platform.id)).first()
@@ -136,11 +149,13 @@ private suspend fun plan(app: AppState, systems: List<PlatformCard>, home: HomeF
         games.forEach { g -> tileArt(g, s.layout)?.let { add(Warm(it, size, memory = true)) } }
         games.forEachIndexed { i, g ->
             g.art.logo?.let { if (i < LOGOS_PER_SYSTEM) add(Warm(it, px.logo, memory = true)) else later += Warm(it, px.logo, memory = false) }
-            g.art.hero?.let { later += Warm(it, px.screen, memory = false, fill = true) }
+            // The first games' rooms in memory, the rest on disk.
+            roomArt(g.art, s)?.let { if (i < ROOMS_PER_SYSTEM && !lowPower) rooms += Warm(it, px.hero, memory = true, hero = true) else later += Warm(it, px.hero, memory = false) }
             // The other kinds a game page or another layout shows.
             listOfNotNull(g.art.boxart, g.art.grid, g.art.square).forEach { later += Warm(it, size, memory = false) }
         }
     }
+    addAll(rooms)
     addAll(later)
 }
 
@@ -157,7 +172,7 @@ private fun isRemote(model: Any): Boolean = model is String && (model.startsWith
 private fun request(context: PlatformContext, w: Warm, memory: Boolean, small: Int): ImageRequest {
     val b = ImageRequest.Builder(context).data(w.model)
     return if (memory) {
-        b.size(w.px, w.px).precision(Precision.INEXACT).scale(if (w.fill) Scale.FILL else Scale.FIT).build()
+        b.size(w.px, w.px).precision(Precision.INEXACT).scale(Scale.FIT).build()
     } else {
         b.size(small, small).memoryCachePolicy(CachePolicy.DISABLED).build()
     }
@@ -174,3 +189,5 @@ private const val MEMORY_SHARE = 0.6
 private const val LOW_POWER_SHARE = 0.25
 private const val PARALLEL = 3
 private const val LOGOS_PER_SYSTEM = 12
+private const val ROOMS_PER_SYSTEM = 24
+private const val HOME_ROOMS = 8

@@ -193,7 +193,7 @@ fun FuseApp(store: FuseStore, platform: PlatformUi, router: InputRouter, phoneLi
                 val borders = rememberTileBorders(store)
                 CompositionLocalProvider(LocalTileMetrics provides metrics, LocalTileBorders provides borders) {
                     Room(app, prefs.showHero, spec.background, prefs.heroDim, prefs.glass, prefs.videoPreview, prefs.videoDelaySeconds)
-                    ArtWarmup(app, maxWidth, maxHeight)
+                    ArtWarmup(app)
                     ShellInput(app)
                     Pages(app)
                     val route = app.navigator.current
@@ -256,9 +256,8 @@ private fun Room(
 ) {
     val quality = Fuse.quality
     val hero = app.hero
-    if (style != BackgroundStyle.HERO || hero == null || !showHero) {
-        AmbientBackground(if (style == BackgroundStyle.HERO) BackgroundStyle.SOLID else style, hero?.accent ?: Fuse.colors.accent, Modifier.fillMaxSize())
-    }
+    // The theme's own room is always underneath, so art fading in or out never shows a bare screen.
+    AmbientBackground(if (style == BackgroundStyle.HERO) BackgroundStyle.SOLID else style, hero?.accent ?: Fuse.colors.accent, Modifier.fillMaxSize())
     if (showHero) {
         var videoReady by remember(hero?.id) { mutableStateOf(false) }
         var playVideo by remember(hero?.id) { mutableStateOf(false) }

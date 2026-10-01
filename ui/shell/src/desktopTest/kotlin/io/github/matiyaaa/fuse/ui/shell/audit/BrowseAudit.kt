@@ -12,16 +12,19 @@ import io.github.matiyaaa.fuse.model.NavAction
 import io.github.matiyaaa.fuse.model.PadButton
 import io.github.matiyaaa.fuse.model.PlatformId
 import io.github.matiyaaa.fuse.model.QueueState
+import io.github.matiyaaa.fuse.model.ScanScope
 import io.github.matiyaaa.fuse.model.UploadState
 import io.github.matiyaaa.fuse.ui.designsystem.components.ToastKind
 import io.github.matiyaaa.fuse.ui.designsystem.input.NavResult
 import io.github.matiyaaa.fuse.ui.shell.store.GameQuery
+import io.github.matiyaaa.fuse.ui.shell.store.GameSet
 import io.github.matiyaaa.fuse.ui.shell.store.RunResult
 import java.io.File
 import kotlin.time.Clock
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 
 private fun LibraryLayout.words(): String = when (this) {
     LibraryLayout.ICON -> "Box art"
@@ -153,6 +156,43 @@ internal fun AuditDriver.libraryScreens(exhaustive: Boolean) {
         for (layout in LibraryLayout.entries) {
             viewAs(layout)
             shoot("Game Boy Advance, ${layout.words()} layout")
+        }
+    }
+
+    scenario("library", "system folding") {
+        useLibrary()
+        // Enough Super Nintendo games for three rows, so there are rows to move down.
+        val snes = File(root, "snes")
+        val extra = (1..14).map { File(snes, "Folding Test ${'A' + it - 1}.sfc").apply { writeBytes(ByteArray(512)) } }
+        try {
+            libraryStore.sources.rescan(ScanScope.PLATFORM, PlatformId("snes"))
+            pumpUntil("the extra games") { libraryStore.library.platforms.value.firstOrNull { it.platform.id == PlatformId("snes") }?.gameCount == 20 }
+            val systems = libraryStore.library.platforms.value.filter { it.gameCount > 0 }
+            tab(Destination.SYSTEMS)
+            Grid(systems.size).goTo(platformIndex("snes"))
+            tap(PadButton.A)
+            waitFor("20 games")
+            viewAs(LibraryLayout.ICON)
+            settle(900)
+            shoot("Super Nintendo, first row")
+            tap(PadButton.DPAD_DOWN)
+            settle(900)
+            shoot("Super Nintendo, second row: the header folded away")
+            tap(PadButton.DPAD_DOWN)
+            settle(900)
+            shoot("Super Nintendo, third row")
+            tap(PadButton.DPAD_UP, 2)
+            settle(900)
+            shoot("Super Nintendo, back on the first row")
+        } finally {
+            // Gone from disk, then forgotten, so later screens see the library as it was.
+            extra.forEach { it.delete() }
+            libraryStore.sources.rescan(ScanScope.PLATFORM, PlatformId("snes"))
+            pumpUntil("the extra games to go") { libraryStore.library.platforms.value.firstOrNull { it.platform.id == PlatformId("snes") }?.gameCount == 6 }
+            runBlocking {
+                val missing = withTimeout(10_000) { libraryStore.library.games(GameQuery(set = GameSet.MISSING)).first { list -> list.count { it.title.startsWith("Folding Test") } == extra.size } }
+                missing.filter { it.title.startsWith("Folding Test") }.forEach { libraryStore.library.forgetMissing(it.id) }
+            }
         }
     }
 
@@ -716,17 +756,26 @@ internal fun AuditDriver.appsScreens(exhaustive: Boolean) {
     scenario("apps", "grid") {
         useLibrary()
         tab(Destination.APPS)
-        waitFor("Starfall Arena")
+        waitFor("All apps")
         tap(PadButton.DPAD_LEFT)
-        shoot("Games filter (default)")
+        shoot("All apps (default)")
         if (!exhaustive) return@scenario
         if (nav(NavAction.UP) != NavResult.MOVED) throw NotCovered("Up did not reach the filters")
-        tap(PadButton.DPAD_LEFT)
+        tap(PadButton.DPAD_LEFT, 2)
         tap(PadButton.DPAD_DOWN)
         shoot("Pinned")
         if (nav(NavAction.UP) != NavResult.MOVED) throw NotCovered("Up did not reach the filters")
-        tap(PadButton.DPAD_RIGHT, 3)
-        shoot("filters focused, All apps")
+        tap(PadButton.DPAD_RIGHT)
+        shoot("filters focused, Emulators")
+        tap(PadButton.DPAD_DOWN)
+        shoot("Emulators")
+        // Leaving the tab and coming back returns to the same list.
+        tab(Destination.HOME)
+        tab(Destination.APPS)
+        settle(800)
+        shoot("back on Apps, still on Emulators")
+        if (nav(NavAction.UP) != NavResult.MOVED) throw NotCovered("Up did not reach the filters")
+        tap(PadButton.DPAD_RIGHT)
         tap(PadButton.DPAD_DOWN)
         shoot("All apps")
         tap(PadButton.DPAD_RIGHT, 2)
@@ -806,7 +855,9 @@ internal fun AuditDriver.cartridgeScreens(exhaustive: Boolean) {
         tap(PadButton.DPAD_DOWN)
         shoot("recent download focused")
         tap(PadButton.DPAD_DOWN, 3)
-        shoot("download not in the library yet focused")
+        shoot("download not in the library yet focused, the page scrolled with it")
+        tap(PadButton.DPAD_UP, 5)
+        shoot("back on the buttons, the page at the top")
     }
 
     scenario("cartridge", "uploads") {

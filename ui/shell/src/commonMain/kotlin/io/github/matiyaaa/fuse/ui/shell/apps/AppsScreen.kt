@@ -5,18 +5,18 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
-import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -53,14 +53,29 @@ import io.github.matiyaaa.fuse.ui.shell.app.openApp
 import io.github.matiyaaa.fuse.ui.shell.app.rememberRouteState
 import io.github.matiyaaa.fuse.ui.shell.components.AppTile
 import io.github.matiyaaa.fuse.ui.shell.components.LocalTileMetrics
+import io.github.matiyaaa.fuse.ui.shell.components.ViewTab
+import io.github.matiyaaa.fuse.ui.shell.components.ViewTabs
 import io.github.matiyaaa.fuse.ui.shell.store.AppCard
 import kotlinx.coroutines.launch
 
-private val filters = listOf(AppFilter.PINNED to "Pinned", AppFilter.GAMES to "Games", AppFilter.EMULATORS to "Emulators", AppFilter.ALL to "All apps")
+private val filters = listOf(AppFilter.PINNED to "Pinned", AppFilter.EMULATORS to "Emulators", AppFilter.ALL to "All apps")
 
 /**
- * Android apps (or Linux applications) Fuse can open, so you rarely need the system launcher:
- * Pinned, Games and All. Names sit under each icon because app icons alone are ambiguous.
+ * Where the Apps tab was: which list, whether focus was on the lists, and the selected app in each.
+ * Kept by the navigator, so leaving the tab and coming back returns exactly there.
+ */
+@Stable
+class AppsViewState(initial: AppFilter) {
+    var filter by mutableStateOf(initial)
+    var inFilters by mutableStateOf(false)
+    private val selections = mutableMapOf<AppFilter, GridSelection>()
+    fun selection(f: AppFilter): GridSelection = selections.getOrPut(f) { GridSelection() }
+}
+
+/**
+ * Android apps Fuse can open, so you rarely need the system launcher: Pinned, Emulators and All
+ * apps (the one it opens on is a setting). Apps played as games are in the Android system instead.
+ * Names sit under each icon because app icons alone are ambiguous.
  */
 @Composable
 fun AppsScreen(app: AppState) {
@@ -71,13 +86,16 @@ fun AppsScreen(app: AppState) {
         }
         return
     }
-    var filterIndex by remember { mutableIntStateOf(1) }
-    var inFilters by remember { mutableStateOf(false) }
+    val view = rememberRouteState(app.navigator, "apps") { AppsViewState(store.prefs.value.appsFilter.takeIf { f -> filters.any { it.first == f } } ?: AppFilter.ALL) }
+    val filterIndex = filters.indexOfFirst { it.first == view.filter }.coerceAtLeast(0)
     val filter = filters[filterIndex].first
+    val inFilters = view.inFilters
     val flow = remember(filter) { store.apps.apps(filter) }
-    val apps by flow.collectAsState(initial = emptyList())
-    val sel = rememberRouteState(app.navigator, "apps.$filter") { GridSelection() }
-    sel.clamp(apps.size)
+    // Null until the list has loaded, so a remembered place isn't clamped away by the empty start.
+    val loaded by flow.collectAsState(initial = null)
+    val apps = loaded.orEmpty()
+    val sel = view.selection(filter)
+    if (loaded != null) sel.clamp(apps.size)
     var columns by remember { mutableIntStateOf(7) }
 
     LaunchedEffect(Unit) {
@@ -88,16 +106,16 @@ fun AppsScreen(app: AppState) {
     InputLayer(enabled = app.focusZone == FocusZone.CONTENT && !app.overlayOpen) { e ->
         if (inFilters) {
             return@InputLayer when (e.action) {
-                NavAction.LEFT -> if (filterIndex > 0) { filterIndex--; NavResult.MOVED } else NavResult.BLOCKED
-                NavAction.RIGHT -> if (filterIndex < filters.lastIndex) { filterIndex++; NavResult.MOVED } else NavResult.BLOCKED
-                NavAction.DOWN, NavAction.SELECT -> { inFilters = false; NavResult.MOVED }
+                NavAction.LEFT -> if (filterIndex > 0) { view.filter = filters[filterIndex - 1].first; NavResult.MOVED } else NavResult.BLOCKED
+                NavAction.RIGHT -> if (filterIndex < filters.lastIndex) { view.filter = filters[filterIndex + 1].first; NavResult.MOVED } else NavResult.BLOCKED
+                NavAction.DOWN, NavAction.SELECT -> { view.inFilters = false; NavResult.MOVED }
                 else -> NavResult.IGNORED
             }
         }
         when (e.action) {
             NavAction.UP, NavAction.DOWN, NavAction.LEFT, NavAction.RIGHT, NavAction.PAGE_UP, NavAction.PAGE_DOWN -> {
                 val r = sel.move(e.action, apps.size, columns)
-                if (r == NavResult.IGNORED && e.action == NavAction.UP) { inFilters = true; NavResult.MOVED } else r
+                if (r == NavResult.IGNORED && e.action == NavAction.UP) { view.inFilters = true; NavResult.MOVED } else r
             }
             NavAction.SELECT -> { apps.getOrNull(sel.index)?.let { a -> app.openApp(a) }; NavResult.ACTIVATED }
             NavAction.CONTEXT -> { apps.getOrNull(sel.index)?.let { app.openContextMenu(app.appMenu(it)) }; NavResult.ACTIVATED }
@@ -110,36 +128,29 @@ fun AppsScreen(app: AppState) {
         columns = ((maxWidth - Space.gutter * 2 + Space.xl) / (size + Space.xl)).toInt().coerceAtLeast(3)
         Column(Modifier.fillMaxSize()) {
             Spacer(Modifier.height(Size.hudHeight + Space.m))
-            Row(Modifier.padding(horizontal = Space.gutter), horizontalArrangement = Arrangement.spacedBy(Space.s)) {
-                filters.forEachIndexed { i, (_, label) ->
-                    val focused = inFilters && app.focusZone == FocusZone.CONTENT && i == filterIndex
-                    Chip(
-                        label,
-                        selected = i == filterIndex,
-                        focused = focused,
-                        color = Fuse.colors.textMuted,
-                        background = Fuse.colors.text.copy(alpha = 0.08f),
-                        onClick = {
-                            app.focusZone = FocusZone.CONTENT
-                            filterIndex = i
-                            inFilters = false
-                        },
-                    )
-                }
-            }
-            Spacer(Modifier.height(Space.xl))
-            if (apps.isEmpty()) {
+            ViewTabs(
+                items = filters.map { (f, label) -> ViewTab(label, badge = if (f == filter && loaded != null) apps.size.toString() else null) },
+                active = filterIndex,
+                focused = filterIndex.takeIf { inFilters && app.focusZone == FocusZone.CONTENT },
+                onSelect = { i ->
+                    app.focusZone = FocusZone.CONTENT
+                    view.filter = filters[i].first
+                    view.inFilters = false
+                },
+            )
+            Spacer(Modifier.height(Space.l))
+            if (loaded != null && apps.isEmpty()) {
                 FText(
                     when (filter) {
                         AppFilter.PINNED -> "Pin apps from their options to keep them here."
-                        AppFilter.GAMES -> "No games here yet. Set an app's Type to Game in its options."
                         AppFilter.EMULATORS -> "No emulators found. Set an app's Type to Emulator in its options."
-                        AppFilter.ALL -> "No apps found."
+                        else -> "No apps found."
                     },
                     Fuse.type.body, color = Fuse.colors.textMuted, modifier = Modifier.padding(horizontal = Space.gutter),
                 )
             }
-            val grid = rememberLazyGridState()
+            // A fresh grid per list; following the selection brings back where you were in it.
+            val grid = remember(filter) { LazyGridState() }
             FollowSelection(grid, { sel.index }, anchor = 0.1f)
             LazyVerticalGrid(
                 columns = GridCells.Fixed(columns),
@@ -155,7 +166,7 @@ fun AppsScreen(app: AppState) {
                             a, selected, size = size,
                             onClick = {
                                 app.focusZone = FocusZone.CONTENT
-                                inFilters = false
+                                view.inFilters = false
                                 // A tap opens the app straight away, like any launcher.
                                 sel.index = i
                                 app.openApp(a)

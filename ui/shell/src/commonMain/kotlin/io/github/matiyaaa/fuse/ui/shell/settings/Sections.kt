@@ -10,6 +10,7 @@ import io.github.matiyaaa.fuse.integrations.KeyCheck
 import io.github.matiyaaa.fuse.integrations.systemart.SystemArtPack
 import io.github.matiyaaa.fuse.integrations.systemart.SystemArtStyle
 import io.github.matiyaaa.fuse.model.CartridgeRoute
+import io.github.matiyaaa.fuse.model.AppFilter
 import io.github.matiyaaa.fuse.model.Destination
 import io.github.matiyaaa.fuse.model.DualScreenMode
 import io.github.matiyaaa.fuse.model.GlyphStyle
@@ -141,6 +142,13 @@ fun homeRows(app: AppState): List<MenuAction> {
                 },
             )
         }))
+        if (app.store.apps.supported) {
+            add(app.choiceRow(
+                "apps.filter", "Apps opens on", FuseIcons.Smartphone, p.appsFilter,
+                listOf(AppFilter.ALL to "All apps", AppFilter.PINNED to "Pinned", AppFilter.EMULATORS to "Emulators"),
+                detail = "The list the Apps tab shows first. It keeps your place when you come back",
+            ) { v -> set { it.copy(appsFilter = v) } })
+        }
         for (w in p.home.widgets.sortedBy { it.order }) {
             add(toggleRow("w.${w.id}", w.kind.title(), widgetIcon(w.kind), w.visible) { v ->
                 set { s -> s.copy(home = s.home.copy(widgets = s.home.widgets.map { if (it.id == w.id) it.copy(visible = v) else it })) }

@@ -85,6 +85,11 @@ class Navigator(start: Route) {
         stack.add(route)
     }
 
+    /** Drops what was remembered for [key], so the route starts fresh next time. */
+    fun forget(key: String) {
+        memory.remove(key)
+    }
+
     /** Remembered per-route UI state (selections, scroll anchors). Bounded so memory stays small. */
     @Suppress("UNCHECKED_CAST")
     fun <T : Any> remembered(key: String, create: () -> T): T {
@@ -100,3 +105,14 @@ class Navigator(start: Route) {
 @Composable
 fun <T : Any> rememberRouteState(navigator: Navigator, key: String, create: () -> T): T =
     remember(key) { navigator.remembered(key, create) }
+
+/**
+ * Like [rememberRouteState], but opening the route anew (a forward push) starts fresh. Only Back
+ * returns to where you were.
+ */
+@Composable
+fun <T : Any> rememberPageState(navigator: Navigator, key: String, create: () -> T): T =
+    remember(key) {
+        if (navigator.direction == NavDirection.FORWARD) navigator.forget(key)
+        navigator.remembered(key, create)
+    }

@@ -1,6 +1,7 @@
 package io.github.matiyaaa.fuse.ui.shell.quick
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -14,13 +15,14 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
-import androidx.compose.foundation.relocation.BringIntoViewRequester
-import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -30,12 +32,22 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
-import io.github.matiyaaa.fuse.model.NavAction
+import io.github.matiyaaa.fuse.model.Destination
 import io.github.matiyaaa.fuse.model.HomeMode
+import io.github.matiyaaa.fuse.model.NavAction
 import io.github.matiyaaa.fuse.model.PerformanceProfile
+import io.github.matiyaaa.fuse.model.ScanPhase
+import io.github.matiyaaa.fuse.model.ScanScope
 import io.github.matiyaaa.fuse.ui.designsystem.components.BatteryGlyph
 import io.github.matiyaaa.fuse.ui.designsystem.components.FText
 import io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction
@@ -45,6 +57,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.components.OverlayEdge
 import io.github.matiyaaa.fuse.ui.designsystem.components.Panel
 import io.github.matiyaaa.fuse.ui.designsystem.components.SectionLabel
 import io.github.matiyaaa.fuse.ui.designsystem.components.SliderBar
+import io.github.matiyaaa.fuse.ui.designsystem.components.Toggle
 import io.github.matiyaaa.fuse.ui.designsystem.components.Trailing
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
@@ -55,17 +68,17 @@ import io.github.matiyaaa.fuse.ui.designsystem.sound.SoundCue
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Durations
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
-import io.github.matiyaaa.fuse.ui.shell.app.applyUpdate
-import io.github.matiyaaa.fuse.ui.shell.store.UpdateState
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.ConfirmSpec
 import io.github.matiyaaa.fuse.ui.shell.app.Route
+import io.github.matiyaaa.fuse.ui.shell.app.applyUpdate
 import io.github.matiyaaa.fuse.ui.shell.app.formatDate
 import io.github.matiyaaa.fuse.ui.shell.app.rememberClockText
 import io.github.matiyaaa.fuse.ui.shell.home.switchHomeStyle
-import io.github.matiyaaa.fuse.model.Destination
+import io.github.matiyaaa.fuse.ui.shell.store.UpdateState
 
-private data class QuickTile(val label: String, val icon: ImageVector, val active: Boolean = false, val detail: String? = null, val run: () -> Unit)
+/** A tile; a [toggle] says On or Off under its name and is lit while [active]. */
+private data class QuickTile(val label: String, val icon: ImageVector, val active: Boolean = false, val detail: String? = null, val toggle: Boolean = false, val run: () -> Unit)
 
 private sealed interface QuickRow {
     data class Tiles(val tiles: List<QuickTile>) : QuickRow
@@ -93,6 +106,8 @@ fun QuickMenu(app: AppState) {
     fun close() { app.quickMenuOpen = false }
     val updateAvailable by app.store.updates.available.collectAsState()
     val updateState by app.store.updates.state.collectAsState()
+    val scan by app.store.sources.scan.collectAsState()
+    val scanning = scan.phase == ScanPhase.DISCOVERING || scan.phase == ScanPhase.SCANNING || scan.phase == ScanPhase.SAVING
 
     val tiles = buildList {
         if (features.wifiSettings) add(QuickTile("Wi-Fi", FuseIcons.Wifi) { platform.quick.openWifi() })
@@ -113,13 +128,33 @@ fun QuickMenu(app: AppState) {
             // Say what changed, since most of it is felt rather than seen.
             app.toasts.show(io.github.matiyaaa.fuse.ui.shell.settings.performanceSummary(next, prefs.lowPower, platform.device, platform.host))
         })
-        add(QuickTile("Low Power", FuseIcons.Leaf, active = prefs.lowPower) { app.store.updatePrefs { it.copy(lowPower = !it.lowPower) } })
+        add(QuickTile("Low Power", FuseIcons.Leaf, active = prefs.lowPower, toggle = true) {
+            val on = !prefs.lowPower
+            app.store.updatePrefs { it.copy(lowPower = on) }
+            app.toasts.show(if (on) "Low Power is on" else "Low Power is off")
+        })
+        // Games put on a card or drive while Fuse was open show up without a trip to Settings.
+        add(QuickTile(
+            "Find games", FuseIcons.FolderSearch, active = scanning,
+            detail = when {
+                scanning -> "Looking"
+                scan.phase == ScanPhase.DONE && scan.added > 0 -> "${scan.added} new"
+                else -> "Scan folders"
+            },
+        ) {
+            if (scanning) {
+                app.toasts.show("Already looking for new games")
+            } else {
+                app.store.sources.rescan(ScanScope.QUICK)
+                app.toasts.show("Looking for new games")
+            }
+        })
         if (prefs.cartridgeEnabled) add(QuickTile("Cartridge", FuseIcons.CloudDownload) { close(); app.selectTab(Destination.CARTRIDGE) })
         // Search has its own button in the top line; Home's style is one press here.
         add(QuickTile("Home", if (prefs.home.mode == HomeMode.CHANNELS) FuseIcons.Grid else FuseIcons.Rows, detail = if (prefs.home.mode == HomeMode.CHANNELS) "Channels" else "Flow") {
             app.switchHomeStyle()
         })
-        add(QuickTile("Sound", FuseIcons.Volume, active = prefs.sound != io.github.matiyaaa.fuse.model.SoundProfile.OFF) {
+        add(QuickTile("Sound", FuseIcons.Volume, active = prefs.sound != io.github.matiyaaa.fuse.model.SoundProfile.OFF, toggle = true) {
             app.store.updatePrefs { it.copy(sound = if (it.sound == io.github.matiyaaa.fuse.model.SoundProfile.OFF) io.github.matiyaaa.fuse.model.SoundProfile.SOFT else io.github.matiyaaa.fuse.model.SoundProfile.OFF) }
         })
     }
@@ -140,6 +175,15 @@ fun QuickMenu(app: AppState) {
                 onSelect = { close(); if (ready) app.applyUpdate() else app.go(Route.Settings("updates")) },
             )))
         }
+        add(QuickRow.Item(MenuAction(
+            "fullscan", "Rescan every folder", FuseIcons.RefreshDot,
+            detail = "Reads all your drives again, for games a quick look misses. Your edits are kept",
+            onSelect = {
+                close()
+                app.store.sources.rescan(ScanScope.FULL)
+                app.toasts.show("Rescanning every folder in the background")
+            },
+        )))
         add(QuickRow.Item(MenuAction("home", "Arrange Home", FuseIcons.Dashboard, onSelect = { close(); app.go(Route.Settings("home")) })))
         add(QuickRow.Item(MenuAction("settings", "Settings", FuseIcons.Settings, trailing = Trailing.Chevron, onSelect = { close(); app.go(Route.Settings()) })))
         add(QuickRow.Item(MenuAction("restart", "Restart Fuse", FuseIcons.Refresh, onSelect = { platform.restart() })))
@@ -244,31 +288,62 @@ fun QuickMenu(app: AppState) {
     }
 }
 
+/**
+ * A tile keeps its own colours while focused (lit in the accent while on), so on or off always reads;
+ * focus adds an outline and a small lift instead of a white fill.
+ */
 @Composable
 private fun QuickTileView(tile: QuickTile, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
     val c = Fuse.colors
+    val motion = Fuse.motion
     val bg by animateColorAsState(
         when {
-            selected -> c.text
             tile.active -> c.accentSoft
+            selected -> c.text.copy(alpha = 0.14f)
             else -> c.text.copy(alpha = 0.07f)
         },
-        Fuse.motion.tween(Durations.FAST),
+        motion.tween(Durations.FAST),
         label = "qt",
     )
-    val fg = if (selected) c.ink else if (tile.active) c.accent else c.text
+    val lift by animateFloatAsState(if (selected) 1f else 0f, motion.focusSpring(), label = "qt lift")
+    val fg = if (tile.active) c.accent else c.text
+    val shape = RoundedCornerShape(Fuse.geometry.panel)
+    val corner = Fuse.geometry.panel
     Box(
         modifier
             .aspectRatio(1.1f)
-            .clip(RoundedCornerShape(Fuse.geometry.panel))
+            .graphicsLayer {
+                val s = 1f + 0.04f * lift * (if (motion.reduced) 0f else 1f)
+                scaleX = s
+                scaleY = s
+            }
+            .drawBehind {
+                if (lift > 0.01f) {
+                    val inset = 2.dp.toPx()
+                    drawRoundRect(
+                        c.focus.copy(alpha = lift),
+                        topLeft = Offset(-inset, -inset),
+                        size = androidx.compose.ui.geometry.Size(size.width + inset * 2, size.height + inset * 2),
+                        cornerRadius = CornerRadius(corner.toPx() + inset),
+                        style = Stroke(2.dp.toPx()),
+                    )
+                }
+            }
+            .clip(shape)
             .background(bg)
             .clickable(remember { MutableInteractionSource() }, null, onClick = onClick)
+            .semantics { this.selected = selected }
             .padding(Space.m),
     ) {
         FuseIcon(tile.icon, tint = fg, modifier = Modifier.align(Alignment.TopStart))
+        if (tile.toggle) {
+            // A switch in the corner, the same as in Settings.
+            Toggle(tile.active, Modifier.align(Alignment.TopEnd).graphicsLayer { scaleX = 0.8f; scaleY = 0.8f; transformOrigin = androidx.compose.ui.graphics.TransformOrigin(1f, 0f) })
+        }
         Column(Modifier.align(Alignment.BottomStart)) {
             FText(tile.label, Fuse.type.label, color = fg, maxLines = 1)
-            tile.detail?.let { FText(it, Fuse.type.caption, color = fg.copy(alpha = 0.7f), maxLines = 1) }
+            val detail = if (tile.toggle) (if (tile.active) "On" else "Off") else tile.detail
+            detail?.let { FText(it, Fuse.type.caption, color = fg.copy(alpha = 0.7f), maxLines = 1) }
         }
     }
 }
