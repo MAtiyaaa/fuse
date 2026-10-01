@@ -61,17 +61,20 @@ suspend fun LazyGridState.follow(index: Int, anchor: Float = 0.2f, animate: Bool
  * may pass a plain value captured at composition (a shelf's column) and still be followed.
  */
 @Composable
-fun FollowSelection(state: LazyListState, selected: () -> Int, anchor: Float = 0.12f, animate: Boolean = true) {
+fun FollowSelection(state: LazyListState, selected: () -> Int, anchor: Float = 0.12f, animate: Boolean = true, enabled: () -> Boolean = { true }) {
     val current by rememberUpdatedState(selected)
+    val on by rememberUpdatedState(enabled)
     LaunchedEffect(state) {
-        snapshotFlow { current() }.collectLatest { state.follow(it, anchor, animate) }
+        // Paused while [enabled] is false (an item held by touch), then catches up.
+        snapshotFlow { if (on()) current() else null }.collectLatest { if (it != null) state.follow(it, anchor, animate) }
     }
 }
 
 @Composable
-fun FollowSelection(state: LazyGridState, selected: () -> Int, anchor: Float = 0.2f, animate: Boolean = true) {
+fun FollowSelection(state: LazyGridState, selected: () -> Int, anchor: Float = 0.2f, animate: Boolean = true, enabled: () -> Boolean = { true }) {
     val current by rememberUpdatedState(selected)
+    val on by rememberUpdatedState(enabled)
     LaunchedEffect(state) {
-        snapshotFlow { current() }.collectLatest { state.follow(it, anchor, animate) }
+        snapshotFlow { if (on()) current() else null }.collectLatest { if (it != null) state.follow(it, anchor, animate) }
     }
 }

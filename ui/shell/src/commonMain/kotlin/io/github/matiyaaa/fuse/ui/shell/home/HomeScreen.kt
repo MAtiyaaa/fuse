@@ -1,10 +1,6 @@
 package io.github.matiyaaa.fuse.ui.shell.home
 
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.VisibilityThreshold
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
-import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Arrangement
@@ -18,11 +14,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -32,9 +28,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import io.github.matiyaaa.fuse.model.Destination
@@ -47,17 +47,24 @@ import io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction
 import io.github.matiyaaa.fuse.ui.designsystem.components.SectionLabel
 import io.github.matiyaaa.fuse.ui.designsystem.components.Trailing
 import io.github.matiyaaa.fuse.ui.designsystem.components.fadingEdges
+import io.github.matiyaaa.fuse.ui.designsystem.focus.DragReorderState
 import io.github.matiyaaa.fuse.ui.designsystem.focus.FollowSelection
+import io.github.matiyaaa.fuse.ui.designsystem.focus.ReorderDefaults
+import io.github.matiyaaa.fuse.ui.designsystem.focus.ReorderMath
 import io.github.matiyaaa.fuse.ui.designsystem.focus.ShelfSelection
+import io.github.matiyaaa.fuse.ui.designsystem.focus.carried
 import io.github.matiyaaa.fuse.ui.designsystem.focus.dragReorder
 import io.github.matiyaaa.fuse.ui.designsystem.focus.rememberDragReorderState
+import io.github.matiyaaa.fuse.ui.designsystem.focus.reorderHandle
 import io.github.matiyaaa.fuse.ui.designsystem.focus.reorderItem
+import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
 import io.github.matiyaaa.fuse.ui.designsystem.icons.HintButton
 import io.github.matiyaaa.fuse.ui.designsystem.input.InputLayer
 import io.github.matiyaaa.fuse.ui.designsystem.input.NavResult
 import io.github.matiyaaa.fuse.ui.designsystem.media.HeroSource
 import io.github.matiyaaa.fuse.ui.designsystem.media.PrefetchArt
+import io.github.matiyaaa.fuse.ui.designsystem.shape.SquircleShape
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Durations
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
@@ -138,6 +145,12 @@ fun FlowHome(app: AppState) {
     var reorder by remember { mutableStateOf<String?>(null) }
     // A system picked up on the Systems shelf (hold confirm); left and right move it.
     var movingSystem by remember { mutableStateOf(false) }
+    // Shelves are held by their title (or a widget) and dragged up and down by touch.
+    val shelfDrag = rememberDragReorderState()
+    fun moveShelfTo(from: Int, to: Int) {
+        val blocks = shelves.map { sh -> sh.widgets.map { it.id } }
+        store.updatePrefs { p -> p.copy(home = p.home.copy(widgets = HomeArrange.moveBlock(p.home.widgets, blocks, from, to))) }
+    }
 
     val shelf = shelves.getOrNull(sel.row)
     val item = shelf?.items?.getOrNull(sel.column(shelf.key))
@@ -180,30 +193,26 @@ fun FlowHome(app: AppState) {
                         app.dismissFromContinue(i.card)
                     }))
                 } else emptyList()
-                app.openContextMenu(app.gameMenu(i.card, extra = extra))
+                // Shelves of games have no options of their own, so moving one is offered here.
+                val move = MenuAction("arrange", "Move this shelf", FuseIcons.Move, detail = "Then drag it, or use up and down", onSelect = {
+                    app.closeOverlays()
+                    reorder = s.key
+                    shelfDrag.arm(s.key)
+                })
+                app.openContextMenu(app.gameMenu(i.card, extra = extra + move))
             }
             is ShelfItem.System -> app.openContextMenu(app.systemMenu(i.card) { movingSystem = true })
             is ShelfItem.App -> app.openContextMenu(app.appMenu(i.card))
-            else -> app.openContextMenu(shelfMenu(app, s) { reorder = s.key })
+            else -> app.openContextMenu(shelfMenu(app, s) { reorder = s.key; shelfDrag.arm(s.key) })
         }
     }
 
     fun moveShelf(key: String, down: Boolean): NavResult {
-        val s = shelves.firstOrNull { it.key == key } ?: return NavResult.BLOCKED
-        val idx = shelves.indexOf(s)
-        val other = shelves.getOrNull(if (down) idx + 1 else idx - 1) ?: return NavResult.BLOCKED
-        store.updatePrefs { p ->
-            val ordered = p.home.widgets.sortedBy { it.order }.toMutableList()
-            val mine = s.widgets.map { it.id }.toSet()
-            val theirs = other.widgets.map { it.id }.toSet()
-            val a = ordered.filter { it.id in mine }
-            val b = ordered.filter { it.id in theirs }
-            val first = ordered.indexOfFirst { it.id in mine || it.id in theirs }
-            val rest = ordered.filterNot { it.id in mine || it.id in theirs }.toMutableList()
-            rest.addAll(first.coerceAtMost(rest.size), if (down) b + a else a + b)
-            p.copy(home = p.home.copy(widgets = rest.mapIndexed { i, w -> w.copy(order = i) }))
-        }
-        sel.row = (if (down) idx + 1 else idx - 1).coerceIn(0, shelves.lastIndex)
+        val idx = shelves.indexOfFirst { it.key == key }.takeIf { it >= 0 } ?: return NavResult.BLOCKED
+        val to = if (down) idx + 1 else idx - 1
+        if (to !in shelves.indices) return NavResult.BLOCKED
+        moveShelfTo(idx, to)
+        sel.row = to
         return NavResult.MOVED
     }
 
@@ -245,12 +254,16 @@ fun FlowHome(app: AppState) {
     BoxWithConstraints(
         Modifier.fillMaxSize()
             // A tap outside the tiles puts a carried shelf or system down.
-            .pointerInput(arranging) { if (arranging) detectTapGestures { reorder = null; movingSystem = false } },
+            .pointerInput(arranging) { if (arranging) detectTapGestures { reorder = null; movingSystem = false; shelfDrag.arm(null) } },
     ) {
         val maxH = maxHeight
         val stageHeight = (maxH * 0.3f).coerceIn(150.dp, 280.dp)
         val rows = rememberLazyListState()
-        FollowSelection(rows, { sel.row }, anchor = 0f)
+        // While a shelf is held the list stays under the finger.
+        FollowSelection(rows, { sel.row }, anchor = 0f, enabled = { shelfDrag.heldKey == null })
+        val shown = shelfDrag.arrange(shelves) { it.key }
+        val selectedKey = shelves.getOrNull(sel.row)?.key
+        val selectedAt = shown.indexOfFirst { it.key == selectedKey }
         Column(Modifier.fillMaxSize()) {
             Spacer(Modifier.height(Size.hudHeight))
             Box(Modifier.fillMaxWidth().height(stageHeight).padding(horizontal = Space.gutter), contentAlignment = Alignment.BottomStart) {
@@ -259,15 +272,49 @@ fun FlowHome(app: AppState) {
             Spacer(Modifier.height(Space.xl))
             LazyColumn(
                 state = rows,
-                modifier = Modifier.fillMaxWidth().weight(1f).fadingEdges(top = if (rows.canScrollBackward) 24.dp else 0.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .fadingEdges(top = if (rows.canScrollBackward) 24.dp else 0.dp)
+                    .dragReorder(
+                        shelfDrag,
+                        visibleKeys = { rows.layoutInfo.visibleItemsInfo.map { it.key } },
+                        scrollBy = { rows.scrollBy(it) },
+                        keepScroll = { rows.requestScrollToItem(rows.firstVisibleItemIndex, rows.firstVisibleItemScrollOffset) },
+                        vertical = true,
+                        enabled = !movingSystem,
+                        longPressMs = ReorderDefaults.liftMs(prefs.input.longPressMs.toLong()),
+                        endInset = Size.hintHeight,
+                        requireHandle = true,
+                        lane = ReorderMath.Lane.COLUMN,
+                        onLift = { key ->
+                            sel.row = shelves.indexOfFirst { it.key == key }.coerceAtLeast(0)
+                            app.focusZone = FocusZone.CONTENT
+                            app.platform.haptics.lift()
+                        },
+                        onTarget = { app.platform.haptics.slot() },
+                        // A hold let go where it started opens the shelf's options.
+                        onHoldReleased = { key ->
+                            shelves.firstOrNull { it.key == key }?.let { sh -> app.openContextMenu(shelfMenu(app, sh) { reorder = sh.key; shelfDrag.arm(sh.key) }) }
+                        },
+                        onDrop = { key, to ->
+                            val from = shelves.indexOfFirst { it.key == key }
+                            if (from >= 0 && to != from) moveShelfTo(from, to)
+                            sel.row = to
+                            reorder = null
+                            app.platform.haptics.drop()
+                        },
+                    ),
                 // Only room for the hint line: the list ends where its content ends, by stick or by touch.
                 contentPadding = PaddingValues(bottom = Size.hintHeight + Space.xl),
                 verticalArrangement = Arrangement.spacedBy(Space.l),
             ) {
-                itemsIndexed(shelves, key = { _, s -> s.key }) { index, s ->
+                itemsIndexed(shown, key = { _, s -> s.key }) { shownAt, s ->
+                    val index = shelves.indexOf(s)
+                    val held = shelfDrag.heldKey == s.key
                     val rowAlpha by animateFloatAsState(
                         // Shelves above the selection dim rather than vanish, so touch scrolling always shows them.
-                        if (index == sel.row) 1f else if (index < sel.row) 0.55f else 0.72f,
+                        if (shownAt == selectedAt || held) 1f else if (shownAt < selectedAt) 0.55f else 0.72f,
                         Fuse.motion.fade(Durations.BASE),
                         label = "shelf",
                     )
@@ -277,18 +324,23 @@ fun FlowHome(app: AppState) {
                         selectedColumn = if (index == sel.row && app.focusZone == FocusZone.CONTENT) sel.column(s.key) else -1,
                         rememberedColumn = sel.column(s.key),
                         moving = reorder == s.key,
+                        lifted = reorder == s.key || held,
+                        shelfDrag = shelfDrag,
                         movingItem = movingSystem && index == sel.row,
                         feed = feed,
                         cartridge = cartridge,
                         clock24h = prefs.clock24h,
                         modifier = Modifier
-                            .animateItem(fadeInSpec = null, fadeOutSpec = null)
+                            // The held shelf follows the finger; the others slide out of its way.
+                            .animateItem(fadeInSpec = null, fadeOutSpec = null, placementSpec = if (held) null else ReorderDefaults.Placement)
+                            .reorderItem(shelfDrag, s.key, liftScale = 1.02f)
                             .graphicsLayer { alpha = rowAlpha },
                         onTap = { col ->
                             if (arranging) {
                                 // A tap while arranging puts the carried shelf or system down.
                                 reorder = null
                                 movingSystem = false
+                                shelfDrag.arm(null)
                                 return@ShelfRow
                             }
                             val wasSelected = sel.row == index && sel.column(s.key) == col
@@ -330,6 +382,8 @@ private fun ShelfRow(
     selectedColumn: Int,
     rememberedColumn: Int,
     moving: Boolean,
+    lifted: Boolean,
+    shelfDrag: DragReorderState,
     movingItem: Boolean,
     feed: io.github.matiyaaa.fuse.ui.shell.store.HomeFeed,
     cartridge: io.github.matiyaaa.fuse.model.CartridgeStatus,
@@ -376,22 +430,56 @@ private fun ShelfRow(
         focus,
         size = 360.dp,
     )
+    // A shelf being moved sits on a raised panel, so it reads as one thing in your hand.
+    val lift by animateFloatAsState(if (lifted) 1f else 0f, Fuse.motion.focusSpring(), label = "shelf lift")
+    val panel = Fuse.geometry.panel
     Column(
         modifier
             .fillMaxWidth()
-            .then(
-                if (moving) Modifier.padding(horizontal = Space.l).border(1.5.dp, c.focus.copy(alpha = 0.7f), RoundedCornerShape(Fuse.geometry.panel)).padding(vertical = Space.s)
-                else Modifier,
-            ),
+            .drawBehind {
+                if (lift <= 0.01f) return@drawBehind
+                val inset = Space.l.toPx()
+                val pad = Space.s.toPx()
+                val r = CornerRadius(panel.toPx())
+                val topLeft = Offset(inset, -pad)
+                val box = androidx.compose.ui.geometry.Size(size.width - inset * 2, size.height + pad)
+                // A soft shadow in three steps, then the panel and its hairline.
+                for (i in 3 downTo 1) {
+                    val spread = i * 6.dp.toPx()
+                    drawRoundRect(
+                        Color.Black.copy(alpha = 0.10f * lift),
+                        topLeft = topLeft + Offset(-spread / 2, spread / 2),
+                        size = androidx.compose.ui.geometry.Size(box.width + spread, box.height + spread / 2),
+                        cornerRadius = CornerRadius(r.x + spread / 2),
+                    )
+                }
+                drawRoundRect(c.surfaceRaised.copy(alpha = 0.94f * lift), topLeft, box, r)
+                drawRoundRect(c.text.copy(alpha = 0.1f * lift), topLeft, box, r, style = Stroke(1.dp.toPx()))
+            },
     ) {
-        Row(Modifier.padding(horizontal = Space.gutter), verticalAlignment = Alignment.CenterVertically) {
-            SectionLabel(shelf.title, color = if (selectedColumn >= 0) c.text else c.textMuted)
-            if (moving || movingItem) {
-                Spacer(Modifier.padding(horizontal = Space.xs))
-                FText(if (moving) "Moving: up and down to place it" else "Moving: left and right to place it", Fuse.type.caption, color = c.accent)
+        Row(
+            Modifier
+                .fillMaxWidth()
+                // Holding a shelf's title picks the whole shelf up.
+                .reorderHandle(shelfDrag, shelf.key)
+                .padding(start = Space.gutter, end = Space.gutter, bottom = Space.m),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            SectionLabel(shelf.title, color = if (selectedColumn >= 0 || lifted) c.text else c.textMuted)
+            if (lifted || movingItem) {
+                Spacer(Modifier.width(Space.s))
+                FuseIcon(FuseIcons.Move, size = 14.dp, tint = c.accent)
+                Spacer(Modifier.width(Space.xs))
+                FText(
+                    when {
+                        movingItem -> "Left and right to place it"
+                        moving -> "Drag it, or up and down to place it"
+                        else -> "Drag to place it"
+                    },
+                    Fuse.type.caption, color = c.accent,
+                )
             }
         }
-        Spacer(Modifier.height(Space.m))
         val height = when (shelf.style) {
             ShelfStyle.WIDE -> metrics.icon * 1.25f
             else -> metrics.icon
@@ -402,35 +490,38 @@ private fun ShelfRow(
                 drag,
                 visibleKeys = { row.layoutInfo.visibleItemsInfo.map { it.key } },
                 scrollBy = { row.scrollBy(it) },
+                keepScroll = { row.requestScrollToItem(row.firstVisibleItemIndex, row.firstVisibleItemScrollOffset) },
                 vertical = false,
-                longPressMs = app.store.prefs.value.input.longPressMs.toLong(),
+                lane = ReorderMath.Lane.ROW,
+                longPressMs = ReorderDefaults.liftMs(app.store.prefs.value.input.longPressMs.toLong()),
                 onLift = { key ->
                     onLift(items.indexOfFirst { it.key == key }.coerceAtLeast(0))
-                    app.platform.haptics.tick()
+                    app.platform.haptics.lift()
                 },
-                onTarget = { app.platform.haptics.tick() },
+                onTarget = { app.platform.haptics.slot() },
                 onHoldReleased = { key -> shelf.items.indexOfFirst { it.key == key }.takeIf { it >= 0 }?.let(onLongPress) },
-                onDrop = { key, to -> shelf.items.indexOfFirst { it.key == key }.takeIf { it >= 0 }?.let { from -> onMoveSystem?.invoke(from, to) } },
+                onDrop = { key, to ->
+                    shelf.items.indexOfFirst { it.key == key }.takeIf { it >= 0 }?.let { from -> onMoveSystem?.invoke(from, to) }
+                    app.platform.haptics.drop()
+                },
             ),
             contentPadding = PaddingValues(start = Space.gutter, end = Space.gutter * 3, bottom = Space.l),
             horizontalArrangement = Arrangement.spacedBy(metrics.gap),
         ) {
             itemsIndexed(items, key = { _, i -> i.key }) { col, item ->
-                val selected = col == selectedColumn
+                val selected = drag.heldKey?.let { it == item.key } ?: (col == selectedColumn)
                 val carried = movingItem && selected
-                val lifted by animateFloatAsState(if (carried) 1f else 0f, Fuse.motion.focusSpring(), label = "carry")
+                val carry by animateFloatAsState(if (carried) 1f else 0f, Fuse.motion.focusSpring(), label = "carry")
+                val tileShape = SquircleShape.fraction(Fuse.geometry.tileCornerFraction)
                 // Tiles slide to their new places; a carried one floats a little above the row.
                 Box(
                     Modifier
-                        .animateItem(fadeInSpec = null, fadeOutSpec = null, placementSpec = if (drag.heldKey == item.key) null else ItemPlacement)
-                        .then(if (shelf.style == ShelfStyle.SYSTEM) Modifier.reorderItem(drag, item.key) else Modifier)
+                        .animateItem(fadeInSpec = null, fadeOutSpec = null, placementSpec = if (drag.heldKey == item.key) null else ReorderDefaults.Placement)
+                        .then(if (shelf.style == ShelfStyle.SYSTEM) Modifier.reorderItem(drag, item.key, shape = tileShape) else Modifier)
+                        // Widgets have no options of their own: holding one picks up its shelf.
+                        .then(if (item is ShelfItem.Widget) Modifier.reorderHandle(shelfDrag, shelf.key) else Modifier)
                         .zIndex(if (carried) 1f else 0f)
-                        .graphicsLayer {
-                            val scale = 1f + 0.05f * lifted
-                            scaleX = scale
-                            scaleY = scale
-                            translationY = -6.dp.toPx() * lifted
-                        },
+                        .carried({ carry }, tileShape),
                 ) {
                 when (item) {
                     is ShelfItem.Game -> if (shelf.style == ShelfStyle.WIDE) {
@@ -441,6 +532,7 @@ private fun ShelfRow(
                     is ShelfItem.System -> SystemTile(item.card, selected, size = height, onClick = { onTap(col) }, onLongClick = if (reorderable) null else ({ onLongPress(col) }))
                     is ShelfItem.App -> AppTile(item.card, selected, size = height, onClick = { onTap(col) }, onLongClick = { onLongPress(col) })
                     is ShelfItem.Collection -> CollectionTile(item.collection, selected, height = height, onClick = { onTap(col) }, onLongClick = { onLongPress(col) })
+                    // A widget's hold belongs to its shelf: let go without moving, and the shelf's options open.
                     is ShelfItem.Widget -> WidgetCard(item.kind, item.span, feed, cartridge, selected, clock24h, onClick = { onTap(col) }, height = height)
                 }
                 }
@@ -449,8 +541,6 @@ private fun ShelfRow(
     }
 }
 
-/** How tiles slide aside while a system is moved. */
-private val ItemPlacement = spring(stiffness = Spring.StiffnessMediumLow, visibilityThreshold = IntOffset.VisibilityThreshold)
 
 /** What the stage shows for a shelf item. */
 private fun ShelfItem.stage(feed: io.github.matiyaaa.fuse.ui.shell.store.HomeFeed): StageInfo = when (this) {

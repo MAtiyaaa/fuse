@@ -118,6 +118,24 @@ internal fun AuditDriver.homeFlow(exhaustive: Boolean) {
         tap(PadButton.A)
         shoot("put down")
     }
+    scenario("home", "flow drag by touch") {
+        useLibrary()
+        waitFor("Continue playing")
+        // A shelf's title (set in capitals) is its handle: Continue playing goes below Systems.
+        val from = textCentre("CONTINUE PLAYING")
+        val to = textCentre("SYSTEMS") + androidx.compose.ui.geometry.Offset(0f, 60f)
+        touch { down(from) }
+        advanceExactly(600)
+        shoot("held by its title, the shelf lifts on a panel")
+        touch { moveTo(from + (to - from) * 0.5f) }
+        settle(150)
+        touch { moveTo(to) }
+        settle(500)
+        shoot("dragged down, the shelves below make room")
+        touch { up() }
+        settle(1_200)
+        shoot("dropped in its new place")
+    }
 }
 
 /** Home in Channels mode: the board, moving around it, and carrying a channel. */
@@ -139,6 +157,25 @@ internal fun AuditDriver.homeChannels(exhaustive: Boolean) {
         shoot("carried channel moved right")
         tap(PadButton.A)
         shoot("put down")
+    }
+    scenario("home", "channels drag by touch") {
+        useLibrary { it.copy(home = HomeLayoutConfig(mode = HomeMode.CHANNELS, widgets = SampleLibrary.channelBoard)) }
+        waitFor("Continue playing")
+        // Hold the channel's tile, just above its name.
+        val from = textCentre("Continue playing") + androidx.compose.ui.geometry.Offset(0f, -80f)
+        // Past the middle of the next channel along, so it takes that place.
+        val to = from + androidx.compose.ui.geometry.Offset(1_100f, 0f)
+        touch { down(from) }
+        advanceExactly(600)
+        shoot("held, the channel floats over its shadow")
+        touch { moveTo(from + (to - from) * 0.5f) }
+        settle(150)
+        touch { moveTo(to) }
+        settle(500)
+        shoot("dragged right, the others slide over")
+        touch { up() }
+        settle(1_200)
+        shoot("dropped")
     }
     if (!exhaustive) return
     scenario("home", "channels default widgets") {

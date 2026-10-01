@@ -82,6 +82,15 @@ interface Haptics {
     fun confirm()
     fun reject()
 
+    /** An item lifted by touch, to be moved. */
+    fun lift() = confirm()
+
+    /** A moved item taking a new place among the others while held. */
+    fun slot() = tick()
+
+    /** A moved item put down. */
+    fun drop() = tick()
+
     object None : Haptics {
         override fun tick() = Unit
         override fun confirm() = Unit

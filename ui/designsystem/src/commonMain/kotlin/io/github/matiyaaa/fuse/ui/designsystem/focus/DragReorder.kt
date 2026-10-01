@@ -1,13 +1,16 @@
 package io.github.matiyaaa.fuse.ui.designsystem.focus
 
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.core.VectorConverter
+import androidx.compose.animation.core.VisibilityThreshold
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -19,15 +22,19 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.toSize
-import androidx.compose.ui.zIndex
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
@@ -44,13 +51,34 @@ object ReorderMath {
     /**
      * The key the held item should take the place of: the one under [point], counting only the
      * middle of each rectangle ([margin] of its size in from every side). In a gap, near an edge or
-     * over the held item itself, nothing changes (null), so the order doesn't flicker.
+     * over the held item itself, nothing changes (null), so the order doesn't flicker. [skip] is the
+     * item just passed: in a grid of mixed sizes it can slide under the finger again, so it only
+     * counts once the finger has left it.
      */
-    fun target(point: Offset, slots: Map<Any, Rect>, held: Any, margin: Float = 0.12f): Any? =
-        slots.entries.firstOrNull { (key, r) ->
-            key != held && Rect(
-                r.left + r.width * margin, r.top + r.height * margin, r.right - r.width * margin, r.bottom - r.height * margin,
+    fun target(point: Offset, slots: Map<Any, Rect>, held: Any, margin: Float = 0.12f, skip: Any? = null, lane: Lane = Lane.GRID): Any? {
+        // In a single row or column only the distance along it counts: a shelf held by its title, at
+        // the far left, still finds the shelf it is over.
+        val mx = if (lane == Lane.COLUMN) 0f else margin
+        val my = if (lane == Lane.ROW) 0f else margin
+        return slots.entries.firstOrNull { (key, r) ->
+            key != held && key != skip && Rect(
+                r.left + r.width * mx, r.top + r.height * my, r.right - r.width * mx, r.bottom - r.height * my,
             ).contains(point)
+        }?.key
+    }
+
+    /** How the items of a reorderable list are laid out. */
+    enum class Lane { GRID, ROW, COLUMN }
+
+    /**
+     * The key whose rectangle is closest to [point], other than [held]: while the list scrolls under
+     * a finger resting at its edge, the held item takes the nearest place, so it never scrolls away.
+     */
+    fun nearest(point: Offset, slots: Map<Any, Rect>, held: Any): Any? =
+        slots.entries.filter { it.key != held }.minByOrNull { (_, r) ->
+            val dx = (r.left - point.x).coerceAtLeast(0f) + (point.x - r.right).coerceAtLeast(0f)
+            val dy = (r.top - point.y).coerceAtLeast(0f) + (point.y - r.bottom).coerceAtLeast(0f)
+            dx * dx + dy * dy
         }?.key
 
     /**
@@ -72,6 +100,22 @@ object ReorderMath {
     private fun square(f: Float) = f * f
 }
 
+/** How a touch reorder moves and feels, shared by every list that can be rearranged. */
+object ReorderDefaults {
+    /** Neighbours sliding out of the way: quick, settling with almost no overshoot. */
+    val Placement: FiniteAnimationSpec<IntOffset> = spring(dampingRatio = 0.86f, stiffness = 420f, visibilityThreshold = IntOffset.VisibilityThreshold)
+
+    /** A dropped item gliding into its place. */
+    val Settle: FiniteAnimationSpec<Offset> = spring(dampingRatio = 0.78f, stiffness = 520f, visibilityThreshold = Offset.VisibilityThreshold)
+
+    /** How much a held item grows, and how high its shadow lifts it. */
+    const val LIFT_SCALE = 1.08f
+    val LiftElevation = 20.dp
+
+    /** The hold before an item lifts: a little quicker than a long press, so it feels direct. */
+    fun liftMs(longPressMs: Long): Long = (longPressMs * 0.7f).toLong().coerceIn(300L, 450L)
+}
+
 /**
  * Where a touch reorder stands: which item is held, where it would go, and where the finger is.
  * Screens pass their list through [arrange] to show the new order while the item is held, and for a
@@ -91,10 +135,24 @@ class DragReorderState internal constructor() {
     var moved by mutableStateOf(false)
         private set
 
+    /**
+     * An item a menu's "Move" picked: the next touch on it drags at once, without the hold. A touch
+     * anywhere else, or a drop, clears it.
+     */
+    var armedKey: Any? by mutableStateOf(null)
+        private set
+
+    fun arm(key: Any?) {
+        armedKey = key
+    }
+
     internal var finger by mutableStateOf(Offset.Zero)
     internal var grab = Offset.Zero
     internal var container = Rect.Zero
     internal val bounds = HashMap<Any, Rect>()
+    internal val handles = HashMap<Any, Rect>()
+    internal var lane = ReorderMath.Lane.GRID
+    private var passed: Any? = null
     internal var displayed: List<Any> = emptyList()
     private var source: List<Any> = emptyList()
 
@@ -133,16 +191,34 @@ class DragReorderState internal constructor() {
         target = displayed.indexOf(key)
         moved = false
         settleKey = null
+        passed = null
+        armedKey = null
     }
 
     /** Moves the target under the finger; true when it changed. */
     internal fun retarget(visible: Collection<Any>): Boolean {
         val held = heldKey ?: return false
         val slots = bounds.filterKeys { it in visible }
-        val over = ReorderMath.target(finger, slots, held) ?: return false
+        passed?.let { p -> if (slots[p]?.contains(finger) != true) passed = null }
+        val over = ReorderMath.target(finger, slots, held, skip = passed, lane = lane) ?: return false
         val to = displayed.indexOf(over)
         if (to < 0 || to == target) return false
         target = to
+        passed = over
+        return true
+    }
+
+    /** While auto-scrolling: the held item takes the place nearest the finger. */
+    internal fun retargetNearest(visible: Collection<Any>): Boolean {
+        val held = heldKey ?: return false
+        if (retarget(visible)) return true
+        // Still over its own place: it stays there.
+        if (bounds[held]?.contains(finger) == true) return false
+        val over = ReorderMath.nearest(finger, bounds.filterKeys { it in visible }, held) ?: return false
+        val to = displayed.indexOf(over)
+        if (to < 0 || to == target) return false
+        target = to
+        passed = over
         return true
     }
 
@@ -153,7 +229,14 @@ class DragReorderState internal constructor() {
     /** Ends the hold; the dropped order shows until the screen's own list changes. */
     internal fun release(keep: Boolean) {
         val held = heldKey ?: return
-        bounds[held]?.let { settleFrom = finger - grab - it.topLeft }
+        bounds[held]?.let {
+            val d = finger - grab - it.topLeft
+            settleFrom = when (lane) {
+                ReorderMath.Lane.COLUMN -> Offset(0f, d.y)
+                ReorderMath.Lane.ROW -> Offset(d.x, 0f)
+                ReorderMath.Lane.GRID -> d
+            }
+        }
         settleKey = held
         if (keep && moved) {
             pendingFrom = source
@@ -190,6 +273,16 @@ fun rememberDragReorderState(): DragReorderState {
  * whatever a long press did before (an options menu) still works. Until the hold, taps and
  * scrolling are untouched. [visibleKeys] are the keys the list currently shows, [scrollBy] scrolls
  * it, and [endInset] is chrome over the list's end (a hint bar) where auto-scroll starts sooner.
+ *
+ * A lazy list keeps its first visible item in place by key, so moving that item would scroll the
+ * list; [keepScroll] is called as the order changes to pin the scroll by index instead (pass
+ * `{ state.requestScrollToItem(state.firstVisibleItemIndex, state.firstVisibleItemScrollOffset) }`).
+ *
+ * [lane] says whether the items form a grid, a single row or a single column.
+ *
+ * With [requireHandle] only a hold on an item's [reorderHandle] lifts it, so a list of rows can be
+ * rearranged while the rows' own items keep their holds (a row of systems inside a list of shelves).
+ * An item that was [DragReorderState.arm]ed lifts at the first touch.
  */
 fun Modifier.dragReorder(
     state: DragReorderState,
@@ -199,12 +292,18 @@ fun Modifier.dragReorder(
     enabled: Boolean = true,
     longPressMs: Long? = null,
     endInset: Dp = 0.dp,
+    requireHandle: Boolean = false,
+    lane: ReorderMath.Lane = ReorderMath.Lane.GRID,
+    keepScroll: () -> Unit = {},
     onLift: (Any) -> Unit = {},
     onTarget: () -> Unit = {},
     onHoldReleased: (Any) -> Unit = {},
     onDrop: (key: Any, to: Int) -> Unit,
 ): Modifier = this
-    .onGloballyPositioned { state.container = Rect(it.positionInRoot(), it.size.toSize()) }
+    .onGloballyPositioned {
+        state.container = Rect(it.positionInRoot(), it.size.toSize())
+        state.lane = lane
+    }
     .pointerInput(state, enabled) {
         if (!enabled) return@pointerInput
         coroutineScope {
@@ -223,9 +322,9 @@ fun Modifier.dragReorder(
                         } else {
                             ReorderMath.autoScrollSpeed(state.finger.x, box.left, box.right - endInset.toPx(), 56.dp.toPx(), 1_400.dp.toPx())
                         }
-                        if (speed != 0f && dt > 0f) {
-                            scrollBy(speed * dt)
-                            if (state.retarget(visibleKeys())) onTarget()
+                        if (speed != 0f && dt > 0f && scrollBy(speed * dt) != 0f && state.retargetNearest(visibleKeys())) {
+                            keepScroll()
+                            onTarget()
                         }
                     }
                 }
@@ -233,18 +332,27 @@ fun Modifier.dragReorder(
             awaitEachGesture {
                 val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
                 val slop = viewConfiguration.touchSlop
-                // Wait out the hold without taking anything, so taps and scrolls behave as always.
-                val early = withTimeoutOrNull(longPressMs ?: viewConfiguration.longPressTimeoutMillis) {
-                    var ended = false
-                    while (!ended) {
-                        val change = awaitPointerEvent(PointerEventPass.Initial).changes.firstOrNull { it.id == down.id }
-                        ended = change == null || !change.pressed || change.isConsumed || (change.position - down.position).getDistance() > slop
-                    }
-                    true
-                }
-                if (early != null) return@awaitEachGesture
                 val at = state.container.topLeft + down.position
-                val key = ReorderMath.hit(at, state.bounds.filterKeys { it in visibleKeys() }) ?: return@awaitEachGesture
+                val visible = visibleKeys()
+                val armed = state.armedKey?.takeIf { it in visible && state.bounds[it]?.contains(at) == true }
+                if (armed == null && state.armedKey != null) state.arm(null)
+                if (armed == null) {
+                    // Wait out the hold without taking anything, so taps and scrolls behave as always.
+                    val early = withTimeoutOrNull(longPressMs ?: ReorderDefaults.liftMs(viewConfiguration.longPressTimeoutMillis)) {
+                        var ended = false
+                        while (!ended) {
+                            val change = awaitPointerEvent(PointerEventPass.Initial).changes.firstOrNull { it.id == down.id }
+                            ended = change == null || !change.pressed || change.isConsumed || (change.position - down.position).getDistance() > slop
+                        }
+                        true
+                    }
+                    if (early != null) return@awaitEachGesture
+                }
+                val key = armed ?: if (requireHandle) {
+                    state.handles.entries.firstOrNull { (k, r) -> k in visible && r.contains(at) }?.key
+                } else {
+                    ReorderMath.hit(at, state.bounds.filterKeys { it in visible })
+                } ?: return@awaitEachGesture
                 state.lift(key, at)
                 if (state.heldKey == null) return@awaitEachGesture
                 onLift(key)
@@ -259,7 +367,10 @@ fun Modifier.dragReorder(
                     if (!change.pressed) break
                     state.finger = state.container.topLeft + change.position
                     if (!state.moved && (state.finger - at).getDistance() > slop) state.markMoved()
-                    if (state.moved && state.retarget(visibleKeys())) onTarget()
+                    if (state.moved && state.retarget(visibleKeys())) {
+                        keepScroll()
+                        onTarget()
+                    }
                 }
                 val moved = state.moved
                 val to = state.target
@@ -275,12 +386,15 @@ fun Modifier.dragReorder(
 
 /**
  * One item of a [dragReorder] list: reports where it is, and while held follows the finger above
- * the others (then settles into its place when dropped). Put it before the item's own scaling, and
- * give the held item no placement animation so it never lags behind the finger.
+ * the others, grown by [liftScale] over a soft shadow in [shape]; dropped, it glides into its place.
+ * Put it before the item's own scaling, and give the held item no placement animation so it never
+ * lags behind the finger.
+ *
+ * The item's place is read while it is placed, so the held item is drawn from the same frame's
+ * position (no jump when it takes a new slot), and moving the finger only redraws its layer.
  */
 @Composable
-fun Modifier.reorderItem(state: DragReorderState, key: Any, liftScale: Float = 1.06f): Modifier {
-    var topLeft by remember { mutableStateOf(Offset.Zero) }
+fun Modifier.reorderItem(state: DragReorderState, key: Any, liftScale: Float = ReorderDefaults.LIFT_SCALE, shape: Shape? = null): Modifier {
     val held = state.heldKey == key
     val settle = remember { Animatable(Offset.Zero, Offset.VectorConverter) }
     val lift = remember { Animatable(0f) }
@@ -288,28 +402,76 @@ fun Modifier.reorderItem(state: DragReorderState, key: Any, liftScale: Float = 1
     LaunchedEffect(held) {
         if (held) {
             settle.snapTo(Offset.Zero)
-            lift.animateTo(1f, spring(stiffness = 900f))
+            lift.animateTo(1f, spring(dampingRatio = 0.7f, stiffness = 700f))
         } else if (state.settleKey == currentKey) {
             settle.snapTo(state.settleFrom)
-            launch { lift.animateTo(0f, spring(stiffness = 700f)) }
-            settle.animateTo(Offset.Zero, spring(dampingRatio = 0.8f, stiffness = 500f))
+            launch { lift.animateTo(0f, spring(dampingRatio = 0.9f, stiffness = 500f)) }
+            settle.animateTo(Offset.Zero, ReorderDefaults.Settle)
         } else {
             lift.snapTo(0f)
         }
     }
+    val raised by remember { derivedStateOf { state.heldKey == currentKey || lift.value > 0.01f } }
+    val elevation = ReorderDefaults.LiftElevation
     return this
-        .zIndex(if (held || lift.value > 0.01f) 1f else 0f)
-        .onGloballyPositioned {
-            val p = it.positionInRoot()
-            state.bounds[key] = Rect(p, it.size.toSize())
-            if (p != topLeft) topLeft = p
+        // Catches an ancestor moving without this item being placed again.
+        .onGloballyPositioned { state.bounds[key] = Rect(it.positionInRoot(), it.size.toSize()) }
+        .layout { measurable, constraints ->
+            val p = measurable.measure(constraints)
+            layout(p.width, p.height) {
+                val origin = coordinates?.positionInRoot() ?: Offset.Zero
+                state.bounds[key] = Rect(origin, Size(p.width.toFloat(), p.height.toFloat()))
+                p.placeWithLayer(0, 0, zIndex = if (raised) 1f else 0f) {
+                    val l = lift.value
+                    // In a single row or column the held item slides along it only, as in a phone's lists.
+                    val t = if (state.heldKey == key) {
+                        val d = state.finger - state.grab - origin
+                        when (state.lane) {
+                            ReorderMath.Lane.COLUMN -> Offset(0f, d.y)
+                            ReorderMath.Lane.ROW -> Offset(d.x, 0f)
+                            ReorderMath.Lane.GRID -> d
+                        }
+                    } else {
+                        settle.value
+                    }
+                    translationX = t.x
+                    translationY = t.y
+                    val s = 1f + (liftScale - 1f) * l
+                    scaleX = s
+                    scaleY = s
+                    if (shape != null && l > 0f) {
+                        this.shape = shape
+                        shadowElevation = elevation.toPx() * l
+                        ambientShadowColor = Color.Black
+                        spotShadowColor = Color.Black
+                    } else {
+                        shadowElevation = 0f
+                    }
+                }
+            }
         }
-        .graphicsLayer {
-            val t = if (held) state.finger - state.grab - topLeft else settle.value
-            translationX = t.x
-            translationY = t.y
-            val s = 1f + (liftScale - 1f) * lift.value
-            scaleX = s
-            scaleY = s
-        }
+}
+
+/** Marks the part of an item a hold lifts it by, for a list with `requireHandle`. */
+fun Modifier.reorderHandle(state: DragReorderState, key: Any): Modifier =
+    onGloballyPositioned { state.handles[key] = Rect(it.positionInRoot(), it.size.toSize()) }
+
+/**
+ * The look of an item carried with the controller, the same as one lifted by touch: grown a little,
+ * raised, over a soft shadow in [shape]. [lift] runs from 0 (resting) to 1 (carried).
+ */
+fun Modifier.carried(lift: () -> Float, shape: Shape, scale: Float = 1.05f): Modifier = graphicsLayer {
+    val l = lift()
+    val s = 1f + (scale - 1f) * l
+    scaleX = s
+    scaleY = s
+    translationY = -6.dp.toPx() * l
+    if (l > 0f) {
+        this.shape = shape
+        shadowElevation = ReorderDefaults.LiftElevation.toPx() * l
+        ambientShadowColor = Color.Black
+        spotShadowColor = Color.Black
+    } else {
+        shadowElevation = 0f
+    }
 }

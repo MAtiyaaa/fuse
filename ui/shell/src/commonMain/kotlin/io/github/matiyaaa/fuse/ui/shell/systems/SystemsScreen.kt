@@ -69,6 +69,8 @@ import io.github.matiyaaa.fuse.ui.designsystem.components.Tile
 import io.github.matiyaaa.fuse.ui.designsystem.components.Trailing
 import io.github.matiyaaa.fuse.ui.designsystem.components.fadingEdges
 import io.github.matiyaaa.fuse.ui.designsystem.focus.FollowSelection
+import io.github.matiyaaa.fuse.ui.designsystem.focus.ReorderDefaults
+import io.github.matiyaaa.fuse.ui.designsystem.focus.carried
 import io.github.matiyaaa.fuse.ui.designsystem.focus.GridSelection
 import io.github.matiyaaa.fuse.ui.designsystem.focus.dragReorder
 import io.github.matiyaaa.fuse.ui.designsystem.focus.rememberDragReorderState
@@ -83,6 +85,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.media.HeroSource
 import io.github.matiyaaa.fuse.ui.designsystem.media.PrefetchArt
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Aspect
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Durations
+import io.github.matiyaaa.fuse.ui.designsystem.shape.SquircleShape
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
@@ -180,7 +183,8 @@ fun SystemsScreen(app: AppState) {
                 FText("Systems appear here once Fuse finds games for them.", Fuse.type.body, color = Fuse.colors.textMuted, modifier = Modifier.padding(horizontal = Space.gutter))
             }
             val grid = rememberLazyGridState()
-            FollowSelection(grid, { sel.index }, anchor = 0.08f)
+            // While a system is held the grid stays where the finger left it.
+            FollowSelection(grid, { sel.index }, anchor = 0.08f, enabled = { drag.heldKey == null })
             LazyVerticalGrid(
                 columns = GridCells.Fixed(columns),
                 state = grid,
@@ -190,15 +194,16 @@ fun SystemsScreen(app: AppState) {
                         drag,
                         visibleKeys = { grid.layoutInfo.visibleItemsInfo.map { it.key } },
                         scrollBy = { grid.scrollBy(it) },
+                        keepScroll = { grid.requestScrollToItem(grid.firstVisibleItemIndex, grid.firstVisibleItemScrollOffset) },
                         enabled = !moving,
-                        longPressMs = app.store.prefs.value.input.longPressMs.toLong(),
+                        longPressMs = ReorderDefaults.liftMs(app.store.prefs.value.input.longPressMs.toLong()),
                         endInset = Size.hintHeight,
                         onLift = { key ->
                             app.focusZone = FocusZone.CONTENT
                             sel.index = shown.indexOfFirst { it.platform.id.value == key }.coerceAtLeast(0)
-                            app.platform.haptics.tick()
+                            app.platform.haptics.lift()
                         },
-                        onTarget = { app.platform.haptics.tick() },
+                        onTarget = { app.platform.haptics.slot() },
                         // A hold let go where it started still opens the options, as it always did.
                         onHoldReleased = { key ->
                             val i = systems.indexOfFirst { it.platform.id.value == key }
@@ -211,6 +216,7 @@ fun SystemsScreen(app: AppState) {
                             val from = systems.indexOfFirst { it.platform.id.value == key }
                             if (from >= 0 && to != from) app.moveSystem(systems, from, to - from)
                             sel.index = to
+                            app.platform.haptics.drop()
                         },
                     ),
                 // Room above the first row for a lifted or carried card.
@@ -220,24 +226,21 @@ fun SystemsScreen(app: AppState) {
             ) {
                 itemsIndexed(shown, key = { _, p -> p.platform.id.value }) { i, card ->
                     val key = card.platform.id.value
-                    val selected = i == sel.index && app.focusZone == FocusZone.CONTENT
+                    // While held, the selection stays on the held system wherever it would land.
+                    val selected = (drag.heldKey?.let { it == key } ?: (i == sel.index)) && app.focusZone == FocusZone.CONTENT
                     val carried = moving && i == sel.index
                     val lifted by animateFloatAsState(if (carried) 1f else 0f, Fuse.motion.focusSpring(), label = "carry")
+                    val shape = SquircleShape.fraction(Fuse.geometry.tileCornerFraction)
                     Tile(
                         selected = selected,
                         glow = card.platform.accent.toColor(),
                         modifier = Modifier
                             // The held system follows the finger, never an animation behind it.
-                            .animateItem(fadeInSpec = null, fadeOutSpec = null, placementSpec = if (drag.heldKey == key) null else ItemPlacement)
-                            .reorderItem(drag, key)
+                            .animateItem(fadeInSpec = null, fadeOutSpec = null, placementSpec = if (drag.heldKey == key) null else ReorderDefaults.Placement)
+                            .reorderItem(drag, key, shape = shape)
                             .zIndex(if (carried) 1f else 0f)
-                            .graphicsLayer {
-                                // A carried system floats a little above the others.
-                                val s = 1f + 0.05f * lifted
-                                scaleX = s
-                                scaleY = s
-                                translationY = -6.dp.toPx() * lifted
-                            }
+                            // Carried with the controller, a system floats the same as one held by touch.
+                            .carried({ lifted }, shape)
                             .fillMaxWidth()
                             .aspectRatio(Aspect.SYSTEM_CARD),
                         onClick = {
@@ -376,7 +379,6 @@ internal fun Modifier.panelFade(): Modifier = this
     }
 
 /** How systems slide aside while one is moved. */
-private val ItemPlacement = spring(stiffness = Spring.StiffnessMediumLow, visibilityThreshold = IntOffset.VisibilityThreshold)
 
 /**
  * Options for a system (Context button or long press on its card). [onMove] adds "Move this system"
