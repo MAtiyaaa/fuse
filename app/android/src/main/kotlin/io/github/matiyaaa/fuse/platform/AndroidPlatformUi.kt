@@ -11,6 +11,7 @@ import io.github.matiyaaa.fuse.BuildConfig
 import io.github.matiyaaa.fuse.CompanionScreens
 import io.github.matiyaaa.fuse.CrashLog
 import io.github.matiyaaa.fuse.SecondScreenLog
+import io.github.matiyaaa.fuse.capture.AndroidScreenCapture
 import io.github.matiyaaa.fuse.model.CapabilityProfile
 import io.github.matiyaaa.fuse.model.DisplayInfo
 import io.github.matiyaaa.fuse.model.Host
@@ -28,7 +29,7 @@ import kotlinx.coroutines.withContext
 
 /**
  * The Android side of the interface: status, displays, sounds, haptics, Home role, storage, quick
- * controls and video previews. One instance lives as long as the process; things that need an
+ * controls, video previews and screen capture. One instance lives as long as the process; things that need an
  * activity go through [ActivityHolder].
  */
 class AndroidPlatformUi(
@@ -57,6 +58,7 @@ class AndroidPlatformUi(
     override val quick: AndroidQuickControls = AndroidQuickControls(appContext, activities)
     override val video: VideoPreview = AndroidVideoPreview()
     override val music: AndroidMenuMusic = AndroidMenuMusic()
+    override val capture: AndroidScreenCapture = AndroidScreenCapture(appContext, activities, scope)
     override val secondScreenLog: StateFlow<List<String>> = SecondScreenLog.entries
 
     private val hasBluetooth = appContext.packageManager.hasSystemFeature(PackageManager.FEATURE_BLUETOOTH)

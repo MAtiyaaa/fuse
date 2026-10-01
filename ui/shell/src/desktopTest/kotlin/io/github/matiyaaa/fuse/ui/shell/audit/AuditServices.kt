@@ -244,6 +244,7 @@ internal class AuditPlatform(
     override val features: PlatformFeatures = ScreenshotPlatform.features,
     override val homeRole: HomeRole? = null,
     metrics: List<PerformanceMetric> = SampleMetrics,
+    override val capture: io.github.matiyaaa.fuse.ui.shell.platform.ScreenCapture? = null,
 ) : PlatformUi by ScreenshotPlatform {
     override val device: CapabilityProfile = ScreenshotPlatform.device.copy(
         screenWidthPx = size.widthPx,
@@ -280,6 +281,40 @@ internal class AuditPlatform(
             override fun openHomeSettings() = Unit
             override fun disable() = Unit
         }
+    }
+}
+
+/**
+ * Screenshots and recordings as Android has them, without a screen to capture: every request is
+ * granted, and what is "saved" is a small picture in the theme's colours.
+ */
+internal class AuditCapture : io.github.matiyaaa.fuse.ui.shell.platform.ScreenCapture {
+    override val picturesPlace = "Pictures/Fuse"
+    override val videosPlace = "Movies/Fuse"
+    override val stoppedElsewhere = kotlinx.coroutines.flow.MutableSharedFlow<io.github.matiyaaa.fuse.ui.shell.platform.CaptureResult>()
+    override val leftFuse = kotlinx.coroutines.flow.MutableSharedFlow<Unit>()
+    private var recording = false
+
+    private fun preview(): androidx.compose.ui.graphics.ImageBitmap {
+        val image = androidx.compose.ui.graphics.ImageBitmap(256, 144)
+        val canvas = androidx.compose.ui.graphics.Canvas(image)
+        val paint = androidx.compose.ui.graphics.Paint().apply {
+            shader = androidx.compose.ui.graphics.LinearGradientShader(
+                androidx.compose.ui.geometry.Offset(0f, 0f), androidx.compose.ui.geometry.Offset(256f, 144f),
+                listOf(androidx.compose.ui.graphics.Color(0xFF3A1E14), androidx.compose.ui.graphics.Color(0xFF111319)),
+            )
+        }
+        canvas.drawRect(0f, 0f, 256f, 144f, paint)
+        return image
+    }
+
+    override suspend fun screenshot(name: String) = io.github.matiyaaa.fuse.ui.shell.platform.CaptureResult(picturesPlace, preview())
+    override suspend fun prepareRecording(withSound: Boolean) = io.github.matiyaaa.fuse.ui.shell.platform.RecordingReady.READY
+    override fun startRecording(name: String) { recording = true }
+    override suspend fun stopRecording(): io.github.matiyaaa.fuse.ui.shell.platform.CaptureResult? {
+        if (!recording) return null
+        recording = false
+        return io.github.matiyaaa.fuse.ui.shell.platform.CaptureResult(videosPlace, preview(), video = true)
     }
 }
 

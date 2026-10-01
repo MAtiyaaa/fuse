@@ -13,6 +13,7 @@ import androidx.activity.OnBackPressedCallback
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.ActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -80,6 +81,10 @@ class MainActivity : ComponentActivity(), ActivityRequests {
     }
     private val permissionSlot = ResultSlot(false)
     private val permissionLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()) { permissionSlot.complete(it) }
+    private val captureSlot = ResultSlot<ActivityResult?>(null)
+    private val captureLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        captureSlot.complete(it.takeIf { r -> r.resultCode == RESULT_OK && r.data != null })
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge(
@@ -128,6 +133,8 @@ class MainActivity : ComponentActivity(), ActivityRequests {
                         stoppedAt = android.os.SystemClock.uptimeMillis()
                         companions.onMainStopped()
                         app.platformUi.music.setForeground(false)
+                        // Only Fuse is ever recorded: a recording ends when Fuse leaves the screen.
+                        app.platformUi.capture.onFuseStopped()
                     }
                     else -> Unit
                 }
@@ -263,6 +270,7 @@ class MainActivity : ComponentActivity(), ActivityRequests {
         audioSlot.cancel()
         roleSlot.cancel()
         permissionSlot.cancel()
+        captureSlot.cancel()
         if (isFinishing) companions.stop()
         super.onDestroy()
     }
@@ -280,6 +288,8 @@ class MainActivity : ComponentActivity(), ActivityRequests {
     override suspend fun requestRole(intent: Intent): Boolean = roleSlot.request { roleLauncher.launch(intent) }
 
     override suspend fun requestPermission(permission: String): Boolean = permissionSlot.request { permissionLauncher.launch(permission) }
+
+    override suspend fun requestScreenCapture(intent: Intent): ActivityResult? = captureSlot.request { captureLauncher.launch(intent) }
 
     companion object {
         /** Set by [HomeActivity]: this start is a press of Home. */

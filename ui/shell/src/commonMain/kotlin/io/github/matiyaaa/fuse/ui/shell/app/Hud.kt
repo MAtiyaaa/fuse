@@ -245,9 +245,8 @@ private fun HudActivityChip(a: HudActivity) {
                 val arc = GSize(size.width - stroke, size.height - stroke)
                 drawArc(c.text.copy(alpha = 0.14f), 0f, 360f, false, Offset(inset, inset), arc, style = Stroke(stroke))
                 when {
-                    a.attention -> Unit
-                    a.progress == null -> drawArc(c.accent, angle, 90f, false, Offset(inset, inset), arc, style = Stroke(stroke, cap = StrokeCap.Round))
-                    else -> drawArc(c.accent, -90f, 360f * sweep, false, Offset(inset, inset), arc, style = Stroke(stroke, cap = StrokeCap.Round))
+                    a.progress != null -> drawArc(c.accent, -90f, 360f * sweep, false, Offset(inset, inset), arc, style = Stroke(stroke, cap = StrokeCap.Round))
+                    !a.attention -> drawArc(c.accent, angle, 90f, false, Offset(inset, inset), arc, style = Stroke(stroke, cap = StrokeCap.Round))
                 }
                 if (a.attention) drawCircle(c.accent, radius = 4.dp.toPx(), center = Offset(size.width - 6.dp.toPx(), 6.dp.toPx()))
             }

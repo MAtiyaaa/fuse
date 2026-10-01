@@ -126,6 +126,9 @@ internal class AuditDriver(
 
     val platform: PlatformUi = AuditPlatform(size)
 
+    /** A device that can take screenshots and recordings (Android). */
+    val capturePlatform: PlatformUi by lazy { AuditPlatform(size, capture = AuditCapture()) }
+
     /** Phone Link as Settings sees it; scenarios set what it reports. */
     val phoneLink = AuditPhoneLink()
 

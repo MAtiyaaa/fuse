@@ -79,6 +79,10 @@ data class UiPrefs(
     /** RomM's details and pictures for games Cartridge downloaded. */
     val cartridgeRommDetails: Boolean = true,
     val checkForUpdates: Boolean = true,
+    /** L3 + R3 takes a screenshot, and held, records (where Fuse can capture its screen). */
+    val captureCombo: Boolean = true,
+    /** Recordings include Fuse's own sound. */
+    val captureSound: Boolean = true,
     val heroDim: Float = 0.3f,
     /** Which of its lists the Apps tab opens on: Pinned, Emulators or All apps. */
     val appsFilter: io.github.matiyaaa.fuse.model.AppFilter = io.github.matiyaaa.fuse.model.AppFilter.ALL,
