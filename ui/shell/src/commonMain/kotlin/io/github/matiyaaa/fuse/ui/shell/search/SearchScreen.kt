@@ -188,7 +188,7 @@ fun SearchScreen(app: AppState) {
         Spacer(Modifier.width(Space.xxl))
         Column(Modifier.weight(1f).fillMaxHeight()) {
             Spacer(Modifier.height(Size.hudHeight + Space.l))
-            SectionLabel(if (query.isBlank()) "Results" else "${hits.size} ${if (hits.size == 1) "result" else "results"}")
+            SectionLabel(if (query.isBlank()) "Results" else "${hits.size} ${if (hits.size == 1) "result" else "results"}", Modifier.fillMaxWidth(), rule = true)
             Spacer(Modifier.height(Space.m))
             if (query.isNotBlank() && hits.isEmpty()) {
                 FText("Nothing matches \"$query\".", Fuse.type.body, color = c.textMuted)

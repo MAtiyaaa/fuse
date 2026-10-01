@@ -118,6 +118,16 @@ internal fun AuditDriver.homeFlow(exhaustive: Boolean) {
         tap(PadButton.A)
         shoot("put down")
     }
+    scenario("home", "posters") {
+        useLibrary { it.copy(gameArt = io.github.matiyaaa.fuse.model.GameArtStyle.POSTER) }
+        waitFor("Continue playing")
+        tap(PadButton.DPAD_DOWN, 2)
+        shoot("Home with posters, a poster shelf focused")
+        tab(io.github.matiyaaa.fuse.model.Destination.LIBRARY)
+        waitFor("All")
+        tap(PadButton.DPAD_DOWN)
+        shoot("the library grid with posters")
+    }
     scenario("home", "flow drag by touch") {
         useLibrary()
         waitFor("Continue playing")

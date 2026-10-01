@@ -103,6 +103,8 @@ import io.github.matiyaaa.fuse.ui.shell.collections.addGamesPicker
 import io.github.matiyaaa.fuse.ui.shell.components.GameCoverTile
 import io.github.matiyaaa.fuse.ui.shell.components.GameIconTile
 import io.github.matiyaaa.fuse.ui.shell.components.LocalTileMetrics
+import io.github.matiyaaa.fuse.ui.shell.components.tileSize
+import io.github.matiyaaa.fuse.ui.shell.components.LocalGameArt
 import io.github.matiyaaa.fuse.ui.shell.components.LocalTileShowsSystem
 import io.github.matiyaaa.fuse.ui.shell.components.SquareGameArt
 import io.github.matiyaaa.fuse.ui.shell.components.Stage
@@ -471,7 +473,8 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
                             )
                         }
                         Spacer(Modifier.height(if (inSystem) lerp(Space.m, Space.s, collapse) else lerp(Space.l, Space.s, collapse)))
-                        val cols = ((maxW - Space.gutter * 2 + metrics.gap) / (metrics.icon + metrics.gap)).toInt().coerceAtLeast(2)
+                        val tileW = LocalGameArt.current.tileSize(metrics.icon).width
+                        val cols = ((maxW - Space.gutter * 2 + metrics.gap) / (tileW + metrics.gap)).toInt().coerceAtLeast(2)
                         columns = cols
                         IconGrid(list, state, gridState, cols, metrics.icon, metrics.gap, onTap = { i -> tapAt(i, list) }, onLong = { i -> state.pick(i, list); options(list[i]) }, focused = gridFocused)
                     }
@@ -521,7 +524,7 @@ internal fun sortLabel(s: SortOrder) = when (s) {
 }
 
 internal fun layoutLabel(l: LibraryLayout) = when (l) {
-    LibraryLayout.ICON -> "Box art"
+    LibraryLayout.ICON -> "Grid"
     LibraryLayout.CAPSULE -> "Capsules"
     LibraryLayout.COVER_GRID -> "Cover grid"
     LibraryLayout.COMPACT_LIST -> "List"

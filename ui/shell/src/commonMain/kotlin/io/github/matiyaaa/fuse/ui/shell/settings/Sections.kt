@@ -13,6 +13,7 @@ import io.github.matiyaaa.fuse.model.AppFilter
 import io.github.matiyaaa.fuse.model.CartridgeRoute
 import io.github.matiyaaa.fuse.model.Destination
 import io.github.matiyaaa.fuse.model.DualScreenMode
+import io.github.matiyaaa.fuse.model.GameArtStyle
 import io.github.matiyaaa.fuse.model.GlyphStyle
 import io.github.matiyaaa.fuse.model.HomeMode
 import io.github.matiyaaa.fuse.model.LaunchDisplay
@@ -66,7 +67,7 @@ private fun motionName(m: MotionProfile?) = when (m) {
 }
 
 private fun layoutName(l: LibraryLayout) = when (l) {
-    LibraryLayout.ICON -> "Box art"
+    LibraryLayout.ICON -> "Grid"
     LibraryLayout.CAPSULE -> "Capsules"
     LibraryLayout.COVER_GRID -> "Cover grid"
     LibraryLayout.COMPACT_LIST -> "List"
@@ -80,6 +81,17 @@ fun appearanceRows(app: AppState): List<MenuAction> {
         add(app.choiceRow("theme", "Theme", FuseIcons.Palette, p.themeId, ThemePresets.all.map { it.id to it.name }, optionDetail = { id -> ThemePresets.byId(id).tagline }) { v ->
             set { it.copy(themeId = v, crt = if (ThemePresets.byId(v).crt.enabled) it.crt.copy(enabled = true) else it.crt) }
         })
+        add(app.choiceRow(
+            "art", "Game art", FuseIcons.Image, p.gameArt,
+            listOf(GameArtStyle.BOX_ART to "Box art", GameArtStyle.POSTER to "Posters"),
+            detail = "How game tiles look on Home, in the Library and in Cartridge",
+            optionDetail = {
+                when (it) {
+                    GameArtStyle.BOX_ART -> "Square art, as Fuse has always shown"
+                    GameArtStyle.POSTER -> "Tall cover art, like a shelf of cases"
+                }
+            },
+        ) { v -> set { it.copy(gameArt = v) } })
         add(toggleRow("hero", "Background art", FuseIcons.Image, p.showHero, "The selected game's art lights the room") { v -> set { it.copy(showHero = v) } })
         add(toggleRow("logo", "Title logos", FuseIcons.Type, p.showLogo, "Show logo art instead of the written title when a game has one") { v -> set { it.copy(showLogo = v) } })
         add(app.percentRow("dim", "Background dimming", FuseIcons.Contrast, p.heroDim, "Darker keeps text readable over bright art") { v -> set { it.copy(heroDim = v) } })

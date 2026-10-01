@@ -60,6 +60,9 @@ import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Radius
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
+import kotlin.math.PI
+import kotlin.math.cos
+import kotlin.math.sin
 
 /** On/off switch. The knob position and a check mark carry the state, not only colour. */
 @Composable
@@ -88,22 +91,7 @@ private fun Color.luminanceApprox(): Float = 0.2126f * red + 0.7152f * green + 0
 /** A thin progress bar. [value] null shows an indeterminate shimmer. */
 @Composable
 fun ProgressBar(value: Float?, modifier: Modifier = Modifier, color: Color = Fuse.colors.accent, height: Dp = 4.dp) {
-    val c = Fuse.colors
-    Box(modifier.height(height).clip(PillShape).background(c.text.copy(alpha = 0.12f))) {
-        if (value != null) {
-            val v by animateFloatAsState(value.coerceIn(0f, 1f), Fuse.motion.tween(Durations.SLOW), label = "progress")
-            Box(Modifier.fillMaxHeight().fillMaxWidth(v).clip(PillShape).background(color))
-        } else {
-            val phase by rememberInfiniteTransition(label = "indet").animateFloat(
-                0f, 1f, infiniteRepeatable(tween(1100, easing = LinearEasing), RepeatMode.Restart), label = "phase",
-            )
-            Canvas(Modifier.fillMaxWidth().fillMaxHeight()) {
-                val w = size.width * 0.3f
-                val x = -w + (size.width + w) * phase
-                drawLine(color, Offset(x, size.height / 2), Offset(x + w, size.height / 2), size.height, StrokeCap.Round)
-            }
-        }
-    }
+    FuseLine(value, modifier, height = height, color = color)
 }
 
 /** Circular progress (achievement completion, downloads). */
@@ -121,12 +109,19 @@ fun ProgressRing(
         val s = stroke.toPx()
         drawArc(c.text.copy(alpha = 0.12f), 0f, 360f, false, style = Stroke(s), topLeft = Offset(s / 2, s / 2), size = androidx.compose.ui.geometry.Size(this.size.width - s, this.size.height - s))
         drawArc(color, -90f, 360f * v, false, style = Stroke(s, cap = StrokeCap.Round), topLeft = Offset(s / 2, s / 2), size = androidx.compose.ui.geometry.Size(this.size.width - s, this.size.height - s))
+        // The spark burns at the head of the arc until it closes.
+        if (v > 0.01f && v < 0.99f) {
+            val r = (this.size.width - s) / 2
+            val a = (-90f + 360f * v) * (PI.toFloat() / 180f)
+            drawSpark(center + Offset(cos(a) * r, sin(a) * r), s * 0.75f, color, 0.85f)
+        }
     }
 }
 
-/** Fuse's loading indicator: an arc chasing around a faint track. */
+/** Fuse's loading indicator: an arc chasing around a faint track, led by a spark. */
 @Composable
 fun Spinner(modifier: Modifier = Modifier, size: Dp = 28.dp, color: Color = Fuse.colors.text) {
+    val spark = Fuse.colors.accent
     val t = rememberInfiniteTransition(label = "spin")
     val angle by t.animateFloat(0f, 360f, infiniteRepeatable(tween(900, easing = LinearEasing)), label = "a")
     val sweep by t.animateFloat(40f, 200f, infiniteRepeatable(tween(1200), RepeatMode.Reverse), label = "s")
@@ -135,6 +130,10 @@ fun Spinner(modifier: Modifier = Modifier, size: Dp = 28.dp, color: Color = Fuse
         val box = androidx.compose.ui.geometry.Size(this.size.width - s, this.size.height - s)
         drawArc(color.copy(alpha = 0.14f), 0f, 360f, false, Offset(s / 2, s / 2), box, style = Stroke(s))
         drawArc(color, angle, sweep, false, Offset(s / 2, s / 2), box, style = Stroke(s, cap = StrokeCap.Round))
+        // A spark leads the arc round, like a fuse burning in a circle.
+        val r = box.width / 2
+        val a = (angle + sweep) * (PI.toFloat() / 180f)
+        drawSpark(center + Offset(cos(a) * r, sin(a) * r), s * 0.8f, spark)
     }
 }
 

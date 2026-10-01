@@ -333,7 +333,7 @@ private fun Stat(label: String, value: String) {
 @Composable
 private fun Section(title: String, content: @Composable () -> Unit) {
     Spacer(Modifier.height(Space.xxl))
-    SectionLabel(title)
+    SectionLabel(title, Modifier.fillMaxWidth(), rule = true)
     Spacer(Modifier.height(Space.m))
     content()
 }

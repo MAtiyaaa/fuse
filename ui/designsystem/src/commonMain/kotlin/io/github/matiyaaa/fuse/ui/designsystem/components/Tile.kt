@@ -163,6 +163,8 @@ fun Tile(
                         size = androidx.compose.ui.geometry.Size(barW, barH),
                         cornerRadius = CornerRadius(barH / 2),
                     )
+                    // The bar is a lit fuse: a spark glows at its middle.
+                    drawSpark(Offset(w / 2, y + barH / 2), barH * 1.05f, colors.accent, lift * 0.8f)
                 }
             }
             .clip(shape)

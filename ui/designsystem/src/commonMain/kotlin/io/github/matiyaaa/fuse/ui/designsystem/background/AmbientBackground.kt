@@ -62,17 +62,26 @@ fun AmbientBackground(
             BackgroundStyle.AURORA -> aurora(time, accent)
             BackgroundStyle.ORBITAL -> orbital(time, accent)
             BackgroundStyle.GRID -> grid(time, accent, colors.isDark)
-            BackgroundStyle.SOLID, BackgroundStyle.HERO -> vignette(accent)
+            BackgroundStyle.SOLID, BackgroundStyle.HERO -> vignette(accent, colors.isDark)
         }
     }
 }
 
-private fun DrawScope.vignette(accent: Color) {
+/** A room without art: an ember glow low on the left and a faint cool light high on the right, for depth. */
+private fun DrawScope.vignette(accent: Color, dark: Boolean) {
     drawRect(
         Brush.radialGradient(
-            listOf(accent.copy(alpha = 0.10f), Color.Transparent),
-            center = Offset(size.width * 0.25f, size.height),
+            listOf(accent.copy(alpha = 0.12f), accent.copy(alpha = 0.04f), Color.Transparent),
+            center = Offset(size.width * 0.2f, size.height * 1.02f),
             radius = size.maxDimension * 0.8f,
+        ),
+    )
+    val cool = lerp(accent, Color(0xFF3D7BFF), 0.85f)
+    drawRect(
+        Brush.radialGradient(
+            listOf(cool.copy(alpha = if (dark) 0.07f else 0.035f), Color.Transparent),
+            center = Offset(size.width * 0.9f, -size.height * 0.1f),
+            radius = size.maxDimension * 0.6f,
         ),
     )
 }

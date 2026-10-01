@@ -66,6 +66,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.theme.TileMetrics
 import io.github.matiyaaa.fuse.ui.shell.apps.AppsScreen
 import io.github.matiyaaa.fuse.ui.shell.cartridge.CartridgeScreen
 import io.github.matiyaaa.fuse.ui.shell.components.LocalTileBorders
+import io.github.matiyaaa.fuse.ui.shell.components.LocalGameArt
 import io.github.matiyaaa.fuse.ui.shell.components.LocalTileMetrics
 import io.github.matiyaaa.fuse.ui.shell.components.PerformanceOverlay
 import io.github.matiyaaa.fuse.ui.shell.components.TileBorders
@@ -191,7 +192,7 @@ fun FuseApp(store: FuseStore, platform: PlatformUi, router: InputRouter, phoneLi
             BoxWithConstraints(Modifier.fillMaxSize().background(Fuse.colors.ink)) {
                 val metrics = remember(maxWidth, maxHeight) { TileMetrics.forHeight(maxHeight, maxWidth) }
                 val borders = rememberTileBorders(store)
-                CompositionLocalProvider(LocalTileMetrics provides metrics, LocalTileBorders provides borders) {
+                CompositionLocalProvider(LocalTileMetrics provides metrics, LocalTileBorders provides borders, LocalGameArt provides prefs.gameArt) {
                     Room(app, prefs.showHero, spec.background, prefs.heroDim, prefs.glass, prefs.videoPreview, prefs.videoDelaySeconds)
                     ArtWarmup(app)
                     ShellInput(app)

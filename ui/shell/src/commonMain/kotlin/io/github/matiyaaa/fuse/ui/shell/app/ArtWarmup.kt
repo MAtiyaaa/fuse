@@ -73,7 +73,8 @@ internal fun ArtWarmup(app: AppState) {
             small = 160.dp.roundToPx(),
         )
     }
-    LaunchedEffect(sizes, lowPower) {
+    val posters = prefs.gameArt == io.github.matiyaaa.fuse.model.GameArtStyle.POSTER
+    LaunchedEffect(sizes, lowPower, posters) {
         delay(START_DELAY_MS)
         val loader = SingletonImageLoader.get(context)
         val budget = ((loader.memoryCache?.maxSize ?: 0L) * if (lowPower) LOW_POWER_SHARE else MEMORY_SHARE).toLong()
@@ -85,7 +86,7 @@ internal fun ArtWarmup(app: AppState) {
         combine(app.store.library.platforms, app.store.library.home, app.store.media.fillProgress) { systems, home, _ -> systems to home }
             .debounce(REPLAN_DELAY_MS)
             .collectLatest { (systems, home) ->
-                val plan = plan(app, systems, home, sizes, lowPower)
+                val plan = plan(app, systems, home, sizes, lowPower, posters)
                 coroutineScope {
                     for (w in plan) {
                         val memory = w.memory && w.model !in inMemory && used + w.bytes <= budget
@@ -120,7 +121,7 @@ internal fun ArtWarmup(app: AppState) {
  * then the backgrounds their rooms show), then each system's games in the order systems are shown
  * (tiles and first logos, then the rooms of the first games). The rest goes to disk.
  */
-private suspend fun plan(app: AppState, systems: List<PlatformCard>, home: HomeFeed, px: WarmSizes, lowPower: Boolean): List<Warm> = buildList {
+private suspend fun plan(app: AppState, systems: List<PlatformCard>, home: HomeFeed, px: WarmSizes, lowPower: Boolean, posters: Boolean): List<Warm> = buildList {
     val bySystem = systems.associateBy { it.platform.id }
     // Systems: what Systems and each system's page show first. A system's background is also every
     // one of its games' placeholder, so it goes into memory.
@@ -132,7 +133,7 @@ private suspend fun plan(app: AppState, systems: List<PlatformCard>, home: HomeF
     // Home: its games' tiles and logos, then the backgrounds of their rooms.
     val homeGames = (home.continuePlaying + home.pinnedGames + home.recentlyPlayed + home.favorites + home.recentlyAdded + home.mostPlayed).distinctBy { it.id }
     for (g in homeGames) {
-        tileArt(g, LibraryLayout.ICON)?.let { add(Warm(it, px.icon, memory = true)) }
+        tileArt(g, LibraryLayout.ICON, posters)?.let { add(Warm(it, px.icon, memory = true)) }
         g.art.logo?.let { add(Warm(it, px.logo, memory = true)) }
     }
     homeGames.take(if (lowPower) 2 else HOME_ROOMS).forEach { g -> roomArt(g.art, bySystem[g.platformId])?.let { add(Warm(it, px.hero, memory = true, hero = true)) } }
@@ -146,7 +147,7 @@ private suspend fun plan(app: AppState, systems: List<PlatformCard>, home: HomeF
             LibraryLayout.CAPSULE -> px.capsule
             else -> px.icon
         }
-        games.forEach { g -> tileArt(g, s.layout)?.let { add(Warm(it, size, memory = true)) } }
+        games.forEach { g -> tileArt(g, s.layout, posters)?.let { add(Warm(it, size, memory = true)) } }
         games.forEachIndexed { i, g ->
             g.art.logo?.let { if (i < LOGOS_PER_SYSTEM) add(Warm(it, px.logo, memory = true)) else later += Warm(it, px.logo, memory = false) }
             // The first games' rooms in memory, the rest on disk.
@@ -159,11 +160,11 @@ private suspend fun plan(app: AppState, systems: List<PlatformCard>, home: HomeF
     addAll(later)
 }
 
-/** The art a tile shows in [layout] (as the library draws it). */
-private fun tileArt(g: GameCard, layout: LibraryLayout): Any? = when (layout) {
+/** The art a tile shows in [layout] (as the library draws it), with [posters] for Game art. */
+private fun tileArt(g: GameCard, layout: LibraryLayout, posters: Boolean): Any? = when (layout) {
     LibraryLayout.COVER_GRID -> g.art.boxart ?: g.art.grid ?: g.art.square ?: g.art.icon
     LibraryLayout.CAPSULE -> g.art.hero ?: g.art.grid ?: g.art.boxart
-    else -> g.art.tile
+    else -> if (posters) g.art.boxart ?: g.art.tile else g.art.tile
 }
 
 private fun isRemote(model: Any): Boolean = model is String && (model.startsWith("https://") || model.startsWith("http://"))

@@ -88,6 +88,7 @@ import io.github.matiyaaa.fuse.ui.shell.apps.appMenu
 import io.github.matiyaaa.fuse.ui.shell.components.AppTile
 import io.github.matiyaaa.fuse.ui.shell.components.GameIconTile
 import io.github.matiyaaa.fuse.ui.shell.components.GameWideTile
+import io.github.matiyaaa.fuse.ui.shell.components.LocalGameArt
 import io.github.matiyaaa.fuse.ui.shell.components.LocalTileMetrics
 import io.github.matiyaaa.fuse.ui.shell.components.Stage
 import io.github.matiyaaa.fuse.ui.shell.components.StageInfo
@@ -403,11 +404,13 @@ private fun ShelfRow(
     FollowSelection(row, { rememberedColumn }, anchor = 0f)
     // What the tiles and the stage will draw next, decoded ahead into memory.
     val focus = if (selectedColumn >= 0) selectedColumn else -1
+    val posters = LocalGameArt.current == io.github.matiyaaa.fuse.model.GameArtStyle.POSTER
     PrefetchArt(
-        remember(shelf.items, shelf.style) {
+        remember(shelf.items, shelf.style, posters) {
             shelf.items.map { item ->
                 when (item) {
                     is ShelfItem.Game -> if (shelf.style == ShelfStyle.WIDE) item.card.art.hero ?: item.card.art.grid ?: item.card.art.boxart
+                    else if (posters) item.card.art.boxart ?: item.card.art.square ?: item.card.art.icon ?: item.card.art.grid
                     else item.card.art.square ?: item.card.art.icon ?: item.card.art.boxart ?: item.card.art.grid
                     is ShelfItem.System -> item.card.art.square ?: item.card.art.icon ?: item.card.art.boxart
                     else -> null
@@ -465,7 +468,12 @@ private fun ShelfRow(
                 .padding(start = Space.gutter, end = Space.gutter, bottom = Space.m),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            SectionLabel(shelf.title, color = if (selectedColumn >= 0 || lifted) c.text else c.textMuted)
+            SectionLabel(
+                shelf.title,
+                Modifier.weight(1f, fill = !(lifted || movingItem)),
+                color = if (selectedColumn >= 0 || lifted) c.text else c.textMuted,
+                rule = !(lifted || movingItem),
+            )
             if (lifted || movingItem) {
                 Spacer(Modifier.width(Space.s))
                 FuseIcon(FuseIcons.Move, size = 14.dp, tint = c.accent)

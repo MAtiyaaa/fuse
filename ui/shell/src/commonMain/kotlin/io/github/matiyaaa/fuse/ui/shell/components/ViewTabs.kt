@@ -44,6 +44,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import io.github.matiyaaa.fuse.ui.designsystem.components.FText
+import io.github.matiyaaa.fuse.ui.designsystem.components.drawSpark
 import io.github.matiyaaa.fuse.ui.designsystem.components.fadingEdgesHorizontal
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
 import io.github.matiyaaa.fuse.ui.designsystem.shape.PillShape
@@ -100,12 +101,15 @@ fun ViewTabs(
                 if (lineW <= 0f) return@drawBehind
                 val h = 3.dp.toPx()
                 val inset = Space.m.toPx()
+                val lineWidth = (lineW - inset * 2).coerceAtLeast(h)
                 drawRoundRect(
                     c.accent.copy(alpha = lineAlpha),
                     topLeft = Offset(lineX + inset, size.height - h),
-                    size = androidx.compose.ui.geometry.Size((lineW - inset * 2).coerceAtLeast(h), h),
+                    size = androidx.compose.ui.geometry.Size(lineWidth, h),
                     cornerRadius = CornerRadius(h / 2),
                 )
+                // A lit fuse under the active view.
+                drawSpark(Offset(lineX + inset + lineWidth / 2, size.height - h / 2), h * 1.05f, c.accent, lineAlpha * 0.75f)
             },
         horizontalArrangement = Arrangement.spacedBy(Space.xxs),
         verticalAlignment = Alignment.CenterVertically,

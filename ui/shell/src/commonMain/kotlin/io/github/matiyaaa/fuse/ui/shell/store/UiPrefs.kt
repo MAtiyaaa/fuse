@@ -29,6 +29,8 @@ data class UiPrefs(
     val home: HomeLayoutConfig = HomeLayoutConfig(),
     val destinations: List<Destination> = Destination.entries,
     val defaultLayout: LibraryLayout = LibraryLayout.ICON,
+    /** Square box art or tall posters on game tiles. */
+    val gameArt: io.github.matiyaaa.fuse.model.GameArtStyle = io.github.matiyaaa.fuse.model.GameArtStyle.BOX_ART,
     val showHero: Boolean = true,
     val showLogo: Boolean = true,
     val videoPreview: Boolean = true,

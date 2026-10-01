@@ -32,6 +32,7 @@ internal fun AppSettings.toUiPrefs(scoped: GlobalScoped): UiPrefs {
         home = home.layout,
         destinations = home.visibleDestinations(),
         defaultLayout = scoped.layout,
+        gameArt = library.gameArt,
         showHero = scoped.showHero,
         showLogo = scoped.showLogo,
         videoPreview = videoPreview.enabled,
@@ -118,6 +119,7 @@ internal fun AppSettings.withUiPrefs(prefs: UiPrefs): AppSettings {
             autoSeries = prefs.autoSeries,
             hiddenSeries = prefs.hiddenSeries,
             appsFilter = prefs.appsFilter,
+            gameArt = prefs.gameArt,
         ),
         sound = sound.copy(
             enabled = prefs.sound != SoundProfile.OFF,

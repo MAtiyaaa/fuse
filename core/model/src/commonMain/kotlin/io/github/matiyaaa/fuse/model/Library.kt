@@ -30,6 +30,13 @@ enum class LibrarySourceKind {
 @Serializable
 enum class LibraryLayout { ICON, CAPSULE, COVER_GRID, COMPACT_LIST }
 
+/**
+ * How game tiles are drawn wherever Fuse shows a grid or row of games: square box art (as Fuse has
+ * always shown), or tall posters (the portrait cover, like a shelf of cases).
+ */
+@Serializable
+enum class GameArtStyle { BOX_ART, POSTER }
+
 @Serializable
 enum class SortOrder { TITLE, RECENTLY_PLAYED, RECENTLY_ADDED, MOST_PLAYED, RELEASE_YEAR }
 

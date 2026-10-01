@@ -45,6 +45,7 @@ import io.github.matiyaaa.fuse.model.BiosState
 import io.github.matiyaaa.fuse.model.CartridgeQueueItem
 import io.github.matiyaaa.fuse.model.CartridgeRoute
 import io.github.matiyaaa.fuse.model.CartridgeStatus
+import io.github.matiyaaa.fuse.model.GameArtStyle
 import io.github.matiyaaa.fuse.model.NavAction
 import io.github.matiyaaa.fuse.model.QueueState
 import io.github.matiyaaa.fuse.model.ReleaseInfo
@@ -85,6 +86,8 @@ import io.github.matiyaaa.fuse.ui.shell.app.room
 import io.github.matiyaaa.fuse.ui.shell.app.systemRoom
 import io.github.matiyaaa.fuse.ui.shell.components.ControlTile
 import io.github.matiyaaa.fuse.ui.shell.components.GameIconTile
+import io.github.matiyaaa.fuse.ui.shell.components.LocalGameArt
+import io.github.matiyaaa.fuse.ui.shell.components.tileSize
 import io.github.matiyaaa.fuse.ui.shell.components.SystemCardArt
 import io.github.matiyaaa.fuse.ui.shell.home.bytesText
 import io.github.matiyaaa.fuse.ui.shell.store.PlatformCard
@@ -408,7 +411,10 @@ private fun ShelfRow(title: String?, count: Int, selected: Int, remembered: Int,
     FollowSelection(state, { remembered }, anchor = 0f)
     Column {
         if (title != null) {
-            SectionLabel(title, Modifier.padding(start = Space.gutter, bottom = Space.s), color = if (selected >= 0) Fuse.colors.text else Fuse.colors.textMuted)
+            SectionLabel(
+                title, Modifier.fillMaxWidth().padding(start = Space.gutter, end = Space.gutter, bottom = Space.s),
+                color = if (selected >= 0) Fuse.colors.text else Fuse.colors.textMuted, rule = true,
+            )
         }
         LazyRow(
             state = state,
@@ -519,12 +525,17 @@ private fun SystemMark(system: PlatformCard?, slug: String?, modifier: Modifier)
 private fun RecentTile(r: RecentDownload, selected: Boolean, size: Dp, onClick: () -> Unit, onLongClick: () -> Unit) {
     val c = Fuse.colors
     val game = r.game
-    Column(Modifier.width(size)) {
+    val style = LocalGameArt.current
+    val tile = style.tileSize(size)
+    Column(Modifier.width(tile.width)) {
         if (game != null) {
             GameIconTile(game, selected, size = size, onClick = onClick, onLongClick = onLongClick)
         } else {
-            Tile(selected = selected, modifier = Modifier.size(size), onClick = onClick, onLongClick = onLongClick) {
-                GeneratedArt(r.download.title, 0xFF5B6475.toColor(), slot = ArtSlot.ICON, label = r.download.platformSlug.uppercase())
+            Tile(selected = selected, modifier = Modifier.size(tile), onClick = onClick, onLongClick = onLongClick) {
+                GeneratedArt(
+                    r.download.title, 0xFF5B6475.toColor(),
+                    slot = if (style == GameArtStyle.POSTER) ArtSlot.BOX else ArtSlot.ICON, label = r.download.platformSlug.uppercase(),
+                )
             }
         }
         Spacer(Modifier.height(Space.s))

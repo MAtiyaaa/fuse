@@ -181,6 +181,8 @@ data class LibraryPreferences(
     val systemColors: Map<String, Long> = emptyMap(),
     /** Which of its lists the Apps tab opens on. */
     val appsFilter: io.github.matiyaaa.fuse.model.AppFilter = io.github.matiyaaa.fuse.model.AppFilter.ALL,
+    /** Square box art or tall posters on game tiles. */
+    val gameArt: io.github.matiyaaa.fuse.model.GameArtStyle = io.github.matiyaaa.fuse.model.GameArtStyle.BOX_ART,
 )
 
 /**

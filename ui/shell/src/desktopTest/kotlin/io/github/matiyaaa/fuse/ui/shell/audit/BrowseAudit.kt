@@ -27,7 +27,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 
 private fun LibraryLayout.words(): String = when (this) {
-    LibraryLayout.ICON -> "Box art"
+    LibraryLayout.ICON -> "Grid"
     LibraryLayout.CAPSULE -> "Capsule"
     LibraryLayout.COVER_GRID -> "Cover Grid"
     LibraryLayout.COMPACT_LIST -> "Compact List"
