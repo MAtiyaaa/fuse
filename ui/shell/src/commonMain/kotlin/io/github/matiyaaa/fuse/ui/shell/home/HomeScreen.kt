@@ -96,6 +96,7 @@ import io.github.matiyaaa.fuse.ui.shell.components.SystemTile
 import io.github.matiyaaa.fuse.ui.shell.components.stage
 import io.github.matiyaaa.fuse.ui.shell.library.CollectionTile
 import io.github.matiyaaa.fuse.ui.shell.systems.moveSystem
+import io.github.matiyaaa.fuse.ui.shell.systems.moveSystemBy
 import io.github.matiyaaa.fuse.ui.shell.systems.systemMenu
 
 @Composable
@@ -222,8 +223,9 @@ fun FlowHome(app: AppState) {
             return@InputLayer when (e.action) {
                 NavAction.LEFT, NavAction.RIGHT -> {
                     val from = sel.column(shelf.key)
-                    val to = app.moveSystem(feed.systems, from, if (e.action == NavAction.LEFT) -1 else 1)
-                    if (to == from) NavResult.BLOCKED else { sel.setColumn(shelf.key, to); NavResult.MOVED }
+                    val key = feed.systems.getOrNull(from)?.platform?.id?.value
+                    val to = if (key == null) -1 else app.moveSystemBy(key, if (e.action == NavAction.LEFT) -1 else 1)
+                    if (to < 0 || to == from) NavResult.BLOCKED else { sel.setColumn(shelf.key, to); NavResult.MOVED }
                 }
                 NavAction.SELECT, NavAction.BACK, NavAction.REORDER -> { movingSystem = false; NavResult.CONSUMED }
                 else -> NavResult.CONSUMED
@@ -361,8 +363,9 @@ fun FlowHome(app: AppState) {
                         // Systems are also held and dragged into place by touch.
                         onMoveSystem = if (arranging) null else { from, to ->
                             sel.row = index
-                            if (to != from) app.moveSystem(feed.systems, from, to - from)
-                            sel.setColumn(s.key, to)
+                            val key = feed.systems.getOrNull(from)?.platform?.id?.value
+                            val placed = if (key != null && to != from) app.moveSystem(key, to) else to
+                            sel.setColumn(s.key, if (placed >= 0) placed else to)
                         },
                         onLift = { col ->
                             sel.row = index

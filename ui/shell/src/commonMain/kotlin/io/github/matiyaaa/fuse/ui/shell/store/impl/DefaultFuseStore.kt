@@ -146,6 +146,7 @@ internal class DefaultFuseStore private constructor(
         val after = transform(before)
         if (after == before) return
         prefsState.value = after
+        ctx.systemOrder.value = after.systemOrder
         writes.trySend(after)
     }
 
@@ -163,6 +164,7 @@ internal class DefaultFuseStore private constructor(
         val settings = data.settings.current()
         ctx.settings.value = settings
         prefsState.value = settings.toUiPrefs(globalScoped(ctx))
+        ctx.systemOrder.value = prefsState.value.systemOrder
     }
 
     /**

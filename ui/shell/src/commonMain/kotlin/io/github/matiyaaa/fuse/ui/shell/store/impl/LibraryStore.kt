@@ -117,7 +117,7 @@ internal class DefaultLibraryOps(
         }
 
     private val systemOrder: Flow<Pair<List<String>, Map<String, Long>>> =
-        data.settings.settings.map { it.library.systemOrder to it.library.systemColors }.distinctUntilChanged()
+        combine(ctx.systemOrder, data.settings.settings.map { it.library.systemColors }.distinctUntilChanged(), ::Pair).distinctUntilChanged()
 
     override val platforms: StateFlow<List<PlatformCard>> = combine(
         data.games.platformCounts(),
