@@ -168,12 +168,15 @@ internal object AuditSystemArt {
     }
 
     fun logo(file: File, text: String) {
-        val img = BufferedImage(640, 160, BufferedImage.TYPE_INT_ARGB)
+        // Cropped to the text, as logo art is.
+        val font = java.awt.Font(java.awt.Font.SANS_SERIF, java.awt.Font.BOLD or java.awt.Font.ITALIC, 112)
+        val width = BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB).createGraphics().run { getFontMetrics(font).stringWidth(text).also { dispose() } }
+        val img = BufferedImage(width + 24, 160, BufferedImage.TYPE_INT_ARGB)
         val g = img.createGraphics()
         g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
         g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON)
         g.color = Color.WHITE
-        g.font = java.awt.Font(java.awt.Font.SANS_SERIF, java.awt.Font.BOLD or java.awt.Font.ITALIC, 112)
+        g.font = font
         g.drawString(text, 8, 124)
         g.dispose()
         ImageIO.write(img, "png", file)

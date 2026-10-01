@@ -1,6 +1,7 @@
 package io.github.matiyaaa.fuse.ui.shell.app
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -8,6 +9,7 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -18,6 +20,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -30,6 +33,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -40,24 +44,21 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import io.github.matiyaaa.fuse.model.BiosState
 import io.github.matiyaaa.fuse.model.CollectionId
 import io.github.matiyaaa.fuse.model.DualScreenMode
 import io.github.matiyaaa.fuse.model.GameId
 import io.github.matiyaaa.fuse.model.PlatformId
 import io.github.matiyaaa.fuse.model.RenderQuality
-import io.github.matiyaaa.fuse.ui.designsystem.components.Chip
 import io.github.matiyaaa.fuse.ui.designsystem.components.FText
 import io.github.matiyaaa.fuse.ui.designsystem.components.PageDots
 import io.github.matiyaaa.fuse.ui.designsystem.components.SectionLabel
 import io.github.matiyaaa.fuse.ui.designsystem.components.StatusCluster
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
-import io.github.matiyaaa.fuse.ui.designsystem.media.ArtSlot
 import io.github.matiyaaa.fuse.ui.designsystem.media.Artwork
-import io.github.matiyaaa.fuse.ui.designsystem.media.GeneratedArt
 import io.github.matiyaaa.fuse.ui.designsystem.media.HeroBackdrop
 import io.github.matiyaaa.fuse.ui.designsystem.media.HeroSource
 import io.github.matiyaaa.fuse.ui.designsystem.shape.PillShape
@@ -68,7 +69,6 @@ import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.FuseTheme
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
 import io.github.matiyaaa.fuse.ui.designsystem.theme.ThemePresets
-import io.github.matiyaaa.fuse.ui.designsystem.theme.toColor
 import io.github.matiyaaa.fuse.ui.shell.components.CoverCollage
 import io.github.matiyaaa.fuse.ui.shell.components.playtimeText
 import io.github.matiyaaa.fuse.ui.shell.platform.PlatformUi
@@ -76,8 +76,7 @@ import io.github.matiyaaa.fuse.ui.shell.store.FuseStore
 import io.github.matiyaaa.fuse.ui.shell.store.GameCard
 import io.github.matiyaaa.fuse.ui.shell.store.GameQuery
 import io.github.matiyaaa.fuse.ui.shell.store.PlatformCard
-import io.github.matiyaaa.fuse.ui.shell.systems.SystemShowcase
-import io.github.matiyaaa.fuse.ui.shell.systems.panelFade
+import kotlin.math.abs
 import kotlin.time.TimeSource
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -173,6 +172,11 @@ fun CompanionApp(store: FuseStore, platform: PlatformUi, mode: DualScreenMode) {
                 playing != null -> CompanionContent(playing, 0)
                 else -> CompanionContent(null, 0)
             }
+            // A game's achievements open over the pages; they close when the game or the page changes.
+            var sheet by remember { mutableStateOf<GameId?>(null) }
+            val targetKey = (content.target as? GameCard)?.id ?: content.target
+            LaunchedEffect(targetKey) { sheet = null }
+            LaunchedEffect(pager) { snapshotFlow { pager.currentPage }.collect { if (it != 0) sheet = null } }
             val hero = companionHero(store, systems, content.target)
             HeroBackdrop(hero, Modifier.fillMaxSize(), dim = 0.25f, gradient = 0.75f, settleMs = 60)
             // Status and controls sit on a deeper shade, so their cards read over any art.
@@ -180,43 +184,89 @@ fun CompanionApp(store: FuseStore, platform: PlatformUi, mode: DualScreenMode) {
                 Modifier
                     .fillMaxSize()
                     .graphicsLayer { alpha = (pager.currentPage + pager.currentPageOffsetFraction).coerceIn(0f, 1f) }
-                    .background(Fuse.colors.ink.copy(alpha = 0.55f)),
+                    .background(Fuse.colors.ink.copy(alpha = 0.6f)),
             )
-            HorizontalPager(state = pager, modifier = Modifier.fillMaxSize(), beyondViewportPageCount = 1) { page ->
+            HorizontalPager(state = pager, modifier = Modifier.fillMaxSize(), beyondViewportPageCount = 1, userScrollEnabled = sheet == null) { page ->
                 when (page) {
-                    0 -> SpotlightPage(store, content, home.playtime.currentSince, systems, time)
+                    0 -> SpotlightPage(store, content, home.playtime.currentSince, systems, time) { sheet = it }
                     1 -> StatusPage(store, platform, status)
                     else -> ControlsPage(store, platform)
                 }
             }
-            if (prefs.display.companionShowsPerformance && pager.currentPage == 0) {
+            if (prefs.display.companionShowsPerformance && pager.currentPage == 0 && sheet == null) {
                 val metrics by platform.performance.collectAsState()
                 io.github.matiyaaa.fuse.ui.shell.components.PerformanceOverlay(
                     metrics,
-                    Modifier.align(Alignment.BottomEnd).padding(Space.l).padding(bottom = Space.xl),
+                    Modifier.align(Alignment.TopStart).padding(start = Space.l, top = CompanionTopBar),
                 )
             }
-            StatusCluster(
-                status,
-                time,
-                Modifier.align(Alignment.TopEnd).padding(horizontal = Space.l, vertical = Space.m),
-                showWifi = prefs.showWifi,
-                showBluetooth = prefs.showBluetooth,
-            )
-            PageDots(
-                count = companionPages.size,
-                current = pager.currentPage,
-                onSelect = { scope.launch { pager.animateScrollToPage(it) } },
-                labels = companionPages,
-                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = Space.s),
-            )
+            sheet?.let { AchievementsSheet(store, it) }
+            // The top line: the page's title (or a close button over the achievements) and the status.
+            Row(
+                Modifier.align(Alignment.TopCenter).fillMaxWidth().height(CompanionTopBar).padding(start = Space.l, end = Space.l),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+                    if (sheet != null) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.padding(end = Space.xs).offset(x = (-6).dp)) { CompanionRoundButton(FuseIcons.Close) { sheet = null } }
+                            FText("Achievements", Fuse.type.titleSmall, maxLines = 1)
+                        }
+                    } else {
+                        // Titles cross-fade with the swipe; the first page has none, its art speaks.
+                        companionPages.forEachIndexed { i, title ->
+                            if (i > 0) {
+                                FText(
+                                    title, Fuse.type.titleSmall, maxLines = 1,
+                                    modifier = Modifier.graphicsLayer { alpha = (1f - abs(pager.currentPage + pager.currentPageOffsetFraction - i)).coerceIn(0f, 1f) },
+                                )
+                            }
+                        }
+                    }
+                }
+                StatusCluster(status, time, showWifi = prefs.showWifi, showBluetooth = prefs.showBluetooth)
+            }
+            if (sheet == null) {
+                PageDots(
+                    count = companionPages.size,
+                    current = pager.currentPage,
+                    onSelect = { scope.launch { pager.animateScrollToPage(it) } },
+                    labels = companionPages,
+                    modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = Space.s),
+                )
+            }
+            // Screen off: black until touched, saying so for a moment.
+            if (CompanionControls.screenOff) {
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .background(Color.Black)
+                        .pointerInput(Unit) { detectTapGestures { CompanionControls.screenOff = false } },
+                ) {
+                    var hint by remember { mutableStateOf(true) }
+                    LaunchedEffect(Unit) {
+                        delay(2_500)
+                        hint = false
+                    }
+                    AnimatedVisibility(hint, Modifier.align(Alignment.Center), enter = fadeIn(), exit = fadeOut(Fuse.motion.fade(Durations.DELIBERATE))) {
+                        FText("Tap to wake", Fuse.type.caption, color = Fuse.colors.textFaint)
+                    }
+                }
+            }
         }
     }
 }
 
 /** The first page: what the main screen has in focus, sliding the way it moved. */
 @Composable
-private fun SpotlightPage(store: FuseStore, content: CompanionContent, since: Long?, systems: List<PlatformCard>, time: String) {
+private fun SpotlightPage(
+    store: FuseStore,
+    content: CompanionContent,
+    since: Long?,
+    systems: List<PlatformCard>,
+    time: String,
+    onAchievements: (GameId) -> Unit,
+) {
     val motion = Fuse.motion
     AnimatedContent(
         targetState = content,
@@ -236,8 +286,8 @@ private fun SpotlightPage(store: FuseStore, content: CompanionContent, since: Lo
         label = "companion",
     ) { c ->
         when (val target = c.target) {
-            is GameCard -> NowPlaying(target, since)
-            is GameId -> FocusedGame(store, target)
+            is GameCard -> NowPlaying(store, target, since, onAchievements)
+            is GameId -> FocusedGame(store, target, onAchievements)
             is PlatformId -> FocusedPlatform(systems.firstOrNull { it.platform.id == target })
             is CollectionId -> FocusedCollection(store, target)
             else -> Idle(time)
@@ -254,7 +304,7 @@ private fun companionHero(store: FuseStore, systems: List<PlatformCard>, target:
         val detail by flow.collectAsState(initial = null)
         detail?.let { d -> gameRoom(target, d.art, d.platform.accent, systems.firstOrNull { it.platform.id == d.platform.id }) }
     }
-    is PlatformId -> systems.firstOrNull { it.platform.id == target }?.let { HeroSource(target, it.art.hero, it.platform.accent.toColor()) }
+    is PlatformId -> systems.firstOrNull { it.platform.id == target }?.let(::systemRoom)
     // A collection's room is its first game's.
     is CollectionId -> {
         val flow = remember(target) { store.library.games(GameQuery(collection = target)) }
@@ -276,21 +326,29 @@ private fun Idle(time: String) {
 }
 
 /**
- * A game: its logo large and centred over its room, nothing else, so the second screen reads as
- * the game's poster. Without a logo the title stands in, in display type.
+ * A game: its logo large and centred over its room, and its achievements under it when it has a
+ * set, so the second screen reads as the game's poster. Without a logo the title stands in.
  */
 @Composable
-private fun FocusedGame(store: FuseStore, id: GameId) {
+private fun FocusedGame(store: FuseStore, id: GameId, onAchievements: (GameId) -> Unit) {
     val flow = remember(id) { store.library.game(id) }
     val detail by flow.collectAsState(initial = null)
     val d = detail ?: return
-    GameLogo(d.art.logo, d.game.displayTitle)
+    GameLogo(d.art.logo, d.game.displayTitle) {
+        d.achievements?.takeIf { it.total > 0 }?.let { a ->
+            Spacer(Modifier.height(Space.xl))
+            AchievementBar(a, onOpen = { onAchievements(id) })
+        }
+    }
 }
 
-/** A game's logo (or its title) in the middle of the page, with a soft shade behind it for contrast. */
+/**
+ * A logo (or a title) in the middle of the page, clear of the top line and the dots, with a soft
+ * shade behind it for contrast. [tint] draws it in one colour (system logos are white).
+ */
 @Composable
-private fun GameLogo(logo: Any?, title: String, below: @Composable () -> Unit = {}) {
-    BoxWithConstraints(Modifier.fillMaxSize().padding(horizontal = Space.xl, vertical = Space.x3)) {
+private fun GameLogo(logo: Any?, title: String, tint: Color? = null, below: @Composable () -> Unit = {}) {
+    BoxWithConstraints(Modifier.fillMaxSize().padding(start = Space.xl, end = Space.xl, top = CompanionTopBar, bottom = CompanionDotsBar + Space.s)) {
         val maxW = maxWidth
         val maxH = maxHeight
         // A soft pool of shade behind the logo, so white and dark logos both read over any art.
@@ -310,6 +368,7 @@ private fun GameLogo(logo: Any?, title: String, below: @Composable () -> Unit = 
                     logo,
                     Modifier.width(maxW * 0.86f).height((maxH * 0.42f).coerceAtMost(maxW * 0.6f)),
                     contentScale = ContentScale.Fit,
+                    tint = tint,
                     fadeIn = true,
                     fallback = name,
                 )
@@ -356,66 +415,16 @@ private fun FocusedCollection(store: FuseStore, id: CollectionId) {
     }
 }
 
-/**
- * A system: the art pack's panel on the right (unless the system has a background image), its
- * logo in white over the system's colour, then games, emulator and firmware.
- */
+/** A system: its logo in white, large and centred over its room, exactly like a game's. */
 @Composable
 private fun FocusedPlatform(card: PlatformCard?) {
     card ?: return
-    val p = card.platform
-    BoxWithConstraints(Modifier.fillMaxSize()) {
-        val tall = maxHeight > maxWidth * 1.15f
-        val panel = if (tall) Modifier.align(Alignment.TopEnd).fillMaxWidth(0.9f).fillMaxHeight(0.7f)
-        else Modifier.align(Alignment.CenterEnd).fillMaxHeight().fillMaxWidth(0.6f)
-        when {
-            card.art.hero != null -> Unit
-            card.art.boxart != null -> SystemShowcase(card, panel)
-            // Until the art pack is downloaded, a panel in the system's colour.
-            else -> Box(panel.panelFade()) {
-                GeneratedArt(p.shortName, p.accent.toColor(), slot = ArtSlot.SYSTEM, label = p.manufacturer, showText = false)
-            }
-        }
-        Column(Modifier.align(Alignment.BottomStart).fillMaxWidth(if (tall) 1f else 0.62f).padding(Space.xl)) {
-            SectionLabel(listOfNotNull(p.manufacturer, p.releaseYear?.toString()).joinToString("  ·  ").ifEmpty { "System" })
-            Spacer(Modifier.height(Space.s))
-            val name: @Composable () -> Unit = { FText(p.name, Fuse.type.display, maxLines = 2) }
-            if (card.art.logo != null) {
-                Artwork(
-                    card.art.logo,
-                    Modifier.height(72.dp).fillMaxWidth(0.85f),
-                    contentScale = ContentScale.Fit,
-                    focusX = 0f,
-                    focusY = 1f,
-                    tint = Color.White,
-                    fadeIn = false,
-                    fallback = name,
-                )
-            } else {
-                name()
-            }
-            Spacer(Modifier.height(Space.m))
-            Row(horizontalArrangement = Arrangement.spacedBy(Space.s)) {
-                Chip("${card.gameCount} ${if (card.gameCount == 1) "game" else "games"}", icon = FuseIcons.Library)
-                Chip(card.emulatorName ?: "No emulator", icon = FuseIcons.Gamepad, color = if (card.emulatorInstalled) Fuse.colors.text else Fuse.colors.warning)
-            }
-            val firmware = when (card.bios.state) {
-                BiosState.READY -> Triple("Firmware ready", FuseIcons.Check, Fuse.colors.success)
-                BiosState.MISSING -> Triple("Firmware missing", FuseIcons.Warning, Fuse.colors.danger)
-                BiosState.PARTIAL -> Triple("Firmware incomplete", FuseIcons.Warning, Fuse.colors.warning)
-                else -> null
-            }
-            if (firmware != null) {
-                Spacer(Modifier.height(Space.s))
-                Chip(firmware.first, icon = firmware.second, color = firmware.third)
-            }
-        }
-    }
+    GameLogo(card.art.logo, card.platform.name, tint = Color.White)
 }
 
-/** The game being played: its logo over its room, and how long this session has run. */
+/** The game being played: its logo over its room, how long this session has run, and its achievements. */
 @Composable
-private fun NowPlaying(game: GameCard, since: Long?) {
+private fun NowPlaying(store: FuseStore, game: GameCard, since: Long?, onAchievements: (GameId) -> Unit) {
     var now by remember { mutableLongStateOf(kotlin.time.Clock.System.now().toEpochMilliseconds()) }
     LaunchedEffect(since) {
         while (since != null) {
@@ -423,6 +432,8 @@ private fun NowPlaying(game: GameCard, since: Long?) {
             delay(15_000)
         }
     }
+    val flow = remember(game.id) { store.library.game(game.id) }
+    val detail by flow.collectAsState(initial = null)
     GameLogo(game.art.logo, game.title) {
         Spacer(Modifier.height(Space.l))
         val session = since?.let { "  ·  ${playtimeText(((now - it) / 1000).coerceAtLeast(0))}" }.orEmpty()
@@ -433,6 +444,10 @@ private fun NowPlaying(game: GameCard, since: Long?) {
         ) {
             Box(Modifier.size(7.dp).clip(CircleShape).background(Fuse.colors.accent))
             FText("Playing$session", Fuse.type.label, maxLines = 1)
+        }
+        detail?.achievements?.takeIf { it.total > 0 }?.let { a ->
+            Spacer(Modifier.height(Space.l))
+            AchievementBar(a, onOpen = { onAchievements(game.id) })
         }
     }
 }

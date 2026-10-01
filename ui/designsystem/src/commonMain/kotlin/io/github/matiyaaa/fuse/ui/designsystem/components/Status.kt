@@ -158,7 +158,7 @@ fun BatteryCapsule(percent: Int, charging: Boolean, modifier: Modifier = Modifie
                 val x = inset - band + (w + band) * sweep
                 clipRect(inset, inset, inset + w, inset + inner.height) {
                     drawRect(
-                        Brush.horizontalGradient(listOf(Color.Transparent, Color.White.copy(alpha = 0.32f), Color.Transparent), startX = x, endX = x + band),
+                        Brush.horizontalGradient(listOf(Color.White.copy(alpha = 0f), Color.White.copy(alpha = 0.32f), Color.White.copy(alpha = 0f)), startX = x, endX = x + band),
                         Offset(x, inset),
                         Size(band, inner.height),
                     )
