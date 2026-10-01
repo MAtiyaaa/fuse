@@ -121,12 +121,12 @@ private fun phoneLinkAccountRows(app: AppState, link: PhoneLinkControl, state: P
 private fun phoneLinkInfoRows(): List<MenuAction> = listOf(
     infoRow(
         "can", "What a phone can do",
-        detail = "See what's playing and downloading, browse and search your library, fix names, details and art, and fill art",
+        detail = "See what's playing and downloading, browse and search your library, fix names, details and art, fill art, and download your screenshots and recordings",
         icon = FuseIcons.Smartphone,
     ),
     infoRow(
         "cannot", "What stays on this device",
-        detail = "Phones can't delete games, see keys or passwords, or change settings. Only phones on your network can connect",
+        detail = "Phones can't delete games or captures, see keys or passwords, or change settings. Only phones on your network can connect",
         icon = FuseIcons.ShieldCheck,
     ),
 )

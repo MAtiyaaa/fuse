@@ -11,7 +11,7 @@
 // ---- Constants
 
 const PAGE = 60;
-const TABS = ['now', 'library', 'tools'];
+const TABS = ['now', 'library', 'captures', 'tools'];
 const SORTS = [
   { id: 'title', label: 'Title', sub: 'A to Z' },
   { id: 'recent', label: 'Recently played', sub: 'Last played first' },
@@ -740,6 +740,9 @@ function applySessionInfo() {
     E.signinSub.textContent = 'Sign in to manage your Fuse library.';
   }
   E.signinFoot.textContent = S.session.version ? `Fuse ${S.session.version}` : '';
+  // Captures exist where the device takes them (Android); elsewhere the tab isn't there.
+  E.capTabBtn.hidden = !capturesOn();
+  if (!capturesOn() && S.tab === 'captures' && S.signedIn) selectTab('now');
   document.title = typeof dev === 'string' && dev.trim() ? `Fuse on ${dev.trim()}` : 'Fuse Phone Link';
   setConn(S.conn);
 }
@@ -887,6 +890,7 @@ function resetData() {
   E.libQClear.hidden = true;
   E.libCount.textContent = '';
   E.libSortLabel.textContent = SORTS[0].label;
+  resetCaptures();
 }
 
 async function signOut(b) {
@@ -906,7 +910,7 @@ async function signOut(b) {
 // ---- Tabs and the connection indicator
 
 function selectTab(tab, opts = {}) {
-  if (!TABS.includes(tab)) tab = 'now';
+  if (!TABS.includes(tab) || (tab === 'captures' && !capturesOn())) tab = 'now';
   if (!opts.initial && tab === S.tab) {
     window.scrollTo({ top: 0, behavior: reducedMotion.matches ? 'auto' : 'smooth' });
     return;
@@ -933,6 +937,7 @@ function selectTab(tab, opts = {}) {
     checkSentinel();
   }
   if (tab === 'tools') updateTools();
+  if (tab === 'captures') ensureCaptures();
 }
 
 function setConn(state) {
@@ -1006,6 +1011,7 @@ function startLive() {
     if (d !== undefined) setFill(d);
   });
   es.addEventListener('library', onLibraryChanged);
+  es.addEventListener('captures', onCapturesChanged);
   es.addEventListener('error', () => {
     if (live.es !== es) return;
     es.close();
@@ -1123,6 +1129,7 @@ document.addEventListener('visibilitychange', () => {
     }
     refreshNow();
     tick(true);
+    if (C.started) refreshCaptures(true);
   }
 });
 
@@ -2306,7 +2313,7 @@ function buildTools() {
           h('div.card-head-main', devTitle, devText)),
         h('div.card-foot', signOutBtn))),
     h('div.note', icon('shield-check'),
-      h('p', 'Deleting games, managing API keys and changing Phone Link settings can only be done on the device.')));
+      h('p', 'Deleting games or captures, managing API keys and changing Phone Link settings can only be done on the device.')));
 
   tools = { sysSelect, fillMissing, fillAll, hint, fillCard, devTitle, devText };
   updateTools();
@@ -2403,6 +2410,427 @@ async function downloadSystemArt(b) {
 
 // ---- Start
 
+// ---- Captures: the device's screenshots and recordings, to look at and download (never to delete)
+
+const CAP_FILTERS = [
+  { id: 'all', label: 'All' },
+  { id: 'pictures', label: 'Screenshots' },
+  { id: 'videos', label: 'Recordings' },
+];
+
+const C = {
+  started: false,
+  loaded: false,
+  loading: false,
+  error: null,
+  gen: 0,
+  items: [],
+  filter: 'all',
+  selecting: false,
+  selected: new Set(),
+  tiles: new Map(),
+};
+let V = null;
+let capTimer = 0;
+
+function capturesOn() {
+  return !!(S.session && S.session.captures);
+}
+
+function ensureCaptures() {
+  if (C.started) {
+    if (C.loaded && !C.loading) refreshCaptures(true);
+    return;
+  }
+  C.started = true;
+  renderCapFilters();
+  E.capTotal.textContent = 'Loading captures';
+  E.capBody.replaceChildren(capSkeleton());
+  refreshCaptures(false);
+}
+
+function resetCaptures() {
+  C.gen += 1;
+  Object.assign(C, { started: false, loaded: false, loading: false, error: null, items: [], filter: 'all', selecting: false });
+  C.selected.clear();
+  C.tiles.clear();
+  clearTimeout(capTimer);
+  capTimer = 0;
+  V = null;
+  if (!E.capBody) return;
+  E.capBody.replaceChildren();
+  E.capFilters.replaceChildren();
+  E.capTotal.textContent = '';
+  E.capSelect.hidden = true;
+  setSelecting(false);
+}
+
+async function refreshCaptures(quietly) {
+  C.gen += 1;
+  const gen = C.gen;
+  C.loading = true;
+  try {
+    const r = await api('/api/captures');
+    if (gen !== C.gen) return;
+    C.items = (Array.isArray(r && r.items) ? r.items : []).filter((c) => c && typeof c.id === 'string');
+    C.loaded = true;
+    C.error = null;
+    // A selection keeps only what is still on the device.
+    const ids = new Set(C.items.map((c) => c.id));
+    for (const id of Array.from(C.selected)) if (!ids.has(id)) C.selected.delete(id);
+    for (const id of Array.from(C.tiles.keys())) if (!ids.has(id)) C.tiles.delete(id);
+  } catch (e) {
+    if (gen !== C.gen || e.status === 401) return;
+    // A background refresh that fails keeps what is shown.
+    if (quietly && C.loaded) return;
+    C.error = e;
+  } finally {
+    if (gen === C.gen) C.loading = false;
+  }
+  renderCaptures();
+}
+
+function onCapturesChanged() {
+  if (!C.started || capTimer) return;
+  capTimer = setTimeout(() => {
+    capTimer = 0;
+    if (S.signedIn && C.started) refreshCaptures(true);
+  }, 700);
+}
+
+function shownCaptures() {
+  if (C.filter === 'pictures') return C.items.filter((c) => !c.video);
+  if (C.filter === 'videos') return C.items.filter((c) => c.video);
+  return C.items;
+}
+
+function renderCapFilters() {
+  const pictures = C.items.filter((c) => !c.video).length;
+  const counts = { all: C.items.length, pictures, videos: C.items.length - pictures };
+  E.capFilters.replaceChildren(...CAP_FILTERS.map((f) => {
+    const b = h('button.chip', { type: 'button', 'aria-pressed': String(C.filter === f.id) },
+      h('span', f.label),
+      C.loaded ? h('span.chip-count', nf.format(counts[f.id])) : null);
+    b.addEventListener('click', () => {
+      if (C.filter === f.id) return;
+      C.filter = f.id;
+      renderCaptures();
+      window.scrollTo(0, 0);
+    });
+    return b;
+  }));
+}
+
+function renderCaptures() {
+  renderCapFilters();
+  // Nothing to filter or choose until there is something.
+  E.capFilters.hidden = C.loaded && C.items.length === 0;
+  E.capSelect.hidden = !C.loaded || C.items.length === 0;
+  if (!C.loaded && C.error) {
+    E.capTotal.textContent = '';
+    E.capBody.replaceChildren(errorState("Couldn't load your captures", C.error, () => {
+      C.error = null;
+      E.capBody.replaceChildren(capSkeleton());
+      refreshCaptures(false);
+    }));
+    return;
+  }
+  const list = shownCaptures();
+  const bytes = list.reduce((sum, c) => sum + num(c.size), 0);
+  E.capTotal.textContent = list.length ? `${plural(list.length, 'capture', 'captures')} · ${fmtBytes(bytes)}` : '';
+  if (!list.length) {
+    if (C.selecting && !C.items.length) setSelecting(false);
+    E.capBody.replaceChildren(capEmpty());
+    syncSelection();
+    return;
+  }
+  const groups = [];
+  let cur = null;
+  for (const c of list) {
+    const key = dayKey(c.takenAt);
+    if (!cur || cur.key !== key) {
+      cur = { key, at: c.takenAt, items: [] };
+      groups.push(cur);
+    }
+    cur.items.push(c);
+  }
+  E.capBody.replaceChildren(...groups.map((g) => h('section.cap-day', { 'aria-label': dayLabel(g.at) },
+    h('div.cap-day-head',
+      h('h2.cap-day-title', dayLabel(g.at)),
+      h('span.cap-day-count', plural(g.items.length, 'capture', 'captures'))),
+    h('div.cap-grid', g.items.map(capTile)))));
+  syncSelection();
+}
+
+function capEmpty() {
+  const dev = deviceName();
+  if (C.filter === 'videos' && C.items.length) {
+    return emptyState('film', 'No recordings yet', `Hold the Screenshot tile in the quick menu on ${dev}, or hold L3 and R3 together, to record.`);
+  }
+  if (C.filter === 'pictures' && C.items.length) {
+    return emptyState('camera', 'No screenshots yet', `Use the Screenshot tile in the quick menu on ${dev}, or press L3 and R3 together.`);
+  }
+  return emptyState('camera', 'No screenshots or recordings yet', `Take one on ${dev} from the quick menu, or press L3 and R3 together. Hold them to record.`);
+}
+
+function capSkeleton() {
+  const tiles = [];
+  for (let i = 0; i < 6; i += 1) tiles.push(h('div.cap-tile.is-skeleton', { 'aria-hidden': 'true' }, h('div.sk.cap-sk')));
+  return h('section.cap-day', { 'aria-hidden': 'true' },
+    h('div.cap-day-head', h('div.sk.sk-line', { style: { width: '96px', height: '14px' } })),
+    h('div.cap-grid', tiles));
+}
+
+function dayKey(t) {
+  const d = new Date(num(t));
+  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+}
+
+function dayLabel(t) {
+  const d = new Date(num(t));
+  const today = new Date(nowMs());
+  const yesterday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1);
+  if (dayKey(d.getTime()) === dayKey(today.getTime())) return 'Today';
+  if (dayKey(d.getTime()) === dayKey(yesterday.getTime())) return 'Yesterday';
+  const sameYear = d.getFullYear() === today.getFullYear();
+  return d.toLocaleDateString('en', { weekday: 'long', month: 'long', day: 'numeric', year: sameYear ? undefined : 'numeric' });
+}
+
+function timeLabel(t) {
+  return new Date(num(t)).toLocaleTimeString('en', { hour: 'numeric', minute: '2-digit' });
+}
+
+function capKind(c) {
+  return c.video ? 'Recording' : 'Screenshot';
+}
+
+function capTile(c) {
+  const hit = C.tiles.get(c.id);
+  if (hit) return hit;
+  const length = c.video && num(c.durationMs) > 0 ? fmtClock(num(c.durationMs) / 1000) : '';
+  const b = h('button.cap-tile', { type: 'button', 'aria-label': [capKind(c), timeLabel(c.takenAt), length].filter(Boolean).join(', ') },
+    h('span.cap-thumb',
+      art(c.thumb, { title: c.name, text: false, flat: true }),
+      c.video ? h('span.cap-badge', { 'aria-hidden': 'true' }, icon('play'), length ? h('span', length) : null) : null,
+      h('span.cap-check', { 'aria-hidden': 'true' }, icon('check'))),
+    h('span.cap-time', { 'aria-hidden': 'true' }, timeLabel(c.takenAt)));
+  b.style.setProperty('animation-delay', `${Math.min(C.tiles.size, 18) * 14}ms`);
+  holdToSelect(b, c.id);
+  b.addEventListener('click', () => {
+    if (b._held) {
+      b._held = false;
+      return;
+    }
+    if (C.selecting) toggleCapture(c.id);
+    else openCapture(c.id);
+  });
+  C.tiles.set(c.id, b);
+  return b;
+}
+
+/** A long press on a capture starts choosing several, with that one chosen. */
+function holdToSelect(el, id) {
+  let timer = 0;
+  let start = null;
+  const cancel = () => {
+    clearTimeout(timer);
+    timer = 0;
+  };
+  el.addEventListener('pointerdown', (e) => {
+    if (e.pointerType === 'mouse' || C.selecting) return;
+    start = { x: e.clientX, y: e.clientY };
+    cancel();
+    timer = setTimeout(() => {
+      timer = 0;
+      el._held = true;
+      setSelecting(true);
+      C.selected.add(id);
+      syncSelection();
+      if (navigator.vibrate) quiet(() => navigator.vibrate(12));
+    }, 480);
+  });
+  el.addEventListener('pointermove', (e) => {
+    if (timer && start && Math.hypot(e.clientX - start.x, e.clientY - start.y) > 10) cancel();
+  });
+  el.addEventListener('pointerup', cancel);
+  el.addEventListener('pointercancel', cancel);
+  el.addEventListener('contextmenu', (e) => {
+    if (el._held) e.preventDefault();
+  });
+}
+
+function setSelecting(on) {
+  C.selecting = on;
+  if (!on) C.selected.clear();
+  E.capSelect.setAttribute('aria-pressed', String(on));
+  E.capSelectLabel.textContent = on ? 'Cancel' : 'Select';
+  E.capSelect.querySelector('use').setAttribute('href', on ? '#i-x' : '#i-square-check-big');
+  E.capTab.classList.toggle('is-selecting', on);
+  document.body.classList.toggle('is-selecting', on);
+  syncSelection();
+}
+
+function toggleCapture(id) {
+  if (C.selected.has(id)) C.selected.delete(id);
+  else C.selected.add(id);
+  syncSelection();
+}
+
+function syncSelection() {
+  for (const [id, el] of C.tiles) {
+    const on = C.selected.has(id);
+    el.classList.toggle('is-selected', on);
+    if (C.selecting) el.setAttribute('aria-pressed', String(on));
+    else el.removeAttribute('aria-pressed');
+  }
+  E.capActions.hidden = !C.selecting;
+  if (!C.selecting) return;
+  const chosen = C.items.filter((c) => C.selected.has(c.id));
+  const bytes = chosen.reduce((sum, c) => sum + num(c.size), 0);
+  E.capCount.textContent = chosen.length ? `${nf.format(chosen.length)} selected · ${fmtBytes(bytes)}` : 'Choose captures to download';
+  const shown = shownCaptures();
+  E.capAll.textContent = shown.length && shown.every((c) => C.selected.has(c.id)) ? 'Clear' : 'Select all';
+  E.capAll.hidden = !shown.length;
+  E.capDownload.disabled = !chosen.length;
+  E.capDownload.querySelector('.btn-label').textContent = chosen.length > 1 ? 'Download zip' : 'Download';
+}
+
+/** Asks the device for a download link, then lets the browser save the file (never held in memory). */
+async function downloadCaptures(ids, b) {
+  if (!ids.length) return;
+  setBusy(b, true);
+  try {
+    const r = await api('/api/captures/download', { method: 'POST', body: { ids } });
+    const url = safeUrl(r && r.url);
+    if (!url || new URL(url).origin !== location.origin) throw new ApiError('Something went wrong. Try again.', 500);
+    const a = h('a', { href: url, download: (r && typeof r.name === 'string' && r.name) || '', hidden: true });
+    document.body.append(a);
+    a.click();
+    setTimeout(() => a.remove(), 1000);
+    const size = r && num(r.size) > 0 ? ` (${fmtBytes(r.size)})` : '';
+    toast(ids.length === 1 ? `Downloading${size}` : `Downloading ${nf.format(ids.length)} captures as a zip${size}`, 'success');
+    if (C.selecting) setSelecting(false);
+  } catch (e) {
+    if (e.status !== 401) toast(e.message, 'error');
+  } finally {
+    setBusy(b, false);
+  }
+}
+
+// The viewer: one capture at a time, full screen, with the ones around it a swipe away.
+
+function openCapture(id) {
+  const list = shownCaptures();
+  const index = list.findIndex((c) => c.id === id);
+  if (index < 0 || V) return;
+  const back = h('button.icon-btn', { type: 'button', 'aria-label': 'Back' }, icon('chevron-left'));
+  const title = h('p.viewer-title');
+  const sub = h('p.viewer-sub');
+  const download = btn('Download', { icon: 'download', kind: 'primary', size: 'sm' });
+  const stage = h('div.viewer-stage');
+  const prev = h('button.icon-btn.viewer-nav.is-prev', { type: 'button', 'aria-label': 'Previous' }, icon('chevron-left'));
+  const next = h('button.icon-btn.viewer-nav.is-next', { type: 'button', 'aria-label': 'Next' }, icon('chevron-right'));
+  const facts = h('div.viewer-facts');
+  const el = h('div.viewer', { role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Capture' },
+    h('div.viewer-bar', back, h('div.viewer-head', title, sub), download),
+    h('div.viewer-main', stage, prev, next),
+    facts);
+  const v = { list, index, el, stage, title, sub, facts, prev, next, download };
+  const layer = {
+    el,
+    focus: back,
+    dismiss() {
+      const media = stage.querySelector('video');
+      if (media) media.pause();
+      if (V === v) V = null;
+      el.classList.add('is-leaving');
+      removeLater(el);
+    },
+  };
+  back.addEventListener('click', () => closeLayer(layer));
+  prev.addEventListener('click', () => stepCapture(-1));
+  next.addEventListener('click', () => stepCapture(1));
+  download.addEventListener('click', () => downloadCaptures([v.list[v.index].id], download));
+  swipe(stage, (dir) => stepCapture(dir));
+  V = v;
+  E.layers.append(el);
+  pushLayer(layer);
+  showCapture();
+}
+
+function stepCapture(dir) {
+  if (!V) return;
+  const to = V.index + dir;
+  if (to < 0 || to >= V.list.length) return;
+  V.index = to;
+  showCapture(dir);
+}
+
+function showCapture(dir = 0) {
+  const v = V;
+  const c = v.list[v.index];
+  v.title.textContent = `${dayLabel(c.takenAt)}, ${timeLabel(c.takenAt)}`;
+  v.sub.textContent = c.name;
+  const old = v.stage.querySelector('video');
+  if (old) old.pause();
+  const src = safeUrl(c.url);
+  let media;
+  if (c.video) {
+    media = h('video.viewer-media', { controls: true, playsinline: true, preload: 'metadata', poster: safeUrl(c.thumb) || null });
+    if (src) media.src = src;
+  } else {
+    media = h('img.viewer-media', { alt: c.name, decoding: 'async', draggable: 'false' });
+    media.referrerPolicy = 'no-referrer';
+    const frame = h('div.viewer-frame.is-loading');
+    const thumb = safeUrl(c.thumb);
+    if (thumb) frame.style.setProperty('background-image', `url("${thumb}")`);
+    media.addEventListener('load', () => frame.classList.remove('is-loading'), { once: true });
+    media.addEventListener('error', () => frame.replaceChildren(emptyState('circle-alert', "Couldn't show this screenshot", 'It may have been removed on the device.', null, { compact: true, danger: true })), { once: true });
+    if (src) media.src = src;
+    frame.append(media, spinner('viewer-spin'));
+    media = frame;
+  }
+  if (dir) media.classList.add(dir > 0 ? 'from-right' : 'from-left');
+  v.stage.replaceChildren(media);
+  const res = num(c.width) > 0 && num(c.height) > 0 ? `${num(c.width)} × ${num(c.height)}` : null;
+  const length = c.video && num(c.durationMs) > 0 ? fmtClock(num(c.durationMs) / 1000) : null;
+  v.facts.replaceChildren(...[
+    h('span.pill', icon(c.video ? 'film' : 'camera'), capKind(c)),
+    length ? h('span.pill', icon('clock'), length) : null,
+    res ? h('span.pill', res) : null,
+    h('span.pill', fmtBytes(c.size)),
+    h('span.viewer-pos', `${nf.format(v.index + 1)} of ${nf.format(v.list.length)}`),
+  ].filter(Boolean));
+  v.prev.disabled = v.index === 0;
+  v.next.disabled = v.index === v.list.length - 1;
+}
+
+/** A horizontal swipe on [el] (pictures only: a video's own controls take the touch). */
+function swipe(el, onSwipe) {
+  let start = null;
+  el.addEventListener('pointerdown', (e) => {
+    if (e.target.closest('video')) return;
+    start = { x: e.clientX, y: e.clientY, t: Date.now() };
+  });
+  el.addEventListener('pointerup', (e) => {
+    if (!start) return;
+    const dx = e.clientX - start.x;
+    const dy = e.clientY - start.y;
+    const quick = Date.now() - start.t < 600;
+    start = null;
+    if (quick && Math.abs(dx) > 56 && Math.abs(dx) > Math.abs(dy) * 1.4) onSwipe(dx < 0 ? 1 : -1);
+  });
+  el.addEventListener('pointercancel', () => {
+    start = null;
+  });
+}
+
+document.addEventListener('keydown', (e) => {
+  if (!V || layers[layers.length - 1]?.el !== V.el) return;
+  if (e.key === 'ArrowLeft') stepCapture(-1);
+  if (e.key === 'ArrowRight') stepCapture(1);
+});
+
 function init() {
   E.boot = $('#boot');
   E.bootMsg = $('#boot-msg');
@@ -2440,6 +2868,17 @@ function init() {
   E.toasts = $('#toasts');
   E.offline = $('#offline');
   E.offlineText = $('#offline-text');
+  E.capTab = $('#tab-captures');
+  E.capTabBtn = $('.tab-btn[data-tab="captures"]');
+  E.capFilters = $('#cap-filters');
+  E.capTotal = $('#cap-total');
+  E.capSelect = $('#cap-select');
+  E.capSelectLabel = $('#cap-select-label');
+  E.capBody = $('#cap-body');
+  E.capActions = $('#cap-actions');
+  E.capCount = $('#cap-count');
+  E.capAll = $('#cap-all');
+  E.capDownload = $('#cap-download');
 
   E.countdown.setAttribute('aria-live', 'off');
 
@@ -2480,6 +2919,18 @@ function init() {
     applySearch();
     E.libQ.focus();
   });
+  E.capSelect.addEventListener('click', () => setSelecting(!C.selecting));
+  E.capAll.addEventListener('click', () => {
+    const shown = shownCaptures();
+    const all = shown.length > 0 && shown.every((c) => C.selected.has(c.id));
+    for (const c of shown) {
+      if (all) C.selected.delete(c.id);
+      else C.selected.add(c.id);
+    }
+    syncSelection();
+  });
+  E.capDownload.addEventListener('click', () => downloadCaptures(C.items.filter((c) => C.selected.has(c.id)).map((c) => c.id), E.capDownload));
+
   E.libSort.addEventListener('click', () => {
     openMenu({
       title: 'Sort by',

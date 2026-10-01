@@ -149,8 +149,9 @@ fun SystemsScreen(app: AppState) {
                 NavAction.SELECT, NavAction.BACK, NavAction.REORDER -> { moving = false; return@InputLayer NavResult.CONSUMED }
                 else -> return@InputLayer NavResult.CONSUMED
             }
-            val to = app.moveSystem(systems, sel.index, delta)
-            return@InputLayer if (to == sel.index) NavResult.BLOCKED else { sel.index = to; NavResult.MOVED }
+            val key = current?.platform?.id?.value ?: return@InputLayer NavResult.BLOCKED
+            val to = app.moveSystemBy(key, delta)
+            return@InputLayer if (to < 0 || to == sel.index) NavResult.BLOCKED else { sel.index = to; NavResult.MOVED }
         }
         when (e.action) {
             NavAction.REORDER -> { if (current != null) moving = true; NavResult.ACTIVATED }
@@ -213,9 +214,8 @@ fun SystemsScreen(app: AppState) {
                             }
                         },
                         onDrop = { key, to ->
-                            val from = systems.indexOfFirst { it.platform.id.value == key }
-                            if (from >= 0 && to != from) app.moveSystem(systems, from, to - from)
-                            sel.index = to
+                            val placed = app.moveSystem(key.toString(), to)
+                            if (placed >= 0) sel.index = placed
                             app.platform.haptics.drop()
                         },
                     ),
@@ -248,7 +248,8 @@ fun SystemsScreen(app: AppState) {
                             when {
                                 // Carrying with the controller, a tap on another system puts it there.
                                 moving -> {
-                                    if (i != sel.index) sel.index = app.moveSystem(systems, sel.index, i - sel.index)
+                                    val carriedKey = systems.getOrNull(sel.index)?.platform?.id?.value
+                                    if (i != sel.index && carriedKey != null) app.moveSystem(carriedKey, i).takeIf { it >= 0 }?.let { sel.index = it }
                                     moving = false
                                 }
                                 // A tap opens the system at once; only games wait for a second tap.
@@ -454,14 +455,45 @@ fun AppState.platformEmulatorPicker(card: PlatformCard) {
 }
 
 /**
- * Moves the system at [index] of [systems] by [delta] places and saves the whole order, so Home,
- * Systems and the Library's system picker all follow it. Returns the system's new index.
+ * Moves the system [key] to place [to] and saves the whole order, so Home, Systems and the
+ * Library's system picker all follow it. The order is worked out from the saved order as it is at
+ * this moment, never from a list a screen kept, so a move can't undo the one before it. Returns
+ * the system's new place, or -1 when it isn't shown.
  */
-fun AppState.moveSystem(systems: List<PlatformCard>, index: Int, delta: Int): Int {
-    val target = index + delta
-    if (index !in systems.indices || target !in systems.indices) return index
-    val ids = systems.map { it.platform.id.value }.toMutableList()
-    ids.add(target, ids.removeAt(index))
-    store.updatePrefs { it.copy(systemOrder = ids + it.systemOrder.filterNot { id -> id in ids }) }
-    return target
+fun AppState.moveSystem(key: String, to: Int): Int {
+    var placed = -1
+    store.updatePrefs { p ->
+        val ids = SystemOrder.shown(store.library.platforms.value.map { it.platform.id.value }, p.systemOrder).toMutableList()
+        val from = ids.indexOf(key)
+        if (from < 0) return@updatePrefs p
+        placed = to.coerceIn(0, ids.lastIndex)
+        if (placed == from) return@updatePrefs p
+        ids.add(placed, ids.removeAt(from))
+        p.copy(systemOrder = SystemOrder.save(ids, p.systemOrder))
+    }
+    return placed
+}
+
+/** Moves the system [key] by [delta] places; its place when it can't go further, -1 when it isn't shown. */
+fun AppState.moveSystemBy(key: String, delta: Int): Int {
+    val ids = SystemOrder.shown(store.library.platforms.value.map { it.platform.id.value }, store.prefs.value.systemOrder)
+    val from = ids.indexOf(key)
+    if (from < 0) return -1
+    if (from + delta !in ids.indices) return from
+    return moveSystem(key, from + delta)
+}
+
+/** The rules for the systems' order, kept apart so they can be tested. */
+internal object SystemOrder {
+    /**
+     * [shown] (the systems on screen, as the store listed them) in the order [saved] gives them:
+     * saved ones first, the rest after them in the order they are listed, as the store does.
+     */
+    fun shown(shown: List<String>, saved: List<String>): List<String> {
+        val rank = saved.withIndex().associate { (i, id) -> id to i }
+        return shown.withIndex().sortedBy { (i, id) -> rank[id] ?: (saved.size + i) }.map { it.value }
+    }
+
+    /** The order to save: every shown system in [ids] order, then systems hidden right now as they were. */
+    fun save(ids: List<String>, saved: List<String>): List<String> = ids + saved.filterNot { it in ids }
 }

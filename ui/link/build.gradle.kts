@@ -46,6 +46,7 @@ kotlin {
                 implementation(libs.ktor.server.core)
                 implementation(libs.ktor.server.cio)
                 implementation(libs.kotlinx.serialization.json)
+                implementation(libs.kotlinx.datetime)
             }
         }
         // Android and the desktop are both the JVM: crypto, networking and the QR encoder live here once.

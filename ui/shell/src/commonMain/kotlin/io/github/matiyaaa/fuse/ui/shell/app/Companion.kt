@@ -136,7 +136,7 @@ internal object CompanionPage {
  * crossfades behind everything; on the first page the details slide the way the main screen moved.
  */
 @Composable
-fun CompanionApp(store: FuseStore, platform: PlatformUi, mode: DualScreenMode) {
+fun CompanionApp(store: FuseStore, platform: PlatformUi, mode: DualScreenMode, onHide: (() -> Unit)? = null) {
     val prefs by store.prefs.collectAsState()
     val spec = prefs.theme
     FuseTheme(
@@ -165,10 +165,10 @@ fun CompanionApp(store: FuseStore, platform: PlatformUi, mode: DualScreenMode) {
             }
         }
         Box(Modifier.fillMaxSize().background(Fuse.colors.ink)) {
+            // The game being played comes first in every mode (Fuse is in the background then).
             val content = when {
-                mode == DualScreenMode.GAME_COMPANION && playing != null -> CompanionContent(playing, 0)
-                mode == DualScreenMode.LIBRARY_COMPANION -> CompanionContent(focus.key, focus.direction)
                 playing != null -> CompanionContent(playing, 0)
+                mode == DualScreenMode.LIBRARY_COMPANION -> CompanionContent(focus.key, focus.direction)
                 else -> CompanionContent(null, 0)
             }
             // A game's achievements open over the pages; they close when the game or the page changes.
@@ -189,7 +189,7 @@ fun CompanionApp(store: FuseStore, platform: PlatformUi, mode: DualScreenMode) {
                 when (page) {
                     0 -> SpotlightPage(store, content, home.playtime.currentSince, systems, time) { sheet = it }
                     1 -> StatusPage(store, platform, status)
-                    else -> ControlsPage(store, platform)
+                    else -> ControlsPage(store, platform, onHide)
                 }
             }
             if (prefs.display.companionShowsPerformance && pager.currentPage == 0 && sheet == null) {

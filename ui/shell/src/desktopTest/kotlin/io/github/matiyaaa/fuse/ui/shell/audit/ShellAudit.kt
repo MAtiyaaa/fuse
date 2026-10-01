@@ -790,8 +790,12 @@ internal fun AuditDriver.companionScreens() {
             store.updatePrefs { it.copy(display = it.display.copy(companionShowsPerformance = true)) }
             shoot("while playing, with performance numbers", 1_500)
             store.updatePrefs { it.copy(display = it.display.copy(companionShowsPerformance = false)) }
-            view = AuditView.Companion(store, platform, DualScreenMode.LIBRARY_COMPANION)
-            shoot("library companion while a game runs (nothing focused)", 2_000)
+            // Fuse is in the background while the game runs: the companion stays, with Hide.
+            view = AuditView.Companion(store, platform, DualScreenMode.LIBRARY_COMPANION, onHide = {})
+            shoot("library companion while a game runs", 2_000)
+            CompanionPage.current.value = 2
+            shoot("controls while Fuse is in the background", 1_500)
+            CompanionPage.current.value = 0
         } finally {
             runBlocking { libraryData.playSessions.end(session, Clock.System.now().toEpochMilliseconds()) }
         }

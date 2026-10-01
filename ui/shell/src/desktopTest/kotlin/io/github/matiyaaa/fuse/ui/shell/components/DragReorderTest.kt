@@ -18,7 +18,9 @@ import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -87,6 +89,83 @@ class DragReorderTest {
                 }
             }
         }
+    }
+
+    /**
+     * Like Systems: the screen reads an immutable list that the store replaces after each drop, and
+     * its drop works from the list it read in that composition.
+     */
+    private fun ComposeUiTest.screenGrid(events: Events, list: MutableState<List<String>>) {
+        setContent {
+            val state = rememberDragReorderState()
+            val grid = rememberLazyGridState()
+            val current = list.value
+            val shown = state.arrange(current) { it }
+            Box(Modifier.size(600.dp, 500.dp)) {
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(3),
+                    state = grid,
+                    modifier = Modifier.dragReorder(
+                        state,
+                        visibleKeys = { grid.layoutInfo.visibleItemsInfo.map { it.key } },
+                        scrollBy = { grid.scrollBy(it) },
+                        longPressMs = 300,
+                        onDrop = { key, to ->
+                            events.dropped += key to to
+                            val from = current.indexOf(key)
+                            if (from >= 0) list.value = current.toMutableList().apply { add(to, removeAt(from)) }
+                        },
+                    ),
+                    contentPadding = PaddingValues(start = 40.dp, end = 40.dp, top = 16.dp, bottom = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                ) {
+                    itemsIndexed(shown, key = { _, k -> k }) { _, k ->
+                        Box(
+                            Modifier
+                                .animateItem(placementSpec = null)
+                                .reorderItem(state, k)
+                                .fillMaxWidth()
+                                .aspectRatio(1.45f)
+                                .background(Color.Gray)
+                                .testTag(k),
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    private fun ComposeUiTest.drag(from: Offset, to: Offset) {
+        onRoot().performTouchInput {
+            down(from)
+            advanceEventTime(450)
+            moveTo(from + Offset(20f, 0f))
+            advanceEventTime(50)
+            moveTo((from + to) / 2f)
+            advanceEventTime(50)
+            moveTo(to)
+            advanceEventTime(50)
+            moveTo(to + Offset(1f, 0f))
+            advanceEventTime(50)
+            up()
+        }
+        waitForIdle()
+    }
+
+    @Test
+    fun aSecondDragWorksFromTheListAsItIsNow() = runComposeUiTest {
+        val events = Events()
+        val list = mutableStateOf(listOf("a", "b", "c", "d", "e"))
+        screenGrid(events, list)
+        waitForIdle()
+        drag(centre("a"), centre("d"))
+        assertEquals(listOf("b", "c", "d", "a", "e"), list.value)
+        // Before the fix the drop still saw the first list and put "a" back where it began.
+        drag(centre("d"), centre("b"))
+        assertEquals(listOf("d", "b", "c", "a", "e"), list.value)
+        drag(centre("a"), centre("d"))
+        assertEquals(listOf("a", "d", "b", "c", "e"), list.value)
     }
 
     private fun ComposeUiTest.centre(tag: String): Offset {

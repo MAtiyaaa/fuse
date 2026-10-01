@@ -1,5 +1,7 @@
 package io.github.matiyaaa.fuse.link
 
+import io.ktor.utils.io.ByteWriteChannel
+import io.ktor.utils.io.jvm.javaio.toOutputStream
 import io.nayuki.qrcodegen.QrCode
 import java.io.File
 import java.net.Inet4Address
@@ -7,9 +9,15 @@ import java.net.NetworkInterface
 import java.security.MessageDigest
 import java.security.SecureRandom
 import java.util.Base64
+import java.util.zip.Deflater
 import java.util.zip.GZIPInputStream
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
 import javax.crypto.SecretKeyFactory
 import javax.crypto.spec.PBEKeySpec
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 private val random = SecureRandom()
 
@@ -55,3 +63,27 @@ internal actual fun readFile(path: String, maxBytes: Int): ByteArray? = runCatch
     val f = File(path)
     if (!f.isFile || f.length() > maxBytes) null else f.readBytes()
 }.getOrNull()
+
+internal actual val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
+
+internal actual suspend fun writeZip(channel: ByteWriteChannel, items: List<ZipItem>) = withContext(Dispatchers.IO) {
+    // Deflate at level 0 (no compression: pictures and videos are compressed already). Sizes and
+    // checksums follow each file, so one pass over the files is enough and every unzip tool reads
+    // it. Java switches to Zip64 by itself past 4 GB.
+    ZipOutputStream(channel.toOutputStream()).use { zip ->
+        zip.setLevel(Deflater.NO_COMPRESSION)
+        val buffer = ByteArray(256 * 1024)
+        for (item in items) {
+            val reader = item.open() ?: continue
+            reader.use {
+                zip.putNextEntry(ZipEntry(item.name).apply { time = item.time })
+                while (true) {
+                    val n = it.read(buffer, buffer.size)
+                    if (n < 0) break
+                    zip.write(buffer, 0, n)
+                }
+                zip.closeEntry()
+            }
+        }
+    }
+}

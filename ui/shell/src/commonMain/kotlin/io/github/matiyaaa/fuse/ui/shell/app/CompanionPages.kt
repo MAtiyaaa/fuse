@@ -309,7 +309,7 @@ internal object CompanionControls {
  * Find games, menu music, sounds and turning this screen off. It fits without scrolling.
  */
 @Composable
-internal fun ControlsPage(store: FuseStore, platform: PlatformUi) {
+internal fun ControlsPage(store: FuseStore, platform: PlatformUi, onHide: (() -> Unit)? = null) {
     val quick = platform.quick
     val prefs by store.prefs.collectAsState()
     val main by quick.brightness.collectAsState()
@@ -403,14 +403,19 @@ internal fun ControlsPage(store: FuseStore, platform: PlatformUi) {
                     }
                 },
                 { m ->
-                    ControlTile(
-                        "Find games", FuseIcons.FolderSearch, selected = false, modifier = m, active = scanning, compact = true,
-                        detail = when {
-                            scanning -> "Looking"
-                            scan.phase == ScanPhase.DONE && scan.added > 0 -> "${scan.added} new"
-                            else -> "Scan folders"
-                        },
-                    ) { if (!scanning) store.sources.rescan(ScanScope.QUICK) }
+                    if (onHide != null) {
+                        // Fuse is in the background: the second screen can be given to something else.
+                        ControlTile("Hide", FuseIcons.EyeOff, selected = false, modifier = m, detail = "Until Fuse is back", compact = true) { onHide() }
+                    } else {
+                        ControlTile(
+                            "Find games", FuseIcons.FolderSearch, selected = false, modifier = m, active = scanning, compact = true,
+                            detail = when {
+                                scanning -> "Looking"
+                                scan.phase == ScanPhase.DONE && scan.added > 0 -> "${scan.added} new"
+                                else -> "Scan folders"
+                            },
+                        ) { if (!scanning) store.sources.rescan(ScanScope.QUICK) }
+                    }
                 },
                 { m ->
                     ControlTile("Menu music", FuseIcons.Music, selected = false, modifier = m, active = prefs.music.enabled, toggle = true, compact = true) {

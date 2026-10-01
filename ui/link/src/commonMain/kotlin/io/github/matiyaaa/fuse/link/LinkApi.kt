@@ -55,6 +55,8 @@ internal class LinkApi(
     private val deviceName: String,
     private val version: String,
     private val readUri: (suspend (String) -> ByteArray?)?,
+    /** Whether the device has screenshots and recordings to offer (the phone shows their tab). */
+    private val capturesAvailable: Boolean = false,
 ) {
     data class Reply(val body: JsonElement, val status: HttpStatusCode = HttpStatusCode.OK)
 
@@ -73,6 +75,7 @@ internal class LinkApi(
         put("signedIn", auth.isSignedIn(token))
         put("device", deviceName)
         put("version", version)
+        put("captures", capturesAvailable)
     }
 
     suspend fun login(body: JsonElement?): Login {

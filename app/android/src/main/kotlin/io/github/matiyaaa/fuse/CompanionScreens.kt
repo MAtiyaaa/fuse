@@ -8,6 +8,8 @@ import android.hardware.display.DisplayManager
 import android.os.Build
 import android.os.SystemClock
 import androidx.activity.ComponentActivity
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.lifecycle.Lifecycle
 import io.github.matiyaaa.fuse.model.DisplayInfo
 import io.github.matiyaaa.fuse.model.DualScreenMode
@@ -39,15 +41,17 @@ object SecondScreenLog {
 /**
  * Fuse's companion on the second screen, following the dual-screen setting.
  *
- * - While Fuse is in front it is a [CompanionPresentation] owned by the main activity, the way
- *   Cartridge does it: AYN handhelds show a Presentation on the second panel where a separate
- *   activity never appeared. It closes when Fuse goes to the background, so games and other apps
- *   get the second screen, and comes back with Fuse.
- * - With "Game on the main screen, companion on the second", a game that uses one screen also gets
- *   a [CompanionActivity] on the second screen, started just before the game (Android only lets a
- *   visible app start activities). A display that refused it, or that put it on the main screen, is
- *   not tried again this session.
- * - While a game that uses both screens runs, nothing is shown there until Fuse resumes.
+ * - It is a [CompanionPresentation] made by the main activity, the way Cartridge does it: AYN
+ *   handhelds show a Presentation on the second panel where a separate activity never appeared.
+ * - It stays when Fuse goes to the background (a game or an app Fuse opened is in front), showing
+ *   the game being played, and never takes the controller. Its controls page then offers Hide,
+ *   which frees the second screen until Fuse is back.
+ * - While a game that uses both screens runs, or something was opened on the second screen,
+ *   nothing is shown there until Fuse resumes.
+ * - Where a display refuses the Presentation, "Companion while playing" falls back to a
+ *   [CompanionActivity] started just before a game (Android only lets a visible app start
+ *   activities). A display that refused it, or that put it on the main screen, is not tried again
+ *   this session.
  * - A [CompanionHomeActivity] (Fuse as the second screen's Home) is never closed from here.
  */
 class CompanionScreens(private val app: FuseApplication) : DualScreenHandoff {
@@ -59,6 +63,13 @@ class CompanionScreens(private val app: FuseApplication) : DualScreenHandoff {
 
     /** True from the launch of a dual-screen game until Fuse's main screen resumes. */
     @Volatile private var suppressed = false
+
+    /** Hidden from its controls page while Fuse was in the background; back when Fuse resumes. */
+    private var hiddenUntilBack = false
+
+    /** True while Fuse's main screen is stopped and the companion carries on alone. */
+    private val _away = MutableStateFlow(false)
+    val away: StateFlow<Boolean> = _away.asStateFlow()
 
     private val monitor get() = app.platformUi.displayMonitor
 
@@ -73,25 +84,47 @@ class CompanionScreens(private val app: FuseApplication) : DualScreenHandoff {
         }
         val main = from as? ComponentActivity ?: return
         if (!main.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) return
+        _away.value = false
         // Fuse is in front: the Presentation takes over from a companion activity left by a game.
         app.activities.companion?.let { finish(it, "Fuse is in front again") }
         showPresentation(main)
+        presentation?.setAway(false)
     }
 
     /** Fuse's main screen resumed: games are over, and the companion comes back. */
     fun onMainResumed(from: Activity, mode: DualScreenMode) {
-        if (suppressed) SecondScreenLog.add("Fuse resumed, companion allowed again")
+        if (suppressed || hiddenUntilBack) SecondScreenLog.add("Fuse resumed, companion allowed again")
         suppressed = false
+        hiddenUntilBack = false
         update(from, mode)
     }
 
-    /** Fuse went to the background: the second screen is free for the game or app in front. */
+    /**
+     * Fuse went to the background, for a game or an app it opened: the companion stays beside it.
+     * Two-screen games and launches on the second screen have already put it away.
+     */
     fun onMainStopped() {
-        hidePresentation("Fuse went to the background")
+        _away.value = true
+        val current = presentation ?: return
+        current.setAway(true)
+        SecondScreenLog.add("Companion stays on display ${current.display.displayId} while Fuse is in the background")
+    }
+
+    /** The main activity is gone without Fuse closing: the Presentation it made goes with it. */
+    fun onMainDestroyed() {
+        hidePresentation("Fuse's main screen closed")
+    }
+
+    /** Hide on the companion's controls page: the second screen is free until Fuse is back. */
+    fun hideUntilBack() {
+        hiddenUntilBack = true
+        hidePresentation("hidden until Fuse is back")
     }
 
     /** A game that uses one screen is starting: in "companion during games" mode it gets the companion. */
     override fun beforeGame() {
+        // The Presentation stays beside the game; an activity is only for displays that refused it.
+        if (presentation?.isShowing == true) return
         if (mode != DualScreenMode.GAME_COMPANION || suppressed || !ACTIVITY_SUPPORTED) return
         val from = app.activities.main ?: return
         val target = monitor.secondary() ?: return
@@ -127,12 +160,13 @@ class CompanionScreens(private val app: FuseApplication) : DualScreenHandoff {
     }
 
     fun stop() {
+        _away.value = false
         hidePresentation("Fuse closed")
         app.activities.companion?.let { finish(it, "Fuse closed") }
     }
 
     private fun wants(mode: DualScreenMode): Boolean =
-        !suppressed && (mode == DualScreenMode.LIBRARY_COMPANION || mode == DualScreenMode.GAME_COMPANION)
+        !suppressed && !hiddenUntilBack && (mode == DualScreenMode.LIBRARY_COMPANION || mode == DualScreenMode.GAME_COMPANION)
 
     private fun showPresentation(main: ComponentActivity) {
         presentation?.let { current ->
@@ -144,7 +178,25 @@ class CompanionScreens(private val app: FuseApplication) : DualScreenHandoff {
         val target = monitor.presentationTarget(mainDisplay = main.displayIdCompat()) ?: return
         if (target.id in refusedPresentation) return
         val display = app.getSystemService(DisplayManager::class.java)?.getDisplay(target.id) ?: return
-        val shown = CompanionPresentation(main, display) { CompanionContent(app) }
+        var made: CompanionPresentation? = null
+        var lastShown: Boolean? = null
+        val shown = CompanionPresentation(
+            main, display,
+            onShown = onShown@{ visible ->
+                // Only while it is the companion (not while Fuse closes it), and only changes after
+                // the first time, so a device that hides it from a background app shows up in
+                // Settings, Second screen status.
+                if (made == null || presentation !== made) return@onShown
+                if (lastShown != null && lastShown != visible) {
+                    SecondScreenLog.add(if (visible) "Companion visible again on display ${target.id}" else "Android hid the companion on display ${target.id}")
+                }
+                lastShown = visible
+            },
+        ) {
+            val fuseAway by away.collectAsState()
+            CompanionContent(app, onHide = if (fuseAway) ::hideUntilBack else null)
+        }
+        made = shown
         shown.setOnDismissListener {
             // Closed by Android (display removed or changed), not by hidePresentation.
             if (presentation === shown) {

@@ -9,6 +9,7 @@ import android.util.Log
 import coil3.ImageLoader
 import coil3.PlatformContext
 import coil3.SingletonImageLoader
+import io.github.matiyaaa.fuse.capture.AndroidCaptureLibrary
 import io.github.matiyaaa.fuse.data.FuseData
 import io.github.matiyaaa.fuse.data.db.AndroidDatabase
 import io.github.matiyaaa.fuse.integrations.FuseHttp
@@ -110,7 +111,7 @@ class FuseApplication : Application(), SingletonImageLoader.Factory {
      */
     private fun startPhoneLink(store: FuseStore): PhoneLinkControl? = try {
         val name = Settings.Global.getString(contentResolver, Settings.Global.DEVICE_NAME)?.takeIf { it.isNotBlank() } ?: Build.MODEL
-        PhoneLinkServer(store, services.secrets, appScope, name, BuildConfig.VERSION_NAME, readUri = ::readContent).also { it.start() }
+        PhoneLinkServer(store, services.secrets, appScope, name, BuildConfig.VERSION_NAME, readUri = ::readContent, captures = AndroidCaptureLibrary(this)).also { it.start() }
     } catch (e: CancellationException) {
         throw e
     } catch (t: Throwable) {

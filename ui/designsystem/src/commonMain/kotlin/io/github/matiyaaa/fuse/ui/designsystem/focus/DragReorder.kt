@@ -27,6 +27,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerInputScope
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -171,13 +172,17 @@ class DragReorderState internal constructor() {
         source = keys
         val held = heldKey
         val order = pending
-        val result = when {
-            held != null -> {
-                val from = keys.indexOf(held)
-                if (from < 0 || target !in items.indices || from == target) items else items.toMutableList().apply { add(target, removeAt(from)) }
-            }
-            order != null && keys == pendingFrom -> items.sortedBy { order.indexOf(key(it)).let { i -> if (i < 0) Int.MAX_VALUE else i } }
-            else -> items
+        // The order just dropped, until the screen's own list catches up; a new hold starts from it too.
+        val base = if (order != null && keys == pendingFrom) {
+            items.sortedBy { order.indexOf(key(it)).let { i -> if (i < 0) Int.MAX_VALUE else i } }
+        } else {
+            items
+        }
+        val result = if (held != null) {
+            val from = base.indexOfFirst { key(it) == held }
+            if (from < 0 || target !in base.indices || from == target) base else base.toMutableList().apply { add(target, removeAt(from)) }
+        } else {
+            base
         }
         displayed = result.map(key)
         return result
@@ -283,7 +288,12 @@ fun rememberDragReorderState(): DragReorderState {
  * With [requireHandle] only a hold on an item's [reorderHandle] lifts it, so a list of rows can be
  * rearranged while the rows' own items keep their holds (a row of systems inside a list of shelves).
  * An item that was [DragReorderState.arm]ed lifts at the first touch.
+ *
+ * The gesture outlives recompositions (restarting it would drop an item mid-drag), so the callbacks
+ * are read as they are now, never as they were when the list was first touched: a drop always sees
+ * the screen's current list.
  */
+@Composable
 fun Modifier.dragReorder(
     state: DragReorderState,
     visibleKeys: () -> Collection<Any>,
@@ -299,90 +309,129 @@ fun Modifier.dragReorder(
     onTarget: () -> Unit = {},
     onHoldReleased: (Any) -> Unit = {},
     onDrop: (key: Any, to: Int) -> Unit,
-): Modifier = this
-    .onGloballyPositioned {
-        state.container = Rect(it.positionInRoot(), it.size.toSize())
-        state.lane = lane
-    }
-    .pointerInput(state, enabled) {
-        if (!enabled) return@pointerInput
-        coroutineScope {
-            // Scrolls while a held item is near either end; asleep otherwise.
-            launch {
-                while (true) {
-                    snapshotFlow { state.heldKey }.first { it != null }
-                    var last = 0L
-                    while (state.heldKey != null) {
-                        val now = withFrameNanos { it }
-                        val dt = if (last == 0L) 0f else (now - last) / 1_000_000_000f
-                        last = now
-                        val box = state.container
-                        val speed = if (vertical) {
-                            ReorderMath.autoScrollSpeed(state.finger.y, box.top, box.bottom - endInset.toPx(), 56.dp.toPx(), 1_400.dp.toPx())
-                        } else {
-                            ReorderMath.autoScrollSpeed(state.finger.x, box.left, box.right - endInset.toPx(), 56.dp.toPx(), 1_400.dp.toPx())
-                        }
-                        if (speed != 0f && dt > 0f && scrollBy(speed * dt) != 0f && state.retargetNearest(visibleKeys())) {
-                            keepScroll()
-                            onTarget()
-                        }
+): Modifier {
+    val currentVisibleKeys by rememberUpdatedState(visibleKeys)
+    val currentScrollBy by rememberUpdatedState(scrollBy)
+    val currentLongPressMs by rememberUpdatedState(longPressMs)
+    val currentKeepScroll by rememberUpdatedState(keepScroll)
+    val currentOnLift by rememberUpdatedState(onLift)
+    val currentOnTarget by rememberUpdatedState(onTarget)
+    val currentOnHoldReleased by rememberUpdatedState(onHoldReleased)
+    val currentOnDrop by rememberUpdatedState(onDrop)
+    return this
+        .onGloballyPositioned {
+            state.container = Rect(it.positionInRoot(), it.size.toSize())
+            state.lane = lane
+        }
+        .pointerInput(state, enabled) {
+            if (!enabled) return@pointerInput
+            dragGestures(
+                state, vertical, endInset, requireHandle,
+                visibleKeys = { currentVisibleKeys() },
+                scrollBy = { currentScrollBy(it) },
+                longPressMs = { currentLongPressMs },
+                keepScroll = { currentKeepScroll() },
+                onLift = { currentOnLift(it) },
+                onTarget = { currentOnTarget() },
+                onHoldReleased = { currentOnHoldReleased(it) },
+                onDrop = { key, to -> currentOnDrop(key, to) },
+            )
+        }
+}
+
+private suspend fun PointerInputScope.dragGestures(
+    state: DragReorderState,
+    vertical: Boolean,
+    endInset: Dp,
+    requireHandle: Boolean,
+    visibleKeys: () -> Collection<Any>,
+    scrollBy: suspend (Float) -> Float,
+    longPressMs: () -> Long?,
+    keepScroll: () -> Unit,
+    onLift: (Any) -> Unit,
+    onTarget: () -> Unit,
+    onHoldReleased: (Any) -> Unit,
+    onDrop: (key: Any, to: Int) -> Unit,
+) {
+    coroutineScope {
+        // Scrolls while a held item is near either end; asleep otherwise.
+        launch {
+            while (true) {
+                snapshotFlow { state.heldKey }.first { it != null }
+                var last = 0L
+                while (state.heldKey != null) {
+                    val now = withFrameNanos { it }
+                    val dt = if (last == 0L) 0f else (now - last) / 1_000_000_000f
+                    last = now
+                    val box = state.container
+                    val speed = if (vertical) {
+                        ReorderMath.autoScrollSpeed(state.finger.y, box.top, box.bottom - endInset.toPx(), 56.dp.toPx(), 1_400.dp.toPx())
+                    } else {
+                        ReorderMath.autoScrollSpeed(state.finger.x, box.left, box.right - endInset.toPx(), 56.dp.toPx(), 1_400.dp.toPx())
                     }
-                }
-            }
-            awaitEachGesture {
-                val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
-                val slop = viewConfiguration.touchSlop
-                val at = state.container.topLeft + down.position
-                val visible = visibleKeys()
-                val armed = state.armedKey?.takeIf { it in visible && state.bounds[it]?.contains(at) == true }
-                if (armed == null && state.armedKey != null) state.arm(null)
-                if (armed == null) {
-                    // Wait out the hold without taking anything, so taps and scrolls behave as always.
-                    val early = withTimeoutOrNull(longPressMs ?: ReorderDefaults.liftMs(viewConfiguration.longPressTimeoutMillis)) {
-                        var ended = false
-                        while (!ended) {
-                            val change = awaitPointerEvent(PointerEventPass.Initial).changes.firstOrNull { it.id == down.id }
-                            ended = change == null || !change.pressed || change.isConsumed || (change.position - down.position).getDistance() > slop
-                        }
-                        true
-                    }
-                    if (early != null) return@awaitEachGesture
-                }
-                val key = armed ?: if (requireHandle) {
-                    state.handles.entries.firstOrNull { (k, r) -> k in visible && r.contains(at) }?.key
-                } else {
-                    ReorderMath.hit(at, state.bounds.filterKeys { it in visible })
-                } ?: return@awaitEachGesture
-                state.lift(key, at)
-                if (state.heldKey == null) return@awaitEachGesture
-                onLift(key)
-                var cancelled = false
-                while (true) {
-                    val change = awaitPointerEvent(PointerEventPass.Initial).changes.firstOrNull { it.id == down.id }
-                    if (change == null) {
-                        cancelled = true
-                        break
-                    }
-                    change.consume()
-                    if (!change.pressed) break
-                    state.finger = state.container.topLeft + change.position
-                    if (!state.moved && (state.finger - at).getDistance() > slop) state.markMoved()
-                    if (state.moved && state.retarget(visibleKeys())) {
+                    if (speed != 0f && dt > 0f && scrollBy(speed * dt) != 0f && state.retargetNearest(visibleKeys())) {
+                        // The list carried the item to a new place: that is a move, even with a still finger.
+                        state.markMoved()
                         keepScroll()
                         onTarget()
                     }
                 }
-                val moved = state.moved
-                val to = state.target
-                state.release(keep = !cancelled)
-                when {
-                    cancelled -> Unit
-                    moved -> onDrop(key, to)
-                    else -> onHoldReleased(key)
+            }
+        }
+        awaitEachGesture {
+            val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+            val slop = viewConfiguration.touchSlop
+            val at = state.container.topLeft + down.position
+            val visible = visibleKeys()
+            val armed = state.armedKey?.takeIf { it in visible && state.bounds[it]?.contains(at) == true }
+            if (armed == null && state.armedKey != null) state.arm(null)
+            if (armed == null) {
+                // Wait out the hold without taking anything, so taps and scrolls behave as always.
+                val early = withTimeoutOrNull(longPressMs() ?: ReorderDefaults.liftMs(viewConfiguration.longPressTimeoutMillis)) {
+                    var ended = false
+                    while (!ended) {
+                        val change = awaitPointerEvent(PointerEventPass.Initial).changes.firstOrNull { it.id == down.id }
+                        ended = change == null || !change.pressed || change.isConsumed || (change.position - down.position).getDistance() > slop
+                    }
+                    true
                 }
+                if (early != null) return@awaitEachGesture
+            }
+            val key = armed ?: if (requireHandle) {
+                state.handles.entries.firstOrNull { (k, r) -> k in visible && r.contains(at) }?.key
+            } else {
+                ReorderMath.hit(at, state.bounds.filterKeys { it in visible })
+            } ?: return@awaitEachGesture
+            state.lift(key, at)
+            if (state.heldKey == null) return@awaitEachGesture
+            onLift(key)
+            var cancelled = false
+            while (true) {
+                val change = awaitPointerEvent(PointerEventPass.Initial).changes.firstOrNull { it.id == down.id }
+                if (change == null) {
+                    cancelled = true
+                    break
+                }
+                change.consume()
+                if (!change.pressed) break
+                state.finger = state.container.topLeft + change.position
+                if (!state.moved && (state.finger - at).getDistance() > slop) state.markMoved()
+                if (state.moved && state.retarget(visibleKeys())) {
+                    keepScroll()
+                    onTarget()
+                }
+            }
+            val moved = state.moved
+            val to = state.target
+            state.release(keep = !cancelled)
+            when {
+                cancelled -> Unit
+                moved -> onDrop(key, to)
+                else -> onHoldReleased(key)
             }
         }
     }
+}
 
 /**
  * One item of a [dragReorder] list: reports where it is, and while held follows the finger above

@@ -54,6 +54,12 @@ internal class StoreContext(
 
     /** Latest saved settings; written only through [DefaultFuseStore]. */
     val settings = MutableStateFlow(initialSettings)
+
+    /**
+     * The user's order of systems as the preferences hold it, ahead of the database: a system moved
+     * by hand shows in its new place on the next frame, never after the write. Set by [DefaultFuseStore].
+     */
+    val systemOrder = MutableStateFlow(initialSettings.library.systemOrder)
     val installed = MutableStateFlow<List<InstalledEmulator>>(emptyList())
 
     fun now(): Long = Clock.System.now().toEpochMilliseconds()
