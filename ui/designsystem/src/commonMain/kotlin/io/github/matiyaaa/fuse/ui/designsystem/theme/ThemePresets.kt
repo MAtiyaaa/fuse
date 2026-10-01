@@ -391,6 +391,12 @@ object ThemePresets {
         Daylight, Channels, Opal, Noon, Ridge, Olive,
     )
 
+    /** The dark rooms, in gallery order, for a gallery that shows them as a group. */
+    val dark: List<ThemeSpec> = all.filter { it.palette.dark }
+
+    /** The bright themes, in gallery order. */
+    val bright: List<ThemeSpec> = all.filter { !it.palette.dark }
+
     fun byId(id: String?): ThemeSpec = all.firstOrNull { it.id == id } ?: Fuse
 
     /** The built-in theme with [id], or null. */

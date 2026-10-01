@@ -87,7 +87,8 @@ internal class PetalsScene(look: SceneLook) : Scene(look) {
         val d = density * fit
         drawRect(sky)
         stars.draw(this, t * 0.3f, k * 0.5f)
-        sun.draw(this, w * 0.72f, h * 1.05f, size.maxDimension * 0.58f, size.maxDimension * 0.24f, alpha = 0.62f * k)
+        // A wide, low glow reads as the horizon after sunset rather than a dome of light.
+        sun.draw(this, w * 0.66f, h * 1.08f, size.maxDimension * 0.85f, size.maxDimension * 0.25f, alpha = 0.6f * k)
         rose.draw(this, w * 0.12f, h * 1.1f, size.maxDimension * 0.42f, size.maxDimension * 0.26f, alpha = 0.2f * k)
         val m = 40f * d
         val spanW = w + 2 * m
@@ -135,6 +136,9 @@ internal class FirefliesScene(look: SceneLook) : Scene(look) {
     private val mid = Path()
     private val near = Path()
     private val floor = Path()
+    private val rims = Path()
+    private var rim = Stroke()
+    private var rimLight: Brush = canopy
 
     private val n = 36
     private val fx = FloatArray(n)
@@ -186,6 +190,26 @@ internal class FirefliesScene(look: SceneLook) : Scene(look) {
         }
         trunks(mid, MID, 0.9f)
         trunks(near, NEAR, 1.02f)
+        // Moonlight catches the right edge of the nearer trunks, strongest where the mist is.
+        rims.reset()
+        for (list in arrayOf(MID, NEAR)) {
+            for (i in list.indices step 2) {
+                val x = w * list[i]
+                val half = list[i + 1] * d / 2f
+                val inset = 1.2f * d
+                rims.moveTo(x + half * 0.82f - inset, 0f)
+                rims.lineTo(x + half - inset, h * 0.9f - half * 1.4f)
+            }
+        }
+        rim = Stroke(width = 1.4f * d, cap = StrokeCap.Round)
+        rimLight = Brush.verticalGradient(
+            0f to mistColor.copy(alpha = 0f),
+            0.45f to mistColor.copy(alpha = 0.05f * k.coerceAtMost(1f)),
+            0.85f to lerp(mistColor, Color.White, 0.3f).copy(alpha = 0.3f * k.coerceAtMost(1f)),
+            1f to mistColor.copy(alpha = 0f),
+            startY = 0f,
+            endY = h * 0.92f,
+        )
         // The forest floor: a low bank with fine grass and ferns along its edge.
         floor.reset()
         floor.moveTo(0f, h)
@@ -222,6 +246,7 @@ internal class FirefliesScene(look: SceneLook) : Scene(look) {
         drawPath(floor, nearTone)
         fireflies(t, near = true)
         drawPath(near, nearTone)
+        drawPath(rims, rimLight, style = rim)
     }
 
     private fun DrawScope.fireflies(t: Float, near: Boolean) {
@@ -508,7 +533,13 @@ internal class DunesScene(look: SceneLook) : Scene(look) {
                 val u1 = wrap(x / period + drift + layer * 0.37f, 1f)
                 val u2 = wrap(x / (period * 0.47f) + drift * 1.3f + layer * 0.61f, 1f)
                 ys[i] = base - amp * (0.78f * profile(u1) + 0.22f * profile(u2))
-                depth[i] = if (u1 >= WINDWARD) amp * 1.15f * smooth(WINDWARD, WINDWARD + 0.1f, u1) else 0f
+                // The shadow fills the slip face and, just past the crest, curves back up to it, so
+                // the ridge line runs down into the dune as it does when seen from a little above.
+                depth[i] = amp * 1.15f * when {
+                    u1 >= WINDWARD -> smooth(WINDWARD, WINDWARD + 0.1f, u1)
+                    u1 < RIDGE -> (1f - u1 / RIDGE).let { it * sqrt(it) }
+                    else -> 0f
+                }
             }
             val body = bodyPaths[layer]
             val shade = shadePaths[layer]
@@ -551,6 +582,8 @@ internal class DunesScene(look: SceneLook) : Scene(look) {
         const val STEPS = 120
         /** The share of each dune that is the long, sunlit face. */
         const val WINDWARD = 0.7f
+        /** How far past the crest, as a share of the dune, its shadow curves back up. */
+        const val RIDGE = 0.1f
         val BASE = floatArrayOf(0.6f, 0.68f, 0.79f, 0.92f)
         val AMP = floatArrayOf(0.035f, 0.05f, 0.07f, 0.09f)
         val PERIOD = floatArrayOf(0.5f, 0.68f, 0.9f, 1.3f)

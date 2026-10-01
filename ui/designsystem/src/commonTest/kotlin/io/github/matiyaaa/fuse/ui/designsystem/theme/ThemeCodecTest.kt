@@ -141,6 +141,7 @@ class ThemeCodecTest {
         val firstBright = all.indexOfFirst { !it.palette.dark }
         assertTrue(all.drop(firstBright).none { it.palette.dark }, "bright themes come after every dark one")
         assertTrue(all.count { !it.palette.dark } >= 4, "a real choice of bright themes")
+        assertEquals(all, ThemePresets.dark + ThemePresets.bright)
         // Ids people may have selected never change.
         for (id in listOf("fuse", "glass", "starlight", "crossbar", "orbital", "wave", "blades", "channels", "crt", "daylight")) {
             assertEquals(id, ThemePresets.find(id)?.id, id)
