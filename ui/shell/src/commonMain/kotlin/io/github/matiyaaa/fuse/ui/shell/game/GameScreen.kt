@@ -258,6 +258,8 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
                         Column {
                             SectionLabel(if (a.mastered) "Mastered" else "Achievements")
                             FText("${a.earned} of ${a.total}  ·  ${a.pointsEarned} pts", Fuse.type.bodyStrong)
+                            // Found by name: the set is right, but only the version RetroAchievements knows unlocks it.
+                            if (a.matchedByName) FText("Matched by name. Unlocks need a supported ROM version", Fuse.type.caption, color = c.textMuted, maxLines = 1)
                         }
                     }
                 }

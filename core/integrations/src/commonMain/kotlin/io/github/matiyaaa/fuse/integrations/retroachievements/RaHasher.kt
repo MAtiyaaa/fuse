@@ -29,16 +29,31 @@ enum class RaHashMethod {
 
     /** MD5 of the file name without its extension. */
     ARCADE_FILE_NAME,
+
+    /** Nintendo DS and DSi: the header, the ARM9 and ARM7 code and the icon and title block. */
+    NINTENDO_DS,
+
+    /** PlayStation: the boot executable named in SYSTEM.CNF (or PSX.EXE), with its name. */
+    PLAYSTATION,
+
+    /** PlayStation 2: the boot executable named in SYSTEM.CNF (BOOT2), with its name. */
+    PLAYSTATION_2,
+
+    /** PSP: PSP_GAME/PARAM.SFO followed by PSP_GAME/SYSDIR/EBOOT.BIN. */
+    PSP,
 }
 
 /** Why Fuse did not produce a hash. Never guess: an unsupported hash is reported, not faked. */
 enum class RaHashUnsupportedReason(val message: String) {
-    DISC_IMAGE("Disc images use rcheevos' per-system disc hashing, which Fuse does not implement yet"),
-    NINTENDO_DS("Nintendo DS/DSi hashing reads the cartridge header and file table; not implemented"),
+    DISC_IMAGE("This system's discs use rcheevos' per-system disc hashing, which Fuse does not implement yet"),
+    NINTENDO_DS("The file does not look like a Nintendo DS cartridge"),
     NINTENDO_3DS("Nintendo 3DS hashing needs decrypted content; not implemented"),
     UNKNOWN_CONSOLE("Fuse does not know how RetroAchievements hashes this console"),
     NOT_N64_ROM("The file does not start like a Nintendo 64 ROM (.z64/.v64/.n64/.ndd)"),
     EMPTY_FILE("The file is empty"),
+    NOT_A_DISC("The image has no readable ISO 9660 data track"),
+    NO_EXECUTABLE("The disc's boot executable could not be found"),
+    COMPRESSED("Compressed images (CHD, CSO, RVZ, PBP) cannot be hashed; Fuse matches them by name"),
 }
 
 /** Result of [RaHasher.hash]. */
@@ -51,8 +66,9 @@ sealed interface RaHashResult {
 }
 
 /**
- * RetroAchievements ROM hashing for the cartridge-based systems (the "simple cases" of rcheevos'
- * rc_hash, which is MIT licensed). Disc systems, NDS/DSi and 3DS are reported as unsupported.
+ * RetroAchievements ROM hashing, following rcheevos' rc_hash (MIT licensed): the cartridge systems
+ * (the "simple cases"), Nintendo DS and DSi, and the PlayStation, PlayStation 2 and PSP discs
+ * ([RaDisc]) from uncompressed images. Other disc systems and 3DS are reported as unsupported.
  *
  * Like rcheevos, at most the first [MAX_BUFFER_BYTES] of a file are read before header handling.
  */
@@ -78,9 +94,17 @@ object RaHasher {
         put(RaConsoleIds.LYNX, RaHashMethod.LYNX)
         put(RaConsoleIds.N64, RaHashMethod.N64)
         put(RaConsoleIds.ARCADE, RaHashMethod.ARCADE_FILE_NAME)
+        put(RaConsoleIds.NDS, RaHashMethod.NINTENDO_DS)
+        put(RaConsoleIds.DSI, RaHashMethod.NINTENDO_DS)
+        put(RaConsoleIds.PLAYSTATION, RaHashMethod.PLAYSTATION)
+        put(RaConsoleIds.PS2, RaHashMethod.PLAYSTATION_2)
+        put(RaConsoleIds.PSP, RaHashMethod.PSP)
     }
 
-    private val discConsoles = setOf(9, 12, 16, 19, 20, 21, 39, 40, 41, 42, 43, 49, 56, 76, 77, 82)
+    private val discConsoles = setOf(9, 16, 19, 20, 39, 40, 42, 43, 49, 56, 76, 77, 82)
+
+    /** Image formats that would have to be decompressed first; these games are matched by name. */
+    private val compressed = setOf("chd", "cso", "zso", "pbp", "rvz", "gcz", "wbfs", "wia", "7z", "rar", "ecm")
 
     /** The method for [consoleId], or null when Fuse cannot hash it (see [unsupportedReason]). */
     fun methodFor(consoleId: Int): RaHashMethod? = methods[consoleId]
@@ -89,18 +113,23 @@ object RaHasher {
     fun unsupportedReason(consoleId: Int): RaHashUnsupportedReason? = when {
         consoleId in methods -> null
         consoleId in discConsoles -> RaHashUnsupportedReason.DISC_IMAGE
-        consoleId == RaConsoleIds.NDS || consoleId == RaConsoleIds.DSI -> RaHashUnsupportedReason.NINTENDO_DS
         consoleId == RaConsoleIds.N3DS -> RaHashUnsupportedReason.NINTENDO_3DS
         else -> RaHashUnsupportedReason.UNKNOWN_CONSOLE
     }
 
+    /** True when a file with this name can't be hashed as it is (a compressed image or archive). */
+    fun isCompressed(fileName: String): Boolean =
+        fileName.substringAfterLast('/').substringAfterLast('\\').substringAfterLast('.', "").lowercase() in compressed
+
     /**
      * Hashes one ROM for [consoleId]. [fileName] is the file's name (a path is fine; only the last
-     * segment is used, and only for arcade). [source] may be null for arcade.
+     * segment is used, for arcade and to spot compressed images). [source] may be null for arcade;
+     * for a disc it is the data track (the .bin a .cue names, or the .iso).
      */
     suspend fun hash(consoleId: Int, fileName: String, source: ByteSource?): RaHashResult {
         val method = methodFor(consoleId) ?: return RaHashResult.Unsupported(unsupportedReason(consoleId)!!)
         if (method == RaHashMethod.ARCADE_FILE_NAME) return RaHashResult.Hashed(hashArcade(fileName), method)
+        if (isCompressed(fileName)) return RaHashResult.Unsupported(RaHashUnsupportedReason.COMPRESSED)
         val src = source ?: return RaHashResult.Unsupported(RaHashUnsupportedReason.EMPTY_FILE)
         return hash(method, src)
     }
@@ -108,6 +137,21 @@ object RaHasher {
     /** Hashes [source] with an explicit [method] (not for [RaHashMethod.ARCADE_FILE_NAME]). */
     suspend fun hash(method: RaHashMethod, source: ByteSource): RaHashResult {
         require(method != RaHashMethod.ARCADE_FILE_NAME) { "Arcade hashes the file name; use hashArcade()" }
+        when (method) {
+            RaHashMethod.NINTENDO_DS -> return hashNds(source)
+            RaHashMethod.PLAYSTATION, RaHashMethod.PLAYSTATION_2, RaHashMethod.PSP -> {
+                val md5 = when (method) {
+                    RaHashMethod.PLAYSTATION -> RaDisc.playStation(source)
+                    RaHashMethod.PLAYSTATION_2 -> RaDisc.playStation2(source)
+                    else -> RaDisc.psp(source)
+                }
+                return when (md5) {
+                    is RaDisc.Result.Hash -> RaHashResult.Hashed(md5.md5, method)
+                    is RaDisc.Result.Failed -> RaHashResult.Unsupported(md5.reason)
+                }
+            }
+            else -> Unit
+        }
         val end = minOf(source.size, MAX_BUFFER_BYTES)
         if (end <= 0) return RaHashResult.Unsupported(RaHashUnsupportedReason.EMPTY_FILE)
         val head = ByteArray(minOf(end, 16L).toInt())
@@ -120,7 +164,7 @@ object RaHasher {
             RaHashMethod.ATARI_7800 -> if (head.size >= 10 && head.copyOfRange(1, 10).contentEquals(ATARI7800_MAGIC)) 128 else 0
             RaHashMethod.LYNX -> if (head.startsWith(LYNX_MAGIC)) 64 else 0
             RaHashMethod.N64 -> 0
-            RaHashMethod.ARCADE_FILE_NAME -> error("unreachable")
+            else -> error("unreachable")
         }
         if (method == RaHashMethod.N64) return hashN64(source, head, end)
         return RaHashResult.Hashed(md5Range(source, start.coerceAtMost(end), end, swap = ByteOrder.NONE), method)
@@ -143,6 +187,45 @@ object RaHasher {
         }
         return RaHashResult.Hashed(md5Range(source, 0, end, order), RaHashMethod.N64)
     }
+
+    /**
+     * rcheevos' Nintendo DS hash: the first 0x160 bytes of the header, the ARM9 and ARM7 code, and
+     * the 0xA00-byte icon and title block (zero-filled when the file ends early). A SuperCard's
+     * 512-byte header in front is skipped.
+     */
+    private suspend fun hashNds(source: ByteSource): RaHashResult {
+        val header = ByteArray(512)
+        if (source.readFully(0, header) < header.size) return RaHashResult.Unsupported(RaHashUnsupportedReason.NINTENDO_DS)
+        var offset = 0L
+        val superCard = header[0] == 0x2E.toByte() && header[1] == 0.toByte() && header[2] == 0.toByte() && header[3] == 0xEA.toByte() &&
+            header[0xB0] == 0x44.toByte() && header[0xB1] == 0x46.toByte() && header[0xB2] == 0x96.toByte() && header[0xB3] == 0.toByte()
+        if (superCard) {
+            offset = 512
+            if (source.readFully(offset, header) < header.size) return RaHashResult.Unsupported(RaHashUnsupportedReason.NINTENDO_DS)
+        }
+        val arm9Addr = header.u32(0x20)
+        val arm9Size = header.u32(0x2C)
+        val arm7Addr = header.u32(0x30)
+        val arm7Size = header.u32(0x3C)
+        val iconAddr = header.u32(0x68)
+        // Code blocks are well under 1 MB each; anything bigger is not a DS cartridge.
+        if (arm9Size + arm7Size > NDS_CODE_LIMIT) return RaHashResult.Unsupported(RaHashUnsupportedReason.NINTENDO_DS)
+        val md5 = Md5()
+        md5.update(header, 0, 0x160)
+        for ((address, size) in listOf(arm9Addr to arm9Size, arm7Addr to arm7Size, iconAddr to NDS_ICON_SIZE)) {
+            val block = ByteArray(size.toInt())
+            source.readFully(address + offset, block)
+            md5.update(block, 0, block.size)
+        }
+        return RaHashResult.Hashed(md5.digestHex(), RaHashMethod.NINTENDO_DS)
+    }
+
+    private fun ByteArray.u32(at: Int): Long =
+        (this[at].toLong() and 0xFF) or ((this[at + 1].toLong() and 0xFF) shl 8) or
+            ((this[at + 2].toLong() and 0xFF) shl 16) or ((this[at + 3].toLong() and 0xFF) shl 24)
+
+    private const val NDS_CODE_LIMIT = 16L * 1024 * 1024
+    private const val NDS_ICON_SIZE = 0xA00L
 
     private enum class ByteOrder { NONE, SWAP_16, SWAP_32 }
 

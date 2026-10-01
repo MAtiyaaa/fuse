@@ -2,19 +2,21 @@ package io.github.matiyaaa.fuse.ui.shell.store.impl
 
 import io.github.matiyaaa.fuse.data.settings.SecretKeys
 import io.github.matiyaaa.fuse.integrations.ApiResult
+import io.github.matiyaaa.fuse.integrations.match.TitleNormalizer
 import io.github.matiyaaa.fuse.integrations.retroachievements.RaCachePolicy
 import io.github.matiyaaa.fuse.integrations.retroachievements.RaCompletionEntry
 import io.github.matiyaaa.fuse.integrations.retroachievements.RaCredentials
+import io.github.matiyaaa.fuse.integrations.retroachievements.RaDiscFiles
 import io.github.matiyaaa.fuse.integrations.retroachievements.RaGameListEntry
 import io.github.matiyaaa.fuse.integrations.retroachievements.RaGameMatcher
 import io.github.matiyaaa.fuse.integrations.retroachievements.RaHasher
 import io.github.matiyaaa.fuse.integrations.retroachievements.RaMedia
 import io.github.matiyaaa.fuse.integrations.retroachievements.RetroAchievementsClient
+import io.github.matiyaaa.fuse.library.parse.DisplayNameCleaner
 import io.github.matiyaaa.fuse.model.AchievementState
 import io.github.matiyaaa.fuse.model.AchievementUser
 import io.github.matiyaaa.fuse.model.Game
 import io.github.matiyaaa.fuse.model.GameId
-import io.github.matiyaaa.fuse.model.LocationKind
 import io.github.matiyaaa.fuse.model.RecentAchievement
 import io.github.matiyaaa.fuse.ui.shell.store.AchievementOps
 import io.github.matiyaaa.fuse.ui.shell.store.AchievementsFeed
@@ -116,21 +118,43 @@ internal class DefaultAchievementOps(
     private suspend fun forGame(game: Game): AchievementState? {
         val client = client() ?: return null
         val raId = game.links.retroAchievementsGameId ?: identify(client, game) ?: return null
-        return fetch("$KEY_GAME$raId", AchievementState.serializer(), RaCachePolicy.GAME_PROGRESS, force = false) {
+        val state = fetch("$KEY_GAME$raId", AchievementState.serializer(), RaCachePolicy.GAME_PROGRESS, force = false) {
             client.gameProgress(raId)
-        }
+        } ?: return null
+        val named = runCatching { cache.getOrNull(NS, "$KEY_NAMED${game.id.value}", now = 0L) }.getOrNull() != null
+        return if (named) state.copy(matchedByName = true) else state
     }
 
     /**
-     * Finds the RetroAchievements game by hashing the ROM the way rcheevos does, for the systems Fuse
-     * can hash. Disc systems and others are reported as unsupported by the hasher; nothing is guessed.
+     * Finds the RetroAchievements game for a game: by hashing its ROM the way rcheevos does (inside
+     * a .zip too, and the data track of a disc: a .cue's first file, an .m3u's first disc), else by
+     * its exact name on that console when the hash is unknown or the image can't be hashed (CHD,
+     * CSO and the like). A game that found nothing isn't looked for again for a day.
      */
     private suspend fun identify(client: RetroAchievementsClient, game: Game): Long? {
         val consoleId = ctx.platform(game.platformId)?.retroAchievementsConsoleId ?: return null
-        if (game.location.kind != LocationKind.FILE) return null
-        val path = game.location.launchPath
-        val source = openByteSource(path)
-        val hash = try {
+        val missKey = "$KEY_MISS${game.id.value}"
+        if (runCatching { cache.getOrNull(NS, missKey, ctx.now()) }.getOrNull() != null) return null
+        val hash = hashOf(consoleId, game)
+        val list = fetch("$KEY_LIST$consoleId", GameList, RaCachePolicy.GAME_LIST, force = false) {
+            client.gameList(consoleId, onlyWithAchievements = true, withHashes = true)
+        } ?: return null
+        val byHash = hash?.let { RaGameMatcher(list).gameIdFor(it) }
+        val raId = byHash ?: byName(list, game)
+        if (raId == null) {
+            cache.put(NS, missKey, "1", ctx.now(), MISS_TTL_MS)
+            return null
+        }
+        if (byHash == null) cache.put(NS, "$KEY_NAMED${game.id.value}", "1", ctx.now(), ttlMs = null)
+        ctx.data.games.updateLinks(game.id) { it.copy(retroAchievementsGameId = raId) }
+        return raId
+    }
+
+    /** The rcheevos hash of [game]'s ROM, or null when it can't be hashed. */
+    private suspend fun hashOf(consoleId: Int, game: Game): String? {
+        val path = RaDiscFiles.dataFile(game.location.launchPath) { ctx.services.fs.readText(it) }
+        val source = openZippedRom(path) ?: openByteSource(path)
+        return try {
             RaHasher.hash(consoleId, path, source).md5OrNull
         } catch (e: CancellationException) {
             throw e
@@ -138,13 +162,22 @@ internal class DefaultAchievementOps(
             null
         } finally {
             source?.close()
-        } ?: return null
-        val list = fetch("$KEY_LIST$consoleId", GameList, RaCachePolicy.GAME_LIST, force = false) {
-            client.gameList(consoleId, onlyWithAchievements = true, withHashes = true)
-        } ?: return null
-        val raId = RaGameMatcher(list).gameIdFor(hash) ?: return null
-        ctx.data.games.updateLinks(game.id) { it.copy(retroAchievementsGameId = raId) }
-        return raId
+        }
+    }
+
+    /**
+     * The game on RetroAchievements with this game's very name (ignoring case, punctuation, tags and
+     * a leading or trailing article). Hacks, homebrew, prototypes and subsets are never picked.
+     */
+    private fun byName(list: List<RaGameListEntry>, game: Game): Long? {
+        val names = listOfNotNull(game.titles.custom, game.titles.metadata, game.titles.cleaned, game.displayTitle, DisplayNameCleaner.clean(game.titles.original))
+            .map { TitleNormalizer.normalize(it) }.filter { it.isNotEmpty() }.toSet()
+        if (names.isEmpty()) return null
+        return list.firstOrNull { entry ->
+            val title = entry.title.trim()
+            !title.startsWith("~") && !title.contains("[Subset", ignoreCase = true) &&
+                title.split(" | ").any { TitleNormalizer.normalize(it) in names }
+        }?.id
     }
 
     override suspend fun connect(username: String, apiKey: String): Result<Unit> {
@@ -218,6 +251,11 @@ internal class DefaultAchievementOps(
         const val KEY_COMPLETION = "completion"
         const val KEY_GAME = "game:"
         const val KEY_LIST = "list:"
+        /** A game matched by its name rather than its ROM's hash. */
+        const val KEY_NAMED = "named:"
+        /** A game nothing was found for, so it isn't hashed again on every visit. */
+        const val KEY_MISS = "miss:"
+        const val MISS_TTL_MS = 24L * 60 * 60 * 1000
         const val RECENT_WINDOW_MINUTES = 60 * 24 * 14
         val RecentList = ListSerializer(RecentAchievement.serializer())
         val CompletionList = ListSerializer(RaCompletionEntry.serializer())
