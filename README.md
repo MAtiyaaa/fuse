@@ -29,7 +29,7 @@ Home screen.
 <a href="https://github.com/MAtiyaaa/fuse/releases/latest"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/brand/button-macos-dark.svg"><img src="docs/assets/brand/button-macos-light.svg" height="48" alt="Download for macOS"></picture></a>
 
 <sub>Android 9 or newer &nbsp;·&nbsp; 64-bit x86 Linux AppImage &nbsp;·&nbsp; Windows 10 and 11 &nbsp;·&nbsp; macOS on Apple silicon and Intel &nbsp;·&nbsp; <a href="#install">checksums and install notes</a></sub><br>
-<sub>0.1.3 is the Capture Update: screenshots and recordings of Fuse on Android, from the quick menu or L3 + R3. <a href="#where-fuse-stands">Here is where it stands.</a></sub><br>
+<sub>0.1.4 is the Gallery Update: download your screenshots and recordings from your phone, a bottom screen that stays while you play, and systems that stay where you drop them. <a href="#where-fuse-stands">Here is where it stands.</a></sub><br>
 <sub>Or download from <a href="https://matiyaaa.github.io/fuse/">Fuse's website</a>, which always offers the latest version for your system.</sub>
 
 <br>
@@ -169,7 +169,7 @@ Play.
     <td width="33%" valign="top">
       <img src="docs/assets/icons/second-screen.svg" width="44" height="44" alt=""><br>
       <b>A second screen that helps</b><br>
-      <sub>On two-screen devices (Android 10 and later) the companion shows the focused game or system, or the game you are playing and its session time.</sub>
+      <sub>On two-screen devices (Android 10 and later) the companion shows the focused game or system, or the game you are playing and its session time, and stays beside games and apps you open.</sub>
     </td>
   </tr>
   <tr>
@@ -366,9 +366,10 @@ Linux app, isn't offered on Windows and macOS.
 ## Where Fuse stands
 
 > [!IMPORTANT]
-> **Fuse 0.1.3 "The Capture Update" is still early.** It takes screenshots and recordings of Fuse on
-> Android, from the quick menu or with L3 + R3 (see [the release notes](docs/releases/0.1.3.md));
-> 0.1.2 brought moving things by touch, Fuse's own look, community themes and a website, 0.1.1
+> **Fuse 0.1.4 "The Gallery Update" is still early.** It lets you download your screenshots and
+> recordings from your phone, keeps the bottom screen beside your games, and fixes systems that
+> moved back after a drag (see [the release notes](docs/releases/0.1.4.md)); 0.1.3 brought
+> screenshots and recordings, 0.1.2 moving things by touch, Fuse's own look, community themes and a website, 0.1.1
 > redesigned the bottom screen of dual-screen handhelds, and 0.1.0 brought Fuse to Windows and macOS. The
 > shared core (library scanning, launch resolution, integrations and the database) and the interface
 > are in place and tested where it matters. The Android app builds and passes its unit tests and lint, and has been tried on one
