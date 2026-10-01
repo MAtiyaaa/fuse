@@ -242,9 +242,10 @@ yourself is never replaced** except by the explicit "reset custom art" action.
 
 ## RomM via Cartridge
 
-Fuse has no RomM client and never talks to a RomM server. [Cartridge](https://github.com/MAtiyaaa/cartridge)
-(a RomM companion app by abdu2304, MIT licensed) signs in to RomM, downloads games into local folders
-and owns the RomM credentials. Fuse then:
+Fuse has no RomM client and never talks to a RomM server. [Cartridge](https://github.com/abdu2304/cartridge)
+(a RomM companion app by abdu2304, MIT licensed; Fuse installs it from the
+[MAtiyaaa/cartridge](https://github.com/MAtiyaaa/cartridge) fork until Fuse's bridge is merged
+upstream) signs in to RomM, downloads games into local folders and owns the RomM credentials. Fuse then:
 
 - scans the folders Cartridge downloads into like any other library (RomM Structure A and B are both
   understood, see [ARCHITECTURE.md](ARCHITECTURE.md#scanning-pipeline));

@@ -60,6 +60,10 @@ private val docs = listOf(
     LicenceDoc("LICENSE-slf4j.txt", "SLF4J", "MIT License: the logging interface Phone Link's web server (Ktor) is built on"),
     LicenceDoc("LGPL-2.1.txt", "JLayer", "GNU Lesser General Public License 2.1 or later: the MP3 decoder for menu music in the Linux app"),
     LicenceDoc(
+        "LICENSE-cartridge.txt", "Cartridge",
+        "MIT License: Cartridge by abdu2304 (github.com/abdu2304/cartridge), the RomM companion Fuse pairs with, and the emulator family matching Fuse learned from it",
+    ),
+    LicenceDoc(
         "music", "Music", "jam channel by ${BundledMusic.ARTIST}. The songs Fuse plays under its menus",
         inline = "${BundledMusic.CREDIT}.\n\n" +
             "Fuse plays these songs under its menus: puddleworld by default and alright apothecary during " +

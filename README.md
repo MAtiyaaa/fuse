@@ -390,9 +390,9 @@ automatically.
 
 ## RomM through Cartridge
 
-Fuse does not talk to RomM servers. [Cartridge](https://github.com/MAtiyaaa/cartridge), a RomM
-companion app, signs in to your RomM server, keeps the credentials, and downloads games into folders
-on your device. Fuse scans those folders like any other and reads Cartridge's local status to show
+Fuse does not talk to RomM servers. [Cartridge](https://github.com/abdu2304/cartridge) by
+[abdu2304](https://github.com/abdu2304), a RomM companion app, signs in to your RomM server, keeps
+the credentials, and downloads games into folders on your device. Fuse scans those folders like any other and reads Cartridge's local status to show
 what it is doing.
 
 ```mermaid
@@ -474,8 +474,11 @@ Third-party components keep their own licences; see [THIRD_PARTY_NOTICES.md](THI
 - [ES-DE](https://es-de.org/), whose MIT-licensed emulator configuration is the best public record of
   how emulators accept games.
 - [RomM](https://github.com/rommapp/romm), whose folder conventions and platform names Fuse follows.
-- [Cartridge](https://github.com/abdu2304/cartridge) by abdu2304, the RomM companion Fuse pairs with
-  (Fuse installs it from the [MAtiyaaa/cartridge](https://github.com/MAtiyaaa/cartridge) releases).
+- **[Cartridge](https://github.com/abdu2304/cartridge) by [abdu2304](https://github.com/abdu2304)**
+  (MIT), the RomM companion Fuse pairs with, and where Fuse learned to match emulator forks by name.
+  Fuse's bridge (live downloads, deep links and uploads) is being contributed to Cartridge; until
+  it is merged there, Fuse installs Cartridge from the [MAtiyaaa/cartridge](https://github.com/MAtiyaaa/cartridge)
+  fork, and will switch to abdu2304's releases once it is.
 - [rcheevos](https://github.com/RetroAchievements/rcheevos) and
   [RetroAchievements](https://retroachievements.org/).
 - **Music by boipurple.** Fuse's menu music is the album *jam channel* by boipurple: puddleworld

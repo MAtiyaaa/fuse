@@ -874,6 +874,12 @@ fun aboutRows(app: AppState): List<MenuAction> = listOfNotNull(
     infoRow("fuse", "Fuse ${app.store.updates.currentVersion}", detail = "A console-style home for your games. Free and open source (GPL-3.0-or-later)", icon = FuseIcons.Info),
     MenuAction("source", "Source code", FuseIcons.External, detail = "github.com/MAtiyaaa/fuse", onSelect = { app.platform.openUrl("https://github.com/MAtiyaaa/fuse") }),
     MenuAction("licences", "Open-source licences", FuseIcons.File, detail = "Fuse, its libraries, fonts and icons", trailing = Trailing.Chevron, onSelect = { app.go(Route.Licenses) }),
+    MenuAction(
+        "cartridge.credit", "Cartridge by abdu2304", FuseIcons.CloudDownload,
+        detail = "The RomM companion Fuse pairs with. github.com/abdu2304/cartridge",
+        trailing = Trailing.Chevron,
+        onSelect = { app.platform.openUrl("https://github.com/abdu2304/cartridge") },
+    ),
     MenuAction("setup", "Run setup again", FuseIcons.Sparkles, trailing = Trailing.Chevron, onSelect = { app.go(Route.Onboarding) }),
     infoRow("credits", "Made with", detail = "Kotlin, Compose Multiplatform, SQLDelight, Ktor, Coil. Icons: Lucide (ISC). Fonts: Sora and Manrope (SIL OFL). Emulator launch data: ES-DE (MIT) and Cartridge (MIT). Hashing rules: rcheevos (MIT)", icon = FuseIcons.Blocks),
     infoRow("trademarks", "Trademarks", detail = "Console and game names belong to their owners. Fuse ships no console artwork, sounds, BIOS or games", icon = FuseIcons.Tag),
