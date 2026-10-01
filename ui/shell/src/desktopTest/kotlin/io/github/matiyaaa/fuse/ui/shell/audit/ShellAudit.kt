@@ -11,7 +11,9 @@ import io.github.matiyaaa.fuse.model.ScanPhase
 import io.github.matiyaaa.fuse.ui.designsystem.input.InputSource
 import io.github.matiyaaa.fuse.ui.designsystem.input.NavResult
 import io.github.matiyaaa.fuse.ui.designsystem.theme.ThemePresets
+import io.github.matiyaaa.fuse.ui.shell.app.CompanionControls
 import io.github.matiyaaa.fuse.ui.shell.app.CompanionPage
+import io.github.matiyaaa.fuse.ui.shell.app.VolumeTarget
 import io.github.matiyaaa.fuse.ui.shell.app.Spotlight
 import io.github.matiyaaa.fuse.ui.shell.screenshots.ScreenshotPlatform
 import io.github.matiyaaa.fuse.ui.shell.settings.settingsSections
@@ -612,6 +614,76 @@ internal fun AuditDriver.companionScreens() {
         shoot("page 3, controls", 1_500)
         CompanionPage.current.value = 0
         Spotlight.set(null)
+    }
+
+    scenario("companion", "achievements and battery") {
+        val store = libraryStore
+        val velvet = runBlocking { store.library.games(GameQuery()).first().first { it.title == "Velvet Orbit" } }
+        // A RetroAchievements set for the game, as Fuse caches it (the audit has no network).
+        val achievements = (1..12).map { i ->
+            io.github.matiyaaa.fuse.model.Achievement(
+                id = 9_000L + i, gameId = 9_001L, title = listOf("First Light", "Orbit Keeper", "Velvet Touch", "Long Way Round", "Gravity Well", "No Fuel Left", "Night Run", "Star Chart", "Perfect Drift", "Event Horizon", "Last Signal", "Home Again")[i - 1],
+                description = "Finish chapter $i without losing a ship",
+                points = listOf(5, 10, 10, 25, 5, 10, 25, 50, 10, 25, 10, 50)[i - 1],
+                badgeUrl = "", badgeLockedUrl = "",
+                earnedAt = if (i <= 7) 1_700_000_000_000L + i * 86_400_000L else null,
+                earnedHardcoreAt = null,
+                displayOrder = i,
+            )
+        }
+        val state = io.github.matiyaaa.fuse.model.AchievementState(
+            raGameId = 9_001L, title = "Velvet Orbit", consoleName = "Dreamcast", iconUrl = null,
+            total = 12, earned = 7, earnedHardcore = 0, points = 235, pointsEarned = 90, highestAward = null,
+            achievements = achievements, fetchedAt = Clock.System.now().toEpochMilliseconds(),
+        )
+        val logo = java.io.File(cache, "companion-logo.png").also { AuditSystemArt.logo(it, "Velvet Orbit") }
+        val owner = io.github.matiyaaa.fuse.model.MediaOwner.OfGame(velvet.id)
+        runBlocking {
+            libraryData.cache.put("retroachievements", "game:9001", state, io.github.matiyaaa.fuse.model.AchievementState.serializer(), 0L, null)
+            libraryData.games.updateLinks(velvet.id) { it.copy(retroAchievementsGameId = 9_001L) }
+            store.media.setFromFile(owner, io.github.matiyaaa.fuse.model.MediaKind.LOGO, logo.absolutePath)
+        }
+        val audit = platform as AuditPlatform
+        val battery = audit.statusFlow.value
+        try {
+            CompanionPage.current.value = 0
+            view = AuditView.Companion(store, platform, DualScreenMode.LIBRARY_COMPANION)
+            settle(1_200)
+            Spotlight.set(velvet.id)
+            waitFor("7 of 12")
+            shoot("a game with achievements", 2_000)
+            val bar = textCentre("7 of 12")
+            touch {
+                down(bar)
+                up()
+            }
+            waitFor("Night Run")
+            shoot("the achievements list", 1_200)
+            Spotlight.set(null)
+            settle(800)
+            CompanionPage.current.value = 1
+            audit.statusFlow.value = battery.copy(batteryPercent = 64, charging = true, batteryMinutes = 52)
+            shoot("status, charging", 1_500)
+            audit.statusFlow.value = battery.copy(batteryPercent = 100, charging = true, batteryFull = true, batteryMinutes = null)
+            shoot("status, charged", 1_500)
+            audit.statusFlow.value = battery.copy(batteryPercent = 9, charging = false, batteryMinutes = 24)
+            shoot("status, low", 1_500)
+            audit.statusFlow.value = battery.copy(batteryMinutes = null)
+            shoot("status, no estimate yet", 1_500)
+            audit.statusFlow.value = battery
+            CompanionPage.current.value = 2
+            CompanionControls.volume = VolumeTarget.MUSIC
+            shoot("controls, menu music volume", 1_500)
+            CompanionControls.volume = VolumeTarget.DEVICE
+            CompanionPage.current.value = 0
+        } finally {
+            audit.statusFlow.value = battery
+            CompanionControls.screenOff = false
+            runBlocking {
+                store.media.reset(owner, io.github.matiyaaa.fuse.model.MediaKind.LOGO)
+                libraryData.games.updateLinks(velvet.id) { it.copy(retroAchievementsGameId = null) }
+            }
+        }
     }
 
     scenario("companion", "now playing") {

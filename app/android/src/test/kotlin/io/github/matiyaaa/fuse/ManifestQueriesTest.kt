@@ -81,6 +81,27 @@ class ManifestQueriesTest {
     fun homeAliasStartsDisabled() {
         val alias = manifest().children("activity-alias").single { it.getAttributeNS(androidNs, "name") == ".HomeAlias" }
         assertEquals("false", alias.getAttributeNS(androidNs, "enabled"))
-        assertEquals(".MainActivity", alias.getAttributeNS(androidNs, "targetActivity"))
+        assertEquals(".HomeActivity", alias.getAttributeNS(androidNs, "targetActivity"))
+    }
+
+    @Test
+    fun homeIsAPrivateHandOverSoFuseShowsInRecents() {
+        val activities = manifest().children("activity")
+        val home = activities.single { it.getAttributeNS(androidNs, "name") == ".HomeActivity" }
+        assertEquals("false", home.getAttributeNS(androidNs, "exported"))
+        assertEquals("true", home.getAttributeNS(androidNs, "excludeFromRecents"))
+        // An alias must come after the activity it targets.
+        val names = manifest().getElementsByTagName("*").let { nodes -> (0 until nodes.length).map { nodes.item(it) as Element } }
+            .map { it.getAttributeNS(androidNs, "name") }
+        assertTrue(names.indexOf(".HomeActivity") < names.indexOf(".HomeAlias"))
+        // MainActivity stays a normal task: never excluded from recents.
+        val main = activities.single { it.getAttributeNS(androidNs, "name") == ".MainActivity" }
+        assertEquals("", main.getAttributeNS(androidNs, "excludeFromRecents"))
+    }
+
+    @Test
+    fun updatesAreHeardPrivately() {
+        val receiver = manifest().children("receiver").single { it.getAttributeNS(androidNs, "name") == ".services.UpdatedReceiver" }
+        assertEquals("false", receiver.getAttributeNS(androidNs, "exported"))
     }
 }

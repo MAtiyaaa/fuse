@@ -147,6 +147,7 @@ internal object ScreenshotPlatform : PlatformUi {
         SystemStatus(
             batteryPercent = 78,
             charging = false,
+            batteryMinutes = 200,
             wifi = ConnectionState.CONNECTED,
             wifiStrength = 3,
             bluetooth = ConnectionState.ON,

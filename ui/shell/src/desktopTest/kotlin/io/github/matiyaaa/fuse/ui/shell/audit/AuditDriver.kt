@@ -19,6 +19,7 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.printToString
 import io.github.matiyaaa.fuse.data.FuseData
 import io.github.matiyaaa.fuse.model.Destination
@@ -392,6 +393,31 @@ internal class AuditDriver(
     }
 
     // ------------------------------------------------------------------------------------ shots
+
+    /** The centre of the lowest on-screen [text] (a tile's label rather than a header above it). */
+    fun textCentre(text: String): androidx.compose.ui.geometry.Offset {
+        val nodes = ui.onAllNodesWithText(text, useUnmergedTree = true).fetchSemanticsNodes()
+        check(nodes.isNotEmpty()) { "\"$text\" is not on screen" }
+        return nodes.maxBy { it.boundsInRoot.top }.boundsInRoot.center
+    }
+
+    /**
+     * Advances the app's clock by exactly [ms] in frames, however slowly they render: for holds,
+     * which [settle] (real time) can undercount when frames are slow.
+     */
+    fun advanceExactly(ms: Long) {
+        var left = ms
+        while (left > 0) {
+            val step = minOf(FRAME_MS, left)
+            ui.mainClock.advanceTimeBy(step)
+            left -= step
+        }
+    }
+
+    /** Touch input on the whole window, in window pixels. A finger stays down between calls. */
+    fun touch(block: androidx.compose.ui.test.TouchInjectionScope.() -> Unit) {
+        ui.onRoot().performTouchInput(block)
+    }
 
     /** Settles, then writes the current frame as `<dir>/<size>/<group>/<screen>--<state>.png`. */
     fun shoot(state: String, settleMs: Long = SETTLE_MS) {

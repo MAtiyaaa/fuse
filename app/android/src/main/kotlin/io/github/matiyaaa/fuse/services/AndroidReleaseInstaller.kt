@@ -84,12 +84,15 @@ class AndroidReleaseInstaller(
             return Result.failure(InstallException("Allow Fuse to install apps in the screen that just opened, then choose Restart and update again."))
         }
         return try {
-            withContext(Dispatchers.IO) { commit(file, keep = true) }
-            // Android asks to confirm, installs, and starts Fuse again (as the Home app, at once).
+            // Android asks to confirm and installs; Fuse then opens itself again (UpdateRelaunch).
+            UpdateRelaunch.arm(appContext)
+            withContext(Dispatchers.IO) { commit(file, keep = true, selfUpdate = true) }
             Result.success(false)
         } catch (e: RuntimeException) {
+            UpdateRelaunch.disarm(appContext)
             Result.failure(InstallException("Android couldn't start the installation."))
         } catch (e: IOException) {
+            UpdateRelaunch.disarm(appContext)
             Result.failure(InstallException("Android couldn't start the installation."))
         }
     }
@@ -202,7 +205,7 @@ class AndroidReleaseInstaller(
         return digest.digest().toHex()
     }
 
-    private fun commit(file: File, keep: Boolean = false) {
+    private fun commit(file: File, keep: Boolean = false, selfUpdate: Boolean = false) {
         val installer = appContext.packageManager.packageInstaller
         val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL).apply {
             setSize(file.length())
@@ -219,6 +222,7 @@ class AndroidReleaseInstaller(
                     session.fsync(out)
                 }
                 val callback = Intent(appContext, InstallResultReceiver::class.java).setPackage(appContext.packageName)
+                    .putExtra(InstallResultReceiver.EXTRA_SELF_UPDATE, selfUpdate)
                 val flags = PendingIntent.FLAG_UPDATE_CURRENT or
                     (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) PendingIntent.FLAG_MUTABLE else 0)
                 val pending = PendingIntent.getBroadcast(appContext, sessionId, callback, flags)

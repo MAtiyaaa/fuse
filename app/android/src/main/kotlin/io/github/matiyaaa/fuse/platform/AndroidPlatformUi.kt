@@ -40,7 +40,7 @@ class AndroidPlatformUi(
 ) : PlatformUi {
     private val appContext = context.applicationContext
 
-    private val statusMonitor = SystemStatusMonitor(appContext).also { it.start() }
+    private val statusMonitor = SystemStatusMonitor(appContext, scope).also { it.start() }
     val displayMonitor = DisplayMonitor(appContext)
     private val performanceMonitor = PerformanceMonitor(appContext, activities, statusMonitor, scope)
 

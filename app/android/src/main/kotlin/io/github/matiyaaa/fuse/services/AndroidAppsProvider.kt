@@ -15,7 +15,6 @@ import android.provider.Settings
 import android.view.Display
 import androidx.core.net.toUri
 import io.github.matiyaaa.fuse.ActivityHolder
-import io.github.matiyaaa.fuse.RecentsCard
 import io.github.matiyaaa.fuse.model.AppEntry
 import io.github.matiyaaa.fuse.ui.shell.store.ApkInstall
 import io.github.matiyaaa.fuse.ui.shell.store.AppIconModel
@@ -133,10 +132,7 @@ class AndroidAppsProvider(
         }
     }
 
-    /**
-     * Opens [component] like a launcher does. From Fuse's window, while Fuse is the Home app, Fuse's
-     * card in recent apps goes right behind it ([RecentsCard]).
-     */
+    /** Opens [component] like a launcher does, from Fuse's window when it has one. */
     private fun start(apps: LauncherApps, component: ComponentName, displayId: Int?) {
         val activity = activities.current
         if (activity == null) {
@@ -145,7 +141,7 @@ class AndroidAppsProvider(
         }
         val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER).setComponent(component)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)
-        RecentsCard.start(activity, intent, options(displayId).toBundle(), displayId)
+        activity.startActivity(intent, options(displayId).toBundle())
     }
 
     private fun options(displayId: Int?): ActivityOptions {

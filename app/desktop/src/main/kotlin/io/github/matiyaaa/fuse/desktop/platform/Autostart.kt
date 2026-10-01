@@ -101,10 +101,14 @@ object Autostart {
         )
     }
 
-    /** The Fuse.app bundle around the launcher at `Fuse.app/Contents/MacOS/Fuse`. */
+    /**
+     * The Fuse.app bundle around the launcher at `Fuse.app/Contents/MacOS/Fuse`. Read from the path
+     * itself, so it gives a macOS path on any system (the tests run on Windows too).
+     */
     internal fun macApp(launcher: String): String? {
-        val app = File(launcher).absoluteFile.parentFile?.parentFile?.parentFile ?: return null
-        return app.path.takeIf { it.endsWith(".app") }
+        val parts = launcher.trimEnd('/').split('/')
+        if (parts.size < 4 || parts[parts.size - 3] != "Contents" || parts[parts.size - 2] != "MacOS") return null
+        return parts.dropLast(3).joinToString("/").takeIf { it.endsWith(".app") }
     }
 
     /** A LaunchAgent that opens [app] at login (`open -a`, so macOS starts it like a click would). */

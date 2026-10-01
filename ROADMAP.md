@@ -127,6 +127,8 @@ yet tried by hand on a PC or a Mac.
 - [x] New games identified and filled the moment they arrive, and art by name without identifying (0.1.0)
 - [x] A background for every game, never the previous game's (0.1.0)
 - [x] RetroAchievements hashing for Nintendo DS, PlayStation, PlayStation 2 and PSP, zipped ROMs, and a match by name (0.1.0)
+- [x] A redesigned bottom screen with achievements, battery time, status rings and control tiles (0.1.1)
+- [x] Moving systems by touch, and Fuse in recent apps as a normal task (0.1.1)
 - [ ] SAF-only storage mode that works without All files access (emulators that need FileProvider URIs would then be limited)
 - [ ] R8 minification and resource shrinking for release APKs
 - [ ] Screenshot tests for the design system and main screens

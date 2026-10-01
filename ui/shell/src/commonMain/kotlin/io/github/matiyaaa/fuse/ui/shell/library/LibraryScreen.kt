@@ -33,6 +33,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.collectAsState
@@ -102,6 +103,7 @@ import io.github.matiyaaa.fuse.ui.shell.collections.addGamesPicker
 import io.github.matiyaaa.fuse.ui.shell.components.GameCoverTile
 import io.github.matiyaaa.fuse.ui.shell.components.GameIconTile
 import io.github.matiyaaa.fuse.ui.shell.components.LocalTileMetrics
+import io.github.matiyaaa.fuse.ui.shell.components.LocalTileShowsSystem
 import io.github.matiyaaa.fuse.ui.shell.components.SquareGameArt
 import io.github.matiyaaa.fuse.ui.shell.components.Stage
 import io.github.matiyaaa.fuse.ui.shell.components.playtimeText
@@ -398,6 +400,9 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
             }
         }
         val compactHeader = maxH < 560.dp
+        // Inside a system, saying which system each game is for says nothing.
+        val inSystem = systemCard != null
+        fun stageOf(card: GameCard?) = card?.stage()?.let { if (inSystem) it.copy(eyebrow = null) else it }
         // A system's page folds its header away once you are past the first row, so more games fit.
         val folded = when {
             systemCard == null || list.isNullOrEmpty() || layout == LibraryLayout.CAPSULE -> false
@@ -418,7 +423,7 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
             }
         }
         Column(Modifier.fillMaxSize()) {
-            Spacer(Modifier.height(Size.hudHeight + if (systemCard != null) lerp(if (compactHeader) Space.s else Space.xl, Space.xs, collapse) else 0.dp))
+            Spacer(Modifier.height(Size.hudHeight + if (systemCard != null) lerp(if (compactHeader) Space.xs else Space.m, Space.xxs, collapse) else 0.dp))
             LibraryHeader(
                 app = app,
                 scope = scope,
@@ -437,21 +442,28 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
             when {
                 list == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Spinner() }
                 list.isEmpty() -> LibraryEmpty(scope, segment)
-                else -> when (layout) {
+                else -> CompositionLocalProvider(LocalTileShowsSystem provides !inSystem) {
+                  when (layout) {
                     LibraryLayout.ICON -> {
                         // The game's logo moves up with the folding header and makes room for another row.
-                        val stage = (maxH * 0.22f).coerceIn(110.dp, 200.dp)
-                        Box(Modifier.fillMaxWidth().height(lerp(stage, stage * 0.66f, collapse)).padding(horizontal = Space.gutter), contentAlignment = Alignment.BottomStart) {
-                            Stage(selectedCard?.stage(), showLogo = prefs.showLogo, logoHeight = lerp(84.dp, 60.dp, collapse))
+                        // Inside a system the stage is smaller, so more games fit from the start.
+                        val stage = if (inSystem) (maxH * 0.14f).coerceIn(92.dp, 124.dp) else (maxH * 0.22f).coerceIn(110.dp, 200.dp)
+                        val logo = when {
+                            !inSystem -> lerp(84.dp, 60.dp, collapse)
+                            compactHeader -> lerp(56.dp, 36.dp, collapse)
+                            else -> lerp(64.dp, 48.dp, collapse)
                         }
-                        Spacer(Modifier.height(lerp(Space.l, Space.s, collapse)))
+                        Box(Modifier.fillMaxWidth().height(lerp(stage, stage * 0.66f, collapse)).padding(horizontal = Space.gutter), contentAlignment = Alignment.BottomStart) {
+                            Stage(stageOf(selectedCard), showLogo = prefs.showLogo, logoHeight = logo, titleStyle = if (inSystem) Fuse.type.display else Fuse.type.hero)
+                        }
+                        Spacer(Modifier.height(if (inSystem) lerp(Space.m, Space.s, collapse) else lerp(Space.l, Space.s, collapse)))
                         val cols = ((maxW - Space.gutter * 2 + metrics.gap) / (metrics.icon + metrics.gap)).toInt().coerceAtLeast(2)
                         columns = cols
                         IconGrid(list, state, gridState, cols, metrics.icon, metrics.gap, onTap = { i -> tapAt(i, list) }, onLong = { i -> state.pick(i, list); options(list[i]) }, focused = gridFocused)
                     }
                     LibraryLayout.CAPSULE -> {
                         Box(Modifier.fillMaxWidth().weight(1f).padding(horizontal = Space.gutter), contentAlignment = Alignment.BottomStart) {
-                            Stage(selectedCard?.stage(), showLogo = prefs.showLogo, logoHeight = 128.dp)
+                            Stage(stageOf(selectedCard), showLogo = prefs.showLogo, logoHeight = 128.dp)
                         }
                         Spacer(Modifier.height(Space.xl))
                         CoverCarousel(
@@ -474,6 +486,7 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
                         columns = 1
                         CompactList(list, state, listState, onTap = { i -> tapAt(i, list) }, onLong = { i -> state.pick(i, list); options(list[i]) }, focused = gridFocused)
                     }
+                  }
                 }
             }
         }
@@ -623,7 +636,7 @@ private fun CoverGrid(
             FText(selected?.title ?: "", Fuse.type.title, maxLines = 1, modifier = Modifier.weight(1f, fill = false))
             if (selected != null) {
                 Spacer(Modifier.width(Space.m))
-                FText(listOfNotNull(selected.platformShort, selected.year?.toString(), selected.playSeconds.takeIf { it > 0 }?.let(::playtimeText)).joinToString("  ·  "), Fuse.type.label, color = Fuse.colors.textMuted, maxLines = 1)
+                FText(listOfNotNull(selected.platformShort.takeIf { LocalTileShowsSystem.current }, selected.year?.toString(), selected.playSeconds.takeIf { it > 0 }?.let(::playtimeText)).joinToString("  ·  "), Fuse.type.label, color = Fuse.colors.textMuted, maxLines = 1)
             }
         }
         LazyVerticalGrid(
@@ -684,7 +697,7 @@ private fun CompactList(
                     FText(card.title, if (sel) Fuse.type.bodyStrong else Fuse.type.body, color = if (card.missing) c.textFaint else c.text, maxLines = 1, modifier = Modifier.weight(1f))
                     if (card.favorite) FuseIcon(FuseIcons.Heart, size = 14.dp, tint = c.textMuted)
                     Spacer(Modifier.width(Space.m))
-                    FText(card.platformShort, Fuse.type.caption, color = c.textMuted, maxLines = 1)
+                    if (LocalTileShowsSystem.current) FText(card.platformShort, Fuse.type.caption, color = c.textMuted, maxLines = 1)
                     Spacer(Modifier.width(Space.m))
                     FText(if (card.playSeconds > 0) playtimeText(card.playSeconds) else "", Fuse.type.caption, color = c.textFaint, maxLines = 1, modifier = Modifier.width(72.dp))
                 }
@@ -697,11 +710,11 @@ private fun CompactList(
                     Artwork(
                         selected.art.boxart ?: selected.art.grid ?: selected.art.square ?: selected.art.icon,
                         Modifier.fillMaxSize(),
-                        fallback = { GeneratedArt(selected.title, selected.accent.toColor(), slot = ArtSlot.BOX, label = selected.platformShort) },
+                        fallback = { GeneratedArt(selected.title, selected.accent.toColor(), slot = ArtSlot.BOX, label = selected.platformShort.takeIf { LocalTileShowsSystem.current }) },
                     )
                 }
                 Spacer(Modifier.height(Space.l))
-                Stage(selected.stage(), logoHeight = 64.dp)
+                Stage(selected.stage().let { if (LocalTileShowsSystem.current) it else it.copy(eyebrow = null) }, logoHeight = 64.dp)
             }
         }
     }

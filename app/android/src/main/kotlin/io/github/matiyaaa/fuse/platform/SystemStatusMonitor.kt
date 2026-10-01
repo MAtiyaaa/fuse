@@ -13,22 +13,33 @@ import android.net.NetworkRequest
 import android.net.wifi.WifiManager
 import android.os.BatteryManager
 import android.os.Build
+import android.os.PowerManager
+import android.os.SystemClock
 import androidx.core.content.ContextCompat
 import io.github.matiyaaa.fuse.model.ConnectionState
 import io.github.matiyaaa.fuse.model.SystemStatus
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 
 /**
  * Battery, Wi-Fi, network and Bluetooth state for the status area, from system broadcasts and
- * network callbacks (no polling). Anything Android does not report to Fuse stays UNKNOWN or null.
+ * network callbacks. Anything Android does not report to Fuse stays UNKNOWN or null. The battery's
+ * time left ([BatteryEstimator]) also reads the battery's current every 30 seconds while something
+ * on screen shows it.
  * Bluetooth reports only on/off: which devices are connected needs BLUETOOTH_CONNECT, which Fuse
  * does not request.
  */
-class SystemStatusMonitor(context: Context) {
+class SystemStatusMonitor(context: Context, private val scope: CoroutineScope) {
     private val appContext = context.applicationContext
+    private val batteryManager = appContext.getSystemService(BatteryManager::class.java)
+    private val power = appContext.getSystemService(PowerManager::class.java)
+    private val estimator = BatteryEstimator()
     private val connectivity = appContext.getSystemService(ConnectivityManager::class.java)
     private val wifiManager = appContext.getSystemService(WifiManager::class.java)
     private val bluetooth: BluetoothAdapter? = appContext.getSystemService(BluetoothManager::class.java)?.adapter
@@ -46,6 +57,7 @@ class SystemStatusMonitor(context: Context) {
     fun start() {
         if (started) return
         started = true
+        registerScreen()
         registerBattery()
         registerWifi()
         registerDefaultNetwork()
@@ -73,7 +85,84 @@ class SystemStatusMonitor(context: Context) {
         val percent = if (present && level >= 0 && scale > 0) (level * 100 / scale).coerceIn(0, 100) else null
         val charging = status == BatteryManager.BATTERY_STATUS_CHARGING ||
             status == BatteryManager.BATTERY_STATUS_FULL || plugged != 0
-        _status.update { it.copy(batteryPercent = percent, charging = percent != null && charging) }
+        val full = percent != null && (status == BatteryManager.BATTERY_STATUS_FULL || (plugged != 0 && percent >= 100))
+        if (percent != null) synchronized(estimator) { estimator.onLevel(SystemClock.elapsedRealtime(), percent, plugged != 0) }
+        _status.update { it.copy(batteryPercent = percent, charging = percent != null && charging, batteryFull = full) }
+        refreshEstimate()
+    }
+
+    /** The screen's state decides whether the battery clock runs (a night asleep isn't use). */
+    private fun registerScreen() {
+        synchronized(estimator) { estimator.onScreen(power?.isInteractive ?: true, SystemClock.elapsedRealtime()) }
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context, intent: Intent) {
+                val on = intent.action == Intent.ACTION_SCREEN_ON
+                synchronized(estimator) { estimator.onScreen(on, SystemClock.elapsedRealtime()) }
+            }
+        }
+        val filter = IntentFilter().apply {
+            addAction(Intent.ACTION_SCREEN_ON)
+            addAction(Intent.ACTION_SCREEN_OFF)
+        }
+        ContextCompat.registerReceiver(appContext, receiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
+        // The current is read on a timer only while something shows the battery.
+        scope.launch {
+            _status.subscriptionCount.collectLatest { watchers ->
+                while (watchers > 0) {
+                    refreshEstimate()
+                    delay(ESTIMATE_POLL_MS)
+                }
+            }
+        }
+    }
+
+    /** Reads the battery's charge and current, and publishes the time left (or to full). */
+    private fun refreshEstimate() {
+        val s = _status.value
+        val minutes = if (s.batteryPercent == null || s.batteryFull) {
+            null
+        } else {
+            val readings = batteryReadings()
+            val systemCharge = if (s.charging) systemChargeMinutes() else null
+            val systemDischarge = if (!s.charging) systemDischargeMinutes() else null
+            synchronized(estimator) {
+                estimator.onReadings(readings[0], readings[1], readings[2])
+                estimator.estimate(SystemClock.elapsedRealtime(), systemDischarge, systemCharge)
+            }
+        }
+        if (minutes != s.batteryMinutes) _status.update { it.copy(batteryMinutes = minutes) }
+    }
+
+    /** Charge counter, current now and current average; null where the battery doesn't report them. */
+    private fun batteryReadings(): Array<Int?> {
+        val bm = batteryManager ?: return arrayOf(null, null, null)
+        fun read(property: Int): Int? = try {
+            bm.getIntProperty(property).takeIf { it != Int.MIN_VALUE }
+        } catch (e: RuntimeException) {
+            null
+        }
+        return arrayOf(
+            read(BatteryManager.BATTERY_PROPERTY_CHARGE_COUNTER),
+            read(BatteryManager.BATTERY_PROPERTY_CURRENT_NOW),
+            read(BatteryManager.BATTERY_PROPERTY_CURRENT_AVERAGE),
+        )
+    }
+
+    /** Android's own time to full, when it has one. */
+    private fun systemChargeMinutes(): Int? = try {
+        batteryManager?.computeChargeTimeRemaining()?.takeIf { it > 0 }?.let { ((it + 59_999) / 60_000).toInt() }
+    } catch (e: RuntimeException) {
+        null
+    }
+
+    /** Android's own time to empty (Android 12 and later), when it has one. */
+    private fun systemDischargeMinutes(): Int? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return null
+        return try {
+            power?.batteryDischargePrediction?.toMinutes()?.toInt()?.takeIf { it > 0 }
+        } catch (e: RuntimeException) {
+            null
+        }
     }
 
     private fun registerWifi() {
@@ -178,5 +267,9 @@ class SystemStatusMonitor(context: Context) {
         ContextCompat.registerReceiver(
             appContext, receiver, IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED), ContextCompat.RECEIVER_EXPORTED,
         )
+    }
+
+    private companion object {
+        const val ESTIMATE_POLL_MS = 30_000L
     }
 }

@@ -92,7 +92,13 @@ internal fun LibraryHeader(
                 when {
                     scope == LibraryScope.All -> LibraryTabs(header, state.segment, count, ::focused, onView)
                     // The same header as the Systems screen, in the same place, so the logo stays put.
-                    platform != null -> SystemHeader(platform, compact, Modifier.padding(start = Space.gutter), widthFraction = 0.9f, collapse = collapse)
+                    // Inside a system its name says it all: smaller, without the count and emulator.
+                    platform != null -> SystemHeader(
+                        platform, compact, Modifier.padding(start = Space.gutter), widthFraction = 0.9f, collapse = collapse,
+                        showMeta = false,
+                        logoHeight = if (compact) 32.dp else 44.dp,
+                        nameStyle = if (compact) Fuse.type.titleSmall else Fuse.type.title,
+                    )
                     else -> Row(Modifier.padding(start = Space.gutter), verticalAlignment = Alignment.CenterVertically) {
                         val title = when (scope) {
                             is LibraryScope.OfPlatform -> scope.platform.value

@@ -39,6 +39,22 @@ fun gameRoom(id: Any, art: Art, accent: Long, system: PlatformCard?): HeroSource
     }
 }
 
+/**
+ * The room for a system: its background, else its art softly blurred into a colour field, else a
+ * glow in its colour.
+ */
+fun systemRoom(card: PlatformCard): HeroSource {
+    val id = card.platform.id
+    val color = card.platform.accent.toColor()
+    val art = card.art
+    val panel = art.boxart ?: art.square ?: art.icon
+    return when {
+        art.hero != null -> HeroSource(id, art.hero, color, art.heroFocusX, art.heroFocusY)
+        panel != null -> HeroSource(id, panel, color, blurred = true)
+        else -> HeroSource(id, null, color)
+    }
+}
+
 /** The image [gameRoom] shows for a game, for warming it up ahead of time. */
 fun roomArt(art: Art, system: PlatformCard?): Any? =
     art.hero ?: art.screenshot ?: system?.art?.hero ?: art.grid ?: art.boxart ?: art.square ?: art.icon

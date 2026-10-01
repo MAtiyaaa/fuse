@@ -25,3 +25,14 @@ fun performanceSummary(profile: PerformanceProfile, lowPower: Boolean, device: C
     }
     return parts.joinToString("  ·  ")
 }
+
+/** The profile's short name, for the quick menu and the bottom screen's tiles. */
+fun performanceLabel(profile: PerformanceProfile): String = when (profile) {
+    PerformanceProfile.AUTOMATIC -> "Automatic"
+    PerformanceProfile.LOW_POWER -> "Low power"
+    PerformanceProfile.BALANCED -> "Balanced"
+    PerformanceProfile.HIGH_QUALITY -> "High quality"
+}
+
+/** The profile one press of a Performance tile moves to. */
+fun PerformanceProfile.next(): PerformanceProfile = PerformanceProfile.entries[(ordinal + 1) % PerformanceProfile.entries.size]

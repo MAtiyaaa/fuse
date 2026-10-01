@@ -37,10 +37,19 @@ if [[ ! -f "$DIST/Fuse.exe" ]]; then
 fi
 
 if [[ "${SKIP_SELF_TEST:-0}" != "1" ]]; then
-  echo "==> Self-test (the packaged runtime and classpath)"
-  # Fuse.exe is a windowed program with no console, so its own Java prints the report.
-  "$DIST/runtime/bin/java.exe" -cp "$DIST/app/*" io.github.matiyaaa.fuse.desktop.MainKt --self-test
-  echo "==> Self-test (Fuse.exe)"
+  # Fuse.exe is a windowed program with no console, so a console Java prints the report first. The
+  # bundled runtime has no java.exe (jpackage strips its commands), so that is the JDK that built it.
+  JAVA_BIN="$DIST/runtime/bin/java.exe"
+  if [[ ! -f "$JAVA_BIN" ]]; then
+    JAVA_BIN="java"
+    if [[ -n "${JAVA_HOME:-}" ]]; then
+      JAVA_BIN="$(cygpath -u "$JAVA_HOME" 2>/dev/null || printf '%s' "$JAVA_HOME")/bin/java"
+    fi
+  fi
+  echo "==> Self-test (the packaged classpath)"
+  "$JAVA_BIN" -cp "$DIST/app/*" io.github.matiyaaa.fuse.desktop.MainKt --self-test
+  echo "==> Self-test (Fuse.exe and its bundled runtime)"
+  # Its exit code is the result.
   "$DIST/Fuse.exe" --self-test
 fi
 

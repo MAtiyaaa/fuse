@@ -1,22 +1,34 @@
 package io.github.matiyaaa.fuse.ui.designsystem.components
 
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.unit.dp
 import io.github.matiyaaa.fuse.model.ConnectionState
 import io.github.matiyaaa.fuse.model.SystemStatus
+import io.github.matiyaaa.fuse.ui.designsystem.theme.Durations
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
 
@@ -89,6 +101,93 @@ fun BatteryGlyph(percent: Int, charging: Boolean, modifier: Modifier = Modifier)
                 close()
             }
             drawPath(bolt, c.ink)
+        }
+    }
+}
+
+/**
+ * The battery drawn large, for status pages: an outline with a nub, the level filling it (animated),
+ * a bolt while charging and a check once full. Green while charging or full, red at 15% or less on
+ * battery, otherwise the text colour. While charging a soft light runs along the fill. It fills the
+ * size it is given; about 2:1 looks right.
+ */
+@Composable
+fun BatteryCapsule(percent: Int, charging: Boolean, modifier: Modifier = Modifier, full: Boolean = false) {
+    val c = Fuse.colors
+    val low = percent <= 15 && !charging
+    val fill = when {
+        charging || full -> c.success
+        low -> c.danger
+        else -> c.text.copy(alpha = 0.92f)
+    }
+    val level by animateFloatAsState(percent.coerceIn(0, 100) / 100f, Fuse.motion.tween(Durations.DELIBERATE), label = "battery")
+    val sweep = if (charging && !full && !Fuse.motion.reduced) {
+        val t by rememberInfiniteTransition(label = "charge").animateFloat(
+            0f, 1f, infiniteRepeatable(tween(1800, easing = LinearEasing), RepeatMode.Restart), label = "sweep",
+        )
+        t
+    } else {
+        null
+    }
+    Canvas(modifier) {
+        val stroke = (size.height * 0.045f).coerceIn(2.dp.toPx(), 3.dp.toPx())
+        val nubW = size.width * 0.05f
+        val gap = stroke
+        val body = Size(size.width - nubW - gap - stroke, size.height - stroke)
+        val radius = body.height * 0.24f
+        drawRoundRect(c.text.copy(alpha = 0.32f), Offset(stroke / 2, stroke / 2), body, CornerRadius(radius), style = Stroke(stroke))
+        drawRoundRect(
+            c.text.copy(alpha = 0.32f),
+            Offset(size.width - nubW, size.height * 0.32f),
+            Size(nubW, size.height * 0.36f),
+            CornerRadius(nubW * 0.6f),
+        )
+        val inset = stroke + size.height * 0.07f
+        val inner = Size(body.width + stroke - inset * 2, size.height - inset * 2)
+        val innerRadius = CornerRadius((radius - inset + stroke).coerceAtLeast(2.dp.toPx()))
+        val w = (inner.width * level).coerceAtLeast(if (percent > 0) innerRadius.x * 1.2f else 0f)
+        if (w > 0f) {
+            drawRoundRect(
+                Brush.verticalGradient(listOf(fill, fill.copy(alpha = fill.alpha * 0.78f)), startY = inset, endY = inset + inner.height),
+                Offset(inset, inset),
+                Size(w, inner.height),
+                innerRadius,
+            )
+            if (sweep != null) {
+                val band = inner.width * 0.35f
+                val x = inset - band + (w + band) * sweep
+                clipRect(inset, inset, inset + w, inset + inner.height) {
+                    drawRect(
+                        Brush.horizontalGradient(listOf(Color.White.copy(alpha = 0f), Color.White.copy(alpha = 0.32f), Color.White.copy(alpha = 0f)), startX = x, endX = x + band),
+                        Offset(x, inset),
+                        Size(band, inner.height),
+                    )
+                }
+            }
+        }
+        val cx = stroke / 2 + body.width / 2
+        val cy = size.height / 2
+        val h = inner.height * 0.62f
+        // The mark sits over the fill in ink, or in the text colour on the empty part.
+        val markColor = if (cx < inset + w) c.ink else c.text
+        if (charging && !full) {
+            val bolt = Path().apply {
+                moveTo(cx + h * 0.10f, cy - h * 0.5f)
+                lineTo(cx - h * 0.30f, cy + h * 0.08f)
+                lineTo(cx - h * 0.02f, cy + h * 0.08f)
+                lineTo(cx - h * 0.12f, cy + h * 0.5f)
+                lineTo(cx + h * 0.30f, cy - h * 0.08f)
+                lineTo(cx + h * 0.02f, cy - h * 0.08f)
+                close()
+            }
+            drawPath(bolt, markColor)
+        } else if (full) {
+            val check = Path().apply {
+                moveTo(cx - h * 0.34f, cy + h * 0.02f)
+                lineTo(cx - h * 0.08f, cy + h * 0.28f)
+                lineTo(cx + h * 0.38f, cy - h * 0.26f)
+            }
+            drawPath(check, markColor, style = Stroke(h * 0.16f, cap = StrokeCap.Round, join = StrokeJoin.Round))
         }
     }
 }

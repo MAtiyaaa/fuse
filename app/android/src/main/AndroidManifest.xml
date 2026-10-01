@@ -211,12 +211,29 @@
             </intent-filter>
         </activity>
 
+        <!--
+          Fuse's Home: hands over to MainActivity in its own normal task, so Fuse shows in recent apps
+          (Android never lists the Home task there). Never drawn. Reached only through HomeAlias.
+        -->
+        <activity
+            android:name=".HomeActivity"
+            android:configChanges="colorMode|density|fontScale|fontWeightAdjustment|grammaticalGender|keyboard|keyboardHidden|layoutDirection|locale|mcc|mnc|navigation|orientation|screenLayout|screenSize|smallestScreenSize|touchscreen|uiMode"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:noHistory="true"
+            android:resizeableActivity="true"
+            android:resumeWhilePausing="true"
+            android:stateNotNeeded="true"
+            android:taskAffinity="io.github.matiyaaa.fuse.home"
+            android:theme="@style/Theme.Fuse.Trampoline" />
+
         <!-- Makes Fuse a Home app. Disabled until the user asks (see AndroidHomeRole). -->
         <activity-alias
             android:name=".HomeAlias"
             android:enabled="false"
             android:exported="true"
-            android:targetActivity=".MainActivity">
+            android:targetActivity=".HomeActivity">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.HOME" />
@@ -255,22 +272,15 @@
             </intent-filter>
         </activity>
 
-        <!--
-          Fuse's card in recent apps while Fuse is the Home app (Android never lists the Home app
-          there). Filed behind each game or app Fuse starts; picking it brings Fuse back. Its own
-          task, never seen.
-        -->
-        <activity
-            android:name=".RecentsCardActivity"
-            android:configChanges="colorMode|density|fontScale|fontWeightAdjustment|grammaticalGender|keyboard|keyboardHidden|layoutDirection|locale|mcc|mnc|navigation|orientation|screenLayout|screenSize|smallestScreenSize|touchscreen|uiMode"
-            android:excludeFromRecents="false"
-            android:exported="false"
-            android:label="Fuse"
-            android:launchMode="singleTask"
-            android:resizeableActivity="true"
-            android:stateNotNeeded="true"
-            android:taskAffinity="io.github.matiyaaa.fuse.recents"
-            android:theme="@style/Theme.Fuse.RecentsCard" />
+
+        <!-- Fuse was just updated: it opens itself again (see UpdateRelaunch). The system sends it. -->
+        <receiver
+            android:name=".services.UpdatedReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
 
         <receiver
             android:name=".services.InstallResultReceiver"

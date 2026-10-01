@@ -127,6 +127,10 @@ data class DisplayProfile(
 data class SystemStatus(
     val batteryPercent: Int? = null,
     val charging: Boolean = false,
+    /** Minutes until full while [charging], until empty otherwise; null while there is no estimate. */
+    val batteryMinutes: Int? = null,
+    /** Plugged in and charged. */
+    val batteryFull: Boolean = false,
     val wifi: ConnectionState = ConnectionState.UNKNOWN,
     val wifiStrength: Int? = null,
     val bluetooth: ConnectionState = ConnectionState.UNKNOWN,

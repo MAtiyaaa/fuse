@@ -2,12 +2,16 @@ package io.github.matiyaaa.fuse.ui.shell.systems
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.VisibilityThreshold
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -47,6 +51,9 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.layout
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import io.github.matiyaaa.fuse.model.CartridgeRoute
@@ -63,6 +70,9 @@ import io.github.matiyaaa.fuse.ui.designsystem.components.Trailing
 import io.github.matiyaaa.fuse.ui.designsystem.components.fadingEdges
 import io.github.matiyaaa.fuse.ui.designsystem.focus.FollowSelection
 import io.github.matiyaaa.fuse.ui.designsystem.focus.GridSelection
+import io.github.matiyaaa.fuse.ui.designsystem.focus.dragReorder
+import io.github.matiyaaa.fuse.ui.designsystem.focus.rememberDragReorderState
+import io.github.matiyaaa.fuse.ui.designsystem.focus.reorderItem
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
 import io.github.matiyaaa.fuse.ui.designsystem.icons.HintButton
@@ -103,10 +113,14 @@ fun SystemsScreen(app: AppState) {
     val systems = platforms.filter { it.gameCount > 0 }
     val sel = rememberRouteState(app.navigator, "systems") { GridSelection() }
     sel.clamp(systems.size)
-    val current = systems.getOrNull(sel.index)
+    // By touch, a held system follows the finger and the others make room; the grid shows that order.
+    val drag = rememberDragReorderState()
+    val shown = drag.arrange(systems) { it.platform.id.value }
+    val current = drag.heldKey?.let { k -> shown.firstOrNull { it.platform.id.value == k } } ?: shown.getOrNull(sel.index)
     var columns = 5
     // Holding confirm picks a system up; the D-pad moves it and the order is saved for Home too.
     var moving by remember { mutableStateOf(false) }
+    fun menu(card: PlatformCard, index: Int) = app.systemMenu(card) { sel.index = index; moving = true }
 
     LaunchedEffect(current?.platform?.id) {
         app.hero = current?.let { HeroSource(it.platform.id, it.art.hero, it.platform.accent.toColor()) }
@@ -140,7 +154,7 @@ fun SystemsScreen(app: AppState) {
             NavAction.UP, NavAction.DOWN, NavAction.LEFT, NavAction.RIGHT, NavAction.PAGE_UP, NavAction.PAGE_DOWN ->
                 sel.move(e.action, systems.size, columns).let { if (it == NavResult.IGNORED && e.action != NavAction.UP) NavResult.BLOCKED else it }
             NavAction.SELECT -> { current?.let { app.go(Route.PlatformGames(it.platform.id)) }; NavResult.ACTIVATED }
-            NavAction.CONTEXT -> { current?.let { app.openContextMenu(app.systemMenu(it)) }; NavResult.ACTIVATED }
+            NavAction.CONTEXT -> { current?.let { app.openContextMenu(menu(it, sel.index)) }; NavResult.ACTIVATED }
             else -> NavResult.IGNORED
         }
     }
@@ -170,13 +184,42 @@ fun SystemsScreen(app: AppState) {
             LazyVerticalGrid(
                 columns = GridCells.Fixed(columns),
                 state = grid,
-                modifier = Modifier.fadingEdges(top = if (grid.canScrollBackward) 20.dp else 0.dp),
+                modifier = Modifier
+                    .fadingEdges(top = if (grid.canScrollBackward) 20.dp else 0.dp)
+                    .dragReorder(
+                        drag,
+                        visibleKeys = { grid.layoutInfo.visibleItemsInfo.map { it.key } },
+                        scrollBy = { grid.scrollBy(it) },
+                        enabled = !moving,
+                        longPressMs = app.store.prefs.value.input.longPressMs.toLong(),
+                        endInset = Size.hintHeight,
+                        onLift = { key ->
+                            app.focusZone = FocusZone.CONTENT
+                            sel.index = shown.indexOfFirst { it.platform.id.value == key }.coerceAtLeast(0)
+                            app.platform.haptics.tick()
+                        },
+                        onTarget = { app.platform.haptics.tick() },
+                        // A hold let go where it started still opens the options, as it always did.
+                        onHoldReleased = { key ->
+                            val i = systems.indexOfFirst { it.platform.id.value == key }
+                            if (i >= 0) {
+                                sel.index = i
+                                app.openContextMenu(menu(systems[i], i))
+                            }
+                        },
+                        onDrop = { key, to ->
+                            val from = systems.indexOfFirst { it.platform.id.value == key }
+                            if (from >= 0 && to != from) app.moveSystem(systems, from, to - from)
+                            sel.index = to
+                        },
+                    ),
                 // Room above the first row for a lifted or carried card.
                 contentPadding = PaddingValues(start = Space.gutter, end = Space.gutter, top = Space.l, bottom = Size.hintHeight + Space.x4),
                 horizontalArrangement = Arrangement.spacedBy(gap),
                 verticalArrangement = Arrangement.spacedBy(Space.l),
             ) {
-                itemsIndexed(systems, key = { _, p -> p.platform.id.value }) { i, card ->
+                itemsIndexed(shown, key = { _, p -> p.platform.id.value }) { i, card ->
+                    val key = card.platform.id.value
                     val selected = i == sel.index && app.focusZone == FocusZone.CONTENT
                     val carried = moving && i == sel.index
                     val lifted by animateFloatAsState(if (carried) 1f else 0f, Fuse.motion.focusSpring(), label = "carry")
@@ -184,7 +227,9 @@ fun SystemsScreen(app: AppState) {
                         selected = selected,
                         glow = card.platform.accent.toColor(),
                         modifier = Modifier
-                            .animateItem(fadeInSpec = null, fadeOutSpec = null)
+                            // The held system follows the finger, never an animation behind it.
+                            .animateItem(fadeInSpec = null, fadeOutSpec = null, placementSpec = if (drag.heldKey == key) null else ItemPlacement)
+                            .reorderItem(drag, key)
                             .zIndex(if (carried) 1f else 0f)
                             .graphicsLayer {
                                 // A carried system floats a little above the others.
@@ -198,12 +243,15 @@ fun SystemsScreen(app: AppState) {
                         onClick = {
                             app.focusZone = FocusZone.CONTENT
                             when {
-                                moving -> moving = false
+                                // Carrying with the controller, a tap on another system puts it there.
+                                moving -> {
+                                    if (i != sel.index) sel.index = app.moveSystem(systems, sel.index, i - sel.index)
+                                    moving = false
+                                }
                                 sel.index == i -> app.go(Route.PlatformGames(card.platform.id))
                                 else -> sel.index = i
                             }
                         },
-                        onLongClick = { sel.index = i; app.openContextMenu(app.systemMenu(card)) },
                     ) {
                         SystemCardArt(card)
                     }
@@ -218,10 +266,19 @@ fun SystemsScreen(app: AppState) {
  * folds it away upwards (0 shows it all, 1 hides it), for a system's page scrolled down its games.
  */
 @Composable
-internal fun SystemHeader(card: PlatformCard?, compact: Boolean, modifier: Modifier = Modifier, widthFraction: Float = 0.62f, collapse: Float = 0f) {
+internal fun SystemHeader(
+    card: PlatformCard?,
+    compact: Boolean,
+    modifier: Modifier = Modifier,
+    widthFraction: Float = 0.62f,
+    collapse: Float = 0f,
+    /** The game count and emulator under the logo; the system's own page leaves them out. */
+    showMeta: Boolean = true,
+    logoHeight: Dp = if (compact) 40.dp else 64.dp,
+    nameStyle: TextStyle = if (compact) Fuse.type.title else Fuse.type.display,
+) {
     val c = Fuse.colors
     val motion = Fuse.motion
-    val logoHeight = if (compact) 40.dp else 64.dp
     AnimatedContent(
         targetState = card,
         modifier = modifier.fillMaxWidth(widthFraction).foldAway(collapse),
@@ -236,7 +293,7 @@ internal fun SystemHeader(card: PlatformCard?, compact: Boolean, modifier: Modif
         }
         Column(verticalArrangement = Arrangement.spacedBy(if (compact) Space.xs else Space.s)) {
             val name: @Composable () -> Unit = {
-                FText(s.platform.name, if (compact) Fuse.type.title else Fuse.type.display, color = c.text, maxLines = 1)
+                FText(s.platform.name, nameStyle, color = c.text, maxLines = 1)
             }
             if (s.art.logo != null) {
                 Artwork(
@@ -251,7 +308,7 @@ internal fun SystemHeader(card: PlatformCard?, compact: Boolean, modifier: Modif
             } else {
                 name()
             }
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s)) {
+            if (showMeta) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s)) {
                 Box(Modifier.size(7.dp).background(s.platform.accent.toColor(), CircleShape))
                 FText("${s.gameCount} ${if (s.gameCount == 1) "game" else "games"}", Fuse.type.body, color = c.textMuted, maxLines = 1)
                 FText("·", Fuse.type.body, color = c.textFaint)
@@ -315,8 +372,14 @@ internal fun Modifier.panelFade(): Modifier = this
         )
     }
 
-/** Options for a system (Context button or long press on its card). */
-fun AppState.systemMenu(card: PlatformCard): ContextMenuSpec {
+/** How systems slide aside while one is moved. */
+private val ItemPlacement = spring(stiffness = Spring.StiffnessMediumLow, visibilityThreshold = IntOffset.VisibilityThreshold)
+
+/**
+ * Options for a system (Context button or long press on its card). [onMove] adds "Move this system"
+ * where systems can be arranged.
+ */
+fun AppState.systemMenu(card: PlatformCard, onMove: (() -> Unit)? = null): ContextMenuSpec {
     val p = card.platform
     val owner = MediaOwner.OfPlatform(p.id)
     return ContextMenuSpec(
@@ -324,6 +387,9 @@ fun AppState.systemMenu(card: PlatformCard): ContextMenuSpec {
         subtitle = "${card.gameCount} games",
         actions = listOfNotNull(
             MenuAction("open", "Open", FuseIcons.Grid, onSelect = { closeOverlays(); go(Route.PlatformGames(p.id)) }),
+            onMove?.let { move ->
+                MenuAction("move", "Move this system", FuseIcons.Move, detail = "Or hold confirm. By touch, hold it and drag", onSelect = { closeOverlays(); move() })
+            },
             MenuAction("settings", "System Settings", FuseIcons.Settings, trailing = Trailing.Chevron, onSelect = { closeOverlays(); go(Route.PlatformSettings(p.id)) }),
             MenuAction("media", "Change System Media", FuseIcons.Image, detail = "Icon, background and logo for ${p.shortName}", trailing = Trailing.Chevron, onSelect = {
                 closeOverlays(); go(Route.Media(owner, p.name))
