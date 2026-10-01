@@ -1162,10 +1162,13 @@ function applyTheme(t) {
   const key = p ? JSON.stringify(p) : '';
   if (key === themeKey) return;
   themeKey = key;
+  // Only the style properties are touched (never the style attribute itself, which the page's
+  // Content Security Policy rightly refuses).
+  for (const k of root._themeKeys || []) root.style.removeProperty(k);
+  root._themeKeys = [];
   if (!p || !need.every((k) => get(k))) {
     root.removeAttribute('data-theme');
     root.removeAttribute('data-light');
-    root.removeAttribute('style');
     syncThemeColor();
     return;
   }
@@ -1220,16 +1223,16 @@ function applyTheme(t) {
     '--edge-raised': dark ? '.16' : '.6',
     '--edge-overlay': dark ? '.18' : '.7',
   };
-  root.setAttribute('style', '');
-  for (const k of Object.keys(v)) root.style.setProperty(k, v[k]);
   if (!dark) {
-    root.style.setProperty('--sh-panel', '0 1px 2px rgba(var(--shadow), .08), 0 6px 18px -6px rgba(var(--shadow), .16)');
-    root.style.setProperty('--sh-raised', '0 2px 4px rgba(var(--shadow), .08), 0 10px 26px -8px rgba(var(--shadow), .2)');
-    root.style.setProperty('--sh-overlay', '0 8px 20px rgba(var(--shadow), .12), 0 24px 64px -12px rgba(var(--shadow), .3)');
+    v['--sh-panel'] = '0 1px 2px rgba(var(--shadow), .08), 0 6px 18px -6px rgba(var(--shadow), .16)';
+    v['--sh-raised'] = '0 2px 4px rgba(var(--shadow), .08), 0 10px 26px -8px rgba(var(--shadow), .2)';
+    v['--sh-overlay'] = '0 8px 20px rgba(var(--shadow), .12), 0 24px 64px -12px rgba(var(--shadow), .3)';
   }
+  v['color-scheme'] = dark ? 'dark' : 'light';
+  for (const k of Object.keys(v)) root.style.setProperty(k, v[k]);
+  root._themeKeys = Object.keys(v);
   root.setAttribute('data-theme', 'device');
   root.toggleAttribute('data-light', !dark);
-  root.style.setProperty('color-scheme', dark ? 'dark' : 'light');
   syncThemeColor();
 }
 
