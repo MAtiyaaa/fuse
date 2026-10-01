@@ -104,9 +104,9 @@ java app/desktop/packaging/RenderIcon.java app/desktop/packaging/fuse.icns
 
 | Property | Current value | Used for |
 |---|---|---|
-| `fuse.version` | `0.1.1` | Android `versionName`, the release tag `v0.1.1`, file names |
-| `fuse.versionCode` | `7` | Android `versionCode`; must grow with every release |
-| `fuse.releaseName` | `The Showcase Update` | Release title |
+| `fuse.version` | `0.1.2` | Android `versionName`, the release tag `v0.1.2`, file names |
+| `fuse.versionCode` | `9` | Android `versionCode`; must grow with every release |
+| `fuse.releaseName` | `The Visual Update` | Release title |
 
 ## Release signing
 

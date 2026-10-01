@@ -129,6 +129,8 @@ yet tried by hand on a PC or a Mac.
 - [x] RetroAchievements hashing for Nintendo DS, PlayStation, PlayStation 2 and PSP, zipped ROMs, and a match by name (0.1.0)
 - [x] A redesigned bottom screen with achievements, battery time, status rings and control tiles (0.1.1)
 - [x] Moving systems by touch, and Fuse in recent apps as a normal task (0.1.1)
+- [x] Moving Home's shelves and channels by touch, the way a phone does (0.1.2)
+- [x] Community themes from a link or a file, a Posters option, and a website (0.1.2)
 - [ ] SAF-only storage mode that works without All files access (emulators that need FileProvider URIs would then be limited)
 - [ ] R8 minification and resource shrinking for release APKs
 - [ ] Screenshot tests for the design system and main screens

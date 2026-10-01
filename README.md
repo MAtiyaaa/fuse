@@ -12,7 +12,8 @@ Fuse gathers the games in your folders, dresses them in art and starts each one 
 already use, all from a console-style interface made for a gamepad. On Android it can even be your
 Home screen.
 
-<a href="https://github.com/MAtiyaaa/fuse/releases"><img src="https://img.shields.io/badge/release-0.1.1%20The%20Second%20Screen%20Update-FF6A3D?style=flat-square&labelColor=15171C" alt="Release 0.1.1, The Second Screen Update"></a>
+<a href="https://github.com/MAtiyaaa/fuse/releases/latest"><img src="https://img.shields.io/github/v/release/MAtiyaaa/fuse?display_name=release&style=flat-square&color=FF6A3D&labelColor=15171C&label=release" alt="The latest release"></a>
+<a href="https://matiyaaa.github.io/fuse/"><img src="https://img.shields.io/badge/website-matiyaaa.github.io%2Ffuse-2B303B?style=flat-square&labelColor=15171C" alt="Website: matiyaaa.github.io/fuse"></a>
 <img src="https://img.shields.io/badge/runs%20on-Android%209%2B%20%C2%B7%20Linux%20%C2%B7%20Windows%20%C2%B7%20macOS-2B303B?style=flat-square&labelColor=15171C" alt="Runs on Android 9 or newer, Linux, Windows and macOS">
 <a href="LICENSE"><img src="https://img.shields.io/badge/licence-GPL--3.0--or--later-2B303B?style=flat-square&labelColor=15171C" alt="Licence: GPL-3.0-or-later"></a>
 <a href="#privacy"><img src="https://img.shields.io/badge/telemetry-none-2B303B?style=flat-square&labelColor=15171C" alt="Telemetry: none"></a>
@@ -28,7 +29,8 @@ Home screen.
 <a href="https://github.com/MAtiyaaa/fuse/releases/latest"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/brand/button-macos-dark.svg"><img src="docs/assets/brand/button-macos-light.svg" height="48" alt="Download for macOS"></picture></a>
 
 <sub>Android 9 or newer &nbsp;·&nbsp; 64-bit x86 Linux AppImage &nbsp;·&nbsp; Windows 10 and 11 &nbsp;·&nbsp; macOS on Apple silicon and Intel &nbsp;·&nbsp; <a href="#install">checksums and install notes</a></sub><br>
-<sub>0.1.1 redesigns the bottom screen of dual-screen handhelds, shaped by hands-on tests on one. <a href="#where-fuse-stands">Here is where it stands.</a></sub>
+<sub>0.1.2 is the Visual Update: touch that moves like a phone, a look of its own and themes anyone can share. <a href="#where-fuse-stands">Here is where it stands.</a></sub><br>
+<sub>Or download from <a href="https://matiyaaa.github.io/fuse/">Fuse's website</a>, which always offers the latest version for your system.</sub>
 
 <br>
 
@@ -100,7 +102,7 @@ under your thumb lifts toward you with a single sweep of light.
     <td width="50%" valign="top">
       <a href="docs/assets/screenshots/settings.png"><img src="docs/assets/screenshots/settings.png" width="100%" alt="Settings, Appearance section: theme, motion, background art, title logos, background dimming, glass panels, CRT effect, high contrast focus and button symbols."></a>
       <br><b>Make it yours</b>
-      <br><sub>Nine themes, four motion levels, glass, CRT and high contrast focus, across 16 sections of settings.</sub>
+      <br><sub>Ten themes and any you add, posters or box art, four motion levels, glass, CRT and high contrast focus, across 16 sections of settings.</sub>
     </td>
     <td width="50%" valign="top">
       <a href="docs/assets/screenshots/onboarding.png"><img src="docs/assets/screenshots/onboarding.png" width="100%" alt="The first step of setup: Welcome to Fuse, a Begin button, and the Fuse mark with its glowing spark."></a>
@@ -199,8 +201,8 @@ Play.
   <tr>
     <td width="33%" valign="top">
       <img src="docs/assets/icons/themes.svg" width="44" height="44" alt=""><br>
-      <b>Nine themes</b><br>
-      <sub>Fuse, Glass, Crossbar, Orbital, Wave, Blades, Channels, CRT and Daylight. Each sets its own background, corners, focus, motion and sound.</sub>
+      <b>Ten themes, and yours</b><br>
+      <sub>Fuse, Glass, Starlight, Crossbar, Orbital, Wave, Blades, Channels, CRT and Daylight, each with its own background, corners, focus, motion and sound. Add themes others made from a link or a file, or <a href="docs/THEMES.md">write your own</a>.</sub>
     </td>
     <td width="33%" valign="top">
       <img src="docs/assets/icons/accessibility.svg" width="44" height="44" alt=""><br>
@@ -300,8 +302,9 @@ Play.
 - **Library** layouts from square box art to capsules to covers to a compact list; **Systems**, **Apps**
   (on Android), **Search**, game pages, a media manager, a folder browser, the **quick menu** and a
   guided setup.
-- **Nine themes**, four motion levels including Reduced, High contrast focus, optional glass panels
-  and CRT effect, and interface sounds synthesised on the fly.
+- **Ten themes** and community themes from a link or a file ([docs/THEMES.md](docs/THEMES.md)), square
+  box art or tall posters, four motion levels including Reduced, High contrast focus, optional glass
+  panels and CRT effect, and interface sounds synthesised on the fly.
 - A **performance overlay** that only shows metrics the device can really measure.
 
 </details>
@@ -369,10 +372,10 @@ Linux app, isn't offered on Windows and macOS.
 ## Where Fuse stands
 
 > [!IMPORTANT]
-> **Fuse 0.1.1 "The Second Screen Update" is still early.** It redesigns the bottom screen of a
-> dual-screen handheld (achievements, battery time, new Status and Controls pages), lets you move
-> systems by touch, rebuilds the Cartridge page, and puts Fuse in Android's recent apps (see
-> [the release notes](docs/releases/0.1.1.md)); 0.1.0 brought Fuse to Windows and macOS. The
+> **Fuse 0.1.2 "The Visual Update" is still early.** It lets you move shelves, channels and systems
+> by touch the way a phone does, gives every screen Fuse's own look, adds community themes and a
+> Posters option, and brings a website (see [the release notes](docs/releases/0.1.2.md)); 0.1.1
+> redesigned the bottom screen of dual-screen handhelds, and 0.1.0 brought Fuse to Windows and macOS. The
 > shared core (library scanning, launch resolution, integrations and the database) and the interface
 > are in place and tested where it matters. The Android app builds and passes its unit tests and lint, and has been tried on one
 > handheld so far. The Linux app builds, passes its tests, packages as an AppImage and starts in a
@@ -508,6 +511,7 @@ what each service receives and when.
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Modules, domain model, scanning, launching, input, storage, security |
 | [INTEGRATIONS.md](INTEGRATIONS.md) | Every online service and the Cartridge bridge, and what leaves the device |
 | [DESIGN_SYSTEM.md](DESIGN_SYSTEM.md) | Tokens, type, focus, motion, themes, sound, accessibility |
+| [docs/THEMES.md](docs/THEMES.md) | Writing, sharing and adding themes |
 | [RESEARCH.md](RESEARCH.md) | What we learned about frontends, Android, emulators, RomM and scrapers |
 | [ROADMAP.md](ROADMAP.md) | What is done and what comes next |
 | [BUILDING.md](BUILDING.md) | Building, testing, packaging and signing |
