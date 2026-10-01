@@ -193,7 +193,7 @@ fun FuseApp(store: FuseStore, platform: PlatformUi, router: InputRouter, phoneLi
                 val borders = rememberTileBorders(store)
                 CompositionLocalProvider(LocalTileMetrics provides metrics, LocalTileBorders provides borders) {
                     Room(app, prefs.showHero, spec.background, prefs.heroDim, prefs.glass, prefs.videoPreview, prefs.videoDelaySeconds)
-                    ArtWarmup(app, maxWidth, maxHeight)
+                    ArtWarmup(app)
                     ShellInput(app)
                     Pages(app)
                     val route = app.navigator.current
@@ -256,9 +256,8 @@ private fun Room(
 ) {
     val quality = Fuse.quality
     val hero = app.hero
-    if (style != BackgroundStyle.HERO || hero == null || !showHero) {
-        AmbientBackground(if (style == BackgroundStyle.HERO) BackgroundStyle.SOLID else style, hero?.accent ?: Fuse.colors.accent, Modifier.fillMaxSize())
-    }
+    // The theme's own room is always underneath, so art fading in or out never shows a bare screen.
+    AmbientBackground(if (style == BackgroundStyle.HERO) BackgroundStyle.SOLID else style, hero?.accent ?: Fuse.colors.accent, Modifier.fillMaxSize())
     if (showHero) {
         var videoReady by remember(hero?.id) { mutableStateOf(false) }
         var playVideo by remember(hero?.id) { mutableStateOf(false) }
@@ -343,7 +342,7 @@ private fun Pages(app: AppState) {
                 Route.Licenses -> io.github.matiyaaa.fuse.ui.shell.settings.LicensesScreen(app)
                 Route.Onboarding -> OnboardingScreen(app)
                 is Route.FolderBrowser -> FolderBrowserScreen(app, route.game)
-                is Route.PickFile -> io.github.matiyaaa.fuse.ui.shell.files.FilePickerScreen(app, route.purpose)
+                is Route.PickFile -> io.github.matiyaaa.fuse.ui.shell.files.FilePickerScreen(app, route.purpose, route.locate)
             }
         }
     }
@@ -411,12 +410,12 @@ private fun ShellInput(app: AppState) {
     }
 }
 
-/** The tabs shown in the top line: Home first, then the user's order. Cartridge needs Cartridge. */
+/** The tabs shown in the top line: Home first, then the user's order. Cartridge needs Cartridge, Apps an app list. */
 @Composable
 private fun visibleTabs(app: AppState, prefs: io.github.matiyaaa.fuse.ui.shell.store.UiPrefs): List<Destination> {
     val cartridge by app.store.cartridge.status.collectAsState()
     return (listOf(Destination.HOME) + prefs.destinations.filter { it != Destination.HOME })
-        .filter { it != Destination.CARTRIDGE || cartridge.installed }
+        .filter { app.offers(it) && (it != Destination.CARTRIDGE || cartridge.installed) }
 }
 
 private fun AppState.runHudButton(button: HudButton) = when (button) {

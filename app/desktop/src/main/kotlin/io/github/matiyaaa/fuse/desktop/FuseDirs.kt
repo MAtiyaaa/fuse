@@ -1,29 +1,41 @@
 package io.github.matiyaaa.fuse.desktop
 
+import io.github.matiyaaa.fuse.desktop.system.DesktopOs
+import io.github.matiyaaa.fuse.desktop.system.fusePath
 import java.io.File
 
 /**
- * Fuse's own folders, following the XDG base directory spec. These are the only places Fuse writes
- * to on its own; anything else is a place the user picked.
+ * Fuse's own folders. On Linux they follow the XDG base directory spec; on Windows they are in
+ * AppData (or a FuseData folder next to a portable Fuse.exe); on macOS in the user's Library. These
+ * are the only places Fuse writes to on its own; anything else is a place the user picked. Paths use
+ * forward slashes on every system.
  */
 class FuseDirs(
     val home: String,
-    /** `$XDG_CACHE_HOME/fuse`: image cache, generated playlists, downloaded updates. */
+    /** Image cache, generated playlists, downloaded updates (`$XDG_CACHE_HOME/fuse`). */
     val cache: String,
-    /** `$XDG_DATA_HOME/fuse`: the database, custom media and the fallback secret file. */
+    /** The database, custom media and the fallback secret file (`$XDG_DATA_HOME/fuse`). */
     val data: String,
-    /** `$XDG_CONFIG_HOME/fuse`: window mode and other desktop-only preferences. */
+    /** Window mode and other desktop-only preferences (`$XDG_CONFIG_HOME/fuse`). */
     val config: String,
-    /** `$XDG_CONFIG_HOME`, for `autostart/`. */
+    /** `$XDG_CONFIG_HOME`, for `autostart/` (Linux). */
     val xdgConfigHome: String,
-    /** `$XDG_DATA_HOME`, for `applications/` and `icons/`. */
+    /** `$XDG_DATA_HOME`, for `applications/` and `icons/` (Linux). */
     val xdgDataHome: String,
+    /** True when everything lives in a FuseData folder next to a portable Fuse.exe. */
+    val portable: Boolean = false,
 ) {
     val database: String get() = "$data/fuse.db"
     val customMedia: String get() = "$data/media/custom"
 
     companion object {
-        fun fromEnvironment(env: Map<String, String> = System.getenv()): FuseDirs {
+        fun fromEnvironment(env: Map<String, String> = System.getenv(), os: DesktopOs = DesktopOs.current): FuseDirs = when (os) {
+            DesktopOs.LINUX -> linux(env)
+            DesktopOs.WINDOWS -> windows(env, System.getProperty("jpackage.app-path"))
+            DesktopOs.MACOS -> macos(System.getProperty("user.home"))
+        }
+
+        internal fun linux(env: Map<String, String>): FuseDirs {
             val home = (env["HOME"]?.takeIf { it.startsWith("/") } ?: System.getProperty("user.home")).trimEnd('/').ifEmpty { "/" }
             fun xdg(name: String, fallback: String): String =
                 env[name]?.takeIf { it.startsWith("/") }?.trimEnd('/') ?: "$home/$fallback"
@@ -38,6 +50,32 @@ class FuseDirs(
                 xdgConfigHome = configHome,
                 xdgDataHome = dataHome,
             )
+        }
+
+        /**
+         * `%LOCALAPPDATA%/Fuse` for the database and cache (large, never roamed) and `%APPDATA%/Fuse`
+         * for settings. A FuseData folder next to Fuse.exe (the portable zip has one) holds everything
+         * instead, so Fuse can live on a USB drive.
+         */
+        internal fun windows(env: Map<String, String>, launcher: String?): FuseDirs {
+            // Windows values use backslashes; Fuse keeps forward slashes.
+            fun slashes(path: String) = path.replace('\\', '/').trimEnd('/')
+            val home = slashes(env["USERPROFILE"] ?: System.getProperty("user.home"))
+            val portable = launcher?.let { File(it).absoluteFile.parentFile }?.let { File(it, "FuseData") }?.takeIf { it.isDirectory }
+            if (portable != null) {
+                val root = portable.fusePath.trimEnd('/')
+                return FuseDirs(home, "$root/cache", "$root/data", "$root/config", "$root/config", "$root/data", portable = true)
+            }
+            val local = env["LOCALAPPDATA"]?.let(::slashes) ?: "$home/AppData/Local"
+            val roaming = env["APPDATA"]?.let(::slashes) ?: "$home/AppData/Roaming"
+            return FuseDirs(home, "$local/Fuse/Cache", "$local/Fuse", "$roaming/Fuse", roaming, local)
+        }
+
+        /** `~/Library/Application Support/Fuse` and `~/Library/Caches/Fuse`. */
+        internal fun macos(userHome: String): FuseDirs {
+            val home = userHome.trimEnd('/').ifEmpty { "/" }
+            val support = "$home/Library/Application Support"
+            return FuseDirs(home, "$home/Library/Caches/Fuse", "$support/Fuse", "$support/Fuse/Config", "$home/Library/Preferences", support)
         }
     }
 

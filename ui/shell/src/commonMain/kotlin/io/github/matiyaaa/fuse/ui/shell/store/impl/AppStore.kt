@@ -43,7 +43,7 @@ internal class DefaultAppOps(private val ctx: StoreContext) : AppOps {
     override val gamesInLibrary: Boolean = provider != null && ctx.host == Host.ANDROID
 
     /** Called after apps joined the library as games, so their art is looked for. */
-    var onGamesAdded: () -> Unit = {}
+    var onGamesAdded: (List<io.github.matiyaaa.fuse.model.GameId>) -> Unit = {}
 
     /** Packages being installed from an APK the user added as a game. */
     private val expectedGames = MutableStateFlow<Set<String>>(emptySet())
@@ -81,7 +81,8 @@ internal class DefaultAppOps(private val ctx: StoreContext) : AppOps {
         .stateIn(ctx.scope, SharingStarted.Eagerly, emptyMap())
 
     override fun apps(filter: AppFilter): Flow<List<AppCard>> = combine(all, customIcons) { list, icons ->
-        val visible = list.filterNot { it.hidden }
+        // Apps played as games live in the Android system with the other games, not in Apps.
+        val visible = list.filterNot { it.hidden || (gamesInLibrary && it.kind == AppKind.GAME) }
         when (filter) {
             AppFilter.PINNED -> visible.filter { it.pinned }
             AppFilter.GAMES -> visible.filter { it.kind == AppKind.GAME }.sortedBy { it.displayTitle.lowercase() }
@@ -95,7 +96,7 @@ internal class DefaultAppOps(private val ctx: StoreContext) : AppOps {
     }
 
     fun search(query: String): List<AppCard> =
-        all.value.filter { !it.hidden && it.displayTitle.contains(query, ignoreCase = true) }.take(20).map { card(it, customIcons.value) }
+        all.value.filter { !it.hidden && !(gamesInLibrary && it.kind == AppKind.GAME) && it.displayTitle.contains(query, ignoreCase = true) }.take(20).map { card(it, customIcons.value) }
 
     fun refreshInstalled() {
         provider?.refresh()
@@ -183,6 +184,6 @@ internal class DefaultAppOps(private val ctx: StoreContext) : AppOps {
             complete = true,
         )
         val delta = ctx.data.indexer.applyFolder(scan, ctx.now(), DisplayNameCleaner::clean, useCleanedForNew = false)
-        if (delta.added > 0 || delta.restored > 0) onGamesAdded()
+        if (delta.addedIds.isNotEmpty()) onGamesAdded(delta.addedIds)
     }
 }

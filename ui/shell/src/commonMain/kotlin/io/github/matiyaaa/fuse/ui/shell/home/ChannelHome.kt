@@ -76,6 +76,7 @@ import io.github.matiyaaa.fuse.ui.shell.app.FocusZone
 import io.github.matiyaaa.fuse.ui.shell.app.Route
 import io.github.matiyaaa.fuse.ui.shell.app.activateGame
 import io.github.matiyaaa.fuse.ui.shell.app.formatDate
+import io.github.matiyaaa.fuse.ui.shell.app.offers
 import io.github.matiyaaa.fuse.ui.shell.app.play
 import io.github.matiyaaa.fuse.ui.shell.app.rememberClockText
 import io.github.matiyaaa.fuse.ui.shell.app.rememberRouteState
@@ -106,7 +107,7 @@ fun ChannelHome(app: AppState) {
     val cartridge by store.cartridge.status.collectAsState()
     // The Cartridge channel only while Cartridge support is on and it is installed; Collections only while on.
     val widgets = prefs.home.widgets.filter {
-        it.visible && (it.kind != WidgetKind.CARTRIDGE_DOWNLOADS || cartridge.installed) && (it.kind != WidgetKind.COLLECTIONS || prefs.collectionsEnabled)
+        it.visible && app.offers(it.kind) && (it.kind != WidgetKind.CARTRIDGE_DOWNLOADS || cartridge.installed) && (it.kind != WidgetKind.COLLECTIONS || prefs.collectionsEnabled)
     }.sortedBy { it.order }
     val cells = remember(widgets) { packCells(widgets.map { channelSpan(it).columns }, BOARD_COLUMNS) }
     val sel = rememberRouteState(app.navigator, "home.channels") { SpatialSelection() }
@@ -161,8 +162,12 @@ fun ChannelHome(app: AppState) {
             return@InputLayer when (e.action) {
                 NavAction.LEFT -> { swap(sel.index - 1); NavResult.MOVED }
                 NavAction.RIGHT -> { swap(sel.index + 1); NavResult.MOVED }
-                NavAction.UP -> { swap((sel.index - BOARD_COLUMNS).coerceAtLeast(0)); NavResult.MOVED }
-                NavAction.DOWN -> { swap((sel.index + BOARD_COLUMNS).coerceAtMost(widgets.lastIndex)); NavResult.MOVED }
+                // Up and down trade places with the channel above or below, the same one plain moves land on.
+                NavAction.UP, NavAction.DOWN -> {
+                    val probe = SpatialSelection(sel.index)
+                    if (probe.move(e.action, cells) == NavResult.MOVED) swap(probe.index)
+                    NavResult.MOVED
+                }
                 NavAction.SELECT, NavAction.BACK, NavAction.REORDER -> { carrying = false; NavResult.CONSUMED }
                 else -> NavResult.CONSUMED
             }

@@ -2,6 +2,7 @@ package io.github.matiyaaa.fuse.integrations.scrape
 
 import io.github.matiyaaa.fuse.integrations.ApiResult
 import io.github.matiyaaa.fuse.integrations.match.MatchDecision
+import io.github.matiyaaa.fuse.integrations.match.PlatformEvidence
 import io.github.matiyaaa.fuse.integrations.match.ScoredMatch
 import io.github.matiyaaa.fuse.integrations.match.TitleMatcher
 import io.github.matiyaaa.fuse.model.ArtworkOption
@@ -39,13 +40,19 @@ data class ProviderError(val provider: ScrapeProviderId, val failure: ApiResult.
 sealed interface ScrapeOutcome {
     val errors: List<ProviderError>
 
-    /** A match safe to apply. [warning] is set when an aggressive accept should be flagged in the UI. */
+    /**
+     * A match safe to apply. [warning] is set when an aggressive accept should be flagged in the UI.
+     * [guessed] marks a best guess by name ([Guess]): its art is offered, its details never are.
+     * [links] is the game's id in each provider the art came from, so it needn't be searched again.
+     */
     data class Accepted(
         val candidate: ScrapeCandidate,
         val metadata: GameMetadata?,
         val artwork: List<ArtworkOption>,
         val warning: String? = null,
         override val errors: List<ProviderError> = emptyList(),
+        val guessed: Boolean = false,
+        val links: Map<ScrapeProviderId, String> = emptyMap(),
     ) : ScrapeOutcome
 
     /** No confident match: let the user pick one of [candidates] (best first). */
@@ -62,6 +69,21 @@ sealed interface ScrapeOutcome {
 
     /** Every provider asked failed (offline, keys rejected, quotas). */
     data class ProviderErrors(override val errors: List<ProviderError>) : ScrapeOutcome
+}
+
+/**
+ * What [ScrapeCoordinator.scrape] does when no match is sure enough to accept. Art is cosmetic, so
+ * it can come from a guess; details never do.
+ */
+enum class Guess {
+    /** Ask the user (the matches are returned for review). */
+    NONE,
+
+    /** Take the best match whose title is the game's own (ignoring case, punctuation and tags). */
+    EXACT_TITLE,
+
+    /** Take the best match whose title is the game's own, else the best match at all. */
+    BEST,
 }
 
 /**
@@ -102,8 +124,12 @@ class ScrapeCoordinator(
         rests.entries.filter { it.value.until > t }.associate { it.key to it.value.reason }
     }
 
-    /** Identifies the game and collects artwork. */
-    suspend fun scrape(request: ScrapeRequest): ScrapeOutcome {
+    /**
+     * Identifies the game and collects artwork. With a [guess], a game with several close matches
+     * still gets art: from the match [Guess] picks (marked [ScrapeOutcome.Accepted.guessed], with no
+     * details) instead of a list to review.
+     */
+    suspend fun scrape(request: ScrapeRequest, guess: Guess = Guess.NONE): ScrapeOutcome {
         val active = activeSources(request)
         if (active.isEmpty()) return ScrapeOutcome.NotFound(emptyList())
         val ordered = if (request.wantMetadata) {
@@ -115,6 +141,8 @@ class ScrapeCoordinator(
         val review = ArrayList<ScoredMatch>()
         val searched = ArrayList<ScrapeProviderId>()
         val failed = HashSet<ScrapeProviderId>()
+        // Where each reviewed match came from, so a guess can be finished without searching again.
+        val seen = HashMap<Pair<ScrapeProviderId, String>, Pair<ScrapeSource, ProviderGame>>()
         val plan = SearchNames.plan(request.query)
         // Every provider by the names first; keywords only when none of them found the game for sure.
         for ((round, keywords) in listOf(plan.names to false, plan.keywords to true)) {
@@ -137,10 +165,25 @@ class ScrapeCoordinator(
                             val game = games.first { it.providerGameId == decision.match.input.providerGameId }
                             return finish(request, source, game, decision.match.candidate, decision.warning, active, errors)
                         }
-                        is MatchDecision.NeedsReview -> review += decision.candidates
+                        is MatchDecision.NeedsReview -> {
+                            review += decision.candidates
+                            for (m in decision.candidates) {
+                                val g = games.firstOrNull { it.providerGameId == m.input.providerGameId } ?: continue
+                                seen.getOrPut(m.candidate.provider to m.candidate.providerGameId) { source to g }
+                            }
+                        }
                         MatchDecision.NoCandidates -> Unit
                     }
                 }
+            }
+        }
+        if (guess != Guess.NONE && review.isNotEmpty()) {
+            val possible = review.filter { it.platform != PlatformEvidence.MISMATCH }
+            val pick = possible.filter { it.titleExact }.maxByOrNull { it.score }
+                ?: if (guess == Guess.BEST) possible.maxByOrNull { it.score } else null
+            val from = pick?.let { seen[it.candidate.provider to it.candidate.providerGameId] }
+            if (pick != null && from != null) {
+                return finish(request, from.first, from.second, pick.candidate, null, active, errors, guessed = true)
             }
         }
         return when {
@@ -222,6 +265,38 @@ class ScrapeCoordinator(
         return finish(request, source, game, candidate, null, activeSources(request), errors)
     }
 
+    /**
+     * Art (and details) for a game identified before, from the providers it has an id in ([ids]):
+     * no search and no matching, so it never asks which game this is again. Other providers that
+     * can add art are asked for the same game by its title. Null when no id could be looked up.
+     */
+    suspend fun known(request: ScrapeRequest, ids: Map<ScrapeProviderId, String>): ScrapeOutcome.Accepted? {
+        if (ids.isEmpty()) return null
+        val active = activeSources(request)
+        val errors = ArrayList<ProviderError>()
+        val found = LinkedHashMap<ScrapeProviderId, Pair<ScrapeSource, ProviderGame>>()
+        for (source in active) {
+            val id = ids[source.id] ?: continue
+            when (val r = call(source.id) { source.byId(id, request.query) }) {
+                is ApiResult.Failure -> errors += ProviderError(source.id, r)
+                is ApiResult.Success -> r.value?.let { found[source.id] = source to it }
+            }
+        }
+        // Details from the first that has them, in the user's order.
+        val (lead, game) = found.values.firstOrNull { it.first.providesMetadata } ?: found.values.firstOrNull() ?: return null
+        val candidate = ScrapeCandidate(
+            provider = lead.id,
+            providerGameId = game.providerGameId,
+            title = game.title,
+            platformName = game.platformNames.firstOrNull(),
+            year = game.year,
+            confidence = 1f,
+            reasons = listOf("Identified before"),
+            previewUrl = game.previewUrl,
+        )
+        return finish(request, lead, game, candidate, null, active, errors, known = found.mapValues { it.value.second })
+    }
+
     /** The art kinds at least one active source (in [priority], with [configured] keys) can return. */
     fun availableKinds(priority: List<ScrapeProviderId>, configured: Set<ScrapeProviderId>): Set<MediaKind> =
         activeSources(priority, configured).flatMapTo(LinkedHashSet()) { it.artworkKinds }
@@ -243,10 +318,15 @@ class ScrapeCoordinator(
         warning: String?,
         active: List<ScrapeSource>,
         errors: MutableList<ProviderError>,
+        guessed: Boolean = false,
+        known: Map<ScrapeProviderId, ProviderGame> = emptyMap(),
     ): ScrapeOutcome.Accepted {
-        val metadata = if (request.wantMetadata && source.providesMetadata) game.metadata else null
-        val artwork = collectArtwork(request, source, game, active, errors)
-        return ScrapeOutcome.Accepted(candidate, metadata, artwork, warning, errors.toList())
+        // A guess is good enough for art, never for details.
+        val metadata = if (request.wantMetadata && source.providesMetadata && !guessed) game.metadata else null
+        val links = LinkedHashMap<ScrapeProviderId, String>()
+        links[source.id] = game.providerGameId
+        val artwork = collectArtwork(request, source, game, active, errors, known, links)
+        return ScrapeOutcome.Accepted(candidate, metadata, artwork, warning, errors.toList(), guessed, links)
     }
 
     private suspend fun collectArtwork(
@@ -255,6 +335,8 @@ class ScrapeCoordinator(
         game: ProviderGame,
         active: List<ScrapeSource>,
         errors: MutableList<ProviderError>,
+        known: Map<ScrapeProviderId, ProviderGame>,
+        links: MutableMap<ScrapeProviderId, String>,
     ): List<ArtworkOption> {
         val kinds = request.artworkKinds
         if (kinds.isEmpty()) return emptyList()
@@ -267,12 +349,12 @@ class ScrapeCoordinator(
         for (source in order) {
             if (!request.collectAllArtwork && reachable.all { k -> out.values.any { it.kind == k } }) break
             if (source.artworkKinds.none { it in kinds }) continue
-            val options = if (source.id == winner.id) {
-                call(source.id) { source.artwork(game, request.query, kinds) }
-            } else {
-                sameGameIn(source, followUp, request.strictness, errors)?.let { call(source.id) { source.artwork(it, request.query, kinds) } }
+            val same = when {
+                source.id == winner.id -> game
+                else -> known[source.id] ?: sameGameIn(source, followUp, request.strictness, errors)
             } ?: continue
-            when (options) {
+            links[source.id] = same.providerGameId
+            when (val options = call(source.id) { source.artwork(same, request.query, kinds) }) {
                 is ApiResult.Failure -> errors += ProviderError(source.id, options)
                 is ApiResult.Success -> options.value.filter { it.kind in kinds }.forEach { out.getOrPut(it.url) { it } }
             }
@@ -281,8 +363,10 @@ class ScrapeCoordinator(
     }
 
     /**
-     * The same game in another provider, only when the matcher would auto-accept it: searched by
-     * the accepted title, then by the game's own names.
+     * The same game in another provider: searched by the accepted title, then by the game's own
+     * names. A match the matcher would auto-accept wins; else the first result with the game's own
+     * title (SteamGridDB often lists one game several times under one name, so nothing there is
+     * ever sure, yet any of them has the game's art). Never one on another platform.
      */
     private suspend fun sameGameIn(
         source: ScrapeSource,
@@ -291,19 +375,26 @@ class ScrapeCoordinator(
         errors: MutableList<ProviderError>,
     ): ProviderGame? {
         val names = (listOf(query.title) + SearchNames.of(query)).distinct().take(FOLLOW_UP_NAMES)
+        var sameName: ProviderGame? = null
         for (name in names) {
             val games = when (val r = call(source.id) { source.search(query.named(name)) }) {
                 is ApiResult.Failure -> {
                     errors += ProviderError(source.id, r)
-                    return null
+                    return sameName
                 }
                 is ApiResult.Success -> r.value
             }
-            val decision = matcher.match(query, games.map { it.toMatchInput() }, strictness)
-            val id = (decision as? MatchDecision.AutoAccept)?.match?.input?.providerGameId ?: continue
-            return games.firstOrNull { it.providerGameId == id }
+            val ranked = matcher.rank(query, games.map { it.toMatchInput() })
+            val decision = matcher.decide(ranked, strictness)
+            (decision as? MatchDecision.AutoAccept)?.match?.input?.providerGameId?.let { id ->
+                return games.firstOrNull { it.providerGameId == id }
+            }
+            if (sameName == null) {
+                val exact = ranked.firstOrNull { it.titleExact && it.platform != PlatformEvidence.MISMATCH }
+                sameName = exact?.let { m -> games.firstOrNull { it.providerGameId == m.input.providerGameId } }
+            }
         }
-        return null
+        return sameName
     }
 
     /**

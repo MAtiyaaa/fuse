@@ -1,6 +1,8 @@
 package io.github.matiyaaa.fuse.launch
 
 import io.github.matiyaaa.fuse.launch.android.AndroidEmulatorCatalog
+import io.github.matiyaaa.fuse.launch.desktop.MacCatalog
+import io.github.matiyaaa.fuse.launch.desktop.WindowsCatalog
 import io.github.matiyaaa.fuse.launch.linux.LinuxCatalog
 import io.github.matiyaaa.fuse.model.EmulatorId
 import io.github.matiyaaa.fuse.model.Host
@@ -37,7 +39,9 @@ class AdapterRegistry(
     }
 
     companion object {
-        /** Every Android and Linux adapter. */
-        val Default: AdapterRegistry by lazy { AdapterRegistry(AndroidEmulatorCatalog.adapters + LinuxCatalog.adapters) }
+        /** Every Android, Linux, Windows and macOS adapter. */
+        val Default: AdapterRegistry by lazy {
+            AdapterRegistry(AndroidEmulatorCatalog.adapters + LinuxCatalog.adapters + WindowsCatalog.adapters + MacCatalog.adapters)
+        }
     }
 }

@@ -6,8 +6,8 @@ from scene import THEMES, Defs, room, shelf, far_fade, grain
 from text import text_path
 
 TAGLINE = 'A controller-first home for your games.'
-META = ['ANDROID', 'LINUX', 'FREE SOFTWARE']
-TITLE = 'Fuse. A controller-first home for your games, on Android and Linux.'
+META = ['ANDROID', 'LINUX', 'WINDOWS', 'MACOS', 'FREE SOFTWARE']
+TITLE = 'Fuse. A controller-first home for your games, on Android, Linux, Windows and macOS.'
 
 
 def meta_line(th, x, y, size, gap):
@@ -78,5 +78,6 @@ def social(W=1280, H=640):
     for i, line in enumerate(lines):
         d, _ = text_path('manrope_medium', line, size, tx, ty + i * lead, tracking=-0.01)
         g.append(f'<path d="{d}" fill="{th["tagline"]}"/>')
-    g.append(meta_line(th, tx, ty + lead + 50, 16, 34))
+    # Five items: a little smaller and closer than on the banner, so the line stays clear of the tiles.
+    g.append(meta_line(th, tx, ty + lead + 50, 14, 24))
     return _svg(W, H, D, ''.join(g))

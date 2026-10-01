@@ -32,6 +32,7 @@ import io.github.matiyaaa.fuse.model.ScrapeCandidate
 import io.github.matiyaaa.fuse.model.ScrapeProviderId
 import io.github.matiyaaa.fuse.model.SortOrder
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
 /**
@@ -200,6 +201,26 @@ interface EmulatorOps {
     suspend fun openEmulator(emulator: EmulatorId)
     fun limitations(emulator: EmulatorId): List<String>
     fun homepage(emulator: EmulatorId): String?
+
+    /** True where Fuse can be pointed at an emulator it didn't find (Windows and macOS). */
+    val canLocate: Boolean get() = false
+
+    /** Every emulator Fuse can start on this device, found or not, by name. */
+    fun known(): List<EmulatorOption> = emptyList()
+
+    /** Where the user located each emulator, by id. */
+    val located: StateFlow<Map<EmulatorId, String>> get() = MutableStateFlow(emptyMap())
+
+    /** Uses the program at [path] for [emulator] and looks again. False when Fuse can't run it. */
+    suspend fun locate(emulator: EmulatorId, path: String): Boolean = false
+
+    /** Forgets where [emulator] was located and looks again. */
+    suspend fun forget(emulator: EmulatorId) = Unit
+
+    /** Extra folders searched for emulators. */
+    val searchFolders: StateFlow<List<String>> get() = MutableStateFlow(emptyList())
+
+    suspend fun setSearchFolders(folders: List<String>) = Unit
 }
 
 interface MediaOps {
@@ -238,7 +259,8 @@ interface MediaOps {
 }
 
 sealed interface ArtworkResult {
-    data class Options(val options: List<ArtworkOption>) : ArtworkResult
+    /** Art to pick from; [guess] is the game it was found for when that is only a best guess by name. */
+    data class Options(val options: List<ArtworkOption>, val guess: ScrapeCandidate? = null) : ArtworkResult
     data class NeedsMatch(val candidates: List<ScrapeCandidate>) : ArtworkResult
     data class Unavailable(val reason: String) : ArtworkResult
 }
@@ -391,6 +413,9 @@ interface UpdateOps {
     /** Installs the ready update. Success(true): restart Fuse now; Success(false): the system took over. */
     suspend fun apply(): Result<Boolean>
     val currentVersion: String
+
+    /** False where an update is got from its release page instead (Windows and macOS). */
+    val inPlace: Boolean get() = true
 }
 
 sealed interface UpdateState {

@@ -88,6 +88,18 @@ Builds, passes its unit tests, packages as a Deb and an AppImage, and starts und
 - [x] AppImage packaging (`scripts/build-appimage.sh`) and an optional login entry
 - [ ] Video previews on the desktop
 
+### Windows and macOS apps
+
+Build, pass their unit tests and a self-test of the packaged app on each system in CI (0.1.0). Not
+yet tried by hand on a PC or a Mac.
+
+- [x] The full launcher, with emulators found the way ES-DE's Windows and macOS rules describe, and Locate for the rest (0.1.0)
+- [x] Controllers through SDL (libGDX Jamepad), credentials through DPAPI or the Keychain (0.1.0)
+- [x] A per-user MSI and a portable zip for Windows, disk images for Apple silicon and Intel Macs (0.1.0)
+- [ ] Code signing with a Microsoft certificate and Apple notarization
+- [ ] Updating in place (today the release page opens)
+- [ ] Checked on real PCs, handheld PCs and Macs
+
 ### Project
 
 - [x] Documentation, licence and third-party notices
@@ -111,6 +123,10 @@ Builds, passes its unit tests, packages as a Deb and an AppImage, and starts und
 - [x] Fuse in recent apps while it is the Home app (0.0.6)
 - [x] Art decoded ahead of time so systems and games show their art at once (0.0.6)
 - [x] Matching that finds games named in every common ROM style, with exact names winning (0.0.6)
+- [x] Pages on the bottom screen: the game, status and controls (0.1.0)
+- [x] New games identified and filled the moment they arrive, and art by name without identifying (0.1.0)
+- [x] A background for every game, never the previous game's (0.1.0)
+- [x] RetroAchievements hashing for Nintendo DS, PlayStation, PlayStation 2 and PSP, zipped ROMs, and a match by name (0.1.0)
 - [ ] SAF-only storage mode that works without All files access (emulators that need FileProvider URIs would then be limited)
 - [ ] R8 minification and resource shrinking for release APKs
 - [ ] Screenshot tests for the design system and main screens
@@ -118,7 +134,7 @@ Builds, passes its unit tests, packages as a Deb and an AppImage, and starts und
 - [ ] Localization (all interface text is English today)
 - [ ] In-app text size setting
 - [ ] TV overscan-safe margins
-- [ ] RetroAchievements hashing for disc systems, Nintendo DS/DSi and 3DS
+- [ ] RetroAchievements hashing for 3DS, Saturn, Dreamcast and compressed disc images (CHD, RVZ)
 - [ ] ScreenScraper developer credentials injected into official builds from CI secrets
 - [ ] A pre-release update channel (the setting exists; update checks only look at stable releases)
 - [ ] On-device checks of the launches marked community or unverified (Kenji-NX, ARMSX1, ARMSX2, Strato, Citron, Sudachi, Winlator Frost)

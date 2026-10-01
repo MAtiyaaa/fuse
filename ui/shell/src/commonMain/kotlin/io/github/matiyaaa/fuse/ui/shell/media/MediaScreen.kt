@@ -76,6 +76,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.components.fadingEdges
 import io.github.matiyaaa.fuse.ui.designsystem.focus.FollowSelection
 import io.github.matiyaaa.fuse.ui.designsystem.focus.GridSelection
 import io.github.matiyaaa.fuse.ui.designsystem.focus.LinearSelection
+import io.github.matiyaaa.fuse.ui.designsystem.icons.ButtonGlyph
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
 import io.github.matiyaaa.fuse.ui.designsystem.icons.HintButton
@@ -83,6 +84,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.input.InputLayer
 import io.github.matiyaaa.fuse.ui.designsystem.input.LayerPriority
 import io.github.matiyaaa.fuse.ui.designsystem.input.NavResult
 import io.github.matiyaaa.fuse.ui.designsystem.media.Artwork
+import io.github.matiyaaa.fuse.ui.designsystem.shape.PillShape
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
@@ -111,7 +113,8 @@ private val slots = listOf(
 private sealed interface Browser {
     data object Closed : Browser
     data class Loading(val label: String? = null) : Browser
-    data class Options(val kind: MediaKind, val options: List<ArtworkOption>) : Browser
+    /** Art to pick; [guess] is the game it was found for when that was a best guess by name. */
+    data class Options(val kind: MediaKind, val options: List<ArtworkOption>, val guess: ScrapeCandidate? = null) : Browser
     data class Message(val text: String) : Browser
     /** Games the sources list for [query]; after picking one, art of [then] is searched when set. */
     data class Matches(val query: String, val candidates: List<ScrapeCandidate>, val then: MediaKind?) : Browser
@@ -217,7 +220,7 @@ fun MediaScreen(app: AppState, owner: MediaOwner, title: String, identifyFirst: 
                 ArtworkResult.Unavailable("Fuse couldn't search for art (${e::class.simpleName}). Try again, or check your keys in Settings, Media and Scraping.")
             }
             browser = when (val r = result) {
-                is ArtworkResult.Options -> if (r.options.isEmpty()) Browser.Message("No ${slotName(k).lowercase()} found. Try another source in Media and Scraping settings.") else Browser.Options(k, r.options)
+                is ArtworkResult.Options -> if (r.options.isEmpty()) Browser.Message("No ${slotName(k).lowercase()} found. Try another source in Media and Scraping settings.") else Browser.Options(k, r.options, r.guess)
                 is ArtworkResult.NeedsMatch -> {
                     // Several close matches: the user picks the game, then art is searched for it.
                     matchSel.index = 0
@@ -303,6 +306,8 @@ fun MediaScreen(app: AppState, owner: MediaOwner, title: String, identifyFirst: 
     LaunchedEffect(browser, adjusting, gameRow) {
         app.hints = when {
             adjusting != null -> listOf(Hint(HintButton.DPAD, "Move focus"), Hint(HintButton.PREV, "Zoom out"), Hint(HintButton.NEXT, "Zoom in"), Hint(HintButton.CONFIRM, "Save"), Hint(HintButton.BACK, "Cancel"))
+            browser is Browser.Options && (browser as Browser.Options).guess != null ->
+                listOf(Hint(HintButton.CONFIRM, "Use this"), Hint(HintButton.OPTIONS, "Not this game?"), Hint(HintButton.BACK, "Close"))
             browser is Browser.Options -> listOf(Hint(HintButton.CONFIRM, "Use this"), Hint(HintButton.BACK, "Close"))
             browser is Browser.Matches -> listOf(Hint(HintButton.CONFIRM, "This is the game"), Hint(HintButton.OPTIONS, "Change search name"), Hint(HintButton.BACK, "Close"))
             gameRow == GameRow.SEARCH_AS -> listOf(Hint(HintButton.CONFIRM, "Change"), Hint(HintButton.OPTIONS, "Fill missing"), Hint(HintButton.BACK, "Back"))
@@ -322,6 +327,8 @@ fun MediaScreen(app: AppState, owner: MediaOwner, title: String, identifyFirst: 
                     browser = Browser.Closed
                     NavResult.ACTIVATED
                 }
+                // Art found by a guess: X says it's another game, and the art follows the pick.
+                NavAction.CONTEXT -> if (options.guess != null) { identify(then = options.kind); NavResult.ACTIVATED } else NavResult.BLOCKED
                 else -> grid.move(e.action, options.options.size, columns = optionCols).let { if (it == NavResult.IGNORED) NavResult.BLOCKED else it }
             }
         }
@@ -470,7 +477,7 @@ fun MediaScreen(app: AppState, owner: MediaOwner, title: String, identifyFirst: 
                         if (gameId != null) FuseButton("Change search name", selected = false, onClick = { editSearchName(thenIdentify = false) }, icon = FuseIcons.TextCursor)
                     }
                 }
-                is Browser.Options -> ArtworkGrid(b, grid, onColumns = { optionCols = it }) { opt ->
+                is Browser.Options -> ArtworkGrid(b, grid, onColumns = { optionCols = it }, onIdentify = { identify(then = b.kind) }) { opt ->
                     app.scope.launch { app.store.media.apply(owner, opt) }
                     browser = Browser.Closed
                 }
@@ -651,7 +658,7 @@ private fun optionColumns(kind: MediaKind, width: Dp): Int {
 }
 
 @Composable
-private fun ArtworkGrid(b: Browser.Options, grid: GridSelection, onColumns: (Int) -> Unit, onPick: (ArtworkOption) -> Unit) {
+private fun ArtworkGrid(b: Browser.Options, grid: GridSelection, onColumns: (Int) -> Unit, onIdentify: () -> Unit, onPick: (ArtworkOption) -> Unit) {
     val state = rememberLazyGridState()
     FollowSelection(state, { grid.index }, anchor = 0.15f)
     BoxWithConstraints {
@@ -659,6 +666,29 @@ private fun ArtworkGrid(b: Browser.Options, grid: GridSelection, onColumns: (Int
     LaunchedEffect(columns) { onColumns(columns) }
     Column {
         SectionLabel("${b.options.size} options for ${slotName(b.kind).lowercase()}")
+        val guess = b.guess
+        if (guess != null) {
+            // Found by the game's name without asking which game it is; one press says it's another.
+            Spacer(Modifier.height(Space.s))
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.m)) {
+                FText(
+                    "Found by name as ${guess.title}${guess.year?.let { " ($it)" }.orEmpty()}",
+                    Fuse.type.body, color = Fuse.colors.textMuted, maxLines = 1, modifier = Modifier.weight(1f, fill = false),
+                )
+                Row(
+                    Modifier
+                        .clip(PillShape)
+                        .background(Fuse.colors.text.copy(alpha = 0.08f))
+                        .clickable(remember { MutableInteractionSource() }, null, onClick = onIdentify)
+                        .padding(start = Space.xs, end = Space.m, top = Space.xs, bottom = Space.xs),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(Space.s),
+                ) {
+                    ButtonGlyph(HintButton.OPTIONS, size = 22.dp)
+                    FText("Not this game? Identify it", Fuse.type.label, maxLines = 1)
+                }
+            }
+        }
         Spacer(Modifier.height(Space.m))
         LazyVerticalGrid(
             columns = GridCells.Fixed(columns),

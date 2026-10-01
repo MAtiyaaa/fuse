@@ -2,6 +2,8 @@ package io.github.matiyaaa.fuse.desktop.services
 
 import io.github.matiyaaa.fuse.data.settings.SecretStore
 import io.github.matiyaaa.fuse.desktop.Log
+import io.github.matiyaaa.fuse.desktop.system.DesktopOs
+import io.github.matiyaaa.fuse.desktop.system.PowerShell
 import io.github.matiyaaa.fuse.desktop.system.Processes
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
@@ -22,13 +24,18 @@ import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.SecretKeySpec
 
 /**
- * Credentials on Linux. The desktop keyring (Secret Service, through the `secret-tool` CLI from
- * libsecret) is used whenever it answers; otherwise [EncryptedFileSecretStore] keeps them. Values are
- * never logged and never passed on a command line (secret-tool reads them from stdin).
+ * Credentials on the desktop. The system keyring is used whenever it answers: Secret Service through
+ * `secret-tool` on Linux, the login Keychain through `security` on macOS. Otherwise, and on Windows,
+ * [EncryptedFileSecretStore] keeps them; on Windows its key is sealed with DPAPI for the signed-in
+ * user. Values are never logged and never passed on a command line (they go through stdin).
  */
-internal class DesktopSecretStore(dataDir: String) : SecretStore {
-    private val keyring = SecretToolStore()
-    private val file = EncryptedFileSecretStore(File(dataDir))
+internal class DesktopSecretStore(dataDir: String, os: DesktopOs = DesktopOs.current) : SecretStore {
+    private val keyring: Keyring = when (os) {
+        DesktopOs.LINUX -> SecretToolStore()
+        DesktopOs.MACOS -> KeychainStore()
+        DesktopOs.WINDOWS -> Keyring.None
+    }
+    private val file = EncryptedFileSecretStore(File(dataDir), if (os == DesktopOs.WINDOWS) DpapiKeyProtector else KeyProtector.None)
 
     override suspend fun get(key: String): String? =
         (if (keyring.available) keyring.lookup(key) else null) ?: file.get(key)
@@ -48,18 +55,33 @@ internal class DesktopSecretStore(dataDir: String) : SecretStore {
     }
 }
 
-/** Secret Service through `secret-tool` (attributes `application=fuse key=<key>`). */
-internal class SecretToolStore {
-    private val tool: String? = Processes.which("secret-tool")
-    val available: Boolean get() = tool != null
+/** A system credential store. */
+internal interface Keyring {
+    val available: Boolean
+    suspend fun lookup(key: String): String?
+    suspend fun store(key: String, value: String): Boolean
+    suspend fun clear(key: String): Boolean
 
-    suspend fun lookup(key: String): String? = withContext(Dispatchers.IO) {
+    object None : Keyring {
+        override val available = false
+        override suspend fun lookup(key: String): String? = null
+        override suspend fun store(key: String, value: String) = false
+        override suspend fun clear(key: String) = false
+    }
+}
+
+/** Secret Service through `secret-tool` (attributes `application=fuse key=<key>`). */
+internal class SecretToolStore : Keyring {
+    private val tool: String? = Processes.which("secret-tool")
+    override val available: Boolean get() = tool != null
+
+    override suspend fun lookup(key: String): String? = withContext(Dispatchers.IO) {
         val t = tool ?: return@withContext null
         val out = Processes.run(listOf(t, "lookup", "application", APP, "key", key), timeoutMs = TIMEOUT_MS) ?: return@withContext null
         if (out.exitCode != 0) null else out.stdout.takeIf { it.isNotEmpty() }
     }
 
-    suspend fun store(key: String, value: String): Boolean = withContext(Dispatchers.IO) {
+    override suspend fun store(key: String, value: String): Boolean = withContext(Dispatchers.IO) {
         val t = tool ?: return@withContext false
         val out = Processes.run(
             listOf(t, "store", "--label=Fuse $key", "application", APP, "key", key),
@@ -71,7 +93,7 @@ internal class SecretToolStore {
         ok
     }
 
-    suspend fun clear(key: String): Boolean = withContext(Dispatchers.IO) {
+    override suspend fun clear(key: String): Boolean = withContext(Dispatchers.IO) {
         val t = tool ?: return@withContext false
         Processes.run(listOf(t, "clear", "application", APP, "key", key), timeoutMs = TIMEOUT_MS)?.exitCode == 0
     }
@@ -91,13 +113,16 @@ internal class SecretToolStore {
  * search showing the values). The key sits next to the data, so anyone who can read the user's files
  * can decrypt them. The desktop keyring is used whenever it is available.
  */
-internal class EncryptedFileSecretStore(private val dir: File) {
+internal class EncryptedFileSecretStore(private val dir: File, private val protector: KeyProtector = KeyProtector.None) {
     private val keyFile = File(dir, "secrets.key")
     private val dataFile = File(dir, "secrets.bin")
     private val mutex = Mutex()
     private val json = Json { ignoreUnknownKeys = true }
     private val serializer = MapSerializer(String.serializer(), String.serializer())
     private val random = SecureRandom()
+
+    /** The opened key, kept once read (opening it can take a moment on Windows). */
+    @Volatile private var openedKey: ByteArray? = null
 
     suspend fun get(key: String): String? = mutex.withLock { withContext(Dispatchers.IO) { load()[key] } }
 
@@ -120,7 +145,8 @@ internal class EncryptedFileSecretStore(private val dir: File) {
             if (bytes.size < MAGIC.size + IV_BYTES || !bytes.copyOfRange(0, MAGIC.size).contentEquals(MAGIC)) return emptyMap()
             val iv = bytes.copyOfRange(MAGIC.size, MAGIC.size + IV_BYTES)
             val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-            cipher.init(Cipher.DECRYPT_MODE, SecretKeySpec(keyFile.readBytes(), "AES"), GCMParameterSpec(128, iv))
+            val key = readKey() ?: return emptyMap()
+            cipher.init(Cipher.DECRYPT_MODE, SecretKeySpec(key, "AES"), GCMParameterSpec(128, iv))
             val plain = cipher.doFinal(bytes, MAGIC.size + IV_BYTES, bytes.size - MAGIC.size - IV_BYTES)
             json.decodeFromString(serializer, String(plain, Charsets.UTF_8))
         } catch (e: Exception) {
@@ -145,29 +171,128 @@ internal class EncryptedFileSecretStore(private val dir: File) {
         }
     }
 
-    private fun keyOrCreate(): ByteArray {
-        if (keyFile.isFile) {
-            val bytes = keyFile.readBytes()
-            if (bytes.size == KEY_BYTES) return bytes
+    /** The key from `secrets.key`: plain, or sealed by [protector] (marked with [SEALED]). */
+    private fun readKey(): ByteArray? {
+        openedKey?.let { return it }
+        if (!keyFile.isFile) return null
+        val bytes = keyFile.readBytes()
+        val key = when {
+            bytes.size == KEY_BYTES -> bytes
+            bytes.size > SEALED.size && bytes.copyOfRange(0, SEALED.size).contentEquals(SEALED) ->
+                protector.open(bytes.copyOfRange(SEALED.size, bytes.size))?.takeIf { it.size == KEY_BYTES }
+            else -> null
         }
-        val key = ByteArray(KEY_BYTES).also(random::nextBytes)
-        writePrivate(keyFile, key)
+        openedKey = key
         return key
     }
 
-    /** Writes [bytes] to a file that is created with mode 0600 (never briefly readable by others). */
+    private fun keyOrCreate(): ByteArray {
+        readKey()?.let { return it }
+        val key = ByteArray(KEY_BYTES).also(random::nextBytes)
+        val sealed = protector.seal(key)
+        writePrivate(keyFile, if (sealed != null) SEALED + sealed else key)
+        openedKey = key
+        return key
+    }
+
+    /**
+     * Writes [bytes] to a file that is created with mode 0600 (never briefly readable by others).
+     * Windows has no such modes; files in the user's AppData are already the user's alone.
+     */
     private fun writePrivate(file: File, bytes: ByteArray) {
         val path = file.toPath()
         Files.deleteIfExists(path)
-        val attrs = PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rw-------"))
-        Files.newByteChannel(path, setOf(StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE), attrs).use { ch ->
+        val posix = path.fileSystem.supportedFileAttributeViews().contains("posix")
+        val attrs = if (posix) arrayOf(PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rw-------"))) else emptyArray()
+        Files.newByteChannel(path, setOf(StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE), *attrs).use { ch ->
             ch.write(java.nio.ByteBuffer.wrap(bytes))
         }
     }
 
     private companion object {
         val MAGIC = "FUSESEC1".toByteArray(Charsets.US_ASCII)
+        val SEALED = "FUSEKEY1".toByteArray(Charsets.US_ASCII)
         const val IV_BYTES = 12
         const val KEY_BYTES = 32
+    }
+}
+
+/** Seals the file store's key for the signed-in user, where the system can. */
+internal interface KeyProtector {
+    fun seal(key: ByteArray): ByteArray?
+    fun open(sealed: ByteArray): ByteArray?
+
+    object None : KeyProtector {
+        override fun seal(key: ByteArray): ByteArray? = null
+        override fun open(sealed: ByteArray): ByteArray? = null
+    }
+}
+
+/**
+ * Windows DPAPI (`ProtectedData`, CurrentUser scope) through Windows PowerShell: only the same user
+ * on the same computer can open the key. The bytes go through stdin as base64.
+ */
+internal object DpapiKeyProtector : KeyProtector {
+    private fun run(method: String, input: ByteArray): ByteArray? {
+        val script = """
+            Add-Type -AssemblyName System.Security
+            ${'$'}b = [Convert]::FromBase64String([Console]::In.ReadToEnd().Trim())
+            ${'$'}o = [System.Security.Cryptography.ProtectedData]::$method(${'$'}b, ${'$'}null, [System.Security.Cryptography.DataProtectionScope]::CurrentUser)
+            [Console]::Out.Write([Convert]::ToBase64String(${'$'}o))
+        """.trimIndent()
+        val out = PowerShell.run(script, stdin = java.util.Base64.getEncoder().encodeToString(input), timeoutMs = 20_000) ?: return null
+        if (out.exitCode != 0) return null
+        return try {
+            java.util.Base64.getDecoder().decode(out.stdout.trim())
+        } catch (e: IllegalArgumentException) {
+            null
+        }
+    }
+
+    override fun seal(key: ByteArray): ByteArray? = run("Protect", key)
+
+    override fun open(sealed: ByteArray): ByteArray? = run("Unprotect", sealed)
+}
+
+/**
+ * The macOS login Keychain through `security` (service "Fuse", account = the key). Values are
+ * stored base64 encoded and handed over as hex through `security -i`'s stdin, so they never show up
+ * in a process list.
+ */
+internal class KeychainStore : Keyring {
+    private val tool: String? = "/usr/bin/security".takeIf { File(it).canExecute() }
+    override val available: Boolean get() = tool != null
+
+    override suspend fun lookup(key: String): String? = withContext(Dispatchers.IO) {
+        val t = tool ?: return@withContext null
+        val out = Processes.run(listOf(t, "find-generic-password", "-s", SERVICE, "-a", key, "-w"), timeoutMs = TIMEOUT_MS) ?: return@withContext null
+        if (out.exitCode != 0) return@withContext null
+        try {
+            String(java.util.Base64.getDecoder().decode(out.stdout.trim()), Charsets.UTF_8)
+        } catch (e: IllegalArgumentException) {
+            null
+        }
+    }
+
+    override suspend fun store(key: String, value: String): Boolean = withContext(Dispatchers.IO) {
+        val t = tool ?: return@withContext false
+        if (key.any { it == '"' || it == '\\' || it.isWhitespace() }) return@withContext false
+        val encoded = java.util.Base64.getEncoder().encodeToString(value.toByteArray(Charsets.UTF_8))
+        val hex = encoded.toByteArray(Charsets.US_ASCII).joinToString("") { "%02x".format(it) }
+        Processes.run(listOf(t, "-i"), timeoutMs = TIMEOUT_MS, stdin = "add-generic-password -U -s $SERVICE -a \"$key\" -X $hex\n")
+        // security -i reports success either way; reading it back is the real check.
+        val ok = lookup(key) == value
+        if (!ok) Log.info("the Keychain did not accept a credential; using Fuse's encrypted file instead")
+        ok
+    }
+
+    override suspend fun clear(key: String): Boolean = withContext(Dispatchers.IO) {
+        val t = tool ?: return@withContext false
+        Processes.run(listOf(t, "delete-generic-password", "-s", SERVICE, "-a", key), timeoutMs = TIMEOUT_MS)?.exitCode == 0
+    }
+
+    private companion object {
+        const val SERVICE = "Fuse"
+        const val TIMEOUT_MS = 20_000L
     }
 }

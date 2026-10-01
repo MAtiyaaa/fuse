@@ -76,6 +76,8 @@ data class UiPrefs(
     val cartridgeRommDetails: Boolean = true,
     val checkForUpdates: Boolean = true,
     val heroDim: Float = 0.3f,
+    /** Which of its lists the Apps tab opens on: Pinned, Emulators or All apps. */
+    val appsFilter: io.github.matiyaaa.fuse.model.AppFilter = io.github.matiyaaa.fuse.model.AppFilter.ALL,
 )
 
 /**

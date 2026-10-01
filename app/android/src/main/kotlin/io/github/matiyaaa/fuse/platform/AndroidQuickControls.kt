@@ -2,6 +2,9 @@ package io.github.matiyaaa.fuse.platform
 
 import android.content.Context
 import android.content.Intent
+import android.database.ContentObserver
+import android.os.Handler
+import android.os.Looper
 import android.media.AudioManager
 import android.os.Build
 import android.provider.Settings
@@ -14,9 +17,10 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlin.math.roundToInt
 
 /**
- * Brightness applies to Fuse's own window only (changing the system brightness needs WRITE_SETTINGS,
- * which Fuse does not ask for). Volume is the media stream. Wi-Fi and Bluetooth open the system
- * panels, since apps can't toggle them on current Android.
+ * Brightness applies to Fuse's own window, unless "Modify system settings" was allowed for Fuse:
+ * then the main screen's brightness itself changes, so it holds in games too. The second screen's
+ * brightness is that of Fuse's window there. Volume is the media stream, followed live. Wi-Fi and
+ * Bluetooth open the system panels, since apps can't toggle them on current Android.
  */
 class AndroidQuickControls(
     context: Context,
@@ -28,12 +32,38 @@ class AndroidQuickControls(
     /** Brightness chosen in Fuse, or null to follow the system. Re-applied when the window is recreated. */
     private var override: Float? = null
 
+    /** The second screen's brightness chosen in Fuse, and Fuse's windows there. */
+    private var secondOverride: Float? = null
+    private val secondWindows = ArrayList<java.lang.ref.WeakReference<android.view.Window>>()
+
     private val _brightness = MutableStateFlow(readBrightness())
     override val brightness: StateFlow<Float?> = _brightness.asStateFlow()
     private val _volume = MutableStateFlow(readVolume())
     override val volume: StateFlow<Float?> = _volume.asStateFlow()
+    private val _second = MutableStateFlow<Float?>(null)
+    override val secondBrightness: StateFlow<Float?> = _second.asStateFlow()
+    private val _system = MutableStateFlow(canWriteSystem())
+    override val systemBrightness: StateFlow<Boolean> = _system.asStateFlow()
+    override val canAskSystemBrightness: Boolean get() = true
+
+    init {
+        // Volume changed with the device's buttons or another app shows at once.
+        runCatching {
+            appContext.contentResolver.registerContentObserver(
+                Settings.System.CONTENT_URI,
+                true,
+                object : ContentObserver(Handler(Looper.getMainLooper())) {
+                    override fun onChange(selfChange: Boolean) {
+                        _volume.value = readVolume()
+                        if (_system.value) _brightness.value = readBrightness()
+                    }
+                },
+            )
+        }
+    }
 
     fun refresh() {
+        _system.value = canWriteSystem()
         _brightness.value = readBrightness()
         _volume.value = readVolume()
     }
@@ -44,8 +74,50 @@ class AndroidQuickControls(
         window.attributes = window.attributes.apply { screenBrightness = value }
     }
 
+    /** A window of Fuse on the second screen; its brightness follows [setSecondBrightness]. */
+    fun attachSecond(window: android.view.Window) {
+        secondWindows.removeAll { it.get() == null || it.get() === window }
+        secondWindows += java.lang.ref.WeakReference(window)
+        secondOverride?.let { v -> window.attributes = window.attributes.apply { screenBrightness = v } }
+        if (_second.value == null) _second.value = secondOverride ?: readBrightness() ?: 0.5f
+    }
+
+    fun detachSecond(window: android.view.Window) {
+        secondWindows.removeAll { it.get() == null || it.get() === window }
+        if (secondWindows.isEmpty()) _second.value = null
+    }
+
+    override fun setSecondBrightness(value: Float) {
+        val v = value.coerceIn(0.02f, 1f)
+        secondOverride = v
+        secondWindows.mapNotNull { it.get() }.forEach { w -> w.attributes = w.attributes.apply { screenBrightness = v } }
+        _second.value = v
+    }
+
+    override fun askSystemBrightness() {
+        val page = Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS, android.net.Uri.parse("package:${appContext.packageName}"))
+        activities.startFirst(page, Intent(Settings.ACTION_DISPLAY_SETTINGS))
+    }
+
+    private fun canWriteSystem(): Boolean = runCatching { Settings.System.canWrite(appContext) }.getOrDefault(false)
+
     override fun setBrightness(value: Float) {
         val v = value.coerceIn(0.02f, 1f)
+        if (canWriteSystem()) {
+            // The screen itself: manual mode, then the level, and Fuse's window follows it again.
+            val written = runCatching {
+                val resolver = appContext.contentResolver
+                Settings.System.putInt(resolver, Settings.System.SCREEN_BRIGHTNESS_MODE, Settings.System.SCREEN_BRIGHTNESS_MODE_MANUAL)
+                Settings.System.putInt(resolver, Settings.System.SCREEN_BRIGHTNESS, (v * 255).roundToInt().coerceIn(1, 255))
+            }.isSuccess
+            if (written) {
+                override = null
+                activities.main?.window?.let { w -> w.attributes = w.attributes.apply { screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE } }
+                _system.value = true
+                _brightness.value = v
+                return
+            }
+        }
         override = v
         activities.main?.window?.let { applyTo(it) }
         _brightness.value = v

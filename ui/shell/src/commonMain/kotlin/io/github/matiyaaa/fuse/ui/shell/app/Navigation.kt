@@ -9,6 +9,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import io.github.matiyaaa.fuse.model.CollectionId
 import io.github.matiyaaa.fuse.model.Destination
+import io.github.matiyaaa.fuse.model.EmulatorId
 import io.github.matiyaaa.fuse.model.GameId
 import io.github.matiyaaa.fuse.model.MediaOwner
 import io.github.matiyaaa.fuse.model.PlatformId
@@ -32,12 +33,18 @@ sealed interface Route {
     data object Licenses : Route
     data object Onboarding : Route
     data class FolderBrowser(val game: GameId) : Route
-    /** Fuse's own file picker, for "Add a game". */
-    data class PickFile(val purpose: FilePurpose) : Route
+    /** Fuse's own file picker, for "Add a game" and for locating an emulator ([locate]). */
+    data class PickFile(val purpose: FilePurpose, val locate: LocateRequest? = null) : Route
 }
 
 /** What a file is picked for. */
-enum class FilePurpose { APK, GAME }
+enum class FilePurpose { APK, GAME, EMULATOR }
+
+/**
+ * An emulator to locate, and what then uses it: a system ([platform]) or a game ([game]) the user
+ * was choosing an emulator for.
+ */
+data class LocateRequest(val emulator: EmulatorId, val name: String, val platform: PlatformId? = null, val game: GameId? = null)
 
 /** Which way the last navigation went, so transitions can move forward or reverse. */
 enum class NavDirection { FORWARD, BACK, LATERAL }
@@ -85,6 +92,11 @@ class Navigator(start: Route) {
         stack.add(route)
     }
 
+    /** Drops what was remembered for [key], so the route starts fresh next time. */
+    fun forget(key: String) {
+        memory.remove(key)
+    }
+
     /** Remembered per-route UI state (selections, scroll anchors). Bounded so memory stays small. */
     @Suppress("UNCHECKED_CAST")
     fun <T : Any> remembered(key: String, create: () -> T): T {
@@ -100,3 +112,14 @@ class Navigator(start: Route) {
 @Composable
 fun <T : Any> rememberRouteState(navigator: Navigator, key: String, create: () -> T): T =
     remember(key) { navigator.remembered(key, create) }
+
+/**
+ * Like [rememberRouteState], but opening the route anew (a forward push) starts fresh. Only Back
+ * returns to where you were.
+ */
+@Composable
+fun <T : Any> rememberPageState(navigator: Navigator, key: String, create: () -> T): T =
+    remember(key) {
+        if (navigator.direction == NavDirection.FORWARD) navigator.forget(key)
+        navigator.remembered(key, create)
+    }

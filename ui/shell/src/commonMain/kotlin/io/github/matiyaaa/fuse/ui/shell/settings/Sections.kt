@@ -9,6 +9,7 @@ import androidx.compose.runtime.setValue
 import io.github.matiyaaa.fuse.integrations.KeyCheck
 import io.github.matiyaaa.fuse.integrations.systemart.SystemArtPack
 import io.github.matiyaaa.fuse.integrations.systemart.SystemArtStyle
+import io.github.matiyaaa.fuse.model.AppFilter
 import io.github.matiyaaa.fuse.model.CartridgeRoute
 import io.github.matiyaaa.fuse.model.Destination
 import io.github.matiyaaa.fuse.model.DualScreenMode
@@ -33,13 +34,16 @@ import io.github.matiyaaa.fuse.ui.designsystem.components.Trailing
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
 import io.github.matiyaaa.fuse.ui.designsystem.theme.ThemePresets
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
-import io.github.matiyaaa.fuse.ui.shell.app.addGame
 import io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec
 import io.github.matiyaaa.fuse.ui.shell.app.ConfirmSpec
 import io.github.matiyaaa.fuse.ui.shell.app.Route
+import io.github.matiyaaa.fuse.ui.shell.app.addGame
 import io.github.matiyaaa.fuse.ui.shell.app.applyUpdate
+import io.github.matiyaaa.fuse.ui.shell.app.emulatorFoldersPicker
 import io.github.matiyaaa.fuse.ui.shell.app.hasTwoScreens
 import io.github.matiyaaa.fuse.ui.shell.app.label
+import io.github.matiyaaa.fuse.ui.shell.app.locatePicker
+import io.github.matiyaaa.fuse.ui.shell.app.offers
 import io.github.matiyaaa.fuse.ui.shell.app.screenName
 import io.github.matiyaaa.fuse.ui.shell.home.title
 import io.github.matiyaaa.fuse.ui.shell.music.BundledMusic
@@ -119,16 +123,17 @@ fun homeRows(app: AppState): List<MenuAction> {
         add(app.choiceRow("mode", "Home style", FuseIcons.Dashboard, p.home.mode, listOf(HomeMode.FLOW to "Flow", HomeMode.CHANNELS to "Channels"), optionDetail = {
             if (it == HomeMode.FLOW) "A continuous dashboard of shelves" else "A board of tiles you arrange yourself"
         }) { v -> set { it.copy(home = it.home.copy(mode = v)) } })
-        for (d in Destination.entries.filter { it != Destination.HOME && (it != Destination.CARTRIDGE || p.cartridgeEnabled) }) {
+        for (d in Destination.entries.filter { it != Destination.HOME && app.offers(it) && (it != Destination.CARTRIDGE || p.cartridgeEnabled) }) {
             val visible = d in p.destinations
             add(toggleRow("dest.$d", "${d.label()} in the top bar", FuseIcons.PanelsTop, visible) { v ->
                 set { it.copy(destinations = if (v) (it.destinations + d).sortedBy { x -> Destination.entries.indexOf(x) } else it.destinations - d) }
             })
         }
-        add(MenuAction("dest.order", "Section order", FuseIcons.MoveHorizontal, detail = p.destinations.joinToString("  ·  ") { it.label() }, trailing = Trailing.Chevron, onSelect = {
+        val shownTabs = p.destinations.filter { app.offers(it) }
+        add(MenuAction("dest.order", "Section order", FuseIcons.MoveHorizontal, detail = shownTabs.joinToString("  ·  ") { it.label() }, trailing = Trailing.Chevron, onSelect = {
             app.choice = io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec(
                 title = "Move a section earlier",
-                options = p.destinations.drop(1).map { d ->
+                options = shownTabs.drop(1).map { d ->
                     MenuAction("mv.$d", d.label(), null, onSelect = {
                         set { s ->
                             val list = s.destinations.toMutableList()
@@ -141,12 +146,19 @@ fun homeRows(app: AppState): List<MenuAction> {
                 },
             )
         }))
-        for (w in p.home.widgets.sortedBy { it.order }) {
+        if (app.store.apps.supported) {
+            add(app.choiceRow(
+                "apps.filter", "Apps opens on", FuseIcons.Smartphone, p.appsFilter,
+                listOf(AppFilter.ALL to "All apps", AppFilter.PINNED to "Pinned", AppFilter.EMULATORS to "Emulators"),
+                detail = "The list the Apps tab shows first. It keeps your place when you come back",
+            ) { v -> set { it.copy(appsFilter = v) } })
+        }
+        for (w in p.home.widgets.filter { app.offers(it.kind) }.sortedBy { it.order }) {
             add(toggleRow("w.${w.id}", w.kind.title(), widgetIcon(w.kind), w.visible) { v ->
                 set { s -> s.copy(home = s.home.copy(widgets = s.home.widgets.map { if (it.id == w.id) it.copy(visible = v) else it })) }
             })
         }
-        val missing = WidgetKind.entries.filter { k -> p.home.widgets.none { it.kind == k } }
+        val missing = WidgetKind.entries.filter { k -> app.offers(k) && p.home.widgets.none { it.kind == k } }
         if (missing.isNotEmpty()) {
             add(MenuAction("w.add", "Add a widget", FuseIcons.Plus, trailing = Trailing.Chevron, onSelect = {
                 app.choice = io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec(
@@ -355,14 +367,35 @@ fun emulatorRows(app: AppState): List<MenuAction> {
         add(MenuAction("refresh", "Look for emulators again", FuseIcons.Refresh, detail = "Fuse also notices installs and removals on its own", onSelect = {
             app.store.emulators.refresh(); app.toasts.show("Looking for emulators")
         }))
+        if (app.store.emulators.canLocate) {
+            val folders by app.store.emulators.searchFolders.collectAsState()
+            add(MenuAction("locate", "Locate an emulator", FuseIcons.Search, detail = "Show Fuse where one is when it wasn't found", trailing = Trailing.Chevron, onSelect = {
+                app.locatePicker()
+            }))
+            add(MenuAction(
+                "folders", "Emulator folders", FuseIcons.FolderOpen,
+                detail = if (folders.isEmpty()) "Add folders Fuse searches for emulators" else folders.joinToString("\n"),
+                trailing = Trailing.Value(if (folders.isEmpty()) "None" else "${folders.size}"),
+                onSelect = { app.emulatorFoldersPicker() },
+            ))
+        }
         if (installed.isEmpty()) add(infoRow("none", "No emulators found", detail = "Install an emulator for a system and it appears here"))
         for (e in installed.sortedBy { it.name.lowercase() }) {
             val limits = app.store.emulators.limitations(e.id)
             add(MenuAction(
                 "emu.${e.id}", e.name + (e.version?.let { "  $it" } ?: ""), FuseIcons.Joystick,
                 detail = buildString {
-                    append(e.platforms.joinToString(", ") { it.value.uppercase() })
-                    append("  ·  found via ${e.detectedVia}")
+                    val systems = when {
+                        e.platforms.isEmpty() -> null
+                        e.platforms.size > 8 -> "Any system"
+                        else -> e.platforms.joinToString(", ") { it.value.uppercase() }
+                    }
+                    val found = when (e.detectedVia) {
+                        "Built in" -> "built in"
+                        "Located" -> "located by you"
+                        else -> "found via ${e.detectedVia}"
+                    }
+                    append(listOfNotNull(systems, found).joinToString("  ·  "))
                     if (e.isFamilyMatch) append("  ·  recognised as a variant")
                     if (limits.isNotEmpty()) append("\n" + limits.joinToString("\n"))
                 },
@@ -814,6 +847,8 @@ fun privacyRows(app: AppState): List<MenuAction> = listOf(
     },
 )
 
+private const val FUSE_RELEASES = "https://github.com/MAtiyaaa/fuse/releases/latest"
+
 @Composable
 fun updateRows(app: AppState): List<MenuAction> {
     val p by app.store.prefs.collectAsState()
@@ -822,7 +857,15 @@ fun updateRows(app: AppState): List<MenuAction> {
     return buildList {
         add(infoRow("version", "Fuse", app.store.updates.currentVersion, icon = FuseIcons.Info))
         val r = available
-        if (r != null) {
+        if (r != null && !app.store.updates.inPlace) {
+            // Windows and macOS install Fuse themselves: the release page has the installer.
+            add(MenuAction(
+                "get", "Get ${r.name}", FuseIcons.External,
+                detail = "Opens its release page. Install it over this one; your library and settings stay",
+                trailing = Trailing.Chevron,
+                onSelect = { app.platform.openUrl(r.htmlUrl.ifBlank { FUSE_RELEASES }) },
+            ))
+        } else if (r != null) {
             val size = GitHubReleasesSize.of(r, app)
             when (val st = state) {
                 is UpdateState.Downloading -> add(MenuAction(
@@ -866,6 +909,12 @@ fun aboutRows(app: AppState): List<MenuAction> = listOfNotNull(
     infoRow("fuse", "Fuse ${app.store.updates.currentVersion}", detail = "A console-style home for your games. Free and open source (GPL-3.0-or-later)", icon = FuseIcons.Info),
     MenuAction("source", "Source code", FuseIcons.External, detail = "github.com/MAtiyaaa/fuse", onSelect = { app.platform.openUrl("https://github.com/MAtiyaaa/fuse") }),
     MenuAction("licences", "Open-source licences", FuseIcons.File, detail = "Fuse, its libraries, fonts and icons", trailing = Trailing.Chevron, onSelect = { app.go(Route.Licenses) }),
+    MenuAction(
+        "cartridge.credit", "Cartridge by abdu2304", FuseIcons.CloudDownload,
+        detail = "The RomM companion Fuse pairs with. github.com/abdu2304/cartridge",
+        trailing = Trailing.Chevron,
+        onSelect = { app.platform.openUrl("https://github.com/abdu2304/cartridge") },
+    ),
     MenuAction("setup", "Run setup again", FuseIcons.Sparkles, trailing = Trailing.Chevron, onSelect = { app.go(Route.Onboarding) }),
     infoRow("credits", "Made with", detail = "Kotlin, Compose Multiplatform, SQLDelight, Ktor, Coil. Icons: Lucide (ISC). Fonts: Sora and Manrope (SIL OFL). Emulator launch data: ES-DE (MIT) and Cartridge (MIT). Hashing rules: rcheevos (MIT)", icon = FuseIcons.Blocks),
     infoRow("trademarks", "Trademarks", detail = "Console and game names belong to their owners. Fuse ships no console artwork, sounds, BIOS or games", icon = FuseIcons.Tag),

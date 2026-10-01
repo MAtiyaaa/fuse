@@ -80,14 +80,14 @@ Namespaces follow the module path (`io.github.matiyaaa.fuse.core.model` for `:co
 |---|---|---|
 | `core:model` | Serializable domain types shared by every layer. No logic beyond small derived properties | `Game.kt`, `Platform.kt`, `Launch.kt`, `Media.kt`, `Settings.kt` |
 | `core:library` | Reads library folders and turns them into `ScannedGame`s: platform detection, folder interpretation, disc grouping, filename parsing, local media, BIOS checks. Read-only | `scan/LibraryScanner.kt`, `scan/FolderInterpreter.kt`, `PlatformCatalog.kt`, `bios/BiosChecker.kt` |
-| `core:launch` | Emulator and launcher catalogs as data, installed-emulator detection helpers, and launch resolution into a `LaunchPlan`. Never starts anything | `LaunchResolver.kt`, `AdapterRegistry.kt`, `android/AndroidEmulatorCatalog.kt`, `linux/LinuxCatalog.kt` |
+| `core:launch` | Emulator and launcher catalogs as data, installed-emulator detection helpers, and launch resolution into a `LaunchPlan`. Never starts anything | `LaunchResolver.kt`, `AdapterRegistry.kt`, `android/AndroidEmulatorCatalog.kt`, `linux/LinuxCatalog.kt`, `desktop/WindowsCatalog.kt`, `desktop/MacCatalog.kt` |
 | `core:integrations` | HTTP clients for RetroAchievements, SteamGridDB, IGDB, TheGamesDB, ScreenScraper, libretro thumbnails, the Art Book Next system art pack and GitHub Releases; the scrape coordinator and title matcher; the Cartridge bridge protocol | `scrape/ScrapeCoordinator.kt`, `cartridge/CartridgeProtocol.kt`, `FuseHttp.kt` |
 | `core:data` | SQLDelight database, repositories, the library indexer that reconciles scans, app settings and scoped settings, the `SecretStore` contract | `FuseData.kt`, `repo/LibraryIndexer.kt`, `settings/AppSettings.kt` |
 | `ui:designsystem` | Tokens, colours, typography, shapes, motion, theme presets, focus and selection, input routing, components, icons, sounds, hero backdrop and generated art | `theme/`, `components/`, `input/InputRouter.kt` |
 | `ui:shell` | Every screen and overlay, navigation, onboarding and settings, written against the `FuseStore` and `PlatformUi` interfaces | `app/FuseApp.kt`, `store/FuseStore.kt`, `store/FuseServices.kt` |
 | `ui:link` | Phone Link: a small Ktor (CIO) web server with its JSON and live-updates API over `FuseStore`, sign-in (PBKDF2 password hash, sessions, lockout) and the phone web app in `src/web`, bundled into `WebAssets.kt` at build time. See [docs/PHONE_LINK.md](docs/PHONE_LINK.md) | `PhoneLinkServer.kt`, `LinkApi.kt`, `LinkAuth.kt`, `src/web/` |
 | `app:android` | Android host: implements `FuseServices` and `PlatformUi` (Home role, emulator launching, status data, Cartridge provider client, installer, companion screen, Keystore secrets) | `app/android/src/main` |
-| `app:desktop` | Linux host: implements `FuseServices` and `PlatformUi` (window modes, joystick input, Secret Service secrets, AppImage packaging) | `app/desktop/src/main` |
+| `app:desktop` | Linux, Windows and macOS host, switching on `DesktopOs` where they differ: implements `FuseServices` and `PlatformUi` (window modes, controllers from `/dev/input` or SDL, Secret Service, DPAPI or Keychain secrets, AppImage, MSI and DMG packaging). No Apps section on any desktop; Cartridge only on Linux | `app/desktop/src/main` |
 
 ## Domain concepts
 
@@ -235,8 +235,12 @@ a `Confidence` level (`VERIFIED_ESDE`, `VERIFIED_SOURCE`, `COMMUNITY`, `UNVERIFI
 entries only open the app.
 
 The registry (`AdapterRegistry.Default`) holds 102 Android definitions (`AndroidConsoleDefs` and
-`AndroidPcDefs`) plus the native Android app adapter, and 35 Linux definitions plus the `.desktop`
-shortcut adapter.
+`AndroidPcDefs`) plus the native Android app adapter, 35 Linux definitions plus the `.desktop`
+shortcut adapter, 32 Windows definitions plus `WindowsShortcutAdapter` (`.exe`, `.lnk`, `.url`,
+`.bat`), and 29 macOS definitions plus `MacOpenAdapter` (apps and scripts). Windows and macOS reuse
+the Linux definitions with their own ids (`windows.ppsspp`, `macos.ppsspp`) and spell out only what
+ES-DE does differently there; the same `LinuxCommandAdapter`, given the host, runs all three.
+`EmulatorPriority` carries Linux's order over to each with that host's ids.
 
 Resolution (`LaunchResolver.resolve`):
 
@@ -261,8 +265,14 @@ Resolution (`LaunchResolver.resolve`):
 
 Detection is separate from resolution: `AndroidEmulatorCatalog.identify` matches an installed package
 (and verifies an exported activity) against the catalog, falling back to `AndroidFamilies` for forks
-and renamed builds; `LinuxDetector` searches `$PATH`, Flatpak and AppImage folders. Adapters never
-change emulator configuration.
+and renamed builds; `LinuxDetector` searches `$PATH`, Flatpak and AppImage folders;
+`WindowsDetector` lists every likely parent folder once (Program Files, AppData, each drive, the
+ES-DE, RetroBat, EmuDeck and LaunchBox layouts, Scoop, Chocolatey, winget, Steam libraries) and
+looks for the programs ES-DE names; `MacDetector` reads app bundles (`CFBundleExecutable`) and
+Homebrew folders. On Windows and macOS the user can also locate an emulator and add search folders,
+kept in `emulators.json`. Adapters never change emulator configuration. Paths in shared code always
+use forward slashes, Windows drives included (`C:/Games/x.iso`, with `C:/` as a root in `FsPath`);
+the desktop app turns them back into backslashes only in the arguments a Windows program gets.
 
 ## Input routing
 
@@ -367,9 +377,10 @@ presses.
 ## Security model
 
 - **Secrets live only in the platform's secure store.** `SecretStore` is implemented with Android
-  Keystore backed encryption (AES-256-GCM) on Android and the Secret Service (`secret-tool`) on
-  Linux, falling back to an AES-GCM encrypted file readable only by the user when no Secret Service
-  is available. The keys are listed in `SecretKeys`: RetroAchievements username and web API key,
+  Keystore backed encryption (AES-256-GCM) on Android, the Secret Service (`secret-tool`) on Linux
+  and the login Keychain (`security`, values through stdin) on macOS, falling back to an AES-GCM
+  encrypted file readable only by the user when no keyring answers. On Windows that file's key is
+  sealed with DPAPI for the signed-in user. The keys are listed in `SecretKeys`: RetroAchievements username and web API key,
   SteamGridDB key, IGDB client id and secret, TheGamesDB key, ScreenScraper user and password.
   Secrets never go into the database, `AppSettings`, logs or exported intents.
 - **Secrets cannot leak through strings.** Clients hold keys in `Secret`, whose `toString()` prints

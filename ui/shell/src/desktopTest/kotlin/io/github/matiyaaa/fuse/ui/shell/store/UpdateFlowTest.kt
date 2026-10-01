@@ -84,4 +84,39 @@ class UpdateFlowTest {
         assertTrue(result.getOrThrow())
         assertEquals("/tmp/fuse-new.AppImage", installer.applied)
     }
+
+    private fun releaseJson(vararg assets: String) = """
+        {"tag_name": "v9.9.9", "name": "Fuse 9.9.9", "html_url": "https://github.com/MAtiyaaa/fuse/releases/tag/v9.9.9",
+         "assets": [${assets.joinToString(",") { "{\"name\": \"$it\", \"browser_download_url\": \"https://example.invalid/$it\", \"size\": 1}" }}]}
+    """.trimIndent()
+
+    @Test
+    fun aReleaseCountsOnceItHasThisDevicesBuild() = runBlocking {
+        // The APK is published first; a Linux PC hears of the release only once its AppImage is there.
+        val apkOnly = FakeServices(FuseData(DesktopDatabase.open(File(cache, "a.db").absolutePath)), cache, latestRelease = releaseJson("Fuse-9.9.9-android.apk"))
+        apkOnly.installer = StepInstaller()
+        assertEquals(null, createFuseStore(apkOnly, scope).updates.check())
+        val both = FakeServices(
+            FuseData(DesktopDatabase.open(File(cache, "b.db").absolutePath)), cache,
+            latestRelease = releaseJson("Fuse-9.9.9-android.apk", "Fuse-9.9.9-x86_64.AppImage"),
+        )
+        both.installer = StepInstaller()
+        assertEquals("v9.9.9", createFuseStore(both, scope).updates.check()?.tag)
+    }
+
+    @Test
+    fun windowsAndMacGetTheReleasePage() = runBlocking {
+        val services = FakeServices(
+            FuseData(DesktopDatabase.open(File(cache, "w.db").absolutePath)), cache,
+            latestRelease = releaseJson("Fuse-9.9.9-windows-x64.msi", "Fuse-9.9.9-windows-x64.zip"),
+        )
+        services.installer = object : ReleaseInstaller {
+            override val platform = ReleasePlatform.WINDOWS_X64
+            override val inPlace = false
+            override suspend fun install(asset: ReleaseAsset, onProgress: (Float) -> Unit) = Result.success(Unit)
+        }
+        val store = createFuseStore(services, scope)
+        assertEquals("v9.9.9", store.updates.check()?.tag)
+        assertEquals(false, store.updates.inPlace)
+    }
 }

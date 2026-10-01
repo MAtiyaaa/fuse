@@ -17,6 +17,7 @@ androidx-core = "1.19.1"
 media3 = "1.11.1"
 junit = "4.13.2"
 jlayer = "1.0.1"
+jamepad = "2.30.0.0"
 
 android-compileSdk = "37"
 android-targetSdk = "36"
@@ -73,6 +74,7 @@ media3-exoplayer = { module = "androidx.media3:media3-exoplayer", version.ref = 
 media3-ui = { module = "androidx.media3:media3-ui", version.ref = "media3" }
 junit = { module = "junit:junit", version.ref = "junit" }
 jlayer = { module = "javazoom:jlayer", version.ref = "jlayer" }
+jamepad = { module = "com.badlogicgames.jamepad:jamepad", version.ref = "jamepad" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

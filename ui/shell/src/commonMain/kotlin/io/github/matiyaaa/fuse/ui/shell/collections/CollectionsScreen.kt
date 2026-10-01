@@ -32,7 +32,6 @@ import io.github.matiyaaa.fuse.model.MediaOwner
 import io.github.matiyaaa.fuse.model.MediaSet
 import io.github.matiyaaa.fuse.model.NavAction
 import io.github.matiyaaa.fuse.model.SortOrder
-import io.github.matiyaaa.fuse.ui.designsystem.components.Chip
 import io.github.matiyaaa.fuse.ui.designsystem.components.FText
 import io.github.matiyaaa.fuse.ui.designsystem.components.Hint
 import io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction
@@ -48,6 +47,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.input.InputLayer
 import io.github.matiyaaa.fuse.ui.designsystem.input.NavResult
 import io.github.matiyaaa.fuse.ui.designsystem.media.HeroSource
 import io.github.matiyaaa.fuse.ui.designsystem.shape.SquircleShape
+import io.github.matiyaaa.fuse.ui.designsystem.theme.Aspect
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
@@ -126,11 +126,13 @@ fun CollectionsScreen(app: AppState) {
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val compact = maxHeight < 560.dp
-        val gap = Space.l
+        // Sized like the Systems screen's cards: about six across, never smaller than a thumb.
+        val gap = Space.m
         val usable = maxWidth - Space.gutter * 2
-        columns = ((usable + gap) / (300.dp + gap)).toInt().coerceIn(2, 5)
+        val target = (maxWidth * 0.135f).coerceAtLeast(112.dp)
+        columns = ((usable + gap) / (target + gap)).toInt().coerceIn(3, 8)
         val cardWidth = (usable - gap * (columns - 1)) / columns
-        val artHeight = cardWidth * 0.56f
+        val artHeight = cardWidth / Aspect.SYSTEM_CARD
         Column(Modifier.fillMaxSize()) {
             Spacer(Modifier.height(Size.hudHeight + if (compact) Space.s else Space.l))
             Row(Modifier.padding(horizontal = Space.gutter), verticalAlignment = Alignment.Bottom) {
@@ -153,7 +155,7 @@ fun CollectionsScreen(app: AppState) {
                 modifier = Modifier.weight(1f).fadingEdges(top = if (grid.canScrollBackward) 24.dp else 0.dp),
                 contentPadding = PaddingValues(start = Space.gutter, end = Space.gutter, top = Space.l, bottom = Size.hintHeight + Space.x4),
                 horizontalArrangement = Arrangement.spacedBy(gap),
-                verticalArrangement = Arrangement.spacedBy(if (compact) Space.l else Space.xl),
+                verticalArrangement = Arrangement.spacedBy(Space.l),
             ) {
                 itemsIndexed(items, key = { _, item -> if (item is CollectionItem.Of) item.collection.id.value else -1L }) { i, item ->
                     val selected = i == sel.index && app.focusZone == FocusZone.CONTENT
@@ -191,14 +193,15 @@ private fun NewCollectionCard(selected: Boolean, artHeight: Dp, onClick: () -> U
         ) {
             Box(Modifier.fillMaxSize().background(c.text.copy(alpha = 0.06f)), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    FuseIcon(FuseIcons.Plus, size = 30.dp, tint = c.text)
-                    Spacer(Modifier.height(Space.s))
-                    FText("New collection", Fuse.type.bodyStrong, maxLines = 1)
+                    FuseIcon(FuseIcons.Plus, size = 22.dp, tint = c.text)
+                    Spacer(Modifier.height(Space.xs))
+                    FText("New", Fuse.type.label, maxLines = 1)
                 }
             }
         }
         Spacer(Modifier.height(Space.s))
-        FText("Pick games for it next", Fuse.type.caption, color = c.textMuted, maxLines = 1)
+        FText("New collection", Fuse.type.label, maxLines = 1)
+        FText("Pick its games next", Fuse.type.caption, color = c.textMuted, maxLines = 1)
     }
 }
 
@@ -228,17 +231,24 @@ private fun CollectionCard(
             when {
                 own != null && media.hero() == null -> io.github.matiyaaa.fuse.ui.designsystem.media.Artwork(own.model(), Modifier.fillMaxSize())
                 games.isNotEmpty() -> CoverCollage(games, artHeight, background = media.hero()?.model())
-                else -> Box(Modifier.fillMaxSize().background(c.text.copy(alpha = 0.06f)), contentAlignment = Alignment.Center) {
-                    FText(if (collection.kind == CollectionKind.SERIES) "No games" else "Empty. Add games from its options", Fuse.type.caption, color = c.textMuted, maxLines = 2)
+                else -> Box(Modifier.fillMaxSize().background(c.text.copy(alpha = 0.06f)).padding(Space.m), contentAlignment = Alignment.Center) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(Space.xs)) {
+                        FuseIcon(FuseIcons.Bookmark, size = 20.dp, tint = c.textMuted)
+                        FText(if (collection.kind == CollectionKind.SERIES) "No games" else "Empty", Fuse.type.caption, color = c.textMuted, maxLines = 1, align = androidx.compose.ui.text.style.TextAlign.Center)
+                    }
                 }
             }
         }
         Spacer(Modifier.height(Space.s))
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s)) {
-            FText(collection.name, Fuse.type.bodyStrong, color = if (selected) c.text else c.text.copy(alpha = 0.9f), maxLines = 1, modifier = Modifier.weight(1f, fill = false))
-            if (collection.kind == CollectionKind.SERIES) Chip("Series", icon = FuseIcons.Sparkles, color = c.textMuted)
+        FText(collection.name, Fuse.type.label, color = if (selected) c.text else c.text.copy(alpha = 0.9f), maxLines = 1)
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
+            // A series Fuse found says so quietly, next to its count.
+            if (collection.kind == CollectionKind.SERIES) FuseIcon(FuseIcons.Sparkles, size = 12.dp, tint = c.textMuted)
+            FText(
+                listOfNotNull("${collection.gameCount} ${if (collection.gameCount == 1) "game" else "games"}", "Series".takeIf { collection.kind == CollectionKind.SERIES }).joinToString("  ·  "),
+                Fuse.type.caption, color = c.textMuted, maxLines = 1,
+            )
         }
-        FText("${collection.gameCount} ${if (collection.gameCount == 1) "game" else "games"}", Fuse.type.caption, color = c.textMuted, maxLines = 1)
     }
 }
 

@@ -11,7 +11,9 @@ import io.github.matiyaaa.fuse.ui.shell.store.EmulatorOption
 import io.github.matiyaaa.fuse.ui.shell.store.RunResult
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 internal class DefaultEmulatorOps(private val ctx: StoreContext) : EmulatorOps {
@@ -76,4 +78,38 @@ internal class DefaultEmulatorOps(private val ctx: StoreContext) : EmulatorOps {
     override fun limitations(emulator: EmulatorId): List<String> = ctx.registry[emulator]?.limitations.orEmpty()
 
     override fun homepage(emulator: EmulatorId): String? = ctx.registry[emulator]?.homepage
+
+    override val canLocate: Boolean get() = ctx.services.emulators.canLocate
+
+    override fun known(): List<EmulatorOption> {
+        val found = installed.value.associateBy { it.id }
+        return ctx.registry.forHost(ctx.host).filterNot { it.builtIn }
+            .map { a -> EmulatorOption(a.id, found[a.id]?.name ?: a.name, installed = a.id in found, note = found[a.id]?.appId) }
+            .sortedBy { it.name.lowercase() }
+    }
+
+    private val _located = MutableStateFlow(ctx.services.emulators.located())
+    override val located: StateFlow<Map<EmulatorId, String>> = _located.asStateFlow()
+
+    private val _searchFolders = MutableStateFlow(ctx.services.emulators.searchFolders())
+    override val searchFolders: StateFlow<List<String>> = _searchFolders.asStateFlow()
+
+    override suspend fun locate(emulator: EmulatorId, path: String): Boolean {
+        if (!ctx.services.emulators.locate(emulator, path)) return false
+        _located.value = ctx.services.emulators.located()
+        detectNow()
+        return installed.value.any { it.id == emulator }
+    }
+
+    override suspend fun forget(emulator: EmulatorId) {
+        ctx.services.emulators.forget(emulator)
+        _located.value = ctx.services.emulators.located()
+        detectNow()
+    }
+
+    override suspend fun setSearchFolders(folders: List<String>) {
+        ctx.services.emulators.setSearchFolders(folders)
+        _searchFolders.value = ctx.services.emulators.searchFolders()
+        detectNow()
+    }
 }

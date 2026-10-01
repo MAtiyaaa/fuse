@@ -1,5 +1,7 @@
 # Runs every test suite (core, store, UI flows, both apps) and builds the Android debug APK for every pull
-# request and every push to a branch other than main. Releases are handled by release.yml.
+# request and every push to a branch other than main. Windows and macOS (Apple silicon and Intel)
+# run the shared and desktop tests, build their packages and run Fuse's --self-test on them; the
+# packages are kept as artifacts to try. Releases are handled by release.yml.
 
 name: CI
 
@@ -71,5 +73,110 @@ jobs:
         with:
           name: fuse-debug-apk
           path: app/android/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 14
+
+  windows:
+    name: Windows package
+    runs-on: windows-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+
+      - name: Install Android platform 37
+        # sdkmanager is a .bat file, which bash doesn't run by its bare name.
+        shell: pwsh
+        run: sdkmanager --install "platforms;android-37.0"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Test the shared and desktop code
+        run: ./gradlew --stacktrace :core:library:desktopTest :core:launch:desktopTest :app:desktop:test
+
+      - name: Build the installer and zip, and self-test them
+        run: bash scripts/build-windows.sh
+
+      - name: Upload test reports
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-reports-windows
+          path: "**/build/reports/tests/"
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Upload the Windows builds
+        uses: actions/upload-artifact@v7
+        with:
+          name: fuse-windows
+          path: build/windows/*
+          if-no-files-found: error
+          retention-days: 14
+
+  macos:
+    name: macOS ${{ matrix.arch }} package
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            runner: macos-15
+          - arch: x64
+            runner: macos-15-intel
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+
+      - name: Install Android platform 37
+        run: sdkmanager --install "platforms;android-37.0"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Test the shared and desktop code
+        run: ./gradlew --stacktrace :core:library:desktopTest :core:launch:desktopTest :app:desktop:test
+
+      - name: Build the disk image and self-test the app
+        run: bash scripts/build-macos.sh
+
+      - name: Upload test reports
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-reports-macos-${{ matrix.arch }}
+          path: "**/build/reports/tests/"
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Upload the disk image
+        uses: actions/upload-artifact@v7
+        with:
+          name: fuse-macos-${{ matrix.arch }}
+          path: build/macos/*.dmg
           if-no-files-found: error
           retention-days: 14

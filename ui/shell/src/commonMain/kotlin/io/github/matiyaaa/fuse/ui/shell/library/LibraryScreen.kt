@@ -1,12 +1,13 @@
 package io.github.matiyaaa.fuse.ui.shell.library
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -22,13 +23,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -45,6 +47,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.lerp
 import io.github.matiyaaa.fuse.model.CollectionId
 import io.github.matiyaaa.fuse.model.GameCollection
 import io.github.matiyaaa.fuse.model.GameId
@@ -73,6 +76,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.media.Artwork
 import io.github.matiyaaa.fuse.ui.designsystem.media.GeneratedArt
 import io.github.matiyaaa.fuse.ui.designsystem.media.HeroSource
 import io.github.matiyaaa.fuse.ui.designsystem.media.PrefetchArt
+import io.github.matiyaaa.fuse.ui.designsystem.media.heroDecodePx
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Aspect
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Durations
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
@@ -89,9 +93,11 @@ import io.github.matiyaaa.fuse.ui.shell.app.activateGame
 import io.github.matiyaaa.fuse.ui.shell.app.gameConfirmLabel
 import io.github.matiyaaa.fuse.ui.shell.app.gameMenu
 import io.github.matiyaaa.fuse.ui.shell.app.play
+import io.github.matiyaaa.fuse.ui.shell.app.rememberPageState
 import io.github.matiyaaa.fuse.ui.shell.app.rememberRouteState
 import io.github.matiyaaa.fuse.ui.shell.app.rememberSystems
 import io.github.matiyaaa.fuse.ui.shell.app.room
+import io.github.matiyaaa.fuse.ui.shell.app.roomArt
 import io.github.matiyaaa.fuse.ui.shell.collections.addGamesPicker
 import io.github.matiyaaa.fuse.ui.shell.components.GameCoverTile
 import io.github.matiyaaa.fuse.ui.shell.components.GameIconTile
@@ -103,7 +109,6 @@ import io.github.matiyaaa.fuse.ui.shell.components.stage
 import io.github.matiyaaa.fuse.ui.shell.store.GameCard
 import io.github.matiyaaa.fuse.ui.shell.store.GameQuery
 import io.github.matiyaaa.fuse.ui.shell.store.GameSet
-import io.github.matiyaaa.fuse.ui.shell.systems.SystemHeader
 import io.github.matiyaaa.fuse.ui.shell.systems.SystemShowcase
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOf
@@ -145,12 +150,15 @@ class LibraryViewState {
     var headerIndex by mutableIntStateOf(0)
     var layoutOverride by mutableStateOf<LibraryLayout?>(null)
     var showHidden by mutableStateOf(false)
-}
 
-/** One item of the header row, for controller focus: a view, or a button. */
-private sealed interface HeaderItem {
-    data class View(val segment: LibrarySegment) : HeaderItem
-    data class Button(val button: LibraryButton) : HeaderItem
+    /**
+     * Selects [index] of [list] and remembers that game. Only the user's own moves pin a game, so a
+     * list that reorders before the user moves keeps the first game selected.
+     */
+    fun pick(index: Int, list: List<GameCard>?) {
+        grid.index = index
+        selectedId = list?.getOrNull(index)?.id
+    }
 }
 
 @Composable
@@ -163,7 +171,12 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
         is LibraryScope.OfPlatform -> "lib.p.${scope.platform}"
         is LibraryScope.OfCollection -> "lib.c.${scope.collection.value}"
     }
-    val state = rememberRouteState(app.navigator, key) { LibraryViewState() }
+    // A system or collection opens on its first game; Back from a game returns to where you were.
+    val state = if (scope == LibraryScope.All) {
+        rememberRouteState(app.navigator, key) { LibraryViewState() }
+    } else {
+        rememberPageState(app.navigator, key) { LibraryViewState() }
+    }
     val sort = prefs.librarySort
 
     // How many games the extra views hold, so they only show when there is something in them.
@@ -235,18 +248,17 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
     }
     PrefetchArt(tileArt, state.grid.index, size = LocalTileMetrics.current.icon * 1.4f)
     PrefetchArt(remember(list) { list.orEmpty().map { it.art.logo } }, state.grid.index, size = 360.dp)
-    // The backgrounds of the games next to the selection, so moving on shows them at once.
-    val screen = androidx.compose.ui.platform.LocalWindowInfo.current.containerSize
-    val screenDp = with(androidx.compose.ui.platform.LocalDensity.current) { maxOf(screen.width, screen.height).toDp() }
-    PrefetchArt(remember(list) { list.orEmpty().map { it.art.hero } }, state.grid.index, size = screenDp, limit = 2, fill = true)
     val special = scope == LibraryScope.All && segment.set != GameSet.LIBRARY
     val systemCard = platforms.firstOrNull { it.platform.id == platformId }
     // A game with its own background image shows it; any other game shows its system's background,
     // so a system's page keeps one room while moving between its games.
     val systems = rememberSystems(app)
+    // The rooms of the games next to the selection, decoded as the background decodes them, so
+    // moving on shows them at once.
+    val heroDp = with(androidx.compose.ui.platform.LocalDensity.current) { Fuse.quality.heroDecodePx.toDp() }
+    PrefetchArt(remember(list, systems) { list.orEmpty().map { roomArt(it.art, systems[it.platformId]) } }, state.grid.index, size = heroDp, limit = 2)
     val gameSystem = selectedCard?.let { systems[it.platformId] }
     LaunchedEffect(selectedCard?.id, selectedCard?.art, special, systemCard?.art, gameSystem?.art) {
-        state.selectedId = selectedCard?.id
         app.hero = when {
             selectedCard != null -> selectedCard.room(gameSystem)
             systemCard != null -> HeroSource(systemCard.platform.id, systemCard.art.hero, systemCard.platform.accent.toColor())
@@ -294,7 +306,17 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
         }
     }
 
+    // The grids live here, so a system's header can fold away as you move down its games.
+    val gridState = rememberLazyGridState()
+    val listState = rememberLazyListState()
+    // Dragging the grid by touch decides the fold from the scroll; a controller decides it from the selection.
+    val dragged by gridState.interactionSource.collectIsDraggedAsState()
+    val listDragged by listState.interactionSource.collectIsDraggedAsState()
+    var touchScroll by remember { mutableStateOf(false) }
+    LaunchedEffect(dragged, listDragged) { if (dragged || listDragged) touchScroll = true }
+
     InputLayer(enabled = app.focusZone == FocusZone.CONTENT && !app.overlayOpen) { e ->
+        touchScroll = false
         val count = list?.size ?: 0
         if (state.inHeader && header.isNotEmpty()) {
             state.headerIndex = state.headerIndex.coerceIn(0, header.lastIndex)
@@ -335,6 +357,7 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
                     LibraryLayout.COMPACT_LIST -> state.grid.move(effective, count, columns = 1, pageRows = 8)
                     else -> state.grid.move(effective, count, columns)
                 }
+                if (r == NavResult.MOVED) state.pick(state.grid.index, list)
                 if (r == NavResult.IGNORED && e.action == NavAction.UP && header.isNotEmpty()) {
                     state.inHeader = true
                     state.headerIndex = header.indexOfFirst { it is HeaderItem.View && it.segment == state.segment }.coerceAtLeast(0)
@@ -369,12 +392,20 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
             app.focusZone = FocusZone.CONTENT
             state.inHeader = false
             when {
-                special -> { state.grid.index = i; options(cards[i]) }
+                special -> { state.pick(i, cards); options(cards[i]) }
                 state.grid.index == i -> app.activateGame(cards[i])
-                else -> state.grid.index = i
+                else -> state.pick(i, cards)
             }
         }
         val compactHeader = maxH < 560.dp
+        // A system's page folds its header away once you are past the first row, so more games fit.
+        val folded = when {
+            systemCard == null || list.isNullOrEmpty() || layout == LibraryLayout.CAPSULE -> false
+            touchScroll -> if (layout == LibraryLayout.COMPACT_LIST) listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 24 else gridState.firstVisibleItemIndex > 0 || gridState.firstVisibleItemScrollOffset > 24
+            layout == LibraryLayout.COMPACT_LIST -> state.grid.index >= 3
+            else -> state.grid.index >= columns
+        }
+        val collapse by animateFloatAsState(if (folded) 1f else 0f, Fuse.motion.followSpring(), label = "system fold")
         // Like the Systems screen: the art pack's panel on the right unless there is a background image.
         if (systemCard != null) {
             AnimatedVisibility(
@@ -387,12 +418,13 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
             }
         }
         Column(Modifier.fillMaxSize()) {
-            Spacer(Modifier.height(Size.hudHeight + if (systemCard != null) (if (compactHeader) Space.s else Space.xl) else 0.dp))
+            Spacer(Modifier.height(Size.hudHeight + if (systemCard != null) lerp(if (compactHeader) Space.s else Space.xl, Space.xs, collapse) else 0.dp))
             LibraryHeader(
                 app = app,
                 scope = scope,
                 platform = systemCard,
                 compact = compactHeader,
+                collapse = collapse,
                 system = platforms.firstOrNull { it.platform.id == state.system },
                 count = list?.size,
                 header = header,
@@ -407,13 +439,15 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
                 list.isEmpty() -> LibraryEmpty(scope, segment)
                 else -> when (layout) {
                     LibraryLayout.ICON -> {
-                        Box(Modifier.fillMaxWidth().height((maxH * 0.22f).coerceIn(110.dp, 200.dp)).padding(horizontal = Space.gutter), contentAlignment = Alignment.BottomStart) {
-                            Stage(selectedCard?.stage(), showLogo = prefs.showLogo, logoHeight = 84.dp)
+                        // The game's logo moves up with the folding header and makes room for another row.
+                        val stage = (maxH * 0.22f).coerceIn(110.dp, 200.dp)
+                        Box(Modifier.fillMaxWidth().height(lerp(stage, stage * 0.66f, collapse)).padding(horizontal = Space.gutter), contentAlignment = Alignment.BottomStart) {
+                            Stage(selectedCard?.stage(), showLogo = prefs.showLogo, logoHeight = lerp(84.dp, 60.dp, collapse))
                         }
-                        Spacer(Modifier.height(Space.l))
+                        Spacer(Modifier.height(lerp(Space.l, Space.s, collapse)))
                         val cols = ((maxW - Space.gutter * 2 + metrics.gap) / (metrics.icon + metrics.gap)).toInt().coerceAtLeast(2)
                         columns = cols
-                        IconGrid(list, state, cols, metrics.icon, metrics.gap, onTap = { i -> tapAt(i, list) }, onLong = { i -> state.grid.index = i; options(list[i]) }, focused = gridFocused)
+                        IconGrid(list, state, gridState, cols, metrics.icon, metrics.gap, onTap = { i -> tapAt(i, list) }, onLong = { i -> state.pick(i, list); options(list[i]) }, focused = gridFocused)
                     }
                     LibraryLayout.CAPSULE -> {
                         Box(Modifier.fillMaxWidth().weight(1f).padding(horizontal = Space.gutter), contentAlignment = Alignment.BottomStart) {
@@ -425,7 +459,7 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
                             selected = state.grid.index,
                             itemWidth = metrics.capsuleWidth * 0.62f,
                             onTap = { i -> tapAt(i, list) },
-                            onLongPress = { i -> state.grid.index = i; options(list[i]) },
+                            onLongPress = { i -> state.pick(i, list); options(list[i]) },
                             focused = gridFocused,
                         )
                         Spacer(Modifier.height(Size.hintHeight + Space.l))
@@ -434,11 +468,11 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
                         val coverW = metrics.coverWidth
                         val cols = ((maxW - Space.gutter * 2 + metrics.gap) / (coverW + metrics.gap)).toInt().coerceAtLeast(2)
                         columns = cols
-                        CoverGrid(list, state, cols, coverW, metrics.gap, onTap = { i -> tapAt(i, list) }, onLong = { i -> state.grid.index = i; options(list[i]) }, focused = gridFocused)
+                        CoverGrid(list, state, gridState, cols, coverW, metrics.gap, onTap = { i -> tapAt(i, list) }, onLong = { i -> state.pick(i, list); options(list[i]) }, focused = gridFocused)
                     }
                     LibraryLayout.COMPACT_LIST -> {
                         columns = 1
-                        CompactList(list, state, onTap = { i -> tapAt(i, list) }, onLong = { i -> state.grid.index = i; options(list[i]) }, focused = gridFocused)
+                        CompactList(list, state, listState, onTap = { i -> tapAt(i, list) }, onLong = { i -> state.pick(i, list); options(list[i]) }, focused = gridFocused)
                     }
                 }
             }
@@ -446,96 +480,7 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
     }
 }
 
-/**
- * One calm line: the views (All, Favourites, Recently played and, when they have games, Missing,
- * Hidden and Removed) on the left, then the game count and System, Sort and View on the right.
- * A system's own page shows its name instead of the views.
- */
-@Composable
-private fun LibraryHeader(
-    app: AppState,
-    scope: LibraryScope,
-    platform: io.github.matiyaaa.fuse.ui.shell.store.PlatformCard?,
-    compact: Boolean,
-    system: io.github.matiyaaa.fuse.ui.shell.store.PlatformCard?,
-    count: Int?,
-    header: List<HeaderItem>,
-    sort: SortOrder,
-    layout: LibraryLayout,
-    state: LibraryViewState,
-    onView: (Int, LibrarySegment) -> Unit,
-    onButton: (Int, LibraryButton) -> Unit,
-) {
-    val c = Fuse.colors
-    fun focused(i: Int) = state.inHeader && app.focusZone == FocusZone.CONTENT && i == state.headerIndex
-    Row(
-        Modifier.fillMaxWidth().padding(start = Space.gutter, end = Space.gutter, top = if (platform != null) 0.dp else Space.xs, bottom = Space.xs),
-        verticalAlignment = if (platform != null) Alignment.Bottom else Alignment.CenterVertically,
-    ) {
-        if (scope == LibraryScope.All) {
-            val scroll = rememberScrollState()
-            Row(
-                Modifier.weight(1f).horizontalScroll(scroll).padding(vertical = Space.xs),
-                horizontalArrangement = Arrangement.spacedBy(Space.s),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                header.forEachIndexed { i, item ->
-                    if (item is HeaderItem.View) {
-                        val s = item.segment
-                        Chip(
-                            s.label,
-                            icon = if (s == LibrarySegment.MISSING) FuseIcons.FileQuestion else null,
-                            selected = s == state.segment,
-                            focused = focused(i),
-                            color = if (s == LibrarySegment.MISSING) c.warning else c.textMuted,
-                            background = c.text.copy(alpha = 0.08f),
-                            onClick = { onView(i, s) },
-                        )
-                    }
-                }
-            }
-        } else if (platform != null) {
-            // The same header as the Systems screen, in the same place, so the logo stays put.
-            SystemHeader(platform, compact, Modifier.weight(1f), widthFraction = 0.9f)
-        } else {
-            Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
-                val title = when (scope) {
-                    is LibraryScope.OfPlatform -> scope.platform.value
-                    is LibraryScope.OfCollection -> scope.name
-                    LibraryScope.All -> "Library"
-                }
-                FText(title, Fuse.type.titleSmall, maxLines = 1)
-            }
-        }
-        if (count != null && platform == null) {
-            Spacer(Modifier.width(Space.m))
-            FText("$count ${if (count == 1) "game" else "games"}", Fuse.type.label, color = c.textMuted, maxLines = 1)
-        }
-        header.forEachIndexed { i, item ->
-            if (item is HeaderItem.Button) {
-                Spacer(Modifier.width(Space.s))
-                val (label, icon) = when (item.button) {
-                    LibraryButton.COLLECTIONS -> "Collections" to FuseIcons.LibraryBig
-                    LibraryButton.ADD_GAMES -> "Add or remove games" to FuseIcons.ListPlus
-                    LibraryButton.SYSTEM -> (system?.platform?.shortName ?: "All systems") to FuseIcons.Filter
-                    LibraryButton.SORT -> sortLabel(sort) to FuseIcons.Sort
-                    LibraryButton.VIEW -> layoutLabel(layout) to layoutIcon(layout)
-                }
-                Chip(
-                    label,
-                    icon = icon,
-                    selected = item.button == LibraryButton.SYSTEM && system != null,
-                    focused = focused(i),
-                    color = c.text,
-                    background = c.text.copy(alpha = 0.08f),
-                    onClick = { onButton(i, item.button) },
-                )
-            }
-        }
-    }
-}
-
-private fun sortLabel(s: SortOrder) = when (s) {
+internal fun sortLabel(s: SortOrder) = when (s) {
     SortOrder.TITLE -> "Title"
     SortOrder.RECENTLY_PLAYED -> "Recently played"
     SortOrder.RECENTLY_ADDED -> "Recently added"
@@ -543,7 +488,7 @@ private fun sortLabel(s: SortOrder) = when (s) {
     SortOrder.RELEASE_YEAR -> "Release year"
 }
 
-private fun layoutLabel(l: LibraryLayout) = when (l) {
+internal fun layoutLabel(l: LibraryLayout) = when (l) {
     LibraryLayout.ICON -> "Box art"
     LibraryLayout.CAPSULE -> "Capsules"
     LibraryLayout.COVER_GRID -> "Cover grid"
@@ -636,6 +581,7 @@ private fun setMenu(app: AppState, card: GameCard, segment: LibrarySegment): Con
 private fun IconGrid(
     list: List<GameCard>,
     state: LibraryViewState,
+    grid: LazyGridState,
     columns: Int,
     size: Dp,
     gap: Dp,
@@ -643,7 +589,6 @@ private fun IconGrid(
     onLong: (Int) -> Unit,
     focused: Boolean,
 ) {
-    val grid = rememberLazyGridState()
     FollowSelection(grid, { state.grid.index }, anchor = 0.05f)
     LazyVerticalGrid(
         columns = GridCells.Fixed(columns),
@@ -663,6 +608,7 @@ private fun IconGrid(
 private fun CoverGrid(
     list: List<GameCard>,
     state: LibraryViewState,
+    grid: LazyGridState,
     columns: Int,
     width: Dp,
     gap: Dp,
@@ -670,7 +616,6 @@ private fun CoverGrid(
     onLong: (Int) -> Unit,
     focused: Boolean,
 ) {
-    val grid = rememberLazyGridState()
     FollowSelection(grid, { state.grid.index }, anchor = 0.1f)
     val selected = list.getOrNull(state.grid.index)
     Column {
@@ -701,12 +646,12 @@ private fun CoverGrid(
 private fun CompactList(
     list: List<GameCard>,
     state: LibraryViewState,
+    listState: LazyListState,
     onTap: (Int) -> Unit,
     onLong: (Int) -> Unit,
     focused: Boolean,
 ) {
     val c = Fuse.colors
-    val listState = rememberLazyListState()
     FollowSelection(listState, { state.grid.index }, anchor = 0.35f)
     val selected = list.getOrNull(state.grid.index)
     Row(Modifier.fillMaxSize().padding(start = Space.gutter, end = Space.gutter)) {

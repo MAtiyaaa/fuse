@@ -211,6 +211,14 @@ internal class DefaultCartridgeOps(
 
 internal class DefaultUpdateOps(private val ctx: StoreContext) : UpdateOps {
     override val currentVersion: String = ctx.services.appVersion
+    override val inPlace: Boolean get() = ctx.services.installer.inPlace
+
+    /**
+     * A release counts for this device once it has this device's build: the APK is published first
+     * and the desktop builds join minutes later, so a Mac never hears of an update it can't get yet.
+     */
+    private fun ReleaseInfo.isUpdateHere(): Boolean =
+        SemVer.isNewer(tag, currentVersion) && GitHubReleases.pickAsset(this, ctx.services.installer.platform) != null
     private val latest = MutableStateFlow<ReleaseInfo?>(null)
     override val available: StateFlow<ReleaseInfo?> = latest
 
@@ -220,7 +228,7 @@ internal class DefaultUpdateOps(private val ctx: StoreContext) : UpdateOps {
         val last = ctx.data.cache.entry(NS, KEY_CHECKED)?.fetchedAt ?: 0
         if (ctx.now() - last < DAY_MS) {
             latest.value = ctx.data.cache.get(NS, KEY_RELEASE, ReleaseInfo.serializer(), now = 0L)
-                ?.takeIf { SemVer.isNewer(it.tag, currentVersion) }
+                ?.takeIf { it.isUpdateHere() }
             return
         }
         check()
@@ -229,12 +237,14 @@ internal class DefaultUpdateOps(private val ctx: StoreContext) : UpdateOps {
     override suspend fun check(): ReleaseInfo? {
         val result = GitHubReleases(ctx.services.http).latest(GitHubReleases.FUSE_REPO)
         val now = ctx.now()
-        ctx.data.cache.put(NS, KEY_CHECKED, "{}", now, ttlMs = null)
         val release = (result as? ApiResult.Success)?.value
         if (release != null) {
             ctx.data.cache.put(NS, KEY_RELEASE, release, ReleaseInfo.serializer(), now, ttlMs = null)
         }
-        latest.value = release?.takeIf { SemVer.isNewer(it.tag, currentVersion) }
+        // A newer release still waiting for this device's build is asked about again in an hour.
+        val waiting = release != null && SemVer.isNewer(release.tag, currentVersion) && !release.isUpdateHere()
+        ctx.data.cache.put(NS, KEY_CHECKED, "{}", if (waiting) now - DAY_MS + HOUR_MS else now, ttlMs = null)
+        latest.value = release?.takeIf { it.isUpdateHere() }
         return latest.value
     }
 
@@ -295,5 +305,6 @@ internal class DefaultUpdateOps(private val ctx: StoreContext) : UpdateOps {
         const val KEY_CHECKED = "checked"
         const val KEY_RELEASE = "release"
         const val DAY_MS = 86_400_000L
+        const val HOUR_MS = 3_600_000L
     }
 }

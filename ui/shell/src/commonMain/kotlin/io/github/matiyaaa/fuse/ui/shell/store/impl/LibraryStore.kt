@@ -381,7 +381,8 @@ internal class DefaultLibraryOps(
         }
         var resolved = ctx.resolver.resolve(game, platformEmulator, installed, ctx.host, choice)
         val chosen = resolved.installed
-        if (chosen != null && chosen.id.value.startsWith("retroarch") && ctx.host == io.github.matiyaaa.fuse.model.Host.LINUX) {
+        // Desktop RetroArch ("linux.retroarch", "windows.retroarch"): use the core file that is really there.
+        if (chosen != null && ctx.host.isDesktop && chosen.id.value.substringAfter('.').startsWith("retroarch")) {
             val coreName = core ?: RetroArchCores.defaultCore(ctx.host, game.platformId)
             val corePath = coreName?.let { ctx.services.emulators.retroArchCorePath(chosen, it) }
             if (corePath != null) {
@@ -496,10 +497,10 @@ internal class DefaultLibraryOps(
         if (appId != null) apps.setKind(appId, io.github.matiyaaa.fuse.model.AppKind.APP) else data.games.removeFromFuse(id)
     }
 
-    /** Called after games joined the library outside a scan, so their art is looked for. */
-    var onGamesAdded: () -> Unit = {}
+    /** Called after games joined the library outside a scan, so they are identified and filled at once. */
+    var onGamesAdded: (List<GameId>) -> Unit = {}
 
-    private fun afterGamesAdded() = onGamesAdded()
+    private fun afterGamesAdded(ids: List<GameId>) = onGamesAdded(ids)
 
     override suspend fun restore(id: GameId) {
         data.games.restoreToFuse(id)
@@ -587,7 +588,7 @@ internal class DefaultLibraryOps(
         val scan = PlatformFolderScan(AddedGames.SOURCE, platform, AddedGames.FOLDER, 0, listOf(game), complete = false)
         data.indexer.applyFolder(scan, ctx.now(), DisplayNameCleaner::clean, useCleanedForNew = ctx.settings.value.library.cleanDisplayNames)
         val id = data.games.idByPath(entry.path) ?: return null
-        afterGamesAdded()
+        afterGamesAdded(listOf(id))
         return id
     }
 

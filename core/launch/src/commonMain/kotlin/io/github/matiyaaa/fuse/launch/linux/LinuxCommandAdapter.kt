@@ -21,17 +21,17 @@ import io.github.matiyaaa.fuse.model.LaunchTarget
 import io.github.matiyaaa.fuse.model.PlatformId
 
 /**
- * Generic Linux adapter for a [LinuxEmulatorDef]. Produces [LaunchPlan.Command] with the program's
- * invocation followed by the mode's arguments.
+ * Generic desktop adapter for a [LinuxEmulatorDef]. Produces [LaunchPlan.Command] with the program's
+ * invocation followed by the mode's arguments. Linux, Windows and macOS share it ([host]); the
+ * Windows and macOS catalogs reuse the Linux definitions with their own ids.
  *
- * [InstalledEmulator.appId] is an absolute executable path (PATH, AppImage, folder installs) or a
- * Flatpak id when [InstalledEmulator.detectedVia] is [LinuxInstallKind.FLATPAK]; Flatpaks run as
- * `flatpak run [--command=...] <id> args...`.
+ * [InstalledEmulator.appId] is an absolute executable path (PATH, AppImage, folder installs, the
+ * program inside a macOS app bundle) or, on Linux, a Flatpak id when [InstalledEmulator.detectedVia]
+ * is [LinuxInstallKind.FLATPAK]; Flatpaks run as `flatpak run [--command=...] <id> args...`.
  */
-class LinuxCommandAdapter(val def: LinuxEmulatorDef) : EmulatorAdapter {
+class LinuxCommandAdapter(val def: LinuxEmulatorDef, override val host: Host = Host.LINUX) : EmulatorAdapter {
     override val id: EmulatorId = EmulatorId(def.id)
     override val name: String get() = def.name
-    override val host: Host get() = Host.LINUX
     override val platforms: Set<PlatformId> get() = def.platforms
     override val capabilities: AdapterCapabilities = def.capabilities.copy(titleIdLaunch = def.titleIdMode != TitleIdMode.NONE)
     override val limitations: List<String> get() = def.limitations
@@ -51,7 +51,7 @@ class LinuxCommandAdapter(val def: LinuxEmulatorDef) : EmulatorAdapter {
 
     /** The program part of the argv. */
     fun invocation(installed: InstalledEmulator): List<String> =
-        if (LinuxInstallKind.of(installed.detectedVia) == LinuxInstallKind.FLATPAK) {
+        if (host == Host.LINUX && LinuxInstallKind.of(installed.detectedVia) == LinuxInstallKind.FLATPAK) {
             listOf("flatpak", "run") + listOfNotNull(def.detection.flatpakCommand?.let { "--command=$it" }) + installed.appId
         } else {
             listOf(installed.appId)
@@ -74,12 +74,12 @@ class LinuxCommandAdapter(val def: LinuxEmulatorDef) : EmulatorAdapter {
         }
         val core = if (def.usesRetroArchCores) {
             request.options.core?.takeIf { it.isNotBlank() }
-                ?: RetroArchCores.defaultCore(Host.LINUX, platform)
+                ?: RetroArchCores.defaultCore(host, platform)
                 ?: return unsupported("${def.name} has no core set for $platform. Pick a core in the platform's settings.")
         } else {
             null
         }
-        val corePath = core?.let { request.options.corePath ?: defaultCorePath(installed, it, home) }
+        val corePath = core?.let { request.options.corePath ?: defaultCorePath(installed, it, home, host) }
 
         val used = (mode.spec.args + listOfNotNull(mode.spec.workingDir)).flatMap { LaunchTokens.tokensIn(it) }.toSet()
         mode.idPattern?.let { pattern ->
@@ -96,7 +96,7 @@ class LinuxCommandAdapter(val def: LinuxEmulatorDef) : EmulatorAdapter {
             LaunchTokens.CORE_PATH to corePath,
             LaunchTokens.SERIAL to serial,
             LaunchTokens.INJECT to injected,
-            LaunchTokens.EMUDIR to installed.appId.takeIf { it.startsWith("/") }?.let(Paths::parent),
+            LaunchTokens.EMUDIR to installed.appId.takeIf(Paths::isAbsolute)?.let(Paths::parent),
         )
         val args = ArrayList<String>()
         for (template in mode.spec.args) {
@@ -135,16 +135,18 @@ class LinuxCommandAdapter(val def: LinuxEmulatorDef) : EmulatorAdapter {
 
     companion object {
         /**
-         * Where a RetroArch install keeps its cores when [LinuxDetector.findRetroArchCore] was not asked:
-         * the Flatpak's own config folder, else `~/.config/retroarch/cores` (ES-DE core paths).
+         * Where a RetroArch install keeps its cores when the detector was not asked (ES-DE core paths):
+         * on Linux the Flatpak's own config folder, else `~/.config/retroarch/cores`; on Windows the
+         * `cores` folder next to retroarch.exe; on macOS `~/Library/Application Support/RetroArch/cores`.
          */
-        fun defaultCorePath(installed: InstalledEmulator, core: String, home: String?): String {
-            val dir = if (LinuxInstallKind.of(installed.detectedVia) == LinuxInstallKind.FLATPAK) {
-                "~/.var/app/${installed.appId}/config/retroarch/cores"
-            } else {
-                "~/.config/retroarch/cores"
+        fun defaultCorePath(installed: InstalledEmulator, core: String, home: String?, host: Host = Host.LINUX): String {
+            val dir = when {
+                host == Host.WINDOWS -> "${Paths.parent(installed.appId).trimEnd('/')}/cores"
+                host == Host.MACOS -> "~/Library/Application Support/RetroArch/cores"
+                LinuxInstallKind.of(installed.detectedVia) == LinuxInstallKind.FLATPAK -> "~/.var/app/${installed.appId}/config/retroarch/cores"
+                else -> "~/.config/retroarch/cores"
             }
-            return Paths.expandHome("$dir/${RetroArchCores.linuxCoreFile(core)}", home)
+            return Paths.expandHome("$dir/${RetroArchCores.coreFile(host, core)}", home)
         }
     }
 }

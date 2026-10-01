@@ -3,10 +3,18 @@ package io.github.matiyaaa.fuse.library
 /**
  * String helpers for "/"-separated paths. Pure functions, no filesystem access.
  *
- * Paths on disk always use "/". Backslashes are only treated as separators by [resolve], because
- * playlists written on Windows (`Disc 1\Game.cue`) are common inside ROM folders.
+ * Paths on disk always use "/", on Windows too ("C:/Games/x.iso", where the drive is the root).
+ * Backslashes are only treated as separators by [resolve], because playlists written on Windows
+ * (`Disc 1\Game.cue`) are common inside ROM folders.
  */
 object FsPath {
+    /** The Windows drive [path] starts with ("C:"), or null. */
+    fun drive(path: String): String? =
+        if (path.length >= 2 && path[1] == ':' && path[0].isLetter() && (path.length == 2 || path[2] == '/')) path.substring(0, 2) else null
+
+    /** True for "/x" and "C:/x". */
+    fun isAbsolute(path: String): Boolean = path.startsWith("/") || drive(path) != null
+
     /** Joins [parent] and [child] with exactly one "/" between them. */
     fun join(parent: String, child: String): String {
         if (parent.isEmpty()) return child
@@ -29,6 +37,8 @@ object FsPath {
         return when {
             index < 0 -> null
             index == 0 -> if (trimmed.length > 1) "/" else null
+            // "C:/Games" is inside the drive's root, "C:/".
+            index == 2 && drive(trimmed) != null -> trimmed.substring(0, 3)
             else -> trimmed.substring(0, index)
         }
     }
@@ -47,9 +57,11 @@ object FsPath {
 
     /** Collapses duplicate separators, resolves "." and ".." and drops a trailing "/". */
     fun normalize(path: String): String {
-        val absolute = path.startsWith("/")
+        val drive = drive(path)
+        val body = if (drive != null) path.substring(2) else path
+        val absolute = drive != null || body.startsWith("/")
         val out = ArrayList<String>()
-        for (part in path.split('/')) {
+        for (part in body.split('/')) {
             when (part) {
                 "", "." -> Unit
                 ".." -> if (out.isNotEmpty() && out.last() != "..") out.removeAt(out.lastIndex) else if (!absolute) out.add("..")
@@ -57,7 +69,11 @@ object FsPath {
             }
         }
         val joined = out.joinToString("/")
-        return if (absolute) "/$joined" else joined
+        return when {
+            drive != null -> "$drive/$joined"
+            absolute -> "/$joined"
+            else -> joined
+        }
     }
 
     /**
@@ -66,7 +82,7 @@ object FsPath {
      */
     fun resolve(baseDir: String, reference: String): String {
         val ref = reference.trim().replace('\\', '/')
-        return if (ref.startsWith("/")) normalize(ref) else normalize(join(baseDir, ref))
+        return if (isAbsolute(ref)) normalize(ref) else normalize(join(baseDir, ref))
     }
 
     /** True when [path] equals [ancestor] or lies below it. */
@@ -74,6 +90,8 @@ object FsPath {
         val p = normalize(path)
         val a = normalize(ancestor)
         if (a == "/") return p.startsWith("/")
+        // A drive root ("C:/") already ends with its separator.
+        if (a.endsWith("/")) return p.startsWith(a)
         return p == a || p.startsWith("$a/")
     }
 

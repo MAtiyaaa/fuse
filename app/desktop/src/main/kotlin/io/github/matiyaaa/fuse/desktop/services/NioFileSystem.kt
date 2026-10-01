@@ -1,5 +1,6 @@
 package io.github.matiyaaa.fuse.desktop.services
 
+import io.github.matiyaaa.fuse.desktop.system.fusePath
 import io.github.matiyaaa.fuse.library.FsAccessException
 import io.github.matiyaaa.fuse.library.FsEntry
 import io.github.matiyaaa.fuse.library.FsPath
@@ -22,7 +23,8 @@ import java.security.MessageDigest
 import java.nio.ByteBuffer
 
 /**
- * Read-only [FuseFileSystem] over java.nio. Symlinks are reported, not walked: an entry that is a
+ * Read-only [FuseFileSystem] over java.nio. Paths in and out use forward slashes on every system
+ * (java.nio reads "C:/Games" on Windows as it is). Symlinks are reported, not walked: an entry that is a
  * link to a directory says so ([FsEntry.isDirectory] and [FsEntry.isSymlink]), and the scanner uses
  * [canonical] to skip directories it has already seen, so link loops end. Only [delete] writes.
  */
@@ -68,7 +70,8 @@ class NioFileSystem : FuseFileSystem {
 
     override suspend fun stat(path: String): FsEntry? = withContext(Dispatchers.IO) {
         val p = Paths.get(path)
-        val name = p.fileName?.toString() ?: "/"
+        // A root has no name: "/" on Linux and macOS, the drive ("C:/") on Windows.
+        val name = p.fileName?.toString() ?: p.root?.toFile()?.fusePath ?: "/"
         entry(p, name, path)
     }
 
@@ -114,7 +117,7 @@ class NioFileSystem : FuseFileSystem {
     override suspend fun canonical(path: String): String? = withContext(Dispatchers.IO) {
         try {
             // toRealPath fails with "Too many levels of symbolic links" on a loop instead of spinning.
-            Paths.get(path).toRealPath().toString()
+            Paths.get(path).toRealPath().toFile().fusePath
         } catch (e: IOException) {
             null
         } catch (e: SecurityException) {

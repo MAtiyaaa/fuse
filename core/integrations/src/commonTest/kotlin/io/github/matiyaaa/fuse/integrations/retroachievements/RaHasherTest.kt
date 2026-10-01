@@ -134,9 +134,12 @@ class RaHasherTest {
     @Test
     fun unsupportedConsolesSayWhy() = runTest {
         val src = ByteArraySource(payload(1024))
-        assertEquals(RaHashUnsupportedReason.DISC_IMAGE, (RaHasher.hash(RaConsoleIds.PLAYSTATION, "x.cue", src) as RaHashResult.Unsupported).reason)
-        assertEquals(RaHashUnsupportedReason.DISC_IMAGE, RaHasher.unsupportedReason(RaConsoleIds.PS2))
-        assertEquals(RaHashUnsupportedReason.NINTENDO_DS, RaHasher.unsupportedReason(RaConsoleIds.NDS))
+        // A PlayStation image that isn't a disc, and one Fuse can't read without decompressing it.
+        assertEquals(RaHashUnsupportedReason.NOT_A_DISC, (RaHasher.hash(RaConsoleIds.PLAYSTATION, "x.bin", src) as RaHashResult.Unsupported).reason)
+        assertEquals(RaHashUnsupportedReason.COMPRESSED, (RaHasher.hash(RaConsoleIds.PLAYSTATION, "Game.chd", src) as RaHashResult.Unsupported).reason)
+        assertEquals(RaHashUnsupportedReason.DISC_IMAGE, RaHasher.unsupportedReason(RaConsoleIds.SATURN))
+        assertNull(RaHasher.unsupportedReason(RaConsoleIds.PS2))
+        assertNull(RaHasher.unsupportedReason(RaConsoleIds.NDS))
         assertEquals(RaHashUnsupportedReason.NINTENDO_3DS, RaHasher.unsupportedReason(RaConsoleIds.N3DS))
         assertEquals(RaHashUnsupportedReason.UNKNOWN_CONSOLE, RaHasher.unsupportedReason(9999))
         assertNull(RaHasher.hash(RaConsoleIds.NDS, "x.nds", src).md5OrNull)

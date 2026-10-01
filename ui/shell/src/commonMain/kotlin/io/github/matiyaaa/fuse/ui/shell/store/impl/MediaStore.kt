@@ -6,6 +6,7 @@ import io.github.matiyaaa.fuse.integrations.igdb.IgdbClient
 import io.github.matiyaaa.fuse.integrations.igdb.IgdbCredentials
 import io.github.matiyaaa.fuse.integrations.libretro.LibretroThumbnails
 import io.github.matiyaaa.fuse.integrations.scrape.FillPlanner
+import io.github.matiyaaa.fuse.integrations.scrape.Guess
 import io.github.matiyaaa.fuse.integrations.scrape.IgdbSource
 import io.github.matiyaaa.fuse.integrations.scrape.LibretroSource
 import io.github.matiyaaa.fuse.integrations.scrape.ScrapeCoordinator
@@ -53,6 +54,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -260,9 +262,24 @@ internal class DefaultMediaOps(
             ?: return ArtworkResult.Unavailable("Online artwork is found for games and systems. Here, choose an image from a file.")
         val game = ctx.data.games.get(gameId) ?: return ArtworkResult.Unavailable("This game is no longer in your library.")
         val (request, coordinator) = request(game, setOf(kind), metadata = false, collectAll = true)
-        return when (val outcome = coordinator.scrape(request)) {
+        // A game identified before is looked up by its ids, so it is never asked about again.
+        coordinator.known(request, knownIds(game))?.let { known ->
+            remember(game, known)
+            val art = known.artwork.filter { it.kind == kind }
+            if (art.isNotEmpty()) return ArtworkResult.Options(art)
+        }
+        // Otherwise art is found by the game's name: when several games match, the best guess's art
+        // is offered, with a way to say it's another game.
+        return when (val outcome = coordinator.scrape(request, guess = Guess.BEST)) {
             is ScrapeOutcome.Accepted -> outcome.artwork.filter { it.kind == kind }
-                .let { if (it.isEmpty()) ArtworkResult.Unavailable("No ${kind.label()} found for this game.") else ArtworkResult.Options(it) }
+                .let {
+                    if (it.isEmpty()) {
+                        ArtworkResult.Unavailable("No ${kind.label()} found for this game.")
+                    } else {
+                        if (!outcome.guessed) remember(game, outcome)
+                        ArtworkResult.Options(it, guess = outcome.candidate.takeIf { outcome.guessed })
+                    }
+                }
             is ScrapeOutcome.NeedsReview -> ArtworkResult.NeedsMatch(outcome.candidates)
             is ScrapeOutcome.NotFound -> ArtworkResult.Unavailable(
                 when {
@@ -274,6 +291,24 @@ internal class DefaultMediaOps(
             )
             is ScrapeOutcome.ProviderErrors -> ArtworkResult.Unavailable(outcome.errors.firstOrNull()?.let { "${it.provider.displayName}: ${it.failure.message}" } ?: "The artwork sources couldn't be reached.")
         }
+    }
+
+    /** The game's id in each provider it was identified in before. */
+    private fun knownIds(game: Game): Map<ScrapeProviderId, String> = buildMap {
+        game.links.steamGridDbGameId?.let { put(ScrapeProviderId.STEAMGRIDDB, it.toString()) }
+        game.links.igdbId?.let { put(ScrapeProviderId.IGDB, it.toString()) }
+    }
+
+    /**
+     * Keeps the game's ids in the providers [outcome] got it from, so its art is looked up directly
+     * next time. A guess only keeps its SteamGridDB id: that is art, while IGDB also brings details.
+     */
+    private suspend fun remember(game: Game, outcome: ScrapeOutcome.Accepted) {
+        val links = outcome.links + (outcome.candidate.provider to outcome.candidate.providerGameId)
+        val sgdb = links[ScrapeProviderId.STEAMGRIDDB]?.toLongOrNull()
+        val igdb = links[ScrapeProviderId.IGDB]?.toLongOrNull()?.takeIf { !outcome.guessed }
+        if ((sgdb == null || sgdb == game.links.steamGridDbGameId) && (igdb == null || igdb == game.links.igdbId)) return
+        ctx.data.games.updateLinks(game.id) { l -> l.copy(steamGridDbGameId = sgdb ?: l.steamGridDbGameId, igdbId = igdb ?: l.igdbId) }
     }
 
     override suspend fun apply(owner: MediaOwner, option: ArtworkOption) {
@@ -314,6 +349,51 @@ internal class DefaultMediaOps(
         startFill(FillJob(MediaFillMode.FILL_MISSING, FILLABLE, platform = null, game = null, everything = false, auto = true))
     }
 
+    /** New games, filled first and on their own worker (see [fillNew]). */
+    private val fresh = Channel<GameId>(Channel.UNLIMITED)
+    private var freshWorker: Job? = null
+
+    /** New games waiting for or being filled; library-wide fills leave them to that worker. */
+    private val freshPending = MutableStateFlow<Set<GameId>>(emptySet())
+
+    /**
+     * Identifies new games and fills their art and details straight away, newest first in line: a
+     * download, a game added by hand or an app made a game shows its art within moments instead of
+     * waiting for the next library-wide fill. Runs beside any fill (never cancels or waits on one);
+     * art Cartridge brought from RomM is kept, since only missing art is looked for.
+     */
+    fun fillNew(ids: Collection<GameId>) {
+        if (ids.isEmpty() || !ctx.settings.value.scraping.autoFill) return
+        val list = ids.distinct()
+        freshPending.update { it + list }
+        list.forEach { fresh.trySend(it) }
+        if (freshWorker?.isActive == true) return
+        freshWorker = ctx.scope.launch {
+            for (id in fresh) {
+                try {
+                    fillFresh(id)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Throwable) {
+                    // One game failing never holds up the others.
+                } finally {
+                    freshPending.update { it - id }
+                }
+            }
+        }
+    }
+
+    private suspend fun fillFresh(id: GameId) {
+        val g = ctx.data.games.get(id) ?: return
+        if (!ctx.data.scopedSettings.resolve(ScopedSettings.ScrapeEnabled, g.platformId, g.id).value) return
+        val (configured, coordinator) = coordinator()
+        val priority = ctx.settings.value.scraping.effectiveOrder()
+        val kinds = FILLABLE intersect coordinator.availableKinds(priority, configured)
+        val details = coordinator.providesMetadata(priority, configured)
+        if (kinds.isEmpty() && !details) return
+        fillOne(g, FillJob(MediaFillMode.FILL_MISSING, kinds, g.platformId, game = g.id, everything = false, auto = true), kinds, details, configured)
+    }
+
     override fun cancelFill() {
         val job = fillJob ?: return
         if (!job.isActive) return
@@ -345,8 +425,11 @@ internal class DefaultMediaOps(
             // so the count shows real work; the ones waiting for a choice are listed straight away.
             if (!job.auto && listed.size > 1) progress.value = FillProgress(0, listed.size, "Checking what's missing", 0, finished = false)
             val waiting = ArrayList<FillChoice>()
+            // New games have their own worker; a fill of the whole library leaves them to it.
+            val busy = if (job.game == null) freshPending.value else emptySet()
             val targets = if (job.remembers) {
                 listed.filter { id ->
+                    if (id in busy) return@filter false
                     val g = ctx.data.games.get(id) ?: return@filter false
                     when (val tried = coveredBy(g, job, kinds, details, configured)) {
                         null -> true
@@ -447,19 +530,24 @@ internal class DefaultMediaOps(
             val tried = ctx.data.cache.getOrNull(FILL_TRIED, key, ctx.now())?.let(Tried::decode)
             if (tried != null && tried.covers(request.query.title, configured, needed, wantDetails)) return GameFill(needsChoice = tried.choice)
         }
-        return when (val outcome = coordinator.scrape(request)) {
+        // A game identified before skips the search; one Fuse can't be sure of still gets art when a
+        // match has its very name (art is cosmetic), while its details wait for the user to pick.
+        val outcome = coordinator.known(request, knownIds(game))?.takeIf { known -> known.artwork.any { it.kind in needed } || (wantDetails && known.metadata != null) }
+            ?: coordinator.scrape(request, guess = Guess.EXACT_TITLE)
+        return when (outcome) {
             is ScrapeOutcome.Accepted -> {
                 val added = store(game, outcome, job.mode, plan.fetch)
                 val found = outcome.artwork.map { it.kind }.toSet()
                 val missing = needed - found
+                val choice = outcome.guessed && wantDetails
                 when {
                     !remember -> Unit
                     outcome.errors.isNotEmpty() -> ctx.data.cache.remove(FILL_TRIED, key)
                     missing.isNotEmpty() || (wantDetails && outcome.metadata == null) ->
-                        remember(key, Tried(request.query.title, configured, missing, details = wantDetails && outcome.metadata == null, choice = false))
+                        remember(key, Tried(request.query.title, configured, missing, details = wantDetails && outcome.metadata == null, choice = choice))
                     else -> ctx.data.cache.remove(FILL_TRIED, key)
                 }
-                GameFill(added, details = outcome.metadata != null && wantDetails)
+                GameFill(added, details = outcome.metadata != null && wantDetails, needsChoice = choice)
             }
             is ScrapeOutcome.NeedsReview -> {
                 if (remember && outcome.errors.isEmpty()) remember(key, Tried(request.query.title, configured, needed, details = wantDetails, choice = true))
@@ -495,16 +583,7 @@ internal class DefaultMediaOps(
                 onlyFillEmpty = mode == MediaFillMode.FILL_MISSING,
             )
         }
-        val candidate = outcome.candidate
-        candidate.providerGameId.toLongOrNull()?.let { providerId ->
-            ctx.data.games.updateLinks(game.id) { links ->
-                when (candidate.provider) {
-                    ScrapeProviderId.STEAMGRIDDB -> links.copy(steamGridDbGameId = providerId)
-                    ScrapeProviderId.IGDB -> links.copy(igdbId = providerId)
-                    else -> links
-                }
-            }
-        }
+        remember(game, outcome)
         return added
     }
 

@@ -37,6 +37,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
@@ -45,6 +46,7 @@ import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import io.github.matiyaaa.fuse.model.CartridgeRoute
@@ -79,10 +81,13 @@ import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec
 import io.github.matiyaaa.fuse.ui.shell.app.ContextMenuSpec
 import io.github.matiyaaa.fuse.ui.shell.app.FocusZone
+import io.github.matiyaaa.fuse.ui.shell.app.LocateRequest
 import io.github.matiyaaa.fuse.ui.shell.app.Route
 import io.github.matiyaaa.fuse.ui.shell.app.rememberRouteState
+import io.github.matiyaaa.fuse.ui.shell.app.startLocate
 import io.github.matiyaaa.fuse.ui.shell.components.SystemCardArt
 import io.github.matiyaaa.fuse.ui.shell.store.PlatformCard
+import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 
 /**
@@ -208,15 +213,18 @@ fun SystemsScreen(app: AppState) {
     }
 }
 
-/** The focused system: logo (or name), then games and emulator. No firmware details here. */
+/**
+ * The focused system: logo (or name), then games and emulator. No firmware details here. [collapse]
+ * folds it away upwards (0 shows it all, 1 hides it), for a system's page scrolled down its games.
+ */
 @Composable
-internal fun SystemHeader(card: PlatformCard?, compact: Boolean, modifier: Modifier = Modifier, widthFraction: Float = 0.62f) {
+internal fun SystemHeader(card: PlatformCard?, compact: Boolean, modifier: Modifier = Modifier, widthFraction: Float = 0.62f, collapse: Float = 0f) {
     val c = Fuse.colors
     val motion = Fuse.motion
     val logoHeight = if (compact) 40.dp else 64.dp
     AnimatedContent(
         targetState = card,
-        modifier = modifier.fillMaxWidth(widthFraction),
+        modifier = modifier.fillMaxWidth(widthFraction).foldAway(collapse),
         contentKey = { it?.platform?.id },
         transitionSpec = { fadeIn(motion.fade(Durations.BASE)) togetherWith fadeOut(motion.fade(Durations.INSTANT)) },
         contentAlignment = Alignment.BottomStart,
@@ -257,6 +265,21 @@ internal fun SystemHeader(card: PlatformCard?, compact: Boolean, modifier: Modif
         }
     }
 }
+
+/**
+ * Folds content away upwards by [fraction]: it slides up under its own top edge, fades out a little
+ * ahead of the slide, and gives its height back to whatever follows.
+ */
+internal fun Modifier.foldAway(fraction: Float): Modifier = this
+    .clipToBounds()
+    .layout { measurable, constraints ->
+        val p = measurable.measure(constraints)
+        val f = fraction.coerceIn(0f, 1f)
+        val h = (p.height * (1f - f)).roundToInt()
+        layout(p.width, h) {
+            p.placeWithLayer(0, h - p.height) { alpha = (1f - f * 1.6f).coerceIn(0f, 1f) }
+        }
+    }
 
 /**
  * The system art pack's tall artwork panel (made for the right side of a frontend's system view),
@@ -340,13 +363,19 @@ fun AppState.platformEmulatorPicker(card: PlatformCard) {
                 choice = null
             }),
         ) + options.map { o ->
+            // Where Fuse can be shown an emulator, one it didn't find can be located instead.
+            val locate = !o.installed && store.emulators.canLocate
             MenuAction(
                 "e${o.id}", o.name, FuseIcons.Chip,
-                detail = o.note,
-                unavailableReason = if (o.installed) null else "Not installed",
+                detail = if (locate) "Not found. Show Fuse where it is" else o.note,
+                unavailableReason = if (o.installed || locate) null else "Not installed",
                 onSelect = {
-                    scope.launch { store.emulators.setPlatformEmulator(card.platform.id, o.id) }
-                    choice = null
+                    if (locate) {
+                        startLocate(LocateRequest(o.id, o.name, platform = card.platform.id))
+                    } else {
+                        scope.launch { store.emulators.setPlatformEmulator(card.platform.id, o.id) }
+                        choice = null
+                    }
                 },
             )
         },

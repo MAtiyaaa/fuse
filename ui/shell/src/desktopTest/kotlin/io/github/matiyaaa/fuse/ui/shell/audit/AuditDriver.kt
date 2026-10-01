@@ -108,6 +108,17 @@ internal class AuditDriver(
     val androidStore: FuseStore
         get() = android ?: runBlocking { AuditLibrary.androidStore(cache, controls, scope) }.also { android = it }
 
+    private var windows: FuseStore? = null
+
+    /** A Windows PC (see [AuditLibrary.windowsStore]), built on first use. */
+    val windowsStore: FuseStore
+        get() = windows ?: runBlocking { AuditLibrary.windowsStore(cache, controls, scope) }.also { windows = it }
+
+    /** The audit device as a Windows PC: Cartridge doesn't run there. */
+    val windowsPlatform: PlatformUi by lazy {
+        AuditPlatform(size, features = io.github.matiyaaa.fuse.ui.shell.screenshots.ScreenshotPlatform.features.copy(cartridge = false))
+    }
+
     /** A first run with two library folders to suggest, built on first use. */
     val firstRunStore: FuseStore
         get() = firstRun ?: runBlocking { AuditLibrary.firstRunStore(root, sd, cache, controls, scope) }.also { firstRun = it }
@@ -261,6 +272,18 @@ internal class AuditDriver(
                 return
             }
             tap(step)
+        }
+        throw NotCovered("\"$text\" was never selected")
+    }
+
+    /** Moves with [step] until the item showing [text] is the selected one, without pressing it. */
+    fun focusText(text: String, substring: Boolean = false, step: () -> Unit = { tap(PadButton.DPAD_DOWN) }) {
+        waitFor(text.take(1))
+        repeat(40) {
+            settle(STEP_MS)
+            val on = ui.onAllNodes(androidx.compose.ui.test.hasText(text, substring = substring) and androidx.compose.ui.test.isSelected()).fetchSemanticsNodes()
+            if (on.isNotEmpty()) return
+            step()
         }
         throw NotCovered("\"$text\" was never selected")
     }

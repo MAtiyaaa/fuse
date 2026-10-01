@@ -1,21 +1,10 @@
 package io.github.matiyaaa.fuse.desktop.services
 
 import io.github.matiyaaa.fuse.desktop.FuseDirs
-import io.github.matiyaaa.fuse.desktop.Log
-import io.github.matiyaaa.fuse.desktop.system.DirectoryWatcher
 import io.github.matiyaaa.fuse.desktop.system.Processes
 import io.github.matiyaaa.fuse.launch.pc.DesktopEntry
 import io.github.matiyaaa.fuse.launch.pc.ShortcutParser
 import io.github.matiyaaa.fuse.model.AppEntry
-import io.github.matiyaaa.fuse.ui.shell.store.AppsProvider
-import io.github.matiyaaa.fuse.ui.shell.store.RunResult
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.launch
 import java.io.File
 import java.util.Locale
 
@@ -161,53 +150,5 @@ internal class IconIndex(bases: List<String>) {
         }
         val name = if (value.endsWith(".png") || value.endsWith(".svg")) value.substringBeforeLast('.') else value
         return found[name]
-    }
-}
-
-/** The Apps section on Linux: `.desktop` applications, refreshed when their folders change. */
-internal class DesktopAppsProvider(
-    private val index: DesktopFileIndex,
-    private val launcher: DesktopLauncher,
-    scope: CoroutineScope,
-) : AppsProvider, AutoCloseable {
-    private val _apps = MutableStateFlow<List<AppEntry>>(emptyList())
-    override val apps: StateFlow<List<AppEntry>> = _apps.asStateFlow()
-
-    private val requests = Channel<Unit>(Channel.CONFLATED)
-    private val watcher = DirectoryWatcher("fuse-apps-watch", debounceMs = 800) { refresh() }
-
-    init {
-        scope.launch(Dispatchers.IO) {
-            for (r in requests) {
-                try {
-                    _apps.value = index.rescan().map { it.entry }
-                } catch (e: Exception) {
-                    Log.warn("could not read desktop applications", e)
-                }
-            }
-        }
-        refresh()
-        watcher.watch(index.applicationDirs())
-    }
-
-    override fun iconModel(entry: AppEntry): Any? = index.get(entry.id)?.icon
-
-    override fun refresh() {
-        requests.trySend(Unit)
-    }
-
-    /** Linux windows open where the desktop puts them; [displayId] is Android's. */
-    override suspend fun launch(entry: AppEntry, displayId: Int?): RunResult {
-        val app = index.get(entry.id) ?: return RunResult.NotInstalled
-        if (!File(app.path).isFile) return RunResult.NotInstalled
-        return launcher.launchDesktopFile(app.path)
-    }
-
-    /** There is no common "app info" screen on Linux desktops, so this does nothing. */
-    override fun openInfo(entry: AppEntry) = Unit
-
-    override fun close() {
-        watcher.close()
-        requests.close()
     }
 }

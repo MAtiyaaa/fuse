@@ -35,6 +35,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.FocusZone
+import io.github.matiyaaa.fuse.ui.shell.app.rememberPageState
 
 /** One settings section: an id used in routes, a label and its rows. */
 class SettingsSection(
@@ -43,7 +44,16 @@ class SettingsSection(
     val icon: ImageVector,
     val summary: String,
     val rows: @Composable (AppState) -> List<MenuAction>,
+    /** False on devices the section means nothing on (Cartridge on Windows and macOS). */
+    val available: (AppState) -> Boolean = { true },
 )
+
+/** Where Settings is: the section, the row, and whether the rows have focus. */
+private class SettingsPlace(section: Int, rows: Boolean) {
+    val sectionSel = LinearSelection(section)
+    val rowSel = LinearSelection()
+    var inRows by mutableStateOf(rows)
+}
 
 val settingsSections: List<SettingsSection> = listOf(
     SettingsSection("appearance", "Appearance", FuseIcons.Palette, "Theme, motion, glass, CRT", ::appearanceRows),
@@ -53,7 +63,7 @@ val settingsSections: List<SettingsSection> = listOf(
     SettingsSection("emulators", "Emulators", FuseIcons.Joystick, "What Fuse found installed", ::emulatorRows),
     SettingsSection("media", "Media and Scraping", FuseIcons.Images, "Art sources, keys, matching, previews", ::mediaRows),
     SettingsSection("achievements", "Achievements", FuseIcons.Trophy, "RetroAchievements", ::achievementRows),
-    SettingsSection("cartridge", "Cartridge", FuseIcons.CloudDownload, "Your RomM companion", ::cartridgeRows),
+    SettingsSection("cartridge", "Cartridge", FuseIcons.CloudDownload, "Your RomM companion", ::cartridgeRows, available = { it.platform.features.cartridge }),
     SettingsSection("inputs", "Inputs", FuseIcons.Gamepad, "Buttons, layout, repeat", ::inputRows),
     SettingsSection("sound", "Sound", FuseIcons.Music, "Menu music and interface sounds", ::soundRows),
     SettingsSection("displays", "Displays", FuseIcons.DualScreen, "Second screen and launching", ::displayRows),
@@ -73,10 +83,15 @@ val settingsSections: List<SettingsSection> = listOf(
  */
 @Composable
 fun SettingsScreen(app: AppState, initialSection: String?) {
-    val sectionSel = remember { LinearSelection(settingsSections.indexOfFirst { it.id == initialSection }.coerceAtLeast(0)) }
-    val rowSel = remember { LinearSelection() }
-    var inRows by remember { mutableStateOf(initialSection != null) }
-    val section = settingsSections[sectionSel.index]
+    val sections = remember { settingsSections.filter { it.available(app) } }
+    // Back from a screen Settings opened (a file picker, Storage) returns to the same row.
+    val place = rememberPageState(app.navigator, "settings.${initialSection.orEmpty()}") {
+        SettingsPlace(sections.indexOfFirst { it.id == initialSection }.coerceAtLeast(0), initialSection != null)
+    }
+    val sectionSel = place.sectionSel
+    val rowSel = place.rowSel
+    var inRows by place::inRows
+    val section = sections[sectionSel.index]
     val rows = section.rows(app)
     rowSel.clamp(rows.size)
 
@@ -95,7 +110,7 @@ fun SettingsScreen(app: AppState, initialSection: String?) {
         } else {
             when (e.action) {
                 NavAction.UP, NavAction.DOWN, NavAction.PAGE_UP, NavAction.PAGE_DOWN -> {
-                    val r = sectionSel.move(e.action, settingsSections.size, vertical = true)
+                    val r = sectionSel.move(e.action, sections.size, vertical = true)
                     if (r == NavResult.MOVED) rowSel.index = 0
                     if (r == NavResult.IGNORED && e.action == NavAction.DOWN) NavResult.BLOCKED else r
                 }
@@ -111,9 +126,9 @@ fun SettingsScreen(app: AppState, initialSection: String?) {
             FText("Settings", Fuse.type.display)
             Spacer(Modifier.height(Space.l))
             MenuList(
-                settingsSections.map { s ->
+                sections.map { s ->
                     MenuAction(s.id, s.label, s.icon, onSelect = {
-                        sectionSel.index = settingsSections.indexOf(s)
+                        sectionSel.index = sections.indexOf(s)
                         rowSel.index = 0
                         inRows = true
                         app.focusZone = FocusZone.CONTENT

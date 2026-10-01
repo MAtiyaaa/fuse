@@ -54,14 +54,8 @@ internal class DefaultFuseStore private constructor(
 
     init {
         mediaOps = DefaultMediaOps(ctx, credentials)
-        // Apps that became games and games added by hand find their art like newly scanned games.
-        val findArt = {
-            ctx.scope.launch {
-                delay(AUTO_FILL_DELAY_MS)
-                mediaOps.autoFill()
-            }
-            Unit
-        }
+        // Apps that became games and games added by hand are identified and filled straight away.
+        val findArt: (List<io.github.matiyaaa.fuse.model.GameId>) -> Unit = { ids -> mediaOps.fillNew(ids) }
         apps.onGamesAdded = findArt
         library = DefaultLibraryOps(ctx, engine, emulators, collections, apps, achievements, cartridge) { enabled ->
             updatePrefs { it.copy(cleanDisplayNames = enabled) }
@@ -145,7 +139,15 @@ internal class DefaultFuseStore private constructor(
             data.cache.purgeExpired(ctx.now())
             runCatching { updates.checkIfDue() }
         }
-        // New games find their art by themselves, once Cartridge's RomM details have had a moment.
+        // Games a scan found (downloads included) are identified and filled first, once Cartridge's
+        // RomM details, read right after the scan, have had a moment to land.
+        ctx.scope.launch {
+            engine.added.collect { ids ->
+                delay(NEW_GAMES_DELAY_MS)
+                mediaOps.fillNew(ids)
+            }
+        }
+        // The rest of the library finds missing art by itself after scans.
         ctx.scope.launch {
             engine.scan.map { it.phase }.distinctUntilChanged().collect { phase ->
                 if (phase == ScanPhase.DONE) {
@@ -162,6 +164,9 @@ internal class DefaultFuseStore private constructor(
 
         /** How long after a scan (or a new key) the automatic fill starts. */
         const val AUTO_FILL_DELAY_MS = 5_000L
+
+        /** How long new games wait for Cartridge's RomM details before they are filled. */
+        const val NEW_GAMES_DELAY_MS = 1_500L
 
         suspend fun create(services: FuseServices, scope: CoroutineScope): DefaultFuseStore {
             val settings = services.data.settings.current()

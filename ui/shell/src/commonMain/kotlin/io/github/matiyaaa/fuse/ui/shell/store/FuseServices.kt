@@ -10,6 +10,7 @@ import io.github.matiyaaa.fuse.model.CartridgeGame
 import io.github.matiyaaa.fuse.model.CartridgeRoute
 import io.github.matiyaaa.fuse.model.CartridgeStatus
 import io.github.matiyaaa.fuse.model.CartridgeUpload
+import io.github.matiyaaa.fuse.model.EmulatorId
 import io.github.matiyaaa.fuse.model.Host
 import io.github.matiyaaa.fuse.model.InstalledEmulator
 import io.github.matiyaaa.fuse.model.LibrarySourceKind
@@ -90,6 +91,26 @@ interface EmulatorDetector {
 
     /** Linux: the user's home directory, for `~` in emulator paths. */
     val homeDir: String? get() = null
+
+    /** True where the user can point Fuse at an emulator it didn't find (Windows and macOS). */
+    val canLocate: Boolean get() = false
+
+    /**
+     * Remembers [path] (a program, or a macOS app) as where [emulator] is, so [detect] finds it from
+     * now on. False when it isn't something Fuse can run.
+     */
+    suspend fun locate(emulator: EmulatorId, path: String): Boolean = false
+
+    /** Forgets where [emulator] was located; [detect] searches for it again. */
+    suspend fun forget(emulator: EmulatorId) = Unit
+
+    /** Extra folders searched for emulators, besides the usual places. */
+    fun searchFolders(): List<String> = emptyList()
+
+    suspend fun setSearchFolders(folders: List<String>) = Unit
+
+    /** Where the user located each emulator, by id. */
+    fun located(): Map<EmulatorId, String> = emptyMap()
 }
 
 /** Result of handing a game or app to the system. */
@@ -158,6 +179,12 @@ interface CartridgeBridge {
 /** Downloads a release and hands it to the system. Only ever after the user confirmed. */
 interface ReleaseInstaller {
     val platform: ReleasePlatform
+
+    /**
+     * False where Fuse can't update itself and offers the release page instead (Windows and macOS,
+     * whose installers Windows and macOS run themselves).
+     */
+    val inPlace: Boolean get() = true
 
     /**
      * Downloads [asset] into the cache, verifies its `sha256:` digest when GitHub published one, and

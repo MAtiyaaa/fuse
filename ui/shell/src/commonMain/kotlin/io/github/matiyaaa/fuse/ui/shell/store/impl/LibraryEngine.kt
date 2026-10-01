@@ -23,6 +23,7 @@ import io.github.matiyaaa.fuse.ui.shell.store.SuggestedSource
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -47,6 +48,9 @@ internal class LibraryEngine(private val ctx: StoreContext) : SourceOps {
 
     /** Platform folders found by the last scans, by platform. */
     val platformFolders = MutableStateFlow<Map<PlatformId, List<String>>>(emptyMap())
+
+    /** Games each scan added, as it finishes: they are identified and filled first. */
+    val added = MutableSharedFlow<List<io.github.matiyaaa.fuse.model.GameId>>(extraBufferCapacity = 16)
 
     /** Firmware status of platforms that need firmware and have games. */
     val bios = MutableStateFlow<Map<PlatformId, BiosStatus>>(emptyMap())
@@ -149,6 +153,7 @@ internal class LibraryEngine(private val ctx: StoreContext) : SourceOps {
             removed = delta.missing,
             changed = delta.updated + delta.restored,
         )
+        if (delta.addedIds.isNotEmpty()) added.tryEmit(delta.addedIds)
         refreshBios()
     }
 

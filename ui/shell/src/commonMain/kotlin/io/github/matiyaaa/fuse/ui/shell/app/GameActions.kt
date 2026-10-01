@@ -206,13 +206,18 @@ fun AppState.emulatorPicker(card: GameCard) {
                 choice = null
             }),
         ) + options.map { o ->
+            val locate = !o.installed && store.emulators.canLocate
             MenuAction(
                 "e${o.id}", o.name, FuseIcons.Chip,
-                detail = o.note ?: if (o.installed) null else "Not installed",
-                unavailableReason = if (o.installed) null else "Not installed on this device",
+                detail = if (locate) "Not found. Show Fuse where it is" else o.note ?: if (o.installed) null else "Not installed",
+                unavailableReason = if (o.installed || locate) null else "Not installed on this device",
                 onSelect = {
-                    scope.launch { store.library.setEmulator(card.id, o.id) }
-                    choice = null
+                    if (locate) {
+                        startLocate(LocateRequest(o.id, o.name, game = card.id))
+                    } else {
+                        scope.launch { store.library.setEmulator(card.id, o.id) }
+                        choice = null
+                    }
                 },
             )
         },

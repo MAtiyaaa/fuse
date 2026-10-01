@@ -63,6 +63,8 @@ ICONS = [
     ('read-only', 'Lock', 'Read-only'),
     ('android', 'Smartphone', 'Android'),
     ('linux', 'Monitor', 'Linux desktop'),
+    ('windows', 'AppWindow', 'Windows'),
+    ('macos', 'Laptop', 'macOS'),
     ('free-software', 'Heart', 'Free software'),
 ]
 

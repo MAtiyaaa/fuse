@@ -5,6 +5,7 @@ import android.content.Intent
 import android.graphics.Color as AndroidColor
 import android.net.Uri
 import android.os.Bundle
+import android.view.InputDevice
 import android.view.KeyEvent
 import android.view.MotionEvent
 import androidx.activity.ComponentActivity
@@ -96,6 +97,8 @@ class MainActivity : ComponentActivity(), ActivityRequests {
             this,
             object : OnBackPressedCallback(true) {
                 override fun handleOnBackPressed() {
+                    // Back pressed on the second screen (its navigation bar or gesture) is not Fuse's.
+                    if (SecondScreenTouch.justTouched()) return
                     val source = router.lastSource.value
                     router.press(PadButton.KEY_ESCAPE, source)
                     router.release(PadButton.KEY_ESCAPE, source)
@@ -213,7 +216,12 @@ class MainActivity : ComponentActivity(), ActivityRequests {
     }
 
     @SuppressLint("RestrictedApi") // Lint false positive: Activity.dispatchKeyEvent is public API.
-    override fun dispatchKeyEvent(event: KeyEvent): Boolean = gamepad.onKey(event) || super.dispatchKeyEvent(event)
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        // The second screen's own Back key (its navigation bar) reaches this window too; it is not Fuse's.
+        val controller = event.isFromSource(InputDevice.SOURCE_GAMEPAD) || event.isFromSource(InputDevice.SOURCE_JOYSTICK)
+        if (event.keyCode == KeyEvent.KEYCODE_BACK && !controller && SecondScreenTouch.justTouched()) return true
+        return gamepad.onKey(event) || super.dispatchKeyEvent(event)
+    }
 
     override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean =
         gamepad.onMotion(event) || super.dispatchGenericMotionEvent(event)

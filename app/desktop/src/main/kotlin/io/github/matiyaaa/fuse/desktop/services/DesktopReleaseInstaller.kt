@@ -2,6 +2,7 @@ package io.github.matiyaaa.fuse.desktop.services
 
 import io.github.matiyaaa.fuse.desktop.FuseDirs
 import io.github.matiyaaa.fuse.desktop.Log
+import io.github.matiyaaa.fuse.desktop.system.DesktopOs
 import io.github.matiyaaa.fuse.integrations.github.ReleasePlatform
 import io.github.matiyaaa.fuse.model.ReleaseAsset
 import io.github.matiyaaa.fuse.ui.shell.store.ReleaseInstaller
@@ -183,4 +184,24 @@ internal class DesktopReleaseInstaller(private val dirs: FuseDirs, private val h
 
     private fun isSafeName(name: String): Boolean =
         name.isNotBlank() && '/' !in name && '\\' !in name && !name.startsWith('.') && name.length <= 200 && name.none { it.code < 32 }
+}
+
+/**
+ * Windows and macOS: Fuse doesn't replace itself there. The update shows the version, and getting it
+ * opens the release page, where the installer (or disk image) is.
+ */
+internal class PageReleaseInstaller(override val platform: ReleasePlatform) : ReleaseInstaller {
+    override val inPlace: Boolean get() = false
+
+    override suspend fun install(asset: ReleaseAsset, onProgress: (Float) -> Unit): Result<Unit> =
+        Result.failure(UnsupportedOperationException("Get the new version from its release page."))
+
+    companion object {
+        /** The build this Mac or PC takes. */
+        fun platformFor(os: DesktopOs): ReleasePlatform = when (os) {
+            DesktopOs.WINDOWS -> ReleasePlatform.WINDOWS_X64
+            DesktopOs.MACOS -> if (System.getProperty("os.arch").orEmpty().let { it == "aarch64" || it == "arm64" }) ReleasePlatform.MACOS_ARM64 else ReleasePlatform.MACOS_X64
+            DesktopOs.LINUX -> ReleasePlatform.LINUX_X86_64
+        }
+    }
 }

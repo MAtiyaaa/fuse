@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -47,9 +48,10 @@ import io.github.matiyaaa.fuse.ui.designsystem.components.Panel
 import io.github.matiyaaa.fuse.ui.designsystem.components.ProgressBar
 import io.github.matiyaaa.fuse.ui.designsystem.components.SectionLabel
 import io.github.matiyaaa.fuse.ui.designsystem.components.StatusDot
+import io.github.matiyaaa.fuse.ui.designsystem.components.fadingEdges
 import io.github.matiyaaa.fuse.ui.designsystem.components.fadingEdgesHorizontal
-import io.github.matiyaaa.fuse.ui.designsystem.focus.FollowSelection
 import io.github.matiyaaa.fuse.ui.designsystem.focus.LinearSelection
+import io.github.matiyaaa.fuse.ui.designsystem.focus.follow
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
 import io.github.matiyaaa.fuse.ui.designsystem.icons.HintButton
@@ -162,92 +164,114 @@ fun CartridgeScreen(app: AppState) {
     }
 
     val c = Fuse.colors
-    // Handhelds: fewer finished uploads, so the recent downloads keep room.
+    // The whole page scrolls as one: the header, buttons and panels move up with the recent downloads.
+    val page = rememberLazyListState()
     BoxWithConstraints(Modifier.fillMaxSize()) {
     val compact = maxHeight < 600.dp
-    Column(Modifier.fillMaxSize().padding(horizontal = Space.gutter)) {
-        Spacer(Modifier.height(Size.hudHeight + Space.xl))
-        Row(verticalAlignment = Alignment.Bottom) {
-            Column(Modifier.weight(1f)) {
-                SectionLabel("Get games")
-                Spacer(Modifier.height(Space.s))
-                FText("Cartridge", Fuse.type.hero)
-                Spacer(Modifier.height(Space.s))
-                FText(statusLine(status), Fuse.type.body, color = c.textMuted, maxLines = 2, modifier = Modifier.widthIn(max = 640.dp))
-            }
-            if (status.installed) ConnectionBadge(status)
-        }
-        Spacer(Modifier.height(Space.xl))
-        // On narrow screens the buttons scroll sideways, keeping the chosen one in view.
-        val actionsScroll = rememberScrollState()
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .fadingEdgesHorizontal(start = actionsScroll.value > 0, end = actionsScroll.value < actionsScroll.maxValue, width = 32.dp)
-                .horizontalScroll(actionsScroll),
-            horizontalArrangement = Arrangement.spacedBy(Space.m),
-        ) {
-            actions.forEachIndexed { i, a ->
-                val chosen = !inRecent && i == actionsSel.index && app.focusZone == FocusZone.CONTENT
-                val into = remember { BringIntoViewRequester() }
-                // Keyed on the scroll range too: a chosen button can grow, which moves the end.
-                LaunchedEffect(chosen, actionsScroll.maxValue) {
-                    // The ends scroll all the way, so no fade lies over the first or last button.
-                    if (!chosen) return@LaunchedEffect
-                    when (i) {
-                        0 -> actionsScroll.animateScrollTo(0)
-                        actions.lastIndex -> actionsScroll.animateScrollTo(actionsScroll.maxValue)
-                        else -> into.bringIntoView()
-                    }
+    val oldBridge = status.installed && !status.bridge
+    val downloading = status.installed && (status.activeDownloads > 0 || status.queuedDownloads > 0 || status.queue.isNotEmpty())
+    val uploading = status.installed && status.uploads.isNotEmpty()
+    val showRecent = status.installed && recent.isNotEmpty()
+    // Items before the first recent download (header, buttons, panels, label), so the page can follow the chosen one.
+    val headerItems = 2 + listOf(oldBridge, downloading, uploading, showRecent).count { it }
+    // The page scrolls below the top line, never under it.
+    LazyColumn(
+        state = page,
+        modifier = Modifier.fillMaxSize().padding(top = Size.hudHeight).fadingEdges(top = if (page.canScrollBackward) Space.xl else 0.dp),
+        contentPadding = PaddingValues(top = Space.xl, bottom = Size.hintHeight + Space.xl),
+    ) {
+        item(key = "header") {
+            Row(Modifier.padding(horizontal = Space.gutter), verticalAlignment = Alignment.Bottom) {
+                Column(Modifier.weight(1f)) {
+                    SectionLabel("Get games")
+                    Spacer(Modifier.height(Space.s))
+                    FText("Cartridge", Fuse.type.hero)
+                    Spacer(Modifier.height(Space.s))
+                    FText(statusLine(status), Fuse.type.body, color = c.textMuted, maxLines = 2, modifier = Modifier.widthIn(max = 640.dp))
                 }
-                FuseButton(
-                    a.label,
-                    selected = chosen,
-                    onClick = { actionsSel.index = i; inRecent = false; a.run() },
-                    modifier = Modifier.bringIntoViewRequester(into),
-                    icon = a.icon,
-                    kind = if (a.primary) ButtonKind.PRIMARY else ButtonKind.SECONDARY,
-                )
+                if (status.installed) ConnectionBadge(status)
             }
         }
-        if (!status.installed) {
-            Spacer(Modifier.height(Space.xl))
-            InstallExplainer(release)
-            return@Column
-        }
-        if (status.installed && !status.bridge) {
-            Spacer(Modifier.height(Space.l))
-            Panel(Modifier.widthIn(max = 720.dp)) {
-                Row(Modifier.padding(Space.l), horizontalArrangement = Arrangement.spacedBy(Space.m), verticalAlignment = Alignment.CenterVertically) {
-                    FuseIcon(FuseIcons.Info, tint = c.warning)
-                    FText(
-                        "This Cartridge (${status.version ?: "unknown version"}) opens, but it can't be opened on a page or show its downloads here. Cartridge 0.9.10 or newer can.",
-                        Fuse.type.body, maxLines = 3,
+        item(key = "actions") {
+            // On narrow screens the buttons scroll sideways, keeping the chosen one in view. The gutter
+            // sits inside the row, so a chosen button's lift and outline are never cut at the edge.
+            val actionsScroll = rememberScrollState()
+            Row(
+                Modifier
+                    .padding(top = Space.xl)
+                    .fillMaxWidth()
+                    .fadingEdgesHorizontal(start = actionsScroll.value > 0, end = actionsScroll.value < actionsScroll.maxValue, width = 32.dp)
+                    .horizontalScroll(actionsScroll)
+                    .padding(horizontal = Space.gutter, vertical = Space.s),
+                horizontalArrangement = Arrangement.spacedBy(Space.m),
+            ) {
+                actions.forEachIndexed { i, a ->
+                    val chosen = !inRecent && i == actionsSel.index && app.focusZone == FocusZone.CONTENT
+                    val into = remember { BringIntoViewRequester() }
+                    // Keyed on the scroll range too: a chosen button can grow, which moves the end.
+                    LaunchedEffect(chosen, actionsScroll.maxValue) {
+                        // The ends scroll all the way, so no fade lies over the first or last button.
+                        if (!chosen) return@LaunchedEffect
+                        when (i) {
+                            0 -> actionsScroll.animateScrollTo(0)
+                            actions.lastIndex -> actionsScroll.animateScrollTo(actionsScroll.maxValue)
+                            else -> into.bringIntoView()
+                        }
+                    }
+                    FuseButton(
+                        a.label,
+                        selected = chosen,
+                        onClick = { actionsSel.index = i; inRecent = false; a.run() },
+                        modifier = Modifier.bringIntoViewRequester(into),
+                        icon = a.icon,
+                        kind = if (a.primary) ButtonKind.PRIMARY else ButtonKind.SECONDARY,
                     )
                 }
             }
         }
-        if (status.activeDownloads > 0 || status.queuedDownloads > 0 || status.queue.isNotEmpty()) {
-            Spacer(Modifier.height(Space.xl))
-            DownloadsPanel(status, Modifier.widthIn(max = 720.dp))
+        if (!status.installed) {
+            item(key = "explainer") {
+                Box(Modifier.padding(start = Space.gutter, end = Space.gutter, top = Space.l)) { InstallExplainer(release) }
+            }
+            return@LazyColumn
         }
-        if (status.uploads.isNotEmpty()) {
-            Spacer(Modifier.height(Space.l))
-            UploadsPanel(status.uploads, Modifier.widthIn(max = 720.dp), maxOthers = if (compact) 1 else 4)
-        }
-        if (recent.isNotEmpty()) {
-            Spacer(Modifier.height(Space.xl))
-            SectionLabel("Recently downloaded")
-            Spacer(Modifier.height(Space.m))
-            val list = rememberLazyListState()
-            FollowSelection(list, { recentSel.index }, anchor = 0.3f)
-            LazyColumn(state = list, verticalArrangement = Arrangement.spacedBy(Space.xs), modifier = Modifier.widthIn(max = 820.dp).weight(1f)) {
-                itemsIndexed(recent, key = { _, r -> r.download.romId }) { i, r ->
-                    RecentRow(r, selected = inRecent && i == recentSel.index && app.focusZone == FocusZone.CONTENT)
+        if (oldBridge) {
+            item(key = "old") {
+                Panel(Modifier.padding(start = Space.gutter, end = Space.gutter, top = Space.l).widthIn(max = 720.dp)) {
+                    Row(Modifier.padding(Space.l), horizontalArrangement = Arrangement.spacedBy(Space.m), verticalAlignment = Alignment.CenterVertically) {
+                        FuseIcon(FuseIcons.Info, tint = c.warning)
+                        FText(
+                            "This Cartridge (${status.version ?: "unknown version"}) opens, but it can't be opened on a page or show its downloads here. Cartridge 0.9.10 or newer can.",
+                            Fuse.type.body, maxLines = 3,
+                        )
+                    }
                 }
-                item { Spacer(Modifier.height(Size.hintHeight + Space.xl)) }
             }
         }
+        if (downloading) {
+            item(key = "downloads") {
+                DownloadsPanel(status, Modifier.padding(start = Space.gutter, end = Space.gutter, top = Space.l).widthIn(max = 720.dp))
+            }
+        }
+        if (uploading) {
+            item(key = "uploads") {
+                UploadsPanel(status.uploads, Modifier.padding(start = Space.gutter, end = Space.gutter, top = Space.l).widthIn(max = 720.dp), maxOthers = if (compact) 1 else 4)
+            }
+        }
+        if (showRecent) {
+            item(key = "recent label") {
+                SectionLabel("Recently downloaded", Modifier.padding(start = Space.gutter, end = Space.gutter, top = Space.xl, bottom = Space.m))
+            }
+            itemsIndexed(recent, key = { _, r -> r.download.romId }) { i, r ->
+                Box(Modifier.padding(horizontal = Space.gutter, vertical = Space.xxs)) {
+                    RecentRow(r, selected = inRecent && i == recentSel.index && app.focusZone == FocusZone.CONTENT, modifier = Modifier.widthIn(max = 820.dp))
+                }
+            }
+        }
+    }
+    // In the recent downloads the page follows the chosen one; up in the buttons it returns to the top.
+    LaunchedEffect(inRecent, recentSel.index, headerItems) {
+        if (inRecent) page.follow(headerItems + recentSel.index, anchor = 0.45f) else page.animateScrollToItem(0)
     }
     }
 }
@@ -333,10 +357,10 @@ private fun ConnectionBadge(s: CartridgeStatus) {
 }
 
 @Composable
-private fun RecentRow(r: RecentDownload, selected: Boolean) {
+private fun RecentRow(r: RecentDownload, selected: Boolean, modifier: Modifier = Modifier) {
     val c = Fuse.colors
     Row(
-        Modifier
+        modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(Fuse.geometry.control))
             .background(if (selected) c.text.copy(alpha = 0.1f) else Color.Transparent)

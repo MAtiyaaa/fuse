@@ -98,6 +98,11 @@ data class AchievementState(
     val highestAward: String?,
     val achievements: List<Achievement> = emptyList(),
     val fetchedAt: Long,
+    /**
+     * Found by the game's name, not its ROM's hash: the set is right, but unlocking needs the ROM
+     * version RetroAchievements supports.
+     */
+    val matchedByName: Boolean = false,
 ) {
     val progress: Float get() = if (total == 0) 0f else earned.toFloat() / total
     val mastered: Boolean get() = highestAward == "mastered"

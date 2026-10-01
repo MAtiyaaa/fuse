@@ -8,9 +8,11 @@ import io.github.matiyaaa.fuse.desktop.services.DesktopLauncher
 import io.github.matiyaaa.fuse.desktop.services.EncryptedFileSecretStore
 import io.github.matiyaaa.fuse.desktop.services.IconIndex
 import io.github.matiyaaa.fuse.desktop.services.NioFileSystem
+import io.github.matiyaaa.fuse.desktop.system.DesktopOs
 import io.github.matiyaaa.fuse.model.PadButton
 import kotlinx.coroutines.runBlocking
 import java.io.File
+import java.nio.file.FileSystems
 import java.nio.file.Files
 import java.nio.file.attribute.PosixFilePermissions
 import kotlin.test.AfterTest
@@ -107,7 +109,10 @@ class DesktopUnitTest {
         assertNull(DesktopFuseServices.writeBelow(root, "playlists/../../escape.txt", "x"))
         assertNull(DesktopFuseServices.writeBelow(root, "", "x"))
         val written = DesktopFuseServices.writeBelow(root, "/playlists/42/Game.m3u", "a.cue\nb.cue\n")
-        assertEquals(File(root, "playlists/42/Game.m3u").absolutePath, written)
+        assertEquals(File(root, "playlists/42/Game.m3u").absoluteFile.invariantSeparatorsPath, written)
+        // Windows ways out of the folder.
+        assertNull(DesktopFuseServices.writeBelow(root, "..\\escape.txt", "x"))
+        assertNull(DesktopFuseServices.writeBelow(root, "C:/escape.txt", "x"))
         assertEquals("a.cue\nb.cue\n", File(written!!).readText())
         assertFalse(File(tmp, "escape.txt").exists())
     }
@@ -121,8 +126,11 @@ class DesktopUnitTest {
         assertEquals("s3cret value", EncryptedFileSecretStore(tmp).get("ra.apikey"))
         val raw = File(tmp, "secrets.bin").readBytes().toString(Charsets.ISO_8859_1)
         assertFalse("s3cret" in raw)
-        for (name in listOf("secrets.bin", "secrets.key")) {
-            assertEquals("rw-------", PosixFilePermissions.toString(Files.getPosixFilePermissions(File(tmp, name).toPath())))
+        // Windows has no POSIX modes; AppData is the user's own there.
+        if (FileSystems.getDefault().supportedFileAttributeViews().contains("posix")) {
+            for (name in listOf("secrets.bin", "secrets.key")) {
+                assertEquals("rw-------", PosixFilePermissions.toString(Files.getPosixFilePermissions(File(tmp, name).toPath())))
+            }
         }
         store.remove("ra.apikey")
         assertNull(store.get("ra.apikey"))
@@ -131,6 +139,8 @@ class DesktopUnitTest {
 
     @Test
     fun fileSystemReportsLinksAndSurvivesLoops() = runBlocking<Unit> {
+        // Making symbolic links on Windows needs Developer Mode or an administrator.
+        if (DesktopOs.isWindows) return@runBlocking
         val fs = NioFileSystem()
         val roms = File(tmp, "roms").apply { mkdirs() }
         File(roms, "snes").mkdirs()

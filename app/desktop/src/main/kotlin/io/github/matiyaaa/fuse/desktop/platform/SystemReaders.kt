@@ -1,5 +1,8 @@
 package io.github.matiyaaa.fuse.desktop.platform
 
+import io.github.matiyaaa.fuse.desktop.system.DesktopOs
+import io.github.matiyaaa.fuse.desktop.system.PowerShell
+import io.github.matiyaaa.fuse.desktop.system.Processes
 import io.github.matiyaaa.fuse.model.ConnectionState
 import io.github.matiyaaa.fuse.model.PerformanceMetric
 import io.github.matiyaaa.fuse.model.SystemStatus
@@ -20,6 +23,7 @@ private fun readSys(path: String): String? = try {
  */
 internal object StatusReader {
     fun read(): SystemStatus {
+        if (DesktopOs.current != DesktopOs.LINUX) return OtherStatus.read()
         val (battery, charging) = battery()
         val net = network()
         return SystemStatus(
@@ -113,7 +117,9 @@ internal class PerformanceReader {
     private var lastIdle = -1L
     private var lastTotal = -1L
 
-    fun read(): List<PerformanceMetric> = buildList {
+    fun read(): List<PerformanceMetric> = if (DesktopOs.current == DesktopOs.LINUX) readLinux() else OtherStatus.performance()
+
+    private fun readLinux(): List<PerformanceMetric> = buildList {
         cpuLoad()?.let { load ->
             add(PerformanceMetric("cpu", "CPU", "${(load * 100).roundToInt()}%", load.toFloat(), "/proc/stat"))
         }
@@ -178,7 +184,123 @@ internal class PerformanceReader {
     }
 }
 
-/** Total RAM in MB from `/proc/meminfo`, or null. */
+/** Total RAM in MB from `/proc/meminfo` (elsewhere from the JVM), or null. */
 internal fun totalRamMb(): Long? =
     readSys("/proc/meminfo")?.lineSequence()?.firstOrNull { it.startsWith("MemTotal:") }
         ?.substringAfter(':')?.trim()?.substringBefore(' ')?.toLongOrNull()?.div(1024)
+        ?: OtherStatus.osBean?.totalMemorySize?.takeIf { it > 0 }?.div(1024 * 1024)
+
+/**
+ * Status and performance on Windows and macOS. Battery: `pmset -g batt` on macOS, the CIM
+ * Win32_Battery class through PowerShell on Windows (asked at most once a minute). Network from
+ * Java's interface list; on macOS `networksetup` names the Wi-Fi device. CPU and memory from the
+ * JVM's operating system bean.
+ */
+internal object OtherStatus {
+    val osBean: com.sun.management.OperatingSystemMXBean? =
+        java.lang.management.ManagementFactory.getOperatingSystemMXBean() as? com.sun.management.OperatingSystemMXBean
+
+    @Volatile private var battery: Pair<Int?, Boolean> = null to false
+    @Volatile private var batteryAt = 0L
+    private val wifiDevice: String? by lazy { if (DesktopOs.isMac) macWifiDevice() else null }
+
+    fun read(): SystemStatus {
+        val (level, charging) = batteryNow()
+        val (network, wifi) = network()
+        return SystemStatus(batteryPercent = level, charging = charging, wifi = wifi, network = network, bluetooth = ConnectionState.UNKNOWN)
+    }
+
+    private fun batteryNow(): Pair<Int?, Boolean> {
+        val now = System.currentTimeMillis()
+        val ttl = if (DesktopOs.isWindows) 60_000L else 10_000L
+        if (now - batteryAt < ttl) return battery
+        battery = if (DesktopOs.isWindows) windowsBattery() else macBattery()
+        batteryAt = now
+        return battery
+    }
+
+    private fun macBattery(): Pair<Int?, Boolean> {
+        val out = Processes.run(listOf("/usr/bin/pmset", "-g", "batt"), timeoutMs = 3_000)?.takeIf { it.exitCode == 0 } ?: return null to false
+        return parsePmset(out.stdout)
+    }
+
+    /** "Now drawing from 'AC Power'" and " -InternalBattery-0 (id=1)	85%; charging; 0:42 remaining". */
+    internal fun parsePmset(text: String): Pair<Int?, Boolean> {
+        val line = text.lineSequence().firstOrNull { "InternalBattery" in it } ?: return null to false
+        val level = Regex("""(\d{1,3})%""").find(line)?.groupValues?.get(1)?.toIntOrNull()?.coerceIn(0, 100)
+        val onAc = "AC Power" in text
+        val state = line.substringAfter(';', "").substringBefore(';').trim()
+        return level to (state == "charging" || state == "finishing charge" || (onAc && state == "charged"))
+    }
+
+    private fun windowsBattery(): Pair<Int?, Boolean> {
+        val script = "\$b = Get-CimInstance -ClassName Win32_Battery | Select-Object -First 1; " +
+            "if (\$b) { [Console]::Out.Write([string]\$b.EstimatedChargeRemaining + ',' + [string]\$b.BatteryStatus) }"
+        val out = PowerShell.run(script, timeoutMs = 8_000)?.takeIf { it.exitCode == 0 } ?: return null to false
+        return parseWin32Battery(out.stdout)
+    }
+
+    /** "85,2": the charge, then Win32_Battery's BatteryStatus (1, 4 and 5 run on the battery). */
+    internal fun parseWin32Battery(text: String): Pair<Int?, Boolean> {
+        val parts = text.trim().split(',')
+        val level = parts.getOrNull(0)?.trim()?.toIntOrNull()?.coerceIn(0, 100) ?: return null to false
+        val status = parts.getOrNull(1)?.trim()?.toIntOrNull()
+        return level to (status != null && status !in setOf(1, 4, 5))
+    }
+
+    private fun network(): Pair<ConnectionState, ConnectionState> {
+        val ifaces = try {
+            java.net.NetworkInterface.networkInterfaces().toList()
+        } catch (e: Exception) {
+            return ConnectionState.UNKNOWN to ConnectionState.UNKNOWN
+        }
+        fun connected(i: java.net.NetworkInterface): Boolean = try {
+            i.isUp && !i.isLoopback && !i.isVirtual && i.inetAddresses().anyMatch { a -> !a.isLoopbackAddress && !a.isLinkLocalAddress }
+        } catch (e: Exception) {
+            false
+        }
+        val physical = ifaces.filter { i -> runCatching { !i.isLoopback && !i.isVirtual }.getOrDefault(false) }
+        val network = when {
+            physical.isEmpty() -> ConnectionState.UNKNOWN
+            physical.any(::connected) -> ConnectionState.CONNECTED
+            else -> ConnectionState.OFF
+        }
+        val wireless = physical.filter { i ->
+            val label = (i.displayName.orEmpty() + " " + i.name).lowercase(Locale.ROOT)
+            i.name == wifiDevice || "wi-fi" in label || "wireless" in label || "wlan" in label || "802.11" in label
+        }
+        val wifi = when {
+            wireless.isEmpty() -> ConnectionState.UNKNOWN
+            wireless.any(::connected) -> ConnectionState.CONNECTED
+            else -> ConnectionState.ON
+        }
+        return network to wifi
+    }
+
+    /** The device behind macOS's "Wi-Fi" hardware port (usually en0). */
+    private fun macWifiDevice(): String? {
+        val out = Processes.run(listOf("/usr/sbin/networksetup", "-listallhardwareports"), timeoutMs = 3_000)?.takeIf { it.exitCode == 0 } ?: return null
+        val lines = out.stdout.lines()
+        val port = lines.indexOfFirst { it.trim().equals("Hardware Port: Wi-Fi", ignoreCase = true) || it.trim().equals("Hardware Port: AirPort", ignoreCase = true) }
+        if (port < 0) return null
+        return lines.getOrNull(port + 1)?.substringAfter("Device:", "")?.trim()?.ifEmpty { null }
+    }
+
+    fun performance(): List<PerformanceMetric> = buildList {
+        val bean = osBean
+        bean?.cpuLoad?.takeIf { it in 0.0..1.0 }?.let { load ->
+            add(PerformanceMetric("cpu", "CPU", "${(load * 100).roundToInt()}%", load.toFloat(), "OperatingSystemMXBean"))
+        }
+        val total = bean?.totalMemorySize ?: 0L
+        val free = bean?.freeMemorySize ?: 0L
+        if (total > 0) {
+            val used = total - free
+            add(PerformanceMetric("memory", "Memory", "${gb(used)} / ${gb(total)} GB", (used.toDouble() / total).toFloat(), "OperatingSystemMXBean"))
+        }
+        val mem = java.lang.management.ManagementFactory.getMemoryMXBean()
+        val fuse = mem.heapMemoryUsage.committed + mem.nonHeapMemoryUsage.committed
+        add(PerformanceMetric("fuse-memory", "Fuse memory", "${(fuse / 1024.0 / 1024.0).roundToInt()} MB", null, "MemoryMXBean"))
+    }
+
+    private fun gb(bytes: Long): String = String.format(Locale.ROOT, "%.1f", bytes / 1024.0 / 1024.0 / 1024.0)
+}

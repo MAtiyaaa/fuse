@@ -89,6 +89,9 @@ internal class AuditServices(
     /** Android, for the screens only an Android device has (its games, APKs). */
     override val host: Host = base.host,
 ) : FuseServices by base {
+    /** Windows and macOS: no app list, and emulators the user can point Fuse at. */
+    private val desktop = host == Host.WINDOWS || host == Host.MACOS
+
     override val fs: FuseFileSystem = object : FuseFileSystem by base.fs {
         override suspend fun list(path: String): List<FsEntry> {
             controls.beforeList()
@@ -97,8 +100,30 @@ internal class AuditServices(
     }
 
     override val emulators = object : EmulatorDetector {
-        override suspend fun detect(): List<InstalledEmulator> = InstalledEmulators
+        private val located = java.util.concurrent.ConcurrentHashMap<EmulatorId, String>()
+
+        override suspend fun detect(): List<InstalledEmulator> = if (!desktop) {
+            InstalledEmulators
+        } else {
+            WindowsEmulators + located.map { (id, path) ->
+                InstalledEmulator(id, id.value.substringAfter('.'), host, path, platforms = emptySet(), detectedVia = "Located")
+            }
+        }
+
         override val homeDir: String? = base.emulators.homeDir
+        override val canLocate: Boolean get() = desktop
+
+        override suspend fun locate(emulator: EmulatorId, path: String): Boolean {
+            if (!path.endsWith(".exe", ignoreCase = true)) return false
+            located[emulator] = path
+            return true
+        }
+
+        override suspend fun forget(emulator: EmulatorId) {
+            located.remove(emulator)
+        }
+
+        override fun located(): Map<EmulatorId, String> = located.toMap()
     }
 
     override val launcher = object : GameLauncher {
@@ -113,7 +138,7 @@ internal class AuditServices(
         override fun open(route: CartridgeRoute, link: String) = true
     }
 
-    override val apps: AppsProvider = controls.apps
+    override val apps: AppsProvider? = if (desktop) null else controls.apps
 
     override val locations = object : DeviceLocations {
         override suspend fun libraryCandidates(): List<LocationHint> = controls.libraryCandidates
@@ -133,6 +158,14 @@ internal class AuditServices(
         )
 
         val InstalledEmulators: List<InstalledEmulator> = ScreenshotServices.InstalledEmulators + Citron
+
+        /** What a Windows PC with a few emulators reports. */
+        val WindowsEmulators: List<InstalledEmulator> = listOf(
+            InstalledEmulator(EmulatorId("windows.retroarch"), "RetroArch", Host.WINDOWS, "C:/RetroArch-Win64/retroarch.exe", platforms = emptySet(), detectedVia = "Folder"),
+            InstalledEmulator(EmulatorId("windows.duckstation"), "DuckStation", Host.WINDOWS, "D:/Emulators/duckstation/duckstation-qt-x64-ReleaseLTCG.exe", platforms = setOf(PlatformId("psx")), detectedVia = "Folder"),
+            InstalledEmulator(EmulatorId("windows.pcsx2"), "PCSX2", Host.WINDOWS, "C:/Program Files/PCSX2/pcsx2-qt.exe", platforms = setOf(PlatformId("ps2")), detectedVia = "Folder"),
+            InstalledEmulator(EmulatorId("windows.shortcut"), "Windows programs and shortcuts", Host.WINDOWS, "powershell.exe", platforms = emptySet(), detectedVia = "Built in"),
+        )
 
         fun create(cache: File, controls: AuditControls, host: Host = Host.LINUX): AuditServices = AuditServices(
             ScreenshotServices(FuseData(DesktopDatabase.open(File(cache, "fuse-${System.nanoTime()}.db").absolutePath)), cache),
