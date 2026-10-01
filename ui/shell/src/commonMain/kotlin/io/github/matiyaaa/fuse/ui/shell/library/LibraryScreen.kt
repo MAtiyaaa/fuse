@@ -447,7 +447,7 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
                     LibraryLayout.ICON -> {
                         // The game's logo moves up with the folding header and makes room for another row.
                         // Inside a system the stage is smaller, so more games fit from the start.
-                        val stage = if (inSystem) (maxH * 0.17f).coerceIn(96.dp, 150.dp) else (maxH * 0.22f).coerceIn(110.dp, 200.dp)
+                        val stage = if (inSystem) (maxH * 0.14f).coerceIn(92.dp, 124.dp) else (maxH * 0.22f).coerceIn(110.dp, 200.dp)
                         val logo = when {
                             !inSystem -> lerp(84.dp, 60.dp, collapse)
                             compactHeader -> lerp(56.dp, 36.dp, collapse)

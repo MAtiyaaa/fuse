@@ -12,7 +12,7 @@ Fuse gathers the games in your folders, dresses them in art and starts each one 
 already use, all from a console-style interface made for a gamepad. On Android it can even be your
 Home screen.
 
-<a href="https://github.com/MAtiyaaa/fuse/releases"><img src="https://img.shields.io/badge/release-0.1.0%20The%20Showcase%20Update-FF6A3D?style=flat-square&labelColor=15171C" alt="Release 0.1.0, The Showcase Update"></a>
+<a href="https://github.com/MAtiyaaa/fuse/releases"><img src="https://img.shields.io/badge/release-0.1.1%20The%20Second%20Screen%20Update-FF6A3D?style=flat-square&labelColor=15171C" alt="Release 0.1.1, The Second Screen Update"></a>
 <img src="https://img.shields.io/badge/runs%20on-Android%209%2B%20%C2%B7%20Linux%20%C2%B7%20Windows%20%C2%B7%20macOS-2B303B?style=flat-square&labelColor=15171C" alt="Runs on Android 9 or newer, Linux, Windows and macOS">
 <a href="LICENSE"><img src="https://img.shields.io/badge/licence-GPL--3.0--or--later-2B303B?style=flat-square&labelColor=15171C" alt="Licence: GPL-3.0-or-later"></a>
 <a href="#privacy"><img src="https://img.shields.io/badge/telemetry-none-2B303B?style=flat-square&labelColor=15171C" alt="Telemetry: none"></a>
@@ -28,7 +28,7 @@ Home screen.
 <a href="https://github.com/MAtiyaaa/fuse/releases/latest"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/brand/button-macos-dark.svg"><img src="docs/assets/brand/button-macos-light.svg" height="48" alt="Download for macOS"></picture></a>
 
 <sub>Android 9 or newer &nbsp;·&nbsp; 64-bit x86 Linux AppImage &nbsp;·&nbsp; Windows 10 and 11 &nbsp;·&nbsp; macOS on Apple silicon and Intel &nbsp;·&nbsp; <a href="#install">checksums and install notes</a></sub><br>
-<sub>0.1.0 is the first 0.1 release, shaped by hands-on tests on a dual-screen Android handheld. <a href="#where-fuse-stands">Here is where it stands.</a></sub>
+<sub>0.1.1 redesigns the bottom screen of dual-screen handhelds, shaped by hands-on tests on one. <a href="#where-fuse-stands">Here is where it stands.</a></sub>
 
 <br>
 
@@ -369,12 +369,12 @@ Linux app, isn't offered on Windows and macOS.
 ## Where Fuse stands
 
 > [!IMPORTANT]
-> **Fuse 0.1.0 "The Showcase Update" is the first 0.1 release, and still early.** It brings Fuse to
-> Windows and macOS, gives the bottom screen of a dual-screen handheld pages of its own, fills new
-> games the moment they arrive, and fixes a long list of rough edges from the sixth round of tests
-> (see [the release notes](docs/releases/0.1.0.md)). The shared core (library scanning, launch
-> resolution, integrations and the database) and the interface are in place and tested where it
-> matters. The Android app builds and passes its unit tests and lint, and has been tried on one
+> **Fuse 0.1.1 "The Second Screen Update" is still early.** It redesigns the bottom screen of a
+> dual-screen handheld (achievements, battery time, new Status and Controls pages), lets you move
+> systems by touch, rebuilds the Cartridge page, and puts Fuse in Android's recent apps (see
+> [the release notes](docs/releases/0.1.1.md)); 0.1.0 brought Fuse to Windows and macOS. The
+> shared core (library scanning, launch resolution, integrations and the database) and the interface
+> are in place and tested where it matters. The Android app builds and passes its unit tests and lint, and has been tried on one
 > handheld so far. The Linux app builds, passes its tests, packages as an AppImage and starts in a
 > virtual display. The Windows and macOS builds pass their tests and a self-test of the packaged app
 > on each system in CI, but haven't been tried by hand on a PC or Mac yet. Expect rough edges and
