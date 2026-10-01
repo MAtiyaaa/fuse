@@ -29,24 +29,30 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import io.github.matiyaaa.fuse.ui.designsystem.components.EmptyState
 import io.github.matiyaaa.fuse.ui.designsystem.components.FText
 import io.github.matiyaaa.fuse.ui.designsystem.components.Hint
 import io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction
 import io.github.matiyaaa.fuse.ui.designsystem.components.MenuList
+import io.github.matiyaaa.fuse.ui.designsystem.components.Panel
+import io.github.matiyaaa.fuse.ui.designsystem.components.StatusDot
 import io.github.matiyaaa.fuse.ui.designsystem.components.Trailing
 import io.github.matiyaaa.fuse.ui.designsystem.components.handleMenuAction
+import io.github.matiyaaa.fuse.ui.designsystem.effects.elevated
+import io.github.matiyaaa.fuse.ui.designsystem.effects.reveal
 import io.github.matiyaaa.fuse.ui.designsystem.focus.LinearSelection
-import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
 import io.github.matiyaaa.fuse.ui.designsystem.icons.HintButton
 import io.github.matiyaaa.fuse.ui.designsystem.input.InputLayer
+import io.github.matiyaaa.fuse.ui.designsystem.theme.Elevation
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
+import io.github.matiyaaa.fuse.ui.designsystem.theme.Radius
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
+import io.github.matiyaaa.fuse.ui.designsystem.theme.tabular
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec
 import io.github.matiyaaa.fuse.ui.shell.app.ConfirmSpec
@@ -79,7 +85,7 @@ fun phoneLinkRows(app: AppState): List<MenuAction> {
             onSelect = { app.go(Route.PhoneLink) },
         ))
         addAll(phoneLinkAccountRows(app, link, state))
-        addAll(phoneLinkInfoRows())
+        labelled("What a phone can do") { addAll(phoneLinkInfoRows()) }
     }
 }
 
@@ -99,7 +105,7 @@ private fun phoneLinkAccountRows(app: AppState, link: PhoneLinkControl, state: P
     add(MenuAction(
         "sessions", "Signed-in phones", FuseIcons.Users,
         detail = if (state.sessions > 0) "Select to sign every phone out" else null,
-        trailing = Trailing.Value(state.sessions.toString()),
+        trailing = if (state.sessions > 0) Trailing.Badge(state.sessions.toString()) else Trailing.None,
         unavailableReason = if (state.sessions == 0) "No phone is signed in" else null,
         onSelect = {
             app.confirm = ConfirmSpec(
@@ -115,14 +121,14 @@ private fun phoneLinkAccountRows(app: AppState, link: PhoneLinkControl, state: P
             }
         },
     ))
-    state.error?.let { add(infoRow("error", "Phone Link couldn't start", detail = it, icon = FuseIcons.Warning)) }
+    state.error?.let { add(infoRow("error", "Phone Link couldn't start", detail = it.trimEnd('.') + ". Turn Phone Link off and on again, or restart Fuse", icon = FuseIcons.Warning)) }
 }
 
 private fun phoneLinkInfoRows(): List<MenuAction> = listOf(
     infoRow(
         "can", "What a phone can do",
         detail = "See what's playing and downloading, browse and search your library, fix names, details and art, fill art, and download your screenshots and recordings",
-        icon = FuseIcons.Smartphone,
+        icon = FuseIcons.MonitorSmartphone,
     ),
     infoRow(
         "cannot", "What stays on this device",
@@ -211,39 +217,64 @@ fun PhoneLinkScreen(app: AppState) {
                 ))
             }
         }
-        addAll(phoneLinkInfoRows())
+        labelled("What a phone can do") { addAll(phoneLinkInfoRows()) }
     }
     sel.clamp(rows.size)
 
     InputLayer(enabled = app.focusZone == FocusZone.CONTENT && !app.overlayOpen) { e -> handleMenuAction(e, rows, sel) }
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
-        val wide = maxWidth > 760.dp
-        Column(Modifier.fillMaxSize().padding(horizontal = Space.gutter)) {
-            Spacer(Modifier.height(Size.hudHeight + Space.m))
-            Row(verticalAlignment = Alignment.Bottom) {
-                FText("Phone Link", Fuse.type.title, maxLines = 1)
-                Spacer(Modifier.width(Space.l))
-                FText(statusLine(on, state, address), Fuse.type.body, color = Fuse.colors.textMuted, maxLines = 1, modifier = Modifier.padding(bottom = 2.dp))
+        val wide = maxWidth > WIDE_FROM
+        val short = maxHeight < SHORT_BELOW
+        Column(Modifier.fillMaxSize().padding(horizontal = if (wide) Space.gutter else Space.gutterCompact)) {
+            Spacer(Modifier.height(Size.hudHeight + if (short) Space.s else Space.l))
+            SettingsPageHeading("Phone Link", "Your library from a phone on the same Wi-Fi", short, Modifier.reveal(0)) {
+                LinkStatus(on, state, address)
             }
-            Spacer(Modifier.height(Space.l))
+            Spacer(Modifier.height(if (short) Space.m else Space.l))
             if (wide) {
                 Row(Modifier.fillMaxSize().padding(bottom = Size.hintHeight + Space.s), horizontalArrangement = Arrangement.spacedBy(Space.xl)) {
-                    BoxWithConstraints(Modifier.weight(0.42f).fillMaxHeight()) {
-                        // Short screens (a handheld) keep the code big and leave out the numbered steps.
-                        val steps = maxHeight >= 400.dp
-                        val qr = minOf(maxWidth - Space.l * 2, maxHeight - if (steps) 184.dp else 132.dp).coerceIn(112.dp, 300.dp)
-                        PairingCard(link, on, state, address, qr, steps, Modifier.fillMaxWidth())
+                    Panel(Modifier.weight(0.42f).fillMaxHeight().reveal(1)) {
+                        BoxWithConstraints(Modifier.fillMaxSize().padding(Space.l), contentAlignment = Alignment.Center) {
+                            // Short screens (a handheld) keep the code big and leave out the numbered steps.
+                            val steps = maxHeight >= STEPS_FROM
+                            val qr = minOf(maxWidth, maxHeight - if (steps) STEPS_ROOM else ADDRESS_ROOM).coerceIn(QR_MIN, QR_MAX)
+                            PairingCard(link, on, state, address, qr, steps, Modifier.fillMaxWidth())
+                        }
                     }
-                    MenuList(rows, sel, modifier = Modifier.weight(0.58f), showSelection = app.focusZone == FocusZone.CONTENT)
+                    Panel(Modifier.weight(0.58f).fillMaxHeight().reveal(2)) {
+                        MenuList(
+                            rows, sel,
+                            showSelection = app.focusZone == FocusZone.CONTENT,
+                            modifier = Modifier.padding(Space.s).menuEdges(rows, sel.index),
+                        )
+                    }
                 }
             } else {
-                MenuList(
-                    rows, sel, modifier = Modifier.fillMaxWidth(), showSelection = app.focusZone == FocusZone.CONTENT,
-                    header = { Column { PairingCard(link, on, state, address, 200.dp, true, Modifier.fillMaxWidth()); Spacer(Modifier.height(Space.l)) } },
-                )
+                Panel(Modifier.fillMaxSize().padding(bottom = Size.hintHeight + Space.s).reveal(1)) {
+                    MenuList(
+                        rows, sel, modifier = Modifier.padding(Space.s), showSelection = app.focusZone == FocusZone.CONTENT,
+                        header = { PairingCard(link, on, state, address, QR_COMPACT, true, Modifier.fillMaxWidth().padding(vertical = Space.l)) },
+                    )
+                }
             }
         }
+    }
+}
+
+/** Whether Phone Link is up: a dot (a ring when it failed to start) and a few words. */
+@Composable
+private fun LinkStatus(on: Boolean, state: PhoneLinkState, address: String?) {
+    val ok = when {
+        !on -> null
+        state.error != null && !state.running -> false
+        state.running && address != null -> true
+        else -> null
+    }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        StatusDot(ok)
+        Spacer(Modifier.width(Space.s))
+        FText(statusLine(on, state, address), Fuse.type.label, color = if (ok == true) Fuse.colors.text else Fuse.colors.textMuted, maxLines = 1)
     }
 }
 
@@ -256,31 +287,38 @@ private fun statusLine(on: Boolean, state: PhoneLinkState, address: String?): St
     else -> "On"
 }
 
-/** The code to scan, or what's missing before there can be one. */
+/**
+ * The code to scan with the address under it and the steps, or (when there can't be a code yet)
+ * what is missing and what to do about it, in the shape every empty state has.
+ */
 @Composable
 private fun PairingCard(link: PhoneLinkControl?, on: Boolean, state: PhoneLinkState, address: String?, qrSize: Dp, steps: Boolean, modifier: Modifier) {
-    val c = Fuse.colors
     Column(
-        modifier.clip(RoundedCornerShape(Fuse.geometry.control)).background(c.text.copy(alpha = 0.06f)).padding(Space.l),
+        modifier,
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(Space.m),
     ) {
         val modules = remember(link, address) { if (link != null && address != null) link.qr(address) else null }
         when {
-            link == null -> Waiting(FuseIcons.Smartphone, "Not in this build", "Phone Link isn't part of this version of Fuse.", qrSize)
-            !on -> Waiting(FuseIcons.Smartphone, "Phone Link is off", "Turn it on to pair a phone. It only runs while Fuse is open.", qrSize)
-            state.error != null && !state.running -> Waiting(FuseIcons.Warning, "Couldn't start", state.error, qrSize)
-            !state.running -> Waiting(FuseIcons.Hourglass, "Starting", "One moment.", qrSize)
-            address == null || modules == null -> Waiting(FuseIcons.WifiOff, "Not on a network", "Join Wi-Fi, then pair from a phone on the same network.", qrSize)
+            link == null -> EmptyState(FuseIcons.Smartphone, "Not in this build", message = "Phone Link isn't part of this version of Fuse.", compact = true)
+            !on -> EmptyState(FuseIcons.Smartphone, "Phone Link is off", message = "Turn it on to pair a phone. It only runs while Fuse is open.", compact = true)
+            state.error != null && !state.running -> EmptyState(
+                FuseIcons.Warning, "Couldn't start",
+                message = state.error.trimEnd('.') + ". Turn Phone Link off and on again, or restart Fuse.",
+                tint = Fuse.colors.danger, compact = true,
+            )
+            !state.running -> EmptyState(FuseIcons.Hourglass, "Starting", message = "One moment.", compact = true)
+            address == null || modules == null -> EmptyState(FuseIcons.WifiOff, "Not on a network", message = "Join Wi-Fi, then pair from a phone on the same network.", compact = true)
             else -> {
                 QrCode(modules, qrSize)
-                FText(address.removePrefix("http://").trimEnd('/'), Fuse.type.titleSmall, maxLines = 1, align = TextAlign.Center)
+                Spacer(Modifier.height(Space.xxs))
+                FText(address.removePrefix("http://").trimEnd('/'), Fuse.type.titleSmall.tabular(), maxLines = 1, align = TextAlign.Center)
                 if (steps) {
                     Steps(state.username)
                 } else {
                     FText(
                         if (state.username == null) "Set a sign-in, then scan on the same Wi-Fi" else "Scan on the same Wi-Fi, then sign in as ${state.username}",
-                        Fuse.type.label, color = Fuse.colors.textMuted, maxLines = 2, align = TextAlign.Center,
+                        Fuse.type.caption, color = Fuse.colors.textMuted, maxLines = 2, align = TextAlign.Center,
                     )
                 }
             }
@@ -289,61 +327,72 @@ private fun PairingCard(link: PhoneLinkControl?, on: Boolean, state: PhoneLinkSt
 }
 
 @Composable
-private fun Waiting(icon: ImageVector, title: String, message: String, size: Dp) {
-    val c = Fuse.colors
-    Box(Modifier.size(size * 0.8f), contentAlignment = Alignment.Center) {
-        Box(Modifier.size(size * 0.5f).clip(CircleShape).background(c.text.copy(alpha = 0.08f)), contentAlignment = Alignment.Center) {
-            FuseIcon(icon, size = size * 0.2f, tint = c.textMuted)
-        }
-    }
-    FText(title, Fuse.type.titleSmall, maxLines = 1, align = TextAlign.Center)
-    FText(message, Fuse.type.label, color = c.textMuted, maxLines = 3, align = TextAlign.Center)
-}
-
-@Composable
 private fun Steps(username: String?) {
-    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Space.xs)) {
+    Column(Modifier.fillMaxWidth().padding(top = Space.xs), verticalArrangement = Arrangement.spacedBy(Space.s)) {
         Step(1, "Join the same Wi-Fi as this device")
         Step(2, "Scan the code with your phone's camera")
-        Step(3, if (username == null) "Set a sign-in here first" else "Sign in as $username")
+        Step(3, if (username == null) "Set a sign-in here first" else "Sign in as $username", attention = username == null)
     }
 }
 
+/** A numbered step: its number in a small accent disc, then what to do. */
 @Composable
-private fun Step(n: Int, text: String) {
+private fun Step(n: Int, text: String, attention: Boolean = false) {
     val c = Fuse.colors
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(20.dp).clip(CircleShape).background(c.accentSoft), contentAlignment = Alignment.Center) {
-            FText(n.toString(), Fuse.type.caption, color = c.accent, maxLines = 1)
+        Box(Modifier.size(Size.iconM).clip(CircleShape).background(c.accentSoft), contentAlignment = Alignment.Center) {
+            FText(n.toString(), Fuse.type.numericSmall, color = c.accent, maxLines = 1)
         }
-        Spacer(Modifier.width(Space.s))
-        FText(text, Fuse.type.label, color = c.textMuted, maxLines = 1)
+        Spacer(Modifier.width(Space.m))
+        FText(text, Fuse.type.label, color = if (attention) c.text else c.textMuted, maxLines = 1)
     }
 }
 
-/** Dark modules on white with a quiet zone, the way phone cameras read codes best. */
+/**
+ * The code as dark modules on white with a quiet zone, whatever the theme: phone cameras read codes
+ * best that way. It sits on the panel as a small lit card. Modules are whole pixels, so their edges
+ * stay crisp for scanning.
+ */
 @Composable
 private fun QrCode(modules: List<BooleanArray>, size: Dp) {
-    Box(Modifier.size(size).clip(RoundedCornerShape(14.dp)).background(Color.White).padding(size * 0.06f)) {
+    val shape = RoundedCornerShape(Radius.m)
+    Box(
+        Modifier
+            .size(size)
+            .elevated(Elevation.raised, shape, fill = QR_PAPER)
+            .padding(size * 0.06f),
+    ) {
         Canvas(Modifier.fillMaxSize()) {
             val n = modules.size
             if (n == 0) return@Canvas
             val cell = this.size.minDimension / n
-            // Whole pixels keep the edges crisp, which matters for scanning.
             val px = kotlin.math.floor(cell).coerceAtLeast(1f)
             val offset = (this.size.minDimension - px * n) / 2f
             for (y in 0 until n) {
                 val row = modules[y]
                 for (x in 0 until n) {
                     if (row[x]) {
-                        drawRect(
-                            Color(0xFF101114),
-                            topLeft = Offset(offset + x * px, offset + y * px),
-                            size = androidx.compose.ui.geometry.Size(px, px),
-                        )
+                        drawRect(QR_INK, topLeft = Offset(offset + x * px, offset + y * px), size = androidx.compose.ui.geometry.Size(px, px))
                     }
                 }
             }
         }
     }
 }
+
+/** A QR code is always dark on white so any camera reads it, so these two colours are fixed. */
+private val QR_PAPER = Color.White
+private val QR_INK = Color(0xFF101114)
+
+private val WIDE_FROM = 760.dp
+private val SHORT_BELOW = 560.dp
+
+/** The numbered steps show when the card is at least this tall; room kept under the code for them, or for the address alone. */
+private val STEPS_FROM = 400.dp
+private val STEPS_ROOM = 156.dp
+private val ADDRESS_ROOM = 48.dp
+
+/** The code's size: as large as the card allows within these, and on narrow screens. */
+private val QR_MIN = 112.dp
+private val QR_MAX = 300.dp
+private val QR_COMPACT = 200.dp

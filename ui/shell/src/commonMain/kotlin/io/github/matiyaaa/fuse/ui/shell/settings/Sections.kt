@@ -78,25 +78,24 @@ fun appearanceRows(app: AppState): List<MenuAction> {
     val p by app.store.prefs.collectAsState()
     val set = app.store::updatePrefs
     return buildList {
-        labelled("Theme and art") {
-            add(MenuAction(
-                "theme", "Theme", FuseIcons.SwatchBook,
-                detail = "Built-in themes and ones you add from a link or a file",
-                trailing = Trailing.Value(p.theme.name),
-                onSelect = { app.go(Route.Themes) },
-            ))
-            add(app.choiceRow(
-                "art", "Game art", FuseIcons.GalleryThumbnails, p.gameArt,
-                listOf(GameArtStyle.BOX_ART to "Box art", GameArtStyle.POSTER to "Posters"),
-                detail = "How game tiles look on Home, in the Library and in Cartridge",
-                optionDetail = {
-                    when (it) {
-                        GameArtStyle.BOX_ART -> "Square art, as Fuse has always shown"
-                        GameArtStyle.POSTER -> "Tall cover art, like a shelf of cases"
-                    }
-                },
-            ) { v -> set { it.copy(gameArt = v) } })
-        }
+        // No label: the theme card above heads these two.
+        add(MenuAction(
+            "theme", "Theme", FuseIcons.SwatchBook,
+            detail = "Built-in themes and ones you add from a link or a file",
+            trailing = Trailing.Value(p.theme.name),
+            onSelect = { app.go(Route.Themes) },
+        ))
+        add(app.choiceRow(
+            "art", "Game art", FuseIcons.GalleryThumbnails, p.gameArt,
+            listOf(GameArtStyle.BOX_ART to "Box art", GameArtStyle.POSTER to "Posters"),
+            detail = "How game tiles look on Home, in the Library and in Cartridge",
+            optionDetail = {
+                when (it) {
+                    GameArtStyle.BOX_ART -> "Square art, as Fuse has always shown"
+                    GameArtStyle.POSTER -> "Tall cover art, like a shelf of cases"
+                }
+            },
+        ) { v -> set { it.copy(gameArt = v) } })
         labelled("Selected game") {
             add(toggleRow("hero", "Background art", FuseIcons.Image, p.showHero, "The selected game's art lights the room") { v -> set { it.copy(showHero = v) } })
             add(toggleRow("logo", "Title logos", FuseIcons.Type, p.showLogo, "Show logo art instead of the written title when a game has one") { v -> set { it.copy(showLogo = v) } })

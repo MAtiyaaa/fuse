@@ -4,8 +4,6 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,7 +14,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -26,7 +23,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import io.github.matiyaaa.fuse.model.GlyphStyle
 import io.github.matiyaaa.fuse.model.InputProfile
@@ -37,10 +39,13 @@ import io.github.matiyaaa.fuse.ui.designsystem.components.FuseButton
 import io.github.matiyaaa.fuse.ui.designsystem.components.Overlay
 import io.github.matiyaaa.fuse.ui.designsystem.components.OverlayEdge
 import io.github.matiyaaa.fuse.ui.designsystem.components.Panel
+import io.github.matiyaaa.fuse.ui.designsystem.components.SectionLabel
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
+import io.github.matiyaaa.fuse.ui.designsystem.icons.PadGlyph
 import io.github.matiyaaa.fuse.ui.designsystem.input.LocalInputRouter
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
+import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import kotlinx.coroutines.delay
@@ -124,15 +129,28 @@ fun ButtonDetectOverlay(app: AppState) {
 
     val motion = Fuse.motion
     Overlay(visible = open, onDismiss = ::close, edge = OverlayEdge.CENTER) {
-        Panel(Modifier.widthIn(min = 460.dp, max = 560.dp)) {
+        Panel(Modifier.widthIn(min = PANEL_MIN, max = PANEL_MAX)) {
             Column(Modifier.padding(Space.xl), horizontalAlignment = Alignment.CenterHorizontally) {
                 AnimatedContent(stage, transitionSpec = { fadeIn(motion.fade(180)) togetherWith fadeOut(motion.fade(120)) }, label = "detect") { s ->
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        FacePad(highlight = when (s) {
-                            DetectStage.RIGHT_BUTTON -> Face.RIGHT
-                            DetectStage.CONFIRM -> null
-                            DetectStage.DONE -> if (result?.confirmOnRight == true) Face.RIGHT else Face.BOTTOM
-                        })
+                    Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                        SectionLabel(
+                            when (s) {
+                                DetectStage.RIGHT_BUTTON -> "Step 1 of 2"
+                                DetectStage.CONFIRM -> "Step 2 of 2"
+                                DetectStage.DONE -> "Done"
+                            },
+                            color = if (s == DetectStage.DONE) Fuse.colors.success else Fuse.colors.textMuted,
+                        )
+                        Spacer(Modifier.height(Space.l))
+                        val done = result
+                        if (s == DetectStage.DONE && done != null) {
+                            DetectedFaces(done)
+                        } else {
+                            FacePad(
+                                lit = if (s == DetectStage.RIGHT_BUTTON) setOf(Face.RIGHT) else emptySet(),
+                                hinted = if (s == DetectStage.CONFIRM) setOf(Face.RIGHT, Face.BOTTOM) else emptySet(),
+                            )
+                        }
                         Spacer(Modifier.height(Space.l))
                         FText(
                             when (s) {
@@ -141,6 +159,7 @@ fun ButtonDetectOverlay(app: AppState) {
                                 DetectStage.DONE -> "All set"
                             },
                             Fuse.type.title,
+                            align = TextAlign.Center,
                         )
                         Spacer(Modifier.height(Space.s))
                         FText(
@@ -149,14 +168,14 @@ fun ButtonDetectOverlay(app: AppState) {
                                 DetectStage.CONFIRM -> "The button you use to say yes and open things. The button next to it becomes Back."
                                 DetectStage.DONE -> result?.let(::describe).orEmpty()
                             },
-                            Fuse.type.body, color = Fuse.colors.textMuted, maxLines = 4,
+                            Fuse.type.body, color = Fuse.colors.textMuted, maxLines = 4, align = TextAlign.Center,
                         )
                     }
                 }
                 notice?.let {
                     Spacer(Modifier.height(Space.m))
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        FuseIcon(FuseIcons.Info, size = 16.dp, tint = Fuse.colors.warning)
+                        FuseIcon(FuseIcons.Warning, size = Size.iconS, tint = Fuse.colors.warning)
                         Spacer(Modifier.size(Space.s))
                         FText(it, Fuse.type.caption, color = Fuse.colors.warning, maxLines = 2)
                     }
@@ -186,22 +205,81 @@ private fun describe(p: InputProfile): String {
 
 private enum class Face { TOP, LEFT, RIGHT, BOTTOM }
 
-/** A small diamond of four face buttons with one lit, drawn in Fuse's own style. */
+/**
+ * The four face buttons as plain lit objects, without letters (they are what is being found out):
+ * [lit] ones solid in the accent inside a ring, so there is no doubt which to press; [hinted] ones
+ * (the candidates) take a soft tint of it.
+ */
 @Composable
-private fun FacePad(highlight: Face?) {
+private fun FacePad(lit: Set<Face>, hinted: Set<Face>) {
     val c = Fuse.colors
+    val accent = c.accent
+    val rest = c.text.copy(alpha = if (c.isDark) 0.1f else 0.08f)
+    val edge = c.text.copy(alpha = if (c.isDark) 0.2f else 0.24f)
+    val light = Color.White.copy(alpha = if (c.isDark) 0.28f else 0.7f)
+    val ring = c.focus
     @Composable
     fun Dot(face: Face) {
-        val on = face == highlight
-        Box(
-            Modifier.size(30.dp).clip(CircleShape)
-                .background(if (on) c.accent else c.text.copy(alpha = 0.08f))
-                .border(1.dp, if (on) c.accent else c.text.copy(alpha = 0.22f), CircleShape),
+        val on = face in lit
+        val hint = face in hinted
+        Spacer(
+            Modifier.size(FACE + Size.focusGap * 2 + Size.focusStroke * 2).drawWithCache {
+                val pad = (Size.focusGap + Size.focusStroke).toPx()
+                val r = (size.minDimension - pad * 2) / 2
+                val center = Offset(size.width / 2, size.height / 2)
+                val rim = Stroke(Size.stroke.toPx())
+                val top = Brush.verticalGradient(0f to light, 0.35f to Color.Transparent, startY = center.y - r, endY = center.y + r)
+                val ringStroke = Stroke(Size.focusStroke.toPx())
+                onDrawBehind {
+                    when {
+                        on -> {
+                            drawCircle(accent, r, center)
+                            drawCircle(ring, r + Size.focusGap.toPx() + ringStroke.width / 2, center, style = ringStroke)
+                        }
+                        hint -> {
+                            drawCircle(accent.copy(alpha = 0.22f), r, center)
+                            drawCircle(accent.copy(alpha = 0.6f), r - rim.width / 2, center, style = rim)
+                        }
+                        else -> {
+                            drawCircle(rest, r, center)
+                            drawCircle(edge, r - rim.width / 2, center, style = rim)
+                        }
+                    }
+                    drawCircle(top, r - rim.width / 2, center, style = rim)
+                }
+            },
         )
     }
-    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Dot(Face.TOP)
-        Row(horizontalArrangement = Arrangement.spacedBy(30.dp)) { Dot(Face.LEFT); Dot(Face.RIGHT) }
+        Row(horizontalArrangement = Arrangement.spacedBy(FACE)) { Dot(Face.LEFT); Dot(Face.RIGHT) }
         Dot(Face.BOTTOM)
     }
 }
+
+/** The face buttons as Fuse now reads them, in the detected style, with confirm lit. */
+@Composable
+private fun DetectedFaces(p: InputProfile) {
+    val nintendoKeys = p.glyphs == GlyphStyle.NINTENDO
+    val confirm = if (p.confirmOnRight == nintendoKeys) PadButton.A else PadButton.B
+    val accent = Fuse.colors.accent
+    @Composable
+    fun Face(b: PadButton) {
+        Box(Modifier.size(FACE + Size.focusGap * 2 + Size.focusStroke * 2), contentAlignment = Alignment.Center) {
+            PadGlyph(b, style = p.glyphs, size = FACE, color = if (b == confirm) accent else Fuse.colors.text, emphasized = b == confirm)
+        }
+    }
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Face(if (nintendoKeys) PadButton.X else PadButton.Y)
+        Row(horizontalArrangement = Arrangement.spacedBy(FACE)) {
+            Face(if (nintendoKeys) PadButton.Y else PadButton.X)
+            Face(if (nintendoKeys) PadButton.A else PadButton.B)
+        }
+        Face(if (nintendoKeys) PadButton.B else PadButton.A)
+    }
+}
+
+/** One face button's size in the pictures, and the overlay's width. */
+private val FACE = Size.iconXL
+private val PANEL_MIN = 460.dp
+private val PANEL_MAX = 560.dp

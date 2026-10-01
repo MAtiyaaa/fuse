@@ -1,12 +1,13 @@
 package io.github.matiyaaa.fuse.ui.shell.settings
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -28,7 +29,10 @@ import io.github.matiyaaa.fuse.ui.designsystem.components.Hint
 import io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction
 import io.github.matiyaaa.fuse.ui.designsystem.components.MenuList
 import io.github.matiyaaa.fuse.ui.designsystem.components.Panel
-import io.github.matiyaaa.fuse.ui.designsystem.components.Spinner
+import io.github.matiyaaa.fuse.ui.designsystem.components.MenuHeader
+import io.github.matiyaaa.fuse.ui.designsystem.components.SkeletonText
+import io.github.matiyaaa.fuse.ui.designsystem.components.fadingEdges
+import io.github.matiyaaa.fuse.ui.designsystem.effects.reveal
 import io.github.matiyaaa.fuse.ui.designsystem.components.handleMenuAction
 import io.github.matiyaaa.fuse.ui.designsystem.focus.LinearSelection
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
@@ -102,7 +106,7 @@ fun LicensesScreen(app: AppState) {
         app.hero = null
         app.hints = listOf(Hint(HintButton.PAGE_PREV, "Scroll up"), Hint(HintButton.PAGE_NEXT, "Scroll down"), Hint(HintButton.BACK, "Back"))
     }
-    val actions = docs.map { MenuAction(it.file, it.title, FuseIcons.File, detail = it.covers) }
+    val actions = docs.map { MenuAction(it.file, it.title, if (it.inline != null) FuseIcons.FileText else FuseIcons.File, detail = it.covers) }
     InputLayer(enabled = app.focusZone == FocusZone.CONTENT && !app.overlayOpen) { e ->
         when (e.action) {
             NavAction.PAGE_DOWN -> {
@@ -116,28 +120,63 @@ fun LicensesScreen(app: AppState) {
             else -> handleMenuAction(e, actions, sel)
         }
     }
-    Column(Modifier.fillMaxSize().padding(horizontal = Space.gutter)) {
-        Spacer(Modifier.height(Size.hudHeight + Space.l))
-        FText("Licences", Fuse.type.display, maxLines = 1)
-        FText("Fuse is free software, and it is built on the work of others", Fuse.type.body, color = Fuse.colors.textMuted)
-        Spacer(Modifier.height(Space.l))
-        Row(Modifier.weight(1f).padding(bottom = Size.hintHeight + Space.s), horizontalArrangement = Arrangement.spacedBy(Space.l)) {
-            Panel(Modifier.width(380.dp).fillMaxHeight()) {
-                MenuList(actions, sel, modifier = Modifier.padding(Space.s))
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val narrow = maxWidth < NARROW_BELOW
+        val short = maxHeight < SHORT_BELOW
+        Column(Modifier.fillMaxSize().padding(horizontal = if (narrow) Space.gutterCompact else Space.gutter)) {
+            Spacer(Modifier.height(Size.hudHeight + if (short) Space.s else Space.l))
+            SettingsPageHeading("Licences", "Fuse is free software, and it is built on the work of others", short, Modifier.reveal(0))
+            Spacer(Modifier.height(if (short) Space.m else Space.l))
+            val list = @Composable { m: Modifier ->
+                Panel(m) {
+                    MenuList(actions, sel, modifier = Modifier.padding(Space.s).menuEdges(actions, sel.index))
+                }
             }
-            Panel(Modifier.weight(1f).fillMaxHeight()) {
-                val body = text
-                if (body == null) {
-                    Box(Modifier.fillMaxSize().padding(Space.xl)) { Spinner() }
-                } else {
-                    FText(
-                        body,
-                        Fuse.type.caption,
-                        color = Fuse.colors.textMuted,
-                        modifier = Modifier.fillMaxSize().verticalScroll(scroll).padding(Space.l),
-                    )
+            val reader = @Composable { m: Modifier ->
+                Panel(m) {
+                    Column(Modifier.fillMaxSize()) {
+                        // What is open, above its text, so the reader never loses track of it.
+                        MenuHeader(
+                            current.title, subtitle = current.covers, icon = FuseIcons.FileText,
+                            modifier = Modifier.padding(start = Space.s, end = Space.s, top = Space.l),
+                        )
+                        val body = text
+                        if (body == null) {
+                            Column(Modifier.fillMaxSize().padding(horizontal = Space.xl, vertical = Space.l), verticalArrangement = Arrangement.spacedBy(Space.l)) {
+                                repeat(SKELETON_PARAGRAPHS) { SkeletonText(lines = 4, style = Fuse.type.caption, lastLineFraction = 0.45f) }
+                            }
+                        } else {
+                            FText(
+                                body,
+                                Fuse.type.caption,
+                                color = Fuse.colors.textMuted,
+                                modifier = Modifier.fillMaxSize().fadingEdges(scroll, top = Space.l, bottom = Space.xl).verticalScroll(scroll)
+                                    .padding(horizontal = Space.xl, vertical = Space.l),
+                            )
+                        }
+                    }
+                }
+            }
+            val bottom = Modifier.padding(bottom = Size.hintHeight + Space.s)
+            if (narrow) {
+                // One above the other: the list short, the text taking the rest.
+                Column(Modifier.weight(1f).then(bottom), verticalArrangement = Arrangement.spacedBy(Space.l)) {
+                    list(Modifier.fillMaxWidth().weight(0.38f).reveal(1))
+                    reader(Modifier.fillMaxWidth().weight(0.62f).reveal(2))
+                }
+            } else {
+                Row(Modifier.weight(1f).then(bottom), horizontalArrangement = Arrangement.spacedBy(Space.xl)) {
+                    list(Modifier.width(LIST_WIDTH).fillMaxHeight().reveal(1))
+                    reader(Modifier.weight(1f).fillMaxHeight().reveal(2))
                 }
             }
         }
     }
 }
+
+private val NARROW_BELOW = 640.dp
+private val SHORT_BELOW = 560.dp
+
+/** The list of licences beside the text; placeholder paragraphs while a text loads. */
+private val LIST_WIDTH = 360.dp
+private const val SKELETON_PARAGRAPHS = 4
