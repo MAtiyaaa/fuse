@@ -814,7 +814,7 @@ fun displayRows(app: AppState): List<MenuAction> {
             optionDetail = {
                 when (it) {
                     DualScreenMode.OFF -> "Leave the second screen alone"
-                    DualScreenMode.LIBRARY_COMPANION -> "Art, logo and details of what you've selected"
+                    DualScreenMode.LIBRARY_COMPANION -> "Art, logo and details of what you've selected, and the game you're playing"
                     DualScreenMode.GAME_COMPANION -> "Clock, battery, playtime and achievements beside the game"
                     DualScreenMode.REVERSE -> "Games open on the second screen when the emulator allows it"
                 }
@@ -836,7 +836,7 @@ fun displayRows(app: AppState): List<MenuAction> {
         if (app.platform.features.secondScreen) {
             add(infoRow(
                 "dual", "Games with two screens", icon = FuseIcons.DualScreen,
-                detail = "DS, DSi, 3DS and Wii U games get the second screen: the companion steps aside while they run and comes back with Fuse. With Fuse as your Home app, Fuse is also the second screen's Home",
+                detail = "The companion stays while games and apps run. DS, DSi, 3DS and Wii U games get the second screen: the companion steps aside while they run and comes back with Fuse. With Fuse as your Home app, Fuse is also the second screen's Home",
             ))
             add(MenuAction(
                 "dual.log", "Second screen status", FuseIcons.Activity,

@@ -51,7 +51,7 @@ import kotlinx.coroutines.runBlocking
 internal sealed interface AuditView {
     data object Blank : AuditView
     data class App(val store: FuseStore, val platform: PlatformUi, val generation: Int) : AuditView
-    data class Companion(val store: FuseStore, val platform: PlatformUi, val mode: DualScreenMode) : AuditView
+    data class Companion(val store: FuseStore, val platform: PlatformUi, val mode: DualScreenMode, val onHide: (() -> Unit)? = null) : AuditView
 }
 
 /** A shot or navigation step that could not be done; the scenario stops and the gap is recorded. */
@@ -170,7 +170,7 @@ internal class AuditDriver(
                     FuseApp(v.store, v.platform, router, phoneLink)
                     ExtraToasts(v.store, v.platform)
                 }
-                is AuditView.Companion -> key(v.mode, v.store) { CompanionApp(v.store, v.platform, v.mode) }
+                is AuditView.Companion -> key(v.mode, v.store) { CompanionApp(v.store, v.platform, v.mode, v.onHide) }
             }
         }
     }

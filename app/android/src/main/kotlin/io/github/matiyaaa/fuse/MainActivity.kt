@@ -128,7 +128,8 @@ class MainActivity : ComponentActivity(), ActivityRequests {
                         pausedWhileAway = true
                     }
                     Lifecycle.Event.ON_START -> app.platformUi.music.setForeground(true)
-                    // A game or another app is in front: the second screen and the sound are theirs.
+                    // A game or another app is in front: the sound is theirs, and the companion stays
+                    // beside them on the second screen (see CompanionScreens).
                     Lifecycle.Event.ON_STOP -> {
                         stoppedAt = android.os.SystemClock.uptimeMillis()
                         companions.onMainStopped()
@@ -271,7 +272,7 @@ class MainActivity : ComponentActivity(), ActivityRequests {
         roleSlot.cancel()
         permissionSlot.cancel()
         captureSlot.cancel()
-        if (isFinishing) companions.stop()
+        if (isFinishing) companions.stop() else companions.onMainDestroyed()
         super.onDestroy()
     }
 
