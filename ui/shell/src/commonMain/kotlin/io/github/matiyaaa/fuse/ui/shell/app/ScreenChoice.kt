@@ -108,11 +108,12 @@ fun AppState.screenPicker(card: GameCard) {
             }
         }
         choice = ChoiceSpec(
+            icon = FuseIcons.DualScreen,
             title = "Open ${card.title} on",
             options = listOf(
                 MenuAction("inherit", "Use the $system setting", FuseIcons.Layers, trailing = Trailing.Check(own == null), onSelect = { pick(null) }),
             ) + LaunchDisplay.entries.map { d ->
-                MenuAction("d.${d.name}", screenName(d), screenIcon(d), trailing = Trailing.Check(own == d), onSelect = { pick(d) })
+                MenuAction("d.${d.name}", screenName(d), screenIcon(d), trailing = Trailing.Check(own == d), section = "Just this game", onSelect = { pick(d) })
             },
         )
     }
@@ -130,11 +131,12 @@ fun AppState.appScreenPicker(app: AppCard) {
         }
     }
     choice = ChoiceSpec(
+        icon = FuseIcons.DualScreen,
         title = "Open ${app.entry.displayTitle} on",
         options = listOf(
             MenuAction("inherit", "Use the setting for all apps", FuseIcons.Layers, trailing = Trailing.Check(own == null), onSelect = { pick(null) }),
         ) + LaunchDisplay.entries.map { d ->
-            MenuAction("d.${d.name}", screenName(d), screenIcon(d), trailing = Trailing.Check(own == d), onSelect = { pick(d) })
+            MenuAction("d.${d.name}", screenName(d), screenIcon(d), trailing = Trailing.Check(own == d), section = "Just this app", onSelect = { pick(d) })
         },
     )
 }
