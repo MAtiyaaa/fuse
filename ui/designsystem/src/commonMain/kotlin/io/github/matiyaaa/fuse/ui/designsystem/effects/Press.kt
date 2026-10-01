@@ -42,7 +42,8 @@ import kotlinx.coroutines.launch
  *
  * - **Press**: the element shrinks to [FuseMotion.pressScale] (about 96.5%) quickly and springs
  *   back with a hint of overshoot when let go, like a key. A tap shorter than the press-in still
- *   shows the whole press. Under Reduced motion nothing scales; the pressed tint alone answers.
+ *   shows the whole press. Under Reduced motion nothing scales, so give such elements a [shape]:
+ *   the pressed tint then answers on its own.
  * - **Hover** (desktop mouse): with a [shape], a soft highlight in the hover colour role fills it
  *   while the pointer is over the element.
  * - **Pressed tint**: with a [shape], the pressed colour role fills it while held.

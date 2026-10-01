@@ -77,7 +77,7 @@ fun GeneratedArt(
         val h = maxHeight
         val short = if (w < h) w else h
         val type = Fuse.type
-        val pad = (short * 0.075f).coerceIn(6.dp, 16.dp)
+        val pad = (short * 0.075f).coerceIn(4.dp, 16.dp)
         // Small tiles (list thumbnails) drop the tag: it could not be read.
         val tagRoom = short >= 72.dp
         fun Dp.asSp() = with(density) { toSp() }
@@ -123,7 +123,8 @@ fun GeneratedArt(
                         val measured = measurer.measure(longest, titleStyle.copy(fontSize = probe.dp.asSp(), lineHeight = TextUnit.Unspecified), softWrap = false, maxLines = 1).size.width
                         if (measured <= 0) Float.MAX_VALUE else probe * room / measured * 0.96f
                     }
-                    minOf(titleStyle.fontSize.value, widthDp / 6.5f, fits).coerceAtLeast(8f)
+                    // Fitting wins over a minimum size: a tiny cover (a collage) gets tiny type, never a broken word.
+                    minOf(titleStyle.fontSize.value, widthDp / 6.5f, fits).coerceAtLeast(MIN_TITLE)
                 } else {
                     titleStyle.fontSize.value
                 }
@@ -166,6 +167,9 @@ private fun PlatformTag(label: String, short: Dp, modifier: Modifier) {
         )
     }
 }
+
+/** The smallest cover title, in dp of type: only collage-sized covers ever reach it. */
+private const val MIN_TITLE = 5f
 
 /** The near-black every generated picture sinks into, with a hint of blue so it isn't flat. */
 private val Night = Color(0xFF07080C)

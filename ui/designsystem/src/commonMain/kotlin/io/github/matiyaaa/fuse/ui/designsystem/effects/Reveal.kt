@@ -48,7 +48,7 @@ class Reveal internal constructor() {
          * Items that first appear later than this after the first one are shown at once: they came
          * from scrolling or data arriving, not from the screen opening.
          */
-        const val WINDOW_MS = 500L
+        const val WINDOW_MS = 700L
     }
 }
 

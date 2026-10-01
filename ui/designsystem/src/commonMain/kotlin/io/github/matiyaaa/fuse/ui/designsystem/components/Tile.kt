@@ -180,7 +180,8 @@ fun Tile(
                 )
                 // The sweep: a soft band with a bright core, slanted like a reflection, defined
                 // around x = 0 and moved by translation so nothing is built while it runs.
-                val band = w * 0.62f
+                // Proportioned to the short side, so a wide card gets a band, not a wash.
+                val band = minOf(w * 0.62f, h * 0.9f)
                 val slant = h * SLANT
                 val dx = 0.94f
                 val dy = 0.34f
