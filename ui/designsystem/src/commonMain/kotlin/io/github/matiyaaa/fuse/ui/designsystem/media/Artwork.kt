@@ -1,10 +1,12 @@
 package io.github.matiyaaa.fuse.ui.designsystem.media
 
 import androidx.compose.animation.core.Animatable
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -30,6 +32,7 @@ import coil3.decode.DataSource
 import coil3.request.ImageRequest
 import coil3.request.crossfade
 import coil3.size.Scale
+import io.github.matiyaaa.fuse.ui.designsystem.effects.shimmer
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Durations
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import kotlinx.coroutines.delay
@@ -39,9 +42,12 @@ import kotlinx.coroutines.delay
  * composable leaves). If the image is missing or fails, [fallback] is shown instead of an empty
  * box, so a library with no scraped art still looks designed.
  *
- * While the image loads, nothing is drawn for [fallbackDelayMs] and the fallback only appears if
- * loading takes longer, so a title never flashes up before a logo that was just a moment away. Art
- * that comes straight from the memory cache appears at once, without the fade.
+ * While the image loads, the fallback waits [fallbackDelayMs] and only appears if loading takes
+ * longer, so a title never flashes up before a logo that was just a moment away. Cropped art (covers,
+ * tiles, heroes) holds its place meanwhile with a quiet skeleton fill, and when the fallback does
+ * appear a calm shimmer passes over it until the art arrives ([loading]; still under Reduced motion
+ * and in Low Power Mode). The art then crossfades in over whatever was there. Art that comes
+ * straight from the memory cache appears at once, without the fade.
  *
  * [focusX]/[focusY] (0..1) choose which part of the image stays visible when it is cropped.
  * [tint] recolours the image (single-colour logos, such as system logos, drawn in white).
@@ -66,6 +72,8 @@ fun Artwork(
     fallbackDelayMs: Long = 400,
     backdrop: Boolean = false,
     backdropBlur: Dp = 0.dp,
+    /** Show loading (skeleton, then shimmer over the fallback) for cropped art. */
+    loading: Boolean = true,
     fallback: @Composable () -> Unit = {},
 ) {
     if (model == null) {
@@ -86,7 +94,11 @@ fun Artwork(
     val failed = state is AsyncImagePainter.State.Error
     val fromMemory = success?.result?.dataSource == DataSource.MEMORY_CACHE
     val alpha = remember(model) { Animatable(0f) }
-    val fade = Fuse.motion.fade<Float>(Durations.FAST)
+    val fade = Fuse.motion.fade<Float>(Durations.BASE)
+    // Read through a derived state so the fade itself never recomposes this.
+    val shown by remember(alpha) { derivedStateOf { alpha.value >= 1f } }
+    // Only art that fills its slot gets a placeholder: never logos, tinted marks or overlays.
+    val placeholder = loading && fadeIn && contentScale == ContentScale.Crop && !backdrop && tint == null
     LaunchedEffect(success != null, fromMemory) {
         when {
             success == null -> alpha.snapTo(0f)
@@ -101,7 +113,14 @@ fun Artwork(
         slow = true
     }
     Box(if (fit) modifier.then(sizer) else modifier) {
-        if (failed || (slow && alpha.value < 1f)) fallback()
+        val waiting = success == null && !failed
+        if (placeholder && !failed && !slow && !shown) {
+            // Holds the art's place while it loads, so a tile never shows a hole.
+            Box(Modifier.matchParentSize().background(Fuse.colors.skeleton))
+        }
+        if (failed || (slow && !shown)) {
+            if (placeholder) Box(Modifier.matchParentSize().shimmer(active = waiting)) { fallback() } else fallback()
+        }
         if (backdrop) {
             val dim = if (backdropBlur > 0.dp) BACKDROP_DIM else BACKDROP_DIM_SHARP
             Box(
