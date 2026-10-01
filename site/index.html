@@ -57,14 +57,18 @@
 
 <main id="top">
   <section class="stage" aria-labelledby="title">
-    <p class="eyebrow"><span class="dot" aria-hidden="true"></span><span data-eyebrow>Fuse {{VERSION}} · {{RELEASE_NAME}}</span></p>
-    <h1 id="title" class="title">Fuse</h1>
+    <a class="release-pill" href="{{RELEASE_URL}}" data-notes>
+      <span class="tag">New</span>
+      <span data-eyebrow>Fuse {{VERSION}} · {{RELEASE_NAME}}</span>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+    </a>
+    <h1 id="title" class="title"><img src="assets/brand/wordmark-dark.svg" alt="Fuse" width="278" height="102"></h1>
     <p class="tagline">Every game you own, one launcher made for controllers and touch. Pick it up, and play.</p>
     <p class="meta">Android 9 or newer <i aria-hidden="true">·</i> Linux <i aria-hidden="true">·</i> Windows <i aria-hidden="true">·</i> macOS <i aria-hidden="true">·</i> Free and open source</p>
   </section>
 
   <section id="download" class="shelf" aria-labelledby="download-title">
-    <h2 id="download-title" class="label"><span>Download</span><span class="rule" aria-hidden="true"></span></h2>
+    <h2 id="download-title" class="label">Download</h2>
     <div class="row platforms" data-row>
       <a class="tile platform" data-platform="android" href="{{RELEASE_URL}}">
         <span class="glyph">{{GLYPH:android}}</span>
@@ -103,13 +107,17 @@
     <p class="release-line"><span data-released>The latest release</span><i aria-hidden="true">·</i><a data-notes href="{{RELEASE_URL}}">What's new</a></p>
   </section>
 
+  <figure class="showcase">
+    <img src="assets/screenshots/home.webp" alt="Fuse's Home screen: The Legend of Zelda: Breath of the Wild in focus, told big over its own art, with Continue playing and a row of systems below" width="1920" height="1080" fetchpriority="high">
+  </figure>
+
   <section id="new" class="shelf" aria-labelledby="new-title" hidden>
-    <h2 id="new-title" class="label"><span data-new-title>New in this release</span><span class="rule" aria-hidden="true"></span></h2>
+    <h2 id="new-title" class="label" data-new-title>New in this release</h2>
     <div class="row highlights" data-row data-highlights></div>
   </section>
 
   <section id="features" class="shelf" aria-labelledby="features-title">
-    <h2 id="features-title" class="label"><span>Made for the couch</span><span class="rule" aria-hidden="true"></span></h2>
+    <h2 id="features-title" class="label">Made for the couch</h2>
     <div class="row features" data-row>
       <div class="tile feature" tabindex="0"><img src="assets/icons/controller.svg" alt="" width="56" height="56"><b>Controller first</b><span>Every screen works from the couch, and answers touch too.</span></div>
       <div class="tile feature" tabindex="0"><img src="assets/icons/library.svg" alt="" width="56" height="56"><b>Your whole library</b><span>Point Fuse at your folders. It finds every game and system.</span></div>
@@ -123,19 +131,18 @@
   </section>
 
   <section id="screens" class="shelf" aria-labelledby="screens-title">
-    <h2 id="screens-title" class="label"><span>A look around</span><span class="rule" aria-hidden="true"></span></h2>
+    <h2 id="screens-title" class="label">A look around</h2>
     <div class="row screens" data-row>
-      <a class="tile screen" href="assets/screenshots/home.png"><img src="assets/screenshots/home.png" alt="Home, with the game in focus told big over its art" loading="lazy" width="1920" height="1080"><span>Home</span></a>
-      <a class="tile screen" href="assets/screenshots/library-icons.png"><img src="assets/screenshots/library-icons.png" alt="The library as a grid of box art" loading="lazy" width="1920" height="1080"><span>Library</span></a>
-      <a class="tile screen" href="assets/screenshots/systems.png"><img src="assets/screenshots/systems.png" alt="Every system with its art" loading="lazy" width="1920" height="1080"><span>Systems</span></a>
-      <a class="tile screen" href="assets/screenshots/game.png"><img src="assets/screenshots/game.png" alt="A game's page" loading="lazy" width="1920" height="1080"><span>Game page</span></a>
-      <a class="tile screen" href="assets/screenshots/home-channels.png"><img src="assets/screenshots/home-channels.png" alt="Home as a board of channels" loading="lazy" width="1920" height="1080"><span>Channels</span></a>
-      <a class="tile screen" href="assets/screenshots/quick-menu.png"><img src="assets/screenshots/quick-menu.png" alt="The quick menu" loading="lazy" width="1920" height="1080"><span>Quick menu</span></a>
+      <a class="tile screen" href="assets/screenshots/library-icons.webp"><img src="assets/screenshots/library-icons.webp" alt="The library as a grid of square box art, Crazy Taxi in focus" loading="lazy" width="1920" height="1080"><span>Library</span></a>
+      <a class="tile screen" href="assets/screenshots/library-covers.webp"><img src="assets/screenshots/library-covers.webp" alt="The library as a wall of covers, Advance Wars in focus" loading="lazy" width="1920" height="1080"><span>Cover grid</span></a>
+      <a class="tile screen" href="assets/screenshots/systems.webp"><img src="assets/screenshots/systems.webp" alt="Every system with its own logo and artwork, Nintendo Switch in focus" loading="lazy" width="1920" height="1080"><span>Systems</span></a>
+      <a class="tile screen" href="assets/screenshots/game.webp"><img src="assets/screenshots/game.webp" alt="The page of The Legend of Zelda: Breath of the Wild, with its details and a Play button" loading="lazy" width="1920" height="1080"><span>Game page</span></a>
+      <a class="tile screen" href="assets/screenshots/home-channels.webp"><img src="assets/screenshots/home-channels.webp" alt="Home as a board of channels" loading="lazy" width="1920" height="1080"><span>Channels</span></a>
     </div>
   </section>
 
   <section id="themes" class="shelf" aria-labelledby="themes-title">
-    <h2 id="themes-title" class="label"><span>Themes</span><span class="rule" aria-hidden="true"></span></h2>
+    <h2 id="themes-title" class="label">Themes</h2>
     <p class="lede">Every theme is a small file anyone can write. Copy a link, then in Fuse open Settings, Appearance, Theme, Add a theme. <a href="https://github.com/MAtiyaaa/fuse/blob/main/docs/THEMES.md">Make your own</a>.</p>
     <div class="row themes" data-row data-themes></div>
   </section>
@@ -144,6 +151,7 @@
 <footer class="foot">
   <p>Fuse is free software under the GPL 3.0. <a href="https://github.com/MAtiyaaa/fuse">Source on GitHub</a> <i aria-hidden="true">·</i> <a href="https://github.com/MAtiyaaa/fuse/issues">Report a problem</a></p>
   <p class="small">Android is a trademark of Google LLC, Windows of Microsoft, macOS of Apple and Linux of Linus Torvalds. Their marks only say which download is which; Fuse is not affiliated with them.</p>
+  <p class="small">The screenshots show well-known games with the art Fuse found for them: box art from the <a href="https://github.com/libretro-thumbnails/libretro-thumbnails">libretro thumbnails</a>, system art from <a href="https://github.com/anthonycaccese/art-book-next-es-de">Art Book Next</a>. The games, their names and their art belong to their owners. Fuse comes with no games.</p>
 </footer>
 
 <div class="hints" data-hints aria-hidden="true">

@@ -15,7 +15,6 @@ import io.github.matiyaaa.fuse.ui.shell.home.ShelfItem
 import io.github.matiyaaa.fuse.ui.shell.home.ShelfStyle
 import io.github.matiyaaa.fuse.ui.shell.home.buildShelves
 import io.github.matiyaaa.fuse.ui.shell.home.title
-import io.github.matiyaaa.fuse.ui.shell.screenshots.SampleLibrary
 import io.github.matiyaaa.fuse.ui.shell.store.FuseStore
 import java.io.File
 import kotlinx.coroutines.runBlocking
@@ -151,7 +150,7 @@ internal fun AuditDriver.homeFlow(exhaustive: Boolean) {
 /** Home in Channels mode: the board, moving around it, and carrying a channel. */
 internal fun AuditDriver.homeChannels(exhaustive: Boolean) {
     scenario("home", "channels") {
-        useLibrary { it.copy(home = HomeLayoutConfig(mode = HomeMode.CHANNELS, widgets = SampleLibrary.channelBoard)) }
+        useLibrary { it.copy(home = HomeLayoutConfig(mode = HomeMode.CHANNELS, widgets = AuditSamples.channelBoard)) }
         waitFor("Continue playing")
         tap(PadButton.DPAD_LEFT)
         shoot("board, default focus", 2_000)
@@ -169,7 +168,7 @@ internal fun AuditDriver.homeChannels(exhaustive: Boolean) {
         shoot("put down")
     }
     scenario("home", "channels drag by touch") {
-        useLibrary { it.copy(home = HomeLayoutConfig(mode = HomeMode.CHANNELS, widgets = SampleLibrary.channelBoard)) }
+        useLibrary { it.copy(home = HomeLayoutConfig(mode = HomeMode.CHANNELS, widgets = AuditSamples.channelBoard)) }
         waitFor("Continue playing")
         // Hold the channel's tile, just above its name.
         val from = textCentre("Continue playing") + androidx.compose.ui.geometry.Offset(0f, -80f)

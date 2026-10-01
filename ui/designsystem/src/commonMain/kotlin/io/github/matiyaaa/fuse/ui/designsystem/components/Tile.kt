@@ -21,12 +21,12 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.unit.dp
 import io.github.matiyaaa.fuse.model.FocusStyle
 import io.github.matiyaaa.fuse.ui.designsystem.shape.SquircleShape
@@ -163,8 +163,6 @@ fun Tile(
                         size = androidx.compose.ui.geometry.Size(barW, barH),
                         cornerRadius = CornerRadius(barH / 2),
                     )
-                    // The bar is a lit fuse: a spark glows at its middle.
-                    drawSpark(Offset(w / 2, y + barH / 2), barH * 1.05f, colors.accent, lift * 0.8f)
                 }
             }
             .clip(shape)

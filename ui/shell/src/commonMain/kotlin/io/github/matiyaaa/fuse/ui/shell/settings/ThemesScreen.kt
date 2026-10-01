@@ -45,7 +45,6 @@ import io.github.matiyaaa.fuse.ui.designsystem.components.Hint
 import io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction
 import io.github.matiyaaa.fuse.ui.designsystem.components.Tile
 import io.github.matiyaaa.fuse.ui.designsystem.components.ToastKind
-import io.github.matiyaaa.fuse.ui.designsystem.components.drawSpark
 import io.github.matiyaaa.fuse.ui.designsystem.components.fadingEdges
 import io.github.matiyaaa.fuse.ui.designsystem.focus.FollowSelection
 import io.github.matiyaaa.fuse.ui.designsystem.focus.GridSelection
@@ -333,7 +332,7 @@ internal fun ThemePreview(spec: ThemeSpec, animate: Boolean, modifier: Modifier 
                 Spacer(Modifier.height(3.dp))
                 Box(Modifier.size(width = 54.dp, height = 3.dp).clip(PillShape).background(c.textMuted.copy(alpha = 0.7f)))
                 Spacer(Modifier.height(9.dp))
-                // Three tiles; the middle one is chosen, lifted over its spark.
+                // Three tiles; the middle one is chosen, lifted over its focus bar.
                 val shape = SquircleShape.fraction(Fuse.geometry.tileCornerFraction)
                 Row(horizontalArrangement = Arrangement.spacedBy(7.dp), verticalAlignment = Alignment.Bottom) {
                     for (i in 0 until 3) {
@@ -345,7 +344,6 @@ internal fun ThemePreview(spec: ThemeSpec, animate: Boolean, modifier: Modifier 
                                     if (chosen) {
                                         val y = size.height + 5.dp.toPx()
                                         drawRoundRect(accent, topLeft = Offset(size.width * 0.3f, y - 1.dp.toPx()), size = androidx.compose.ui.geometry.Size(size.width * 0.4f, 2.dp.toPx()), cornerRadius = CornerRadius(1.dp.toPx()))
-                                        drawSpark(Offset(size.width / 2, y), 1.4.dp.toPx(), accent, 0.9f)
                                     }
                                 }
                                 .clip(shape)

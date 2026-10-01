@@ -55,7 +55,7 @@ Home screen.
 The game you are on sets the mood. Its art fills the room, its colour tints the glow, and the tile
 under your thumb lifts toward you with a single sweep of light.
 
-<a href="docs/assets/screenshots/home.png"><img src="docs/assets/screenshots/home.png" width="100%" alt="Fuse's Home screen in the Fuse theme. A dark room tinted amber by the focused game, Velvet Orbit, shown large at the top left with its play time and two discs. Below, a Continue playing row of wide tiles and a row of system tiles."></a>
+<a href="docs/assets/screenshots/home.webp"><img src="docs/assets/screenshots/home.webp" width="100%" alt="Fuse's Home screen in the Fuse theme. The Legend of Zelda: Breath of the Wild is in focus, told large with its year, play time, update and DLC. Below, a Continue playing row with Final Fantasy VII, Super Mario 64 and Metroid Prime over their box art, and a row of systems with their logos and artwork."></a>
 
 <sub><b>Home.</b> Continue where you left off, with your systems one row below.</sub>
 
@@ -64,48 +64,36 @@ under your thumb lifts toward you with a single sweep of light.
 <table>
   <tr>
     <td width="50%" valign="top">
-      <a href="docs/assets/screenshots/library-covers.png"><img src="docs/assets/screenshots/library-covers.png" width="100%" alt="The Library as a grid of tall cover tiles, filtered by chips for favourites, recently played and each system."></a>
+      <a href="docs/assets/screenshots/library-covers.webp"><img src="docs/assets/screenshots/library-covers.webp" width="100%" alt="The Library as a wall of tall covers of well-known games, Advance Wars in focus, with tabs for every game, favourites and recently played."></a>
       <br><b>Your whole library</b>
       <br><sub>Covers, square box art, capsules or a compact list, filtered by system, favourites or what you played last.</sub>
     </td>
     <td width="50%" valign="top">
-      <a href="docs/assets/screenshots/library-icons.png"><img src="docs/assets/screenshots/library-icons.png" width="100%" alt="The Library as a grid of square icon tiles. Games without art show generated placeholder art with their initials and platform colour."></a>
-      <br><b>Every tile looks intentional</b>
-      <br><sub>Games without art get generated placeholder art from their initials and their platform's colour.</sub>
+      <a href="docs/assets/screenshots/library-icons.webp"><img src="docs/assets/screenshots/library-icons.webp" width="100%" alt="The Library as a grid of square box art, Crazy Taxi in focus with its art filling the room, next to Chrono Trigger, Crash Bandicoot and Donkey Kong Country."></a>
+      <br><b>Art that fills itself in</b>
+      <br><sub>Box art, covers, logos and backgrounds for every game, found for you, and art of Fuse's own for any it can't find.</sub>
     </td>
   </tr>
   <tr>
     <td width="50%" valign="top">
-      <a href="docs/assets/screenshots/game.png"><img src="docs/assets/screenshots/game.png" width="100%" alt="A game page: a large Play button that says the game starts in Flycast, an emulator button, favourite and collection buttons, play time, and buttons for Disc 1 and Disc 2."></a>
+      <a href="docs/assets/screenshots/game.webp"><img src="docs/assets/screenshots/game.webp" width="100%" alt="The page of The Legend of Zelda: Breath of the Wild: its year, developer, genres and players, a Play button that says it starts in Ryujinx, its play time and what it's about."></a>
       <br><b>A page for every game</b>
-      <br><sub>Fuse tells you which emulator it will start, keeps your play time and groups the discs of a set.</sub>
+      <br><sub>Its details, the emulator Fuse will start, your play time, and its discs, updates and DLC kept together.</sub>
     </td>
     <td width="50%" valign="top">
-      <a href="docs/assets/screenshots/systems.png"><img src="docs/assets/screenshots/systems.png" width="100%" alt="The Systems screen in a cool blue light. The focused system shows its game count, its default emulator Dolphin and that two emulators are available."></a>
-      <br><b>Systems, and the emulators behind them</b>
-      <br><sub>Choose the emulator per system or per game, from the ones installed on your device.</sub>
+      <a href="docs/assets/screenshots/systems.webp"><img src="docs/assets/screenshots/systems.webp" width="100%" alt="The Systems screen: every system with its own logo and artwork, Nintendo Switch in focus with its game count and its emulator, Ryujinx."></a>
+      <br><b>Systems, with art of their own</b>
+      <br><sub>Logos, artwork and colours for every system, and the emulator behind each one, per system or per game.</sub>
     </td>
   </tr>
   <tr>
     <td width="50%" valign="top">
-      <a href="docs/assets/screenshots/home-channels.png"><img src="docs/assets/screenshots/home-channels.png" width="100%" alt="Home as a board of tiles: the time and date, Continue playing, Favourites, a Systems count, this week's play time as a bar chart, total play time and New in your library."></a>
+      <a href="docs/assets/screenshots/home-channels.webp"><img src="docs/assets/screenshots/home-channels.webp" width="100%" alt="Home as a board of tiles: Continue playing, Favourites, Systems with their logos, this week's play time as a bar chart, total play time and New in your library."></a>
       <br><b>Or a board of tiles you arrange</b>
       <br><sub>Channels turns Home into widgets you place and resize yourself, from 19 kinds.</sub>
     </td>
     <td width="50%" valign="top">
-      <a href="docs/assets/screenshots/quick-menu.png"><img src="docs/assets/screenshots/quick-menu.png" width="100%" alt="The quick menu over Home: the time, battery, tiles for Wi-Fi, Bluetooth, Display, Controller, Performance, Low Power, Cartridge, Search and Sound, and brightness and volume sliders."></a>
-      <br><b>One button from everything</b>
-      <br><sub>Start opens the quick menu: status, brightness, volume, performance and shortcuts.</sub>
-    </td>
-  </tr>
-  <tr>
-    <td width="50%" valign="top">
-      <a href="docs/assets/screenshots/settings.png"><img src="docs/assets/screenshots/settings.png" width="100%" alt="Settings, Appearance section: theme, motion, background art, title logos, background dimming, glass panels, CRT effect, high contrast focus and button symbols."></a>
-      <br><b>Make it yours</b>
-      <br><sub>Ten themes and any you add, posters or box art, four motion levels, glass, CRT and high contrast focus, across 16 sections of settings.</sub>
-    </td>
-    <td width="50%" valign="top">
-      <a href="docs/assets/screenshots/onboarding.png"><img src="docs/assets/screenshots/onboarding.png" width="100%" alt="The first step of setup: Welcome to Fuse, a Begin button, and the Fuse mark with its glowing spark."></a>
+      <a href="docs/assets/screenshots/onboarding.webp"><img src="docs/assets/screenshots/onboarding.webp" width="100%" alt="The first step of setup: Welcome to Fuse, a Begin button, and the Fuse mark."></a>
       <br><b>A guided start</b>
       <br><sub>Setup walks you through folders, emulators and, on Android, the optional Home screen.</sub>
     </td>
@@ -113,7 +101,10 @@ under your thumb lifts toward you with a single sweep of light.
 </table>
 
 <p align="center"><sub>Every screenshot is a real render of Fuse's interface (the desktop build at 1920 x 1080), driven with
-controller input over a sample library of invented games. The art is Fuse's own generated placeholder art.</sub></p>
+controller input over a library of well-known games whose art Fuse found by itself: box art from the
+<a href="https://github.com/libretro-thumbnails/libretro-thumbnails">libretro thumbnails</a>, system art from <a href="https://github.com/anthonycaccese/art-book-next-es-de">Art Book Next</a>.
+Games with no art there (the Switch games here) show Fuse's own. The games, their names and their art belong to their owners.
+Fuse comes with no games and is not affiliated with them.</sub></p>
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/brand/divider-dark.svg">

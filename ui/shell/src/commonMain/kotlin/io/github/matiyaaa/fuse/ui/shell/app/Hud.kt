@@ -70,7 +70,6 @@ import io.github.matiyaaa.fuse.model.Destination
 import io.github.matiyaaa.fuse.model.SystemStatus
 import io.github.matiyaaa.fuse.ui.designsystem.components.FText
 import io.github.matiyaaa.fuse.ui.designsystem.components.StatusCluster
-import io.github.matiyaaa.fuse.ui.designsystem.components.drawSpark
 import io.github.matiyaaa.fuse.ui.designsystem.icons.ButtonGlyph
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
@@ -302,7 +301,6 @@ private fun Tab(destination: Destination, selected: Boolean, focused: Boolean, s
                         size = GSize(w, h),
                         cornerRadius = CornerRadius(h / 2),
                     )
-                    drawSpark(Offset(size.width / 2, size.height - h / 2 - 3.dp.toPx()), h * 0.95f, c.accent, bar * 0.7f)
                 }
                 if (focused) {
                     drawRoundRect(

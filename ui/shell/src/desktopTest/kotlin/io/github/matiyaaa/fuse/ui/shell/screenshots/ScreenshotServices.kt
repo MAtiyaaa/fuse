@@ -37,7 +37,10 @@ import io.github.matiyaaa.fuse.ui.shell.store.LocationHint
 import io.github.matiyaaa.fuse.ui.shell.store.MemorySecrets
 import io.github.matiyaaa.fuse.ui.shell.store.ReleaseInstaller
 import io.github.matiyaaa.fuse.ui.shell.store.RunResult
+import io.github.matiyaaa.fuse.integrations.FuseHttp
+import io.github.matiyaaa.fuse.integrations.FuseHttpConfig
 import io.ktor.client.HttpClient
+import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respondError
 import io.ktor.http.HttpStatusCode
@@ -48,9 +51,10 @@ import kotlinx.coroutines.flow.StateFlow
 /**
  * The services behind the README screenshots: a real temporary library folder and SQLite database,
  * the emulators a typical Linux handheld setup would have installed (reported, never started), and
- * no network. Nothing here runs a game.
+ * either no network or, with [live], the real one, so Fuse can fetch art the way it does on a
+ * device. Nothing here runs a game.
  */
-internal class ScreenshotServices(override val data: FuseData, private val cache: File) : FuseServices {
+internal class ScreenshotServices(override val data: FuseData, private val cache: File, live: Boolean = false) : FuseServices {
     init {
         // Screenshots show what the scene sets up, not an art search Fuse started by itself.
         kotlinx.coroutines.runBlocking { data.settings.update { it.copy(scraping = it.scraping.copy(autoFill = false)) } }
@@ -60,7 +64,9 @@ internal class ScreenshotServices(override val data: FuseData, private val cache
     override val appVersion = "0.0.1"
     override val fs: FuseFileSystem = JavaFileSystem()
     override val secrets: SecretStore = MemorySecrets()
-    override val http = HttpClient(MockEngine { respondError(HttpStatusCode.NotFound) })
+    // OkHttp follows the JVM's proxy settings (https.proxyHost), as a sandboxed or corporate network needs.
+    override val http: HttpClient =
+        if (live) FuseHttp.client(OkHttp.create(), FuseHttpConfig(appVersion = appVersion)) else HttpClient(MockEngine { respondError(HttpStatusCode.NotFound) })
     override val cacheDir: String = cache.absolutePath
 
     override val emulators = object : EmulatorDetector {

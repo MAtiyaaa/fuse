@@ -115,11 +115,11 @@ def main():
     for name in ["site.css", "site.js"]:
         copy(SITE / "assets" / name, out / "assets" / name)
     brand = ROOT / "docs" / "assets" / "brand"
-    for name in ["icon.svg", "mark.svg", "spark.svg", "social-preview.png"]:
+    for name in ["icon.svg", "wordmark-dark.svg", "social-preview.png"]:
         copy(brand / name, out / "assets" / "brand" / name)
     for p in (ROOT / "docs" / "assets" / "icons").glob("*.svg"):
         copy(p, out / "assets" / "icons" / p.name)
-    for p in (ROOT / "docs" / "assets" / "screenshots").glob("*.png"):
+    for p in (ROOT / "docs" / "assets" / "screenshots").glob("*.webp"):
         copy(p, out / "assets" / "screenshots" / p.name)
     for p in (ROOT / "ui" / "designsystem" / "src" / "commonMain" / "composeResources" / "font").glob("*.ttf"):
         copy(p, out / "assets" / "fonts" / p.name)

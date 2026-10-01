@@ -87,8 +87,8 @@ import io.github.matiyaaa.fuse.ui.shell.app.systemRoom
 import io.github.matiyaaa.fuse.ui.shell.components.ControlTile
 import io.github.matiyaaa.fuse.ui.shell.components.GameIconTile
 import io.github.matiyaaa.fuse.ui.shell.components.LocalGameArt
-import io.github.matiyaaa.fuse.ui.shell.components.tileSize
 import io.github.matiyaaa.fuse.ui.shell.components.SystemCardArt
+import io.github.matiyaaa.fuse.ui.shell.components.tileSize
 import io.github.matiyaaa.fuse.ui.shell.home.bytesText
 import io.github.matiyaaa.fuse.ui.shell.store.PlatformCard
 import io.github.matiyaaa.fuse.ui.shell.store.RecentDownload
@@ -411,10 +411,7 @@ private fun ShelfRow(title: String?, count: Int, selected: Int, remembered: Int,
     FollowSelection(state, { remembered }, anchor = 0f)
     Column {
         if (title != null) {
-            SectionLabel(
-                title, Modifier.fillMaxWidth().padding(start = Space.gutter, end = Space.gutter, bottom = Space.s),
-                color = if (selected >= 0) Fuse.colors.text else Fuse.colors.textMuted, rule = true,
-            )
+            SectionLabel(title, Modifier.padding(start = Space.gutter, bottom = Space.s), color = if (selected >= 0) Fuse.colors.text else Fuse.colors.textMuted)
         }
         LazyRow(
             state = state,

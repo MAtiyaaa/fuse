@@ -20,6 +20,8 @@ kotlin {
         getByName("desktopTest") {
             dependencies {
                 implementation(libs.ktor.client.mock)
+                // The README screenshots fetch real art (see ReadmeScreenshots).
+                implementation(libs.ktor.client.okhttp)
                 implementation(libs.compose.ui.test)
                 implementation(compose.desktop.currentOs)
             }
@@ -27,9 +29,10 @@ kotlin {
     }
 }
 
-// README screenshots: the real interface over a sample library of invented games, rendered headless
-// into docs/assets/screenshots. Never part of desktopTest, check or CI; run it on purpose:
-//     ./gradlew :ui:shell:desktopScreenshots
+// README screenshots: the real interface over a library of well-known games whose art Fuse fetches
+// (libretro thumbnails and Art Book Next; SteamGridDB too when STEAMGRIDDB_API_KEY is set), rendered
+// headless into docs/assets/screenshots. Never part of desktopTest, check or CI; run it on purpose:
+//     ./gradlew :ui:shell:desktopScreenshots [-Pfuse.screenshots.sources=STEAMGRIDDB,LIBRETRO]
 val screenshotTests = "io.github.matiyaaa.fuse.ui.shell.screenshots.*"
 
 // UI audit: every screen, overlay and state at the sizes Fuse runs at, rendered headless into a
@@ -56,8 +59,9 @@ tasks.register<Test>("desktopScreenshots") {
         providers.gradleProperty("fuse.screenshots.dir")
             .getOrElse(rootProject.layout.projectDirectory.dir("docs/assets/screenshots").asFile.absolutePath),
     )
-    // Rendering every screen takes a few minutes; the coroutine test default of one minute is too short.
-    systemProperty("kotlinx.coroutines.test.default_timeout", "20m")
+    systemProperty("fuse.screenshots.sources", providers.gradleProperty("fuse.screenshots.sources").getOrElse(""))
+    // Filling the art and rendering every screen takes several minutes; the coroutine test default of one minute is too short.
+    systemProperty("kotlinx.coroutines.test.default_timeout", "40m")
     maxHeapSize = "1g"
     testLogging { showStandardStreams = true }
     outputs.upToDateWhen { false }

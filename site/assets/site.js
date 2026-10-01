@@ -70,8 +70,7 @@
     if (eyebrow) eyebrow.textContent = name ? `Fuse ${version} · ${name}` : `Fuse ${version}`;
     const released = $("[data-released]");
     if (released) released.textContent = rel.published_at ? `Fuse ${version}, released ${ago(rel.published_at)}` : `Fuse ${version}`;
-    const notes = $("[data-notes]");
-    if (notes) notes.href = url;
+    $$("[data-notes]").forEach((el) => { el.href = url; });
 
     for (const tile of $$(".platform")) {
       const key = tile.dataset.platform;
@@ -101,28 +100,42 @@
     return mb >= 100 ? `${Math.round(mb)} MB` : `${mb.toFixed(1)} MB`;
   }
 
-  // The release's headlines: its top-level bullets that start with a bold title.
+  // The release's headlines: its top-level bullets that start with a bold title, each with the
+  // words that follow it (continuation lines included, nested bullets left out).
   function highlights(body, version) {
-    const titles = [];
+    const items = [];
+    let open = null;
     for (const line of body.split(/\r?\n/)) {
-      const m = /^- \*\*(.+?)\*\*/.exec(line);
-      if (m) titles.push(m[1].replace(/[.:]$/, ""));
-      if (titles.length === 8) break;
+      const m = /^- \*\*(.+?)\*\*\s*(.*)$/.exec(line);
+      if (m) {
+        if (items.length === 8) break;
+        open = { title: m[1].replace(/[.:]$/, ""), text: m[2] };
+        items.push(open);
+      } else if (open && /^ {2}\S/.test(line) && !/^ {2}-/.test(line)) {
+        open.text += " " + line.trim();
+      } else {
+        open = null;
+      }
     }
     const row = $("[data-highlights]");
-    if (!row || titles.length === 0) return;
+    if (!row || items.length === 0) return;
     row.textContent = "";
-    titles.forEach((t, i) => {
+    const plain = (s) => s.replace(/\[([^\]]+)\]\([^)]+\)/g, "$1").replace(/[*_`]/g, "").trim();
+    for (const item of items) {
       const card = document.createElement("a");
       card.className = "tile highlight";
       card.href = `https://github.com/${REPO}/releases/tag/v${version}`;
-      const n = document.createElement("span");
-      n.textContent = String(i + 1).padStart(2, "0");
       const b = document.createElement("b");
-      b.textContent = t;
-      card.append(n, b);
+      b.textContent = item.title;
+      card.append(b);
+      const text = plain(item.text).replace(/:$/, ".");
+      if (text) {
+        const span = document.createElement("span");
+        span.textContent = text;
+        card.append(span);
+      }
       row.append(card);
-    });
+    }
     const title = $("[data-new-title]");
     if (title) title.textContent = `New in ${version}`;
     $("#new").hidden = false;

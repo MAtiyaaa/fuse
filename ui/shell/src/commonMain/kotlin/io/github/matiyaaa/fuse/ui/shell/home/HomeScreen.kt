@@ -468,12 +468,7 @@ private fun ShelfRow(
                 .padding(start = Space.gutter, end = Space.gutter, bottom = Space.m),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            SectionLabel(
-                shelf.title,
-                Modifier.weight(1f, fill = !(lifted || movingItem)),
-                color = if (selectedColumn >= 0 || lifted) c.text else c.textMuted,
-                rule = !(lifted || movingItem),
-            )
+            SectionLabel(shelf.title, color = if (selectedColumn >= 0 || lifted) c.text else c.textMuted)
             if (lifted || movingItem) {
                 Spacer(Modifier.width(Space.s))
                 FuseIcon(FuseIcons.Move, size = 14.dp, tint = c.accent)

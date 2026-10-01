@@ -12,12 +12,9 @@ screen, themes anyone can make and share, and a website to download it from.
   - **Home, Channels.** Hold a channel and drag it anywhere on the board; the others reflow around it.
   - **Systems** move more smoothly than before, with haptics for lifting, passing a place and dropping.
   - Holding and letting go without moving still opens the options, as before.
-- **A look of its own.** The spark and the lit fuse from Fuse's logo now mark what's happening
-  everywhere:
-  - the chosen tile's bar and the active tab glow with a spark;
-  - progress burns like a fuse, with a spark at its head;
-  - section titles run on into a fading line;
-  - panels, menus and dialogs catch the light along their top edge, like tiles.
+- **One family of surfaces.** Panels, menus and dialogs catch the light along their top edge, as
+  tiles do, and screens without art (Settings, Apps, Achievements) get a soft second light for depth.
+  Focus, tabs and progress share one crisp accent, so the art does the lighting.
 - **Themes anyone can make.** A theme is a small file that starts from a built-in theme and changes
   what it likes (docs/THEMES.md).
   - Settings, Appearance, Theme now opens a gallery of live previews, each drawn in its own theme.
@@ -32,7 +29,8 @@ screen, themes anyone can make and share, and a website to download it from.
   Fuse found, each with its own place.
 - **A website.** [matiyaaa.github.io/fuse](https://matiyaaa.github.io/fuse/) looks and moves like Fuse
   (arrow keys and controllers work too), always offers the latest version for Android, Windows, macOS
-  and Linux, and lists themes to add.
+  and Linux, and lists themes to add. Its screenshots, like the README's, now show a library of
+  well-known games with the art Fuse fills in by itself.
 
 ## Changed
 
@@ -59,3 +57,4 @@ screen, themes anyone can make and share, and a website to download it from.
   and a flick carries on with the finger's speed.
 - The onboarding theme preview used the current theme's background colour instead of the previewed
   theme's.
+- A game's page said "1 players" for a game for one player.

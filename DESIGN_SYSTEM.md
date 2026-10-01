@@ -176,23 +176,25 @@ selected state is shown several ways at once, so it never relies on colour:
 | Tinted glow | In the `GLOW` focus style the shadow rises from 6 to 28 dp of elevation and is tinted with the tile's colour (the art's or platform's), ambient shadow at half strength. Other styles use a neutral shadow from 4 to 14 dp |
 | Light edge | A 1 dp squircle hairline along the top, white fading from 16% (30% when focused) to transparent, so the tile reads as a raised object |
 | Sweep | When focus arrives, one band of light (55% of the tile's width, white at 22%) sweeps across the tile once, in 520 ms, clipped to its shape. Standard and Enhanced motion only, and never in Low Power Mode |
-| Accent bar | A 28 x 3 dp rounded bar in the accent colour, 7 dp below the tile, for the `GLOW` and `BAR` styles (1.4 x wider and 1.3 x taller in `BAR`). A spark glows at its middle |
+| Accent bar | A 28 x 3 dp rounded bar in the accent colour, 7 dp below the tile, for the `GLOW` and `BAR` styles (1.4 x wider and 1.3 x taller in `BAR`). It grows out from its middle as the tile lifts |
 | Ring | A 2 dp outline in the focus colour, 3 dp outside the tile, for the `RING` style, and added to every style when High contrast focus is on |
 
 Buttons follow the same rule: the selected primary button gets a ring, and every selected button gets
 one with High contrast focus. HUD tabs show focus as an outline, and the active tab as its label plus
-an accent underline with a spark.
+a short accent underline.
 
-### The spark and the fuse line
+### Crisp accents
 
-The brand's two marks carry Fuse's look through the shared components
-(`designsystem/components/Spark.kt`), so every screen has it without drawing it itself:
+The accent is a colour, never a light. Every accent shape is solid with clean edges (no halo, bloom
+or glow), so the screen reads as a calm, finished object and the art does the lighting:
 
-| Mark | Where |
+| Shape | Where |
 |---|---|
-| The spark (`drawSpark`): a core from near white through a warm tint to the accent, in a halo 3.2 times wider | The focused tile's bar, the active tab's underline, the head of a progress ring, the spinner |
-| The fuse line (`FuseLine`): a track, a fill that warms into the accent, the spark at its head while it runs; a spark with a glowing tail when the length isn't known | Every `ProgressBar`: fills, downloads, updates, achievements |
-| The rule (`fuseRule`): a hairline that fades out to the right | Section titles with `SectionLabel(rule = true)`: Home shelves, Cartridge, Achievements, Search, the game page |
+| A short rounded bar | Under the focused tile and the active tab |
+| A solid fill with round ends on a quiet track (`ProgressBar`); a short segment gliding along the track when the length isn't known (resting in the middle under Reduced motion) | Fills, downloads, updates, achievements |
+| A round-capped arc on a faint ring (`ProgressRing`, `Spinner`) | Downloads, achievement completion, loading |
+
+Section titles (`SectionLabel`) are small uppercase labels with an optional quiet count after them.
 
 Panels share the tiles' lit top edge, so menus, dialogs and cards read as the same family of objects.
 
