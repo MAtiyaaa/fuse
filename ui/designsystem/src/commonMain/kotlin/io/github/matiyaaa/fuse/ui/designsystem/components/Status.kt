@@ -1,5 +1,6 @@
 package io.github.matiyaaa.fuse.ui.designsystem.components
 
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -7,14 +8,15 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -67,28 +69,34 @@ fun StatusCluster(
     }
 }
 
-/** Battery drawn as an outline with a level fill; a bolt when charging, warning colour when low. */
+/**
+ * Battery drawn as an outline with a level fill that eases to each new reading; a bolt when
+ * charging, the danger colour when low. Its shapes are built once per size.
+ */
 @Composable
 fun BatteryGlyph(percent: Int, charging: Boolean, modifier: Modifier = Modifier) {
     val c = Fuse.colors
     val low = percent <= 15 && !charging
-    val fillColor = when {
-        charging -> c.success
-        low -> c.danger
-        else -> c.text
-    }
-    Canvas(modifier.size(width = 26.dp, height = 13.dp)) {
-        val stroke = 1.4.dp.toPx()
-        val nub = 2.dp.toPx()
-        val body = Size(size.width - nub - stroke, size.height - stroke)
-        val r = CornerRadius(3.dp.toPx())
-        drawRoundRect(c.text.copy(alpha = 0.55f), Offset(stroke / 2, stroke / 2), body, r, style = Stroke(stroke))
-        drawRoundRect(c.text.copy(alpha = 0.55f), Offset(size.width - nub, size.height * 0.32f), Size(nub, size.height * 0.36f), CornerRadius(nub))
-        val inset = stroke + 1.2.dp.toPx()
-        val fullW = body.width - inset * 2 + stroke
-        val w = fullW * (percent.coerceIn(0, 100) / 100f)
-        drawRoundRect(fillColor, Offset(inset, inset), Size(w.coerceAtLeast(1.5f), size.height - inset * 2), CornerRadius(1.5.dp.toPx()))
-        if (charging) {
+    val fillColor by animateColorAsState(
+        when {
+            charging -> c.success
+            low -> c.danger
+            else -> c.text
+        },
+        Fuse.motion.tween(Durations.BASE),
+        label = "batteryColor",
+    )
+    val level by animateFloatAsState(percent.coerceIn(0, 100) / 100f, Fuse.motion.tween(Durations.DELIBERATE), label = "batteryLevel")
+    val outline = c.text.copy(alpha = 0.55f)
+    val boltColor = c.ink
+    Spacer(
+        modifier.size(width = 26.dp, height = 13.dp).drawWithCache {
+            val stroke = 1.4.dp.toPx()
+            val nub = 2.dp.toPx()
+            val body = Size(size.width - nub - stroke, size.height - stroke)
+            val r = CornerRadius(3.dp.toPx())
+            val inset = stroke + 1.2.dp.toPx()
+            val fullW = body.width - inset * 2 + stroke
             val cx = body.width / 2 + stroke / 2
             val h = size.height
             val bolt = Path().apply {
@@ -100,9 +108,15 @@ fun BatteryGlyph(percent: Int, charging: Boolean, modifier: Modifier = Modifier)
                 lineTo(cx, h * 0.44f)
                 close()
             }
-            drawPath(bolt, c.ink)
-        }
-    }
+            val outlineStroke = Stroke(stroke)
+            onDrawBehind {
+                drawRoundRect(outline, Offset(stroke / 2, stroke / 2), body, r, style = outlineStroke)
+                drawRoundRect(outline, Offset(size.width - nub, size.height * 0.32f), Size(nub, size.height * 0.36f), CornerRadius(nub))
+                drawRoundRect(fillColor, Offset(inset, inset), Size((fullW * level).coerceAtLeast(1.5f), size.height - inset * 2), CornerRadius(1.5.dp.toPx()))
+                if (charging) drawPath(bolt, boltColor)
+            }
+        },
+    )
 }
 
 /**
@@ -121,56 +135,29 @@ fun BatteryCapsule(percent: Int, charging: Boolean, modifier: Modifier = Modifie
         else -> c.text.copy(alpha = 0.92f)
     }
     val level by animateFloatAsState(percent.coerceIn(0, 100) / 100f, Fuse.motion.tween(Durations.DELIBERATE), label = "battery")
-    val sweep = if (charging && !full && !Fuse.motion.reduced) {
-        val t by rememberInfiniteTransition(label = "charge").animateFloat(
+    val sweep = if (charging && !full && !Fuse.motion.reduced && Fuse.quality.animatedBackground) {
+        rememberInfiniteTransition(label = "charge").animateFloat(
             0f, 1f, infiniteRepeatable(tween(1800, easing = LinearEasing), RepeatMode.Restart), label = "sweep",
         )
-        t
     } else {
         null
     }
-    Canvas(modifier) {
-        val stroke = (size.height * 0.045f).coerceIn(2.dp.toPx(), 3.dp.toPx())
-        val nubW = size.width * 0.05f
-        val gap = stroke
-        val body = Size(size.width - nubW - gap - stroke, size.height - stroke)
-        val radius = body.height * 0.24f
-        drawRoundRect(c.text.copy(alpha = 0.32f), Offset(stroke / 2, stroke / 2), body, CornerRadius(radius), style = Stroke(stroke))
-        drawRoundRect(
-            c.text.copy(alpha = 0.32f),
-            Offset(size.width - nubW, size.height * 0.32f),
-            Size(nubW, size.height * 0.36f),
-            CornerRadius(nubW * 0.6f),
-        )
-        val inset = stroke + size.height * 0.07f
-        val inner = Size(body.width + stroke - inset * 2, size.height - inset * 2)
-        val innerRadius = CornerRadius((radius - inset + stroke).coerceAtLeast(2.dp.toPx()))
-        val w = (inner.width * level).coerceAtLeast(if (percent > 0) innerRadius.x * 1.2f else 0f)
-        if (w > 0f) {
-            drawRoundRect(
-                Brush.verticalGradient(listOf(fill, fill.copy(alpha = fill.alpha * 0.78f)), startY = inset, endY = inset + inner.height),
-                Offset(inset, inset),
-                Size(w, inner.height),
-                innerRadius,
-            )
-            if (sweep != null) {
-                val band = inner.width * 0.35f
-                val x = inset - band + (w + band) * sweep
-                clipRect(inset, inset, inset + w, inset + inner.height) {
-                    drawRect(
-                        Brush.horizontalGradient(listOf(Color.White.copy(alpha = 0f), Color.White.copy(alpha = 0.32f), Color.White.copy(alpha = 0f)), startX = x, endX = x + band),
-                        Offset(x, inset),
-                        Size(band, inner.height),
-                    )
-                }
-            }
-        }
-        val cx = stroke / 2 + body.width / 2
-        val cy = size.height / 2
-        val h = inner.height * 0.62f
-        // The mark sits over the fill in ink, or in the text colour on the empty part.
-        val markColor = if (cx < inset + w) c.ink else c.text
-        if (charging && !full) {
+    val outline = c.text.copy(alpha = 0.32f)
+    val ink = c.ink
+    val text = c.text
+    Spacer(
+        modifier.drawWithCache {
+            val stroke = (size.height * 0.045f).coerceIn(2.dp.toPx(), 3.dp.toPx())
+            val nubW = size.width * 0.05f
+            val gap = stroke
+            val body = Size(size.width - nubW - gap - stroke, size.height - stroke)
+            val radius = body.height * 0.24f
+            val inset = stroke + size.height * 0.07f
+            val inner = Size(body.width + stroke - inset * 2, size.height - inset * 2)
+            val innerRadius = CornerRadius((radius - inset + stroke).coerceAtLeast(2.dp.toPx()))
+            val cx = stroke / 2 + body.width / 2
+            val cy = size.height / 2
+            val h = inner.height * 0.62f
             val bolt = Path().apply {
                 moveTo(cx + h * 0.10f, cy - h * 0.5f)
                 lineTo(cx - h * 0.30f, cy + h * 0.08f)
@@ -180,58 +167,90 @@ fun BatteryCapsule(percent: Int, charging: Boolean, modifier: Modifier = Modifie
                 lineTo(cx + h * 0.02f, cy - h * 0.08f)
                 close()
             }
-            drawPath(bolt, markColor)
-        } else if (full) {
             val check = Path().apply {
                 moveTo(cx - h * 0.34f, cy + h * 0.02f)
                 lineTo(cx - h * 0.08f, cy + h * 0.28f)
                 lineTo(cx + h * 0.38f, cy - h * 0.26f)
             }
-            drawPath(check, markColor, style = Stroke(h * 0.16f, cap = StrokeCap.Round, join = StrokeJoin.Round))
-        }
-    }
+            val outlineStroke = Stroke(stroke)
+            val checkStroke = Stroke(h * 0.16f, cap = StrokeCap.Round, join = StrokeJoin.Round)
+            val fillBrush = Brush.verticalGradient(listOf(fill, fill.copy(alpha = fill.alpha * 0.78f)), startY = inset, endY = inset + inner.height)
+            val band = inner.width * 0.35f
+            onDrawBehind {
+                drawRoundRect(outline, Offset(stroke / 2, stroke / 2), body, CornerRadius(radius), style = outlineStroke)
+                drawRoundRect(outline, Offset(size.width - nubW, size.height * 0.32f), Size(nubW, size.height * 0.36f), CornerRadius(nubW * 0.6f))
+                val w = (inner.width * level).coerceAtLeast(if (percent > 0) innerRadius.x * 1.2f else 0f)
+                if (w > 0f) {
+                    drawRoundRect(fillBrush, Offset(inset, inset), Size(w, inner.height), innerRadius)
+                    if (sweep != null) {
+                        val x = inset - band + (w + band) * sweep.value
+                        clipRect(inset, inset, inset + w, inset + inner.height) {
+                            drawRect(
+                                Brush.horizontalGradient(listOf(Color.White.copy(alpha = 0f), Color.White.copy(alpha = 0.32f), Color.White.copy(alpha = 0f)), startX = x, endX = x + band),
+                                Offset(x, inset),
+                                Size(band, inner.height),
+                            )
+                        }
+                    }
+                }
+                // The mark sits over the fill in ink, or in the text colour on the empty part.
+                val markColor = if (cx < inset + w) ink else text
+                if (charging && !full) drawPath(bolt, markColor) else if (full) drawPath(check, markColor, style = checkStroke)
+            }
+        },
+    )
 }
 
 /** Wi-Fi strength 0..4 as three arcs and a dot; unlit arcs stay faintly visible. */
 @Composable
 fun WifiGlyph(level: Int, connected: Boolean, modifier: Modifier = Modifier) {
     val c = Fuse.colors
-    Canvas(modifier.size(18.dp)) {
-        val stroke = 1.8.dp.toPx()
-        val center = Offset(size.width / 2, size.height * 0.86f)
-        val lit = if (!connected) 0 else (level.coerceIn(0, 4) * 3 + 3) / 4
-        for (i in 1..3) {
-            val radius = size.width * (0.18f + 0.26f * i) / 1.2f
-            drawArc(
-                color = if (i <= lit) c.text.copy(alpha = 0.9f) else c.text.copy(alpha = 0.2f),
-                startAngle = 225f,
-                sweepAngle = 90f,
-                useCenter = false,
-                topLeft = Offset(center.x - radius, center.y - radius),
-                size = Size(radius * 2, radius * 2),
-                style = Stroke(stroke, cap = StrokeCap.Round),
-            )
-        }
-        drawCircle(if (connected) c.text else c.text.copy(alpha = 0.3f), radius = stroke * 0.9f, center = center)
-        if (!connected) {
-            drawLine(c.text.copy(alpha = 0.7f), Offset(size.width * 0.15f, size.height * 0.15f), Offset(size.width * 0.85f, size.height * 0.85f), stroke, StrokeCap.Round)
-        }
-    }
+    val lit = if (!connected) 0 else (level.coerceIn(0, 4) * 3 + 3) / 4
+    val on = c.text.copy(alpha = 0.9f)
+    val off = c.text.copy(alpha = 0.2f)
+    Spacer(
+        modifier.size(18.dp).drawWithCache {
+            val stroke = 1.8.dp.toPx()
+            val center = Offset(size.width / 2, size.height * 0.86f)
+            val arcStroke = Stroke(stroke, cap = StrokeCap.Round)
+            onDrawBehind {
+                for (i in 1..3) {
+                    val radius = size.width * (0.18f + 0.26f * i) / 1.2f
+                    drawArc(
+                        color = if (i <= lit) on else off,
+                        startAngle = 225f,
+                        sweepAngle = 90f,
+                        useCenter = false,
+                        topLeft = Offset(center.x - radius, center.y - radius),
+                        size = Size(radius * 2, radius * 2),
+                        style = arcStroke,
+                    )
+                }
+                drawCircle(if (connected) c.text else c.text.copy(alpha = 0.3f), radius = stroke * 0.9f, center = center)
+                if (!connected) {
+                    drawLine(c.text.copy(alpha = 0.7f), Offset(size.width * 0.15f, size.height * 0.15f), Offset(size.width * 0.85f, size.height * 0.85f), stroke, StrokeCap.Round)
+                }
+            }
+        },
+    )
 }
 
 @Composable
 private fun BluetoothGlyph(color: Color) {
-    Canvas(Modifier.size(14.dp)) {
-        val w = size.width
-        val h = size.height
-        val p = Path().apply {
-            moveTo(w * 0.25f, h * 0.28f)
-            lineTo(w * 0.75f, h * 0.7f)
-            lineTo(w * 0.5f, h * 0.92f)
-            lineTo(w * 0.5f, h * 0.08f)
-            lineTo(w * 0.75f, h * 0.3f)
-            lineTo(w * 0.25f, h * 0.72f)
-        }
-        drawPath(p, color, style = Stroke(1.6.dp.toPx(), cap = StrokeCap.Round, join = androidx.compose.ui.graphics.StrokeJoin.Round))
-    }
+    Spacer(
+        Modifier.size(14.dp).drawWithCache {
+            val w = size.width
+            val h = size.height
+            val p = Path().apply {
+                moveTo(w * 0.25f, h * 0.28f)
+                lineTo(w * 0.75f, h * 0.7f)
+                lineTo(w * 0.5f, h * 0.92f)
+                lineTo(w * 0.5f, h * 0.08f)
+                lineTo(w * 0.75f, h * 0.3f)
+                lineTo(w * 0.25f, h * 0.72f)
+            }
+            val stroke = Stroke(1.6.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+            onDrawBehind { drawPath(p, color, style = stroke) }
+        },
+    )
 }
