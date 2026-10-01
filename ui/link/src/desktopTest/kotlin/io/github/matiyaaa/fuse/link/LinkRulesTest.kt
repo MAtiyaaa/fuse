@@ -58,3 +58,23 @@ class LinkRulesTest {
         assertEquals(0, auth.sessionCount())
     }
 }
+
+class CaptureRulesTest {
+    @Test
+    fun rangesAreReadTheWayHttpSays() {
+        assertEquals(ByteRange.Whole, ByteRange.parse(null, 1_000))
+        assertEquals(ByteRange.Part(0, 499), ByteRange.parse("bytes=0-499", 1_000))
+        assertEquals(ByteRange.Part(500, 999), ByteRange.parse("bytes=500-", 1_000))
+        assertEquals(ByteRange.Part(900, 999), ByteRange.parse("bytes=-100", 1_000))
+        assertEquals(ByteRange.Part(0, 999), ByteRange.parse("bytes=-5000", 1_000))
+        // An end past the file is cut to the file.
+        assertEquals(ByteRange.Part(990, 999), ByteRange.parse("bytes=990-5000", 1_000))
+        assertEquals(ByteRange.Unsatisfiable, ByteRange.parse("bytes=1000-", 1_000))
+        assertEquals(ByteRange.Unsatisfiable, ByteRange.parse("bytes=-0", 1_000))
+        // Several ranges, or ones that can't be read, get the whole file.
+        assertEquals(ByteRange.Whole, ByteRange.parse("bytes=0-1,5-9", 1_000))
+        assertEquals(ByteRange.Whole, ByteRange.parse("bytes=9-5", 1_000))
+        assertEquals(ByteRange.Whole, ByteRange.parse("items=0-5", 1_000))
+        assertEquals(ByteRange.Whole, ByteRange.parse("bytes=a-b", 1_000))
+    }
+}

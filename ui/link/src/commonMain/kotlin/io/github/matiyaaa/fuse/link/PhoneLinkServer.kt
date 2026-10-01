@@ -4,6 +4,7 @@ import io.github.matiyaaa.fuse.data.settings.SecretStore
 import io.github.matiyaaa.fuse.ui.shell.store.FuseStore
 import io.github.matiyaaa.fuse.ui.shell.store.PhoneLinkControl
 import io.github.matiyaaa.fuse.ui.shell.store.PhoneLinkState
+import io.ktor.http.ContentDisposition
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpMethod
@@ -28,6 +29,7 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.put
 import io.ktor.server.routing.routing
+import io.ktor.utils.io.writeFully
 import io.ktor.utils.io.writeStringUtf8
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -42,19 +44,23 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonArray
 
 /**
  * Phone Link: a small web server (Ktor, CIO) for a phone on the same network, serving the phone web
  * app and its API (docs/PHONE_LINK.md). It runs while Phone Link is on in Settings.
  *
  * Every request must come from the local network and name the device by address; everything but
- * the app itself, the session check and sign-in needs a signed-in phone. There are no routes that
- * delete anything, show keys or passwords, or change settings beyond fixing a game's name, details
- * and art and starting art fills.
+ * the app itself, the session check, sign-in and a download link a signed-in phone asked for needs
+ * a signed-in phone. There are no routes that delete anything, show keys or passwords, or change
+ * settings beyond fixing a game's name, details and art and starting art fills. Screenshots and
+ * recordings can be looked at and downloaded, never changed.
  */
 class PhoneLinkServer(
     private val store: FuseStore,
@@ -64,10 +70,13 @@ class PhoneLinkServer(
     private val version: String,
     /** Reads art that isn't a plain file (Android content URIs); null where there is none. */
     private val readUri: (suspend (String) -> ByteArray?)? = null,
+    /** The device's screenshots and recordings; null where Fuse takes none (the desktop for now). */
+    captures: LinkCaptures? = null,
     private val clock: () -> Long = { kotlin.time.Clock.System.now().toEpochMilliseconds() },
 ) : PhoneLinkControl {
     internal val auth = LinkAuth(secrets, clock)
-    internal val api = LinkApi(store, auth, deviceName, version, readUri)
+    internal val api = LinkApi(store, auth, deviceName, version, readUri, capturesAvailable = captures != null)
+    private val share = captures?.let { CaptureShare(it, clock) }
     private val stateFlow = MutableStateFlow(PhoneLinkState())
     override val state: StateFlow<PhoneLinkState> = stateFlow
     private val lifecycle = Mutex()
@@ -249,7 +258,127 @@ class PhoneLinkServer(
                 }
             }
             get("/api/events") { call.signedIn { call.events() } }
+
+            // Screenshots and recordings: look and download, never change or delete.
+            get("/api/captures") {
+                call.signedIn {
+                    val s = share
+                    if (s == null) {
+                        call.json(buildJsonObject { put("available", false); putJsonArray("items") {} })
+                    } else {
+                        call.json(s.list())
+                    }
+                }
+            }
+            get("/api/captures/{id}/thumb") {
+                call.signedIn {
+                    val bytes = share?.thumbnail(call.parameters["id"].orEmpty())
+                    if (bytes == null) {
+                        call.json(buildJsonObject { put("error", "No such picture.") }, HttpStatusCode.NotFound)
+                    } else {
+                        call.response.header(HttpHeaders.CacheControl, "private, max-age=3600")
+                        call.respondBytes(bytes, ContentType.Image.JPEG)
+                    }
+                }
+            }
+            get("/api/captures/{id}") {
+                call.signedIn {
+                    val s = share
+                    val capture = s?.capture(call.parameters["id"].orEmpty())
+                    if (s == null || capture == null) {
+                        call.json(buildJsonObject { put("error", "This capture is no longer on the device.") }, HttpStatusCode.NotFound)
+                    } else {
+                        call.sendCapture(s, capture, attachment = false)
+                    }
+                }
+            }
+            post("/api/captures/download") {
+                call.signedIn {
+                    val s = share ?: return@signedIn call.json(buildJsonObject { put("error", "There are no captures on this device.") }, HttpStatusCode.NotFound)
+                    val ids = ((call.body() as? JsonObject)?.get("ids") as? JsonArray)
+                        ?.mapNotNull { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content }
+                        .orEmpty()
+                    when {
+                        ids.isEmpty() -> call.json(buildJsonObject { put("error", "Choose something to download.") }, HttpStatusCode.BadRequest)
+                        ids.size > CaptureShare.MAX_DOWNLOAD -> call.json(buildJsonObject { put("error", "Download at most ${CaptureShare.MAX_DOWNLOAD} at a time.") }, HttpStatusCode.BadRequest)
+                        else -> {
+                            val minted = s.mintDownload(ids)
+                            if (minted == null) {
+                                call.json(buildJsonObject { put("error", "Some of these are no longer on the device. Refresh and try again.") }, HttpStatusCode.NotFound)
+                            } else {
+                                call.json(buildJsonObject {
+                                    put("url", minted.url)
+                                    put("name", minted.name)
+                                    put("size", minted.size)
+                                    put("count", minted.count)
+                                })
+                            }
+                        }
+                    }
+                }
+            }
+            // A link a signed-in phone just asked for: the browser may hand it to a download manager
+            // that has no cookie, so the link itself is the permission (random, short-lived).
+            get("/api/download/{token}") {
+                val s = share
+                val items = s?.download(call.parameters["token"].orEmpty())
+                when {
+                    s == null || items == null -> call.json(buildJsonObject { put("error", "This download link has expired. Start the download again.") }, HttpStatusCode.NotFound)
+                    items.size == 1 -> call.sendCapture(s, items.single(), attachment = true)
+                    else -> call.sendZip(s, items)
+                }
+            }
         }
+    }
+
+    /** One capture, whole or the byte range asked for, so videos can seek and downloads resume. */
+    private suspend fun ApplicationCall.sendCapture(share: CaptureShare, capture: LinkCapture, attachment: Boolean) = share.sending {
+        val reader = share.open(capture)
+        if (reader == null) {
+            json(buildJsonObject { put("error", "This capture is no longer on the device.") }, HttpStatusCode.NotFound)
+            return@sending
+        }
+        try {
+            // A descriptor that can't say its size falls back on the size Fuse listed.
+            val length = reader.length.takeIf { it >= 0 } ?: capture.size
+            val disposition = if (attachment) ContentDisposition.Attachment else ContentDisposition.Inline
+            response.header(HttpHeaders.ContentDisposition, disposition.withParameter(ContentDisposition.Parameters.FileName, capture.name).toString())
+            response.header(HttpHeaders.AcceptRanges, "bytes")
+            val type = ContentType.parse(capture.mime)
+            val (status, first, count) = when (val range = ByteRange.parse(request.headers[HttpHeaders.Range], length)) {
+                ByteRange.Unsatisfiable -> {
+                    response.header(HttpHeaders.ContentRange, "bytes */$length")
+                    respondText("", ContentType.Text.Plain, HttpStatusCode.RequestedRangeNotSatisfiable)
+                    return@sending
+                }
+                ByteRange.Whole -> Triple(HttpStatusCode.OK, 0L, length)
+                is ByteRange.Part -> {
+                    response.header(HttpHeaders.ContentRange, "bytes ${range.first}-${range.last}/$length")
+                    Triple(HttpStatusCode.PartialContent, range.first, range.count)
+                }
+            }
+            if (first > 0) withContext(ioDispatcher) { reader.seek(first) }
+            respondBytesWriter(type, status, count) {
+                val buffer = ByteArray(COPY_BUFFER)
+                var left = count
+                while (left > 0) {
+                    val n = withContext(ioDispatcher) { reader.read(buffer, minOf(left, buffer.size.toLong()).toInt()) }
+                    if (n < 0) break
+                    writeFully(buffer, 0, n)
+                    left -= n
+                }
+            }
+        } finally {
+            runCatching { reader.close() }
+        }
+    }
+
+    /** Several captures as one zip, written as the files are read. */
+    private suspend fun ApplicationCall.sendZip(share: CaptureShare, items: List<LinkCapture>) = share.sending {
+        val name = share.zipName()
+        response.header(HttpHeaders.ContentDisposition, ContentDisposition.Attachment.withParameter(ContentDisposition.Parameters.FileName, name).toString())
+        val entries = share.zipEntryNames(items).zip(items) { entryName, capture -> ZipItem(entryName, capture.takenAt) { share.open(capture) } }
+        respondBytesWriter(ContentType.Application.Zip) { writeZip(this, entries) }
     }
 
     private fun securityHeaders(call: ApplicationCall) {
@@ -260,7 +389,10 @@ class PhoneLinkServer(
             "Content-Security-Policy",
             "default-src 'self'; img-src 'self' https: data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
         )
-        if (call.request.path().startsWith("/api/") && !call.request.path().startsWith("/api/img/")) {
+        // Pictures may be kept by the phone's browser; everything else is asked for fresh.
+        val path = call.request.path()
+        val picture = path.startsWith("/api/img/") || (path.startsWith("/api/captures/") && path.endsWith("/thumb"))
+        if (path.startsWith("/api/") && !picture) {
             call.response.header(HttpHeaders.CacheControl, "no-store")
         }
     }
@@ -321,6 +453,7 @@ class PhoneLinkServer(
                 launch { api.nowUpdates().collect { send("now", LinkJson.encodeToString(JsonObject.serializer(), it)) } }
                 launch { api.fillUpdates().collect { send("fill", it?.let { f -> LinkJson.encodeToString(JsonObject.serializer(), f) } ?: "null") } }
                 launch { api.libraryUpdates().collect { send("library", "{}") } }
+                share?.let { s -> launch { s.changes.collect { send("captures", "{}") } } }
                 launch {
                     while (true) {
                         delay(20_000)
@@ -335,5 +468,6 @@ class PhoneLinkServer(
         const val PORT = 47300
         private const val COOKIE = "fuse_session"
         private const val MAX_BODY = 64 * 1024L
+        private const val COPY_BUFFER = 256 * 1024
     }
 }

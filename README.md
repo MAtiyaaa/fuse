@@ -176,7 +176,7 @@ Play.
     <td width="33%" valign="top">
       <img src="docs/assets/icons/phone-link.svg" width="44" height="44" alt=""><br>
       <b>Phone Link</b><br>
-      <sub>Manage your library from a phone on the same Wi-Fi: see what's playing and downloading, fix names, details and art, and start art fills. Signed in with a password you set on the device; a phone can't delete anything or see keys.</sub>
+      <sub>Manage your library from a phone on the same Wi-Fi: see what's playing and downloading, fix names, details and art, start art fills, and download your screenshots and recordings. Signed in with a password you set on the device; a phone can't delete anything or see keys.</sub>
     </td>
     <td width="33%" valign="top">
       <img src="docs/assets/icons/storage.svg" width="44" height="44" alt=""><br>

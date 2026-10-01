@@ -1,5 +1,8 @@
 package io.github.matiyaaa.fuse.link
 
+import io.ktor.utils.io.ByteWriteChannel
+import kotlinx.coroutines.CoroutineDispatcher
+
 /** PBKDF2-HMAC-SHA256 of [password] with [salt]: [bytes] long. */
 internal expect fun pbkdf2(password: String, salt: ByteArray, iterations: Int, bytes: Int): ByteArray
 
@@ -25,3 +28,15 @@ internal expect fun gunzip(data: ByteArray): ByteArray
 
 /** A file's bytes, up to [maxBytes]; null when it can't be read. */
 internal expect fun readFile(path: String, maxBytes: Int): ByteArray?
+
+/** Where blocking file reads run. */
+internal expect val ioDispatcher: CoroutineDispatcher
+
+/** A file for [writeZip]: its name in the zip, its time, and how to open it. */
+internal class ZipItem(val name: String, val time: Long, val open: suspend () -> CaptureReader?)
+
+/**
+ * Writes [items] to [channel] as a zip, one file after the other as it is read, so nothing large is
+ * held in memory. Pictures and videos are compressed already, so the zip doesn't compress them again.
+ */
+internal expect suspend fun writeZip(channel: ByteWriteChannel, items: List<ZipItem>)
