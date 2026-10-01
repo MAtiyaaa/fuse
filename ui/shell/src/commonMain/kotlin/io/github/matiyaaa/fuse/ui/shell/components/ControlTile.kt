@@ -84,7 +84,7 @@ fun ControlTile(
     val shape = controlTileShape()
     val bg by animateColorAsState(
         when {
-            active -> c.accent.copy(alpha = if (c.isDark) 0.16f else 0.12f)
+            active -> c.accent.copy(alpha = if (c.isDark) 0.13f else 0.1f)
             selected -> c.text.copy(alpha = if (c.isDark) 0.11f else 0.08f)
             else -> c.text.copy(alpha = if (c.isDark) 0.06f else 0.045f)
         },

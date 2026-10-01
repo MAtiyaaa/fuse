@@ -259,7 +259,13 @@ fun MediaScreen(app: AppState, owner: MediaOwner, title: String, identifyFirst: 
                     matchSel.index = 0
                     Browser.Matches(searchTitle?.current ?: title, r.candidates, then = k)
                 }
-                is ArtworkResult.Unavailable -> Browser.Message("No ${slotName(k).lowercase()} to show", r.reason)
+                // A one-line reason that already says nothing was found is the title, and the message
+                // says what to try; any other reason is the message under a plain title.
+                is ArtworkResult.Unavailable -> {
+                    val sentence = r.reason.removeSuffix(".")
+                    if (sentence.startsWith("No ") && ". " !in sentence) Browser.Message(sentence, "Try another source in Media and Scraping settings, or choose a file.")
+                    else Browser.Message("Nothing to pick from", r.reason)
+                }
             }
         }
     }
@@ -453,14 +459,15 @@ fun MediaScreen(app: AppState, owner: MediaOwner, title: String, identifyFirst: 
             }
         }
         // Each row reports its height (for scrolling) and its place (for the gliding highlight).
+        // The place is read outside the reveal's layer, so a row still rising in reports where it lands.
         fun rowModifier(i: Int) = Modifier
-            .bringIntoViewRequester(rowRequesters[i])
-            .reveal(reveal, 2 + i)
-            .onSizeChanged { if (rowHeights[i] != it.height) rowHeights = rowHeights + (i to it.height) }
             .onPlaced { coords ->
                 val y = coords.positionInParent().y
                 highlight.place(i, y, y + coords.size.height)
             }
+            .bringIntoViewRequester(rowRequesters[i])
+            .onSizeChanged { if (rowHeights[i] != it.height) rowHeights = rowHeights + (i to it.height) }
+            .reveal(reveal, 2 + i)
         // The list scrolls below the top line, never under it.
         Column(Modifier.width(listWidth).fillMaxHeight()) {
         Spacer(Modifier.height(Size.hudHeight))

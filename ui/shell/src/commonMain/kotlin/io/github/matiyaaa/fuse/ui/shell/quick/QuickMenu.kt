@@ -132,19 +132,17 @@ fun QuickMenu(app: AppState) {
     val recordingTime = rememberRecordingTime(capture)
 
     val tiles = buildList {
-        // Both open the system's panel; the tile says how things stand where the platform reports it.
+        // Both open the system's panel, so they are never lit like a switch Fuse flips; they say how
+        // things stand where the platform reports it.
         if (features.wifiSettings) {
-            add(QuickTile(
-                "Wi-Fi", if (status.wifi == ConnectionState.OFF) FuseIcons.WifiOff else FuseIcons.Wifi,
-                active = status.wifi == ConnectionState.CONNECTED, detail = connectionText(status.wifi),
-            ) { platform.quick.openWifi() })
+            add(QuickTile("Wi-Fi", if (status.wifi == ConnectionState.OFF) FuseIcons.WifiOff else FuseIcons.Wifi, detail = connectionText(status.wifi)) {
+                platform.quick.openWifi()
+            })
         }
         if (features.bluetoothSettings) {
-            add(QuickTile(
-                "Bluetooth", if (status.bluetooth == ConnectionState.OFF) FuseIcons.BluetoothOff else FuseIcons.Bluetooth,
-                active = status.bluetooth == ConnectionState.CONNECTED || status.bluetooth == ConnectionState.ON,
-                detail = connectionText(status.bluetooth),
-            ) { platform.quick.openBluetooth() })
+            add(QuickTile("Bluetooth", if (status.bluetooth == ConnectionState.OFF) FuseIcons.BluetoothOff else FuseIcons.Bluetooth, detail = connectionText(status.bluetooth)) {
+                platform.quick.openBluetooth()
+            })
         }
         // A screenshot three seconds after the menu closes; held, a recording after the same wait.
         if (capture != null) {
@@ -321,13 +319,14 @@ fun QuickMenu(app: AppState) {
                                 else -> Spacer(Modifier.height(Space.xxs))
                             }
                             val placed = Modifier
-                                .bringIntoViewRequester(requesters[i])
-                                .reveal(reveal, i + 1)
+                                // Where the row sits in the list, for the highlight gliding between rows; read
+                                // outside the reveal's layer, so a row still rising in reports where it lands.
                                 .onPlaced { coords ->
-                                    // Where the row sits in the list, for the highlight gliding between rows.
                                     val y = coords.positionInParent().y
                                     highlight.place(i, y, y + coords.size.height)
                                 }
+                                .bringIntoViewRequester(requesters[i])
+                                .reveal(reveal, i + 1)
                             when (r) {
                                 is QuickRow.Tiles -> Row(placed.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TILE_GAP)) {
                                     r.tiles.forEachIndexed { j, t ->

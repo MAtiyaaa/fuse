@@ -156,7 +156,7 @@ private fun Flash(shots: Int, hidden: Boolean) {
     LaunchedEffect(shots) {
         if (shots == 0) return@LaunchedEffect
         alpha.snapTo(0.32f)
-        alpha.animateTo(0f, tween(340, easing = Easings.Exit))
+        alpha.animateTo(0f, tween(340, easing = Easings.Standard))
     }
     if (alpha.value > 0f && !hidden) Box(Modifier.fillMaxSize().graphicsLayer { this.alpha = alpha.value }.background(flash))
 }

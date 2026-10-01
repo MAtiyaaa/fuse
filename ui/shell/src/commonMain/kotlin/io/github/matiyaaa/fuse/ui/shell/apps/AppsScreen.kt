@@ -172,7 +172,7 @@ fun AppsScreen(app: AppState) {
                 ) {
                     when (filter) {
                         AppFilter.PINNED -> EmptyState(FuseIcons.Pin, "Nothing pinned yet", message = "Pin apps from their options to keep them here.")
-                        AppFilter.EMULATORS -> EmptyState(FuseIcons.Chip, "No emulators found", message = "Set an app's Type to Emulator in its options, and it shows up here.")
+                        AppFilter.EMULATORS -> EmptyState(FuseIcons.Chip, "No emulators found", message = "Set an app's Type to Emulator in its options.")
                         else -> EmptyState(FuseIcons.AppWindow, "No apps found")
                     }
                 }
