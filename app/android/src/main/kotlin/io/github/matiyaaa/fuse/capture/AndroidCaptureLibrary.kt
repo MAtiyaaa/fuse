@@ -15,6 +15,7 @@ import android.os.ParcelFileDescriptor
 import android.provider.MediaStore
 import android.util.Size
 import androidx.annotation.RequiresApi
+import androidx.core.graphics.scale
 import io.github.matiyaaa.fuse.link.CaptureReader
 import io.github.matiyaaa.fuse.link.LinkCapture
 import io.github.matiyaaa.fuse.link.LinkCaptures
@@ -181,7 +182,7 @@ class AndroidCaptureLibrary(context: Context) : LinkCaptures {
             retriever.setDataSource(file.path)
             retriever.getFrameAtTime(0)?.let { frame ->
                 val scale = THUMB_WIDTH.toFloat() / frame.width
-                if (scale >= 1f) frame else Bitmap.createScaledBitmap(frame, THUMB_WIDTH, (frame.height * scale).toInt().coerceAtLeast(1), true).also { frame.recycle() }
+                if (scale >= 1f) frame else frame.scale(THUMB_WIDTH, (frame.height * scale).toInt().coerceAtLeast(1)).also { frame.recycle() }
             }
         } finally {
             runCatching { retriever.release() }

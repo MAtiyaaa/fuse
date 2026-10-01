@@ -55,6 +55,8 @@ jobs:
           :core:integrations:desktopTest
           :core:data:desktopTest
           :ui:shell:desktopTest
+          :ui:designsystem:desktopTest
+          :ui:link:desktopTest
           :app:android:testDebugUnitTest
           :app:android:assembleDebug
           :app:desktop:test

@@ -1,5 +1,6 @@
 package io.github.matiyaaa.fuse
 
+import android.annotation.SuppressLint
 import android.app.Presentation
 import android.content.Context
 import android.graphics.drawable.ColorDrawable
@@ -177,7 +178,8 @@ private class PresentationHost : LifecycleOwner, SavedStateRegistryOwner, ViewMo
     }
 }
 
-/** The Presentation's root: says when Android shows or hides its window. */
+/** The Presentation's root: says when Android shows or hides its window. Made in code only. */
+@SuppressLint("ViewConstructor")
 private class ShownFrame(context: Context, private val onShown: (Boolean) -> Unit) : FrameLayout(context) {
     override fun onWindowVisibilityChanged(visibility: Int) {
         super.onWindowVisibilityChanged(visibility)
