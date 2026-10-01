@@ -1450,7 +1450,8 @@ button.value-box:active { background-image: linear-gradient(var(--pressed), var(
 }
 .menu-item:active { background: var(--pressed); }
 @media (hover: hover) { .menu-item:hover { background: var(--hover); } }
-.menu-item[aria-checked="true"] { background: color-mix(in srgb, var(--accent) 9%, transparent); }
+/* The chosen row is marked by its disc; the row itself only lifts a little out of the sheet. */
+.menu-item[aria-checked="true"] { background: var(--hover); }
 .menu-item-main { flex: 1; min-width: 0; }
 .menu-item-title { font: 600 15px/22px var(--sans); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .menu-item-sub { font: 500 13px/18px var(--sans); color: var(--muted); font-variant-numeric: tabular-nums; }
