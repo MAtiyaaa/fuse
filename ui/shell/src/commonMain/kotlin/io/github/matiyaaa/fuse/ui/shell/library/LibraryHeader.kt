@@ -30,6 +30,7 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
@@ -49,6 +50,7 @@ import io.github.matiyaaa.fuse.ui.shell.components.ViewTab
 import io.github.matiyaaa.fuse.ui.shell.components.ViewTabs
 import io.github.matiyaaa.fuse.ui.shell.store.PlatformCard
 import io.github.matiyaaa.fuse.ui.shell.systems.SystemHeader
+import kotlin.math.roundToInt
 
 /** One item of the header row, for controller focus: a view, or a button. */
 internal sealed interface HeaderItem {
@@ -62,6 +64,9 @@ internal sealed interface HeaderItem {
  * system shows its own header, which folds away by [collapse] as you move down its games, and a
  * collection shows its name. A compact toolbar on the right holds Collections, the system filter,
  * Sort and View; focus outlines its buttons and never fills them, so their values stay readable.
+ *
+ * With [foldTools] a folded system header gives back its whole height: the toolbar stays where it
+ * is and hangs over the row below, which keeps room for it.
  */
 @Composable
 internal fun LibraryHeader(
@@ -78,6 +83,7 @@ internal fun LibraryHeader(
     state: LibraryViewState,
     onView: (Int, LibrarySegment) -> Unit,
     onButton: (Int, LibraryButton) -> Unit,
+    foldTools: Boolean = false,
 ) {
     val c = Fuse.colors
     fun focused(i: Int) = state.inHeader && app.focusZone == FocusZone.CONTENT && i == state.headerIndex
@@ -85,7 +91,10 @@ internal fun LibraryHeader(
         // Every button names its value when there is room; on narrow screens only the focused one does.
         val roomy = maxWidth >= 1000.dp
         Row(
-            Modifier.fillMaxWidth().padding(end = Space.gutter, top = if (platform != null) 0.dp else Space.xs, bottom = Space.xs),
+            Modifier
+                .fillMaxWidth()
+                .then(if (foldTools && platform != null) Modifier.foldKeepingTop(collapse) else Modifier)
+                .padding(end = Space.gutter, top = if (platform != null) 0.dp else Space.xs, bottom = Space.xs),
             verticalAlignment = if (platform != null) Alignment.Bottom else Alignment.CenterVertically,
         ) {
             Box(Modifier.weight(1f)) {
@@ -141,6 +150,12 @@ internal fun LibraryHeader(
             }
         }
     }
+}
+
+/** Reports [fraction] less of the height while drawing everything in place, unclipped. */
+private fun Modifier.foldKeepingTop(fraction: Float): Modifier = layout { measurable, constraints ->
+    val p = measurable.measure(constraints)
+    layout(p.width, (p.height * (1f - fraction.coerceIn(0f, 1f))).roundToInt()) { p.place(0, 0) }
 }
 
 /** The views of the whole library, as tabs. The active one carries the game count. */

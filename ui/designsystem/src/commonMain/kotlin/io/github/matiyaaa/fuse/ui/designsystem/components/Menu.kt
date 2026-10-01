@@ -63,6 +63,8 @@ sealed interface Trailing {
     data class Badge(val text: String) : Trailing
     /** A running job: [text] over a small bar ([fraction] null while its size isn't known). */
     data class Progress(val fraction: Float?, val text: String) : Trailing
+    /** A group that opens in place: a quiet [summary] and a chevron that turns when [open]. */
+    data class Disclosure(val open: Boolean, val summary: String? = null) : Trailing
 }
 
 @Immutable
@@ -78,6 +80,8 @@ data class MenuAction(
     val unavailableReason: String? = null,
     /** Artwork before the label, such as a game's logo. */
     val art: MenuArt? = null,
+    /** How deep in an open group the row sits; each level steps it in. */
+    val indent: Int = 0,
     val onSelect: () -> Unit = {},
 )
 
@@ -140,6 +144,12 @@ fun MenuRow(
             .padding(end = Space.l),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        if (action.indent > 0) {
+            // Rows inside an open group step in behind a faint rule, so the group reads as one.
+            Spacer(Modifier.width(Space.m))
+            Box(Modifier.width(1.dp).height(Size.row - Space.m).background(c.text.copy(alpha = 0.1f)))
+            Spacer(Modifier.width(Space.l * action.indent - Space.m - 1.dp))
+        }
         Box(
             Modifier
                 .width(3.dp)
@@ -191,6 +201,14 @@ fun MenuRow(
                 FText(tr.text, t.label, color = c.textMuted, maxLines = 1)
                 Spacer(Modifier.height(Space.xs))
                 ProgressBar(tr.fraction, Modifier.fillMaxWidth())
+            }
+            is Trailing.Disclosure -> Row(verticalAlignment = Alignment.CenterVertically) {
+                val turn by animateFloatAsState(if (tr.open) 180f else 0f, motion.focusSpring(), label = "disclosure")
+                if (tr.summary != null) {
+                    FText(tr.summary, t.label, color = c.textMuted, maxLines = 1)
+                    Spacer(Modifier.width(Space.s))
+                }
+                FuseIcon(FuseIcons.ChevronDown, size = 18.dp, tint = if (tr.open) c.text else c.textMuted, modifier = Modifier.graphicsLayer { rotationZ = turn })
             }
         }
     }

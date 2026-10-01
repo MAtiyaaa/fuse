@@ -295,7 +295,10 @@ fun FlowHome(app: AppState) {
                             sel.row = index
                             sel.setColumn(s.key, col)
                             app.focusZone = FocusZone.CONTENT
-                            if (wasSelected) s.items.getOrNull(col)?.let(::activate)
+                            // Systems, apps, collections and widgets open on the first tap. A game is
+                            // shown first and played on the second, so browsing never starts one.
+                            val item = s.items.getOrNull(col)
+                            if (item != null && (wasSelected || item !is ShelfItem.Game)) activate(item)
                         },
                         onLongPress = { col ->
                             sel.row = index

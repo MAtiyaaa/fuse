@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
@@ -21,7 +22,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -78,7 +81,8 @@ fun PlatformCard.stage(): StageInfo = StageInfo(
 
 /**
  * The selected item's name, told big: its logo art when it has one, otherwise its title set in the
- * display face, with a quiet meta line underneath. Swaps with a short fade and lift.
+ * display face, with a quiet meta line underneath. Swaps with a short fade and lift. [fold] (0..1)
+ * tucks the meta line away, for a page that is giving its height to the grid.
  */
 @Composable
 fun Stage(
@@ -87,6 +91,7 @@ fun Stage(
     showLogo: Boolean = true,
     logoHeight: Dp = 104.dp,
     titleStyle: TextStyle = Fuse.type.hero,
+    fold: Float = 0f,
 ) {
     val motion = Fuse.motion
     val c = Fuse.colors
@@ -105,15 +110,15 @@ fun Stage(
             Spacer(Modifier.height(logoHeight))
             return@AnimatedContent
         }
-        Column(verticalArrangement = Arrangement.spacedBy(Space.s)) {
+        Column {
             if (s.eyebrow != null) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s)) {
+                Row(Modifier.padding(bottom = Space.s), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s)) {
                     Box(Modifier.size(7.dp).background(s.accent.toColor(), CircleShape))
                     FText(s.eyebrow.uppercase(), Fuse.type.overline, color = c.textMuted, maxLines = 1)
                 }
             }
             val title: @Composable () -> Unit = {
-                FText(s.title, titleStyle, color = c.text, maxLines = 2, modifier = Modifier.widthIn(max = 720.dp))
+                FText(s.title, titleStyle, color = c.text, maxLines = if (fold > 0f) 1 else 2, modifier = Modifier.widthIn(max = 720.dp))
             }
             if (showLogo && s.logo != null) {
                 Artwork(
@@ -127,12 +132,25 @@ fun Stage(
             } else {
                 title()
             }
-            if (s.meta.isNotEmpty()) {
-                FText(s.meta.joinToString("  ·  "), Fuse.type.body, color = c.textMuted, maxLines = 1)
+            if (s.meta.isNotEmpty() && fold < 1f) {
+                FText(
+                    s.meta.joinToString("  ·  "), Fuse.type.body, color = c.textMuted, maxLines = 1,
+                    modifier = Modifier.foldDown(fold).padding(top = Space.s),
+                )
             }
         }
     }
 }
+
+/** Gives [fraction] of the content's height back from the bottom, fading it out ahead of the cut. */
+private fun Modifier.foldDown(fraction: Float): Modifier = if (fraction <= 0f) this else this
+    .clipToBounds()
+    .layout { measurable, constraints ->
+        val p = measurable.measure(constraints)
+        val f = fraction.coerceIn(0f, 1f)
+        val h = (p.height * (1f - f)).toInt()
+        layout(p.width, h) { p.placeWithLayer(0, 0) { alpha = (1f - f * 1.6f).coerceIn(0f, 1f) } }
+    }
 
 fun playtimeText(seconds: Long): String {
     val minutes = seconds / 60

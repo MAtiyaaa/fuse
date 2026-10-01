@@ -243,7 +243,8 @@ fun ChannelHome(app: AppState) {
                                 app.focusZone = FocusZone.CONTENT
                                 when {
                                     carrying -> carrying = false
-                                    sel.index == i -> open(w)
+                                    // Channels that play a game show it first; the rest open at once.
+                                    sel.index == i || w.kind !in playChannels -> { sel.index = i; open(w) }
                                     else -> sel.index = i
                                 }
                             },
@@ -275,6 +276,11 @@ private fun channelGames(kind: WidgetKind, feed: HomeFeed): List<GameCard> = whe
     WidgetKind.CURRENT_GAME -> listOfNotNull(feed.playtime.currentGame)
     else -> emptyList()
 }
+
+/** Channels whose confirm plays a game, so a first tap only shows it. */
+private val playChannels = setOf(
+    WidgetKind.CONTINUE_PLAYING, WidgetKind.RECENTLY_PLAYED, WidgetKind.PINNED_GAMES, WidgetKind.CURRENT_GAME,
+)
 
 private val gameChannels = setOf(
     WidgetKind.CONTINUE_PLAYING, WidgetKind.RECENTLY_PLAYED, WidgetKind.FAVORITES, WidgetKind.RECENTLY_ADDED,

@@ -18,6 +18,7 @@ import io.github.matiyaaa.fuse.model.HomeMode
 import io.github.matiyaaa.fuse.model.LaunchDisplay
 import io.github.matiyaaa.fuse.model.LibraryLayout
 import io.github.matiyaaa.fuse.model.MatchStrictness
+import io.github.matiyaaa.fuse.model.ScrapeProviderId
 import io.github.matiyaaa.fuse.model.MediaFillMode
 import io.github.matiyaaa.fuse.model.MediaKind
 import io.github.matiyaaa.fuse.model.MediaOwner
@@ -79,28 +80,28 @@ fun appearanceRows(app: AppState): List<MenuAction> {
         add(app.choiceRow("theme", "Theme", FuseIcons.Palette, p.themeId, ThemePresets.all.map { it.id to it.name }, optionDetail = { id -> ThemePresets.byId(id).tagline }) { v ->
             set { it.copy(themeId = v, crt = if (ThemePresets.byId(v).crt.enabled) it.crt.copy(enabled = true) else it.crt) }
         })
-        add(app.choiceRow(
-            "motion", "Motion", FuseIcons.Activity, p.motion, listOf(null, MotionProfile.REDUCED, MotionProfile.MINIMAL, MotionProfile.STANDARD, MotionProfile.ENHANCED).map { it to motionName(it) },
-            detail = "Reduced keeps only short fades: no scaling, sliding or moving backgrounds",
-        ) { v -> set { it.copy(motion = v) } })
         add(toggleRow("hero", "Background art", FuseIcons.Image, p.showHero, "The selected game's art lights the room") { v -> set { it.copy(showHero = v) } })
         add(toggleRow("logo", "Title logos", FuseIcons.Type, p.showLogo, "Show logo art instead of the written title when a game has one") { v -> set { it.copy(showLogo = v) } })
         add(app.percentRow("dim", "Background dimming", FuseIcons.Contrast, p.heroDim, "Darker keeps text readable over bright art") { v -> set { it.copy(heroDim = v) } })
         add(toggleRow("glass", "Glass panels", FuseIcons.Layers, p.glass.enabled, "Frosted, translucent menus") { v -> set { it.copy(glass = it.glass.copy(enabled = v)) } })
         if (p.glass.enabled) {
-            add(app.percentRow("glass.opacity", "Panel opacity", FuseIcons.Layers, p.glass.surfaceOpacity) { v -> set { it.copy(glass = it.glass.copy(surfaceOpacity = v.coerceAtLeast(0.3f))) } })
-            add(app.choiceRow("glass.blur", "Blur strength", FuseIcons.Aperture, p.glass.blur, listOf(0f, 12f, 24f, 36f, 48f).map { it to if (it == 0f) "Off" else "${it.toInt()}" }) { v -> set { it.copy(glass = it.glass.copy(blur = v)) } })
-            add(app.percentRow("glass.hero", "Background brightness", FuseIcons.Sun, p.glass.heroBrightness) { v -> set { it.copy(glass = it.glass.copy(heroBrightness = v.coerceAtLeast(0.2f))) } })
-            add(app.percentRow("glass.gradient", "Gradient strength", FuseIcons.Contrast, p.glass.gradientStrength) { v -> set { it.copy(glass = it.glass.copy(gradientStrength = v)) } })
+            add(app.percentRow("glass.opacity", "Panel opacity", FuseIcons.Layers, p.glass.surfaceOpacity) { v -> set { it.copy(glass = it.glass.copy(surfaceOpacity = v.coerceAtLeast(0.3f))) } }.copy(indent = 1))
+            add(app.choiceRow("glass.blur", "Blur strength", FuseIcons.Aperture, p.glass.blur, listOf(0f, 12f, 24f, 36f, 48f).map { it to if (it == 0f) "Off" else "${it.toInt()}" }) { v -> set { it.copy(glass = it.glass.copy(blur = v)) } }.copy(indent = 1))
+            add(app.percentRow("glass.hero", "Background brightness", FuseIcons.Sun, p.glass.heroBrightness) { v -> set { it.copy(glass = it.glass.copy(heroBrightness = v.coerceAtLeast(0.2f))) } }.copy(indent = 1))
+            add(app.percentRow("glass.gradient", "Gradient strength", FuseIcons.Contrast, p.glass.gradientStrength) { v -> set { it.copy(glass = it.glass.copy(gradientStrength = v)) } }.copy(indent = 1))
         }
         add(toggleRow("crt", "CRT effect", FuseIcons.Tv, p.crt.enabled, "Scanlines and phosphor glow. Turns itself off in Low Power Mode") { v -> set { it.copy(crt = it.crt.copy(enabled = v)) } })
         if (p.crt.enabled) {
-            add(app.percentRow("crt.scan", "Scanlines", FuseIcons.Rows, p.crt.scanlines) { v -> set { it.copy(crt = it.crt.copy(scanlines = v)) } })
-            add(app.percentRow("crt.curve", "Curvature", FuseIcons.Aperture, p.crt.curvature) { v -> set { it.copy(crt = it.crt.copy(curvature = v)) } })
-            add(app.percentRow("crt.bloom", "Bloom", FuseIcons.Sun, p.crt.bloom) { v -> set { it.copy(crt = it.crt.copy(bloom = v)) } })
-            add(app.percentRow("crt.color", "Colour separation", FuseIcons.Palette, p.crt.chromatic) { v -> set { it.copy(crt = it.crt.copy(chromatic = v)) } })
-            add(app.percentRow("crt.vignette", "Vignette", FuseIcons.Contrast, p.crt.vignette) { v -> set { it.copy(crt = it.crt.copy(vignette = v)) } })
+            add(app.percentRow("crt.scan", "Scanlines", FuseIcons.Rows, p.crt.scanlines) { v -> set { it.copy(crt = it.crt.copy(scanlines = v)) } }.copy(indent = 1))
+            add(app.percentRow("crt.curve", "Curvature", FuseIcons.Aperture, p.crt.curvature) { v -> set { it.copy(crt = it.crt.copy(curvature = v)) } }.copy(indent = 1))
+            add(app.percentRow("crt.bloom", "Bloom", FuseIcons.Sun, p.crt.bloom) { v -> set { it.copy(crt = it.crt.copy(bloom = v)) } }.copy(indent = 1))
+            add(app.percentRow("crt.color", "Colour separation", FuseIcons.Palette, p.crt.chromatic) { v -> set { it.copy(crt = it.crt.copy(chromatic = v)) } }.copy(indent = 1))
+            add(app.percentRow("crt.vignette", "Vignette", FuseIcons.Contrast, p.crt.vignette) { v -> set { it.copy(crt = it.crt.copy(vignette = v)) } }.copy(indent = 1))
         }
+        add(app.choiceRow(
+            "motion", "Motion", FuseIcons.Activity, p.motion, listOf(null, MotionProfile.REDUCED, MotionProfile.MINIMAL, MotionProfile.STANDARD, MotionProfile.ENHANCED).map { it to motionName(it) },
+            detail = "Reduced keeps only short fades: no scaling, sliding or moving backgrounds",
+        ) { v -> set { it.copy(motion = v) } })
         add(toggleRow("contrast", "High contrast focus", FuseIcons.Accessibility, p.highContrastFocus, "Adds an outline to everything that's selected") { v -> set { it.copy(highContrastFocus = v) } })
     }
 }
@@ -313,41 +314,7 @@ fun systemsRows(app: AppState): List<MenuAction> {
     val systems = platforms.filter { it.gameCount > 0 }
     val artProgress by app.store.media.systemArtProgress.collectAsState()
     return buildList {
-        add(toggleRow("art.auto", "System art", FuseIcons.Image, prefs.systemArtAuto, "Logos, artwork and colours for each system from the Art Book Next pack, downloaded when a system has none") { v ->
-            app.store.updatePrefs { it.copy(systemArtAuto = v) }
-        })
-        add(app.choiceRow(
-            "art.style", "System art style", FuseIcons.Palette, prefs.systemArtStyle,
-            SystemArtStyle.entries.map { it.name to it.displayName },
-            detail = "Used the next time system art is downloaded",
-        ) { v ->
-            app.store.updatePrefs { it.copy(systemArtStyle = v) }
-            app.confirm = ConfirmSpec("Download in this style now?", "Fuse downloads art for every system again in the new style. Art you chose yourself stays.", "Download") {
-                app.store.media.downloadSystemArt()
-                app.toasts.show("Downloading system art")
-            }
-        })
-        val progress = artProgress
-        add(MenuAction(
-            "art.all", "Download system art for all systems", FuseIcons.CloudDownload,
-            detail = when {
-                progress == null -> "Fetches every system again in the chosen style. Art you chose yourself stays"
-                !progress.finished -> "Working: ${progress.current ?: ""} (${progress.done + 1} of ${progress.total})"
-                else -> "Done: ${progress.added} images for ${progress.total} systems"
-            },
-            onSelect = {
-                app.store.media.downloadSystemArt()
-                app.toasts.show("Downloading system art")
-            },
-        ))
-        add(infoRow("art.credit", "Art Book Next", detail = SystemArtPack.ATTRIBUTION, icon = FuseIcons.Info))
-        add(infoRow("order", "Arrange systems", detail = "Hold confirm on a system in Systems or on Home, then move it with the D-pad. The order is used everywhere"))
-        if (prefs.systemOrder.isNotEmpty()) {
-            add(MenuAction("order.reset", "Reset system order", FuseIcons.RotateCcw, detail = "Back to the order Fuse uses by default", onSelect = {
-                app.store.updatePrefs { it.copy(systemOrder = emptyList()) }
-                app.toasts.show("System order reset")
-            }))
-        }
+        // Each system's own settings first; how systems look and are ordered after.
         systems.forEach { p ->
             add(MenuAction(
                 "sys.${p.platform.id}", p.platform.name, FuseIcons.Chip,
@@ -357,6 +324,51 @@ fun systemsRows(app: AppState): List<MenuAction> {
             ))
         }
         if (systems.isEmpty()) add(infoRow("none", "No systems yet", detail = "Systems appear once Fuse finds games for them"))
+        add(MenuAction(
+            "order.reset", "Reset system order", FuseIcons.RotateCcw,
+            detail = if (prefs.systemOrder.isEmpty()) "Hold a system in Systems or on Home and drag it, or move it with the D-pad. The order is used everywhere" else "Back to the order Fuse uses by default",
+            enabled = prefs.systemOrder.isNotEmpty(),
+            onSelect = {
+                app.store.updatePrefs { it.copy(systemOrder = emptyList()) }
+                app.toasts.show("System order reset")
+            },
+        ))
+        addAll(app.group(
+            "systems.art", "System art", FuseIcons.Image,
+            summary = if (prefs.systemArtAuto) SystemArtStyle.entries.firstOrNull { it.name == prefs.systemArtStyle }?.displayName else "Off",
+            detail = "Logos, artwork and colours from the Art Book Next pack",
+        ) {
+            buildList {
+                add(toggleRow("art.auto", "Download system art", FuseIcons.Image, prefs.systemArtAuto, "Downloaded when a system has none") { v ->
+                    app.store.updatePrefs { it.copy(systemArtAuto = v) }
+                })
+                add(app.choiceRow(
+                    "art.style", "System art style", FuseIcons.Palette, prefs.systemArtStyle,
+                    SystemArtStyle.entries.map { it.name to it.displayName },
+                    detail = "Used the next time system art is downloaded",
+                ) { v ->
+                    app.store.updatePrefs { it.copy(systemArtStyle = v) }
+                    app.confirm = ConfirmSpec("Download in this style now?", "Fuse downloads art for every system again in the new style. Art you chose yourself stays.", "Download") {
+                        app.store.media.downloadSystemArt()
+                        app.toasts.show("Downloading system art")
+                    }
+                })
+                val progress = artProgress
+                add(MenuAction(
+                    "art.all", "Download system art for all systems", FuseIcons.CloudDownload,
+                    detail = when {
+                        progress == null -> "Fetches every system again in the chosen style. Art you chose yourself stays"
+                        !progress.finished -> "Working: ${progress.current ?: ""} (${progress.done + 1} of ${progress.total})"
+                        else -> "Done: ${progress.added} images for ${progress.total} systems"
+                    },
+                    onSelect = {
+                        app.store.media.downloadSystemArt()
+                        app.toasts.show("Downloading system art")
+                    },
+                ))
+                add(infoRow("art.credit", "Art Book Next", detail = SystemArtPack.ATTRIBUTION, icon = FuseIcons.Info))
+            }
+        })
     }
 }
 
@@ -417,50 +429,57 @@ fun mediaRows(app: AppState): List<MenuAction> {
     fun secretRow(key: String, label: String, detail: String) = app.textRow(
         "key.$key", label, FuseIcons.Key, if (key in stored) "Saved" else null, detail = detail, placeholder = "Paste or type",
     ) { v -> app.scope.launch { if (v.isBlank()) app.store.credentials.remove(key) else app.store.credentials.put(key, v) } }
+    // What a provider's last key test says, as its row's value, icon and note.
+    fun providerRow(s: io.github.matiyaaa.fuse.model.ProviderStatus): MenuAction {
+        // Providers with a key show the result of the last real test, not just "a key is saved".
+        val tested = s.id in checks
+        val check = checks[s.id]
+        val (value, icon, detail) = when {
+            !s.configured -> Triple("Needs setup", FuseIcons.Alert, s.note)
+            tested && check == null -> Triple("Checking", FuseIcons.Hourglass, "Testing the key with a real request")
+            check is KeyCheck.Working -> Triple("Working", FuseIcons.CircleCheck, s.note ?: "The key was accepted")
+            check is KeyCheck.Rejected -> Triple("Key rejected", FuseIcons.CircleX, check.reason)
+            check is KeyCheck.Unreachable -> Triple("Offline", FuseIcons.WifiOff, "Couldn't reach it to test the key: ${check.reason}")
+            check is KeyCheck.Failed -> Triple("Not confirmed", FuseIcons.Warning, check.reason)
+            else -> Triple("Ready", FuseIcons.CircleCheck, s.note)
+        }
+        return infoRow("prov.${s.id}", s.id.displayName, value, detail = detail, icon = icon)
+    }
+    // Each source's own keys sit right under it.
+    fun keyRows(id: ScrapeProviderId): List<MenuAction> = when (id) {
+        ScrapeProviderId.STEAMGRIDDB -> listOf(secretRow("sgdb.apikey", "SteamGridDB API key", "Free from steamgriddb.com, Preferences, API. Stored encrypted on this device"))
+        ScrapeProviderId.IGDB -> listOf(
+            secretRow("igdb.clientId", "IGDB Client ID", "From your own Twitch developer app. IGDB doesn't allow apps to share one"),
+            secretRow("igdb.clientSecret", "IGDB Client Secret", "Stored encrypted; never shown again"),
+        )
+        ScrapeProviderId.THEGAMESDB -> listOf(secretRow("tgdb.apikey", "TheGamesDB API key", "Requested on the TheGamesDB forum"))
+        ScrapeProviderId.SCREENSCRAPER -> listOf(
+            secretRow("ss.user", "ScreenScraper username", "Optional. Your account raises your request limits"),
+            secretRow("ss.password", "ScreenScraper password", "Stored encrypted"),
+        )
+        else -> emptyList()
+    }
+    val ready = providers.count { it.configured && checks[it.id] !is KeyCheck.Rejected }
+    val needs = providers.filter { !it.configured || checks[it.id] is KeyCheck.Rejected }
     return buildList {
-        add(MenuAction("order", "Source order", FuseIcons.Layers, detail = p.scraperOrder.joinToString("  ·  ") { it.displayName }, trailing = Trailing.Chevron, onSelect = {
-            app.choice = io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec(
-                title = "Move a source earlier",
-                message = "Fuse asks sources in this order. RomM data from Cartridge comes first so nothing is scraped twice.",
-                options = p.scraperOrder.drop(1).map { id ->
-                    MenuAction("mv.$id", id.displayName, null, onSelect = {
-                        set { s ->
-                            val l = s.scraperOrder.toMutableList(); val i = l.indexOf(id)
-                            if (i > 0) { l.removeAt(i); l.add(i - 1, id) }
-                            s.copy(scraperOrder = l)
-                        }
-                        app.choice = null
-                    })
-                },
-            )
+        // What you come here for first: filling art, and how it looks and behaves.
+        addAll(fillRows(app, fill))
+        add(MenuAction("fill", "Fill missing art", FuseIcons.Wand, detail = "Box art, icons, covers, banners, backgrounds, logos and screenshots for games without them. Custom art is never replaced", onSelect = {
+            app.store.media.fill(MediaFillMode.FILL_MISSING, MediaKind.Fillable)
+            app.toasts.show("Looking for missing art. Progress shows here and in the top bar")
         }))
-        for (s in providers) {
-            // Providers with a key show the result of the last real test, not just "a key is saved".
-            val tested = s.id in checks
-            val check = checks[s.id]
-            val (value, icon, detail) = when {
-                !s.configured -> Triple("Needs setup", FuseIcons.Alert, s.note)
-                tested && check == null -> Triple("Checking", FuseIcons.Hourglass, "Testing the key with a real request")
-                check is KeyCheck.Working -> Triple("Working", FuseIcons.CircleCheck, s.note ?: "The key was accepted")
-                check is KeyCheck.Rejected -> Triple("Key rejected", FuseIcons.CircleX, check.reason)
-                check is KeyCheck.Unreachable -> Triple("Offline", FuseIcons.WifiOff, "Couldn't reach it to test the key: ${check.reason}")
-                check is KeyCheck.Failed -> Triple("Not confirmed", FuseIcons.Warning, check.reason)
-                else -> Triple("Ready", FuseIcons.CircleCheck, s.note)
-            }
-            add(infoRow("prov.${s.id}", s.id.displayName, value, detail = detail, icon = icon))
+        add(MenuAction("fill.all", "Fill everything", FuseIcons.Sparkles, detail = "Every kind of art, screenshots and details (description, year, genres, series, rating) for every game, plus system art. Nothing you chose or edited is replaced", onSelect = {
+            app.store.media.fillEverything()
+            app.toasts.show("Filling art and details. Progress shows here and in the top bar")
+        }))
+        add(toggleRow(
+            "fill.auto", "Find art by itself", FuseIcons.ScanSearch, p.autoFillArt,
+            "After a scan or a new key, games missing art or details get them. When a source runs out of requests, the others take over",
+        ) { v -> set { it.copy(autoFillArt = v) } })
+        add(toggleRow("video", "Video previews", FuseIcons.Film, p.videoPreview, if (app.platform.features.videoPreview) "After resting on a game, its art turns into a muted gameplay clip" else "Not available on this system yet", enabled = app.platform.features.videoPreview) { v -> set { it.copy(videoPreview = v) } })
+        if (p.videoPreview && app.platform.features.videoPreview) {
+            add(app.choiceRow("video.delay", "Preview delay", FuseIcons.Timer, p.videoDelaySeconds, listOf(5, 10, 15, 20, 30).map { it to "$it seconds" }) { v -> set { it.copy(videoDelaySeconds = v) } }.copy(indent = 1))
         }
-        if (checks.isNotEmpty() || stored.any { it.startsWith("sgdb.") || it.startsWith("igdb.") || it.startsWith("tgdb.") }) {
-            add(MenuAction("test", "Test keys", FuseIcons.ShieldCheck, detail = "Checks every key with a real request and shows the result above", onSelect = {
-                app.store.media.checkKeys()
-                app.toasts.show("Testing keys")
-            }))
-        }
-        add(secretRow("sgdb.apikey", "SteamGridDB API key", "Free from steamgriddb.com, Preferences, API. Stored encrypted on this device"))
-        add(secretRow("igdb.clientId", "IGDB Client ID", "From your own Twitch developer app. IGDB doesn't allow apps to share one"))
-        add(secretRow("igdb.clientSecret", "IGDB Client Secret", "Stored encrypted; never shown again"))
-        add(secretRow("tgdb.apikey", "TheGamesDB API key", "Requested on the TheGamesDB forum"))
-        add(secretRow("ss.user", "ScreenScraper username", "Optional. Your account raises your request limits"))
-        add(secretRow("ss.password", "ScreenScraper password", "Stored encrypted"))
         add(app.choiceRow("lang", "Preferred language", FuseIcons.Globe, p.scraperLanguage, listOf("en" to "English", "fr" to "French", "de" to "German", "es" to "Spanish", "it" to "Italian", "pt" to "Portuguese", "ja" to "Japanese", "zh" to "Chinese", "ko" to "Korean")) { v -> set { it.copy(scraperLanguage = v) } })
         add(app.choiceRow("region", "Preferred region", FuseIcons.Map, p.scraperRegion, listOf("any" to "Any region", "us" to "USA", "eu" to "Europe", "jp" to "Japan", "wor" to "World")) { v -> set { it.copy(scraperRegion = v) } })
         add(app.choiceRow(
@@ -481,24 +500,52 @@ fun mediaRows(app: AppState): List<MenuAction> {
                 }
             } else set { it.copy(matching = v) }
         })
-        add(toggleRow(
-            "fill.auto", "Find art by itself", FuseIcons.ScanSearch, p.autoFillArt,
-            "After a scan or a new key, games missing art or details get them. When a source runs out of requests, the others take over",
-        ) { v -> set { it.copy(autoFillArt = v) } })
-        addAll(fillRows(app, fill))
-        add(MenuAction("fill", "Fill missing art", FuseIcons.Wand, detail = "Box art, icons, covers, banners, backgrounds, logos and screenshots for games without them. Custom art is never replaced", onSelect = {
-            app.store.media.fill(MediaFillMode.FILL_MISSING, MediaKind.Fillable)
-            app.toasts.show("Looking for missing art. Progress shows here and in the top bar")
-        }))
-        add(MenuAction("fill.all", "Fill everything", FuseIcons.Sparkles, detail = "Every kind of art, screenshots and details (description, year, genres, series, rating) for every game, plus system art. Nothing you chose or edited is replaced", onSelect = {
-            app.store.media.fillEverything()
-            app.toasts.show("Filling art and details. Progress shows here and in the top bar")
-        }))
         add(app.confirmRow("replace", "Replace all scraped art", FuseIcons.RotateCcw, "Replace scraped art?", "Fuse fetches art again for every game and replaces art it scraped before. Art you chose yourself stays.", "Replace") {
             app.store.media.fill(MediaFillMode.REPLACE_ALL, MediaKind.Fillable)
         })
-        add(toggleRow("video", "Video previews", FuseIcons.Film, p.videoPreview, if (app.platform.features.videoPreview) "After resting on a game, its art turns into a muted gameplay clip" else "Not available on this system yet", enabled = app.platform.features.videoPreview) { v -> set { it.copy(videoPreview = v) } })
-        add(app.choiceRow("video.delay", "Preview delay", FuseIcons.Timer, p.videoDelaySeconds, listOf(5, 10, 15, 20, 30).map { it to "$it seconds" }) { v -> set { it.copy(videoDelaySeconds = v) } })
+        // Set once and rarely touched again: where art comes from, and the keys for it.
+        addAll(app.group(
+            "media.sources", "Sources and keys", FuseIcons.Layers,
+            summary = when {
+                providers.isEmpty() -> null
+                needs.isEmpty() -> "All $ready ready"
+                needs.size == 1 -> "$ready ready  ·  ${needs.single().id.displayName} needs a key"
+                else -> "$ready ready  ·  ${needs.size} need keys"
+            },
+            detail = "The order Fuse asks them in, each one's status and its keys",
+        ) {
+            buildList {
+                add(MenuAction("order", "Source order", FuseIcons.Layers, detail = p.scraperOrder.joinToString("  ·  ") { it.displayName }, trailing = Trailing.Chevron, onSelect = {
+                    app.choice = io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec(
+                        title = "Move a source earlier",
+                        message = "Fuse asks sources in this order. RomM data from Cartridge comes first so nothing is scraped twice.",
+                        options = p.scraperOrder.drop(1).map { id ->
+                            MenuAction("mv.$id", id.displayName, null, onSelect = {
+                                set { s ->
+                                    val l = s.scraperOrder.toMutableList(); val i = l.indexOf(id)
+                                    if (i > 0) { l.removeAt(i); l.add(i - 1, id) }
+                                    s.copy(scraperOrder = l)
+                                }
+                                app.choice = null
+                            })
+                        },
+                    )
+                }))
+                for (s in providers) {
+                    add(providerRow(s))
+                    addAll(keyRows(s.id).map { it.copy(indent = 1) })
+                }
+                // Keys for sources this build doesn't list still have a place.
+                val listed = providers.map { it.id }.toSet()
+                for (id in ScrapeProviderId.entries) if (id !in listed) addAll(keyRows(id))
+                if (checks.isNotEmpty() || stored.any { it.startsWith("sgdb.") || it.startsWith("igdb.") || it.startsWith("tgdb.") }) {
+                    add(MenuAction("test", "Test keys", FuseIcons.ShieldCheck, detail = "Checks every key with a real request and shows the result on each source", onSelect = {
+                        app.store.media.checkKeys()
+                        app.toasts.show("Testing keys")
+                    }))
+                }
+            }
+        })
     }
 }
 

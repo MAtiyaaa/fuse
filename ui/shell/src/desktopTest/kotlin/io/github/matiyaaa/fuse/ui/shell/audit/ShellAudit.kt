@@ -157,6 +157,17 @@ internal fun AuditDriver.settingsScreens(exhaustive: Boolean) {
             if (moved >= 5) shoot("last row focused")
         }
     }
+    scenario("settings", "media sources") {
+        useLibrary()
+        openSettings()
+        tap(PadButton.DPAD_DOWN, sectionIndex("media"))
+        tap(PadButton.DPAD_RIGHT)
+        waitFor("Fill missing art")
+        shoot("filling first, sources folded")
+        tapText("Sources and keys")
+        waitFor("Source order")
+        shoot("sources and keys open")
+    }
     scenario("settings", "phone link") {
         phoneLink.state.value = io.github.matiyaaa.fuse.ui.shell.store.PhoneLinkState(
             running = true,

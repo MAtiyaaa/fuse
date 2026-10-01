@@ -248,8 +248,11 @@ fun SystemsScreen(app: AppState) {
                                     if (i != sel.index) sel.index = app.moveSystem(systems, sel.index, i - sel.index)
                                     moving = false
                                 }
-                                sel.index == i -> app.go(Route.PlatformGames(card.platform.id))
-                                else -> sel.index = i
+                                // A tap opens the system at once; only games wait for a second tap.
+                                else -> {
+                                    sel.index = i
+                                    app.go(Route.PlatformGames(card.platform.id))
+                                }
                             }
                         },
                     ) {

@@ -25,9 +25,11 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImagePainter
 import coil3.compose.LocalPlatformContext
 import coil3.compose.rememberAsyncImagePainter
+import coil3.compose.rememberConstraintsSizeResolver
 import coil3.decode.DataSource
 import coil3.request.ImageRequest
 import coil3.request.crossfade
+import coil3.size.Scale
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Durations
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import kotlinx.coroutines.delay
@@ -47,6 +49,9 @@ import kotlinx.coroutines.delay
  * [backdrop] draws the whole image ([ContentScale.Fit]) over a dimmed, cropped copy of itself,
  * blurred by [backdropBlur] (0 for none), so art of another shape fills the slot without losing its
  * edges: a portrait cover in a square tile keeps its title and logo.
+ *
+ * Fitted art (logos, icons, badges, backdrops) is decoded for the space it is laid out in. Without
+ * that, an SVG logo would be drawn at its own small canvas size and stretched, and come out soft.
  */
 @Composable
 fun Artwork(
@@ -68,8 +73,12 @@ fun Artwork(
         return
     }
     val context = LocalPlatformContext.current
-    val request = remember(model, context) {
-        ImageRequest.Builder(context).data(model).crossfade(false).build()
+    val fit = backdrop || contentScale == ContentScale.Fit
+    val sizer = rememberConstraintsSizeResolver()
+    val request = remember(model, context, fit) {
+        ImageRequest.Builder(context).data(model).crossfade(false)
+            .apply { if (fit) size(sizer).scale(Scale.FIT) }
+            .build()
     }
     val painter = rememberAsyncImagePainter(request, contentScale = if (backdrop) ContentScale.Fit else contentScale)
     val state by painter.state.collectAsStateCompat()
@@ -91,7 +100,7 @@ fun Artwork(
         delay(fallbackDelayMs)
         slow = true
     }
-    Box(modifier) {
+    Box(if (fit) modifier.then(sizer) else modifier) {
         if (failed || (slow && alpha.value < 1f)) fallback()
         if (backdrop) {
             val dim = if (backdropBlur > 0.dp) BACKDROP_DIM else BACKDROP_DIM_SHARP

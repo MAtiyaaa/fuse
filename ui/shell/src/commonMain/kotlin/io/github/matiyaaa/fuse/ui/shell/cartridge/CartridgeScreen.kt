@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -43,6 +42,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import io.github.matiyaaa.fuse.model.BiosState
+import io.github.matiyaaa.fuse.model.CartridgeQueueItem
 import io.github.matiyaaa.fuse.model.CartridgeRoute
 import io.github.matiyaaa.fuse.model.CartridgeStatus
 import io.github.matiyaaa.fuse.model.NavAction
@@ -86,7 +86,6 @@ import io.github.matiyaaa.fuse.ui.shell.app.systemRoom
 import io.github.matiyaaa.fuse.ui.shell.components.ControlTile
 import io.github.matiyaaa.fuse.ui.shell.components.GameIconTile
 import io.github.matiyaaa.fuse.ui.shell.components.SystemCardArt
-import io.github.matiyaaa.fuse.ui.shell.components.agoText
 import io.github.matiyaaa.fuse.ui.shell.home.bytesText
 import io.github.matiyaaa.fuse.ui.shell.store.PlatformCard
 import io.github.matiyaaa.fuse.ui.shell.store.RecentDownload
@@ -103,13 +102,14 @@ private data class CartAction(
 )
 
 private const val ACTIONS = "actions"
+private const val DOWNLOADING = "downloading"
 private const val SYSTEMS = "systems"
 private const val RECENT = "recent"
 
 /**
- * Cartridge from Fuse: a hero with the connection and what is downloading right now, a row of
- * actions (open, browse, search RomM with Fuse's keyboard, downloads, upload, consoles, sync), your
- * systems to browse on RomM, and what just arrived, ready to play. Anything more opens the real
+ * Cartridge from Fuse: a slim hero with the connection, a row of actions (open, browse, search RomM
+ * with Fuse's keyboard, downloads, upload, consoles, sync), a line for the download in progress
+ * while there is one, your systems to browse on RomM, and what just arrived, ready to play. Anything more opens the real
  * Cartridge (which keeps its own look); pressing Back there returns straight here and Fuse picks up
  * the new games by itself. Controller first, and every tile answers touch.
  */
@@ -187,9 +187,17 @@ fun CartridgeScreen(app: AppState) {
     )
     val systems = if (bridge) platforms.filter { it.gameCount > 0 } else emptyList()
     val shownRecent = if (status.installed) recent else emptyList()
-    val rows = listOfNotNull(ACTIONS, SYSTEMS.takeIf { systems.isNotEmpty() }, RECENT.takeIf { shownRecent.isNotEmpty() })
+    val current = status.queue.firstOrNull { it.state == QueueState.DOWNLOADING }
+    val downloading = status.installed && (current != null || status.activeDownloads > 0)
+    val rows = listOfNotNull(
+        ACTIONS,
+        DOWNLOADING.takeIf { downloading },
+        SYSTEMS.takeIf { systems.isNotEmpty() },
+        RECENT.takeIf { shownRecent.isNotEmpty() },
+    )
     fun sizeOf(row: String) = when (row) {
         ACTIONS -> actions.size
+        DOWNLOADING -> 1
         SYSTEMS -> systems.size
         else -> shownRecent.size
     }
@@ -225,6 +233,7 @@ fun CartridgeScreen(app: AppState) {
     fun activate(rowKey: String, col: Int) {
         when (rowKey) {
             ACTIONS -> actions.getOrNull(col)?.let(::runAction)
+            DOWNLOADING -> if (bridge) open(CartridgeRoute.Downloads) else open(CartridgeRoute.Home)
             SYSTEMS -> systems.getOrNull(col)?.let { open(CartridgeRoute.Platform(it.platform.id.value)) }
             RECENT -> shownRecent.getOrNull(col)?.let { r -> if (r.game != null) app.activateGame(r.game) else open(CartridgeRoute.Game(r.download.romId)) }
         }
@@ -242,8 +251,8 @@ fun CartridgeScreen(app: AppState) {
         val already = sel.row == r && sel.column(rowKey) == col
         sel.row = r
         sel.setColumn(rowKey, col)
-        // Actions do what they say at once; art tiles are chosen first, like everywhere in Fuse.
-        if (already || rowKey == ACTIONS) activate(rowKey, col)
+        // Everything opens at once, except a game, which is shown first and played on a second tap.
+        if (already || rowKey != RECENT) activate(rowKey, col)
     }
 
     // The background follows a chosen system or game.
@@ -257,6 +266,7 @@ fun CartridgeScreen(app: AppState) {
         app.hints = when (row) {
             SYSTEMS -> listOf(Hint(HintButton.CONFIRM, "Browse in Cartridge"), Hint(HintButton.OPTIONS, "Options"))
             RECENT -> listOf(Hint(HintButton.CONFIRM, if (shownRecent.getOrNull(col)?.game != null) "Play" else "Open in Cartridge"), Hint(HintButton.OPTIONS, "Options"))
+            DOWNLOADING -> listOf(Hint(HintButton.CONFIRM, "Downloads"))
             else -> listOf(Hint(HintButton.CONFIRM, "Choose"))
         }
     }
@@ -278,7 +288,11 @@ fun CartridgeScreen(app: AppState) {
         val oldBridge = status.installed && !status.bridge
         val uploading = status.installed && status.uploads.isNotEmpty()
         // The page's items, so it can follow the chosen row (it fits on most screens and stays put).
-        val items = listOfNotNull("hero", "old".takeIf { oldBridge }, "uploads".takeIf { uploading }, ACTIONS, SYSTEMS.takeIf { SYSTEMS in rows }, RECENT.takeIf { RECENT in rows }, "explainer".takeIf { !status.installed })
+        val items = listOfNotNull(
+            "hero", "old".takeIf { oldBridge }, "uploads".takeIf { uploading }, ACTIONS,
+            DOWNLOADING.takeIf { DOWNLOADING in rows }, SYSTEMS.takeIf { SYSTEMS in rows }, RECENT.takeIf { RECENT in rows },
+            "explainer".takeIf { !status.installed },
+        )
         FollowSelection(page, { if (sel.row == 0) 0 else items.indexOf(rows.getOrElse(sel.row) { ACTIONS }).coerceAtLeast(0) }, anchor = 0.1f)
         LazyColumn(
             state = page,
@@ -286,9 +300,7 @@ fun CartridgeScreen(app: AppState) {
             contentPadding = PaddingValues(top = if (compact) Space.s else Space.m, bottom = Size.hintHeight + Space.l),
             verticalArrangement = Arrangement.spacedBy(if (compact) Space.m else Space.l),
         ) {
-            item(key = "hero") {
-                Hero(status, release, checked, compact, platforms, onActivity = { if (bridge) open(CartridgeRoute.Downloads) })
-            }
+            item(key = "hero") { Hero(status, compact) }
             if (oldBridge) {
                 item(key = "old") {
                     Row(
@@ -328,6 +340,15 @@ fun CartridgeScreen(app: AppState) {
                         unavailable = a.needsBridge && !bridge,
                         compact = compact,
                     ) { tap(ACTIONS, i) }
+                }
+            }
+            if (DOWNLOADING in rows) {
+                item(key = DOWNLOADING) {
+                    DownloadLine(
+                        status, current, platforms,
+                        selected = row == DOWNLOADING && focused,
+                        modifier = Modifier.padding(horizontal = Space.gutter).widthIn(max = 880.dp),
+                    ) { tap(DOWNLOADING, 0) }
                 }
             }
             if (SYSTEMS in rows) {
@@ -399,37 +420,19 @@ private fun ShelfRow(title: String?, count: Int, selected: Int, remembered: Int,
     }
 }
 
-/**
- * The top of the page: what Cartridge is, whether it reaches RomM, and on the right what is
- * happening now (the download in progress, else the last one) or, before installing, the release.
- */
+/** The top of the page: what Cartridge is, whether it reaches RomM, and what it is doing. */
 @Composable
-private fun Hero(
-    status: CartridgeStatus,
-    release: ReleaseInfo?,
-    checked: Boolean,
-    compact: Boolean,
-    platforms: List<PlatformCard>,
-    onActivity: () -> Unit,
-) {
+private fun Hero(status: CartridgeStatus, compact: Boolean) {
     val c = Fuse.colors
-    Row(
-        Modifier.fillMaxWidth().padding(horizontal = Space.gutter).height(if (compact) 104.dp else 132.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(Space.xl),
-    ) {
-        Column(Modifier.weight(1f)) {
-            SectionLabel("Get games")
-            Spacer(Modifier.height(Space.xs))
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.m)) {
-                FText("Cartridge", if (compact) Fuse.type.title else Fuse.type.display, maxLines = 1)
-                if (status.installed) ConnectionPill(status)
-            }
-            Spacer(Modifier.height(Space.s))
-            FText(statusLine(status), Fuse.type.body, color = c.textMuted, maxLines = if (compact) 1 else 2, modifier = Modifier.widthIn(max = 560.dp))
+    Column(Modifier.fillMaxWidth().padding(horizontal = Space.gutter)) {
+        SectionLabel("Get games")
+        Spacer(Modifier.height(Space.xs))
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.m)) {
+            FText("Cartridge", if (compact) Fuse.type.title else Fuse.type.display, maxLines = 1)
+            if (status.installed) ConnectionPill(status)
         }
-        val card = Modifier.width(if (compact) 300.dp else 400.dp).fillMaxHeight()
-        if (status.installed) ActivityCard(status, platforms, card, onActivity) else ReleaseCard(release, checked, card)
+        Spacer(Modifier.height(Space.xs))
+        FText(statusLine(status), Fuse.type.body, color = c.textMuted, maxLines = 1, modifier = Modifier.widthIn(max = 720.dp))
     }
 }
 
@@ -449,101 +452,64 @@ private fun ConnectionPill(s: CartridgeStatus) {
     }
 }
 
-/** A raised card in the hero: rounded, faintly lit from the top, tinted by [tint] when there is one. */
+/**
+ * The download in progress, as one line: its system, its name, how far along it is and how many
+ * wait behind it, over a bar in the system's colour. It only shows while something downloads, and
+ * opens the downloads.
+ */
 @Composable
-private fun HeroCard(modifier: Modifier, tint: Color? = null, onClick: (() -> Unit)? = null, content: @Composable () -> Unit) {
+private fun DownloadLine(
+    status: CartridgeStatus,
+    current: CartridgeQueueItem?,
+    platforms: List<PlatformCard>,
+    selected: Boolean,
+    modifier: Modifier,
+    onClick: () -> Unit,
+) {
     val c = Fuse.colors
-    val shape = RoundedCornerShape(Fuse.geometry.panel)
-    val top = tint?.copy(alpha = 0.22f) ?: c.surfaceRaised.copy(alpha = 0.8f)
-    Box(
-        modifier
-            .clip(shape)
-            .background(c.surfaceRaised.copy(alpha = 0.7f))
-            .background(Brush.linearGradient(listOf(top, Color.Transparent)))
-            .border(1.dp, c.text.copy(alpha = 0.07f), shape)
-            .then(if (onClick != null) Modifier.clickable(remember { MutableInteractionSource() }, null, onClick = onClick) else Modifier)
-            .padding(Space.l),
-    ) { content() }
-}
-
-/** What is downloading now, over its system's colour; else the last download; else a quiet note. */
-@Composable
-private fun ActivityCard(status: CartridgeStatus, platforms: List<PlatformCard>, modifier: Modifier, onClick: () -> Unit) {
-    val c = Fuse.colors
-    val current = status.queue.firstOrNull { it.state == QueueState.DOWNLOADING }
-    val downloading = current != null || status.activeDownloads > 0
+    val shape = RoundedCornerShape(Fuse.geometry.control)
     val slug = current?.platformSlug ?: status.currentPlatform
     val system = slug?.let { s -> platforms.firstOrNull { it.platform.id.value == s } }
-    HeroCard(modifier, tint = if (downloading) (system?.platform?.accent?.toColor() ?: c.accent) else null, onClick = onClick) {
-        if (downloading) {
-            val progress = current?.progress ?: status.progress
-            val others = (status.queue.size - 1).coerceAtLeast(0).takeIf { status.queue.isNotEmpty() } ?: status.queuedDownloads
-            Column(Modifier.fillMaxHeight(), verticalArrangement = Arrangement.SpaceBetween) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    SystemMark(system, slug, Modifier.weight(1f))
-                    progress?.let { FText("${(it * 100).toInt()}%", Fuse.type.label, color = c.accent, maxLines = 1) }
-                }
-                Column(verticalArrangement = Arrangement.spacedBy(Space.xs)) {
-                    FText(current?.title ?: status.currentTitle ?: "Preparing", Fuse.type.titleSmall, maxLines = 1)
-                    ProgressBar(progress, Modifier.fillMaxWidth(), height = 6.dp)
-                    val sizes = current?.let { q -> q.total?.let { "${bytesText(q.received)} of ${bytesText(it)}" } }
-                    FText(
-                        listOfNotNull(sizes, if (others > 0) "$others more waiting" else null).joinToString("  ·  ").ifEmpty { "Downloading" },
-                        Fuse.type.caption, color = c.textMuted, maxLines = 1,
-                    )
-                }
-            }
-        } else {
-            val last = status.recent.maxByOrNull { it.finishedAt }
-            Row(Modifier.fillMaxHeight(), verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(44.dp).clip(CircleShape).background(c.text.copy(alpha = 0.08f)), contentAlignment = Alignment.Center) {
-                    FuseIcon(if (last != null) FuseIcons.Check else FuseIcons.CloudDownload, tint = if (last != null) c.success else c.textMuted)
-                }
-                Spacer(Modifier.width(Space.m))
-                Column(Modifier.weight(1f)) {
-                    FText(if (last != null) "LAST DOWNLOAD" else "DOWNLOADS", Fuse.type.overline, color = c.textMuted, maxLines = 1)
-                    FText(last?.title ?: "Nothing downloading", Fuse.type.bodyStrong, maxLines = 1)
-                    FText(
-                        last?.let { "Arrived ${agoText(it.finishedAt)}" } ?: "Games you download from RomM show up here",
-                        Fuse.type.caption, color = c.textMuted, maxLines = 1,
-                    )
-                }
-            }
+    val tint = system?.platform?.accent?.toColor() ?: c.accent
+    val progress = current?.progress ?: status.progress
+    val others = (status.queue.size - 1).coerceAtLeast(0).takeIf { status.queue.isNotEmpty() } ?: status.queuedDownloads
+    val sizes = current?.let { q -> q.total?.let { "${bytesText(q.received)} of ${bytesText(it)}" } }
+    Column(
+        modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .background(c.text.copy(alpha = if (selected) 0.1f else 0.05f))
+            .background(Brush.horizontalGradient(listOf(tint.copy(alpha = 0.14f), Color.Transparent)))
+            .border(if (selected) 2.dp else 1.dp, if (selected) c.focus else c.text.copy(alpha = 0.07f), shape)
+            .clickable(remember { MutableInteractionSource() }, null, onClick = onClick)
+            .padding(start = Space.m, end = Space.m, top = Space.s, bottom = Space.s + 2.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.m)) {
+            FuseIcon(FuseIcons.Download, size = 16.dp, tint = tint)
+            SystemMark(system, slug, Modifier.width(64.dp))
+            FText(current?.title ?: status.currentTitle ?: "Preparing", Fuse.type.bodyStrong, maxLines = 1, modifier = Modifier.weight(1f))
+            val note = listOfNotNull(sizes, if (others > 0) "$others more" else null).joinToString("  ·  ")
+            if (note.isNotEmpty()) FText(note, Fuse.type.caption, color = c.textMuted, maxLines = 1)
+            progress?.let { FText("${(it * 100).toInt()}%", Fuse.type.label, color = c.text, maxLines = 1) }
+            FuseIcon(FuseIcons.ChevronRight, size = 16.dp, tint = c.textMuted)
         }
+        Spacer(Modifier.height(Space.s))
+        ProgressBar(progress, Modifier.fillMaxWidth(), color = tint, height = 3.dp)
     }
 }
 
-/** A system's logo in white, or its short name, for the activity card. */
+/** A system's logo in white, or its short name, for the download line. */
 @Composable
 private fun SystemMark(system: PlatformCard?, slug: String?, modifier: Modifier) {
     val logo = system?.art?.logo
     val name = system?.platform?.shortName ?: slug?.uppercase() ?: "RomM"
-    Box(modifier.height(24.dp), contentAlignment = Alignment.CenterStart) {
+    Box(modifier.height(20.dp), contentAlignment = Alignment.CenterStart) {
         if (logo != null) {
-            Artwork(logo, Modifier.height(24.dp).width(110.dp), contentScale = ContentScale.Fit, focusX = 0f, tint = Color.White, fadeIn = false, fallback = {
+            Artwork(logo, Modifier.fillMaxSize(), contentScale = ContentScale.Fit, focusX = 0f, tint = Color.White, fadeIn = false, fallback = {
                 FText(name, Fuse.type.overline, maxLines = 1)
             })
         } else {
             FText(name, Fuse.type.overline, color = Fuse.colors.textMuted, maxLines = 1)
-        }
-    }
-}
-
-/** Before Cartridge is installed: its latest release, from GitHub. */
-@Composable
-private fun ReleaseCard(release: ReleaseInfo?, checked: Boolean, modifier: Modifier) {
-    val c = Fuse.colors
-    HeroCard(modifier, tint = c.accent) {
-        Row(Modifier.fillMaxHeight(), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(44.dp).clip(CircleShape).background(c.accent.copy(alpha = 0.18f)), contentAlignment = Alignment.Center) {
-                FuseIcon(FuseIcons.CloudDownload, tint = c.accent)
-            }
-            Spacer(Modifier.width(Space.m))
-            Column(Modifier.weight(1f)) {
-                FText("LATEST RELEASE", Fuse.type.overline, color = c.textMuted, maxLines = 1)
-                FText(release?.name ?: if (checked) "Couldn't reach GitHub" else "Checking GitHub", Fuse.type.bodyStrong, maxLines = 1)
-                FText("github.com/MAtiyaaa/cartridge", Fuse.type.caption, color = c.textMuted, maxLines = 1)
-            }
         }
     }
 }

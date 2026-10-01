@@ -9,6 +9,16 @@ import io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec
 import io.github.matiyaaa.fuse.ui.shell.app.ConfirmSpec
 import io.github.matiyaaa.fuse.ui.shell.app.TextInputSpec
 
+/**
+ * A group of rows that opens in place: its header shows [summary] and a chevron, and while open its
+ * rows follow it, stepped in. Rarely changed settings live in groups at the end of a section.
+ */
+fun AppState.group(id: String, label: String, icon: ImageVector, summary: String? = null, detail: String? = null, rows: () -> List<MenuAction>): List<MenuAction> {
+    val open = openGroups[id] == true
+    val header = MenuAction("group.$id", label, icon, detail = detail, trailing = Trailing.Disclosure(open, summary), onSelect = { openGroups[id] = !open })
+    return if (open) listOf(header) + rows().map { it.copy(indent = it.indent + 1) } else listOf(header)
+}
+
 /** A switch row. */
 fun toggleRow(id: String, label: String, icon: ImageVector, on: Boolean, detail: String? = null, enabled: Boolean = true, set: (Boolean) -> Unit) =
     MenuAction(id, label, icon, detail = detail, trailing = Trailing.Switch(on), enabled = enabled, onSelect = { set(!on) })
