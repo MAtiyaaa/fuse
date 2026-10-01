@@ -27,6 +27,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
@@ -41,7 +43,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
@@ -52,6 +56,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -62,12 +67,16 @@ import io.github.matiyaaa.fuse.model.MediaKind
 import io.github.matiyaaa.fuse.model.MediaOwner
 import io.github.matiyaaa.fuse.model.NavAction
 import io.github.matiyaaa.fuse.model.ScanScope
+import io.github.matiyaaa.fuse.ui.designsystem.components.EmptyState
 import io.github.matiyaaa.fuse.ui.designsystem.components.FText
+import io.github.matiyaaa.fuse.ui.designsystem.components.IconBadge
 import io.github.matiyaaa.fuse.ui.designsystem.components.Hint
 import io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction
 import io.github.matiyaaa.fuse.ui.designsystem.components.Tile
 import io.github.matiyaaa.fuse.ui.designsystem.components.Trailing
 import io.github.matiyaaa.fuse.ui.designsystem.components.fadingEdges
+import io.github.matiyaaa.fuse.ui.designsystem.effects.rememberReveal
+import io.github.matiyaaa.fuse.ui.designsystem.effects.reveal
 import io.github.matiyaaa.fuse.ui.designsystem.focus.FollowSelection
 import io.github.matiyaaa.fuse.ui.designsystem.focus.ReorderDefaults
 import io.github.matiyaaa.fuse.ui.designsystem.focus.carried
@@ -80,7 +89,9 @@ import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
 import io.github.matiyaaa.fuse.ui.designsystem.icons.HintButton
 import io.github.matiyaaa.fuse.ui.designsystem.input.InputLayer
 import io.github.matiyaaa.fuse.ui.designsystem.input.NavResult
+import io.github.matiyaaa.fuse.ui.designsystem.media.ArtSlot
 import io.github.matiyaaa.fuse.ui.designsystem.media.Artwork
+import io.github.matiyaaa.fuse.ui.designsystem.media.GeneratedArt
 import io.github.matiyaaa.fuse.ui.designsystem.media.HeroSource
 import io.github.matiyaaa.fuse.ui.designsystem.media.PrefetchArt
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Aspect
@@ -89,6 +100,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.shape.SquircleShape
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
+import io.github.matiyaaa.fuse.ui.designsystem.theme.tabular
 import io.github.matiyaaa.fuse.ui.designsystem.theme.toColor
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec
@@ -163,6 +175,7 @@ fun SystemsScreen(app: AppState) {
         }
     }
 
+    val reveal = rememberReveal()
     BoxWithConstraints(
         Modifier.fillMaxSize()
             // A tap outside the cards puts a carried system down.
@@ -170,18 +183,28 @@ fun SystemsScreen(app: AppState) {
     ) {
         val gap = Space.m
         val usable = maxWidth - Space.gutter * 2
-        // About six cards across, never smaller than a thumb.
-        val target = (maxWidth * 0.135f).coerceAtLeast(112.dp)
-        columns = ((usable + gap) / (target + gap)).toInt().coerceIn(3, 8)
-        val compactHeader = maxHeight < 560.dp
+        // About six cards across, never smaller than a thumb; two across on a phone held upright.
+        val target = (maxWidth * 0.135f).coerceAtLeast(Size.touch * 2 + Space.l)
+        columns = ((usable + gap) / (target + gap)).toInt().coerceIn(if (maxWidth < Size.touch * 12) 2 else 3, 8)
+        val cardHeight = (usable - gap * (columns - 1)) / columns / Aspect.SYSTEM_CARD
+        val compactHeader = maxHeight < Size.touch * 12
         // The art pack's panel stands on the right, unless the user chose a background for the system.
         if (current?.art?.hero == null) SystemShowcase(current, Modifier.align(Alignment.CenterEnd).fillMaxHeight().width(maxHeight * 0.46f))
         Column(Modifier.fillMaxSize()) {
             Spacer(Modifier.height(Size.hudHeight + if (compactHeader) Space.s else Space.xl))
-            SystemHeader(current, compactHeader, Modifier.padding(horizontal = Space.gutter))
+            SystemHeader(current, compactHeader, Modifier.padding(horizontal = Space.gutter).reveal(reveal, 0))
             Spacer(Modifier.height(if (compactHeader) Space.xs else Space.m))
             if (systems.isEmpty()) {
-                FText("Systems appear here once Fuse finds games for them.", Fuse.type.body, color = Fuse.colors.textMuted, modifier = Modifier.padding(horizontal = Space.gutter))
+                Box(Modifier.weight(1f).fillMaxWidth().padding(horizontal = Space.gutter, vertical = Space.xl), contentAlignment = Alignment.Center) {
+                    EmptyState(
+                        FuseIcons.Gamepad,
+                        "No systems yet",
+                        message = "Systems appear here once Fuse finds games for them. Add the folder your games are in from Settings, Library.",
+                        compact = compactHeader,
+                        modifier = Modifier.padding(bottom = Size.hintHeight),
+                    )
+                }
+                return@Column
             }
             val grid = rememberLazyGridState()
             // While a system is held the grid stays where the finger left it.
@@ -190,7 +213,7 @@ fun SystemsScreen(app: AppState) {
                 columns = GridCells.Fixed(columns),
                 state = grid,
                 modifier = Modifier
-                    .fadingEdges(top = if (grid.canScrollBackward) 20.dp else 0.dp)
+                    .fadingEdges(grid, top = Space.l, bottom = Space.x3)
                     .dragReorder(
                         drag,
                         visibleKeys = { grid.layoutInfo.visibleItemsInfo.map { it.key } },
@@ -222,7 +245,8 @@ fun SystemsScreen(app: AppState) {
                 // Room above the first row for a lifted or carried card.
                 contentPadding = PaddingValues(start = Space.gutter, end = Space.gutter, top = Space.l, bottom = Size.hintHeight + Space.x4),
                 horizontalArrangement = Arrangement.spacedBy(gap),
-                verticalArrangement = Arrangement.spacedBy(Space.l),
+                // Rows stay clear of the spark under a lifted card.
+                verticalArrangement = Arrangement.spacedBy(Size.sparkClearance),
             ) {
                 itemsIndexed(shown, key = { _, p -> p.platform.id.value }) { i, card ->
                     val key = card.platform.id.value
@@ -237,6 +261,8 @@ fun SystemsScreen(app: AppState) {
                         modifier = Modifier
                             // The held system follows the finger, never an animation behind it.
                             .animateItem(fadeInSpec = null, fadeOutSpec = null, placementSpec = if (drag.heldKey == key) null else ReorderDefaults.Placement)
+                            // Row by row as the screen opens.
+                            .reveal(reveal, 1 + i / columns)
                             .reorderItem(drag, key, shape = shape)
                             .zIndex(if (carried) 1f else 0f)
                             // Carried with the controller, a system floats the same as one held by touch.
@@ -260,7 +286,9 @@ fun SystemsScreen(app: AppState) {
                             }
                         },
                     ) {
-                        SystemCardArt(card)
+                        SystemCardFace(card, cardHeight)
+                        // A carried system says so: it moves with the D-pad until confirmed.
+                        if (carried) IconBadge(FuseIcons.Move, Modifier.align(Alignment.TopEnd).padding(Space.s), tint = Fuse.colors.onArt, background = Fuse.colors.artScrim)
                     }
                 }
             }
@@ -269,8 +297,125 @@ fun SystemsScreen(app: AppState) {
 }
 
 /**
- * The focused system: logo (or name), then games and emulator. No firmware details here. [collapse]
- * folds it away upwards (0 shows it all, 1 hides it), for a system's page scrolled down its games.
+ * A system's face on the Systems grid. Systems with their own square art or icon show it whole.
+ * Otherwise the card is the system's colour (or its art pack's panel and logo) with its maker on
+ * top, its name (or logo) and, at the foot, how many games it has and the emulator they start in,
+ * so the grid answers "what runs this?" without opening anything. Small cards keep the name and
+ * count only.
+ */
+@Composable
+private fun SystemCardFace(card: PlatformCard, height: Dp) {
+    val art = card.art
+    if ((art.square ?: art.icon) != null) {
+        SystemCardArt(card)
+        return
+    }
+    val c = Fuse.colors
+    val accent = card.platform.accent.toColor()
+    // Roomy cards carry the maker and the emulator too; small ones (phones) the name and count.
+    val roomy = height >= Size.touch * 2
+    val tiny = height < Size.touch + Space.l
+    Box(Modifier.fillMaxSize()) {
+        GeneratedArt(title = card.platform.name, accent = accent, slot = ArtSlot.WIDE, showText = false)
+        if (art.boxart != null) {
+            // The art pack's tall panel stands at the right end, blended into the card's colour.
+            Artwork(
+                art.boxart,
+                Modifier.align(Alignment.CenterEnd).fillMaxHeight().fillMaxWidth(0.42f).panelBlend(),
+                contentScale = ContentScale.Crop,
+                focusX = 0.5f,
+                focusY = 0.35f,
+            )
+        }
+        // A floor under the words, so they read on any colour.
+        Box(Modifier.fillMaxSize().drawBehind { drawRect(Brush.verticalGradient(0.4f to Color.Transparent, 1f to c.artScrim.copy(alpha = c.artScrim.alpha * 0.7f))) })
+        Column(
+            Modifier.fillMaxSize().padding(if (roomy) Space.m else Space.s + Space.xxs),
+            verticalArrangement = Arrangement.SpaceBetween,
+        ) {
+            val maker = card.platform.manufacturer?.uppercase()
+            if (roomy && maker != null) FText(maker, Fuse.type.overline, color = c.onArtMuted, maxLines = 1) else Spacer(Modifier.height(Space.hair))
+            Column(verticalArrangement = Arrangement.spacedBy(Space.xxs)) {
+                val name: @Composable () -> Unit = {
+                    FText(card.platform.shortName, if (roomy) Fuse.type.title else Fuse.type.titleSmall, color = c.onArt, maxLines = 1)
+                }
+                if (art.logo != null) {
+                    Artwork(
+                        art.logo,
+                        Modifier.fillMaxWidth(0.62f).height((height * 0.24f).coerceIn(Space.l + Space.xxs, Size.touch + Space.xl)),
+                        contentScale = ContentScale.Fit,
+                        focusX = 0f,
+                        focusY = 1f,
+                        tint = c.onArt,
+                        fallback = name,
+                    )
+                } else {
+                    name()
+                }
+                if (!tiny) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        FText(gamesText(card.gameCount), Fuse.type.caption.tabular(), color = c.onArt.copy(alpha = 0.9f), maxLines = 1)
+                        if (roomy) {
+                            val emulator = card.emulatorName?.takeIf { card.emulatorInstalled }
+                            FText("  ·  ", Fuse.type.caption, color = c.onArtMuted, maxLines = 1)
+                            FText(emulator ?: "No emulator", Fuse.type.caption, color = if (emulator == null) c.warning else c.onArtMuted, maxLines = 1, modifier = Modifier.weight(1f, fill = false))
+                        }
+                    }
+                }
+            }
+        }
+        if (!card.emulatorInstalled) {
+            IconBadge(FuseIcons.Warning, Modifier.align(Alignment.TopEnd).padding(Space.s), tint = c.warning, background = c.artScrim, size = Size.badge)
+        }
+    }
+}
+
+/**
+ * A small square standing for a system in lists, pickers and page headers: its own square art or
+ * icon where it has one, else its colour with its short name set as large as fits ("PS2",
+ * "Switch"), so systems never become ambiguous initials.
+ */
+@Composable
+internal fun SystemMark(card: PlatformCard, size: Dp, modifier: Modifier = Modifier) {
+    val accent = card.platform.accent.toColor()
+    val shape = SquircleShape.fraction(Fuse.geometry.tileCornerFraction.coerceAtLeast(0.12f) + 0.06f)
+    val generated: @Composable () -> Unit = {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            GeneratedArt(title = card.platform.name, accent = accent, slot = ArtSlot.WIDE, showText = false)
+            val style = Fuse.type.titleSmall
+            BasicText(
+                card.platform.shortName,
+                Modifier.padding(horizontal = size * 0.12f),
+                style = style.copy(color = Fuse.colors.onArt, textAlign = TextAlign.Center),
+                maxLines = 1,
+                autoSize = TextAutoSize.StepBased(minFontSize = style.fontSize * 0.45f, maxFontSize = style.fontSize * (size / Size.thumbL).coerceIn(0.7f, 1.6f)),
+            )
+        }
+    }
+    Box(modifier.size(size).clip(shape)) {
+        val own = card.art.square ?: card.art.icon
+        if (own != null) Artwork(own, Modifier.fillMaxSize(), fallback = generated) else generated()
+    }
+}
+
+/** Fades an art pack panel in from its left edge, so it melts into the card's colour. */
+private fun Modifier.panelBlend(): Modifier = this
+    .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+    .drawWithContent {
+        drawContent()
+        drawRect(Brush.horizontalGradient(0f to Color.Transparent, 0.6f to Color.Black), blendMode = BlendMode.DstIn)
+    }
+
+internal fun gamesText(n: Int) = "$n ${if (n == 1) "game" else "games"}"
+
+/**
+ * The focused system, told big: its maker and year as a small line on top, its logo (or name), then
+ * how many games it has and the emulator they start in, or a warning when none is installed.
+ * Firmware details live on the system's page. [collapse] folds it away upwards (0 shows it all, 1
+ * hides it), for a system's page scrolled down its games.
+ *
+ * With [showMeta] (the Systems screen) the name sits in a slot as tall as a logo, so moving between
+ * systems with and without a logo never moves the grid below.
  */
 @Composable
 internal fun SystemHeader(
@@ -279,9 +424,9 @@ internal fun SystemHeader(
     modifier: Modifier = Modifier,
     widthFraction: Float = 0.62f,
     collapse: Float = 0f,
-    /** The game count and emulator under the logo; the system's own page leaves them out. */
+    /** The maker line, game count and emulator around the logo; the system's own page leaves them out. */
     showMeta: Boolean = true,
-    logoHeight: Dp = if (compact) 40.dp else 64.dp,
+    logoHeight: Dp = if (compact) Size.touch - Space.s else Size.touch + Space.l,
     nameStyle: TextStyle = if (compact) Fuse.type.title else Fuse.type.display,
 ) {
     val c = Fuse.colors
@@ -290,7 +435,7 @@ internal fun SystemHeader(
         targetState = card,
         modifier = modifier.fillMaxWidth(widthFraction).foldAway(collapse),
         contentKey = { it?.platform?.id },
-        transitionSpec = { fadeIn(motion.fade(Durations.BASE)) togetherWith fadeOut(motion.fade(Durations.INSTANT)) },
+        transitionSpec = { fadeIn(motion.fade(Durations.BASE)) togetherWith fadeOut(motion.exit(Durations.INSTANT)) },
         contentAlignment = Alignment.BottomStart,
         label = "system header",
     ) { s ->
@@ -299,30 +444,39 @@ internal fun SystemHeader(
             return@AnimatedContent
         }
         Column(verticalArrangement = Arrangement.spacedBy(if (compact) Space.xs else Space.s)) {
+            if (showMeta) {
+                val eyebrow = listOfNotNull(s.platform.manufacturer?.uppercase(), s.platform.releaseYear?.toString()).joinToString("  ·  ")
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s)) {
+                    Box(Modifier.size(Size.dot).background(s.platform.accent.toColor(), CircleShape))
+                    FText(eyebrow.ifEmpty { "SYSTEM" }, Fuse.type.overline.tabular(), color = c.textMuted, maxLines = 1)
+                }
+            }
             val name: @Composable () -> Unit = {
                 FText(s.platform.name, nameStyle, color = c.text, maxLines = 1)
             }
-            if (s.art.logo != null) {
-                Artwork(
-                    s.art.logo,
-                    Modifier.height(logoHeight).fillMaxWidth(),
-                    contentScale = ContentScale.Fit,
-                    focusX = 0f,
-                    focusY = 0.5f,
-                    tint = Color.White,
-                    fallback = name,
-                )
-            } else {
-                name()
+            Box(if (showMeta) Modifier.height(logoHeight) else Modifier, contentAlignment = Alignment.BottomStart) {
+                if (s.art.logo != null) {
+                    Artwork(
+                        s.art.logo,
+                        Modifier.height(logoHeight).fillMaxWidth(),
+                        contentScale = ContentScale.Fit,
+                        focusX = 0f,
+                        focusY = if (showMeta) 1f else 0.5f,
+                        tint = c.text,
+                        fallback = name,
+                    )
+                } else {
+                    name()
+                }
             }
             if (showMeta) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s)) {
-                Box(Modifier.size(7.dp).background(s.platform.accent.toColor(), CircleShape))
-                FText("${s.gameCount} ${if (s.gameCount == 1) "game" else "games"}", Fuse.type.body, color = c.textMuted, maxLines = 1)
+                FText(gamesText(s.gameCount), Fuse.type.bodyStrong.tabular(), color = c.text, maxLines = 1)
                 FText("·", Fuse.type.body, color = c.textFaint)
                 if (s.emulatorInstalled && s.emulatorName != null) {
+                    FuseIcon(FuseIcons.Chip, size = Size.iconS, tint = c.textMuted)
                     FText(s.emulatorName, Fuse.type.body, color = c.textMuted, maxLines = 1)
                 } else {
-                    FuseIcon(FuseIcons.Warning, size = 14.dp, tint = c.warning)
+                    FuseIcon(FuseIcons.Warning, size = Size.iconS, tint = c.warning)
                     FText("No emulator installed", Fuse.type.body, color = c.warning, maxLines = 1)
                 }
             }
@@ -379,8 +533,6 @@ internal fun Modifier.panelFade(): Modifier = this
         )
     }
 
-/** How systems slide aside while one is moved. */
-
 /**
  * Options for a system (Context button or long press on its card). [onMove] adds "Move this system"
  * where systems can be arranged.
@@ -390,7 +542,9 @@ fun AppState.systemMenu(card: PlatformCard, onMove: (() -> Unit)? = null): Conte
     val owner = MediaOwner.OfPlatform(p.id)
     return ContextMenuSpec(
         title = p.name,
-        subtitle = "${card.gameCount} games",
+        subtitle = listOfNotNull(gamesText(card.gameCount), card.emulatorName?.takeIf { card.emulatorInstalled }).joinToString("  ·  "),
+        icon = FuseIcons.Gamepad,
+        art = card.art.square ?: card.art.icon,
         actions = listOfNotNull(
             MenuAction("open", "Open", FuseIcons.Grid, onSelect = { closeOverlays(); go(Route.PlatformGames(p.id)) }),
             onMove?.let { move ->

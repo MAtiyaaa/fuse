@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
@@ -31,21 +30,30 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.addOutline
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.dp
 import io.github.matiyaaa.fuse.model.CollectionKind
 import io.github.matiyaaa.fuse.model.GameCollection
 import io.github.matiyaaa.fuse.model.MediaOwner
 import io.github.matiyaaa.fuse.model.MediaSet
 import io.github.matiyaaa.fuse.model.NavAction
 import io.github.matiyaaa.fuse.model.SortOrder
+import io.github.matiyaaa.fuse.ui.designsystem.components.EmptyState
 import io.github.matiyaaa.fuse.ui.designsystem.components.FText
 import io.github.matiyaaa.fuse.ui.designsystem.components.Hint
 import io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction
+import io.github.matiyaaa.fuse.ui.designsystem.components.MenuArt
 import io.github.matiyaaa.fuse.ui.designsystem.components.Tile
 import io.github.matiyaaa.fuse.ui.designsystem.components.Trailing
 import io.github.matiyaaa.fuse.ui.designsystem.components.fadingEdges
+import io.github.matiyaaa.fuse.ui.designsystem.effects.rememberReveal
+import io.github.matiyaaa.fuse.ui.designsystem.effects.reveal
+import io.github.matiyaaa.fuse.ui.designsystem.effects.skeleton
 import io.github.matiyaaa.fuse.ui.designsystem.focus.FollowSelection
 import io.github.matiyaaa.fuse.ui.designsystem.focus.GridSelection
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
@@ -59,6 +67,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.theme.Aspect
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
+import io.github.matiyaaa.fuse.ui.designsystem.theme.tabular
 import io.github.matiyaaa.fuse.ui.designsystem.theme.toColor
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec
@@ -68,7 +77,6 @@ import io.github.matiyaaa.fuse.ui.shell.app.FocusZone
 import io.github.matiyaaa.fuse.ui.shell.app.Route
 import io.github.matiyaaa.fuse.ui.shell.app.TextInputSpec
 import io.github.matiyaaa.fuse.ui.shell.app.rememberRouteState
-import io.github.matiyaaa.fuse.ui.shell.components.ControlTile
 import io.github.matiyaaa.fuse.ui.shell.components.CoverCollage
 import io.github.matiyaaa.fuse.ui.shell.components.ViewTab
 import io.github.matiyaaa.fuse.ui.shell.components.ViewTabs
@@ -179,13 +187,14 @@ fun CollectionsScreen(app: AppState) {
         }
     }
 
+    val entry = rememberReveal()
     BoxWithConstraints(Modifier.fillMaxSize()) {
-        val compact = maxHeight < 560.dp
+        val compact = maxHeight < Size.touch * 12
         // Sized like the Systems screen's cards: about six across, never smaller than a thumb.
         val gap = Space.m
         val usable = maxWidth - Space.gutter * 2
-        val target = (maxWidth * 0.135f).coerceAtLeast(112.dp)
-        columns = ((usable + gap) / (target + gap)).toInt().coerceIn(3, 8)
+        val target = (maxWidth * 0.135f).coerceAtLeast(Size.touch * 2 + Space.l)
+        columns = ((usable + gap) / (target + gap)).toInt().coerceIn(if (maxWidth < Size.touch * 12) 2 else 3, 8)
         val cardWidth = (usable - gap * (columns - 1)) / columns
         val artHeight = cardWidth / Aspect.SYSTEM_CARD
         Column(Modifier.fillMaxSize()) {
@@ -198,22 +207,25 @@ fun CollectionsScreen(app: AppState) {
                 active = view.ordinal,
                 focused = view.ordinal.takeIf { inTabs },
                 onSelect = { i -> show(CollectionsView.entries[i]); state.inTabs = false },
+                modifier = Modifier.reveal(entry, 0),
             )
             if (items.isEmpty()) {
-                SeriesEmpty(prefs.autoSeries, selected = !inTabs && app.focusZone == FocusZone.CONTENT, onTurnOn = ::turnOnSeries)
+                SeriesEmpty(prefs.autoSeries, selected = !inTabs && app.focusZone == FocusZone.CONTENT, compact = compact, onTurnOn = ::turnOnSeries)
                 return@Column
             }
-            // Each view keeps its own scroll, so switching back finds you where you were.
+            // Each view keeps its own scroll, so switching back finds you where you were, and its
+            // cards rise in again when it is shown.
             key(view) {
+                val reveal = rememberReveal(view)
                 val grid = rememberLazyGridState()
                 FollowSelection(grid, { sel.index }, anchor = 0.2f)
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(columns),
                     state = grid,
-                    modifier = Modifier.weight(1f).fadingEdges(top = if (grid.canScrollBackward) 24.dp else 0.dp),
+                    modifier = Modifier.weight(1f).fadingEdges(grid, top = Space.xl, bottom = Space.x3),
                     contentPadding = PaddingValues(start = Space.gutter, end = Space.gutter, top = Space.l, bottom = Size.hintHeight + Space.x4),
                     horizontalArrangement = Arrangement.spacedBy(gap),
-                    verticalArrangement = Arrangement.spacedBy(Space.l),
+                    verticalArrangement = Arrangement.spacedBy(Space.xl),
                 ) {
                     itemsIndexed(items, key = { _, item -> if (item is CollectionItem.Of) item.collection.id.value else -1L }) { i, item ->
                         val selected = !inTabs && i == sel.index && app.focusZone == FocusZone.CONTENT
@@ -223,11 +235,14 @@ fun CollectionsScreen(app: AppState) {
                             sel.index = i
                             open(item)
                         }
+                        // Row by row as the view opens.
+                        val rise = Modifier.reveal(reveal, 1 + i / columns)
                         when (item) {
-                            CollectionItem.New -> NewCollectionCard(selected, artHeight, tap)
+                            CollectionItem.New -> NewCollectionCard(selected, artHeight, tap, rise)
                             is CollectionItem.Of -> CollectionCard(
                                 app, item.collection, selected, artHeight, tap,
                                 onLongClick = { state.inTabs = false; sel.index = i; app.openContextMenu(app.collectionMenu(item.collection)) },
+                                modifier = rise,
                             )
                         }
                     }
@@ -239,31 +254,25 @@ fun CollectionsScreen(app: AppState) {
 
 /** The Series view with nothing in it: what it is for, and the switch when it is off. */
 @Composable
-private fun ColumnScope.SeriesEmpty(on: Boolean, selected: Boolean, onTurnOn: () -> Unit) {
-    val c = Fuse.colors
-    Column(
-        Modifier.weight(1f).fillMaxWidth().padding(horizontal = Space.gutter, vertical = Space.xl),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
+private fun ColumnScope.SeriesEmpty(on: Boolean, selected: Boolean, compact: Boolean, onTurnOn: () -> Unit) {
+    Box(
+        Modifier.weight(1f).fillMaxWidth().padding(horizontal = Space.gutter, vertical = Space.xl).padding(bottom = Size.hintHeight),
+        contentAlignment = Alignment.Center,
     ) {
-        Box(Modifier.size(64.dp).clip(CircleShape).background(c.text.copy(alpha = 0.06f)), contentAlignment = Alignment.Center) {
-            FuseIcon(FuseIcons.Sparkles, size = 26.dp, tint = c.textMuted)
-        }
-        Spacer(Modifier.height(Space.m))
-        FText(if (on) "No series yet" else "Automatic series is off", Fuse.type.title, maxLines = 1)
-        Spacer(Modifier.height(Space.xs))
-        FText(
-            if (on) "Fuse gathers games of one series into a collection, once it finds two or more of them." else "Turn it on and Fuse gathers games of one series into collections of their own.",
-            Fuse.type.body, color = c.textMuted, maxLines = 2, align = TextAlign.Center, modifier = Modifier.widthIn(max = 520.dp),
+        EmptyState(
+            FuseIcons.Sparkles,
+            if (on) "No series yet" else "Automatic series is off",
+            message = if (on) {
+                "Fuse gathers the games of one series into a collection of their own once it finds two or more of them."
+            } else {
+                "Turn it on and Fuse gathers the games of one series into collections of their own."
+            },
+            actionLabel = if (on) null else "Turn on Automatic series",
+            actionIcon = FuseIcons.Sparkles,
+            actionSelected = selected,
+            onAction = onTurnOn,
+            compact = compact,
         )
-        if (!on) {
-            Spacer(Modifier.height(Space.l))
-            ControlTile(
-                "Turn on Automatic series", FuseIcons.Sparkles, selected = selected,
-                modifier = Modifier.width(240.dp).height(80.dp), active = true, onClick = onTurnOn,
-            )
-        }
-        Spacer(Modifier.height(Size.hintHeight))
     }
 }
 
@@ -271,28 +280,43 @@ private fun MediaSet.hero(): io.github.matiyaaa.fuse.model.MediaItem? = all(io.g
 
 private fun io.github.matiyaaa.fuse.model.MediaItem.model(): Any? = localPath ?: remoteUrl
 
+/**
+ * The card that makes a new collection: an outlined, empty slot with a plus, so it reads as a place
+ * to put something rather than a collection of its own.
+ */
 @Composable
-private fun NewCollectionCard(selected: Boolean, artHeight: Dp, onClick: () -> Unit) {
+private fun NewCollectionCard(selected: Boolean, artHeight: Dp, onClick: () -> Unit, modifier: Modifier) {
     val c = Fuse.colors
-    Column {
+    val fraction = Fuse.geometry.tileCornerFraction * 0.6f
+    val shape = SquircleShape.fraction(fraction)
+    val dash = c.hairlineStrong
+    Column(modifier) {
         Tile(
             selected = selected,
             modifier = Modifier.fillMaxWidth().height(artHeight),
-            shape = SquircleShape.fraction(Fuse.geometry.tileCornerFraction * 0.6f),
-            cornerFraction = Fuse.geometry.tileCornerFraction * 0.6f,
+            shape = shape,
+            cornerFraction = fraction,
             onClick = onClick,
         ) {
-            Box(Modifier.fillMaxSize().background(c.text.copy(alpha = 0.06f)), contentAlignment = Alignment.Center) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    FuseIcon(FuseIcons.Plus, size = 22.dp, tint = c.text)
-                    Spacer(Modifier.height(Space.xs))
-                    FText("New", Fuse.type.label, maxLines = 1)
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .background(c.surfaceDim.copy(alpha = if (c.isDark) 0.55f else 0.8f))
+                    .drawWithCache {
+                        // A dashed edge just inside the card's own outline.
+                        val outline = Path().apply { addOutline(shape.createOutline(size, layoutDirection, this@drawWithCache)) }
+                        val on = Space.s.toPx()
+                        val stroke = Stroke(width = Size.focusStroke.toPx() * 1.5f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(on, on * 0.75f)))
+                        onDrawBehind { drawPath(outline, dash, style = stroke) }
+                    },
+                contentAlignment = Alignment.Center,
+            ) {
+                Box(Modifier.size(Size.thumb).clip(CircleShape).background(c.text.copy(alpha = if (c.isDark) 0.1f else 0.08f)), contentAlignment = Alignment.Center) {
+                    FuseIcon(FuseIcons.Plus, size = Size.iconM, tint = c.text)
                 }
             }
         }
-        Spacer(Modifier.height(Space.s))
-        FText("New collection", Fuse.type.label, maxLines = 1)
-        FText("Pick its games next", Fuse.type.caption, color = c.textMuted, maxLines = 1)
+        CardLabel("New collection", "Pick its games next", selected)
     }
 }
 
@@ -304,16 +328,18 @@ private fun CollectionCard(
     artHeight: Dp,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
+    modifier: Modifier,
 ) {
     val c = Fuse.colors
     val games by remember(collection.id) { app.store.library.games(GameQuery(collection = collection.id)) }.collectAsState(initial = emptyList())
     val media by remember(collection.id) { app.store.media.media(MediaOwner.OfCollection(collection.id)) }.collectAsState(initial = MediaSet.Empty)
-    Column {
+    val fraction = Fuse.geometry.tileCornerFraction * 0.6f
+    Column(modifier) {
         Tile(
             selected = selected,
             modifier = Modifier.fillMaxWidth().height(artHeight),
-            shape = SquircleShape.fraction(Fuse.geometry.tileCornerFraction * 0.6f),
-            cornerFraction = Fuse.geometry.tileCornerFraction * 0.6f,
+            shape = SquircleShape.fraction(fraction),
+            cornerFraction = fraction,
             glow = games.firstOrNull()?.accent?.toColor() ?: c.accent,
             onClick = onClick,
             onLongClick = onLongClick,
@@ -322,19 +348,34 @@ private fun CollectionCard(
             when {
                 own != null && media.hero() == null -> io.github.matiyaaa.fuse.ui.designsystem.media.Artwork(own.model(), Modifier.fillMaxSize())
                 games.isNotEmpty() -> CoverCollage(games, artHeight, background = media.hero()?.model())
-                else -> Box(Modifier.fillMaxSize().background(c.text.copy(alpha = 0.06f)).padding(Space.m), contentAlignment = Alignment.Center) {
+                // Its games are still on their way: the card holds its place.
+                collection.gameCount > 0 -> Box(Modifier.fillMaxSize().skeleton())
+                else -> Box(Modifier.fillMaxSize().background(c.surfaceDim.copy(alpha = if (c.isDark) 0.55f else 0.8f)), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(Space.xs)) {
-                        FuseIcon(FuseIcons.Bookmark, size = 20.dp, tint = c.textMuted)
-                        FText(if (collection.kind == CollectionKind.SERIES) "No games" else "Empty", Fuse.type.caption, color = c.textMuted, maxLines = 1, align = androidx.compose.ui.text.style.TextAlign.Center)
+                        FuseIcon(if (collection.kind == CollectionKind.SERIES) FuseIcons.Sparkles else FuseIcons.Bookmark, size = Size.iconM, tint = c.textMuted)
+                        FText("No games yet", Fuse.type.caption, color = c.textMuted, maxLines = 1, align = TextAlign.Center)
                     }
                 }
             }
         }
-        Spacer(Modifier.height(Space.s))
-        FText(collection.name, Fuse.type.label, color = if (selected) c.text else c.text.copy(alpha = 0.9f), maxLines = 1)
-        FText("${collection.gameCount} ${if (collection.gameCount == 1) "game" else "games"}", Fuse.type.caption, color = c.textMuted, maxLines = 1)
+        CardLabel(collection.name, countText(collection.gameCount), selected)
     }
 }
+
+/**
+ * A card's name and count under its art. It starts below the spark's reach, so the bar under a
+ * lifted card never touches the words.
+ */
+@Composable
+private fun CardLabel(title: String, detail: String, selected: Boolean) {
+    val c = Fuse.colors
+    Spacer(Modifier.height(Size.sparkClearance))
+    FText(title, Fuse.type.bodyStrong, color = if (selected) c.text else c.text.copy(alpha = 0.88f), maxLines = 1)
+    Spacer(Modifier.height(Space.xxs))
+    FText(detail, Fuse.type.caption.tabular(), color = c.textMuted, maxLines = 1)
+}
+
+private fun countText(n: Int) = "$n ${if (n == 1) "game" else "games"}"
 
 /** Asks for a name, makes the collection, then offers to pick its games. */
 fun AppState.newCollection() {
@@ -354,7 +395,8 @@ fun AppState.collectionMenu(c: GameCollection): ContextMenuSpec {
     val owner = MediaOwner.OfCollection(c.id)
     return ContextMenuSpec(
         title = c.name,
-        subtitle = if (series) "Series Fuse found  ·  ${c.gameCount} games" else "${c.gameCount} games",
+        subtitle = if (series) "Series Fuse found  ·  ${countText(c.gameCount)}" else countText(c.gameCount),
+        icon = if (series) FuseIcons.Sparkles else FuseIcons.Bookmark,
         actions = buildList {
             add(MenuAction("open", "Open", FuseIcons.Grid, onSelect = { closeOverlays(); go(Route.CollectionGames(c.id, c.name)) }))
             if (series) {
@@ -401,17 +443,23 @@ fun AppState.addGamesPicker(id: io.github.matiyaaa.fuse.model.CollectionId, name
         val members = store.library.games(GameQuery(collection = id)).first().map { it.id }.toMutableSet()
         fun spec(): ChoiceSpec = ChoiceSpec(
             title = "Games in $name",
-            message = "${members.size} ${if (members.size == 1) "game" else "games"}. Select games to add or remove them.",
+            message = "${countText(members.size)}. Select games to add or remove them.",
             options = listOf(MenuAction("done", "Done", FuseIcons.Check, onSelect = { choice = null })) +
                 games.map { g: GameCard ->
                     val inIt = g.id in members
-                    MenuAction("g${g.id.value}", g.title, null, detail = g.platformShort, trailing = Trailing.Check(inIt), onSelect = {
+                    MenuAction(
+                        "g${g.id.value}", g.title, null, detail = g.platformShort, trailing = Trailing.Check(inIt),
+                        // Every game shows its art, so a long list is quick to scan.
+                        art = MenuArt(g.art.square ?: g.art.icon ?: g.art.boxart, square = true, fallbackTitle = g.title, accent = g.accent, wide = false),
+                        section = "Your library",
+                        onSelect = {
                         scope.launch {
                             if (inIt) store.collections.remove(id, g.id) else store.collections.add(id, g.id)
                             if (inIt) members.remove(g.id) else members.add(g.id)
                             choice = spec()
                         }
-                    })
+                    },
+                    )
                 },
         )
         choice = spec()
