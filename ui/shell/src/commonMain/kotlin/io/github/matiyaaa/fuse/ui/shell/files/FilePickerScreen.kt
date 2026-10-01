@@ -76,7 +76,11 @@ fun FilePickerScreen(app: AppState, purpose: FilePurpose) {
         // A folder that went away since last time: start from the storage places.
         listing = if (loaded.error != null && place.path != null && cameFrom == null && listing == null) app.store.library.browse(null).also { place.path = null } else loaded
         val back = cameFrom
-        sel.index = back?.let { b -> listing?.entries?.indexOfFirst { it.path == b }?.takeIf { it >= 0 }?.plus(if (listing?.path != null) 1 else 0) } ?: 0
+        val now = listing
+        // Back up: on the folder just left. Into a folder: on its first entry, B goes up.
+        val up = if (now?.path != null) 1 else 0
+        sel.index = back?.let { b -> now?.entries?.indexOfFirst { it.path == b }?.takeIf { it >= 0 }?.plus(up) }
+            ?: if (up == 1 && now?.entries?.isNotEmpty() == true) 1 else 0
         cameFrom = null
     }
     LaunchedEffect(Unit) {
@@ -130,7 +134,7 @@ fun FilePickerScreen(app: AppState, purpose: FilePurpose) {
             Spacer(Modifier.height(Size.hudHeight + Space.m))
             FText(if (purpose == FilePurpose.APK) "Choose an APK" else "Choose a game file", Fuse.type.title, maxLines = 1)
             Spacer(Modifier.height(Space.xs))
-            FText(where(l), Fuse.type.body, color = Fuse.colors.textMuted, maxLines = 1)
+            Trail(l)
             Spacer(Modifier.height(Space.l))
             Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(Space.xl)) {
                 Box(Modifier.weight(if (wide) 0.62f else 1f).fillMaxHeight()) {
@@ -154,11 +158,22 @@ fun FilePickerScreen(app: AppState, purpose: FilePurpose) {
     }
 }
 
-/** The folder shown, as a short path, or the storage places. */
-private fun where(l: BrowseListing?): String = when {
-    l == null -> "Looking at your storage"
-    l.path == null -> "Pick where to look"
-    else -> l.path
+/** Where the picker is: the storage place, then the last folders below it. */
+@Composable
+private fun Trail(l: BrowseListing?) {
+    val c = Fuse.colors
+    val parts = when {
+        l == null -> listOf("Looking at your storage")
+        l.path == null -> listOf("Pick where to look")
+        l.trail.size > 3 -> listOf(l.trail.first(), "...") + l.trail.takeLast(2)
+        else -> l.trail.ifEmpty { listOf(l.path) }
+    }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        parts.forEachIndexed { i, part ->
+            if (i > 0) FuseIcon(FuseIcons.ChevronRight, size = 16.dp, tint = c.textFaint, modifier = Modifier.padding(horizontal = Space.xs))
+            FText(part, Fuse.type.body, color = if (i == parts.lastIndex) c.text else c.textMuted, maxLines = 1)
+        }
+    }
 }
 
 /** For a game file: the systems that take it; for an APK, nothing extra. */
@@ -167,7 +182,8 @@ private fun fileDetail(e: BrowseEntry, purpose: FilePurpose): String? {
     val systems = PlatformCatalog.forExtension(FsPath.extension(e.name))
     return when {
         systems.isEmpty() -> null
-        systems.size <= 2 -> systems.joinToString(" or ") { it.shortName }
+        systems.size == 1 -> systems.single().name
+        systems.size == 2 -> systems.joinToString(" or ") { it.shortName }
         else -> "${systems.first().shortName} and ${systems.size - 1} more"
     }
 }

@@ -15,6 +15,8 @@ import io.github.matiyaaa.fuse.ui.shell.app.Spotlight
 import io.github.matiyaaa.fuse.ui.shell.screenshots.ScreenshotPlatform
 import io.github.matiyaaa.fuse.ui.shell.settings.settingsSections
 import io.github.matiyaaa.fuse.ui.shell.store.GameQuery
+import io.github.matiyaaa.fuse.ui.shell.store.LocationHint
+import java.io.File
 import kotlin.time.Clock
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -27,6 +29,15 @@ internal fun AuditDriver.openSettings() {
     choose(6)
     waitFor("Theme, motion, glass, CRT")
     settle()
+}
+
+/** A downloads folder with a game file and an APK, and the library as an SD card, for the file picker. */
+private fun AuditDriver.storageForPicker() {
+    val folder = File(root.parentFile, "audit-downloads").apply { mkdirs() }
+    File(folder, "Quasar Drift (World).gba").writeBytes(ByteArray(2048))
+    File(folder, "Ember Tactics.apk").writeBytes(ByteArray(4096))
+    File(folder, "Saves").mkdirs()
+    controls.storageRoots = listOf(LocationHint(folder.absolutePath, "Internal storage"), LocationHint(root.absolutePath, "SD card 4E21-9A0C"))
 }
 
 private fun sectionIndex(id: String) = settingsSections.indexOfFirst { it.id == id }.also { check(it >= 0) { "No settings section $id" } }
@@ -161,6 +172,52 @@ internal fun AuditDriver.settingsScreens(exhaustive: Boolean) {
     }
 
     if (!exhaustive) return
+
+    scenario("settings", "add a game") {
+        storageForPicker()
+        show(androidStore)
+        openSettings()
+        tap(PadButton.DPAD_DOWN, sectionIndex("library"))
+        tap(PadButton.DPAD_RIGHT)
+        tapText("Add a game")
+        waitFor("An APK file")
+        shoot("an app, an APK or a game file")
+        tapText("An app on this device")
+        waitFor("Which app is a game?")
+        shoot("apps that aren't games yet")
+        tap(PadButton.B)
+        tapText("Add a game")
+        waitFor("An APK file")
+        tapText("A game file")
+        waitFor("Choose a game file")
+        settle()
+        shoot("file picker: storage places")
+        tap(PadButton.A)
+        waitFor("Up a folder")
+        settle()
+        shoot("file picker: a folder, folders first")
+        tapText("Quasar Drift (World).gba")
+        tap(PadButton.A)
+        waitFor("Which system is")
+        shoot("the system for a picked file")
+        tap(PadButton.B)
+    }
+
+    scenario("settings", "add an apk") {
+        storageForPicker()
+        show(androidStore)
+        openSettings()
+        tap(PadButton.DPAD_DOWN, sectionIndex("library"))
+        tap(PadButton.DPAD_RIGHT)
+        tapText("Add a game")
+        waitFor("An APK file")
+        tapText("An APK file")
+        waitFor("Choose an APK")
+        tap(PadButton.A)
+        waitFor("Ember Tactics.apk")
+        settle()
+        shoot("APK picker: only APKs and folders")
+    }
 
     scenario("settings", "storage") {
         useLibrary()

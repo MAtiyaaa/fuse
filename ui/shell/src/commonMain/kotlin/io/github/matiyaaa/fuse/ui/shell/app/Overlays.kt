@@ -54,6 +54,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
 fun OverlayHost(app: AppState) {
     ContextMenuOverlay(app)
     ChoiceOverlay(app)
+    ScreenPromptOverlay(app)
     ConfirmOverlay(app)
     TextInputOverlay(app)
     io.github.matiyaaa.fuse.ui.shell.settings.ButtonDetectOverlay(app)
@@ -124,7 +125,7 @@ private fun ChoiceOverlay(app: AppState) {
                     FText(it, Fuse.type.body, color = Fuse.colors.textMuted, maxLines = 8)
                 }
                 Spacer(Modifier.height(Space.l))
-                MenuList(s.options, sel, modifier = Modifier.heightIn(max = 420.dp))
+                MenuList(s.options, sel, modifier = Modifier.heightIn(max = 420.dp), fill = false)
             }
         }
     }

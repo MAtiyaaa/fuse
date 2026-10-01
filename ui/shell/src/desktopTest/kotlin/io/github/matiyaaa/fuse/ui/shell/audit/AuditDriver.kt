@@ -102,6 +102,12 @@ internal class AuditDriver(
     /** The library store's database, for play sessions the audit opens itself. */
     val libraryData: FuseData get() = libraryStore.let { data!! }
 
+    private var android: FuseStore? = null
+
+    /** An Android device: its game apps in the Android system, APKs to install. Built on first use. */
+    val androidStore: FuseStore
+        get() = android ?: runBlocking { AuditLibrary.androidStore(cache, controls, scope) }.also { android = it }
+
     /** A first run with two library folders to suggest, built on first use. */
     val firstRunStore: FuseStore
         get() = firstRun ?: runBlocking { AuditLibrary.firstRunStore(root, sd, cache, controls, scope) }.also { firstRun = it }

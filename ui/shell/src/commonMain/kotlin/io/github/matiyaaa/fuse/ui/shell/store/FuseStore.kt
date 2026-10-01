@@ -172,6 +172,8 @@ data class BrowseListing(
     val entries: List<BrowseEntry>,
     /** Set when the folder couldn't be read. */
     val error: String? = null,
+    /** The storage place's name, then each folder below it ("Internal storage", "Download", "Games"). */
+    val trail: List<String> = emptyList(),
 )
 
 data class BrowseEntry(val path: String, val name: String, val isDirectory: Boolean, val sizeBytes: Long = 0)

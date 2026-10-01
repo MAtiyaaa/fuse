@@ -210,11 +210,13 @@ fun MenuList(
     /** Keeps a quiet marker on the selected row while focus is in another pane (settings sections). */
     dimSelection: Boolean = false,
     header: (@Composable () -> Unit)? = null,
+    /** Takes all the height it may; off for lists in dialogs, which are only as tall as their rows. */
+    fill: Boolean = true,
 ) {
     val state = rememberLazyListState()
     FollowSelection(state, { selection.index + if (header != null) 1 else 0 }, anchor = 0.3f)
     LazyColumn(
-        modifier = modifier.fillMaxHeight(),
+        modifier = if (fill) modifier.fillMaxHeight() else modifier,
         state = state,
         verticalArrangement = Arrangement.spacedBy(Space.xxs),
     ) {

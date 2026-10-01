@@ -50,6 +50,9 @@ internal class AuditControls(val cache: File) {
 
     @Volatile var libraryCandidates: List<LocationHint> = emptyList()
 
+    /** Where Fuse's file picker starts. */
+    @Volatile var storageRoots: List<LocationHint> = emptyList()
+
     /** Folder listings still allowed before listing pauses; negative means never pause. */
     private val listBudget = MutableStateFlow(-1)
 
@@ -83,6 +86,8 @@ internal class AuditControls(val cache: File) {
 internal class AuditServices(
     private val base: ScreenshotServices,
     private val controls: AuditControls,
+    /** Android, for the screens only an Android device has (its games, APKs). */
+    override val host: Host = base.host,
 ) : FuseServices by base {
     override val fs: FuseFileSystem = object : FuseFileSystem by base.fs {
         override suspend fun list(path: String): List<FsEntry> {
@@ -113,6 +118,7 @@ internal class AuditServices(
     override val locations = object : DeviceLocations {
         override suspend fun libraryCandidates(): List<LocationHint> = controls.libraryCandidates
         override suspend fun biosRoots(): List<String> = emptyList()
+        override suspend fun storageRoots(): List<LocationHint> = controls.storageRoots
     }
 
     companion object {
@@ -128,9 +134,10 @@ internal class AuditServices(
 
         val InstalledEmulators: List<InstalledEmulator> = ScreenshotServices.InstalledEmulators + Citron
 
-        fun create(cache: File, controls: AuditControls): AuditServices = AuditServices(
+        fun create(cache: File, controls: AuditControls, host: Host = Host.LINUX): AuditServices = AuditServices(
             ScreenshotServices(FuseData(DesktopDatabase.open(File(cache, "fuse-${System.nanoTime()}.db").absolutePath)), cache),
             controls,
+            host,
         )
     }
 }

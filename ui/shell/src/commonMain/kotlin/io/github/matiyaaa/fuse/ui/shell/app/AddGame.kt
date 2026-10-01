@@ -16,6 +16,9 @@ import io.github.matiyaaa.fuse.ui.shell.store.GameCard
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
+/** "Sega, 1994": who made the system and when, to tell similar names apart. */
+private fun Platform.maker(): String? = listOfNotNull(manufacturer, releaseYear?.toString()).joinToString(", ").ifEmpty { null }
+
 /** "a game", "an app" or "an emulator". */
 private fun AppKind.noun(): String = when (this) {
     AppKind.GAME -> "a game"
@@ -79,7 +82,7 @@ fun AppState.systemPicker(card: GameCard) {
         val rest = PlatformCatalog.all.filter { p -> first.none { it.id == p.id } }.sortedBy { it.name.lowercase() }
         fun row(p: Platform, detail: String?) = MenuAction(
             "p.${p.id.value}", p.name, null,
-            detail = detail,
+            detail = detail ?: p.maker(),
             trailing = Trailing.Check(p.id == current),
             onSelect = { pick(p) },
         )
@@ -212,6 +215,6 @@ internal fun AppState.addGameFile(path: String) {
         message = if (suggested.isEmpty()) "Fuse doesn't know this kind of file. Pick the system whose emulator opens it." else null,
         options = suggested.map { p ->
             MenuAction("s.${p.id.value}", p.name, FuseIcons.Sparkles, detail = "Takes .${FsPath.extension(path)} files", onSelect = { add(p.id, p.name) })
-        } + rest.map { p -> MenuAction("p.${p.id.value}", p.name, null, onSelect = { add(p.id, p.name) }) },
+        } + rest.map { p -> MenuAction("p.${p.id.value}", p.name, null, detail = p.maker(), onSelect = { add(p.id, p.name) }) },
     )
 }

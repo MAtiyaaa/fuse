@@ -578,18 +578,33 @@ internal fun AuditDriver.launchScreens() {
         shoot("error toast after the launch failed", 700)
     }
 
+    scenario("game", "system") {
+        useLibrary()
+        openGame("Emberline Saga")
+        tap(PadButton.X)
+        tapText("System")
+        waitFor("System for")
+        shoot("a game's system: its folder's first, then every other")
+        tap(PadButton.B)
+    }
+
     scenario("launch", "which screen") {
         useLibrary(twoScreens)
         openGame("Emberline Saga")
         tap(PadButton.A)
-        waitFor("Play on which screen?")
+        waitFor("PLAY ON WHICH SCREEN?")
         shoot("top or bottom, just this time")
-        tapText("Remember")
+        tap(PadButton.DPAD_RIGHT)
         settle(400)
-        shoot("remember for this game")
-        tapText("Remember")
+        shoot("the bottom screen chosen")
+        tap(PadButton.DPAD_DOWN)
+        tap(PadButton.A)
         settle(400)
-        shoot("remember for the whole system")
+        shoot("always for this game ticked")
+        tap(PadButton.DPAD_RIGHT)
+        tap(PadButton.A)
+        settle(400)
+        shoot("always for the system ticked instead")
         tap(PadButton.B)
         // Game options offer the screen too.
         tap(PadButton.X)
@@ -710,7 +725,7 @@ internal fun AuditDriver.appsScreens(exhaustive: Boolean) {
         tap(PadButton.DPAD_DOWN)
         shoot("Pinned")
         if (nav(NavAction.UP) != NavResult.MOVED) throw NotCovered("Up did not reach the filters")
-        tap(PadButton.DPAD_RIGHT, 2)
+        tap(PadButton.DPAD_RIGHT, 3)
         shoot("filters focused, All apps")
         tap(PadButton.DPAD_DOWN)
         shoot("All apps")
@@ -718,6 +733,28 @@ internal fun AuditDriver.appsScreens(exhaustive: Boolean) {
         tap(PadButton.X)
         waitFor("App Info")
         shoot("app options menu")
+        tapText("Type")
+        waitFor("What is")
+        shoot("an app's type: game, app or emulator")
+        tap(PadButton.B)
+    }
+
+    scenario("android", "games") {
+        show(androidStore)
+        tab(Destination.SYSTEMS)
+        waitFor("Android")
+        shoot("Android in Systems")
+        tap(PadButton.A)
+        waitFor("7 games")
+        settle(1_200)
+        shoot("the Android system: game apps with their icons")
+        tap(PadButton.X)
+        waitFor("Android, or back to being an app")
+        shoot("an Android game's options")
+        tapText("System")
+        waitFor("System for")
+        shoot("an Android game's system")
+        tap(PadButton.B)
     }
 }
 

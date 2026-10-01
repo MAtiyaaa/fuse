@@ -79,6 +79,9 @@ class AppState(
     var textInput by mutableStateOf<TextInputSpec?>(null)
     var choice by mutableStateOf<ChoiceSpec?>(null)
 
+    /** "Play on which screen?" on a device with two screens. */
+    var screenPrompt by mutableStateOf<ScreenPromptSpec?>(null)
+
     /** "Detect my buttons" is running; it takes every press until it finishes. */
     var buttonDetect by mutableStateOf(false)
 
@@ -98,7 +101,7 @@ class AppState(
     var launching by mutableStateOf<LaunchVeil?>(null)
 
     val overlayOpen: Boolean
-        get() = quickMenuOpen || contextMenu != null || confirm != null || textInput != null || choice != null || buttonDetect
+        get() = quickMenuOpen || contextMenu != null || confirm != null || textInput != null || choice != null || screenPrompt != null || buttonDetect
 
     fun openContextMenu(spec: ContextMenuSpec) {
         contextMenu = spec
@@ -110,6 +113,7 @@ class AppState(
         confirm = null
         textInput = null
         choice = null
+        screenPrompt = null
         buttonDetect = false
     }
 

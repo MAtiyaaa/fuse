@@ -416,7 +416,7 @@ class StoreIntegrationTest {
         val game = androidGames(2).first { it.title == "DREDGE" }
         assertTrue(game.isApp)
         // The app's icon until art is found.
-        assertEquals(AppIconModel.ref("com.blackrock.dredge"), game.art.icon)
+        assertEquals(AppIconModel("com.blackrock.dredge"), game.art.icon)
 
         // It starts as the app, whatever system it is filed under.
         store.library.setPlatform(game.id, PlatformId("win"))

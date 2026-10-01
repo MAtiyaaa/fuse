@@ -13,6 +13,7 @@ import io.github.matiyaaa.fuse.model.MediaOwner
 import io.github.matiyaaa.fuse.model.MediaSet
 import io.github.matiyaaa.fuse.model.Platform
 import io.github.matiyaaa.fuse.model.PlatformId
+import io.github.matiyaaa.fuse.ui.shell.store.AppIconModel
 import io.github.matiyaaa.fuse.ui.shell.store.Art
 import io.github.matiyaaa.fuse.ui.shell.store.FuseServices
 import io.github.matiyaaa.fuse.ui.shell.store.GameCard
@@ -79,7 +80,7 @@ internal class StoreContext(
             title = summary.displayTitle,
             platformShort = platform?.shortName ?: summary.platformId.value.uppercase(),
             accent = platform?.accent ?: DEFAULT_ACCENT,
-            art = media?.let(Art::from) ?: Art.None,
+            art = media?.let(Art::from)?.let(::withAppIcon) ?: Art.None,
             favorite = summary.favorite,
             lastPlayedAt = summary.lastPlayedAt,
             playSeconds = summary.totalSeconds,
@@ -91,6 +92,14 @@ internal class StoreContext(
             missing = summary.missing,
             isApp = summary.isApp,
         )
+    }
+
+    /** An Android game's own icon (stored as "app-icon:<package>") as the app list's image model. */
+    private fun withAppIcon(art: Art): Art {
+        val ref = (art.icon as? String)?.let(AppIconModel::parse) ?: return art
+        val apps = services.apps
+        val model = apps?.apps?.value?.firstOrNull { it.packageName == ref.packageName }?.let(apps::iconModel) ?: ref
+        return art.copy(icon = model)
     }
 
     /** Turns game summaries into cards with their artwork, following both games and media changes. */

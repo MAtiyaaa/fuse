@@ -136,7 +136,8 @@ internal class DefaultLibraryOps(
             .map { p ->
                 val (chosen, layout) = choices[p.id] ?: ("" to p.defaultLayout)
                 val candidates = ctx.registry.forPlatform(p.id, ctx.host)
-                val installedIds = installed.map { it.id }.toSet()
+                // Built-in adapters (Android apps) need nothing installed.
+                val installedIds = installed.map { it.id }.toSet() + candidates.filter { it.builtIn }.map { it.id }
                 val chosenId = chosen.takeIf { it.isNotBlank() }?.let(::EmulatorId)
                 val effective = chosenId ?: candidates.firstOrNull { it.id in installedIds && !it.opensAppOnly }?.id
                     ?: candidates.firstOrNull { it.id in installedIds }?.id
@@ -147,7 +148,7 @@ internal class DefaultLibraryOps(
                     gameCount = counts[p.id] ?: 0,
                     art = art[p.id] ?: Art.None,
                     emulatorName = effectiveInstalled?.name ?: effective?.let { ctx.registry[it]?.name },
-                    emulatorInstalled = effectiveInstalled != null,
+                    emulatorInstalled = effectiveInstalled != null || effective in installedIds,
                     installedEmulators = candidates.count { it.id in installedIds },
                     bios = bios[p.id] ?: if (p.bios == null) BiosStatus.NotRequired else BiosStatus(io.github.matiyaaa.fuse.model.BiosState.UNKNOWN),
                     layout = layout,
@@ -595,18 +596,28 @@ internal class DefaultLibraryOps(
         if (path == null) {
             return BrowseListing(null, null, roots.map { BrowseEntry(it.path, it.label, isDirectory = true) })
         }
+        val trail = trailOf(path, roots)
         val entries = try {
             ctx.services.fs.list(path)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            return BrowseListing(path, parentOf(path, roots), emptyList(), error = "Fuse can't read this folder.")
+            return BrowseListing(path, parentOf(path, roots), emptyList(), error = "Fuse can't read this folder.", trail = trail)
         }
         val shown = entries
             .filter { !it.name.startsWith(".") }
             .sortedWith(compareBy<io.github.matiyaaa.fuse.library.FsEntry>({ !it.isDirectory }, { it.name.lowercase() }))
             .map { BrowseEntry(it.path, it.name, it.isDirectory, it.sizeBytes) }
-        return BrowseListing(path, parentOf(path, roots), shown)
+        return BrowseListing(path, parentOf(path, roots), shown, trail = trail)
+    }
+
+    /** The storage place holding [path] by name, then the folders below it; the path's own parts outside any. */
+    private fun trailOf(path: String, roots: List<io.github.matiyaaa.fuse.ui.shell.store.LocationHint>): List<String> {
+        val p = path.trimEnd('/')
+        val root = roots.filter { r -> val rp = r.path.trimEnd('/'); p == rp || p.startsWith("$rp/") || rp.isEmpty() }
+            .maxByOrNull { it.path.length }
+        val rest = if (root == null) p else p.removePrefix(root.path.trimEnd('/'))
+        return listOfNotNull(root?.label) + rest.split('/').filter { it.isNotEmpty() }
     }
 
     /** The folder above [path], or null (the storage places) at a storage root. */
