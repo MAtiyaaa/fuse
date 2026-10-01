@@ -36,14 +36,24 @@ class ScrapeCoordinatorTest {
         override val providesMetadata: Boolean,
         private val results: ApiResult<List<ProviderGame>>,
         private val art: List<ArtworkOption> = emptyList(),
+        override val artworkKinds: Set<MediaKind> = MediaKind.entries.toSet(),
     ) : ScrapeSource {
         var searches = 0
+        var lookups = 0
+        /** Which game the art was asked for, by provider id. */
+        val artFor = ArrayList<String>()
         override suspend fun search(query: ScrapeQuery): ApiResult<List<ProviderGame>> {
             searches++
             return results
         }
-        override suspend fun artwork(game: ProviderGame, query: ScrapeQuery, kinds: Set<MediaKind>) =
-            ApiResult.Success(art.filter { it.kind in kinds })
+        override suspend fun byId(id: String, query: ScrapeQuery): ApiResult<ProviderGame?> {
+            lookups++
+            return results.let { r -> if (r is ApiResult.Success) ApiResult.Success(r.value.firstOrNull { it.providerGameId == id }) else ApiResult.Success(null) }
+        }
+        override suspend fun artwork(game: ProviderGame, query: ScrapeQuery, kinds: Set<MediaKind>): ApiResult<List<ArtworkOption>> {
+            artFor += game.providerGameId
+            return ApiResult.Success(art.filter { it.kind in kinds })
+        }
     }
 
     private fun game(provider: ScrapeProviderId, id: String, title: String, platforms: List<String> = emptyList()) = ProviderGame(
@@ -393,5 +403,98 @@ class ScrapeCoordinatorTest {
         assertEquals(3, down.asked.size)
         assertEquals(4, missing.asked.size)
         assertEquals(setOf(ScrapeProviderId.STEAMGRIDDB), coordinator.resting().keys)
+    }
+
+    // SteamGridDB lists one game several times under one name, so nothing there is ever sure.
+    private val duplicates = listOf(
+        game(ScrapeProviderId.STEAMGRIDDB, "11", "Super Metroid"),
+        game(ScrapeProviderId.STEAMGRIDDB, "12", "Super Metroid"),
+        game(ScrapeProviderId.STEAMGRIDDB, "13", "Super Metroid: Redesign"),
+    )
+    private val box = art(ScrapeProviderId.STEAMGRIDDB, MediaKind.SQUARE, "https://sgdb/square.png")
+
+    @Test
+    fun duplicatesStillGiveArtAsABestGuess() = runTest {
+        val sgdb = StubSource(ScrapeProviderId.STEAMGRIDDB, false, ApiResult.Success(duplicates), listOf(box))
+        val coordinator = ScrapeCoordinator(listOf(sgdb))
+        val req = request(ScrapeProviderId.STEAMGRIDDB, kinds = setOf(MediaKind.SQUARE))
+        // Without a guess the user is asked.
+        assertIs<ScrapeOutcome.NeedsReview>(coordinator.scrape(req))
+        // With one, the first entry with the game's own name gives its art, and no details.
+        val guessed = coordinator.scrape(req, guess = Guess.EXACT_TITLE)
+        assertIs<ScrapeOutcome.Accepted>(guessed)
+        assertTrue(guessed.guessed)
+        assertEquals("11", guessed.candidate.providerGameId)
+        assertEquals(listOf("https://sgdb/square.png"), guessed.artwork.map { it.url })
+        assertEquals(null, guessed.metadata)
+        assertEquals("11", guessed.links[ScrapeProviderId.STEAMGRIDDB])
+    }
+
+    @Test
+    fun anExactTitleGuessNeedsTheGamesOwnName() = runTest {
+        val others = listOf(game(ScrapeProviderId.IGDB, "1", "Metroid Prime", listOf("SNES")), game(ScrapeProviderId.IGDB, "2", "Super Mario World", listOf("SNES")))
+        val igdb = StubSource(ScrapeProviderId.IGDB, true, ApiResult.Success(others))
+        val coordinator = ScrapeCoordinator(listOf(igdb))
+        assertIs<ScrapeOutcome.NeedsReview>(coordinator.scrape(request(ScrapeProviderId.IGDB), guess = Guess.EXACT_TITLE))
+        // The art picker takes the best match at all, and says it's a guess: art, but no details.
+        val best = coordinator.scrape(request(ScrapeProviderId.IGDB), guess = Guess.BEST)
+        assertIs<ScrapeOutcome.Accepted>(best)
+        assertTrue(best.guessed)
+        assertEquals(null, best.metadata)
+    }
+
+    @Test
+    fun aGameIdentifiedBeforeIsNeverSearchedAgain() = runTest {
+        val sgdb = StubSource(ScrapeProviderId.STEAMGRIDDB, false, ApiResult.Success(duplicates), listOf(box))
+        val coordinator = ScrapeCoordinator(listOf(sgdb))
+        val known = coordinator.known(request(ScrapeProviderId.STEAMGRIDDB, kinds = setOf(MediaKind.SQUARE)), mapOf(ScrapeProviderId.STEAMGRIDDB to "12"))
+        assertIs<ScrapeOutcome.Accepted>(known)
+        assertEquals(0, sgdb.searches)
+        assertEquals(1, sgdb.lookups)
+        assertEquals(listOf("12"), sgdb.artFor)
+        assertEquals("12", known.candidate.providerGameId)
+        assertEquals(listOf("https://sgdb/square.png"), known.artwork.map { it.url })
+        // Nothing to look up: the caller searches as usual.
+        assertEquals(null, coordinator.known(request(ScrapeProviderId.STEAMGRIDDB), emptyMap()))
+    }
+
+    @Test
+    fun aKnownIdBringsDetailsAndOtherProvidersArtByName() = runTest {
+        val igdb = StubSource(
+            ScrapeProviderId.IGDB, true,
+            ApiResult.Success(listOf(game(ScrapeProviderId.IGDB, "1103", "Super Metroid", listOf("SNES")))),
+            listOf(art(ScrapeProviderId.IGDB, MediaKind.BOXART, "https://igdb/cover.jpg")),
+            artworkKinds = setOf(MediaKind.BOXART),
+        )
+        val sgdb = StubSource(ScrapeProviderId.STEAMGRIDDB, false, ApiResult.Success(duplicates), listOf(box))
+        val coordinator = ScrapeCoordinator(listOf(igdb, sgdb))
+        val outcome = coordinator.known(
+            request(ScrapeProviderId.IGDB, ScrapeProviderId.STEAMGRIDDB, kinds = setOf(MediaKind.BOXART, MediaKind.SQUARE)),
+            mapOf(ScrapeProviderId.IGDB to "1103"),
+        )
+        assertIs<ScrapeOutcome.Accepted>(outcome)
+        assertEquals(0, igdb.searches)
+        assertEquals("About Super Metroid", outcome.metadata?.description)
+        assertEquals(setOf("https://igdb/cover.jpg", "https://sgdb/square.png"), outcome.artwork.map { it.url }.toSet())
+        // SteamGridDB's duplicates: its first entry with the very name, remembered for next time.
+        assertEquals(mapOf(ScrapeProviderId.IGDB to "1103", ScrapeProviderId.STEAMGRIDDB to "11"), outcome.links)
+    }
+
+    @Test
+    fun aPickedGameGetsSteamGridDbArtDespiteItsDuplicates() = runTest {
+        val igdb = StubSource(
+            ScrapeProviderId.IGDB, true,
+            ApiResult.Success(listOf(game(ScrapeProviderId.IGDB, "1103", "Super Metroid", listOf("SNES")), game(ScrapeProviderId.IGDB, "1104", "Super Metroid", listOf("SNES")))),
+            artworkKinds = setOf(MediaKind.BOXART),
+        )
+        val sgdb = StubSource(ScrapeProviderId.STEAMGRIDDB, false, ApiResult.Success(duplicates), listOf(box))
+        val coordinator = ScrapeCoordinator(listOf(igdb, sgdb))
+        val req = request(ScrapeProviderId.IGDB, ScrapeProviderId.STEAMGRIDDB, kinds = setOf(MediaKind.SQUARE))
+        val review = coordinator.scrape(req)
+        assertIs<ScrapeOutcome.NeedsReview>(review)
+        val picked = coordinator.accept(req, review.candidates.first { it.provider == ScrapeProviderId.IGDB })
+        assertIs<ScrapeOutcome.Accepted>(picked)
+        assertEquals(listOf("https://sgdb/square.png"), picked.artwork.map { it.url })
+        assertEquals("11", picked.links[ScrapeProviderId.STEAMGRIDDB])
     }
 }

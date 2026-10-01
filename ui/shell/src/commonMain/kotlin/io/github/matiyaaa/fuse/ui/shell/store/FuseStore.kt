@@ -238,7 +238,8 @@ interface MediaOps {
 }
 
 sealed interface ArtworkResult {
-    data class Options(val options: List<ArtworkOption>) : ArtworkResult
+    /** Art to pick from; [guess] is the game it was found for when that is only a best guess by name. */
+    data class Options(val options: List<ArtworkOption>, val guess: ScrapeCandidate? = null) : ArtworkResult
     data class NeedsMatch(val candidates: List<ScrapeCandidate>) : ArtworkResult
     data class Unavailable(val reason: String) : ArtworkResult
 }

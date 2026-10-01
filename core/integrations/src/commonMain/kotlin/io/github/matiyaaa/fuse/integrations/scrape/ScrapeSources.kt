@@ -77,6 +77,12 @@ interface ScrapeSource {
     /** Finds games for [query]. */
     suspend fun search(query: ScrapeQuery): ApiResult<List<ProviderGame>>
 
+    /**
+     * The game with this source's [id], for a game identified before: no search and no matching.
+     * Success(null) when the source has no such game or can't look games up by id.
+     */
+    suspend fun byId(id: String, query: ScrapeQuery): ApiResult<ProviderGame?> = ApiResult.Success(null)
+
     /** Artwork of the [kinds] for a game this source returned from [search]. */
     suspend fun artwork(game: ProviderGame, query: ScrapeQuery, kinds: Set<MediaKind>): ApiResult<List<ArtworkOption>>
 }
@@ -96,6 +102,11 @@ class IgdbSource(private val client: IgdbClient, private val limit: Int = 10) : 
             }
         }
         return client.searchGames(query.title, emptyList(), limit).map { list -> list.map { it.toProviderGame(null) } }
+    }
+
+    override suspend fun byId(id: String, query: ScrapeQuery): ApiResult<ProviderGame?> {
+        val n = id.toLongOrNull() ?: return ApiResult.Success(null)
+        return client.gameById(n).map { it?.toProviderGame(PlatformEvidence.MATCH) }
     }
 
     override suspend fun artwork(game: ProviderGame, query: ScrapeQuery, kinds: Set<MediaKind>) =
@@ -260,16 +271,19 @@ class SteamGridDbSource(
     override val artworkKinds = setOf(MediaKind.SQUARE, MediaKind.BOXART, MediaKind.GRID, MediaKind.HERO, MediaKind.LOGO, MediaKind.ICON)
 
     override suspend fun search(query: ScrapeQuery): ApiResult<List<ProviderGame>> =
-        client.searchAutocomplete(query.title).map { list ->
-            list.map { g ->
-                ProviderGame(
-                    provider = ScrapeProviderId.STEAMGRIDDB,
-                    providerGameId = g.id.toString(),
-                    title = g.name,
-                    year = g.releaseDate?.let { Dates.yearOfEpochSeconds(it) },
-                )
-            }
-        }
+        client.searchAutocomplete(query.title).map { list -> list.map { it.toProviderGame() } }
+
+    override suspend fun byId(id: String, query: ScrapeQuery): ApiResult<ProviderGame?> {
+        val n = id.toLongOrNull() ?: return ApiResult.Success(null)
+        return client.gameById(n).map { it?.toProviderGame() }
+    }
+
+    private fun io.github.matiyaaa.fuse.integrations.steamgriddb.SgdbGame.toProviderGame() = ProviderGame(
+        provider = ScrapeProviderId.STEAMGRIDDB,
+        providerGameId = id.toString(),
+        title = name,
+        year = releaseDate?.let { Dates.yearOfEpochSeconds(it) },
+    )
 
     override suspend fun artwork(game: ProviderGame, query: ScrapeQuery, kinds: Set<MediaKind>): ApiResult<List<ArtworkOption>> {
         val gameId = game.providerGameId.toLongOrNull() ?: return ApiResult.Success(emptyList())
