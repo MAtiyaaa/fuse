@@ -110,6 +110,30 @@ class LibraryIndexerTest {
     }
 
     @Test
+    fun aSystemTheUserChoseSurvivesRescans() = runBlocking {
+        TestDb().use { t ->
+            val d = t.data
+            d.indexer.apply(report(folder("/roms/gba", listOf(metroid, goldenSun))), 1_000, testCleaner)
+            val id = d.games.idByPath(metroid.path)!!
+            d.games.setEmulatorOverride(id, EmulatorId("mgba"))
+            d.games.setPlatformOverride(id, PlatformId("gbc"))
+            d.games.get(id)!!.let { g ->
+                assertEquals(PlatformId("gbc"), g.platformId)
+                assertEquals(PlatformId("gbc"), g.platformOverride)
+                assertEquals(PlatformId("gba"), g.scannedPlatformId)
+                // The emulator was chosen for the old system.
+                assertNull(g.emulatorOverride)
+            }
+            // A changed file is rewritten, and still keeps the user's system.
+            d.indexer.apply(report(folder("/roms/gba", listOf(metroid.copy(sizeBytes = 999), goldenSun))), 2_000, testCleaner)
+            assertEquals(PlatformId("gbc"), d.games.get(id)!!.platformId)
+            assertEquals(999L, d.games.get(id)!!.location.sizeBytes)
+            d.games.setPlatformOverride(id, null)
+            assertEquals(PlatformId("gba"), d.games.get(id)!!.platformId)
+        }
+    }
+
+    @Test
     fun removedGamesStayRemovedAcrossRescans() = runBlocking {
         TestDb().use { t ->
             val d = t.data

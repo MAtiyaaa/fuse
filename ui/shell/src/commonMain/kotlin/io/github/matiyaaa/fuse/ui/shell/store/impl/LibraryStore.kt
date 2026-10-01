@@ -9,7 +9,9 @@ import io.github.matiyaaa.fuse.launch.RetroArchCores
 import io.github.matiyaaa.fuse.launch.ScopedLaunchChoice
 import io.github.matiyaaa.fuse.library.FsPath
 import io.github.matiyaaa.fuse.library.parse.DisplayNameCleaner
+import io.github.matiyaaa.fuse.library.parse.FilenameParser
 import io.github.matiyaaa.fuse.library.scan.ScanRules
+import io.github.matiyaaa.fuse.model.AddedGames
 import io.github.matiyaaa.fuse.model.AppFilter
 import io.github.matiyaaa.fuse.model.BiosStatus
 import io.github.matiyaaa.fuse.model.EmulatorId
@@ -25,12 +27,16 @@ import io.github.matiyaaa.fuse.model.LibraryLayout
 import io.github.matiyaaa.fuse.model.LocationKind
 import io.github.matiyaaa.fuse.model.MediaOwner
 import io.github.matiyaaa.fuse.model.Platform
+import io.github.matiyaaa.fuse.model.PlatformFolderScan
 import io.github.matiyaaa.fuse.model.PlatformId
 import io.github.matiyaaa.fuse.model.ScanPhase
 import io.github.matiyaaa.fuse.model.ScanScope
+import io.github.matiyaaa.fuse.model.ScannedGame
 import io.github.matiyaaa.fuse.model.ScopedSettings
 import io.github.matiyaaa.fuse.model.SortOrder
 import io.github.matiyaaa.fuse.ui.shell.store.Art
+import io.github.matiyaaa.fuse.ui.shell.store.BrowseEntry
+import io.github.matiyaaa.fuse.ui.shell.store.BrowseListing
 import io.github.matiyaaa.fuse.ui.shell.store.ContentNote
 import io.github.matiyaaa.fuse.ui.shell.store.EmulatorChoice
 import io.github.matiyaaa.fuse.ui.shell.store.GameCard
@@ -479,10 +485,20 @@ internal class DefaultLibraryOps(
     override suspend fun setFolderPolicy(id: GameId, policy: FolderPolicy?) {
         val game = data.games.get(id) ?: return
         data.games.setFolderPolicyOverride(id, policy)
-        engine.rescan(ScanScope.PLATFORM, game.platformId)
+        // The folder is scanned as the system it belongs to, whatever system the game is filed under.
+        engine.rescan(ScanScope.PLATFORM, game.scannedPlatformId ?: game.platformId)
     }
 
-    override suspend fun removeFromFuse(id: GameId) = data.games.removeFromFuse(id)
+    /** An installed app played as a game goes back to being an app; a file game leaves Fuse only. */
+    override suspend fun removeFromFuse(id: GameId) {
+        val appId = data.games.get(id)?.appId
+        if (appId != null) apps.setKind(appId, io.github.matiyaaa.fuse.model.AppKind.APP) else data.games.removeFromFuse(id)
+    }
+
+    /** Called after games joined the library outside a scan, so their art is looked for. */
+    var onGamesAdded: () -> Unit = {}
+
+    private fun afterGamesAdded() = onGamesAdded()
 
     override suspend fun restore(id: GameId) {
         data.games.restoreToFuse(id)
@@ -528,6 +544,76 @@ internal class DefaultLibraryOps(
         }
         walk(root, 0)
         return found
+    }
+
+    override suspend fun setPlatform(id: GameId, platform: PlatformId?) {
+        val game = data.games.get(id) ?: return
+        // Back to the folder's system clears the choice, so later folder changes apply again.
+        val chosen = platform?.takeUnless { it == (game.scannedPlatformId ?: game.platformId) && game.appId == null }
+        data.games.setPlatformOverride(id, chosen)
+        // Art found under the old system may be another game: the next fill looks again.
+        ctx.data.cache.remove(FILL_TRIED, id.value.toString())
+    }
+
+    override suspend fun addGameFile(path: String, platform: PlatformId): GameId? {
+        val fs = ctx.services.fs
+        val entry = try {
+            fs.stat(path)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            null
+        } ?: return null
+        if (entry.isDirectory) return null
+        val game = ScannedGame(
+            platformId = platform,
+            sourceId = AddedGames.SOURCE,
+            path = entry.path,
+            kind = LocationKind.FILE,
+            launchPath = entry.path,
+            title = FsPath.stem(entry.name),
+            tags = FilenameParser.parse(entry.name).tags,
+            sizeBytes = entry.sizeBytes,
+            modifiedAt = entry.modifiedAt,
+        )
+        val known = data.games.idByPath(entry.path)
+        // A game already in the library only changes system; one Fuse removed comes back.
+        if (known != null) {
+            data.games.restoreToFuse(known)
+            setPlatform(known, platform)
+            return known
+        }
+        val scan = PlatformFolderScan(AddedGames.SOURCE, platform, AddedGames.FOLDER, 0, listOf(game), complete = false)
+        data.indexer.applyFolder(scan, ctx.now(), DisplayNameCleaner::clean, useCleanedForNew = ctx.settings.value.library.cleanDisplayNames)
+        val id = data.games.idByPath(entry.path) ?: return null
+        afterGamesAdded()
+        return id
+    }
+
+    override suspend fun browse(path: String?): BrowseListing {
+        val roots = runCatching { ctx.services.locations.storageRoots() }.getOrDefault(emptyList())
+        if (path == null) {
+            return BrowseListing(null, null, roots.map { BrowseEntry(it.path, it.label, isDirectory = true) })
+        }
+        val entries = try {
+            ctx.services.fs.list(path)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            return BrowseListing(path, parentOf(path, roots), emptyList(), error = "Fuse can't read this folder.")
+        }
+        val shown = entries
+            .filter { !it.name.startsWith(".") }
+            .sortedWith(compareBy<io.github.matiyaaa.fuse.library.FsEntry>({ !it.isDirectory }, { it.name.lowercase() }))
+            .map { BrowseEntry(it.path, it.name, it.isDirectory, it.sizeBytes) }
+        return BrowseListing(path, parentOf(path, roots), shown)
+    }
+
+    /** The folder above [path], or null (the storage places) at a storage root. */
+    private fun parentOf(path: String, roots: List<io.github.matiyaaa.fuse.ui.shell.store.LocationHint>): String? {
+        val trimmed = path.trimEnd('/')
+        if (roots.any { it.path.trimEnd('/') == trimmed }) return null
+        return FsPath.parent(trimmed)?.takeIf { it.isNotEmpty() }
     }
 }
 

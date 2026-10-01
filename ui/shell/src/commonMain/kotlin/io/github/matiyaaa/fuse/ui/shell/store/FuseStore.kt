@@ -2,6 +2,7 @@ package io.github.matiyaaa.fuse.ui.shell.store
 
 import io.github.matiyaaa.fuse.model.AchievementState
 import io.github.matiyaaa.fuse.model.AppFilter
+import io.github.matiyaaa.fuse.model.AppKind
 import io.github.matiyaaa.fuse.model.ArtworkOption
 import io.github.matiyaaa.fuse.model.BorderStyle
 import io.github.matiyaaa.fuse.model.CartridgeRoute
@@ -148,7 +149,32 @@ interface LibraryOps {
 
     /** Folder browser for FOLDER_BROWSER games: files inside the game folder that could be launched. */
     suspend fun launchCandidates(id: GameId): List<String>
+
+    /**
+     * Files the game under [platform] for good (a rescan keeps it), or back under the system its
+     * folder says when null. Its emulator choice goes with the old system.
+     */
+    suspend fun setPlatform(id: GameId, platform: PlatformId?) = Unit
+
+    /** Adds the game file at [path], wherever it is on the device, to [platform]. Null when it can't be read. */
+    suspend fun addGameFile(path: String, platform: PlatformId): GameId? = null
+
+    /** What is in the folder at [path] for Fuse's file picker; the device's storage when null. */
+    suspend fun browse(path: String?): BrowseListing = BrowseListing(null, null, emptyList())
 }
+
+/** A folder's content in Fuse's file picker: folders first, then files, by name. */
+data class BrowseListing(
+    /** The folder shown, or null for the list of storage places. */
+    val path: String?,
+    /** Where "up" goes: the folder above, or null for the storage places. */
+    val parent: String?,
+    val entries: List<BrowseEntry>,
+    /** Set when the folder couldn't be read. */
+    val error: String? = null,
+)
+
+data class BrowseEntry(val path: String, val name: String, val isDirectory: Boolean, val sizeBytes: Long = 0)
 
 interface SourceOps {
     val sources: StateFlow<List<LibrarySource>>
@@ -276,13 +302,33 @@ interface AchievementOps {
 
 interface AppOps {
     val supported: Boolean
+    /** Whether apps that are games join the library in the Android system (Android only). */
+    val gamesInLibrary: Boolean get() = false
     fun apps(filter: AppFilter): Flow<List<AppCard>>
+    /** Every installed app, hidden ones too, by name (for pickers such as "Add a game"). */
+    fun everyApp(): Flow<List<AppCard>> = apps(AppFilter.ALL)
     /** [display] is the screen to open on (main when null or on devices with one screen). */
     suspend fun launch(app: AppCard, display: LaunchDisplay? = null)
     suspend fun setPinned(app: AppCard, pinned: Boolean)
     suspend fun setHidden(app: AppCard, hidden: Boolean)
     suspend fun rename(app: AppCard, title: String?)
     suspend fun openInfo(app: AppCard)
+
+    /** Says what the app with [appId] is: a game joins the Android system, an emulator lists under Emulators. Null lets Fuse decide. */
+    suspend fun setKind(appId: String, kind: AppKind?) = Unit
+
+    /**
+     * Hands the APK at [path] to Android's installer (which asks the user) and makes the app a game
+     * once it is installed. The file itself is left where it is.
+     */
+    suspend fun installGame(path: String): ApkInstall = ApkInstall.Failed("Apps can't be installed on this system.")
+}
+
+/** What happened when an APK was handed to the system installer. */
+sealed interface ApkInstall {
+    /** Android is asking the user to confirm. */
+    data class Started(val packageName: String, val label: String) : ApkInstall
+    data class Failed(val message: String) : ApkInstall
 }
 
 interface CartridgeOps {

@@ -1,0 +1,15 @@
+-- 0.0.6: the system the user chose for a game (kept across rescans) next to the one its folder
+-- says, and what an installed app is (a game, an app or an emulator) when the user said so.
+ALTER TABLE game ADD COLUMN platform_override TEXT;
+ALTER TABLE game ADD COLUMN platform_scanned TEXT;
+UPDATE game SET platform_scanned = platform_id;
+ALTER TABLE app_override ADD COLUMN kind TEXT;
+
+-- List screens tell apps played as games ('app:') from files.
+DROP VIEW game_summary;
+CREATE VIEW game_summary AS
+SELECT id, platform_id, title_original, title_cleaned, title_custom, title_metadata, use_cleaned,
+    search_title, sort_title, release_year, dlc_count, update_count, disc_count, favorite, hidden,
+    pinned, missing, removed_at, added_at, last_played_at, tracked_seconds, imported_seconds,
+    session_count, folder_path
+FROM game;

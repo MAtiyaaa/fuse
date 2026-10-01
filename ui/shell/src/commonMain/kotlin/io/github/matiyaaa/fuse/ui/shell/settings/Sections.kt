@@ -33,6 +33,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.components.Trailing
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
 import io.github.matiyaaa.fuse.ui.designsystem.theme.ThemePresets
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
+import io.github.matiyaaa.fuse.ui.shell.app.addGame
 import io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec
 import io.github.matiyaaa.fuse.ui.shell.app.ConfirmSpec
 import io.github.matiyaaa.fuse.ui.shell.app.Route
@@ -206,6 +207,12 @@ fun libraryRows(app: AppState): List<MenuAction> {
                 app.store.sources.rescan()
             }
         }))
+        add(MenuAction(
+            "add.game", "Add a game", FuseIcons.Plus,
+            detail = if (app.store.apps.gamesInLibrary) "An app on this device, an APK file, or a game file from anywhere" else "A game file from anywhere on this computer",
+            trailing = Trailing.Chevron,
+            onSelect = { app.addGame() },
+        ))
         add(MenuAction("scan", "Scan for changes", FuseIcons.Refresh, detail = "Only folders that changed. Also runs whenever you return to Fuse", trailing = Trailing.Value(scan.phase.name.lowercase().replaceFirstChar { it.uppercase() }), onSelect = {
             app.store.sources.rescan(ScanScope.QUICK); app.toasts.show("Scanning")
         }))

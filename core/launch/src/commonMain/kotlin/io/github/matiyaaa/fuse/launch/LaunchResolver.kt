@@ -3,6 +3,7 @@ package io.github.matiyaaa.fuse.launch
 import io.github.matiyaaa.fuse.launch.android.AndroidIntentPlan
 import io.github.matiyaaa.fuse.launch.android.AndroidIntentPlanner
 import io.github.matiyaaa.fuse.launch.pc.ShortcutParser
+import io.github.matiyaaa.fuse.model.AppGames
 import io.github.matiyaaa.fuse.model.EmulatorId
 import io.github.matiyaaa.fuse.model.FolderInterpretation
 import io.github.matiyaaa.fuse.model.FolderSupport
@@ -134,6 +135,8 @@ class LaunchResolver(
         host: Host,
         generate: (PlaylistRequest) -> String?,
     ): TargetResult {
+        // An installed app played as a game starts as the app.
+        game.appId?.let { return TargetResult.Ok(LaunchTarget.App(it)) }
         val loc = game.location
         val ext = Paths.extension(loc.launchPath)
         val isIdFile = loc.kind == LocationKind.FILE && ext in adapter.idFileExtensions
@@ -227,7 +230,8 @@ class LaunchResolver(
                     null
                 }
 
-        val candidates: List<LaunchCandidate> = registry.forPlatform(game.platformId, host)
+        // An installed app played as a game is started as the app, whichever system it is filed under.
+        val candidates: List<LaunchCandidate> = (if (game.appId != null) registry.forPlatform(AppGames.PLATFORM, host) else registry.forPlatform(game.platformId, host))
             .mapNotNull { a -> installedFor(a)?.let { LaunchCandidate(a, it) } }
 
         private fun candidate(id: EmulatorId): LaunchCandidate? =
@@ -236,10 +240,15 @@ class LaunchResolver(
         private fun nameOf(id: EmulatorId) = registry[id]?.name ?: id.value
 
         fun resolve(platformDefault: EmulatorId?): ResolvedLaunch {
+            if (game.appId != null) return resolveCandidates(platformDefault = null)
             game.emulatorOverride?.let { id ->
                 candidate(id)?.let { return attempt(it, ChoiceSource.GAME) }
                 notes += "This game's emulator (${nameOf(id)}) isn't installed."
             }
+            return resolveCandidates(platformDefault)
+        }
+
+        private fun resolveCandidates(platformDefault: EmulatorId?): ResolvedLaunch {
             var triedPlatform: EmulatorId? = null
             platformDefault?.let { id ->
                 val c = candidate(id)

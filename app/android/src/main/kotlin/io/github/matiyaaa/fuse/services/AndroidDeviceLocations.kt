@@ -44,6 +44,10 @@ class AndroidDeviceLocations(private val volumes: StorageVolumes) : DeviceLocati
         roots.filter { File(it).canRead() }.distinctBy(::canonical)
     }
 
+    override suspend fun storageRoots(): List<LocationHint> = withContext(Dispatchers.IO) {
+        volumes.mounted().filter { File(it.root).canRead() }.map { LocationHint(it.root, it.label) }
+    }
+
     /** ES-DE's `ROMDirectory` setting, when ES-DE's settings file is readable and the folder exists. */
     private fun esDeRomDirectory(): String? {
         val settings = File(volumes.primaryRoot, "ES-DE/settings/es_settings.xml")

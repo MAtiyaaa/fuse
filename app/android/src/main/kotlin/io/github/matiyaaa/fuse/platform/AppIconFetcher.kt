@@ -13,6 +13,7 @@ import coil3.fetch.FetchResult
 import coil3.fetch.Fetcher
 import coil3.fetch.ImageFetchResult
 import coil3.key.Keyer
+import coil3.map.Mapper
 import coil3.request.Options
 import coil3.size.pxOrElse
 import io.github.matiyaaa.fuse.ui.shell.store.AppIconModel
@@ -60,6 +61,11 @@ class AppIconFetcher(
     }
 
     /** Memory cache key: one entry per package (Coil adds the size). */
+    /** Art stored as text (an Android game's icon in the library, `app-icon:<package>`) loads the app's icon. */
+    class RefMapper : Mapper<String, AppIconModel> {
+        override fun map(data: String, options: Options): AppIconModel? = AppIconModel.parse(data)
+    }
+
     class IconKeyer : Keyer<AppIconModel> {
         override fun key(data: AppIconModel, options: Options): String = "app-icon:${data.packageName}"
     }

@@ -410,7 +410,11 @@ private fun ShelfRow(
 private fun ShelfItem.stage(feed: io.github.matiyaaa.fuse.ui.shell.store.HomeFeed): StageInfo = when (this) {
     is ShelfItem.Game -> card.stage()
     is ShelfItem.System -> card.stage()
-    is ShelfItem.App -> StageInfo(key = key, title = card.entry.displayTitle, eyebrow = if (card.entry.isGame) "ANDROID GAME" else "APP")
+    is ShelfItem.App -> StageInfo(key = key, title = card.entry.displayTitle, eyebrow = when (card.entry.kind) {
+        io.github.matiyaaa.fuse.model.AppKind.GAME -> "ANDROID GAME"
+        io.github.matiyaaa.fuse.model.AppKind.EMULATOR -> "EMULATOR"
+        io.github.matiyaaa.fuse.model.AppKind.APP -> "APP"
+    })
     is ShelfItem.Collection -> StageInfo(key = key, title = collection.name, eyebrow = "COLLECTION", meta = listOf("${collection.gameCount} games"))
     is ShelfItem.Widget -> StageInfo(
         key = key,

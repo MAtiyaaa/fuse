@@ -9,6 +9,7 @@ import io.github.matiyaaa.fuse.data.db.Game_disc
 import io.github.matiyaaa.fuse.data.db.Game_summary
 import io.github.matiyaaa.fuse.data.enumOr
 import io.github.matiyaaa.fuse.data.enumOrNull
+import io.github.matiyaaa.fuse.model.AppGames
 import io.github.matiyaaa.fuse.model.ChildContent
 import io.github.matiyaaa.fuse.model.ContentKind
 import io.github.matiyaaa.fuse.model.Disc
@@ -46,6 +47,7 @@ internal fun Game_summary.toSummary() = GameSummary(
     dlcCount = dlc_count.toInt(),
     updateCount = update_count.toInt(),
     discCount = disc_count.toInt(),
+    isApp = folder_path == AppGames.FOLDER,
 )
 
 internal fun GameRow.titles() = GameTitles(title_original, title_cleaned, title_custom, title_metadata, use_cleaned.asBool())
@@ -86,6 +88,8 @@ internal fun GameRow.toModel(content: List<ChildContent>, discs: List<Disc>) = G
     ),
     emulatorOverride = emulator_override?.let(::EmulatorId),
     folderPolicyOverride = enumOrNull<FolderPolicy>(folder_policy_override),
+    platformOverride = platform_override?.let(::PlatformId),
+    scannedPlatformId = platform_scanned?.let(::PlatformId),
 )
 
 internal fun GameRow.toRecord(game: Game) = GameRecord(

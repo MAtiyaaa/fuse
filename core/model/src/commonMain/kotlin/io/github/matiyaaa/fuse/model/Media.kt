@@ -30,6 +30,15 @@ enum class MediaKind(
     companion object {
         /** Every kind a fill looks for (videos and borders come from elsewhere). */
         val Fillable: Set<MediaKind> = setOf(SQUARE, ICON, BOXART, GRID, HERO, LOGO, SCREENSHOT)
+
+        /**
+         * The art a game needs: box art, icon, cover, wide capsule, background and logo. A game
+         * without screenshots isn't missing art; they come along when a source has them.
+         */
+        val Essential: Set<MediaKind> = setOf(SQUARE, ICON, BOXART, GRID, HERO, LOGO)
+
+        /** Of [kinds], those whose absence makes a game "missing art": the essential ones, or all of them when none is. */
+        fun needed(kinds: Set<MediaKind>): Set<MediaKind> = (kinds intersect Essential).ifEmpty { kinds }
     }
 }
 

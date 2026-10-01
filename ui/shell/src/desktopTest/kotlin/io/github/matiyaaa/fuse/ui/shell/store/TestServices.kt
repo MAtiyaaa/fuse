@@ -7,6 +7,7 @@ import io.github.matiyaaa.fuse.launch.ResolvedLaunch
 import io.github.matiyaaa.fuse.library.FsAccessException
 import io.github.matiyaaa.fuse.library.FsEntry
 import io.github.matiyaaa.fuse.library.FuseFileSystem
+import io.github.matiyaaa.fuse.model.AppEntry
 import io.github.matiyaaa.fuse.model.CartridgeRoute
 import io.github.matiyaaa.fuse.model.CartridgeStatus
 import io.github.matiyaaa.fuse.model.EmulatorId
@@ -24,7 +25,15 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.runBlocking
 
 /** Test doubles for [FuseServices]: real files and database, fake launcher and system. */
-internal class FakeServices(override val data: FuseData, private val cache: File, autoFill: Boolean = false) : FuseServices {
+internal class FakeServices(
+    override val data: FuseData,
+    private val cache: File,
+    autoFill: Boolean = false,
+    override val host: Host = Host.LINUX,
+    override val apps: AppsProvider? = null,
+    /** Emulators the fake detects; the Linux ones by default. */
+    private val installedEmulators: List<InstalledEmulator>? = null,
+) : FuseServices {
     init {
         // Tests start fills themselves; the automatic one runs only where a test turns it on.
         kotlinx.coroutines.runBlocking { data.settings.update { it.copy(scraping = it.scraping.copy(autoFill = autoFill)) } }
@@ -33,7 +42,6 @@ internal class FakeServices(override val data: FuseData, private val cache: File
     val launched = mutableListOf<ResolvedLaunch>()
     var exit: CompletableDeferred<Unit>? = null
 
-    override val host = Host.LINUX
     override val appVersion = "0.0.1"
     override val fs: FuseFileSystem = JavaFileSystem()
     override val secrets: SecretStore = MemorySecrets()
@@ -46,7 +54,7 @@ internal class FakeServices(override val data: FuseData, private val cache: File
     override val cacheDir: String = cache.absolutePath
 
     override val emulators = object : EmulatorDetector {
-        override suspend fun detect() = listOf(
+        override suspend fun detect() = installedEmulators ?: listOf(
             InstalledEmulator(EmulatorId("linux.mgba"), "mGBA", Host.LINUX, "/usr/bin/mgba-qt", platforms = setOf(PlatformId("gba")), detectedVia = "PATH"),
             InstalledEmulator(EmulatorId("linux.duckstation"), "DuckStation", Host.LINUX, "/usr/bin/duckstation-qt", platforms = setOf(PlatformId("psx")), detectedVia = "PATH"),
         )
@@ -91,11 +99,13 @@ internal class FakeServices(override val data: FuseData, private val cache: File
         override suspend fun install(asset: ReleaseAsset, onProgress: (Float) -> Unit) = Result.failure<Unit>(UnsupportedOperationException())
     }
 
-    override val apps: AppsProvider? = null
+    /** Where the fake's file picker starts. */
+    var storageRoots: List<LocationHint> = emptyList()
 
     override val locations = object : DeviceLocations {
         override suspend fun libraryCandidates() = emptyList<LocationHint>()
         override suspend fun biosRoots() = emptyList<String>()
+        override suspend fun storageRoots() = this@FakeServices.storageRoots
     }
 
     override fun writeCacheFile(relativePath: String, content: String): String? {
@@ -117,6 +127,19 @@ internal class FakeServices(override val data: FuseData, private val cache: File
     }
 
     override fun utcOffsetMillis() = 0L
+}
+
+/** Installed apps for tests; [apps] can change like a real install or removal. */
+internal class FakeApps(initial: List<AppEntry>) : AppsProvider {
+    override val apps = kotlinx.coroutines.flow.MutableStateFlow(initial)
+    val opened = mutableListOf<String>()
+    override fun iconModel(entry: AppEntry): Any = AppIconModel(entry.packageName)
+    override fun refresh() = Unit
+    override suspend fun launch(entry: AppEntry, displayId: Int?): RunResult {
+        opened += entry.id
+        return RunResult.Started()
+    }
+    override fun openInfo(entry: AppEntry) = Unit
 }
 
 internal class MemorySecrets : SecretStore {

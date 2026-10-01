@@ -54,9 +54,19 @@ internal class DefaultFuseStore private constructor(
 
     init {
         mediaOps = DefaultMediaOps(ctx, credentials)
+        // Apps that became games and games added by hand find their art like newly scanned games.
+        val findArt = {
+            ctx.scope.launch {
+                delay(AUTO_FILL_DELAY_MS)
+                mediaOps.autoFill()
+            }
+            Unit
+        }
+        apps.onGamesAdded = findArt
         library = DefaultLibraryOps(ctx, engine, emulators, collections, apps, achievements, cartridge) { enabled ->
             updatePrefs { it.copy(cleanDisplayNames = enabled) }
         }
+        library.onGamesAdded = findArt
     }
 
     override val media get() = mediaOps
@@ -129,6 +139,7 @@ internal class DefaultFuseStore private constructor(
             emulators.detectNow()
             cartridge.start()
             collections.start()
+            apps.start()
             if (data.sources.all().isNotEmpty()) engine.rescan(ScanScope.QUICK)
             achievements.refresh(force = false)
             data.cache.purgeExpired(ctx.now())

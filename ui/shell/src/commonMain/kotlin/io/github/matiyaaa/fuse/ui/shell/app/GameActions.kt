@@ -112,7 +112,9 @@ fun AppState.gameMenu(card: GameCard, fromDetail: Boolean = false, extra: List<M
             add(MenuAction("collection", "Add to Collection", FuseIcons.ListPlus, trailing = Trailing.Chevron, onSelect = { collectionPicker(card.id, card.title) }))
         }
         add(MenuAction("pin", "Pin to Home", FuseIcons.Pin, onSelect = { run { lib.setPinned(card.id, true); toasts.show("Pinned to Home") } }))
-        add(MenuAction("emulator", "Emulator", FuseIcons.Chip, trailing = Trailing.Chevron, onSelect = { emulatorPicker(card) }))
+        add(MenuAction("system", "System", FuseIcons.Layers, detail = if (card.isApp) "Android, or back to being an app" else "If it landed in the wrong one", trailing = Trailing.Value(card.platformShort), onSelect = { systemPicker(card) }))
+        // An Android game always starts as its app.
+        if (!card.isApp) add(MenuAction("emulator", "Emulator", FuseIcons.Chip, trailing = Trailing.Chevron, onSelect = { emulatorPicker(card) }))
         if (hasTwoScreens && !io.github.matiyaaa.fuse.launch.DualScreenPlatforms.usesSecondScreen(card.platformId)) {
             add(MenuAction("screen", "Screen", FuseIcons.DualScreen, detail = "Top, bottom, or ask when it starts", trailing = Trailing.Chevron, onSelect = { screenPicker(card) }))
         }
@@ -127,7 +129,7 @@ fun AppState.gameMenu(card: GameCard, fromDetail: Boolean = false, extra: List<M
                 scope.launch { lib.rename(card.id, title.ifBlank { null }) }
             }
         }))
-        add(MenuAction("folder", "Folder Behaviour", FuseIcons.FolderOpen, trailing = Trailing.Chevron, onSelect = { folderPolicyPicker(card) }))
+        if (!card.isApp) add(MenuAction("folder", "Folder Behaviour", FuseIcons.FolderOpen, trailing = Trailing.Chevron, onSelect = { folderPolicyPicker(card) }))
         // Only while Cartridge support is on and Cartridge is installed.
         if (store.cartridge.status.value.installed) {
             if (card.rommRomId != null) {
@@ -138,12 +140,16 @@ fun AppState.gameMenu(card: GameCard, fromDetail: Boolean = false, extra: List<M
                 add(MenuAction("find", "Find in Cartridge", FuseIcons.CloudDownload, onSelect = {
                     closeOverlays(); store.cartridge.open(CartridgeRoute.Search(card.title, null))
                 }))
-                // Games Cartridge downloaded are on RomM already.
-                add(MenuAction("upload", "Upload to RomM", FuseIcons.Upload, detail = "Through Cartridge, with its other discs, DLC and updates", onSelect = { uploadToRomm(card) }))
+                // Games Cartridge downloaded are on RomM already, and apps have no files to send.
+                if (!card.isApp) add(MenuAction("upload", "Upload to RomM", FuseIcons.Upload, detail = "Through Cartridge, with its other discs, DLC and updates", onSelect = { uploadToRomm(card) }))
             }
         }
         add(MenuAction("hide", "Hide", FuseIcons.EyeOff, onSelect = { run { lib.setHidden(card.id, true); toasts.show("Hidden. Show hidden games from Library options.") } }))
-        add(MenuAction("remove", "Remove from Fuse", FuseIcons.Trash, destructive = true, detail = "Your files are not touched", onSelect = {
+        if (card.isApp) {
+            add(MenuAction("notgame", "Not a game", FuseIcons.AppWindow, detail = "Leaves your games and stays in Apps", onSelect = {
+                run { lib.removeFromFuse(card.id); toasts.show("${card.title} is an app again. It's in Apps") }
+            }))
+        } else add(MenuAction("remove", "Remove from Fuse", FuseIcons.Trash, destructive = true, detail = "Your files are not touched", onSelect = {
             closeOverlays()
             confirm = ConfirmSpec(
                 title = "Remove ${card.title} from Fuse?",

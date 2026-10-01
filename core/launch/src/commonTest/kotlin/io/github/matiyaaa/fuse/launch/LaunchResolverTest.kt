@@ -1,5 +1,6 @@
 package io.github.matiyaaa.fuse.launch
 
+import io.github.matiyaaa.fuse.model.AppGames
 import io.github.matiyaaa.fuse.model.ChildContent
 import io.github.matiyaaa.fuse.model.ContentKind
 import io.github.matiyaaa.fuse.model.ContentSupport
@@ -10,6 +11,7 @@ import io.github.matiyaaa.fuse.model.Host
 import io.github.matiyaaa.fuse.model.LaunchPlan
 import io.github.matiyaaa.fuse.model.LaunchTarget
 import io.github.matiyaaa.fuse.model.LocationKind
+import io.github.matiyaaa.fuse.model.PlatformId
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -31,6 +33,19 @@ class LaunchResolverTest {
         assertEquals(EmulatorId("duckstation"), r.adapter?.id)
         assertEquals(ChoiceSource.PRIORITY, r.source)
         assertEquals(listOf("retroarch", "epsxe"), r.alternatives.map { it.adapter.id.value })
+    }
+
+    @Test
+    fun anAppPlayedAsAGameStartsAsTheAppWhateverItsSystem() {
+        val app = game("android", AppGames.path("com.blackrock.dredge/com.unity3d.player.UnityPlayerActivity"), title = "DREDGE")
+        for (g in listOf(app, app.copy(platformId = PlatformId("win"), emulatorOverride = EmulatorId("winlator")))) {
+            val r = resolver.resolve(g, EmulatorId("winlator"), psxInstalled, Host.ANDROID)
+            assertEquals(EmulatorId("android-app"), r.adapter?.id)
+            assertEquals(LaunchTarget.App("com.blackrock.dredge/com.unity3d.player.UnityPlayerActivity"), r.target)
+            val plan = assertIs<LaunchPlan.AndroidIntent>(r.plan)
+            assertEquals("com.blackrock.dredge", plan.packageName)
+            assertEquals("com.unity3d.player.UnityPlayerActivity", plan.activity)
+        }
     }
 
     @Test

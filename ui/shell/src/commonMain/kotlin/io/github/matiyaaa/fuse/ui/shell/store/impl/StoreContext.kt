@@ -89,6 +89,7 @@ internal class StoreContext(
             dlc = summary.dlcCount,
             discs = summary.discCount,
             missing = summary.missing,
+            isApp = summary.isApp,
         )
     }
 

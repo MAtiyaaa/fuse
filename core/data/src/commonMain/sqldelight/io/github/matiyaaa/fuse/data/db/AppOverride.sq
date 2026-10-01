@@ -5,7 +5,9 @@ CREATE TABLE app_override (
     pinned INTEGER NOT NULL DEFAULT 0,
     hidden INTEGER NOT NULL DEFAULT 0,
     sort_order INTEGER,
-    last_used_at INTEGER
+    last_used_at INTEGER,
+    -- AppKind name, when the user said what the app is (else Fuse decides).
+    kind TEXT
 );
 
 selectAll:
@@ -28,6 +30,9 @@ UPDATE app_override SET hidden = :hidden WHERE app_id = :appId;
 
 setSortOrder:
 UPDATE app_override SET sort_order = :sortOrder WHERE app_id = :appId;
+
+setKind:
+UPDATE app_override SET kind = :kind WHERE app_id = :appId;
 
 setLastUsed:
 UPDATE app_override SET last_used_at = :lastUsedAt WHERE app_id = :appId;

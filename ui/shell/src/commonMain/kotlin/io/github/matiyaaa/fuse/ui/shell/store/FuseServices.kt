@@ -191,10 +191,24 @@ interface AppsProvider {
     /** Opens [entry], on the display with [displayId] when given (the device's second screen). */
     suspend fun launch(entry: AppEntry, displayId: Int? = null): RunResult
     fun openInfo(entry: AppEntry)
+
+    /** Hands the APK at [path] to the system installer, which asks the user. The file stays where it is. */
+    suspend fun installApk(path: String): ApkInstall = ApkInstall.Failed("Apps can't be installed on this system.")
 }
 
 /** Image loader model for an installed app's icon. */
-data class AppIconModel(val packageName: String)
+data class AppIconModel(val packageName: String) {
+    companion object {
+        private const val SCHEME = "app-icon:"
+
+        /** How the icon is written where art is stored as text (an Android game's icon in the library). */
+        fun ref(packageName: String): String = SCHEME + packageName
+
+        /** The model a [ref] stands for, or null for any other text. */
+        fun parse(text: String): AppIconModel? =
+            text.takeIf { it.startsWith(SCHEME) }?.removePrefix(SCHEME)?.takeIf { it.isNotEmpty() }?.let(::AppIconModel)
+    }
+}
 
 /** Candidate folders to offer during onboarding and in Settings -> Library. */
 data class LocationHint(val path: String, val label: String, val kind: LibrarySourceKind = LibrarySourceKind.ROMS_ROOT)
@@ -205,4 +219,7 @@ interface DeviceLocations {
 
     /** Configured firmware folders (ES-DE `BIOS/`, RetroArch `system/`). */
     suspend fun biosRoots(): List<String>
+
+    /** Where Fuse's file picker starts: internal storage and SD cards, or the home folder and drives. */
+    suspend fun storageRoots(): List<LocationHint> = emptyList()
 }

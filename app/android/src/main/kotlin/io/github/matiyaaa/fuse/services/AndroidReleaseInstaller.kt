@@ -94,6 +94,31 @@ class AndroidReleaseInstaller(
         }
     }
 
+    /**
+     * Hands an APK already on the device (one the user picked) to the system installer. The file is
+     * the user's, so it is never deleted. Asks for "install unknown apps" first when needed.
+     */
+    suspend fun installLocal(file: File): Result<Unit> {
+        if (!file.isFile) return Result.failure(InstallException("${file.name} isn't there any more."))
+        if (!appContext.packageManager.canRequestPackageInstalls()) {
+            withContext(Dispatchers.Main) {
+                activities.startFirst(
+                    Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, "package:${appContext.packageName}".toUri()),
+                    Intent(Settings.ACTION_SECURITY_SETTINGS),
+                )
+            }
+            return Result.failure(InstallException("Allow Fuse to install apps in the screen that just opened, then pick the APK again."))
+        }
+        return try {
+            withContext(Dispatchers.IO) { commit(file, keep = true) }
+            Result.success(Unit)
+        } catch (e: RuntimeException) {
+            Result.failure(InstallException("Android couldn't start the installation."))
+        } catch (e: IOException) {
+            Result.failure(InstallException("Fuse couldn't read ${file.name}."))
+        }
+    }
+
     override suspend fun install(asset: ReleaseAsset, onProgress: (Float) -> Unit): Result<Unit> {
         if (!appContext.packageManager.canRequestPackageInstalls()) {
             withContext(Dispatchers.Main) {

@@ -41,4 +41,8 @@ internal class DesktopLocations(private val folders: KnownFolders) : DeviceLocat
     override suspend fun biosRoots(): List<String> = withContext(Dispatchers.IO) {
         (folders.biosRoots() + folders.retroArchSystemDirs()).distinct()
     }
+
+    override suspend fun storageRoots(): List<LocationHint> = withContext(Dispatchers.IO) {
+        folders.storageRoots().map { LocationHint(it.path, it.label) }
+    }
 }

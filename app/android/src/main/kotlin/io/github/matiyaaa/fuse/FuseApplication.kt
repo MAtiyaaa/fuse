@@ -160,6 +160,7 @@ class FuseApplication : Application(), SingletonImageLoader.Factory {
     private fun buildImageLoader(context: PlatformContext, lowMemory: Boolean, reuse: ImageLoader?): ImageLoader {
         imageLoaderLowMemory = lowMemory
         val loader = fuseImageLoader(context, cacheDir.absolutePath, http, lowMemory) {
+            add(AppIconFetcher.RefMapper())
             add(AppIconFetcher.Factory(this@FuseApplication))
             add(AppIconFetcher.IconKeyer())
         }
