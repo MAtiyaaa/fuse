@@ -244,12 +244,14 @@ private fun GlyphView(glyph: Glyph, size: Dp, color: Color, emphasized: Boolean,
     val density = LocalDensity.current
     val measurer = rememberTextMeasurer(cacheSize = 4)
     val keycap = glyph.body == Body.KEYCAP
-    // Letters: Sora (the display and numbers face) on pad buttons, Manrope on keycaps.
+    // Letters: Sora (the display and numbers face) on pad buttons, Manrope on keycaps. Two-letter
+    // shoulder labels get a touch more size at small sizes, where they would otherwise blur.
     val ratio = when (glyph.body) {
         Body.DISC -> 0.5f
         Body.HOLD -> 0.38f
         Body.STICK -> 0.3f
         Body.KEYCAP -> 0.42f
+        Body.BUMPER, Body.TRIGGER -> if (size < ButtonGlyphDefaults.Size) 0.44f else 0.4f
         else -> 0.4f
     }
     val family = if (keycap) type.label.fontFamily else type.title.fontFamily
@@ -305,7 +307,7 @@ private fun GlyphView(glyph: Glyph, size: Dp, color: Color, emphasized: Boolean,
             .size(width, size)
             .drawWithCache {
                 val ops = GlyphBuilder(this.size.width, this.size.height, density.density, paint, layout, capHeight).build(glyph)
-                onDrawBehind { for (op in ops) op.draw(this) }
+                onDrawBehind { for (i in ops.indices) ops[i].draw(this) }
             },
     )
 }
