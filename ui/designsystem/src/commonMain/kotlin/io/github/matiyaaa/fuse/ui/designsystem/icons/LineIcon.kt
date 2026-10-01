@@ -3,6 +3,7 @@ package io.github.matiyaaa.fuse.ui.designsystem.icons
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.paint
 import androidx.compose.ui.graphics.Color
@@ -47,9 +48,11 @@ fun FuseIcon(
     tint: Color = Fuse.colors.text,
 ) {
     val painter = rememberVectorPainter(icon)
+    // Icons are everywhere; keep the tint filter across recompositions instead of making one each time.
+    val filter = remember(tint) { ColorFilter.tint(tint) }
     Box(
         modifier
             .size(size)
-            .paint(painter, colorFilter = ColorFilter.tint(tint), contentScale = ContentScale.Fit),
+            .paint(painter, colorFilter = filter, contentScale = ContentScale.Fit),
     )
 }
