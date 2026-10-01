@@ -45,6 +45,9 @@ declared in the version catalog for the platform apps and not yet used by any mo
 | AndroidX Core KTX | `androidx.core:core-ktx` | 1.19.1 | Apache-2.0 | `app:android` | [core](https://developer.android.com/jetpack/androidx/releases/core) |
 | Media3 ExoPlayer and UI | `androidx.media3:media3-exoplayer`, `:media3-ui` | 1.11.1 | Apache-2.0 | Catalog only (planned for video previews) | [media](https://github.com/androidx/media) |
 | JLayer (MP3 decoder for menu music) | `javazoom:jlayer` | 1.0.1 | LGPL-2.1-or-later (the sources say "version 2 of the License, or any later version") | `app:desktop` | [JLayer](http://www.javazoom.net/javalayer/javalayer.html) |
+| libGDX Jamepad (controllers on Windows and macOS, through SDL) | `com.badlogicgames.jamepad:jamepad` | 2.30.0.0 | Apache-2.0 | `app:desktop`, Windows and macOS builds only | [jamepad](https://github.com/libgdx/jamepad) |
+| SDL2 (inside Jamepad's native libraries) | | 2.30 | zlib | `app:desktop`, Windows and macOS builds only | [SDL](https://github.com/libsdl-org/SDL) |
+| gdx-jnigen-loader (loads Jamepad's native library) | `com.badlogicgames.gdx:gdx-jnigen-loader` | 2.2.0 | Apache-2.0 | `app:desktop`, Windows and macOS builds only | [gdx-jnigen](https://github.com/libgdx/gdx-jnigen) |
 
 ### Build tools
 
@@ -58,6 +61,7 @@ from the same project).
 | Compose Multiplatform Gradle plugin | `org.jetbrains.compose:compose-gradle-plugin` | 1.12.1 | Apache-2.0 | [compose-multiplatform](https://github.com/JetBrains/compose-multiplatform) |
 | Android Gradle Plugin (application and Kotlin Multiplatform library plugins) | `com.android.tools.build:gradle` | 9.4.1 | Apache-2.0 | [AGP release notes](https://developer.android.com/build/releases/gradle-plugin) |
 | SQLDelight Gradle plugin | `app.cash.sqldelight:gradle-plugin` | 2.4.0 | Apache-2.0 | [sqldelight](https://github.com/sqldelight/sqldelight) |
+| WiX Toolset (builds the Windows installer; the Compose plugin downloads it) | | 3.14 | MS-RL | [wix3](https://github.com/wixtoolset/wix3) |
 | Lucide icon generator | `tools/icons/generate_icons.py` (part of Fuse) | | GPL-3.0-or-later | |
 
 ## Bundled assets
@@ -83,9 +87,9 @@ but we credit every source:
 
 | Source | Licence | What Fuse uses | How |
 |---|---|---|---|
-| [ES-DE](https://gitlab.com/es-de/emulationstation-de) `es_find_rules.xml` and `es_systems.xml` (Android and Linux) | MIT. Copyright (c) 2024-2026 Northwestern Software AB, (c) 2020-2024 Leon Styhre, (c) 2014 Alec Lofquist ([LICENSE](https://gitlab.com/es-de/emulationstation-de/-/blob/master/LICENSE)) | Emulator package and activity names, executables, Flatpak ids, intent actions, extras and flags, system folder names, directory-as-file and id-file conventions | Re-expressed as Kotlin data in `core/launch`; every entry cites its ES-DE rule in `source`. The XML files are not copied |
+| [ES-DE](https://gitlab.com/es-de/emulationstation-de) `es_find_rules.xml` and `es_systems.xml` (Android, Linux, Windows and macOS) | MIT. Copyright (c) 2024-2026 Northwestern Software AB, (c) 2020-2024 Leon Styhre, (c) 2014 Alec Lofquist ([LICENSE](https://gitlab.com/es-de/emulationstation-de/-/blob/master/LICENSE)) | Emulator package and activity names, executables, Flatpak ids, intent actions, extras and flags, system folder names, directory-as-file and id-file conventions | Re-expressed as Kotlin data in `core/launch`; every entry cites its ES-DE rule in `source`. The XML files are not copied |
 | [RomM](https://github.com/rommapp/romm) | AGPL-3.0 | Folder conventions (Structure A and B), platform slugs and aliases, file category names, never-game folder names and ignored file names | Used as facts in `core/library` and `core/model`. No RomM code is used |
-| [rcheevos](https://github.com/RetroAchievements/rcheevos) | MIT | How RetroAchievements hashes ROMs for cartridge-based systems | Reimplemented in `RaHasher`; no rcheevos code is copied |
+| [rcheevos](https://github.com/RetroAchievements/rcheevos) | MIT | How RetroAchievements hashes ROMs: cartridge systems, Nintendo DS, and the PlayStation family's discs (ISO 9660 and boot executables) | Reimplemented in `RaHasher` and `RaDisc`; no rcheevos code is copied |
 | [Cartridge](https://github.com/abdu2304/cartridge) by abdu2304 | MIT. Copyright (c) 2026 abdu2304 | The approach of matching emulator forks by words in the package name or label (its `FAMILIES` table); Fuse pairs with the app and installs it from the [MAtiyaaa/cartridge](https://github.com/MAtiyaaa/cartridge) fork until the bridge is merged upstream | Re-expressed in `AndroidFamilies`; the bridge protocol is a contract shared by both apps. The licence is in `files/licenses/LICENSE-cartridge.txt` and in Settings, About, Licences |
 | Emulator and launcher sources and vendor guides (Dolphin, PPSSPP, melonDS, Azahar, Eden, Vita3K, aPS3e, ARMSX3, Flycast, GameNative, Winlator Cmod, WinNative, Bannerlator, GameHub Lite and others) | Various | Intent actions, extras and exported activities, cited per adapter | Facts only; see [docs/research/emulators.md](docs/research/emulators.md) |
 | Daijisho platform files, GlazedBelmont community ES-DE configs | No licence | Cross-checking facts only | Nothing copied |
@@ -110,10 +114,12 @@ cached on their device. None of it is part of Fuse's distribution.
 
 | Licence | Where | Conclusion |
 |---|---|---|
-| Apache-2.0 | Kotlin, kotlinx, Compose Multiplatform, JetBrains Lifecycle, SQLDelight, Coil, Ktor, Typesafe Config, OkHttp, Okio, AndroidX, Media3, SQLite JDBC, Skiko, Gradle | Compatible. The Free Software Foundation lists Apache-2.0 as compatible with GPL version 3, so Apache-2.0 code can be combined into a work distributed under GPL-3.0-or-later. Apache-2.0 asks redistributors to pass on its licence text and any NOTICE files |
+| Apache-2.0 | Kotlin, kotlinx, Compose Multiplatform, JetBrains Lifecycle, SQLDelight, Coil, Ktor, Typesafe Config, OkHttp, Okio, AndroidX, Media3, SQLite JDBC, Skiko, libGDX Jamepad and gdx-jnigen-loader (Windows and macOS), Gradle | Compatible. The Free Software Foundation lists Apache-2.0 as compatible with GPL version 3, so Apache-2.0 code can be combined into a work distributed under GPL-3.0-or-later. Apache-2.0 asks redistributors to pass on its licence text and any NOTICE files |
 | MIT | QR Code generator library, SLF4J API, Feather-derived Lucide icons, ES-DE (facts), rcheevos (reimplemented rules), Cartridge (approach) | Compatible. Permissive; the notices are kept in `files/licenses/LICENSE-qrcodegen.txt`, `files/licenses/LICENSE-slf4j.txt`, `files/licenses/LICENSE-lucide.txt` and `files/licenses/LICENSE-cartridge.txt` and credited above |
 | ISC | Lucide icons | Compatible. Permissive; the copyright and permission notice is kept in `files/licenses/LICENSE-lucide.txt` |
 | BSD-3-Clause | Skia inside Skiko (desktop) | Compatible. Permissive |
+| zlib | SDL 2 inside Jamepad (Windows and macOS) | Compatible. Permissive; its notice is kept in `files/licenses/LICENSE-sdl.txt` |
+| MS-RL | WiX Toolset (builds the Windows installer only) | Not shipped as part of Fuse's code; a build tool, like Gradle |
 | LGPL-2.1-or-later | JLayer (desktop only) | Compatible. The LGPL lets a covered library be combined with a program under any licence, and section 3 of LGPL-2.1 also allows applying the GPL to it. Fuse uses the unmodified jar, which the AppImage keeps as a separate file that can be replaced; its licence text ships with Fuse |
 | Public domain | SQLite | Compatible. No conditions |
 | SIL OFL 1.1 | Sora and Manrope fonts | Compatible for distribution. The fonts stay under the OFL and are not relicensed; the OFL explicitly allows bundling the fonts with software under any licence as long as the fonts are not sold on their own and the licence travels with them. Fuse does not modify the fonts, and neither declares a Reserved Font Name |

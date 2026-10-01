@@ -124,7 +124,12 @@ def buttons():
         'secondary-dark': ('#1A1D25', '#FFFFFF', .12, LIGHT_TEXT),
         'secondary-light': ('#FFFFFF', INK_TEXT, .14, INK_TEXT),
     }
-    for key, label, style in (('android', 'Download for Android', 'primary'), ('linux', 'Download for Linux', 'secondary')):
+    for key, label, style in (
+        ('android', 'Download for Android', 'primary'),
+        ('linux', 'Download for Linux', 'secondary'),
+        ('windows', 'Download for Windows', 'secondary'),
+        ('macos', 'Download for macOS', 'secondary'),
+    ):
         for theme in ('dark', 'light'):
             fill, edge, ea, fg = styles[f'{style}-{theme}']
             pad, icon_w, gap = 22, 18, 10

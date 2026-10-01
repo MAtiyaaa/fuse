@@ -3,7 +3,7 @@
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/brand/banner-dark.svg">
   <source media="(prefers-color-scheme: light)" srcset="docs/assets/brand/banner-light.svg">
-  <img src="docs/assets/brand/banner-dark.svg" width="100%" alt="Fuse. A controller-first home for your games. Android, Linux, free software.">
+  <img src="docs/assets/brand/banner-dark.svg" width="100%" alt="Fuse. A controller-first home for your games. Android, Linux, Windows, macOS, free software.">
 </picture>
 
 <h3>Point it at your folders. Pick up a controller. Play.</h3>
@@ -12,8 +12,8 @@ Fuse gathers the games in your folders, dresses them in art and starts each one 
 already use, all from a console-style interface made for a gamepad. On Android it can even be your
 Home screen.
 
-<a href="https://github.com/MAtiyaaa/fuse/releases"><img src="https://img.shields.io/badge/release-0.0.6%20The%20Android%20Games%20Update-FF6A3D?style=flat-square&labelColor=15171C" alt="Release 0.0.6, The Android Games Update"></a>
-<img src="https://img.shields.io/badge/runs%20on-Android%209%2B%20%C2%B7%20Linux-2B303B?style=flat-square&labelColor=15171C" alt="Runs on Android 9 or newer and Linux">
+<a href="https://github.com/MAtiyaaa/fuse/releases"><img src="https://img.shields.io/badge/release-0.1.0%20The%20Showcase%20Update-FF6A3D?style=flat-square&labelColor=15171C" alt="Release 0.1.0, The Showcase Update"></a>
+<img src="https://img.shields.io/badge/runs%20on-Android%209%2B%20%C2%B7%20Linux%20%C2%B7%20Windows%20%C2%B7%20macOS-2B303B?style=flat-square&labelColor=15171C" alt="Runs on Android 9 or newer, Linux, Windows and macOS">
 <a href="LICENSE"><img src="https://img.shields.io/badge/licence-GPL--3.0--or--later-2B303B?style=flat-square&labelColor=15171C" alt="Licence: GPL-3.0-or-later"></a>
 <a href="#privacy"><img src="https://img.shields.io/badge/telemetry-none-2B303B?style=flat-square&labelColor=15171C" alt="Telemetry: none"></a>
 
@@ -22,9 +22,13 @@ Home screen.
 <a href="https://github.com/MAtiyaaa/fuse/releases/latest"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/brand/button-android-dark.svg"><img src="docs/assets/brand/button-android-light.svg" height="48" alt="Download for Android"></picture></a>
 &nbsp;
 <a href="https://github.com/MAtiyaaa/fuse/releases/latest"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/brand/button-linux-dark.svg"><img src="docs/assets/brand/button-linux-light.svg" height="48" alt="Download for Linux"></picture></a>
+<br>
+<a href="https://github.com/MAtiyaaa/fuse/releases/latest"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/brand/button-windows-dark.svg"><img src="docs/assets/brand/button-windows-light.svg" height="48" alt="Download for Windows"></picture></a>
+&nbsp;
+<a href="https://github.com/MAtiyaaa/fuse/releases/latest"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/brand/button-macos-dark.svg"><img src="docs/assets/brand/button-macos-light.svg" height="48" alt="Download for macOS"></picture></a>
 
-<sub>Android 9 or newer &nbsp;·&nbsp; 64-bit x86 Linux AppImage &nbsp;·&nbsp; <a href="#install">checksums and install notes</a></sub><br>
-<sub>0.0.6 is an early release, shaped by hands-on tests on a dual-screen Android handheld. <a href="#where-fuse-stands">Here is where it stands.</a></sub>
+<sub>Android 9 or newer &nbsp;·&nbsp; 64-bit x86 Linux AppImage &nbsp;·&nbsp; Windows 10 and 11 &nbsp;·&nbsp; macOS on Apple silicon and Intel &nbsp;·&nbsp; <a href="#install">checksums and install notes</a></sub><br>
+<sub>0.1.0 is the first 0.1 release, shaped by hands-on tests on a dual-screen Android handheld. <a href="#where-fuse-stands">Here is where it stands.</a></sub>
 
 <br>
 
@@ -247,14 +251,18 @@ Play.
   confidence level.
 - **More than 100 definitions on Android** (RetroArch, Dolphin, PPSSPP, DuckStation, NetherSX2,
   ARMSX2, aPS3e, melonDS, Azahar, Eden, Vita3K, Flycast, Lemuroid, MAME4droid, ScummVM and many
-  more) and **35 on Linux**, found on `$PATH`, as Flatpaks or as AppImages (RetroArch, PCSX2, RPCS3,
-  Dolphin, Cemu, Ryujinx, xemu, Xenia, shadPS4, MAME, DOSBox Staging and more).
+  more), **35 on Linux**, found on `$PATH`, as Flatpaks or as AppImages (RetroArch, PCSX2, RPCS3,
+  Dolphin, Cemu, Ryujinx, xemu, Xenia, shadPS4, MAME, DOSBox Staging and more), **32 on Windows**,
+  found in portable folders, Program Files, AppData, Scoop, Chocolatey, winget and Steam libraries,
+  and **29 on macOS**, found as apps or Homebrew programs. Anything Fuse misses on Windows or macOS
+  can be located from Settings.
 - **Pick an emulator** per system or per game. Forks and renamed builds are recognised by family, and
   shared package names are trusted only after Fuse checks that the expected activity exists.
 - **Honest fallbacks.** When an app has no documented way to start a specific game, Fuse opens the app
   and says why.
 - **Steam and Windows games** start through GameNative, GameHub Lite, Winlator Cmod, WinNative or
-  Bannerlator on Android, and through Steam or `.desktop` shortcuts on Linux.
+  Bannerlator on Android, through Steam or `.desktop` shortcuts on Linux, and as they are on Windows
+  (`.exe` games, `.lnk` shortcuts and `.bat` scripts).
 - **DLC and updates**: Fuse explains, per emulator, how they are used. It never installs content
   itself.
 
@@ -289,8 +297,9 @@ Play.
 - A **button mapping** screen with capture and a live button test that no button can leave by accident.
 - **Home** as a flowing dashboard (Flow) or a board of tiles you arrange (Channels), with 19 kinds of
   widgets.
-- **Library** layouts from square box art to capsules to covers to a compact list; **Systems**, **Apps**,
-  **Search**, game pages, a media manager, a folder browser, the **quick menu** and a guided setup.
+- **Library** layouts from square box art to capsules to covers to a compact list; **Systems**, **Apps**
+  (on Android), **Search**, game pages, a media manager, a folder browser, the **quick menu** and a
+  guided setup.
 - **Nine themes**, four motion levels including Reduced, High contrast focus, optional glass panels
   and CRT effect, and interface sounds synthesised on the fly.
 - A **performance overlay** that only shows metrics the device can really measure.
@@ -298,7 +307,7 @@ Play.
 </details>
 
 <details>
-<summary><b>Android and Linux</b></summary>
+<summary><b>Android, Linux, Windows and macOS</b></summary>
 <br>
 
 <table>
@@ -326,26 +335,55 @@ Play.
       </ul>
     </td>
   </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="docs/assets/icons/windows.svg" width="40" height="40" alt=""><br>
+      <b>Windows</b> <sub>10 and 11, 64-bit</sub>
+      <ul>
+        <li>An installer for your account (no administrator needed), or a portable zip that keeps everything next to it</li>
+        <li>Controllers through SDL, like most emulators</li>
+        <li>Keys protected by Windows for your account (DPAPI)</li>
+        <li><code>.exe</code> games, <code>.lnk</code> shortcuts and <code>.bat</code> scripts next to your emulators</li>
+        <li>Emulators you keep anywhere: show Fuse where with Locate</li>
+      </ul>
+    </td>
+    <td width="50%" valign="top">
+      <img src="docs/assets/icons/macos.svg" width="40" height="40" alt=""><br>
+      <b>macOS</b> <sub>Apple silicon (11 or newer) and Intel (10.15 or newer)</sub>
+      <ul>
+        <li>A disk image for each kind of Mac</li>
+        <li>Controllers through SDL, like most emulators</li>
+        <li>Keys kept in the Keychain</li>
+        <li>Emulators as apps or Homebrew programs, found in Applications and the folders inside it</li>
+        <li>An optional login item</li>
+      </ul>
+    </td>
+  </tr>
 </table>
+
+On every computer Fuse manages games only: there is no Apps section, and Cartridge, an Android and
+Linux app, isn't offered on Windows and macOS.
 
 </details>
 
 ## Where Fuse stands
 
 > [!IMPORTANT]
-> **Fuse 0.0.6 "The Android Games Update" is still early.** It answers the fifth round of tests on
-> a dual-screen Android handheld with Android games in their own system, a game's system you can
-> change, adding a game from anywhere, Fuse in recent apps as the Home app, art that is ready before
-> it is shown and matching that finds games however their files are named (see
-> [the release notes](docs/releases/0.0.6.md)). The shared core (library scanning, launch resolution,
-> integrations and the database) and the interface are in place and tested where it matters. The
-> Android app builds and passes its unit tests and lint, and has been tried on one handheld so far.
-> The Linux app builds, passes its tests, packages as an AppImage and starts in a virtual display.
-> Expect rough edges and changes between versions.
+> **Fuse 0.1.0 "The Showcase Update" is the first 0.1 release, and still early.** It brings Fuse to
+> Windows and macOS, gives the bottom screen of a dual-screen handheld pages of its own, fills new
+> games the moment they arrive, and fixes a long list of rough edges from the sixth round of tests
+> (see [the release notes](docs/releases/0.1.0.md)). The shared core (library scanning, launch
+> resolution, integrations and the database) and the interface are in place and tested where it
+> matters. The Android app builds and passes its unit tests and lint, and has been tried on one
+> handheld so far. The Linux app builds, passes its tests, packages as an AppImage and starts in a
+> virtual display. The Windows and macOS builds pass their tests and a self-test of the packaged app
+> on each system in CI, but haven't been tried by hand on a PC or Mac yet. Expect rough edges and
+> changes between versions.
 
-Not there yet: checks on more handhelds, video previews on the desktop, a storage mode without All
-files access, translations (the interface is English only), RetroAchievements hashing for disc
-systems, DS and 3DS, and ScreenScraper credentials. [ROADMAP.md](ROADMAP.md) ticks a box only when the
+Not there yet: checks on more handhelds and on Windows and Mac computers, signed Windows and macOS
+builds, video previews on the desktop, a storage mode without All files access, translations (the
+interface is English only), RetroAchievements hashing for 3DS, Saturn, Dreamcast and compressed disc
+images, and ScreenScraper credentials. [ROADMAP.md](ROADMAP.md) ticks a box only when the
 code is in this repository.
 
 **Tried it on your device?** A short report ("this emulator launches on my handheld") helps more than
@@ -360,7 +398,13 @@ Download the latest files from the [Releases page](https://github.com/MAtiyaaa/f
 |---|---|
 | `Fuse-<version>-android.apk` | Android 9 or newer |
 | `Fuse-<version>-x86_64.AppImage` | 64-bit x86 Linux |
-| `SHA256SUMS.txt` | Checksums for both |
+| `Fuse-<version>-windows-x64.msi` | Windows 10 and 11, 64-bit (installer) |
+| `Fuse-<version>-windows-x64.zip` | Windows 10 and 11, 64-bit (portable) |
+| `Fuse-<version>-macos-arm64.dmg` | Macs with Apple silicon, macOS 11 or newer |
+| `Fuse-<version>-macos-x64.dmg` | Intel Macs, macOS 10.15 or newer |
+| `SHA256SUMS.txt` | Checksums for all of them |
+
+The APK is published first; the computer builds join the release a little later.
 
 Check what you downloaded:
 
@@ -381,6 +425,19 @@ sha256sum -c SHA256SUMS.txt --ignore-missing
       <pre><code>chmod +x Fuse-*-x86_64.AppImage
 ./Fuse-*-x86_64.AppImage</code></pre>
       <p>If it does not start, your distribution may need the FUSE 2 library (<code>libfuse2</code>, or <code>libfuse2t64</code> on newer Ubuntu and Debian). See the <a href="https://docs.appimage.org/user-guide/troubleshooting/fuse.html">AppImage FUSE guide</a>.</p>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="docs/assets/icons/line/windows.svg" width="20" height="20" alt="">&nbsp;<b>Windows</b>
+      <p>Run the <code>.msi</code>: it installs Fuse for your account, with no administrator prompt, and a later version installs over it. Or unzip the portable <code>.zip</code> anywhere (a USB drive works) and run <code>Fuse.exe</code>; it keeps its library and settings in the <code>FuseData</code> folder beside it.</p>
+      <p>Fuse isn't signed by Microsoft yet, so SmartScreen may warn the first time: choose <b>More info</b>, then <b>Run anyway</b>.</p>
+    </td>
+    <td width="50%" valign="top">
+      <img src="docs/assets/icons/line/macos.svg" width="20" height="20" alt="">&nbsp;<b>macOS</b>
+      <p>Open the disk image for your Mac (<code>arm64</code> for Apple silicon, <code>x64</code> for Intel) and drag Fuse to Applications.</p>
+      <p>Fuse isn't notarized by Apple yet. The first time, right-click Fuse and choose <b>Open</b>, or allow it in System Settings, Privacy &amp; Security. From Terminal, this does the same:</p>
+      <pre><code>xattr -dr com.apple.quarantine /Applications/Fuse.app</code></pre>
     </td>
   </tr>
 </table>

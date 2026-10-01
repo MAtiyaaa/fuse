@@ -13,8 +13,9 @@
   Point Gradle at the SDK with `ANDROID_HOME` or a `local.properties` file containing
   `sdk.dir=/path/to/sdk` (it is git-ignored). The Android Gradle Plugin downloads the build tools it
   needs once the SDK licences are accepted (`sdkmanager --licenses`).
-- **Linux desktop** to run the desktop app. Gradle configures every module, including the Android
-  ones, so keep the Android SDK available even for desktop builds.
+- **Linux, Windows or macOS** to run the desktop app. Gradle configures every module, including the
+  Android ones, so keep the Android SDK available even for desktop builds. Each desktop package is
+  built on its own system (jpackage can't build for another one).
 
 Versions of everything else live in `gradle/libs.versions.toml`.
 
@@ -28,7 +29,10 @@ Versions of everything else live in `gradle/libs.versions.toml`.
 | Run the desktop app | `./gradlew :app:desktop:run` | |
 | Compile the desktop app | `./gradlew :app:desktop:compileKotlin` | |
 | Compile the shell for desktop | `./gradlew :ui:shell:compileKotlinDesktop` | |
-| AppImage | `scripts/build-appimage.sh` | `build/appimage/Fuse-<version>-x86_64.AppImage` |
+| AppImage (on Linux) | `scripts/build-appimage.sh` | `build/appimage/Fuse-<version>-x86_64.AppImage` |
+| Windows installer and zip (on Windows) | `bash scripts/build-windows.sh` | `build/windows/Fuse-<version>-windows-x64.{msi,zip}` |
+| macOS disk image (on a Mac) | `scripts/build-macos.sh` | `build/macos/Fuse-<version>-macos-<arm64 or x64>.dmg` |
+| Self-test a desktop build | `./gradlew :app:desktop:run --args=--self-test` | a report; exit code 0 when it all works |
 
 ## Tests
 
@@ -61,15 +65,48 @@ It needs `curl` and network access the first time, to fetch `appimagetool`. Runn
 (`libfuse2`, or `libfuse2t64` on Ubuntu 24.04 and later); where that is not possible, set
 `APPIMAGE_EXTRACT_AND_RUN=1` (the script already does this for `appimagetool`).
 
+## Windows
+
+`scripts/build-windows.sh` runs in Git Bash on Windows 10 or 11 (as in CI) and builds:
+
+- `Fuse-<version>-windows-x64.msi`, a per-user installer (`%LOCALAPPDATA%\Programs\Fuse`, no
+  administrator prompt). Its upgrade code never changes, so a newer MSI replaces an older install.
+  The Compose plugin downloads the WiX toolset it needs the first time.
+- `Fuse-<version>-windows-x64.zip`, the same app with an empty `FuseData` folder next to `Fuse.exe`.
+  When that folder exists, Fuse keeps its database, cache and settings there instead of in AppData.
+
+Both are checked with `--self-test` first (once with the bundled Java, which prints the report, and
+once through `Fuse.exe`). Controllers use SDL through libGDX Jamepad, which only the Windows and macOS
+builds carry.
+
+## macOS
+
+`scripts/build-macos.sh` builds `Fuse.app` for the Mac it runs on (`arm64` on Apple silicon, `x64`
+on Intel), signs it ad hoc (Apple silicon runs nothing unsigned), runs `--self-test`, and puts it on
+`Fuse-<version>-macos-<arch>.dmg` next to a link to Applications. The app isn't notarized, so the
+first launch needs right-click, Open. The bundle's version is `<major + 1>.<minor>.<patch>` (1.1.0
+for 0.1.0), because macOS and Windows Installer don't accept a leading 0; Fuse itself shows
+`fuse.version`. Apple silicon builds need macOS 11 or newer, Intel builds 10.15 or newer.
+
+## Icons
+
+`app/desktop/packaging/RenderIcon.java` draws Fuse's icon from the same geometry as `fuse.svg`:
+
+```sh
+java app/desktop/packaging/RenderIcon.java app/desktop/packaging/fuse.png 256
+java app/desktop/packaging/RenderIcon.java app/desktop/packaging/fuse.ico
+java app/desktop/packaging/RenderIcon.java app/desktop/packaging/fuse.icns
+```
+
 ## Versions
 
 `gradle.properties` holds the release identity:
 
 | Property | Current value | Used for |
 |---|---|---|
-| `fuse.version` | `0.0.6` | Android `versionName`, the release tag `v0.0.6`, file names |
-| `fuse.versionCode` | `6` | Android `versionCode`; must grow with every release |
-| `fuse.releaseName` | `The Android Games Update` | Release title |
+| `fuse.version` | `0.1.0` | Android `versionName`, the release tag `v0.1.0`, file names |
+| `fuse.versionCode` | `7` | Android `versionCode`; must grow with every release |
+| `fuse.releaseName` | `The Showcase Update` | Release title |
 
 ## Release signing
 
@@ -110,10 +147,18 @@ Losing the key means existing installs cannot update to your builds.
 - a tag `v*` is pushed (the tag must equal `v<fuse.version>`); or
 - it is started by hand (Actions, Release, Run workflow), again only if the release does not exist.
 
-It builds the Android APK and the AppImage in parallel, writes `SHA256SUMS.txt`, and creates the
-release `v<version>` titled `Fuse <version> - <releaseName>` with the notes from
-`docs/releases/<version>.md`. So a release is: add `docs/releases/<version>.md`, bump `fuse.version`,
-`fuse.versionCode` and `fuse.releaseName`, and merge to `main`.
+It creates the release `v<version>` titled `Fuse <version> - <releaseName>`, with the notes from
+`docs/releases/<version>.md`, as soon as the Android APK is built. The AppImage, the Windows MSI and
+zip, and the macOS disk images (Apple silicon on `macos-15`, Intel on `macos-15-intel`) build at the
+same time and are attached to the release as each finishes; one failing doesn't hold back the
+others. A last job rewrites `SHA256SUMS.txt` for every file there. Started by hand with
+`desktop_only`, the workflow builds the desktop packages again and adds them to the existing release
+of the current version, without touching the APK. So a release is: add
+`docs/releases/<version>.md`, bump `fuse.version`, `fuse.versionCode` and `fuse.releaseName`, and
+merge to `main`.
+
+Fuse announces an update only once the release has the build for the device it runs on, so a Mac
+doesn't hear about a release before its disk image is attached.
 
 Repository secrets used by the workflow (Settings > Secrets and variables > Actions > New repository
 secret). Without them the APK is signed with a debug key and the workflow warns; phones that
@@ -140,7 +185,9 @@ base64 -w0 fuse-release.p12   # the value of ANDROID_KEYSTORE_BASE64
 ```
 
 `.github/workflows/ci.yml` runs every test suite and builds the debug APK for every pull request and
-every push to a branch other than `main`.
+every push to a branch other than `main`. On Windows and on both kinds of Mac it also runs the shared
+and desktop tests, builds the packages and self-tests them; the packages are kept as run artifacts
+for 14 days, to try a change before it's released.
 
 ## Troubleshooting
 
