@@ -24,8 +24,9 @@ import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
@@ -101,7 +102,7 @@ fun GeneratedArt(
                         maxLines = 1,
                     )
                 }
-                if (tagged) PlatformTag(label!!, short, Modifier.align(Alignment.BottomStart).padding(pad))
+                if (tagged) PlatformTag(label, short, Modifier.align(Alignment.BottomStart).padding(pad))
             }
             else -> Column(
                 Modifier.fillMaxSize().padding(pad),
@@ -110,11 +111,22 @@ fun GeneratedArt(
                 if (label != null && tagRoom) PlatformTag(label, short, Modifier) else Box(Modifier)
                 // Small covers get smaller type, so words wrap whole instead of breaking apart.
                 val titleStyle = if (slot == ArtSlot.HERO) type.hero else type.title
-                // The longest word has to fit on one line (about 0.72 em per character in the bold display face).
-                val longest = remember(title) { title.split(' ').maxOfOrNull { it.length }?.coerceAtLeast(4) ?: 4 }
+                // The longest word has to fit on one line, measured in the face itself, so a word is
+                // never broken across lines on a small cover.
                 val widthDp = w.value
-                val fits = (widthDp - pad.value * 2) / (longest * 0.72f)
-                val titleSize = if (slot == ArtSlot.BOX) minOf(titleStyle.fontSize.value, widthDp / 6.5f, fits).coerceAtLeast(8f) else titleStyle.fontSize.value
+                val measurer = rememberTextMeasurer(cacheSize = 0)
+                val room = with(density) { (w - pad * 2).toPx() }
+                val titleSize = if (slot == ArtSlot.BOX) {
+                    val fits = remember(title, titleStyle, room) {
+                        val probe = 20f
+                        val longest = title.split(' ').filter { it.isNotBlank() }.maxByOrNull { it.length } ?: title
+                        val measured = measurer.measure(longest, titleStyle.copy(fontSize = probe.dp.asSp(), lineHeight = TextUnit.Unspecified), softWrap = false, maxLines = 1).size.width
+                        if (measured <= 0) Float.MAX_VALUE else probe * room / measured * 0.96f
+                    }
+                    minOf(titleStyle.fontSize.value, widthDp / 6.5f, fits).coerceAtLeast(8f)
+                } else {
+                    titleStyle.fontSize.value
+                }
                 BasicText(
                     title,
                     style = titleStyle.copy(

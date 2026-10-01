@@ -226,24 +226,29 @@ private fun scrim(color: Color, strength: Float, curve: FloatArray): Array<Pair<
 
 /**
  * The room of an item without art, and the placeholder while art loads: a key light in [accent]
- * high on the right, a softer bounce from the lower left in a cooler shade, and night between.
+ * high on the right, a softer bounce from the lower left in a cooler shade, and the room between.
+ * In a dark theme the room is night; in a light one it is the theme's own paper, lit in the
+ * accent, so an art-less game never drops a dark slab into a bright interface.
  */
 @Composable
 private fun LitRoom(accent: Color, modifier: Modifier = Modifier) {
+    val colors = Fuse.colors
+    val dark = colors.isDark
+    val room = if (dark) Color.Black else colors.ink
     Box(
         modifier.fillMaxSize().drawWithCache {
             val w = size.width
             val h = size.height
-            val night = Brush.verticalGradient(listOf(lerp(Color.Black, accent, 0.16f), Color.Black))
+            val night = Brush.verticalGradient(listOf(lerp(room, accent, if (dark) 0.16f else 0.1f), room))
             val key = Brush.radialGradient(
-                0f to lerp(Color.Black, accent, 0.62f),
-                0.45f to lerp(Color.Black, accent, 0.26f).copy(alpha = 0.7f),
+                0f to lerp(room, accent, if (dark) 0.62f else 0.38f),
+                0.45f to lerp(room, accent, if (dark) 0.26f else 0.16f).copy(alpha = 0.7f),
                 1f to Color.Transparent,
                 center = Offset(w * 0.72f, h * 0.28f),
                 radius = size.maxDimension * 0.75f,
             )
             val bounce = Brush.radialGradient(
-                0f to lerp(accent, Color(0xFF3A4C8C), 0.45f).copy(alpha = 0.3f),
+                0f to lerp(accent, Color(0xFF3A4C8C), 0.45f).copy(alpha = if (dark) 0.3f else 0.16f),
                 1f to Color.Transparent,
                 center = Offset(w * 0.1f, h * 1.1f),
                 radius = size.maxDimension * 0.6f,
