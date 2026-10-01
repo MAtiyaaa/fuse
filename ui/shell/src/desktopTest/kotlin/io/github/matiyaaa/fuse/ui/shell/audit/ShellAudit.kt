@@ -70,14 +70,18 @@ internal fun AuditDriver.overlayScreens(exhaustive: Boolean) {
         waitFor("Continue playing")
         tap(PadButton.DPAD_LEFT)
         tap(PadButton.X)
-        waitFor("Rename Display Title")
-        choose(8)
+        tapText("Rename Display Title")
         waitFor("Display title")
         shoot("rename dialog with the on-screen keyboard")
         if (!exhaustive) return@scenario
         tap(PadButton.Y)
+        tap(PadButton.L1, 4)
+        shoot("caret moved back with LB")
         tap(PadButton.DPAD_DOWN, 4)
-        shoot("bottom row (Shift, Space, Delete, Done) focused")
+        shoot("bottom row (123, Paste, Space, Done) focused")
+        tap(PadButton.DPAD_LEFT, 6)
+        tap(PadButton.A)
+        shoot("numbers and punctuation page")
         tap(PadButton.B)
     }
 
@@ -120,7 +124,70 @@ internal fun AuditDriver.settingsScreens(exhaustive: Boolean) {
             if (moved >= 5) shoot("last row focused")
         }
     }
+    scenario("settings", "phone link") {
+        phoneLink.state.value = io.github.matiyaaa.fuse.ui.shell.store.PhoneLinkState(
+            running = true,
+            addresses = listOf("http://192.168.1.20:47300/", "http://10.0.0.8:47300/"),
+            username = "player",
+            sessions = 1,
+        )
+        useLibrary { it.copy(phoneLinkEnabled = true) }
+        openSettings()
+        tap(PadButton.DPAD_DOWN, sectionIndex("phonelink"))
+        tap(PadButton.DPAD_RIGHT)
+        waitFor("Pair a phone")
+        shoot("settings rows")
+        tapText("Pair a phone")
+        waitFor("Address in the code")
+        settle(800)
+        shoot("pairing code, sign-in and signed-in phones")
+        tapText("Signed-in phones")
+        waitFor("Sign out all phones?")
+        shoot("sign out all confirmation")
+        tap(PadButton.B)
+        tapText("Sign-in", step = PadButton.DPAD_UP)
+        waitFor("Phone Link username")
+        shoot("username entry")
+        tap(PadButton.B)
+        phoneLink.state.value = io.github.matiyaaa.fuse.ui.shell.store.PhoneLinkState()
+        useLibrary { it.copy(phoneLinkEnabled = false) }
+        openSettings()
+        tap(PadButton.DPAD_DOWN, sectionIndex("phonelink"))
+        tap(PadButton.DPAD_RIGHT)
+        tapText("Pair a phone")
+        waitFor("Phone Link is off")
+        settle(600)
+        shoot("off")
+    }
+
     if (!exhaustive) return
+
+    scenario("settings", "storage") {
+        useLibrary()
+        openSettings()
+        tap(PadButton.DPAD_DOWN, sectionIndex("storage"))
+        tap(PadButton.DPAD_RIGHT)
+        tapText("Games and space")
+        waitFor("Showing")
+        settle(2_500)
+        shoot("drives and games by size")
+        tapText("Showing")
+        waitFor("Show games from")
+        tap(PadButton.B)
+        // Pick the two largest games.
+        tapText("Showing")
+        tap(PadButton.B)
+        tap(PadButton.DPAD_DOWN)
+        tap(PadButton.A)
+        tap(PadButton.DPAD_DOWN)
+        tap(PadButton.A)
+        settle(600)
+        shoot("two games picked")
+        tapText("Delete 2 games", step = PadButton.DPAD_UP, substring = true)
+        waitFor("This can't be undone")
+        shoot("delete confirmation naming what goes")
+        tap(PadButton.B)
+    }
 
     scenario("settings", "controls") {
         useLibrary()
@@ -376,6 +443,24 @@ internal fun AuditDriver.companionScreens() {
         shoot("game with an update and DLC focused", 2_000)
         Spotlight.set(PlatformId("psx"))
         shoot("system focused (firmware missing)", 2_000)
+        // With the art pack's logo and panel (drawn by the audit; the pack itself is downloaded).
+        val psx = store.library.platforms.value.first { it.platform.id == PlatformId("psx") }
+        val owner = io.github.matiyaaa.fuse.model.MediaOwner.OfPlatform(psx.platform.id)
+        val dir = java.io.File(cache, "system-art").apply { mkdirs() }
+        val panel = java.io.File(dir, "psx-panel.png").also { AuditSystemArt.panel(it, psx.platform.accent) }
+        val logo = java.io.File(dir, "psx-logo.png").also { AuditSystemArt.logo(it, psx.platform.shortName) }
+        runBlocking {
+            store.media.setFromFile(owner, io.github.matiyaaa.fuse.model.MediaKind.BOXART, panel.absolutePath)
+            store.media.setFromFile(owner, io.github.matiyaaa.fuse.model.MediaKind.LOGO, logo.absolutePath)
+        }
+        try {
+            Spotlight.set(null)
+            settle(600)
+            Spotlight.set(PlatformId("psx"))
+            shoot("system focused with its logo and art panel", 2_500)
+        } finally {
+            runBlocking { store.media.reset(owner, null) }
+        }
         Spotlight.set(PlatformId("psp"))
         shoot("system focused (no emulator)", 2_000)
         Spotlight.set(null)

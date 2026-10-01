@@ -38,6 +38,15 @@ internal object UpdateHandoff {
 internal class DesktopReleaseInstaller(private val dirs: FuseDirs, private val http: HttpClient) : ReleaseInstaller {
     override val platform: ReleasePlatform = ReleasePlatform.LINUX_X86_64
 
+    /** Downloads, verifies and places the new AppImage; [applyUpdate] then restarts into it. */
+    override suspend fun download(asset: ReleaseAsset, onProgress: (Float) -> Unit): Result<String> =
+        install(asset, onProgress).mapCatching {
+            UpdateHandoff.installedFuseAppImage ?: error("The new AppImage could not be placed.")
+        }
+
+    override suspend fun applyUpdate(downloaded: String): Result<Boolean> =
+        if (File(downloaded).canExecute()) Result.success(true) else Result.failure(IOException("The new AppImage is gone. Download the update again."))
+
     override suspend fun install(asset: ReleaseAsset, onProgress: (Float) -> Unit): Result<Unit> = withContext(Dispatchers.IO) {
         try {
             val name = asset.name

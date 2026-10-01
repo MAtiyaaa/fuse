@@ -1,6 +1,5 @@
 package io.github.matiyaaa.fuse.ui.shell.systems
 
-import io.github.matiyaaa.fuse.ui.designsystem.components.fadingEdges
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.animateFloatAsState
@@ -9,21 +8,6 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.graphics.BlendMode
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.CompositingStrategy
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.zIndex
-import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
-import io.github.matiyaaa.fuse.ui.designsystem.theme.Durations
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -32,14 +16,18 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -49,7 +37,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import io.github.matiyaaa.fuse.model.CartridgeRoute
 import io.github.matiyaaa.fuse.model.MediaFillMode
 import io.github.matiyaaa.fuse.model.MediaKind
@@ -61,15 +58,19 @@ import io.github.matiyaaa.fuse.ui.designsystem.components.Hint
 import io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction
 import io.github.matiyaaa.fuse.ui.designsystem.components.Tile
 import io.github.matiyaaa.fuse.ui.designsystem.components.Trailing
+import io.github.matiyaaa.fuse.ui.designsystem.components.fadingEdges
 import io.github.matiyaaa.fuse.ui.designsystem.focus.FollowSelection
 import io.github.matiyaaa.fuse.ui.designsystem.focus.GridSelection
+import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
 import io.github.matiyaaa.fuse.ui.designsystem.icons.HintButton
 import io.github.matiyaaa.fuse.ui.designsystem.input.InputLayer
 import io.github.matiyaaa.fuse.ui.designsystem.input.NavResult
 import io.github.matiyaaa.fuse.ui.designsystem.media.Artwork
 import io.github.matiyaaa.fuse.ui.designsystem.media.HeroSource
+import io.github.matiyaaa.fuse.ui.designsystem.media.PrefetchArt
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Aspect
+import io.github.matiyaaa.fuse.ui.designsystem.theme.Durations
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
@@ -105,6 +106,9 @@ fun SystemsScreen(app: AppState) {
     LaunchedEffect(current?.platform?.id) {
         app.hero = current?.let { HeroSource(it.platform.id, it.art.hero, it.platform.accent.toColor()) }
     }
+    // Logos and art panels of the neighbouring systems are decoded ahead, so the header never waits.
+    PrefetchArt(remember(systems) { systems.map { it.art.logo } }, sel.index, size = 360.dp)
+    PrefetchArt(remember(systems) { systems.map { it.art.boxart } }, sel.index, size = 480.dp)
     LaunchedEffect(moving) {
         app.hints = if (moving) {
             listOf(Hint(HintButton.DPAD, "Move"), Hint(HintButton.CONFIRM, "Done"))
@@ -206,13 +210,13 @@ fun SystemsScreen(app: AppState) {
 
 /** The focused system: logo (or name), then games and emulator. No firmware details here. */
 @Composable
-private fun SystemHeader(card: PlatformCard?, compact: Boolean, modifier: Modifier = Modifier) {
+internal fun SystemHeader(card: PlatformCard?, compact: Boolean, modifier: Modifier = Modifier, widthFraction: Float = 0.62f) {
     val c = Fuse.colors
     val motion = Fuse.motion
     val logoHeight = if (compact) 40.dp else 64.dp
     AnimatedContent(
         targetState = card,
-        modifier = modifier.fillMaxWidth(0.62f),
+        modifier = modifier.fillMaxWidth(widthFraction),
         contentKey = { it?.platform?.id },
         transitionSpec = { fadeIn(motion.fade(Durations.BASE)) togetherWith fadeOut(motion.fade(Durations.INSTANT)) },
         contentAlignment = Alignment.BottomStart,
@@ -259,29 +263,34 @@ private fun SystemHeader(card: PlatformCard?, compact: Boolean, modifier: Modifi
  * fading into the background on its left and toward the bottom so the grid stays calm.
  */
 @Composable
-private fun SystemShowcase(card: PlatformCard?, modifier: Modifier) {
+internal fun SystemShowcase(card: PlatformCard?, modifier: Modifier) {
     val art = card?.art?.boxart
     Crossfade(targetState = art, modifier = modifier, animationSpec = Fuse.motion.fade(Durations.SLOW), label = "showcase") { model ->
         if (model == null) return@Crossfade
         Artwork(
             model,
-            Modifier.fillMaxSize()
-                .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
-                .drawWithContent {
-                    drawContent()
-                    drawRect(Brush.horizontalGradient(0f to Color.Transparent, 0.55f to Color.Black), blendMode = BlendMode.DstIn)
-                    // Clear of the status bar at the top, quieter behind the grid toward the bottom.
-                    drawRect(
-                        Brush.verticalGradient(0f to Color.Transparent, 0.2f to Color.Black.copy(alpha = 0.8f), 0.5f to Color.Black.copy(alpha = 0.55f), 1f to Color.Black.copy(alpha = 0.15f)),
-                        blendMode = BlendMode.DstIn,
-                    )
-                },
+            Modifier.fillMaxSize().panelFade(),
             contentScale = ContentScale.Crop,
             focusX = 0.5f,
             focusY = 0.3f,
         )
     }
 }
+
+/**
+ * Fades a side panel into the background: from nothing on its left to full on its right, clear of
+ * the status bar at the top and quieter toward the bottom.
+ */
+internal fun Modifier.panelFade(): Modifier = this
+    .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+    .drawWithContent {
+        drawContent()
+        drawRect(Brush.horizontalGradient(0f to Color.Transparent, 0.55f to Color.Black), blendMode = BlendMode.DstIn)
+        drawRect(
+            Brush.verticalGradient(0f to Color.Transparent, 0.2f to Color.Black.copy(alpha = 0.8f), 0.5f to Color.Black.copy(alpha = 0.55f), 1f to Color.Black.copy(alpha = 0.15f)),
+            blendMode = BlendMode.DstIn,
+        )
+    }
 
 /** Options for a system (Context button or long press on its card). */
 fun AppState.systemMenu(card: PlatformCard): ContextMenuSpec {
@@ -290,7 +299,7 @@ fun AppState.systemMenu(card: PlatformCard): ContextMenuSpec {
     return ContextMenuSpec(
         title = p.name,
         subtitle = "${card.gameCount} games",
-        actions = listOf(
+        actions = listOfNotNull(
             MenuAction("open", "Open", FuseIcons.Grid, onSelect = { closeOverlays(); go(Route.PlatformGames(p.id)) }),
             MenuAction("settings", "System Settings", FuseIcons.Settings, trailing = Trailing.Chevron, onSelect = { closeOverlays(); go(Route.PlatformSettings(p.id)) }),
             MenuAction("media", "Change System Media", FuseIcons.Image, detail = "Icon, background and logo for ${p.shortName}", trailing = Trailing.Chevron, onSelect = {
@@ -298,7 +307,7 @@ fun AppState.systemMenu(card: PlatformCard): ContextMenuSpec {
             }),
             MenuAction("fill", "Fill Missing Game Art", FuseIcons.Wand, detail = "Only games without art; your custom art is never replaced", onSelect = {
                 closeOverlays()
-                store.media.fill(MediaFillMode.FILL_MISSING, setOf(MediaKind.ICON, MediaKind.BOXART, MediaKind.HERO, MediaKind.LOGO, MediaKind.GRID), platform = p.id)
+                store.media.fill(MediaFillMode.FILL_MISSING, MediaKind.Fillable, platform = p.id)
                 toasts.show("Finding missing art for ${p.shortName}")
             }),
             MenuAction("emulator", "Emulator", FuseIcons.Chip, trailing = Trailing.Value(card.emulatorName ?: "None"), onSelect = { platformEmulatorPicker(card) }),
@@ -312,7 +321,7 @@ fun AppState.systemMenu(card: PlatformCard): ContextMenuSpec {
             MenuAction("rescan", "Rescan", FuseIcons.Refresh, onSelect = {
                 closeOverlays(); store.sources.rescan(ScanScope.PLATFORM, p.id); toasts.show("Rescanning ${p.shortName}")
             }),
-            MenuAction("cartridge", "Browse in Cartridge", FuseIcons.CloudDownload, onSelect = {
+            if (!store.cartridge.status.value.installed) null else MenuAction("cartridge", "Browse in Cartridge", FuseIcons.CloudDownload, onSelect = {
                 closeOverlays(); store.cartridge.open(CartridgeRoute.Platform(p.id.value))
             }),
         ),

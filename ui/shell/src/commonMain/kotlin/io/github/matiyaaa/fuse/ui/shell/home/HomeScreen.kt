@@ -1,12 +1,8 @@
 package io.github.matiyaaa.fuse.ui.shell.home
 
-import io.github.matiyaaa.fuse.ui.designsystem.components.fadingEdges
 import androidx.compose.animation.core.animateFloatAsState
-import io.github.matiyaaa.fuse.ui.designsystem.components.Trailing
-import androidx.compose.ui.zIndex
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -33,7 +29,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import io.github.matiyaaa.fuse.model.Destination
 import io.github.matiyaaa.fuse.model.HomeMode
 import io.github.matiyaaa.fuse.model.NavAction
@@ -42,14 +40,16 @@ import io.github.matiyaaa.fuse.ui.designsystem.components.FText
 import io.github.matiyaaa.fuse.ui.designsystem.components.Hint
 import io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction
 import io.github.matiyaaa.fuse.ui.designsystem.components.SectionLabel
+import io.github.matiyaaa.fuse.ui.designsystem.components.Trailing
+import io.github.matiyaaa.fuse.ui.designsystem.components.fadingEdges
 import io.github.matiyaaa.fuse.ui.designsystem.focus.FollowSelection
 import io.github.matiyaaa.fuse.ui.designsystem.focus.ShelfSelection
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
-import io.github.matiyaaa.fuse.ui.designsystem.media.PrefetchArt
 import io.github.matiyaaa.fuse.ui.designsystem.icons.HintButton
 import io.github.matiyaaa.fuse.ui.designsystem.input.InputLayer
 import io.github.matiyaaa.fuse.ui.designsystem.input.NavResult
 import io.github.matiyaaa.fuse.ui.designsystem.media.HeroSource
+import io.github.matiyaaa.fuse.ui.designsystem.media.PrefetchArt
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Durations
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
@@ -59,10 +59,15 @@ import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.ContextMenuSpec
 import io.github.matiyaaa.fuse.ui.shell.app.FocusZone
 import io.github.matiyaaa.fuse.ui.shell.app.Route
+import io.github.matiyaaa.fuse.ui.shell.app.activateGame
 import io.github.matiyaaa.fuse.ui.shell.app.dismissFromContinue
+import io.github.matiyaaa.fuse.ui.shell.app.gameConfirmLabel
 import io.github.matiyaaa.fuse.ui.shell.app.gameMenu
+import io.github.matiyaaa.fuse.ui.shell.app.openApp
 import io.github.matiyaaa.fuse.ui.shell.app.play
 import io.github.matiyaaa.fuse.ui.shell.app.rememberRouteState
+import io.github.matiyaaa.fuse.ui.shell.app.rememberSystems
+import io.github.matiyaaa.fuse.ui.shell.app.room
 import io.github.matiyaaa.fuse.ui.shell.apps.appMenu
 import io.github.matiyaaa.fuse.ui.shell.components.AppTile
 import io.github.matiyaaa.fuse.ui.shell.components.GameIconTile
@@ -75,7 +80,6 @@ import io.github.matiyaaa.fuse.ui.shell.components.stage
 import io.github.matiyaaa.fuse.ui.shell.library.CollectionTile
 import io.github.matiyaaa.fuse.ui.shell.systems.moveSystem
 import io.github.matiyaaa.fuse.ui.shell.systems.systemMenu
-import kotlinx.coroutines.launch
 
 @Composable
 fun HomeScreen(app: AppState) {
@@ -117,7 +121,7 @@ fun FlowHome(app: AppState) {
     val cartridge by store.cartridge.status.collectAsState()
     val achievementsOn by store.achievements.configured.collectAsState()
     val shelves = remember(prefs.home, feed, achievementsOn, cartridge.installed) {
-        buildShelves(prefs.home.widgets, feed, achievementsOn, cartridge.installed)
+        buildShelves(prefs.home.widgets, if (prefs.collectionsEnabled) feed else feed.copy(collections = emptyList()), achievementsOn, cartridge.installed)
     }
     val sel = rememberRouteState(app.navigator, "home.flow") { ShelfSelection() }
     val keys = shelves.map { it.key }
@@ -135,11 +139,12 @@ fun FlowHome(app: AppState) {
     }
 
     // The room and the stage follow the selection.
-    LaunchedEffect(item?.key, reorder, movingSystem) {
-        app.hero = item?.hero()
+    val systems = rememberSystems(app)
+    LaunchedEffect(item?.key, reorder, movingSystem, systems) {
+        app.hero = item?.hero(systems)
         app.hints = when {
             reorder != null || movingSystem -> listOf(Hint(HintButton.DPAD, "Move"), Hint(HintButton.CONFIRM, "Done"))
-            item is ShelfItem.Game -> listOf(Hint(HintButton.CONFIRM, "Play"), Hint(HintButton.OPTIONS, "Options"), Hint(HintButton.SEARCH, "Search"))
+            item is ShelfItem.Game -> listOf(Hint(HintButton.CONFIRM, app.gameConfirmLabel), Hint(HintButton.OPTIONS, "Options"), Hint(HintButton.SEARCH, "Search"))
             item is ShelfItem.System -> listOf(Hint(HintButton.CONFIRM, "Open"), Hint(HintButton.HOLD_CONFIRM, "Hold to move"), Hint(HintButton.OPTIONS, "Options"))
             item is ShelfItem.Widget -> listOf(Hint(HintButton.CONFIRM, "Open"), Hint(HintButton.HOLD_CONFIRM, "Hold to arrange"))
             else -> listOf(Hint(HintButton.CONFIRM, "Open"), Hint(HintButton.OPTIONS, "Options"), Hint(HintButton.SEARCH, "Search"))
@@ -148,9 +153,9 @@ fun FlowHome(app: AppState) {
 
     fun activate(i: ShelfItem) {
         when (i) {
-            is ShelfItem.Game -> app.play(i.card)
+            is ShelfItem.Game -> app.activateGame(i.card)
             is ShelfItem.System -> app.go(Route.PlatformGames(i.card.platform.id))
-            is ShelfItem.App -> app.scope.launch { store.apps.launch(i.card) }
+            is ShelfItem.App -> app.openApp(i.card)
             is ShelfItem.Collection -> app.go(Route.CollectionGames(i.collection.id, i.collection.name))
             is ShelfItem.Widget -> openWidget(app, i.kind)
         }
@@ -314,17 +319,34 @@ private fun ShelfRow(
     val metrics = LocalTileMetrics.current
     val row = rememberLazyListState()
     FollowSelection(row, { rememberedColumn }, anchor = 0f)
+    // What the tiles and the stage will draw next, decoded ahead into memory.
+    val focus = if (selectedColumn >= 0) selectedColumn else -1
     PrefetchArt(
-        remember(shelf.items) {
+        remember(shelf.items, shelf.style) {
             shelf.items.map { item ->
                 when (item) {
-                    is ShelfItem.Game -> item.card.art.grid ?: item.card.art.icon ?: item.card.art.boxart
-                    is ShelfItem.System -> item.card.art.icon ?: item.card.art.boxart
+                    is ShelfItem.Game -> if (shelf.style == ShelfStyle.WIDE) item.card.art.hero ?: item.card.art.grid ?: item.card.art.boxart
+                    else item.card.art.square ?: item.card.art.icon ?: item.card.art.boxart ?: item.card.art.grid
+                    is ShelfItem.System -> item.card.art.square ?: item.card.art.icon ?: item.card.art.boxart
                     else -> null
                 }
             }
         },
-        if (selectedColumn >= 0) selectedColumn else -1,
+        focus,
+        size = metrics.icon * 1.4f,
+    )
+    PrefetchArt(
+        remember(shelf.items) {
+            shelf.items.map { item ->
+                when (item) {
+                    is ShelfItem.Game -> item.card.art.logo
+                    is ShelfItem.System -> item.card.art.logo
+                    else -> null
+                }
+            }
+        },
+        focus,
+        size = 360.dp,
     )
     Column(
         modifier
@@ -401,9 +423,10 @@ private fun ShelfItem.stage(feed: io.github.matiyaaa.fuse.ui.shell.store.HomeFee
     )
 }
 
-private fun ShelfItem.hero(): HeroSource? = when (this) {
-    is ShelfItem.Game -> HeroSource(key, card.art.hero ?: card.art.grid, card.accent.toColor(), card.art.heroFocusX, card.art.heroFocusY, card.art.video)
-    is ShelfItem.System -> HeroSource(key, card.art.hero, card.platform.accent.toColor())
+/** The backdrop for an item, keyed by its game or system (the second screen shows what the key names). */
+private fun ShelfItem.hero(systems: Map<io.github.matiyaaa.fuse.model.PlatformId, io.github.matiyaaa.fuse.ui.shell.store.PlatformCard>): HeroSource? = when (this) {
+    is ShelfItem.Game -> card.room(systems[card.platformId])
+    is ShelfItem.System -> HeroSource(card.platform.id, card.art.hero, card.platform.accent.toColor())
     else -> null
 }
 
@@ -412,7 +435,7 @@ private fun openWidget(app: AppState, kind: WidgetKind) {
         WidgetKind.CARTRIDGE_DOWNLOADS -> app.selectTab(Destination.CARTRIDGE)
         WidgetKind.RECENT_ACHIEVEMENT, WidgetKind.RECENT_ACHIEVEMENTS, WidgetKind.ACHIEVEMENT_PROGRESS,
         WidgetKind.RECENTLY_MASTERED -> app.selectTab(Destination.ACHIEVEMENTS)
-        WidgetKind.STORAGE -> app.go(Route.Settings("storage"))
+        WidgetKind.STORAGE -> app.go(Route.Storage)
         WidgetKind.CLOCK -> app.quickMenuOpen = true
         else -> app.selectTab(Destination.LIBRARY)
     }

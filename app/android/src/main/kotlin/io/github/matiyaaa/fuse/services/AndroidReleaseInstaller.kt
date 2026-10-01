@@ -42,6 +42,58 @@ class AndroidReleaseInstaller(
     private val appContext = context.applicationContext
     override val platform: ReleasePlatform = ReleasePlatform.ANDROID
 
+    override suspend fun download(asset: ReleaseAsset, onProgress: (Float) -> Unit): Result<String> {
+        val expected = asset.digest?.takeIf { it.startsWith("sha256:", ignoreCase = true) }
+            ?.substringAfter(':')?.trim()?.lowercase()
+        val dir = File(appContext.cacheDir, "updates")
+        val file = File(dir, safeName(asset.name))
+        return try {
+            withContext(Dispatchers.IO) {
+                if (!dir.isDirectory && !dir.mkdirs()) throw InstallException("Fuse couldn't prepare its download folder.")
+                // Only the update being downloaded is kept.
+                dir.listFiles()?.filter { it != file }?.forEach { it.delete() }
+                val actual = download(asset, file, onProgress)
+                if (expected != null && expected != actual) {
+                    file.delete()
+                    throw InstallException("The download didn't match the checksum GitHub published, so it was deleted. Try again.")
+                }
+            }
+            Result.success(file.absolutePath)
+        } catch (e: CancellationException) {
+            file.delete()
+            throw e
+        } catch (e: InstallException) {
+            file.delete()
+            Result.failure(e)
+        } catch (e: IOException) {
+            file.delete()
+            Result.failure(InstallException("The download failed. Check the connection and try again."))
+        }
+    }
+
+    override suspend fun applyUpdate(downloaded: String): Result<Boolean> {
+        val file = File(downloaded)
+        if (!file.isFile) return Result.failure(InstallException("The download is gone. Download the update again."))
+        if (!appContext.packageManager.canRequestPackageInstalls()) {
+            withContext(Dispatchers.Main) {
+                activities.startFirst(
+                    Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, "package:${appContext.packageName}".toUri()),
+                    Intent(Settings.ACTION_SECURITY_SETTINGS),
+                )
+            }
+            return Result.failure(InstallException("Allow Fuse to install apps in the screen that just opened, then choose Restart and update again."))
+        }
+        return try {
+            withContext(Dispatchers.IO) { commit(file, keep = true) }
+            // Android asks to confirm, installs, and starts Fuse again (as the Home app, at once).
+            Result.success(false)
+        } catch (e: RuntimeException) {
+            Result.failure(InstallException("Android couldn't start the installation."))
+        } catch (e: IOException) {
+            Result.failure(InstallException("Android couldn't start the installation."))
+        }
+    }
+
     override suspend fun install(asset: ReleaseAsset, onProgress: (Float) -> Unit): Result<Unit> {
         if (!appContext.packageManager.canRequestPackageInstalls()) {
             withContext(Dispatchers.Main) {
@@ -125,7 +177,7 @@ class AndroidReleaseInstaller(
         return digest.digest().toHex()
     }
 
-    private fun commit(file: File) {
+    private fun commit(file: File, keep: Boolean = false) {
         val installer = appContext.packageManager.packageInstaller
         val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL).apply {
             setSize(file.length())
@@ -155,8 +207,9 @@ class AndroidReleaseInstaller(
             }
             throw e
         } finally {
-            // The session holds its own copy now; the cached APK is Fuse's own file.
-            file.delete()
+            // The session holds its own copy now. A Fuse update keeps its download, so a dismissed
+            // confirmation can be tried again; the next download replaces it.
+            if (!keep) file.delete()
         }
     }
 

@@ -1,7 +1,5 @@
 package io.github.matiyaaa.fuse.ui.shell.settings
 
-import io.github.matiyaaa.fuse.integrations.systemart.SystemArtPack
-
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,6 +21,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import io.github.matiyaaa.fuse.integrations.systemart.SystemArtPack
 import io.github.matiyaaa.fuse.model.NavAction
 import io.github.matiyaaa.fuse.ui.designsystem.components.FText
 import io.github.matiyaaa.fuse.ui.designsystem.components.Hint
@@ -42,6 +41,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.FocusZone
+import io.github.matiyaaa.fuse.ui.shell.music.BundledMusic
 import kotlinx.coroutines.launch
 
 /**
@@ -52,11 +52,21 @@ private data class LicenceDoc(val file: String, val title: String, val covers: S
 
 private val docs = listOf(
     LicenceDoc("GPL-3.0.txt", "Fuse", "GNU General Public License 3.0 or later"),
-    LicenceDoc("Apache-2.0.txt", "Libraries", "Apache License 2.0: Kotlin, Compose Multiplatform, AndroidX, Ktor, Coil, SQLDelight, kotlinx, Media3"),
+    LicenceDoc("Apache-2.0.txt", "Libraries", "Apache License 2.0: Kotlin, Compose Multiplatform, AndroidX, Ktor, Coil, SQLDelight, kotlinx, Media3, Typesafe Config"),
     LicenceDoc("OFL-Sora.txt", "Sora typeface", "SIL Open Font License 1.1"),
     LicenceDoc("OFL-Manrope.txt", "Manrope typeface", "SIL Open Font License 1.1"),
     LicenceDoc("LICENSE-lucide.txt", "Lucide icons", "ISC License (and MIT for icons derived from Feather)"),
+    LicenceDoc("LICENSE-qrcodegen.txt", "QR codes", "MIT License: Project Nayuki's QR Code generator library, for Phone Link pairing"),
+    LicenceDoc("LICENSE-slf4j.txt", "SLF4J", "MIT License: the logging interface Phone Link's web server (Ktor) is built on"),
     LicenceDoc("LGPL-2.1.txt", "JLayer", "GNU Lesser General Public License 2.1 or later: the MP3 decoder for menu music in the Linux app"),
+    LicenceDoc(
+        "music", "Music", "jam channel by ${BundledMusic.ARTIST}. The songs Fuse plays under its menus",
+        inline = "${BundledMusic.CREDIT}.\n\n" +
+            "Fuse plays these songs under its menus: puddleworld by default and alright apothecary during " +
+            "first-time setup. Pick another one, or a song of your own, in Settings, Sound.\n\n" +
+            "The songs are the work of ${BundledMusic.ARTIST} and are not covered by Fuse's licence. They ship " +
+            "with Fuse so it has music out of the box; all rights stay with the artist.",
+    ),
     LicenceDoc(
         "art-book-next", "System art", "Art Book Next, CC BY-NC-SA 2.0. Downloaded when used, not part of Fuse",
         inline = SystemArtPack.ATTRIBUTION + "\n\n" +

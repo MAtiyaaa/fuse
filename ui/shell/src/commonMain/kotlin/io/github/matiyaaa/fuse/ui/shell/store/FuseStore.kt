@@ -12,6 +12,7 @@ import io.github.matiyaaa.fuse.model.FolderPolicy
 import io.github.matiyaaa.fuse.model.GameCollection
 import io.github.matiyaaa.fuse.model.GameId
 import io.github.matiyaaa.fuse.model.InstalledEmulator
+import io.github.matiyaaa.fuse.model.LaunchDisplay
 import io.github.matiyaaa.fuse.model.LibraryLayout
 import io.github.matiyaaa.fuse.model.LibrarySource
 import io.github.matiyaaa.fuse.model.LibrarySourceKind
@@ -53,7 +54,53 @@ interface FuseStore {
     val settings: ScopedSettingsOps
     val credentials: CredentialOps
     val updates: UpdateOps
+    val storage: StorageOps
+
+    /** A song that ships with Fuse ([io.github.matiyaaa.fuse.ui.shell.music.BundledMusic]) as a file the player can open. */
+    suspend fun bundledTrack(id: String): String? = null
 }
+
+/**
+ * Space on the drives the library lives on, what each game takes (every disc, track and folder
+ * file) and deleting games' files. Deleting is only offered on the device, in Settings, Storage.
+ */
+interface StorageOps {
+    /** The latest measurement; null until [refresh] first runs. Updates as games are measured. */
+    val usage: StateFlow<StorageUsage?>
+    /** Measures every game again. */
+    fun refresh()
+    /** What [game] takes on disk, or null when it is gone. */
+    suspend fun size(game: GameId): Long?
+    /**
+     * Deletes the games' files (all discs, tracks and folder contents; never saves next to them)
+     * and forgets the games. Only paths inside the game's library folder are touched.
+     */
+    suspend fun delete(games: List<GameId>): DeleteReport
+}
+
+data class StorageUsage(
+    val volumes: List<VolumeUsage>,
+    /** Largest first. */
+    val games: List<GameSize>,
+    val measured: Int,
+    val total: Int,
+    val finished: Boolean,
+)
+
+/** A drive: its size, what's free, and how much of it is games, by system. */
+data class VolumeUsage(
+    val label: String,
+    val totalBytes: Long,
+    val freeBytes: Long,
+    val gamesBytes: Long,
+    val systems: List<SystemShare>,
+)
+
+data class SystemShare(val platform: PlatformId, val name: String, val accent: Long, val bytes: Long)
+
+data class GameSize(val card: GameCard, val bytes: Long, val files: Int)
+
+data class DeleteReport(val deleted: Int, val freedBytes: Long, val failed: List<String>)
 
 data class GameQuery(
     val platform: PlatformId? = null,
@@ -74,7 +121,8 @@ interface LibraryOps {
     fun game(id: GameId): Flow<GameDetail?>
     fun search(query: String): Flow<SearchResults>
 
-    suspend fun launch(id: GameId, emulator: EmulatorId? = null, discPath: String? = null): LaunchOutcome
+    /** [display] overrides the screen settings for this launch (the user just picked one). */
+    suspend fun launch(id: GameId, emulator: EmulatorId? = null, discPath: String? = null, display: LaunchDisplay? = null): LaunchOutcome
 
     /** Called when Fuse comes back to the foreground: closes the running session, checks for changes. */
     fun onResume()
@@ -135,8 +183,15 @@ interface MediaOps {
     suspend fun setFromFile(owner: MediaOwner, kind: MediaKind, path: String)
     suspend fun adjust(owner: MediaOwner, kind: MediaKind, focusX: Float, focusY: Float, zoom: Float)
     suspend fun reset(owner: MediaOwner, kind: MediaKind?)
-    /** Bulk fill for a game, platform or everything ([platform] and [game] null). */
+    /**
+     * Bulk fill for a game, platform or everything ([platform] and [game] null). Kinds no configured
+     * source can return are left out, and a bulk "fill missing" skips games whose sources had
+     * nothing a short while ago (a single game is always searched again).
+     */
     fun fill(mode: MediaFillMode, kinds: Set<MediaKind>, platform: PlatformId? = null, game: GameId? = null)
+    /** Every art kind and every detail the sources have, for games missing any, plus system art. */
+    fun fillEverything(platform: PlatformId? = null)
+    fun cancelFill()
     val fillProgress: StateFlow<FillProgress?>
     /** The name art and details are searched with for [game]; null when the game is gone. */
     suspend fun searchTitle(game: GameId): SearchTitle?
@@ -171,7 +226,29 @@ sealed interface IdentifyResult {
 
 data class RecentDownload(val download: io.github.matiyaaa.fuse.model.CartridgeDownload, val game: GameCard?)
 
-data class FillProgress(val done: Int, val total: Int, val current: String?, val added: Int, val finished: Boolean)
+data class FillProgress(
+    val done: Int,
+    val total: Int,
+    /** The game (or system) being worked on; with several at once, the latest one started. */
+    val current: String?,
+    /** Images added. */
+    val added: Int,
+    val finished: Boolean,
+    /** Games whose details (description, year, genres, series, rating) were filled in. */
+    val details: Int = 0,
+    /** Games with several close matches, for the user to pick in Identify game. */
+    val needsYou: List<FillChoice> = emptyList(),
+    val cancelled: Boolean = false,
+    /** Sources resting (out of requests, key rejected or not answering); the others carry on. */
+    val paused: List<String> = emptyList(),
+    /** Started by Fuse after a scan rather than by the user. */
+    val automatic: Boolean = false,
+) {
+    val fraction: Float get() = if (total <= 0) 1f else (done.toFloat() / total).coerceIn(0f, 1f)
+}
+
+/** A game a fill couldn't name by itself. */
+data class FillChoice(val game: GameId, val title: String)
 
 interface CollectionOps {
     val collections: StateFlow<List<GameCollection>>
@@ -179,8 +256,11 @@ interface CollectionOps {
     suspend fun rename(id: CollectionId, name: String)
     suspend fun delete(id: CollectionId)
     suspend fun add(id: CollectionId, game: GameId)
+    suspend fun addGames(id: CollectionId, games: List<GameId>)
     suspend fun remove(id: CollectionId, game: GameId)
     suspend fun membership(game: GameId): Set<CollectionId>
+    /** Makes a series the user's own collection: Fuse stops changing it (hide its name from series too). */
+    suspend fun keepSeries(id: CollectionId)
 }
 
 interface AchievementOps {
@@ -197,7 +277,8 @@ interface AchievementOps {
 interface AppOps {
     val supported: Boolean
     fun apps(filter: AppFilter): Flow<List<AppCard>>
-    suspend fun launch(app: AppCard)
+    /** [display] is the screen to open on (main when null or on devices with one screen). */
+    suspend fun launch(app: AppCard, display: LaunchDisplay? = null)
     suspend fun setPinned(app: AppCard, pinned: Boolean)
     suspend fun setHidden(app: AppCard, hidden: Boolean)
     suspend fun rename(app: AppCard, title: String?)
@@ -214,6 +295,25 @@ interface CartridgeOps {
     /** Downloads and hands the release to the system installer. Only after the user confirmed. */
     suspend fun install(release: ReleaseInfo): Result<Unit>
     fun refresh()
+
+    /**
+     * Hands [game] to Cartridge to upload to RomM: every file of it, other discs, DLC and updates
+     * included. Cartridge shows what it would send and uploads only after the user confirms there.
+     */
+    suspend fun upload(game: GameId): UploadHandoff
+}
+
+/** What happened when Fuse handed a game to Cartridge to upload. */
+enum class UploadHandoff {
+    /** Cartridge is showing the upload. */
+    OPENED,
+    NOT_INSTALLED,
+    /** This Cartridge can't take uploads (bridge protocol 3). */
+    TOO_OLD,
+    /** None of the game's files were found. */
+    NO_FILES,
+    /** Cartridge didn't open. */
+    FAILED,
 }
 
 /** Global -> Platform -> Game settings with visible inheritance. */
@@ -234,7 +334,44 @@ interface CredentialOps {
 
 interface UpdateOps {
     val available: StateFlow<ReleaseInfo?>
+    /** Where an update stands: downloading with progress, ready to install, installing, failed. */
+    val state: StateFlow<UpdateState>
     suspend fun check(): ReleaseInfo?
-    suspend fun install(release: ReleaseInfo): Result<Unit>
+    /** Starts downloading [release] in the background (again after a failure). A second call while it runs does nothing. */
+    fun download(release: ReleaseInfo)
+    fun cancelDownload()
+    /** Installs the ready update. Success(true): restart Fuse now; Success(false): the system took over. */
+    suspend fun apply(): Result<Boolean>
     val currentVersion: String
 }
+
+sealed interface UpdateState {
+    data object Idle : UpdateState
+    /** [progress] 0..1, or null while the size is unknown. */
+    data class Downloading(val release: ReleaseInfo, val progress: Float?) : UpdateState
+    data class Ready(val release: ReleaseInfo, val file: String) : UpdateState
+    data class Installing(val release: ReleaseInfo) : UpdateState
+    data class Failed(val release: ReleaseInfo, val message: String) : UpdateState
+}
+
+/**
+ * Phone Link as Settings sees it. The server itself lives in :ui:link and follows
+ * [UiPrefs.phoneLinkEnabled]; account changes happen only here, on the device.
+ */
+interface PhoneLinkControl {
+    val state: StateFlow<PhoneLinkState>
+    /** Sets the username and password phones sign in with; every signed-in phone is signed out. */
+    suspend fun setAccount(username: String, password: String): Result<Unit>
+    suspend fun signOutAll()
+    /** The QR code for [text] as rows of dark modules. */
+    fun qr(text: String): List<BooleanArray>?
+}
+
+data class PhoneLinkState(
+    val running: Boolean = false,
+    /** Addresses phones open, like "http://192.168.1.20:47300/". Empty when not on a network. */
+    val addresses: List<String> = emptyList(),
+    val username: String? = null,
+    val sessions: Int = 0,
+    val error: String? = null,
+)

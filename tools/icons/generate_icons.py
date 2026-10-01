@@ -44,6 +44,7 @@ ICONS = {
     "ScanSearch": "scan-search", "ScanLine": "scan-line", "BadgeCheck": "badge-check", "Cable": "cable",
     "Plug": "plug", "Unplug": "unplug", "Tv": "tv", "AppWindow": "app-window", "SquarePlay": "square-play",
     "CirclePlay": "circle-play", "Dashboard": "layout-dashboard", "PanelsTop": "panels-top-left",
+    "PanelTop": "panel-top", "PanelBottom": "panel-bottom",
     "HomePlus": "house-plus", "Pin": "pin", "PinOff": "pin-off", "History": "history", "Flame": "flame",
     "Activity": "activity", "Thermometer": "thermometer", "Memory": "memory-stick", "Battery": "battery",
     "BatteryCharging": "battery-charging", "BatteryLow": "battery-low", "Aperture": "aperture",
@@ -53,6 +54,8 @@ ICONS = {
     "RefreshDot": "refresh-ccw-dot", "Import": "import", "Upload": "upload", "Share": "share-2",
     "QrCode": "qr-code", "Wrench": "wrench", "Blocks": "blocks", "ClipboardPaste": "clipboard-paste",
     "Filter": "list-filter", "Sort": "arrow-up-down", "FileQuestion": "file-question",
+    "Shift": "arrow-big-up", "CapsLock": "arrow-big-up-dash", "Backspace": "delete", "Return": "corner-down-left",
+    "SquareCheck": "square-check", "LibraryBig": "library-big", "LockKeyhole": "lock-keyhole", "Network": "network",
 }
 
 NUM = r"-?(?:\d+\.?\d*|\.\d+)(?:e-?\d+)?"

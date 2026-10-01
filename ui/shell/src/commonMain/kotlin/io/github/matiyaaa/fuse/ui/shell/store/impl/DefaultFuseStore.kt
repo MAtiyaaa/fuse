@@ -1,19 +1,23 @@
 package io.github.matiyaaa.fuse.ui.shell.store.impl
 
-import io.github.matiyaaa.fuse.library.parse.DisplayNameCleaner
-
 import io.github.matiyaaa.fuse.data.settings.SecretKeys
+import io.github.matiyaaa.fuse.library.parse.DisplayNameCleaner
+import io.github.matiyaaa.fuse.model.ScanPhase
+import io.github.matiyaaa.fuse.model.ScanScope
 import io.github.matiyaaa.fuse.model.ScopeRef
 import io.github.matiyaaa.fuse.model.ScopedSettings
-import io.github.matiyaaa.fuse.model.ScanScope
+import io.github.matiyaaa.fuse.ui.designsystem.res.Res
+import io.github.matiyaaa.fuse.ui.shell.music.BundledMusic
 import io.github.matiyaaa.fuse.ui.shell.store.FuseServices
 import io.github.matiyaaa.fuse.ui.shell.store.FuseStore
 import io.github.matiyaaa.fuse.ui.shell.store.UiPrefs
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -44,6 +48,7 @@ internal class DefaultFuseStore private constructor(
     override val achievements = DefaultAchievementOps(ctx, credentials)
     override val cartridge = DefaultCartridgeOps(ctx, engine)
     override val updates = DefaultUpdateOps(ctx)
+    override val storage = DefaultStorageOps(ctx)
     override val settings = DefaultScopedSettingsOps(ctx) { reloadPrefs() }
     override val library: DefaultLibraryOps
 
@@ -55,6 +60,11 @@ internal class DefaultFuseStore private constructor(
     }
 
     override val media get() = mediaOps
+
+    override suspend fun bundledTrack(id: String): String? {
+        if (BundledMusic.byId(id) == null) return null
+        return ctx.services.cacheFile(BundledMusic.cachePath(id)) { Res.readBytes(BundledMusic.resource(id)) }
+    }
 
     override fun updatePrefs(transform: (UiPrefs) -> UiPrefs) {
         val before = prefsState.value
@@ -82,14 +92,19 @@ internal class DefaultFuseStore private constructor(
 
     /**
      * Clean names became the default in 0.0.2. Games already in the library get cleaned names once,
-     * recorded like any cleanup so Settings, Library can undo it; custom titles are never touched.
+     * and again whenever the cleaning rules improve ([CLEAN_RULES]; 0.0.4 learned list numbers and
+     * codes in front of names). Recorded like any cleanup so Settings, Library can undo it; custom
+     * titles are never touched.
      */
     private suspend fun cleanExistingNamesOnce() {
         val library = ctx.settings.value.library
-        if (!library.cleanDisplayNames || library.cleanedExistingNames) return
+        if (!library.cleanDisplayNames) return
+        if (library.cleanedExistingNames && library.cleanedNamesRules >= CLEAN_RULES) return
         runCatching { data.titleCleanup.apply(DisplayNameCleaner::clean) }
         writeLock.withLock {
-            ctx.settings.value = data.settings.update { it.copy(library = it.library.copy(cleanedExistingNames = true)) }
+            ctx.settings.value = data.settings.update {
+                it.copy(library = it.library.copy(cleanedExistingNames = true, cleanedNamesRules = CLEAN_RULES))
+            }
         }
     }
 
@@ -113,14 +128,30 @@ internal class DefaultFuseStore private constructor(
             achievements.load()
             emulators.detectNow()
             cartridge.start()
+            collections.start()
             if (data.sources.all().isNotEmpty()) engine.rescan(ScanScope.QUICK)
             achievements.refresh(force = false)
             data.cache.purgeExpired(ctx.now())
             runCatching { updates.checkIfDue() }
         }
+        // New games find their art by themselves, once Cartridge's RomM details have had a moment.
+        ctx.scope.launch {
+            engine.scan.map { it.phase }.distinctUntilChanged().collect { phase ->
+                if (phase == ScanPhase.DONE) {
+                    delay(AUTO_FILL_DELAY_MS)
+                    mediaOps.autoFill()
+                }
+            }
+        }
     }
 
     companion object {
+        /** Version of [DisplayNameCleaner]'s rules; existing names are cleaned again when it grows. */
+        const val CLEAN_RULES = 2
+
+        /** How long after a scan (or a new key) the automatic fill starts. */
+        const val AUTO_FILL_DELAY_MS = 5_000L
+
         suspend fun create(services: FuseServices, scope: CoroutineScope): DefaultFuseStore {
             val settings = services.data.settings.current()
             val ctx = StoreContext(services, scope, settings)

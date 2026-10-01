@@ -28,6 +28,8 @@ data class ScrapeQuery(
     val sizeBytes: Long? = null,
     val preferredLanguage: String = "en",
     val preferredRegion: String? = null,
+    /** Other names the game goes by (its original or cleaned file name, a name a provider gave), searched when [title] finds nothing sure. */
+    val alsoKnownAs: List<String> = emptyList(),
 )
 
 /** One possible match with a confidence the user can see before anything is saved. */

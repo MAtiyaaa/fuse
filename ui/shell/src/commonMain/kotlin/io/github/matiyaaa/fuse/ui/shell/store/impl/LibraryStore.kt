@@ -335,7 +335,7 @@ internal class DefaultLibraryOps(
 
     // Launching -------------------------------------------------------------------------------------
 
-    override suspend fun launch(id: GameId, emulator: EmulatorId?, discPath: String?): LaunchOutcome {
+    override suspend fun launch(id: GameId, emulator: EmulatorId?, discPath: String?, display: LaunchDisplay?): LaunchOutcome {
         val stored = data.games.get(id) ?: return LaunchOutcome.Failed("This game is no longer in your library.")
         val platform = ctx.platform(stored.platformId) ?: return LaunchOutcome.Failed("Fuse doesn't know this system.")
         var game = stored
@@ -358,7 +358,9 @@ internal class DefaultLibraryOps(
         val platformEmulator = settings.resolve(ScopedSettings.Emulator, game.platformId, null).value
             .takeIf { it.isNotBlank() }?.let(::EmulatorId)
         val core = settings.resolve(ScopedSettings.RetroArchCore, game.platformId, id).value.takeIf { it.isNotBlank() }
-        val display = settings.resolve(ScopedSettings.LaunchScreen, game.platformId, id).value
+        // Asking happens before this (the interface asks and passes the answer); here it means the main screen.
+        val display = (display ?: settings.resolve(ScopedSettings.LaunchScreen, game.platformId, id).value)
+            .let { if (it == LaunchDisplay.ASK) LaunchDisplay.PRIMARY else it }
         val displayId = if (display == LaunchDisplay.SECONDARY) ctx.services.launcher.secondaryDisplayId() else null
         var choice = ScopedLaunchChoice(
             core = core,

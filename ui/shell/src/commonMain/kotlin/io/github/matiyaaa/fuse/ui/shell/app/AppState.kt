@@ -12,6 +12,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.components.ToastState
 import io.github.matiyaaa.fuse.ui.designsystem.media.HeroSource
 import io.github.matiyaaa.fuse.ui.shell.platform.PlatformUi
 import io.github.matiyaaa.fuse.ui.shell.store.FuseStore
+import io.github.matiyaaa.fuse.ui.shell.store.PhoneLinkControl
 import kotlinx.coroutines.CoroutineScope
 
 /** Where controller focus is: the section tabs at the top, or the page content. */
@@ -38,6 +39,11 @@ data class TextInputSpec(
     val title: String,
     val initial: String,
     val placeholder: String = "",
+    /** Shows dots instead of the text (passwords). */
+    val secret: Boolean = false,
+    /** A capital to start with and after full stops; off for keys, addresses and user names. */
+    val capitalize: Boolean = true,
+    val doneLabel: String = "Done",
     val onDone: (String) -> Unit,
 )
 
@@ -57,6 +63,8 @@ class AppState(
     val platform: PlatformUi,
     val scope: CoroutineScope,
     start: Route,
+    /** Phone Link's server, where this build has one. */
+    val phoneLink: PhoneLinkControl? = null,
 ) {
     val navigator = Navigator(start)
     val toasts = ToastState()
@@ -75,7 +83,7 @@ class AppState(
     var buttonDetect by mutableStateOf(false)
 
     /** Text being typed in the text input overlay (on-screen keyboard or a hardware keyboard). */
-    var textDraft by mutableStateOf("")
+    val textDraft = io.github.matiyaaa.fuse.ui.designsystem.components.EditableText()
 
     /** Where hardware keyboard typing goes (search field, rename dialog), or null for navigation keys. */
     var keyboardTarget by mutableStateOf<KeyboardTarget?>(null)
@@ -118,7 +126,7 @@ class AppState(
 }
 
 /** A text field that accepts hardware keyboard input. */
-class KeyboardTarget(val get: () -> String, val set: (String) -> Unit, val submit: () -> Unit)
+class KeyboardTarget(val field: io.github.matiyaaa.fuse.ui.designsystem.components.EditableText, val submit: () -> Unit)
 
 /** Shown for the moment between pressing Play and the emulator taking over. */
 data class LaunchVeil(val title: String, val art: Any?, val accent: Long)

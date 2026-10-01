@@ -6,6 +6,7 @@ import io.github.matiyaaa.fuse.model.Destination
 import io.github.matiyaaa.fuse.model.LibraryLayout
 import io.github.matiyaaa.fuse.model.SoundProfile
 import io.github.matiyaaa.fuse.ui.designsystem.theme.ThemePresets
+import io.github.matiyaaa.fuse.ui.shell.music.BundledMusic
 import io.github.matiyaaa.fuse.ui.shell.store.MusicPrefs
 import io.github.matiyaaa.fuse.ui.shell.store.UiPrefs
 
@@ -42,7 +43,10 @@ internal fun AppSettings.toUiPrefs(scoped: GlobalScoped): UiPrefs {
         performanceOverlay = performance.overlay,
         sound = if (!sound.enabled) SoundProfile.OFF else sound.profile ?: theme.sound,
         soundVolume = sound.volume,
-        music = MusicPrefs(music.enabled, music.volume, music.songPath, music.songName),
+        music = MusicPrefs(
+            music.enabled, music.volume, music.songPath, music.songName,
+            track = music.track ?: if (music.songPath != null) BundledMusic.OWN_SONG else BundledMusic.MENU_DEFAULT,
+        ),
         clock24h = statusArea.use24HourClock ?: false,
         showWifi = statusArea.showWifi,
         showBluetooth = statusArea.showBluetooth,
@@ -52,11 +56,19 @@ internal fun AppSettings.toUiPrefs(scoped: GlobalScoped): UiPrefs {
         systemArtAuto = library.systemArtAuto,
         librarySort = library.sort,
         systemArtStyle = library.systemArtStyle,
+        openGamePage = library.selectOpensGamePage,
+        collectionsEnabled = library.collectionsEnabled,
+        phoneLinkEnabled = library.phoneLinkEnabled,
+        autoSeries = library.autoSeries,
+        hiddenSeries = library.hiddenSeries,
         scraperOrder = scraping.providerOrder,
         scraperLanguage = scraping.preferredLanguage,
         scraperRegion = scraping.preferredRegion ?: ANY_REGION,
         matching = scraping.matching,
+        autoFillArt = scraping.autoFill,
         autoRefreshFromCartridge = cartridge.autoRefreshOnReturn,
+        cartridgeRommDetails = cartridge.rommDetails,
+        cartridgeEnabled = cartridge.enabled,
         checkForUpdates = updates.checkForUpdates,
         heroDim = appearance.heroDim,
     )
@@ -90,6 +102,7 @@ internal fun AppSettings.withUiPrefs(prefs: UiPrefs): AppSettings {
             preferredLanguage = prefs.scraperLanguage,
             preferredRegion = prefs.scraperRegion.takeIf { it != ANY_REGION && it.isNotBlank() },
             matching = prefs.matching,
+            autoFill = prefs.autoFillArt,
         ),
         videoPreview = videoPreview.copy(enabled = prefs.videoPreview, delaySeconds = prefs.videoDelaySeconds.coerceIn(0, 60)),
         library = library.copy(
@@ -98,6 +111,11 @@ internal fun AppSettings.withUiPrefs(prefs: UiPrefs): AppSettings {
             systemArtAuto = prefs.systemArtAuto,
             sort = prefs.librarySort,
             systemArtStyle = prefs.systemArtStyle,
+            selectOpensGamePage = prefs.openGamePage,
+            collectionsEnabled = prefs.collectionsEnabled,
+            phoneLinkEnabled = prefs.phoneLinkEnabled,
+            autoSeries = prefs.autoSeries,
+            hiddenSeries = prefs.hiddenSeries,
         ),
         sound = sound.copy(
             enabled = prefs.sound != SoundProfile.OFF,
@@ -109,13 +127,14 @@ internal fun AppSettings.withUiPrefs(prefs: UiPrefs): AppSettings {
             volume = prefs.music.volume.coerceIn(0f, 1f),
             songPath = prefs.music.songPath,
             songName = prefs.music.songName,
+            track = prefs.music.track,
         ),
         statusArea = statusArea.copy(
             use24HourClock = prefs.clock24h,
             showWifi = prefs.showWifi,
             showBluetooth = prefs.showBluetooth,
         ),
-        cartridge = cartridge.copy(autoRefreshOnReturn = prefs.autoRefreshFromCartridge),
+        cartridge = cartridge.copy(autoRefreshOnReturn = prefs.autoRefreshFromCartridge, enabled = prefs.cartridgeEnabled, rommDetails = prefs.cartridgeRommDetails),
         updates = updates.copy(checkForUpdates = prefs.checkForUpdates),
     )
 }

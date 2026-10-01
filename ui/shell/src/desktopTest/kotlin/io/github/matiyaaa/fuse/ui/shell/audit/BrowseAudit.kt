@@ -1,7 +1,9 @@
 package io.github.matiyaaa.fuse.ui.shell.audit
 
 import io.github.matiyaaa.fuse.model.CartridgeDownload
+import io.github.matiyaaa.fuse.model.CartridgeQueueItem
 import io.github.matiyaaa.fuse.model.CartridgeStatus
+import io.github.matiyaaa.fuse.model.CartridgeUploadItem
 import io.github.matiyaaa.fuse.model.Destination
 import io.github.matiyaaa.fuse.model.LibraryLayout
 import io.github.matiyaaa.fuse.model.MediaKind
@@ -9,6 +11,8 @@ import io.github.matiyaaa.fuse.model.MediaOwner
 import io.github.matiyaaa.fuse.model.NavAction
 import io.github.matiyaaa.fuse.model.PadButton
 import io.github.matiyaaa.fuse.model.PlatformId
+import io.github.matiyaaa.fuse.model.QueueState
+import io.github.matiyaaa.fuse.model.UploadState
 import io.github.matiyaaa.fuse.ui.designsystem.components.ToastKind
 import io.github.matiyaaa.fuse.ui.designsystem.input.NavResult
 import io.github.matiyaaa.fuse.ui.shell.store.GameQuery
@@ -20,14 +24,12 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 
 private fun LibraryLayout.words(): String = when (this) {
-    LibraryLayout.ICON -> "Icon"
+    LibraryLayout.ICON -> "Box art"
     LibraryLayout.CAPSULE -> "Capsule"
     LibraryLayout.COVER_GRID -> "Cover Grid"
     LibraryLayout.COMPACT_LIST -> "Compact List"
 }
 
-/** The number of game actions before the view actions in a library's options menu. */
-private const val GAME_ACTIONS = 13
 
 /**
  * Chooses a layout the way a user does: Options, "View as", then the layout. [shootChoice] also
@@ -35,8 +37,9 @@ private const val GAME_ACTIONS = 13
  */
 internal fun AuditDriver.viewAs(layout: LibraryLayout, shootChoice: Boolean = false) {
     tap(PadButton.X)
-    waitFor("View as")
-    choose(GAME_ACTIONS)
+    // "View as" sits below the game actions, often past the bottom of the menu.
+    waitFor("Manage Media")
+    tapText("View as")
     waitFor("Cover grid")
     if (shootChoice) shoot("View as choice list open")
     choose(layout.ordinal)
@@ -153,14 +156,95 @@ internal fun AuditDriver.libraryScreens(exhaustive: Boolean) {
         }
     }
 
+    scenario("library", "box art") {
+        useLibrary()
+        // One game each with square box art, only an icon, only a portrait cover, and nothing.
+        val gba = runBlocking { libraryStore.library.games(GameQuery()).first().filter { it.platformId == PlatformId("gba") }.sortedBy { it.title } }
+        val dir = File(cache, "box-art").apply { mkdirs() }
+        runBlocking {
+            gba.getOrNull(0)?.let { g ->
+                val f = File(dir, "square.png").also { AuditCovers.square(it, g.title, g.accent) }
+                libraryStore.media.setFromFile(MediaOwner.OfGame(g.id), MediaKind.SQUARE, f.absolutePath)
+            }
+            gba.getOrNull(1)?.let { g ->
+                val f = File(dir, "icon.png").also { AuditIcons.write(it, g.title, g.accent, 1) }
+                libraryStore.media.setFromFile(MediaOwner.OfGame(g.id), MediaKind.ICON, f.absolutePath)
+            }
+            gba.getOrNull(2)?.let { g ->
+                val f = File(dir, "cover.png").also { AuditCovers.cover(it, g.title, g.accent) }
+                libraryStore.media.setFromFile(MediaOwner.OfGame(g.id), MediaKind.BOXART, f.absolutePath)
+            }
+        }
+        tab(Destination.SYSTEMS)
+        val grid = Grid(libraryStore.library.platforms.value.count { it.gameCount > 0 })
+        grid.goTo(platformIndex("gba"))
+        tap(PadButton.A)
+        waitFor("Beacon Bay")
+        settle(1_200)
+        shoot("Box art, icon, cover only and no art")
+        viewAs(LibraryLayout.COMPACT_LIST)
+        settle(800)
+        shoot("The same games as a list")
+    }
+
+    scenario("library", "system with art") {
+        useLibrary()
+        val gba = libraryStore.library.platforms.value.first { it.platform.id == PlatformId("gba") }
+        val owner = MediaOwner.OfPlatform(gba.platform.id)
+        val dir = File(cache, "system-art").apply { mkdirs() }
+        val panel = File(dir, "gba-panel.png").also { AuditSystemArt.panel(it, gba.platform.accent) }
+        val logo = File(dir, "gba-logo.png").also { AuditSystemArt.logo(it, gba.platform.shortName) }
+        runBlocking {
+            libraryStore.media.setFromFile(owner, MediaKind.BOXART, panel.absolutePath)
+            libraryStore.media.setFromFile(owner, MediaKind.LOGO, logo.absolutePath)
+        }
+        try {
+            tab(Destination.SYSTEMS)
+            val grid = Grid(libraryStore.library.platforms.value.count { it.gameCount > 0 })
+            grid.goTo(platformIndex("gba"))
+            settle(1_200)
+            shoot("Systems with the Game Boy Advance focused")
+            tap(PadButton.A)
+            waitFor("Beacon Bay")
+            settle(1_200)
+            shoot("its page keeps the logo and the art panel")
+            tap(PadButton.DPAD_RIGHT)
+            settle(1_200)
+            shoot("the next game, same background")
+        } finally {
+            runBlocking { libraryStore.media.reset(owner, null) }
+        }
+    }
+
+    scenario("collections", "grid") {
+        useLibrary()
+        tab(Destination.LIBRARY)
+        waitFor("All")
+        if (nav(NavAction.UP) != NavResult.MOVED) throw NotCovered("Up did not reach the Library header")
+        tapText("Collections", step = PadButton.DPAD_RIGHT)
+        waitFor("New collection")
+        tap(PadButton.DPAD_RIGHT)
+        settle(1_200)
+        shoot("your collections, the first one focused")
+        tap(PadButton.X)
+        waitFor("Add or remove games")
+        shoot("options for a collection")
+        tapText("Add or remove games")
+        waitFor("Select games to add")
+        shoot("picking its games")
+        tap(PadButton.B)
+    }
+
     scenario("library", "system without emulator") {
         useLibrary()
         tab(Destination.SYSTEMS)
-        val grid = Grid(libraryStore.library.platforms.value.count { it.gameCount > 0 })
-        grid.goTo(platformIndex("psp"))
+        val systems = libraryStore.library.platforms.value.filter { it.gameCount > 0 }
+        val bare = systems.firstOrNull { !it.emulatorInstalled } ?: throw NotCovered("Every system in the audit library has an emulator")
+        val grid = Grid(systems.size)
+        grid.goTo(platformIndex(bare.platform.id.value))
         tap(PadButton.A)
         waitFor("No emulator installed")
-        shoot("PlayStation Portable, no emulator installed")
+        shoot("${bare.platform.name}, no emulator installed")
     }
 
     scenario("library", "collection") {
@@ -168,7 +252,9 @@ internal fun AuditDriver.libraryScreens(exhaustive: Boolean) {
         search("Long Adventures")
         tap(PadButton.START)
         tap(PadButton.A)
-        waitFor("Glasswing Requiem")
+        // A collection of the user's own can be edited from its header.
+        waitFor("Add or remove games")
+        settle(1_000)
         for (layout in LibraryLayout.entries) {
             viewAs(layout)
             shoot("Long Adventures, ${layout.words()} layout")
@@ -324,6 +410,51 @@ internal fun AuditDriver.gameScreens(exhaustive: Boolean) {
         tap(PadButton.DPAD_DOWN)
         shoot("discs row focused")
     }
+
+    // At every size: the art preview must fit a handheld screen.
+    scenario("media", "game") {
+        useLibrary()
+        // From the game's options: Play, then Manage Media.
+        search("Hollow Meridian")
+        tap(PadButton.START)
+        tap(PadButton.X)
+        waitFor("Game Info")
+        choose(1)
+        waitFor("Manage media")
+        shoot("Search as row")
+        tap(PadButton.A)
+        settle(600)
+        shoot("Search as keyboard")
+        tap(PadButton.B)
+        tap(PadButton.DPAD_DOWN)
+        shoot("Identify game row")
+        tap(PadButton.A)
+        settle(1_500)
+        shoot("Identify game with no source set up")
+        tap(PadButton.DPAD_DOWN)
+        shoot("Box art slot")
+        tap(PadButton.DPAD_DOWN)
+        shoot("Icon slot")
+        tap(PadButton.DPAD_DOWN)
+        shoot("Cover slot preview fits the screen")
+        tap(PadButton.A)
+        waitFor("Choose a file")
+        shoot("Cover slot actions")
+        choose(0)
+        settle(1_500)
+        shoot("Find cover with no art source set up")
+        tap(PadButton.X)
+        waitFor("Fill art")
+        shoot("fill art choice")
+        tap(PadButton.B)
+        // Down to the last slot, then all the way back: the header and every row come back.
+        repeat(9) { tap(PadButton.DPAD_DOWN) }
+        settle(600)
+        shoot("last slot focused")
+        repeat(10) { tap(PadButton.DPAD_UP) }
+        settle(800)
+        shoot("back at the top, everything shown again")
+    }
     if (!exhaustive) return
 
     scenario("game", "single file") {
@@ -396,8 +527,7 @@ internal fun AuditDriver.gameScreens(exhaustive: Boolean) {
         useLibrary()
         openGame("Emberline Saga")
         tap(PadButton.X)
-        waitFor("Rename Display Title")
-        choose(7)
+        tapText("Rename Display Title")
         waitFor("Display title")
         shoot("text input with the on-screen keyboard")
         tap(PadButton.X, 5)
@@ -412,8 +542,7 @@ internal fun AuditDriver.gameScreens(exhaustive: Boolean) {
         useLibrary()
         openGame("Emberline Saga")
         tap(PadButton.X)
-        waitFor("Remove from Fuse")
-        choose(11)
+        tapText("Remove from Fuse")
         waitFor("stay exactly where they are")
         shoot("destructive confirm dialog, Cancel focused")
         tap(PadButton.DPAD_RIGHT)
@@ -421,38 +550,6 @@ internal fun AuditDriver.gameScreens(exhaustive: Boolean) {
         tap(PadButton.B)
     }
 
-    scenario("media", "game") {
-        useLibrary()
-        // From the game's options: Play, then Manage Media.
-        search("Hollow Meridian")
-        tap(PadButton.START)
-        tap(PadButton.X)
-        waitFor("Game Info")
-        choose(1)
-        waitFor("Manage media")
-        shoot("Search as row")
-        tap(PadButton.A)
-        settle(600)
-        shoot("Search as keyboard")
-        tap(PadButton.B)
-        tap(PadButton.DPAD_DOWN)
-        shoot("Identify game row")
-        tap(PadButton.A)
-        settle(1_500)
-        shoot("Identify game with no source set up")
-        tap(PadButton.DPAD_DOWN)
-        shoot("Icon slot")
-        tap(PadButton.DPAD_DOWN)
-        tap(PadButton.A)
-        waitFor("Choose a file")
-        shoot("Cover slot actions")
-        choose(0)
-        settle(1_500)
-        shoot("Find cover with no art source set up")
-        tap(PadButton.X)
-        waitFor("Fill art")
-        shoot("fill art choice")
-    }
 
     gap("game", "folder browser", "*", "Unreachable: nothing in the app pushes Route.FolderBrowser. A game whose folder behaviour is " +
         "\"Open as a folder\" launches the folder directly instead of opening the browser.")
@@ -479,6 +576,27 @@ internal fun AuditDriver.launchScreens() {
         }
         waitFor("Flycast closed right away")
         shoot("error toast after the launch failed", 700)
+    }
+
+    scenario("launch", "which screen") {
+        useLibrary(twoScreens)
+        openGame("Emberline Saga")
+        tap(PadButton.A)
+        waitFor("Play on which screen?")
+        shoot("top or bottom, just this time")
+        tapText("Remember")
+        settle(400)
+        shoot("remember for this game")
+        tapText("Remember")
+        settle(400)
+        shoot("remember for the whole system")
+        tap(PadButton.B)
+        // Game options offer the screen too.
+        tap(PadButton.X)
+        tapText("Screen")
+        waitFor("Open Emberline Saga on")
+        shoot("a game's own screen")
+        tap(PadButton.B)
     }
 
     scenario("launch", "needs emulator") {
@@ -618,6 +736,11 @@ internal fun AuditDriver.cartridgeReady(): CartridgeStatus {
         progress = 0.42f,
         currentTitle = "Kestrel Nine",
         currentPlatform = "genesis",
+        queue = listOf(
+            CartridgeQueueItem(201, "Kestrel Nine", "genesis", QueueState.DOWNLOADING, 1_300_000, 3_100_000),
+            CartridgeQueueItem(202, "Lantern Keep", "psx", QueueState.QUEUED, 0, 540_000_000),
+            CartridgeQueueItem(203, "Tidal Circuit", "n64", QueueState.PAUSED, 8_000_000, 16_000_000),
+        ),
         recent = listOf(
             CartridgeDownload(101, "Brightwater Farm", "switch", path("switch", "Brightwater Farm.nsp"), now - 25 * 60_000L),
             CartridgeDownload(102, "Starfold Academy", "ngc", path("ngc", "Starfold Academy.rvz"), now - 3 * 3_600_000L),
@@ -647,6 +770,36 @@ internal fun AuditDriver.cartridgeScreens(exhaustive: Boolean) {
         shoot("recent download focused")
         tap(PadButton.DPAD_DOWN, 3)
         shoot("download not in the library yet focused")
+    }
+
+    scenario("cartridge", "uploads") {
+        useLibrary()
+        val now = Clock.System.now().toEpochMilliseconds()
+        setCartridge(
+            cartridgeReady().copy(
+                protocol = 3, activeDownloads = 0, queuedDownloads = 0, progress = null, currentTitle = null, queue = emptyList(),
+                uploads = listOf(
+                    CartridgeUploadItem("u3", "Hollow Meridian", "psx", UploadState.UPLOADING, 212_000_000, 540_000_000, files = 3, updatedAt = now),
+                    CartridgeUploadItem("u2", "Beacon Bay", "gba", UploadState.DONE, 8_000_000, 8_000_000, files = 1, romId = 88, updatedAt = now - 60_000),
+                    CartridgeUploadItem("u1", "Tidal Circuit", "n64", UploadState.FAILED, 0, 16_000_000, files = 1, error = "RomM has no N64 console yet", updatedAt = now - 120_000),
+                ),
+            ),
+        )
+        tab(Destination.CARTRIDGE)
+        waitFor("Uploading to RomM")
+        tap(PadButton.DPAD_LEFT)
+        shoot("an upload going, one done and one failed")
+        tap(PadButton.DPAD_RIGHT, 5)
+        shoot("last button focused, the row scrolled")
+        if (!exhaustive) return@scenario
+        // Sync library, Consoles, then Upload a game
+        tap(PadButton.DPAD_LEFT, 2)
+        tap(PadButton.A)
+        waitFor("Upload a game to RomM")
+        shoot("pick a system to upload from")
+        tapText("Game Boy Advance")
+        waitFor("Upload a Game Boy Advance game")
+        shoot("pick a game to upload")
     }
     if (!exhaustive) return
 

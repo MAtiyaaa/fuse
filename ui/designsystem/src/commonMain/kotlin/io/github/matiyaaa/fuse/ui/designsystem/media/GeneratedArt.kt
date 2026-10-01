@@ -51,6 +51,7 @@ fun GeneratedArt(
     ) {
         val w = constraints.maxWidth.toFloat()
         val maxH = maxHeight.value
+        val widthDp = maxWidth.value
         // A soft light source whose position depends on the title, so tiles side by side differ.
         Canvas(Modifier.fillMaxSize()) {
             val cx = size.width * (0.2f + (seed % 60) / 100f)
@@ -105,13 +106,23 @@ fun GeneratedArt(
                 Modifier.fillMaxSize().padding(pad.dp / 2),
                 verticalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceBetween,
             ) {
+                // Small covers get smaller type, so words wrap whole instead of breaking apart.
+                val titleStyle = if (slot == ArtSlot.HERO) type.hero else type.title
+                // The longest word has to fit on one line (about 0.72 em per character in the bold display face).
+                val longest = remember(title) { title.split(' ').maxOfOrNull { it.length }?.coerceAtLeast(4) ?: 4 }
+                val fits = (widthDp - pad) / (longest * 0.72f)
+                val titleSize = if (slot == ArtSlot.BOX) minOf(titleStyle.fontSize.value, widthDp / 6.5f, fits).coerceAtLeast(8f) else titleStyle.fontSize.value
                 BasicText(
                     label ?: "",
-                    style = type.overline.copy(color = Color.White.copy(alpha = 0.7f)),
+                    style = type.overline.copy(
+                        color = Color.White.copy(alpha = 0.7f),
+                        fontSize = minOf(type.overline.fontSize.value, (widthDp / 11f).coerceAtLeast(7f)).sp,
+                    ),
+                    maxLines = 1,
                 )
                 BasicText(
                     title,
-                    style = (if (slot == ArtSlot.HERO) type.hero else type.title).copy(color = Color.White),
+                    style = titleStyle.copy(color = Color.White, fontSize = titleSize.sp, lineHeight = (titleSize * 1.15f).sp),
                     maxLines = if (slot == ArtSlot.BOX) 4 else 2,
                     overflow = TextOverflow.Ellipsis,
                 )

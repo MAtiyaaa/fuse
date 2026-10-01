@@ -16,6 +16,8 @@ import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onFirst
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.printToString
 import io.github.matiyaaa.fuse.data.FuseData
@@ -106,14 +108,22 @@ internal class AuditDriver(
 
     val platform: PlatformUi = AuditPlatform(size)
 
+    /** Phone Link as Settings sees it; scenarios set what it reports. */
+    val phoneLink = AuditPhoneLink()
+
     /** Shows the library app from a fresh start (default focus everywhere) with the baseline settings. */
-    fun useLibrary(prefs: (UiPrefs) -> UiPrefs = { it }) {
+    fun useLibrary(platform: PlatformUi = this.platform, prefs: (UiPrefs) -> UiPrefs = { it }) {
         val store = libraryStore
         val base = libraryPrefs!!
         store.updatePrefs { prefs(base) }
         controls.cartridge = io.github.matiyaaa.fuse.model.CartridgeStatus(installed = false)
         store.cartridge.refresh()
         show(store, platform)
+    }
+
+    /** The audit device with a second screen games and apps can open on. */
+    val twoScreens: PlatformUi by lazy {
+        AuditPlatform(size, features = io.github.matiyaaa.fuse.ui.shell.screenshots.ScreenshotPlatform.features.copy(secondScreen = true, launchOnOtherDisplay = true))
     }
 
     /** Shows [store] in a freshly started app. */
@@ -136,7 +146,7 @@ internal class AuditDriver(
             when (val v = view) {
                 AuditView.Blank -> Unit
                 is AuditView.App -> key(v.generation) {
-                    FuseApp(v.store, v.platform, router)
+                    FuseApp(v.store, v.platform, router, phoneLink)
                     ExtraToasts(v.store, v.platform)
                 }
                 is AuditView.Companion -> key(v.mode, v.store) { CompanionApp(v.store, v.platform, v.mode) }
@@ -173,6 +183,8 @@ internal class AuditDriver(
             block()
         } catch (e: Throwable) {
             if (e is org.junit.internal.AssumptionViolatedException) throw e
+            // Anything but a screen that couldn't be reached is a bug worth its stack trace.
+            if (e !is NotCovered && e !is AssertionError) e.printStackTrace(System.out)
             val reason = (e.message ?: e.toString()).lines().take(12).joinToString(" | ")
             Audit.uncovered(AuditGap(size.label, group, screen, lastState, reason))
             recover()
@@ -228,6 +240,24 @@ internal class AuditDriver(
 
     fun hasText(text: String, ignoreCase: Boolean = true): Boolean =
         ui.onAllNodesWithText(text, substring = true, ignoreCase = ignoreCase, useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()
+
+    /**
+     * Chooses the menu row showing exactly [text] the way a player does (menus whose order changes
+     * between versions): Down until that row is the selected one, then A.
+     */
+    fun tapText(text: String, step: PadButton = PadButton.DPAD_DOWN, substring: Boolean = false) {
+        waitFor(text.take(1))
+        repeat(40) {
+            settle(STEP_MS)
+            val on = ui.onAllNodes(androidx.compose.ui.test.hasText(text, substring = substring) and androidx.compose.ui.test.isSelected()).fetchSemanticsNodes()
+            if (on.isNotEmpty()) {
+                tap(PadButton.A)
+                return
+            }
+            tap(step)
+        }
+        throw NotCovered("\"$text\" was never selected")
+    }
 
     fun waitFor(text: String, timeoutMs: Long = 15_000, ignoreCase: Boolean = true) =
         pumpUntil("\"$text\"", timeoutMs) { hasText(text, ignoreCase) }

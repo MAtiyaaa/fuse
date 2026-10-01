@@ -1,17 +1,24 @@
 package io.github.matiyaaa.fuse.ui.shell.store.impl
 
 import io.github.matiyaaa.fuse.integrations.ApiResult
+import io.github.matiyaaa.fuse.integrations.cartridge.CartridgeMatch
 import io.github.matiyaaa.fuse.integrations.cartridge.CartridgeProtocol
+import io.github.matiyaaa.fuse.integrations.getOrNull
 import io.github.matiyaaa.fuse.integrations.github.GitHubReleases
 import io.github.matiyaaa.fuse.integrations.github.SemVer
-import io.github.matiyaaa.fuse.integrations.getOrNull
+import io.github.matiyaaa.fuse.library.storage.UploadFiles
 import io.github.matiyaaa.fuse.model.CartridgeRoute
 import io.github.matiyaaa.fuse.model.CartridgeStatus
+import io.github.matiyaaa.fuse.model.CartridgeUpload
+import io.github.matiyaaa.fuse.model.GameId
 import io.github.matiyaaa.fuse.model.ReleaseInfo
+import io.github.matiyaaa.fuse.model.ScanPhase
 import io.github.matiyaaa.fuse.model.ScanScope
 import io.github.matiyaaa.fuse.ui.shell.store.CartridgeOps
 import io.github.matiyaaa.fuse.ui.shell.store.RecentDownload
 import io.github.matiyaaa.fuse.ui.shell.store.UpdateOps
+import io.github.matiyaaa.fuse.ui.shell.store.UpdateState
+import io.github.matiyaaa.fuse.ui.shell.store.UploadHandoff
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -27,11 +34,13 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * Fuse's side of the Cartridge bridge: status, recent downloads and deep links. When Cartridge
  * reports a library change (a finished download), Fuse runs a quick scan so the game shows up
- * without a restart.
+ * without a restart. With bridge protocol 2 it also brings in RomM's details and pictures for the
+ * games Cartridge downloaded ([CartridgeDetails]).
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 internal class DefaultCartridgeOps(
@@ -43,6 +52,12 @@ internal class DefaultCartridgeOps(
     private var readJob: Job? = null
     private var watcher: AutoCloseable? = null
     private var seenLibraryChange: Long? = null
+    private var seenGamesRevision: Long? = null
+    private val details = CartridgeDetails(ctx)
+    private var gamesJob: Job? = null
+
+    /** Games Cartridge reported that Fuse hadn't indexed yet: matched again after the next scan. */
+    private var waitingForScan = false
 
     override val recent: StateFlow<List<RecentDownload>> = combine(
         state.map { it.recent }.distinctUntilChanged(),
@@ -50,8 +65,10 @@ internal class DefaultCartridgeOps(
         engine.scan.map { it.phase }.distinctUntilChanged(),
     ) { downloads, _ -> downloads }
         .mapLatest { downloads ->
+            // The same file can be written differently by the two apps (see CartridgeMatch).
+            val match = if (downloads.any { it.path != null }) CartridgeMatch(ctx.data.games.paths()) else null
             downloads.map { d ->
-                val id = d.path?.let { ctx.data.games.idByPath(it) }
+                val id = d.path?.let { p -> match?.find(p) }
                 if (id != null && d.romId > 0) rememberRomId(id, d.romId)
                 RecentDownload(d, id?.let { ctx.card(it) })
             }
@@ -65,14 +82,84 @@ internal class DefaultCartridgeOps(
         if (current.rommRomId != romId) ctx.data.games.updateLinks(id) { it.copy(rommRomId = romId) }
     }
 
+    private val enabled: Boolean get() = ctx.settings.value.cartridge.enabled
+
+    /** Follows the Cartridge switch: watching and reading only while it is on. */
     fun start() {
-        watcher = runCatching { ctx.services.cartridge.watch { refresh() } }.getOrNull()
-        refresh()
+        // A scan that just finished may have indexed games Cartridge already reported.
+        ctx.scope.launch {
+            engine.scan.map { it.phase }.distinctUntilChanged().collect { phase ->
+                if (phase == ScanPhase.DONE && waitingForScan) syncGames()
+            }
+        }
+        // Turning RomM's details on applies them straight away.
+        ctx.scope.launch {
+            ctx.settings.map { it.cartridge.rommDetails }.distinctUntilChanged().collect { on -> if (on) syncGames() }
+        }
+        ctx.scope.launch {
+            ctx.settings.map { it.cartridge.enabled }.distinctUntilChanged().collect { on ->
+                watcher?.let { runCatching { it.close() } }
+                watcher = null
+                readJob?.cancel()
+                if (on) {
+                    watcher = runCatching { ctx.services.cartridge.watch { refresh() } }.getOrNull()
+                    refresh()
+                } else {
+                    // Everything Cartridge-related hides when it reads as not installed.
+                    state.value = CartridgeStatus()
+                    gamesJob?.cancel()
+                    seenGamesRevision = null
+                }
+            }
+        }
+    }
+
+    /**
+     * Reads the games Cartridge downloaded (protocol 2) and brings in their RomM details. One run at
+     * a time; a newer change restarts it.
+     */
+    private fun syncGames() {
+        if (!enabled || state.value.protocol < CartridgeProtocol.GAMES_PROTOCOL) return
+        gamesJob?.cancel()
+        gamesJob = ctx.scope.launch(Dispatchers.Default) {
+            val games = try {
+                ctx.services.cartridge.games()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                null
+            } ?: return@launch
+            val outcome = details.sync(games, applyDetails = ctx.settings.value.cartridge.rommDetails)
+            waitingForScan = outcome.unmatched > 0
+        }
     }
 
     /** Opening can wait on the system (xdg-open on Linux), so it never runs on the caller's thread. */
     override fun open(route: CartridgeRoute) {
         ctx.scope.launch(Dispatchers.Default) { ctx.services.cartridge.open(route, CartridgeProtocol.deepLink(route)) }
+    }
+
+    override suspend fun upload(game: GameId): UploadHandoff = withContext(Dispatchers.Default) {
+        val status = state.value
+        if (!enabled || !status.installed) return@withContext UploadHandoff.NOT_INSTALLED
+        if (!CartridgeProtocol.supportsUploads(status)) return@withContext UploadHandoff.TOO_OLD
+        val g = ctx.data.games.get(game) ?: return@withContext UploadHandoff.NO_FILES
+        val files = try {
+            UploadFiles.collect(ctx.services.fs, g.location, g.discs)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            emptyList()
+        }
+        if (files.isEmpty()) return@withContext UploadHandoff.NO_FILES
+        val handed = try {
+            ctx.services.cartridge.upload(CartridgeUpload(g.displayTitle, g.platformId.value, files))
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            false
+        }
+        if (handed) UploadHandoff.OPENED else UploadHandoff.FAILED
     }
 
     override suspend fun latestRelease(): ReleaseInfo? =
@@ -85,12 +172,13 @@ internal class DefaultCartridgeOps(
     }
 
     override fun refresh() {
-        if (readJob?.isActive == true) return
+        if (!enabled || readJob?.isActive == true) return
         readJob = ctx.scope.launch { readNow() }
     }
 
     /** On return to Fuse: re-read status, and rescan when Cartridge changed the library meanwhile. */
     suspend fun refreshOnResume() {
+        if (!enabled) return
         readJob?.cancel()
         readNow()
     }
@@ -103,11 +191,16 @@ internal class DefaultCartridgeOps(
         } catch (e: Exception) {
             return
         }
+        if (!enabled) return
         state.value = next
         val changedAt = next.libraryChangedAt
         val previous = seenLibraryChange
         seenLibraryChange = changedAt
         val changed = previous != null && changedAt > previous
+        if (next.protocol >= CartridgeProtocol.GAMES_PROTOCOL && (next.gamesRevision != seenGamesRevision || changed)) {
+            seenGamesRevision = next.gamesRevision
+            syncGames()
+        }
         if (changed && ctx.settings.value.cartridge.autoRefreshOnReturn) {
             // Let Cartridge finish writing the file before looking at the folder.
             delay(300)
@@ -145,11 +238,56 @@ internal class DefaultUpdateOps(private val ctx: StoreContext) : UpdateOps {
         return latest.value
     }
 
-    /** Downloads, verifies and opens the system installer. Only called after the user confirmed. */
-    override suspend fun install(release: ReleaseInfo): Result<Unit> {
+    private val stateFlow = MutableStateFlow<UpdateState>(UpdateState.Idle)
+    override val state: StateFlow<UpdateState> = stateFlow
+    private var job: Job? = null
+
+    override fun download(release: ReleaseInfo) {
+        val current = stateFlow.value
+        if (current is UpdateState.Downloading || current is UpdateState.Installing) return
+        if (current is UpdateState.Ready && current.release.tag == release.tag) return
         val asset = GitHubReleases.pickAsset(release, ctx.services.installer.platform)
-            ?: return Result.failure(IllegalStateException("This release has no build for this device."))
-        return ctx.services.installer.install(asset)
+        if (asset == null) {
+            stateFlow.value = UpdateState.Failed(release, "This release has no build for this device.")
+            return
+        }
+        stateFlow.value = UpdateState.Downloading(release, null)
+        job = ctx.scope.launch {
+            val result = try {
+                ctx.services.installer.download(asset) { p -> stateFlow.value = UpdateState.Downloading(release, p) }
+            } catch (e: CancellationException) {
+                stateFlow.value = UpdateState.Idle
+                throw e
+            } catch (e: Throwable) {
+                Result.failure(e)
+            }
+            stateFlow.value = result.fold(
+                onSuccess = { UpdateState.Ready(release, it) },
+                onFailure = { UpdateState.Failed(release, it.message ?: "The download failed. Try again.") },
+            )
+        }
+    }
+
+    override fun cancelDownload() {
+        job?.cancel()
+        job = null
+        stateFlow.value = UpdateState.Idle
+    }
+
+    override suspend fun apply(): Result<Boolean> {
+        val ready = stateFlow.value as? UpdateState.Ready ?: return Result.failure(IllegalStateException("Download the update first."))
+        stateFlow.value = UpdateState.Installing(ready.release)
+        val result = try {
+            ctx.services.installer.applyUpdate(ready.file)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Throwable) {
+            Result.failure(e)
+        }
+        // Stays ready: after a refusal (install permission not given yet, the confirmation dismissed)
+        // it can be tried again without downloading again.
+        stateFlow.value = ready
+        return result
     }
 
     private companion object {

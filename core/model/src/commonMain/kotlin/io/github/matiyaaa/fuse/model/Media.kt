@@ -8,7 +8,9 @@ enum class MediaKind(
     /** Width / height the artwork is designed for; null when it varies (logos, borders). */
     val aspect: Float?,
 ) {
-    /** Square app-style icon, the tile in Icon Mode. */
+    /** Square box art (the iisu style): the game's tile wherever games are drawn as squares. */
+    SQUARE(1f),
+    /** Square app-style icon; tiles use it when a game has no square box art. */
     ICON(1f),
     /** Portrait box art / capsule. */
     BOXART(0.72f),
@@ -24,6 +26,11 @@ enum class MediaKind(
     /** Frame around the artwork (Dynamic Borders). */
     BORDER(null),
     ;
+
+    companion object {
+        /** Every kind a fill looks for (videos and borders come from elsewhere). */
+        val Fillable: Set<MediaKind> = setOf(SQUARE, ICON, BOXART, GRID, HERO, LOGO, SCREENSHOT)
+    }
 }
 
 /**
@@ -81,6 +88,7 @@ data class MediaSet(
     fun all(kind: MediaKind): List<MediaItem> = items.filter { it.kind == kind }.sortedBy { it.order }
     fun has(kind: MediaKind): Boolean = items.any { it.kind == kind }
 
+    val square get() = first(MediaKind.SQUARE)
     val icon get() = first(MediaKind.ICON)
     val boxart get() = first(MediaKind.BOXART)
     val grid get() = first(MediaKind.GRID)

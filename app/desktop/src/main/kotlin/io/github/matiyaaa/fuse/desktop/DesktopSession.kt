@@ -11,26 +11,28 @@ import io.github.matiyaaa.fuse.desktop.input.LinuxGamepads
 import io.github.matiyaaa.fuse.desktop.platform.DesktopPlatformUi
 import io.github.matiyaaa.fuse.desktop.platform.WindowActions
 import io.github.matiyaaa.fuse.desktop.services.DesktopFuseServices
+import io.github.matiyaaa.fuse.link.PhoneLinkServer
 import io.github.matiyaaa.fuse.model.PadButton
 import io.github.matiyaaa.fuse.ui.designsystem.input.InputRouter
 import io.github.matiyaaa.fuse.ui.designsystem.input.InputSource
 import io.github.matiyaaa.fuse.ui.shell.store.FuseStore
 import io.github.matiyaaa.fuse.ui.shell.store.createFuseStore
+import java.awt.EventQueue
+import java.io.File
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.plus
 import kotlinx.coroutines.withContext
-import java.awt.EventQueue
-import java.io.File
-import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.atomic.AtomicReference
 
 /** Where startup is. */
 sealed interface StartState {
     data object Loading : StartState
-    data class Ready(val store: FuseStore, val services: DesktopFuseServices) : StartState
+    data class Ready(val store: FuseStore, val services: DesktopFuseServices, val phoneLink: PhoneLinkServer? = null) : StartState
     data class Failed(val message: String) : StartState
 }
 
@@ -102,7 +104,7 @@ class DesktopSession(
                 val services = withContext(Dispatchers.IO) { DesktopFuseServices.create(dirs, scope) }
                 services.launcherHooks.onGameExited = { EventQueue.invokeLater { bringToFront() } }
                 val store = createFuseStore(services, scope)
-                startState = StartState.Ready(store, services)
+                startState = StartState.Ready(store, services, startPhoneLink(store, services))
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Throwable) {
@@ -110,6 +112,18 @@ class DesktopSession(
                 startState = StartState.Failed(e.message?.takeIf { it.isNotBlank() } ?: e.javaClass.simpleName)
             }
         }
+    }
+
+    /** Phone Link follows its switch in Settings; a failure here never stops Fuse from starting. */
+    private fun startPhoneLink(store: FuseStore, services: DesktopFuseServices): PhoneLinkServer? = try {
+        val name = runCatching { java.net.InetAddress.getLocalHost().hostName }.getOrNull()?.takeIf { it.isNotBlank() } ?: "Fuse"
+        // Off the UI thread: requests and address checks never wait on the window.
+        PhoneLinkServer(store, services.secrets, scope + Dispatchers.Default, name, BuildInfo.VERSION).also { it.start() }
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Throwable) {
+        Log.warn("Phone Link could not start", e)
+        null
     }
 
     fun toggleFullscreen() = setWindowMode(if (fullscreen) baseMode else WindowMode.FULLSCREEN)
@@ -196,6 +210,7 @@ class DesktopSession(
         if (!closed.compareAndSet(false, true)) return
         gamepads.close()
         platform.close()
+        (startState as? StartState.Ready)?.phoneLink?.close()
         (startState as? StartState.Ready)?.services?.close()
     }
 

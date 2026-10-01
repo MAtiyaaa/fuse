@@ -11,6 +11,10 @@ import io.github.matiyaaa.fuse.model.MediaKind
 import io.github.matiyaaa.fuse.model.ScrapeCandidate
 import io.github.matiyaaa.fuse.model.ScrapeProviderId
 import io.github.matiyaaa.fuse.model.ScrapeQuery
+import kotlin.time.Clock
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /** One scrape job for one game. */
 data class ScrapeRequest(
@@ -64,17 +68,37 @@ sealed interface ScrapeOutcome {
  * Runs metadata search and artwork listing across providers in the user's order. It only reads
  * from providers and returns data: it never writes to the library or the media store.
  *
- * Identification tries metadata providers first (in priority order), then artwork-only ones. The
- * first provider whose results the [TitleMatcher] auto-accepts under the request's strictness wins;
- * otherwise every candidate seen is returned for review. Artwork for an accepted game comes from
- * the winning provider and from each other configured provider that also confidently matches the
- * accepted title.
+ * Identification tries metadata providers first (in priority order), then artwork-only ones. Each
+ * provider is searched by the game's title and, while nothing sure turns up, by its other names
+ * ([SearchNames]). The first provider whose results the [TitleMatcher] auto-accepts under the
+ * request's strictness wins; otherwise every candidate seen is returned for review. Artwork for an
+ * accepted game comes from the winning provider and from each other configured provider that also
+ * confidently matches the accepted title, until every kind asked for has an option.
+ *
+ * A provider that runs out of requests (a quota, a monthly allowance, a long rate limit), rejects
+ * its key or keeps failing to answer rests for a while: the jobs that follow skip it and the other
+ * providers take over, and each skip is reported as that job's error so nothing is remembered as
+ * missing because of it. Short rate limits are waited out once.
  */
 class ScrapeCoordinator(
     sources: List<ScrapeSource>,
     private val matcher: TitleMatcher = TitleMatcher(),
+    private val now: () -> Long = { Clock.System.now().toEpochMilliseconds() },
 ) {
     private val sources: Map<ScrapeProviderId, ScrapeSource> = sources.associateBy { it.id }
+
+    /** A provider taking a break until [until] (epoch ms), and why. */
+    private data class Rest(val until: Long, val reason: String)
+
+    private val lock = Mutex()
+    private val rests = HashMap<ScrapeProviderId, Rest>()
+    private val failuresInARow = HashMap<ScrapeProviderId, Int>()
+
+    /** Providers resting now, with the reason (safe to show). */
+    suspend fun resting(): Map<ScrapeProviderId, String> = lock.withLock {
+        val t = now()
+        rests.entries.filter { it.value.until > t }.associate { it.key to it.value.reason }
+    }
 
     /** Identifies the game and collects artwork. */
     suspend fun scrape(request: ScrapeRequest): ScrapeOutcome {
@@ -88,24 +112,29 @@ class ScrapeCoordinator(
         val errors = ArrayList<ProviderError>()
         val review = ArrayList<ScoredMatch>()
         val searched = ArrayList<ScrapeProviderId>()
+        val names = SearchNames.of(request.query)
         for (source in ordered) {
-            val games = when (val r = source.search(request.query)) {
-                is ApiResult.Failure -> {
-                    errors += ProviderError(source.id, r)
-                    continue
+            var answered = false
+            for (name in names) {
+                val games = when (val r = call(source.id) { source.search(request.query.named(name)) }) {
+                    is ApiResult.Failure -> {
+                        errors += ProviderError(source.id, r)
+                        break
+                    }
+                    is ApiResult.Success -> r.value.take(request.maxCandidates)
                 }
-                is ApiResult.Success -> r.value.take(request.maxCandidates)
-            }
-            searched += source.id
-            val ranked = matcher.rank(request.query, games.map { it.toMatchInput() })
-            when (val decision = matcher.decide(ranked, request.strictness)) {
-                is MatchDecision.AutoAccept -> {
-                    val game = games.first { it.providerGameId == decision.match.input.providerGameId }
-                    return finish(request, source, game, decision.match.candidate, decision.warning, active, errors)
+                answered = true
+                val ranked = matcher.rank(request.query, games.map { it.toMatchInput() })
+                when (val decision = matcher.decide(ranked, request.strictness)) {
+                    is MatchDecision.AutoAccept -> {
+                        val game = games.first { it.providerGameId == decision.match.input.providerGameId }
+                        return finish(request, source, game, decision.match.candidate, decision.warning, active, errors)
+                    }
+                    is MatchDecision.NeedsReview -> review += decision.candidates
+                    MatchDecision.NoCandidates -> Unit
                 }
-                is MatchDecision.NeedsReview -> review += decision.candidates
-                MatchDecision.NoCandidates -> Unit
             }
+            if (answered) searched += source.id
         }
         return when {
             // A provider can list the same game twice (regional entries, paged results); show it once.
@@ -133,16 +162,21 @@ class ScrapeCoordinator(
         val errors = ArrayList<ProviderError>()
         val found = ArrayList<ScoredMatch>()
         val searched = ArrayList<ScrapeProviderId>()
+        val names = SearchNames.of(request.query)
         for (source in active) {
-            val games = when (val r = source.search(request.query)) {
-                is ApiResult.Failure -> {
-                    errors += ProviderError(source.id, r)
-                    continue
+            // Other names only when the title found nothing at all here.
+            for (name in names) {
+                val games = when (val r = call(source.id) { source.search(request.query.named(name)) }) {
+                    is ApiResult.Failure -> {
+                        errors += ProviderError(source.id, r)
+                        break
+                    }
+                    is ApiResult.Success -> r.value.take(request.maxCandidates)
                 }
-                is ApiResult.Success -> r.value.take(request.maxCandidates)
+                if (source.id !in searched) searched += source.id
+                found += matcher.rank(request.query, games.map { it.toMatchInput() })
+                if (games.isNotEmpty()) break
             }
-            searched += source.id
-            found += matcher.rank(request.query, games.map { it.toMatchInput() })
         }
         return when {
             found.isNotEmpty() -> ScrapeOutcome.NeedsReview(
@@ -163,7 +197,7 @@ class ScrapeCoordinator(
     suspend fun accept(request: ScrapeRequest, candidate: ScrapeCandidate): ScrapeOutcome {
         val source = sources[candidate.provider] ?: return ScrapeOutcome.NotFound(emptyList())
         val errors = ArrayList<ProviderError>()
-        val games = when (val r = source.search(request.query.copy(title = candidate.title))) {
+        val games = when (val r = call(source.id) { source.search(request.query.copy(title = candidate.title)) }) {
             is ApiResult.Failure -> return ScrapeOutcome.ProviderErrors(listOf(ProviderError(source.id, r)))
             is ApiResult.Success -> r.value
         }
@@ -172,9 +206,18 @@ class ScrapeCoordinator(
         return finish(request, source, game, candidate, null, activeSources(request), errors)
     }
 
-    private fun activeSources(request: ScrapeRequest): List<ScrapeSource> = request.priority.distinct().mapNotNull { id ->
-        sources[id]?.takeIf { !id.needsCredentials || id in request.configured }
-    }
+    /** The art kinds at least one active source (in [priority], with [configured] keys) can return. */
+    fun availableKinds(priority: List<ScrapeProviderId>, configured: Set<ScrapeProviderId>): Set<MediaKind> =
+        activeSources(priority, configured).flatMapTo(LinkedHashSet()) { it.artworkKinds }
+
+    /** Whether an active source can fill in details (description, year, genres). */
+    fun providesMetadata(priority: List<ScrapeProviderId>, configured: Set<ScrapeProviderId>): Boolean =
+        activeSources(priority, configured).any { it.providesMetadata }
+
+    private fun activeSources(request: ScrapeRequest): List<ScrapeSource> = activeSources(request.priority, request.configured)
+
+    private fun activeSources(priority: List<ScrapeProviderId>, configured: Set<ScrapeProviderId>): List<ScrapeSource> =
+        priority.distinct().mapNotNull { id -> sources[id]?.takeIf { !id.needsCredentials || id in configured } }
 
     private suspend fun finish(
         request: ScrapeRequest,
@@ -202,13 +245,16 @@ class ScrapeCoordinator(
         val out = LinkedHashMap<String, ArtworkOption>()
         // The winner first when it is in the list, then the rest in the user's order.
         val order = (listOf(winner) + active).distinctBy { it.id }
+        // Kinds no source can return never hold the loop open.
+        val reachable = kinds.filter { k -> order.any { k in it.artworkKinds } }
         val followUp = request.query.copy(title = game.title, year = request.query.year ?: game.year)
         for (source in order) {
-            if (!request.collectAllArtwork && kinds.all { k -> out.values.any { it.kind == k } }) break
+            if (!request.collectAllArtwork && reachable.all { k -> out.values.any { it.kind == k } }) break
+            if (source.artworkKinds.none { it in kinds }) continue
             val options = if (source.id == winner.id) {
-                source.artwork(game, request.query, kinds)
+                call(source.id) { source.artwork(game, request.query, kinds) }
             } else {
-                sameGameIn(source, followUp, request.strictness, errors)?.let { source.artwork(it, request.query, kinds) }
+                sameGameIn(source, followUp, request.strictness, errors)?.let { call(source.id) { source.artwork(it, request.query, kinds) } }
             } ?: continue
             when (options) {
                 is ApiResult.Failure -> errors += ProviderError(source.id, options)
@@ -218,22 +264,84 @@ class ScrapeCoordinator(
         return out.values.toList()
     }
 
-    /** The same game in another provider, only when the matcher would auto-accept it. */
+    /**
+     * The same game in another provider, only when the matcher would auto-accept it: searched by
+     * the accepted title, then by the game's own names.
+     */
     private suspend fun sameGameIn(
         source: ScrapeSource,
         query: ScrapeQuery,
         strictness: MatchStrictness,
         errors: MutableList<ProviderError>,
     ): ProviderGame? {
-        val games = when (val r = source.search(query)) {
-            is ApiResult.Failure -> {
-                errors += ProviderError(source.id, r)
-                return null
+        val names = (listOf(query.title) + SearchNames.of(query)).distinct().take(FOLLOW_UP_NAMES)
+        for (name in names) {
+            val games = when (val r = call(source.id) { source.search(query.named(name)) }) {
+                is ApiResult.Failure -> {
+                    errors += ProviderError(source.id, r)
+                    return null
+                }
+                is ApiResult.Success -> r.value
             }
-            is ApiResult.Success -> r.value
+            val decision = matcher.match(query, games.map { it.toMatchInput() }, strictness)
+            val id = (decision as? MatchDecision.AutoAccept)?.match?.input?.providerGameId ?: continue
+            return games.firstOrNull { it.providerGameId == id }
         }
-        val decision = matcher.match(query, games.map { it.toMatchInput() }, strictness)
-        val id = (decision as? MatchDecision.AutoAccept)?.match?.input?.providerGameId ?: return null
-        return games.firstOrNull { it.providerGameId == id }
+        return null
+    }
+
+    /**
+     * One provider call, minding rests: a resting provider isn't asked, a short rate limit is waited
+     * out once, and running out of requests, a rejected key or repeated failures start a rest.
+     */
+    private suspend fun <T> call(provider: ScrapeProviderId, block: suspend () -> ApiResult<T>): ApiResult<T> {
+        lock.withLock { rests[provider]?.takeIf { it.until > now() } }?.let { return ApiResult.RateLimited(null, it.reason) }
+        var result = block()
+        val wait = (result as? ApiResult.RateLimited)?.retryAfterSeconds
+        if (wait != null && wait <= SHORT_WAIT_SECONDS) {
+            delay(wait.coerceAtLeast(1) * 1000)
+            result = block()
+        }
+        lock.withLock {
+            when (result) {
+                is ApiResult.Success -> failuresInARow.remove(provider)
+                is ApiResult.RateLimited -> {
+                    val ms = result.retryAfterSeconds?.let { (it * 1000).coerceAtLeast(MIN_REST_MS) } ?: QUOTA_REST_MS
+                    rests[provider] = Rest(now() + ms, result.message)
+                }
+                is ApiResult.AuthError -> rests[provider] = Rest(now() + AUTH_REST_MS, result.message)
+                is ApiResult.NetworkError, is ApiResult.InvalidResponse -> failed(provider, result.message)
+                // Server trouble counts; a 404 or another answer about one request does not.
+                is ApiResult.HttpError -> if (result.code >= 500) failed(provider, result.message)
+                is ApiResult.NotConfigured -> Unit
+            }
+        }
+        return result
+    }
+
+    /** Counts a failed answer; enough in a row and the provider rests. Call with [lock] held. */
+    private fun failed(provider: ScrapeProviderId, reason: String) {
+        val n = (failuresInARow[provider] ?: 0) + 1
+        failuresInARow[provider] = n
+        if (n >= FAILURES_BEFORE_REST) {
+            rests[provider] = Rest(now() + FAILING_REST_MS, reason)
+            failuresInARow.remove(provider)
+        }
+    }
+
+    private companion object {
+        /** Rate limits this short are waited out; longer ones start a rest. */
+        const val SHORT_WAIT_SECONDS = 15L
+        const val MIN_REST_MS = 30_000L
+        /** A quota or allowance with no reset time: rest, then try again. */
+        const val QUOTA_REST_MS = 30 * 60_000L
+        const val AUTH_REST_MS = 30 * 60_000L
+        const val FAILURES_BEFORE_REST = 3
+        const val FAILING_REST_MS = 5 * 60_000L
+        /** Names another provider is searched by to find the accepted game there. */
+        const val FOLLOW_UP_NAMES = 2
     }
 }
+
+/** This query searching by [name] instead of its title (the same query for the title itself). */
+private fun ScrapeQuery.named(name: String): ScrapeQuery = if (name == title) this else copy(title = name)

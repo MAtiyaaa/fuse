@@ -33,6 +33,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.FocusZone
 import kotlinx.coroutines.launch
+import io.github.matiyaaa.fuse.ui.shell.app.play
 
 /** For games whose folder behaviour is "Open as a folder": pick which file inside to launch. */
 @Composable
@@ -46,7 +47,8 @@ fun FolderBrowserScreen(app: AppState, id: GameId) {
     val folder = detail?.game?.location?.path.orEmpty()
     val actions = files.orEmpty().map { path ->
         MenuAction(path, path.removePrefix(folder).trimStart('/'), FuseIcons.File, onSelect = {
-            app.scope.launch { app.store.library.launch(id, discPath = path) }
+            val card = detail?.toCard()
+            if (card != null) app.play(card, discPath = path) else app.scope.launch { app.store.library.launch(id, discPath = path) }
         })
     }
     sel.clamp(actions.size)

@@ -128,6 +128,11 @@ class GameRepository(
         q.selectIdByPath(path).executeAsOneOrNull()?.let(::GameId)
     }
 
+    /** Every game's path (removed games left out), for matching paths other apps report. */
+    suspend fun paths(): List<Pair<GameId, String>> = withContext(dispatcher) {
+        q.selectPaths().executeAsList().map { GameId(it.id) to it.path }
+    }
+
     /** Local games linked to each RetroAchievements game id (for the COMPLETED collection). */
     suspend fun idsForRetroAchievements(raGameIds: Collection<Long>): Map<Long, List<GameId>> = withContext(dispatcher) {
         raGameIds.distinct().chunked(SQL_CHUNK)
@@ -237,6 +242,19 @@ class GameRepository(
      */
     suspend fun forgetMissing(id: GameId): Boolean = withContext(dispatcher) {
         db.transactionWithResult {
+            val deleted = q.deleteMissing(id.value).value > 0
+            if (deleted) db.mediaQueries.deleteOwner(MediaOwner.OfGame(id).type(), id.value.toString())
+            deleted
+        }
+    }
+
+    /**
+     * Forgets a game whose files the user just deleted (Settings, Storage): the record goes, with
+     * its media, sessions and collection entries, as if it had been missing.
+     */
+    suspend fun forgetDeleted(id: GameId, now: Long): Boolean = withContext(dispatcher) {
+        db.transactionWithResult {
+            q.markMissing(now, id.value)
             val deleted = q.deleteMissing(id.value).value > 0
             if (deleted) db.mediaQueries.deleteOwner(MediaOwner.OfGame(id).type(), id.value.toString())
             deleted

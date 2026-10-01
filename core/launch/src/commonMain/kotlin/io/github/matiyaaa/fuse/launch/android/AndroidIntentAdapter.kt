@@ -224,6 +224,9 @@ class AndroidIntentAdapter(
                 if (LaunchTokens.SAF in tokens) {
                     add("Uses scoped storage: inside ${def.name}, grant access to each system's ROM folder (for example ROMs/psx), not the whole ROMs folder.")
                 }
+                if (LaunchTokens.DOC in tokens) {
+                    add("Single-file images (CHD, PBP, ISO) are shared through Fuse, which needs All files access; other files use ${def.name}'s own folder access.")
+                }
                 if (LaunchTokens.PROVIDER in tokens) {
                     add("Fuse shares the file through its own FileProvider, which needs All files access for Fuse. Single files only (no .cue/.bin sets).")
                 }

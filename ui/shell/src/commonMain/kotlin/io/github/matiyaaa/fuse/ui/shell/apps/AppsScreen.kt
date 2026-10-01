@@ -31,6 +31,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.components.Chip
 import io.github.matiyaaa.fuse.ui.designsystem.components.FText
 import io.github.matiyaaa.fuse.ui.designsystem.components.Hint
 import io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction
+import io.github.matiyaaa.fuse.ui.designsystem.components.Trailing
 import io.github.matiyaaa.fuse.ui.designsystem.focus.FollowSelection
 import io.github.matiyaaa.fuse.ui.designsystem.focus.GridSelection
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
@@ -44,6 +45,9 @@ import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.ContextMenuSpec
 import io.github.matiyaaa.fuse.ui.shell.app.FocusZone
 import io.github.matiyaaa.fuse.ui.shell.app.TextInputSpec
+import io.github.matiyaaa.fuse.ui.shell.app.appScreenPicker
+import io.github.matiyaaa.fuse.ui.shell.app.hasTwoScreens
+import io.github.matiyaaa.fuse.ui.shell.app.openApp
 import io.github.matiyaaa.fuse.ui.shell.app.rememberRouteState
 import io.github.matiyaaa.fuse.ui.shell.components.AppTile
 import io.github.matiyaaa.fuse.ui.shell.components.LocalTileMetrics
@@ -93,7 +97,7 @@ fun AppsScreen(app: AppState) {
                 val r = sel.move(e.action, apps.size, columns)
                 if (r == NavResult.IGNORED && e.action == NavAction.UP) { inFilters = true; NavResult.MOVED } else r
             }
-            NavAction.SELECT -> { apps.getOrNull(sel.index)?.let { a -> app.scope.launch { store.apps.launch(a) } }; NavResult.ACTIVATED }
+            NavAction.SELECT -> { apps.getOrNull(sel.index)?.let { a -> app.openApp(a) }; NavResult.ACTIVATED }
             NavAction.CONTEXT -> { apps.getOrNull(sel.index)?.let { app.openContextMenu(app.appMenu(it)) }; NavResult.ACTIVATED }
             else -> NavResult.IGNORED
         }
@@ -147,7 +151,7 @@ fun AppsScreen(app: AppState) {
                                 inFilters = false
                                 // A tap opens the app straight away, like any launcher.
                                 sel.index = i
-                                app.scope.launch { store.apps.launch(a) }
+                                app.openApp(a)
                             },
                             onLongClick = { sel.index = i; app.openContextMenu(app.appMenu(a)) },
                         )
@@ -173,7 +177,10 @@ fun AppState.appMenu(app: AppCard): ContextMenuSpec {
         subtitle = app.entry.packageName,
         art = app.icon,
         actions = listOf(
-            MenuAction("launch", "Open", FuseIcons.Play, onSelect = { closeOverlays(); scope.launch { ops.launch(app) } }),
+            MenuAction("launch", "Open", FuseIcons.Play, onSelect = { closeOverlays(); openApp(app) }),
+        ) + listOfNotNull(
+            if (hasTwoScreens) MenuAction("screen", "Screen", FuseIcons.DualScreen, detail = "Top, bottom, or ask when it opens", trailing = Trailing.Chevron, onSelect = { appScreenPicker(app) }) else null,
+        ) + listOf(
             MenuAction("pin", if (app.entry.pinned) "Unpin" else "Pin", FuseIcons.Pin, onSelect = {
                 closeOverlays(); scope.launch { ops.setPinned(app, !app.entry.pinned) }
             }),

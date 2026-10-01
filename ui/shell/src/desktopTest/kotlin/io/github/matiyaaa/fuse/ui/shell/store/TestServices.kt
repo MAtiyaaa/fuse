@@ -1,7 +1,6 @@
 package io.github.matiyaaa.fuse.ui.shell.store
 
 import io.github.matiyaaa.fuse.data.FuseData
-import io.github.matiyaaa.fuse.data.db.DesktopDatabase
 import io.github.matiyaaa.fuse.data.settings.SecretStore
 import io.github.matiyaaa.fuse.integrations.github.ReleasePlatform
 import io.github.matiyaaa.fuse.launch.ResolvedLaunch
@@ -13,36 +12,24 @@ import io.github.matiyaaa.fuse.model.CartridgeStatus
 import io.github.matiyaaa.fuse.model.EmulatorId
 import io.github.matiyaaa.fuse.model.Host
 import io.github.matiyaaa.fuse.model.InstalledEmulator
-import io.github.matiyaaa.fuse.model.LaunchPlan
-import io.github.matiyaaa.fuse.model.LaunchTarget
-import io.github.matiyaaa.fuse.model.LibrarySourceKind
 import io.github.matiyaaa.fuse.model.PlatformId
 import io.github.matiyaaa.fuse.model.ReleaseAsset
-import io.github.matiyaaa.fuse.model.ScanPhase
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respondError
 import io.ktor.http.HttpStatusCode
 import java.io.File
-import java.nio.file.Files
-import kotlin.test.AfterTest
-import kotlin.test.BeforeTest
 import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertIs
-import kotlin.test.assertNotNull
-import kotlin.test.assertTrue
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.withTimeout
 
 /** Test doubles for [FuseServices]: real files and database, fake launcher and system. */
-internal class FakeServices(override val data: FuseData, private val cache: File) : FuseServices {
+internal class FakeServices(override val data: FuseData, private val cache: File, autoFill: Boolean = false) : FuseServices {
+    init {
+        // Tests start fills themselves; the automatic one runs only where a test turns it on.
+        kotlinx.coroutines.runBlocking { data.settings.update { it.copy(scraping = it.scraping.copy(autoFill = autoFill)) } }
+    }
+
     val launched = mutableListOf<ResolvedLaunch>()
     var exit: CompletableDeferred<Unit>? = null
 
@@ -50,7 +37,12 @@ internal class FakeServices(override val data: FuseData, private val cache: File
     override val appVersion = "0.0.1"
     override val fs: FuseFileSystem = JavaFileSystem()
     override val secrets: SecretStore = MemorySecrets()
-    override val http = HttpClient(MockEngine { respondError(HttpStatusCode.NotFound) })
+    /** Hosts of every request made, in order (nothing is found anywhere). */
+    val requestHosts: MutableList<String> = java.util.Collections.synchronizedList(mutableListOf())
+    override val http = HttpClient(MockEngine { request ->
+        requestHosts += request.url.host
+        respondError(HttpStatusCode.NotFound)
+    })
     override val cacheDir: String = cache.absolutePath
 
     override val emulators = object : EmulatorDetector {
@@ -60,9 +52,16 @@ internal class FakeServices(override val data: FuseData, private val cache: File
         )
     }
 
+    /** The device's second screen, when the test gives it one, and the display each launch asked for. */
+    var secondDisplay: Int? = null
+    val launchedOn = mutableListOf<Int?>()
+
     override val launcher = object : GameLauncher {
+        override fun secondaryDisplayId(): Int? = secondDisplay
+
         override suspend fun run(launch: ResolvedLaunch, displayId: Int?): RunResult {
             launched += launch
+            launchedOn += displayId
             val waiter = exit
             return RunResult.Started(awaitExit = waiter?.let { w -> { w.await() } })
         }
@@ -70,12 +69,24 @@ internal class FakeServices(override val data: FuseData, private val cache: File
         override suspend fun openApp(appId: String): RunResult = RunResult.Started()
     }
 
+    /** What the fake Cartridge reports; tests change it and call refresh. */
+    var cartridgeStatus = CartridgeStatus(installed = false)
+    var cartridgeGames: List<io.github.matiyaaa.fuse.model.CartridgeGame>? = null
+
+    /** Games handed to the fake Cartridge to upload. */
+    val uploads = mutableListOf<io.github.matiyaaa.fuse.model.CartridgeUpload>()
+
     override val cartridge = object : CartridgeBridge {
-        override suspend fun read() = CartridgeStatus(installed = false)
+        override suspend fun read() = cartridgeStatus
+        override suspend fun games() = cartridgeGames
         override fun open(route: CartridgeRoute, link: String) = false
+        override suspend fun upload(upload: io.github.matiyaaa.fuse.model.CartridgeUpload): Boolean {
+            uploads += upload
+            return true
+        }
     }
 
-    override val installer = object : ReleaseInstaller {
+    override var installer: ReleaseInstaller = object : ReleaseInstaller {
         override val platform = ReleasePlatform.LINUX_X86_64
         override suspend fun install(asset: ReleaseAsset, onProgress: (Float) -> Unit) = Result.failure<Unit>(UnsupportedOperationException())
     }
@@ -95,6 +106,16 @@ internal class FakeServices(override val data: FuseData, private val cache: File
         return file.absolutePath
     }
 
+    override suspend fun cacheFile(relativePath: String, content: suspend () -> ByteArray): String? {
+        require(!relativePath.contains("..")) { "Cache paths never leave the cache" }
+        val file = File(cache, relativePath)
+        if (!file.isFile) {
+            file.parentFile.mkdirs()
+            file.writeBytes(content())
+        }
+        return file.absolutePath
+    }
+
     override fun utcOffsetMillis() = 0L
 }
 
@@ -106,6 +127,8 @@ internal class MemorySecrets : SecretStore {
 }
 
 internal class JavaFileSystem : FuseFileSystem {
+    override suspend fun delete(path: String): Boolean = File(path).let { !it.exists() || it.deleteRecursively() }
+
     override suspend fun list(path: String): List<FsEntry> {
         val dir = File(path)
         val children = dir.listFiles() ?: throw FsAccessException(path, "Unreadable")

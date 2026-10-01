@@ -140,7 +140,7 @@ internal class AuditApps(entries: List<AppEntry>, private val icons: Map<String,
     override val apps: StateFlow<List<AppEntry>> = MutableStateFlow(entries)
     override fun iconModel(entry: AppEntry): Any? = icons[entry.id]
     override fun refresh() = Unit
-    override suspend fun launch(entry: AppEntry): RunResult = RunResult.Started()
+    override suspend fun launch(entry: AppEntry, displayId: Int?): RunResult = RunResult.Started()
     override fun openInfo(entry: AppEntry) = Unit
 
     companion object {
@@ -232,6 +232,40 @@ internal class AuditPlatform(
             override fun request() = Unit
             override fun openHomeSettings() = Unit
             override fun disable() = Unit
+        }
+    }
+}
+
+/** Phone Link without a server: reports what a scenario sets and draws a code-like pattern. */
+internal class AuditPhoneLink : io.github.matiyaaa.fuse.ui.shell.store.PhoneLinkControl {
+    override val state = kotlinx.coroutines.flow.MutableStateFlow(io.github.matiyaaa.fuse.ui.shell.store.PhoneLinkState())
+
+    override suspend fun setAccount(username: String, password: String): Result<Unit> {
+        if (password.length < 6) return Result.failure(IllegalArgumentException("The password needs at least 6 characters"))
+        state.value = state.value.copy(username = username, sessions = 0)
+        return Result.success(Unit)
+    }
+
+    override suspend fun signOutAll() {
+        state.value = state.value.copy(sessions = 0)
+    }
+
+    /** A version 3 sized grid with the three finder squares and a fixed scatter, like a real code. */
+    override fun qr(text: String): List<BooleanArray> {
+        val n = 29
+        val random = kotlin.random.Random(text.hashCode())
+        fun finder(x: Int, y: Int, fx: Int, fy: Int): Boolean? {
+            val dx = x - fx
+            val dy = y - fy
+            if (dx !in -1..7 || dy !in -1..7) return null
+            if (dx == -1 || dy == -1 || dx == 7 || dy == 7) return false
+            val ring = minOf(dx, dy, 6 - dx, 6 - dy)
+            return ring != 1
+        }
+        return List(n) { y ->
+            BooleanArray(n) { x ->
+                finder(x, y, 0, 0) ?: finder(x, y, n - 7, 0) ?: finder(x, y, 0, n - 7) ?: (random.nextInt(100) < 48)
+            }
         }
     }
 }

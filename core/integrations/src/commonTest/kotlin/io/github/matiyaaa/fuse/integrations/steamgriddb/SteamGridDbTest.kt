@@ -9,13 +9,13 @@ import io.github.matiyaaa.fuse.model.MediaKind
 import io.github.matiyaaa.fuse.model.ScrapeProviderId
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
-import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlinx.coroutines.test.runTest
 
 class SteamGridDbTest {
 
@@ -87,6 +87,9 @@ class SteamGridDbTest {
         assertEquals(MediaKind.ICON, SgdbAssetType.ICON.mediaKind(256, 256))
         assertEquals(MediaKind.BOXART, SgdbAssetType.GRID.mediaKind(660, 930))
         assertEquals(MediaKind.GRID, SgdbAssetType.GRID.mediaKind(460, 215))
+        assertEquals(MediaKind.SQUARE, SgdbAssetType.GRID.mediaKind(512, 512))
+        assertEquals(MediaKind.SQUARE, SgdbAssetType.GRID.mediaKind(1024, 1024))
+        assertEquals(MediaKind.ICON, SgdbAssetType.ICON.mediaKind(512, 512))
     }
 
     @Test

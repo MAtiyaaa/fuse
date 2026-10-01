@@ -164,6 +164,34 @@ internal object AuditSystemArt {
     }
 }
 
+/** Stand-ins for game art: a portrait cover with its title at the top, and a square box art. */
+internal object AuditCovers {
+    fun cover(file: File, title: String, color: Long) = draw(file, 600, 900, title, color)
+
+    fun square(file: File, title: String, color: Long) = draw(file, 512, 512, title, color)
+
+    private fun draw(file: File, w: Int, h: Int, title: String, color: Long) {
+        val img = BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB)
+        val g = img.createGraphics()
+        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
+        g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON)
+        val base = Color(color.toInt(), true)
+        g.paint = GradientPaint(0f, 0f, base.brighter(), w.toFloat(), h.toFloat(), base.darker().darker())
+        g.fillRect(0, 0, w, h)
+        g.color = Color(255, 255, 255, 50)
+        g.fill(Ellipse2D.Float(w * 0.2f, h * 0.38f, w * 0.6f, w * 0.6f))
+        // A title band at the top, where covers keep their logo: cropping would cut it off.
+        g.color = Color(0, 0, 0, 110)
+        g.fillRect(0, 0, w, h / 7)
+        g.color = Color.WHITE
+        g.font = java.awt.Font(java.awt.Font.SANS_SERIF, java.awt.Font.BOLD, h / 14)
+        val metrics = g.fontMetrics
+        g.drawString(title, ((w - metrics.stringWidth(title)) / 2).coerceAtLeast(8), h / 7 - h / 28)
+        g.dispose()
+        ImageIO.write(img, "png", file)
+    }
+}
+
 internal object AuditIcons {
     fun write(file: File, label: String, color: Long, variant: Int) {
         val size = 192

@@ -61,3 +61,12 @@ JOIN collection_game cg ON cg.game_id = game_summary.id
 WHERE cg.collection_id = ? AND game_summary.missing = 0 AND game_summary.removed_at IS NULL
     AND game_summary.hidden = 0
 ORDER BY cg.sort_order, game_summary.sort_title;
+
+setKind:
+UPDATE game_collection SET kind = :kind WHERE id = :id;
+
+memberIds:
+SELECT game_id FROM collection_game WHERE collection_id = ?;
+
+byKind:
+SELECT id, name FROM game_collection WHERE kind = ?;

@@ -1,27 +1,11 @@
 package io.github.matiyaaa.fuse.ui.shell.library
 
-import io.github.matiyaaa.fuse.ui.designsystem.media.PrefetchArt
-
-import androidx.compose.foundation.rememberScrollState
-
-import androidx.compose.foundation.horizontalScroll
-
-import kotlinx.coroutines.flow.map
-
-import kotlinx.coroutines.flow.flowOf
-
-import kotlinx.coroutines.flow.combine
-
-import io.github.matiyaaa.fuse.ui.shell.app.ConfirmSpec
-
-import io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec
-
-import io.github.matiyaaa.fuse.ui.shell.store.GameSet
-
-import io.github.matiyaaa.fuse.ui.designsystem.components.fadingEdges
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -38,13 +22,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -58,6 +42,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import io.github.matiyaaa.fuse.model.CollectionId
@@ -75,6 +60,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction
 import io.github.matiyaaa.fuse.ui.designsystem.components.Spinner
 import io.github.matiyaaa.fuse.ui.designsystem.components.Tile
 import io.github.matiyaaa.fuse.ui.designsystem.components.Trailing
+import io.github.matiyaaa.fuse.ui.designsystem.components.fadingEdges
 import io.github.matiyaaa.fuse.ui.designsystem.focus.FollowSelection
 import io.github.matiyaaa.fuse.ui.designsystem.focus.GridSelection
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
@@ -86,27 +72,42 @@ import io.github.matiyaaa.fuse.ui.designsystem.media.ArtSlot
 import io.github.matiyaaa.fuse.ui.designsystem.media.Artwork
 import io.github.matiyaaa.fuse.ui.designsystem.media.GeneratedArt
 import io.github.matiyaaa.fuse.ui.designsystem.media.HeroSource
-import io.github.matiyaaa.fuse.ui.designsystem.shape.PillShape
+import io.github.matiyaaa.fuse.ui.designsystem.media.PrefetchArt
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Aspect
+import io.github.matiyaaa.fuse.ui.designsystem.theme.Durations
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
 import io.github.matiyaaa.fuse.ui.designsystem.theme.toColor
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
+import io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec
+import io.github.matiyaaa.fuse.ui.shell.app.ConfirmSpec
 import io.github.matiyaaa.fuse.ui.shell.app.ContextMenuSpec
 import io.github.matiyaaa.fuse.ui.shell.app.FocusZone
 import io.github.matiyaaa.fuse.ui.shell.app.Route
+import io.github.matiyaaa.fuse.ui.shell.app.activateGame
+import io.github.matiyaaa.fuse.ui.shell.app.gameConfirmLabel
 import io.github.matiyaaa.fuse.ui.shell.app.gameMenu
 import io.github.matiyaaa.fuse.ui.shell.app.play
 import io.github.matiyaaa.fuse.ui.shell.app.rememberRouteState
+import io.github.matiyaaa.fuse.ui.shell.app.rememberSystems
+import io.github.matiyaaa.fuse.ui.shell.app.room
+import io.github.matiyaaa.fuse.ui.shell.collections.addGamesPicker
 import io.github.matiyaaa.fuse.ui.shell.components.GameCoverTile
 import io.github.matiyaaa.fuse.ui.shell.components.GameIconTile
 import io.github.matiyaaa.fuse.ui.shell.components.LocalTileMetrics
+import io.github.matiyaaa.fuse.ui.shell.components.SquareGameArt
 import io.github.matiyaaa.fuse.ui.shell.components.Stage
 import io.github.matiyaaa.fuse.ui.shell.components.playtimeText
 import io.github.matiyaaa.fuse.ui.shell.components.stage
 import io.github.matiyaaa.fuse.ui.shell.store.GameCard
 import io.github.matiyaaa.fuse.ui.shell.store.GameQuery
+import io.github.matiyaaa.fuse.ui.shell.store.GameSet
+import io.github.matiyaaa.fuse.ui.shell.systems.SystemHeader
+import io.github.matiyaaa.fuse.ui.shell.systems.SystemShowcase
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 /** What a library view lists. */
@@ -130,7 +131,7 @@ enum class LibrarySegment(val label: String, val set: GameSet) {
 }
 
 /** The buttons at the end of the Library header. */
-enum class LibraryButton { SYSTEM, SORT, VIEW }
+enum class LibraryButton { COLLECTIONS, ADD_GAMES, SYSTEM, SORT, VIEW }
 
 /** Remembered per library view: which game was selected (by id, so re-sorting keeps it), and where focus was. */
 @Stable
@@ -180,7 +181,14 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
     val segments = if (scope != LibraryScope.All) emptyList() else LibrarySegment.entries.filter { s ->
         s.set == GameSet.LIBRARY || (extraCounts[s] ?: 0) > 0 || state.segment == s
     }
+    val collectionsOn = prefs.collectionsEnabled
+    val allCollections by store.collections.collections.collectAsState()
+    // A collection of the user's own (not a series Fuse keeps up to date) can be edited here.
+    val ownCollection = (scope as? LibraryScope.OfCollection)?.let { s -> allCollections.firstOrNull { it.id == s.collection } }
+        ?.takeIf { it.kind != io.github.matiyaaa.fuse.model.CollectionKind.SERIES }
     val buttons = buildList {
+        if (scope == LibraryScope.All && collectionsOn) add(LibraryButton.COLLECTIONS)
+        if (ownCollection != null) add(LibraryButton.ADD_GAMES)
         if (scope == LibraryScope.All) add(LibraryButton.SYSTEM)
         add(LibraryButton.SORT)
         add(LibraryButton.VIEW)
@@ -215,15 +223,35 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
         if (idx >= 0) state.grid.index = idx else state.grid.clamp(list.size)
     }
     val selectedCard = list?.getOrNull(state.grid.index)
-    PrefetchArt(remember(list) { list.orEmpty().map { it.art.icon ?: it.art.boxart ?: it.art.grid } }, state.grid.index)
+    // The next tiles' art and the stage logos are ready before the selection reaches them.
+    val tileArt = remember(list, layout) {
+        list.orEmpty().map { a ->
+            when (layout) {
+                LibraryLayout.COVER_GRID -> a.art.boxart ?: a.art.grid ?: a.art.square ?: a.art.icon
+                LibraryLayout.CAPSULE -> a.art.hero ?: a.art.grid ?: a.art.boxart
+                else -> a.art.square ?: a.art.icon ?: a.art.boxart ?: a.art.grid
+            }
+        }
+    }
+    PrefetchArt(tileArt, state.grid.index, size = LocalTileMetrics.current.icon * 1.4f)
+    PrefetchArt(remember(list) { list.orEmpty().map { it.art.logo } }, state.grid.index, size = 360.dp)
     val special = scope == LibraryScope.All && segment.set != GameSet.LIBRARY
-    LaunchedEffect(selectedCard?.id, special) {
+    val systemCard = platforms.firstOrNull { it.platform.id == platformId }
+    // A game with its own background image shows it; any other game shows its system's background,
+    // so a system's page keeps one room while moving between its games.
+    val systems = rememberSystems(app)
+    val gameSystem = selectedCard?.let { systems[it.platformId] }
+    LaunchedEffect(selectedCard?.id, selectedCard?.art, special, systemCard?.art, gameSystem?.art) {
         state.selectedId = selectedCard?.id
-        app.hero = selectedCard?.let { HeroSource(it.id, it.art.hero ?: it.art.grid, it.accent.toColor(), it.art.heroFocusX, it.art.heroFocusY, it.art.video) }
+        app.hero = when {
+            selectedCard != null -> selectedCard.room(gameSystem)
+            systemCard != null -> HeroSource(systemCard.platform.id, systemCard.art.hero, systemCard.platform.accent.toColor())
+            else -> null
+        }
         app.hints = when {
             selectedCard == null -> emptyList()
             special -> listOf(Hint(HintButton.CONFIRM, "Choose"), Hint(HintButton.BACK, "Back"))
-            else -> listOf(Hint(HintButton.CONFIRM, "Play"), Hint(HintButton.OPTIONS, "Options"), Hint(HintButton.SEARCH, "Search"))
+            else -> listOf(Hint(HintButton.CONFIRM, app.gameConfirmLabel), Hint(HintButton.OPTIONS, "Options"), Hint(HintButton.SEARCH, "Search"))
         }
     }
 
@@ -234,12 +262,20 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
             app.openContextMenu(setMenu(app, card, segment))
             return
         }
-        val base = app.gameMenu(card)
+        val remove = ownCollection?.let { c ->
+            listOf(MenuAction("uncollect", "Remove from ${c.name}", FuseIcons.Minus, detail = "The game stays in your library", onSelect = {
+                app.closeOverlays()
+                app.scope.launch { store.collections.remove(c.id, card.id) }
+            }))
+        }.orEmpty()
+        val base = app.gameMenu(card, extra = remove)
         app.openContextMenu(base.copy(actions = base.actions + viewActions(app, state, platformId, layout, sort)))
     }
 
     fun press(button: LibraryButton) {
         when (button) {
+            LibraryButton.COLLECTIONS -> app.go(Route.Collections)
+            LibraryButton.ADD_GAMES -> ownCollection?.let { app.addGamesPicker(it.id, it.name) }
             LibraryButton.SYSTEM -> app.choice = systemPicker(app, state, platforms)
             LibraryButton.SORT -> app.choice = sortPicker(app, sort)
             LibraryButton.VIEW -> app.choice = layoutPicker(app, state, platformId, layout)
@@ -307,7 +343,7 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
                 when {
                     selectedCard == null -> Unit
                     special -> options(selectedCard)
-                    else -> app.play(selectedCard)
+                    else -> app.activateGame(selectedCard)
                 }
                 if (selectedCard != null) NavResult.ACTIVATED else NavResult.BLOCKED
             }
@@ -330,16 +366,29 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
             state.inHeader = false
             when {
                 special -> { state.grid.index = i; options(cards[i]) }
-                state.grid.index == i -> app.play(cards[i])
+                state.grid.index == i -> app.activateGame(cards[i])
                 else -> state.grid.index = i
             }
         }
+        val compactHeader = maxH < 560.dp
+        // Like the Systems screen: the art pack's panel on the right unless there is a background image.
+        if (systemCard != null) {
+            AnimatedVisibility(
+                visible = systemCard.art.hero == null && selectedCard?.art?.hero == null,
+                modifier = Modifier.align(Alignment.CenterEnd),
+                enter = fadeIn(Fuse.motion.fade(Durations.SLOW)),
+                exit = fadeOut(Fuse.motion.fade(Durations.BASE)),
+            ) {
+                SystemShowcase(systemCard, Modifier.fillMaxHeight().width(maxH * 0.46f))
+            }
+        }
         Column(Modifier.fillMaxSize()) {
-            Spacer(Modifier.height(Size.hudHeight))
+            Spacer(Modifier.height(Size.hudHeight + if (systemCard != null) (if (compactHeader) Space.s else Space.xl) else 0.dp))
             LibraryHeader(
                 app = app,
                 scope = scope,
-                platform = platforms.firstOrNull { it.platform.id == platformId },
+                platform = systemCard,
+                compact = compactHeader,
                 system = platforms.firstOrNull { it.platform.id == state.system },
                 count = list?.size,
                 header = header,
@@ -403,6 +452,7 @@ private fun LibraryHeader(
     app: AppState,
     scope: LibraryScope,
     platform: io.github.matiyaaa.fuse.ui.shell.store.PlatformCard?,
+    compact: Boolean,
     system: io.github.matiyaaa.fuse.ui.shell.store.PlatformCard?,
     count: Int?,
     header: List<HeaderItem>,
@@ -415,8 +465,8 @@ private fun LibraryHeader(
     val c = Fuse.colors
     fun focused(i: Int) = state.inHeader && app.focusZone == FocusZone.CONTENT && i == state.headerIndex
     Row(
-        Modifier.fillMaxWidth().padding(start = Space.gutter, end = Space.gutter, top = Space.xs, bottom = Space.xs),
-        verticalAlignment = Alignment.CenterVertically,
+        Modifier.fillMaxWidth().padding(start = Space.gutter, end = Space.gutter, top = if (platform != null) 0.dp else Space.xs, bottom = Space.xs),
+        verticalAlignment = if (platform != null) Alignment.Bottom else Alignment.CenterVertically,
     ) {
         if (scope == LibraryScope.All) {
             val scroll = rememberScrollState()
@@ -440,21 +490,20 @@ private fun LibraryHeader(
                     }
                 }
             }
+        } else if (platform != null) {
+            // The same header as the Systems screen, in the same place, so the logo stays put.
+            SystemHeader(platform, compact, Modifier.weight(1f), widthFraction = 0.9f)
         } else {
             Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
                 val title = when (scope) {
-                    is LibraryScope.OfPlatform -> platform?.platform?.name ?: scope.platform.value
+                    is LibraryScope.OfPlatform -> scope.platform.value
                     is LibraryScope.OfCollection -> scope.name
                     LibraryScope.All -> "Library"
                 }
                 FText(title, Fuse.type.titleSmall, maxLines = 1)
-                if (platform != null && !platform.emulatorInstalled) {
-                    Spacer(Modifier.width(Space.m))
-                    Chip("No emulator installed", icon = FuseIcons.Warning, color = c.warning)
-                }
             }
         }
-        if (count != null) {
+        if (count != null && platform == null) {
             Spacer(Modifier.width(Space.m))
             FText("$count ${if (count == 1) "game" else "games"}", Fuse.type.label, color = c.textMuted, maxLines = 1)
         }
@@ -462,6 +511,8 @@ private fun LibraryHeader(
             if (item is HeaderItem.Button) {
                 Spacer(Modifier.width(Space.s))
                 val (label, icon) = when (item.button) {
+                    LibraryButton.COLLECTIONS -> "Collections" to FuseIcons.LibraryBig
+                    LibraryButton.ADD_GAMES -> "Add or remove games" to FuseIcons.ListPlus
                     LibraryButton.SYSTEM -> (system?.platform?.shortName ?: "All systems") to FuseIcons.Filter
                     LibraryButton.SORT -> sortLabel(sort) to FuseIcons.Sort
                     LibraryButton.VIEW -> layoutLabel(layout) to layoutIcon(layout)
@@ -489,7 +540,7 @@ private fun sortLabel(s: SortOrder) = when (s) {
 }
 
 private fun layoutLabel(l: LibraryLayout) = when (l) {
-    LibraryLayout.ICON -> "Icons"
+    LibraryLayout.ICON -> "Box art"
     LibraryLayout.CAPSULE -> "Capsules"
     LibraryLayout.COVER_GRID -> "Cover grid"
     LibraryLayout.COMPACT_LIST -> "List"
@@ -574,7 +625,7 @@ private fun setMenu(app: AppState, card: GameCard, segment: LibrarySegment): Con
             MenuAction("restore", "Restore to Fuse", FuseIcons.Undo, onSelect = { run("${card.title} is back in your library") { lib.restore(card.id) } }),
         )
     }
-    return ContextMenuSpec(title = card.title, subtitle = "${card.platformShort}  ·  ${segment.label}", art = card.art.icon, actions = actions)
+    return ContextMenuSpec(title = card.title, subtitle = "${card.platformShort}  ·  ${segment.label}", art = card.art.tile, actions = actions)
 }
 
 @Composable
@@ -675,8 +726,8 @@ private fun CompactList(
                 ) {
                     Box(Modifier.width(3.dp).height(20.dp).background(if (sel) c.accent else androidx.compose.ui.graphics.Color.Transparent, RoundedCornerShape(2.dp)))
                     Spacer(Modifier.width(Space.m))
-                    Artwork(
-                        card.art.icon ?: card.art.boxart,
+                    SquareGameArt(
+                        card.art,
                         Modifier.size(34.dp).clip(RoundedCornerShape(8.dp)),
                         fallback = { GeneratedArt(card.title, card.accent.toColor(), slot = ArtSlot.ICON) },
                     )
@@ -695,7 +746,7 @@ private fun CompactList(
             if (selected != null) {
                 Tile(selected = false, modifier = Modifier.fillMaxWidth(0.55f).height(260.dp), showSpark = false) {
                     Artwork(
-                        selected.art.boxart ?: selected.art.grid ?: selected.art.icon,
+                        selected.art.boxart ?: selected.art.grid ?: selected.art.square ?: selected.art.icon,
                         Modifier.fillMaxSize(),
                         fallback = { GeneratedArt(selected.title, selected.accent.toColor(), slot = ArtSlot.BOX, label = selected.platformShort) },
                     )

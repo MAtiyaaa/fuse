@@ -7,6 +7,7 @@ import io.github.matiyaaa.fuse.data.DAY_MS
 import io.github.matiyaaa.fuse.data.SQL_CHUNK
 import io.github.matiyaaa.fuse.data.currentTimeMillis
 import io.github.matiyaaa.fuse.data.db.FuseDatabase
+import io.github.matiyaaa.fuse.data.decodeOrNull
 import io.github.matiyaaa.fuse.data.enumOr
 import io.github.matiyaaa.fuse.data.ioDispatcher
 import io.github.matiyaaa.fuse.data.lastInsertId
@@ -48,6 +49,9 @@ sealed interface CollectionKey {
     /** Genre from game metadata, matched case-insensitively. */
     data class Genre(val name: String) : CollectionKey
 }
+
+/** A game as series detection sees it. */
+data class SeriesRow(val id: GameId, val title: String, val franchise: String?)
 
 /** A collection as the Collections screen lists it. [name] is a default label the UI may localise. */
 data class CollectionView(
@@ -146,11 +150,64 @@ class CollectionRepository(
             .flowOn(dispatcher)
 
     /** Creates a manual collection at the end of the list. */
-    suspend fun create(name: String): CollectionId = withContext(dispatcher) {
+    suspend fun create(name: String, kind: CollectionKind = CollectionKind.MANUAL): CollectionId = withContext(dispatcher) {
         db.transactionWithResult {
             val order = (q.maxOrder().executeAsOne().max_order ?: -1) + 1
-            q.insert(name.trim(), CollectionKind.MANUAL.name, order, clock())
+            q.insert(name.trim(), kind.name, order, clock())
             CollectionId(db.lastInsertId())
+        }
+    }
+
+    /** Turns a series into the user's own collection (Fuse stops keeping it up to date), or back. */
+    suspend fun setKind(id: CollectionId, kind: CollectionKind) = withContext(dispatcher) {
+        q.setKind(kind.name, id.value)
+        Unit
+    }
+
+    /** Every game's shown title and the series its details name, for series detection. */
+    suspend fun seriesInputs(): List<SeriesRow> = withContext(dispatcher) {
+        db.gameQueries.seriesInputs().executeAsList().map { row ->
+            val titles = io.github.matiyaaa.fuse.model.GameTitles(row.title_original, row.title_cleaned, row.title_custom, row.title_metadata, row.use_cleaned != 0L)
+            val franchise = row.metadata_json?.let { decodeOrNull(io.github.matiyaaa.fuse.model.GameMetadata.serializer(), it) }?.franchise
+            SeriesRow(GameId(row.id), titles.display, franchise?.trim()?.ifEmpty { null })
+        }
+    }
+
+    /** Changes to any game (titles, details, new games), for keeping series up to date. */
+    fun observeGameChanges(): Flow<Unit> = db.gameQueries.seriesInputs().asFlow().map { }
+
+    /**
+     * Makes the series collections match [series] (name to members): new series are added at the
+     * end, members follow the detection, and series no longer found are removed. The user's own
+     * collections are never touched. Returns whether anything changed.
+     */
+    suspend fun syncSeries(series: Map<String, List<GameId>>): Boolean = withContext(dispatcher) {
+        db.transactionWithResult {
+            var changed = false
+            val existing = q.byKind(CollectionKind.SERIES.name).executeAsList().associate { it.name.lowercase() to it.id }
+            val wanted = series.mapKeys { it.key.trim() }.filterKeys { it.isNotEmpty() }
+            for ((name, members) in wanted) {
+                val id = existing[name.lowercase()] ?: run {
+                    val order = (q.maxOrder().executeAsOne().max_order ?: -1) + 1
+                    q.insert(name, CollectionKind.SERIES.name, order, clock())
+                    changed = true
+                    db.lastInsertId()
+                }
+                val current = q.memberIds(id).executeAsList().toSet()
+                val target = members.map { it.value }.toSet()
+                var order = (q.maxGameOrder(id).executeAsOne().max_order ?: -1) + 1
+                for (g in members.map { it.value }) if (g !in current) { q.addGame(id, g, order++); changed = true }
+                for (g in current) if (g !in target) { q.removeGame(id, g); changed = true }
+            }
+            val keep = wanted.keys.map { it.lowercase() }.toSet()
+            for ((name, id) in existing) {
+                if (name !in keep) {
+                    q.delete(id)
+                    db.mediaQueries.deleteOwner(MediaOwner.OfCollection(CollectionId(id)).type(), id.toString())
+                    changed = true
+                }
+            }
+            changed
         }
     }
 

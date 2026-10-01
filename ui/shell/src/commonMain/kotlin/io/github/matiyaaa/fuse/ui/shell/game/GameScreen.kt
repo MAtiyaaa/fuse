@@ -28,7 +28,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -63,7 +62,6 @@ import io.github.matiyaaa.fuse.ui.designsystem.input.NavResult
 import io.github.matiyaaa.fuse.ui.designsystem.media.ArtSlot
 import io.github.matiyaaa.fuse.ui.designsystem.media.Artwork
 import io.github.matiyaaa.fuse.ui.designsystem.media.GeneratedArt
-import io.github.matiyaaa.fuse.ui.designsystem.media.HeroSource
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Aspect
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
@@ -75,7 +73,9 @@ import io.github.matiyaaa.fuse.ui.shell.app.Route
 import io.github.matiyaaa.fuse.ui.shell.app.collectionPicker
 import io.github.matiyaaa.fuse.ui.shell.app.emulatorPicker
 import io.github.matiyaaa.fuse.ui.shell.app.gameMenu
+import io.github.matiyaaa.fuse.ui.shell.app.gameRoom
 import io.github.matiyaaa.fuse.ui.shell.app.play
+import io.github.matiyaaa.fuse.ui.shell.app.rememberSystems
 import io.github.matiyaaa.fuse.ui.shell.components.agoText
 import io.github.matiyaaa.fuse.ui.shell.components.playtimeText
 import io.github.matiyaaa.fuse.ui.shell.store.GameCard
@@ -138,8 +138,10 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
     val row = rows.getOrNull(sel.row) ?: "actions"
     val col = sel.column(row)
 
-    LaunchedEffect(game.id) {
-        app.hero = HeroSource(game.id, d.art.hero ?: d.art.grid, accent, d.art.heroFocusX, d.art.heroFocusY, d.art.video)
+    val systems = rememberSystems(app)
+    val system = systems[d.platform.id]
+    LaunchedEffect(game.id, d.art, system?.art) {
+        app.hero = gameRoom(game.id, d.art, d.platform.accent, system)
     }
     LaunchedEffect(row, col) {
         app.hints = when (row) {
@@ -160,7 +162,7 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
                 when (row) {
                     "actions" -> actions.getOrNull(col)?.run?.invoke()
                     "discs" -> discs.getOrNull(col)?.let { disc ->
-                        app.scope.launch { app.store.library.launch(game.id, discPath = disc.path) }
+                        app.play(card, discPath = disc.path)
                     }
                     else -> Unit
                 }
@@ -201,6 +203,7 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
                     val meta = listOfNotNull(
                         game.metadata.releaseYear?.toString(),
                         game.metadata.developer,
+                        game.metadata.franchise?.takeIf { it.isNotBlank() && !game.displayTitle.startsWith(it, ignoreCase = true) }?.let { "$it series" },
                         game.metadata.genres.take(2).joinToString(", ").ifBlank { null },
                         game.metadata.players?.let { "$it players" },
                     )
@@ -235,7 +238,7 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
                     Spacer(Modifier.width(Space.xxl))
                     Tile(selected = false, showSpark = false, glow = accent, modifier = Modifier.width(200.dp).aspectRatio(Aspect.BOX)) {
                         Artwork(
-                            d.art.boxart ?: d.art.grid ?: d.art.icon, Modifier.fillMaxSize(),
+                            d.art.boxart ?: d.art.grid ?: d.art.square ?: d.art.icon, Modifier.fillMaxSize(),
                             fallback = { GeneratedArt(game.displayTitle, accent, slot = ArtSlot.BOX, label = d.platform.shortName) },
                         )
                     }
@@ -268,7 +271,7 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
                     Row(horizontalArrangement = Arrangement.spacedBy(Space.m)) {
                         discs.forEachIndexed { i, disc ->
                             FuseButton(disc.label, selected = row == "discs" && col == i, icon = FuseIcons.Disc, onClick = {
-                                app.scope.launch { app.store.library.launch(game.id, discPath = disc.path) }
+                                app.play(card, discPath = disc.path)
                             })
                         }
                     }
@@ -309,7 +312,8 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
                 }
             }
             ContentSection(d)
-            InfoSection(d)
+            val size by androidx.compose.runtime.produceState<Long?>(null, game.id) { value = app.store.storage.size(game.id) }
+            InfoSection(d, size)
             Spacer(Modifier.height(Size.hintHeight + Space.x4))
         }
     }
@@ -356,12 +360,14 @@ private fun ContentSection(d: GameDetail) {
 }
 
 @Composable
-private fun InfoSection(d: GameDetail) {
+private fun InfoSection(d: GameDetail, size: Long?) {
     val c = Fuse.colors
     val game = d.game
     Section("Details") {
         Column(verticalArrangement = Arrangement.spacedBy(Space.xs), modifier = Modifier.widthIn(max = 820.dp)) {
             Info("File", game.location.path)
+            // Every disc, track and folder file together, as Settings, Storage counts it.
+            size?.let { Info("Size", io.github.matiyaaa.fuse.ui.shell.home.bytesText(it)) }
             if (game.location.launchPath != game.location.path) Info("Launches", game.location.launchPath)
             Info("Read as", when (game.location.interpretation) {
                 io.github.matiyaaa.fuse.model.FolderInterpretation.SINGLE_FILE -> "A single file"

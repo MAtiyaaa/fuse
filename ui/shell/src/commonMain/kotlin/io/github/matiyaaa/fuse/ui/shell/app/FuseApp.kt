@@ -11,6 +11,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -21,22 +23,26 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import io.github.matiyaaa.fuse.ui.designsystem.components.ToastKind
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.draw.blur
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.unit.dp
 import io.github.matiyaaa.fuse.model.BackgroundStyle
 import io.github.matiyaaa.fuse.model.Destination
 import io.github.matiyaaa.fuse.model.GlyphStyle
 import io.github.matiyaaa.fuse.model.NavAction
 import io.github.matiyaaa.fuse.model.RenderQuality
+import io.github.matiyaaa.fuse.model.ScopedSettings
 import io.github.matiyaaa.fuse.ui.designsystem.background.AmbientBackground
 import io.github.matiyaaa.fuse.ui.designsystem.background.CrtOverlay
 import io.github.matiyaaa.fuse.ui.designsystem.components.HintBar
 import io.github.matiyaaa.fuse.ui.designsystem.components.ToastHost
+import io.github.matiyaaa.fuse.ui.designsystem.components.ToastKind
+import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
 import io.github.matiyaaa.fuse.ui.designsystem.input.InputFeedback
 import io.github.matiyaaa.fuse.ui.designsystem.input.InputLayer
 import io.github.matiyaaa.fuse.ui.designsystem.input.InputRouter
@@ -44,6 +50,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.input.InputSource
 import io.github.matiyaaa.fuse.ui.designsystem.input.LayerPriority
 import io.github.matiyaaa.fuse.ui.designsystem.input.LocalInputRouter
 import io.github.matiyaaa.fuse.ui.designsystem.input.NavResult
+import io.github.matiyaaa.fuse.ui.designsystem.input.TextInput
 import io.github.matiyaaa.fuse.ui.designsystem.media.HeroBackdrop
 import io.github.matiyaaa.fuse.ui.designsystem.sound.LocalUiSounds
 import io.github.matiyaaa.fuse.ui.designsystem.sound.SoundCue
@@ -52,18 +59,23 @@ import io.github.matiyaaa.fuse.ui.designsystem.theme.Easings
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.FuseTheme
 import io.github.matiyaaa.fuse.ui.designsystem.theme.GlyphConfig
+import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
 import io.github.matiyaaa.fuse.ui.designsystem.theme.ThemePresets
 import io.github.matiyaaa.fuse.ui.designsystem.theme.TileMetrics
 import io.github.matiyaaa.fuse.ui.shell.apps.AppsScreen
 import io.github.matiyaaa.fuse.ui.shell.cartridge.CartridgeScreen
+import io.github.matiyaaa.fuse.ui.shell.components.LocalTileBorders
 import io.github.matiyaaa.fuse.ui.shell.components.LocalTileMetrics
+import io.github.matiyaaa.fuse.ui.shell.components.PerformanceOverlay
+import io.github.matiyaaa.fuse.ui.shell.components.TileBorders
 import io.github.matiyaaa.fuse.ui.shell.game.FolderBrowserScreen
 import io.github.matiyaaa.fuse.ui.shell.game.GameScreen
 import io.github.matiyaaa.fuse.ui.shell.home.HomeScreen
 import io.github.matiyaaa.fuse.ui.shell.library.LibraryScope
 import io.github.matiyaaa.fuse.ui.shell.library.LibraryScreen
 import io.github.matiyaaa.fuse.ui.shell.media.MediaScreen
+import io.github.matiyaaa.fuse.ui.shell.music.BundledMusic
 import io.github.matiyaaa.fuse.ui.shell.onboarding.OnboardingScreen
 import io.github.matiyaaa.fuse.ui.shell.platform.MenuMusicPlayer
 import io.github.matiyaaa.fuse.ui.shell.platform.PlatformUi
@@ -72,32 +84,24 @@ import io.github.matiyaaa.fuse.ui.shell.search.SearchScreen
 import io.github.matiyaaa.fuse.ui.shell.settings.PlatformSettingsScreen
 import io.github.matiyaaa.fuse.ui.shell.settings.SettingsScreen
 import io.github.matiyaaa.fuse.ui.shell.store.FuseStore
+import io.github.matiyaaa.fuse.ui.shell.store.PhoneLinkControl
+import io.github.matiyaaa.fuse.ui.shell.store.UpdateState
 import io.github.matiyaaa.fuse.ui.shell.systems.SystemsScreen
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
-import io.github.matiyaaa.fuse.ui.shell.components.TileBorders
-import io.github.matiyaaa.fuse.ui.shell.components.LocalTileBorders
-import io.github.matiyaaa.fuse.ui.shell.components.PerformanceOverlay
-import io.github.matiyaaa.fuse.model.ScopedSettings
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
-import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
-import io.github.matiyaaa.fuse.ui.designsystem.input.TextInput
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Brush
 
 /**
  * The whole Fuse interface for one window. [router] is created by the host (Android activity or
  * desktop window) because that is where raw input arrives.
  */
 @Composable
-fun FuseApp(store: FuseStore, platform: PlatformUi, router: InputRouter) {
+fun FuseApp(store: FuseStore, platform: PlatformUi, router: InputRouter, phoneLink: PhoneLinkControl? = null) {
     val base = rememberCoroutineScope()
     val prefs by store.prefs.collectAsState()
     val app = remember {
@@ -108,7 +112,7 @@ fun FuseApp(store: FuseStore, platform: PlatformUi, router: InputRouter) {
                 state.toasts.show("Something went wrong (${t::class.simpleName ?: "error"}). Fuse kept running.", ToastKind.ERROR)
             },
         )
-        state = AppState(store, platform, scope, if (prefs.onboardingDone) Route.Root(Destination.HOME) else Route.Onboarding)
+        state = AppState(store, platform, scope, if (prefs.onboardingDone) Route.Root(Destination.HOME) else Route.Onboarding, phoneLink)
         state
     }
     val spec = ThemePresets.byId(prefs.themeId)
@@ -127,10 +131,13 @@ fun FuseApp(store: FuseStore, platform: PlatformUi, router: InputRouter) {
     DisposableEffect(router, keyboardTarget) {
         router.textInput = keyboardTarget?.let { target ->
             object : TextInput {
-                override fun type(text: String) = target.set(target.get() + text)
-                override fun backspace() = target.set(target.get().dropLast(1))
+                override fun type(text: String) = target.field.insert(text)
+                override fun backspace() = target.field.backspace()
                 override fun submit() = target.submit()
-                override fun paste() = app.pasteInto(target.get, target.set)
+                override fun paste() = app.pasteInto(target.field)
+                override fun deleteForward() = target.field.deleteForward()
+                override fun home() = target.field.setCaret(0)
+                override fun end() = target.field.setCaret(target.field.text.length)
             }
         }
         onDispose { router.textInput = null }
@@ -142,6 +149,8 @@ fun FuseApp(store: FuseStore, platform: PlatformUi, router: InputRouter) {
         platform.sounds.setVolume(prefs.soundVolume)
     }
     MenuMusic(app, platform.music)
+    FillFinishedToast(app)
+    io.github.matiyaaa.fuse.ui.shell.cartridge.UploadFinishedToasts(app)
     DisposableEffect(router) {
         router.feedback = InputFeedback { event, result ->
             when (result) {
@@ -154,6 +163,12 @@ fun FuseApp(store: FuseStore, platform: PlatformUi, router: InputRouter) {
                         },
                     )
                     if (!event.isRepeat) platform.haptics.tick()
+                    // The second screen slides the same way when what it shows changes.
+                    when (event.action) {
+                        NavAction.LEFT, NavAction.UP, NavAction.PAGE_UP -> Spotlight.moved(-1)
+                        NavAction.RIGHT, NavAction.DOWN, NavAction.PAGE_DOWN -> Spotlight.moved(1)
+                        else -> Unit
+                    }
                 }
                 NavResult.ACTIVATED -> { platform.sounds.play(SoundCue.SELECT); platform.haptics.confirm() }
                 NavResult.BLOCKED -> if (!event.isRepeat) { platform.sounds.play(SoundCue.BUMP); platform.haptics.reject() }
@@ -195,6 +210,7 @@ fun FuseApp(store: FuseStore, platform: PlatformUi, router: InputRouter) {
                             showBluetooth = prefs.showBluetooth,
                             onSelect = { app.focusZone = FocusZone.CONTENT; app.selectTab(it) },
                             onStatusClick = { app.quickMenuOpen = true },
+                            activities = hudActivities(app),
                         )
                     }
                     if (prefs.performanceOverlay) {
@@ -314,8 +330,11 @@ private fun Pages(app: AppState) {
                 }
                 is Route.PlatformGames -> LibraryScreen(app, LibraryScope.OfPlatform(route.platform))
                 is Route.CollectionGames -> LibraryScreen(app, LibraryScope.OfCollection(route.collection, route.name))
+                Route.Collections -> io.github.matiyaaa.fuse.ui.shell.collections.CollectionsScreen(app)
+                Route.Storage -> io.github.matiyaaa.fuse.ui.shell.settings.StorageScreen(app)
+                Route.PhoneLink -> io.github.matiyaaa.fuse.ui.shell.settings.PhoneLinkScreen(app)
                 is Route.GameInfo -> GameScreen(app, route.game)
-                is Route.Media -> MediaScreen(app, route.owner, route.title)
+                is Route.Media -> MediaScreen(app, route.owner, route.title, route.identify)
                 is Route.Settings -> SettingsScreen(app, route.section)
                 is Route.PlatformSettings -> PlatformSettingsScreen(app, route.platform)
                 Route.Search -> SearchScreen(app)
@@ -434,15 +453,90 @@ private fun rememberTileBorders(store: FuseStore): TileBorders {
     return flow.collectAsState(TileBorders()).value
 }
 
-/** The menu music follows its settings and steps aside while a game starts or runs. */
+/**
+ * The menu music follows its settings and steps aside while a game starts or runs. First-time setup
+ * plays its own song and crossfades into the menu song when it finishes.
+ */
 @Composable
 private fun MenuMusic(app: AppState, player: MenuMusicPlayer?) {
     player ?: return
     val prefs by app.store.prefs.collectAsState()
     val home by app.store.library.home.collectAsState()
     val music = prefs.music
-    LaunchedEffect(music.enabled, music.songPath) { player.setSong(music.songPath.takeIf { music.enabled }) }
+    val setup = app.navigator.current == Route.Onboarding
+    val track = when {
+        !music.enabled -> null
+        setup -> BundledMusic.ONBOARDING
+        else -> music.track
+    }
+    // The previous song keeps playing until the next one is ready, so the player can crossfade.
+    var song by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(track, music.songPath) {
+        song = when (track) {
+            null -> null
+            BundledMusic.OWN_SONG -> music.songPath
+            else -> app.store.bundledTrack(track)
+        }
+    }
+    LaunchedEffect(song) { player.setSong(song) }
     LaunchedEffect(music.volume) { player.setVolume(music.volume) }
     val quiet = app.launching != null || home.playtime.currentGame != null
     LaunchedEffect(quiet) { player.setPlaying(!quiet) }
+}
+
+/** What is working in the background, for the top line: Cartridge downloads and Fuse updates. */
+/** Says once when a fill that ran for more than one game finishes, unless its Settings page is open. */
+@Composable
+private fun FillFinishedToast(app: AppState) {
+    val fill by app.store.media.fillProgress.collectAsState()
+    var running by remember { mutableStateOf(false) }
+    LaunchedEffect(fill) {
+        val f = fill ?: return@LaunchedEffect
+        if (!f.finished) {
+            running = f.total > 1
+            return@LaunchedEffect
+        }
+        if (!running) return@LaunchedEffect
+        running = false
+        if (f.cancelled || (app.navigator.current as? Route.Settings)?.section == "media") return@LaunchedEffect
+        // Fuse's own fills speak up only when they found something.
+        if (f.automatic && f.added == 0 && f.details == 0) return@LaunchedEffect
+        val needs = f.needsYou.size.takeIf { it > 0 }?.let { " $it need you in Settings, Media and Scraping." } ?: ""
+        val lead = if (f.automatic) "Found art for your games" else "Fill finished"
+        app.toasts.show("$lead. ${io.github.matiyaaa.fuse.ui.shell.settings.fillSummary(f)}.$needs")
+    }
+}
+
+@Composable
+private fun hudActivities(app: AppState): List<HudActivity> {
+    val update by app.store.updates.state.collectAsState()
+    val available by app.store.updates.available.collectAsState()
+    val cartridge by app.store.cartridge.status.collectAsState()
+    val fill by app.store.media.fillProgress.collectAsState()
+    return buildList {
+        fill?.takeIf { !it.finished }?.let { f ->
+            add(HudActivity(
+                "fill", FuseIcons.Wand, "${if (f.automatic) "Finding art" else "Filling art and details"}: ${f.done} of ${f.total}",
+                progress = f.fraction.takeIf { f.total > 0 },
+            ) { app.go(Route.Settings("media")) })
+        }
+        cartridge.uploads.firstOrNull { it.active }?.let { u ->
+            add(HudActivity(
+                "upload", FuseIcons.Upload, "Uploading ${u.title} to RomM",
+                progress = u.progress.takeIf { u.state == io.github.matiyaaa.fuse.model.UploadState.UPLOADING },
+            ) { app.selectTab(io.github.matiyaaa.fuse.model.Destination.CARTRIDGE) })
+        }
+        if (cartridge.installed && (cartridge.activeDownloads > 0 || cartridge.queue.any { it.state == io.github.matiyaaa.fuse.model.QueueState.DOWNLOADING })) {
+            val current = cartridge.queue.firstOrNull { it.state == io.github.matiyaaa.fuse.model.QueueState.DOWNLOADING }
+            add(HudActivity(
+                "cartridge", FuseIcons.CloudDownload, "Cartridge is downloading ${current?.title ?: cartridge.currentTitle ?: "a game"}",
+                progress = current?.progress ?: cartridge.progress,
+            ) { app.selectTab(io.github.matiyaaa.fuse.model.Destination.CARTRIDGE) })
+        }
+        when (val u = update) {
+            is UpdateState.Downloading -> add(HudActivity("update", FuseIcons.Download, "Downloading ${u.release.name}", progress = u.progress) { app.go(Route.Settings("updates")) })
+            is UpdateState.Ready -> add(HudActivity("update", FuseIcons.Refresh, "${u.release.name} is ready: restart to update", attention = true) { app.go(Route.Settings("updates")) })
+            else -> if (available != null) add(HudActivity("update", FuseIcons.Download, "${available?.name} is available", attention = true) { app.go(Route.Settings("updates")) })
+        }
+    }
 }

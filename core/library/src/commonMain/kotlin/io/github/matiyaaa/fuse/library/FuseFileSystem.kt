@@ -66,6 +66,14 @@ interface FuseFileSystem {
      */
     suspend fun canonical(path: String): String?
 
+    /**
+     * Deletes the file at [path], or the folder with everything in it (links are removed, never
+     * followed). Only for the user's explicit "delete these games" in Settings, Storage; scanning
+     * never writes. Returns false when it could not (no permission, read-only storage); a path that
+     * is already gone counts as deleted.
+     */
+    suspend fun delete(path: String): Boolean = false
+
     /** Joins [parent] and [child] with a single "/". */
     fun join(parent: String, child: String): String = FsPath.join(parent, child)
 

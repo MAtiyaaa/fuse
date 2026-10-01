@@ -6,8 +6,10 @@ import io.github.matiyaaa.fuse.integrations.github.ReleasePlatform
 import io.github.matiyaaa.fuse.launch.ResolvedLaunch
 import io.github.matiyaaa.fuse.library.FuseFileSystem
 import io.github.matiyaaa.fuse.model.AppEntry
+import io.github.matiyaaa.fuse.model.CartridgeGame
 import io.github.matiyaaa.fuse.model.CartridgeRoute
 import io.github.matiyaaa.fuse.model.CartridgeStatus
+import io.github.matiyaaa.fuse.model.CartridgeUpload
 import io.github.matiyaaa.fuse.model.Host
 import io.github.matiyaaa.fuse.model.InstalledEmulator
 import io.github.matiyaaa.fuse.model.LibrarySourceKind
@@ -57,6 +59,13 @@ interface FuseServices {
      * its absolute path, or null when it could not be written. [relativePath] never leaves the cache.
      */
     fun writeCacheFile(relativePath: String, content: String): String?
+
+    /**
+     * The file at [relativePath] below [cacheDir], written from [content] when it isn't there yet
+     * (for example a bundled song unpacked once). Writes are atomic, so a file that exists is
+     * complete. Null when it could not be written or this platform has no files.
+     */
+    suspend fun cacheFile(relativePath: String, content: suspend () -> ByteArray): String? = null
 
     /** Offset of local time from UTC right now, for "today" and "this week" playtime buckets. */
     fun utcOffsetMillis(): Long
@@ -126,8 +135,21 @@ interface CartridgeBridge {
     /** Current status. Cheap enough to call on every resume. Never throws. */
     suspend fun read(): CartridgeStatus
 
+    /**
+     * The games Cartridge downloaded, with RomM's details (bridge protocol 2); null when this
+     * Cartridge doesn't offer them. Read only when [CartridgeStatus.gamesRevision] or the library
+     * changed, since it can be large.
+     */
+    suspend fun games(): List<CartridgeGame>? = null
+
     /** Opens [route] in Cartridge ([link] is the built `cartridge://` URL). False when nothing handled it. */
     fun open(route: CartridgeRoute, link: String): Boolean
+
+    /**
+     * Hands [upload] to Cartridge (bridge protocol 3), which shows the files and uploads them to RomM
+     * once the user confirms there. False when nothing handled it.
+     */
+    suspend fun upload(upload: CartridgeUpload): Boolean = false
 
     /** Calls [onChange] when Cartridge reports a change (Android ContentObserver, Linux file watch). */
     fun watch(onChange: () -> Unit): AutoCloseable? = null
@@ -143,6 +165,19 @@ interface ReleaseInstaller {
      * marks it executable (Linux). [onProgress] gets 0..1.
      */
     suspend fun install(asset: ReleaseAsset, onProgress: (Float) -> Unit = {}): Result<Unit>
+
+    /**
+     * The first half of a Fuse update: downloads and verifies [asset] and keeps it ready. Returns a
+     * handle for [applyUpdate] (the downloaded file). Nothing is installed yet.
+     */
+    suspend fun download(asset: ReleaseAsset, onProgress: (Float) -> Unit = {}): Result<String> =
+        install(asset, onProgress).map { "" }
+
+    /**
+     * Installs what [download] prepared. Returns true when Fuse must restart itself into it (Linux);
+     * false when the system takes over (Android asks to confirm and restarts Fuse).
+     */
+    suspend fun applyUpdate(downloaded: String): Result<Boolean> = Result.success(false)
 }
 
 /** Launchable apps (Android launcher apps; Linux `.desktop` applications). */
@@ -153,7 +188,8 @@ interface AppsProvider {
     /** Image model for the app's icon (an [AppIconModel] the platform's image loader understands). */
     fun iconModel(entry: AppEntry): Any?
     fun refresh()
-    suspend fun launch(entry: AppEntry): RunResult
+    /** Opens [entry], on the display with [displayId] when given (the device's second screen). */
+    suspend fun launch(entry: AppEntry, displayId: Int? = null): RunResult
     fun openInfo(entry: AppEntry)
 }
 

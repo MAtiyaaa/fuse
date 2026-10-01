@@ -3,24 +3,31 @@ package io.github.matiyaaa.fuse.ui.shell.settings
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import io.github.matiyaaa.fuse.integrations.KeyCheck
+import io.github.matiyaaa.fuse.integrations.systemart.SystemArtPack
+import io.github.matiyaaa.fuse.integrations.systemart.SystemArtStyle
+import io.github.matiyaaa.fuse.model.CartridgeRoute
 import io.github.matiyaaa.fuse.model.Destination
 import io.github.matiyaaa.fuse.model.DualScreenMode
 import io.github.matiyaaa.fuse.model.GlyphStyle
 import io.github.matiyaaa.fuse.model.HomeMode
+import io.github.matiyaaa.fuse.model.LaunchDisplay
 import io.github.matiyaaa.fuse.model.LibraryLayout
 import io.github.matiyaaa.fuse.model.MatchStrictness
 import io.github.matiyaaa.fuse.model.MediaFillMode
 import io.github.matiyaaa.fuse.model.MediaKind
+import io.github.matiyaaa.fuse.model.MediaOwner
 import io.github.matiyaaa.fuse.model.MotionProfile
 import io.github.matiyaaa.fuse.model.PerformanceProfile
 import io.github.matiyaaa.fuse.model.ScanScope
+import io.github.matiyaaa.fuse.model.ScopeRef
+import io.github.matiyaaa.fuse.model.ScopedSettings
 import io.github.matiyaaa.fuse.model.SoundProfile
 import io.github.matiyaaa.fuse.model.Support
 import io.github.matiyaaa.fuse.model.WidgetKind
-import io.github.matiyaaa.fuse.model.CartridgeRoute
-import io.github.matiyaaa.fuse.integrations.KeyCheck
-import io.github.matiyaaa.fuse.integrations.systemart.SystemArtPack
-import io.github.matiyaaa.fuse.integrations.systemart.SystemArtStyle
 import io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction
 import io.github.matiyaaa.fuse.ui.designsystem.components.Trailing
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
@@ -29,16 +36,20 @@ import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec
 import io.github.matiyaaa.fuse.ui.shell.app.ConfirmSpec
 import io.github.matiyaaa.fuse.ui.shell.app.Route
+import io.github.matiyaaa.fuse.ui.shell.app.applyUpdate
+import io.github.matiyaaa.fuse.ui.shell.app.hasTwoScreens
 import io.github.matiyaaa.fuse.ui.shell.app.label
+import io.github.matiyaaa.fuse.ui.shell.app.screenName
 import io.github.matiyaaa.fuse.ui.shell.home.title
+import io.github.matiyaaa.fuse.ui.shell.music.BundledMusic
 import io.github.matiyaaa.fuse.ui.shell.platform.StorageState
-import kotlinx.coroutines.launch
-import androidx.compose.runtime.setValue
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.mutableStateOf
-import io.github.matiyaaa.fuse.ui.shell.platform.WindowStyle
 import io.github.matiyaaa.fuse.ui.shell.platform.WindowControls
+import io.github.matiyaaa.fuse.ui.shell.platform.WindowStyle
+import io.github.matiyaaa.fuse.ui.shell.store.FillChoice
+import io.github.matiyaaa.fuse.ui.shell.store.FillProgress
 import io.github.matiyaaa.fuse.ui.shell.store.MusicPrefs
+import io.github.matiyaaa.fuse.ui.shell.store.UpdateState
+import kotlinx.coroutines.launch
 
 private fun motionName(m: MotionProfile?) = when (m) {
     null -> "Theme default"
@@ -49,7 +60,7 @@ private fun motionName(m: MotionProfile?) = when (m) {
 }
 
 private fun layoutName(l: LibraryLayout) = when (l) {
-    LibraryLayout.ICON -> "Icons"
+    LibraryLayout.ICON -> "Box art"
     LibraryLayout.CAPSULE -> "Capsules"
     LibraryLayout.COVER_GRID -> "Cover grid"
     LibraryLayout.COMPACT_LIST -> "List"
@@ -107,7 +118,7 @@ fun homeRows(app: AppState): List<MenuAction> {
         add(app.choiceRow("mode", "Home style", FuseIcons.Dashboard, p.home.mode, listOf(HomeMode.FLOW to "Flow", HomeMode.CHANNELS to "Channels"), optionDetail = {
             if (it == HomeMode.FLOW) "A continuous dashboard of shelves" else "A board of tiles you arrange yourself"
         }) { v -> set { it.copy(home = it.home.copy(mode = v)) } })
-        for (d in Destination.entries.filter { it != Destination.HOME }) {
+        for (d in Destination.entries.filter { it != Destination.HOME && (it != Destination.CARTRIDGE || p.cartridgeEnabled) }) {
             val visible = d in p.destinations
             add(toggleRow("dest.$d", "${d.label()} in the top bar", FuseIcons.PanelsTop, visible) { v ->
                 set { it.copy(destinations = if (v) (it.destinations + d).sortedBy { x -> Destination.entries.indexOf(x) } else it.destinations - d) }
@@ -203,6 +214,42 @@ fun libraryRows(app: AppState): List<MenuAction> {
         })
         add(MenuAction("bios", "Check BIOS again", FuseIcons.Key, onSelect = { app.store.sources.refreshBios(); app.toasts.show("Checking BIOS files") }))
         add(app.choiceRow("layout", "Default view", FuseIcons.Grid, p.defaultLayout, LibraryLayout.entries.map { it to layoutName(it) }) { v -> app.store.updatePrefs { it.copy(defaultLayout = v) } })
+        add(app.choiceRow(
+            "select", "Selecting a game", FuseIcons.Play, p.openGamePage,
+            listOf(false to "Plays it", true to "Opens its page"),
+            detail = "What confirm (or a tap on a selected game) does. Play is always on the game's page",
+        ) { v -> app.store.updatePrefs { it.copy(openGamePage = v) } })
+        add(toggleRow("collections", "Collections", FuseIcons.LibraryBig, p.collectionsEnabled, "Your own collections and the series Fuse finds. Off hides them everywhere; nothing is deleted") { v ->
+            app.store.updatePrefs { it.copy(collectionsEnabled = v) }
+        })
+        add(toggleRow(
+            "series", "Automatic series", FuseIcons.Sparkles, p.autoSeries,
+            "A collection for each series, like Super Mario, from game details and shared titles. Kept up to date",
+            enabled = p.collectionsEnabled,
+        ) { v -> app.store.updatePrefs { it.copy(autoSeries = v) } })
+        if (p.hiddenSeries.isNotEmpty() && p.collectionsEnabled) {
+            add(MenuAction(
+                "series.hidden", "Hidden series", FuseIcons.EyeOff,
+                detail = "Series you hid or kept as your own. Bring one back to let Fuse make it again",
+                trailing = Trailing.Value(p.hiddenSeries.size.toString()),
+                onSelect = {
+                    app.choice = ChoiceSpec(
+                        title = "Hidden series",
+                        message = "Fuse makes these again when you bring them back.",
+                        options = p.hiddenSeries.sorted().map { name ->
+                            MenuAction("s.$name", name.replaceFirstChar { it.uppercase() }, FuseIcons.Eye, detail = "Bring back", onSelect = {
+                                app.store.updatePrefs { it.copy(hiddenSeries = it.hiddenSeries - name) }
+                                app.choice = null
+                                app.toasts.show("Fuse will make this series again")
+                            })
+                        } + MenuAction("all", "Bring all back", FuseIcons.Refresh, onSelect = {
+                            app.store.updatePrefs { it.copy(hiddenSeries = emptyList()) }
+                            app.choice = null
+                        }),
+                    )
+                },
+            ))
+        }
         add(MenuAction(
             "clean", "Clean display names", FuseIcons.Wand,
             detail = "Hides tags like (USA) and [!] in titles. Files are never renamed",
@@ -325,6 +372,7 @@ fun mediaRows(app: AppState): List<MenuAction> {
     val providers by app.store.media.providers.collectAsState()
     val checks by app.store.media.keyChecks.collectAsState()
     val stored by app.store.credentials.stored.collectAsState()
+    val fill by app.store.media.fillProgress.collectAsState()
     val set = app.store::updatePrefs
     fun secretRow(key: String, label: String, detail: String) = app.textRow(
         "key.$key", label, FuseIcons.Key, if (key in stored) "Saved" else null, detail = detail, placeholder = "Paste or type",
@@ -393,17 +441,81 @@ fun mediaRows(app: AppState): List<MenuAction> {
                 }
             } else set { it.copy(matching = v) }
         })
-        add(MenuAction("fill", "Fill missing art", FuseIcons.Wand, detail = "Every game without an icon, cover, background or logo. Custom art is never replaced", onSelect = {
-            app.store.media.fill(MediaFillMode.FILL_MISSING, setOf(MediaKind.ICON, MediaKind.BOXART, MediaKind.HERO, MediaKind.LOGO, MediaKind.GRID))
-            app.toasts.show("Looking for missing art in the background")
+        add(toggleRow(
+            "fill.auto", "Find art by itself", FuseIcons.ScanSearch, p.autoFillArt,
+            "After a scan or a new key, games missing art or details get them. When a source runs out of requests, the others take over",
+        ) { v -> set { it.copy(autoFillArt = v) } })
+        addAll(fillRows(app, fill))
+        add(MenuAction("fill", "Fill missing art", FuseIcons.Wand, detail = "Box art, icons, covers, banners, backgrounds, logos and screenshots for games without them. Custom art is never replaced", onSelect = {
+            app.store.media.fill(MediaFillMode.FILL_MISSING, MediaKind.Fillable)
+            app.toasts.show("Looking for missing art. Progress shows here and in the top bar")
+        }))
+        add(MenuAction("fill.all", "Fill everything", FuseIcons.Sparkles, detail = "Every kind of art, screenshots and details (description, year, genres, series, rating) for every game, plus system art. Nothing you chose or edited is replaced", onSelect = {
+            app.store.media.fillEverything()
+            app.toasts.show("Filling art and details. Progress shows here and in the top bar")
         }))
         add(app.confirmRow("replace", "Replace all scraped art", FuseIcons.RotateCcw, "Replace scraped art?", "Fuse fetches art again for every game and replaces art it scraped before. Art you chose yourself stays.", "Replace") {
-            app.store.media.fill(MediaFillMode.REPLACE_ALL, setOf(MediaKind.ICON, MediaKind.BOXART, MediaKind.HERO, MediaKind.LOGO, MediaKind.GRID))
+            app.store.media.fill(MediaFillMode.REPLACE_ALL, MediaKind.Fillable)
         })
         add(toggleRow("video", "Video previews", FuseIcons.Film, p.videoPreview, if (app.platform.features.videoPreview) "After resting on a game, its art turns into a muted gameplay clip" else "Not available on this system yet", enabled = app.platform.features.videoPreview) { v -> set { it.copy(videoPreview = v) } })
         add(app.choiceRow("video.delay", "Preview delay", FuseIcons.Timer, p.videoDelaySeconds, listOf(5, 10, 15, 20, 30).map { it to "$it seconds" }) { v -> set { it.copy(videoDelaySeconds = v) } })
     }
 }
+
+/** The running or last fill: live progress (select to stop), then what it did and the games that need a choice. */
+fun fillRows(app: AppState, fill: FillProgress?): List<MenuAction> {
+    val f = fill ?: return emptyList()
+    return buildList {
+        if (!f.finished) {
+            add(MenuAction(
+                "fill.progress", if (f.automatic) "Finding art for your games" else "Filling art and details", FuseIcons.Wand,
+                detail = listOfNotNull(f.current, "${f.added} ${if (f.added == 1) "image" else "images"} added", pausedNote(f), "Select to stop").joinToString("  ·  "),
+                trailing = Trailing.Progress(f.fraction.takeIf { f.total > 0 }, "${f.done} of ${f.total}"),
+                onSelect = { app.store.media.cancelFill() },
+            ))
+        } else {
+            add(infoRow(
+                "fill.result", if (f.cancelled) "Fill stopped" else "Fill finished",
+                "${f.done} of ${f.total}",
+                detail = fillSummary(f),
+                icon = if (f.cancelled) FuseIcons.CircleX else FuseIcons.CircleCheck,
+            ))
+        }
+        if (f.needsYou.isNotEmpty()) add(needsYouRow(app, f.needsYou))
+    }
+}
+
+/** Which sources are resting while the fill carries on with the others, or null. */
+fun pausedNote(f: FillProgress): String? = f.paused.takeIf { it.isNotEmpty() }?.let { names ->
+    "${names.joinToString(" and ")} ${if (names.size == 1) "is" else "are"} out of requests for now, using the others"
+}
+
+/** "40 images added, details for 12 games" (or that nothing new was found). */
+fun fillSummary(f: FillProgress): String {
+    val parts = listOfNotNull(
+        f.added.takeIf { it > 0 }?.let { "$it ${if (it == 1) "image" else "images"} added" },
+        f.details.takeIf { it > 0 }?.let { "details for $it ${if (it == 1) "game" else "games"}" },
+    )
+    return if (parts.isEmpty()) "Nothing new was found" else parts.joinToString(", ").replaceFirstChar { it.uppercase() }
+}
+
+private fun needsYouRow(app: AppState, games: List<FillChoice>): MenuAction = MenuAction(
+    "fill.needs", "${games.size} ${if (games.size == 1) "game needs" else "games need"} you", FuseIcons.FileQuestion,
+    detail = "Several close matches. Pick the right game in Identify game",
+    trailing = Trailing.Badge(games.size.toString()),
+    onSelect = {
+        app.choice = ChoiceSpec(
+            title = "Pick the right game",
+            message = "Fuse found several close matches for these. Choose one to see them all.",
+            options = games.take(60).map { g ->
+                MenuAction("needs.${g.game.value}", g.title, FuseIcons.Gamepad, trailing = Trailing.Chevron, onSelect = {
+                    app.choice = null
+                    app.go(Route.Media(MediaOwner.OfGame(g.game), g.title, identify = true))
+                })
+            },
+        )
+    },
+)
 
 @Composable
 fun achievementRows(app: AppState): List<MenuAction> {
@@ -439,14 +551,25 @@ fun cartridgeRows(app: AppState): List<MenuAction> {
     val s by app.store.cartridge.status.collectAsState()
     val p by app.store.prefs.collectAsState()
     return buildList {
+        add(toggleRow(
+            "enabled", "Cartridge support", FuseIcons.Plug, p.cartridgeEnabled,
+            if (p.cartridgeEnabled) "The Cartridge tab, downloads, menu entries and status" else "Off: Fuse leaves Cartridge alone",
+        ) { v -> app.store.updatePrefs { it.copy(cartridgeEnabled = v) } })
+        if (!p.cartridgeEnabled) return@buildList
         add(infoRow("status", "Cartridge", if (!s.installed) "Not installed" else s.version ?: "Installed", icon = FuseIcons.CloudDownload,
             detail = when {
                 !s.installed -> "Install it from the Cartridge tab"
                 !s.bridge -> "Update to 0.9.10 or newer for direct links and live status"
+                s.protocol >= 2 -> "Linked. Downloads, each game's progress and RomM's details appear in Fuse"
                 else -> "Linked. Downloads appear in Fuse automatically"
             }))
         if (s.installed) add(MenuAction("open", "Open Cartridge", FuseIcons.External, onSelect = { app.store.cartridge.open(CartridgeRoute.Home) }))
         add(toggleRow("auto", "Pick up new downloads on return", FuseIcons.Refresh, p.autoRefreshFromCartridge, "Rescans the folders Cartridge saved to when you come back") { v -> app.store.updatePrefs { it.copy(autoRefreshFromCartridge = v) } })
+        add(toggleRow(
+            "romm", "Details and art from RomM", FuseIcons.Database, p.cartridgeRommDetails,
+            if (s.installed && s.bridge && s.protocol < 2) "Needs a newer Cartridge. Games it downloaded then get RomM's description, genres, series, cover and logo"
+            else "Games Cartridge downloaded get RomM's description, genres, series, cover and logo. Your own edits and picks stay",
+        ) { v -> app.store.updatePrefs { it.copy(cartridgeRommDetails = v) } })
     }
 }
 
@@ -460,39 +583,58 @@ fun soundRows(app: AppState): List<MenuAction> {
         if (app.platform.music == null) {
             add(infoRow("music", "Menu music", "Not available", icon = FuseIcons.Music, detail = "This device can't play music in Fuse"))
         } else {
-            add(toggleRow("music", "Menu music", FuseIcons.Music, music.enabled, if (music.songPath == null) "Choose a song below. Fuse comes without one" else "Plays in Fuse's menus and stops for games") { v -> setMusic { it.copy(enabled = v) } })
+            add(toggleRow("music", "Menu music", FuseIcons.Music, music.enabled, "Plays in Fuse's menus and stops for games") { v -> setMusic { it.copy(enabled = v) } })
             add(app.percentRow("musicvolume", "Music volume", FuseIcons.Volume, music.volume, "Low sits nicely under the interface") { v -> setMusic { it.copy(volume = v) } })
-            add(
-                MenuAction(
-                    "song", "Song", FuseIcons.Disc,
-                    detail = "An audio file on this device, such as MP3. Fuse keeps its own copy",
-                    trailing = Trailing.Value(music.songName ?: "None"),
-                    onSelect = {
-                        app.choice = ChoiceSpec(
-                            title = "Menu music",
-                            message = music.songName?.let { "Now playing: $it" } ?: "Pick a song from this device. It loops quietly in Fuse's menus.",
-                            options = listOfNotNull(
-                                MenuAction("pick", "Choose a file", FuseIcons.FolderOpen, detail = "MP3 works everywhere", onSelect = {
-                                    app.choice = null
-                                    app.scope.launch {
-                                        val picked = app.platform.storage.pickAudio("Choose menu music") ?: return@launch
-                                        setMusic { it.copy(enabled = true, songPath = picked.path, songName = picked.name) }
-                                        app.toasts.show("Menu music: ${picked.name}")
-                                    }
-                                }),
-                                if (music.songPath != null) MenuAction("none", "No song", FuseIcons.VolumeOff, onSelect = {
-                                    app.choice = null
-                                    setMusic { it.copy(songPath = null, songName = null) }
-                                }) else null,
-                            ),
-                        )
-                    },
-                ),
-            )
+            add(songRow(app, music, ::setMusic))
+            add(infoRow("credit", "Music by ${BundledMusic.ARTIST}", detail = "Fuse's songs are from the album ${BundledMusic.ALBUM}. First-time setup plays ${BundledMusic.byId(BundledMusic.ONBOARDING)?.title}", icon = FuseIcons.Heart))
         }
         add(app.choiceRow("sound", "Interface sounds", FuseIcons.Bell, p.sound, listOf(SoundProfile.OFF to "Off", SoundProfile.SOFT to "Soft", SoundProfile.CLICK to "Crisp", SoundProfile.CHIME to "Chime")) { v -> app.store.updatePrefs { it.copy(sound = v) } })
         add(app.percentRow("volume", "Sound effects volume", FuseIcons.Volume, p.soundVolume, "Moving, confirming and going back") { v -> app.store.updatePrefs { it.copy(soundVolume = v) } })
     }
+}
+
+/** The menu song: one of the album's songs, or the user's own. Picking one plays it straight away. */
+private fun songRow(app: AppState, music: MusicPrefs, setMusic: ((MusicPrefs) -> MusicPrefs) -> Unit): MenuAction {
+    val own = music.track == BundledMusic.OWN_SONG
+    val current = if (own) music.songName ?: "Your song" else BundledMusic.byId(music.track)?.title ?: "None"
+    fun pickFile() {
+        app.choice = null
+        app.scope.launch {
+            val picked = app.platform.storage.pickAudio("Choose menu music") ?: return@launch
+            setMusic { it.copy(enabled = true, songPath = picked.path, songName = picked.name, track = BundledMusic.OWN_SONG) }
+            app.toasts.show("Menu music: ${picked.name}")
+        }
+    }
+    return MenuAction(
+        "song", "Song", FuseIcons.Disc,
+        detail = if (own) "Your own song. Fuse keeps its own copy" else "${BundledMusic.ARTIST}, ${BundledMusic.ALBUM}",
+        trailing = Trailing.Value(current),
+        onSelect = {
+            app.choice = ChoiceSpec(
+                title = "Menu music",
+                message = "${BundledMusic.CREDIT}, or a song of your own. The song you pick plays straight away.",
+                options = BundledMusic.tracks.map { t ->
+                    MenuAction(
+                        "t.${t.id}", t.title, FuseIcons.Music,
+                        detail = if (t.id == BundledMusic.MENU_DEFAULT) "Fuse's default" else null,
+                        trailing = Trailing.Check(!own && music.track == t.id),
+                        onSelect = {
+                            app.choice = null
+                            setMusic { it.copy(enabled = true, track = t.id) }
+                        },
+                    )
+                } + listOfNotNull(
+                    music.songPath?.let { path ->
+                        MenuAction("own", music.songName ?: "Your song", FuseIcons.FolderOpen, detail = "Your own song", trailing = Trailing.Check(own), onSelect = {
+                            app.choice = null
+                            setMusic { it.copy(enabled = true, track = BundledMusic.OWN_SONG, songPath = path) }
+                        })
+                    },
+                    MenuAction("pick", if (music.songPath == null) "Choose your own song" else "Choose another song", FuseIcons.Upload, detail = "An audio file on this device. MP3 works everywhere", onSelect = ::pickFile),
+                ),
+            )
+        },
+    )
 }
 
 @Composable
@@ -540,7 +682,11 @@ fun displayRows(app: AppState): List<MenuAction> {
         }
         add(app.choiceRow(
             "mode", "Second screen", FuseIcons.DualScreen, d.mode,
-            listOf(DualScreenMode.OFF to "Off", DualScreenMode.LIBRARY_COMPANION to "Show the selected game", DualScreenMode.GAME_COMPANION to "Companion while playing", DualScreenMode.REVERSE to "Play on the second screen"),
+            // Playing on the second screen is now "Games open on"; the old choice stays listed only while it's set.
+            listOfNotNull(
+                DualScreenMode.OFF to "Off", DualScreenMode.LIBRARY_COMPANION to "Show the selected game", DualScreenMode.GAME_COMPANION to "Companion while playing",
+                (DualScreenMode.REVERSE to "Play on the second screen").takeIf { d.mode == DualScreenMode.REVERSE },
+            ),
             optionDetail = {
                 when (it) {
                     DualScreenMode.OFF -> "Leave the second screen alone"
@@ -550,6 +696,19 @@ fun displayRows(app: AppState): List<MenuAction> {
                 }
             },
         ) { v -> app.store.updatePrefs { it.copy(display = it.display.copy(mode = v)) } })
+        if (app.hasTwoScreens) {
+            val games by remember { app.store.settings.observe(ScopedSettings.LaunchScreen, null, null) }.collectAsState(null)
+            val screens = LaunchDisplay.entries.map { it to screenName(it) }
+            add(app.choiceRow(
+                "games.screen", "Games open on", FuseIcons.PanelTop, games?.value ?: LaunchDisplay.ASK, screens,
+                detail = "A game or system can have its own: game options, Screen, or the system's settings",
+                optionDetail = { if (it == LaunchDisplay.ASK) "Pick when a game starts, and remember it for the game or its system if you like" else null },
+            ) { v -> app.scope.launch { app.store.settings.set(ScopedSettings.LaunchScreen, ScopeRef.Global, v) } })
+            add(app.choiceRow(
+                "apps.screen", "Apps open on", FuseIcons.Smartphone, d.appScreen, screens,
+                detail = if (d.appScreens.isEmpty()) "An app can have its own: app options, Screen" else "${d.appScreens.size} ${if (d.appScreens.size == 1) "app has" else "apps have"} a screen of their own",
+            ) { v -> app.store.updatePrefs { it.copy(display = it.display.copy(appScreen = v)) } })
+        }
         if (app.platform.features.secondScreen) {
             add(infoRow(
                 "dual", "Games with two screens", icon = FuseIcons.DualScreen,
@@ -625,7 +784,13 @@ fun storageRows(app: AppState): List<MenuAction> {
             trailing = Trailing.Value(if (storage == StorageState.GRANTED || storage == StorageState.NOT_NEEDED) "Allowed" else "Allow"),
             onSelect = { app.platform.storage.request() },
         ))
-        add(infoRow("readonly", "Fuse never changes your games", detail = "It only reads your folders. Nothing is moved, renamed or deleted, and playlists for multi-disc games are made in Fuse's own storage", icon = FuseIcons.ShieldCheck))
+        add(MenuAction(
+            "space", "Games and space", FuseIcons.HardDrive,
+            detail = "What each game takes on each drive, and deleting games you're done with",
+            trailing = Trailing.Chevron,
+            onSelect = { app.go(Route.Storage) },
+        ))
+        add(infoRow("readonly", "Fuse only changes your games when you ask", detail = "It reads your folders. Files are only deleted when you delete games in Games and space, after you confirm. Playlists for multi-disc games are made in Fuse's own storage", icon = FuseIcons.ShieldCheck))
     }
 }
 
@@ -646,13 +811,40 @@ fun privacyRows(app: AppState): List<MenuAction> = listOf(
 fun updateRows(app: AppState): List<MenuAction> {
     val p by app.store.prefs.collectAsState()
     val available by app.store.updates.available.collectAsState()
+    val state by app.store.updates.state.collectAsState()
     return buildList {
         add(infoRow("version", "Fuse", app.store.updates.currentVersion, icon = FuseIcons.Info))
-        if (available != null) {
-            val r = available!!
-            add(app.confirmRow("install", "Install ${r.name}", FuseIcons.Download, "Install ${r.name}?", "Fuse downloads the release from GitHub, checks its checksum, and hands it to your system's installer.", "Download") {
-                app.scope.launch { app.store.updates.install(r).onFailure { app.toasts.show(it.message ?: "Update failed") } }
-            })
+        val r = available
+        if (r != null) {
+            val size = GitHubReleasesSize.of(r, app)
+            when (val st = state) {
+                is UpdateState.Downloading -> add(MenuAction(
+                    "download", "Downloading ${r.name}", FuseIcons.Download,
+                    detail = "You can keep using Fuse. Select to stop",
+                    trailing = Trailing.Value(st.progress?.let { "${(it * 100).toInt()}%" } ?: "Starting"),
+                    onSelect = { app.store.updates.cancelDownload() },
+                ))
+                is UpdateState.Ready, is UpdateState.Installing -> add(MenuAction(
+                    "apply", "Restart and update", FuseIcons.Refresh,
+                    detail = if (app.platform.host == io.github.matiyaaa.fuse.model.Host.ANDROID) "Android asks you to confirm, then Fuse starts again in ${r.name}" else "Fuse closes and starts again in ${r.name}",
+                    trailing = Trailing.Value(if (st is UpdateState.Installing) "Installing" else "Ready"),
+                    onSelect = { app.applyUpdate() },
+                ))
+                is UpdateState.Failed -> add(MenuAction(
+                    "download", "Download ${r.name} again", FuseIcons.Download, detail = st.message,
+                    onSelect = { app.store.updates.download(r) },
+                ))
+                UpdateState.Idle -> add(MenuAction(
+                    "download", "Download ${r.name}", FuseIcons.Download,
+                    detail = listOfNotNull(size, "Checked against the checksum GitHub publishes. Nothing installs until you choose Restart and update").joinToString(". "),
+                    onSelect = { app.store.updates.download(r) },
+                ))
+            }
+            if (r.notes.isNotBlank()) add(MenuAction("notes", "What's new in ${r.name}", FuseIcons.Sparkles, trailing = Trailing.Chevron, onSelect = {
+                app.choice = ChoiceSpec(r.name, r.notes.lines().filterNot { it.startsWith("# ") }.joinToString("\n").trim().take(1600), listOf(
+                    MenuAction("ok", "Close", FuseIcons.Check, onSelect = { app.choice = null }),
+                ))
+            }))
         }
         add(MenuAction("check", "Check for updates", FuseIcons.Refresh, onSelect = {
             app.scope.launch { app.toasts.show(if (app.store.updates.check() != null) "An update is available" else "Fuse is up to date") }
@@ -707,4 +899,16 @@ private fun crashRow(app: AppState, report: String): MenuAction {
             ),
         )
     })
+}
+
+/** The download size of the update for this device, for the Updates row. */
+private object GitHubReleasesSize {
+    fun of(release: io.github.matiyaaa.fuse.model.ReleaseInfo, app: AppState): String? {
+        val asset = release.assets.firstOrNull { a ->
+            val n = a.name.lowercase()
+            if (app.platform.host == io.github.matiyaaa.fuse.model.Host.ANDROID) n.endsWith(".apk") else n.endsWith(".appimage")
+        } ?: return null
+        if (asset.sizeBytes <= 0) return null
+        return "${(asset.sizeBytes / 1_000_000.0).let { (it * 10).toInt() / 10.0 }} MB"
+    }
 }

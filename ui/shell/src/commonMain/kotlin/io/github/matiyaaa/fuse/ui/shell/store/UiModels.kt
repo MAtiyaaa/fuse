@@ -20,6 +20,8 @@ import io.github.matiyaaa.fuse.model.RecentAchievement
 /** Artwork references already resolved to loadable models (file paths or URLs). */
 @Immutable
 data class Art(
+    /** Square box art, the tile art. */
+    val square: Any? = null,
     val icon: Any? = null,
     val boxart: Any? = null,
     val grid: Any? = null,
@@ -29,10 +31,14 @@ data class Art(
     val heroFocusY: Float = 0.35f,
     val video: String? = null,
 ) {
+    /** Art for a small square (thumbnails, menus): square box art, then icon, cover and wide art. */
+    val tile: Any? get() = square ?: icon ?: boxart ?: grid
+
     companion object {
         val None = Art()
 
         fun from(media: MediaSet): Art = Art(
+            square = media.square?.model,
             icon = media.icon?.model,
             boxart = media.boxart?.model,
             grid = media.grid?.model,

@@ -12,7 +12,7 @@ Fuse gathers the games in your folders, dresses them in art and starts each one 
 already use, all from a console-style interface made for a gamepad. On Android it can even be your
 Home screen.
 
-<a href="https://github.com/MAtiyaaa/fuse/releases"><img src="https://img.shields.io/badge/release-0.0.3%20The%20Sound%20and%20Screens%20Update-FF6A3D?style=flat-square&labelColor=15171C" alt="Release 0.0.3, The Sound and Screens Update"></a>
+<a href="https://github.com/MAtiyaaa/fuse/releases"><img src="https://img.shields.io/badge/release-0.0.5%20The%20Box%20Art%20Update-FF6A3D?style=flat-square&labelColor=15171C" alt="Release 0.0.5, The Box Art Update"></a>
 <img src="https://img.shields.io/badge/runs%20on-Android%209%2B%20%C2%B7%20Linux-2B303B?style=flat-square&labelColor=15171C" alt="Runs on Android 9 or newer and Linux">
 <a href="LICENSE"><img src="https://img.shields.io/badge/licence-GPL--3.0--or--later-2B303B?style=flat-square&labelColor=15171C" alt="Licence: GPL-3.0-or-later"></a>
 <a href="#privacy"><img src="https://img.shields.io/badge/telemetry-none-2B303B?style=flat-square&labelColor=15171C" alt="Telemetry: none"></a>
@@ -24,7 +24,7 @@ Home screen.
 <a href="https://github.com/MAtiyaaa/fuse/releases/latest"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/brand/button-linux-dark.svg"><img src="docs/assets/brand/button-linux-light.svg" height="48" alt="Download for Linux"></picture></a>
 
 <sub>Android 9 or newer &nbsp;·&nbsp; 64-bit x86 Linux AppImage &nbsp;·&nbsp; <a href="#install">checksums and install notes</a></sub><br>
-<sub>0.0.3 is an early release, shaped by hands-on tests on a dual-screen Android handheld. <a href="#where-fuse-stands">Here is where it stands.</a></sub>
+<sub>0.0.5 is an early release, shaped by hands-on tests on a dual-screen Android handheld. <a href="#where-fuse-stands">Here is where it stands.</a></sub>
 
 <br>
 
@@ -60,7 +60,7 @@ under your thumb lifts toward you with a single sweep of light.
     <td width="50%" valign="top">
       <a href="docs/assets/screenshots/library-covers.png"><img src="docs/assets/screenshots/library-covers.png" width="100%" alt="The Library as a grid of tall cover tiles, filtered by chips for favourites, recently played and each system."></a>
       <br><b>Your whole library</b>
-      <br><sub>Covers, icons, capsules or a compact list, filtered by system, favourites or what you played last.</sub>
+      <br><sub>Covers, square box art, capsules or a compact list, filtered by system, favourites or what you played last.</sub>
     </td>
     <td width="50%" valign="top">
       <a href="docs/assets/screenshots/library-icons.png"><img src="docs/assets/screenshots/library-icons.png" width="100%" alt="The Library as a grid of square icon tiles. Games without art show generated placeholder art with their initials and platform colour."></a>
@@ -149,8 +149,8 @@ Play.
     </td>
     <td width="33%" valign="top">
       <img src="docs/assets/icons/read-only.svg" width="44" height="44" alt=""><br>
-      <b>Read-only, always</b><br>
-      <sub>Fuse never moves, renames or deletes your files. Games that go missing are marked, not removed.</sub>
+      <b>Your files, left alone</b><br>
+      <sub>Fuse never moves or renames your files, and deletes a game's files only when you ask in Storage and confirm. Games that go missing are marked, not removed.</sub>
     </td>
     <td width="33%" valign="top">
       <img src="docs/assets/icons/artwork.svg" width="44" height="44" alt=""><br>
@@ -167,12 +167,29 @@ Play.
     <td width="33%" valign="top">
       <img src="docs/assets/icons/cartridge.svg" width="44" height="44" alt=""><br>
       <b>RomM, through Cartridge</b><br>
-      <sub>Pair with the Cartridge app to watch downloads, pick up new games when you come back, and jump to a game's RomM entry.</sub>
+      <sub>Pair with the Cartridge app to follow each download, pick up new games when you come back, bring in RomM's details and art, and jump to a game's RomM entry.</sub>
     </td>
     <td width="33%" valign="top">
       <img src="docs/assets/icons/second-screen.svg" width="44" height="44" alt=""><br>
       <b>A second screen that helps</b><br>
       <sub>On two-screen devices (Android 10 and later) the companion shows the focused game or system, or the game you are playing and its session time.</sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="33%" valign="top">
+      <img src="docs/assets/icons/phone-link.svg" width="44" height="44" alt=""><br>
+      <b>Phone Link</b><br>
+      <sub>Manage your library from a phone on the same Wi-Fi: see what's playing and downloading, fix names, details and art, and start art fills. Signed in with a password you set on the device; a phone can't delete anything or see keys.</sub>
+    </td>
+    <td width="33%" valign="top">
+      <img src="docs/assets/icons/storage.svg" width="44" height="44" alt=""><br>
+      <b>Storage at a glance</b><br>
+      <sub>Each drive as a bar by system, every game by the space it takes, and deleting the games you're done with, after a confirmation that names what goes.</sub>
+    </td>
+    <td width="33%" valign="top">
+      <img src="docs/assets/icons/collections.svg" width="44" height="44" alt=""><br>
+      <b>Collections and series</b><br>
+      <sub>Your own collections, plus the series Fuse finds on its own from game details and shared titles. Hide one, or keep it as yours.</sub>
     </td>
   </tr>
   <tr>
@@ -209,8 +226,9 @@ Play.
 - **Folder behaviour you control**: Auto, File, Folder as game or Folder browser, set globally, per
   system or per game.
 - **Quick rescans** only read the folders that changed.
-- **Read-only.** Fuse never moves, renames or deletes your files. Missing games are marked, not
-  removed, and playlists for multi-disc games are written to Fuse's own cache.
+- **Your files, left alone.** Fuse never moves or renames your files, and deletes a game's files only
+  when you ask in Settings, Storage and confirm (never from Phone Link). Missing games are marked,
+  not removed, and playlists for multi-disc games are written to Fuse's own cache.
 - **BIOS checks** report Unknown, never Missing, when a location cannot be read.
 
 </details>
@@ -242,8 +260,11 @@ Play.
 <br>
 
 - Media already in **ES-DE and Batocera** layouts is used first.
+- **Square box art** for every game, from SteamGridDB, your own folders or a file; games without it
+  show their cover whole instead of cropped.
 - **SteamGridDB, IGDB, TheGamesDB and libretro thumbnails** fill the rest, with your own keys where a
-  service needs one. The ScreenScraper client is built in and waits for developer credentials, so in
+  service needs one, by themselves after a scan if you like. When a source runs out of requests,
+  the others take over. The ScreenScraper client is built in and waits for developer credentials, so in
   0.0.1 it makes no requests.
 - Uncertain matches are **shown to you** before anything is saved.
 - **Art you choose yourself is never replaced**, except when you ask to reset it.
@@ -261,7 +282,7 @@ Play.
 - A **button mapping** screen with capture and a live button test that no button can leave by accident.
 - **Home** as a flowing dashboard (Flow) or a board of tiles you arrange (Channels), with 19 kinds of
   widgets.
-- **Library** layouts from icons to capsules to covers to a compact list; **Systems**, **Apps**,
+- **Library** layouts from square box art to capsules to covers to a compact list; **Systems**, **Apps**,
   **Search**, game pages, a media manager, a folder browser, the **quick menu** and a guided setup.
 - **Nine themes**, four motion levels including Reduced, High contrast focus, optional glass panels
   and CRT effect, and interface sounds synthesised on the fly.
@@ -305,9 +326,10 @@ Play.
 ## Where Fuse stands
 
 > [!IMPORTANT]
-> **Fuse 0.0.3 "The Sound and Screens Update" is still early.** It fixes what the second round of
-> tests on a dual-screen Android handheld turned up (see [the release
-> notes](docs/releases/0.0.3.md)). The shared core (library scanning, launch resolution,
+> **Fuse 0.0.5 "The Box Art Update" is still early.** It answers the fourth round of tests on a
+> dual-screen Android handheld with square box art, menu music, a choice of screen for games and
+> apps, uploads to RomM through Cartridge and art that finds itself (see
+> [the release notes](docs/releases/0.0.5.md)). The shared core (library scanning, launch resolution,
 > integrations and the database) and the interface are in place and tested where it matters. The
 > Android app builds and passes its unit tests and lint, and has been tried on one handheld so far.
 > The Linux app builds, passes its tests, packages as an AppImage and starts in a virtual display.
@@ -377,15 +399,18 @@ flowchart LR
 To pair them:
 
 1. Install Cartridge 0.9.10 or newer (Settings, Cartridge in Fuse can install it from Cartridge's
-   GitHub releases after you confirm). The bridge is in review as
-   [MAtiyaaa/cartridge#29](https://github.com/MAtiyaaa/cartridge/pull/29).
+   GitHub releases after you confirm). RomM's details, each game's download progress and uploading
+   games to RomM need Cartridge 0.9.11 "The Bridge Expansion", with bridge protocols 2 and 3 (in
+   review as [MAtiyaaa/cartridge#30](https://github.com/MAtiyaaa/cartridge/pull/30)).
 2. Sign in to RomM inside Cartridge and download some games.
 3. In Fuse, add the folder Cartridge saves to as a library, if setup did not suggest it already.
 
 On Android, Fuse reads Cartridge's status through a read-only content provider protected by a
 Cartridge permission; on Linux it reads `~/.local/state/cartridge/status.json`
 (`$XDG_STATE_HOME/cartridge/status.json`). Fuse opens Cartridge on a specific page, platform or game
-with `cartridge://` links. **No server address, token or password ever passes between the two apps.**
+with `cartridge://` links. It can also hand Cartridge a game to upload to your RomM server ("Upload
+to RomM" in a game's options): Cartridge shows the files and uploads only after you confirm there.
+**No server address, token or password ever passes between the two apps.**
 The full protocol is in [INTEGRATIONS.md](INTEGRATIONS.md#cartridge-bridge-protocol).
 
 ## Build it yourself
@@ -445,6 +470,10 @@ Third-party components keep their own licences; see [THIRD_PARTY_NOTICES.md](THI
   (Fuse installs it from the [MAtiyaaa/cartridge](https://github.com/MAtiyaaa/cartridge) releases).
 - [rcheevos](https://github.com/RetroAchievements/rcheevos) and
   [RetroAchievements](https://retroachievements.org/).
+- **Music by boipurple.** Fuse's menu music is the album *jam channel* by boipurple: puddleworld
+  plays under the menus and alright apothecary during setup, and every song on the album can be
+  picked in Settings, Sound. The songs remain the artist's own and are not covered by Fuse's
+  licence.
 - [Lucide](https://lucide.dev/) icons (ISC), and the [Sora](https://github.com/sora-xor/sora-font) and
   [Manrope](https://github.com/googlefonts/manrope) typefaces (SIL Open Font License).
 - Kotlin, Compose Multiplatform, SQLDelight, Ktor, Coil and kotlinx libraries.
@@ -452,7 +481,7 @@ Third-party components keep their own licences; see [THIRD_PARTY_NOTICES.md](THI
 
 <sub>iiSU was studied as a reference for quality only; no code or assets were taken from it, nor from
 Sony, Microsoft or Nintendo. Console and game names are trademarks of their owners and are used only
-to identify systems. Fuse ships no console artwork, sounds, BIOS files or games.</sub>
+to identify systems. Fuse ships no console artwork, console sounds, BIOS files or games.</sub>
 
 <br>
 

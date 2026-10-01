@@ -3,14 +3,15 @@ package io.github.matiyaaa.fuse.ui.shell.app
 import io.github.matiyaaa.fuse.model.CartridgeRoute
 import io.github.matiyaaa.fuse.model.FolderPolicy
 import io.github.matiyaaa.fuse.model.GameId
-import io.github.matiyaaa.fuse.model.MediaOwner
-import io.github.matiyaaa.fuse.model.MediaKind
 import io.github.matiyaaa.fuse.model.MediaFillMode
+import io.github.matiyaaa.fuse.model.MediaKind
+import io.github.matiyaaa.fuse.model.MediaOwner
 import io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction
 import io.github.matiyaaa.fuse.ui.designsystem.components.ToastKind
 import io.github.matiyaaa.fuse.ui.designsystem.components.Trailing
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
 import io.github.matiyaaa.fuse.ui.designsystem.sound.SoundCue
+import io.github.matiyaaa.fuse.ui.shell.cartridge.uploadToRomm
 import io.github.matiyaaa.fuse.ui.shell.store.GameCard
 import io.github.matiyaaa.fuse.ui.shell.store.LaunchOutcome
 import kotlinx.coroutines.delay
@@ -20,12 +21,26 @@ import kotlinx.coroutines.launch
  * Starts a game. The launch veil appears immediately (so pressing Play always responds), the store
  * resolves the emulator and fires the launch, and anything other than a clean start is explained.
  */
-fun AppState.play(card: GameCard, emulator: io.github.matiyaaa.fuse.model.EmulatorId? = null) {
+/** What confirming a game tile does: play it, or open its page when the user chose that. */
+fun AppState.activateGame(card: GameCard) {
+    if (store.prefs.value.openGamePage) go(Route.GameInfo(card.id)) else play(card)
+}
+
+/** The hint for confirming on a game tile, following [activateGame]. */
+val AppState.gameConfirmLabel: String get() = if (store.prefs.value.openGamePage) "Open" else "Play"
+
+fun AppState.play(card: GameCard, emulator: io.github.matiyaaa.fuse.model.EmulatorId? = null, discPath: String? = null) {
     if (launching != null) return
-    launching = LaunchVeil(card.title, card.art.hero ?: card.art.boxart ?: card.art.icon, card.accent)
+    // On two screens this may ask which one first; the veil only covers the launch itself.
+    playOnChosenScreen(card) { display -> launch(card, emulator, discPath, display) }
+}
+
+private fun AppState.launch(card: GameCard, emulator: io.github.matiyaaa.fuse.model.EmulatorId?, discPath: String?, display: io.github.matiyaaa.fuse.model.LaunchDisplay?) {
+    if (launching != null) return
+    launching = LaunchVeil(card.title, card.art.hero ?: card.art.boxart ?: card.art.tile, card.accent)
     platform.sounds.play(SoundCue.LAUNCH)
     scope.launch {
-        when (val outcome = store.library.launch(card.id, emulator)) {
+        when (val outcome = store.library.launch(card.id, emulator, discPath, display)) {
             LaunchOutcome.Started -> {
                 // The veil lifts when Fuse is paused by the emulator; this is only a safety net.
                 delay(4_000)
@@ -93,12 +108,17 @@ fun AppState.gameMenu(card: GameCard, fromDetail: Boolean = false, extra: List<M
                 onSelect = { run { lib.setFavorite(card.id, !card.favorite) } },
             ),
         )
-        add(MenuAction("collection", "Add to Collection", FuseIcons.ListPlus, trailing = Trailing.Chevron, onSelect = { collectionPicker(card.id, card.title) }))
+        if (store.prefs.value.collectionsEnabled) {
+            add(MenuAction("collection", "Add to Collection", FuseIcons.ListPlus, trailing = Trailing.Chevron, onSelect = { collectionPicker(card.id, card.title) }))
+        }
         add(MenuAction("pin", "Pin to Home", FuseIcons.Pin, onSelect = { run { lib.setPinned(card.id, true); toasts.show("Pinned to Home") } }))
         add(MenuAction("emulator", "Emulator", FuseIcons.Chip, trailing = Trailing.Chevron, onSelect = { emulatorPicker(card) }))
+        if (hasTwoScreens && !io.github.matiyaaa.fuse.launch.DualScreenPlatforms.usesSecondScreen(card.platformId)) {
+            add(MenuAction("screen", "Screen", FuseIcons.DualScreen, detail = "Top, bottom, or ask when it starts", trailing = Trailing.Chevron, onSelect = { screenPicker(card) }))
+        }
         add(MenuAction("rescrape", "Find Details and Art", FuseIcons.Wand, detail = "Fills what's missing, including a proper title. Your own art and names stay", onSelect = {
             closeOverlays()
-            store.media.fill(MediaFillMode.FILL_MISSING, MediaKind.entries.filter { it != MediaKind.VIDEO && it != MediaKind.BORDER }.toSet(), game = card.id)
+            store.media.fill(MediaFillMode.FILL_MISSING, MediaKind.Fillable, game = card.id)
             toasts.show("Looking for details and art for ${card.title}")
         }))
         add(MenuAction("rename", "Rename Display Title", FuseIcons.TextCursor, detail = "The file keeps its name", onSelect = {
@@ -108,14 +128,19 @@ fun AppState.gameMenu(card: GameCard, fromDetail: Boolean = false, extra: List<M
             }
         }))
         add(MenuAction("folder", "Folder Behaviour", FuseIcons.FolderOpen, trailing = Trailing.Chevron, onSelect = { folderPolicyPicker(card) }))
-        if (card.rommRomId != null) {
-            add(MenuAction("cartridge", "Open in Cartridge", FuseIcons.CloudDownload, onSelect = {
-                closeOverlays(); store.cartridge.open(CartridgeRoute.Game(card.rommRomId))
-            }))
-        } else {
-            add(MenuAction("find", "Find in Cartridge", FuseIcons.CloudDownload, onSelect = {
-                closeOverlays(); store.cartridge.open(CartridgeRoute.Search(card.title, null))
-            }))
+        // Only while Cartridge support is on and Cartridge is installed.
+        if (store.cartridge.status.value.installed) {
+            if (card.rommRomId != null) {
+                add(MenuAction("cartridge", "Open in Cartridge", FuseIcons.CloudDownload, onSelect = {
+                    closeOverlays(); store.cartridge.open(CartridgeRoute.Game(card.rommRomId))
+                }))
+            } else {
+                add(MenuAction("find", "Find in Cartridge", FuseIcons.CloudDownload, onSelect = {
+                    closeOverlays(); store.cartridge.open(CartridgeRoute.Search(card.title, null))
+                }))
+                // Games Cartridge downloaded are on RomM already.
+                add(MenuAction("upload", "Upload to RomM", FuseIcons.Upload, detail = "Through Cartridge, with its other discs, DLC and updates", onSelect = { uploadToRomm(card) }))
+            }
         }
         add(MenuAction("hide", "Hide", FuseIcons.EyeOff, onSelect = { run { lib.setHidden(card.id, true); toasts.show("Hidden. Show hidden games from Library options.") } }))
         add(MenuAction("remove", "Remove from Fuse", FuseIcons.Trash, destructive = true, detail = "Your files are not touched", onSelect = {
@@ -129,7 +154,7 @@ fun AppState.gameMenu(card: GameCard, fromDetail: Boolean = false, extra: List<M
             )
         }))
     }
-    return ContextMenuSpec(title = card.title, subtitle = card.platformShort, art = card.art.icon ?: card.art.boxart, actions = actions)
+    return ContextMenuSpec(title = card.title, subtitle = card.platformShort, art = card.art.tile, actions = actions)
 }
 
 fun AppState.collectionPicker(game: GameId, title: String) {
@@ -208,4 +233,13 @@ fun AppState.folderPolicyPicker(card: GameCard) {
             MenuAction("files", "Files only", FuseIcons.File, detail = "Every file inside is its own game", onSelect = { pick(FolderPolicy.FILE) }),
         ),
     )
+}
+
+/** Installs the downloaded Fuse update: restarts into it (Linux) or hands it to Android's installer. */
+fun AppState.applyUpdate() {
+    scope.launch {
+        store.updates.apply()
+            .onSuccess { restart -> if (restart) platform.restart() }
+            .onFailure { toasts.show(it.message ?: "The update couldn't be installed") }
+    }
 }

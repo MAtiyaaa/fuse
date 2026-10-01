@@ -138,8 +138,39 @@ class DisplayNameCleanerTest {
         assertEquals("007 - The World Is Not Enough", clean("007 - The World Is Not Enough (USA)"))
         assertEquals("1943 - The Battle of Midway", clean("1943 - The Battle of Midway (USA)"))
         assertEquals("2064 - Read Only Memories", clean("2064 - Read Only Memories"))
-        assertEquals("12 - Title", clean("12 - Title"))
         assertEquals("0123", clean("0123 - "))
+        assertEquals("1080 Snowboarding", clean("1080 Snowboarding (USA)"))
+        assertEquals("10-Yard Fight", clean("10-Yard Fight (USA)"))
+        assertEquals("3-D WorldRunner", clean("3-D WorldRunner (USA)"))
+        assertEquals("F1 Race Stars", clean("F1 Race Stars"))
+        assertEquals("R4 - Ridge Racer Type 4", clean("R4 - Ridge Racer Type 4 (USA)"))
+        assertEquals("4-in-1 Fun Pak", clean("4-in-1 Fun Pak (USA)"))
+        assertEquals("3D Dot Game Heroes", clean("3D Dot Game Heroes"))
+        assertEquals("99 Nights", clean("99 Nights"))
+    }
+
+    @Test
+    fun stripsCodesAndNumbersBeforeTheName() {
+        // Numbers and codes that collections and dumps put in front, with or without separators.
+        val cases = mapOf(
+            "12 - Pepsiman" to "Pepsiman",
+            "1 - Pepsiman" to "Pepsiman",
+            "123. Pepsiman" to "Pepsiman",
+            "12.Pepsiman" to "Pepsiman",
+            "12) Pepsiman" to "Pepsiman",
+            "#12 Pepsiman" to "Pepsiman",
+            "#12 - Pepsiman" to "Pepsiman",
+            "0123 Pepsiman" to "Pepsiman",
+            "045 Pepsiman" to "Pepsiman",
+            "0123-Pepsiman" to "Pepsiman",
+            "001_Pepsiman" to "Pepsiman",
+            "A123-Pepsiman" to "Pepsiman",
+            "A123 - Pepsiman" to "Pepsiman",
+            "NUS-012 Pepsiman" to "Pepsiman",
+            "DMG-123. Pepsiman" to "Pepsiman",
+            "000123 - Pepsiman (Japan)" to "Pepsiman",
+        )
+        for ((file, expected) in cases) assertEquals(expected, clean(file), file)
     }
 
     @Test

@@ -2,13 +2,18 @@ package io.github.matiyaaa.fuse.ui.shell.store.impl
 
 import io.github.matiyaaa.fuse.data.repo.AppOverrideRepository
 import io.github.matiyaaa.fuse.data.settings.SecretKeys
+import io.github.matiyaaa.fuse.library.series.SeriesDetector
+import io.github.matiyaaa.fuse.library.series.SeriesInput
 import io.github.matiyaaa.fuse.model.AppEntry
 import io.github.matiyaaa.fuse.model.AppFilter
 import io.github.matiyaaa.fuse.model.BorderStyle
 import io.github.matiyaaa.fuse.model.CollectionId
+import io.github.matiyaaa.fuse.model.CollectionKind
 import io.github.matiyaaa.fuse.model.GameCollection
 import io.github.matiyaaa.fuse.model.GameId
+import io.github.matiyaaa.fuse.model.LaunchDisplay
 import io.github.matiyaaa.fuse.model.LibraryLayout
+import io.github.matiyaaa.fuse.model.MediaOwner
 import io.github.matiyaaa.fuse.model.PlatformId
 import io.github.matiyaaa.fuse.model.Resolved
 import io.github.matiyaaa.fuse.model.ScopeRef
@@ -24,14 +29,16 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
-import io.github.matiyaaa.fuse.model.MediaOwner
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 
 internal class DefaultCollectionOps(private val ctx: StoreContext) : CollectionOps {
     private val repo = ctx.data.collections
@@ -50,9 +57,43 @@ internal class DefaultCollectionOps(private val ctx: StoreContext) : CollectionO
 
     override suspend fun add(id: CollectionId, game: GameId) = repo.addGames(id, listOf(game))
 
+    override suspend fun addGames(id: CollectionId, games: List<GameId>) = repo.addGames(id, games)
+
     override suspend fun remove(id: CollectionId, game: GameId) = repo.removeGames(id, listOf(game))
 
     override suspend fun membership(game: GameId): Set<CollectionId> = repo.observeCollectionsOf(game).first()
+
+    override suspend fun keepSeries(id: CollectionId) = repo.setKind(id, CollectionKind.MANUAL)
+
+    /**
+     * Keeps series collections up to date: whenever games change (a scan, new details, a rename) or
+     * the series settings change, the library's series are found again and synced. Nothing runs
+     * while Collections are off; turning automatic series off removes them.
+     */
+    @OptIn(kotlinx.coroutines.FlowPreview::class)
+    fun start() {
+        val settings = ctx.settings.map { Triple(it.library.collectionsEnabled, it.library.autoSeries, it.library.hiddenSeries.toSet()) }.distinctUntilChanged()
+        ctx.scope.launch {
+            combine(repo.observeGameChanges().debounce(1_500), settings) { _, s -> s }
+                .collectLatest { (enabled, auto, hidden) ->
+                    if (!enabled) return@collectLatest
+                    runCatching { syncSeries(auto, hidden) }
+                }
+        }
+    }
+
+    private suspend fun syncSeries(auto: Boolean, hidden: Set<String>) {
+        if (!auto) {
+            repo.syncSeries(emptyMap())
+            return
+        }
+        val inputs = repo.seriesInputs().map { SeriesInput(it.id, it.title, it.franchise) }
+        val found = SeriesDetector.detect(inputs)
+            .filter { it.name.lowercase() !in hidden }
+            // The user's own collection with the same name wins.
+            .filter { s -> collections.value.none { it.kind != CollectionKind.SERIES && it.name.equals(s.name, ignoreCase = true) } }
+        repo.syncSeries(found.associate { it.name to it.members })
+    }
 }
 
 internal class DefaultAppOps(private val ctx: StoreContext) : AppOps {
@@ -77,7 +118,7 @@ internal class DefaultAppOps(private val ctx: StoreContext) : AppOps {
             ctx.data.media.observeFor(ids.map { MediaOwner.OfApp(it) }).map { media ->
                 media.mapNotNull { (owner, set) ->
                     val id = (owner as? MediaOwner.OfApp)?.packageName ?: return@mapNotNull null
-                    (set.icon ?: set.boxart ?: set.grid)?.model?.let { id to (it as Any) }
+                    (set.icon ?: set.square ?: set.boxart ?: set.grid)?.model?.let { id to (it as Any) }
                 }.toMap()
             }
         }
@@ -103,9 +144,10 @@ internal class DefaultAppOps(private val ctx: StoreContext) : AppOps {
 
     private fun card(entry: AppEntry, icons: Map<String, Any>) = AppCard(entry, icons[entry.id] ?: provider?.iconModel(entry))
 
-    override suspend fun launch(app: AppCard) {
+    override suspend fun launch(app: AppCard, display: LaunchDisplay?) {
         val p = provider ?: return
-        p.launch(app.entry)
+        val displayId = if (display == LaunchDisplay.SECONDARY) ctx.services.launcher.secondaryDisplayId() else null
+        p.launch(app.entry, displayId)
         overrides.markUsed(app.entry.id, ctx.now())
     }
 

@@ -121,6 +121,8 @@ data class ScrapingSettings(
     val preferredRegion: String? = null,
     /** Global matching strictness; the global level of [io.github.matiyaaa.fuse.model.ScopedSettings.Matching]. */
     val matching: MatchStrictness = MatchStrictness.NORMAL,
+    /** Look for missing art and details by itself after scans and when a source is added. */
+    val autoFill: Boolean = true,
 ) {
     /** Enabled providers in effective order. */
     fun effectiveOrder(): List<ScrapeProviderId> =
@@ -155,6 +157,8 @@ data class LibraryPreferences(
     val cleanDisplayNames: Boolean = true,
     /** Existing games were given cleaned names once, when clean names became the default. */
     val cleanedExistingNames: Boolean = false,
+    /** The cleaning rules the library's names were last cleaned with (see DefaultFuseStore.CLEAN_RULES). */
+    val cleanedNamesRules: Int = 1,
     /** Systems in the user's order, by platform id. Systems not listed follow in catalog order. */
     val systemOrder: List<String> = emptyList(),
     /** Fetch system logos and art from the system art pack when a system has none. */
@@ -163,6 +167,16 @@ data class LibraryPreferences(
     val sort: io.github.matiyaaa.fuse.model.SortOrder = io.github.matiyaaa.fuse.model.SortOrder.TITLE,
     /** Artwork set used from the system art pack (a SystemArtStyle name). */
     val systemArtStyle: String = "CLASSIC",
+    /** Confirm on a game opens its page instead of starting it. */
+    val selectOpensGamePage: Boolean = false,
+    /** Phone Link's server runs while this is on (Settings, Phone Link). */
+    val phoneLinkEnabled: Boolean = false,
+    /** Collections as a whole; off hides them everywhere (they are kept). */
+    val collectionsEnabled: Boolean = true,
+    /** Fuse makes a collection for each series it finds and keeps it up to date. */
+    val autoSeries: Boolean = true,
+    /** Series the user hid or kept as their own collection, lower case, so Fuse doesn't make them again. */
+    val hiddenSeries: List<String> = emptyList(),
     /** Brand colours from the system art pack (opaque ARGB), by platform id. */
     val systemColors: Map<String, Long> = emptyMap(),
 )
@@ -181,18 +195,23 @@ data class SoundSettings(
 )
 
 /**
- * Music under Fuse's menus. Fuse ships no song: the user picks a file, which is copied into Fuse's
- * storage so it keeps playing after the original moves.
+ * Music under Fuse's menus: one of the songs Fuse ships, or a file the user picked, which is copied
+ * into Fuse's storage so it keeps playing after the original moves.
  */
 @Serializable
 data class MusicSettings(
     val enabled: Boolean = true,
     /** 0..1, low by default so the music sits under the interface. */
     val volume: Float = 0.2f,
-    /** Fuse's copy of the song; null when none was chosen. */
+    /** Fuse's copy of the user's own song; null when none was chosen. */
     val songPath: String? = null,
     /** What Settings calls the song (the picked file's name). */
     val songName: String? = null,
+    /**
+     * A bundled song's id, or "file" for the user's own song. Null for settings from before songs
+     * were bundled: the user's own song if there is one, else the default bundled song.
+     */
+    val track: String? = null,
 )
 
 @Serializable
@@ -208,8 +227,15 @@ data class StatusAreaSettings(
 
 @Serializable
 data class CartridgeSettings(
+    /** Off: Fuse leaves Cartridge alone entirely (no tab, widget, menu entries or status reads). */
+    val enabled: Boolean = true,
     /** Rescan the folders Cartridge changed when returning from it. */
     val autoRefreshOnReturn: Boolean = true,
+    /**
+     * Use RomM's details and pictures for games Cartridge downloaded (bridge protocol 2): they fill
+     * empty fields and replace scraped ones, never what the user set.
+     */
+    val rommDetails: Boolean = true,
 )
 
 /**

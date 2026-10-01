@@ -1,8 +1,7 @@
 package io.github.matiyaaa.fuse.ui.shell.app
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -30,6 +29,7 @@ import io.github.matiyaaa.fuse.model.NavAction
 import io.github.matiyaaa.fuse.ui.designsystem.components.ButtonKind
 import io.github.matiyaaa.fuse.ui.designsystem.components.FText
 import io.github.matiyaaa.fuse.ui.designsystem.components.FuseButton
+import io.github.matiyaaa.fuse.ui.designsystem.components.KeyboardField
 import io.github.matiyaaa.fuse.ui.designsystem.components.KeyboardState
 import io.github.matiyaaa.fuse.ui.designsystem.components.MenuList
 import io.github.matiyaaa.fuse.ui.designsystem.components.OnScreenKeyboard
@@ -104,7 +104,8 @@ private fun ChoiceOverlay(app: AppState) {
     val spec = app.choice
     var shown by remember { mutableStateOf(spec) }
     if (spec != null) shown = spec
-    val sel = remember(spec) { LinearSelection() }
+    // Keyed by the title, so a list that updates itself (checks toggled in place) keeps its place.
+    val sel = remember(spec?.title) { LinearSelection() }
     if (spec != null) {
         InputLayer(priority = LayerPriority.DIALOG + 1, modal = true) { e ->
             when (e.action) {
@@ -177,14 +178,16 @@ private fun TextInputOverlay(app: AppState) {
     val spec = app.textInput
     var shown by remember { mutableStateOf(spec) }
     if (spec != null) shown = spec
-    val keyboard = remember(spec) { KeyboardState() }
+    val field = app.textDraft
+    val keyboard = remember(spec) { KeyboardState(autoCapitalize = spec?.capitalize == true && spec.secret.not()) }
     LaunchedEffect(spec) {
         if (spec != null) {
-            app.textDraft = spec.initial
-            app.keyboardTarget = KeyboardTarget({ app.textDraft }, { app.textDraft = it }, {
+            field.replaceAll(spec.initial)
+            keyboard.prepare(field)
+            app.keyboardTarget = KeyboardTarget(field) {
                 app.textInput = null
-                spec.onDone(app.textDraft)
-            })
+                spec.onDone(field.text)
+            }
         } else {
             app.keyboardTarget = null
         }
@@ -192,45 +195,67 @@ private fun TextInputOverlay(app: AppState) {
     fun done() {
         val s = spec ?: return
         app.textInput = null
-        s.onDone(app.textDraft)
+        s.onDone(field.text)
     }
+    val paste = { app.pasteInto(field) }
     if (spec != null) {
-        InputLayer(priority = LayerPriority.DIALOG + 3, modal = true) { e ->
+        InputLayer(
+            priority = LayerPriority.DIALOG + 3,
+            modal = true,
+            repeats = setOf(NavAction.CONTEXT, NavAction.PREVIOUS_SECTION, NavAction.NEXT_SECTION),
+        ) { e ->
             when (e.action) {
                 NavAction.BACK -> { app.textInput = null; NavResult.CONSUMED }
-                else -> keyboard.handle(e, app.textDraft, { app.textDraft = it }, ::done, onPaste = { app.pasteInto({ app.textDraft }, { app.textDraft = it }) })
+                else -> keyboard.handle(e, field, ::done, onPaste = paste)
             }
         }
     }
     Overlay(visible = spec != null, onDismiss = { app.textInput = null }, edge = OverlayEdge.BOTTOM) {
         val s = shown ?: return@Overlay
-        Panel(Modifier.widthIn(max = 880.dp).padding(Space.l)) {
-            Column(Modifier.padding(Space.l)) {
-                FText(s.title, Fuse.type.titleSmall)
-                Spacer(Modifier.height(Space.m))
-                Box(
-                    Modifier.fillMaxWidth().clip(RoundedCornerShape(Fuse.geometry.control))
-                        .background(Fuse.colors.text.copy(alpha = 0.08f)).padding(horizontal = Space.l, vertical = Space.m),
-                ) {
-                    val text = app.textDraft
-                    FText(
-                        if (text.isEmpty()) s.placeholder.ifEmpty { " " } else "$text|",
-                        Fuse.type.title,
-                        color = if (text.isEmpty()) Fuse.colors.textFaint else Fuse.colors.text,
-                        maxLines = 1,
+        BoxWithConstraints {
+            // Short screens (handhelds) get shorter keys, so the field and hints still fit.
+            val keyHeight = if (maxHeight < 560.dp) 38.dp else 46.dp
+            Panel(Modifier.widthIn(max = 880.dp).padding(Space.l)) {
+                Column(Modifier.padding(Space.l)) {
+                    FText(s.title, Fuse.type.titleSmall)
+                    Spacer(Modifier.height(Space.m))
+                    KeyboardField(
+                        field,
+                        Modifier.fillMaxWidth(),
+                        placeholder = s.placeholder,
+                        secret = s.secret,
+                        onClear = { field.replaceAll(""); keyboard.prepare(field) },
                     )
-                }
-                Spacer(Modifier.height(Space.l))
-                OnScreenKeyboard(keyboard, app.textDraft, { app.textDraft = it }, ::done, onPaste = { app.pasteInto({ app.textDraft }, { app.textDraft = it }) })
-                Spacer(Modifier.height(Space.s))
-                Row(horizontalArrangement = Arrangement.spacedBy(Space.l), verticalAlignment = Alignment.CenterVertically) {
-                    KeyHint(HintButton.OPTIONS, "Delete")
-                    KeyHint(HintButton.SEARCH, "Space")
-                    KeyHint(HintButton.NEXT, "Paste")
-                    KeyHint(HintButton.MENU, "Done")
+                    Spacer(Modifier.height(Space.l))
+                    OnScreenKeyboard(
+                        keyboard, field, ::done,
+                        keyHeight = keyHeight,
+                        doneLabel = s.doneLabel,
+                        onPaste = paste,
+                        onKey = { app.platform.haptics.tick() },
+                    )
+                    Spacer(Modifier.height(Space.m))
+                    KeyboardHints()
                 }
             }
         }
+    }
+}
+
+/** The controller shortcuts under a keyboard. */
+@Composable
+fun KeyboardHints(done: String = "Done") {
+    Row(horizontalArrangement = Arrangement.spacedBy(Space.l), verticalAlignment = Alignment.CenterVertically) {
+        KeyHint(HintButton.OPTIONS, "Delete")
+        KeyHint(HintButton.SEARCH, "Space")
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            ButtonGlyph(HintButton.PREV, size = 18.dp, color = Fuse.colors.textFaint)
+            Spacer(Modifier.width(Space.xxs))
+            ButtonGlyph(HintButton.NEXT, size = 18.dp, color = Fuse.colors.textFaint)
+            Spacer(Modifier.width(Space.xs))
+            FText("Move cursor", Fuse.type.caption, color = Fuse.colors.textFaint)
+        }
+        KeyHint(HintButton.MENU, done)
     }
 }
 

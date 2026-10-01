@@ -53,19 +53,40 @@ data class UiPrefs(
     /** How the Library is sorted. */
     val librarySort: io.github.matiyaaa.fuse.model.SortOrder = io.github.matiyaaa.fuse.model.SortOrder.TITLE,
     val systemArtStyle: String = "CLASSIC",
+    /** Confirm (or a tap on a selected tile) opens a game's page instead of playing it. */
+    val openGamePage: Boolean = false,
+    /** Phone Link: a phone on the same network can see and fix the library (see docs/PHONE_LINK.md). */
+    val phoneLinkEnabled: Boolean = false,
+    /** Collections as a whole; off hides every collection feature. */
+    val collectionsEnabled: Boolean = true,
+    /** Automatic series collections. */
+    val autoSeries: Boolean = true,
+    /** Series Fuse no longer makes (hidden, or kept as the user's own), lower case. */
+    val hiddenSeries: List<String> = emptyList(),
     val scraperOrder: List<ScrapeProviderId> = io.github.matiyaaa.fuse.data.settings.ScrapingSettings.DefaultProviderOrder,
     val scraperLanguage: String = "en",
     val scraperRegion: String = "any",
     val matching: MatchStrictness = MatchStrictness.NORMAL,
+    /** Missing art and details are looked for by themselves after scans. */
+    val autoFillArt: Boolean = true,
     val autoRefreshFromCartridge: Boolean = true,
+    /** Cartridge support as a whole; off hides every Cartridge feature. */
+    val cartridgeEnabled: Boolean = true,
+    /** RomM's details and pictures for games Cartridge downloaded. */
+    val cartridgeRommDetails: Boolean = true,
     val checkForUpdates: Boolean = true,
     val heroDim: Float = 0.3f,
 )
 
-/** Menu music: on or off, how loud, and the song the user chose (none is bundled). */
+/**
+ * Menu music: on or off, how loud, and which song. [track] is a bundled song's id
+ * ([io.github.matiyaaa.fuse.ui.shell.music.BundledMusic]) or `"file"` for the user's own song at
+ * [songPath].
+ */
 data class MusicPrefs(
     val enabled: Boolean = true,
     val volume: Float = 0.2f,
     val songPath: String? = null,
     val songName: String? = null,
+    val track: String = io.github.matiyaaa.fuse.ui.shell.music.BundledMusic.MENU_DEFAULT,
 )

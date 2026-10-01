@@ -1,5 +1,6 @@
 package io.github.matiyaaa.fuse.services
 
+import android.app.ActivityOptions
 import android.content.ActivityNotFoundException
 import android.content.ComponentName
 import android.content.Context
@@ -11,6 +12,7 @@ import android.os.Looper
 import android.os.Process
 import android.os.UserHandle
 import android.provider.Settings
+import android.view.Display
 import androidx.core.net.toUri
 import io.github.matiyaaa.fuse.ActivityHolder
 import io.github.matiyaaa.fuse.model.AppEntry
@@ -35,6 +37,8 @@ class AndroidAppsProvider(
     context: Context,
     private val scope: CoroutineScope,
     private val activities: ActivityHolder,
+    /** Frees the second screen for an app opened there. */
+    private val dualScreen: DualScreenHandoff? = null,
 ) : AppsProvider {
     private val appContext = context.applicationContext
     private val launcherApps = appContext.getSystemService(LauncherApps::class.java)
@@ -93,7 +97,7 @@ class AndroidAppsProvider(
     private fun isGame(app: ApplicationInfo): Boolean =
         app.category == ApplicationInfo.CATEGORY_GAME || (app.flags and ApplicationInfo.FLAG_IS_GAME) != 0
 
-    override suspend fun launch(entry: AppEntry): RunResult = withContext(Dispatchers.Main) {
+    override suspend fun launch(entry: AppEntry, displayId: Int?): RunResult = withContext(Dispatchers.Main) {
         val apps = launcherApps ?: return@withContext RunResult.Failed("Android didn't give Fuse its app list.")
         val className = entry.id.substringAfter('/', "")
         val component = if (className.isNotEmpty()) {
@@ -104,7 +108,16 @@ class AndroidAppsProvider(
         }
         try {
             if (!apps.isActivityEnabled(component, user)) return@withContext RunResult.NotInstalled
-            apps.startMainActivity(component, user, null, activities.revealOptions()?.toBundle())
+            val other = displayId != null && displayId != Display.DEFAULT_DISPLAY
+            if (other) dualScreen?.beforeSecondScreenLaunch()
+            try {
+                apps.startMainActivity(component, user, null, options(displayId).toBundle())
+            } catch (e: SecurityException) {
+                // Android refused the other screen: open on this one instead.
+                if (!other) throw e
+                dualScreen?.dualScreenGameFailed()
+                apps.startMainActivity(component, user, null, options(null).toBundle())
+            }
             RunResult.Started(null)
         } catch (e: ActivityNotFoundException) {
             RunResult.NotInstalled
@@ -113,6 +126,12 @@ class AndroidAppsProvider(
         } catch (e: IllegalArgumentException) {
             RunResult.NotInstalled
         }
+    }
+
+    private fun options(displayId: Int?): ActivityOptions {
+        val options = activities.revealOptions() ?: ActivityOptions.makeBasic()
+        if (displayId != null) options.launchDisplayId = displayId
+        return options
     }
 
     override fun openInfo(entry: AppEntry) {

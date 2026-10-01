@@ -26,7 +26,8 @@ class IgdbTest {
                                 {"id":2,"company":{"id":71,"name":"Nintendo"},"developer":false,"publisher":true}],
           "name":"Super Metroid","platforms":[{"id":19,"abbreviation":"SNES","name":"Super Nintendo Entertainment System"}],
           "screenshots":[{"id":1,"image_id":"sc6j0c"}],"artworks":[{"id":2,"image_id":"ar5g3"}],
-          "summary":"Samus returns to Zebes.","game_type":0}]
+          "summary":"Samus returns to Zebes.","game_type":0,
+          "franchises":[{"id":5,"name":"Metroid"}],"collections":[{"id":9,"name":"Metroid 2D"}],"total_rating":93.6}]
     """.trimIndent()
 
     private class Clock(var now: Long = 0)
@@ -108,6 +109,9 @@ class IgdbTest {
         assertEquals(listOf("Nintendo"), g.publishers)
         assertEquals("co1tqi", g.cover?.imageId)
         assertEquals(0L, g.gameType)
+        assertEquals("Metroid", g.series)
+        assertEquals(93.6, g.totalRating)
+        assertTrue("franchises.name" in body && "total_rating" in body, body)
         assertEquals("fields ${IgdbQuery.GAME_FIELDS}; where id = 1103; limit 1;", IgdbQuery.byId(1103))
     }
 

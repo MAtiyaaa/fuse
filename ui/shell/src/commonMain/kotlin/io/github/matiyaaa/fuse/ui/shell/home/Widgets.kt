@@ -1,6 +1,7 @@
 package io.github.matiyaaa.fuse.ui.shell.home
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,7 +14,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -43,6 +43,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.theme.toColor
 import io.github.matiyaaa.fuse.ui.shell.app.formatDate
 import io.github.matiyaaa.fuse.ui.shell.app.rememberClockText
 import io.github.matiyaaa.fuse.ui.shell.components.LocalTileMetrics
+import io.github.matiyaaa.fuse.ui.shell.components.SquareGameArt
 import io.github.matiyaaa.fuse.ui.shell.components.playtimeText
 import io.github.matiyaaa.fuse.ui.shell.store.HomeFeed
 
@@ -159,8 +160,8 @@ private fun ColumnScope.MostPlayed(feed: HomeFeed) {
 private fun ColumnScope.CurrentGame(feed: HomeFeed) {
     val g = feed.playtime.currentGame ?: return
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.m)) {
-        Artwork(
-            g.art.icon ?: g.art.boxart,
+        SquareGameArt(
+            g.art,
             Modifier.size(56.dp).clip(RoundedCornerShape(12.dp)),
             fallback = { GeneratedArt(g.title, g.accent.toColor(), slot = ArtSlot.ICON) },
         )
@@ -280,12 +281,15 @@ private fun ColumnScope.ClockWidget(clock24h: Boolean) {
     FText(formatDate(), Fuse.type.caption, color = Fuse.colors.textMuted, maxLines = 1)
 }
 
+/** "1.2 GB", "640 MB", "12 KB": sizes as people read them (decimal units, like drives are sold). */
 fun bytesText(bytes: Long): String {
     val gb = bytes / 1_000_000_000.0
     return when {
         gb >= 100 -> "${gb.toInt()} GB"
         gb >= 1 -> "${(gb * 10).toInt() / 10.0} GB"
-        else -> "${bytes / 1_000_000} MB"
+        bytes >= 1_000_000 -> "${bytes / 1_000_000} MB"
+        bytes > 0 -> "${((bytes + 999) / 1_000).coerceAtLeast(1)} KB"
+        else -> "0 KB"
     }
 }
 
