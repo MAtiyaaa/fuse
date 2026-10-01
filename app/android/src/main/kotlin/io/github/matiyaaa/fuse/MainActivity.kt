@@ -125,6 +125,7 @@ class MainActivity : ComponentActivity(), ActivityRequests {
                     Lifecycle.Event.ON_START -> app.platformUi.music.setForeground(true)
                     // A game or another app is in front: the second screen and the sound are theirs.
                     Lifecycle.Event.ON_STOP -> {
+                        stoppedAt = android.os.SystemClock.uptimeMillis()
                         companions.onMainStopped()
                         app.platformUi.music.setForeground(false)
                     }
@@ -195,6 +196,9 @@ class MainActivity : ComponentActivity(), ActivityRequests {
         }
     }
 
+    /** When Fuse last left the screen (uptime), to tell a Home press in Fuse from a return from a game. */
+    private var stoppedAt = 0L
+
     /** Fuse lost focus to a game or app (on this screen or the other one) and was not paused since. */
     private var lostFocus = false
     private var pausedWhileAway = false
@@ -237,13 +241,17 @@ class MainActivity : ComponentActivity(), ActivityRequests {
     }
 
     /**
-     * Home pressed while Fuse is Home. When Fuse was on screen it goes to its Home page; when it comes
-     * back from a game it stays where the player left it. The activity is never recreated.
+     * Home pressed while Fuse is Home (handed over by [HomeActivity]). When Fuse was on screen it goes
+     * to its Home page; when it comes back from a game it stays where the player left it. The
+     * activity is never recreated.
      */
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        val isHome = intent.action == Intent.ACTION_MAIN && intent.hasCategory(Intent.CATEGORY_HOME)
-        val wasVisible = lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)
+        val isHome = intent.getBooleanExtra(EXTRA_HOME, false) ||
+            (intent.action == Intent.ACTION_MAIN && intent.hasCategory(Intent.CATEGORY_HOME))
+        // Still started, or stopped only a moment ago by the Home press itself.
+        val wasVisible = lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED) ||
+            android.os.SystemClock.uptimeMillis() - stoppedAt < HOME_PRESS_MS
         if (isHome && wasVisible && app.startup.value is Startup.Ready) {
             router.dispatch(NavAction.HOME, router.lastSource.value)
         }
@@ -272,4 +280,12 @@ class MainActivity : ComponentActivity(), ActivityRequests {
     override suspend fun requestRole(intent: Intent): Boolean = roleSlot.request { roleLauncher.launch(intent) }
 
     override suspend fun requestPermission(permission: String): Boolean = permissionSlot.request { permissionLauncher.launch(permission) }
+
+    companion object {
+        /** Set by [HomeActivity]: this start is a press of Home. */
+        const val EXTRA_HOME = "io.github.matiyaaa.fuse.HOME"
+
+        /** How soon after leaving the screen a Home press still counts as made inside Fuse. */
+        private const val HOME_PRESS_MS = 1_000L
+    }
 }

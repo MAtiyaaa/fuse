@@ -9,10 +9,11 @@
         <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
     </style>
 
-    <!-- Fuse's card in recent apps: ink, like Fuse, and no animation or preview of its own. -->
-    <style name="Theme.Fuse.RecentsCard">
+    <!-- Fuse's Home hand-over: see-through, with no animation or preview of its own. -->
+    <style name="Theme.Fuse.Trampoline" parent="android:Theme.Translucent.NoTitleBar">
         <item name="android:windowAnimationStyle">@null</item>
         <item name="android:windowDisablePreview">true</item>
         <item name="android:windowNoTitle">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
     </style>
 </resources>

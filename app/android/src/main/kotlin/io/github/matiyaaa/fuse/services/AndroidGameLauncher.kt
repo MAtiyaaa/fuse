@@ -16,7 +16,6 @@ import android.provider.DocumentsContract
 import android.view.Display
 import androidx.core.content.FileProvider
 import io.github.matiyaaa.fuse.ActivityHolder
-import io.github.matiyaaa.fuse.RecentsCard
 import io.github.matiyaaa.fuse.launch.DualScreenPlatforms
 import io.github.matiyaaa.fuse.launch.LaunchTokens
 import io.github.matiyaaa.fuse.launch.ResolvedLaunch
@@ -370,11 +369,11 @@ class AndroidGameLauncher(
         return options
     }
 
-    /** Starts [intent]; while Fuse is the Home app, Fuse's card in recent apps goes right behind it. */
-    private fun startWith(intent: Intent, options: ActivityOptions, displayId: Int?) {
+    /** Starts [intent] from Fuse's window when it has one, else from the app. */
+    private fun startWith(intent: Intent, options: ActivityOptions, @Suppress("UNUSED_PARAMETER") displayId: Int?) {
         val activity = activities.current
         if (activity != null) {
-            RecentsCard.start(activity, intent, options.toBundle(), displayId)
+            activity.startActivity(intent, options.toBundle())
         } else {
             appContext.startActivity(Intent(intent).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), options.toBundle())
         }

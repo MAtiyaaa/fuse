@@ -28,9 +28,16 @@ class InstallResultReceiver : BroadcastReceiver() {
                     }
                 }
             }
-            PackageInstaller.STATUS_SUCCESS -> Toast.makeText(context, "Installed.", Toast.LENGTH_SHORT).show()
-            PackageInstaller.STATUS_FAILURE_ABORTED -> Unit // The user cancelled.
-            else -> Toast.makeText(context, failureMessage(status), Toast.LENGTH_LONG).show()
+            PackageInstaller.STATUS_SUCCESS -> {
+                // Fuse's own update: this runs in the new version, which opens itself again.
+                if (intent.getBooleanExtra(EXTRA_SELF_UPDATE, false)) UpdateRelaunch.onUpdated(context)
+                else Toast.makeText(context, "Installed.", Toast.LENGTH_SHORT).show()
+            }
+            PackageInstaller.STATUS_FAILURE_ABORTED -> UpdateRelaunch.disarm(context) // The user cancelled.
+            else -> {
+                UpdateRelaunch.disarm(context)
+                Toast.makeText(context, failureMessage(status), Toast.LENGTH_LONG).show()
+            }
         }
     }
 
@@ -50,5 +57,10 @@ class InstallResultReceiver : BroadcastReceiver() {
         PackageInstaller.STATUS_FAILURE_INVALID -> "Install failed: the download isn't a valid app."
         PackageInstaller.STATUS_FAILURE_BLOCKED -> "Install was blocked by the device."
         else -> "Install failed."
+    }
+
+    companion object {
+        /** Set on Fuse's own update, so the new version knows to open itself. */
+        const val EXTRA_SELF_UPDATE = "io.github.matiyaaa.fuse.SELF_UPDATE"
     }
 }
