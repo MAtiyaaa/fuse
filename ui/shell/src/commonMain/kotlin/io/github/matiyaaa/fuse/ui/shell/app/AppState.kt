@@ -18,13 +18,19 @@ import kotlinx.coroutines.CoroutineScope
 /** Where controller focus is: the section tabs at the top, or the page content. */
 enum class FocusZone { TABS, CONTENT }
 
-/** An options menu opened on something (a game, a system, an app, a widget). */
+/**
+ * An options menu opened on something (a game, a system, an app, a widget). Its header shows [art],
+ * else an [icon]. With an [accent], something without art gets generated art in its colour, as its
+ * tile does, so the menu still shows what it belongs to.
+ */
 data class ContextMenuSpec(
     val title: String,
     val subtitle: String? = null,
     val icon: ImageVector? = null,
     val art: Any? = null,
     val actions: List<MenuAction>,
+    /** ARGB colour for generated art when there is no [art]. */
+    val accent: Long? = null,
 )
 
 data class ConfirmSpec(
@@ -47,10 +53,15 @@ data class TextInputSpec(
     val onDone: (String) -> Unit,
 )
 
+/**
+ * A list to choose from, in a dialog: what it is about ([title], an optional [message]) and its
+ * [options]. An [icon] heads it in a well, so a picker reads as part of the thing it changes.
+ */
 data class ChoiceSpec(
     val title: String,
     val message: String? = null,
     val options: List<MenuAction>,
+    val icon: ImageVector? = null,
 )
 
 /**
@@ -146,5 +157,21 @@ class AppState(
 /** A text field that accepts hardware keyboard input. */
 class KeyboardTarget(val field: io.github.matiyaaa.fuse.ui.designsystem.components.EditableText, val submit: () -> Unit)
 
-/** Shown for the moment between pressing Play and the emulator taking over. */
-data class LaunchVeil(val title: String, val art: Any?, val accent: Long)
+/**
+ * Shown for the moment between pressing Play and the emulator taking over: the game's [title] over
+ * its [art] (its room: background, screenshot or system art), lit in [accent]. [cover] is its own
+ * square or box art, set beside the title as a tile (generated from the title when it has none);
+ * [logo] replaces the written title where the user shows logos; [system] names where it runs.
+ */
+data class LaunchVeil(
+    val title: String,
+    val art: Any?,
+    val accent: Long,
+    val cover: Any? = null,
+    val logo: Any? = null,
+    val system: String? = null,
+    val artFocusX: Float = 0.5f,
+    val artFocusY: Float = 0.35f,
+    /** [art] is a cover, not a background: drawn blurred into a colour field behind everything. */
+    val artBlurred: Boolean = false,
+)

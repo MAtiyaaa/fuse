@@ -2,6 +2,8 @@ package io.github.matiyaaa.fuse.ui.shell.app
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
@@ -41,6 +43,9 @@ import io.github.matiyaaa.fuse.ui.designsystem.background.AmbientBackground
 import io.github.matiyaaa.fuse.ui.designsystem.background.CrtOverlay
 import io.github.matiyaaa.fuse.ui.designsystem.components.HintBar
 import io.github.matiyaaa.fuse.ui.designsystem.components.ToastHost
+import io.github.matiyaaa.fuse.ui.designsystem.components.rememberHintFlash
+import io.github.matiyaaa.fuse.ui.designsystem.effects.RevealScope
+import io.github.matiyaaa.fuse.ui.designsystem.icons.HintButton
 import io.github.matiyaaa.fuse.ui.shell.capture.CaptureController
 import io.github.matiyaaa.fuse.ui.shell.capture.CaptureOverlay
 import io.github.matiyaaa.fuse.ui.shell.capture.rememberRecordingTime
@@ -157,6 +162,8 @@ fun FuseApp(store: FuseStore, platform: PlatformUi, router: InputRouter, phoneLi
         platform.sounds.setProfile(prefs.sound)
         platform.sounds.setVolume(prefs.soundVolume)
     }
+    // The hint line answers the hand: a pressed button's glyph flashes when it did something.
+    val hintFlash = rememberHintFlash()
     MenuMusic(app, platform.music)
     FillFinishedToast(app)
     io.github.matiyaaa.fuse.ui.shell.cartridge.UploadFinishedToasts(app)
@@ -184,6 +191,15 @@ fun FuseApp(store: FuseStore, platform: PlatformUi, router: InputRouter, phoneLi
                 NavResult.CONSUMED -> if (event.action == NavAction.BACK) platform.sounds.play(SoundCue.BACK)
                 NavResult.IGNORED -> Unit
             }
+            if (!event.isRepeat && (result == NavResult.ACTIVATED || result == NavResult.CONSUMED)) {
+                when (event.action) {
+                    NavAction.SELECT -> HintButton.CONFIRM
+                    NavAction.BACK -> HintButton.BACK
+                    NavAction.CONTEXT -> HintButton.OPTIONS
+                    NavAction.SEARCH -> HintButton.SEARCH
+                    else -> null
+                }?.let(hintFlash::flash)
+            }
         }
         onDispose { router.feedback = InputFeedback { _, _ -> } }
     }
@@ -195,6 +211,7 @@ fun FuseApp(store: FuseStore, platform: PlatformUi, router: InputRouter, phoneLi
         glyphs = GlyphConfig(glyphStyle, prefs.input.confirmOnRight),
         glass = prefs.glass,
         highContrastFocus = prefs.highContrastFocus,
+        animateChanges = true,
     ) {
         CompositionLocalProvider(LocalInputRouter provides router, LocalUiSounds provides platform.sounds) {
             BoxWithConstraints(Modifier.fillMaxSize().background(Fuse.colors.ink)) {
@@ -204,13 +221,17 @@ fun FuseApp(store: FuseStore, platform: PlatformUi, router: InputRouter, phoneLi
                     Room(app, prefs.showHero, spec.background, prefs.heroDim, prefs.glass, prefs.videoPreview, prefs.videoDelaySeconds, spec.ambient)
                     ArtWarmup(app)
                     ShellInput(app)
-                    Pages(app)
+                    Pages(app, visibleTabs(app, prefs))
                     val route = app.navigator.current
                     if (route != Route.Onboarding) {
                         val status by platform.status.collectAsState()
+                        // Settings or Search open is where you are, not the tab underneath them.
+                        val page = hudPage(app.navigator.stack)
+                        HudScrim(art = prefs.showHero && app.hero != null)
                         Hud(
                             destinations = visibleTabs(app, prefs),
-                            active = app.navigator.root?.destination,
+                            active = if (page == null) app.navigator.root?.destination else null,
+                            activeButton = page,
                             tabsFocused = app.focusZone == FocusZone.TABS,
                             focusedButton = app.hudButton,
                             onButton = { app.focusZone = FocusZone.CONTENT; app.hudButton = null; app.runHudButton(it) },
@@ -225,7 +246,8 @@ fun FuseApp(store: FuseStore, platform: PlatformUi, router: InputRouter, phoneLi
                     }
                     if (prefs.performanceOverlay) {
                         val metrics by platform.performance.collectAsState()
-                        PerformanceOverlay(metrics, Modifier.align(Alignment.TopStart).padding(start = Space.gutter, top = Size.hudHeight + Space.s))
+                        // Under the status it extends, where it covers the least of any page.
+                        PerformanceOverlay(metrics, Modifier.align(Alignment.TopEnd).padding(end = Space.gutter, top = Size.hudHeight + Space.xs))
                     }
                     // Content fades out under the hint line, so hints never sit on top of tiles.
                     if (app.hints.isNotEmpty()) {
@@ -237,7 +259,7 @@ fun FuseApp(store: FuseStore, platform: PlatformUi, router: InputRouter, phoneLi
                                 .background(Brush.verticalGradient(0f to Color.Transparent, 0.55f to Fuse.colors.ink.copy(alpha = 0.78f), 1f to Fuse.colors.ink.copy(alpha = 0.94f))),
                         )
                     }
-                    HintBar(app.hints, Modifier.align(Alignment.BottomEnd).padding(horizontal = Space.gutter, vertical = Space.s))
+                    HintBar(app.hints, Modifier.align(Alignment.BottomEnd).padding(horizontal = Space.gutter, vertical = Space.s), flash = hintFlash)
                     QuickMenu(app)
                     OverlayHost(app)
                     ToastHost(app.toasts)
@@ -304,60 +326,90 @@ private fun Room(
     }
 }
 
-/** Page content with transitions that follow the direction you moved. */
+/**
+ * Page content, moving the way you went, like rooms side by side: the next tab along slides in from
+ * its side, a page you open comes in from the right and Back brings the last one in from the left.
+ * The page you leave fades at once while drifting half as far the other way, and the new one fades
+ * in a beat later as it settles, so two pages never sit on top of each other. Under Reduced motion
+ * it is a short crossfade, without travel.
+ *
+ * Every entry into a page gets a fresh [RevealScope], so a page's own `Modifier.reveal` items rise
+ * in as it arrives, once. Input belongs to the new page from its first frame; nothing here holds it.
+ */
 @Composable
-private fun Pages(app: AppState) {
+private fun Pages(app: AppState, tabs: List<Destination>) {
     val motion = Fuse.motion
     val nav = app.navigator
-    val destinations = Destination.entries
+    // Tabs follow the order the top line shows them in, which the user may have changed.
+    fun place(route: Route): Int {
+        val d = (route as? Route.Root)?.destination ?: return 0
+        return tabs.indexOf(d).takeIf { it >= 0 } ?: (tabs.size + d.ordinal)
+    }
     AnimatedContent(
         targetState = nav.current,
         transitionSpec = {
             val dir = when (nav.direction) {
                 NavDirection.FORWARD -> 1
                 NavDirection.BACK -> -1
-                NavDirection.LATERAL -> {
-                    val from = (initialState as? Route.Root)?.destination?.let(destinations::indexOf) ?: 0
-                    val to = (targetState as? Route.Root)?.destination?.let(destinations::indexOf) ?: 0
-                    if (to >= from) 1 else -1
-                }
+                NavDirection.LATERAL -> if (place(targetState) >= place(initialState)) 1 else -1
             }
             val shift = motion.slideFraction
-            (fadeIn(motion.fade(Durations.BASE)) + slideInHorizontally(motion.tween(Durations.SLOW, Easings.Enter)) { (it * shift * dir).toInt() }) togetherWith
-                (fadeOut(motion.fade(Durations.FAST)) + slideOutHorizontally(motion.tween(Durations.BASE, Easings.Exit)) { (-it * shift * 0.6f * dir).toInt() })
+            val enter = fadeIn(tween(motion.ms(Durations.BASE), delayMillis = motion.ms(Durations.INSTANT) / 2, easing = Easings.Fade)) +
+                slideInHorizontally(motion.tween(Durations.SLOW, Easings.Enter)) { (it * shift * dir).toInt() }
+            val exit = fadeOut(motion.tween(Durations.FAST, Easings.Standard)) +
+                slideOutHorizontally(motion.tween(Durations.FAST, Easings.Standard)) { (-it * shift * 0.5f * dir).toInt() }
+            (enter togetherWith exit).using(SizeTransform(clip = false))
         },
         contentKey = { it },
         label = "pages",
     ) { route ->
-        Box(Modifier.fillMaxSize()) {
-            when (route) {
-                is Route.Root -> when (route.destination) {
-                    Destination.HOME -> HomeScreen(app)
-                    Destination.LIBRARY -> LibraryScreen(app, LibraryScope.All)
-                    Destination.SYSTEMS -> SystemsScreen(app)
-                    Destination.ACHIEVEMENTS -> io.github.matiyaaa.fuse.ui.shell.achievements.AchievementsScreen(app)
-                    Destination.APPS -> AppsScreen(app)
-                    Destination.CARTRIDGE -> CartridgeScreen(app)
+        RevealScope(route) {
+            Box(Modifier.fillMaxSize()) {
+                when (route) {
+                    is Route.Root -> when (route.destination) {
+                        Destination.HOME -> HomeScreen(app)
+                        Destination.LIBRARY -> LibraryScreen(app, LibraryScope.All)
+                        Destination.SYSTEMS -> SystemsScreen(app)
+                        Destination.ACHIEVEMENTS -> io.github.matiyaaa.fuse.ui.shell.achievements.AchievementsScreen(app)
+                        Destination.APPS -> AppsScreen(app)
+                        Destination.CARTRIDGE -> CartridgeScreen(app)
+                    }
+                    is Route.PlatformGames -> LibraryScreen(app, LibraryScope.OfPlatform(route.platform))
+                    is Route.CollectionGames -> LibraryScreen(app, LibraryScope.OfCollection(route.collection, route.name))
+                    Route.Collections -> io.github.matiyaaa.fuse.ui.shell.collections.CollectionsScreen(app)
+                    Route.Storage -> io.github.matiyaaa.fuse.ui.shell.settings.StorageScreen(app)
+                    Route.PhoneLink -> io.github.matiyaaa.fuse.ui.shell.settings.PhoneLinkScreen(app)
+                    is Route.GameInfo -> GameScreen(app, route.game)
+                    is Route.Media -> MediaScreen(app, route.owner, route.title, route.identify)
+                    is Route.Settings -> SettingsScreen(app, route.section)
+                    is Route.PlatformSettings -> PlatformSettingsScreen(app, route.platform)
+                    Route.Search -> SearchScreen(app)
+                    Route.Controls -> io.github.matiyaaa.fuse.ui.shell.settings.ControlsScreen(app)
+                    Route.Licenses -> io.github.matiyaaa.fuse.ui.shell.settings.LicensesScreen(app)
+                    Route.Themes -> io.github.matiyaaa.fuse.ui.shell.settings.ThemesScreen(app)
+                    Route.Onboarding -> OnboardingScreen(app)
+                    is Route.FolderBrowser -> FolderBrowserScreen(app, route.game)
+                    is Route.PickFile -> io.github.matiyaaa.fuse.ui.shell.files.FilePickerScreen(app, route.purpose, route.locate)
                 }
-                is Route.PlatformGames -> LibraryScreen(app, LibraryScope.OfPlatform(route.platform))
-                is Route.CollectionGames -> LibraryScreen(app, LibraryScope.OfCollection(route.collection, route.name))
-                Route.Collections -> io.github.matiyaaa.fuse.ui.shell.collections.CollectionsScreen(app)
-                Route.Storage -> io.github.matiyaaa.fuse.ui.shell.settings.StorageScreen(app)
-                Route.PhoneLink -> io.github.matiyaaa.fuse.ui.shell.settings.PhoneLinkScreen(app)
-                is Route.GameInfo -> GameScreen(app, route.game)
-                is Route.Media -> MediaScreen(app, route.owner, route.title, route.identify)
-                is Route.Settings -> SettingsScreen(app, route.section)
-                is Route.PlatformSettings -> PlatformSettingsScreen(app, route.platform)
-                Route.Search -> SearchScreen(app)
-                Route.Controls -> io.github.matiyaaa.fuse.ui.shell.settings.ControlsScreen(app)
-                Route.Licenses -> io.github.matiyaaa.fuse.ui.shell.settings.LicensesScreen(app)
-                Route.Themes -> io.github.matiyaaa.fuse.ui.shell.settings.ThemesScreen(app)
-                Route.Onboarding -> OnboardingScreen(app)
-                is Route.FolderBrowser -> FolderBrowserScreen(app, route.game)
-                is Route.PickFile -> io.github.matiyaaa.fuse.ui.shell.files.FilePickerScreen(app, route.purpose, route.locate)
             }
         }
     }
+}
+
+/**
+ * The top line's own page that is open (Settings or Search, or a page opened from it), or null when
+ * a tab's pages are showing. The line shows it as the active place instead of the tab underneath.
+ */
+internal fun hudPage(stack: List<Route>): HudButton? {
+    for (route in stack.asReversed()) {
+        when (route) {
+            Route.Search -> return HudButton.SEARCH
+            is Route.Settings, is Route.PlatformSettings, Route.Controls, Route.Licenses, Route.Themes, Route.Storage, Route.PhoneLink ->
+                return HudButton.SETTINGS
+            else -> Unit
+        }
+    }
+    return null
 }
 
 /**
@@ -497,7 +549,6 @@ private fun MenuMusic(app: AppState, player: MenuMusicPlayer?) {
     LaunchedEffect(quiet) { player.setPlaying(!quiet) }
 }
 
-/** What is working in the background, for the top line: Cartridge downloads and Fuse updates. */
 /** Says once when a fill that ran for more than one game finishes, unless its Settings page is open. */
 @Composable
 private fun FillFinishedToast(app: AppState) {
@@ -520,6 +571,7 @@ private fun FillFinishedToast(app: AppState) {
     }
 }
 
+/** What is working in the background, for the top line: recordings, art fills, uploads, downloads and updates. */
 @Composable
 private fun hudActivities(app: AppState): List<HudActivity> {
     val update by app.store.updates.state.collectAsState()

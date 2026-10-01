@@ -55,6 +55,7 @@ internal fun AppState.locateEmulator(request: LocateRequest, path: String) {
 internal fun AppState.locatePicker() {
     val located = store.emulators.located.value
     choice = ChoiceSpec(
+        icon = FuseIcons.FolderSearch,
         title = "Locate an emulator",
         message = "Fuse looks in the usual places. If it missed one, pick it here and show Fuse its program.",
         options = store.emulators.known().map { o ->
@@ -73,6 +74,7 @@ internal fun AppState.locatePicker() {
 
 private fun AppState.locatedOptions(o: EmulatorOption) {
     choice = ChoiceSpec(
+        icon = FuseIcons.Chip,
         title = o.name,
         message = store.emulators.located.value[o.id],
         options = listOf(
@@ -92,6 +94,7 @@ private fun AppState.locatedOptions(o: EmulatorOption) {
 internal fun AppState.emulatorFoldersPicker() {
     val folders = store.emulators.searchFolders.value
     choice = ChoiceSpec(
+        icon = FuseIcons.Folder,
         title = "Emulator folders",
         message = "Besides the usual places, Fuse searches these folders and the folders inside them.",
         options = listOf(
