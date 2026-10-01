@@ -16,6 +16,10 @@ import io.github.matiyaaa.fuse.ui.shell.store.GameCard
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
+/** Group names in system lists: the likely ones first, then the rest from A to Z. */
+private const val SUGGESTED = "Suggested"
+private const val EVERY_SYSTEM = "Every system"
+
 /** "Sega, 1994": who made the system and when, to tell similar names apart. */
 private fun Platform.maker(): String? = listOfNotNull(manufacturer, releaseYear?.toString()).joinToString(", ").ifEmpty { null }
 
@@ -44,6 +48,7 @@ fun AppState.appKindPicker(app: AppCard) {
     }
     val gameDetail = if (store.apps.gamesInLibrary) "Joins the Android system with box art, details and play time" else "Lists under Games in Apps"
     choice = ChoiceSpec(
+        icon = FuseIcons.CircleHelp,
         title = "What is ${entry.displayTitle}?",
         message = if (entry.chosenKind == null) "Fuse took it for ${entry.detectedKind.noun()}." else "You said it's ${entry.kind.noun()}.",
         options = listOf(
@@ -52,7 +57,7 @@ fun AppState.appKindPicker(app: AppCard) {
             MenuAction("emulator", "Emulator", FuseIcons.Chip, detail = "Lists under Emulators in Apps", trailing = Trailing.Check(entry.kind == AppKind.EMULATOR), onSelect = { pick(AppKind.EMULATOR) }),
         ) + listOfNotNull(
             if (entry.chosenKind != null) {
-                MenuAction("auto", "Let Fuse decide", FuseIcons.Sparkles, detail = "Fuse takes it for ${entry.detectedKind.noun()}", onSelect = { pick(null) })
+                MenuAction("auto", "Let Fuse decide", FuseIcons.Sparkles, detail = "Fuse takes it for ${entry.detectedKind.noun()}", section = "", onSelect = { pick(null) })
             } else {
                 null
             },
@@ -80,14 +85,16 @@ fun AppState.systemPicker(card: GameCard) {
         val suggested = if (appId != null) emptyList() else PlatformCatalog.forExtension(FsPath.extension(game.location.launchPath))
         val first = (listOfNotNull(PlatformCatalog.byId(folder)) + suggested).distinctBy { it.id }
         val rest = PlatformCatalog.all.filter { p -> first.none { it.id == p.id } }.sortedBy { it.name.lowercase() }
-        fun row(p: Platform, detail: String?) = MenuAction(
+        fun row(p: Platform, detail: String?, section: String) = MenuAction(
             "p.${p.id.value}", p.name, null,
             detail = detail ?: p.maker(),
             trailing = Trailing.Check(p.id == current),
+            section = section,
             onSelect = { pick(p) },
         )
         val ext = FsPath.extension(game.location.launchPath)
         choice = ChoiceSpec(
+            icon = FuseIcons.Layers,
             title = "System for ${card.title}",
             message = if (appId != null) {
                 "Android games start as their app whatever system they are in."
@@ -107,9 +114,9 @@ fun AppState.systemPicker(card: GameCard) {
                         appId != null && p.id == folder -> "Where Android games go"
                         p.id == folder -> "The system its folder says"
                         else -> "Takes .$ext files"
-                    }))
+                    }, SUGGESTED))
                 }
-                rest.forEach { add(row(it, null)) }
+                rest.forEach { add(row(it, null, EVERY_SYSTEM)) }
             },
         )
     }
@@ -119,6 +126,7 @@ fun AppState.systemPicker(card: GameCard) {
 fun AppState.addGame() {
     val apps = store.apps
     choice = ChoiceSpec(
+        icon = FuseIcons.CirclePlus,
         title = "Add a game",
         message = "Fuse finds the games in your library folders by itself. Add one from anywhere else here.",
         options = listOfNotNull(
@@ -154,6 +162,7 @@ private fun AppState.appGamePicker() {
     scope.launch {
         val list = store.apps.everyApp().first().filter { it.entry.kind != AppKind.GAME }
         choice = ChoiceSpec(
+            icon = FuseIcons.Smartphone,
             title = "Which app is a game?",
             message = if (list.isEmpty()) "Every app here is a game already." else "It joins the Android system with box art, details and play time. Its options can change it back.",
             options = list.map { a ->
@@ -211,10 +220,14 @@ internal fun AppState.addGameFile(path: String) {
         }
     }
     choice = ChoiceSpec(
+        icon = FuseIcons.FileText,
         title = "Which system is $name for?",
         message = if (suggested.isEmpty()) "Fuse doesn't know this kind of file. Pick the system whose emulator opens it." else null,
         options = suggested.map { p ->
-            MenuAction("s.${p.id.value}", p.name, FuseIcons.Sparkles, detail = "Takes .${FsPath.extension(path)} files", onSelect = { add(p.id, p.name) })
-        } + rest.map { p -> MenuAction("p.${p.id.value}", p.name, null, detail = p.maker(), onSelect = { add(p.id, p.name) }) },
+            MenuAction("s.${p.id.value}", p.name, FuseIcons.Sparkles, detail = "Takes .${FsPath.extension(path)} files", section = SUGGESTED, onSelect = { add(p.id, p.name) })
+        } + rest.map { p ->
+            // Without suggestions the list is every system, and needs no heading to say so.
+            MenuAction("p.${p.id.value}", p.name, null, detail = p.maker(), section = if (suggested.isEmpty()) null else EVERY_SYSTEM, onSelect = { add(p.id, p.name) })
+        },
     )
 }

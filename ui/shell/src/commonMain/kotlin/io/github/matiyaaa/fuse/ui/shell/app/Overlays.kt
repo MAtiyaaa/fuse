@@ -3,17 +3,17 @@ package io.github.matiyaaa.fuse.ui.shell.app
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -23,7 +23,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import io.github.matiyaaa.fuse.model.NavAction
 import io.github.matiyaaa.fuse.ui.designsystem.components.ButtonKind
@@ -31,25 +30,32 @@ import io.github.matiyaaa.fuse.ui.designsystem.components.FText
 import io.github.matiyaaa.fuse.ui.designsystem.components.FuseButton
 import io.github.matiyaaa.fuse.ui.designsystem.components.KeyboardField
 import io.github.matiyaaa.fuse.ui.designsystem.components.KeyboardState
+import io.github.matiyaaa.fuse.ui.designsystem.components.MenuHeader
 import io.github.matiyaaa.fuse.ui.designsystem.components.MenuList
 import io.github.matiyaaa.fuse.ui.designsystem.components.OnScreenKeyboard
+import io.github.matiyaaa.fuse.ui.designsystem.components.OnScreenKeyboardHints
 import io.github.matiyaaa.fuse.ui.designsystem.components.Overlay
 import io.github.matiyaaa.fuse.ui.designsystem.components.OverlayEdge
 import io.github.matiyaaa.fuse.ui.designsystem.components.Panel
 import io.github.matiyaaa.fuse.ui.designsystem.components.handleMenuAction
 import io.github.matiyaaa.fuse.ui.designsystem.focus.LinearSelection
-import io.github.matiyaaa.fuse.ui.designsystem.icons.ButtonGlyph
-import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
-import io.github.matiyaaa.fuse.ui.designsystem.icons.HintButton
 import io.github.matiyaaa.fuse.ui.designsystem.input.InputLayer
 import io.github.matiyaaa.fuse.ui.designsystem.input.LayerPriority
 import io.github.matiyaaa.fuse.ui.designsystem.input.NavResult
+import io.github.matiyaaa.fuse.ui.designsystem.media.ArtSlot
 import io.github.matiyaaa.fuse.ui.designsystem.media.Artwork
+import io.github.matiyaaa.fuse.ui.designsystem.media.GeneratedArt
 import io.github.matiyaaa.fuse.ui.designsystem.sound.SoundCue
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
+import io.github.matiyaaa.fuse.ui.designsystem.theme.toColor
 
-/** Draws whichever overlay is open. Each overlay is modal: nothing underneath reacts while it's up. */
+/**
+ * Draws whichever overlay is open. Each overlay is modal: nothing underneath reacts while it's up.
+ * They all arrive and leave the same way ([Overlay]: the scrim fades, the panel grows or slides in
+ * and leaves quicker than it came) with the same opening sound, and closing one leaves the page
+ * underneath exactly where it was.
+ */
 @Composable
 fun OverlayHost(app: AppState) {
     ContextMenuOverlay(app)
@@ -78,23 +84,28 @@ private fun ContextMenuOverlay(app: AppState) {
     }
     Overlay(visible = spec != null, onDismiss = { app.contextMenu = null }, edge = OverlayEdge.END) {
         val s = shown ?: return@Overlay
-        Panel(Modifier.width(420.dp).fillMaxHeight().padding(vertical = Space.l).padding(end = Space.l)) {
-            Column(Modifier.padding(Space.l)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (s.art != null) {
-                        Artwork(s.art, Modifier.size(52.dp).clip(RoundedCornerShape(12.dp)))
-                        Spacer(Modifier.width(Space.m))
-                    } else if (s.icon != null) {
-                        FuseIcon(s.icon, size = 28.dp)
-                        Spacer(Modifier.width(Space.m))
+        BoxWithConstraints {
+            // A side sheet the height of the screen; a narrow screen gives it all but a margin.
+            val width = minOf(SHEET_WIDTH, maxWidth - Space.l)
+            Panel(Modifier.width(width).fillMaxHeight().padding(vertical = Space.l).padding(end = Space.l)) {
+                Column(Modifier.padding(Space.l)) {
+                    // Art, or for something without art its generated tile, else the icon.
+                    val accent = s.accent
+                    val leading: (@Composable () -> Unit)? = when {
+                        s.art != null || (accent != null && s.icon == null) -> {
+                            {
+                                Artwork(
+                                    s.art,
+                                    Modifier.fillMaxSize(),
+                                    fallback = { accent?.let { GeneratedArt(s.title, it.toColor(), slot = ArtSlot.ICON) } },
+                                )
+                            }
+                        }
+                        else -> null
                     }
-                    Column {
-                        FText(s.title, Fuse.type.titleSmall, maxLines = 2)
-                        s.subtitle?.let { FText(it, Fuse.type.caption, color = Fuse.colors.textMuted, maxLines = 1) }
-                    }
+                    MenuHeader(s.title, subtitle = s.subtitle, icon = s.icon, leading = leading)
+                    MenuList(s.actions, sel)
                 }
-                Spacer(Modifier.height(Space.l))
-                MenuList(s.actions, sel)
             }
         }
     }
@@ -107,6 +118,7 @@ private fun ChoiceOverlay(app: AppState) {
     if (spec != null) shown = spec
     // Keyed by the title, so a list that updates itself (checks toggled in place) keeps its place.
     val sel = remember(spec?.title) { LinearSelection() }
+    LaunchedEffect(spec != null) { if (spec != null) app.platform.sounds.play(SoundCue.OPEN) }
     if (spec != null) {
         InputLayer(priority = LayerPriority.DIALOG + 1, modal = true) { e ->
             when (e.action) {
@@ -117,16 +129,33 @@ private fun ChoiceOverlay(app: AppState) {
     }
     Overlay(visible = spec != null, onDismiss = { app.choice = null }, edge = OverlayEdge.CENTER) {
         val s = shown ?: return@Overlay
-        Panel(Modifier.widthIn(min = 420.dp, max = 560.dp).heightIn(max = 560.dp)) {
-            Column(Modifier.padding(Space.xl)) {
-                FText(s.title, Fuse.type.title, maxLines = 2)
-                s.message?.let {
-                    Spacer(Modifier.height(Space.s))
-                    FText(it, Fuse.type.body, color = Fuse.colors.textMuted, maxLines = 8)
-                }
-                Spacer(Modifier.height(Space.l))
-                MenuList(s.options, sel, modifier = Modifier.heightIn(max = 420.dp), fill = false)
+        DialogPanel { compact ->
+            Column(Modifier.padding(if (compact) Space.l else Space.xl)) {
+                MenuHeader(s.title, subtitle = s.message, icon = s.icon, subtitleMaxLines = 6)
+                // As tall as its rows, scrolling within whatever height the dialog has left.
+                MenuList(s.options, sel, modifier = Modifier.weight(1f, fill = false), fill = false)
             }
+        }
+    }
+}
+
+/**
+ * A centred dialog panel that fits the screen it is on: between [DIALOG_MIN_WIDTH] and
+ * [DIALOG_MAX_WIDTH] wide and at most [DIALOG_MAX_HEIGHT] tall, always leaving a margin, so a
+ * handheld's short screen or a phone held upright never clips it. [content] learns whether the
+ * screen is short ([compact]) so it can tighten its padding.
+ */
+@Composable
+private fun DialogPanel(content: @Composable ColumnScope.(compact: Boolean) -> Unit) {
+    BoxWithConstraints(contentAlignment = Alignment.Center) {
+        val room = maxWidth - Space.l * 2
+        val compact = maxHeight < COMPACT_HEIGHT
+        Panel(
+            Modifier
+                .widthIn(min = minOf(DIALOG_MIN_WIDTH, room), max = minOf(DIALOG_MAX_WIDTH, room))
+                .heightIn(max = minOf(DIALOG_MAX_HEIGHT, maxHeight - Space.l * 2)),
+        ) {
+            Column { content(compact) }
         }
     }
 }
@@ -138,6 +167,7 @@ private fun ConfirmOverlay(app: AppState) {
     if (spec != null) shown = spec
     // Destructive confirmations start on Cancel so a hurried press never deletes anything.
     var index by remember(spec) { mutableIntStateOf(if (spec?.destructive == true) 0 else 1) }
+    LaunchedEffect(spec != null) { if (spec != null) app.platform.sounds.play(SoundCue.OPEN) }
     fun finish(ok: Boolean) {
         val s = spec ?: return
         app.confirm = null
@@ -156,12 +186,12 @@ private fun ConfirmOverlay(app: AppState) {
     }
     Overlay(visible = spec != null, onDismiss = { app.confirm = null }, edge = OverlayEdge.CENTER) {
         val s = shown ?: return@Overlay
-        Panel(Modifier.widthIn(min = 420.dp, max = 560.dp)) {
-            Column(Modifier.padding(Space.xl)) {
+        DialogPanel { compact ->
+            Column(Modifier.padding(if (compact) Space.l else Space.xl)) {
                 FText(s.title, Fuse.type.title, maxLines = 3)
                 Spacer(Modifier.height(Space.s))
                 FText(s.message, Fuse.type.body, color = Fuse.colors.textMuted, maxLines = 8)
-                Spacer(Modifier.height(Space.xl))
+                Spacer(Modifier.height(if (compact) Space.l else Space.xl))
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.m, Alignment.End)) {
                     FuseButton("Cancel", selected = index == 0, onClick = { finish(false) }, kind = ButtonKind.GHOST)
                     FuseButton(
@@ -215,7 +245,7 @@ private fun TextInputOverlay(app: AppState) {
         val s = shown ?: return@Overlay
         BoxWithConstraints {
             // Short screens (handhelds) get shorter keys, so the field and hints still fit.
-            val keyHeight = if (maxHeight < 560.dp) 38.dp else 46.dp
+            val keyHeight = if (maxHeight < COMPACT_HEIGHT) 38.dp else 46.dp
             Panel(Modifier.widthIn(max = 880.dp).padding(Space.l)) {
                 Column(Modifier.padding(Space.l)) {
                     FText(s.title, Fuse.type.titleSmall)
@@ -236,36 +266,25 @@ private fun TextInputOverlay(app: AppState) {
                         onKey = { app.platform.haptics.tick() },
                     )
                     Spacer(Modifier.height(Space.m))
-                    KeyboardHints()
+                    // Names the finishing key the way the key itself does (Save, Connect, Done).
+                    OnScreenKeyboardHints(doneLabel = s.doneLabel)
                 }
             }
         }
     }
 }
 
-/** The controller shortcuts under a keyboard. */
+/** The controller shortcuts under a keyboard; kept for callers of the shell's earlier version. */
 @Composable
-fun KeyboardHints(done: String = "Done") {
-    Row(horizontalArrangement = Arrangement.spacedBy(Space.l), verticalAlignment = Alignment.CenterVertically) {
-        KeyHint(HintButton.OPTIONS, "Delete")
-        KeyHint(HintButton.SEARCH, "Space")
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            ButtonGlyph(HintButton.PREV, size = 18.dp, color = Fuse.colors.textFaint)
-            Spacer(Modifier.width(Space.xxs))
-            ButtonGlyph(HintButton.NEXT, size = 18.dp, color = Fuse.colors.textFaint)
-            Spacer(Modifier.width(Space.xs))
-            FText("Move cursor", Fuse.type.caption, color = Fuse.colors.textFaint)
-        }
-        KeyHint(HintButton.MENU, done)
-    }
-}
+fun KeyboardHints(done: String = "Done") = OnScreenKeyboardHints(doneLabel = done)
 
-/** A small glyph and label under the keyboard, in the pad's own button style. */
-@Composable
-private fun KeyHint(button: HintButton, label: String) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        ButtonGlyph(button, size = 18.dp, color = Fuse.colors.textFaint)
-        Spacer(Modifier.width(Space.xs))
-        FText(label, Fuse.type.caption, color = Fuse.colors.textFaint)
-    }
-}
+/** A context menu sheet's width on screens with room for it. */
+private val SHEET_WIDTH = 420.dp
+
+/** Dialog widths and height on screens with room for them. */
+private val DIALOG_MIN_WIDTH = 420.dp
+private val DIALOG_MAX_WIDTH = 560.dp
+private val DIALOG_MAX_HEIGHT = 560.dp
+
+/** Screens shorter than this (handhelds) get tighter dialogs. */
+private val COMPACT_HEIGHT = 560.dp
