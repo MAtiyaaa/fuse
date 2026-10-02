@@ -76,6 +76,7 @@ import io.github.matiyaaa.fuse.ui.shell.app.applyUpdate
 import io.github.matiyaaa.fuse.ui.shell.app.formatDate
 import io.github.matiyaaa.fuse.ui.shell.app.offers
 import io.github.matiyaaa.fuse.ui.shell.app.rememberClockText
+import io.github.matiyaaa.fuse.ui.shell.app.sections
 import io.github.matiyaaa.fuse.ui.shell.capture.rememberRecordingTime
 import io.github.matiyaaa.fuse.ui.shell.components.ControlTile
 import io.github.matiyaaa.fuse.ui.shell.components.ROW_CONTENT_START
@@ -186,7 +187,10 @@ fun QuickMenu(app: AppState) {
                 app.toasts.show("Looking for new games")
             }
         })
-        if (prefs.cartridgeEnabled && app.offers(Destination.CARTRIDGE)) add(QuickTile("Cartridge", FuseIcons.CloudDownload) { close(); app.selectTab(Destination.CARTRIDGE) })
+        val sections = app.sections
+        if ((prefs.cartridgeEnabled || sections.addons) && app.offers(Destination.CARTRIDGE)) {
+            add(QuickTile(sections.label(Destination.CARTRIDGE), sections.icon(Destination.CARTRIDGE)) { close(); app.selectTab(Destination.CARTRIDGE) })
+        }
         // Search has its own button in the top line; Home's style is one press here.
         add(QuickTile("Home", if (prefs.home.mode == HomeMode.CHANNELS) FuseIcons.Grid else FuseIcons.Rows, detail = if (prefs.home.mode == HomeMode.CHANNELS) "Channels" else "Flow") {
             app.switchHomeStyle()

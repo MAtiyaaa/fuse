@@ -12,31 +12,20 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.scrollBy
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -56,12 +45,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.Shape
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.addOutline
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.input.pointer.pointerInput
@@ -70,8 +54,6 @@ import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.toSize
@@ -81,37 +63,28 @@ import io.github.matiyaaa.fuse.model.CartridgeStatus
 import io.github.matiyaaa.fuse.model.HomeWidget
 import io.github.matiyaaa.fuse.model.NavAction
 import io.github.matiyaaa.fuse.model.WidgetKind
-import io.github.matiyaaa.fuse.ui.designsystem.components.ButtonKind
+import io.github.matiyaaa.fuse.ui.designsystem.components.Badge
 import io.github.matiyaaa.fuse.ui.designsystem.components.FText
-import io.github.matiyaaa.fuse.ui.designsystem.components.FuseButton
 import io.github.matiyaaa.fuse.ui.designsystem.components.Hint
 import io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction
-import io.github.matiyaaa.fuse.ui.designsystem.components.Panel
 import io.github.matiyaaa.fuse.ui.designsystem.components.Tile
 import io.github.matiyaaa.fuse.ui.designsystem.components.fadingEdges
 import io.github.matiyaaa.fuse.ui.designsystem.effects.lightEdge
 import io.github.matiyaaa.fuse.ui.designsystem.effects.rememberReveal
 import io.github.matiyaaa.fuse.ui.designsystem.effects.reveal
-import io.github.matiyaaa.fuse.ui.designsystem.focus.DragReorderState
 import io.github.matiyaaa.fuse.ui.designsystem.focus.GridCell
-import io.github.matiyaaa.fuse.ui.designsystem.focus.ReorderDefaults
 import io.github.matiyaaa.fuse.ui.designsystem.focus.SpatialSelection
-import io.github.matiyaaa.fuse.ui.designsystem.focus.dragReorder
 import io.github.matiyaaa.fuse.ui.designsystem.focus.followScroll
-import io.github.matiyaaa.fuse.ui.designsystem.focus.packBoard
-import io.github.matiyaaa.fuse.ui.designsystem.focus.rememberDragReorderState
-import io.github.matiyaaa.fuse.ui.designsystem.focus.reorderItem
-import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
 import io.github.matiyaaa.fuse.ui.designsystem.icons.HintButton
 import io.github.matiyaaa.fuse.ui.designsystem.input.InputLayer
+import io.github.matiyaaa.fuse.ui.designsystem.input.LocalInputRouter
 import io.github.matiyaaa.fuse.ui.designsystem.input.NavResult
 import io.github.matiyaaa.fuse.ui.designsystem.media.Artwork
 import io.github.matiyaaa.fuse.ui.designsystem.shape.SquircleShape
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Durations
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Elevation
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
-import io.github.matiyaaa.fuse.ui.designsystem.theme.Radius
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
 import io.github.matiyaaa.fuse.ui.designsystem.theme.toColor
@@ -129,8 +102,11 @@ import io.github.matiyaaa.fuse.ui.shell.store.HomeFeed
 import io.github.matiyaaa.fuse.ui.shell.store.PlatformCard
 import io.github.matiyaaa.fuse.ui.shell.store.UiPrefs
 import kotlin.math.PI
+import kotlin.math.exp
 import kotlin.math.roundToInt
 import kotlin.math.sin
+import kotlin.time.TimeSource
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /** Columns of the board on a landscape screen, and on a narrow one (a phone held upright). */
@@ -145,15 +121,14 @@ private const val WIDGET_CORNER = 0.6f
 
 /**
  * Channel Mode: Home as a board of widgets you arrange yourself, like a phone's home screen. Each
- * widget is one to four cells across and one to three down, and is designed for its size: a list
- * of games shows its first game's art with the next covers beside it, the clock draws a dial once
- * it has room, storage a ring. The room behind the board takes the focused widget's game.
+ * widget is one to four cells across and one to three down, has its own place on the grid, and is
+ * designed for its size. The room behind the board takes the focused widget's game.
  *
- * Holding a widget (or holding confirm, or Options, Arrange Home) arranges the board: widgets
- * wobble a little, show a corner to resize them by and a badge to take them off, and an Add tile
- * appears. By touch, drag a widget to move it (the others spring to their new places) or drag its
- * corner to resize it, cell by cell, with a tick for each. With the controller, A picks a widget up
- * and the D-pad moves it, and Options, Resize grows or shrinks it with the D-pad.
+ * Holding a widget (or holding confirm, or Options, Arrange Home) arranges the board: the grid's free
+ * cells show, widgets wobble a little, and each gets a badge to take it off. By touch, drag a widget
+ * anywhere on the grid (the widgets in the way move aside, and the cells it will land on light up),
+ * or drag the chosen widget's handles to resize it. With the controller, A picks a widget up and the
+ * D-pad carries it a cell at a time; holding Options (X) turns the D-pad into resizing.
  */
 @Composable
 fun ChannelHome(app: AppState) {
@@ -172,61 +147,83 @@ fun ChannelHome(app: AppState) {
     }
 
     val widgets = prefs.home.boardWidgets().filter { onBoard(it, app, prefs, cartridge) }
-    val drag = rememberDragReorderState()
-    // While a widget is held, the board shows the order it would land in.
-    val shown = drag.arrange(widgets) { it.id }
+    val editor = remember { BoardEditor() }
+    val arranging = editor.arranging
+    val op = editor.op
     val sel = rememberRouteState(app.navigator, "home.board") { SpatialSelection() }
-    var arranging by remember { mutableStateOf(false) }
-    // The controller carries the selected widget (moving it), or resizes it.
-    var carrying by remember { mutableStateOf(false) }
-    var resizing by remember { mutableStateOf(false) }
-    // A size shown before it is kept: while a corner is dragged, or the D-pad resizes.
-    var preview by remember { mutableStateOf<Pair<String, BoardSize>?>(null) }
+    // After a change is kept the board's order follows its new reading order; the same widget stays chosen.
+    var reselect by remember { mutableStateOf<String?>(null) }
+    reselect?.let { id ->
+        val i = widgets.indexOfFirst { it.id == id }
+        if (i >= 0) {
+            sel.index = i
+            reselect = null
+        }
+    }
     sel.clamp(if (arranging) widgets.size + 1 else widgets.size)
     val current = widgets.getOrNull(sel.index)
     val reveal = rememberReveal()
     val haptics = app.platform.haptics
+    val router = LocalInputRouter.current
+    val held by router.heldModifier.collectAsState()
+
+    // Holding Options while arranging turns the chosen widget's look into resizing, after a beat so
+    // a quick press for the menu doesn't flash it.
+    val holding = arranging && held == NavAction.CONTEXT && op == null
+    var resizeLook by remember { mutableStateOf(false) }
+    LaunchedEffect(holding) {
+        if (holding) {
+            delay(RESIZE_LOOK_MS)
+            resizeLook = true
+        } else {
+            resizeLook = false
+        }
+    }
 
     val systems = rememberSystems(app)
     LaunchedEffect(current?.id, systems) {
         val game = current?.let { firstGame(it.kind, feed) }
         app.hero = game?.room(systems[game.platformId])
     }
-    LaunchedEffect(arranging, carrying, resizing) {
+    LaunchedEffect(arranging, op is BoardOp.Carry, resizeLook) {
         app.hints = when {
-            resizing -> listOf(Hint(HintButton.DPAD, "Resize"), Hint(HintButton.CONFIRM, "Keep"), Hint(HintButton.BACK, "Cancel"))
-            carrying -> listOf(Hint(HintButton.DPAD, "Move"), Hint(HintButton.CONFIRM, "Put down"))
-            arranging -> listOf(Hint(HintButton.CONFIRM, "Pick up"), Hint(HintButton.OPTIONS, "Edit"), Hint(HintButton.BACK, "Done"))
+            op is BoardOp.Carry -> listOf(Hint(HintButton.DPAD, "Move"), Hint(HintButton.CONFIRM, "Put down"), Hint(HintButton.BACK, "Cancel"))
+            resizeLook -> listOf(Hint(HintButton.DPAD, "Resize"), Hint(HintButton.HOLD_OPTIONS, "Let go when done"))
+            arranging -> listOf(Hint(HintButton.CONFIRM, "Pick up"), Hint(HintButton.HOLD_OPTIONS, "Resize"), Hint(HintButton.OPTIONS, "Edit"), Hint(HintButton.BACK, "Done"))
             else -> listOf(Hint(HintButton.CONFIRM, "Open"), Hint(HintButton.HOLD_CONFIRM, "Arrange"), Hint(HintButton.OPTIONS, "Options"))
         }
     }
-    // Leaving the board puts everything down.
+    // Leaving the board puts everything down where it was.
     LaunchedEffect(app.focusZone) {
-        if (app.focusZone != FocusZone.CONTENT) {
-            carrying = false
-            resizing = false
-            preview = null
-        }
+        if (app.focusZone != FocusZone.CONTENT) editor.cancel()
     }
 
-    /** Saves the whole board (every widget, shown here or not) after [change], renumbered in order. */
+    /**
+     * Keeps [layout] (a board [columns] wide): each widget's place on this board, the new size of the
+     * one [resized], and the board's order in reading order, so a board of another width that was never
+     * arranged follows this one. Widgets not shown keep their places, after the others.
+     */
+    fun save(layout: BoardLayout, columns: Int, resized: String? = null) {
+        val reading = layout.ids.withIndex().associate { it.value to it.index }
+        store.updatePrefs { p ->
+            val board = p.home.boardWidgets().map { w ->
+                val r = layout[w.id] ?: return@map w
+                val sized = if (w.id == resized) w.copy(width = r.width, height = r.height) else w
+                sized.copy(spots = w.spots + (columns to r.spot))
+            }.sortedWith(compareBy({ reading[it.id] ?: Int.MAX_VALUE }, { it.order }))
+            p.copy(home = p.home.copy(board = board.mapIndexed { i, w -> w.copy(order = i) }))
+        }
+    }
     fun saveBoard(change: (List<HomeWidget>) -> List<HomeWidget>) {
         store.updatePrefs { p -> p.copy(home = p.home.copy(board = change(p.home.boardWidgets()).mapIndexed { i, w -> w.copy(order = i) })) }
     }
-    fun moveTo(from: Int, to: Int) {
-        if (from !in widgets.indices || to !in widgets.indices || from == to) return
-        val ids = widgets.map { it.id }
-        saveBoard { HomeArrange.moveOne(it, ids, ids[from], to) }
-        sel.index = to
-    }
-    fun resize(id: String, size: BoardSize) = saveBoard { list -> list.map { if (it.id == id) it.copy(width = size.width, height = size.height) else it } }
     fun remove(w: HomeWidget) {
         saveBoard { list -> list.filterNot { it.id == w.id } }
         app.toasts.show("Took ${w.kind.title()} off Home. Add it back with Add widget")
     }
     fun add(kind: WidgetKind) {
         saveBoard { list -> list + HomeWidget(kind.name.lowercase(), kind, list.size) }
-        sel.index = widgets.size
+        reselect = kind.name.lowercase()
         app.toasts.show("Added ${kind.title()}")
     }
     fun addPicker() {
@@ -238,52 +235,15 @@ fun ChannelHome(app: AppState) {
         app.choice = ChoiceSpec(
             title = "Add a widget",
             icon = FuseIcons.CirclePlus,
-            message = "It goes at the end of the board. Drag its corner, or use Options, Resize, to make it bigger",
+            message = "It takes the first free place on the board. Then drag it anywhere, or resize it by its handles",
             options = missing.map { k -> MenuAction("add.$k", k.title(), widgetIcon(k), onSelect = { app.choice = null; add(k) }) },
         )
     }
     fun stopArranging() {
-        arranging = false
-        carrying = false
-        resizing = false
-        preview = null
+        editor.cancel()
+        editor.arranging = false
         sel.clamp(widgets.size)
     }
-
-    fun menu(w: HomeWidget?) = ContextMenuSpec(
-        title = w?.kind?.title() ?: "Home",
-        subtitle = "Home",
-        actions = listOfNotNull(
-            if (!arranging) {
-                MenuAction("arrange", "Arrange Home", FuseIcons.Grid, detail = "Move, resize, add and remove widgets", onSelect = {
-                    app.closeOverlays()
-                    arranging = true
-                })
-            } else {
-                null
-            },
-            w?.let {
-                MenuAction("move", "Move", FuseIcons.Move, detail = "Then drag it, or use the D-pad", onSelect = {
-                    app.closeOverlays()
-                    arranging = true
-                    carrying = true
-                    drag.arm(it.id)
-                })
-            },
-            w?.let {
-                val s = it.boardSize
-                MenuAction("resize", "Resize", FuseIcons.Maximize, detail = "Now ${s.width} by ${s.height}. Use the D-pad, or drag its corner", onSelect = {
-                    app.closeOverlays()
-                    arranging = true
-                    resizing = true
-                    preview = it.id to s
-                })
-            },
-            w?.let { MenuAction("remove", "Remove from Home", FuseIcons.Minus, destructive = true, onSelect = { app.closeOverlays(); remove(it) }) },
-            if (arranging) MenuAction("add", "Add a widget", FuseIcons.CirclePlus, onSelect = { app.closeOverlays(); addPicker() }) else null,
-            if (arranging) MenuAction("done", "Done arranging", FuseIcons.Check, onSelect = { app.closeOverlays(); stopArranging() }) else null,
-        ) + if (arranging) emptyList() else app.homeStyleActions(),
-    )
 
     fun open(w: HomeWidget) = app.openWidget(w.kind, feed, firstGame(w.kind, feed))
 
@@ -296,25 +256,25 @@ fun ChannelHome(app: AppState) {
         val gapY = Size.sparkClearance
         val cellW = (maxWidth - gutter * 2 - gapX * (columns - 1)) / columns
         val cellH = (cellW * if (narrow) 0.86f else 0.6f).coerceIn(CELL_MIN, CELL_MAX)
-        val sizeOf: (HomeWidget) -> BoardSize = { w -> (preview?.takeIf { it.first == w.id }?.second ?: w.boardSize).fit(columns) }
-        val cells = remember(shown, columns, preview, arranging) {
-            packBoard(shown.map { sizeOf(it).let { s -> s.width to s.height } } + if (arranging) listOf(1 to 1) else emptyList(), columns)
-        }
         val density = LocalDensity.current
-        val cellWpx = with(density) { cellW.toPx() }
-        val cellHpx = with(density) { cellH.toPx() }
-        val gapXpx = with(density) { gapX.toPx() }
-        val gapYpx = with(density) { gapY.toPx() }
-        fun rectOf(c: GridCell) = Rect(
-            c.column * (cellWpx + gapXpx),
-            c.row * (cellHpx + gapYpx),
-            c.column * (cellWpx + gapXpx) + c.columnSpan * cellWpx + (c.columnSpan - 1) * gapXpx,
-            c.row * (cellHpx + gapYpx) + c.rowSpan * cellHpx + (c.rowSpan - 1) * gapYpx,
-        )
-        val rows = cells.maxOfOrNull { it.row + it.rowSpan } ?: 0
+        val geometry = with(density) { BoardGeometry(columns, cellW.toPx(), cellH.toPx(), gapX.toPx(), gapY.toPx()) }
+        val committed = remember(widgets, columns) {
+            BoardGrid.layout(widgets.map { BoardGrid.Item(it.id, it.boardSize, it.spots[columns]) }, columns)
+        }
+        val shown = editor.preview ?: committed
+        // Arranging: the first free place adds a widget (hidden while something is being changed).
+        val addRect = if (arranging && op == null) BoardGrid.layout(
+            committed.rects.map { (id, r) -> BoardGrid.Item(id, r.size, r.spot) } + BoardGrid.Item(ADD_KEY, BoardSize(1, 1), null),
+            columns,
+        )[ADD_KEY] else null
+        val usedRows = maxOf(shown.rows, op?.target?.bottom ?: 0, addRect?.bottom ?: 0)
+        // While arranging one spare row shows below, so there is always somewhere to put a widget.
+        val rows = if (arranging) usedRows + 1 else usedRows
         val boardHeight = cellH * rows + gapY * (rows - 1).coerceAtLeast(0)
+        val cells = widgets.map { w -> shown[w.id]?.toCell() ?: GridCell(0, 0, 1) } + listOfNotNull(addRect?.toCell())
         val scroll = rememberScrollState()
         val topPad = with(density) { Space.l.toPx() }
+        val gutterPx = with(density) { gutter.toPx() }
         val motion = Fuse.motion
         // What covers the board's bottom: the hints, and while arranging the toolbar above them.
         val bottomCover by animateDpAsState(
@@ -323,56 +283,71 @@ fun ChannelHome(app: AppState) {
             label = "boardBottom",
         )
         val bottomPad = with(density) { bottomCover.toPx() }
-        // The focused widget always comes fully into view, clear of the hints and the toolbar.
+        // The focused widget (or the one being carried) always comes fully into view.
         KeepCellInView(
             scroll,
-            { cells.getOrNull(sel.index)?.let(::rectOf)?.translate(0f, topPad) },
-            enabled = drag.heldKey == null,
+            {
+                val r = (op as? BoardOp.Carry)?.target ?: cells.getOrNull(sel.index)?.let { BoardRect(it.column, it.row, it.columnSpan, it.rowSpan) }
+                r?.let { geometry.rect(it).translate(0f, topPad) }
+            },
+            enabled = op !is BoardOp.Drag,
             margin = topPad,
             bottomMargin = bottomPad,
         )
 
-        InputLayer(enabled = app.focusZone == FocusZone.CONTENT && !app.overlayOpen, longPress = true) { e ->
+        val start = remember { TimeSource.Monotonic.markNow() }
+        var lastResize by remember { mutableStateOf(-1_000L) }
+        InputLayer(
+            enabled = app.focusZone == FocusZone.CONTENT && !app.overlayOpen,
+            longPress = true,
+            holdModifier = if (arranging) NavAction.CONTEXT else null,
+        ) { e ->
             val w = widgets.getOrNull(sel.index)
+            val carried = editor.op as? BoardOp.Carry
+            val direction = e.action == NavAction.LEFT || e.action == NavAction.RIGHT || e.action == NavAction.UP || e.action == NavAction.DOWN
             when {
-                resizing && w != null -> {
-                    val now = preview?.takeIf { it.first == w.id }?.second ?: w.boardSize
-                    val next = when (e.action) {
-                        NavAction.LEFT -> now.copy(width = now.width - 1)
-                        NavAction.RIGHT -> now.copy(width = now.width + 1)
-                        NavAction.UP -> now.copy(height = now.height - 1)
-                        NavAction.DOWN -> now.copy(height = now.height + 1)
-                        NavAction.SELECT, NavAction.REORDER -> {
-                            resize(w.id, now.fit(columns))
-                            resizing = false
-                            preview = null
-                            return@InputLayer NavResult.ACTIVATED
-                        }
-                        NavAction.BACK -> {
-                            resizing = false
-                            preview = null
-                            return@InputLayer NavResult.CONSUMED
-                        }
-                        else -> return@InputLayer NavResult.CONSUMED
-                    }.fit(columns)
-                    if (next == now) NavResult.BLOCKED else { preview = w.id to next; NavResult.MOVED }
+                // Options held: the D-pad resizes the chosen widget, one cell a step, never faster
+                // than a step every [RESIZE_REPEAT_MS] however long a direction is held.
+                e.modifier == NavAction.CONTEXT && direction -> {
+                    if (w == null || carried != null) return@InputLayer NavResult.BLOCKED
+                    val now = start.elapsedNow().inWholeMilliseconds
+                    if (e.isRepeat && now - lastResize < RESIZE_REPEAT_MS) return@InputLayer NavResult.CONSUMED
+                    lastResize = now
+                    val rect = committed[w.id] ?: return@InputLayer NavResult.BLOCKED
+                    val horizontal = e.action == NavAction.LEFT || e.action == NavAction.RIGHT
+                    val next = BoardGrid.resizeStep(rect, e.action, columns)?.getOrNull()
+                    val change = next?.let { BoardGrid.resize(committed, w.id, it) } as? BoardChange.Done
+                    if (change == null) {
+                        editor.bump(w.id, horizontal)
+                        NavResult.BLOCKED
+                    } else {
+                        save(change.layout, columns, resized = w.id)
+                        reselect = w.id
+                        NavResult.MOVED
+                    }
                 }
-                carrying -> when (e.action) {
-                    NavAction.LEFT -> if (sel.index > 0) { moveTo(sel.index, sel.index - 1); NavResult.MOVED } else NavResult.BLOCKED
-                    NavAction.RIGHT -> if (sel.index < widgets.lastIndex) { moveTo(sel.index, sel.index + 1); NavResult.MOVED } else NavResult.BLOCKED
-                    // Up and down take the place of the widget above or below, the same one plain moves land on.
-                    NavAction.UP, NavAction.DOWN -> {
-                        val probe = SpatialSelection(sel.index)
-                        if (probe.move(e.action, cells.take(widgets.size)) == NavResult.MOVED) {
-                            moveTo(sel.index, probe.index)
-                            NavResult.MOVED
-                        } else {
+                carried != null -> when (e.action) {
+                    NavAction.LEFT, NavAction.RIGHT, NavAction.UP, NavAction.DOWN -> {
+                        val t = carried.target
+                        val col = t.column + when (e.action) { NavAction.LEFT -> -1; NavAction.RIGHT -> 1; else -> 0 }
+                        val row = t.row + when (e.action) { NavAction.UP -> -1; NavAction.DOWN -> 1; else -> 0 }
+                        val change = if (row > carried.base.rows) null else BoardGrid.move(carried.base, carried.id, col, row) as? BoardChange.Done
+                        if (change == null) {
+                            editor.bump(carried.id, horizontal = e.action == NavAction.LEFT || e.action == NavAction.RIGHT)
                             NavResult.BLOCKED
+                        } else {
+                            editor.update(t.copy(column = col, row = row), change.layout)
+                            NavResult.MOVED
                         }
                     }
-                    NavAction.SELECT, NavAction.BACK, NavAction.REORDER -> {
-                        carrying = false
-                        drag.arm(null)
+                    NavAction.SELECT, NavAction.REORDER -> {
+                        editor.finish()?.let { save(it, columns) }
+                        reselect = carried.id
+                        haptics.drop()
+                        NavResult.ACTIVATED
+                    }
+                    NavAction.BACK -> {
+                        editor.cancel()
                         NavResult.CONSUMED
                     }
                     else -> NavResult.CONSUMED
@@ -381,29 +356,36 @@ fun ChannelHome(app: AppState) {
                     NavAction.UP, NavAction.DOWN, NavAction.LEFT, NavAction.RIGHT -> sel.move(e.action, cells)
                     NavAction.SELECT -> when {
                         arranging && sel.index >= widgets.size -> { addPicker(); NavResult.ACTIVATED }
-                        arranging -> { carrying = true; NavResult.ACTIVATED }
+                        arranging && w != null -> {
+                            committed[w.id]?.let { editor.start(BoardOp.Carry(w.id, committed, it)) }
+                            haptics.lift()
+                            NavResult.ACTIVATED
+                        }
                         else -> { w?.let(::open); NavResult.ACTIVATED }
                     }
                     NavAction.REORDER -> {
                         if (w != null) {
-                            arranging = true
-                            carrying = true
+                            editor.arranging = true
+                            committed[w.id]?.let { editor.start(BoardOp.Carry(w.id, committed, it)) }
+                            haptics.lift()
                         }
                         NavResult.ACTIVATED
                     }
-                    NavAction.CONTEXT -> { app.openContextMenu(menu(w)); NavResult.ACTIVATED }
+                    NavAction.CONTEXT -> { app.openContextMenu(boardMenu(app, editor, w, ::addPicker, ::stopArranging, ::remove, committed)); NavResult.ACTIVATED }
                     NavAction.BACK -> if (arranging) { stopArranging(); NavResult.CONSUMED } else NavResult.IGNORED
                     else -> NavResult.IGNORED
                 }
             }
         }
 
-        // Corners and badges that sit on widgets while arranging: touches there are theirs, not a drag's.
+        // Badges and handles that sit on widgets while arranging: touches there are theirs, not a drag's.
         val controls = remember { mutableStateMapOf<String, Rect>() }
+        var containerTopLeft by remember { mutableStateOf(Offset.Zero) }
+        var viewport by remember { mutableStateOf(0f) }
         val time = rememberClockText(prefs.clock24h)
         // One shared beat for the arranging wobble, read only while drawing, and only running while
         // arranging: a beat left running would wake every frame for nothing.
-        val wobbling = arranging && !motion.reduced
+        val wobbling = arranging && op == null && !motion.reduced
         val beat = remember { Animatable(0f) }
         LaunchedEffect(wobbling) {
             while (wobbling) {
@@ -411,39 +393,48 @@ fun ChannelHome(app: AppState) {
                 beat.animateTo(1f, tween(WOBBLE_MS, easing = LinearEasing))
             }
         }
-        CompositionLocalProvider(LocalHomeTime provides time) {
+        val wells by animateFloatAsState(if (arranging) 1f else 0f, motion.fade(Durations.BASE), label = "wells")
+        val cartridgeIcon = remember { if (app.store.apps.supported) io.github.matiyaaa.fuse.ui.shell.store.AppIconModel(io.github.matiyaaa.fuse.integrations.cartridge.CartridgeProtocol.PACKAGE_NAME) else null }
+        CompositionLocalProvider(LocalHomeTime provides time, LocalCartridgeIcon provides cartridgeIcon.takeIf { cartridge.installed }) {
             Column(Modifier.fillMaxSize()) {
                 Spacer(Modifier.height(Size.hudHeight))
                 Box(
                     Modifier
                         .weight(1f)
                         .fillMaxWidth()
+                        .onGloballyPositioned {
+                            containerTopLeft = it.positionInRoot()
+                            viewport = it.size.height.toFloat()
+                        }
                         .fadingEdges(scroll, top = Space.l, bottom = bottomCover)
                         // A tap on the board's empty space puts a carried widget down, then stops arranging.
-                        .pointerInput(arranging, carrying) {
-                            if (arranging) detectTapGestures { if (carrying) carrying = false else stopArranging() }
+                        .pointerInput(arranging) {
+                            if (arranging) detectTapGestures {
+                                if (editor.op is BoardOp.Carry) editor.finish()?.let { save(it, columns) } else stopArranging()
+                            }
                         }
-                        .dragReorder(
-                            drag,
-                            visibleKeys = { widgets.map { it.id } },
+                        .boardDrag(
+                            editor,
+                            geometry = { geometry },
+                            layout = { committed },
+                            origin = { Offset(gutterPx, topPad - scroll.value) },
+                            arranging = { editor.arranging },
+                            liftMs = boardLiftMs(prefs.input.longPressMs),
+                            viewportHeight = { viewport },
+                            bottomInset = bottomPad,
                             scrollBy = { scroll.scrollBy(it) },
-                            // While arranging a touch moves a widget at once; otherwise a hold does.
-                            longPressMs = if (arranging) 0L else ReorderDefaults.liftMs(prefs.input.longPressMs.toLong()),
-                            endInset = Size.hintHeight,
-                            ignore = { at -> controls.values.any { it.contains(at) } },
-                            onLift = { key ->
+                            ignore = { at -> controls.values.any { it.contains(containerTopLeft + at) } },
+                            onLift = { id ->
                                 app.focusZone = FocusZone.CONTENT
-                                sel.index = widgets.indexOfFirst { it.id == key }.coerceAtLeast(0)
-                                arranging = true
-                                carrying = false
+                                sel.index = widgets.indexOfFirst { it.id == id }.coerceAtLeast(0)
+                                editor.arranging = true
                                 haptics.lift()
                             },
                             onTarget = { haptics.slot() },
-                            // A hold let go where it started leaves the board arranging, the widget chosen.
-                            onHoldReleased = { key -> sel.index = widgets.indexOfFirst { it.id == key }.coerceAtLeast(0) },
-                            onDrop = { key, to ->
-                                moveTo(widgets.indexOfFirst { it.id == key }, to)
-                                sel.index = to
+                            onDrop = { layout ->
+                                val id = widgets.getOrNull(sel.index)?.id
+                                layout?.let { save(it, columns) }
+                                reselect = id
                                 haptics.drop()
                             },
                         )
@@ -457,71 +448,120 @@ fun ChannelHome(app: AppState) {
                     ) {
                         val fraction = Fuse.geometry.tileCornerFraction * WIDGET_CORNER
                         val shape = remember(fraction) { SquircleShape.fraction(fraction) }
-                        shown.forEachIndexed { at, w ->
-                            key(w.id) {
-                                val i = widgets.indexOf(w)
-                                val cell = cells.getOrNull(at)
-                                if (cell != null) {
-                                    BoardItem(
-                                        widget = w,
-                                        size = sizeOf(w),
-                                        rect = rectOf(cell),
-                                        reveal = { m -> m.reveal(reveal, 1 + cell.row) },
-                                        feed = feed,
-                                        cartridge = cartridge,
-                                        clock24h = prefs.clock24h,
-                                        selected = i == sel.index && app.focusZone == FocusZone.CONTENT,
-                                        carrying = carrying,
-                                        held = drag.heldKey == w.id,
-                                        arranging = arranging,
-                                        wobble = { if (wobbling) beat.value else null },
-                                        resizingHere = preview?.first == w.id,
-                                        shape = shape,
-                                        cornerFraction = fraction,
-                                        drag = drag,
-                                        onControl = { name, r -> if (r == null) controls.remove("$name:${w.id}") else controls["$name:${w.id}"] = r },
-                                        onClick = {
-                                            app.focusZone = FocusZone.CONTENT
-                                            when {
-                                                arranging -> sel.index = i
-                                                // Widgets that play a game show it first; the rest open at once.
-                                                sel.index == i || w.kind !in playWidgets -> { sel.index = i; open(w) }
-                                                else -> sel.index = i
-                                            }
-                                        },
-                                        onRemove = { remove(w) },
-                                        resizeDrag = Modifier.resizeDrag(
-                                            start = { w.boardSize.fit(columns) },
-                                            cell = { Offset(cellWpx + gapXpx, cellHpx + gapYpx) },
-                                            columns = columns,
-                                            onStart = {
-                                                app.focusZone = FocusZone.CONTENT
-                                                sel.index = i
-                                                haptics.lift()
-                                            },
-                                            onSize = { s ->
-                                                preview = w.id to s
-                                                haptics.slot()
-                                            },
-                                            onEnd = { s ->
-                                                if (s != w.boardSize.fit(columns)) resize(w.id, s)
-                                                preview = null
-                                                haptics.drop()
-                                            },
-                                            onCancel = { preview = null },
-                                        ),
-                                    )
+                        GridWells(
+                            geometry = geometry,
+                            rows = rows,
+                            occupied = shown,
+                            target = op?.target,
+                            cornerFraction = fraction,
+                            shown = wells,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                        widgets.forEachIndexed { i, w ->
+                            val rect = shown[w.id]
+                            if (rect != null) key(w.id) {
+                                val dragged = (op as? BoardOp.Drag)?.takeIf { it.id == w.id }
+                                val px = if (dragged != null) {
+                                    val r = geometry.rect(rect)
+                                    Rect(editor.finger - editor.grab, r.size)
+                                } else {
+                                    geometry.rect(rect)
                                 }
+                                val selected = i == sel.index && app.focusZone == FocusZone.CONTENT
+                                BoardItem(
+                                    widget = w,
+                                    size = rect.size,
+                                    rect = px,
+                                    reveal = { m -> m.reveal(reveal, 1 + rect.row) },
+                                    feed = feed,
+                                    cartridge = cartridge,
+                                    clock24h = prefs.clock24h,
+                                    selected = selected,
+                                    lifted = dragged != null || (op is BoardOp.Carry && op.id == w.id),
+                                    following = dragged != null,
+                                    arranging = arranging,
+                                    wobble = { if (wobbling) beat.value else null },
+                                    bump = editor.bump?.takeIf { it.id == w.id },
+                                    shape = shape,
+                                    cornerFraction = fraction,
+                                    onClick = {
+                                        app.focusZone = FocusZone.CONTENT
+                                        when {
+                                            arranging -> sel.index = i
+                                            // Widgets that play a game show it first; the rest open at once.
+                                            sel.index == i || w.kind !in playWidgets -> { sel.index = i; open(w) }
+                                            else -> sel.index = i
+                                        }
+                                    },
+                                    chrome = {
+                                        if (arranging && dragged == null) {
+                                        val resizingHere = (op as? BoardOp.Resize)?.takeIf { it.id == w.id }
+                                        if (op == null && !resizeLook) {
+                                            RemoveBadge(
+                                                w.kind.title(),
+                                                Modifier.align(Alignment.TopStart).offset(-BADGE_OUT, -BADGE_OUT)
+                                                    .onGloballyPositioned { controls["x:${w.id}"] = Rect(it.positionInRoot(), it.size.toSize()) },
+                                            ) { remove(w) }
+                                        }
+                                        if (op is BoardOp.Carry && op.id == w.id) {
+                                            Badge("Moving", icon = FuseIcons.Move, modifier = Modifier.align(Alignment.TopEnd).padding(Space.s))
+                                        }
+                                        // Handles on the chosen widget, or the one being resized.
+                                        if ((selected && op == null && !resizeLook) || resizingHere != null) {
+                                            ResizeHandles(
+                                                name = w.kind.title(),
+                                                rect = rect,
+                                                columns = columns,
+                                                active = resizingHere?.edge,
+                                                handle = { edge ->
+                                                    Modifier.resizeHandle(
+                                                        editor, w.id, edge,
+                                                        geometry = { geometry },
+                                                        layout = { committed },
+                                                        onStart = {
+                                                            app.focusZone = FocusZone.CONTENT
+                                                            sel.index = i
+                                                            haptics.lift()
+                                                        },
+                                                        onSize = { haptics.slot() },
+                                                        onLimit = {
+                                                            haptics.reject()
+                                                            editor.bump(w.id, horizontal = edge == ResizeEdge.LEFT || edge == ResizeEdge.RIGHT || edge == ResizeEdge.CORNER)
+                                                        },
+                                                        onEnd = { layout ->
+                                                            layout?.let { save(it, columns, resized = w.id) }
+                                                            reselect = w.id
+                                                            haptics.drop()
+                                                        },
+                                                    )
+                                                },
+                                                onPlaced = { edge, r -> if (r == null) controls.remove("r$edge:${w.id}") else controls["r$edge:${w.id}"] = r },
+                                            )
+                                        }
+                                        if (resizingHere != null) {
+                                            SizeChip(resizingHere.target.width, resizingHere.target.height, Modifier.align(Alignment.TopEnd).offset(x = Space.s, y = -Space.l))
+                                        }
+                                        if (selected && resizeLook) ResizeFrame(rect, columns, shape)
+                                        }
+                                    },
+                                )
                             }
                         }
-                        // Arranging: the last place adds a widget.
-                        val addCell = cells.getOrNull(shown.size)
-                        if (arranging && addCell != null) {
+                        if (addRect != null) {
                             AddTile(
                                 selected = sel.index == widgets.size && app.focusZone == FocusZone.CONTENT,
                                 shape = shape,
-                                modifier = Modifier.boardPlace(rectOf(addCell), animate = true),
+                                modifier = Modifier.boardPlace(geometry.rect(addRect), animate = true),
                                 onClick = { sel.index = widgets.size; addPicker() },
+                            )
+                        }
+                        // The size a held widget will land at, beside where it lands.
+                        (op as? BoardOp.Drag)?.let { o ->
+                            val r = geometry.rect(o.target)
+                            SizeChip(
+                                o.target.width, o.target.height,
+                                Modifier.offset(x = with(density) { r.left.toDp() } + Space.m, y = with(density) { r.top.toDp() } + Space.m),
+                                accent = false,
                             )
                         }
                     }
@@ -532,7 +572,7 @@ fun ChannelHome(app: AppState) {
         // starting to arrange never moves the widget under the finger. It steps aside while a widget
         // is moved or resized (the hints say how), so it never hides the widget being changed.
         AnimatedVisibility(
-            arranging && !carrying && !resizing && drag.heldKey == null && preview == null,
+            arranging && op == null && !resizeLook,
             modifier = Modifier.align(Alignment.BottomStart).padding(start = gutter, end = gutter, bottom = Size.hintHeight + Space.s),
             enter = fadeIn(motion.enter(Durations.BASE)) + slideInVertically(motion.enter(Durations.BASE)) { it / 2 },
             exit = fadeOut(motion.exit(Durations.FAST)) + slideOutVertically(motion.exit(Durations.FAST)) { it / 2 },
@@ -544,17 +584,61 @@ fun ChannelHome(app: AppState) {
             )
         }
         // Controls of widgets that are gone, or of a board no longer arranged, catch no touches.
-        LaunchedEffect(arranging, widgets.map { it.id }) {
-            val live = if (arranging) widgets.flatMap { listOf("x:${it.id}", "r:${it.id}") }.toSet() else emptySet()
-            controls.keys.retainAll(live)
+        LaunchedEffect(arranging, widgets.map { it.id }, sel.index) {
+            if (!arranging) controls.clear()
+            val live = widgets.map { it.id }.toSet()
+            controls.keys.retainAll { k -> k.substringAfter(':') in live }
         }
     }
 }
 
+/** Home's options: arranging, and for a chosen widget moving, resizing and removing it. */
+private fun boardMenu(
+    app: AppState,
+    editor: BoardEditor,
+    w: HomeWidget?,
+    addPicker: () -> Unit,
+    stopArranging: () -> Unit,
+    remove: (HomeWidget) -> Unit,
+    board: BoardLayout,
+) = ContextMenuSpec(
+    title = w?.kind?.title() ?: "Home",
+    subtitle = "Home",
+    actions = listOfNotNull(
+        if (!editor.arranging) {
+            MenuAction("arrange", "Arrange Home", FuseIcons.Grid, detail = "Move, resize, add and remove widgets", onSelect = {
+                app.closeOverlays()
+                editor.arranging = true
+            })
+        } else {
+            null
+        },
+        w?.let {
+            MenuAction("move", "Move", FuseIcons.Move, detail = "Then drag it anywhere, or carry it with the D-pad", onSelect = {
+                app.closeOverlays()
+                editor.arranging = true
+                board[it.id]?.let { r -> editor.start(BoardOp.Carry(it.id, board, r)) }
+            })
+        },
+        w?.let {
+            val s = board[it.id]?.size ?: it.boardSize
+            MenuAction("resize", "Resize", FuseIcons.Scaling, detail = "Now ${s.width} by ${s.height}. Hold Options and use the D-pad, or drag a handle", onSelect = {
+                app.closeOverlays()
+                editor.arranging = true
+                app.toasts.show("Hold Options and press a direction to resize ${it.kind.title()}")
+            })
+        },
+        w?.let { MenuAction("remove", "Remove from Home", FuseIcons.Minus, destructive = true, onSelect = { app.closeOverlays(); remove(it) }) },
+        if (editor.arranging) MenuAction("add", "Add a widget", FuseIcons.CirclePlus, onSelect = { app.closeOverlays(); addPicker() }) else null,
+        if (editor.arranging) MenuAction("done", "Done arranging", FuseIcons.Check, onSelect = { app.closeOverlays(); stopArranging() }) else null,
+    ) + if (editor.arranging) emptyList() else app.homeStyleActions(),
+)
+
 /**
- * One widget on the board: its face in a tile at [rect], and while arranging its remove badge and
- * resize corner. Lifted (held by a finger or carried by the controller) it floats over a shadow
- * with a well marking where it will land; arranging, it wobbles on its own beat.
+ * One widget on the board: its face in a tile at [rect] (in the board's pixels), and while arranging
+ * its [chrome] (remove badge, handles). Lifted (held by a finger or carried by the controller) it
+ * floats over a shadow, a little larger; arranging, it wobbles on its own beat. A widget that ran
+ * into a limit ([bump]) shakes along the axis it was pushed in.
  */
 @Composable
 private fun BoardItem(
@@ -566,44 +650,58 @@ private fun BoardItem(
     cartridge: CartridgeStatus,
     clock24h: Boolean,
     selected: Boolean,
-    carrying: Boolean,
-    held: Boolean,
+    lifted: Boolean,
+    following: Boolean,
     arranging: Boolean,
     wobble: () -> Float?,
-    resizingHere: Boolean,
+    bump: Bump?,
     shape: Shape,
     cornerFraction: Float,
-    drag: DragReorderState,
-    onControl: (String, Rect?) -> Unit,
     onClick: () -> Unit,
-    onRemove: () -> Unit,
-    resizeDrag: Modifier,
+    chrome: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit,
 ) {
     val motion = Fuse.motion
-    val carried = selected && carrying
-    val lift by animateFloatAsState(if (carried || held) 1f else 0f, motion.focusSpring(), label = "lift")
-    val well by animateFloatAsState(if (carried || held) 1f else 0f, motion.fade(Durations.FAST), label = "well")
+    val lift by animateFloatAsState(if (lifted) 1f else 0f, motion.focusSpring(), label = "lift")
     val phase = remember(widget.id) { (widget.id.hashCode() and 0xFF) / 255f }
     // Wider widgets wobble less, so a large one doesn't swing its corners about.
     val swing = WOBBLE_DEGREES / size.width.coerceAtLeast(1)
+    val shake = remember { Animatable(0f) }
+    LaunchedEffect(bump?.nonce) {
+        if (bump == null) return@LaunchedEffect
+        shake.snapTo(0f)
+        shake.animateTo(1f, tween(SHAKE_MS, easing = LinearEasing))
+        shake.snapTo(0f)
+    }
+    val shadow = Fuse.colors.shadow
     Box(
-        reveal(Modifier.boardPlace(rect, animate = !held))
-            // Where the widget will land stays marked while it floats.
-            .dropWell({ well }, shape)
-            .reorderItem(drag, widget.id, liftScale = 1f, shape = shape)
-            .zIndex(if (carried || held) 1f else 0f)
+        reveal(Modifier.boardPlace(rect, animate = !following))
+            .zIndex(if (lifted) 2f else 0f)
             .graphicsLayer {
                 val t = wobble()
-                if (t != null && !held && !carried) rotationZ = sin((t + phase) * 2f * PI.toFloat()) * swing
+                if (t != null && !lifted) rotationZ = sin((t + phase) * 2f * PI.toFloat()) * swing
                 // Lifted, it grows by the same few points whatever its size.
                 val s = 1f + 2f * LIFT_GROW.toPx() / this.size.width.coerceAtLeast(1f) * lift
                 scaleX = s
                 scaleY = s
+                if (lift > 0f) {
+                    this.shape = shape
+                    shadowElevation = Elevation.tileFocused.shadow.toPx() * 2.4f * lift
+                    spotShadowColor = shadow
+                    ambientShadowColor = shadow
+                }
+                // A short, damped shake along the axis the widget was pushed in.
+                val k = shake.value
+                if (k > 0f && bump != null) {
+                    val d = sin(k * PI.toFloat() * 6f) * exp(-k * 3.5f) * SHAKE.toPx()
+                    if (bump.horizontal) translationX = d else translationY = d
+                }
             },
     ) {
         Tile(
-            selected = selected,
+            selected = selected && !lifted,
             modifier = Modifier.fillMaxSize(),
+            // While arranging, the spark under the chosen widget would sit on its bottom handle.
+            showSpark = !arranging,
             cornerFraction = cornerFraction,
             shape = shape,
             glow = widgetGlow(widget.kind, feed, cartridge),
@@ -615,22 +713,7 @@ private fun BoardItem(
                 BoardFace(widget.kind, size, feed, cartridge, clock24h)
             }
         }
-        if (arranging && !held) {
-            RemoveBadge(
-                widget.kind.title(),
-                // The disc's centre sits just inside the corner, clear of the widget's name.
-                Modifier.align(Alignment.TopStart).offset(-BADGE_OUT, -BADGE_OUT)
-                    .onGloballyPositioned { onControl("x", Rect(it.positionInRoot(), it.size.toSize())) },
-                onRemove,
-            )
-            ResizeGrip(
-                widget.kind.title(),
-                active = resizingHere,
-                modifier = Modifier.align(Alignment.BottomEnd)
-                    .onGloballyPositioned { onControl("r", Rect(it.positionInRoot(), it.size.toSize())) }
-                    .then(resizeDrag),
-            )
-        }
+        if (arranging) chrome()
     }
 }
 
@@ -688,48 +771,6 @@ private fun Modifier.boardPlace(rect: Rect, animate: Boolean): Modifier {
     }
 }
 
-/**
- * Resizing by touch: dragging the corner changes the size in whole cells (one [cell] apart in each
- * direction), never past the board's [columns] or three rows. [onSize] fires for each new size,
- * [onEnd] with the size the finger left it at.
- */
-private fun Modifier.resizeDrag(
-    start: () -> BoardSize,
-    cell: () -> Offset,
-    columns: Int,
-    onStart: () -> Unit,
-    onSize: (BoardSize) -> Unit,
-    onEnd: (BoardSize) -> Unit,
-    onCancel: () -> Unit,
-): Modifier = pointerInput(columns) {
-    var from = BoardSize(1, 1)
-    var shown = from
-    var moved = Offset.Zero
-    detectDragGestures(
-        onDragStart = {
-            from = start()
-            shown = from
-            moved = Offset.Zero
-            onStart()
-        },
-        onDrag = { change, delta ->
-            change.consume()
-            moved += delta
-            val step = cell()
-            val next = BoardSize(
-                from.width + (moved.x / step.x).roundToInt(),
-                from.height + (moved.y / step.y).roundToInt(),
-            ).fit(columns)
-            if (next != shown) {
-                shown = next
-                onSize(next)
-            }
-        },
-        onDragEnd = { onEnd(shown) },
-        onDragCancel = onCancel,
-    )
-}
-
 /** Brings the focused widget fully into view as the selection moves, unless a finger holds one. */
 @Composable
 private fun KeepCellInView(scroll: ScrollState, rect: () -> Rect?, enabled: Boolean, margin: Float, bottomMargin: Float) {
@@ -748,122 +789,6 @@ private fun KeepCellInView(scroll: ScrollState, rect: () -> Rect?, enabled: Bool
                 else -> return@collect
             }
             scroll.animateScrollTo(target.roundToInt().coerceIn(0, scroll.maxValue), spec)
-        }
-    }
-}
-
-/**
- * The toolbar floating over the board while it is arranged: what to do, and Add widget and Done
- * for touch (the controller has the same in its hints). On a narrow screen only the buttons.
- */
-@Composable
-private fun ArrangeBar(compact: Boolean, onAdd: () -> Unit, onDone: () -> Unit) {
-    val c = Fuse.colors
-    Panel(raised = true, shape = RoundedCornerShape(Radius.pill)) {
-        Row(Modifier.padding(start = if (compact) Space.s else Space.xl, end = Space.s, top = Space.s, bottom = Space.s), verticalAlignment = Alignment.CenterVertically) {
-            if (!compact) {
-                Column(Modifier.widthIn(max = ARRANGE_TEXT)) {
-                    FText("Arranging Home", Fuse.type.bodyStrong, maxLines = 1)
-                    FText("Drag a widget to move it, or its corner to resize it", Fuse.type.caption, color = c.textMuted, maxLines = 1)
-                }
-                Spacer(Modifier.width(Space.xl))
-            }
-            FuseButton("Add widget", selected = false, onClick = onAdd, kind = ButtonKind.SECONDARY, icon = FuseIcons.Plus)
-            Spacer(Modifier.width(Space.s))
-            FuseButton("Done", selected = false, onClick = onDone, kind = ButtonKind.PRIMARY)
-        }
-    }
-}
-
-/** The badge that takes a widget off Home while arranging: a minus in a disc, in a target big enough to tap. */
-@Composable
-private fun RemoveBadge(name: String, modifier: Modifier, onClick: () -> Unit) {
-    val c = Fuse.colors
-    Box(
-        modifier
-            .size(Size.touch * 0.8f)
-            .semantics { contentDescription = "Remove $name" }
-            .clickable(remember { MutableInteractionSource() }, null, onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        Box(
-            Modifier
-                .size(Size.badge + Space.xxs)
-                .graphicsLayer {
-                    shape = CircleShape
-                    clip = true
-                    shadowElevation = Elevation.raised.shadow.toPx()
-                }
-                .background(c.surfaceOverlay)
-                .border(Size.stroke, c.hairlineStrong, CircleShape),
-            contentAlignment = Alignment.Center,
-        ) {
-            FuseIcon(FuseIcons.Minus, size = Size.iconS, tint = c.text)
-        }
-    }
-}
-
-/**
- * The corner a widget is resized by: a short arc along its bottom right corner, in the accent while
- * in use, inside a finger-sized target.
- */
-@Composable
-private fun ResizeGrip(name: String, active: Boolean, modifier: Modifier) {
-    val c = Fuse.colors
-    val tone by animateFloatAsState(if (active) 1f else 0f, Fuse.motion.fade(Durations.FAST), label = "grip")
-    val idle = c.onArt
-    val lit = c.accent
-    val shadow = c.shadow
-    Canvas(
-        modifier
-            .size(Size.touch)
-            .semantics { contentDescription = "Resize $name" },
-    ) {
-        val inset = 7.dp.toPx()
-        val r = 18.dp.toPx()
-        val w = 3.5.dp.toPx()
-        val right = size.width - inset
-        val bottom = size.height - inset
-        val path = Path().apply {
-            moveTo(right, bottom - r)
-            quadraticTo(right, bottom, right - r, bottom)
-        }
-        // A soft shadow under the arc so it reads on any art.
-        drawPath(path, shadow.copy(alpha = 0.45f), style = Stroke(w + 3.dp.toPx(), cap = StrokeCap.Round))
-        drawPath(path, lerp(idle, lit, tone), style = Stroke(w, cap = StrokeCap.Round))
-    }
-}
-
-/** The last place on a board being arranged: a dashed outline with a plus that adds a widget. */
-@Composable
-private fun AddTile(selected: Boolean, shape: Shape, modifier: Modifier, onClick: () -> Unit) {
-    val c = Fuse.colors
-    val edge = if (selected) c.accent else c.hairlineStrong
-    Box(
-        modifier
-            .clip(shape)
-            .background(c.surfaceDim.copy(alpha = if (c.isDark) 0.5f else 0.7f))
-            .clickable(remember { MutableInteractionSource() }, null, onClick = onClick)
-            .semantics { contentDescription = "Add a widget" },
-        contentAlignment = Alignment.Center,
-    ) {
-        Canvas(Modifier.fillMaxSize()) {
-            val path = Path().apply { addOutline(shape.createOutline(size, layoutDirection, this@Canvas)) }
-            drawPath(
-                path,
-                edge,
-                style = Stroke(
-                    width = (if (selected) Size.focusStroke else Size.stroke).toPx() * 1.5f,
-                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(Space.s.toPx(), (Space.xs + Space.xxs).toPx())),
-                ),
-            )
-        }
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Box(Modifier.size(Size.chip).clip(CircleShape).background(c.text.copy(alpha = 0.08f)), contentAlignment = Alignment.Center) {
-                FuseIcon(FuseIcons.Plus, size = Size.iconM, tint = if (selected) c.accent else c.textMuted)
-            }
-            Spacer(Modifier.height(Space.s))
-            FText("Add widget", Fuse.type.label, color = if (selected) c.text else c.textMuted, maxLines = 1)
         }
     }
 }
@@ -904,10 +829,6 @@ internal fun SystemChip(s: PlatformCard, shape: Shape, modifier: Modifier) {
 private val FOCUS_GROW = 6.dp
 private val LIFT_GROW = 10.dp
 
-/** The room the arranging toolbar takes over the board's bottom, and the widest its words get. */
-private val ARRANGE_BAR = 72.dp
-private val ARRANGE_TEXT = 360.dp
-
 /** How far the remove badge's target reaches out past the widget's corner. */
 private val BADGE_OUT = 17.dp
 
@@ -918,3 +839,16 @@ private val CELL_MAX = 240.dp
 /** The wobble while arranging: one beat this long, at most this many degrees (for a one-cell widget). */
 private const val WOBBLE_MS = 520
 private const val WOBBLE_DEGREES = 0.9f
+
+/** A widget that can't go further shakes this far, for this long. */
+private val SHAKE = 7.dp
+private const val SHAKE_MS = 360
+
+/** How long Options is held before the chosen widget shows it is being resized. */
+private const val RESIZE_LOOK_MS = 150L
+
+/** The quickest a held direction resizes, one step each. */
+private const val RESIZE_REPEAT_MS = 200L
+
+/** Stands for the Add tile when finding its place. */
+private const val ADD_KEY = "\u0000add"

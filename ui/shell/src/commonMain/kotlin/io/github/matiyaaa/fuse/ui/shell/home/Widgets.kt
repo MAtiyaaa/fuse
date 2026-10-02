@@ -53,6 +53,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.components.ProgressRing
 import io.github.matiyaaa.fuse.ui.designsystem.components.Tile
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
+import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseMarks
 import io.github.matiyaaa.fuse.ui.designsystem.media.ArtSlot
 import io.github.matiyaaa.fuse.ui.designsystem.media.Artwork
 import io.github.matiyaaa.fuse.ui.designsystem.media.GeneratedArt
@@ -256,7 +257,7 @@ internal fun widgetIcon(kind: WidgetKind): ImageVector = when (kind) {
     WidgetKind.RECENT_ACHIEVEMENT, WidgetKind.RECENT_ACHIEVEMENTS -> FuseIcons.Trophy
     WidgetKind.ACHIEVEMENT_PROGRESS -> FuseIcons.Target
     WidgetKind.RECENTLY_MASTERED -> FuseIcons.Crown
-    WidgetKind.CARTRIDGE_DOWNLOADS -> FuseIcons.CloudDownload
+    WidgetKind.CARTRIDGE_DOWNLOADS -> FuseMarks.Cartridge
     WidgetKind.STORAGE -> FuseIcons.HardDrive
     WidgetKind.CLOCK -> FuseIcons.Clock3
     WidgetKind.CONTINUE_PLAYING -> FuseIcons.CirclePlay
@@ -279,7 +280,7 @@ internal fun widgetTint(kind: WidgetKind, feed: HomeFeed, cartridge: CartridgeSt
     val c = Fuse.colors
     return when (kind) {
         WidgetKind.PLAYTIME_WEEK, WidgetKind.PLAYTIME_TOTAL, WidgetKind.MOST_PLAYED -> c.accent
-        WidgetKind.CARTRIDGE_DOWNLOADS -> if (cartridge.activeDownloads > 0) c.accent else c.text
+        WidgetKind.CARTRIDGE_DOWNLOADS -> io.github.matiyaaa.fuse.ui.designsystem.icons.CartridgeBrand.ORANGE.toColor()
         WidgetKind.RECENT_ACHIEVEMENT, WidgetKind.RECENT_ACHIEVEMENTS, WidgetKind.ACHIEVEMENT_PROGRESS, WidgetKind.RECENTLY_MASTERED -> c.warning
         WidgetKind.CURRENT_GAME -> feed.playtime.currentGame?.accent?.toColor() ?: c.accent
         WidgetKind.STORAGE -> if (storageLow(feed)) c.warning else c.text
@@ -652,7 +653,7 @@ private fun ColumnScope.CartridgeWidget(status: CartridgeStatus, room: WidgetRoo
     val downloading = status.installed && status.activeDownloads > 0
     val now = CartridgeNow.of(status)
     WidgetHeader(
-        FuseIcons.CloudDownload, WidgetKind.CARTRIDGE_DOWNLOADS.title(),
+        FuseMarks.Cartridge, WidgetKind.CARTRIDGE_DOWNLOADS.title(),
         trailing = if (downloading) now.percent else null,
     )
     Spacer(Modifier.weight(1f))

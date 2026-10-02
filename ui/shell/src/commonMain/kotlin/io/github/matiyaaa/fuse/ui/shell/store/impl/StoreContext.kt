@@ -72,6 +72,9 @@ internal class StoreContext(
         recentProblems.update { (it + (now() to problem)).takeLast(10) }
     }
 
+    /** Called whenever Fuse comes back to the front (after a game, or another app). */
+    val resumeHooks = MutableStateFlow<List<() -> Unit>>(emptyList())
+
     /** True once emulators were looked for: until then, "none installed" means "not known yet". */
     val emulatorsDetected = MutableStateFlow(false)
 

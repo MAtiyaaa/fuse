@@ -226,17 +226,51 @@ Panels share the tiles' lit top edge, so menus, dialogs and cards read as the sa
 
 Channels is a board of widgets, like a phone's home screen. The grid is four cells across (two on a
 phone held upright); a cell is 60% as tall as it is wide (86% upright), between 96 and 240 dp. A
-widget is one to four cells across and one to three down, and `packBoard` (`focus/SpatialSelection.kt`)
-places each in turn at the first place it fits, reading from the top left, so a small widget fills a
-gap a large one left. Every face is designed for five shapes (`home/BoardFaces.kt`): one cell, a strip,
-a column, a square of four and anything larger, and the room the face really has decides how many
-covers, rows or chips fit. A new shape crossfades in.
+widget is one to four cells across and one to three down, and has its own place on the grid
+(`HomeWidget.spots`, one per board width). `BoardGrid` (`home/BoardGrid.kt`) is the pure engine:
+widgets keep their places, and one put where others are takes those cells while each widget it
+covers moves to the nearest free place, preferring the place the moved widget left (a swap), then
+anywhere within a row, then just below, pushing the widgets under it down. A board never arranged
+packs in reading order exactly as before. Every face is designed for five shapes
+(`home/BoardFaces.kt`, `home/BrandedFaces.kt`): one cell, a strip, a column, a square of four and
+anything larger. A new shape crossfades in.
 
-Arranging: widgets wobble by under a degree (less for wider ones), each on its own beat, with a remove
-badge at the top left corner and a resize arc at the bottom right. Moves and resizes reflow the board
-on a spring (damping 0.78, stiffness 420); the widget under a finger never lags behind it. Resizing by
-touch snaps in whole cells, with a haptic tick for each. Focused, a widget grows at most 6 dp a side,
-lifted 10 dp, whatever its size.
+Arranging (`home/BoardEditor.kt`, `home/BoardChrome.kt`):
+
+- **The grid shows.** Every empty cell is a quiet well in the widget corner shape, with one spare
+  row below the board; the landing place of a widget being moved is a dashed accent outline.
+- **Dragging** follows the finger exactly; the landing place snaps with hysteresis, the widgets
+  that make room move there live on a spring (damping 0.78, stiffness 420), and the drop settles
+  into the outline it showed. Near the screen's edge the board scrolls.
+- **Resizing by touch** uses handles on all four edges and the corner. A direction that can't
+  change (the board's edge, the smallest or largest size) is dimmed. While resizing, the frame and
+  a "W by H" chip show the snapped size, neighbours move aside live, and release keeps exactly that.
+- **With a controller**, A picks a widget up and the D-pad carries it a cell at a time; B puts it
+  back. Holding X turns the selected widget into its resize frame (accent edge, arrows, size chip)
+  after 150 ms; X with Right or Down grows it (against the right edge it grows to the left), Left
+  or Up shrinks it, at most one step every 200 ms. A step that can't happen shakes the widget along
+  that axis with the blocked sound. A quick press of X still opens the widget's options
+  (`InputRouter` hold modifiers).
+
+Focused, a widget grows at most 6 dp a side, lifted 10 dp, whatever its size.
+
+### The Store
+
+The Store (Addons on Android) is a console storefront built from the same pieces as the rest of
+Fuse: shelves of cards a controller moves through, a lit page per app, and Fuse's buttons.
+
+- **Cards** are 312 by 140 dp: the app's mark, name, maker, its one line from the catalogue, the
+  systems it plays and its state as a badge (Update, Installed, Track only, Manual, or a job).
+  Suggestions for your library are wider, lit in the app's colour with the reason as an overline.
+- **Marks.** An installed app shows its own icon. Otherwise the mark is a monogram on a squircle in
+  the colour of its category from the pack, turned a little by its name so neighbours differ. Fuse
+  never invents an icon for someone else's app.
+- **The app page** puts the app in its colour with one main button that follows its state
+  (Install, Update, Open, Cancel, Allow installs, Try again, Download page) and the facts below it:
+  installed and newest version, the file, its source, its package, the systems it plays, and the
+  release's notes.
+- **The first choice** of edition is two large cards with each kind of device drawn in line art,
+  the one that suits the device marked.
 
 ## Motion
 
@@ -396,6 +430,11 @@ picture: the controller hides it and waits 150 ms before a screenshot or a recor
   shoulders, triggers and keyboard keys are keycaps with their label; the D-pad is an outlined cross;
   menu and view buttons are simple line drawings. No console maker artwork is used.
 - **Status glyphs** (battery, Wi-Fi, Bluetooth) and the Fuse mark are drawn in code.
+
+Other apps keep their own marks. Cartridge appears as Cartridge draws itself: `FuseMarks.Cartridge`
+is its mark, and `CartridgeBrand` its colours (orange `#EF4B23` on near-black `#16171B`). Its icon,
+its page's panel, its action cards and its widget's progress use them in every theme, as Cartridge
+does; where Android can read the installed app's icon, that icon is shown instead.
 
 ## Sound
 

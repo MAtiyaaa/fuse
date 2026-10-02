@@ -33,6 +33,9 @@ sealed interface Route {
     data object Controls : Route
     data object Licenses : Route
 
+    /** An app's page in the Store, by its key in the catalogue. */
+    data class StoreApp(val key: String) : Route
+
     /** Where play time went: today, this week, this month, per day, per game and per system. */
     data object PlayTime : Route
     data object Themes : Route

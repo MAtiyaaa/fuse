@@ -2,6 +2,7 @@ package io.github.matiyaaa.fuse.desktop.platform
 
 import io.github.matiyaaa.fuse.desktop.Log
 import io.github.matiyaaa.fuse.ui.shell.platform.MenuMusicPlayer
+import io.github.matiyaaa.fuse.ui.shell.platform.MusicState
 import javazoom.jl.decoder.Bitstream
 import javazoom.jl.decoder.Decoder
 import javazoom.jl.decoder.SampleBuffer
@@ -12,16 +13,42 @@ import java.io.InputStream
 import javax.sound.sampled.AudioFormat
 import javax.sound.sampled.AudioInputStream
 import javax.sound.sampled.AudioSystem
+import javax.sound.sampled.DataLine
 import javax.sound.sampled.SourceDataLine
 
 /**
- * Menu music on Linux: MP3 through JLayer's decoder, WAV through Java Sound, mixed on one background
- * thread into one Java Sound line. Volume, fades and crossfades are applied to the samples, so they
- * work on every sound system. Changing songs while music plays crossfades (when both songs have the
- * same sample rate and channels; otherwise the new one simply takes over). A song that can't be
- * decoded, or no sound device, means silence.
+ * Where decoded music goes: one sound output at a sample rate and channel count. The real one is a
+ * Java Sound line ([SharedLineOutput]); tests use their own.
  */
-class DesktopMenuMusic : MenuMusicPlayer, AutoCloseable {
+internal interface MusicOutput : AutoCloseable {
+    val rate: Int
+    val channels: Int
+
+    /** Writes interleaved 16-bit little-endian samples, blocking while the output is full. */
+    fun write(bytes: ByteArray)
+
+    /** Lets what was written finish and stops, keeping the output open for later. */
+    fun pause()
+    fun resume()
+}
+
+/**
+ * Menu music on Linux: MP3 through JLayer's decoder, WAV through Java Sound, mixed on one background
+ * thread into one output. Volume, fades and crossfades are applied to the samples, so they work on
+ * every sound system, and the output's buffer is short so a volume change is heard at once (ramped
+ * across a block, so it never clicks). Changing songs while music plays crossfades (when both songs
+ * have the same sample rate and channels; otherwise the new one simply takes over).
+ *
+ * [apply] always checks the mixer is alive: when the output fails (a device unplugged, a sound
+ * server restarting) the mixer starts again after a short wait instead of leaving the song set and
+ * silent. A song that can't be decoded, or no sound device at all, means silence.
+ */
+class DesktopMenuMusic internal constructor(
+    private val openOutput: (rate: Int, channels: Int) -> MusicOutput,
+    private val retryMs: Long,
+) : MenuMusicPlayer, AutoCloseable {
+    constructor() : this(::SharedLineOutput, RETRY_MS)
+
     @Volatile private var song: String? = null
     @Volatile private var volume = 0.2f
     @Volatile private var wanted = true
@@ -29,28 +56,19 @@ class DesktopMenuMusic : MenuMusicPlayer, AutoCloseable {
     private val lock = Object()
     private var thread: Thread? = null
 
-    override fun setSong(path: String?) {
+    override fun apply(state: MusicState) {
+        volume = state.volume.coerceIn(0f, 1f)
+        wanted = state.playing
         synchronized(lock) {
-            val next = path?.takeIf { File(it).isFile }
-            if (next == song) return
-            song = next
-            if (next != null && thread?.isAlive != true && !closed) {
-                thread = Thread({ mix() }, "fuse-menu-music").apply {
+            song = state.song?.takeIf { File(it).isFile }
+            if (song != null && thread?.isAlive != true && !closed) {
+                thread = Thread({ run() }, "fuse-menu-music").apply {
                     isDaemon = true
                     start()
                 }
             }
             lock.notifyAll()
         }
-    }
-
-    override fun setVolume(volume: Float) {
-        this.volume = volume.coerceIn(0f, 1f)
-    }
-
-    override fun setPlaying(playing: Boolean) {
-        wanted = playing
-        synchronized(lock) { lock.notifyAll() }
     }
 
     override fun close() {
@@ -62,14 +80,46 @@ class DesktopMenuMusic : MenuMusicPlayer, AutoCloseable {
         }
     }
 
+    /** True while the mixer thread runs (for tests). */
+    internal val running: Boolean get() = synchronized(lock) { thread?.isAlive == true }
+
     /** One song being played: its looping stream and where it is in the crossfade. */
     private class Voice(val path: String, val stream: LoopingStream, var mix: Float)
 
-    /** Mixes the current song, and songs fading out, until Fuse closes or nothing is left to play. */
-    private fun mix() {
+    /**
+     * Mixes until Fuse closes or nothing is left to play. A failing output is opened again after a
+     * wait that grows with each failure in a row, up to [MAX_FAILURES]; a later [apply] starts over.
+     */
+    private fun run() {
         val me = Thread.currentThread()
-        var line: SourceDataLine? = null
+        var failures = 0
+        try {
+            while (!me.isInterrupted && !closed) {
+                try {
+                    if (mix()) return
+                    failures = 0
+                } catch (e: InterruptedException) {
+                    return
+                } catch (e: Exception) {
+                    failures++
+                    Log.warn("menu music stopped ($failures)", e)
+                    if (failures >= MAX_FAILURES) return
+                    Thread.sleep(retryMs * failures)
+                }
+            }
+        } catch (e: InterruptedException) {
+            // Fuse is closing.
+        } finally {
+            synchronized(lock) { if (thread === me) thread = null }
+        }
+    }
+
+    /** One mixing session. Returns true when there is nothing left to play; throws when the output fails. */
+    private fun mix(): Boolean {
+        val me = Thread.currentThread()
+        var output: MusicOutput? = null
         var gate = 0f
+        var gain = 0f
         var current: Voice? = null
         val leaving = ArrayList<Voice>()
         try {
@@ -84,12 +134,15 @@ class DesktopMenuMusic : MenuMusicPlayer, AutoCloseable {
                     // Silent: drop what was fading out and wait until there is something to play.
                     leaving.forEach { it.stream.close() }
                     leaving.clear()
-                    line?.let { l -> l.drain(); l.stop() }
+                    output?.pause()
                     synchronized(lock) {
-                        while (!closed && !me.isInterrupted && song == current?.path && !(wanted && current != null)) lock.wait(500)
-                        if (song == null && current == null) return
+                        while (!closed && !me.isInterrupted && song == current?.path && !(wanted && current != null)) {
+                            // Off for good: the thread ends, and the next song starts a new one.
+                            if (song == null) return true
+                            lock.wait(500)
+                        }
                     }
-                    line?.start()
+                    output?.resume()
                     continue
                 }
                 val lead = current ?: leaving.firstOrNull()
@@ -126,30 +179,33 @@ class DesktopMenuMusic : MenuMusicPlayer, AutoCloseable {
                     v.mix = (v.mix - seconds * 1000f / CROSSFADE_MS).coerceAtLeast(0f)
                     (v.mix <= 0f).also { gone -> if (gone) v.stream.close() }
                 }
-                val lineFormat = AudioFormat(rate.toFloat(), 16, channels, true, false)
-                if (line == null || line?.format?.matches(lineFormat) != true) {
-                    line?.close()
-                    line = AudioSystem.getSourceDataLine(lineFormat).apply { open(lineFormat); start() }
+                if (output == null || output.rate != rate || output.channels != channels) {
+                    output?.close()
+                    output = null
+                    output = openOutput(rate, channels)
                 }
-                // Perceived loudness follows the square of the level, so low settings stay usable.
-                val gain = volume * volume * gate
+                // Perceived loudness follows the square of the level, so low settings stay usable. The
+                // gain glides from the last block's to this one's, so a volume change never clicks.
+                val v = volume
+                val target = v * v * gate
                 val bytes = ByteArray(out.size * 2)
-                for (i in out.indices) {
-                    val v = (out[i] * gain).toInt().coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt())
-                    bytes[i * 2] = (v and 0xFF).toByte()
-                    bytes[i * 2 + 1] = (v shr 8 and 0xFF).toByte()
+                for (f in 0 until frames) {
+                    val g = gain + (target - gain) * (f + 1) / frames
+                    for (c in 0 until channels) {
+                        val i = f * channels + c
+                        val sample = (out[i] * g).toInt().coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt())
+                        bytes[i * 2] = (sample and 0xFF).toByte()
+                        bytes[i * 2 + 1] = (sample shr 8 and 0xFF).toByte()
+                    }
                 }
-                line?.write(bytes, 0, bytes.size)
+                gain = target
+                output.write(bytes)
             }
-        } catch (e: InterruptedException) {
-            // Fuse is closing.
-        } catch (e: Exception) {
-            Log.warn("menu music stopped", e)
+            return true
         } finally {
             current?.stream?.close()
             leaving.forEach { it.stream.close() }
-            line?.close()
-            synchronized(lock) { if (thread === me) thread = null }
+            runCatching { output?.close() }
         }
     }
 
@@ -263,10 +319,45 @@ class DesktopMenuMusic : MenuMusicPlayer, AutoCloseable {
         }
     }
 
-    private companion object {
-        const val BLOCK_FRAMES = 2048
+    internal companion object {
+        /** About 23 ms at 44.1 kHz: how often the volume and fades are worked out. */
+        const val BLOCK_FRAMES = 1024
+        const val MAX_FAILURES = 5
+        const val RETRY_MS = 1_000L
         const val FADE_IN_MS = 1_200f
         const val FADE_OUT_MS = 500f
         const val CROSSFADE_MS = 2_500f
     }
+}
+
+/**
+ * A Java Sound line, preferring ALSA's "default" device (routed through PipeWire or PulseAudio, so it
+ * is shared with the interface sounds and games) over raw hardware devices only one program can hold.
+ * Its buffer holds about four mixing blocks, so a change is heard within a tenth of a second.
+ */
+private class SharedLineOutput(override val rate: Int, override val channels: Int) : MusicOutput {
+    private val line: SourceDataLine
+
+    init {
+        val format = AudioFormat(rate.toFloat(), 16, channels, true, false)
+        val info = DataLine.Info(SourceDataLine::class.java, format)
+        val preferred = AudioSystem.getMixerInfo().firstOrNull { it.name.startsWith("default") }
+            ?.let { AudioSystem.getMixer(it) }?.takeIf { it.isLineSupported(info) }
+        line = (preferred?.getLine(info) as? SourceDataLine) ?: AudioSystem.getSourceDataLine(format)
+        line.open(format, DesktopMenuMusic.BLOCK_FRAMES * channels * 2 * 4)
+        line.start()
+    }
+
+    override fun write(bytes: ByteArray) {
+        line.write(bytes, 0, bytes.size)
+    }
+
+    override fun pause() {
+        line.drain()
+        line.stop()
+    }
+
+    override fun resume() = line.start()
+
+    override fun close() = line.close()
 }

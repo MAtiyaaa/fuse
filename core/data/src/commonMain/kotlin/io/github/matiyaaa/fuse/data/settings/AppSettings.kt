@@ -11,6 +11,7 @@ import io.github.matiyaaa.fuse.model.MotionProfile
 import io.github.matiyaaa.fuse.model.PerformanceProfile
 import io.github.matiyaaa.fuse.model.ScrapeProviderId
 import io.github.matiyaaa.fuse.model.SoundProfile
+import io.github.matiyaaa.fuse.model.StoreVariant
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
@@ -45,11 +46,40 @@ data class AppSettings(
     val privacy: PrivacySettings = PrivacySettings(),
     val updates: UpdateSettings = UpdateSettings(),
     val capture: CaptureSettings = CaptureSettings(),
+    val store: StoreSettings = StoreSettings(),
 ) {
     companion object {
         const val CURRENT_VERSION = 2
     }
 }
+
+/**
+ * The Store (Android): which edition of the Obtainium Emulation Pack it follows (null until the
+ * user chose one), whether installed apps are checked for updates by themselves, and what Fuse
+ * installed through it.
+ */
+@Serializable
+data class StoreSettings(
+    val variant: StoreVariant? = null,
+    val autoCheck: Boolean = true,
+    /** Apps Fuse installed or updated, by their key in the catalogue. */
+    val installs: Map<String, StoreInstall> = emptyMap(),
+)
+
+/**
+ * One app Fuse installed from the Store: the package Android installed it as (the first install
+ * pins it, so later updates must be the same app), the upstream version and file it was, and the
+ * version code Android gave it then. When the app changes outside Fuse, its version code no longer
+ * matches and Fuse goes by what Android reports instead.
+ */
+@Serializable
+data class StoreInstall(
+    val packageName: String,
+    val version: String? = null,
+    val file: String? = null,
+    val versionCode: Long = 0,
+    val installedAt: Long = 0,
+)
 
 /** Screenshots and recordings of Fuse's own screen. */
 @Serializable

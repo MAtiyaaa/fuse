@@ -14,6 +14,8 @@
         android:maxSdkVersion="32" />
     <!-- Installing Cartridge and Fuse updates, always through the system's confirmation. -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- The Store's Uninstall: Android still asks the user to confirm every removal. -->
+    <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
     <uses-permission android:name="android.permission.VIBRATE" />
     <!-- Screen brightness from the second screen's controls, only once the user allows it in Android's settings. -->
     <uses-permission

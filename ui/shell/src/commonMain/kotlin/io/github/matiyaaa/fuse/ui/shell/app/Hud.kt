@@ -98,24 +98,6 @@ import kotlinx.coroutines.delay
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 
-fun Destination.label(): String = when (this) {
-    Destination.HOME -> "Home"
-    Destination.LIBRARY -> "Library"
-    Destination.SYSTEMS -> "Systems"
-    Destination.ACHIEVEMENTS -> "Achievements"
-    Destination.APPS -> "Apps"
-    Destination.CARTRIDGE -> "Cartridge"
-}
-
-fun Destination.icon(): ImageVector = when (this) {
-    Destination.HOME -> FuseIcons.Home
-    Destination.LIBRARY -> FuseIcons.Library
-    Destination.SYSTEMS -> FuseIcons.Chip
-    Destination.ACHIEVEMENTS -> FuseIcons.Trophy
-    Destination.APPS -> FuseIcons.Smartphone
-    Destination.CARTRIDGE -> FuseIcons.CloudDownload
-}
-
 /** The buttons at the end of the tab line, reachable with the stick after the last tab. */
 enum class HudButton { SEARCH, SETTINGS }
 
@@ -133,6 +115,8 @@ enum class HudButton { SEARCH, SETTINGS }
 @Composable
 fun Hud(
     destinations: List<Destination>,
+    /** How this device names and draws each section. */
+    sections: Sections,
     active: Destination?,
     tabsFocused: Boolean,
     status: SystemStatus,
@@ -207,7 +191,7 @@ fun Hud(
                         var x by remember { mutableFloatStateOf(0f) }
                         var w by remember { mutableIntStateOf(0) }
                         Tab(
-                            d, selected = d == active, focused = tabsFocused && focusedButton == null && d == active, showLabel = labels || d == active,
+                            sections.label(d), sections.icon(d), selected = d == active, focused = tabsFocused && focusedButton == null && d == active, showLabel = labels || d == active,
                             modifier = Modifier
                                 .bringIntoViewRequester(requesters.getValue(d))
                                 .onPlaced {
@@ -469,7 +453,7 @@ private fun HudIconButton(icon: ImageVector, label: String, focused: Boolean, ac
 }
 
 @Composable
-private fun Tab(destination: Destination, selected: Boolean, focused: Boolean, showLabel: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
+private fun Tab(label: String, icon: ImageVector, selected: Boolean, focused: Boolean, showLabel: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val c = Fuse.colors
     val motion = Fuse.motion
     val shape = rememberHudShape(insetX = false)
@@ -479,13 +463,13 @@ private fun Tab(destination: Destination, selected: Boolean, focused: Boolean, s
     Row(
         modifier
             .height(Size.touch)
-            .fuseClickable(shape = shape, role = Role.Tab, onClickLabel = destination.label(), onClick = onClick)
+            .fuseClickable(shape = shape, role = Role.Tab, onClickLabel = label, onClick = onClick)
             .hudFocus(shape, { focus }, fill, c.focus)
             .semantics { this.selected = selected }
             .padding(horizontal = Space.m),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        FuseIcon(destination.icon(), size = Size.iconM, tint = tint)
+        FuseIcon(icon, size = Size.iconM, tint = tint)
         AnimatedVisibility(
             visible = showLabel,
             enter = expandHorizontally(motion.tween(Durations.BASE)) + fadeIn(motion.fade(Durations.BASE)),
@@ -493,7 +477,7 @@ private fun Tab(destination: Destination, selected: Boolean, focused: Boolean, s
         ) {
             Row {
                 Spacer(Modifier.width(Space.s))
-                FText(destination.label(), Fuse.type.bodyStrong, color = tint, maxLines = 1)
+                FText(label, Fuse.type.bodyStrong, color = tint, maxLines = 1)
             }
         }
     }

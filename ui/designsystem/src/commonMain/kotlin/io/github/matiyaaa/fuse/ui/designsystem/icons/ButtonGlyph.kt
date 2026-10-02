@@ -44,6 +44,9 @@ import kotlin.math.roundToInt
 enum class HintButton {
     CONFIRM, BACK, OPTIONS, SEARCH, MENU, VIEW, PREV, NEXT, PAGE_PREV, PAGE_NEXT, DPAD, HOLD_CONFIRM,
 
+    /** Options held down (resizing a widget with the D-pad). */
+    HOLD_OPTIONS,
+
     /** The left stick (moving, scrolling). Keyboards show the arrow keys. */
     LEFT_STICK,
 
@@ -66,7 +69,7 @@ private enum class Face { SOUTH, EAST, WEST, NORTH }
 private fun faceFor(button: HintButton, confirmOnRight: Boolean): Face? = when (button) {
     HintButton.CONFIRM, HintButton.HOLD_CONFIRM -> if (confirmOnRight) Face.EAST else Face.SOUTH
     HintButton.BACK -> if (confirmOnRight) Face.SOUTH else Face.EAST
-    HintButton.OPTIONS -> if (confirmOnRight) Face.NORTH else Face.WEST
+    HintButton.OPTIONS, HintButton.HOLD_OPTIONS -> if (confirmOnRight) Face.NORTH else Face.WEST
     HintButton.SEARCH -> if (confirmOnRight) Face.WEST else Face.NORTH
     else -> null
 }
@@ -80,7 +83,7 @@ private fun faceLabel(face: Face, style: GlyphStyle): String = when (style) {
 private fun keyboardLabel(button: HintButton): String = when (button) {
     HintButton.CONFIRM, HintButton.HOLD_CONFIRM -> "Enter"
     HintButton.BACK -> "Esc"
-    HintButton.OPTIONS -> "Tab"
+    HintButton.OPTIONS, HintButton.HOLD_OPTIONS -> "Tab"
     HintButton.SEARCH -> "F"
     HintButton.MENU -> "M"
     HintButton.VIEW -> "Tab"
@@ -143,7 +146,7 @@ private fun hintGlyph(button: HintButton, glyphs: GlyphConfig): Glyph {
         HintButton.DPAD -> Glyph(Body.DPAD)
         HintButton.LEFT_STICK -> Glyph(Body.STICK, "L", left = true)
         HintButton.RIGHT_STICK -> Glyph(Body.STICK, "R", left = false)
-        else -> faceGlyph(faceFor(button, glyphs.confirmOnRight) ?: Face.SOUTH, style, hold = button == HintButton.HOLD_CONFIRM)
+        else -> faceGlyph(faceFor(button, glyphs.confirmOnRight) ?: Face.SOUTH, style, hold = button == HintButton.HOLD_CONFIRM || button == HintButton.HOLD_OPTIONS)
     }
 }
 

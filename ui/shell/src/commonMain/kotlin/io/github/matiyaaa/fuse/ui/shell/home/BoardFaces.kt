@@ -44,6 +44,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.components.ProgressBar
 import io.github.matiyaaa.fuse.ui.designsystem.components.ProgressRing
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
+import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseMarks
 import io.github.matiyaaa.fuse.ui.designsystem.media.ArtSlot
 import io.github.matiyaaa.fuse.ui.designsystem.media.Artwork
 import io.github.matiyaaa.fuse.ui.designsystem.media.GeneratedArt
@@ -94,13 +95,14 @@ internal enum class FaceSize {
 internal fun BoardFace(kind: WidgetKind, size: BoardSize, feed: HomeFeed, cartridge: CartridgeStatus, clock24h: Boolean) {
     val face = FaceSize.of(size)
     when (kind) {
-        WidgetKind.CONTINUE_PLAYING, WidgetKind.RECENTLY_PLAYED, WidgetKind.FAVORITES, WidgetKind.RECENTLY_ADDED,
-        WidgetKind.PINNED_GAMES,
+        WidgetKind.CONTINUE_PLAYING -> ContinueFace(feed, face)
+        WidgetKind.FAVORITES -> FavoritesFace(feed, face)
+        WidgetKind.RECENTLY_PLAYED, WidgetKind.RECENTLY_ADDED, WidgetKind.PINNED_GAMES,
         -> GamesFace(kind, boardGames(kind, feed), face) { gameCaption(kind, it) }
         WidgetKind.CURRENT_GAME -> GamesFace(kind, listOfNotNull(feed.playtime.currentGame), face) { g ->
             feed.playtime.currentSince?.let { "Started ${agoText(it)}" } ?: g.platformShort
         }
-        WidgetKind.SYSTEMS -> SystemsFace(feed)
+        WidgetKind.SYSTEMS -> SystemsFace(feed, face)
         WidgetKind.PINNED_APPS -> AppsFace(feed)
         WidgetKind.COLLECTIONS -> CollectionsFace(feed, face)
         else -> Framed(kind, feed, cartridge) {
@@ -255,60 +257,6 @@ private fun emptyGamesNote(kind: WidgetKind): String = when (kind) {
 
 // ------------------------------------------------------------------- systems, apps, collections
 
-/** Systems as cards in their colours, as many as fit, the last saying how many more there are. */
-@Composable
-private fun SystemsFace(feed: HomeFeed) {
-    Framed(WidgetKind.SYSTEMS, feed, null) {
-        val systems = feed.systems
-        WidgetHeader(FuseIcons.Chip, WidgetKind.SYSTEMS.title(), trailing = systems.size.takeIf { it > 0 }?.toString())
-        Spacer(Modifier.height(Space.s))
-        if (systems.isEmpty()) {
-            Spacer(Modifier.weight(1f))
-            FText("Systems show once Fuse finds games", Fuse.type.label, color = Fuse.colors.textMuted, maxLines = 2)
-            return@Framed
-        }
-        BoxWithConstraints(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.BottomStart) {
-            val gap = Space.xs
-            // The largest cards that show every system, if any fit; else cards of the usual width,
-            // as many as fit, the last saying how many more there are.
-            val best = (1..8).firstNotNullOfOrNull { columns ->
-                val w = (maxWidth - gap * (columns - 1)) / columns
-                val h = w / Aspect.SYSTEM_CARD
-                val rows = (systems.size + columns - 1) / columns
-                if (w in CHIP_MIN..CHIP_MAX && h * rows + gap * (rows - 1) <= maxHeight) Triple(columns, w, h) else null
-            }
-            val columns = best?.first ?: ((maxWidth + gap) / (CHIP_TARGET + gap)).toInt().coerceIn(1, 8)
-            val chipW = best?.second ?: ((maxWidth - gap * (columns - 1)) / columns)
-            val chipH = best?.third ?: (chipW / Aspect.SYSTEM_CARD).coerceAtMost(maxHeight)
-            val rows = ((maxHeight + gap) / (chipH + gap)).toInt().coerceAtLeast(1)
-            val slots = columns * rows
-            // A "+N" chip only once there are a few places; a face with one or two shows systems.
-            val shown = if (systems.size > slots) systems.take(if (slots >= 3) slots - 1 else slots) else systems
-            val more = if (slots >= 3) systems.size - shown.size else 0
-            val chip = RoundedCornerShape(Fuse.geometry.control)
-            Column(verticalArrangement = Arrangement.spacedBy(gap)) {
-                (shown.map { it as Any? } + if (more > 0) listOf(more) else emptyList()).chunked(columns).forEach { line ->
-                    Row(horizontalArrangement = Arrangement.spacedBy(gap)) {
-                        line.forEach { item ->
-                            val m = Modifier.width(chipW).height(chipH)
-                            if (item is Int) MoreChip(item, chip, m) else SystemChip(item as io.github.matiyaaa.fuse.ui.shell.store.PlatformCard, chip, m)
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-/** The last chip of a full face: how many more there are. */
-@Composable
-private fun MoreChip(count: Int, shape: androidx.compose.ui.graphics.Shape, modifier: Modifier) {
-    val c = Fuse.colors
-    Box(modifier.clip(shape).background(c.text.copy(alpha = if (c.isDark) 0.08f else 0.06f)), contentAlignment = Alignment.Center) {
-        FText("+$count", Fuse.type.bodyStrong.tabular(), color = c.textMuted, maxLines = 1)
-    }
-}
-
 /** Pinned apps as icons, as many as fit. */
 @Composable
 private fun AppsFace(feed: HomeFeed) {
@@ -357,72 +305,6 @@ private fun AppsFace(feed: HomeFeed) {
     }
 }
 
-/** Collections: one told big in a single cell, else a list, as long as the face allows. */
-@Composable
-private fun CollectionsFace(feed: HomeFeed, face: FaceSize) {
-    Framed(WidgetKind.COLLECTIONS, feed, null) {
-        val c = Fuse.colors
-        val all = feed.collections
-        WidgetHeader(FuseIcons.Bookmark, WidgetKind.COLLECTIONS.title(), trailing = all.size.takeIf { it > 1 && face != FaceSize.SMALL }?.toString())
-        if (all.isEmpty()) {
-            Spacer(Modifier.weight(1f))
-            FText("Make one from a game's options", Fuse.type.label, color = c.textMuted, maxLines = 2)
-            return@Framed
-        }
-        if (face == FaceSize.SMALL) {
-            Spacer(Modifier.weight(1f))
-            FText(all.first().name, Fuse.type.titleSmall, maxLines = 2)
-            WidgetCaption(if (all.size > 1) "${gamesText(all.first().gameCount)}  ·  ${all.size - 1} more" else gamesText(all.first().gameCount))
-            return@Framed
-        }
-        Spacer(Modifier.height(Space.s))
-        if (face == FaceSize.WIDE) {
-            BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
-                val rows = ((maxHeight + Space.xs) / (LIST_ROW + Space.xs)).toInt().coerceAtLeast(1)
-                Column(verticalArrangement = Arrangement.spacedBy(Space.xs)) {
-                    for (col in all.take(rows)) {
-                        Row(Modifier.height(LIST_ROW), verticalAlignment = Alignment.CenterVertically) {
-                            FuseIcon(FuseIcons.Bookmark, size = Size.iconXS, tint = c.textMuted)
-                            Spacer(Modifier.width(Space.s))
-                            FText(col.name, Fuse.type.label, maxLines = 1, modifier = Modifier.weight(1f))
-                            Spacer(Modifier.width(Space.s))
-                            FText("${col.gameCount}", Fuse.type.numericSmall, color = c.textFaint, maxLines = 1)
-                        }
-                    }
-                }
-            }
-            return@Framed
-        }
-        // Taller faces lay the collections out as cards, as many as fit.
-        BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
-            val gap = Space.s
-            val columns = ((maxWidth + gap) / (CARD_MIN + gap)).toInt().coerceIn(1, 4)
-            val cardW = (maxWidth - gap * (columns - 1)) / columns
-            val rows = ((maxHeight + gap) / (CARD_HEIGHT + gap)).toInt().coerceAtLeast(1)
-            val cardH = ((maxHeight - gap * (rows - 1)) / rows).coerceAtMost(CARD_HEIGHT * 1.5f)
-            val shape = RoundedCornerShape(Fuse.geometry.control)
-            Column(verticalArrangement = Arrangement.spacedBy(gap)) {
-                all.take(columns * rows).chunked(columns).forEach { line ->
-                    Row(horizontalArrangement = Arrangement.spacedBy(gap)) {
-                        for (col in line) {
-                            Column(
-                                Modifier.size(cardW, cardH).clip(shape).background(c.text.copy(alpha = if (c.isDark) 0.06f else 0.05f)).padding(Space.m),
-                            ) {
-                                Box(Modifier.size(Size.badge + Space.xs).clip(shape).background(c.accent.copy(alpha = 0.16f)), contentAlignment = Alignment.Center) {
-                                    FuseIcon(FuseIcons.Bookmark, size = Size.iconXS, tint = c.accent)
-                                }
-                                Spacer(Modifier.weight(1f))
-                                FText(col.name, Fuse.type.bodyStrong, maxLines = 2)
-                                FText(gamesText(col.gameCount), Fuse.type.caption, color = c.textMuted, maxLines = 1)
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
 // ----------------------------------------------------------------------------- the surface
 
 /**
@@ -431,9 +313,15 @@ private fun CollectionsFace(feed: HomeFeed, face: FaceSize) {
  * are null for faces that handle their own empty state.
  */
 @Composable
-private fun Framed(kind: WidgetKind, feed: HomeFeed?, cartridge: CartridgeStatus?, content: @Composable ColumnScope.() -> Unit) {
+internal fun Framed(
+    kind: WidgetKind,
+    feed: HomeFeed?,
+    cartridge: CartridgeStatus?,
+    tint: androidx.compose.ui.graphics.Color? = null,
+    content: @Composable ColumnScope.() -> Unit,
+) {
     val c = Fuse.colors
-    val tint = if (feed != null && cartridge != null) widgetTint(kind, feed, cartridge) else c.text
+    val tint = tint ?: if (feed != null && cartridge != null) widgetTint(kind, feed, cartridge) else c.text
     BoxWithConstraints(Modifier.fillMaxSize().widgetSurface(c.surfaceRaised, tint.copy(alpha = if (c.isDark) WASH_DARK else WASH_LIGHT))) {
         val room = widgetRoom(maxWidth, maxHeight)
         CompositionLocalProvider(LocalWidgetRoom provides room) {
@@ -846,18 +734,24 @@ private fun ColumnScope.CartridgeFace(cartridge: CartridgeStatus, face: FaceSize
     val c = Fuse.colors
     val downloading = cartridge.installed && cartridge.activeDownloads > 0
     val now = CartridgeNow.of(cartridge)
-    WidgetHeader(FuseIcons.CloudDownload, WidgetKind.CARTRIDGE_DOWNLOADS.title(), trailing = if (downloading && face == FaceSize.WIDE) now.percent else null)
+    WidgetHeader(FuseMarks.Cartridge, WidgetKind.CARTRIDGE_DOWNLOADS.title(), trailing = if (downloading && face == FaceSize.WIDE) now.percent else null)
     if (!cartridge.installed) {
         Spacer(Modifier.weight(1f))
-        FText("Get games from RomM", Fuse.type.bodyStrong, maxLines = 2)
-        WidgetCaption("Install Cartridge", c.accent)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            CartridgeEmblem(if (LocalWidgetRoom.current.compact) 40.dp else 56.dp)
+            Spacer(Modifier.width(Space.m))
+            Column {
+                FText("Get games from RomM", Fuse.type.bodyStrong, maxLines = 2)
+                WidgetCaption("Install Cartridge", CARTRIDGE_TINT.toColor())
+            }
+        }
         return
     }
     if (face == FaceSize.SMALL) {
         Spacer(Modifier.weight(1f))
         if (downloading) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                ProgressRing(now.progress ?: 0f, size = Size.thumb, stroke = Size.track) {
+                ProgressRing(now.progress ?: 0f, size = Size.thumb, stroke = Size.track, color = CARTRIDGE_TINT.toColor()) {
                     FuseIcon(FuseIcons.ArrowDown, size = Size.iconXS, tint = c.text)
                 }
                 Spacer(Modifier.width(Space.s))
@@ -867,6 +761,8 @@ private fun ColumnScope.CartridgeFace(cartridge: CartridgeStatus, face: FaceSize
                 }
             }
         } else {
+            CartridgeEmblem(36.dp)
+            Spacer(Modifier.height(Space.xs))
             FText(if (cartridge.connected == true) "Connected" else "Idle", Fuse.type.bodyStrong, maxLines = 1)
             WidgetCaption(cartridge.recent.firstOrNull()?.title?.let { "Latest: $it" } ?: "No downloads")
         }
@@ -882,12 +778,18 @@ private fun ColumnScope.CartridgeFace(cartridge: CartridgeStatus, face: FaceSize
         if (downloading) {
             FText(now.title ?: "Downloading", Fuse.type.bodyStrong, maxLines = 1)
             Spacer(Modifier.height(Space.s))
-            ProgressBar(now.progress, Modifier.fillMaxWidth())
+            ProgressBar(now.progress, Modifier.fillMaxWidth(), color = CARTRIDGE_TINT.toColor())
             Spacer(Modifier.height(Space.xs + Space.xxs))
             WidgetCaption(if (now.waiting > 0) "${now.waiting} more queued" else "Downloading from RomM")
         } else {
-            FText(cartridge.recent.firstOrNull()?.let { "Latest: ${it.title}" } ?: "No downloads", Fuse.type.bodyStrong, maxLines = 1)
-            WidgetCaption(status)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                CartridgeEmblem(if (LocalWidgetRoom.current.compact) 36.dp else 48.dp)
+                Spacer(Modifier.width(Space.m))
+                Column {
+                    FText(cartridge.recent.firstOrNull()?.let { "Latest: ${it.title}" } ?: "No downloads", Fuse.type.bodyStrong, maxLines = 1)
+                    WidgetCaption(status)
+                }
+            }
         }
         return
     }
@@ -902,16 +804,14 @@ private fun ColumnScope.CartridgeFace(cartridge: CartridgeStatus, face: FaceSize
         val shown = lines.take(((room - 64.dp) / 22.dp).toInt().coerceIn(0, QUEUE_LINES))
         val dial: @Composable () -> Unit = {
             if (downloading) {
-                ProgressRing(now.progress ?: 0f, size = ring, stroke = Size.track * if (big) 3 else 2) {
+                ProgressRing(now.progress ?: 0f, size = ring, stroke = Size.track * if (big) 3 else 2, color = CARTRIDGE_TINT.toColor()) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         FText(now.percent ?: "", (if (big) Fuse.type.title else Fuse.type.titleSmall).tabular(), maxLines = 1)
                         FText("downloaded", Fuse.type.caption, color = c.textMuted, maxLines = 1)
                     }
                 }
             } else {
-                Box(Modifier.size(ring).clip(RoundedCornerShape(ring / 2)).background(c.text.copy(alpha = 0.06f)), contentAlignment = Alignment.Center) {
-                    FuseIcon(FuseIcons.CloudDownload, size = ring * 0.32f, tint = c.textMuted)
-                }
+                Box(Modifier.size(ring), contentAlignment = Alignment.Center) { CartridgeEmblem(ring * 0.62f) }
             }
         }
         val words: @Composable () -> Unit = {
@@ -1139,26 +1039,12 @@ private const val MAX_COVERS = 6
 /** Icon sizes the Apps widget tries, largest first. */
 private val APP_SIZES = listOf(112.dp, 96.dp, 80.dp, 72.dp, 64.dp, 56.dp, 48.dp, 40.dp)
 
-/** The width a system chip aims for; the face fits as many as it can. */
-private val CHIP_TARGET = 112.dp
-
-/** The smallest and largest a system card is drawn when it grows to fill a face. */
-private val CHIP_MIN = 84.dp
-private val CHIP_MAX = 220.dp
-
-/** A collection card's narrowest width and usual height. */
-private val CARD_MIN = 150.dp
-private val CARD_HEIGHT = 96.dp
-
 /** Badge sizes the recent achievements try on larger faces, largest first. */
 private val BADGE_SIZES = listOf(96.dp, 80.dp, 72.dp, 64.dp, 56.dp, 48.dp)
 
 /** The width of a game in progress on a large face, and of one on a strip. */
 private val RING_CARD = 168.dp
 private val STRIP_ENTRY = 260.dp
-
-/** A row in a face's list. */
-private val LIST_ROW = 26.dp
 
 /** Lines of Cartridge's queue on a tall face. */
 private const val QUEUE_LINES = 4

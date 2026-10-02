@@ -139,6 +139,9 @@ class AppState(
     /** Where hardware keyboard typing goes (search field, rename dialog), or null for navigation keys. */
     var keyboardTarget by mutableStateOf<KeyboardTarget?>(null)
 
+    /** Which part of Addons shows (Cartridge or the Store); null until one is chosen or opened. */
+    var addonsPart by mutableStateOf<AddonsPart?>(null)
+
     /** Settings groups that are open, by id. They stay open while Fuse runs. */
     val openGroups = androidx.compose.runtime.mutableStateMapOf<String, Boolean>()
 

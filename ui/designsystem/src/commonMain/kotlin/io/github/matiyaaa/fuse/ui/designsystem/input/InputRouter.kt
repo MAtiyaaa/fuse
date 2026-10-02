@@ -33,7 +33,11 @@ enum class NavResult {
 
 enum class InputSource { GAMEPAD, KEYBOARD, TOUCH, POINTER }
 
-data class NavEvent(val action: NavAction, val repeat: Int, val source: InputSource) {
+/**
+ * One action for the layers. [modifier] is set when it came while a hold modifier was held down
+ * (a direction pressed with Options held, for resizing): see [InputRouter.register].
+ */
+data class NavEvent(val action: NavAction, val repeat: Int, val source: InputSource, val modifier: NavAction? = null) {
     val isRepeat: Boolean get() = repeat > 0
 }
 
@@ -88,6 +92,8 @@ class InputRouter(
         var handler: (NavEvent) -> NavResult,
         /** Actions beyond the directions that repeat while held here (the keyboard's delete and caret keys). */
         var repeats: Set<NavAction> = emptySet(),
+        /** An action whose button modifies directions while held, instead of acting at once. */
+        var holdModifier: NavAction? = null,
     )
 
     private val layers = mutableListOf<Layer>()
@@ -95,12 +101,20 @@ class InputRouter(
 
     /** Handle returned by [register]; keep it to update or remove the layer. */
     inner class Registration internal constructor(private val layer: Layer) {
-        fun update(enabled: Boolean, modal: Boolean, longPress: Boolean, handler: (NavEvent) -> NavResult, repeats: Set<NavAction> = emptySet()) {
+        fun update(
+            enabled: Boolean,
+            modal: Boolean,
+            longPress: Boolean,
+            handler: (NavEvent) -> NavResult,
+            repeats: Set<NavAction> = emptySet(),
+            holdModifier: NavAction? = null,
+        ) {
             layer.enabled = enabled
             layer.modal = modal
             layer.longPress = longPress
             layer.handler = handler
             layer.repeats = repeats
+            layer.holdModifier = holdModifier
         }
 
         fun remove() {
@@ -112,9 +126,10 @@ class InputRouter(
         priority: Int,
         modal: Boolean = false,
         longPress: Boolean = false,
+        holdModifier: NavAction? = null,
         handler: (NavEvent) -> NavResult,
     ): Registration {
-        val layer = Layer(priority, seq++, enabled = true, modal = modal, longPress = longPress, handler = handler)
+        val layer = Layer(priority, seq++, enabled = true, modal = modal, longPress = longPress, handler = handler, holdModifier = holdModifier)
         layers += layer
         return Registration(layer)
     }
@@ -125,7 +140,9 @@ class InputRouter(
     /** Sends an action through the layer stack. Returns what the handling layer did. */
     fun dispatch(action: NavAction, source: InputSource, repeat: Int = 0): NavResult {
         _lastSource.value = source
-        val event = NavEvent(action, repeat, source)
+        val modifier = _heldModifier.value?.takeIf { action.isDirection }
+        if (modifier != null) modifierUsed = true
+        val event = NavEvent(action, repeat, source, modifier)
         var result = route(event)
         // Hold-to-reorder falls back to the options menu where a screen has no reorder mode.
         if (result == NavResult.IGNORED && action == NavAction.REORDER) {
@@ -143,6 +160,24 @@ class InputRouter(
         }
         return NavResult.IGNORED
     }
+
+    // ---------------------------------------------------------------- hold modifiers
+
+    private val _heldModifier = MutableStateFlow<NavAction?>(null)
+
+    /**
+     * The hold modifier being held down right now, or null. A layer asks for one (`holdModifier`):
+     * its button then acts when let go, as a tap, unless a direction was pressed meanwhile, and the
+     * directions pressed while it is down carry it in [NavEvent.modifier]. Screens read this to show
+     * that holding has changed what the directions do.
+     */
+    val heldModifier: StateFlow<NavAction?> = _heldModifier.asStateFlow()
+
+    private var modifierButton: PadButton? = null
+    private var modifierUsed = false
+
+    private val NavAction.isDirection: Boolean
+        get() = this == NavAction.UP || this == NavAction.DOWN || this == NavAction.LEFT || this == NavAction.RIGHT
 
     // ---------------------------------------------------------------- raw input
 
@@ -210,6 +245,15 @@ class InputRouter(
             stickPending += button
             return
         }
+        val top = orderedLayers().firstOrNull()
+        if (top?.holdModifier != null && action == top.holdModifier && modifierButton == null) {
+            // Held, it changes what the directions do; let go untouched, it is an ordinary press.
+            held[button] = null
+            modifierButton = button
+            modifierUsed = false
+            _heldModifier.value = action
+            return
+        }
         when {
             action.repeats || action in topRepeats() -> {
                 dispatch(action, source)
@@ -248,6 +292,16 @@ class InputRouter(
             return
         }
         if (!held.containsKey(button)) return
+        if (button == modifierButton) {
+            held.remove(button)
+            val action = _heldModifier.value
+            val used = modifierUsed
+            modifierButton = null
+            modifierUsed = false
+            _heldModifier.value = null
+            if (!used && action != null) dispatch(action, source)
+            return
+        }
         val job = held.remove(button)
         job?.cancel()
         // A pending long press that was let go early is an ordinary select.
@@ -268,6 +322,9 @@ class InputRouter(
         comboHold = null
         comboActive = false
         comboDone = false
+        modifierButton = null
+        modifierUsed = false
+        _heldModifier.value = null
     }
 
     private val PadButton.isStick: Boolean get() = this == PadButton.L3 || this == PadButton.R3

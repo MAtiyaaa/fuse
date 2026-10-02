@@ -25,6 +25,7 @@ and redact credentials from every error message (`redact()`, see
 - [RomM via Cartridge](#romm-via-cartridge)
 - [Cartridge bridge protocol](#cartridge-bridge-protocol)
 - [GitHub Releases](#github-releases)
+- [The Store: Obtainium Emulation Pack](#the-store-obtainium-emulation-pack)
 - [Steam and Windows launchers](#steam-and-windows-launchers)
 - [RPCS3 compatibility list](#rpcs3-compatibility-list)
 - [Emulators' own files](#emulators-own-files)
@@ -41,6 +42,7 @@ and redact credentials from every error message (`redact()`, see
 | Libretro thumbnails | Nothing | The system folder name and candidate game names in image URLs | When you fill artwork |
 | System art (Art Book Next) | Nothing | The pack's system name (for example `snes`) in file URLs on raw.githubusercontent.com | When a platform's system art or the style picker is shown and the files are not cached yet |
 | GitHub Releases | Nothing | A request for the latest release of Fuse or Cartridge, your IP address and the User-Agent with Fuse's version | Update checks (automatic check can be turned off) and "Install Cartridge"; downloads only after you confirm |
+| Store (Android): Obtainium Emulation Pack, app sources | Optionally a GitHub token | Requests for the pack's newest release on github.com, each app's releases (GitHub's API, or the download page the pack names), and the APK you install; your IP address and the User-Agent (or the one the pack sets for a download page) | The catalogue when the Store opens and is older than 6 hours, or on "Check now"; an app's releases when its page or card is shown, for installed apps a little after start (at most twice a day, can be turned off); downloads only when you press Install or Update |
 | RPCS3 compatibility list (rpcs3.net) | Nothing | A PS3 game's title id (for example `BLUS30443`), your IP address and the User-Agent | Only when you choose How It Runs in RPCS3 in a PS3 game's options; the answer is kept a week |
 | Cartridge | Nothing | Nothing leaves the device through Fuse: Fuse reads Cartridge's local status and opens it with deep links. "Upload to RomM" hands Cartridge a game's file paths; Cartridge uploads the files to your own RomM server only after you confirm there | On resume and when Cartridge reports a change; uploads only when you start one and confirm it in Cartridge |
 
@@ -482,6 +484,82 @@ day. Turn it off and Fuse only contacts GitHub when you press "Check for updates
 
 **Leaves the device.** Your IP address, the User-Agent with Fuse's version, and which repository was
 asked.
+
+## The Store: Obtainium Emulation Pack
+
+**What for.** Android only: the Store in Addons installs, updates and removes emulators and gaming
+apps listed in the [Obtainium Emulation Pack](https://github.com/RJNY/Obtainium-Emulation-Pack)
+(public domain). Fuse reads the pack as data; nothing about the apps is written into Fuse.
+
+**The catalogue** (`obtainium/PackFetcher.kt`, `obtainium/PackDocument.kt`). The user picks an
+edition on first use: Standard (`obtainium-emulation-pack-latest.json`) or Dual-Screen
+(`obtainium-emulation-pack-dual-screen-latest.json`), which really differ (forks for devices with
+a second screen, and companions only they use). Fuse reads the newest release's tag from where
+`github.com/RJNY/Obtainium-Emulation-Pack/releases/latest` redirects (no API quota) and downloads
+that release's file for the edition; when that fails it takes the same file from the project's
+main branch. A download only replaces the saved catalogue when it parses as a real pack (at least
+five usable apps), and the last good one is kept, so the Store opens offline with a note of its age.
+It is refreshed when the Store opens and the copy is older than 6 hours, or on "Check now".
+
+**What an app is.** Each entry's `additionalSettings` (a JSON string, as Obtainium exports it) is
+read for the settings that choose a release and a file. An entry marked `trackOnly` is only
+followed (its newest release is shown, with no Install); a source Fuse doesn't read is shown with
+its download page. An entry's `id` is its package name except where the pack uses a generated
+number (RetroArch, the track-only entries): then the package is learnt from the first install and
+pinned.
+
+**Releases** (`obtainium/PackResolver.kt`, `ApkPicker.kt`, `VersionText.kt`, `HtmlLinks.kt`),
+following Obtainium's own rules so each app resolves as the pack intends:
+
+- *GitHub sources*: `api.github.com/repos/{owner}/{repo}/releases?per_page=50` (and `/releases/latest`
+  when the pack asks to verify it), sorted by the pack's method (date, natural name order, or names
+  with a date fallback), skipping drafts, pre-releases unless allowed, and titles or notes the pack's
+  filters reject, falling back to older releases only where the pack allows it. The version comes
+  from the tag (or the title, or the date) through the pack's `versionExtractionRegEx` and
+  `matchGroupToUse` template (`$1$3.$2$4$6$5`), the last match winning. 60 requests an hour without a
+  token; a GitHub token (Settings, Store; kept in the secret store) raises that. When the limit is
+  reached Fuse says so and waits for GitHub's reset time.
+- *Download pages* (Dolphin, DuckStation, Eden, Play!, PPSSPP, RetroArch, ScummVM): the page is
+  fetched with the pack's request headers, its links found (`<a href>`, and every address on the
+  page when the pack asks or the page is JSON), resolved against the page's final address, filtered
+  by the pack's patterns, sorted in natural order, through each intermediate page in turn; the last
+  link is the newest. The version is read from the link or the whole page by the pack's pattern.
+- *The file*: the pack's file filter (or its inverse), then the device's processor types
+  (`arm64-v8a` also matches `aarch64` and `arm64`), then a universal build, then the pack's preferred
+  index. Only a plain APK is installed: a release that is a zip or a split bundle is installed by
+  hand from its page.
+
+Releases are cached for 6 hours (kept 30 days, shown as "last known" while a fresh look fails).
+
+**Installing** (`store/impl/AppStoreImpl.kt`, `ApkDownloader.kt`, Android `AndroidPackageBridge`).
+Nothing downloads until you press Install or Update. Then:
+
+1. Every address on the way is HTTPS. Redirects are followed one at a time and a hop to anything
+   else stops the download; addresses only ever come from the resolver, never from text on screen.
+2. The download goes to `cache/store` (never a user folder), at most 1 GB and only when there is room,
+   and must be complete. GitHub's `sha256:` digest is checked when published.
+3. Android reads the file (`getPackageArchiveInfo`). It must be the package the pack lists (or the
+   package pinned for that app), and not older than what is installed; otherwise it is deleted and
+   nothing installs.
+4. It goes to `PackageInstaller` with `USER_ACTION_REQUIRED`: Android shows its own confirmation
+   every time, one at a time. "Update all" queues the updates and Android asks about each one.
+   Without "Install unknown apps" for Fuse, Android's settings open first and the install carries on
+   once it is allowed. A signature conflict is reported as such, with Uninstall first.
+5. The download is deleted once Android has it. Fuse remembers the upstream version and file it
+   installed, which makes later update checks exact.
+
+**Installed and updates.** What is installed is read from the PackageManager, refreshed by the
+system's package broadcasts and on resume. An update is claimed only when it is real: after a Fuse
+install, any newer release; otherwise when Android's version name and the release's version are the
+same kind of numbers and the release is newer. Anything else shows "can't compare", never a made-up
+update.
+
+**Uninstalling** goes through `PackageInstaller.uninstall` (with `REQUEST_DELETE_PACKAGES`); Android
+asks the user to confirm. Fuse never removes files to "uninstall".
+
+**Leaves the device.** Your IP address and User-Agent to github.com, api.github.com (with your
+token when you added one), raw.githubusercontent.com and the download pages the pack names, and
+which app's releases or file was asked for.
 
 ## Steam and Windows launchers
 
