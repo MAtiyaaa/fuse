@@ -78,6 +78,9 @@ internal class AuditControls(val cache: File) {
     }
 
     val apps: AuditApps = AuditApps.create(File(cache, "app-icons"))
+
+    /** The drives the audit device reports; none by default, like a host that can't tell. */
+    @Volatile var drives: List<io.github.matiyaaa.fuse.model.StorageVolume> = emptyList()
 }
 
 /**
@@ -140,6 +143,10 @@ internal class AuditServices(
     }
 
     override val apps: AppsProvider? = if (desktop) null else controls.apps
+
+    override val volumes = object : io.github.matiyaaa.fuse.ui.shell.store.VolumeMonitor {
+        override suspend fun volumes() = controls.drives
+    }
 
     override val locations = object : DeviceLocations {
         override suspend fun libraryCandidates(): List<LocationHint> = controls.libraryCandidates

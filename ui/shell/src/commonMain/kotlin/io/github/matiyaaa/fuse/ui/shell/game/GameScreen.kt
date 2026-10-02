@@ -175,7 +175,9 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
 
     // Play first, then the emulator it starts in, then the quick actions, then everything else.
     val actions = listOf(
-        DetailAction("play", "Play", FuseIcons.Play, "Play", primary = true) { app.play(card) },
+        // A game Fuse can't reach right now keeps its Play button (pressing it explains why), drawn
+        // as not ready, so the page never promises a start it knows won't happen.
+        DetailAction("play", "Play", if (d.unavailable != null) FuseIcons.HardDrive else FuseIcons.Play, "Play", primary = d.unavailable == null && !d.missing) { app.play(card) },
         DetailAction("emu", d.emulator.selected?.name ?: "Choose emulator", if (d.emulator.selected == null) FuseIcons.Warning else FuseIcons.Chip, "Choose emulator") {
             app.emulatorPicker(card)
         },
@@ -317,12 +319,12 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
                             FuseButton(
                                 a.label, selected = selected, icon = a.icon,
                                 kind = if (a.primary) ButtonKind.PRIMARY else ButtonKind.SECONDARY,
-                                height = if (a.primary) Size.row else Size.touch,
+                                height = if (a.id == "play") Size.row else Size.touch,
                                 // The emulator reads as a choice: its name, and a chevron for "pick another".
                                 trailingIcon = if (a.id == "emu") FuseIcons.ChevronDown else null,
                                 // Play stays pressable without an emulator: pressing it explains what to install.
                                 enabled = !a.primary || d.emulator.canLaunch || d.emulator.selected != null,
-                                modifier = m.then(if (a.primary) Modifier.widthIn(min = Size.touch * 3) else Modifier),
+                                modifier = m.then(if (a.id == "play") Modifier.widthIn(min = Size.touch * 3) else Modifier),
                                 onClick = tap,
                             )
                         } else {
@@ -603,6 +605,23 @@ private fun FactChip(text: String, icon: ImageVector? = null, dot: Color? = null
 @Composable
 private fun LaunchNote(d: GameDetail, modifier: Modifier) {
     val c = Fuse.colors
+    // Where the game can't be reached, that comes first, calmly: it isn't broken, it's away.
+    val away = d.unavailable
+    if (away != null || d.missing) {
+        Row(modifier.padding(top = Space.m), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s)) {
+            FuseIcon(if (away != null) FuseIcons.HardDrive else FuseIcons.FileQuestion, size = Size.iconS, tint = if (away != null) c.textMuted else c.warning)
+            FText(
+                when {
+                    away != null && away.state == io.github.matiyaaa.fuse.model.SourceState.OFFLINE ->
+                        "Stored on ${away.driveLabel}, which isn't connected. Connect it to play."
+                    away != null -> "${away.label}. Your game and everything about it are kept."
+                    else -> "The last scan didn't find this game's file. Scan again once it's back."
+                },
+                Fuse.type.caption, color = c.text, maxLines = 2,
+            )
+        }
+        return
+    }
     val summary = launchNote(d) ?: return
     val missing = d.emulator.selected == null
     Row(modifier.padding(top = Space.m), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s)) {
@@ -960,6 +979,8 @@ fun GameDetail.toCard(): GameCard = GameCard(
     dlc = game.content.count { it.kind == ContentKind.DLC },
     discs = game.discs.size,
     rommRomId = game.links.rommRomId,
+    missing = missing,
+    unavailable = unavailable,
 )
 
 /** How many can play: "1 player", "1-4 players", or a source's own words ("Single player"). */

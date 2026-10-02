@@ -44,6 +44,7 @@ import io.github.matiyaaa.fuse.ui.shell.store.GameDetail
 import io.github.matiyaaa.fuse.ui.shell.store.GameQuery
 import io.github.matiyaaa.fuse.ui.shell.store.HomeFeed
 import io.github.matiyaaa.fuse.ui.shell.store.LaunchOutcome
+import io.github.matiyaaa.fuse.ui.shell.store.Unavailable
 import io.github.matiyaaa.fuse.ui.shell.store.LibraryOps
 import io.github.matiyaaa.fuse.ui.shell.store.PlatformCard
 import io.github.matiyaaa.fuse.ui.shell.store.PlaytimeSummary
@@ -279,7 +280,10 @@ internal class DefaultLibraryOps(
             combine(data.playSessions.sessions(id), achievements.gameState(game)) { sessions, ra ->
                 sessions.filter { it.endedAt != null && it.startedAt >= weekStart }.sumOf { it.durationSeconds ?: 0 } to ra
             },
-        ) { media, installed, platformEmulator, cols, (week, ra) ->
+        ) { media, installed, platformEmulator, cols, (week, ra) -> Detail(media, installed, platformEmulator, cols, week, ra) }
+            .combine(ctx.offline) { parts, roots -> parts to roots.takeIf { game.appId == null }?.firstOrNull { it.holds(game.location.path) } }
+            .map { (parts, away) ->
+            val (media, installed, platformEmulator, cols, week, ra) = parts
             val resolved = ctx.resolver.resolve(
                 game,
                 platformEmulator.value.takeIf { it.isNotBlank() }?.let(::EmulatorId),
@@ -296,9 +300,21 @@ internal class DefaultLibraryOps(
                 achievements = ra,
                 collections = cols,
                 secondsThisWeek = week,
+                unavailable = away?.let { Unavailable(it.driveLabel, it.state) },
+                missing = record.missing,
             )
         }
     }.flowOn(Dispatchers.Default)
+
+    /** What the game page combines before it knows the game's drive. */
+    private data class Detail(
+        val media: io.github.matiyaaa.fuse.model.MediaSet,
+        val installed: List<InstalledEmulator>,
+        val platformEmulator: io.github.matiyaaa.fuse.model.Resolved<String>,
+        val cols: List<io.github.matiyaaa.fuse.model.GameCollection>,
+        val week: Long,
+        val ra: io.github.matiyaaa.fuse.model.AchievementState?,
+    )
 
     private fun choiceOf(game: Game, platform: Platform, resolved: ResolvedLaunch, installed: List<InstalledEmulator>): EmulatorChoice {
         val name = resolved.installed?.name ?: resolved.adapter?.name

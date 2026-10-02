@@ -134,15 +134,15 @@ fun StorageScreen(app: AppState) {
                 add(MenuAction(
                     "dall", "All drives", FuseIcons.Layers2, section = "Drives",
                     detail = gamesCount(all?.games?.size ?: 0),
-                    trailing = Trailing.Check(drive == null),
+                    trailing = Trailing.Value(bytesText(all?.games.orEmpty().filterNot { it.lastKnown }.sumOf { it.bytes })),
                     onSelect = { chooseDrive(null) },
                 ))
                 volumes.forEach { v ->
                     add(MenuAction(
                         "d.${v.id}", v.label, v.icon(), section = "Drives",
                         detail = driveLine(v),
-                        trailing = if (!v.online) Trailing.Value("Offline")
-                        else Trailing.Level(v.usedFraction(), "${(v.usedFraction() * 100).toInt()}% used"),
+                        trailing = if (!v.online) Trailing.Value("Not connected")
+                        else Trailing.Level(v.usedFraction(), "${(v.usedFraction() * 100).toInt()}%"),
                         onSelect = { chooseDrive(v.id) },
                     ))
                 }
@@ -213,9 +213,9 @@ fun StorageScreen(app: AppState) {
         val short = maxHeight < SHORT_BELOW
         Column(Modifier.fillMaxSize().padding(horizontal = if (wide) Space.gutter else Space.gutterCompact)) {
             Spacer(Modifier.height(Size.hudHeight + if (short) Space.s else Space.l))
-            SettingsPageHeading("Storage", summaryLine(u), short, Modifier.reveal(0)) {
-                if (u != null && !u.finished) {
-                    ProgressBar(if (u.total > 0) u.measured.toFloat() / u.total else null, Modifier.width(MEASURE_BAR))
+            SettingsPageHeading("Storage", summaryLine(all), short, Modifier.reveal(0)) {
+                if (all != null && !all.finished) {
+                    ProgressBar(if (all.total > 0) all.measured.toFloat() / all.total else null, Modifier.width(MEASURE_BAR))
                 }
             }
             Spacer(Modifier.height(if (short) Space.m else Space.l))
@@ -266,7 +266,7 @@ fun StorageScreen(app: AppState) {
                         )
                     }
                     games(Modifier.weight(0.6f).fillMaxHeight().reveal(2), shownRows) {
-                        ShownHeader(u, systems.firstOrNull { it.id == system })
+                        ShownHeader(u, systems.firstOrNull { it.id == system }, volumes.firstOrNull { it.id == drive }?.label)
                     }
                 }
             } else {
@@ -303,12 +303,13 @@ private fun gamesCount(n: Int) = "$n ${if (n == 1) "game" else "games"}"
 
 /** The games pane's title: what it shows, how many and how much. */
 @Composable
-private fun ShownHeader(u: StorageUsage?, shown: SystemSize?) {
+private fun ShownHeader(u: StorageUsage?, shown: SystemSize?, drive: String? = null) {
     val games = u?.games.orEmpty()
     val count = shown?.games ?: games.size
     val bytes = shown?.bytes ?: games.sumOf { it.bytes }
     Row(Modifier.fillMaxWidth().padding(start = Space.s, end = Space.l, top = Space.s, bottom = Space.m), verticalAlignment = Alignment.CenterVertically) {
-        FText(shown?.name ?: "All systems", Fuse.type.titleSmall, maxLines = 1, modifier = Modifier.weight(1f))
+        val what = shown?.name ?: if (drive != null) "Everything" else "All systems"
+        FText(if (drive != null) "$what on $drive" else what, Fuse.type.titleSmall, maxLines = 1, modifier = Modifier.weight(1f))
         Spacer(Modifier.width(Space.m))
         FText("${gamesCount(count)}  ·  ${bytesText(bytes)}", Fuse.type.label.tabular(), color = Fuse.colors.textMuted, maxLines = 1)
     }
@@ -397,11 +398,11 @@ private fun storageRows(
             add(MenuAction(
                 "g${g.card.id.value}", g.card.title, if (away != null) FuseIcons.HardDrive else if (on) FuseIcons.SquareCheck else FuseIcons.Square,
                 detail = if (away != null) "${g.card.platformShort}  ·  ${away.label}" else "${g.card.platformShort}  ·  ${g.files} ${if (g.files == 1) "file" else "files"}",
-                trailing = Trailing.Value(if (g.lastKnown) "${bytesText(g.bytes)} last seen" else bytesText(g.bytes)),
+                trailing = Trailing.Value(bytesText(g.bytes)),
                 // Square art for every game, so titles line up and the list stays compact.
                 art = MenuArt(g.card.art.tile, square = true, fallbackTitle = g.card.title, accent = g.card.accent, wide = false),
                 // A game whose drive is out can't be picked: Fuse can't see which files are its own.
-                unavailableReason = away?.let { "Connect ${it.driveLabel} to manage this game" },
+                unavailableReason = away?.let { "${g.card.platformShort}  ·  On ${it.driveLabel}, not connected" },
                 onSelect = { onPick(g.card.id) },
             ))
         }
@@ -466,7 +467,7 @@ private fun VolumeUsage.usedFraction(): Float =
 /** A drive row's second line: its space and games, or when it was last seen. */
 private fun driveLine(v: VolumeUsage): String =
     if (!v.online) {
-        "Not connected  ·  ${gamesCount(v.games)}" + (v.lastSeenAt?.let { "  ·  seen ${io.github.matiyaaa.fuse.ui.shell.components.agoText(it)}" } ?: "")
+        gamesCount(v.games) + (v.lastSeenAt?.let { "  ·  seen ${io.github.matiyaaa.fuse.ui.shell.components.agoText(it)}" } ?: "")
     } else {
         "${bytesText(v.freeBytes)} free of ${bytesText(v.totalBytes)}  ·  ${gamesCount(v.games)}"
     }

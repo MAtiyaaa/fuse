@@ -123,6 +123,10 @@ data class GameDetail(
     val achievements: AchievementState?,
     val collections: List<GameCollection>,
     val secondsThisWeek: Long,
+    /** Set while the game's drive or folder can't be reached. */
+    val unavailable: Unavailable? = null,
+    /** The last scan didn't find the game's file. */
+    val missing: Boolean = false,
 )
 
 @Immutable

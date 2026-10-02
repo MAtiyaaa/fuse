@@ -648,7 +648,7 @@ internal fun AuditDriver.launchScreens() {
             controls.launchGate = null
         }
         waitFor("Flycast closed right away")
-        shoot("error toast after the launch failed", 700)
+        shoot("problem sheet after the launch failed", 700)
     }
 
     scenario("game", "system") {
@@ -692,7 +692,7 @@ internal fun AuditDriver.launchScreens() {
         openGame("Waystation Nine")
         tap(PadButton.A)
         waitFor("No emulator for")
-        shoot("choice dialog with emulators to install")
+        shoot("problem sheet with emulators to get")
     }
 
     scenario("launch", "opened app only") {

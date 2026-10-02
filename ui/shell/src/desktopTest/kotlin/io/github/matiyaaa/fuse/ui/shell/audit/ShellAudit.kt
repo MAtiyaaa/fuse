@@ -67,7 +67,7 @@ private fun AuditDriver.storageForPicker() {
     controls.storageRoots = listOf(LocationHint(folder.absolutePath, "Internal storage"), LocationHint(root.absolutePath, "SD card 4E21-9A0C"))
 }
 
-private fun sectionIndex(id: String) = settingsSections.indexOfFirst { it.id == id }.also { check(it >= 0) { "No settings section $id" } }
+internal fun sectionIndex(id: String) = settingsSections.indexOfFirst { it.id == id }.also { check(it >= 0) { "No settings section $id" } }
 
 // ----------------------------------------------------------------------------------- overlays
 
