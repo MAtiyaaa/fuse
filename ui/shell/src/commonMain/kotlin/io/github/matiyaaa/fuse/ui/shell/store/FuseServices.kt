@@ -308,4 +308,44 @@ interface EmulatorFiles {
 
     /** Writes [text] to [path] inside a known emulator data folder; false when it may not or could not. */
     suspend fun write(path: String, text: String): Boolean
+
+    /**
+     * RPCS3's `dev_hdd0` folders for [installed], worked out as RPCS3 does (its config folder, or the
+     * folder its `vfs.yml` moved `/dev_hdd0/` to). Not checked to exist; empty where unknown.
+     */
+    suspend fun rpcs3Storage(installed: io.github.matiyaaa.fuse.model.InstalledEmulator): List<String> = emptyList()
+
+    /** Vita3K's pref paths for [installed] (where its `ux0` lives): `config.yml`'s `pref-path`, else its defaults. */
+    suspend fun vita3kStorage(installed: io.github.matiyaaa.fuse.model.InstalledEmulator): List<String> = emptyList()
+
+    /**
+     * Runs an emulator's own installer and waits for it to finish (or for [InstallerRun.stopWhen] to
+     * show in its output, then stops it). Null where Fuse can't run programs.
+     */
+    suspend fun runInstaller(run: InstallerRun, onOutput: (String) -> Unit = {}): InstallerResult? = null
+
+    /**
+     * Copies the file at [source] into a folder of Fuse's own as [name] (a licence the emulator only
+     * takes under its content id) and returns the copy. Nothing is written anywhere else.
+     */
+    suspend fun stage(source: String, name: String): String? = null
+
+    /** Removes what [stage] copied. */
+    suspend fun clearStaged() = Unit
 }
+
+/**
+ * One run of an emulator's installer: [argv] (program first), started in [workingDir] with [env]
+ * added to Fuse's environment. When [stopWhen] matches its output the run is over and the program
+ * is stopped (Vita3K starts the game it just installed from a .vpk). Stopped after [timeoutMs].
+ */
+data class InstallerRun(
+    val argv: List<String>,
+    val workingDir: String? = null,
+    val env: Map<String, String> = emptyMap(),
+    val stopWhen: Regex? = null,
+    val timeoutMs: Long = 60 * 60 * 1000L,
+)
+
+/** How an installer run ended: its exit code (null when Fuse stopped it), and the end of what it printed. */
+data class InstallerResult(val exitCode: Int?, val output: String, val timedOut: Boolean = false, val started: Boolean = true)

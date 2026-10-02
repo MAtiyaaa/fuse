@@ -19,9 +19,9 @@ class PackageInstallTest {
         val rpcs3 = registry[EmulatorId("linux.rpcs3")]!!
         val flatpak = InstalledEmulator(rpcs3.id, "RPCS3", Host.LINUX, "net.rpcs3.RPCS3", platforms = setOf(PlatformId("ps3")), detectedVia = "Flatpak")
         val plan = rpcs3.packageInstall(flatpak, "/games/ps3/Game Update.pkg")!!
-        assertEquals(listOf("flatpak", "run", "net.rpcs3.RPCS3", "--installpkg", "/games/ps3/Game Update.pkg"), plan.argv)
+        assertEquals(listOf("flatpak", "run", "net.rpcs3.RPCS3", "--headless", "--installpkg", "/games/ps3/Game Update.pkg"), plan.argv)
         assertNull(rpcs3.packageInstall(flatpak, "/games/ps3/Game.iso"))
-        assertEquals(setOf("pkg"), rpcs3.packageExtensions)
+        assertEquals(setOf("pkg", "rap", "edat"), rpcs3.packageExtensions)
     }
 
     @Test

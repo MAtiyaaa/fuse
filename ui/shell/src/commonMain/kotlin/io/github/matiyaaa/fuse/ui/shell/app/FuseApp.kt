@@ -448,7 +448,8 @@ private fun Pages(app: AppState, tabs: List<Destination>) {
                     Route.Themes -> io.github.matiyaaa.fuse.ui.shell.settings.ThemesScreen(app)
                     Route.Onboarding -> OnboardingScreen(app)
                     is Route.FolderBrowser -> FolderBrowserScreen(app, route.game)
-                    is Route.PickFile -> io.github.matiyaaa.fuse.ui.shell.files.FilePickerScreen(app, route.purpose, route.locate)
+                    is Route.GameContent -> io.github.matiyaaa.fuse.ui.shell.game.GameContentScreen(app, route.game)
+                    is Route.PickFile -> io.github.matiyaaa.fuse.ui.shell.files.FilePickerScreen(app, route.purpose, route.locate, route.licence)
                     is Route.StoreApp -> io.github.matiyaaa.fuse.ui.shell.addons.StoreAppScreen(app, route.key)
                 }
             }

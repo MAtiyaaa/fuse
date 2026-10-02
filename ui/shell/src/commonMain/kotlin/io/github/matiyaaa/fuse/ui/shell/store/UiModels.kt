@@ -291,6 +291,8 @@ sealed interface ProblemAction {
     data class GrantAccess(override val label: String = "Allow access") : ProblemAction
     data class OpenSystem(val platform: io.github.matiyaaa.fuse.model.PlatformId, override val label: String) : ProblemAction
     data class OpenGame(val game: GameId, override val label: String) : ProblemAction
+    /** The game's Installed Content page, to install it into its emulator. */
+    data class InstallContent(val game: GameId, override val label: String = "Install it") : ProblemAction
     data class AdoptDrive(val source: io.github.matiyaaa.fuse.model.LibrarySourceId, override val label: String = "It's the same library") : ProblemAction
     data class RemoveSource(val source: io.github.matiyaaa.fuse.model.LibrarySourceId, override val label: String = "Remove this folder") : ProblemAction
     data class Rescan(override val label: String = "Scan again") : ProblemAction
@@ -341,18 +343,6 @@ sealed interface CompatibilityAnswer {
     /** rpcs3.net couldn't be reached. */
     data object Unreachable : CompatibilityAnswer
 }
-
-/** A package (a game, an update, extra content) an emulator can install from its command line. */
-data class PackageOption(
-    val path: String,
-    /** What it is: "Update", "Extra content" or "Game", and the file's name. */
-    val kind: String,
-    val fileName: String,
-    val emulator: EmulatorId,
-    val emulatorName: String,
-    /** Needs its licence key (Vita3K's zRIF), asked for each time and never kept. */
-    val needsKey: Boolean,
-)
 
 /** Everything Fuse knows about one emulator, for its page in Settings. */
 data class EmulatorDetails(

@@ -66,6 +66,7 @@ internal class DefaultFuseStore private constructor(
     override val settings = DefaultScopedSettingsOps(ctx) { reloadPrefs() }
     private val appStoreOps = ctx.services.packages?.let { DefaultAppStoreOps(ctx, it, prefsState) { t -> updatePrefs(t) } }
     override val appStore: AppStoreOps = appStoreOps ?: AppStoreOps.None
+    override val content = DefaultContentOps(ctx, emulators) { engine.drives.volumes.value }
     override val backup = DefaultBackupOps(ctx) { restore ->
         writeLock.withLock { restore().also { reloadLocked() } }
     }
@@ -81,6 +82,18 @@ internal class DefaultFuseStore private constructor(
             updatePrefs { it.copy(cleanDisplayNames = enabled) }
         }
         library.onGamesAdded = findArt
+        library.notInstalled = { id ->
+            content.view(id)?.takeIf { it.plan.storageReadable && !it.plan.gameInstalled && it.mode == io.github.matiyaaa.fuse.ui.shell.store.InstallMode.FUSE }?.let { v ->
+                io.github.matiyaaa.fuse.ui.shell.store.Problem(
+                    title = "${v.title} isn't installed yet",
+                    message = "It's a package, so ${v.emulatorName} plays it once it is installed. Fuse installs it, with its updates and DLC, and checks it went in.",
+                    kind = io.github.matiyaaa.fuse.ui.shell.store.ProblemKind.FILE,
+                    severity = io.github.matiyaaa.fuse.ui.shell.store.Severity.INFO,
+                    reassurance = null,
+                    actions = listOf(io.github.matiyaaa.fuse.ui.shell.store.ProblemAction.InstallContent(id)),
+                )
+            }
+        }
         health = DefaultHealthOps(ctx, engine, library, mediaOps, updates, { credentials.stored.value }, { cartridge.status.value })
     }
 

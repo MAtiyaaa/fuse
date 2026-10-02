@@ -77,4 +77,56 @@ class DesktopEmulatorFilesTest {
         assertTrue(files.write(settings.absolutePath, "[Patches]\nEnable = Mine\n"))
         assertEquals("[Patches]\nEnable = Mine\n", File(backups, settings.name).readText())
     }
+
+    @Test
+    fun rpcs3StorageFollowsVfsYml() = runBlocking {
+        val config = File(home, ".config/rpcs3").apply { File(this, "config").mkdirs() }
+        val files = DesktopEmulatorFiles(DesktopOs.LINUX, env = emptyMap(), home = home.absolutePath, backups = backups)
+        val rpcs3 = InstalledEmulator(EmulatorId("linux.rpcs3"), "RPCS3", Host.LINUX, "/usr/bin/rpcs3", platforms = setOf(PlatformId("ps3")), detectedVia = "PATH")
+        assertEquals(listOf("${p(config)}/dev_hdd0"), files.rpcs3Storage(rpcs3), "next to its config by default")
+        File(config, "config/vfs.yml").writeText("\$(EmulatorDir): \"\"\n/dev_hdd0/: /run/media/me/Games/ps3hdd/\n/dev_hdd1/: \$(EmulatorDir)dev_hdd1/\n")
+        assertEquals(listOf("/run/media/me/Games/ps3hdd"), files.rpcs3Storage(rpcs3), "moved to another drive")
+        File(config, "config/vfs.yml").writeText("/dev_hdd0/: \$(EmulatorDir)hdd0/\n")
+        assertEquals(listOf("${p(config)}/hdd0"), files.rpcs3Storage(rpcs3))
+    }
+
+    @Test
+    fun vita3kStorageFollowsItsPrefPath() = runBlocking {
+        val data = File(home, ".local/share/Vita3K/Vita3K").apply { mkdirs() }
+        val files = DesktopEmulatorFiles(DesktopOs.LINUX, env = emptyMap(), home = home.absolutePath, backups = backups)
+        val vita = InstalledEmulator(EmulatorId("linux.vita3k"), "Vita3K", Host.LINUX, "/usr/bin/Vita3K", platforms = setOf(PlatformId("psvita")), detectedVia = "PATH")
+        assertTrue(p(data) in files.vita3kStorage(vita))
+        File(data, "config.yml").writeText("backend-renderer: Vulkan\npref-path: /media/sd/vita3k\n")
+        assertEquals("/media/sd/vita3k", files.vita3kStorage(vita).first(), "its own setting comes first")
+    }
+
+    @Test
+    fun anInstallerIsWaitedForAndStoppedWhenItSaysItIsDone() = runBlocking {
+        if (System.getProperty("os.name").lowercase().contains("win")) return@runBlocking
+        val files = DesktopEmulatorFiles(DesktopOs.LINUX, env = emptyMap(), home = home.absolutePath, backups = backups)
+        val lines = mutableListOf<String>()
+        val done = files.runInstaller(io.github.matiyaaa.fuse.ui.shell.store.InstallerRun(listOf("sh", "-c", "echo one; echo two; exit 3"))) { lines += it }
+        assertEquals(3, done.exitCode)
+        assertEquals(listOf("one", "two"), lines)
+        val started = System.currentTimeMillis()
+        val stopped = files.runInstaller(
+            io.github.matiyaaa.fuse.ui.shell.store.InstallerRun(listOf("sh", "-c", "echo Content installed, will auto-boot: PCSA00001; sleep 30"), stopWhen = Regex("will auto-boot")),
+        )
+        assertNull(stopped.exitCode, "Fuse stopped it")
+        assertTrue(System.currentTimeMillis() - started < 10_000)
+        val missing = files.runInstaller(io.github.matiyaaa.fuse.ui.shell.store.InstallerRun(listOf("/nowhere/rpcs3")))
+        assertFalse(missing.started)
+    }
+
+    @Test
+    fun aLicenceIsStagedUnderItsNameAndClearedAfter() = runBlocking {
+        val files = DesktopEmulatorFiles(DesktopOs.LINUX, env = emptyMap(), home = home.absolutePath, backups = backups)
+        val source = File(home, "key.rap").apply { writeBytes(ByteArray(16) { 1 }) }
+        val staged = files.stage(source.absolutePath, "UP0700-BLUS30443_00-DEMONSSOULS00000.rap")!!
+        assertTrue(staged.endsWith("/UP0700-BLUS30443_00-DEMONSSOULS00000.rap"))
+        assertTrue(File(staged).isFile)
+        files.clearStaged()
+        assertFalse(File(staged).exists())
+        assertTrue(source.isFile, "the original stays")
+    }
 }
