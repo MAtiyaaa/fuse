@@ -947,7 +947,7 @@ internal fun AuditDriver.cartridgeScreens(exhaustive: Boolean) {
             down(tile)
             up()
         }
-        waitFor("How it works")
+        waitFor("Your RomM library, on this device")
         tap(PadButton.DPAD_LEFT)
         shoot("not installed")
         tap(PadButton.A)
@@ -959,7 +959,7 @@ internal fun AuditDriver.cartridgeScreens(exhaustive: Boolean) {
         useLibrary()
         setCartridge(CartridgeStatus(installed = true, version = "0.9.4", bridge = false))
         tab(Destination.CARTRIDGE)
-        waitFor("0.9.10 or newer")
+        waitFor("Update Cartridge")
         tap(PadButton.DPAD_LEFT)
         shoot("older Cartridge without the bridge")
     }
