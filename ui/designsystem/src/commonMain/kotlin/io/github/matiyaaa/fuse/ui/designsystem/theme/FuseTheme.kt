@@ -77,6 +77,11 @@ object Fuse {
 /**
  * Root of every Fuse surface (main window, second screen, onboarding). [motion] overrides the
  * theme's own motion profile when the user picked one in Accessibility.
+ *
+ * With [animateChanges] (the app's root windows), changing the theme, glass or High contrast focus
+ * crossfades the whole surface from the old look to the new one over about 300 ms instead of
+ * snapping, at the cost of a single recomposition (see [ThemeTransition]). It stays off for theme
+ * previews and anything else that is drawn in a fixed theme.
  */
 @Composable
 fun FuseTheme(
@@ -86,6 +91,30 @@ fun FuseTheme(
     glyphs: GlyphConfig = GlyphConfig(GlyphStyle.XBOX, confirmOnRight = false),
     glass: GlassSettings? = null,
     highContrastFocus: Boolean = false,
+    animateChanges: Boolean = false,
+    content: @Composable () -> Unit,
+) {
+    if (!animateChanges) {
+        FuseThemeLocals(spec, motion, quality, glyphs, glass, highContrastFocus, content)
+        return
+    }
+    val reduced = (motion ?: spec.motion) == MotionProfile.REDUCED
+    ThemeTransition(
+        requested = ThemeLookKey(spec, glass, highContrastFocus),
+        animate = !reduced && quality.animatedBackground,
+    ) { shown ->
+        FuseThemeLocals(shown.spec, motion, quality, glyphs, shown.glass, shown.highContrastFocus, content)
+    }
+}
+
+@Composable
+private fun FuseThemeLocals(
+    spec: ThemeSpec,
+    motion: MotionProfile?,
+    quality: RenderQuality,
+    glyphs: GlyphConfig,
+    glass: GlassSettings?,
+    highContrastFocus: Boolean,
     content: @Composable () -> Unit,
 ) {
     val colors = remember(spec) { FuseColors.from(spec.palette) }

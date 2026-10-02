@@ -1,6 +1,43 @@
 package io.github.matiyaaa.fuse.ui.designsystem.components
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.AnimationVector1D
+import androidx.compose.animation.core.VectorConverter
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.foundation.border
+import androidx.compose.foundation.hoverable
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.RoundRect
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.ClipOp
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Constraints
+import io.github.matiyaaa.fuse.ui.designsystem.icons.ButtonGlyph
+import io.github.matiyaaa.fuse.ui.designsystem.icons.ButtonGlyphDefaults
+import io.github.matiyaaa.fuse.ui.designsystem.icons.HintButton
+import io.github.matiyaaa.fuse.ui.designsystem.theme.Easings
+import io.github.matiyaaa.fuse.ui.designsystem.theme.FuseMotion
+import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
+import kotlin.math.roundToInt
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -15,6 +52,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -44,10 +82,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.Size as GeometrySize
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
@@ -67,6 +104,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
 import kotlin.math.abs
 import kotlin.time.TimeSource
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -87,6 +125,9 @@ internal data class Key(
     val icon: ImageVector? = null,
     val page: KeyPage? = null,
 )
+
+/** A key the controller pressed: which one, and a serial so pressing it twice shows twice. */
+internal data class KeyPulse(val page: KeyPage, val row: Int, val column: Int, val serial: Int)
 
 private fun chars(s: String, weight: Float = 1f) = s.map { Key(it.toString(), weight) }
 private fun gap(weight: Float) = Key("", weight, KeyKind.GAP)
@@ -139,6 +180,17 @@ class KeyboardState(val autoCapitalize: Boolean = false) {
 
     /** True while a finger drags on Space to move the caret; the keys dim like a trackpad. */
     var trackpad by mutableStateOf(false)
+
+    /**
+     * The last key the controller pressed (A on a key, X for Delete, Y for Space, Start for Done),
+     * so that key can be seen going down. Purely visual: nothing reads it to decide what to type.
+     */
+    internal var pulse by mutableStateOf<KeyPulse?>(null)
+        private set
+    private var pulses = 0
+
+    /** True while a finger holds the focused key down, so the focus highlight dips with it. */
+    internal var touching by mutableStateOf(false)
 
     private var lastShiftTap: TimeSource.Monotonic.ValueTimeMark? = null
     private var lastSpace: TimeSource.Monotonic.ValueTimeMark? = null
@@ -202,21 +254,34 @@ class KeyboardState(val autoCapitalize: Boolean = false) {
                 return NavResult.MOVED
             }
             NavAction.SELECT -> {
+                showPress(row, column)
                 press(rows[row][column], field, onDone, onPaste)
                 return NavResult.ACTIVATED
             }
             NavAction.CONTEXT -> {
+                showPress(KeyKind.BACKSPACE)
                 if (event.repeat >= WORD_DELETE_AFTER) field.deleteWordBack() else field.backspace()
                 edited(field)
                 return NavResult.ACTIVATED
             }
-            NavAction.SEARCH -> { typeSpace(field); return NavResult.ACTIVATED }
+            NavAction.SEARCH -> { showPress(KeyKind.SPACE); typeSpace(field); return NavResult.ACTIVATED }
             NavAction.PREVIOUS_SECTION -> { field.moveCaret(-1); edited(field); return NavResult.MOVED }
             NavAction.NEXT_SECTION -> { field.moveCaret(1); edited(field); return NavResult.MOVED }
             NavAction.PAGE_UP -> { field.moveWord(-1); edited(field); return NavResult.MOVED }
             NavAction.PAGE_DOWN -> { field.moveWord(1); edited(field); return NavResult.MOVED }
-            NavAction.QUICK_MENU -> { onDone(); return NavResult.ACTIVATED }
+            NavAction.QUICK_MENU -> { showPress(KeyKind.DONE); onDone(); return NavResult.ACTIVATED }
             else -> return NavResult.IGNORED
+        }
+    }
+
+    private fun showPress(r: Int, c: Int) {
+        pulse = KeyPulse(page, r, c, ++pulses)
+    }
+
+    private fun showPress(kind: KeyKind) {
+        rows.forEachIndexed { r, keys ->
+            val c = keys.indexOfFirst { it.kind == kind }
+            if (c >= 0) return showPress(r, c)
         }
     }
 
@@ -295,6 +360,12 @@ class KeyboardState(val autoCapitalize: Boolean = false) {
  * caret, and a double tap on Shift locks capitals. Hardware keyboards type directly.
  * [onPaste] inserts the clipboard; without it the Paste key is dimmed. [onKey] plays feedback for
  * touch presses (controller presses already get it from the input router).
+ *
+ * Keys are caps with a face, a light top edge and a darker lip, so they read as things you press.
+ * Focus is one highlight that glides from key to key and lifts with the spark (a tinted glow and
+ * the accent bar underneath); a pressed key dips, whether a finger or the controller pressed it
+ * (X dips Delete, Y dips Space, Start dips Done). Under Reduced motion the highlight moves at once
+ * and nothing scales.
  */
 @Composable
 fun OnScreenKeyboard(
@@ -309,26 +380,32 @@ fun OnScreenKeyboard(
     onKey: () -> Unit = {},
 ) {
     val rows = state.rows
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(Space.s)) {
-        rows.forEachIndexed { r, keys ->
-            Row(Modifier.fillMaxWidth()) {
-                keys.forEachIndexed { col, key ->
-                    if (key.kind == KeyKind.GAP) {
-                        Spacer(Modifier.weight(key.weight))
-                    } else {
-                        Box(Modifier.weight(key.weight).padding(horizontal = 3.dp)) {
-                            KeyCap(
-                                key = key,
-                                state = state,
-                                field = field,
-                                doneLabel = doneLabel,
-                                selected = showFocus && r == state.row && col == state.column,
-                                enabled = key.kind != KeyKind.PASTE || onPaste != null,
-                                height = keyHeight,
-                                onFocus = { state.row = r; state.column = col },
-                                onPress = { onKey(); state.press(key, field, onDone, onPaste) },
-                                onKey = onKey,
-                            )
+    var width by remember { mutableIntStateOf(0) }
+    val rowGap = rowGapFor(keyHeight)
+    Box(modifier.onSizeChanged { width = it.width }) {
+        if (width > 0) KeyHighlight(state, width, keyHeight, rowGap, visible = showFocus)
+        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(rowGap)) {
+            rows.forEachIndexed { r, keys ->
+                Row(Modifier.fillMaxWidth()) {
+                    keys.forEachIndexed { col, key ->
+                        if (key.kind == KeyKind.GAP) {
+                            Spacer(Modifier.weight(key.weight))
+                        } else {
+                            Box(Modifier.weight(key.weight).padding(horizontal = KeyGap / 2)) {
+                                KeyCap(
+                                    key = key,
+                                    state = state,
+                                    field = field,
+                                    position = KeyPosition(state.page, r, col),
+                                    doneLabel = doneLabel,
+                                    selected = showFocus && r == state.row && col == state.column,
+                                    enabled = key.kind != KeyKind.PASTE || onPaste != null,
+                                    height = keyHeight,
+                                    onFocus = { state.row = r; state.column = col },
+                                    onPress = { onKey(); state.press(key, field, onDone, onPaste) },
+                                    onKey = onKey,
+                                )
+                            }
                         }
                     }
                 }
@@ -337,11 +414,189 @@ fun OnScreenKeyboard(
     }
 }
 
+/**
+ * The controller shortcuts for typing, to sit under an [OnScreenKeyboard]: X deletes, Y types a
+ * space, LB and RB move the cursor and Start finishes. Glyphs follow the pad's style.
+ */
+@Composable
+fun OnScreenKeyboardHints(modifier: Modifier = Modifier, doneLabel: String = "Done") {
+    Row(modifier, horizontalArrangement = Arrangement.spacedBy(Space.l), verticalAlignment = Alignment.CenterVertically) {
+        KeyboardHint(listOf(HintButton.OPTIONS), "Delete")
+        KeyboardHint(listOf(HintButton.SEARCH), "Space")
+        KeyboardHint(listOf(HintButton.PREV, HintButton.NEXT), "Move cursor")
+        KeyboardHint(listOf(HintButton.MENU), doneLabel)
+    }
+}
+
+@Composable
+private fun KeyboardHint(buttons: List<HintButton>, label: String) {
+    val c = Fuse.colors
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        buttons.forEachIndexed { i, b ->
+            if (i > 0) Spacer(Modifier.width(Space.xxs))
+            ButtonGlyph(b, size = ButtonGlyphDefaults.SmallSize, color = c.textMuted)
+        }
+        Spacer(Modifier.width(Space.s))
+        FText(label, Fuse.type.caption, color = c.textMuted, maxLines = 1)
+    }
+}
+
+/** The gap between keys in a row. */
+private val KeyGap = Space.s
+
+/**
+ * The gap between rows: a little more than across, as on a phone, which leaves room for the
+ * spark's bar under a focused key. Short keyboards (handhelds) keep the rows tight.
+ */
+private fun rowGapFor(keyHeight: Dp): Dp = if (keyHeight >= 40.dp) Space.m else Space.s
+
+/** Which key a cap is, so a controller press can find it. */
+private data class KeyPosition(val page: KeyPage, val row: Int, val column: Int)
+
+/** Where key ([r], [c]) sits in a keyboard [width] wide, from the same weights the rows lay out with. */
+private fun keyRect(rows: List<List<Key>>, r: Int, c: Int, width: Float, keyHeight: Float, gap: Float, rowGap: Float): Rect {
+    val row = rows[r]
+    val total = row.sumOf { it.weight.toDouble() }.toFloat()
+    val start = row.take(c).sumOf { it.weight.toDouble() }.toFloat()
+    val left = width * start / total + gap / 2
+    val right = width * (start + row[c].weight) / total - gap / 2
+    val top = r * (keyHeight + rowGap)
+    return Rect(left, top, right, top + keyHeight)
+}
+
+/** How far a focused key lifts, a little less than a tile: keys sit close together. */
+private fun FuseMotion.keyLift(): Float = 1f + (focusScale - 1f) * 0.7f
+
+/**
+ * The focus: one lit cap under the keys that glides to the focused key, lifted, with a glow tinted
+ * by the accent and the spark's accent bar beneath. The focused key's own face fades away above it,
+ * so its label sits on the highlight.
+ */
+@Composable
+private fun BoxScope.KeyHighlight(state: KeyboardState, width: Int, keyHeight: Dp, rowGap: Dp, visible: Boolean) {
+    val c = Fuse.colors
+    val motion = Fuse.motion
+    val localDensity = LocalDensity.current
+    val rows = state.rows
+    val r = state.row.coerceIn(0, rows.lastIndex)
+    val col = state.column.coerceIn(0, rows[r].lastIndex)
+    val target = with(localDensity) { keyRect(rows, r, col, width.toFloat(), keyHeight.toPx(), KeyGap.toPx(), rowGap.toPx()) }
+    val rect = remember { Animatable(target, Rect.VectorConverter) }
+    val shown by animateFloatAsState(if (visible) 1f else 0f, motion.fade(Durations.FAST), label = "keyFocusShown")
+    val lift by animateFloatAsState(if (visible) 1f else 0f, motion.focusSpring(), label = "keyFocusLift")
+    LaunchedEffect(target, visible) {
+        // Glide from key to key; appear where the focus is (never fly in from somewhere else).
+        if (!visible || shown < 0.5f || motion.reduced) rect.snapTo(target)
+        else rect.animateTo(target, spring(dampingRatio = 0.86f, stiffness = 1100f))
+    }
+    val dip = rememberKeyDip(state, KeyPosition(state.page, r, col), state.touching)
+    val accent = c.accent
+    val face = c.text
+    val lip = lerp(c.text, c.ink, 0.38f)
+    val light = Color.White.copy(alpha = if (c.isDark) 0f else 0.28f)
+    val radius = Fuse.geometry.control
+    val shape = RoundedCornerShape(radius)
+    val scaleTo = motion.keyLift()
+    val reduced = motion.reduced
+    // High contrast focus rings the focused key too, as it rings every focused tile and button.
+    val ring = if (Fuse.look.highContrastFocus) c.focus else null
+    Box(
+        Modifier
+            .matchParentSize()
+            .layout { measurable, constraints ->
+                val box = rect.value
+                val placeable = measurable.measure(Constraints.fixed(box.width.roundToInt().coerceAtLeast(0), box.height.roundToInt().coerceAtLeast(0)))
+                layout(constraints.maxWidth, constraints.maxHeight) { placeable.place(box.left.toInt(), box.top.toInt()) }
+            }
+            .graphicsLayer {
+                val box = rect.value
+                val d = dip.value
+                // Whole pixels come from layout; the rest glides here, so slow moves stay smooth.
+                translationX = box.left - box.left.toInt()
+                translationY = box.top - box.top.toInt() + if (reduced) 0f else d * KeyLip.toPx()
+                // Every key lifts by the same few dp, so the long Space bar doesn't balloon.
+                val grow = (scaleTo - 1f) * lift * box.height
+                val press = if (reduced) 1f else 1f - 0.04f * d
+                scaleX = (1f + grow / box.width.coerceAtLeast(1f)) * press
+                scaleY = (1f + grow / box.height.coerceAtLeast(1f)) * press
+                alpha = shown
+                shadowElevation = (2f + 10f * lift * (1f - d)) * density
+                this.shape = shape
+                clip = false
+                spotShadowColor = lerp(accent, Color.Black, 0.45f)
+                ambientShadowColor = lerp(accent, Color.Black, 0.7f).copy(alpha = 0.35f)
+            }
+            .drawWithCache {
+                val w = size.width
+                val h = size.height
+                val lipPx = KeyLip.toPx()
+                val corner = CornerRadius(radius.toPx().coerceAtMost(h / 2))
+                val body = Path().apply { addRoundRect(RoundRect(0f, 0f, w, h, corner)) }
+                val top = Path().apply { addRoundRect(RoundRect(0f, 0f, w, h - lipPx, corner)) }
+                val edge = Brush.verticalGradient(0f to light, 0.4f to Color.Transparent, endY = h)
+                val edgeStroke = Stroke(2.dp.toPx())
+                // The bar sits a quarter of the way into the gap below; tight rows get a slimmer one.
+                val barGap = rowGap.toPx() / 4
+                val barH = Size.sparkHeight.toPx() * (if (rowGap < Space.m) 0.8f else 1f)
+                val ringWidth = Size.focusStroke.toPx()
+                val ringOut = Size.focusGap.toPx() + ringWidth / 2
+                val ringPath = Path().apply {
+                    addRoundRect(RoundRect(-ringOut, -ringOut, w + ringOut, h + ringOut, CornerRadius((corner.x + ringOut).coerceAtMost(h / 2 + ringOut))))
+                }
+                val ringStroke = Stroke(ringWidth)
+                onDrawBehind {
+                    drawPath(body, lip)
+                    drawPath(top, face)
+                    clipPath(top) { drawPath(top, edge, style = edgeStroke) }
+                    if (ring != null && lift > 0.01f) drawPath(ringPath, ring, alpha = lift.coerceIn(0f, 1f), style = ringStroke)
+                    // The spark's accent bar, grown from the middle as the key lifts.
+                    val barW = Size.sparkWidth.toPx() * 0.8f * lift
+                    if (barW > 0.5f) {
+                        drawRoundRect(accent, Offset((w - barW) / 2, h + barGap), GeometrySize(barW, barH), CornerRadius(barH / 2), alpha = lift)
+                    }
+                }
+            },
+    )
+}
+
+/** The lip under a key's face. */
+private val KeyLip = 2.dp
+
+/** Keys that do something rather than type: a quieter face, so the letters lead. */
+private val FunctionKeys = setOf(KeyKind.SHIFT, KeyKind.BACKSPACE, KeyKind.PAGE, KeyKind.PASTE, KeyKind.SPACE)
+
+/**
+ * How far down a key is pressed, 0 to 1: held by a finger ([held]), or a quick dip when the
+ * controller pressed it (the keyboard's [KeyboardState.pulse]).
+ */
+@Composable
+private fun rememberKeyDip(state: KeyboardState, at: KeyPosition, held: Boolean): Animatable<Float, AnimationVector1D> {
+    val motion = Fuse.motion
+    val dip = remember { Animatable(0f) }
+    val pulse = state.pulse
+    // The last press this key has shown, so a press is shown once (and none on first appearing).
+    val seen = remember { intArrayOf(pulse?.serial ?: -1) }
+    LaunchedEffect(pulse, held, at) {
+        val down = tween<Float>(motion.ms(Durations.INSTANT) / 2, easing = Easings.Standard)
+        if (held) {
+            dip.animateTo(1f, down)
+            return@LaunchedEffect
+        }
+        val mine = pulse != null && pulse.serial != seen[0] && pulse.page == at.page && pulse.row == at.row && pulse.column == at.column
+        if (pulse != null) seen[0] = pulse.serial
+        if (mine) dip.animateTo(1f, down)
+        // Always come back up, even when another press interrupted this one.
+        dip.animateTo(0f, spring(dampingRatio = 0.7f, stiffness = 700f))
+    }
+    return dip
+}
+
 @Composable
 private fun KeyCap(
     key: Key,
     state: KeyboardState,
     field: EditableText,
+    position: KeyPosition,
     doneLabel: String,
     selected: Boolean,
     enabled: Boolean,
@@ -351,30 +606,56 @@ private fun KeyCap(
     onKey: () -> Unit,
 ) {
     val c = Fuse.colors
+    val motion = Fuse.motion
     var pressed by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val press by rememberUpdatedState(onPress)
-    val function = key.kind in setOf(KeyKind.SHIFT, KeyKind.BACKSPACE, KeyKind.PAGE, KeyKind.PASTE)
-    val shiftOn = key.kind == KeyKind.SHIFT && state.shift != ShiftState.OFF
-    val bg by animateColorAsState(
-        when {
-            selected -> c.text
-            pressed -> c.text.copy(alpha = 0.26f)
-            key.kind == KeyKind.DONE -> c.accent
-            shiftOn -> c.text.copy(alpha = 0.85f)
-            function -> c.text.copy(alpha = 0.05f)
-            else -> c.text.copy(alpha = 0.11f)
-        },
-        Fuse.motion.tween(Durations.INSTANT),
-        label = "key",
-    )
-    val fg = when {
-        selected || shiftOn -> c.ink
-        !enabled -> c.textFaint
-        key.kind == KeyKind.DONE -> c.onAccent
-        else -> c.text
+    val hover = remember { MutableInteractionSource() }
+    val hovered by hover.collectIsHoveredAsState()
+    val function = key.kind in FunctionKeys
+    val shiftOnce = key.kind == KeyKind.SHIFT && state.shift == ShiftState.ONCE
+    val shiftLock = key.kind == KeyKind.SHIFT && state.shift == ShiftState.LOCK
+    val solid = key.kind == KeyKind.DONE || shiftLock
+    val dark = c.isDark
+    val faceColor = when {
+        solid -> c.accent
+        shiftOnce -> c.accent.copy(alpha = 0.2f)
+        function -> c.text.copy(alpha = if (dark) 0.065f else 0.075f)
+        else -> c.text.copy(alpha = if (dark) 0.115f else 0.11f)
     }
-    val scale by animateFloatAsState(if (pressed) 0.94f else 1f, Fuse.motion.tween(Durations.INSTANT), label = "keyScale")
+    val face by animateColorAsState(
+        when {
+            // The glide highlight shows through where the focused key's face was.
+            selected -> faceColor.copy(alpha = 0f)
+            (hovered || pressed) && !solid && enabled -> lerp(faceColor, c.text, 0.08f).copy(alpha = faceColor.alpha + 0.06f)
+            else -> faceColor
+        },
+        motion.tween(Durations.INSTANT),
+        label = "keyFace",
+    )
+    val fg by animateColorAsState(
+        when {
+            selected -> c.ink
+            !enabled -> c.textFaint
+            solid -> c.onAccent
+            shiftOnce -> c.accent
+            else -> c.text
+        },
+        motion.tween(Durations.INSTANT),
+        label = "keyInk",
+    )
+    val lipColor = when {
+        selected -> Color.Transparent
+        solid -> lerp(c.accent, Color.Black, 0.32f)
+        else -> Color.Black.copy(alpha = if (dark) 0.3f else 0.1f)
+    }
+    val lift by animateFloatAsState(if (selected) 1f else 0f, motion.focusSpring(), label = "keyLift")
+    val dim by animateFloatAsState(if (state.trackpad && key.kind != KeyKind.SPACE) 0.35f else 1f, motion.fade(Durations.FAST), label = "keyDim")
+    val dip = rememberKeyDip(state, position, held = pressed)
+    val light = Color.White.copy(alpha = if (dark) 0.09f else 0.6f)
+    val radius = Fuse.geometry.control
+    val scaleTo = motion.keyLift()
+    val reduced = motion.reduced
     val label = when {
         key.kind == KeyKind.DONE -> doneLabel
         key.kind == KeyKind.CHAR && state.shift != ShiftState.OFF -> key.label.uppercase()
@@ -385,74 +666,116 @@ private fun KeyCap(
             .fillMaxWidth()
             .height(height)
             .zIndex(if (pressed) 1f else 0f)
+            .hoverable(hover, enabled)
             .pointerInput(key, enabled) {
                 if (!enabled) return@pointerInput
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false)
                     pressed = true
                     onFocus()
-                    when (key.kind) {
-                        KeyKind.BACKSPACE -> {
-                            // Deletes at once, repeats after a moment and then takes whole words.
-                            onKey()
-                            state.deleteHeld(field, 0)
-                            val repeat = scope.launch {
-                                delay(420)
-                                var n = 1
+                    state.touching = true
+                    // Released however the gesture ends, so no key (or the highlight) stays down
+                    // and Delete never keeps repeating.
+                    var repeat: Job? = null
+                    try {
+                        when (key.kind) {
+                            KeyKind.BACKSPACE -> {
+                                // Deletes at once, repeats after a moment and then takes whole words.
+                                onKey()
+                                state.deleteHeld(field, 0)
+                                repeat = scope.launch {
+                                    delay(420)
+                                    var n = 1
+                                    while (true) {
+                                        state.deleteHeld(field, n++)
+                                        delay(if (n > WORD_DELETE_AFTER) 170 else 75)
+                                    }
+                                }
+                                waitForUpOrCancellation()
+                            }
+                            KeyKind.SPACE -> {
+                                // Dragging along Space moves the caret, like a trackpad.
+                                val step = 9.dp.toPx()
+                                var moved = 0f
+                                var travelled = 0f
                                 while (true) {
-                                    state.deleteHeld(field, n++)
-                                    delay(if (n > WORD_DELETE_AFTER) 170 else 75)
+                                    val event = awaitPointerEvent()
+                                    val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                                    if (!change.pressed) break
+                                    val dx = change.positionChange().x
+                                    travelled += abs(dx)
+                                    if (!state.trackpad && travelled > viewConfiguration.touchSlop) state.trackpad = true
+                                    if (state.trackpad) {
+                                        moved += dx
+                                        while (moved >= step) { field.moveCaret(1); moved -= step }
+                                        while (moved <= -step) { field.moveCaret(-1); moved += step }
+                                        change.consume()
+                                    }
                                 }
-                            }
-                            waitForUpOrCancellation()
-                            repeat.cancel()
-                        }
-                        KeyKind.SPACE -> {
-                            // Dragging along Space moves the caret, like a trackpad.
-                            val step = 9.dp.toPx()
-                            var moved = 0f
-                            var travelled = 0f
-                            while (true) {
-                                val event = awaitPointerEvent()
-                                val change = event.changes.firstOrNull { it.id == down.id } ?: break
-                                if (!change.pressed) break
-                                val dx = change.positionChange().x
-                                travelled += abs(dx)
-                                if (!state.trackpad && travelled > viewConfiguration.touchSlop) state.trackpad = true
                                 if (state.trackpad) {
-                                    moved += dx
-                                    while (moved >= step) { field.moveCaret(1); moved -= step }
-                                    while (moved <= -step) { field.moveCaret(-1); moved += step }
-                                    change.consume()
+                                    state.trackpad = false
+                                    state.edited(field)
+                                } else {
+                                    press()
                                 }
                             }
-                            if (state.trackpad) {
-                                state.trackpad = false
-                                state.edited(field)
-                            } else {
-                                press()
-                            }
+                            else -> if (waitForUpOrCancellation() != null) press()
                         }
-                        else -> if (waitForUpOrCancellation() != null) press()
+                    } finally {
+                        repeat?.cancel()
+                        pressed = false
+                        state.touching = false
                     }
-                    pressed = false
                 }
             },
     ) {
         Box(
             Modifier
                 .fillMaxSize()
-                .graphicsLayer { scaleX = scale; scaleY = scale; alpha = if (state.trackpad && key.kind != KeyKind.SPACE) 0.35f else 1f }
-                .clip(RoundedCornerShape(Fuse.geometry.control))
-                .background(bg),
+                .graphicsLayer {
+                    alpha = dim
+                    if (!reduced) {
+                        val s = 1f - 0.04f * dip.value
+                        scaleX = s
+                        scaleY = s
+                    }
+                }
+                .drawWithCache {
+                    val w = size.width
+                    val h = size.height
+                    val lipPx = KeyLip.toPx()
+                    val corner = CornerRadius(radius.toPx().coerceAtMost(h / 2))
+                    val top = Path().apply { addRoundRect(RoundRect(0f, 0f, w, h - lipPx, corner)) }
+                    val under = Path().apply { addRoundRect(RoundRect(0f, lipPx, w, h, corner)) }
+                    val edge = Brush.verticalGradient(0f to light, 0.4f to Color.Transparent, endY = h)
+                    val edgeStroke = Stroke(2.dp.toPx())
+                    onDrawBehind {
+                        // The lip shows below the face; pressing slides the face down over it.
+                        if (lipColor.alpha > 0f) clipPath(top, ClipOp.Difference) { drawPath(under, lipColor) }
+                        if (face.alpha > 0f) {
+                            translate(top = if (reduced) 0f else dip.value * lipPx) {
+                                drawPath(top, face)
+                                clipPath(top) { drawPath(top, edge, style = edgeStroke, alpha = (face.alpha / faceColor.alpha.coerceAtLeast(0.01f)).coerceIn(0f, 1f)) }
+                            }
+                        }
+                    }
+                },
             contentAlignment = Alignment.Center,
         ) {
-            when {
-                key.kind == KeyKind.SPACE && state.trackpad -> FuseIcon(FuseIcons.MoveHorizontal, size = 18.dp, tint = fg)
-                key.kind == KeyKind.SHIFT -> FuseIcon(if (state.shift == ShiftState.LOCK) FuseIcons.CapsLock else FuseIcons.Shift, size = 20.dp, tint = fg)
-                key.icon != null -> FuseIcon(key.icon, size = 20.dp, tint = fg)
-                key.kind == KeyKind.CHAR -> FText(label, Fuse.type.titleSmall, color = fg, maxLines = 1)
-                else -> FText(label, Fuse.type.label, color = fg, maxLines = 1)
+            Box(
+                Modifier
+                    .padding(bottom = KeyLip)
+                    .graphicsLayer {
+                        if (!reduced) {
+                            val s = 1f + (scaleTo - 1f) * lift
+                            scaleX = s
+                            scaleY = s
+                            translationY = dip.value * KeyLip.toPx()
+                        }
+                    },
+                contentAlignment = Alignment.Center,
+            ) {
+                KeyLabel(key, label, state, fg)
             }
         }
         // The pressed letter pops up above the finger.
@@ -462,14 +785,37 @@ private fun KeyCap(
                     .align(Alignment.TopCenter)
                     .offset(y = -height - Space.xs)
                     .size(width = height * 1.05f, height = height * 1.1f)
-                    .shadow(12.dp, RoundedCornerShape(Fuse.geometry.control))
-                    .clip(RoundedCornerShape(Fuse.geometry.control))
-                    .background(c.surfaceRaised),
+                    .shadow(12.dp, RoundedCornerShape(radius))
+                    .clip(RoundedCornerShape(radius))
+                    .background(c.surfaceRaised)
+                    .drawWithCache {
+                        val sheen = Brush.verticalGradient(0f to Color.White.copy(alpha = if (dark) 0.08f else 0f), 0.5f to Color.Transparent)
+                        onDrawBehind { drawRect(sheen) }
+                    },
                 contentAlignment = Alignment.Center,
             ) {
                 FText(label, Fuse.type.title, color = c.text, maxLines = 1)
             }
         }
+    }
+}
+
+/** What a key shows: its character, or an icon for the keys that do something. */
+@Composable
+private fun KeyLabel(key: Key, label: String, state: KeyboardState, fg: Color) {
+    when {
+        key.kind == KeyKind.SPACE && state.trackpad -> FuseIcon(FuseIcons.MoveHorizontal, size = Size.iconM, tint = fg)
+        // Lucide's space bar sits low in its box; lift it to the key's optical middle.
+        key.kind == KeyKind.SPACE -> FuseIcon(FuseIcons.Space, Modifier.offset(y = -Size.iconL * 0.22f), size = Size.iconL, tint = fg)
+        key.kind == KeyKind.SHIFT -> FuseIcon(if (state.shift == ShiftState.LOCK) FuseIcons.CapsLock else FuseIcons.Shift, size = Size.iconM, tint = fg)
+        key.kind == KeyKind.DONE -> Row(verticalAlignment = Alignment.CenterVertically) {
+            FuseIcon(FuseIcons.Return, size = Size.iconS, tint = fg)
+            Spacer(Modifier.width(Space.s))
+            FText(label, Fuse.type.label, color = fg, maxLines = 1)
+        }
+        key.icon != null -> FuseIcon(key.icon, size = Size.iconM, tint = fg)
+        key.kind == KeyKind.CHAR -> FText(label, Fuse.type.titleSmall, color = fg, maxLines = 1)
+        else -> FText(label, Fuse.type.label, color = fg, maxLines = 1)
     }
 }
 
@@ -490,6 +836,7 @@ fun KeyboardField(
     onClear: (() -> Unit)? = null,
 ) {
     val c = Fuse.colors
+    val motion = Fuse.motion
     val value = field.value
     val shown = if (secret) "•".repeat(value.text.length) else value.text
     var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
@@ -506,15 +853,26 @@ fun KeyboardField(
             delay(540)
         }
     }
+    val shape = RoundedCornerShape(Fuse.geometry.control)
+    // The edge firms up while typing goes here, so it is clear where the keys write.
+    val edge by animateColorAsState(
+        if (focused) c.text.copy(alpha = if (c.isDark) 0.2f else 0.26f) else c.hairline,
+        motion.tween(Durations.FAST),
+        label = "fieldEdge",
+    )
+    val icon by animateColorAsState(if (focused) c.text else c.textMuted, motion.tween(Durations.FAST), label = "fieldIcon")
     Row(
         modifier
-            .clip(RoundedCornerShape(Fuse.geometry.control))
-            .background(c.text.copy(alpha = 0.08f))
+            .clip(shape)
+            .background(c.text.copy(alpha = if (c.isDark) 0.07f else 0.06f))
+            // A well, the opposite of a key: a soft shade just inside the top edge.
+            .background(Brush.verticalGradient(0f to Color.Black.copy(alpha = if (c.isDark) 0.2f else 0.05f), 0.3f to Color.Transparent))
+            .border(Size.stroke, edge, shape)
             .padding(horizontal = Space.l, vertical = Space.m),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (leading != null) {
-            FuseIcon(leading, tint = c.textMuted)
+            FuseIcon(leading, tint = icon)
             Spacer(Modifier.width(Space.m))
         }
         BoxWithConstraints(Modifier.weight(1f)) {
@@ -553,32 +911,49 @@ fun KeyboardField(
                     maxLines = 1,
                     softWrap = false,
                     onTextLayout = { layout = it },
+                    // The shared editing marks: rounded selection blocks, and a caret the height of
+                    // the glyphs that glides to each new place and blinks without recomposing.
                     modifier = Modifier
-                        .drawBehind {
-                            val l = layout ?: return@drawBehind
-                            val sel = value.selection
-                            if (!sel.collapsed && sel.max <= shown.length) drawPath(l.getPathForRange(sel.min, sel.max), c.accent.copy(alpha = 0.35f))
-                        }
-                        .drawWithContent {
-                            drawContent()
-                            val l = layout ?: return@drawWithContent
-                            if (focused && value.selection.collapsed) {
-                                val r = l.getCursorRect(value.selection.start.coerceIn(0, shown.length))
-                                val w = 2.dp.toPx()
-                                drawRect(c.accent, topLeft = Offset(r.left - w / 2, r.top), size = Size(w, r.height), alpha = blink.value)
-                            }
-                        },
+                        .editingSelection({ layout }, value.selection)
+                        .editingCaret(
+                            { layout },
+                            offset = value.selection.start,
+                            visible = focused && value.selection.collapsed,
+                            alpha = { blink.value },
+                        ),
                 )
             }
         }
-        if (onClear != null && value.text.isNotEmpty()) {
-            Spacer(Modifier.width(Space.s))
-            Box(
-                Modifier.size(26.dp).clip(CircleShape).background(c.text.copy(alpha = 0.16f))
-                    .clickable(remember { MutableInteractionSource() }, null, onClick = onClear),
-                contentAlignment = Alignment.Center,
+        if (onClear != null) {
+            // The clear button pops in with the first character and out with the last.
+            AnimatedVisibility(
+                visible = value.text.isNotEmpty(),
+                enter = fadeIn(motion.fade(Durations.FAST)) + if (motion.reduced) EnterTransition.None else scaleIn(motion.tween(Durations.FAST, Easings.Enter), initialScale = 0.6f),
+                exit = fadeOut(motion.fade(Durations.INSTANT)) + if (motion.reduced) ExitTransition.None else scaleOut(motion.tween(Durations.INSTANT, Easings.Exit), targetScale = 0.6f),
             ) {
-                FuseIcon(FuseIcons.Close, size = 14.dp, tint = c.text)
+                val interaction = remember { MutableInteractionSource() }
+                val hovered by interaction.collectIsHoveredAsState()
+                val pressed by interaction.collectIsPressedAsState()
+                val fill by animateColorAsState(
+                    c.text.copy(alpha = if (pressed) 0.28f else if (hovered) 0.22f else 0.16f),
+                    motion.tween(Durations.INSTANT),
+                    label = "clearFill",
+                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Spacer(Modifier.width(Space.s))
+                    Box(
+                        Modifier
+                            .size(Size.chipCompact)
+                            .graphicsLayer { if (!motion.reduced) { val k = if (pressed) 0.92f else 1f; scaleX = k; scaleY = k } }
+                            .clip(CircleShape)
+                            .background(fill)
+                            .hoverable(interaction)
+                            .clickable(interaction, null, onClick = onClear),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        FuseIcon(FuseIcons.Close, size = Size.iconXS, tint = c.text)
+                    }
+                }
             }
         }
     }

@@ -17,10 +17,6 @@ import io.github.matiyaaa.fuse.ui.shell.store.LaunchOutcome
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-/**
- * Starts a game. The launch veil appears immediately (so pressing Play always responds), the store
- * resolves the emulator and fires the launch, and anything other than a clean start is explained.
- */
 /** What confirming a game tile does: play it, or open its page when the user chose that. */
 fun AppState.activateGame(card: GameCard) {
     if (store.prefs.value.openGamePage) go(Route.GameInfo(card.id)) else play(card)
@@ -29,6 +25,10 @@ fun AppState.activateGame(card: GameCard) {
 /** The hint for confirming on a game tile, following [activateGame]. */
 val AppState.gameConfirmLabel: String get() = if (store.prefs.value.openGamePage) "Open" else "Play"
 
+/**
+ * Starts a game. The launch veil appears immediately (so pressing Play always responds), the store
+ * resolves the emulator and fires the launch, and anything other than a clean start is explained.
+ */
 fun AppState.play(card: GameCard, emulator: io.github.matiyaaa.fuse.model.EmulatorId? = null, discPath: String? = null) {
     if (launching != null) return
     // On two screens this may ask which one first; the veil only covers the launch itself.
@@ -37,7 +37,20 @@ fun AppState.play(card: GameCard, emulator: io.github.matiyaaa.fuse.model.Emulat
 
 private fun AppState.launch(card: GameCard, emulator: io.github.matiyaaa.fuse.model.EmulatorId?, discPath: String?, display: io.github.matiyaaa.fuse.model.LaunchDisplay?) {
     if (launching != null) return
-    launching = LaunchVeil(card.title, card.art.hero ?: card.art.boxart ?: card.art.tile, card.accent)
+    // The veil shows the room the game was lit by, with its own cover beside the title.
+    val system = store.library.platforms.value.firstOrNull { it.platform.id == card.platformId }
+    val room = card.room(system)
+    launching = LaunchVeil(
+        title = card.title,
+        art = room.model,
+        accent = card.accent,
+        cover = card.art.square ?: card.art.boxart ?: card.art.icon,
+        logo = card.art.logo?.takeIf { store.prefs.value.showLogo },
+        system = system?.platform?.name,
+        artFocusX = room.focusX,
+        artFocusY = room.focusY,
+        artBlurred = room.blurred,
+    )
     platform.sounds.play(SoundCue.LAUNCH)
     scope.launch {
         when (val outcome = store.library.launch(card.id, emulator, discPath, display)) {
@@ -55,6 +68,7 @@ private fun AppState.launch(card: GameCard, emulator: io.github.matiyaaa.fuse.mo
                 launching = null
                 platform.sounds.play(SoundCue.ERROR)
                 choice = ChoiceSpec(
+                    icon = FuseIcons.Chip,
                     title = "No emulator for ${outcome.platformName}",
                     message = if (outcome.suggestions.isEmpty()) {
                         "Install an emulator for this system, then come back. Fuse notices new apps automatically."
@@ -63,7 +77,7 @@ private fun AppState.launch(card: GameCard, emulator: io.github.matiyaaa.fuse.mo
                     },
                     options = outcome.suggestions.mapIndexed { i, s ->
                         MenuAction("s$i", s, FuseIcons.Package, onSelect = { choice = null })
-                    } + MenuAction("ok", "OK", FuseIcons.Check, onSelect = { choice = null }),
+                    } + MenuAction("ok", "OK", FuseIcons.Check, section = "", onSelect = { choice = null }),
                 )
             }
             is LaunchOutcome.Failed -> {
@@ -80,7 +94,6 @@ private fun AppState.launch(card: GameCard, emulator: io.github.matiyaaa.fuse.mo
     }
 }
 
-/** The options menu for a game (Context button, Select, or a long press). */
 /** Takes [card] off Continue Playing until it is played again. */
 fun AppState.dismissFromContinue(card: GameCard) {
     val now = kotlin.time.Clock.System.now().toEpochMilliseconds()
@@ -88,7 +101,10 @@ fun AppState.dismissFromContinue(card: GameCard) {
     toasts.show("Removed from Continue playing")
 }
 
-/** [extra] actions go right after Play, for the shelf or list the game was opened from. */
+/**
+ * The options menu for a game (Context button, Select, or a long press). [extra] actions go right
+ * after Play, for the shelf or list the game was opened from.
+ */
 fun AppState.gameMenu(card: GameCard, fromDetail: Boolean = false, extra: List<MenuAction> = emptyList()): ContextMenuSpec {
     val lib = store.library
     fun run(block: suspend () -> Unit) {
@@ -160,7 +176,7 @@ fun AppState.gameMenu(card: GameCard, fromDetail: Boolean = false, extra: List<M
             )
         }))
     }
-    return ContextMenuSpec(title = card.title, subtitle = card.platformShort, art = card.art.tile, actions = actions)
+    return ContextMenuSpec(title = card.title, subtitle = card.platformShort, art = card.art.tile, actions = actions, accent = card.accent)
 }
 
 fun AppState.collectionPicker(game: GameId, title: String) {
@@ -168,6 +184,7 @@ fun AppState.collectionPicker(game: GameId, title: String) {
         val cols = store.collections.collections.value
         val member = store.collections.membership(game)
         choice = ChoiceSpec(
+            icon = FuseIcons.Bookmark,
             title = "Collections",
             message = title,
             options = cols.map { col ->
@@ -198,6 +215,7 @@ fun AppState.emulatorPicker(card: GameCard) {
     val options = store.emulators.optionsFor(card.platformId)
     contextMenu = null
     choice = ChoiceSpec(
+        icon = FuseIcons.Chip,
         title = "Emulator for ${card.title}",
         message = "The platform's choice is used unless you pick one here.",
         options = listOf(
@@ -234,6 +252,7 @@ fun AppState.folderPolicyPicker(card: GameCard) {
         choice = null
     }
     choice = ChoiceSpec(
+        icon = FuseIcons.FolderOpen,
         title = "Folder behaviour",
         message = "How Fuse treats this game's folder. Nothing on disk changes.",
         options = listOf(

@@ -11,74 +11,115 @@ object FuseIcons {
     val Aperture: ImageVector by lazy { lineIcon("Aperture", "M2 12a10 10 0 1 0 20 0a10 10 0 1 0 -20 0Z", "m14.31 8 5.74 9.94", "M9.69 8h11.48", "m7.38 12 5.74-9.94", "M9.69 16 3.95 6.06", "M14.31 16H2.83", "m16.62 12-5.74 9.94") }
     val AppWindow: ImageVector by lazy { lineIcon("AppWindow", "M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1 -2 2h-16a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2Z", "M10 4v4", "M2 8h20", "M6 4v4") }
     val Archive: ImageVector by lazy { lineIcon("Archive", "M3 3h18a1 1 0 0 1 1 1v3a1 1 0 0 1 -1 1h-18a1 1 0 0 1 -1 -1v-3a1 1 0 0 1 1 -1Z", "M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8", "M10 12h4") }
+    val ArrowDown: ImageVector by lazy { lineIcon("ArrowDown", "M12 5v14", "m19 12-7 7-7-7") }
     val ArrowLeft: ImageVector by lazy { lineIcon("ArrowLeft", "m12 19-7-7 7-7", "M19 12H5") }
     val ArrowRight: ImageVector by lazy { lineIcon("ArrowRight", "M5 12h14", "m12 5 7 7-7 7") }
+    val ArrowUp: ImageVector by lazy { lineIcon("ArrowUp", "m5 12 7-7 7 7", "M12 19V5") }
     val ArrowUpRight: ImageVector by lazy { lineIcon("ArrowUpRight", "M7 7h10v10", "M7 17 17 7") }
+    val AudioLines: ImageVector by lazy { lineIcon("AudioLines", "M2 10v3", "M6 6v11", "M10 3v18", "M14 8v7", "M18 5v13", "M22 10v3") }
     val Award: ImageVector by lazy { lineIcon("Award", "m15.477 12.89 1.515 8.526a.5.5 0 0 1-.81.47l-3.58-2.687a1 1 0 0 0-1.197 0l-3.586 2.686a.5.5 0 0 1-.81-.469l1.514-8.526", "M6 8a6 6 0 1 0 12 0a6 6 0 1 0 -12 0Z") }
     val Backspace: ImageVector by lazy { lineIcon("Backspace", "M10 5a2 2 0 0 0-1.344.519l-6.328 5.74a1 1 0 0 0 0 1.481l6.328 5.741A2 2 0 0 0 10 19h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2z", "m12 9 6 6", "m18 9-6 6") }
     val BadgeCheck: ImageVector by lazy { lineIcon("BadgeCheck", "M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z", "m16 9-5.5 5.5L8 12") }
     val Battery: ImageVector by lazy { lineIcon("Battery", "M 22 14 L 22 10", "M4 6h12a2 2 0 0 1 2 2v8a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2v-8a2 2 0 0 1 2 -2Z") }
     val BatteryCharging: ImageVector by lazy { lineIcon("BatteryCharging", "m11 7-3 5h4l-3 5", "M14.856 6H16a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2.935", "M22 14v-4", "M5.14 18H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h2.936") }
+    val BatteryFull: ImageVector by lazy { lineIcon("BatteryFull", "M10 10v4", "M14 10v4", "M22 14v-4", "M6 10v4", "M4 6h12a2 2 0 0 1 2 2v8a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2v-8a2 2 0 0 1 2 -2Z") }
     val BatteryLow: ImageVector by lazy { lineIcon("BatteryLow", "M22 14v-4", "M6 14v-4", "M4 6h12a2 2 0 0 1 2 2v8a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2v-8a2 2 0 0 1 2 -2Z") }
+    val BatteryMedium: ImageVector by lazy { lineIcon("BatteryMedium", "M10 14v-4", "M22 14v-4", "M6 14v-4", "M4 6h12a2 2 0 0 1 2 2v8a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2v-8a2 2 0 0 1 2 -2Z") }
+    val BatteryWarning: ImageVector by lazy { lineIcon("BatteryWarning", "M10 17h.01", "M10 7v6", "M14 6h2a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2", "M22 14v-4", "M6 18H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h2") }
     val Bell: ImageVector by lazy { lineIcon("Bell", "M10.268 21a2 2 0 0 0 3.464 0", "M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326") }
+    val Blend: ImageVector by lazy { lineIcon("Blend", "M8 9a7 7 0 1 0 14 0a7 7 0 1 0 -14 0Z", "M2 15a7 7 0 1 0 14 0a7 7 0 1 0 -14 0Z") }
     val Blocks: ImageVector by lazy { lineIcon("Blocks", "M10 22V7a1 1 0 0 0-1-1H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-5a1 1 0 0 0-1-1H2", "M15 2h6a1 1 0 0 1 1 1v6a1 1 0 0 1 -1 1h-6a1 1 0 0 1 -1 -1v-6a1 1 0 0 1 1 -1Z") }
     val Bluetooth: ImageVector by lazy { lineIcon("Bluetooth", "m7 7 10 10-5 5V2l5 5L7 17") }
     val BluetoothOff: ImageVector by lazy { lineIcon("BluetoothOff", "m17 17-5 5V12l-5 5", "m2 2 20 20", "M14.5 9.5 17 7l-5-5v4.5") }
     val Bolt: ImageVector by lazy { lineIcon("Bolt", "M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z", "M8 12a4 4 0 1 0 8 0a4 4 0 1 0 -8 0Z") }
+    val BookOpen: ImageVector by lazy { lineIcon("BookOpen", "M12 5v16", "M20.001 19A2 2 0 0022 17V5a2 2 0 00-1.999-2L16 3.002A5 5 0 0012 5a5 5 0 00-4-2H4a2 2 0 00-2 2v12a2 2 0 001.999 2H8a5 5 0 014 2 5 5 0 014-2z") }
     val Bookmark: ImageVector by lazy { lineIcon("Bookmark", "M17 3a2 2 0 0 1 2 2v15a1 1 0 0 1-1.496.868l-4.512-2.578a2 2 0 0 0-1.984 0l-4.512 2.578A1 1 0 0 1 5 20V5a2 2 0 0 1 2-2z") }
     val Box: ImageVector by lazy { lineIcon("Box", "M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z", "m3.3 7 8.7 5 8.7-5", "M12 22V12") }
     val Brush: ImageVector by lazy { lineIcon("Brush", "m11 10 3 3", "M6.5 21A3.5 3.5 0 1 0 3 17.5a2.62 2.62 0 0 1-.708 1.792A1 1 0 0 0 3 21z", "M9.969 17.031 21.378 5.624a1 1 0 0 0-3.002-3.002L6.967 14.031") }
     val Cable: ImageVector by lazy { lineIcon("Cable", "M17 19a1 1 0 0 1-1-1v-2a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2a1 1 0 0 1-1 1z", "M17 21v-2", "M19 14V6.5a1 1 0 0 0-7 0v11a1 1 0 0 1-7 0V10", "M21 21v-2", "M3 5V3", "M4 10a2 2 0 0 1-2-2V6a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2a2 2 0 0 1-2 2z", "M7 5V3") }
     val Calendar: ImageVector by lazy { lineIcon("Calendar", "M8 2v3", "M16 2v3", "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2Z", "M3 9h18") }
+    val CalendarClock: ImageVector by lazy { lineIcon("CalendarClock", "M16 14v2.2l1.6 1", "M16 2v3", "M21 7.338V5a2 2 0 00-2-2H5a2 2 0 00-2 2v14a2 2 0 002 2h2.338", "M3 9h5.859", "M8 2v3", "M10 16a6 6 0 1 0 12 0a6 6 0 1 0 -12 0Z") }
     val Camera: ImageVector by lazy { lineIcon("Camera", "M13.997 4a2 2 0 0 1 1.76 1.05l.486.9A2 2 0 0 0 18.003 7H20a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h1.997a2 2 0 0 0 1.759-1.048l.489-.904A2 2 0 0 1 10.004 4z", "M9 13a3 3 0 1 0 6 0a3 3 0 1 0 -6 0Z") }
     val CapsLock: ImageVector by lazy { lineIcon("CapsLock", "M14 16a1 1 0 0 0 1-1v-2a1 1 0 0 1 1-1h3.293a.707.707 0 0 0 .5-1.207l-6.939-6.939a1.207 1.207 0 0 0-1.708 0l-6.94 6.94a.707.707 0 0 0 .5 1.206H8a1 1 0 0 1 1 1v2a1 1 0 0 0 1 1z", "M9 20h6") }
     val Carousel: ImageVector by lazy { lineIcon("Carousel", "M2 7v10", "M6 5v14", "M12 3h8a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2h-8a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2Z") }
+    val Cast: ImageVector by lazy { lineIcon("Cast", "M2 8V6a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-6", "M2 12a9 9 0 0 1 8 8", "M2 16a5 5 0 0 1 4 4", "M2 20L2.01 20") }
     val Chart: ImageVector by lazy { lineIcon("Chart", "M5 21v-6", "M12 21V3", "M19 21V9") }
+    val ChartLine: ImageVector by lazy { lineIcon("ChartLine", "M3 3v16a2 2 0 0 0 2 2h16", "m19 9-5 5-4-4-3 3") }
+    val ChartPie: ImageVector by lazy { lineIcon("ChartPie", "M21 12c.552 0 1.005-.449.95-.998a10 10 0 0 0-8.953-8.951c-.55-.055-.998.398-.998.95v8a1 1 0 0 0 1 1z", "M21.21 15.89A10 10 0 1 1 8 2.83") }
     val Check: ImageVector by lazy { lineIcon("Check", "M20 6 9 17l-5-5") }
-    val Copy: ImageVector by lazy { lineIcon("Copy", "M10 8h10a2 2 0 0 1 2 2v10a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-10a2 2 0 0 1 2 -2Z", "M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2") }
+    val CheckCheck: ImageVector by lazy { lineIcon("CheckCheck", "M18 6 7 17l-5-5", "m22 10-7.5 7.5L13 16") }
     val ChevronDown: ImageVector by lazy { lineIcon("ChevronDown", "m6 9 6 6 6-6") }
     val ChevronLeft: ImageVector by lazy { lineIcon("ChevronLeft", "m15 18-6-6 6-6") }
     val ChevronRight: ImageVector by lazy { lineIcon("ChevronRight", "m9 18 6-6-6-6") }
     val ChevronUp: ImageVector by lazy { lineIcon("ChevronUp", "m18 15-6-6-6 6") }
+    val ChevronsDown: ImageVector by lazy { lineIcon("ChevronsDown", "m7 6 5 5 5-5", "m7 13 5 5 5-5") }
+    val ChevronsLeft: ImageVector by lazy { lineIcon("ChevronsLeft", "m11 17-5-5 5-5", "m18 17-5-5 5-5") }
+    val ChevronsRight: ImageVector by lazy { lineIcon("ChevronsRight", "m6 17 5-5-5-5", "m13 17 5-5-5-5") }
+    val ChevronsUp: ImageVector by lazy { lineIcon("ChevronsUp", "m17 11-5-5-5 5", "m17 18-5-5-5 5") }
     val Chip: ImageVector by lazy { lineIcon("Chip", "M12 20v2", "M12 2v2", "M17 20v2", "M17 2v2", "M2 12h2", "M2 17h2", "M2 7h2", "M20 12h2", "M20 17h2", "M20 7h2", "M7 20v2", "M7 2v2", "M6 4h12a2 2 0 0 1 2 2v12a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2Z", "M9 8h6a1 1 0 0 1 1 1v6a1 1 0 0 1 -1 1h-6a1 1 0 0 1 -1 -1v-6a1 1 0 0 1 1 -1Z") }
     val CircleCheck: ImageVector by lazy { lineIcon("CircleCheck", "M2 12a10 10 0 1 0 20 0a10 10 0 1 0 -20 0Z", "m16 9-5.5 5.5L8 12") }
     val CircleDot: ImageVector by lazy { lineIcon("CircleDot", "M11 12a1 1 0 1 0 2 0a1 1 0 1 0 -2 0Z", "M2 12a10 10 0 1 0 20 0a10 10 0 1 0 -20 0Z") }
+    val CircleHelp: ImageVector by lazy { lineIcon("CircleHelp", "M2 12a10 10 0 1 0 20 0a10 10 0 1 0 -20 0Z", "M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3", "M12 17h.01") }
     val CirclePlay: ImageVector by lazy { lineIcon("CirclePlay", "M9 9.003a1 1 0 0 1 1.517-.859l4.997 2.997a1 1 0 0 1 0 1.718l-4.997 2.997A1 1 0 0 1 9 14.996z", "M2 12a10 10 0 1 0 20 0a10 10 0 1 0 -20 0Z") }
+    val CirclePlus: ImageVector by lazy { lineIcon("CirclePlus", "M2 12a10 10 0 1 0 20 0a10 10 0 1 0 -20 0Z", "M8 12h8", "M12 8v8") }
     val CirclePower: ImageVector by lazy { lineIcon("CirclePower", "M2 12a10 10 0 1 0 20 0a10 10 0 1 0 -20 0Z", "M12 7v4", "M7.998 9.003a5 5 0 1 0 8-.005") }
+    val CircleSlash: ImageVector by lazy { lineIcon("CircleSlash", "M2 12a10 10 0 1 0 20 0a10 10 0 1 0 -20 0Z", "M9 15L15 9") }
+    val CircleUser: ImageVector by lazy { lineIcon("CircleUser", "M2 12a10 10 0 1 0 20 0a10 10 0 1 0 -20 0Z", "M9 10a3 3 0 1 0 6 0a3 3 0 1 0 -6 0Z", "M7 20.662V19a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v1.662") }
     val CircleX: ImageVector by lazy { lineIcon("CircleX", "M2 12a10 10 0 1 0 20 0a10 10 0 1 0 -20 0Z", "m15 9-6 6", "m9 9 6 6") }
     val Clapperboard: ImageVector by lazy { lineIcon("Clapperboard", "m12.296 3.464 3.02 3.956", "M20.2 6 3 11l-.9-2.4c-.3-1.1.3-2.2 1.3-2.5l13.5-4c1.1-.3 2.2.3 2.5 1.3z", "M3 11h18v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z", "m6.18 5.276 3.1 3.899") }
     val ClipboardPaste: ImageVector by lazy { lineIcon("ClipboardPaste", "M11 14h10", "M16 4h2a2 2 0 0 1 2 2v1.344", "m17 18 4-4-4-4", "M8 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 1.793-1.113", "M9 2h6a1 1 0 0 1 1 1v2a1 1 0 0 1 -1 1h-6a1 1 0 0 1 -1 -1v-2a1 1 0 0 1 1 -1Z") }
     val Clock: ImageVector by lazy { lineIcon("Clock", "M2 12a10 10 0 1 0 20 0a10 10 0 1 0 -20 0Z", "M12 6v6l4 2") }
+    val Clock3: ImageVector by lazy { lineIcon("Clock3", "M2 12a10 10 0 1 0 20 0a10 10 0 1 0 -20 0Z", "M12 6v6h4") }
     val Close: ImageVector by lazy { lineIcon("Close", "M18 6 6 18", "m6 6 12 12") }
     val Cloud: ImageVector by lazy { lineIcon("Cloud", "M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z") }
     val CloudDownload: ImageVector by lazy { lineIcon("CloudDownload", "M12 13v8l-4-4", "m12 21 4-4", "M4.393 15.269A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.436 8.284") }
+    val CloudMoon: ImageVector by lazy { lineIcon("CloudMoon", "M13 16a3 3 0 0 1 0 6H7a5 5 0 1 1 4.9-6z", "M18.376 14.512a6 6 0 0 0 3.461-4.127c.148-.625-.659-.97-1.248-.714a4 4 0 0 1-5.259-5.26c.255-.589-.09-1.395-.716-1.248a6 6 0 0 0-4.594 5.36") }
+    val CloudOff: ImageVector by lazy { lineIcon("CloudOff", "M10.94 5.274A7 7 0 0 1 15.71 10h1.79a4.5 4.5 0 0 1 4.222 6.057", "M18.796 18.81A4.5 4.5 0 0 1 17.5 19H9A7 7 0 0 1 5.79 5.78", "m2 2 20 20") }
     val Cog: ImageVector by lazy { lineIcon("Cog", "M11 10.27 7 3.34", "m11 13.73-4 6.93", "M12 22v-2", "M12 2v2", "M14 12h8", "m17 20.66-1-1.73", "m17 3.34-1 1.73", "M2 12h2", "m20.66 17-1.73-1", "m20.66 7-1.73 1", "m3.34 17 1.73-1", "m3.34 7 1.73 1", "M10 12a2 2 0 1 0 4 0a2 2 0 1 0 -4 0Z", "M4 12a8 8 0 1 0 16 0a8 8 0 1 0 -16 0Z") }
     val Columns: ImageVector by lazy { lineIcon("Columns", "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2Z", "M9 3v18", "M15 3v18") }
+    val Columns2: ImageVector by lazy { lineIcon("Columns2", "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2Z", "M12 3v18") }
     val Compass: ImageVector by lazy { lineIcon("Compass", "M2 12a10 10 0 1 0 20 0a10 10 0 1 0 -20 0Z", "m16.24 7.76-1.804 5.411a2 2 0 0 1-1.265 1.265L7.76 16.24l1.804-5.411a2 2 0 0 1 1.265-1.265z") }
     val Contrast: ImageVector by lazy { lineIcon("Contrast", "M2 12a10 10 0 1 0 20 0a10 10 0 1 0 -20 0Z", "M12 18a6 6 0 0 0 0-12v12z") }
+    val Copy: ImageVector by lazy { lineIcon("Copy", "M10 8h10a2 2 0 0 1 2 2v10a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-10a2 2 0 0 1 2 -2Z", "M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2") }
+    val CornerUpLeft: ImageVector by lazy { lineIcon("CornerUpLeft", "M20 20v-7a4 4 0 0 0-4-4H4", "M9 14 4 9l5-5") }
+    val Corners: ImageVector by lazy { lineIcon("Corners", "M21 11a8 8 0 0 0-8-8", "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4") }
     val Crop: ImageVector by lazy { lineIcon("Crop", "M6 2v14a2 2 0 0 0 2 2h14", "M18 22V8a2 2 0 0 0-2-2H2") }
     val Crosshair: ImageVector by lazy { lineIcon("Crosshair", "M2 12a10 10 0 1 0 20 0a10 10 0 1 0 -20 0Z", "M22 12L18 12", "M6 12L2 12", "M12 6L12 2", "M12 22L12 18") }
+    val Crown: ImageVector by lazy { lineIcon("Crown", "M11.562 3.266a.5.5 0 0 1 .876 0L15.39 8.87a1 1 0 0 0 1.516.294L21.183 5.5a.5.5 0 0 1 .798.519l-2.834 10.246a1 1 0 0 1-.956.734H5.81a1 1 0 0 1-.957-.734L2.02 6.02a.5.5 0 0 1 .798-.519l4.276 3.664a1 1 0 0 0 1.516-.294z", "M5 21h14") }
+    val DPad: ImageVector by lazy { lineIcon("DPad", "M11.146 15.854a1.207 1.207 0 0 1 1.708 0l1.56 1.56A2 2 0 0 1 15 18.828V21a1 1 0 0 1-1 1h-4a1 1 0 0 1-1-1v-2.172a2 2 0 0 1 .586-1.414z", "M18.828 15a2 2 0 0 1-1.414-.586l-1.56-1.56a1.207 1.207 0 0 1 0-1.708l1.56-1.56A2 2 0 0 1 18.828 9H21a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1z", "M6.586 14.414A2 2 0 0 1 5.172 15H3a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1h2.172a2 2 0 0 1 1.414.586l1.56 1.56a1.207 1.207 0 0 1 0 1.708z", "M9 3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2.172a2 2 0 0 1-.586 1.414l-1.56 1.56a1.207 1.207 0 0 1-1.708 0l-1.56-1.56A2 2 0 0 1 9 5.172z") }
     val Dashboard: ImageVector by lazy { lineIcon("Dashboard", "M4 3h5a1 1 0 0 1 1 1v7a1 1 0 0 1 -1 1h-5a1 1 0 0 1 -1 -1v-7a1 1 0 0 1 1 -1Z", "M15 3h5a1 1 0 0 1 1 1v3a1 1 0 0 1 -1 1h-5a1 1 0 0 1 -1 -1v-3a1 1 0 0 1 1 -1Z", "M15 12h5a1 1 0 0 1 1 1v7a1 1 0 0 1 -1 1h-5a1 1 0 0 1 -1 -1v-7a1 1 0 0 1 1 -1Z", "M4 16h5a1 1 0 0 1 1 1v3a1 1 0 0 1 -1 1h-5a1 1 0 0 1 -1 -1v-3a1 1 0 0 1 1 -1Z") }
     val Database: ImageVector by lazy { lineIcon("Database", "M3 5a9 3 0 1 0 18 0a9 3 0 1 0 -18 0Z", "M3 5V19A9 3 0 0 0 21 19V5", "M3 12A9 3 0 0 0 21 12") }
+    val Dice: ImageVector by lazy { lineIcon("Dice", "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2Z", "M16 8h.01", "M8 8h.01", "M8 16h.01", "M16 16h.01", "M12 12h.01") }
     val Disc: ImageVector by lazy { lineIcon("Disc", "M2 12a10 10 0 1 0 20 0a10 10 0 1 0 -20 0Z", "M6 12c0-1.7.7-3.2 1.8-4.2", "M10 12a2 2 0 1 0 4 0a2 2 0 1 0 -4 0Z", "M18 12c0 1.7-.7 3.2-1.8 4.2") }
     val Download: ImageVector by lazy { lineIcon("Download", "M12 15V3", "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4", "m7 10 5 5 5-5") }
+    val Droplet: ImageVector by lazy { lineIcon("Droplet", "M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7z") }
     val DualScreen: ImageVector by lazy { lineIcon("DualScreen", "M5 8h6a2 2 0 0 1 2 2v10a2 2 0 0 1 -2 2h-6a2 2 0 0 1 -2 -2v-10a2 2 0 0 1 2 -2Z", "M5 4a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2h-2.4", "M8 18h.01") }
+    val Earth: ImageVector by lazy { lineIcon("Earth", "M21.54 15H17a2 2 0 0 0-2 2v4.54", "M7 3.34V5a3 3 0 0 0 3 3a2 2 0 0 1 2 2c0 1.1.9 2 2 2a2 2 0 0 0 2-2c0-1.1.9-2 2-2h3.17", "M11 21.95V18a2 2 0 0 0-2-2a2 2 0 0 1-2-2v-1a2 2 0 0 0-2-2H2.05", "M2 12a10 10 0 1 0 20 0a10 10 0 1 0 -20 0Z") }
+    val Eraser: ImageVector by lazy { lineIcon("Eraser", "M21 21H8a2 2 0 0 1-1.42-.587l-3.994-3.999a2 2 0 0 1 0-2.828l10-10a2 2 0 0 1 2.829 0l5.999 6a2 2 0 0 1 0 2.828L12.834 21", "m5.082 11.09 8.828 8.828") }
     val External: ImageVector by lazy { lineIcon("External", "M15 3h6v6", "M10 14 21 3", "M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6") }
     val Eye: ImageVector by lazy { lineIcon("Eye", "M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0", "M9 12a3 3 0 1 0 6 0a3 3 0 1 0 -6 0Z") }
     val EyeOff: ImageVector by lazy { lineIcon("EyeOff", "M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49", "M14.084 14.158a3 3 0 0 1-4.242-4.242", "M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143", "m2 2 20 20") }
     val File: ImageVector by lazy { lineIcon("File", "M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z", "M14 2v5a1 1 0 0 0 1 1h5") }
     val FileArchive: ImageVector by lazy { lineIcon("FileArchive", "M13.659 22H18a2 2 0 0 0 2-2V8a2.4 2.4 0 0 0-.706-1.706l-3.588-3.588A2.4 2.4 0 0 0 14 2H6a2 2 0 0 0-2 2v11.5", "M14 2v5a1 1 0 0 0 1 1h5", "M8 12v-1", "M8 18v-2", "M8 7V6", "M6 20a2 2 0 1 0 4 0a2 2 0 1 0 -4 0Z") }
+    val FileDown: ImageVector by lazy { lineIcon("FileDown", "M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z", "M14 2v5a1 1 0 0 0 1 1h5", "M12 18v-6", "m9 15 3 3 3-3") }
     val FileQuestion: ImageVector by lazy { lineIcon("FileQuestion", "M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z", "M12 17h.01", "M9.1 9a3 3 0 0 1 5.82 1c0 2-3 3-3 3") }
+    val FileText: ImageVector by lazy { lineIcon("FileText", "M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z", "M14 2v5a1 1 0 0 0 1 1h5", "M10 9H8", "M16 13H8", "M16 17H8") }
+    val FileUp: ImageVector by lazy { lineIcon("FileUp", "M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z", "M14 2v5a1 1 0 0 0 1 1h5", "M12 12v6", "m15 15-3-3-3 3") }
     val Film: ImageVector by lazy { lineIcon("Film", "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2Z", "M7 3v18", "M3 7.5h4", "M3 12h18", "M3 16.5h4", "M17 3v18", "M17 7.5h4", "M17 16.5h4") }
     val Filter: ImageVector by lazy { lineIcon("Filter", "M2 5h20", "M6 12h12", "M9 19h6") }
     val Flame: ImageVector by lazy { lineIcon("Flame", "M12 3q1 4 4 6.5t3 5.5a1 1 0 0 1-14 0 5 5 0 0 1 1-3 1 1 0 0 0 5 0c0-2-1.5-3-1.5-5q0-2 2.5-4") }
+    val Flower: ImageVector by lazy { lineIcon("Flower", "M9 12a3 3 0 1 0 6 0a3 3 0 1 0 -6 0Z", "M12 16.5A4.5 4.5 0 1 1 7.5 12 4.5 4.5 0 1 1 12 7.5a4.5 4.5 0 1 1 4.5 4.5 4.5 4.5 0 1 1-4.5 4.5", "M12 7.5V9", "M7.5 12H9", "M16.5 12H15", "M12 16.5V15", "m8 8 1.88 1.88", "M14.12 9.88 16 8", "m8 16 1.88-1.88", "M14.12 14.12 16 16") }
     val Folder: ImageVector by lazy { lineIcon("Folder", "M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z") }
-    val FolderPlus: ImageVector by lazy { lineIcon("FolderPlus", "M12 10v6", "M9 13h6", "M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z") }
     val FolderOpen: ImageVector by lazy { lineIcon("FolderOpen", "m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2") }
+    val FolderPlus: ImageVector by lazy { lineIcon("FolderPlus", "M12 10v6", "M9 13h6", "M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z") }
     val FolderSearch: ImageVector by lazy { lineIcon("FolderSearch", "M10.7 20H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H20a2 2 0 0 1 2 2v4.1", "m21 21-1.9-1.9", "M14 17a3 3 0 1 0 6 0a3 3 0 1 0 -6 0Z") }
+    val GalleryThumbnails: ImageVector by lazy { lineIcon("GalleryThumbnails", "M5 3h14a2 2 0 0 1 2 2v10a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-10a2 2 0 0 1 2 -2Z", "M4 21h1", "M9 21h1", "M14 21h1", "M19 21h1") }
     val GalleryVertical: ImageVector by lazy { lineIcon("GalleryVertical", "M7 2h10", "M5 6h14", "M5 10h14a2 2 0 0 1 2 2v8a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-8a2 2 0 0 1 2 -2Z") }
     val Gamepad: ImageVector by lazy { lineIcon("Gamepad", "M6 11L10 11", "M8 9L8 13", "M15 12L15.01 12", "M18 10L18.01 10", "M17.32 5H6.68a4 4 0 0 0-3.978 3.59c-.006.052-.01.101-.017.152C2.604 9.416 2 14.456 2 16a3 3 0 0 0 3 3c1 0 1.5-.5 2-1l1.414-1.414A2 2 0 0 1 9.828 16h4.344a2 2 0 0 1 1.414.586L17 18c.5.5 1 1 2 1a3 3 0 0 0 3-3c0-1.545-.604-6.584-.685-7.258-.007-.05-.011-.1-.017-.151A4 4 0 0 0 17.32 5z") }
     val Gauge: ImageVector by lazy { lineIcon("Gauge", "m12 14 4-4", "M3.34 19a10 10 0 1 1 17.32 0") }
+    val Gem: ImageVector by lazy { lineIcon("Gem", "M10.5 3 8 9l4 13 4-13-2.5-6", "M17 3a2 2 0 0 1 1.6.8l3 4a2 2 0 0 1 .013 2.382l-7.99 10.986a2 2 0 0 1-3.247 0l-7.99-10.986A2 2 0 0 1 2.4 7.8l2.998-3.997A2 2 0 0 1 7 3z", "M2 9h20") }
+    val Ghost: ImageVector by lazy { lineIcon("Ghost", "M15 10v1", "M7.528 20.472a1.6 1.6 0 012.277 0l1.057 1.056a1.6 1.6 0 002.276 0l1.057-1.056a1.6 1.6 0 012.277 0l1.114 1.114a1.4 1.4 0 002.414-1V10a8 8 0 00-16 0v10.586a1.4 1.4 0 002.414 1z", "M9 10v1") }
+    val Gift: ImageVector by lazy { lineIcon("Gift", "M12 7v14", "M20 11v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-8", "M7.5 7a1 1 0 0 1 0-5A4.8 8 0 0 1 12 7a4.8 8 0 0 1 4.5-5 1 1 0 0 1 0 5", "M4 7h16a1 1 0 0 1 1 1v2a1 1 0 0 1 -1 1h-16a1 1 0 0 1 -1 -1v-2a1 1 0 0 1 1 -1Z") }
     val Globe: ImageVector by lazy { lineIcon("Globe", "M2 12a10 10 0 1 0 20 0a10 10 0 1 0 -20 0Z", "M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20", "M2 12h20") }
     val Grid: ImageVector by lazy { lineIcon("Grid", "M4 3h5a1 1 0 0 1 1 1v5a1 1 0 0 1 -1 1h-5a1 1 0 0 1 -1 -1v-5a1 1 0 0 1 1 -1Z", "M15 3h5a1 1 0 0 1 1 1v5a1 1 0 0 1 -1 1h-5a1 1 0 0 1 -1 -1v-5a1 1 0 0 1 1 -1Z", "M15 14h5a1 1 0 0 1 1 1v5a1 1 0 0 1 -1 1h-5a1 1 0 0 1 -1 -1v-5a1 1 0 0 1 1 -1Z", "M4 14h5a1 1 0 0 1 1 1v5a1 1 0 0 1 -1 1h-5a1 1 0 0 1 -1 -1v-5a1 1 0 0 1 1 -1Z") }
     val Grid2: ImageVector by lazy { lineIcon("Grid2", "M12 3v18", "M3 12h18", "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2Z") }
@@ -86,57 +127,77 @@ object FuseIcons {
     val Grip: ImageVector by lazy { lineIcon("Grip", "M8 12a1 1 0 1 0 2 0a1 1 0 1 0 -2 0Z", "M8 5a1 1 0 1 0 2 0a1 1 0 1 0 -2 0Z", "M8 19a1 1 0 1 0 2 0a1 1 0 1 0 -2 0Z", "M14 12a1 1 0 1 0 2 0a1 1 0 1 0 -2 0Z", "M14 5a1 1 0 1 0 2 0a1 1 0 1 0 -2 0Z", "M14 19a1 1 0 1 0 2 0a1 1 0 1 0 -2 0Z") }
     val Hand: ImageVector by lazy { lineIcon("Hand", "M18 11V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2", "M14 10V4a2 2 0 0 0-2-2a2 2 0 0 0-2 2v2", "M10 10.5V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2v8", "M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15") }
     val HardDrive: ImageVector by lazy { lineIcon("HardDrive", "M10 16h.01", "M2.212 11.577a2 2 0 0 0-.212.896V18a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-5.527a2 2 0 0 0-.212-.896L18.55 5.11A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z", "M21.946 12.013H2.054", "M6 16h.01") }
+    val Hash: ImageVector by lazy { lineIcon("Hash", "M4 9L20 9", "M4 15L20 15", "M10 3L8 21", "M16 3L14 21") }
+    val Headphones: ImageVector by lazy { lineIcon("Headphones", "M3 14h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a9 9 0 0 1 18 0v7a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3") }
     val Heart: ImageVector by lazy { lineIcon("Heart", "M2 9.5a5.5 5.5 0 0 1 9.591-3.676.56.56 0 0 0 .818 0A5.49 5.49 0 0 1 22 9.5c0 2.29-1.5 4-3 5.5l-5.492 5.313a2 2 0 0 1-3 .019L5 15c-1.5-1.5-3-3.2-3-5.5") }
+    val HeartOff: ImageVector by lazy { lineIcon("HeartOff", "M10.5 4.893a5.5 5.5 0 0 1 1.091.931.56.56 0 0 0 .818 0A5.49 5.49 0 0 1 22 9.5c0 1.872-1.002 3.356-2.187 4.655", "m16.967 16.967-3.459 3.346a2 2 0 0 1-3 .019L5 15c-1.5-1.5-3-3.2-3-5.5a5.5 5.5 0 0 1 2.747-4.761", "m2 2 20 20") }
     val History: ImageVector by lazy { lineIcon("History", "M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8", "M3 3v5h5", "M12 7v5l4 2") }
     val Home: ImageVector by lazy { lineIcon("Home", "M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8", "M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z") }
     val HomePlus: ImageVector by lazy { lineIcon("HomePlus", "M12.35 21H5a2 2 0 0 1-2-2v-9a2 2 0 0 1 .71-1.53l7-6a2 2 0 0 1 2.58 0l7 6A2 2 0 0 1 21 10v2.35", "M14.8 12.4A1 1 0 0 0 14 12h-4a1 1 0 0 0-1 1v8", "M15 18h6", "M18 15v6") }
     val Hourglass: ImageVector by lazy { lineIcon("Hourglass", "M5 22h14", "M5 2h14", "M17 22v-4.172a2 2 0 0 0-.586-1.414L12 12l-4.414 4.414A2 2 0 0 0 7 17.828V22", "M7 2v4.172a2 2 0 0 0 .586 1.414L12 12l4.414-4.414A2 2 0 0 0 17 6.172V2") }
     val Image: ImageVector by lazy { lineIcon("Image", "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2Z", "M7 9a2 2 0 1 0 4 0a2 2 0 1 0 -4 0Z", "m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21") }
+    val ImagePlay: ImageVector by lazy { lineIcon("ImagePlay", "M15 15.003a1 1 0 0 1 1.517-.859l4.997 2.997a1 1 0 0 1 0 1.718l-4.997 2.997a1 1 0 0 1-1.517-.86z", "M21 12.17V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h6", "m6 21 5-5", "M7 9a2 2 0 1 0 4 0a2 2 0 1 0 -4 0Z") }
     val Images: ImageVector by lazy { lineIcon("Images", "m22 11-1.296-1.296a2.4 2.4 0 0 0-3.408 0L11 16", "M4 8a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2", "M12 7a1 1 0 1 0 2 0a1 1 0 1 0 -2 0Z", "M10 2h10a2 2 0 0 1 2 2v10a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-10a2 2 0 0 1 2 -2Z") }
     val Import: ImageVector by lazy { lineIcon("Import", "M12 3v12", "m8 11 4 4 4-4", "M8 5H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-4") }
     val Info: ImageVector by lazy { lineIcon("Info", "M2 12a10 10 0 1 0 20 0a10 10 0 1 0 -20 0Z", "M12 16v-4", "M12 8h.01") }
     val Joystick: ImageVector by lazy { lineIcon("Joystick", "M21 17a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v2a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-2Z", "M6 15v-2", "M12 15V9", "M9 6a3 3 0 1 0 6 0a3 3 0 1 0 -6 0Z") }
     val Key: ImageVector by lazy { lineIcon("Key", "M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z", "M16 7.5a0.5 0.5 0 1 0 1 0a0.5 0.5 0 1 0 -1 0Z") }
     val Keyboard: ImageVector by lazy { lineIcon("Keyboard", "M10 8h.01", "M12 12h.01", "M14 8h.01", "M16 12h.01", "M18 8h.01", "M6 8h.01", "M7 16h10", "M8 12h.01", "M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1 -2 2h-16a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2Z") }
+    val Laptop: ImageVector by lazy { lineIcon("Laptop", "M18 5a2 2 0 0 1 2 2v8.526a2 2 0 0 0 .212.897l1.068 2.127a1 1 0 0 1-.9 1.45H3.62a1 1 0 0 1-.9-1.45l1.068-2.127A2 2 0 0 0 4 15.526V7a2 2 0 0 1 2-2z", "M20.054 15.987H3.946") }
     val Layers: ImageVector by lazy { lineIcon("Layers", "M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z", "M2 12a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 12", "M2 17a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 17") }
+    val LayoutList: ImageVector by lazy { lineIcon("LayoutList", "M4 3h5a1 1 0 0 1 1 1v5a1 1 0 0 1 -1 1h-5a1 1 0 0 1 -1 -1v-5a1 1 0 0 1 1 -1Z", "M4 14h5a1 1 0 0 1 1 1v5a1 1 0 0 1 -1 1h-5a1 1 0 0 1 -1 -1v-5a1 1 0 0 1 1 -1Z", "M14 4h7", "M14 9h7", "M14 15h7", "M14 20h7") }
     val Leaf: ImageVector by lazy { lineIcon("Leaf", "M11 20a10 10 0 0010-10 25.9 25.9 0 00-1.04-7.281 1 1 0 00-1.755-.325C15.833 5.5 13 5.5 9.8 6.1A7 7 0 0011 20", "M2 21a5 5 0 012.911-4.544C7.613 15.212 8.351 15.24 11 13") }
     val Library: ImageVector by lazy { lineIcon("Library", "m16 6 4 14", "M12 6v14", "M8 8v12", "M4 4v16") }
     val LibraryBig: ImageVector by lazy { lineIcon("LibraryBig", "M4 3h6a1 1 0 0 1 1 1v16a1 1 0 0 1 -1 1h-6a1 1 0 0 1 -1 -1v-16a1 1 0 0 1 1 -1Z", "M7 3v18", "M20.4 18.9c.2.5-.1 1.1-.6 1.3l-1.9.7c-.5.2-1.1-.1-1.3-.6L11.1 5.1c-.2-.5.1-1.1.6-1.3l1.9-.7c.5-.2 1.1.1 1.3.6Z") }
+    val LifeBuoy: ImageVector by lazy { lineIcon("LifeBuoy", "M2 12a10 10 0 1 0 20 0a10 10 0 1 0 -20 0Z", "m4.93 4.93 4.24 4.24", "m14.83 9.17 4.24-4.24", "m14.83 14.83 4.24 4.24", "m9.17 14.83-4.24 4.24", "M8 12a4 4 0 1 0 8 0a4 4 0 1 0 -8 0Z") }
     val Link: ImageVector by lazy { lineIcon("Link", "M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71", "M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71") }
     val Link2: ImageVector by lazy { lineIcon("Link2", "M9 17H7A5 5 0 0 1 7 7h2", "M15 7h2a5 5 0 1 1 0 10h-2", "M8 12L16 12") }
     val List: ImageVector by lazy { lineIcon("List", "M3 5h.01", "M3 12h.01", "M3 19h.01", "M8 5h13", "M8 12h13", "M8 19h13") }
+    val ListChecks: ImageVector by lazy { lineIcon("ListChecks", "M13 5h8", "M13 12h8", "M13 19h8", "m3 17 2 2 4-4", "m3 7 2 2 4-4") }
     val ListPlus: ImageVector by lazy { lineIcon("ListPlus", "M16 5H3", "M11 12H3", "M16 19H3", "M18 9v6", "M21 12h-6") }
     val Lock: ImageVector by lazy { lineIcon("Lock", "M5 11h14a2 2 0 0 1 2 2v7a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-7a2 2 0 0 1 2 -2Z", "M7 11V7a5 5 0 0 1 10 0v4") }
     val LockKeyhole: ImageVector by lazy { lineIcon("LockKeyhole", "M11 16a1 1 0 1 0 2 0a1 1 0 1 0 -2 0Z", "M5 10h14a2 2 0 0 1 2 2v8a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-8a2 2 0 0 1 2 -2Z", "M7 10V7a5 5 0 0 1 10 0v3") }
+    val LockOpen: ImageVector by lazy { lineIcon("LockOpen", "M5 11h14a2 2 0 0 1 2 2v7a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-7a2 2 0 0 1 2 -2Z", "M7 11V7a5 5 0 0 1 9.9-1") }
     val LogOut: ImageVector by lazy { lineIcon("LogOut", "m16 17 5-5-5-5", "M21 12H9", "M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4") }
     val Map: ImageVector by lazy { lineIcon("Map", "M14.106 5.553a2 2 0 0 0 1.788 0l3.659-1.83A1 1 0 0 1 21 4.619v12.764a1 1 0 0 1-.553.894l-4.553 2.277a2 2 0 0 1-1.788 0l-4.212-2.106a2 2 0 0 0-1.788 0l-3.659 1.83A1 1 0 0 1 3 19.381V6.618a1 1 0 0 1 .553-.894l4.553-2.277a2 2 0 0 1 1.788 0z", "M15 5.764v15", "M9 3.236v15") }
     val Maximize: ImageVector by lazy { lineIcon("Maximize", "M15 3h6v6", "m21 3-7 7", "m3 21 7-7", "M9 21H3v-6") }
     val Medal: ImageVector by lazy { lineIcon("Medal", "M7.21 15 2.66 7.14a2 2 0 0 1 .13-2.2L4.4 2.8A2 2 0 0 1 6 2h12a2 2 0 0 1 1.6.8l1.6 2.14a2 2 0 0 1 .14 2.2L16.79 15", "M11 12 5.12 2.2", "m13 12 5.88-9.8", "M8 7h8", "M7 17a5 5 0 1 0 10 0a5 5 0 1 0 -10 0Z", "M12 18v-2h-.5") }
     val Memory: ImageVector by lazy { lineIcon("Memory", "M12 12v-2", "M12 18v-2", "M16 12v-2", "M16 18v-2", "M2 11h1.5", "M20 18v-2", "M20.5 11H22", "M4 18v-2", "M8 12v-2", "M8 18v-2", "M4 6h16a2 2 0 0 1 2 2v6a2 2 0 0 1 -2 2h-16a2 2 0 0 1 -2 -2v-6a2 2 0 0 1 2 -2Z") }
+    val Mic: ImageVector by lazy { lineIcon("Mic", "M12 19v3", "M19 10v2a7 7 0 0 1-14 0v-2", "M12 2h0a3 3 0 0 1 3 3v7a3 3 0 0 1 -3 3h0a3 3 0 0 1 -3 -3v-7a3 3 0 0 1 3 -3Z") }
     val Minus: ImageVector by lazy { lineIcon("Minus", "M5 12h14") }
-    val Laptop: ImageVector by lazy { lineIcon("Laptop", "M18 5a2 2 0 0 1 2 2v8.526a2 2 0 0 0 .212.897l1.068 2.127a1 1 0 0 1-.9 1.45H3.62a1 1 0 0 1-.9-1.45l1.068-2.127A2 2 0 0 0 4 15.526V7a2 2 0 0 1 2-2z", "M20.054 15.987H3.946") }
     val Monitor: ImageVector by lazy { lineIcon("Monitor", "M4 3h16a2 2 0 0 1 2 2v10a2 2 0 0 1 -2 2h-16a2 2 0 0 1 -2 -2v-10a2 2 0 0 1 2 -2Z", "M8 21L16 21", "M12 17L12 21") }
+    val MonitorPlay: ImageVector by lazy { lineIcon("MonitorPlay", "M15.033 9.44a.647.647 0 0 1 0 1.12l-4.065 2.352a.645.645 0 0 1-.968-.56V7.648a.645.645 0 0 1 .967-.56z", "M12 17v4", "M8 21h8", "M4 3h16a2 2 0 0 1 2 2v10a2 2 0 0 1 -2 2h-16a2 2 0 0 1 -2 -2v-10a2 2 0 0 1 2 -2Z") }
     val MonitorSmartphone: ImageVector by lazy { lineIcon("MonitorSmartphone", "M18 8V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h8", "M10 19v-3.96 3.15", "M7 19h5", "M18 12h2a2 2 0 0 1 2 2v6a2 2 0 0 1 -2 2h-2a2 2 0 0 1 -2 -2v-6a2 2 0 0 1 2 -2Z") }
     val Moon: ImageVector by lazy { lineIcon("Moon", "M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401") }
+    val MoonStar: ImageVector by lazy { lineIcon("MoonStar", "M18 5h4", "M20 3v4", "M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401") }
     val More: ImageVector by lazy { lineIcon("More", "M11 12a1 1 0 1 0 2 0a1 1 0 1 0 -2 0Z", "M18 12a1 1 0 1 0 2 0a1 1 0 1 0 -2 0Z", "M4 12a1 1 0 1 0 2 0a1 1 0 1 0 -2 0Z") }
     val MoreVertical: ImageVector by lazy { lineIcon("MoreVertical", "M11 12a1 1 0 1 0 2 0a1 1 0 1 0 -2 0Z", "M11 5a1 1 0 1 0 2 0a1 1 0 1 0 -2 0Z", "M11 19a1 1 0 1 0 2 0a1 1 0 1 0 -2 0Z") }
+    val Mountain: ImageVector by lazy { lineIcon("Mountain", "m8 3 4 8 5-5 5 15H2L8 3z") }
     val Mouse: ImageVector by lazy { lineIcon("Mouse", "M12 2h0a7 7 0 0 1 7 7v6a7 7 0 0 1 -7 7h0a7 7 0 0 1 -7 -7v-6a7 7 0 0 1 7 -7Z", "M12 6v4") }
     val Move: ImageVector by lazy { lineIcon("Move", "M12 2v20", "m15 19-3 3-3-3", "m19 9 3 3-3 3", "M2 12h20", "m5 9-3 3 3 3", "m9 5 3-3 3 3") }
     val MoveHorizontal: ImageVector by lazy { lineIcon("MoveHorizontal", "m18 8 4 4-4 4", "M2 12h20", "m6 8-4 4 4 4") }
+    val MoveVertical: ImageVector by lazy { lineIcon("MoveVertical", "M12 2v20", "m8 18 4 4 4-4", "m8 6 4-4 4 4") }
     val Music: ImageVector by lazy { lineIcon("Music", "M9 18V5l12-2v13", "M3 18a3 3 0 1 0 6 0a3 3 0 1 0 -6 0Z", "M15 16a3 3 0 1 0 6 0a3 3 0 1 0 -6 0Z") }
     val Network: ImageVector by lazy { lineIcon("Network", "M17 16h4a1 1 0 0 1 1 1v4a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1v-4a1 1 0 0 1 1 -1Z", "M3 16h4a1 1 0 0 1 1 1v4a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1v-4a1 1 0 0 1 1 -1Z", "M10 2h4a1 1 0 0 1 1 1v4a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1v-4a1 1 0 0 1 1 -1Z", "M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3", "M12 12V8") }
+    val Orbit: ImageVector by lazy { lineIcon("Orbit", "M20.341 6.484A10 10 0 0 1 10.266 21.85", "M3.659 17.516A10 10 0 0 1 13.74 2.152", "M9 12a3 3 0 1 0 6 0a3 3 0 1 0 -6 0Z", "M17 5a2 2 0 1 0 4 0a2 2 0 1 0 -4 0Z", "M3 19a2 2 0 1 0 4 0a2 2 0 1 0 -4 0Z") }
     val Package: ImageVector by lazy { lineIcon("Package", "M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z", "M12 22V12", "M3.29 7 L12 12 L20.71 7", "m7.5 4.27 9 5.15") }
+    val Paintbrush: ImageVector by lazy { lineIcon("Paintbrush", "m14.622 17.897-10.68-2.913", "M18.376 2.622a1 1 0 1 1 3.002 3.002L17.36 9.643a.5.5 0 0 0 0 .707l.944.944a2.41 2.41 0 0 1 0 3.408l-.944.944a.5.5 0 0 1-.707 0L8.354 7.348a.5.5 0 0 1 0-.707l.944-.944a2.41 2.41 0 0 1 3.408 0l.944.944a.5.5 0 0 0 .707 0z", "M9 8c-1.804 2.71-3.97 3.46-6.583 3.948a.507.507 0 0 0-.302.819l7.32 8.883a1 1 0 0 0 1.185.204C12.735 20.405 16 16.792 16 15") }
     val Palette: ImageVector by lazy { lineIcon("Palette", "M12 22a1 1 0 0 1 0-20 10 9 0 0 1 10 9 5 5 0 0 1-5 5h-2.25a1.75 1.75 0 0 0-1.4 2.8l.3.4a1.75 1.75 0 0 1-1.4 2.8z", "M13 6.5a0.5 0.5 0 1 0 1 0a0.5 0.5 0 1 0 -1 0Z", "M17 10.5a0.5 0.5 0 1 0 1 0a0.5 0.5 0 1 0 -1 0Z", "M6 12.5a0.5 0.5 0 1 0 1 0a0.5 0.5 0 1 0 -1 0Z", "M8 7.5a0.5 0.5 0 1 0 1 0a0.5 0.5 0 1 0 -1 0Z") }
     val PanelBottom: ImageVector by lazy { lineIcon("PanelBottom", "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2Z", "M3 15h18") }
+    val PanelLeft: ImageVector by lazy { lineIcon("PanelLeft", "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2Z", "M9 3v18") }
     val PanelTop: ImageVector by lazy { lineIcon("PanelTop", "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2Z", "M3 9h18") }
     val PanelsTop: ImageVector by lazy { lineIcon("PanelsTop", "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2Z", "M3 9h18", "M9 21V9") }
+    val Pause: ImageVector by lazy { lineIcon("Pause", "M15 3h3a1 1 0 0 1 1 1v16a1 1 0 0 1 -1 1h-3a1 1 0 0 1 -1 -1v-16a1 1 0 0 1 1 -1Z", "M6 3h3a1 1 0 0 1 1 1v16a1 1 0 0 1 -1 1h-3a1 1 0 0 1 -1 -1v-16a1 1 0 0 1 1 -1Z") }
     val Pencil: ImageVector by lazy { lineIcon("Pencil", "M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z", "m15 5 4 4") }
     val Pin: ImageVector by lazy { lineIcon("Pin", "M12 17v5", "M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z") }
     val PinOff: ImageVector by lazy { lineIcon("PinOff", "M12 17v5", "M15 9.34V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H7.89", "m2 2 20 20", "M9 9v1.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h11") }
+    val Pipette: ImageVector by lazy { lineIcon("Pipette", "m12 9-8.414 8.414A2 2 0 0 0 3 18.828v1.344a2 2 0 0 1-.586 1.414A2 2 0 0 1 3.828 21h1.344a2 2 0 0 0 1.414-.586L15 12", "m18 9 .4.4a1 1 0 1 1-3 3l-3.8-3.8a1 1 0 1 1 3-3l.4.4 3.4-3.4a1 1 0 1 1 3 3z", "m2 22 .414-.414") }
     val Play: ImageVector by lazy { lineIcon("Play", "M5 5a2 2 0 0 1 3.008-1.728l11.997 6.998a2 2 0 0 1 .003 3.458l-12 7A2 2 0 0 1 5 19z") }
     val Plug: ImageVector by lazy { lineIcon("Plug", "M12 22v-5", "M15 8V2", "M17 8a1 1 0 0 1 1 1v4a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1z", "M9 8V2") }
+    val PlugZap: ImageVector by lazy { lineIcon("PlugZap", "M6.3 20.3a2.4 2.4 0 0 0 3.4 0L12 18l-6-6-2.3 2.3a2.4 2.4 0 0 0 0 3.4Z", "m2 22 3-3", "M7.5 13.5 10 11", "M10.5 16.5 13 14", "m18 3-4 4h6l-4 4") }
     val Plus: ImageVector by lazy { lineIcon("Plus", "M5 12h14", "M12 5v14") }
     val Power: ImageVector by lazy { lineIcon("Power", "M12 2v10", "M18.4 6.6a9 9 0 1 1-12.77.04") }
+    val Puzzle: ImageVector by lazy { lineIcon("Puzzle", "M15.39 4.39a1 1 0 0 0 1.68-.474 2.5 2.5 0 1 1 3.014 3.015 1 1 0 0 0-.474 1.68l1.683 1.682a2.414 2.414 0 0 1 0 3.414L19.61 15.39a1 1 0 0 1-1.68-.474 2.5 2.5 0 1 0-3.014 3.015 1 1 0 0 1 .474 1.68l-1.683 1.682a2.414 2.414 0 0 1-3.414 0L8.61 19.61a1 1 0 0 0-1.68.474 2.5 2.5 0 1 1-3.014-3.015 1 1 0 0 0 .474-1.68l-1.683-1.682a2.414 2.414 0 0 1 0-3.414L4.39 8.61a1 1 0 0 1 1.68.474 2.5 2.5 0 1 0 3.014-3.015 1 1 0 0 1-.474-1.68l1.683-1.682a2.414 2.414 0 0 1 3.414 0z") }
     val QrCode: ImageVector by lazy { lineIcon("QrCode", "M4 3h3a1 1 0 0 1 1 1v3a1 1 0 0 1 -1 1h-3a1 1 0 0 1 -1 -1v-3a1 1 0 0 1 1 -1Z", "M17 3h3a1 1 0 0 1 1 1v3a1 1 0 0 1 -1 1h-3a1 1 0 0 1 -1 -1v-3a1 1 0 0 1 1 -1Z", "M4 16h3a1 1 0 0 1 1 1v3a1 1 0 0 1 -1 1h-3a1 1 0 0 1 -1 -1v-3a1 1 0 0 1 1 -1Z", "M21 16h-3a2 2 0 0 0-2 2v3", "M21 21v.01", "M12 7v3a2 2 0 0 1-2 2H7", "M3 12h.01", "M12 3h.01", "M12 16v.01", "M16 12h1", "M21 12v.01", "M12 21v-1") }
     val RectHorizontal: ImageVector by lazy { lineIcon("RectHorizontal", "M4 6h16a2 2 0 0 1 2 2v8a2 2 0 0 1 -2 2h-16a2 2 0 0 1 -2 -2v-8a2 2 0 0 1 2 -2Z") }
     val RectVertical: ImageVector by lazy { lineIcon("RectVertical", "M8 2h8a2 2 0 0 1 2 2v16a2 2 0 0 1 -2 2h-8a2 2 0 0 1 -2 -2v-16a2 2 0 0 1 2 -2Z") }
@@ -145,26 +206,43 @@ object FuseIcons {
     val Return: ImageVector by lazy { lineIcon("Return", "M20 4v7a4 4 0 0 1-4 4H4", "m9 10-5 5 5 5") }
     val Rocket: ImageVector by lazy { lineIcon("Rocket", "M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5", "M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09", "M9 12a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.4 22.4 0 0 1-4 2z", "M9 12H4s.55-3.03 2-4c1.62-1.08 5 .05 5 .05") }
     val RotateCcw: ImageVector by lazy { lineIcon("RotateCcw", "M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8", "M3 3v5h5") }
+    val RotateCw: ImageVector by lazy { lineIcon("RotateCw", "M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8", "M21 3v5h-5") }
     val Rows: ImageVector by lazy { lineIcon("Rows", "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2Z", "M21 9H3", "M21 15H3") }
     val Save: ImageVector by lazy { lineIcon("Save", "M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z", "M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7", "M7 3v4a1 1 0 0 0 1 1h7") }
     val ScanLine: ImageVector by lazy { lineIcon("ScanLine", "M3 7V5a2 2 0 0 1 2-2h2", "M17 3h2a2 2 0 0 1 2 2v2", "M21 17v2a2 2 0 0 1-2 2h-2", "M7 21H5a2 2 0 0 1-2-2v-2", "M7 12h10") }
     val ScanSearch: ImageVector by lazy { lineIcon("ScanSearch", "M3 7V5a2 2 0 0 1 2-2h2", "M17 3h2a2 2 0 0 1 2 2v2", "M21 17v2a2 2 0 0 1-2 2h-2", "M7 21H5a2 2 0 0 1-2-2v-2", "M9 12a3 3 0 1 0 6 0a3 3 0 1 0 -6 0Z", "m16 16-1.9-1.9") }
     val Search: ImageVector by lazy { lineIcon("Search", "m21 21-4.34-4.34", "M3 11a8 8 0 1 0 16 0a8 8 0 1 0 -16 0Z") }
+    val SearchX: ImageVector by lazy { lineIcon("SearchX", "m13.5 8.5-5 5", "m8.5 8.5 5 5", "M3 11a8 8 0 1 0 16 0a8 8 0 1 0 -16 0Z", "m21 21-4.3-4.3") }
     val Server: ImageVector by lazy { lineIcon("Server", "M4 2h16a2 2 0 0 1 2 2v4a2 2 0 0 1 -2 2h-16a2 2 0 0 1 -2 -2v-4a2 2 0 0 1 2 -2Z", "M4 14h16a2 2 0 0 1 2 2v4a2 2 0 0 1 -2 2h-16a2 2 0 0 1 -2 -2v-4a2 2 0 0 1 2 -2Z", "M6 6L6.01 6", "M6 18L6.01 18") }
     val Settings: ImageVector by lazy { lineIcon("Settings", "M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915", "M9 12a3 3 0 1 0 6 0a3 3 0 1 0 -6 0Z") }
+    val Settings2: ImageVector by lazy { lineIcon("Settings2", "M14 17H5", "M19 7h-9", "M14 17a3 3 0 1 0 6 0a3 3 0 1 0 -6 0Z", "M4 7a3 3 0 1 0 6 0a3 3 0 1 0 -6 0Z") }
     val Shapes: ImageVector by lazy { lineIcon("Shapes", "M8.3 10a.7.7 0 0 1-.626-1.079L11.4 3a.7.7 0 0 1 1.198-.043L16.3 8.9a.7.7 0 0 1-.572 1.1Z", "M4 14h5a1 1 0 0 1 1 1v5a1 1 0 0 1 -1 1h-5a1 1 0 0 1 -1 -1v-5a1 1 0 0 1 1 -1Z", "M14 17.5a3.5 3.5 0 1 0 7 0a3.5 3.5 0 1 0 -7 0Z") }
     val Share: ImageVector by lazy { lineIcon("Share", "M15 5a3 3 0 1 0 6 0a3 3 0 1 0 -6 0Z", "M3 12a3 3 0 1 0 6 0a3 3 0 1 0 -6 0Z", "M15 19a3 3 0 1 0 6 0a3 3 0 1 0 -6 0Z", "M8.59 13.51L15.42 17.49", "M15.41 6.51L8.59 10.49") }
     val ShieldCheck: ImageVector by lazy { lineIcon("ShieldCheck", "M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z", "m9 12 2 2 4-4") }
     val Shift: ImageVector by lazy { lineIcon("Shift", "M9 19a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1v-6a1 1 0 0 1 1-1h3.293a.707.707 0 0 0 .5-1.207l-7.086-7.086a1 1 0 0 0-1.414 0l-7.086 7.086a.707.707 0 0 0 .5 1.207H8a1 1 0 0 1 1 1z") }
+    val Shuffle: ImageVector by lazy { lineIcon("Shuffle", "m18 14 4 4-4 4", "m18 2 4 4-4 4", "M2 18h1.973a4 4 0 0 0 3.3-1.7l5.454-8.6a4 4 0 0 1 3.3-1.7H22", "M2 6h1.972a4 4 0 0 1 3.6 2.2", "M22 18h-6.041a4 4 0 0 1-3.3-1.8l-.359-.45") }
+    val Signal: ImageVector by lazy { lineIcon("Signal", "M2 20h.01", "M7 20v-4", "M12 20v-8", "M17 20V8", "M22 4v16") }
     val Sliders: ImageVector by lazy { lineIcon("Sliders", "M10 5H3", "M12 19H3", "M14 3v4", "M16 17v4", "M21 12h-9", "M21 19h-5", "M21 5h-7", "M8 10v4", "M8 12H3") }
+    val SlidersVertical: ImageVector by lazy { lineIcon("SlidersVertical", "M10 8h4", "M12 21v-9", "M12 8V3", "M17 16h4", "M19 12V3", "M19 21v-5", "M3 14h4", "M5 10V3", "M5 21v-7") }
     val Smartphone: ImageVector by lazy { lineIcon("Smartphone", "M7 2h10a2 2 0 0 1 2 2v16a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-16a2 2 0 0 1 2 -2Z", "M12 18h.01") }
+    val Snowflake: ImageVector by lazy { lineIcon("Snowflake", "m10 20-1.25-2.5L6 18", "M10 4 8.75 6.5 6 6", "m14 20 1.25-2.5L18 18", "m14 4 1.25 2.5L18 6", "m17 21-3-6h-4", "m17 3-3 6 1.5 3", "M2 12h6.5L10 9", "m20 10-1.5 2 1.5 2", "M22 12h-6.5L14 15", "m4 10 1.5 2L4 14", "m7 21 3-6-1.5-3", "m7 3 3 6h4") }
     val Sort: ImageVector by lazy { lineIcon("Sort", "m21 16-4 4-4-4", "M17 20V4", "m3 8 4-4 4 4", "M7 4v16") }
+    val SortAlpha: ImageVector by lazy { lineIcon("SortAlpha", "m3 16 4 4 4-4", "M7 20V4", "M20 8h-5", "M15 10V6.5a2.5 2.5 0 0 1 5 0V10", "M15 14h5l-5 6h5") }
+    val Space: ImageVector by lazy { lineIcon("Space", "M22 17v1c0 .5-.5 1-1 1H3c-.5 0-1-.5-1-1v-1") }
+    val Sparkle: ImageVector by lazy { lineIcon("Sparkle", "M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z") }
     val Sparkles: ImageVector by lazy { lineIcon("Sparkles", "M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z", "M20 2v4", "M22 4h-4", "M2 20a2 2 0 1 0 4 0a2 2 0 1 0 -4 0Z") }
+    val Speaker: ImageVector by lazy { lineIcon("Speaker", "M6 2h12a2 2 0 0 1 2 2v16a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2v-16a2 2 0 0 1 2 -2Z", "M12 6h.01", "M8 14a4 4 0 1 0 8 0a4 4 0 1 0 -8 0Z", "M12 14h.01") }
     val Square: ImageVector by lazy { lineIcon("Square", "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2Z") }
     val SquareCheck: ImageVector by lazy { lineIcon("SquareCheck", "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2Z", "m16 9-5.5 5.5L8 12") }
+    val SquarePen: ImageVector by lazy { lineIcon("SquarePen", "M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7", "M18.375 2.625a1 1 0 0 1 3 3l-9.013 9.014a2 2 0 0 1-.853.505l-2.873.84a.5.5 0 0 1-.62-.62l.84-2.873a2 2 0 0 1 .506-.852z") }
     val SquarePlay: ImageVector by lazy { lineIcon("SquarePlay", "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2Z", "M9 9.003a1 1 0 0 1 1.517-.859l4.997 2.997a1 1 0 0 1 0 1.718l-4.997 2.997A1 1 0 0 1 9 14.996z") }
     val Star: ImageVector by lazy { lineIcon("Star", "M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z") }
     val Sun: ImageVector by lazy { lineIcon("Sun", "M8 12a4 4 0 1 0 8 0a4 4 0 1 0 -8 0Z", "M12 2v2", "M12 20v2", "m4.93 4.93 1.41 1.41", "m17.66 17.66 1.41 1.41", "M2 12h2", "M20 12h2", "m6.34 17.66-1.41 1.41", "m19.07 4.93-1.41 1.41") }
+    val SunDim: ImageVector by lazy { lineIcon("SunDim", "M8 12a4 4 0 1 0 8 0a4 4 0 1 0 -8 0Z", "M12 4h.01", "M20 12h.01", "M12 20h.01", "M4 12h.01", "M17.657 6.343h.01", "M17.657 17.657h.01", "M6.343 17.657h.01", "M6.343 6.343h.01") }
+    val SunMoon: ImageVector by lazy { lineIcon("SunMoon", "M12 2v2", "M14.837 16.385a6 6 0 1 1-7.223-7.222c.624-.147.97.66.715 1.248a4 4 0 0 0 5.26 5.259c.589-.255 1.396.09 1.248.715", "M16 12a4 4 0 0 0-4-4", "m19 5-1.256 1.256", "M20 12h2") }
+    val Sunset: ImageVector by lazy { lineIcon("Sunset", "M12 10V2", "m4.93 10.93 1.41 1.41", "M2 18h2", "M20 18h2", "m19.07 10.93-1.41 1.41", "M22 22H2", "m16 6-4 4-4-4", "M16 18a4 4 0 0 0-8 0") }
+    val Swap: ImageVector by lazy { lineIcon("Swap", "M8 3 4 7l4 4", "M4 7h16", "m16 21 4-4-4-4", "M20 17H4") }
+    val SwatchBook: ImageVector by lazy { lineIcon("SwatchBook", "M11 17a4 4 0 0 1-8 0V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2Z", "M16.7 13H19a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2H7", "M 7 17h.01", "m11 8 2.3-2.3a2.4 2.4 0 0 1 3.404.004L18.6 7.6a2.4 2.4 0 0 1 .026 3.434L9.9 19.8") }
     val Swords: ImageVector by lazy { lineIcon("Swords", "m13 19 6-6", "M14.5 17.5 3.586 6.586A2 2 0 013 5.172V3h2.172a2 2 0 011.414.586L17.5 14.5", "m14.828 6.172 2.586-2.586A2 2 0 0118.828 3H21v2.172a2 2 0 01-.586 1.414l-2.586 2.586", "m16 16 4 4", "m19 21 2-2", "m5 14 4 4", "m5 21-2-2", "M7.5 16.5 4 20") }
     val Tag: ImageVector by lazy { lineIcon("Tag", "M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z", "M7 7.5a0.5 0.5 0 1 0 1 0a0.5 0.5 0 1 0 -1 0Z") }
     val Target: ImageVector by lazy { lineIcon("Target", "M2 12a10 10 0 1 0 20 0a10 10 0 1 0 -20 0Z", "M6 12a6 6 0 1 0 12 0a6 6 0 1 0 -12 0Z", "M10 12a2 2 0 1 0 4 0a2 2 0 1 0 -4 0Z") }
@@ -173,6 +251,8 @@ object FuseIcons {
     val Thermometer: ImageVector by lazy { lineIcon("Thermometer", "M14 4v10.54a4 4 0 1 1-4 0V4a2 2 0 0 1 4 0Z") }
     val Timer: ImageVector by lazy { lineIcon("Timer", "M10 2L14 2", "M12 14L15 11", "M4 14a8 8 0 1 0 16 0a8 8 0 1 0 -16 0Z") }
     val Trash: ImageVector by lazy { lineIcon("Trash", "M10 11v6", "M14 11v6", "M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6", "M3 6h18", "M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2") }
+    val Trees: ImageVector by lazy { lineIcon("Trees", "M10 10v.2A3 3 0 0 1 8.9 16H5a3 3 0 0 1-1-5.8V10a3 3 0 0 1 6 0Z", "M7 16v6", "M13 19v3", "M12 19h8.3a1 1 0 0 0 .7-1.7L18 14h.3a1 1 0 0 0 .7-1.7L16 9h.2a1 1 0 0 0 .8-1.7L13 3l-1.4 1.5") }
+    val TrendingUp: ImageVector by lazy { lineIcon("TrendingUp", "M16 7h6v6", "m22 7-8.5 8.5-5-5L2 17") }
     val Trophy: ImageVector by lazy { lineIcon("Trophy", "M10 14.66V17a1 1 0 0 1-1 1 2 2 0 0 0-2 2v2", "M14 14.66V17a1 1 0 0 0 1 1 2 2 0 0 1 2 2v2", "M17.916 10H19.5A2.5 2.5 0 0 0 22 7.5V5a1 1 0 0 0-1-1h-3", "M4 22h16", "M6 9a6 6 0 0 0 12 0V3a1 1 0 0 0-1-1H7a1 1 0 0 0-1 1z", "M6.084 10H4.5A2.5 2.5 0 0 1 2 7.5V5a1 1 0 0 1 1-1h3") }
     val Tv: ImageVector by lazy { lineIcon("Tv", "m17 2-5 5-5-5", "M4 7h16a2 2 0 0 1 2 2v11a2 2 0 0 1 -2 2h-16a2 2 0 0 1 -2 -2v-11a2 2 0 0 1 2 -2Z") }
     val Type: ImageVector by lazy { lineIcon("Type", "M12 4v16", "M4 7V5a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v2", "M9 20h6") }
@@ -180,14 +260,19 @@ object FuseIcons {
     val Unplug: ImageVector by lazy { lineIcon("Unplug", "m19 5 3-3", "m2 22 3-3", "M6.3 20.3a2.4 2.4 0 0 0 3.4 0L12 18l-6-6-2.3 2.3a2.4 2.4 0 0 0 0 3.4Z", "M7.5 13.5 10 11", "M10.5 16.5 13 14", "m12 6 6 6 2.3-2.3a2.4 2.4 0 0 0 0-3.4l-2.6-2.6a2.4 2.4 0 0 0-3.4 0Z") }
     val Upload: ImageVector by lazy { lineIcon("Upload", "M12 3v12", "m17 8-5-5-5 5", "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4") }
     val User: ImageVector by lazy { lineIcon("User", "M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2", "M8 7a4 4 0 1 0 8 0a4 4 0 1 0 -8 0Z") }
+    val UserRound: ImageVector by lazy { lineIcon("UserRound", "M7 8a5 5 0 1 0 10 0a5 5 0 1 0 -10 0Z", "M20 21a8 8 0 0 0-16 0") }
     val Users: ImageVector by lazy { lineIcon("Users", "M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2", "M16 3.128a4 4 0 0 1 0 7.744", "M22 21v-2a4 4 0 0 0-3-3.87", "M5 7a4 4 0 1 0 8 0a4 4 0 1 0 -8 0Z") }
     val Vibrate: ImageVector by lazy { lineIcon("Vibrate", "m2 8 2 2-2 2 2 2-2 2", "m22 8-2 2 2 2-2 2 2 2", "M9 5h6a1 1 0 0 1 1 1v12a1 1 0 0 1 -1 1h-6a1 1 0 0 1 -1 -1v-12a1 1 0 0 1 1 -1Z") }
+    val Video: ImageVector by lazy { lineIcon("Video", "m16 13 5.223 3.482a.5.5 0 0 0 .777-.416V7.87a.5.5 0 0 0-.752-.432L16 10.5", "M4 6h10a2 2 0 0 1 2 2v8a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-8a2 2 0 0 1 2 -2Z") }
     val Volume: ImageVector by lazy { lineIcon("Volume", "M11 4.702a.705.705 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.705.705 0 0 0 11 19.298z", "M16 9a5 5 0 0 1 0 6", "M19.364 18.364a9 9 0 0 0 0-12.728") }
     val VolumeOff: ImageVector by lazy { lineIcon("VolumeOff", "M11 4.702a.7.7 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.7.7 0 0 0 11 19.298z", "m16.5 14.5 5-5", "m16.5 9.5 5 5") }
     val Wand: ImageVector by lazy { lineIcon("Wand", "m21.64 3.64-1.28-1.28a1.21 1.21 0 0 0-1.72 0L2.36 18.64a1.21 1.21 0 0 0 0 1.72l1.28 1.28a1.2 1.2 0 0 0 1.72 0L21.64 5.36a1.2 1.2 0 0 0 0-1.72", "m14 7 3 3", "M5 6v4", "M19 14v4", "M10 2v2", "M7 8H3", "M21 16h-4", "M11 3H9") }
     val Warning: ImageVector by lazy { lineIcon("Warning", "m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3", "M12 9v4", "M12 17h.01") }
+    val Waves: ImageVector by lazy { lineIcon("Waves", "M2 12q2.5 2 5 0t5 0 5 0 5 0", "M2 19q2.5 2 5 0t5 0 5 0 5 0", "M2 5q2.5 2 5 0t5 0 5 0 5 0") }
     val Wifi: ImageVector by lazy { lineIcon("Wifi", "M12 20h.01", "M2 8.82a15 15 0 0 1 20 0", "M5 12.859a10 10 0 0 1 14 0", "M8.5 16.429a5 5 0 0 1 7 0") }
     val WifiOff: ImageVector by lazy { lineIcon("WifiOff", "M12 20h.01", "M8.5 16.429a5 5 0 0 1 7 0", "M5 12.859a10 10 0 0 1 5.17-2.69", "M19 12.859a10 10 0 0 0-2.007-1.523", "M2 8.82a15 15 0 0 1 4.177-2.643", "M22 8.82a15 15 0 0 0-11.288-3.764", "m2 2 20 20") }
     val Wrench: ImageVector by lazy { lineIcon("Wrench", "M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.106-3.105c.32-.322.863-.22.983.218a6 6 0 0 1-8.259 7.057l-7.91 7.91a1 1 0 0 1-2.999-3l7.91-7.91a6 6 0 0 1 7.057-8.259c.438.12.54.662.219.984z") }
     val Zap: ImageVector by lazy { lineIcon("Zap", "M15.914 4a1.5 1.5 0 00-2.474-1.561l-9 9A1.5 1.5 0 005.5 14h4.002a.5.5 0 01.471.666L8.086 20a1.5 1.5 0 002.475 1.56l9-9A1.5 1.5 0 0018.5 10h-3.997a.5.5 0 01-.472-.667z") }
+    val ZoomIn: ImageVector by lazy { lineIcon("ZoomIn", "M3 11a8 8 0 1 0 16 0a8 8 0 1 0 -16 0Z", "M21 21L16.65 16.65", "M11 8L11 14", "M8 11L14 11") }
+    val ZoomOut: ImageVector by lazy { lineIcon("ZoomOut", "M3 11a8 8 0 1 0 16 0a8 8 0 1 0 -16 0Z", "M21 21L16.65 16.65", "M8 11L14 11") }
 }

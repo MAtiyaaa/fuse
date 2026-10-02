@@ -2,6 +2,7 @@ package io.github.matiyaaa.fuse.ui.designsystem.focus
 
 import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.lazy.LazyListState
@@ -11,9 +12,29 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
-import kotlinx.coroutines.flow.collectLatest
+import androidx.compose.runtime.withFrameNanos
+import androidx.compose.ui.unit.IntSize
+import io.github.matiyaaa.fuse.ui.designsystem.theme.Durations
+import io.github.matiyaaa.fuse.ui.designsystem.theme.Easings
+import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
+import io.github.matiyaaa.fuse.ui.designsystem.theme.FuseMotion
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 
 private val followSpec: AnimationSpec<Float> = spring(dampingRatio = 1f, stiffness = 600f)
+
+/**
+ * How a list glides to keep up with the selection: a critically damped spring, which restarts
+ * smoothly from its current speed when the selection moves again (holding a direction glides
+ * instead of stepping). Under Reduced motion a short tween, so the list still moves (the selection
+ * must stay in view) without a long slide.
+ */
+fun FuseMotion.followScroll(): AnimationSpec<Float> =
+    if (reduced) tween(ms(Durations.FAST), easing = Easings.Standard) else followSpec
 
 /**
  * Keeps [index] at a steady anchor inside a lazy row/column (anchor 0 = aligned with the content
@@ -23,7 +44,10 @@ private val followSpec: AnimationSpec<Float> = spring(dampingRatio = 1f, stiffne
  *
  * [anchor] is where the selected item's leading edge should sit, as a fraction of the viewport.
  */
-suspend fun LazyListState.follow(index: Int, anchor: Float = 0.12f, animate: Boolean = true) {
+suspend fun LazyListState.follow(index: Int, anchor: Float = 0.12f, animate: Boolean = true, spec: AnimationSpec<Float> = followSpec) {
+    // Before the first layout the viewport is empty, so the anchor would come out as 0 and pin the
+    // item to the top, hiding the rows above it (a list opened on its fifth row). Wait for it.
+    if (layoutInfo.viewportSize == IntSize.Zero) snapshotFlow { layoutInfo.viewportSize }.first { it != IntSize.Zero }
     val info = layoutInfo
     val inner = info.viewportSize.let { if (info.orientation == androidx.compose.foundation.gestures.Orientation.Horizontal) it.width else it.height } -
         info.beforeContentPadding - info.afterContentPadding
@@ -36,11 +60,13 @@ suspend fun LazyListState.follow(index: Int, anchor: Float = 0.12f, animate: Boo
     }
     val delta = (item.offset - target).toFloat()
     if (delta == 0f) return
-    if (animate) animateScrollBy(delta, followSpec) else scrollBy(delta)
+    if (animate) animateScrollBy(delta, spec) else scrollBy(delta)
 }
 
 /** Grid version: keeps the selected row near [anchor] of the viewport height. */
-suspend fun LazyGridState.follow(index: Int, anchor: Float = 0.2f, animate: Boolean = true) {
+suspend fun LazyGridState.follow(index: Int, anchor: Float = 0.2f, animate: Boolean = true, spec: AnimationSpec<Float> = followSpec) {
+    // As for lists: measure only once the grid has been laid out.
+    if (layoutInfo.viewportSize == IntSize.Zero) snapshotFlow { layoutInfo.viewportSize }.first { it != IntSize.Zero }
     val info = layoutInfo
     val viewport = info.viewportEndOffset - info.viewportStartOffset
     val item = info.visibleItemsInfo.firstOrNull { it.index == index }
@@ -53,20 +79,26 @@ suspend fun LazyGridState.follow(index: Int, anchor: Float = 0.2f, animate: Bool
     // Only scroll when the row is leaving the comfortable middle band, so moving sideways never scrolls.
     val band = viewport * 0.18f
     if (kotlin.math.abs(delta) < band && item.offset.y >= 0 && item.offset.y + item.size.height <= viewport) return
-    if (animate) animateScrollBy(delta, followSpec) else scrollBy(delta)
+    if (animate) animateScrollBy(delta, spec) else scrollBy(delta)
 }
 
 /**
  * Follows [selected] whenever it changes. The newest [selected] lambda is always used, so a caller
  * may pass a plain value captured at composition (a shelf's column) and still be followed.
+ *
+ * A selection can change in the same moment as the items do (a shelf moved down one place, rows
+ * arriving): each move is measured only once the list has laid that change out, so the list never
+ * follows the place an item used to be. While it waits, the glide already under way carries on, so
+ * holding a direction stays one smooth run.
  */
 @Composable
 fun FollowSelection(state: LazyListState, selected: () -> Int, anchor: Float = 0.12f, animate: Boolean = true, enabled: () -> Boolean = { true }) {
     val current by rememberUpdatedState(selected)
     val on by rememberUpdatedState(enabled)
+    val spec by rememberUpdatedState(Fuse.motion.followScroll())
     LaunchedEffect(state) {
         // Paused while [enabled] is false (an item held by touch), then catches up.
-        snapshotFlow { if (on()) current() else null }.collectLatest { if (it != null) state.follow(it, anchor, animate) }
+        followEach(snapshotFlow { if (on()) current() else null }) { state.follow(it, anchor, animate, spec) }
     }
 }
 
@@ -74,7 +106,31 @@ fun FollowSelection(state: LazyListState, selected: () -> Int, anchor: Float = 0
 fun FollowSelection(state: LazyGridState, selected: () -> Int, anchor: Float = 0.2f, animate: Boolean = true, enabled: () -> Boolean = { true }) {
     val current by rememberUpdatedState(selected)
     val on by rememberUpdatedState(enabled)
+    val spec by rememberUpdatedState(Fuse.motion.followScroll())
     LaunchedEffect(state) {
-        snapshotFlow { if (on()) current() else null }.collectLatest { if (it != null) state.follow(it, anchor, animate) }
+        followEach(snapshotFlow { if (on()) current() else null }) { state.follow(it, anchor, animate, spec) }
+    }
+}
+
+/**
+ * Runs [follow] for each new selection after the layout of the frame it changed in: two frames on,
+ * that frame's measure pass has run. The previous follow keeps going until then and is only
+ * replaced when the new one starts, so following never pauses between steps.
+ */
+private suspend fun followEach(selections: Flow<Int?>, follow: suspend (Int) -> Unit) = coroutineScope {
+    var running: Job? = null
+    selections.collect { index ->
+        val previous = running
+        running = if (index == null) {
+            previous?.cancel()
+            null
+        } else {
+            launch {
+                withFrameNanos {}
+                withFrameNanos {}
+                previous?.cancelAndJoin()
+                follow(index)
+            }
+        }
     }
 }

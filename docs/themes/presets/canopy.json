@@ -1,0 +1,42 @@
+{
+  "fuseTheme": 1,
+  "name": "Canopy",
+  "id": "canopy",
+  "tagline": "Fireflies in a quiet wood",
+  "extends": "canopy",
+  "dark": true,
+  "colors": {
+    "background": "#050C0A",
+    "surface": "#0D1714",
+    "surfaceRaised": "#15221D",
+    "accent": "#E3EE7A",
+    "accentSoft": "#E3EE7A33",
+    "onAccent": "#1A1E04",
+    "text": "#EEF5EC",
+    "textMuted": "#9FB4A6",
+    "focus": "#F4FFC9"
+  },
+  "background": {
+    "style": "fireflies",
+    "intensity": 1.0,
+    "speed": 1.0,
+    "secondary": "#5FCFA0"
+  },
+  "corners": "soft",
+  "focus": "glow",
+  "motion": "standard",
+  "sound": "soft",
+  "glass": {
+    "enabled": false,
+    "blur": 24.0,
+    "opacity": 0.72
+  },
+  "crt": {
+    "enabled": false,
+    "scanlines": 0.35,
+    "bloom": 0.15,
+    "curvature": 0.08,
+    "chromatic": 0.1,
+    "vignette": 0.3
+  }
+}

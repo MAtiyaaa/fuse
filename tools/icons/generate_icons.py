@@ -57,6 +57,41 @@ ICONS = {
     "Shift": "arrow-big-up", "CapsLock": "arrow-big-up-dash", "Backspace": "delete", "Return": "corner-down-left",
     "SquareCheck": "square-check", "LibraryBig": "library-big", "LockKeyhole": "lock-keyhole", "Network": "network",
     "Copy": "copy", "Camera": "camera",
+    # 0.2.0: what the screens of a polished launcher reach for, grouped by use.
+    # Appearance and themes.
+    "Paintbrush": "paintbrush", "SwatchBook": "swatch-book", "Pipette": "pipette", "Droplet": "droplet",
+    "SunMoon": "sun-moon", "MoonStar": "moon-star", "CloudMoon": "cloud-moon", "Flower": "flower",
+    "Trees": "trees", "Waves": "waves", "Mountain": "mountain", "Sunset": "sunset", "Snowflake": "snowflake",
+    "Sparkle": "sparkle", "Blend": "blend", "Orbit": "orbit", "Corners": "square-round-corner",
+    "SunDim": "sun-dim",
+    # Layout.
+    "LayoutList": "layout-list", "PanelLeft": "panel-left", "Columns2": "columns-2",
+    "GalleryThumbnails": "gallery-thumbnails",
+    # Media.
+    "ImagePlay": "image-play", "Video": "video", "MonitorPlay": "monitor-play", "Cast": "cast",
+    "Headphones": "headphones", "Speaker": "speaker", "Mic": "mic", "Pause": "pause", "AudioLines": "audio-lines",
+    "ZoomIn": "zoom-in", "ZoomOut": "zoom-out",
+    # Status.
+    "CircleHelp": "circle-help", "CircleSlash": "circle-slash", "Signal": "signal", "BatteryFull": "battery-full",
+    "BatteryMedium": "battery-medium", "BatteryWarning": "battery-warning", "PlugZap": "plug-zap",
+    "CloudOff": "cloud-off", "SearchX": "search-x", "LockOpen": "lock-open",
+    # Actions.
+    "RotateCw": "rotate-cw", "Shuffle": "shuffle", "SlidersVertical": "sliders-vertical", "Settings2": "settings-2",
+    "ListChecks": "list-checks", "CheckCheck": "check-check", "SquarePen": "square-pen", "Eraser": "eraser",
+    "CirclePlus": "circle-plus", "HeartOff": "heart-off", "SortAlpha": "arrow-down-a-z", "Swap": "arrow-left-right",
+    "FileUp": "file-up", "FileDown": "file-down", "FileText": "file-text",
+    # Navigation.
+    "ChevronsLeft": "chevrons-left", "ChevronsRight": "chevrons-right", "ChevronsUp": "chevrons-up",
+    "ChevronsDown": "chevrons-down", "ArrowUp": "arrow-up", "ArrowDown": "arrow-down",
+    "MoveVertical": "move-vertical", "CornerUpLeft": "corner-up-left", "DPad": "gamepad-directional",
+    # Time and people.
+    "CalendarClock": "calendar-clock", "Clock3": "clock-3", "UserRound": "user-round", "CircleUser": "circle-user",
+    # Play, stats and help.
+    "Crown": "crown", "Gem": "gem", "Gift": "gift", "Ghost": "ghost", "Puzzle": "puzzle", "Dice": "dice-5",
+    "ChartLine": "chart-line", "ChartPie": "chart-pie", "TrendingUp": "trending-up", "Hash": "hash", "Earth": "earth",
+    "LifeBuoy": "life-buoy", "BookOpen": "book-open",
+    # Keyboard.
+    "Space": "space",
 }
 
 NUM = r"-?(?:\d+\.?\d*|\.\d+)(?:e-?\d+)?"

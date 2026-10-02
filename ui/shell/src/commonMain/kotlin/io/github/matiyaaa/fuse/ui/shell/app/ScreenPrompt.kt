@@ -4,8 +4,6 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -17,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -33,9 +32,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import io.github.matiyaaa.fuse.model.LaunchDisplay
@@ -44,14 +46,19 @@ import io.github.matiyaaa.fuse.ui.designsystem.components.FText
 import io.github.matiyaaa.fuse.ui.designsystem.components.Overlay
 import io.github.matiyaaa.fuse.ui.designsystem.components.OverlayEdge
 import io.github.matiyaaa.fuse.ui.designsystem.components.Panel
+import io.github.matiyaaa.fuse.ui.designsystem.effects.fuseClickable
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
 import io.github.matiyaaa.fuse.ui.designsystem.input.InputLayer
 import io.github.matiyaaa.fuse.ui.designsystem.input.LayerPriority
 import io.github.matiyaaa.fuse.ui.designsystem.input.NavResult
 import io.github.matiyaaa.fuse.ui.designsystem.media.Artwork
+import io.github.matiyaaa.fuse.ui.designsystem.shape.SquircleShape
 import io.github.matiyaaa.fuse.ui.designsystem.sound.SoundCue
+import io.github.matiyaaa.fuse.ui.designsystem.theme.Durations
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
+import io.github.matiyaaa.fuse.ui.designsystem.theme.Radius
+import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
 
 /**
@@ -135,7 +142,7 @@ internal fun ScreenPromptOverlay(app: AppState) {
                 Column(Modifier.padding(pad)) {
                     Header(s, compact)
                     Spacer(Modifier.height(if (compact) Space.m else Space.l))
-                    Row(horizontalArrangement = Arrangement.spacedBy(Space.l)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(if (compact) Space.m else Space.l)) {
                         screens.forEachIndexed { i, d ->
                             ScreenCard(
                                 display = d,
@@ -151,7 +158,7 @@ internal fun ScreenPromptOverlay(app: AppState) {
                         }
                     }
                     Spacer(Modifier.height(if (compact) Space.m else Space.l))
-                    Row(horizontalArrangement = Arrangement.spacedBy(Space.m)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(if (compact) Space.m else Space.l)) {
                         memories.forEachIndexed { i, m ->
                             Tick(
                                 label = if (m == ScreenMemory.ITEM) s.itemLabel else s.groupLabel,
@@ -167,7 +174,7 @@ internal fun ScreenPromptOverlay(app: AppState) {
                         "Leave both unticked for just this time. Settings, Displays changes it later.",
                         Fuse.type.caption,
                         color = Fuse.colors.textFaint,
-                        maxLines = 1,
+                        maxLines = 2,
                     )
                 }
             }
@@ -175,22 +182,34 @@ internal fun ScreenPromptOverlay(app: AppState) {
     }
 }
 
+/** What is asked and about what: the game's art (or a dual-screen mark), the question, and its name. */
 @Composable
 private fun Header(s: ScreenPromptSpec, compact: Boolean) {
     val c = Fuse.colors
     Row(verticalAlignment = Alignment.CenterVertically) {
-        if (s.art != null) {
-            Artwork(s.art, Modifier.size(if (compact) 40.dp else 48.dp).clip(RoundedCornerShape(10.dp)).background(c.surfaceRaised))
-            Spacer(Modifier.width(Space.m))
+        val well = SquircleShape.fraction(Fuse.geometry.tileCornerFraction.coerceAtLeast(0.12f) + 0.06f)
+        Box(
+            Modifier
+                .size(if (compact) Size.thumb else Size.thumbL)
+                .clip(well)
+                .background(c.text.copy(alpha = if (c.isDark) 0.08f else 0.06f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (s.art != null) Artwork(s.art, Modifier.fillMaxSize()) else FuseIcon(FuseIcons.DualScreen, size = Size.iconL, tint = c.text)
         }
-        Column {
-            FText("${s.verb.uppercase()} ON WHICH SCREEN?", Fuse.type.caption, color = c.accent, maxLines = 1)
-            FText(s.title, if (compact) Fuse.type.titleSmall else Fuse.type.title, maxLines = 1)
+        Spacer(Modifier.width(Space.m))
+        Column(verticalArrangement = Arrangement.spacedBy(Space.xxs)) {
+            FText("${s.verb} on which screen?", if (compact) Fuse.type.titleSmall else Fuse.type.title, maxLines = 1)
+            FText(s.title, Fuse.type.body, color = c.textMuted, maxLines = 1)
         }
     }
 }
 
-/** One screen to choose: the handheld with that screen lit, its name and what it is. */
+/**
+ * One screen to choose: the handheld with that screen lit, its name and what it is. Focused, it
+ * lifts onto the raised surface inside a focus ring; the screen last chosen keeps an accent ring
+ * while focus is on the ticks below.
+ */
 @Composable
 private fun ScreenCard(
     display: LaunchDisplay,
@@ -205,30 +224,38 @@ private fun ScreenCard(
     onClick: () -> Unit,
 ) {
     val c = Fuse.colors
-    val lift by animateFloatAsState(if (focused) 1f else 0f, Fuse.motion.focusSpring(), label = "screenCard")
-    val edge by animateColorAsState(
+    val motion = Fuse.motion
+    val lift by animateFloatAsState(if (focused) 1f else 0f, motion.focusSpring(), label = "screenCard")
+    val ring by animateColorAsState(
         when {
             focused -> c.focus
-            marked -> c.accent.copy(alpha = 0.55f)
+            marked -> c.accent.copy(alpha = 0.6f)
             else -> c.hairline
         },
+        motion.tween(Durations.FAST),
         label = "screenCardEdge",
     )
-    val shape = RoundedCornerShape(Fuse.geometry.panel)
+    val fill by animateColorAsState(if (focused) c.surfaceRaised else c.text.copy(alpha = if (c.isDark) 0.04f else 0.03f), motion.tween(Durations.FAST), label = "screenCardFill")
+    val shape = RoundedCornerShape(Fuse.geometry.control)
     Column(
         modifier
-            .scale(1f + 0.02f * lift)
+            .graphicsLayer {
+                val s = 1f + (motion.focusScale - 1f) * 0.3f * lift
+                scaleX = s
+                scaleY = s
+            }
             .clip(shape)
-            .background(if (focused) c.surfaceRaised else c.surface.copy(alpha = 0.6f))
-            .border(if (focused || marked) 2.dp else 1.dp, edge, shape)
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick)
+            .background(fill)
+            .border(if (focused || marked) Size.focusStroke else Size.stroke, ring, shape)
+            .fuseClickable(shape = shape, scale = false, role = Role.Button, onClickLabel = screenName(display), onClick = onClick)
+            .semantics { selected = focused }
             .padding(vertical = if (compact) Space.m else Space.l, horizontal = Space.m),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Handheld(lit = display, art = art, accent = accent, width = deviceWidth, dim = !focused)
         Spacer(Modifier.height(if (compact) Space.s else Space.m))
         Row(verticalAlignment = Alignment.CenterVertically) {
-            FuseIcon(screenIcon(display), size = 18.dp, tint = if (focused) c.accent else c.textMuted)
+            FuseIcon(screenIcon(display), size = Size.iconS, tint = if (focused) c.accent else c.textMuted)
             Spacer(Modifier.width(Space.s))
             FText(screenName(display), Fuse.type.titleSmall, maxLines = 1)
         }
@@ -238,6 +265,7 @@ private fun ScreenCard(
                 Fuse.type.caption,
                 color = c.textMuted,
                 maxLines = 1,
+                modifier = Modifier.padding(top = Space.xxs),
             )
         }
     }
@@ -255,7 +283,7 @@ private fun Handheld(lit: LaunchDisplay, art: Any?, accent: Color, width: Dp, di
     val corner = RoundedCornerShape(width * 0.08f)
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Box(
-            Modifier.width(width).aspectRatio(16f / 10f).clip(corner).background(shell).border(1.dp, outline, corner)
+            Modifier.width(width).aspectRatio(16f / 10f).clip(corner).background(shell).border(Size.stroke, outline, corner)
                 .padding(width * 0.05f),
         ) {
             Screen(on = lit == LaunchDisplay.PRIMARY, art = art, accent = accent, modifier = Modifier.fillMaxSize())
@@ -263,7 +291,7 @@ private fun Handheld(lit: LaunchDisplay, art: Any?, accent: Color, width: Dp, di
         Row(Modifier.width(width * 0.72f).height(width * 0.035f), horizontalArrangement = Arrangement.SpaceBetween) {
             repeat(2) { Box(Modifier.width(width * 0.16f).fillMaxHeight().background(outline, RoundedCornerShape(50))) }
         }
-        Box(Modifier.width(width).aspectRatio(16f / 10.5f).clip(corner).background(shell).border(1.dp, outline, corner)) {
+        Box(Modifier.width(width).aspectRatio(16f / 10.5f).clip(corner).background(shell).border(Size.stroke, outline, corner)) {
             Screen(
                 on = lit == LaunchDisplay.SECONDARY, art = art, accent = accent,
                 modifier = Modifier.align(Alignment.Center).fillMaxHeight(0.78f).aspectRatio(1.05f),
@@ -274,25 +302,31 @@ private fun Handheld(lit: LaunchDisplay, art: Any?, accent: Color, width: Dp, di
     }
 }
 
+/** One screen of the handheld: the game lit on it, or dark glass. */
 @Composable
 private fun Screen(on: Boolean, art: Any?, accent: Color, modifier: Modifier) {
-    val glass = RoundedCornerShape(4.dp)
-    val off = Color(0xFF07090D)
+    val c = Fuse.colors
+    val glass = RoundedCornerShape(Radius.xs)
     Box(
-        modifier.clip(glass).background(
-            if (on) Brush.linearGradient(listOf(accent, accent.copy(alpha = 0.45f), off)) else Brush.linearGradient(listOf(off, off)),
-        ),
+        modifier
+            .clip(glass)
+            .then(
+                if (on) {
+                    Modifier.background(Brush.linearGradient(listOf(accent, accent.copy(alpha = 0.45f), c.surfaceDim)))
+                } else {
+                    Modifier.background(c.surfaceDim).border(Size.stroke, c.hairline, glass)
+                },
+            ),
     ) {
         if (on && art != null) Artwork(art, Modifier.fillMaxSize())
-        if (!on) Box(Modifier.fillMaxSize().border(1.dp, Color.White.copy(alpha = 0.06f), glass))
     }
 }
 
 @Composable
 private fun DPad(color: Color, modifier: Modifier) {
     Box(modifier) {
-        Box(Modifier.align(Alignment.Center).fillMaxWidth().fillMaxHeight(0.32f).background(color, RoundedCornerShape(2.dp)))
-        Box(Modifier.align(Alignment.Center).fillMaxHeight().fillMaxWidth(0.32f).background(color, RoundedCornerShape(2.dp)))
+        Box(Modifier.align(Alignment.Center).fillMaxWidth().fillMaxHeight(0.32f).background(color, RoundedCornerShape(Space.xxs)))
+        Box(Modifier.align(Alignment.Center).fillMaxHeight().fillMaxWidth(0.32f).background(color, RoundedCornerShape(Space.xxs)))
     }
 }
 
@@ -305,23 +339,40 @@ private fun FaceButtons(color: Color, modifier: Modifier) {
     }
 }
 
-/** A tick box with its label; ticking one unticks the other. */
+/**
+ * A tick box with its label; ticking one unticks the other. The box fills with the accent and a
+ * check when ticked, and is a quiet outline when not, like the choice marks in menus.
+ */
 @Composable
 private fun Tick(label: String, checked: Boolean, focused: Boolean, modifier: Modifier, onClick: () -> Unit) {
     val c = Fuse.colors
+    val motion = Fuse.motion
     val shape = RoundedCornerShape(Fuse.geometry.control)
-    val edge by animateColorAsState(if (focused) c.focus else c.hairline, label = "tickEdge")
+    val ring by animateColorAsState(if (focused) c.focus else c.hairline, motion.tween(Durations.FAST), label = "tickEdge")
+    val box by animateColorAsState(if (checked) c.accent else Color.Transparent, motion.tween(Durations.FAST), label = "tickBox")
     Row(
         modifier
+            .heightIn(min = Size.touch)
             .clip(shape)
             .background(if (focused) c.surfaceRaised else Color.Transparent)
-            .border(if (focused) 2.dp else 1.dp, edge, shape)
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick)
+            .border(if (focused) Size.focusStroke else Size.stroke, ring, shape)
+            .fuseClickable(shape = shape, scale = false, role = Role.Checkbox, onClick = onClick)
+            .semantics { selected = focused }
             .padding(horizontal = Space.m, vertical = Space.s),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        FuseIcon(if (checked) FuseIcons.SquareCheck else FuseIcons.Square, size = 20.dp, tint = if (checked) c.accent else c.textMuted)
-        Spacer(Modifier.width(Space.s))
+        val mark = RoundedCornerShape(Radius.xs)
+        Box(
+            Modifier
+                .size(Size.iconM)
+                .clip(mark)
+                .background(box)
+                .then(if (checked) Modifier else Modifier.border(Size.focusStroke * 0.75f, c.textMuted, mark)),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (checked) FuseIcon(FuseIcons.Check, size = Size.iconXS, tint = c.onAccent)
+        }
+        Spacer(Modifier.width(Space.m))
         FText(label, Fuse.type.label, color = if (checked || focused) c.text else c.textMuted, maxLines = 1)
     }
 }

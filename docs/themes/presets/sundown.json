@@ -1,0 +1,42 @@
+{
+  "fuseTheme": 1,
+  "name": "Sundown",
+  "id": "sundown",
+  "tagline": "A neon sun over an endless grid",
+  "extends": "sundown",
+  "dark": true,
+  "colors": {
+    "background": "#0B0716",
+    "surface": "#160F26",
+    "surfaceRaised": "#211736",
+    "accent": "#FF4FA3",
+    "accentSoft": "#FF4FA333",
+    "onAccent": "#2A0216",
+    "text": "#FBF2FF",
+    "textMuted": "#B9A8CF",
+    "focus": "#7DF3FF"
+  },
+  "background": {
+    "style": "horizon",
+    "intensity": 1.0,
+    "speed": 1.0,
+    "secondary": "#3EE6FF"
+  },
+  "corners": "sharp",
+  "focus": "ring",
+  "motion": "enhanced",
+  "sound": "click",
+  "glass": {
+    "enabled": false,
+    "blur": 24.0,
+    "opacity": 0.72
+  },
+  "crt": {
+    "enabled": false,
+    "scanlines": 0.35,
+    "bloom": 0.15,
+    "curvature": 0.08,
+    "chromatic": 0.1,
+    "vignette": 0.3
+  }
+}

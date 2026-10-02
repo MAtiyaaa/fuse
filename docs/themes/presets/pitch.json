@@ -1,0 +1,41 @@
+{
+  "fuseTheme": 1,
+  "name": "Pitch",
+  "id": "pitch",
+  "tagline": "True black, kind to the battery",
+  "extends": "pitch",
+  "dark": true,
+  "colors": {
+    "background": "#000000",
+    "surface": "#0D0D0F",
+    "surfaceRaised": "#17171A",
+    "accent": "#EDEDED",
+    "accentSoft": "#EDEDED26",
+    "onAccent": "#0A0A0A",
+    "text": "#E8E8EA",
+    "textMuted": "#8E8E95",
+    "focus": "#FFFFFF"
+  },
+  "background": {
+    "style": "solid",
+    "intensity": 0.0,
+    "speed": 0.0
+  },
+  "corners": "soft",
+  "focus": "ring",
+  "motion": "minimal",
+  "sound": "soft",
+  "glass": {
+    "enabled": false,
+    "blur": 24.0,
+    "opacity": 0.72
+  },
+  "crt": {
+    "enabled": false,
+    "scanlines": 0.35,
+    "bloom": 0.15,
+    "curvature": 0.08,
+    "chromatic": 0.1,
+    "vignette": 0.3
+  }
+}

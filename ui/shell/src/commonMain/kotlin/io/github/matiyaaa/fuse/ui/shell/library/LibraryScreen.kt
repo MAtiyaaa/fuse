@@ -1,12 +1,11 @@
 package io.github.matiyaaa.fuse.ui.shell.library
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
-import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -15,14 +14,17 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListLayoutInfo
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyGridState
@@ -40,31 +42,50 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.lerp
 import io.github.matiyaaa.fuse.model.CollectionId
+import io.github.matiyaaa.fuse.model.CollectionKind
+import io.github.matiyaaa.fuse.model.GameArtStyle
 import io.github.matiyaaa.fuse.model.GameCollection
 import io.github.matiyaaa.fuse.model.GameId
 import io.github.matiyaaa.fuse.model.LibraryLayout
 import io.github.matiyaaa.fuse.model.NavAction
 import io.github.matiyaaa.fuse.model.PlatformId
+import io.github.matiyaaa.fuse.model.ScanScope
 import io.github.matiyaaa.fuse.model.ScopedSettings
 import io.github.matiyaaa.fuse.model.SortOrder
-import io.github.matiyaaa.fuse.ui.designsystem.components.Chip
+import io.github.matiyaaa.fuse.ui.designsystem.components.ButtonKind
+import io.github.matiyaaa.fuse.ui.designsystem.components.EmptyState
 import io.github.matiyaaa.fuse.ui.designsystem.components.FText
+import io.github.matiyaaa.fuse.ui.designsystem.components.FuseButton
 import io.github.matiyaaa.fuse.ui.designsystem.components.Hint
 import io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction
-import io.github.matiyaaa.fuse.ui.designsystem.components.Spinner
 import io.github.matiyaaa.fuse.ui.designsystem.components.Tile
 import io.github.matiyaaa.fuse.ui.designsystem.components.Trailing
 import io.github.matiyaaa.fuse.ui.designsystem.components.fadingEdges
+import io.github.matiyaaa.fuse.ui.designsystem.effects.Reveal
+import io.github.matiyaaa.fuse.ui.designsystem.effects.fuseClickable
+import io.github.matiyaaa.fuse.ui.designsystem.effects.rememberReveal
+import io.github.matiyaaa.fuse.ui.designsystem.effects.reveal
+import io.github.matiyaaa.fuse.ui.designsystem.effects.skeleton
 import io.github.matiyaaa.fuse.ui.designsystem.focus.FollowSelection
 import io.github.matiyaaa.fuse.ui.designsystem.focus.GridSelection
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
@@ -78,11 +99,14 @@ import io.github.matiyaaa.fuse.ui.designsystem.media.GeneratedArt
 import io.github.matiyaaa.fuse.ui.designsystem.media.HeroSource
 import io.github.matiyaaa.fuse.ui.designsystem.media.PrefetchArt
 import io.github.matiyaaa.fuse.ui.designsystem.media.heroDecodePx
+import io.github.matiyaaa.fuse.ui.designsystem.shape.PillShape
+import io.github.matiyaaa.fuse.ui.designsystem.shape.SquircleShape
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Aspect
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Durations
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
+import io.github.matiyaaa.fuse.ui.designsystem.theme.TileMetrics
 import io.github.matiyaaa.fuse.ui.designsystem.theme.toColor
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec
@@ -93,7 +117,6 @@ import io.github.matiyaaa.fuse.ui.shell.app.Route
 import io.github.matiyaaa.fuse.ui.shell.app.activateGame
 import io.github.matiyaaa.fuse.ui.shell.app.gameConfirmLabel
 import io.github.matiyaaa.fuse.ui.shell.app.gameMenu
-import io.github.matiyaaa.fuse.ui.shell.app.play
 import io.github.matiyaaa.fuse.ui.shell.app.rememberPageState
 import io.github.matiyaaa.fuse.ui.shell.app.rememberRouteState
 import io.github.matiyaaa.fuse.ui.shell.app.rememberSystems
@@ -102,18 +125,30 @@ import io.github.matiyaaa.fuse.ui.shell.app.roomArt
 import io.github.matiyaaa.fuse.ui.shell.collections.addGamesPicker
 import io.github.matiyaaa.fuse.ui.shell.components.GameCoverTile
 import io.github.matiyaaa.fuse.ui.shell.components.GameIconTile
-import io.github.matiyaaa.fuse.ui.shell.components.LocalTileMetrics
-import io.github.matiyaaa.fuse.ui.shell.components.tileSize
+import io.github.matiyaaa.fuse.ui.shell.components.GameMarksInline
+import io.github.matiyaaa.fuse.ui.shell.components.GameTileSkeleton
+import io.github.matiyaaa.fuse.ui.shell.components.baseForWidth
 import io.github.matiyaaa.fuse.ui.shell.components.LocalGameArt
+import io.github.matiyaaa.fuse.ui.shell.components.LocalTileMetrics
+import io.github.matiyaaa.fuse.ui.shell.components.LocalTileShowsFavourite
 import io.github.matiyaaa.fuse.ui.shell.components.LocalTileShowsSystem
+import io.github.matiyaaa.fuse.ui.shell.components.PlatformTag
 import io.github.matiyaaa.fuse.ui.shell.components.SquareGameArt
 import io.github.matiyaaa.fuse.ui.shell.components.Stage
+import io.github.matiyaaa.fuse.ui.shell.components.StageLine
+import io.github.matiyaaa.fuse.ui.shell.components.cornerFraction
+import io.github.matiyaaa.fuse.ui.shell.components.coverCornerFraction
+import io.github.matiyaaa.fuse.ui.shell.components.gamesText
 import io.github.matiyaaa.fuse.ui.shell.components.playtimeText
 import io.github.matiyaaa.fuse.ui.shell.components.stage
+import io.github.matiyaaa.fuse.ui.shell.components.tileSize
 import io.github.matiyaaa.fuse.ui.shell.store.GameCard
 import io.github.matiyaaa.fuse.ui.shell.store.GameQuery
 import io.github.matiyaaa.fuse.ui.shell.store.GameSet
 import io.github.matiyaaa.fuse.ui.shell.systems.SystemShowcase
+import kotlin.math.abs
+import kotlin.math.sqrt
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
@@ -139,8 +174,11 @@ enum class LibrarySegment(val label: String, val set: GameSet) {
     REMOVED("Removed", GameSet.REMOVED),
 }
 
-/** The buttons at the end of the Library header. */
-enum class LibraryButton { COLLECTIONS, ADD_GAMES, SYSTEM, SORT, VIEW }
+/**
+ * The buttons at the end of the Library header. [EMULATOR] only shows on a system that has no
+ * emulator, and leads to its settings.
+ */
+enum class LibraryButton { COLLECTIONS, ADD_GAMES, EMULATOR, SYSTEM, SORT, VIEW }
 
 /** Remembered per library view: which game was selected (by id, so re-sorting keeps it), and where focus was. */
 @Stable
@@ -165,6 +203,9 @@ class LibraryViewState {
     }
 }
 
+/** What an empty view offers to do about it: one action, on the confirm button and as a button. */
+private class EmptyAction(val label: String, val icon: ImageVector, val run: () -> Unit)
+
 @Composable
 fun LibraryScreen(app: AppState, scope: LibraryScope) {
     val store = app.store
@@ -182,6 +223,8 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
         rememberPageState(app.navigator, key) { LibraryViewState() }
     }
     val sort = prefs.librarySort
+    val platformId = (scope as? LibraryScope.OfPlatform)?.platform
+    val systemCard = platforms.firstOrNull { it.platform.id == platformId }
 
     // How many games the extra views hold, so they only show when there is something in them.
     val extraCounts by remember(scope) {
@@ -195,17 +238,34 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
             ) { it.toMap() }
         }
     }.collectAsState(initial = emptyMap())
+    // How many games each main view holds within the system filter, for the counts on the tabs.
+    val viewCounts by remember(scope, state.system, state.showHidden) {
+        if (scope != LibraryScope.All) {
+            flowOf(emptyMap())
+        } else {
+            val base = store.library.games(GameQuery(platform = state.system))
+            val all = if (state.showHidden) store.library.games(GameQuery(platform = state.system, includeHidden = true)) else base
+            combine(base, all) { b, a ->
+                mapOf(
+                    LibrarySegment.ALL to a.size,
+                    LibrarySegment.FAVORITES to b.count { it.favorite },
+                    LibrarySegment.RECENT to b.count { it.lastPlayedAt != null },
+                )
+            }
+        }
+    }.collectAsState(initial = emptyMap())
     val segments = if (scope != LibraryScope.All) emptyList() else LibrarySegment.entries.filter { s ->
         s.set == GameSet.LIBRARY || (extraCounts[s] ?: 0) > 0 || state.segment == s
     }
     val collectionsOn = prefs.collectionsEnabled
     val allCollections by store.collections.collections.collectAsState()
+    val collection = (scope as? LibraryScope.OfCollection)?.let { s -> allCollections.firstOrNull { it.id == s.collection } }
     // A collection of the user's own (not a series Fuse keeps up to date) can be edited here.
-    val ownCollection = (scope as? LibraryScope.OfCollection)?.let { s -> allCollections.firstOrNull { it.id == s.collection } }
-        ?.takeIf { it.kind != io.github.matiyaaa.fuse.model.CollectionKind.SERIES }
+    val ownCollection = collection?.takeIf { it.kind != CollectionKind.SERIES }
     val buttons = buildList {
         if (scope == LibraryScope.All && collectionsOn) add(LibraryButton.COLLECTIONS)
         if (ownCollection != null) add(LibraryButton.ADD_GAMES)
+        if (systemCard != null && !systemCard.emulatorInstalled) add(LibraryButton.EMULATOR)
         if (scope == LibraryScope.All) add(LibraryButton.SYSTEM)
         add(LibraryButton.SORT)
         add(LibraryButton.VIEW)
@@ -226,7 +286,6 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
     val gamesFlow = remember(query) { store.library.games(query) }
     val games by gamesFlow.collectAsState(initial = null)
 
-    val platformId = (scope as? LibraryScope.OfPlatform)?.platform
     val layoutFlow = remember(platformId) { store.settings.observe(ScopedSettings.Layout, platformId, null) }
     val resolvedLayout by layoutFlow.collectAsState(initial = null)
     val layout = state.layoutOverride ?: resolvedLayout?.value?.takeIf { resolvedLayout?.isDefault == false } ?: prefs.defaultLayout
@@ -251,9 +310,8 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
         }
     }
     PrefetchArt(tileArt, state.grid.index, size = LocalTileMetrics.current.icon * 1.4f)
-    PrefetchArt(remember(list) { list.orEmpty().map { it.art.logo } }, state.grid.index, size = 360.dp)
+    PrefetchArt(remember(list) { list.orEmpty().map { it.art.logo } }, state.grid.index, size = LOGO_PREFETCH)
     val special = scope == LibraryScope.All && segment.set != GameSet.LIBRARY
-    val systemCard = platforms.firstOrNull { it.platform.id == platformId }
     // A game with its own background image shows it; any other game shows its system's background,
     // so a system's page keeps one room while moving between its games.
     val systems = rememberSystems(app)
@@ -262,14 +320,43 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
     val heroDp = with(androidx.compose.ui.platform.LocalDensity.current) { Fuse.quality.heroDecodePx.toDp() }
     PrefetchArt(remember(list, systems) { list.orEmpty().map { roomArt(it.art, systems[it.platformId]) } }, state.grid.index, size = heroDp, limit = 2)
     val gameSystem = selectedCard?.let { systems[it.platformId] }
-    LaunchedEffect(selectedCard?.id, selectedCard?.art, special, systemCard?.art, gameSystem?.art) {
+
+    fun choose(s: LibrarySegment) {
+        if (state.segment != s) {
+            state.segment = s
+            state.grid.index = 0
+            state.selectedId = null
+        }
+    }
+
+    // An empty view offers the one thing most likely to help.
+    val emptyAction: EmptyAction? = when {
+        list == null || list.isNotEmpty() -> null
+        scope == LibraryScope.All && state.system != null -> EmptyAction("Show all systems", FuseIcons.Filter) {
+            state.system = null
+            state.grid.index = 0
+            state.selectedId = null
+        }
+        scope == LibraryScope.All && segment != LibrarySegment.ALL -> EmptyAction("Show all games", FuseIcons.Library) {
+            choose(LibrarySegment.ALL)
+        }
+        scope == LibraryScope.All -> EmptyAction("Add a game folder", FuseIcons.FolderPlus) { app.go(Route.Settings("library")) }
+        ownCollection != null -> EmptyAction("Add games", FuseIcons.ListPlus) { app.addGamesPicker(ownCollection.id, ownCollection.name) }
+        systemCard != null -> EmptyAction("Scan again", FuseIcons.Refresh) {
+            store.sources.rescan(ScanScope.PLATFORM, systemCard.platform.id)
+            app.toasts.show("Rescanning ${systemCard.platform.shortName}")
+        }
+        else -> null
+    }
+
+    LaunchedEffect(selectedCard?.id, selectedCard?.art, special, systemCard?.art, gameSystem?.art, emptyAction?.label) {
         app.hero = when {
             selectedCard != null -> selectedCard.room(gameSystem)
             systemCard != null -> HeroSource(systemCard.platform.id, systemCard.art.hero, systemCard.platform.accent.toColor())
             else -> null
         }
         app.hints = when {
-            selectedCard == null -> emptyList()
+            selectedCard == null -> listOfNotNull(emptyAction?.let { Hint(HintButton.CONFIRM, it.label) })
             special -> listOf(Hint(HintButton.CONFIRM, "Choose"), Hint(HintButton.BACK, "Back"))
             else -> listOf(Hint(HintButton.CONFIRM, app.gameConfirmLabel), Hint(HintButton.OPTIONS, "Options"), Hint(HintButton.SEARCH, "Search"))
         }
@@ -296,17 +383,10 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
         when (button) {
             LibraryButton.COLLECTIONS -> app.go(Route.Collections)
             LibraryButton.ADD_GAMES -> ownCollection?.let { app.addGamesPicker(it.id, it.name) }
+            LibraryButton.EMULATOR -> platformId?.let { app.go(Route.PlatformSettings(it)) }
             LibraryButton.SYSTEM -> app.choice = systemPicker(app, state, platforms)
             LibraryButton.SORT -> app.choice = sortPicker(app, sort)
             LibraryButton.VIEW -> app.choice = layoutPicker(app, state, platformId, layout)
-        }
-    }
-
-    fun choose(s: LibrarySegment) {
-        if (state.segment != s) {
-            state.segment = s
-            state.grid.index = 0
-            state.selectedId = null
         }
     }
 
@@ -372,11 +452,11 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
             }
             NavAction.SELECT -> {
                 when {
-                    selectedCard == null -> Unit
+                    selectedCard == null -> emptyAction?.run?.invoke()
                     special -> options(selectedCard)
                     else -> app.activateGame(selectedCard)
                 }
-                if (selectedCard != null) NavResult.ACTIVATED else NavResult.BLOCKED
+                if (selectedCard != null || emptyAction != null) NavResult.ACTIVATED else NavResult.BLOCKED
             }
             NavAction.CONTEXT -> {
                 if (selectedCard != null) options(selectedCard)
@@ -384,6 +464,18 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
                 NavResult.ACTIVATED
             }
             else -> NavResult.IGNORED
+        }
+    }
+
+    // Entering the screen reveals its header once; the content reveals again for each new view.
+    val entry = rememberReveal(key)
+    val reveal = rememberReveal(key, segment, state.system, layout)
+    // A view that takes a moment to load shows its skeleton; one that is quick never flashes it.
+    val showSkeleton by produceState(false, list == null) {
+        value = false
+        if (list == null) {
+            delay(SKELETON_DELAY_MS)
+            value = true
         }
     }
 
@@ -401,7 +493,7 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
                 else -> state.pick(i, cards)
             }
         }
-        val compactHeader = maxH < 560.dp
+        val compactHeader = maxH < SHORT_SCREEN
         // Inside a system, saying which system each game is for says nothing.
         val inSystem = systemCard != null
         fun stageOf(card: GameCard?) = card?.stage()?.let { if (inSystem) it.copy(eyebrow = null) else it }
@@ -424,69 +516,94 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
                 SystemShowcase(systemCard, Modifier.fillMaxHeight().width(maxH * 0.46f))
             }
         }
+        // Stage sizes for the Grid layout: inside a system the stage is smaller, so more games fit
+        // from the start, and folded it shrinks to one line beside the toolbar, so the games get the height.
+        // A folded system page lets its toolbar hang beside the one-line stage, where there is room.
+        val foldTools = inSystem && layout == LibraryLayout.ICON && maxW >= STACK_WIDTH
+        val stageHeight = when {
+            inSystem -> (maxH * SYSTEM_STAGE_SHARE).coerceIn(SYSTEM_STAGE_MIN, SYSTEM_STAGE_MAX)
+            // A short screen (a handheld) sets the title in the display face, so it keeps clear of the tabs.
+            compactHeader -> (maxH * STAGE_SHARE).coerceIn(SHORT_STAGE_MIN, SHORT_STAGE_MAX)
+            else -> (maxH * STAGE_SHARE).coerceIn(STAGE_MIN, STAGE_MAX)
+        }
+        // The stage's title: the hero face where there is room for it.
+        // A short or narrow screen (a phone held upright) sets it in the display face instead.
+        val stageTitle = if (compactHeader || maxW < STACK_WIDTH) Fuse.type.display else Fuse.type.hero
         Column(Modifier.fillMaxSize()) {
             Spacer(Modifier.height(Size.hudHeight + if (systemCard != null) lerp(if (compactHeader) Space.xs else Space.m, Space.xxs, collapse) else 0.dp))
-            LibraryHeader(
-                app = app,
-                scope = scope,
-                platform = systemCard,
-                compact = compactHeader,
-                collapse = collapse,
-                system = platforms.firstOrNull { it.platform.id == state.system },
-                count = list?.size,
-                header = header,
-                sort = sort,
-                layout = layout,
-                state = state,
-                onView = { i, s -> state.headerIndex = i; choose(s); state.inHeader = false },
-                onButton = { i, b -> state.headerIndex = i; press(b) },
-                // The box art view's stage keeps room on its right for the toolbar once folded.
-                foldTools = inSystem && layout == LibraryLayout.ICON,
-            )
+            Box(Modifier.reveal(entry, 0)) {
+                LibraryHeader(
+                    app = app,
+                    scope = scope,
+                    platform = systemCard,
+                    compact = compactHeader,
+                    collapse = collapse,
+                    system = platforms.firstOrNull { it.platform.id == state.system },
+                    count = list?.size,
+                    header = header,
+                    sort = sort,
+                    layout = layout,
+                    state = state,
+                    onView = { i, s -> state.headerIndex = i; choose(s); state.inHeader = false },
+                    onButton = { i, b -> state.headerIndex = i; press(b) },
+                    // The box art view's stage keeps room on its right for the toolbar once folded.
+                    foldTools = foldTools,
+                    counts = viewCounts,
+                )
+            }
             when {
-                list == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Spinner() }
-                list.isEmpty() -> LibraryEmpty(scope, segment)
-                else -> CompositionLocalProvider(LocalTileShowsSystem provides !inSystem) {
+                list == null -> if (showSkeleton) LibrarySkeleton(layout, metrics, maxW, maxH, stageHeight)
+                list.isEmpty() -> LibraryEmpty(
+                    scope, segment, collection,
+                    filteredTo = platforms.firstOrNull { it.platform.id == state.system }?.platform?.shortName,
+                    action = emptyAction,
+                    selected = gridFocused,
+                    compact = compactHeader,
+                )
+                else -> CompositionLocalProvider(
+                    LocalTileShowsSystem provides !inSystem,
+                    LocalTileShowsFavourite provides !(scope == LibraryScope.All && segment == LibrarySegment.FAVORITES),
+                ) {
                   when (layout) {
                     LibraryLayout.ICON -> {
                         // The game's logo moves up with the folding header and makes room for another row.
-                        // Inside a system the stage is smaller, so more games fit from the start, and
-                        // folded it shrinks to one line beside the toolbar, so the games get the height.
-                        val stage = if (inSystem) (maxH * 0.14f).coerceIn(92.dp, 124.dp) else (maxH * 0.22f).coerceIn(110.dp, 200.dp)
                         val logo = when {
-                            !inSystem -> lerp(84.dp, 60.dp, collapse)
-                            compactHeader -> lerp(56.dp, 32.dp, collapse)
-                            else -> lerp(64.dp, 40.dp, collapse)
+                            !inSystem && compactHeader -> STAGE_LOGO_SHORT
+                            !inSystem -> STAGE_LOGO
+                            compactHeader -> lerp(STAGE_LOGO_SHORT, Space.xxl, collapse)
+                            else -> lerp(Space.x4, Space.xxl + Space.s, collapse)
                         }
-                        val foldedStage = if (inSystem) logo + 4.dp else stage * 0.66f
+                        val foldedStage = if (inSystem) logo + Space.xs else stageHeight * 0.66f
                         Box(
                             Modifier
                                 .fillMaxWidth()
-                                .height(lerp(stage, foldedStage, collapse))
-                                .padding(start = Space.gutter, end = Space.gutter + if (inSystem) lerp(0.dp, 320.dp, collapse) else 0.dp),
+                                .height(lerp(stageHeight, foldedStage, collapse))
+                                .padding(start = Space.gutter, end = Space.gutter + if (foldTools) lerp(0.dp, FOLDED_TOOLBAR_ROOM, collapse) else 0.dp)
+                                .reveal(reveal, 1),
                             contentAlignment = Alignment.BottomStart,
                         ) {
                             Stage(
                                 stageOf(selectedCard), showLogo = prefs.showLogo, logoHeight = logo,
-                                titleStyle = if (inSystem) androidx.compose.ui.text.lerp(Fuse.type.display, Fuse.type.title, collapse) else Fuse.type.hero,
+                                titleStyle = if (inSystem) androidx.compose.ui.text.lerp(Fuse.type.display, Fuse.type.title, collapse) else stageTitle,
                                 fold = if (inSystem) collapse else 0f,
+                                // A short screen keeps the stage to two lines, clear of the tabs.
+                                inlineEyebrow = compactHeader,
                             )
                         }
                         Spacer(Modifier.height(if (inSystem) lerp(Space.m, Space.s, collapse) else lerp(Space.l, Space.s, collapse)))
-                        val tileW = LocalGameArt.current.tileSize(metrics.icon).width
-                        val cols = ((maxW - Space.gutter * 2 + metrics.gap) / (tileW + metrics.gap)).toInt().coerceAtLeast(2)
+                        val (cols, base) = iconGrid(maxW, metrics, LocalGameArt.current)
                         columns = cols
-                        IconGrid(list, state, gridState, cols, metrics.icon, metrics.gap, onTap = { i -> tapAt(i, list) }, onLong = { i -> state.pick(i, list); options(list[i]) }, focused = gridFocused)
+                        IconGrid(list, state, gridState, cols, base, metrics.gap, reveal, onTap = { i -> tapAt(i, list) }, onLong = { i -> state.pick(i, list); options(list[i]) }, focused = gridFocused)
                     }
                     LibraryLayout.CAPSULE -> {
-                        Box(Modifier.fillMaxWidth().weight(1f).padding(horizontal = Space.gutter), contentAlignment = Alignment.BottomStart) {
-                            Stage(stageOf(selectedCard), showLogo = prefs.showLogo, logoHeight = 128.dp)
+                        Box(Modifier.fillMaxWidth().weight(1f).padding(horizontal = Space.gutter).reveal(reveal, 1), contentAlignment = Alignment.BottomStart) {
+                            Stage(stageOf(selectedCard), showLogo = prefs.showLogo, logoHeight = if (compactHeader) CAPSULE_LOGO / 2 else CAPSULE_LOGO, titleStyle = stageTitle)
                         }
                         Spacer(Modifier.height(Space.xl))
                         CoverCarousel(
                             items = list,
                             selected = state.grid.index,
-                            itemWidth = metrics.capsuleWidth * 0.62f,
+                            itemWidth = metrics.capsuleWidth * CAPSULE_SCALE,
                             onTap = { i -> tapAt(i, list) },
                             onLongPress = { i -> state.pick(i, list); options(list[i]) },
                             onSettle = { i ->
@@ -494,7 +611,9 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
                                 state.inHeader = false
                                 state.pick(i, list)
                             },
+                            modifier = Modifier.reveal(reveal, 2),
                             focused = gridFocused,
+                            start = Space.gutter,
                         )
                         Spacer(Modifier.height(Size.hintHeight + Space.l))
                     }
@@ -502,11 +621,11 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
                         val coverW = metrics.coverWidth
                         val cols = ((maxW - Space.gutter * 2 + metrics.gap) / (coverW + metrics.gap)).toInt().coerceAtLeast(2)
                         columns = cols
-                        CoverGrid(list, state, gridState, cols, coverW, metrics.gap, onTap = { i -> tapAt(i, list) }, onLong = { i -> state.pick(i, list); options(list[i]) }, focused = gridFocused)
+                        CoverGrid(list, state, gridState, cols, coverW, metrics.gap, reveal, onTap = { i -> tapAt(i, list) }, onLong = { i -> state.pick(i, list); options(list[i]) }, focused = gridFocused)
                     }
                     LibraryLayout.COMPACT_LIST -> {
                         columns = 1
-                        CompactList(list, state, listState, onTap = { i -> tapAt(i, list) }, onLong = { i -> state.pick(i, list); options(list[i]) }, focused = gridFocused)
+                        CompactList(list, state, listState, reveal, onTap = { i -> tapAt(i, list) }, onLong = { i -> state.pick(i, list); options(list[i]) }, focused = gridFocused)
                     }
                   }
                 }
@@ -515,12 +634,32 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
     }
 }
 
+/**
+ * The Grid layout's columns on a screen [width] wide, and the base tile size that fills each column
+ * exactly, so a row runs from gutter to gutter with square (or poster) tiles, never stretched ones.
+ */
+private fun iconGrid(width: Dp, metrics: TileMetrics, style: GameArtStyle): Pair<Int, Dp> {
+    val room = width - Space.gutter * 2
+    val cols = ((room + metrics.gap) / (style.tileSize(metrics.icon).width + metrics.gap)).toInt().coerceAtLeast(2)
+    val cell = (room - metrics.gap * (cols - 1)) / cols
+    return cols to style.baseForWidth(cell)
+}
+
 internal fun sortLabel(s: SortOrder) = when (s) {
     SortOrder.TITLE -> "Title"
     SortOrder.RECENTLY_PLAYED -> "Recently played"
     SortOrder.RECENTLY_ADDED -> "Recently added"
     SortOrder.MOST_PLAYED -> "Most played"
     SortOrder.RELEASE_YEAR -> "Release year"
+}
+
+/** Each order gets an icon of its own in the Sort by list, so the choices read at a glance. */
+private fun sortIcon(s: SortOrder) = when (s) {
+    SortOrder.TITLE -> FuseIcons.SortAlpha
+    SortOrder.RECENTLY_PLAYED -> FuseIcons.History
+    SortOrder.RECENTLY_ADDED -> FuseIcons.CirclePlus
+    SortOrder.MOST_PLAYED -> FuseIcons.TrendingUp
+    SortOrder.RELEASE_YEAR -> FuseIcons.Calendar
 }
 
 internal fun layoutLabel(l: LibraryLayout) = when (l) {
@@ -544,11 +683,11 @@ private fun systemPicker(app: AppState, state: LibraryViewState, platforms: List
         title = "Show games from",
         message = "Your library, narrowed to one system. Systems follow the order you gave them.",
         options = listOf(
-            MenuAction("sys.all", "All systems", FuseIcons.Library, detail = "${systems.sumOf { it.gameCount }} games", trailing = Trailing.Check(state.system == null), onSelect = { pick(null) }),
+            MenuAction("sys.all", "All systems", FuseIcons.Library, detail = gamesText(systems.sumOf { it.gameCount }), trailing = Trailing.Check(state.system == null), onSelect = { pick(null) }),
         ) + systems.map { p ->
             MenuAction(
                 "sys.${p.platform.id.value}", p.platform.name, FuseIcons.Chip,
-                detail = listOfNotNull("${p.gameCount} ${if (p.gameCount == 1) "game" else "games"}", p.platform.manufacturer).joinToString("  ·  "),
+                detail = listOfNotNull(gamesText(p.gameCount), p.platform.manufacturer).joinToString("  ·  "),
                 trailing = Trailing.Check(state.system == p.platform.id),
                 onSelect = { pick(p.platform.id) },
             )
@@ -559,7 +698,7 @@ private fun systemPicker(app: AppState, state: LibraryViewState, platforms: List
 private fun sortPicker(app: AppState, current: SortOrder) = ChoiceSpec(
     title = "Sort by",
     options = SortOrder.entries.map { s ->
-        MenuAction(s.name, sortLabel(s), FuseIcons.Sort, trailing = Trailing.Check(s == current), onSelect = {
+        MenuAction(s.name, sortLabel(s), sortIcon(s), trailing = Trailing.Check(s == current), onSelect = {
             app.store.updatePrefs { it.copy(librarySort = s) }
             app.choice = null
         })
@@ -592,7 +731,7 @@ private fun setMenu(app: AppState, card: GameCard, segment: LibrarySegment): Con
         LibrarySegment.MISSING -> listOf(
             MenuAction("rescan", "Scan for it again", FuseIcons.Refresh, detail = "If you moved it back, Fuse finds it and keeps its art and play time", onSelect = {
                 app.closeOverlays()
-                app.store.sources.rescan(io.github.matiyaaa.fuse.model.ScanScope.PLATFORM, card.platformId)
+                app.store.sources.rescan(ScanScope.PLATFORM, card.platformId)
                 app.toasts.show("Rescanning ${card.platformShort}")
             }),
             MenuAction("forget", "Forget this game", FuseIcons.Trash, destructive = true, detail = "Removes its art, play time and collections from Fuse", onSelect = {
@@ -612,6 +751,11 @@ private fun setMenu(app: AppState, card: GameCard, segment: LibrarySegment): Con
     return ContextMenuSpec(title = card.title, subtitle = "${card.platformShort}  ·  ${segment.label}", art = card.art.tile, actions = actions)
 }
 
+/**
+ * The Grid layout: game tiles in rows under the stage. Its first rows rise into place as the view
+ * opens, one row a beat after another; rows scrolled to later are simply there. The top and bottom
+ * edges soften only while there is more to scroll, so the last row never runs into the hint line.
+ */
 @Composable
 private fun IconGrid(
     list: List<GameCard>,
@@ -620,6 +764,7 @@ private fun IconGrid(
     columns: Int,
     size: Dp,
     gap: Dp,
+    reveal: Reveal,
     onTap: (Int) -> Unit,
     onLong: (Int) -> Unit,
     focused: Boolean,
@@ -628,17 +773,28 @@ private fun IconGrid(
     LazyVerticalGrid(
         columns = GridCells.Fixed(columns),
         state = grid,
-        modifier = Modifier.fadingEdges(top = if (grid.canScrollBackward) 24.dp else 0.dp),
-        contentPadding = PaddingValues(start = Space.gutter, end = Space.gutter, top = Space.s, bottom = Size.hintHeight + Space.x4),
+        modifier = Modifier.padding(bottom = Size.hintHeight).fadingEdges(grid, top = Space.xl, bottom = BOTTOM_FADE),
+        contentPadding = PaddingValues(start = Space.gutter, end = Space.gutter, top = Space.s, bottom = Space.xxl),
         horizontalArrangement = Arrangement.spacedBy(gap),
         verticalArrangement = Arrangement.spacedBy(gap + Space.s),
     ) {
         itemsIndexed(list, key = { _, g -> g.id.value }) { i, card ->
-            GameIconTile(card, selected = focused && i == state.grid.index, size = size, onClick = { onTap(i) }, onLongClick = { onLong(i) })
+            GameIconTile(
+                card,
+                selected = focused && i == state.grid.index,
+                size = size,
+                modifier = Modifier.reveal(reveal, 2 + i / columns),
+                onClick = { onTap(i) },
+                onLongClick = { onLong(i) },
+            )
         }
     }
 }
 
+/**
+ * The Cover grid: portrait covers, with the selected game's title and details on one line above them
+ * (the covers carry their own names, so the line names the one you are on).
+ */
 @Composable
 private fun CoverGrid(
     list: List<GameCard>,
@@ -647,121 +803,435 @@ private fun CoverGrid(
     columns: Int,
     width: Dp,
     gap: Dp,
+    reveal: Reveal,
     onTap: (Int) -> Unit,
     onLong: (Int) -> Unit,
     focused: Boolean,
 ) {
     FollowSelection(grid, { state.grid.index }, anchor = 0.1f)
     val selected = list.getOrNull(state.grid.index)
+    val showsSystem = LocalTileShowsSystem.current
     Column {
-        Row(Modifier.padding(horizontal = Space.gutter, vertical = Space.s), verticalAlignment = Alignment.CenterVertically) {
-            FText(selected?.title ?: "", Fuse.type.title, maxLines = 1, modifier = Modifier.weight(1f, fill = false))
-            if (selected != null) {
-                Spacer(Modifier.width(Space.m))
-                FText(listOfNotNull(selected.platformShort.takeIf { LocalTileShowsSystem.current }, selected.year?.toString(), selected.playSeconds.takeIf { it > 0 }?.let(::playtimeText)).joinToString("  ·  "), Fuse.type.label, color = Fuse.colors.textMuted, maxLines = 1)
-            }
-        }
+        StageLine(
+            selected?.stage()?.let { if (showsSystem) it else it.copy(eyebrow = null) },
+            Modifier.fillMaxWidth().padding(start = Space.gutter, end = Space.gutter, top = CONTENT_TOP, bottom = Space.s).reveal(reveal, 1),
+        )
         LazyVerticalGrid(
             columns = GridCells.Fixed(columns),
             state = grid,
-            modifier = Modifier.fadingEdges(top = if (grid.canScrollBackward) 24.dp else 0.dp),
-            contentPadding = PaddingValues(start = Space.gutter, end = Space.gutter, top = Space.m, bottom = Size.hintHeight + Space.x4),
+            modifier = Modifier.padding(bottom = Size.hintHeight).fadingEdges(grid, top = Space.xl, bottom = BOTTOM_FADE),
+            contentPadding = PaddingValues(start = Space.gutter, end = Space.gutter, top = Space.m, bottom = Space.xxl),
             horizontalArrangement = Arrangement.spacedBy(gap),
             verticalArrangement = Arrangement.spacedBy(gap + Space.m),
         ) {
             itemsIndexed(list, key = { _, g -> g.id.value }) { i, card ->
-                GameCoverTile(card, selected = focused && i == state.grid.index, width = width, aspect = Aspect.BOX, onClick = { onTap(i) }, onLongClick = { onLong(i) })
+                GameCoverTile(
+                    card,
+                    selected = focused && i == state.grid.index,
+                    width = width,
+                    aspect = Aspect.BOX,
+                    modifier = Modifier.reveal(reveal, 2 + i / columns),
+                    onClick = { onTap(i) },
+                    onLongClick = { onLong(i) },
+                )
             }
         }
     }
 }
 
-@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+/**
+ * The List layout: one game per row, with the selected game's cover and details beside the list on
+ * screens wide enough for both. One highlight glides from row to row as the selection moves, with
+ * the accent bar at its start, like the menus.
+ */
 @Composable
 private fun CompactList(
     list: List<GameCard>,
     state: LibraryViewState,
     listState: LazyListState,
+    reveal: Reveal,
     onTap: (Int) -> Unit,
     onLong: (Int) -> Unit,
     focused: Boolean,
 ) {
-    val c = Fuse.colors
     FollowSelection(listState, { state.grid.index }, anchor = 0.35f)
     val selected = list.getOrNull(state.grid.index)
-    Row(Modifier.fillMaxSize().padding(start = Space.gutter, end = Space.gutter)) {
-        LazyColumn(
-            state = listState,
-            modifier = Modifier.weight(1.1f).fillMaxHeight().fadingEdges(top = if (listState.canScrollBackward) 24.dp else 0.dp),
-            contentPadding = PaddingValues(top = Space.s, bottom = Size.hintHeight + Space.xxl),
-            verticalArrangement = Arrangement.spacedBy(Space.xxs),
-        ) {
-            itemsIndexed(list, key = { _, g -> g.id.value }) { i, card ->
-                val sel = focused && i == state.grid.index
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .height(Size.rowCompact + 8.dp)
-                        .clip(RoundedCornerShape(Fuse.geometry.control))
-                        .background(if (sel) c.text.copy(alpha = 0.11f) else androidx.compose.ui.graphics.Color.Transparent)
-                        .combinedClickable(remember { MutableInteractionSource() }, null, onLongClick = { onLong(i) }) { onTap(i) }
-                        .padding(horizontal = Space.m),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Box(Modifier.width(3.dp).height(20.dp).background(if (sel) c.accent else androidx.compose.ui.graphics.Color.Transparent, RoundedCornerShape(2.dp)))
-                    Spacer(Modifier.width(Space.m))
-                    SquareGameArt(
-                        card.art,
-                        Modifier.size(34.dp).clip(RoundedCornerShape(8.dp)),
-                        fallback = { GeneratedArt(card.title, card.accent.toColor(), slot = ArtSlot.ICON) },
-                    )
-                    Spacer(Modifier.width(Space.m))
-                    FText(card.title, if (sel) Fuse.type.bodyStrong else Fuse.type.body, color = if (card.missing) c.textFaint else c.text, maxLines = 1, modifier = Modifier.weight(1f))
-                    if (card.favorite) FuseIcon(FuseIcons.Heart, size = 14.dp, tint = c.textMuted)
-                    Spacer(Modifier.width(Space.m))
-                    if (LocalTileShowsSystem.current) FText(card.platformShort, Fuse.type.caption, color = c.textMuted, maxLines = 1)
-                    Spacer(Modifier.width(Space.m))
-                    FText(if (card.playSeconds > 0) playtimeText(card.playSeconds) else "", Fuse.type.caption, color = c.textFaint, maxLines = 1, modifier = Modifier.width(72.dp))
-                }
+    val showsSystem = LocalTileShowsSystem.current
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val side = maxWidth >= SIDE_PANEL_MIN
+        // A list as narrow as a phone held upright gives each row's details a line of their own.
+        val dense = maxWidth - Space.gutter * 2 < DENSE_LIST
+        val short = maxHeight < SHORT_SCREEN
+        Row(Modifier.fillMaxSize().padding(horizontal = Space.gutter)) {
+            GlidingList(
+                list, state.grid.index, listState, focused,
+                Modifier.weight(LIST_WEIGHT).fillMaxHeight(),
+            ) { i, card, sel ->
+                GameRow(
+                    card, sel, showsSystem, dense,
+                    Modifier.reveal(reveal, 2 + i),
+                    onClick = { onTap(i) },
+                    onLongClick = { onLong(i) },
+                )
             }
-        }
-        Spacer(Modifier.width(Space.xl))
-        Column(Modifier.weight(0.9f).padding(top = Space.s)) {
-            if (selected != null) {
-                Tile(selected = false, modifier = Modifier.fillMaxWidth(0.55f).height(260.dp), showSpark = false) {
-                    Artwork(
-                        selected.art.boxart ?: selected.art.grid ?: selected.art.square ?: selected.art.icon,
-                        Modifier.fillMaxSize(),
-                        fallback = { GeneratedArt(selected.title, selected.accent.toColor(), slot = ArtSlot.BOX, label = selected.platformShort.takeIf { LocalTileShowsSystem.current }) },
-                    )
-                }
-                Spacer(Modifier.height(Space.l))
-                Stage(selected.stage().let { if (LocalTileShowsSystem.current) it else it.copy(eyebrow = null) }, logoHeight = 64.dp)
+            if (side && selected != null) {
+                Spacer(Modifier.width(Space.xxl))
+                ListPreview(selected, showsSystem, compact = short, modifier = Modifier.weight(PREVIEW_WEIGHT).fillMaxHeight().reveal(reveal, 1))
             }
         }
     }
 }
 
+/**
+ * A list whose selected row is marked by one highlight that glides between rows: its top and bottom
+ * edges move on their own springs (the leading one quicker), so it stretches a little as it travels.
+ * A long jump (a page, a held direction) glides in from the neighbouring row only, since the list is
+ * already scrolling to follow. It snaps under Reduced motion.
+ */
 @Composable
-private fun LibraryEmpty(scope: LibraryScope, segment: LibrarySegment) {
+private fun GlidingList(
+    list: List<GameCard>,
+    selectedIndex: Int,
+    listState: LazyListState,
+    focused: Boolean,
+    modifier: Modifier,
+    row: @Composable (Int, GameCard, Boolean) -> Unit,
+) {
     val c = Fuse.colors
-    val (title, body) = when (scope) {
-        is LibraryScope.OfCollection -> "This collection is empty" to "Add games from any game's options (Add to Collection)."
-        is LibraryScope.OfPlatform -> "No games for this system yet" to
-            "Put games in this system's folder, or get them from your RomM server with Cartridge. They appear here on their own."
-        LibraryScope.All -> when (segment) {
-            LibrarySegment.FAVORITES -> "No favourites yet" to "Mark games as favourites from their options."
-            LibrarySegment.RECENT -> "Nothing played yet" to "Games you play show up here, newest first."
-            LibrarySegment.MISSING -> "Nothing is missing" to "Games whose files disappear are listed here, so you can find them again or let Fuse forget them."
-            LibrarySegment.HIDDEN -> "No hidden games" to "Games you hide from their options wait here."
-            LibrarySegment.REMOVED -> "Nothing removed" to "Games you remove from Fuse wait here, in case you want them back."
-            LibrarySegment.ALL -> "Nothing here yet" to "Games you add show up here."
+    val motion = Fuse.motion
+    val target = selectedIndex.coerceIn(0, (list.size - 1).coerceAtLeast(0)).toFloat()
+    val top = remember { Animatable(target) }
+    val bottom = remember { Animatable(target) }
+    val shown by animateFloatAsState(if (focused) 1f else 0f, motion.tween(if (focused) Durations.FAST else Durations.INSTANT), label = "list highlight")
+    LaunchedEffect(target, list.size) {
+        if (motion.reduced || shown < 0.05f) {
+            top.snapTo(target)
+            bottom.snapTo(target)
+            return@LaunchedEffect
+        }
+        if (abs(target - top.value) > 1.5f || abs(target - bottom.value) > 1.5f) {
+            val from = if (target > top.value) target - 1f else target + 1f
+            top.snapTo(from)
+            bottom.snapTo(from)
+        }
+        val down = target >= bottom.value
+        launch { top.animateTo(target, if (down) motion.glideTrail() else motion.glide()) }
+        launch { bottom.animateTo(target, if (down) motion.glide() else motion.glideTrail()) }
+    }
+    val fill = c.text.copy(alpha = if (c.isDark) ROW_FILL else ROW_FILL_LIGHT)
+    val accent = c.accent
+    val outline = if (Fuse.look.highContrastFocus) c.focus else null
+    val corner = Fuse.geometry.control
+    LazyColumn(
+        state = listState,
+        modifier = modifier
+            .padding(bottom = Size.hintHeight)
+            .fadingEdges(listState, top = Space.xl, bottom = BOTTOM_FADE)
+            .drawBehind {
+                if (shown <= 0.01f || list.isEmpty()) return@drawBehind
+                val info = listState.layoutInfo
+                val gap = Space.xxs.toPx()
+                val t = rowEdge(top.value, info, gap, bottom = false) ?: return@drawBehind
+                val b = rowEdge(bottom.value, info, gap, bottom = true) ?: return@drawBehind
+                if (b <= t) return@drawBehind
+                val h = b - t
+                val r = corner.toPx().coerceAtMost(h / 2)
+                clipRect {
+                    drawRoundRect(fill, Offset(0f, t), size.copy(height = h), CornerRadius(r), alpha = shown)
+                    if (outline != null) {
+                        val sw = Size.focusStroke.toPx()
+                        drawRoundRect(
+                            outline,
+                            Offset(sw / 2, t + sw / 2),
+                            androidx.compose.ui.geometry.Size(size.width - sw, h - sw),
+                            CornerRadius((r - sw / 2).coerceAtLeast(0f)),
+                            alpha = shown,
+                            style = Stroke(sw),
+                        )
+                    }
+                    val bh = ROW_BAR_HEIGHT.toPx().coerceAtMost(h - Space.s.toPx())
+                    // On strongly rounded highlights (pill themes) the bar steps in to stay inside the curve.
+                    val curve = if (r > bh / 2) r - sqrt(r * r - (bh / 2) * (bh / 2)) else 0f
+                    drawRoundRect(
+                        accent,
+                        Offset(curve, t + (h - bh) / 2),
+                        androidx.compose.ui.geometry.Size(Size.sparkHeight.toPx(), bh),
+                        CornerRadius(Size.sparkHeight.toPx() / 2),
+                        alpha = shown,
+                    )
+                }
+            },
+        contentPadding = PaddingValues(top = CONTENT_TOP, bottom = Space.xl),
+        verticalArrangement = Arrangement.spacedBy(Space.xxs),
+    ) {
+        itemsIndexed(list, key = { _, g -> g.id.value }) { i, card ->
+            row(i, card, focused && i == selectedIndex)
         }
     }
-    Box(Modifier.fillMaxSize().padding(horizontal = Space.gutter), contentAlignment = Alignment.CenterStart) {
+}
+
+/**
+ * The top (or [bottom]) edge, in the list's own pixels, of the row at a fractional position, blended
+ * between the rows either side. Rows out of view are estimated from the ones in view (every row has
+ * the same height), so the highlight can travel in from off screen.
+ */
+private fun rowEdge(pos: Float, info: LazyListLayoutInfo, gapPx: Float, bottom: Boolean): Float? {
+    val visible = info.visibleItemsInfo
+    if (visible.isEmpty()) return null
+    // Item offsets start after the top content padding; the drawing starts at the list's own top.
+    val shift = -info.viewportStartOffset.toFloat()
+    val first = visible.first()
+    val step = first.size + gapPx
+    fun span(i: Int): Pair<Float, Float> {
+        visible.firstOrNull { it.index == i }?.let { return it.offset + shift to it.offset + it.size + shift }
+        val top = first.offset + (i - first.index) * step + shift
+        return top to top + first.size
+    }
+    val i = pos.toInt()
+    val f = (pos - i).coerceIn(0f, 1f)
+    val a = span(i)
+    val b = if (f > 0f) span(i + 1) else a
+    val ea = if (bottom) a.second else a.first
+    val eb = if (bottom) b.second else b.first
+    return ea + (eb - ea) * f
+}
+
+/**
+ * One game in the List layout: its art, its title, its marks, its platform tag and its play time in
+ * a column of tabular figures ([dense]: the details on a second line under the title, so a narrow
+ * list never squeezes the name). Hover and press come from [fuseClickable]; selection is drawn by
+ * the list's gliding highlight.
+ */
+@Composable
+private fun GameRow(
+    card: GameCard,
+    selected: Boolean,
+    showsSystem: Boolean,
+    dense: Boolean,
+    modifier: Modifier,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+) {
+    val c = Fuse.colors
+    val shape = RoundedCornerShape(Fuse.geometry.control)
+    val thumbCorner = Fuse.geometry.tileCornerFraction.coerceAtLeast(THUMB_CORNER_MIN) + THUMB_CORNER_EXTRA
+    val thumb = remember(thumbCorner) { SquircleShape.fraction(thumbCorner) }
+    val played = if (card.playSeconds > 0) playtimeText(card.playSeconds) else ""
+    val timeColor = if (selected) c.textMuted else c.textFaint
+    Row(
+        modifier
+            .fillMaxWidth()
+            .height(Size.row)
+            .clip(shape)
+            .fuseClickable(shape = shape, scale = false, onLongClick = onLongClick, onClick = onClick)
+            .semantics { this.selected = selected }
+            .padding(start = Size.sparkHeight + Space.m, end = Space.m),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        SquareGameArt(
+            card.art,
+            Modifier.size(Size.thumb).clip(thumb),
+            fallback = { GeneratedArt(card.title, card.accent.toColor(), slot = ArtSlot.ICON) },
+        )
+        Spacer(Modifier.width(Space.m))
+        val title: @Composable (Modifier) -> Unit = { m ->
+            FText(
+                card.title,
+                if (selected) Fuse.type.bodyStrong else Fuse.type.body,
+                color = if (card.missing) c.textFaint else c.text,
+                maxLines = 1,
+                modifier = m,
+            )
+        }
+        if (dense) {
+            // The name keeps the whole width; the system, marks and play time follow underneath.
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Space.xxs)) {
+                title(Modifier)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s)) {
+                    if (showsSystem) PlatformTag(card.platformShort, emphasised = selected)
+                    GameMarksInline(card, emphasised = selected)
+                    if (played.isNotEmpty()) FText(played, Fuse.type.numericSmall, color = timeColor, maxLines = 1)
+                }
+            }
+            return@Row
+        }
+        title(Modifier.weight(1f))
+        GameMarksInline(card, Modifier.padding(start = Space.m), emphasised = selected)
+        if (showsSystem) {
+            Spacer(Modifier.width(Space.m))
+            PlatformTag(card.platformShort, emphasised = selected)
+        }
+        Spacer(Modifier.width(Space.m))
+        FText(
+            played,
+            Fuse.type.numericSmall,
+            color = timeColor,
+            maxLines = 1,
+            align = TextAlign.End,
+            modifier = Modifier.width(PLAYTIME_COLUMN),
+        )
+    }
+}
+
+/**
+ * Beside the list: the selected game's cover, lifted like a tile, and its stage underneath. The
+ * stage always gets the room it needs; the cover takes what is left, up to [PREVIEW_COVER] of the
+ * height, so a short screen gets a smaller cover rather than a stage running into the hint line.
+ */
+@Composable
+private fun ListPreview(card: GameCard, showsSystem: Boolean, compact: Boolean, modifier: Modifier) {
+    val corner = coverCornerFraction()
+    val shape = remember(corner) { SquircleShape.fraction(corner) }
+    BoxWithConstraints(modifier.padding(top = CONTENT_TOP, bottom = Size.hintHeight + Space.l)) {
+        val coverMax = (maxHeight * PREVIEW_COVER).coerceAtMost(maxWidth / Aspect.BOX)
+        Column(Modifier.fillMaxHeight()) {
+            Tile(
+                selected = false,
+                modifier = Modifier
+                    .weight(1f, fill = false)
+                    .heightIn(max = coverMax)
+                    .aspectRatio(Aspect.BOX, matchHeightConstraintsFirst = true),
+                shape = shape,
+                cornerFraction = corner,
+                showSpark = false,
+            ) {
+                Artwork(
+                    card.art.boxart ?: card.art.grid ?: card.art.square ?: card.art.icon,
+                    Modifier.fillMaxSize(),
+                    // The same generated cover the Cover grid shows, so a game looks the same in every layout.
+                    fallback = { GeneratedArt(card.title, card.accent.toColor(), slot = ArtSlot.BOX, label = card.platformShort.takeIf { showsSystem }) },
+                )
+            }
+            Spacer(Modifier.height(if (compact) Space.m else Space.l))
+            Stage(
+                card.stage().let { if (showsSystem) it else it.copy(eyebrow = null) },
+                logoHeight = if (compact) Space.x3 else Space.x4,
+                titleStyle = if (compact) Fuse.type.title else Fuse.type.display,
+                inlineEyebrow = compact,
+            )
+        }
+    }
+}
+
+/**
+ * What a view looks like while its games are on their way: the stage and the tiles (or rows) in
+ * their own places and shapes, with the calm shared shimmer passing over them, so nothing jumps
+ * when the games arrive.
+ */
+@Composable
+internal fun LibrarySkeleton(layout: LibraryLayout, metrics: TileMetrics, maxW: Dp, maxH: Dp, stageHeight: Dp) {
+    val bar = RoundedCornerShape(BAR_RADIUS)
+    Column(Modifier.fillMaxSize().clipToBounds()) {
+        when (layout) {
+            LibraryLayout.ICON -> {
+                StageSkeleton(Modifier.fillMaxWidth().height(stageHeight).padding(horizontal = Space.gutter))
+                Spacer(Modifier.height(Space.l))
+                val style = LocalGameArt.current
+                val (cols, base) = iconGrid(maxW, metrics, style)
+                val tile = style.tileSize(base)
+                Column(Modifier.padding(start = Space.gutter, top = Space.s), verticalArrangement = Arrangement.spacedBy(metrics.gap + Space.s)) {
+                    repeat(SKELETON_ROWS) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(metrics.gap)) {
+                            repeat(cols) { GameTileSkeleton(Modifier.size(tile), style.cornerFraction()) }
+                        }
+                    }
+                }
+            }
+            LibraryLayout.COVER_GRID -> {
+                Box(Modifier.padding(start = Space.gutter, top = CONTENT_TOP + Space.xs, bottom = Space.s + Space.xs).width(maxW * 0.3f).height(Space.l + Space.xs).skeleton(bar))
+                val cols = ((maxW - Space.gutter * 2 + metrics.gap) / (metrics.coverWidth + metrics.gap)).toInt().coerceAtLeast(2)
+                Row(Modifier.padding(start = Space.gutter, top = Space.m), horizontalArrangement = Arrangement.spacedBy(metrics.gap)) {
+                    repeat(cols) { GameTileSkeleton(Modifier.width(metrics.coverWidth).aspectRatio(Aspect.BOX), coverCornerFraction()) }
+                }
+            }
+            LibraryLayout.CAPSULE -> {
+                StageSkeleton(Modifier.fillMaxWidth().weight(1f).padding(horizontal = Space.gutter))
+                Spacer(Modifier.height(Space.xl))
+                CarouselSkeleton(metrics.capsuleWidth * CAPSULE_SCALE, start = Space.gutter)
+                Spacer(Modifier.height(Size.hintHeight + Space.l))
+            }
+            LibraryLayout.COMPACT_LIST -> {
+                Column(Modifier.padding(start = Space.gutter, end = Space.gutter, top = CONTENT_TOP), verticalArrangement = Arrangement.spacedBy(Space.xxs)) {
+                    val rows = ((maxH - Size.hudHeight) / (Size.row + Space.xxs)).toInt().coerceIn(1, SKELETON_LIST_ROWS)
+                    repeat(rows) { i ->
+                        Row(
+                            Modifier.fillMaxWidth(LIST_WEIGHT / (LIST_WEIGHT + PREVIEW_WEIGHT)).height(Size.row).padding(start = Size.sparkHeight + Space.m, end = Space.m),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            GameTileSkeleton(Modifier.size(Size.thumb), Fuse.geometry.tileCornerFraction.coerceAtLeast(THUMB_CORNER_MIN) + THUMB_CORNER_EXTRA)
+                            Spacer(Modifier.width(Space.m))
+                            // Titles of different lengths, so the column reads as a list of names.
+                            Box(Modifier.fillMaxWidth(SKELETON_TITLE[i % SKELETON_TITLE.size]).height(Space.m + Space.xxs).skeleton(bar))
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** The stage's eyebrow, title and meta line as placeholder bars, sitting where they will. */
+@Composable
+private fun StageSkeleton(modifier: Modifier) {
+    val bar = RoundedCornerShape(BAR_RADIUS)
+    Box(modifier, contentAlignment = Alignment.BottomStart) {
         Column(verticalArrangement = Arrangement.spacedBy(Space.s)) {
-            FText(title, Fuse.type.display)
-            FText(body, Fuse.type.body, color = c.textMuted)
+            Box(Modifier.width(Space.x5).height(Space.m - Space.xxs).skeleton(bar))
+            Box(Modifier.width(Space.x5 * 3).height(Space.xxl + Space.s).skeleton(RoundedCornerShape(Space.s)))
+            Box(Modifier.width(Space.x5 * 2).height(Space.m + Space.xxs).skeleton(bar))
+        }
+    }
+}
+
+/**
+ * An empty view: what it is for, how it fills up, and the one thing that helps most as a button
+ * (also on the confirm button, since focus stays on the view). Errors never land here: an empty
+ * list is a real state, told plainly.
+ */
+@Composable
+private fun LibraryEmpty(
+    scope: LibraryScope,
+    segment: LibrarySegment,
+    collection: GameCollection?,
+    filteredTo: String?,
+    action: EmptyAction?,
+    selected: Boolean,
+    compact: Boolean = false,
+) {
+    val series = collection?.kind == CollectionKind.SERIES
+    val (icon, title, body) = when (scope) {
+        is LibraryScope.OfCollection -> Triple(
+            if (series) FuseIcons.Sparkles else FuseIcons.Bookmark,
+            "This collection is empty",
+            if (series) "Fuse adds games of this series here as it finds them." else "Add games here, or from any game's options.",
+        )
+        is LibraryScope.OfPlatform -> Triple(
+            FuseIcons.FolderSearch,
+            "No games for this system yet",
+            "Put games in this system's folder, or get them from your RomM server with Cartridge. They appear here on their own.",
+        )
+        LibraryScope.All -> when (segment) {
+            LibrarySegment.FAVORITES -> Triple(FuseIcons.Heart, "No favourites yet", "Choose Add to Favourites in a game's options.")
+            LibrarySegment.RECENT -> Triple(FuseIcons.History, "Nothing played yet", "Games you play show up here, newest first.")
+            LibrarySegment.MISSING -> Triple(FuseIcons.CheckCheck, "Nothing is missing", "Games whose files disappear are listed here, so you can find them again or let Fuse forget them.")
+            LibrarySegment.HIDDEN -> Triple(FuseIcons.EyeOff, "No hidden games", "Games you hide from their options wait here.")
+            LibrarySegment.REMOVED -> Triple(FuseIcons.Undo, "Nothing removed", "Games you remove from Fuse wait here, in case you want them back.")
+            LibrarySegment.ALL -> Triple(FuseIcons.LibraryBig, "Nothing here yet", "Add a folder of games and Fuse finds them, with their art.")
+        }
+    }
+    // A system filter can be what empties a view, so the message says so.
+    val message = if (scope == LibraryScope.All && filteredTo != null) "Showing $filteredTo games only. $body" else body
+    Box(
+        Modifier.fillMaxSize().padding(start = Space.gutter, end = Space.gutter, bottom = Size.hintHeight + Space.xl),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            EmptyState(icon = icon, title = title, message = message, compact = compact)
+            // The action sits outside the state's arrival layer, so its focus ring is never cut.
+            if (action != null) {
+                Spacer(Modifier.height(if (compact) Space.l else Space.xl))
+                FuseButton(action.label, selected = selected, onClick = action.run, kind = ButtonKind.PRIMARY, icon = action.icon)
+            }
         }
     }
 }
@@ -777,12 +1247,12 @@ private fun viewActions(app: AppState, state: LibraryViewState, platform: Platfo
             app.contextMenu = null
             app.choice = sortPicker(app, sort)
         }),
-        MenuAction("hidden", if (state.showHidden) "Hide hidden games" else "Show hidden games", FuseIcons.Eye, onSelect = {
+        MenuAction("hidden", if (state.showHidden) "Hide hidden games" else "Show hidden games", if (state.showHidden) FuseIcons.EyeOff else FuseIcons.Eye, onSelect = {
             state.showHidden = !state.showHidden
             app.closeOverlays()
         }),
         MenuAction("rescan", if (platform != null) "Rescan this system" else "Rescan library", FuseIcons.Refresh, onSelect = {
-            app.store.sources.rescan(io.github.matiyaaa.fuse.model.ScanScope.PLATFORM, platform)
+            app.store.sources.rescan(ScanScope.PLATFORM, platform)
             app.closeOverlays()
             app.toasts.show("Rescanning in the background")
         }),
@@ -800,17 +1270,105 @@ fun layoutIcon(l: LibraryLayout) = when (l) {
     LibraryLayout.COMPACT_LIST -> FuseIcons.List
 }
 
-/** A collection on Home and in Search: its name over a soft tint. */
+/**
+ * A collection on Home and in Search: a tile of its own, lit like the others, with its mark in a
+ * small well at the top and its name and count at the bottom.
+ */
 @Composable
 fun CollectionTile(collection: GameCollection, selected: Boolean, height: Dp, onClick: () -> Unit, onLongClick: () -> Unit) {
     val c = Fuse.colors
-    Tile(selected = selected, modifier = Modifier.size(width = height * 1.6f, height = height), onClick = onClick, onLongClick = onLongClick) {
+    val series = collection.kind == CollectionKind.SERIES
+    Tile(selected = selected, modifier = Modifier.size(width = height * COLLECTION_ASPECT, height = height), onClick = onClick, onLongClick = onLongClick) {
         Box(Modifier.fillMaxSize().background(c.surfaceRaised).padding(Space.m)) {
-            FuseIcon(FuseIcons.Bookmark, tint = c.textMuted, modifier = Modifier.align(Alignment.TopStart))
-            Column(Modifier.align(Alignment.BottomStart)) {
+            Box(
+                Modifier.size(Size.chipCompact).clip(PillShape).background(c.text.copy(alpha = if (c.isDark) WELL_FILL else WELL_FILL_LIGHT)),
+                contentAlignment = Alignment.Center,
+            ) {
+                FuseIcon(if (series) FuseIcons.Sparkles else FuseIcons.Bookmark, size = Size.iconS, tint = c.textMuted)
+            }
+            Column(Modifier.align(Alignment.BottomStart), verticalArrangement = Arrangement.spacedBy(Space.xxs)) {
                 FText(collection.name, Fuse.type.titleSmall, maxLines = 2)
-                FText("${collection.gameCount} ${if (collection.gameCount == 1) "game" else "games"}", Fuse.type.caption, color = c.textMuted)
+                FText(gamesText(collection.gameCount), Fuse.type.caption.copy(fontFeatureSettings = "tnum"), color = c.textMuted, maxLines = 1)
             }
         }
     }
 }
+
+/** Loading that takes longer than this shows the skeleton; anything quicker never flashes it. */
+private const val SKELETON_DELAY_MS = 160L
+
+/** Rows of tile placeholders in the Grid layout's skeleton, and rows in the List's. */
+private const val SKELETON_ROWS = 3
+private const val SKELETON_LIST_ROWS = 14
+
+/** Widths of the list skeleton's title bars, so the column reads as names of different lengths. */
+private val SKELETON_TITLE = floatArrayOf(0.42f, 0.56f, 0.34f, 0.5f, 0.38f, 0.6f, 0.46f)
+
+/** Room between the header and a layout that starts right under it (the Cover grid, the List). */
+private val CONTENT_TOP = Space.m
+
+/** Placeholder text bars are rounded like a line of type. */
+private val BAR_RADIUS = Space.s
+
+/**
+ * Lists end above the hint line, so the hints never sit on top of art, and their bottom edge
+ * softens over this much while more games wait below.
+ */
+private val BOTTOM_FADE = Space.xxl + Space.s
+
+/** Screens shorter than this get the compact header and stage (handhelds in landscape). */
+private val SHORT_SCREEN = 560.dp
+
+/** The stage's height as a share of the screen's, and its bounds; inside a system it is smaller. */
+private const val STAGE_SHARE = 0.22f
+private val STAGE_MIN = 110.dp
+private val STAGE_MAX = 200.dp
+private val SHORT_STAGE_MIN = 100.dp
+private val SHORT_STAGE_MAX = 120.dp
+private const val SYSTEM_STAGE_SHARE = 0.14f
+private val SYSTEM_STAGE_MIN = 92.dp
+private val SYSTEM_STAGE_MAX = 124.dp
+
+/** The selected game's logo on the stage, and on a short screen. */
+private val STAGE_LOGO = 84.dp
+private val STAGE_LOGO_SHORT = 56.dp
+
+/** Logos ahead of the selection are decoded at this size, ready for the stage. */
+private val LOGO_PREFETCH = 360.dp
+
+/** Room a folded system stage keeps on its right for the toolbar hanging beside it. */
+private val FOLDED_TOOLBAR_ROOM = 320.dp
+
+/** Capsule Mode's covers, against the capsule size, and the stage logo above them. */
+private const val CAPSULE_SCALE = 0.62f
+private val CAPSULE_LOGO = 128.dp
+
+/** The List layout's split between the list and the preview, and when the preview has room. */
+private const val LIST_WEIGHT = 1.15f
+private const val PREVIEW_WEIGHT = 0.85f
+private val SIDE_PANEL_MIN = 720.dp
+
+/** The preview cover's height, as a share of the panel's. */
+private const val PREVIEW_COVER = 0.56f
+
+/** Lists narrower than this put each row's system, marks and play time under its name. */
+private val DENSE_LIST = 400.dp
+
+/** The column of play times in the List layout: wide enough for "12 h 30 min". */
+private val PLAYTIME_COLUMN = Space.x4 + Space.l
+
+/** The accent bar at the start of the selected row, as tall as the menus' bar. */
+private val ROW_BAR_HEIGHT = 22.dp
+
+/** The selected row's fill in dark and light themes, as in the menus. */
+private const val ROW_FILL = 0.1f
+private const val ROW_FILL_LIGHT = 0.07f
+
+/** Row thumbnails take the tiles' corners, at least this round, a little rounder for their size. */
+private const val THUMB_CORNER_MIN = 0.12f
+private const val THUMB_CORNER_EXTRA = 0.06f
+
+/** A collection tile's width against its height, and the fill of its icon well. */
+private const val COLLECTION_ASPECT = 1.6f
+private const val WELL_FILL = 0.08f
+private const val WELL_FILL_LIGHT = 0.06f

@@ -2,9 +2,11 @@ package io.github.matiyaaa.fuse.ui.designsystem.theme
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.LineBreak
 import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
@@ -39,7 +41,19 @@ data class FuseTypography(
     /** Clock and counters: tabular figures so digits don't jitter. */
     val numeric: TextStyle,
     val numericLarge: TextStyle,
+    /**
+     * Small numbers that sit beside captions and labels: counts in chips and tabs, badge numbers,
+     * durations and sizes in list rows. Tabular, so a column of them lines up and a ticking value
+     * never shifts its neighbours.
+     */
+    val numericSmall: TextStyle = numeric,
 )
+
+/**
+ * This style with tabular (equal width) figures, for numbers that change in place or line up in a
+ * column (progress, sizes, times) in a reading style such as caption or label.
+ */
+fun TextStyle.tabular(): TextStyle = copy(fontFeatureSettings = "tnum")
 
 @Composable
 fun rememberFuseTypography(): FuseTypography {
@@ -54,10 +68,16 @@ fun rememberFuseTypography(): FuseTypography {
         Font(Res.font.manrope_semibold, FontWeight.SemiBold),
         Font(Res.font.manrope_bold, FontWeight.Bold),
     )
+    return remember(sora, manrope) { fuseTypography(sora, manrope) }
+}
+
+private fun fuseTypography(sora: FontFamily, manrope: FontFamily): FuseTypography {
     val trim = LineHeightStyle(LineHeightStyle.Alignment.Center, LineHeightStyle.Trim.Both)
+    // Titles balance their lines where the platform can, so a wrapped title never leaves a single
+    // word on its last line. Reading text keeps the platform's quicker default.
     fun display(size: Int, line: Int, weight: FontWeight, tracking: Double) = TextStyle(
         fontFamily = sora, fontWeight = weight, fontSize = size.sp, lineHeight = line.sp,
-        letterSpacing = tracking.em, lineHeightStyle = trim,
+        letterSpacing = tracking.em, lineHeightStyle = trim, lineBreak = LineBreak.Heading,
     )
     fun text(size: Int, line: Int, weight: FontWeight, tracking: Double = 0.0) = TextStyle(
         fontFamily = manrope, fontWeight = weight, fontSize = size.sp, lineHeight = line.sp,
@@ -73,7 +93,8 @@ fun rememberFuseTypography(): FuseTypography {
         label = text(13, 18, FontWeight.SemiBold, 0.005),
         caption = text(12, 16, FontWeight.Medium, 0.01),
         overline = text(11, 14, FontWeight.Bold, 0.14),
-        numeric = display(15, 20, FontWeight.SemiBold, 0.0).copy(fontFeatureSettings = "tnum"),
-        numericLarge = display(40, 44, FontWeight.SemiBold, -0.02).copy(fontFeatureSettings = "tnum"),
+        numeric = display(15, 20, FontWeight.SemiBold, 0.0).tabular(),
+        numericLarge = display(40, 44, FontWeight.SemiBold, -0.02).tabular(),
+        numericSmall = display(12, 16, FontWeight.SemiBold, 0.01).tabular(),
     )
 }

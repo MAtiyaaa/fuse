@@ -1,7 +1,6 @@
 package io.github.matiyaaa.fuse.ui.shell.settings
 
-import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.background
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -16,8 +15,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -28,21 +25,31 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.dp
 import io.github.matiyaaa.fuse.model.GameId
 import io.github.matiyaaa.fuse.model.NavAction
 import io.github.matiyaaa.fuse.model.PlatformId
+import io.github.matiyaaa.fuse.ui.designsystem.components.EmptyState
 import io.github.matiyaaa.fuse.ui.designsystem.components.FText
 import io.github.matiyaaa.fuse.ui.designsystem.components.Hint
 import io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction
 import io.github.matiyaaa.fuse.ui.designsystem.components.MenuArt
 import io.github.matiyaaa.fuse.ui.designsystem.components.MenuList
+import io.github.matiyaaa.fuse.ui.designsystem.components.Panel
+import io.github.matiyaaa.fuse.ui.designsystem.components.ProgressBar
 import io.github.matiyaaa.fuse.ui.designsystem.components.SectionLabel
+import io.github.matiyaaa.fuse.ui.designsystem.components.Skeleton
+import io.github.matiyaaa.fuse.ui.designsystem.components.SkeletonRow
+import io.github.matiyaaa.fuse.ui.designsystem.components.SkeletonText
 import io.github.matiyaaa.fuse.ui.designsystem.components.Trailing
+import io.github.matiyaaa.fuse.ui.designsystem.components.fadingEdges
 import io.github.matiyaaa.fuse.ui.designsystem.components.handleMenuAction
+import io.github.matiyaaa.fuse.ui.designsystem.effects.reveal
 import io.github.matiyaaa.fuse.ui.designsystem.focus.LinearSelection
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
 import io.github.matiyaaa.fuse.ui.designsystem.icons.HintButton
@@ -51,6 +58,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.input.NavResult
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
+import io.github.matiyaaa.fuse.ui.designsystem.theme.tabular
 import io.github.matiyaaa.fuse.ui.designsystem.theme.toColor
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec
@@ -131,13 +139,12 @@ fun StorageScreen(app: AppState) {
         ))
         shown.forEach { g ->
             val on = g.card.id in picked
-            val logo = g.card.art.logo
             add(MenuAction(
                 "g${g.card.id.value}", g.card.title, if (on) FuseIcons.SquareCheck else FuseIcons.Square,
                 detail = "${g.card.platformShort}  ·  ${g.files} ${if (g.files == 1) "file" else "files"}",
                 trailing = Trailing.Value(bytesText(g.bytes)),
-                // The game's logo, or its square art when it has no logo.
-                art = MenuArt(logo ?: g.card.art.tile, square = logo == null, fallbackTitle = g.card.title, accent = g.card.accent),
+                // Square art for every game, so titles line up and the list stays compact.
+                art = MenuArt(g.card.art.tile, square = true, fallbackTitle = g.card.title, accent = g.card.accent, wide = false),
                 onSelect = { picked = if (on) picked - g.card.id else picked + g.card.id },
             ))
         }
@@ -156,23 +163,42 @@ fun StorageScreen(app: AppState) {
         }
     }
 
+    val empty = u != null && u.finished && u.games.isEmpty()
     BoxWithConstraints(Modifier.fillMaxSize()) {
-        val wide = maxWidth > 760.dp
-        Column(Modifier.fillMaxSize().padding(horizontal = Space.gutter)) {
-            Spacer(Modifier.height(Size.hudHeight + Space.m))
-            Row(verticalAlignment = Alignment.Bottom) {
-                FText("Storage", Fuse.type.title, maxLines = 1)
-                Spacer(Modifier.width(Space.l))
-                FText(summaryLine(u), Fuse.type.body, color = Fuse.colors.textMuted, maxLines = 1, modifier = Modifier.padding(bottom = 2.dp))
+        val wide = maxWidth > WIDE_FROM
+        val short = maxHeight < SHORT_BELOW
+        Column(Modifier.fillMaxSize().padding(horizontal = if (wide) Space.gutter else Space.gutterCompact)) {
+            Spacer(Modifier.height(Size.hudHeight + if (short) Space.s else Space.l))
+            SettingsPageHeading("Storage", summaryLine(u), short, Modifier.reveal(0)) {
                 if (u != null && !u.finished) {
-                    Spacer(Modifier.width(Space.l))
-                    io.github.matiyaaa.fuse.ui.designsystem.components.ProgressBar(
-                        if (u.total > 0) u.measured.toFloat() / u.total else null,
-                        Modifier.width(140.dp).padding(bottom = 8.dp),
-                    )
+                    ProgressBar(if (u.total > 0) u.measured.toFloat() / u.total else null, Modifier.width(MEASURE_BAR))
                 }
             }
-            Spacer(Modifier.height(Space.l))
+            Spacer(Modifier.height(if (short) Space.m else Space.l))
+            val list: @Composable (Modifier, (@Composable () -> Unit)?) -> Unit = { m, header ->
+                Panel(m) {
+                    Column(Modifier.fillMaxSize()) {
+                        MenuList(
+                            rows, sel,
+                            showSelection = app.focusZone == FocusZone.CONTENT,
+                            header = header,
+                            fill = !(u == null || empty),
+                            modifier = Modifier.padding(Space.s).menuEdges(rows, sel.index),
+                        )
+                        when {
+                            // Rows shaped like the games still being measured.
+                            u == null -> Column(Modifier.padding(horizontal = Space.s)) { repeat(SKELETON_ROWS) { SkeletonRow() } }
+                            empty -> Box(Modifier.fillMaxSize().padding(Space.l), contentAlignment = Alignment.Center) {
+                                EmptyState(
+                                    FuseIcons.HardDrive, "No games to measure",
+                                    message = "Games show here, largest first, once Fuse finds them in your folders.",
+                                    compact = true,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
             if (wide) {
                 // The drives scroll along with the list: moving down the games moves down the drives
                 // by the same share, so every part of them can be read without touching the screen.
@@ -181,15 +207,19 @@ fun StorageScreen(app: AppState) {
                     val share = if (rows.size <= 1) 0f else sel.index.toFloat() / (rows.size - 1)
                     drives.animateScrollTo((drives.maxValue * share).toInt())
                 }
-                Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(Space.xl)) {
-                    Column(Modifier.weight(0.4f).fillMaxHeight().verticalScroll(drives), verticalArrangement = Arrangement.spacedBy(Space.l)) {
-                        Volumes(u)
-                        Spacer(Modifier.height(Size.hintHeight + Space.l))
+                Row(Modifier.fillMaxSize().padding(bottom = Size.hintHeight + Space.s), horizontalArrangement = Arrangement.spacedBy(Space.xl)) {
+                    Column(
+                        Modifier.weight(0.4f).fillMaxHeight().fadingEdges(drives, top = Space.l, bottom = Space.xl).verticalScroll(drives).reveal(1),
+                        verticalArrangement = Arrangement.spacedBy(Space.l),
+                    ) {
+                        Volumes(u, nested = false)
                     }
-                    MenuList(rows, sel, modifier = Modifier.weight(0.6f), showSelection = app.focusZone == FocusZone.CONTENT)
+                    list(Modifier.weight(0.6f).fillMaxHeight().reveal(2), null)
                 }
             } else {
-                MenuList(rows, sel, modifier = Modifier.fillMaxWidth(), showSelection = app.focusZone == FocusZone.CONTENT, header = { Column { Volumes(u); Spacer(Modifier.height(Space.l)) } })
+                list(
+                    Modifier.fillMaxSize().padding(bottom = Size.hintHeight + Space.s).reveal(1),
+                ) { Column(Modifier.padding(top = Space.s, bottom = Space.m), verticalArrangement = Arrangement.spacedBy(Space.m)) { Volumes(u, nested = true) } }
             }
         }
     }
@@ -202,64 +232,139 @@ private fun summaryLine(u: StorageUsage?): String {
     return "${u.games.size} games take ${bytesText(games)}"
 }
 
+/** Every drive the library is on, or what stands in for them while they're unknown. */
 @Composable
-private fun Volumes(u: StorageUsage?) {
+private fun Volumes(u: StorageUsage?, nested: Boolean) {
     val volumes = u?.volumes.orEmpty()
-    if (volumes.isEmpty()) {
-        FText(if (u == null) "Looking at your drives" else "Fuse can't tell how much space these drives have.", Fuse.type.body, color = Fuse.colors.textMuted)
-        return
+    when {
+        u == null -> VolumeSkeleton(nested)
+        volumes.isEmpty() -> Panel(Modifier.fillMaxWidth(), raised = nested, shadow = !nested) {
+            Box(Modifier.fillMaxWidth().padding(Space.l), contentAlignment = Alignment.Center) {
+                EmptyState(
+                    FuseIcons.HardDrive, "Drive space unknown",
+                    message = "This system doesn't say how big these drives are. Each game's size is still below.",
+                    compact = true,
+                )
+            }
+        }
+        else -> volumes.forEach { VolumeCard(it, nested) }
     }
-    volumes.forEach { VolumeCard(it) }
 }
 
-/** A drive as a bar: each system's games in its colour, then other files, then free space. */
+/**
+ * A drive: how much is free, a bar of what fills it (games, everything else, free space), then the
+ * games on it by system, each with a bar against the largest, in the system's own colour.
+ */
 @Composable
-private fun VolumeCard(v: VolumeUsage) {
+private fun VolumeCard(v: VolumeUsage, nested: Boolean) {
     val c = Fuse.colors
     val used = (v.totalBytes - v.freeBytes).coerceAtLeast(0)
     val other = (used - v.gamesBytes).coerceAtLeast(0)
-    Column(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(Fuse.geometry.control)).background(c.text.copy(alpha = 0.06f)).padding(Space.l),
-        verticalArrangement = Arrangement.spacedBy(Space.s),
-    ) {
-        SectionLabel(v.label)
-        Row(verticalAlignment = Alignment.Bottom) {
-            FText("${bytesText(v.freeBytes)} free", Fuse.type.titleSmall, maxLines = 1)
-            Spacer(Modifier.width(Space.s))
-            FText("of ${bytesText(v.totalBytes)}", Fuse.type.label, color = c.textMuted, maxLines = 1)
-        }
-        val systems = v.systems.take(6)
-        val rest = v.systems.drop(6).sumOf { it.bytes }
-        val track = c.text.copy(alpha = 0.1f)
-        val otherColor = c.text.copy(alpha = 0.32f)
-        Canvas(Modifier.fillMaxWidth().height(14.dp).clip(RoundedCornerShape(7.dp))) {
-            drawRoundRect(track, cornerRadius = CornerRadius(7.dp.toPx()))
-            val total = v.totalBytes.coerceAtLeast(1).toFloat()
-            var x = 0f
-            fun segment(bytes: Long, color: androidx.compose.ui.graphics.Color) {
-                val w = size.width * (bytes / total)
-                if (w <= 0f) return
-                drawRect(color, topLeft = Offset(x, 0f), size = androidx.compose.ui.geometry.Size(w, size.height))
-                x += w
+    val games = c.accent
+    val rest = c.text.copy(alpha = if (c.isDark) 0.34f else 0.3f)
+    Panel(Modifier.fillMaxWidth(), raised = nested, shadow = !nested) {
+        Column(Modifier.fillMaxWidth().padding(Space.l), verticalArrangement = Arrangement.spacedBy(Space.s)) {
+            SectionLabel(v.label, icon = FuseIcons.HardDrive)
+            Row(verticalAlignment = Alignment.Bottom) {
+                FText(bytesText(v.freeBytes), Fuse.type.title.tabular(), maxLines = 1, modifier = Modifier.alignByBaseline())
+                Spacer(Modifier.width(Space.s))
+                FText("free of ${bytesText(v.totalBytes)}", Fuse.type.label, color = c.textMuted, maxLines = 1, modifier = Modifier.alignByBaseline())
             }
-            systems.forEach { segment(it.bytes, it.accent.toColor()) }
-            segment(rest, otherColor)
-            segment(other, otherColor.copy(alpha = 0.2f))
+            UsageBar(listOf(v.gamesBytes to games, other to rest), v.totalBytes, Modifier.fillMaxWidth().padding(vertical = Space.xxs))
+            Row(horizontalArrangement = Arrangement.spacedBy(Space.l), verticalAlignment = Alignment.CenterVertically) {
+                Key(games, "Games", v.gamesBytes)
+                Key(rest, "Everything else", other)
+                Key(null, "Free", v.freeBytes)
+            }
+            if (v.systems.isNotEmpty()) {
+                Spacer(Modifier.height(Space.s))
+                SectionLabel("Games by system", count = v.systems.size.toString(), rule = true)
+                Spacer(Modifier.height(Space.xxs))
+                val shown = v.systems.take(SYSTEMS_SHOWN)
+                val others = v.systems.drop(SYSTEMS_SHOWN).sumOf { it.bytes }
+                val largest = (shown.maxOfOrNull { it.bytes } ?: 0L).coerceAtLeast(others).coerceAtLeast(1)
+                shown.forEach { SystemBar(it.accent.toColor(), it.name, it.bytes, largest) }
+                if (others > 0) SystemBar(rest, "Other systems", others, largest)
+            }
         }
-        Spacer(Modifier.height(Space.xs))
-        systems.forEach { Legend(it.accent.toColor(), it.name, it.bytes) }
-        if (rest > 0) Legend(otherColor, "Other systems", rest)
-        Legend(otherColor.copy(alpha = 0.2f), "Everything else on the drive", other)
     }
 }
 
+/** One system's share of the games on a drive: its name and size over a bar in its colour. */
 @Composable
-private fun Legend(color: androidx.compose.ui.graphics.Color, label: String, bytes: Long) {
+private fun SystemBar(color: Color, name: String, bytes: Long, largest: Long) {
+    Column(Modifier.fillMaxWidth().padding(vertical = Space.xxs), verticalArrangement = Arrangement.spacedBy(Space.xs)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            FText(name, Fuse.type.label, color = Fuse.colors.text, maxLines = 1, modifier = Modifier.weight(1f))
+            Spacer(Modifier.width(Space.s))
+            FText(bytesText(bytes), Fuse.type.numericSmall, color = Fuse.colors.textMuted, maxLines = 1)
+        }
+        UsageBar(listOf(bytes to color), largest, Modifier.fillMaxWidth())
+    }
+}
+
+/**
+ * A rounded track with [parts] laid along it in order, each [bytes] of [total]. Every part shows at
+ * least as a dot, so a few kilobytes of games on a large drive still read as something. The parts
+ * ease to new sizes.
+ */
+@Composable
+private fun UsageBar(parts: List<Pair<Long, Color>>, total: Long, modifier: Modifier) {
+    val c = Fuse.colors
+    val track = c.text.copy(alpha = if (c.isDark) 0.1f else 0.08f)
+    val shares = parts.map { (b, _) -> (b.toFloat() / total.coerceAtLeast(1)).coerceIn(0f, 1f) }
+    val eased = shares.mapIndexed { i, f ->
+        animateFloatAsState(f, Fuse.motion.value(), label = "usage$i")
+    }
+    val colors = parts.map { it.second }
+    val height = Size.track * if (parts.size > 1) 2 else 1
+    Spacer(
+        modifier.height(height).drawBehind {
+            val h = size.height
+            val r = CornerRadius(h / 2)
+            drawRoundRect(track, cornerRadius = r)
+            var x = 0f
+            eased.forEachIndexed { i, f ->
+                val share = f.value
+                if (shares[i] <= 0f) return@forEachIndexed
+                val w = (size.width * share).coerceAtLeast(h).coerceAtMost(size.width - x)
+                if (w <= 0f) return@forEachIndexed
+                drawRoundRect(colors[i], Offset(x, 0f), androidx.compose.ui.geometry.Size(w, h), r)
+                // Neighbouring parts meet edge to edge, with a hairline of the track between them.
+                x += w + if (i < eased.lastIndex) 1.dp.toPx() else 0f
+            }
+        },
+    )
+}
+
+/** A legend entry: a dot (a ring for free space) and what it stands for, with its size. */
+@Composable
+private fun Key(color: Color?, label: String, bytes: Long) {
+    val c = Fuse.colors
+    val ring = c.text.copy(alpha = 0.4f)
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(9.dp).clip(CircleShape).background(color))
-        Spacer(Modifier.width(Space.s))
-        FText(label, Fuse.type.label, color = Fuse.colors.textMuted, maxLines = 1, modifier = Modifier.weight(1f))
-        FText(bytesText(bytes), Fuse.type.label, maxLines = 1)
+        Spacer(
+            Modifier.size(Size.dot).drawBehind {
+                if (color != null) drawCircle(color) else drawCircle(ring, size.minDimension / 2 - 0.75.dp.toPx(), style = Stroke(1.5.dp.toPx()))
+            },
+        )
+        Spacer(Modifier.width(Space.xs + Space.xxs))
+        FText(label, Fuse.type.caption, color = c.textMuted, maxLines = 1)
+        Spacer(Modifier.width(Space.xs))
+        FText(bytesText(bytes), Fuse.type.numericSmall, color = c.text, maxLines = 1)
+    }
+}
+
+/** A drive card's shape while Fuse looks at the drives. */
+@Composable
+private fun VolumeSkeleton(nested: Boolean) {
+    Panel(Modifier.fillMaxWidth(), raised = nested, shadow = !nested) {
+        Column(Modifier.fillMaxWidth().padding(Space.l), verticalArrangement = Arrangement.spacedBy(Space.m)) {
+            Skeleton(Modifier.fillMaxWidth(0.4f).height(Space.m))
+            Skeleton(Modifier.fillMaxWidth(0.6f).height(Space.xl))
+            Skeleton(Modifier.fillMaxWidth().height(Size.track * 2))
+            SkeletonText(lines = 3, style = Fuse.type.label, lastLineFraction = 0.5f)
+        }
     }
 }
 
@@ -286,3 +391,12 @@ private fun confirmDelete(app: AppState, games: List<Pair<GameId, String>>, file
         }
     }
 }
+
+/** Drives sit beside the games from this width; the measuring bar's length; rows shown while loading. */
+private val WIDE_FROM = 760.dp
+private val SHORT_BELOW = 560.dp
+private val MEASURE_BAR = 140.dp
+private const val SKELETON_ROWS = 6
+
+/** Systems listed by name on each drive; the rest share one bar. */
+private const val SYSTEMS_SHOWN = 6

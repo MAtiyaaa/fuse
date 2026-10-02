@@ -1,6 +1,21 @@
 package io.github.matiyaaa.fuse.ui.shell.home
 
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.ui.unit.Dp
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.ui.graphics.toArgb
+import io.github.matiyaaa.fuse.model.CartridgeStatus
+import io.github.matiyaaa.fuse.ui.designsystem.effects.elevated
+import io.github.matiyaaa.fuse.ui.designsystem.effects.rememberReveal
+import io.github.matiyaaa.fuse.ui.designsystem.effects.reveal
+import io.github.matiyaaa.fuse.ui.designsystem.theme.Elevation
+import io.github.matiyaaa.fuse.ui.shell.app.rememberClockText
+import io.github.matiyaaa.fuse.ui.shell.components.agoText
+import io.github.matiyaaa.fuse.ui.shell.store.HomeFeed
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Arrangement
@@ -20,6 +35,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -28,11 +44,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
@@ -41,7 +52,6 @@ import io.github.matiyaaa.fuse.model.Destination
 import io.github.matiyaaa.fuse.model.HomeMode
 import io.github.matiyaaa.fuse.model.NavAction
 import io.github.matiyaaa.fuse.model.WidgetKind
-import io.github.matiyaaa.fuse.ui.designsystem.components.FText
 import io.github.matiyaaa.fuse.ui.designsystem.components.Hint
 import io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction
 import io.github.matiyaaa.fuse.ui.designsystem.components.SectionLabel
@@ -57,7 +67,6 @@ import io.github.matiyaaa.fuse.ui.designsystem.focus.dragReorder
 import io.github.matiyaaa.fuse.ui.designsystem.focus.rememberDragReorderState
 import io.github.matiyaaa.fuse.ui.designsystem.focus.reorderHandle
 import io.github.matiyaaa.fuse.ui.designsystem.focus.reorderItem
-import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
 import io.github.matiyaaa.fuse.ui.designsystem.icons.HintButton
 import io.github.matiyaaa.fuse.ui.designsystem.input.InputLayer
@@ -98,6 +107,13 @@ import io.github.matiyaaa.fuse.ui.shell.library.CollectionTile
 import io.github.matiyaaa.fuse.ui.shell.systems.moveSystem
 import io.github.matiyaaa.fuse.ui.shell.systems.moveSystemBy
 import io.github.matiyaaa.fuse.ui.shell.systems.systemMenu
+
+/** Shorter than this (a handheld), the stage's title and logo are set smaller. */
+private val COMPACT_BELOW = 560.dp
+
+/** The stage's logo height, and on a handheld. */
+private val STAGE_LOGO = 104.dp
+private val COMPACT_LOGO = 72.dp
 
 @Composable
 fun HomeScreen(app: AppState) {
@@ -157,10 +173,16 @@ fun FlowHome(app: AppState) {
     val shelf = shelves.getOrNull(sel.row)
     val item = shelf?.items?.getOrNull(sel.column(shelf.key))
 
+    // Before the library's first load Home shows its outline, never "no games".
+    val loading = rememberHomeLoading(app, feed, shelves.isEmpty())
     if (shelves.isEmpty()) {
-        HomeEmpty(app)
+        if (loading) HomeSkeleton(app, channels = false) else HomeEmpty(app)
         return
     }
+    // The stage, then each shelf in turn, rise in as Home opens (once; shelves scrolled to later are just there).
+    val reveal = rememberReveal()
+    val accent = Fuse.colors.accent.toArgb().toLong() and 0xFFFFFFFFL
+    val time = rememberClockText(prefs.clock24h)
 
     // The room and the stage follow the selection.
     val systems = rememberSystems(app)
@@ -260,6 +282,9 @@ fun FlowHome(app: AppState) {
             .pointerInput(arranging) { if (arranging) detectTapGestures { reorder = null; movingSystem = false; shelfDrag.arm(null) } },
     ) {
         val maxH = maxHeight
+        val widgetMax = maxWidth - Space.gutter * 2
+        CompositionLocalProvider(LocalHomeTime provides time) {
+        val compact = maxH < COMPACT_BELOW
         val stageHeight = (maxH * 0.3f).coerceIn(150.dp, 280.dp)
         val rows = rememberLazyListState()
         // While a shelf is held the list stays under the finger.
@@ -269,16 +294,27 @@ fun FlowHome(app: AppState) {
         val selectedAt = shown.indexOfFirst { it.key == selectedKey }
         Column(Modifier.fillMaxSize()) {
             Spacer(Modifier.height(Size.hudHeight))
-            Box(Modifier.fillMaxWidth().height(stageHeight).padding(horizontal = Space.gutter), contentAlignment = Alignment.BottomStart) {
-                Stage(item?.stage(feed), showLogo = prefs.showLogo)
+            Box(
+                Modifier.fillMaxWidth().height(stageHeight).padding(horizontal = Space.gutter).reveal(reveal, 0),
+                contentAlignment = Alignment.BottomStart,
+            ) {
+                Stage(
+                    item?.stage(shelf, feed, cartridge, time, accent),
+                    showLogo = prefs.showLogo,
+                    // A handheld's stage is shorter: a smaller title and logo keep two lines inside it.
+                    logoHeight = if (compact) COMPACT_LOGO else STAGE_LOGO,
+                    titleStyle = if (compact) Fuse.type.display else Fuse.type.hero,
+                )
             }
-            Spacer(Modifier.height(Space.xl))
+            // The shelf's own top padding and title row make up the rest of the gap to the stage.
+            Spacer(Modifier.height(if (compact) Space.s else Space.m))
             LazyColumn(
                 state = rows,
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
-                    .fadingEdges(top = if (rows.canScrollBackward) 24.dp else 0.dp)
+                    // Only the shelf's own top padding fades, so the focused shelf's title stays crisp.
+                    .fadingEdges(rows, top = Space.s)
                     .dragReorder(
                         shelfDrag,
                         visibleKeys = { rows.layoutInfo.visibleItemsInfo.map { it.key } },
@@ -310,7 +346,6 @@ fun FlowHome(app: AppState) {
                     ),
                 // Only room for the hint line: the list ends where its content ends, by stick or by touch.
                 contentPadding = PaddingValues(bottom = Size.hintHeight + Space.xl),
-                verticalArrangement = Arrangement.spacedBy(Space.l),
             ) {
                 itemsIndexed(shown, key = { _, s -> s.key }) { shownAt, s ->
                     val index = shelves.indexOf(s)
@@ -321,6 +356,8 @@ fun FlowHome(app: AppState) {
                         Fuse.motion.fade(Durations.BASE),
                         label = "shelf",
                     )
+                    // Where a shelf held by touch will land stays marked while it follows the finger.
+                    val well by animateFloatAsState(if (held) 1f else 0f, Fuse.motion.fade(Durations.FAST), label = "well")
                     ShelfRow(
                         app = app,
                         shelf = s,
@@ -333,9 +370,13 @@ fun FlowHome(app: AppState) {
                         feed = feed,
                         cartridge = cartridge,
                         clock24h = prefs.clock24h,
+                        // A wide widget never runs past the screen on a phone held upright.
+                        widgetMax = widgetMax,
                         modifier = Modifier
                             // The held shelf follows the finger; the others slide out of its way.
                             .animateItem(fadeInSpec = null, fadeOutSpec = null, placementSpec = if (held) null else ReorderDefaults.Placement)
+                            .reveal(reveal, 1 + shownAt)
+                            .dropWell({ well }, RoundedCornerShape(Fuse.geometry.panel), horizontal = Space.l)
                             .reorderItem(shelfDrag, s.key, liftScale = 1.02f)
                             .graphicsLayer { alpha = rowAlpha },
                         onTap = { col ->
@@ -376,6 +417,7 @@ fun FlowHome(app: AppState) {
                 }
             }
         }
+        }
     }
 }
 
@@ -389,9 +431,10 @@ private fun ShelfRow(
     lifted: Boolean,
     shelfDrag: DragReorderState,
     movingItem: Boolean,
-    feed: io.github.matiyaaa.fuse.ui.shell.store.HomeFeed,
-    cartridge: io.github.matiyaaa.fuse.model.CartridgeStatus,
+    feed: HomeFeed,
+    cartridge: CartridgeStatus,
     clock24h: Boolean,
+    widgetMax: Dp,
     modifier: Modifier,
     onTap: (Int) -> Unit,
     onLongPress: (Int) -> Unit,
@@ -436,56 +479,47 @@ private fun ShelfRow(
         focus,
         size = 360.dp,
     )
-    // A shelf being moved sits on a raised panel, so it reads as one thing in your hand.
-    val lift by animateFloatAsState(if (lifted) 1f else 0f, Fuse.motion.focusSpring(), label = "shelf lift")
-    val panel = Fuse.geometry.panel
-    Column(
-        modifier
-            .fillMaxWidth()
-            .drawBehind {
-                if (lift <= 0.01f) return@drawBehind
-                val inset = Space.l.toPx()
-                val pad = Space.s.toPx()
-                val r = CornerRadius(panel.toPx())
-                val topLeft = Offset(inset, -pad)
-                val box = androidx.compose.ui.geometry.Size(size.width - inset * 2, size.height + pad)
-                // A soft shadow in three steps, then the panel and its hairline.
-                for (i in 3 downTo 1) {
-                    val spread = i * 6.dp.toPx()
-                    drawRoundRect(
-                        Color.Black.copy(alpha = 0.10f * lift),
-                        topLeft = topLeft + Offset(-spread / 2, spread / 2),
-                        size = androidx.compose.ui.geometry.Size(box.width + spread, box.height + spread / 2),
-                        cornerRadius = CornerRadius(r.x + spread / 2),
-                    )
-                }
-                drawRoundRect(c.surfaceRaised.copy(alpha = 0.94f * lift), topLeft, box, r)
-                drawRoundRect(c.text.copy(alpha = 0.1f * lift), topLeft, box, r, style = Stroke(1.dp.toPx()))
-            },
-    ) {
+    // A shelf being moved sits on a panel at the overlay level, so it reads as one thing in your hand.
+    val motion = Fuse.motion
+    val lift by animateFloatAsState(if (lifted) 1f else 0f, motion.focusSpring(), label = "shelf lift")
+    val showPanel by remember { derivedStateOf { lift > 0.01f } }
+    val panelShape = RoundedCornerShape(Fuse.geometry.panel)
+    val lit = selectedColumn >= 0 || lifted
+    val titleColor by animateColorAsState(if (lit) c.text else c.textMuted, motion.fade(Durations.FAST), label = "shelf title")
+    Box(modifier.fillMaxWidth()) {
+        if (showPanel) {
+            Box(
+                Modifier
+                    .matchParentSize()
+                    .padding(horizontal = Space.l)
+                    .graphicsLayer { alpha = lift.coerceIn(0f, 1f) }
+                    .elevated(Elevation.overlay, panelShape),
+            )
+        }
+        Column(Modifier.fillMaxWidth().padding(top = Space.s)) {
         Row(
             Modifier
                 .fillMaxWidth()
+                // Room for the "Moving" badge always, so picking a shelf up never moves anything.
+                .heightIn(min = Size.badge)
                 // Holding a shelf's title picks the whole shelf up.
                 .reorderHandle(shelfDrag, shelf.key)
-                .padding(start = Space.gutter, end = Space.gutter, bottom = Space.m),
+                .padding(horizontal = Space.gutter),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            SectionLabel(shelf.title, color = if (selectedColumn >= 0 || lifted) c.text else c.textMuted)
+            SectionLabel(shelf.title, color = titleColor, count = shelf.count?.takeIf { it > 1 }?.toString())
             if (lifted || movingItem) {
-                Spacer(Modifier.width(Space.s))
-                FuseIcon(FuseIcons.Move, size = 14.dp, tint = c.accent)
-                Spacer(Modifier.width(Space.xs))
-                FText(
+                Spacer(Modifier.width(Space.m))
+                MovingNote(
                     when {
                         movingItem -> "Left and right to place it"
-                        moving -> "Drag it, or up and down to place it"
+                        moving -> "Up and down to place it, or drag it"
                         else -> "Drag to place it"
                     },
-                    Fuse.type.caption, color = c.accent,
                 )
             }
         }
+        Spacer(Modifier.height(Space.s))
         val height = when (shelf.style) {
             ShelfStyle.WIDE -> metrics.icon * 1.25f
             else -> metrics.icon
@@ -511,7 +545,8 @@ private fun ShelfRow(
                     app.platform.haptics.drop()
                 },
             ),
-            contentPadding = PaddingValues(start = Space.gutter, end = Space.gutter * 3, bottom = Space.l),
+            // Clear of the spark bar and the lift before the next shelf's title.
+            contentPadding = PaddingValues(start = Space.gutter, end = Space.gutter * 3, bottom = Size.sparkClearance + Space.xs),
             horizontalArrangement = Arrangement.spacedBy(metrics.gap),
         ) {
             itemsIndexed(items, key = { _, i -> i.key }) { col, item ->
@@ -539,34 +574,33 @@ private fun ShelfRow(
                     is ShelfItem.App -> AppTile(item.card, selected, size = height, onClick = { onTap(col) }, onLongClick = { onLongPress(col) })
                     is ShelfItem.Collection -> CollectionTile(item.collection, selected, height = height, onClick = { onTap(col) }, onLongClick = { onLongPress(col) })
                     // A widget's hold belongs to its shelf: let go without moving, and the shelf's options open.
-                    is ShelfItem.Widget -> WidgetCard(item.kind, item.span, feed, cartridge, selected, clock24h, onClick = { onTap(col) }, height = height)
+                    is ShelfItem.Widget -> WidgetCard(item.kind, item.span, feed, cartridge, selected, clock24h, onClick = { onTap(col) }, modifier = Modifier.widthIn(max = widgetMax), height = height)
                 }
                 }
             }
+        }
         }
     }
 }
 
 
-/** What the stage shows for a shelf item. */
-private fun ShelfItem.stage(feed: io.github.matiyaaa.fuse.ui.shell.store.HomeFeed): StageInfo = when (this) {
-    is ShelfItem.Game -> card.stage()
+/**
+ * What the stage shows for a shelf item. Games read as they do in the Library, led by what put
+ * them on this shelf ("Added 3 days ago" on New in your library); widgets tell their value big,
+ * the same as their channel's spotlight.
+ */
+private fun ShelfItem.stage(shelf: Shelf?, feed: HomeFeed, cartridge: CartridgeStatus, time: String, accent: Long): StageInfo = when (this) {
+    is ShelfItem.Game -> card.stage().let { s ->
+        if (shelf?.kind == WidgetKind.RECENTLY_ADDED && card.addedAt > 0) s.copy(meta = listOf("Added ${agoText(card.addedAt)}") + s.meta) else s
+    }
     is ShelfItem.System -> card.stage()
-    is ShelfItem.App -> StageInfo(key = key, title = card.entry.displayTitle, eyebrow = when (card.entry.kind) {
-        io.github.matiyaaa.fuse.model.AppKind.GAME -> "ANDROID GAME"
-        io.github.matiyaaa.fuse.model.AppKind.EMULATOR -> "EMULATOR"
-        io.github.matiyaaa.fuse.model.AppKind.APP -> "APP"
+    is ShelfItem.App -> StageInfo(key = key, title = card.entry.displayTitle, accent = accent, eyebrow = when (card.entry.kind) {
+        io.github.matiyaaa.fuse.model.AppKind.GAME -> "Android game"
+        io.github.matiyaaa.fuse.model.AppKind.EMULATOR -> "Emulator"
+        io.github.matiyaaa.fuse.model.AppKind.APP -> "App"
     })
-    is ShelfItem.Collection -> StageInfo(key = key, title = collection.name, eyebrow = "COLLECTION", meta = listOf("${collection.gameCount} games"))
-    is ShelfItem.Widget -> StageInfo(
-        key = key,
-        title = kind.title(),
-        eyebrow = "AT A GLANCE",
-        meta = when (kind) {
-            WidgetKind.PLAYTIME_WEEK, WidgetKind.PLAYTIME_TOTAL -> listOf("Time Fuse saw you play. Imported time is kept separate.")
-            else -> emptyList()
-        },
-    )
+    is ShelfItem.Collection -> StageInfo(key = key, title = collection.name, eyebrow = "Collection", meta = listOf(gamesText(collection.gameCount)), accent = accent)
+    is ShelfItem.Widget -> widgetStage(kind, key, feed, cartridge, time, accent)
 }
 
 /** The backdrop for an item, keyed by its game or system (the second screen shows what the key names). */

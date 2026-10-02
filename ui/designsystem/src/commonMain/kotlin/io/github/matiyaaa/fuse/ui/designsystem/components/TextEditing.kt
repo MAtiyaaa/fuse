@@ -1,11 +1,26 @@
 package io.github.matiyaaa.fuse.ui.designsystem.components
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.spring
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.unit.dp
+import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 
 /**
  * Text being edited on the on-screen keyboard: the text plus its selection (a caret when the
@@ -130,3 +145,72 @@ object TextEdits {
     private fun nextBoundary(text: String, caret: Int): Int =
         if (caret + 1 < text.length && text[caret].isHighSurrogate() && text[caret + 1].isLowSurrogate()) caret + 2 else (caret + 1).coerceAtMost(text.length)
 }
+
+/**
+ * Draws [selection] behind a line of text as one softly rounded block per line, in [color] (the
+ * accent at a third by default), instead of a hard-edged path. Pair it with [editingCaret] on the
+ * same text; [layout] is the text's latest layout.
+ */
+@Composable
+fun Modifier.editingSelection(
+    layout: () -> TextLayoutResult?,
+    selection: TextRange,
+    color: Color = Fuse.colors.accent.copy(alpha = 0.32f),
+): Modifier = drawBehind {
+    val l = layout() ?: return@drawBehind
+    if (selection.collapsed) return@drawBehind
+    val length = l.layoutInput.text.length
+    val from = selection.min.coerceIn(0, length)
+    val to = selection.max.coerceIn(0, length)
+    if (to <= from) return@drawBehind
+    val radius = CornerRadius(4.dp.toPx())
+    val pad = 1.dp.toPx()
+    for (line in l.getLineForOffset(from)..l.getLineForOffset(to)) {
+        val start = maxOf(from, l.getLineStart(line))
+        val end = minOf(to, l.getLineEnd(line))
+        if (end <= start) continue
+        val left = l.getHorizontalPosition(start, usePrimaryDirection = true)
+        val right = l.getHorizontalPosition(end, usePrimaryDirection = true)
+        val top = l.getLineTop(line)
+        val bottom = l.getLineBottom(line)
+        drawRoundRect(color, Offset(minOf(left, right) - pad, top), Size(kotlin.math.abs(right - left) + pad * 2, bottom - top), radius)
+    }
+}
+
+/**
+ * Draws the caret of an edited line over the text: a rounded bar the height of the text's own
+ * glyphs (not the whole line box), that glides to its new place on a quick spring when it moves
+ * (it jumps under Reduced motion). [alpha] is read while drawing, so a blink costs no
+ * recomposition. Nothing is drawn while [visible] is false or a range is selected.
+ */
+@Composable
+fun Modifier.editingCaret(
+    layout: () -> TextLayoutResult?,
+    offset: Int,
+    visible: Boolean,
+    alpha: () -> Float = { 1f },
+    color: Color = Fuse.colors.accent,
+): Modifier {
+    val reduced = Fuse.motion.reduced
+    val x = remember { Animatable(Float.NaN) }
+    val l = layout()
+    val target = l?.let { it.getCursorRect(offset.coerceIn(0, it.layoutInput.text.length)).left }
+    LaunchedEffect(target) {
+        if (target == null) return@LaunchedEffect
+        if (x.value.isNaN() || reduced) x.snapTo(target) else x.animateTo(target, spring(dampingRatio = 0.9f, stiffness = 1600f))
+    }
+    return drawWithContent {
+        drawContent()
+        val res = layout() ?: return@drawWithContent
+        if (!visible) return@drawWithContent
+        val a = alpha().coerceIn(0f, 1f)
+        if (a <= 0f) return@drawWithContent
+        val r = res.getCursorRect(offset.coerceIn(0, res.layoutInput.text.length))
+        val w = 2.dp.toPx()
+        // The glyphs' height, centred on the line: about 0.8 of the line box.
+        val h = r.height * 0.8f
+        val px = if (x.value.isNaN()) r.left else x.value
+        drawRoundRect(color, Offset(px - w / 2, r.top + (r.height - h) / 2), Size(w, h), CornerRadius(w / 2), alpha = a)
+    }
+}
+
