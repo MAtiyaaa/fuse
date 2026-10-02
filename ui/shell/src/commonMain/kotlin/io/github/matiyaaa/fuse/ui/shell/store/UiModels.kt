@@ -78,7 +78,23 @@ data class GameCard(
     val rommRomId: Long? = null,
     /** An installed app played as a game (Android), not a file: no files to upload or delete. */
     val isApp: Boolean = false,
-)
+    /** Set while the drive or folder holding the game can't be read (an SD card that's out). */
+    val unavailable: Unavailable? = null,
+) {
+    /** Drawn dimmed: its file is gone, or its drive can't be reached right now. */
+    val dimmed: Boolean get() = missing || unavailable != null
+}
+
+/** Why a game can't be reached right now, and on which drive it lives. */
+@Immutable
+data class Unavailable(val driveLabel: String, val state: io.github.matiyaaa.fuse.model.SourceState) {
+    /** "SD card unavailable" for the tile and stage. */
+    val label: String get() = when (state) {
+        io.github.matiyaaa.fuse.model.SourceState.NO_ACCESS -> "No access to $driveLabel"
+        io.github.matiyaaa.fuse.model.SourceState.FOLDER_MISSING, io.github.matiyaaa.fuse.model.SourceState.MOVED -> "Library folder missing"
+        else -> "$driveLabel unavailable"
+    }
+}
 
 @Immutable
 data class PlatformCard(
@@ -185,9 +201,58 @@ data class SearchResults(
 sealed interface LaunchOutcome {
     data object Started : LaunchOutcome
     data class OpenedAppOnly(val appName: String, val reason: String) : LaunchOutcome
-    data class NeedsEmulator(val platformName: String, val suggestions: List<String>) : LaunchOutcome
-    data class Failed(val message: String) : LaunchOutcome
-    data class Unsupported(val message: String) : LaunchOutcome
+
+    /** The game didn't start; [problem] says what happened and what can be done. */
+    data class Problem(val problem: io.github.matiyaaa.fuse.ui.shell.store.Problem) : LaunchOutcome
+}
+
+/**
+ * Something that went wrong or needs attention, told the way a player needs it: what happened
+ * ([title]), why it probably happened ([message]), whether anything was harmed ([reassurance]),
+ * and what can be done now ([actions]). Technical text stays behind [details]. Launch failures and
+ * System health speak through this one shape.
+ */
+@Immutable
+data class Problem(
+    val title: String,
+    val message: String,
+    val kind: ProblemKind = ProblemKind.GENERAL,
+    val severity: Severity = Severity.ATTENTION,
+    /** Said plainly when it is true: "Nothing was changed." Null when it isn't worth saying. */
+    val reassurance: String? = NOTHING_CHANGED,
+    val actions: List<ProblemAction> = emptyList(),
+    /** The technical story (the system's message, paths, ids) for a bug report. */
+    val details: String? = null,
+) {
+    companion object {
+        const val NOTHING_CHANGED = "Nothing was changed. Your games and settings are as they were."
+    }
+}
+
+/** What a problem is about, for its icon. */
+enum class ProblemKind { DRIVE, EMULATOR, FILE, ACCESS, FIRMWARE, NETWORK, ACCOUNT, DATA, DISPLAY, GENERAL }
+
+/** How much a problem matters. Never alarming: the worst is "Broken", for something that can't work. */
+enum class Severity { HEALTHY, INFO, ATTENTION, BROKEN }
+
+/** Something the player can do about a [Problem]. The screen showing it decides how each runs. */
+@Immutable
+sealed interface ProblemAction {
+    val label: String
+
+    data class Retry(override val label: String = "Try again") : ProblemAction
+    data class PickEmulator(val game: GameId? = null, val platform: io.github.matiyaaa.fuse.model.PlatformId? = null, override val label: String = "Choose another emulator") : ProblemAction
+    data class OpenEmulator(val emulator: EmulatorId, val name: String, override val label: String = "Open $name") : ProblemAction
+    data class OpenLink(val url: String, override val label: String) : ProblemAction
+    data class CheckDrives(override val label: String = "Check drives again") : ProblemAction
+    data class OpenStorage(override val label: String = "Storage") : ProblemAction
+    data class OpenSettings(val section: String, override val label: String) : ProblemAction
+    data class GrantAccess(override val label: String = "Allow access") : ProblemAction
+    data class OpenSystem(val platform: io.github.matiyaaa.fuse.model.PlatformId, override val label: String) : ProblemAction
+    data class OpenGame(val game: GameId, override val label: String) : ProblemAction
+    data class AdoptDrive(val source: io.github.matiyaaa.fuse.model.LibrarySourceId, override val label: String = "It's the same library") : ProblemAction
+    data class RemoveSource(val source: io.github.matiyaaa.fuse.model.LibrarySourceId, override val label: String = "Remove this folder") : ProblemAction
+    data class Rescan(override val label: String = "Scan again") : ProblemAction
 }
 
 /** Emulator choice option for pickers. */

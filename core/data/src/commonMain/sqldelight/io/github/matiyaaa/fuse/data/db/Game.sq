@@ -335,3 +335,16 @@ WHERE missing = 0 AND removed_at IS NULL AND hidden = 0;
 
 countVisibleIn:
 SELECT COUNT(*) FROM game WHERE id IN ? AND missing = 0 AND removed_at IS NULL AND hidden = 0;
+
+-- Relinking a library folder whose drive moved (0.2.0) ------------------------------------------
+-- :old and :new never end with '/'; a path is inside :old when it equals it or starts with :old/.
+
+countPathsAtPrefix:
+SELECT COUNT(*) FROM game WHERE path = :new OR substr(path, 1, length(:new) + 1) = :new || '/';
+
+relinkGames:
+UPDATE game SET
+    path = CASE WHEN path = :old THEN :new WHEN substr(path, 1, length(:old) + 1) = :old || '/' THEN :new || substr(path, length(:old) + 1) ELSE path END,
+    launch_path = CASE WHEN launch_path = :old THEN :new WHEN substr(launch_path, 1, length(:old) + 1) = :old || '/' THEN :new || substr(launch_path, length(:old) + 1) ELSE launch_path END,
+    folder_path = CASE WHEN folder_path = :old THEN :new WHEN substr(folder_path, 1, length(:old) + 1) = :old || '/' THEN :new || substr(folder_path, length(:old) + 1) ELSE folder_path END
+WHERE source_id = :sourceId;

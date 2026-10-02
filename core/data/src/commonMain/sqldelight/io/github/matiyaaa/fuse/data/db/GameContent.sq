@@ -62,3 +62,13 @@ FROM game_genre gg JOIN game g ON g.id = gg.game_id
 WHERE g.missing = 0 AND g.removed_at IS NULL AND g.hidden = 0
 GROUP BY gg.genre
 ORDER BY gg.genre;
+
+relinkContent:
+UPDATE game_content SET path = CASE WHEN path = :old THEN :new ELSE :new || substr(path, length(:old) + 1) END
+WHERE substr(path, 1, length(:old) + 1) = :old || '/'
+    AND game_id IN (SELECT id FROM game WHERE source_id = :sourceId);
+
+relinkDiscs:
+UPDATE game_disc SET path = CASE WHEN path = :old THEN :new ELSE :new || substr(path, length(:old) + 1) END
+WHERE substr(path, 1, length(:old) + 1) = :old || '/'
+    AND game_id IN (SELECT id FROM game WHERE source_id = :sourceId);

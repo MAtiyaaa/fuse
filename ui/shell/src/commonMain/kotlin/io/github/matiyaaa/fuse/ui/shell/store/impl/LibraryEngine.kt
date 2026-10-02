@@ -18,6 +18,10 @@ import io.github.matiyaaa.fuse.model.ScanProgress
 import io.github.matiyaaa.fuse.model.ScanScope
 import io.github.matiyaaa.fuse.model.ScopedSettings
 import io.github.matiyaaa.fuse.model.SettingScope
+import io.github.matiyaaa.fuse.model.SourceState
+import io.github.matiyaaa.fuse.model.SourceStatus
+import io.github.matiyaaa.fuse.model.StorageVolume
+import io.github.matiyaaa.fuse.library.storage.Volumes
 import io.github.matiyaaa.fuse.ui.shell.store.SourceOps
 import io.github.matiyaaa.fuse.ui.shell.store.SuggestedSource
 import kotlinx.coroutines.CancellationException
@@ -29,6 +33,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
@@ -54,6 +59,28 @@ internal class LibraryEngine(private val ctx: StoreContext) : SourceOps {
 
     /** Firmware status of platforms that need firmware and have games. */
     val bios = MutableStateFlow<Map<PlatformId, BiosStatus>>(emptyMap())
+
+    val drives = Drives(ctx)
+    override val status: StateFlow<List<SourceStatus>> get() = drives.status
+    override val volumes: StateFlow<List<StorageVolume>> get() = drives.volumes
+    private var driveWatch: AutoCloseable? = null
+    private val driveChanges = Channel<Unit>(Channel.CONFLATED)
+
+    override fun refreshDrives() {
+        driveChanges.trySend(Unit)
+    }
+
+    override suspend fun adoptDrive(source: LibrarySourceId): Boolean {
+        val status = drives.status.value.firstOrNull { it.source.id == source } ?: return false
+        val volume = status.volume ?: return false
+        if (status.state != SourceState.OTHER_DRIVE) return false
+        val path = FsPath.normalize(status.source.path)
+        val relative = Volumes.relativeTo(path, FsPath.normalize(volume.mountPath)) ?: return false
+        data.sources.setVolume(source, Volumes.refFor(status.source, volume, relative, ctx.now()))
+        drives.refresh()
+        rescan(ScanScope.QUICK)
+        return true
+    }
 
     override suspend fun add(path: String, kind: LibrarySourceKind): LibrarySource? {
         val normalized = FsPath.normalize(path.trim())
@@ -97,6 +124,18 @@ internal class LibraryEngine(private val ctx: StoreContext) : SourceOps {
     private val requests = Channel<Pending>(Channel.UNLIMITED)
 
     fun start() {
+        // Drives: plugging one in or out is noticed where the system tells, and on every scan.
+        driveWatch = runCatching { ctx.services.volumes.watch { driveChanges.trySend(Unit) } }.getOrNull()
+        ctx.scope.launch {
+            drives.refresh()
+            for (change in driveChanges) {
+                // Mounting takes a moment to settle (Android sends several broadcasts per card).
+                delay(DRIVE_SETTLE_MS)
+                while (driveChanges.tryReceive().isSuccess) Unit
+                val back = drives.refresh()
+                if (back.isNotEmpty()) rescan(ScanScope.QUICK)
+            }
+        }
         ctx.scope.launch {
             for (first in requests) {
                 // Collapse what queued up meanwhile: a full scan covers everything, duplicates run once.
@@ -116,7 +155,11 @@ internal class LibraryEngine(private val ctx: StoreContext) : SourceOps {
     }
 
     private suspend fun runScan(scope: ScanScope, platform: PlatformId?) {
-        val enabled = data.sources.all().filter { it.enabled }
+        // Only folders that can be read now: a drive that is out is never scanned, so none of its
+        // games is marked missing. They return as they were when the drive does.
+        drives.refresh()
+        val readable = drives.status.value.filter { it.scannable }.map { it.source.id }.toSet()
+        val enabled = data.sources.all().filter { it.enabled && it.id in readable }
         if (enabled.isEmpty()) {
             platformFolders.value = emptyMap()
             scanState.value = ScanProgress(ScanPhase.DONE)
@@ -137,9 +180,17 @@ internal class LibraryEngine(private val ctx: StoreContext) : SourceOps {
             return
         }
         scanState.value = last.copy(phase = ScanPhase.SAVING)
+        // A drive pulled out while it was being read leaves an empty folder behind, which reads as
+        // "every game deleted". Only folders still on the same drive after the scan are applied.
+        val before = drives.status.value.filter { it.scannable }.associate { it.source.id to it.volume?.id }
+        drives.refresh()
+        val after = drives.status.value.filter { it.scannable }.associate { it.source.id to it.volume?.id }
+        val stillThere = before.filter { (id, volume) -> id in after && after[id] == volume }.keys
+        val dropped = enabled.map { it.id }.filterNot { it in stillThere }.toSet()
+        val kept = if (dropped.isEmpty()) report else report.copy(scanned = report.scanned.filter { it.sourceId !in dropped })
         val cleanNew = ctx.settings.value.library.cleanDisplayNames
-        val delta = data.indexer.apply(report, ctx.now(), DisplayNameCleaner::clean, useCleanedForNew = cleanNew)
-        enabled.forEach { data.sources.markScanned(it.id) }
+        val delta = data.indexer.apply(kept, ctx.now(), DisplayNameCleaner::clean, useCleanedForNew = cleanNew)
+        enabled.filterNot { it.id in dropped }.forEach { data.sources.markScanned(it.id) }
 
         val found = HashMap<PlatformId, MutableList<String>>()
         report.scanned.forEach { found.getOrPut(it.platformId) { ArrayList() } += it.folderPath }
@@ -193,5 +244,10 @@ internal class LibraryEngine(private val ctx: StoreContext) : SourceOps {
             }
             bios.value = result
         }
+    }
+
+    private companion object {
+        /** Wait after a drive event before looking, so a card that is still mounting reads whole. */
+        const val DRIVE_SETTLE_MS = 1_200L
     }
 }

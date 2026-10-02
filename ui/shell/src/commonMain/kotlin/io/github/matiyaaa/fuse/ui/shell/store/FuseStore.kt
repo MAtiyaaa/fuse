@@ -114,18 +114,44 @@ data class StorageUsage(
     val finished: Boolean,
 )
 
-/** A drive: its size, what's free, and how much of it is games, by system. */
+/**
+ * A drive the library is on: its size, what's free, and how much of it is games, by system. A drive
+ * that is out ([online] false) keeps its place with what Fuse last knew of it.
+ */
 data class VolumeUsage(
     val label: String,
     val totalBytes: Long,
     val freeBytes: Long,
     val gamesBytes: Long,
     val systems: List<SystemShare>,
+    /** The drive's id ([io.github.matiyaaa.fuse.model.StorageVolume.id]), or a stand-in where the system has none. */
+    val id: String = label,
+    val kind: io.github.matiyaaa.fuse.model.VolumeKind = io.github.matiyaaa.fuse.model.VolumeKind.OTHER,
+    val removable: Boolean = false,
+    val online: Boolean = true,
+    /** When an offline drive was last seen connected. */
+    val lastSeenAt: Long? = null,
+    /** Games stored on it (measured or, while offline, last known). */
+    val games: Int = 0,
+    val readOnly: Boolean = false,
+    /** Where it is mounted and its filesystem, for technical details only. */
+    val mountPath: String? = null,
+    val fsType: String? = null,
 )
 
 data class SystemShare(val platform: PlatformId, val name: String, val accent: Long, val bytes: Long)
 
-data class GameSize(val card: GameCard, val bytes: Long, val files: Int)
+/**
+ * What one game takes, on which drive ([volumeId], matching [VolumeUsage.id]). A game whose drive is
+ * out shows the size the last scan saw ([lastKnown]).
+ */
+data class GameSize(
+    val card: GameCard,
+    val bytes: Long,
+    val files: Int,
+    val volumeId: String? = null,
+    val lastKnown: Boolean = false,
+)
 
 data class DeleteReport(val deleted: Int, val freedBytes: Long, val failed: List<String>)
 
@@ -213,6 +239,22 @@ interface SourceOps {
     suspend fun suggestions(): List<SuggestedSource>
     fun rescan(scope: ScanScope = ScanScope.QUICK, platform: PlatformId? = null)
     fun refreshBios()
+
+    /** Every library folder with the drive it is on and whether Fuse can read it right now. */
+    val status: StateFlow<List<io.github.matiyaaa.fuse.model.SourceStatus>> get() = MutableStateFlow(emptyList())
+
+    /** The drives mounted now. */
+    val volumes: StateFlow<List<io.github.matiyaaa.fuse.model.StorageVolume>> get() = MutableStateFlow(emptyList())
+
+    /** Looks at the drives again ("Retry" after plugging one in); folders that came back are scanned. */
+    fun refreshDrives() = Unit
+
+    /**
+     * For a folder in [io.github.matiyaaa.fuse.model.SourceState.OTHER_DRIVE]: the user says the drive
+     * mounted there now holds this library (a card that was reformatted or cloned). False when the
+     * folder can't be read there.
+     */
+    suspend fun adoptDrive(source: io.github.matiyaaa.fuse.model.LibrarySourceId): Boolean = false
 }
 
 data class SuggestedSource(val path: String, val label: String, val kind: LibrarySourceKind, val platformsFound: Int)

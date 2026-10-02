@@ -18,6 +18,7 @@ import io.github.matiyaaa.fuse.ui.shell.store.EmulatorDetector
 import io.github.matiyaaa.fuse.ui.shell.store.FuseServices
 import io.github.matiyaaa.fuse.ui.shell.store.GameLauncher
 import io.github.matiyaaa.fuse.ui.shell.store.ReleaseInstaller
+import io.github.matiyaaa.fuse.ui.shell.store.VolumeMonitor
 import io.ktor.client.HttpClient
 import java.io.File
 import java.io.IOException
@@ -37,19 +38,19 @@ class AndroidFuseServices(
     dualScreen: DualScreenHandoff? = null,
 ) : FuseServices {
     private val appContext = context.applicationContext
-    val volumes = StorageVolumes(appContext)
+    val storageVolumes = StorageVolumes(appContext)
 
     override val host: Host = Host.ANDROID
     override val appVersion: String = BuildConfig.VERSION_NAME
-    override val fs: FuseFileSystem = AndroidFileSystem(volumes::mounted, appContext.packageName, volumes::hasFullAccess)
+    override val fs: FuseFileSystem = AndroidFileSystem(storageVolumes::mounted, appContext.packageName, storageVolumes::hasFullAccess)
     override val secrets: SecretStore = KeystoreSecretStore(appContext)
     override val cacheDir: String = appContext.cacheDir.absolutePath
 
-    override val emulators: EmulatorDetector = AndroidEmulatorDetector(appContext, volumes)
+    override val emulators: EmulatorDetector = AndroidEmulatorDetector(appContext, storageVolumes)
     override val launcher: GameLauncher = AndroidGameLauncher(
         appContext,
         activities,
-        volumes,
+        storageVolumes,
         sources = { data.sources.all().filter { it.enabled }.map { SourceRoot(it.path, it.kind) } },
         platformAt = { path -> data.games.idByPath(path)?.let { data.games.summary(it) }?.platformId?.value },
         dualScreen = dualScreen,
@@ -58,7 +59,8 @@ class AndroidFuseServices(
     private val releaseInstaller = AndroidReleaseInstaller(appContext, http, activities)
     override val installer: ReleaseInstaller = releaseInstaller
     override val apps: AppsProvider = AndroidAppsProvider(appContext, scope, activities, dualScreen, releaseInstaller::installLocal)
-    override val locations: DeviceLocations = AndroidDeviceLocations(volumes)
+    override val locations: DeviceLocations = AndroidDeviceLocations(storageVolumes)
+    override val volumes: VolumeMonitor = io.github.matiyaaa.fuse.storage.AndroidVolumes(appContext)
 
     override fun writeCacheFile(relativePath: String, content: String): String? =
         writeCacheBytes(relativePath, content.toByteArray(Charsets.UTF_8))

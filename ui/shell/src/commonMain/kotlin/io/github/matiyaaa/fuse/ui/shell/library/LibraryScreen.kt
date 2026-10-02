@@ -1043,7 +1043,7 @@ private fun GameRow(
             FText(
                 card.title,
                 if (selected) Fuse.type.bodyStrong else Fuse.type.body,
-                color = if (card.missing) c.textFaint else c.text,
+                color = if (card.dimmed) c.textFaint else c.text,
                 maxLines = 1,
                 modifier = m,
             )

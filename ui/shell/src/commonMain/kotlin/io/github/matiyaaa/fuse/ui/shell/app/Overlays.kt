@@ -63,6 +63,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.theme.toColor
 fun OverlayHost(app: AppState) {
     ContextMenuOverlay(app)
     ChoiceOverlay(app)
+    ProblemOverlay(app)
     ReorderOverlay(app)
     ScreenPromptOverlay(app)
     ConfirmOverlay(app)

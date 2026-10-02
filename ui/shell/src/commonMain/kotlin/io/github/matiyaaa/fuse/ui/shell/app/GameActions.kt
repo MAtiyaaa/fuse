@@ -64,31 +64,9 @@ private fun AppState.launch(card: GameCard, emulator: io.github.matiyaaa.fuse.mo
                 launching = null
                 toasts.show("${outcome.appName}: ${outcome.reason}", ToastKind.INFO, durationMs = 6000)
             }
-            is LaunchOutcome.NeedsEmulator -> {
+            is LaunchOutcome.Problem -> {
                 launching = null
-                platform.sounds.play(SoundCue.ERROR)
-                choice = ChoiceSpec(
-                    icon = FuseIcons.Chip,
-                    title = "No emulator for ${outcome.platformName}",
-                    message = if (outcome.suggestions.isEmpty()) {
-                        "Install an emulator for this system, then come back. Fuse notices new apps automatically."
-                    } else {
-                        "Install one of these, then come back. Fuse notices new apps automatically."
-                    },
-                    options = outcome.suggestions.mapIndexed { i, s ->
-                        MenuAction("s$i", s, FuseIcons.Package, onSelect = { choice = null })
-                    } + MenuAction("ok", "OK", FuseIcons.Check, section = "", onSelect = { choice = null }),
-                )
-            }
-            is LaunchOutcome.Failed -> {
-                launching = null
-                platform.sounds.play(SoundCue.ERROR)
-                toasts.show(outcome.message, ToastKind.ERROR, durationMs = 6000)
-            }
-            is LaunchOutcome.Unsupported -> {
-                launching = null
-                platform.sounds.play(SoundCue.ERROR)
-                toasts.show(outcome.message, ToastKind.WARNING, durationMs = 7000)
+                showProblem(outcome.problem, card, retry = { launch(card, emulator, discPath, display) })
             }
         }
     }

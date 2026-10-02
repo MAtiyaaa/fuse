@@ -23,6 +23,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -49,7 +50,7 @@ internal class DefaultCartridgeOps(
 ) : CartridgeOps {
     private val state = MutableStateFlow(CartridgeStatus())
     override val status: StateFlow<CartridgeStatus> = state
-    private var readJob: Job? = null
+    private val reads = Channel<Unit>(Channel.CONFLATED)
     private var watcher: AutoCloseable? = null
     private var seenLibraryChange: Long? = null
     private var seenGamesRevision: Long? = null
@@ -86,6 +87,7 @@ internal class DefaultCartridgeOps(
 
     /** Follows the Cartridge switch: watching and reading only while it is on. */
     fun start() {
+        ctx.scope.launch { for (request in reads) if (enabled) readNow() }
         // A scan that just finished may have indexed games Cartridge already reported.
         ctx.scope.launch {
             engine.scan.map { it.phase }.distinctUntilChanged().collect { phase ->
@@ -100,7 +102,6 @@ internal class DefaultCartridgeOps(
             ctx.settings.map { it.cartridge.enabled }.distinctUntilChanged().collect { on ->
                 watcher?.let { runCatching { it.close() } }
                 watcher = null
-                readJob?.cancel()
                 if (on) {
                     watcher = runCatching { ctx.services.cartridge.watch { refresh() } }.getOrNull()
                     refresh()
@@ -172,14 +173,14 @@ internal class DefaultCartridgeOps(
     }
 
     override fun refresh() {
-        if (!enabled || readJob?.isActive == true) return
-        readJob = ctx.scope.launch { readNow() }
+        // Conflated: a request made during a read queues exactly one more read, so a change
+        // Cartridge announces mid-read is never lost and a burst of announcements costs one read.
+        if (enabled) reads.trySend(Unit)
     }
 
     /** On return to Fuse: re-read status, and rescan when Cartridge changed the library meanwhile. */
     suspend fun refreshOnResume() {
         if (!enabled) return
-        readJob?.cancel()
         readNow()
     }
 

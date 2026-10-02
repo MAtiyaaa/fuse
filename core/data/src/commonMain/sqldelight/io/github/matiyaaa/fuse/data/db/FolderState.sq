@@ -18,3 +18,7 @@ DELETE FROM folder_state WHERE path >= :fromInclusive AND path < :untilExclusive
 
 deleteAll:
 DELETE FROM folder_state;
+
+relink:
+UPDATE OR REPLACE folder_state SET path = CASE WHEN path = :old THEN :new ELSE :new || substr(path, length(:old) + 1) END
+WHERE path = :old OR substr(path, 1, length(:old) + 1) = :old || '/';

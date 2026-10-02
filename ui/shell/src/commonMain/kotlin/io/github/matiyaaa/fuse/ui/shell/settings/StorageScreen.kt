@@ -88,6 +88,8 @@ fun StorageScreen(app: AppState) {
     val systemSel = rememberRouteState(app.navigator, "storage.systems") { LinearSelection() }
     var pane by remember { mutableStateOf(StoragePane.GAMES) }
     var system by remember { mutableStateOf<PlatformId?>(null) }
+    // The drive shown, by its id; null shows every drive.
+    var drive by remember { mutableStateOf<String?>(null) }
     var picked by remember { mutableStateOf(setOf<GameId>()) }
     val platforms by store.library.platforms.collectAsState()
 
@@ -96,41 +98,65 @@ fun StorageScreen(app: AppState) {
         app.hero = null
     }
 
-    val u = usage
+    val all = usage
+    // Picking a drive narrows everything after it (its systems, its games) to what it holds.
+    val u = remember(all, drive) { all?.onDrive(drive) }
+    val volumes = all?.volumes.orEmpty()
     val systems = remember(u, platforms) { systemSizes(u, platforms) }
-    // The row the filter is on: All systems, or its system.
-    val filterRow = system?.let { id -> systems.indexOfFirst { it.id == id } + 1 } ?: 0
     // The rows are built once per change of what they show, never while the selection moves: with
     // hundreds of games, building them on every step is what made the list stutter.
     var wideLayout by remember { mutableStateOf(true) }
     val rows = remember(u, system, picked, canDelete, platforms, wideLayout) {
         storageRows(
-            app, u, system, picked, canDelete, wide = wideLayout,
+            app, u, system, picked, canDelete, wide = wideLayout, drives = volumes, drive = drive,
             onPick = { id -> picked = if (id in picked) picked - id else picked + id },
             onPicked = { picked = emptySet() },
             onFilter = { system = it; sel.index = 0 },
+            onDrive = { drive = it; system = null; sel.index = 0 },
         )
     }
-    val systemRows = remember(systems, u, system) {
+    val systemRows = remember(systems, u, system, volumes, drive) {
         val total = u?.games.orEmpty().sumOf { it.bytes }
         val largest = systems.maxOfOrNull { it.bytes }?.coerceAtLeast(1) ?: 1
         fun choose(id: PlatformId?) {
             // A second press on the system shown goes back to all of them.
-            val next = if (id == null || id == system) null else id
-            system = next
-            systemSel.index = next?.let { n -> systems.indexOfFirst { it.id == n } + 1 } ?: 0
+            system = if (id == null || id == system) null else id
+            sel.index = 0
+        }
+        fun chooseDrive(id: String?) {
+            drive = if (id == null || id == drive) null else id
+            system = null
             sel.index = 0
         }
         buildList {
+            // With more than one drive, each is a filter of its own above the systems.
+            if (volumes.size > 1) {
+                add(MenuAction(
+                    "dall", "All drives", FuseIcons.Layers2, section = "Drives",
+                    detail = gamesCount(all?.games?.size ?: 0),
+                    trailing = Trailing.Check(drive == null),
+                    onSelect = { chooseDrive(null) },
+                ))
+                volumes.forEach { v ->
+                    add(MenuAction(
+                        "d.${v.id}", v.label, v.icon(), section = "Drives",
+                        detail = driveLine(v),
+                        trailing = if (!v.online) Trailing.Value("Offline")
+                        else Trailing.Level(v.usedFraction(), "${(v.usedFraction() * 100).toInt()}% used"),
+                        onSelect = { chooseDrive(v.id) },
+                    ))
+                }
+            }
+            val systemsSection = if (volumes.size > 1) "Systems" else null
             add(MenuAction(
-                "all", "All systems", FuseIcons.Layers,
+                "all", "All systems", FuseIcons.Layers, section = systemsSection,
                 detail = gamesCount(u?.games?.size ?: 0),
                 trailing = Trailing.Value(bytesText(total)),
                 onSelect = { choose(null) },
             ))
             systems.forEach { sz ->
                 add(MenuAction(
-                    "s.${sz.id.value}", sz.name,
+                    "s.${sz.id.value}", sz.name, section = systemsSection,
                     detail = gamesCount(sz.games),
                     trailing = Trailing.Level(sz.bytes.toFloat() / largest, bytesText(sz.bytes)),
                     art = MenuArt(sz.art, square = true, fallbackTitle = sz.short, accent = sz.accent, wide = false),
@@ -139,6 +165,9 @@ fun StorageScreen(app: AppState) {
             }
         }
     }
+    // The row the filters are on: the system shown, else the drive shown, else the first row.
+    val filterKey = system?.let { "s.${it.value}" } ?: drive?.let { "d.$it" } ?: systemRows.firstOrNull()?.id
+    val filterRow = systemRows.indexOfFirst { it.id == filterKey }.coerceAtLeast(0)
 
     val shownRows = rows
     sel.clamp(shownRows.size)
@@ -227,8 +256,9 @@ fun StorageScreen(app: AppState) {
                             dimSelection = !inSystems,
                             header = {
                                 Column(Modifier.padding(top = Space.xs, bottom = Space.m), verticalArrangement = Arrangement.spacedBy(Space.m)) {
-                                    Volumes(u, nested = true, bySystem = false)
-                                    if (systems.isNotEmpty()) SectionLabel("Systems", count = systems.size.toString(), rule = true, modifier = Modifier.padding(horizontal = Space.s))
+                                    // One drive, or the drive picked: its card. Several: each is a row below.
+                                    Volumes(all, drive, nested = true, bySystem = false)
+                                    if (systems.isNotEmpty() && volumes.size <= 1) SectionLabel("Systems", count = systems.size.toString(), rule = true, modifier = Modifier.padding(horizontal = Space.s))
                                 }
                             },
                             modifier = Modifier.padding(Space.s),
@@ -243,7 +273,7 @@ fun StorageScreen(app: AppState) {
                 games(
                     Modifier.fillMaxSize().padding(bottom = Size.hintHeight + Space.s).reveal(1),
                     shownRows,
-                ) { Column(Modifier.padding(top = Space.s, bottom = Space.m), verticalArrangement = Arrangement.spacedBy(Space.m)) { Volumes(u, nested = true, bySystem = true) } }
+                ) { Column(Modifier.padding(top = Space.s, bottom = Space.m), verticalArrangement = Arrangement.spacedBy(Space.m)) { Volumes(all, drive, nested = true, bySystem = true, every = true) } }
             }
         }
     }
@@ -296,9 +326,12 @@ private fun storageRows(
     picked: Set<GameId>,
     canDelete: Boolean,
     wide: Boolean,
+    drives: List<VolumeUsage>,
+    drive: String?,
     onPick: (GameId) -> Unit,
     onPicked: () -> Unit,
     onFilter: (PlatformId?) -> Unit,
+    onDrive: (String?) -> Unit,
 ): List<MenuAction> {
     val store = app.store
     val shown = u?.games.orEmpty().filter { system == null || it.card.platformId == system }
@@ -327,6 +360,20 @@ private fun storageRows(
             },
             onSelect = { confirmDelete(app, chosen.map { it.card.id to it.card.title }, chosen.sumOf { it.files }, bytes, onPicked) },
         ))
+        if (!wide && drives.size > 1) {
+            add(MenuAction(
+                "drive", "Drive", FuseIcons.HardDrive,
+                trailing = Trailing.Value(drives.firstOrNull { it.id == drive }?.label ?: "All drives"),
+                onSelect = {
+                    app.choice = ChoiceSpec(
+                        title = "Show games on",
+                        icon = FuseIcons.HardDrive,
+                        options = listOf(MenuAction("all", "All drives", FuseIcons.Layers2, trailing = Trailing.Check(drive == null), onSelect = { onDrive(null); app.choice = null })) +
+                            drives.map { v -> MenuAction("d.${v.id}", v.label, v.icon(), detail = driveLine(v), trailing = Trailing.Check(drive == v.id), onSelect = { onDrive(v.id); app.choice = null }) },
+                    )
+                },
+            ))
+        }
         if (!wide) {
             val systems = u?.games.orEmpty().map { it.card.platformId }.distinct()
             add(MenuAction(
@@ -346,12 +393,15 @@ private fun storageRows(
         }
         shown.forEach { g ->
             val on = g.card.id in picked
+            val away = g.card.unavailable
             add(MenuAction(
-                "g${g.card.id.value}", g.card.title, if (on) FuseIcons.SquareCheck else FuseIcons.Square,
-                detail = "${g.card.platformShort}  ·  ${g.files} ${if (g.files == 1) "file" else "files"}",
-                trailing = Trailing.Value(bytesText(g.bytes)),
+                "g${g.card.id.value}", g.card.title, if (away != null) FuseIcons.HardDrive else if (on) FuseIcons.SquareCheck else FuseIcons.Square,
+                detail = if (away != null) "${g.card.platformShort}  ·  ${away.label}" else "${g.card.platformShort}  ·  ${g.files} ${if (g.files == 1) "file" else "files"}",
+                trailing = Trailing.Value(if (g.lastKnown) "${bytesText(g.bytes)} last seen" else bytesText(g.bytes)),
                 // Square art for every game, so titles line up and the list stays compact.
                 art = MenuArt(g.card.art.tile, square = true, fallbackTitle = g.card.title, accent = g.card.accent, wide = false),
+                // A game whose drive is out can't be picked: Fuse can't see which files are its own.
+                unavailableReason = away?.let { "Connect ${it.driveLabel} to manage this game" },
                 onSelect = { onPick(g.card.id) },
             ))
         }
@@ -361,14 +411,27 @@ private fun storageRows(
 private fun summaryLine(u: StorageUsage?): String {
     if (u == null) return "Measuring your games"
     if (!u.finished) return "Measuring ${u.measured} of ${u.total} games"
-    val games = u.games.sumOf { it.bytes }
-    return "${u.games.size} games take ${bytesText(games)}"
+    val here = u.games.filterNot { it.lastKnown }
+    val drives = u.volumes.count { it.online }
+    val away = u.volumes.count { !it.online }
+    return "${here.size} games take ${bytesText(here.sumOf { it.bytes })}" +
+        (if (drives > 1) " on $drives drives" else "") +
+        (if (away > 0) "  ·  $away ${if (away == 1) "drive" else "drives"} not connected" else "")
 }
 
-/** Every drive the library is on, or what stands in for them while they're unknown. */
+/**
+ * The drive cards: the one drive, or the drive picked. With several drives and none picked, the
+ * drives are rows in the list (each with its own bar), so no card adds them up into one meaningless
+ * total; [every] (the narrow layout, which has no drive rows) shows each drive's card instead.
+ */
 @Composable
-private fun Volumes(u: StorageUsage?, nested: Boolean, bySystem: Boolean) {
+private fun Volumes(u: StorageUsage?, drive: String?, nested: Boolean, bySystem: Boolean, every: Boolean = false) {
     val volumes = u?.volumes.orEmpty()
+    val shown = when {
+        drive != null -> volumes.filter { it.id == drive }
+        volumes.size == 1 || every -> volumes
+        else -> emptyList()
+    }
     when {
         u == null -> VolumeSkeleton(nested)
         volumes.isEmpty() -> Panel(Modifier.fillMaxWidth(), raised = nested, shadow = !nested) {
@@ -380,7 +443,51 @@ private fun Volumes(u: StorageUsage?, nested: Boolean, bySystem: Boolean) {
                 )
             }
         }
-        else -> volumes.forEach { VolumeCard(it, nested, bySystem) }
+        else -> shown.forEach { if (it.online) VolumeCard(it, nested, bySystem) else OfflineVolumeCard(it, nested) }
+    }
+}
+
+/** The games, drives and systems of [this] narrowed to the drive [id]; everything when null. */
+private fun StorageUsage.onDrive(id: String?): StorageUsage =
+    if (id == null) this else copy(games = games.filter { it.volumeId == id })
+
+/** The icon for a kind of drive. */
+private fun VolumeUsage.icon(): androidx.compose.ui.graphics.vector.ImageVector = when (kind) {
+    io.github.matiyaaa.fuse.model.VolumeKind.SD_CARD -> FuseIcons.SdCard
+    io.github.matiyaaa.fuse.model.VolumeKind.USB, io.github.matiyaaa.fuse.model.VolumeKind.EXTERNAL -> FuseIcons.Usb
+    io.github.matiyaaa.fuse.model.VolumeKind.NETWORK -> FuseIcons.Network
+    io.github.matiyaaa.fuse.model.VolumeKind.OPTICAL -> FuseIcons.Disc
+    else -> FuseIcons.HardDrive
+}
+
+private fun VolumeUsage.usedFraction(): Float =
+    if (totalBytes <= 0) 0f else ((totalBytes - freeBytes).toFloat() / totalBytes).coerceIn(0f, 1f)
+
+/** A drive row's second line: its space and games, or when it was last seen. */
+private fun driveLine(v: VolumeUsage): String =
+    if (!v.online) {
+        "Not connected  ·  ${gamesCount(v.games)}" + (v.lastSeenAt?.let { "  ·  seen ${io.github.matiyaaa.fuse.ui.shell.components.agoText(it)}" } ?: "")
+    } else {
+        "${bytesText(v.freeBytes)} free of ${bytesText(v.totalBytes)}  ·  ${gamesCount(v.games)}"
+    }
+
+/**
+ * A drive that is out: its name, that its games are kept, and when it was last seen. Calm, not an
+ * error; nothing needs doing until the drive is connected again.
+ */
+@Composable
+private fun OfflineVolumeCard(v: VolumeUsage, nested: Boolean) {
+    val c = Fuse.colors
+    Panel(Modifier.fillMaxWidth(), raised = nested, shadow = !nested) {
+        Column(Modifier.fillMaxWidth().padding(Space.l), verticalArrangement = Arrangement.spacedBy(Space.s)) {
+            SectionLabel(v.label, icon = v.icon())
+            FText("Not connected", Fuse.type.title, maxLines = 1)
+            FText(
+                "${gamesCount(v.games)} kept, with their art and play time. They come back as they were when the drive is connected." +
+                    (v.lastSeenAt?.let { " Last seen ${io.github.matiyaaa.fuse.ui.shell.components.agoText(it)}." } ?: ""),
+                Fuse.type.caption, color = c.textMuted, maxLines = 4,
+            )
+        }
     }
 }
 
@@ -398,7 +505,7 @@ private fun VolumeCard(v: VolumeUsage, nested: Boolean, bySystem: Boolean) {
     val rest = c.text.copy(alpha = if (c.isDark) 0.34f else 0.3f)
     Panel(Modifier.fillMaxWidth(), raised = nested, shadow = !nested) {
         Column(Modifier.fillMaxWidth().padding(Space.l), verticalArrangement = Arrangement.spacedBy(Space.s)) {
-            SectionLabel(v.label, icon = FuseIcons.HardDrive)
+            SectionLabel(v.label + if (v.readOnly) "  ·  Read only" else "", icon = v.icon())
             Row(verticalAlignment = Alignment.Bottom) {
                 FText(bytesText(v.freeBytes), Fuse.type.title.tabular(), maxLines = 1, modifier = Modifier.alignByBaseline())
                 Spacer(Modifier.width(Space.s))

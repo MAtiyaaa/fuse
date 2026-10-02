@@ -55,6 +55,9 @@ interface FuseServices {
     /** Where to look for existing libraries and firmware on this device. */
     val locations: DeviceLocations
 
+    /** The drives mounted now, and word when one comes or goes. */
+    val volumes: VolumeMonitor get() = VolumeMonitor.None
+
     /**
      * Writes a small text file below [cacheDir] (for example `playlists/42/Game.m3u`) and returns
      * its absolute path, or null when it could not be written. [relativePath] never leaves the cache.
@@ -70,6 +73,25 @@ interface FuseServices {
 
     /** Offset of local time from UTC right now, for "today" and "this week" playtime buckets. */
     fun utcOffsetMillis(): Long
+}
+
+/**
+ * The drives the system has mounted: internal storage, SD cards, USB drives, second disks. Library
+ * folders remember theirs, so an unplugged drive reads as offline rather than as deleted games.
+ */
+interface VolumeMonitor {
+    /** Every mounted drive Fuse could keep games on. Never throws; empty when the system won't say. */
+    suspend fun volumes(): List<io.github.matiyaaa.fuse.model.StorageVolume>
+
+    /**
+     * Calls [onChange] (on any thread) when a drive is mounted, unmounted or moved, where the system
+     * tells; null when it can't, and Fuse then looks on resume and before every scan.
+     */
+    fun watch(onChange: () -> Unit): AutoCloseable? = null
+
+    object None : VolumeMonitor {
+        override suspend fun volumes(): List<io.github.matiyaaa.fuse.model.StorageVolume> = emptyList()
+    }
 }
 
 /** Finds installed emulators and where they keep their firmware. */

@@ -343,8 +343,17 @@ internal class DefaultLibraryOps(
     // Launching -------------------------------------------------------------------------------------
 
     override suspend fun launch(id: GameId, emulator: EmulatorId?, discPath: String?, display: LaunchDisplay?): LaunchOutcome {
-        val stored = data.games.get(id) ?: return LaunchOutcome.Failed("This game is no longer in your library.")
-        val platform = ctx.platform(stored.platformId) ?: return LaunchOutcome.Failed("Fuse doesn't know this system.")
+        val stored = data.games.get(id) ?: return LaunchOutcome.Problem(LaunchProblems.gone())
+        val platform = ctx.platform(stored.platformId) ?: return LaunchOutcome.Problem(LaunchProblems.unknownSystem(stored.platformId))
+        // A game on a drive that is out says which drive to connect, before anything is tried.
+        if (stored.appId == null) {
+            engine.drives.offlineFor(stored.location.path)?.let { root ->
+                return LaunchOutcome.Problem(LaunchProblems.unavailable(root, stored.displayTitle, root.lastSeenAt?.let(::describeWhen)))
+            }
+            if (discPath == null && stored.location.path.let(FsPath::isAbsolute) && !exists(stored.location.launchPath)) {
+                return LaunchOutcome.Problem(LaunchProblems.fileMissing(stored.displayTitle, stored.location.launchPath))
+            }
+        }
         var game = stored
         if (discPath != null) {
             game = game.copy(
@@ -392,16 +401,18 @@ internal class DefaultLibraryOps(
 
         val installedEmulator = resolved.installed
         if (installedEmulator == null) {
-            val suggestions = ctx.registry.forPlatform(game.platformId, ctx.host).filterNot { it.opensAppOnly }.take(3).map { it.name }
-            return LaunchOutcome.NeedsEmulator(platform.name, suggestions)
+            val suggestions = ctx.registry.forPlatform(game.platformId, ctx.host).filterNot { it.opensAppOnly }.take(3)
+                .map { it.name to emulators.homepage(it.id) }
+            return LaunchOutcome.Problem(LaunchProblems.noEmulator(platform.name, platform.id, suggestions))
         }
+        val android = ctx.host == io.github.matiyaaa.fuse.model.Host.ANDROID
         return when (val plan = resolved.plan) {
-            is LaunchPlan.Unsupported -> LaunchOutcome.Unsupported(plan.reason)
+            is LaunchPlan.Unsupported -> LaunchOutcome.Problem(LaunchProblems.unsupported(plan.reason, id))
             is LaunchPlan.OpenAppOnly -> when (val r = ctx.services.launcher.openApp(plan.appId)) {
                 is RunResult.Started -> LaunchOutcome.OpenedAppOnly(installedEmulator.name, plan.reason)
                 is RunResult.OpenedAppInstead -> LaunchOutcome.OpenedAppOnly(installedEmulator.name, r.reason)
-                RunResult.NotInstalled -> notInstalled(installedEmulator)
-                is RunResult.Failed -> LaunchOutcome.Failed(r.message)
+                RunResult.NotInstalled -> notInstalled(installedEmulator, id)
+                is RunResult.Failed -> LaunchOutcome.Problem(LaunchProblems.refused(installedEmulator, id, r.message, android))
             }
             is LaunchPlan.AndroidIntent, is LaunchPlan.Command -> when (val r = ctx.services.launcher.run(resolved, displayId)) {
                 is RunResult.Started -> {
@@ -410,16 +421,28 @@ internal class DefaultLibraryOps(
                 }
                 // Only the app opened; which game gets played there is unknown, so no session is recorded.
                 is RunResult.OpenedAppInstead -> LaunchOutcome.OpenedAppOnly(installedEmulator.name, r.reason)
-                RunResult.NotInstalled -> notInstalled(installedEmulator)
-                is RunResult.Failed -> LaunchOutcome.Failed(r.message)
+                RunResult.NotInstalled -> notInstalled(installedEmulator, id)
+                is RunResult.Failed -> LaunchOutcome.Problem(LaunchProblems.refused(installedEmulator, id, r.message, android))
             }
         }
     }
 
-    private fun notInstalled(emulator: InstalledEmulator): LaunchOutcome {
+    private fun notInstalled(emulator: InstalledEmulator, game: GameId): LaunchOutcome {
         emulators.refresh()
-        return LaunchOutcome.Failed("${emulator.name} isn't installed any more. Pick another emulator for this game.")
+        return LaunchOutcome.Problem(LaunchProblems.emulatorGone(emulator, game))
     }
+
+    private suspend fun exists(path: String): Boolean = try {
+        ctx.services.fs.stat(path) != null
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        // Unknown is not missing: let the emulator try.
+        true
+    }
+
+    /** "today at 2:14 PM" style wording for when a drive was last seen. */
+    private fun describeWhen(at: Long): String = TimeWords.relative(at, ctx.now(), ctx.services.utcOffsetMillis())
 
     /**
      * Opens an honest play session: it ends when the emulator process exits (Linux) or when Fuse
@@ -462,6 +485,8 @@ internal class DefaultLibraryOps(
             emulators.refreshIfStale()
             apps.refreshInstalled()
             cartridge.refreshOnResume()
+            // A card may have gone in or out while a game ran.
+            engine.refreshDrives()
         }
     }
 

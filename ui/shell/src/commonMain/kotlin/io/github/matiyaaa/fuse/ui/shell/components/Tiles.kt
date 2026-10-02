@@ -162,7 +162,7 @@ fun GameIconTile(
         onClick = onClick,
         onLongClick = onLongClick,
     ) {
-        val art = Modifier.fillMaxSize().alpha(if (card.missing) MISSING_ART_ALPHA else 1f)
+        val art = Modifier.fillMaxSize().alpha(if (card.dimmed) MISSING_ART_ALPHA else 1f)
         val label = card.platformShort.takeIf { LocalTileShowsSystem.current }
         val border = LocalTileBorders.current.of(card.platformId)
         // A border that names the system takes the tag; generated art then leaves it out.
@@ -207,7 +207,7 @@ fun GameCoverTile(
     ) {
         Artwork(
             model = card.art.boxart ?: card.art.grid ?: card.art.square ?: card.art.icon,
-            modifier = Modifier.fillMaxSize().alpha(if (card.missing) MISSING_ART_ALPHA else 1f),
+            modifier = Modifier.fillMaxSize().alpha(if (card.dimmed) MISSING_ART_ALPHA else 1f),
             fallback = { GeneratedArt(card.title, accent, slot = ArtSlot.BOX, label = artLabel) },
         )
         val inset = markInset(width, corner)
@@ -303,7 +303,10 @@ internal enum class MarkTint { PLAIN, WARNING }
  * mark means the same thing everywhere.
  */
 internal fun GameCard.marks(favourite: Boolean = true): List<GameMark> = buildList {
-    if (missing) add(GameMark(FuseIcons.FileQuestion, "File missing", MarkTint.WARNING))
+    val away = unavailable
+    // A drive that is out is calmer than a file that is gone: the game comes back by itself.
+    if (away != null) add(GameMark(if (away.state == io.github.matiyaaa.fuse.model.SourceState.NO_ACCESS) FuseIcons.LockKeyhole else FuseIcons.HardDrive, away.label, MarkTint.PLAIN))
+    else if (missing) add(GameMark(FuseIcons.FileQuestion, "File missing", MarkTint.WARNING))
     if (updates > 0) add(GameMark(FuseIcons.ArrowUp, if (updates == 1) "Update" else "$updates updates", MarkTint.PLAIN))
     if (dlc > 0) add(GameMark(FuseIcons.Puzzle, "$dlc DLC", MarkTint.PLAIN))
     if (discs > 1) add(GameMark(FuseIcons.Disc, "$discs discs", MarkTint.PLAIN, count = discs))

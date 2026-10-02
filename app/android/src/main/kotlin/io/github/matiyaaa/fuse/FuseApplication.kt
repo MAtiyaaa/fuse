@@ -72,7 +72,7 @@ class FuseApplication : Application(), SingletonImageLoader.Factory {
     lateinit var services: AndroidFuseServices
         private set
 
-    val platformUi: AndroidPlatformUi by lazy { AndroidPlatformUi(this, activities, appScope, services.volumes, crashLog) }
+    val platformUi: AndroidPlatformUi by lazy { AndroidPlatformUi(this, activities, appScope, services.storageVolumes, crashLog) }
 
     /** The second-screen companion, shared by the main screen and the game launcher. */
     val companions: CompanionScreens by lazy { CompanionScreens(this) }

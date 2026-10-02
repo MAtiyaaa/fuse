@@ -48,7 +48,8 @@ internal class FakeServices(
     var exit: CompletableDeferred<Unit>? = null
 
     override val appVersion = "0.0.1"
-    override val fs: FuseFileSystem = JavaFileSystem()
+    val javaFs = JavaFileSystem()
+    override val fs: FuseFileSystem = javaFs
     override val secrets: SecretStore = MemorySecrets()
     /** Hosts of every request made, in order (nothing is found anywhere). */
     val requestHosts: MutableList<String> = java.util.Collections.synchronizedList(mutableListOf())
@@ -140,6 +141,13 @@ internal class FakeServices(
         return file.absolutePath
     }
 
+    /** The drives the fake system reports; null reports none, like a host that can't tell. */
+    @Volatile var drives: List<io.github.matiyaaa.fuse.model.StorageVolume>? = null
+
+    override val volumes = object : VolumeMonitor {
+        override suspend fun volumes() = drives.orEmpty()
+    }
+
     override fun utcOffsetMillis() = 0L
 }
 
@@ -164,9 +172,13 @@ internal class MemorySecrets : SecretStore {
 }
 
 internal class JavaFileSystem : FuseFileSystem {
+    /** Runs before each listing, so a test can change the world in the middle of a scan. */
+    @Volatile var beforeList: ((String) -> Unit)? = null
+
     override suspend fun delete(path: String): Boolean = File(path).let { !it.exists() || it.deleteRecursively() }
 
     override suspend fun list(path: String): List<FsEntry> {
+        beforeList?.invoke(path)
         val dir = File(path)
         val children = dir.listFiles() ?: throw FsAccessException(path, "Unreadable")
         return children.map { FsEntry(it.name, it.absolutePath, it.isDirectory, it.length(), it.lastModified()) }

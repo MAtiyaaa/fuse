@@ -71,3 +71,8 @@ WHERE g.missing = 0 AND g.removed_at IS NULL
         WHERE m.owner_type = 'game' AND m.owner_id = CAST(g.id AS TEXT) AND m.kind = :kind
     )
 ORDER BY g.id;
+
+-- Art found next to the games (LOCAL_FOLDER) follows its library folder when the drive moves.
+relinkLocalMedia:
+UPDATE media SET local_path = CASE WHEN local_path = :old THEN :new ELSE :new || substr(local_path, length(:old) + 1) END
+WHERE source = 'LOCAL_FOLDER' AND substr(local_path, 1, length(:old) + 1) = :old || '/';

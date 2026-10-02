@@ -380,7 +380,7 @@ picture: the controller hides it and waits 150 ms before a screenshot or a recor
 
 - **One icon set.** Interface icons are [Lucide](https://lucide.dev/license) line icons (ISC; a few
   are derived from Feather, MIT), vendored as path data into `designsystem/icons/FuseIcons.kt` by
-  `tools/icons/generate_icons.py`, which lists every icon Fuse uses (167 today). Do not hand-edit the
+  `tools/icons/generate_icons.py`, which lists every icon Fuse uses (305 today). Do not hand-edit the
   generated file and do not mix in other icon sets.
 - **One stroke weight.** Every icon is a 24 x 24 viewport stroked at 1.8 (slightly lighter than
   Lucide's 2, to match the typography at handheld sizes) with round caps and joins, tinted with the

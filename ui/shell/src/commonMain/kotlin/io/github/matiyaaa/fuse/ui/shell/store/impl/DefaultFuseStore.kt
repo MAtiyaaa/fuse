@@ -61,7 +61,7 @@ internal class DefaultFuseStore private constructor(
     override val achievements = DefaultAchievementOps(ctx, credentials)
     override val cartridge = DefaultCartridgeOps(ctx, engine)
     override val updates = DefaultUpdateOps(ctx)
-    override val storage = DefaultStorageOps(ctx)
+    override val storage = DefaultStorageOps(ctx, engine.drives)
     override val settings = DefaultScopedSettingsOps(ctx) { reloadPrefs() }
     override val library: DefaultLibraryOps
 

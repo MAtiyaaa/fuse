@@ -31,6 +31,8 @@ data class GameSummary(
     val discCount: Int,
     /** An installed app played as a game ([io.github.matiyaaa.fuse.model.AppGames]), not a file. */
     val isApp: Boolean = false,
+    /** The platform folder the scanner found the game in; tells which library folder (and drive) holds it. */
+    val folderPath: String = "",
 ) {
     val displayTitle: String get() = titles.display
     val sortKey: String get() = titles.sortKey
