@@ -9,6 +9,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import io.github.matiyaaa.fuse.model.Destination
 import io.github.matiyaaa.fuse.ui.designsystem.components.Hint
 import io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction
+import io.github.matiyaaa.fuse.ui.designsystem.components.ReorderEntry
 import io.github.matiyaaa.fuse.ui.designsystem.components.ToastState
 import io.github.matiyaaa.fuse.ui.designsystem.media.HeroSource
 import io.github.matiyaaa.fuse.ui.shell.platform.PlatformUi
@@ -67,6 +68,19 @@ data class ChoiceSpec(
 )
 
 /**
+ * A list to put in order, in a dialog: rows with grips that drag, or pick up with A and move with
+ * the D-pad. [onMoved] gets each new order (keys) the moment a row is put down, so the setting
+ * underneath changes as you go.
+ */
+data class ReorderSpec(
+    val title: String,
+    val entries: List<ReorderEntry>,
+    val message: String? = null,
+    val icon: ImageVector? = null,
+    val onMoved: (List<String>) -> Unit,
+)
+
+/**
  * The interface's live state: navigation, focus zone, overlays and what the backdrop shows. One
  * instance per window/screen; the second screen has its own.
  */
@@ -102,6 +116,7 @@ class AppState(
     var confirm by mutableStateOf<ConfirmSpec?>(null)
     var textInput by mutableStateOf<TextInputSpec?>(null)
     var choice by mutableStateOf<ChoiceSpec?>(null)
+    var reorder by mutableStateOf<ReorderSpec?>(null)
 
     /** "Play on which screen?" on a device with two screens. */
     var screenPrompt by mutableStateOf<ScreenPromptSpec?>(null)
@@ -131,7 +146,7 @@ class AppState(
     var launching by mutableStateOf<LaunchVeil?>(null)
 
     val overlayOpen: Boolean
-        get() = quickMenuOpen || contextMenu != null || confirm != null || textInput != null || choice != null || screenPrompt != null || buttonDetect
+        get() = quickMenuOpen || contextMenu != null || confirm != null || textInput != null || choice != null || reorder != null || screenPrompt != null || buttonDetect
 
     fun openContextMenu(spec: ContextMenuSpec) {
         contextMenu = spec

@@ -37,8 +37,11 @@ import io.github.matiyaaa.fuse.ui.designsystem.components.OnScreenKeyboardHints
 import io.github.matiyaaa.fuse.ui.designsystem.components.Overlay
 import io.github.matiyaaa.fuse.ui.designsystem.components.OverlayEdge
 import io.github.matiyaaa.fuse.ui.designsystem.components.Panel
+import io.github.matiyaaa.fuse.ui.designsystem.components.ReorderList
+import io.github.matiyaaa.fuse.ui.designsystem.components.ReorderListState
 import io.github.matiyaaa.fuse.ui.designsystem.components.handleMenuAction
 import io.github.matiyaaa.fuse.ui.designsystem.focus.LinearSelection
+import io.github.matiyaaa.fuse.ui.designsystem.focus.ReorderDefaults
 import io.github.matiyaaa.fuse.ui.designsystem.input.InputLayer
 import io.github.matiyaaa.fuse.ui.designsystem.input.LayerPriority
 import io.github.matiyaaa.fuse.ui.designsystem.input.NavResult
@@ -60,6 +63,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.theme.toColor
 fun OverlayHost(app: AppState) {
     ContextMenuOverlay(app)
     ChoiceOverlay(app)
+    ReorderOverlay(app)
     ScreenPromptOverlay(app)
     ConfirmOverlay(app)
     TextInputOverlay(app)
@@ -134,6 +138,54 @@ private fun ChoiceOverlay(app: AppState) {
                 MenuHeader(s.title, subtitle = s.message, icon = s.icon, subtitleMaxLines = 6)
                 // As tall as its rows, scrolling within whatever height the dialog has left.
                 MenuList(s.options, sel, modifier = Modifier.weight(1f, fill = false), fill = false)
+            }
+        }
+    }
+}
+
+@Composable
+private fun ReorderOverlay(app: AppState) {
+    val spec = app.reorder
+    var shown by remember { mutableStateOf(spec) }
+    if (spec != null) shown = spec
+    val keys = (spec ?: shown)?.entries?.map { it.key }.orEmpty()
+    // A fresh list each time one opens, starting on its first row that can move.
+    val list = remember(spec?.title) { ReorderListState(keys).also { s -> s.selection.index = (spec?.entries?.indexOfFirst { !it.locked } ?: 0).coerceAtLeast(0) } }
+    list.sync(keys)
+    val locked: (String) -> Boolean = { k -> spec?.entries?.firstOrNull { it.key == k }?.locked == true }
+    val haptics = app.platform.haptics
+    fun close() {
+        list.cancel()
+        app.reorder = null
+        app.platform.sounds.play(SoundCue.CLOSE)
+    }
+    LaunchedEffect(spec != null) { if (spec != null) app.platform.sounds.play(SoundCue.OPEN) }
+    if (spec != null) {
+        InputLayer(priority = LayerPriority.DIALOG + 1, modal = true) { e ->
+            list.handle(e, locked, onMoved = { spec.onMoved(it); haptics.drop() }, onDone = ::close, onLift = { haptics.lift() }, onSlot = { haptics.slot() })
+        }
+    }
+    Overlay(visible = spec != null, onDismiss = ::close, edge = OverlayEdge.CENTER) {
+        val s = shown ?: return@Overlay
+        DialogPanel { compact ->
+            Column(Modifier.padding(if (compact) Space.l else Space.xl)) {
+                MenuHeader(
+                    s.title,
+                    subtitle = s.message ?: "Drag a row by its grip, or press A to pick it up and move it with the D-pad",
+                    icon = s.icon,
+                    subtitleMaxLines = 4,
+                )
+                ReorderList(
+                    s.entries,
+                    list,
+                    onMoved = { order -> s.onMoved(order) },
+                    onDone = ::close,
+                    modifier = Modifier.weight(1f, fill = false),
+                    longPressMs = ReorderDefaults.liftMs(app.store.prefs.value.input.longPressMs.toLong()),
+                    onLift = { haptics.lift() },
+                    onSlot = { haptics.slot() },
+                    onDrop = { haptics.drop() },
+                )
             }
         }
     }

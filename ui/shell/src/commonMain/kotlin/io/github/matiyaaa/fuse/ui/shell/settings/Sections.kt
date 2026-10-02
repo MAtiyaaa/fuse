@@ -1,6 +1,5 @@
 package io.github.matiyaaa.fuse.ui.shell.settings
 
-import io.github.matiyaaa.fuse.ui.designsystem.components.ToastKind
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -33,10 +32,13 @@ import io.github.matiyaaa.fuse.model.SoundProfile
 import io.github.matiyaaa.fuse.model.Support
 import io.github.matiyaaa.fuse.model.WidgetKind
 import io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction
+import io.github.matiyaaa.fuse.ui.designsystem.components.ReorderEntry
+import io.github.matiyaaa.fuse.ui.designsystem.components.ToastKind
 import io.github.matiyaaa.fuse.ui.designsystem.components.Trailing
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec
+import io.github.matiyaaa.fuse.ui.shell.app.ReorderSpec
 import io.github.matiyaaa.fuse.ui.shell.app.ConfirmSpec
 import io.github.matiyaaa.fuse.ui.shell.app.Route
 import io.github.matiyaaa.fuse.ui.shell.app.addGame
@@ -159,19 +161,17 @@ fun homeRows(app: AppState): List<MenuAction> {
             }
             val shownTabs = p.destinations.filter { app.offers(it) }
             add(MenuAction("dest.order", "Section order", FuseIcons.MoveHorizontal, detail = shownTabs.joinToString("  ·  ") { it.label() }, trailing = Trailing.Chevron, onSelect = {
-                app.choice = ChoiceSpec(
-                    title = "Move a section earlier",
+                app.reorder = ReorderSpec(
+                    title = "Section order",
                     icon = FuseIcons.MoveHorizontal,
-                    options = shownTabs.drop(1).map { d ->
-                        MenuAction("mv.$d", d.label(), d.icon(), onSelect = {
-                            set { s ->
-                                val list = s.destinations.toMutableList()
-                                val i = list.indexOf(d)
-                                if (i > 1) { list.removeAt(i); list.add(i - 1, d) }
-                                s.copy(destinations = list)
-                            }
-                            app.choice = null
-                        })
+                    message = "The order of the top bar. Home always comes first. Drag a row by its grip, or press A to pick it up and move it with the D-pad",
+                    entries = shownTabs.map { d -> ReorderEntry(d.name, d.label(), d.icon(), locked = d == Destination.HOME) },
+                    onMoved = { keys ->
+                        set { s ->
+                            val moved = keys.mapNotNull { k -> Destination.entries.firstOrNull { it.name == k } }
+                            // Sections hidden from this list (not offered here) keep their places after the rest.
+                            s.copy(destinations = moved + s.destinations.filter { it !in moved })
+                        }
                     },
                 )
             }))
@@ -581,19 +581,16 @@ fun mediaRows(app: AppState): List<MenuAction> {
             ) {
                 buildList {
                     add(MenuAction("order", "Source order", FuseIcons.Layers, detail = p.scraperOrder.joinToString("  ·  ") { it.displayName }, trailing = Trailing.Chevron, onSelect = {
-                        app.choice = ChoiceSpec(
-                            title = "Move a source earlier",
+                        app.reorder = ReorderSpec(
+                            title = "Source order",
                             icon = FuseIcons.Layers,
-                            message = "Fuse asks sources in this order. RomM data from Cartridge comes first so nothing is scraped twice.",
-                            options = p.scraperOrder.drop(1).map { id ->
-                                MenuAction("mv.$id", id.displayName, null, onSelect = {
-                                    set { s ->
-                                        val l = s.scraperOrder.toMutableList(); val i = l.indexOf(id)
-                                        if (i > 0) { l.removeAt(i); l.add(i - 1, id) }
-                                        s.copy(scraperOrder = l)
-                                    }
-                                    app.choice = null
-                                })
+                            message = "Fuse asks sources in this order. RomM data from Cartridge comes first so nothing is scraped twice",
+                            entries = p.scraperOrder.map { id -> ReorderEntry(id.name, id.displayName) },
+                            onMoved = { keys ->
+                                set { s ->
+                                    val moved = keys.mapNotNull { k -> s.scraperOrder.firstOrNull { it.name == k } }
+                                    s.copy(scraperOrder = moved + s.scraperOrder.filter { it !in moved })
+                                }
                             },
                         )
                     }))

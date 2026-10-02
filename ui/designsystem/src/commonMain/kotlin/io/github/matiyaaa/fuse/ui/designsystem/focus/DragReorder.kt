@@ -287,7 +287,9 @@ fun rememberDragReorderState(): DragReorderState {
  *
  * With [requireHandle] only a hold on an item's [reorderHandle] lifts it, so a list of rows can be
  * rearranged while the rows' own items keep their holds (a row of systems inside a list of shelves).
- * An item that was [DragReorderState.arm]ed lifts at the first touch.
+ * With [instantHandles] a touch on a handle lifts its item at once, without the hold (a list made
+ * for rearranging, whose rows show grips). An item that was [DragReorderState.arm]ed lifts at the
+ * first touch.
  *
  * The gesture outlives recompositions (restarting it would drop an item mid-drag), so the callbacks
  * are read as they are now, never as they were when the list was first touched: a drop always sees
@@ -303,6 +305,7 @@ fun Modifier.dragReorder(
     longPressMs: Long? = null,
     endInset: Dp = 0.dp,
     requireHandle: Boolean = false,
+    instantHandles: Boolean = false,
     lane: ReorderMath.Lane = ReorderMath.Lane.GRID,
     keepScroll: () -> Unit = {},
     onLift: (Any) -> Unit = {},
@@ -326,7 +329,7 @@ fun Modifier.dragReorder(
         .pointerInput(state, enabled) {
             if (!enabled) return@pointerInput
             dragGestures(
-                state, vertical, endInset, requireHandle,
+                state, vertical, endInset, requireHandle, instantHandles,
                 visibleKeys = { currentVisibleKeys() },
                 scrollBy = { currentScrollBy(it) },
                 longPressMs = { currentLongPressMs },
@@ -344,6 +347,7 @@ private suspend fun PointerInputScope.dragGestures(
     vertical: Boolean,
     endInset: Dp,
     requireHandle: Boolean,
+    instantHandles: Boolean,
     visibleKeys: () -> Collection<Any>,
     scrollBy: suspend (Float) -> Float,
     longPressMs: () -> Long?,
@@ -383,7 +387,8 @@ private suspend fun PointerInputScope.dragGestures(
             val slop = viewConfiguration.touchSlop
             val at = state.container.topLeft + down.position
             val visible = visibleKeys()
-            val armed = state.armedKey?.takeIf { it in visible && state.bounds[it]?.contains(at) == true }
+            val handle = if (instantHandles) state.handles.entries.firstOrNull { (k, r) -> k in visible && r.contains(at) }?.key else null
+            val armed = state.armedKey?.takeIf { it in visible && state.bounds[it]?.contains(at) == true } ?: handle
             if (armed == null && state.armedKey != null) state.arm(null)
             if (armed == null) {
                 // Wait out the hold without taking anything, so taps and scrolls behave as always.

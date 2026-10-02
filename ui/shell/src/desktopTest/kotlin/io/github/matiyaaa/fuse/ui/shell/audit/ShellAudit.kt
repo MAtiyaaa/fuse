@@ -242,6 +242,36 @@ internal fun AuditDriver.settingsScreens(exhaustive: Boolean) {
         waitFor("Source order")
         shoot("sources and keys open")
     }
+    scenario("settings", "reorder sections") {
+        useLibrary()
+        openSettings()
+        tap(PadButton.DPAD_DOWN, sectionIndex("home"))
+        tap(PadButton.DPAD_RIGHT)
+        waitFor("Section order")
+        tapText("Section order")
+        waitFor("Home always comes first")
+        shoot("the sheet, Home locked first")
+        tap(PadButton.A)
+        tap(PadButton.DPAD_DOWN)
+        shoot("carried with the controller, one place down")
+        tap(PadButton.A)
+        shoot("put down, saved")
+        // By touch: the last row's grip, dragged up two rows.
+        val last = describedBounds("Move ").maxBy { it.top }
+        val from = last.center
+        val to = from - androidx.compose.ui.geometry.Offset(0f, last.height * 2.2f)
+        touch { down(from) }
+        settle(150)
+        touch { moveTo(from + (to - from) * 0.5f) }
+        settle(150)
+        touch { moveTo(to) }
+        settle(400)
+        shoot("dragged by its grip, the others make room")
+        touch { up() }
+        settle(900)
+        shoot("dropped by touch")
+        tap(PadButton.B)
+    }
     scenario("settings", "phone link") {
         phoneLink.state.value = io.github.matiyaaa.fuse.ui.shell.store.PhoneLinkState(
             running = true,

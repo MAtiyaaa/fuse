@@ -453,6 +453,11 @@ internal class AuditDriver(
         return nodes.maxBy { it.boundsInRoot.top }.boundsInRoot.center
     }
 
+    /** Where everything described as [description] (part of it) is on screen, as touch targets. */
+    fun describedBounds(description: String): List<androidx.compose.ui.geometry.Rect> =
+        ui.onAllNodes(androidx.compose.ui.test.hasContentDescription(description, substring = true), useUnmergedTree = true)
+            .fetchSemanticsNodes().map { it.boundsInRoot }
+
     /**
      * Advances the app's clock by exactly [ms] in frames, however slowly they render: for holds,
      * which [settle] (real time) can undercount when frames are slow.
