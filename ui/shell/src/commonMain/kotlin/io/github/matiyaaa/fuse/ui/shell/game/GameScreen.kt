@@ -467,6 +467,8 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
             }
             Section("Details", Modifier.section("details", 8)) {
                 val size by produceState(SIZE_LOADING, game.id) { value = app.store.storage.size(game.id) ?: SIZE_UNKNOWN }
+                // A PlayStation disc's own serial (and PCSX2's CRC), read from the image once.
+                val disc by produceState<io.github.matiyaaa.fuse.library.disc.DiscIdentity?>(null, game.id) { value = app.store.library.discIdentity(game.id) }
                 // Cards in a line share one height; a line holds as many as fit a readable width,
                 // and four make two even lines rather than three and one.
                 SideEffect { cardsPerLine = layout.cardsPerLine }
@@ -485,7 +487,7 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
                                 InfoCard.STARTS -> StartsCard(d, selected, tap, m)
                                 InfoCard.PLAY -> PlayCard(d, selected, tap, m)
                                 InfoCard.EXTRAS -> ExtrasCard(d, selected, tap, m)
-                                InfoCard.FILE -> FileCard(d, size, selected, tap, m)
+                                InfoCard.FILE -> FileCard(d, size, disc, selected, tap, m)
                             }
                         }
                         repeat(perLine - chunk.size) { Spacer(Modifier.weight(1f)) }
@@ -759,7 +761,7 @@ private fun ExtrasCard(d: GameDetail, selected: Boolean, onClick: () -> Unit, mo
 
 /** Where the game lives on this device and how Fuse reads it. */
 @Composable
-private fun FileCard(d: GameDetail, size: Long, selected: Boolean, onClick: () -> Unit, modifier: Modifier) {
+private fun FileCard(d: GameDetail, size: Long, disc: io.github.matiyaaa.fuse.library.disc.DiscIdentity?, selected: Boolean, onClick: () -> Unit, modifier: Modifier) {
     val game = d.game
     val loc = game.location
     InfoPanel("On this device", FuseIcons.HardDrive, selected, onClick, modifier, actionable = true) {
@@ -780,6 +782,8 @@ private fun FileCard(d: GameDetail, size: Long, selected: Boolean, onClick: () -
             FolderInterpretation.MULTI_DISC -> "A multi-disc set"
             FolderInterpretation.FOLDER_BROWSER -> "A folder you pick from"
         }, lines = 2)
+        (disc?.serial ?: game.tags.serial)?.let { Fact("Serial", it, numeric = true) }
+        disc?.crcText?.let { Fact("PCSX2 CRC", it, numeric = true) }
         game.tags.regions.takeIf { it.isNotEmpty() }?.let { Fact("Region", it.joinToString(", ")) }
         game.metadata.developer?.let { Fact("Developer", it) }
         game.metadata.publisher?.takeIf { it != game.metadata.developer }?.let { Fact("Publisher", it) }

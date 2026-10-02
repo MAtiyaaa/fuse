@@ -315,6 +315,18 @@ data class EmulatorOption(
     val unavailable: String? = null,
 )
 
+/** A package (a game, an update, extra content) an emulator can install from its command line. */
+data class PackageOption(
+    val path: String,
+    /** What it is: "Update", "Extra content" or "Game", and the file's name. */
+    val kind: String,
+    val fileName: String,
+    val emulator: EmulatorId,
+    val emulatorName: String,
+    /** Needs its licence key (Vita3K's zRIF), asked for each time and never kept. */
+    val needsKey: Boolean,
+)
+
 /** Everything Fuse knows about one emulator, for its page in Settings. */
 data class EmulatorDetails(
     val id: EmulatorId,

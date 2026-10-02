@@ -57,6 +57,20 @@ data class LinuxEmulatorDef(
     val installHint: String? = null,
     /** Runs only its own kind of file (scripts) on every system; see [io.github.matiyaaa.fuse.launch.EmulatorAdapter.shortcutsOnly]. */
     val shortcutsOnly: Boolean = false,
+    /** How it installs a package file from its command line, when it can. */
+    val packageInstall: PackageInstallSpec? = null,
+)
+
+/**
+ * A package install from the command line: [args] after the program, with `{FILE}` for the package
+ * and `{KEY}` for its licence key when [needsKey] (Vita3K's zRIF). The key is passed only to the
+ * emulator, never written down or logged.
+ */
+data class PackageInstallSpec(
+    val extensions: Set<String>,
+    val args: List<String>,
+    val needsKey: Boolean = false,
+    val source: String,
 )
 
 /** How a Linux program was found. [label] is what [io.github.matiyaaa.fuse.model.InstalledEmulator.detectedVia] holds. */

@@ -203,6 +203,14 @@ internal class JavaFileSystem : FuseFileSystem {
         it.inputStream().use { s -> String(s.readNBytes(maxBytes)) }
     }
 
+    override suspend fun readBytes(path: String, offset: Long, length: Int): ByteArray? = File(path).takeIf { it.isFile }?.let { f ->
+        java.io.RandomAccessFile(f, "r").use { r ->
+            if (offset >= r.length()) return@use ByteArray(0)
+            r.seek(offset)
+            ByteArray(minOf(length.toLong(), r.length() - offset).toInt()).also { r.readFully(it) }
+        }
+    }
+
     override suspend fun md5(path: String): String? = null
 
     override suspend fun canonical(path: String): String? = File(path).canonicalPath

@@ -325,6 +325,23 @@ interface LibraryOps {
     /** Folder browser for FOLDER_BROWSER games: files inside the game folder that could be launched. */
     suspend fun launchCandidates(id: GameId): List<String>
 
+    /**
+     * What a PlayStation or PS2 disc image says about itself (its serial, and PCSX2's CRC for PS2
+     * discs), read from the image once and remembered. Null for other games, compressed images and
+     * images that can't be read.
+     */
+    suspend fun discIdentity(id: GameId): io.github.matiyaaa.fuse.library.disc.DiscIdentity? = null
+
+    /** Packages of [id] (its own file, its updates and extra content) that an installed emulator can install. */
+    suspend fun packages(id: GameId): List<PackageOption> = emptyList()
+
+    /**
+     * Starts [option]'s emulator installing it, with [key] when it needs one. The key goes only to
+     * the emulator: it is never kept, logged or sent anywhere.
+     */
+    suspend fun installPackage(option: PackageOption, key: String? = null): LaunchOutcome =
+        LaunchOutcome.Problem(Problem("Packages can't be installed here", "This device can't run emulator installers.", ProblemKind.EMULATOR))
+
     /** Play time today, this week, this month and in all, per day, per game and per system. */
     fun playTime(): Flow<PlayTimeReport> = kotlinx.coroutines.flow.flowOf(PlayTimeReport(loaded = true))
 

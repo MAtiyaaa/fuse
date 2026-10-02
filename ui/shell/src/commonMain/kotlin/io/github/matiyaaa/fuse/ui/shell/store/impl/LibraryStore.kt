@@ -53,6 +53,7 @@ import io.github.matiyaaa.fuse.ui.shell.store.PlayTimeReport
 import io.github.matiyaaa.fuse.ui.shell.store.SearchResults
 import io.github.matiyaaa.fuse.ui.shell.store.StorageSummary
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -565,6 +566,110 @@ internal class DefaultLibraryOps(
 
     override suspend fun undoCleanNames(): Boolean = data.titleCleanup.undoLast() != null
 
+    override suspend fun packages(id: GameId): List<io.github.matiyaaa.fuse.ui.shell.store.PackageOption> {
+        val game = data.games.get(id) ?: return emptyList()
+        if (ctx.installed.value.isEmpty()) emulators.detectNow()
+        val installers = ctx.registry.forPlatform(game.platformId, ctx.host)
+            .filter { it.packageExtensions.isNotEmpty() }
+            .mapNotNull { a -> ctx.installed.value.firstOrNull { it.id == a.id }?.let { a to it } }
+        if (installers.isEmpty()) return emptyList()
+        val extensions = installers.flatMap { it.first.packageExtensions }.toSet()
+        val files = LinkedHashMap<String, String>()
+        if (game.location.kind == LocationKind.FILE && Paths.extension(game.location.launchPath).lowercase() in extensions) {
+            files[game.location.launchPath] = "Game"
+        }
+        game.content.filter { !it.isDirectory && Paths.extension(it.path).lowercase() in extensions }.forEach { files[it.path] = packageKind(it.name) }
+        // Packages kept beside the game (an update or extra content for it): the same serial, or a name that starts with its own.
+        val serial = game.tags.serial?.uppercase()
+        val title = io.github.matiyaaa.fuse.data.TitleText.normalize(game.titles.cleaned ?: game.titles.original)
+        val folders = listOfNotNull(game.location.path.takeIf { game.location.kind == LocationKind.FOLDER }, FsPath.parent(game.location.path))
+        for (folder in folders.distinct()) {
+            val entries = try { ctx.services.fs.list(folder) } catch (e: CancellationException) { throw e } catch (e: Exception) { emptyList() }
+            for (e in entries) {
+                if (e.isDirectory || e.extension !in extensions || e.path in files) continue
+                val name = e.name.substringBeforeLast('.')
+                val same = (serial != null && name.uppercase().contains(serial)) ||
+                    (title.length >= 3 && io.github.matiyaaa.fuse.data.TitleText.normalize(name).startsWith(title))
+                if (same) files[e.path] = packageKind(e.name)
+            }
+        }
+        return files.entries.flatMap { (path, kind) ->
+            val ext = Paths.extension(path).lowercase()
+            installers.filter { (a, _) -> ext in a.packageExtensions }.map { (a, inst) ->
+                io.github.matiyaaa.fuse.ui.shell.store.PackageOption(path, kind, Paths.fileName(path), a.id, inst.name, a.packageNeedsKey)
+            }
+        }
+    }
+
+    override suspend fun installPackage(option: io.github.matiyaaa.fuse.ui.shell.store.PackageOption, key: String?): LaunchOutcome {
+        val adapter = ctx.registry[option.emulator]
+        val installed = ctx.installed.value.firstOrNull { it.id == option.emulator }
+        if (adapter == null || installed == null) return LaunchOutcome.Problem(io.github.matiyaaa.fuse.ui.shell.store.Problem(
+                "${option.emulatorName} isn't installed any more", "Install it again, then try once more.", io.github.matiyaaa.fuse.ui.shell.store.ProblemKind.EMULATOR,
+            ))
+        if (!exists(option.path)) return LaunchOutcome.Problem(LaunchProblems.fileMissing(option.fileName, option.path))
+        val plan = adapter.packageInstall(installed, option.path, key)
+            ?: return LaunchOutcome.Problem(io.github.matiyaaa.fuse.ui.shell.store.Problem(
+                if (adapter.packageNeedsKey && key.isNullOrBlank()) "${option.emulatorName} needs the package's key" else "${option.emulatorName} can't install this file",
+                if (adapter.packageNeedsKey) "Paste the zRIF that came with ${option.fileName}. Fuse passes it to ${option.emulatorName} and keeps no copy." else "${option.fileName} isn't a package ${option.emulatorName} installs.",
+                io.github.matiyaaa.fuse.ui.shell.store.ProblemKind.FILE,
+            ))
+        val launch = io.github.matiyaaa.fuse.launch.ResolvedLaunch(adapter, installed, io.github.matiyaaa.fuse.launch.ChoiceSource.GAME, plan.target, plan)
+        return when (val r = ctx.services.launcher.run(launch)) {
+            is io.github.matiyaaa.fuse.ui.shell.store.RunResult.Failed -> LaunchOutcome.Problem(io.github.matiyaaa.fuse.ui.shell.store.Problem(
+                "${option.emulatorName} didn't start", "Its installer couldn't be opened. Open ${option.emulatorName} and install the package from its menu.", io.github.matiyaaa.fuse.ui.shell.store.ProblemKind.EMULATOR,
+                details = r.message,
+            ))
+            is io.github.matiyaaa.fuse.ui.shell.store.RunResult.NotInstalled -> LaunchOutcome.Problem(io.github.matiyaaa.fuse.ui.shell.store.Problem(
+                "${option.emulatorName} isn't installed any more", "Install it again, then try once more.", io.github.matiyaaa.fuse.ui.shell.store.ProblemKind.EMULATOR,
+            ))
+            else -> LaunchOutcome.Started
+        }
+    }
+
+    /** What a package file is, from its name: an update, extra content, or the game itself. */
+    private fun packageKind(name: String): String {
+        val n = name.lowercase()
+        return when {
+            listOf("update", "[upd]", "patch").any { it in n } || Regex("""\bv\d+\.\d+""").containsMatchIn(n) -> "Update"
+            listOf("dlc", "add-on", "addon").any { it in n } -> "Extra content"
+            else -> "Package"
+        }
+    }
+
+    private val discs by lazy { io.github.matiyaaa.fuse.library.disc.PlayStationDisc(ctx.services.fs) }
+
+    override suspend fun discIdentity(id: GameId): io.github.matiyaaa.fuse.library.disc.DiscIdentity? {
+        val game = data.games.get(id) ?: return null
+        if (game.platformId.value !in DISC_PLATFORMS || game.appId != null) return null
+        val path = discImage(game) ?: return null
+        val stat = ctx.services.fs.stat(path) ?: return null
+        val key = "$path|${stat.sizeBytes}|${stat.modifiedAt}"
+        val serializer = io.github.matiyaaa.fuse.library.disc.DiscIdentity.serializer()
+        data.cache.get(DISC_CACHE, key, serializer, ctx.now())?.let { return it }
+        val found = try {
+            withContext(Dispatchers.Default) { discs.identify(path) }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            null
+        } ?: return null
+        data.cache.put(DISC_CACHE, key, found, serializer, ctx.now(), ttlMs = null)
+        return found
+    }
+
+    /** The image to read: the first disc, and for a cue sheet the track file it names first. */
+    private suspend fun discImage(game: io.github.matiyaaa.fuse.model.Game): String? {
+        val path = game.discs.firstOrNull()?.path ?: game.location.launchPath
+        val ext = Paths.extension(path).lowercase()
+        if (ext in setOf("iso", "bin", "img")) return path
+        if (ext != "cue") return null
+        val cue = ctx.services.fs.readText(path, 64 * 1024) ?: return null
+        val name = Regex("""(?im)^\s*FILE\s+"([^"]+)"""").find(cue)?.groupValues?.get(1) ?: return null
+        val dir = FsPath.parent(path) ?: return null
+        return FsPath.join(dir, name.replace('\\', '/'))
+    }
+
     override fun playTime(): Flow<PlayTimeReport> = flow {
         val offset = ctx.services.utcOffsetMillis()
         val day = (ctx.now() + offset).floorDiv(TimeWords.DAY_MS)
@@ -708,3 +813,9 @@ private fun SortOrder.comparator(): Comparator<io.github.matiyaaa.fuse.data.repo
 }
 
 private const val HOUR_MS = 3_600_000L
+
+/** Systems whose disc images say their serial in SYSTEM.CNF. */
+private val DISC_PLATFORMS = setOf("ps2", "psx")
+
+/** Cache namespace for [io.github.matiyaaa.fuse.library.disc.DiscIdentity], keyed by path, size and change time. */
+private const val DISC_CACHE = "disc.identity"

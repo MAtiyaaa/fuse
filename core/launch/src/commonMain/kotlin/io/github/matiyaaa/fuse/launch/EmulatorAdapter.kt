@@ -122,6 +122,18 @@ interface EmulatorAdapter {
     /** Emulator-specific wording for where to install [kind] content (for example "Install to NAND"). */
     fun installHint(kind: ContentKind): String? = null
 
+    /** File types it installs from its command line (`pkg`), empty when it can't. */
+    val packageExtensions: Set<String> get() = emptySet()
+
+    /** True when installing a package needs its licence key (Vita3K's zRIF). */
+    val packageNeedsKey: Boolean get() = false
+
+    /**
+     * The command that installs the package at [path] in [installed], with [key] when it needs one;
+     * null when it can't install that file. Nothing is run here.
+     */
+    fun packageInstall(installed: InstalledEmulator, path: String, key: String? = null): LaunchPlan.Command? = null
+
     /** Describes how to start [LaunchRequest.game]. Pure: no I/O, nothing is launched. */
     fun plan(request: LaunchRequest): LaunchPlan
 }
