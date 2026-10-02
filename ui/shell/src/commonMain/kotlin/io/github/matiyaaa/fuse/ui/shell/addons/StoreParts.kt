@@ -37,12 +37,14 @@ import io.github.matiyaaa.fuse.ui.shell.store.StoreJob
 import io.github.matiyaaa.fuse.ui.shell.store.StoreState
 import kotlin.math.abs
 
-/** The Store's own colour where an app's category has none. */
-internal const val STORE_TINT = 0xFF2BB673L
-
-/** An app's colour: its category's, turned a little by its name so neighbours in a shelf differ. */
+/**
+ * An app's colour: its category's, turned a little by its name so neighbours in a shelf differ. An
+ * app whose category has no colour takes the theme's accent, so the Store always matches the theme.
+ */
+@Composable
+@androidx.compose.runtime.ReadOnlyComposable
 internal fun StoreApp.tint(): Color {
-    val base = (color ?: STORE_TINT).toColor()
+    val base = color?.toColor() ?: Fuse.colors.accent
     val turn = (abs(name.hashCode()) % 7 - 3) / 3f
     return if (turn >= 0) lerp(base, Color(0xFF3B5BDB), turn * 0.18f) else lerp(base, Color(0xFFE8590C), -turn * 0.18f)
 }

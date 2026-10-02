@@ -107,6 +107,8 @@ data class StoreState(
     val canInstall: Boolean = true,
     /** A GitHub token is set for update checks. */
     val hasGitHubToken: Boolean = false,
+    /** Icons the apps publish themselves (see AppIconFinder), by key, for apps not installed yet. */
+    val icons: Map<String, String> = emptyMap(),
 ) {
     fun app(key: String): StoreApp? = catalogue?.apps?.firstOrNull { it.key == key }
 
