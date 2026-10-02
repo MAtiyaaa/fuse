@@ -157,13 +157,20 @@ fun OnboardingScreen(app: AppState) {
         }
     }
 
+    // Steps move a short, fixed way whatever the screen's width (a share of a wide desktop window
+    // flew them hundreds of pixels), and the old step is gone before the new one settles.
+    val travel = with(androidx.compose.ui.platform.LocalDensity.current) { STEP_TRAVEL.roundToPx() }
     Box(Modifier.fillMaxSize()) {
         AnimatedContent(
             targetState = state.index,
             transitionSpec = {
                 val dir = if (state.forward) 1 else -1
-                (slideInHorizontally(motion.tween(Durations.SLOW, Easings.Enter)) { (it * motion.slideFraction * 2f * dir).toInt() } + fadeIn(motion.fade(Durations.SLOW))) togetherWith
-                    (slideOutHorizontally(motion.tween(Durations.BASE, Easings.Exit)) { (-it * motion.slideFraction * dir).toInt() } + fadeOut(motion.fade(Durations.FAST)))
+                val shift = if (motion.reduced) 0 else travel
+                (
+                    slideInHorizontally(motion.tween(Durations.SLOW, Easings.Enter)) { shift * dir } +
+                        fadeIn(androidx.compose.animation.core.tween(motion.ms(Durations.BASE), delayMillis = motion.ms(Durations.FAST) / 2, easing = Easings.Fade))
+                    ) togetherWith
+                    (slideOutHorizontally(motion.tween(Durations.FAST, Easings.Exit)) { -shift / 2 * dir } + fadeOut(motion.fade(Durations.FAST)))
             },
             label = "onboarding",
         ) { index ->
@@ -242,3 +249,6 @@ fun FuseLine(progress: Float, label: String, modifier: Modifier = Modifier) {
         FText(label, Fuse.type.label, color = c.textMuted)
     }
 }
+
+/** How far a setup step slides in. */
+private val STEP_TRAVEL = 56.dp
