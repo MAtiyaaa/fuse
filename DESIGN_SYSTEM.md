@@ -431,6 +431,11 @@ picture: the controller hides it and waits 150 ms before a screenshot or a recor
   menu and view buttons are simple line drawings. No console maker artwork is used.
 - **Status glyphs** (battery, Wi-Fi, Bluetooth) and the Fuse mark are drawn in code.
 
+Other apps keep their own marks. Cartridge appears as Cartridge draws itself: `FuseMarks.Cartridge`
+is its mark, and `CartridgeBrand` its colours (orange `#EF4B23` on near-black `#16171B`). Its icon,
+its page's panel, its action cards and its widget's progress use them in every theme, as Cartridge
+does; where Android can read the installed app's icon, that icon is shown instead.
+
 ## Sound
 
 Interface sounds are synthesised at runtime by `ToneSynth` (`designsystem/sound/UiSounds.kt`): short

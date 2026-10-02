@@ -1,24 +1,47 @@
 package io.github.matiyaaa.fuse.ui.designsystem.icons
 
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathFillType
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.vector.addPathNodes
+import androidx.compose.ui.unit.dp
 
 /**
- * Marks drawn for Fuse itself, in the same 24 x 24 line style as [FuseIcons] (which is generated
- * from Lucide and never edited by hand). Original drawings, not taken from any app or brand.
+ * Marks of other apps Fuse works with, kept as their makers draw them (unlike [FuseIcons], which is
+ * generated from Lucide and never edited by hand). Each is one flat colour, tinted like any icon.
  */
 object FuseMarks {
     /**
-     * Cartridge: a game cartridge seen from the front, its label window and the contacts along its
-     * bottom edge. Stands for the Cartridge app wherever Fuse names it.
+     * Cartridge's own mark: a cartridge with its label window and its contact strip, as Cartridge
+     * draws it (`src/components/Logo.vue` in github.com/MAtiyaaa/cartridge, MIT). Readable from 16 px.
      */
     val Cartridge: ImageVector by lazy {
-        lineIcon(
-            "Cartridge",
-            "M6.5 2.5h11a2 2 0 0 1 2 2v12.2l-1.5 1.5V21.5H6V18.2l-1.5-1.5V4.5a2 2 0 0 1 2-2Z",
-            "M9 6h6a1 1 0 0 1 1 1v5a1 1 0 0 1 -1 1h-6a1 1 0 0 1 -1 -1v-5a1 1 0 0 1 1 -1Z",
-            "M9 21.5v-2",
-            "M12 21.5v-2",
-            "M15 21.5v-2",
-        )
+        ImageVector.Builder(name = "Cartridge", defaultWidth = 24.dp, defaultHeight = 24.dp, viewportWidth = 48f, viewportHeight = 48f)
+            .addPath(
+                pathData = addPathNodes(
+                    "M10 3h21.6L41 12.4V41a4 4 0 0 1-4 4H10a4 4 0 0 1-4-4V7a4 4 0 0 1 4-4z" +
+                        "M13 10.5a2 2 0 0 0-2 2V26a2 2 0 0 0 2 2h19a2 2 0 0 0 2-2V12.5a2 2 0 0 0-2-2z" +
+                        "M13.5 34a1.75 1.75 0 0 0 0 3.5h20a1.75 1.75 0 0 0 0-3.5z",
+                ),
+                pathFillType = PathFillType.EvenOdd,
+                fill = SolidColor(Color.Black),
+            )
+            .build()
     }
+}
+
+/**
+ * Cartridge's colours: its orange mark on its near-black, as on its launcher icon. Fuse uses them
+ * wherever it shows Cartridge, whatever Fuse's own theme is, as Cartridge does.
+ */
+object CartridgeBrand {
+    /** The mark's orange (`#EF4B23`). */
+    const val ORANGE: Long = 0xFFEF4B23L
+
+    /** The icon's ground and Cartridge's surface (`#16171B`). */
+    const val INK: Long = 0xFF16171BL
+
+    /** Cartridge's deepest background (`#0C0D10`). */
+    const val DEEP: Long = 0xFF0C0D10L
 }

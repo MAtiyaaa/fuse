@@ -742,7 +742,7 @@ private fun ColumnScope.CartridgeFace(cartridge: CartridgeStatus, face: FaceSize
             Spacer(Modifier.width(Space.m))
             Column {
                 FText("Get games from RomM", Fuse.type.bodyStrong, maxLines = 2)
-                WidgetCaption("Install Cartridge", c.accent)
+                WidgetCaption("Install Cartridge", CARTRIDGE_TINT.toColor())
             }
         }
         return
@@ -751,7 +751,7 @@ private fun ColumnScope.CartridgeFace(cartridge: CartridgeStatus, face: FaceSize
         Spacer(Modifier.weight(1f))
         if (downloading) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                ProgressRing(now.progress ?: 0f, size = Size.thumb, stroke = Size.track) {
+                ProgressRing(now.progress ?: 0f, size = Size.thumb, stroke = Size.track, color = CARTRIDGE_TINT.toColor()) {
                     FuseIcon(FuseIcons.ArrowDown, size = Size.iconXS, tint = c.text)
                 }
                 Spacer(Modifier.width(Space.s))
@@ -778,7 +778,7 @@ private fun ColumnScope.CartridgeFace(cartridge: CartridgeStatus, face: FaceSize
         if (downloading) {
             FText(now.title ?: "Downloading", Fuse.type.bodyStrong, maxLines = 1)
             Spacer(Modifier.height(Space.s))
-            ProgressBar(now.progress, Modifier.fillMaxWidth())
+            ProgressBar(now.progress, Modifier.fillMaxWidth(), color = CARTRIDGE_TINT.toColor())
             Spacer(Modifier.height(Space.xs + Space.xxs))
             WidgetCaption(if (now.waiting > 0) "${now.waiting} more queued" else "Downloading from RomM")
         } else {
@@ -804,7 +804,7 @@ private fun ColumnScope.CartridgeFace(cartridge: CartridgeStatus, face: FaceSize
         val shown = lines.take(((room - 64.dp) / 22.dp).toInt().coerceIn(0, QUEUE_LINES))
         val dial: @Composable () -> Unit = {
             if (downloading) {
-                ProgressRing(now.progress ?: 0f, size = ring, stroke = Size.track * if (big) 3 else 2) {
+                ProgressRing(now.progress ?: 0f, size = ring, stroke = Size.track * if (big) 3 else 2, color = CARTRIDGE_TINT.toColor()) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         FText(now.percent ?: "", (if (big) Fuse.type.title else Fuse.type.titleSmall).tabular(), maxLines = 1)
                         FText("downloaded", Fuse.type.caption, color = c.textMuted, maxLines = 1)

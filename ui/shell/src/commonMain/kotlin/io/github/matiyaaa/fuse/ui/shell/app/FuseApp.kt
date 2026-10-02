@@ -659,7 +659,7 @@ private fun hudActivities(app: AppState): List<HudActivity> {
         if (cartridge.installed && (cartridge.activeDownloads > 0 || cartridge.queue.any { it.state == io.github.matiyaaa.fuse.model.QueueState.DOWNLOADING })) {
             val current = cartridge.queue.firstOrNull { it.state == io.github.matiyaaa.fuse.model.QueueState.DOWNLOADING }
             add(HudActivity(
-                "cartridge", FuseIcons.CloudDownload, "Cartridge is downloading ${current?.title ?: cartridge.currentTitle ?: "a game"}",
+                "cartridge", io.github.matiyaaa.fuse.ui.designsystem.icons.FuseMarks.Cartridge, "Cartridge is downloading ${current?.title ?: cartridge.currentTitle ?: "a game"}",
                 progress = current?.progress ?: cartridge.progress,
             ) { app.openCartridge() })
         }

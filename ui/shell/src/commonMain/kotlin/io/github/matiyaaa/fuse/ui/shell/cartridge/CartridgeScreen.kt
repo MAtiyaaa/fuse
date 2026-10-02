@@ -62,6 +62,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.components.fadingEdges
 import io.github.matiyaaa.fuse.ui.designsystem.effects.skeleton
 import io.github.matiyaaa.fuse.ui.designsystem.focus.FollowSelection
 import io.github.matiyaaa.fuse.ui.designsystem.focus.ShelfSelection
+import io.github.matiyaaa.fuse.ui.designsystem.icons.CartridgeBrand
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
 import io.github.matiyaaa.fuse.ui.designsystem.icons.HintButton
@@ -537,7 +538,7 @@ private fun ActionCard(action: CartAction, selected: Boolean, unavailable: Boole
         modifier = Modifier.width(if (compact) 168.dp else 196.dp).height(if (compact) 104.dp else 120.dp),
         shape = shape,
         cornerFraction = 0.14f,
-        glow = if (action.primary) brand else c.accent,
+        glow = brand,
         onClick = onClick,
     ) {
         Box(
@@ -549,10 +550,10 @@ private fun ActionCard(action: CartAction, selected: Boolean, unavailable: Boole
         Column(Modifier.fillMaxSize().padding(Space.m)) {
             val ink = if (action.primary) Color.White else c.text
             Box(
-                Modifier.size(Size.chip).clip(SquircleShape.fraction(0.3f)).background(if (action.primary) Color.White.copy(alpha = 0.18f) else c.accent.copy(alpha = 0.14f)),
+                Modifier.size(Size.chip).clip(SquircleShape.fraction(0.3f)).background(if (action.primary) Color.White.copy(alpha = 0.18f) else brand.copy(alpha = 0.14f)),
                 contentAlignment = Alignment.Center,
             ) {
-                FuseIcon(action.icon, size = Size.iconM, tint = if (action.primary) Color.White else if (unavailable) c.textFaint else c.accent)
+                FuseIcon(action.icon, size = Size.iconM, tint = if (action.primary) Color.White else if (unavailable) c.textFaint else brand)
             }
             Spacer(Modifier.weight(1f))
             FText(action.label, Fuse.type.bodyStrong, color = if (unavailable) c.textMuted else ink, maxLines = 1)
@@ -662,8 +663,10 @@ private fun Pitch(
     Column(modifier.fillMaxWidth().widthIn(max = 1040.dp)) {
         Box(
             Modifier.fillMaxWidth().clip(shape)
-                .background(Brush.linearGradient(listOf(lerp(brand, Color.Black, 0.5f), lerp(brand, Color.Black, 0.82f))))
-                .border(1.dp, Color.White.copy(alpha = 0.08f), shape)
+                // Cartridge's own surface: its near-black, warmed by its orange where its mark is.
+                .background(Brush.linearGradient(listOf(lerp(CartridgeBrand.INK.toColor(), brand, 0.2f), CartridgeBrand.INK.toColor(), CartridgeBrand.DEEP.toColor())))
+                .background(Brush.radialGradient(listOf(brand.copy(alpha = 0.22f), Color.Transparent), radius = 900f, center = androidx.compose.ui.geometry.Offset(160f, 160f)))
+                .border(1.dp, brand.copy(alpha = 0.22f), shape)
                 .padding(if (compact) Space.l else Space.xl),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -714,8 +717,8 @@ private fun Pitch(
                     Modifier.weight(1f).clip(RoundedCornerShape(Fuse.geometry.control)).background(c.text.copy(alpha = if (c.isDark) 0.05f else 0.04f)).padding(Space.l),
                     horizontalArrangement = Arrangement.spacedBy(Space.m),
                 ) {
-                    Box(Modifier.size(Size.chip).clip(CircleShape).background(brand.copy(alpha = 0.18f)), contentAlignment = Alignment.Center) {
-                        FuseIcon(icon, size = Size.iconS, tint = lerp(brand, Color.White, 0.35f))
+                    Box(Modifier.size(Size.chip).clip(CircleShape).background(brand.copy(alpha = 0.16f)), contentAlignment = Alignment.Center) {
+                        FuseIcon(icon, size = Size.iconS, tint = lerp(brand, Color.White, 0.2f))
                     }
                     Column(Modifier.weight(1f)) {
                         FText("${i + 1}  $title", Fuse.type.bodyStrong, maxLines = 1)

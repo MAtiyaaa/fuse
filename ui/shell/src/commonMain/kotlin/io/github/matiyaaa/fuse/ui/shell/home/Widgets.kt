@@ -280,7 +280,7 @@ internal fun widgetTint(kind: WidgetKind, feed: HomeFeed, cartridge: CartridgeSt
     val c = Fuse.colors
     return when (kind) {
         WidgetKind.PLAYTIME_WEEK, WidgetKind.PLAYTIME_TOTAL, WidgetKind.MOST_PLAYED -> c.accent
-        WidgetKind.CARTRIDGE_DOWNLOADS -> if (cartridge.activeDownloads > 0) c.accent else c.text
+        WidgetKind.CARTRIDGE_DOWNLOADS -> io.github.matiyaaa.fuse.ui.designsystem.icons.CartridgeBrand.ORANGE.toColor()
         WidgetKind.RECENT_ACHIEVEMENT, WidgetKind.RECENT_ACHIEVEMENTS, WidgetKind.ACHIEVEMENT_PROGRESS, WidgetKind.RECENTLY_MASTERED -> c.warning
         WidgetKind.CURRENT_GAME -> feed.playtime.currentGame?.accent?.toColor() ?: c.accent
         WidgetKind.STORAGE -> if (storageLow(feed)) c.warning else c.text

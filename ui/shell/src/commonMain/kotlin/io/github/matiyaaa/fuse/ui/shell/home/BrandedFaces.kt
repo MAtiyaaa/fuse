@@ -45,6 +45,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.components.FText
 import io.github.matiyaaa.fuse.ui.designsystem.icons.ButtonGlyph
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
+import io.github.matiyaaa.fuse.ui.designsystem.icons.CartridgeBrand
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseMarks
 import io.github.matiyaaa.fuse.ui.designsystem.icons.HintButton
 import io.github.matiyaaa.fuse.ui.designsystem.media.ArtSlot
@@ -581,16 +582,43 @@ internal fun Emblem(icon: ImageVector, tint: Color, size: Dp, stacked: Boolean =
     }
 }
 
-/** Cartridge's own icon when it is installed here, else Fuse's drawn Cartridge mark in a lit disc. */
+/**
+ * Cartridge's icon: its own (the installed app's) where Fuse can read it, else drawn as Cartridge
+ * draws it, its orange mark on a near-black squircle, with an orange glow beneath.
+ */
 @Composable
 internal fun CartridgeEmblem(size: Dp) {
     val icon = LocalCartridgeIcon.current
-    val mark: @Composable () -> Unit = { Emblem(FuseMarks.Cartridge, CARTRIDGE_TINT.toColor(), size) }
+    val mark: @Composable () -> Unit = { CartridgeIcon(size) }
     if (icon == null) {
         mark()
     } else {
         Box(Modifier.size(size), contentAlignment = Alignment.Center) {
             Artwork(icon, Modifier.size(size * 0.86f), contentScale = ContentScale.Fit, loading = false, fallback = mark)
+        }
+    }
+}
+
+/** Cartridge's launcher icon, drawn: [CartridgeBrand.ORANGE] mark on [CartridgeBrand.INK]. */
+@Composable
+internal fun CartridgeIcon(size: Dp) {
+    val orange = CartridgeBrand.ORANGE.toColor()
+    val shape = remember { SquircleShape.fraction(0.3f) }
+    Box(Modifier.size(size), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(size * 1.4f).background(Brush.radialGradient(0f to orange.copy(alpha = 0.26f), 0.6f to orange.copy(alpha = 0.05f), 1f to Color.Transparent)))
+        Box(
+            Modifier.size(size * 0.86f)
+                .graphicsLayer {
+                    this.shape = shape
+                    clip = true
+                    shadowElevation = 8.dp.toPx()
+                    spotShadowColor = orange
+                }
+                .background(CartridgeBrand.INK.toColor())
+                .border(1.dp, Color.White.copy(alpha = 0.07f), shape),
+            contentAlignment = Alignment.Center,
+        ) {
+            FuseIcon(FuseMarks.Cartridge, size = size * 0.52f, tint = orange)
         }
     }
 }
@@ -603,6 +631,6 @@ private fun FramedEmpty(kind: WidgetKind, note: String) {
 
 /** Favourites' heart, and Cartridge's mark colour. */
 private const val FAVORITE_RED = 0xFFE5486EL
-internal const val CARTRIDGE_TINT = 0xFF5B7CFAL
+internal const val CARTRIDGE_TINT = CartridgeBrand.ORANGE
 
 private val COLLECTION_CARD = 150.dp
