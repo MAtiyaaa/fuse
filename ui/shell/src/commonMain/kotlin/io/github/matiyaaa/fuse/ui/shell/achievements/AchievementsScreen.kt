@@ -55,7 +55,9 @@ import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
 import io.github.matiyaaa.fuse.ui.designsystem.icons.HintButton
 import io.github.matiyaaa.fuse.ui.designsystem.input.InputLayer
 import io.github.matiyaaa.fuse.ui.designsystem.input.NavResult
+import io.github.matiyaaa.fuse.ui.designsystem.media.ArtSlot
 import io.github.matiyaaa.fuse.ui.designsystem.media.Artwork
+import io.github.matiyaaa.fuse.ui.designsystem.media.GeneratedArt
 import io.github.matiyaaa.fuse.ui.designsystem.shape.SquircleShape
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Elevation
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
@@ -390,12 +392,15 @@ private fun UnlockCard(r: RecentAchievement, selected: Boolean, size: Dp, onClic
         Spacer(Modifier.width(Space.m))
         Column(Modifier.weight(1f)) {
             FText(r.achievement.title, Fuse.type.bodyStrong, color = if (selected) c.text else c.text.copy(alpha = 0.88f), maxLines = 2)
-            FText(r.gameTitle, Fuse.type.caption, color = c.textMuted, maxLines = 1)
+            // The game gives way before the time does.
+            Row {
+                FText(r.gameTitle, Fuse.type.caption, color = c.textMuted, maxLines = 1, modifier = Modifier.weight(1f, fill = false))
+                FText("  ·  ${agoText(r.earnedAt)}", Fuse.type.caption, color = c.textMuted, maxLines = 1)
+            }
             Spacer(Modifier.height(Space.s))
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s)) {
                 Badge("${r.achievement.points} pts", color = c.accent, filled = false)
                 if (r.hardcore) Badge("Hardcore", color = c.warning, filled = false)
-                FText(agoText(r.earnedAt), Fuse.type.caption, color = c.textFaint, maxLines = 1, modifier = Modifier.weight(1f, fill = false))
             }
         }
     }
@@ -412,8 +417,10 @@ private fun GameProgressCard(s: AchievementState, selected: Boolean, size: Dp, o
     Row(Modifier.width(size * CARD_WIDTH), verticalAlignment = Alignment.CenterVertically) {
         Tile(selected = selected, modifier = Modifier.size(size), onClick = onClick) {
             Box(Modifier.fillMaxSize().background(c.surfaceRaised), contentAlignment = Alignment.Center) {
-                if (s.iconUrl != null) Artwork(s.iconUrl, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-                else FuseIcon(FuseIcons.Gamepad, size = Size.iconXL, tint = c.textMuted)
+                // Without its icon a game gets generated art, like everywhere else in Fuse.
+                Artwork(s.iconUrl, Modifier.fillMaxSize(), contentScale = ContentScale.Crop, fallback = {
+                    GeneratedArt(s.title, c.accent, Modifier.fillMaxSize(), slot = ArtSlot.ICON)
+                })
             }
         }
         Spacer(Modifier.width(Space.m))

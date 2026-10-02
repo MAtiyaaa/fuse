@@ -31,9 +31,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.layout.positionInParent
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
@@ -237,12 +239,28 @@ fun QuickMenu(app: AppState) {
     }
     row = row.coerceIn(0, (rows.size - 1).coerceAtLeast(0))
 
+    val highlight = rememberRowHighlight()
+    val requesters = remember(rows.size) { List(rows.size) { BringIntoViewRequester() } }
+    val scroll = rememberScrollState()
     LaunchedEffect(open) {
-        if (open) { row = 0; col = 0; platform.sounds.play(SoundCue.OPEN) }
+        // Each opening starts at the top, on the first tile.
+        if (open) { row = 0; col = 0; scroll.scrollTo(0); platform.sounds.play(SoundCue.OPEN) }
     }
     // The selected row scrolls into view, so the stick and the list never drift apart.
-    val requesters = remember(rows.size) { List(rows.size) { BringIntoViewRequester() } }
-    LaunchedEffect(row, open) { if (open) requesters.getOrNull(row)?.bringIntoView() }
+    val margin = with(LocalDensity.current) { Space.l.toPx() }
+    LaunchedEffect(row, open) {
+        if (!open) return@LaunchedEffect
+        // The ends scroll all the way, so the first and last rows never sit under a faded edge;
+        // others come into view with a little room around them.
+        when (row) {
+            0 -> scroll.animateScrollTo(0)
+            rows.lastIndex -> scroll.animateScrollTo(scroll.maxValue)
+            else -> {
+                val h = highlight.bounds[row]?.let { it.second - it.first } ?: 0f
+                requesters.getOrNull(row)?.bringIntoView(Rect(0f, -margin, 1f, h + margin))
+            }
+        }
+    }
 
     if (open) {
         // Holding A turns into REORDER: the Screenshot tile records, everything else just runs.
@@ -277,14 +295,12 @@ fun QuickMenu(app: AppState) {
     }
 
     val reveal = rememberReveal(open)
-    val highlight = rememberRowHighlight()
     val target = highlight.bounds[row]?.takeIf { open && rows.getOrNull(row) !is QuickRow.Tiles }
     highlight.Follow(target)
 
     Overlay(visible = open, onDismiss = ::close, edge = OverlayEdge.END) {
         val c = Fuse.colors
         val time = rememberClockText(prefs.clock24h)
-        val scroll = rememberScrollState()
         BoxWithConstraints {
             // A side sheet the height of the screen; a narrow screen gives it all but a margin.
             val width = minOf(QUICK_MENU_WIDTH, maxWidth - Space.l)

@@ -697,10 +697,10 @@ private fun Preview(media: MediaSet, kind: MediaKind, adjusting: MediaKind?, fx:
     // The art is as large as fits: never wider than the pane, never taller than the space left
     // under the label and above the details, whatever its shape (tall covers on a short screen).
     val aspect = kind.aspect ?: 2.6f
-    val below = (if (kind == MediaKind.SCREENSHOT && media.screenshots.size > 1) 54.dp + Space.m else 0.dp) + (if (m != null) 32.dp + Space.m else 0.dp)
+    val below = (if (kind == MediaKind.SCREENSHOT && media.screenshots.size > 1) SHOT_THUMB / Aspect.SCREENSHOT + Space.m else 0.dp) + (if (m != null) Size.chip + Space.m else 0.dp)
     val roomH = (maxHeight - 28.dp - Space.m - below).coerceAtLeast(80.dp)
     val tileW = minOf(maxWidth, roomH * aspect, 640.dp)
-    val thumbs = ((maxWidth + Space.s) / (96.dp + Space.s)).toInt().coerceIn(1, 6)
+    val thumbs = ((maxWidth + Space.s) / (SHOT_THUMB + Space.s)).toInt().coerceIn(1, 6)
     Column {
         SectionLabel(if (adjusting != null) "Adjusting ${slotName(kind).lowercase()}" else slotName(kind))
         Spacer(Modifier.height(Space.m))
@@ -742,7 +742,7 @@ private fun Preview(media: MediaSet, kind: MediaKind, adjusting: MediaKind?, fx:
         if (kind == MediaKind.SCREENSHOT && media.screenshots.size > 1) {
             Spacer(Modifier.height(Space.m))
             Row(horizontalArrangement = Arrangement.spacedBy(Space.s)) {
-                media.screenshots.take(thumbs).forEach { s -> Artwork(s.model, Modifier.width(96.dp).aspectRatio(Aspect.SCREENSHOT).clip(RoundedCornerShape(Radius.s))) }
+                media.screenshots.take(thumbs).forEach { s -> Artwork(s.model, Modifier.width(SHOT_THUMB).aspectRatio(Aspect.SCREENSHOT).clip(RoundedCornerShape(Radius.s))) }
             }
         }
         m?.let {
@@ -840,6 +840,9 @@ private fun ArtworkGrid(b: Browser.Options, grid: GridSelection, current: String
     }
     }
 }
+
+/** The row of screenshots under the preview: each this wide, 16:9. */
+private val SHOT_THUMB = Space.x5
 
 /** Below this height a slot's frame shows a single line for an empty slot instead of the full message. */
 private val EMPTY_FRAME_MIN = Space.x5 + Space.x4 + Space.xxl
