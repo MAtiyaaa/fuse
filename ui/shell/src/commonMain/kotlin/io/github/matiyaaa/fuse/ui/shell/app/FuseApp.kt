@@ -126,6 +126,8 @@ fun FuseApp(
     safeMode: SafeMode? = null,
     /** Called once this start has run long enough to count as settled ([StartupGuard.settle]). */
     onSettled: () -> Unit = {},
+    /** Plays the startup animation on this start when it is on in Settings (the apps do; tests and renders don't). */
+    startupIntro: Boolean = false,
 ) {
     val base = rememberCoroutineScope()
     val stored by store.prefs.collectAsState()
@@ -145,7 +147,7 @@ fun FuseApp(
     val prefs = if (app.safeMode != null) stored.inSafeMode() else stored
     LaunchedEffect(Unit) {
         // The startup animation, once per start of Fuse (a window made again doesn't replay it).
-        if (!StartupIntro.played && app.safeMode == null && stored.startupAnimation) app.intro = true
+        if (startupIntro && !StartupIntro.played && app.safeMode == null && stored.startupAnimation) app.intro = true
         StartupIntro.played = true
         if (app.safeMode != null) app.showSafeMode()
         delay(StartupGuard.SETTLE_MS)
