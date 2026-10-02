@@ -16,6 +16,7 @@ internal enum class AuditSize(val widthPx: Int, val heightPx: Int, val density: 
     P(2400, 1080, 2.75f, "phone, landscape"),
     V(1080, 2400, 2.75f, "phone, portrait"),
     T(3840, 2160, 2.0f, "TV"),
+    U(3440, 1080, 1.0f, "31:9 ultrawide desktop"),
 
     /** The second screen of a dual-screen handheld, for the companion. */
     C(1080, 1240, 2.5f, "second screen of a dual-screen handheld"),

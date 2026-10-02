@@ -417,12 +417,28 @@ and, for each one (`CartridgeDetails`):
   way (`content://` document URIs, `/sdcard`, `/storage/emulated/0`), the one game inside a folder
   Cartridge reports (multi-disc games), the same folder and file name, or a file name no other game
   has. Games Fuse hasn't indexed yet are tried again after the next scan;
+- checks that RomM's details are this game's (`RommGuard`): RomM's platform slug must resolve to the
+  game's system (or one that shares its games, such as Game Boy and Game Boy Color; a slug Fuse
+  doesn't know is no evidence), and RomM's title must read like the game's own file or cleaned name
+  (title similarity 0.8 or more). A path alone is not trusted, since Cartridge names a download by its
+  RomM rom id and that id can come to mean another rom. When the check fails nothing is written, and
+  details an earlier version wrote for it are undone;
+- before RomM's details first reach a game, keeps what it had (name, details and the art they
+  replace, `kv_cache` namespace `cartridge.romm.before`), so they can be put back;
 - links it to its RomM entry (`rommRomId`);
 - applies RomM's description, year, developer, publisher, genres, series (as the franchise, which
   feeds automatic series collections), players and rating with source `ROMM`: they fill empty fields
   and replace scraped ones, while details the user edited are only ever filled;
-- adds the cover and logo as `ROMM` media, replacing scraped art but never the user's picks or art
-  from the game's folder, and a screenshot only when the game has none.
+- reads the cover, logo and screenshot from Cartridge (a `content://` URI on Android, a file on
+  Linux), checks they really are pictures, and keeps a copy in Fuse's own data folder (`romm/<game>/`);
+  a picture that can't be read is never recorded. They are added as `ROMM` media, replacing scraped
+  art but never the user's picks or art from the game's folder, and a screenshot only when the game
+  has none.
+
+Once (and again from **Check RomM matches again** in Settings, Accounts, Cartridge), Fuse checks
+every game holding RomM's details against its own names and puts back the ones that belong to
+another game. Any game can also be reset by hand: **Reset Name and Details** in its options forgets
+the name, details and art sources gave it, and keeps the user's own name and picks.
 
 A game is written again only when Cartridge says its row or pictures changed, so a later "Fill
 everything" isn't undone at every sync.
@@ -553,6 +569,19 @@ system's package broadcasts and on resume. An update is claimed only when it is 
 install, any newer release; otherwise when Android's version name and the release's version are the
 same kind of numbers and the release is newer. Anything else shows "can't compare", never a made-up
 update.
+
+**Icons.** An installed app shows its own icon. Before that, Fuse looks once for the icon the app
+publishes itself (`obtainium/AppIconFinder.kt`, cached for 30 days, or 7 when there is none): a
+GitHub project's fastlane or F-Droid metadata icon, else the icon its Play Store build uses, and a
+website's home-screen icon (`apple-touch-icon`, else its largest `icon`). Only HTTPS, checked with a
+HEAD request to be a PNG, JPEG or WebP. Nothing is guessed: an app that publishes none keeps its
+monogram, and an owner's avatar is never used.
+
+**What Fuse does with each app.** Every app in both editions is either an emulator in Fuse's launch
+catalog (an app page says whether Fuse starts games in it or, where the app doesn't allow that, opens
+it) or an app Apps lists: Moonlight and Artemis under Streaming, frontends and helpers under Tools
+(`KnownApps`). `StoreCoverageTest` reads both pack fixtures, so a new pack app fails until Fuse knows
+it.
 
 **Uninstalling** goes through `PackageInstaller.uninstall` (with `REQUEST_DELETE_PACKAGES`); Android
 asks the user to confirm. Fuse never removes files to "uninstall".

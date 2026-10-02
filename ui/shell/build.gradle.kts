@@ -39,7 +39,7 @@ val screenshotTests = "io.github.matiyaaa.fuse.ui.shell.screenshots.*"
 
 // UI audit: every screen, overlay and state at the sizes Fuse runs at, rendered headless into a
 // folder with a manifest.json. Never part of desktopTest, check or CI; run it on purpose:
-//     ./gradlew :ui:shell:desktopAudit -Pfuse.audit.dir=/tmp/fuse-audit [-Pfuse.audit.only=home,library/all] [-Pfuse.audit.sizes=M,H]
+//     ./gradlew :ui:shell:desktopAudit -Pfuse.audit.dir=/tmp/fuse-audit [-Pfuse.audit.only=home,library/all] [-Pfuse.audit.sizes=M,H] [-Pfuse.audit.theme=daylight]
 val auditTests = "io.github.matiyaaa.fuse.ui.shell.audit.*"
 
 // Frame cost of the interactions that must stay smooth (scrolling, tab and system runs), with a JFR
@@ -88,6 +88,7 @@ tasks.register<Test>("desktopAudit") {
     systemProperty("fuse.audit.dir", dir.orEmpty())
     systemProperty("fuse.audit.only", providers.gradleProperty("fuse.audit.only").getOrElse(""))
     systemProperty("fuse.audit.sizes", providers.gradleProperty("fuse.audit.sizes").getOrElse(""))
+    systemProperty("fuse.audit.theme", providers.gradleProperty("fuse.audit.theme").getOrElse(""))
     // Every screen at several sizes takes a while; the coroutine test default of one minute is too short.
     systemProperty("kotlinx.coroutines.test.default_timeout", "40m")
     maxHeapSize = "1536m"

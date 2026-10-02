@@ -136,7 +136,9 @@ internal class AuditDriver(
     fun useLibrary(platform: PlatformUi = this.platform, prefs: (UiPrefs) -> UiPrefs = { it }) {
         val store = libraryStore
         val base = libraryPrefs!!
-        store.updatePrefs { prefs(base) }
+        // -Pfuse.audit.theme renders every screen in that theme, unless a scenario picks its own.
+        val theme = System.getProperty("fuse.audit.theme")?.takeIf { it.isNotBlank() }
+        store.updatePrefs { prefs(base).let { p -> if (theme != null && p.themeId == base.themeId) p.copy(themeId = theme) else p } }
         controls.cartridge = io.github.matiyaaa.fuse.model.CartridgeStatus(installed = false)
         store.cartridge.refresh()
         show(store, platform)
