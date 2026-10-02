@@ -106,6 +106,9 @@ class UiAudit {
 
     @Test fun keyScreensH() = audit(AuditSize.H) { keyScreens() }
 
+    /** Addons at a 6 inch handheld's size, where the Store's pages are shortest. */
+    @Test fun addonsH() = audit(AuditSize.H) { addonsScreens() }
+
     @Test fun keyScreensD() = audit(AuditSize.D) { keyScreens() }
 
     @Test fun keyScreensP() = audit(AuditSize.P) { keyScreens() }

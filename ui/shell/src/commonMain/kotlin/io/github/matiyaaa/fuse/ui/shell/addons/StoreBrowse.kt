@@ -68,7 +68,9 @@ import io.github.matiyaaa.fuse.ui.shell.app.FocusZone
 import io.github.matiyaaa.fuse.ui.shell.app.Route
 import io.github.matiyaaa.fuse.ui.shell.app.TextInputSpec
 import io.github.matiyaaa.fuse.ui.shell.app.rememberRouteState
+import io.github.matiyaaa.fuse.ui.shell.components.ReportScroll
 import io.github.matiyaaa.fuse.ui.shell.components.agoText
+import io.github.matiyaaa.fuse.ui.shell.components.subTabsRoom
 import io.github.matiyaaa.fuse.ui.shell.store.Availability
 import io.github.matiyaaa.fuse.ui.shell.store.StoreApp
 import io.github.matiyaaa.fuse.ui.shell.store.StoreState
@@ -115,12 +117,12 @@ internal fun StoreContent(app: AppState, active: Boolean, topPadding: Dp) {
     LaunchedEffect(state.variant) { ops.open() }
     val variant = state.variant
     if (variant == null) {
-        StoreSetup(app, state.recommended, active, topPadding)
+        StoreSetup(app, state.recommended, active, topPadding + subTabsRoom())
         return
     }
     val catalogue = state.catalogue
     if (catalogue == null) {
-        StoreWaiting(app, state, active, topPadding)
+        StoreWaiting(app, state, active, topPadding + subTabsRoom())
         return
     }
     StoreShelves(app, state, active, topPadding)
@@ -273,12 +275,15 @@ private fun StoreShelves(app: AppState, state: StoreState, active: Boolean, topP
 
     val list = rememberLazyListState()
     FollowSelection(list, { sel.row }, anchor = 0.12f)
+    // The Addons tabs above fold away as the page scrolls.
+    ReportScroll(list)
+    val room = subTabsRoom()
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val compact = maxHeight < 600.dp
         LazyColumn(
             state = list,
             modifier = Modifier.fillMaxSize().padding(top = topPadding).fadingEdges(top = if (list.canScrollBackward) Space.xl else 0.dp),
-            contentPadding = PaddingValues(top = if (compact) Space.s else Space.m, bottom = Size.hintHeight + Space.xl),
+            contentPadding = PaddingValues(top = room + if (compact) Space.s else Space.m, bottom = Size.hintHeight + Space.xl),
             verticalArrangement = Arrangement.spacedBy(if (compact) Space.l else Space.xl),
         ) {
             for ((ri, r) in rows.withIndex()) {

@@ -1,11 +1,14 @@
 package io.github.matiyaaa.fuse.ui.shell.addons
 
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -14,6 +17,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import io.github.matiyaaa.fuse.model.NavAction
 import io.github.matiyaaa.fuse.ui.designsystem.components.Hint
@@ -24,12 +29,18 @@ import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseMarks
 import io.github.matiyaaa.fuse.ui.designsystem.icons.HintButton
 import io.github.matiyaaa.fuse.ui.designsystem.input.InputLayer
 import io.github.matiyaaa.fuse.ui.designsystem.input.NavResult
+import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
 import io.github.matiyaaa.fuse.ui.shell.app.AddonsPart
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.FocusZone
 import io.github.matiyaaa.fuse.ui.shell.cartridge.CartridgeContent
+import io.github.matiyaaa.fuse.ui.shell.components.COMPACT_TAB
+import io.github.matiyaaa.fuse.ui.shell.components.CompactTab
+import io.github.matiyaaa.fuse.ui.shell.components.CompactTabs
+import io.github.matiyaaa.fuse.ui.shell.components.LocalSubTabs
+import io.github.matiyaaa.fuse.ui.shell.components.SubTabsState
 import io.github.matiyaaa.fuse.ui.shell.components.ViewTab
 import io.github.matiyaaa.fuse.ui.shell.components.ViewTabs
 
@@ -75,28 +86,69 @@ fun AddonsScreen(app: AppState) {
     }
 
     val entry = rememberReveal()
+    val many = parts.size > 1
+    // The full tabs, and the folded ones the page scrolls under: the page is clipped below the
+    // folded ones and keeps the rest of the full tabs' room above its first row.
+    val openTop = Size.hudHeight + TABS + Space.s
+    val foldedTop = Size.hudHeight + COMPACT_TAB + Space.s * 2
+    val tabs = remember(many) { SubTabsState(extraTop = if (many) openTop - foldedTop else 0.dp) }
+    // Up into the tabs opens them again, wherever the page is.
+    val fold by animateFloatAsState(
+        if (many && tabs.collapsed && !inTabs) 1f else 0f,
+        Fuse.motion.focusSpring(),
+        label = "fold",
+    )
     Box(Modifier.fillMaxSize()) {
-        val top = if (parts.size > 1) Size.hudHeight + TABS + Space.s else Size.hudHeight
-        key(part) {
-            when (part) {
-                AddonsPart.CARTRIDGE -> CartridgeContent(app, embedded = true, active = !inTabs, topPadding = top)
-                AddonsPart.STORE -> StoreContent(app, active = !inTabs, topPadding = top)
+        CompositionLocalProvider(LocalSubTabs provides tabs) {
+            key(part) {
+                val top = if (many) foldedTop else Size.hudHeight
+                when (part) {
+                    AddonsPart.CARTRIDGE -> CartridgeContent(app, embedded = true, active = !inTabs, topPadding = top)
+                    AddonsPart.STORE -> StoreContent(app, active = !inTabs, topPadding = top)
+                }
             }
         }
-        if (parts.size > 1) {
-            Column {
-                Spacer(Modifier.height(Size.hudHeight + Space.xs))
-                ViewTabs(
-                    items = parts.map { p ->
-                        when (p) {
-                            AddonsPart.CARTRIDGE -> ViewTab("Cartridge", icon = FuseMarks.Cartridge, badge = (cartridge.activeDownloads + cartridge.queuedDownloads).takeIf { it > 0 }?.toString())
-                            AddonsPart.STORE -> ViewTab("Store", icon = FuseIcons.Store, badge = store.updates.size.takeIf { it > 0 }?.toString())
-                        }
-                    },
+        if (many) {
+            val items = parts.map { p ->
+                when (p) {
+                    AddonsPart.CARTRIDGE -> ViewTab("Cartridge", icon = FuseMarks.Cartridge, badge = (cartridge.activeDownloads + cartridge.queuedDownloads).takeIf { it > 0 }?.toString())
+                    AddonsPart.STORE -> ViewTab("Store", icon = FuseIcons.Store, badge = store.updates.size.takeIf { it > 0 }?.toString())
+                }
+            }
+            // Open: the named tabs, which lift away and shrink toward the top left as the page scrolls.
+            if (fold < 1f) {
+                Column {
+                    Spacer(Modifier.height(Size.hudHeight + Space.xs))
+                    ViewTabs(
+                        items = items,
+                        active = parts.indexOf(part),
+                        focused = parts.indexOf(part).takeIf { inTabs },
+                        onSelect = { i -> show(parts[i]); tabsFocused = false },
+                        modifier = Modifier.reveal(entry, 0).graphicsLayer {
+                            alpha = 1f - fold
+                            val s = 1f - 0.45f * fold
+                            scaleX = s
+                            scaleY = s
+                            translationY = -10.dp.toPx() * fold
+                            transformOrigin = TransformOrigin(0f, 0f)
+                        },
+                    )
+                }
+            }
+            // Folded: just the icons, half the size, in a small pill where the tabs were.
+            if (fold > 0f) {
+                CompactTabs(
+                    items = items.map { CompactTab(it.label, it.icon ?: FuseIcons.Store, it.badge) },
                     active = parts.indexOf(part),
-                    focused = parts.indexOf(part).takeIf { inTabs },
                     onSelect = { i -> show(parts[i]); tabsFocused = false },
-                    modifier = Modifier.reveal(entry, 0),
+                    modifier = Modifier.padding(start = Space.gutter, top = Size.hudHeight + Space.s).graphicsLayer {
+                        alpha = fold
+                        val s = 0.7f + 0.3f * fold
+                        scaleX = s
+                        scaleY = s
+                        translationY = 10.dp.toPx() * (1f - fold)
+                        transformOrigin = TransformOrigin(0f, 0f)
+                    },
                 )
             }
         }
