@@ -63,6 +63,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.effects.rememberReveal
 import io.github.matiyaaa.fuse.ui.designsystem.effects.reveal
 import io.github.matiyaaa.fuse.ui.designsystem.effects.shimmer
 import io.github.matiyaaa.fuse.ui.designsystem.effects.skeleton
+import io.github.matiyaaa.fuse.ui.designsystem.focus.packBoard
 import io.github.matiyaaa.fuse.ui.designsystem.focus.LinearSelection
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
@@ -466,9 +467,30 @@ internal fun HomeSkeleton(app: AppState, channels: Boolean) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val compact = maxHeight < SKELETON_COMPACT_BELOW
         val stage = (maxHeight * 0.3f).coerceIn(150.dp, 280.dp)
-        // The board's own measures: two columns on a phone held upright, four otherwise.
-        val columns = if (maxWidth < SKELETON_NARROW_BELOW) 2 else 4
-        val unit = ((maxWidth - Space.gutter * 2 - Space.l * (columns - 1)) / columns).coerceAtMost(maxHeight * 0.26f)
+        if (channels) {
+            // The board's own measures and the board as it comes: a large widget, two small ones and
+            // strips under them.
+            val narrow = maxWidth < SKELETON_NARROW_BELOW
+            val columns = if (narrow) 2 else 4
+            val gutter = if (narrow) Space.gutterCompact else Space.gutter
+            val gapX = if (narrow) Space.m else Space.l
+            val gapY = Size.sparkClearance
+            val cellW = (maxWidth - gutter * 2 - gapX * (columns - 1)) / columns
+            val cellH = (cellW * if (narrow) 0.86f else 0.6f).coerceIn(96.dp, 240.dp)
+            val shape = SquircleShape.fraction(fraction * 0.6f)
+            val cells = remember(columns) { packBoard(listOf(2 to 2, 1 to 1, 1 to 1, 2 to 1, 2 to 1, 2 to 1), columns) }
+            Box(Modifier.fillMaxSize().padding(start = gutter, end = gutter, top = Size.hudHeight + Space.l)) {
+                for (c in cells) {
+                    Skeleton(
+                        Modifier
+                            .offset(x = (cellW + gapX) * c.column, y = (cellH + gapY) * c.row)
+                            .size(cellW * c.columnSpan + gapX * (c.columnSpan - 1), cellH * c.rowSpan + gapY * (c.rowSpan - 1)),
+                        shape = shape,
+                    )
+                }
+            }
+            return@BoxWithConstraints
+        }
         Column(Modifier.fillMaxSize()) {
             Spacer(Modifier.height(Size.hudHeight))
             Column(Modifier.fillMaxWidth().height(stage).padding(horizontal = Space.gutter), verticalArrangement = Arrangement.Bottom) {
@@ -480,27 +502,8 @@ internal fun HomeSkeleton(app: AppState, channels: Boolean) {
             }
             Spacer(Modifier.height(Space.xl))
             val row = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState(), enabled = false).padding(horizontal = Space.gutter)
-            if (channels) {
-                val channel = SquircleShape.fraction(fraction * 0.6f)
-                // A wide channel and two small ones, as a fresh board starts.
-                val rows = if (columns == 2) listOf(listOf(2), listOf(1, 1)) else listOf(listOf(2, 1, 1))
-                Column(Modifier.padding(top = Space.l), verticalArrangement = Arrangement.spacedBy(Space.m)) {
-                    for (spans in rows) {
-                        Row(row, horizontalArrangement = Arrangement.spacedBy(Space.l)) {
-                            spans.forEach { span ->
-                                Column {
-                                    Skeleton(Modifier.size(unit * span + Space.l * (span - 1), unit * 0.78f), shape = channel)
-                                    Spacer(Modifier.height(Size.sparkClearance))
-                                    SkeletonText(Modifier.width(unit * 0.5f), lines = 1, style = Fuse.type.label)
-                                }
-                            }
-                        }
-                    }
-                }
-            } else {
-                ShelfSkeleton(row, metrics.icon * 1.25f * 1.78f, metrics.icon * 1.25f, metrics.gap, SquircleShape.fraction(fraction * 0.7f))
-                ShelfSkeleton(row, metrics.icon, metrics.icon, metrics.gap, tileShape)
-            }
+            ShelfSkeleton(row, metrics.icon * 1.25f * 1.78f, metrics.icon * 1.25f, metrics.gap, SquircleShape.fraction(fraction * 0.7f))
+            ShelfSkeleton(row, metrics.icon, metrics.icon, metrics.gap, tileShape)
         }
     }
 }

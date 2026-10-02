@@ -32,6 +32,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size as GeoSize
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
@@ -128,12 +129,35 @@ fun ControlTile(
             .padding(if (compact) Space.s else Space.m),
     ) {
         val dim = Modifier.alpha(if (unavailable) 0.45f else 1f)
-        ControlWell(icon, active, compact, dim.align(Alignment.TopStart))
-        Column(dim.align(Alignment.BottomStart)) {
-            FText(label, Fuse.type.label, color = c.text, maxLines = 1)
-            // The state line is always laid out, so every label sits on the same line.
-            val state = if (toggle) (if (active) "On" else "Off") else detail
-            FText(state.orEmpty(), Fuse.type.caption, color = stateColor, maxLines = 1)
+        // The well above the words when the tile is tall enough for both, else beside them: a short
+        // tile (the second screen of a small handheld) never lets the icon ride over the label.
+        Layout(
+            content = {
+                ControlWell(icon, active, compact, dim)
+                Column(dim) {
+                    FText(label, Fuse.type.label, color = c.text, maxLines = 1)
+                    // The state line is always laid out, so every label sits on the same line.
+                    val state = if (toggle) (if (active) "On" else "Off") else detail
+                    FText(state.orEmpty(), Fuse.type.caption, color = stateColor, maxLines = 1)
+                }
+            },
+            modifier = Modifier.matchParentSize(),
+        ) { measurables, constraints ->
+            val loose = constraints.copy(minWidth = 0, minHeight = 0)
+            val well = measurables[0].measure(loose)
+            val gap = Space.s.roundToPx()
+            val wordsHeight = measurables[1].minIntrinsicHeight(constraints.maxWidth)
+            val stacked = well.height + gap + wordsHeight <= constraints.maxHeight
+            val side = measurables[1].measure(if (stacked) loose else loose.copy(maxWidth = (constraints.maxWidth - well.width - gap).coerceAtLeast(0)))
+            layout(constraints.maxWidth, constraints.maxHeight) {
+                if (stacked) {
+                    well.place(0, 0)
+                    side.place(0, constraints.maxHeight - side.height)
+                } else {
+                    well.place(0, (constraints.maxHeight - well.height) / 2)
+                    side.place(well.width + gap, (constraints.maxHeight - side.height) / 2)
+                }
+            }
         }
     }
 }

@@ -180,6 +180,9 @@ class InputRouter(
     private val sticksDown = mutableSetOf<PadButton>()
     private var comboHold: Job? = null
 
+    /** Sticks pressed on their own, waiting for release to act (unless the combo forms first). */
+    private val stickPending = mutableSetOf<PadButton>()
+
     /** Both sticks went down together; stays set until both are up, so neither acts on its own. */
     private var comboActive = false
     private var comboDone = false
@@ -201,6 +204,12 @@ class InputRouter(
         if (held.containsKey(button)) return
         val action = actionFor(button) ?: return
         _lastSource.value = source
+        if (button.isStick && onCaptureCombo != null) {
+            // While both sticks together take a screenshot, a stick on its own acts when it is let go,
+            // and only if the other stick never joined it: pressing one a moment early must not act.
+            stickPending += button
+            return
+        }
         when {
             action.repeats || action in topRepeats() -> {
                 dispatch(action, source)
@@ -230,7 +239,14 @@ class InputRouter(
             longPressConsumed.remove(button)
             return
         }
-        if (button.isStick && comboRelease(button)) return
+        if (button.isStick && comboRelease(button)) {
+            stickPending -= button
+            return
+        }
+        if (stickPending.remove(button)) {
+            actionFor(button)?.let { dispatch(it, source) }
+            return
+        }
         if (!held.containsKey(button)) return
         val job = held.remove(button)
         job?.cancel()
@@ -247,6 +263,7 @@ class InputRouter(
         longPressConsumed.clear()
         stickDirection = null
         sticksDown.clear()
+        stickPending.clear()
         comboHold?.cancel()
         comboHold = null
         comboActive = false
@@ -264,6 +281,8 @@ class InputRouter(
         _lastSource.value = source
         comboActive = true
         comboDone = false
+        // Neither stick acts on its own now: the press was the start of the combo.
+        stickPending.clear()
         comboHold = scope.launch {
             delay(COMBO_HOLD_MS)
             comboDone = true
@@ -326,7 +345,9 @@ class InputRouter(
             PadButton.START -> NavAction.QUICK_MENU
             PadButton.SELECT -> NavAction.CONTEXT
             PadButton.MODE -> NavAction.HOME
-            PadButton.L3, PadButton.R3 -> null
+            // The right stick pressed in opens the quick menu too (Start and M stay); the left stick is free.
+            PadButton.R3 -> NavAction.QUICK_MENU
+            PadButton.L3 -> null
             PadButton.DPAD_UP, PadButton.KEY_UP -> NavAction.UP
             PadButton.DPAD_DOWN, PadButton.KEY_DOWN -> NavAction.DOWN
             PadButton.DPAD_LEFT, PadButton.KEY_LEFT -> NavAction.LEFT

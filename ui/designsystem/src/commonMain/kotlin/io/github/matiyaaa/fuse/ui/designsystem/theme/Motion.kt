@@ -166,11 +166,11 @@ class FuseMotion(val profile: MotionProfile) {
      * [glideTrail].
      */
     fun <T> glide(): FiniteAnimationSpec<T> =
-        if (reduced) snap() else spring(dampingRatio = 0.9f, stiffness = 700f)
+        if (reduced) snap() else spring(dampingRatio = 0.9f, stiffness = 1400f)
 
     /** The trailing edge of a gliding indicator: softer than [glide], so the indicator stretches as it moves. */
     fun <T> glideTrail(): FiniteAnimationSpec<T> =
-        if (reduced) snap() else spring(dampingRatio = 0.92f, stiffness = 380f)
+        if (reduced) snap() else spring(dampingRatio = 0.92f, stiffness = 900f)
 
     /**
      * Values that change in place: a toggle's knob, a slider's fill, a progress bar, a counter.

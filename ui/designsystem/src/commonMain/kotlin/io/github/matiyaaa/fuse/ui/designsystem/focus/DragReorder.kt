@@ -283,11 +283,14 @@ fun rememberDragReorderState(): DragReorderState {
  * list; [keepScroll] is called as the order changes to pin the scroll by index instead (pass
  * `{ state.requestScrollToItem(state.firstVisibleItemIndex, state.firstVisibleItemScrollOffset) }`).
  *
- * [lane] says whether the items form a grid, a single row or a single column.
+ * [lane] says whether the items form a grid, a single row or a single column. A touch where [ignore]
+ * says so (a point in the window) is left alone, for controls that sit on the items (a resize grip).
  *
  * With [requireHandle] only a hold on an item's [reorderHandle] lifts it, so a list of rows can be
  * rearranged while the rows' own items keep their holds (a row of systems inside a list of shelves).
- * An item that was [DragReorderState.arm]ed lifts at the first touch.
+ * With [instantHandles] a touch on a handle lifts its item at once, without the hold (a list made
+ * for rearranging, whose rows show grips). An item that was [DragReorderState.arm]ed lifts at the
+ * first touch.
  *
  * The gesture outlives recompositions (restarting it would drop an item mid-drag), so the callbacks
  * are read as they are now, never as they were when the list was first touched: a drop always sees
@@ -303,7 +306,9 @@ fun Modifier.dragReorder(
     longPressMs: Long? = null,
     endInset: Dp = 0.dp,
     requireHandle: Boolean = false,
+    instantHandles: Boolean = false,
     lane: ReorderMath.Lane = ReorderMath.Lane.GRID,
+    ignore: (Offset) -> Boolean = { false },
     keepScroll: () -> Unit = {},
     onLift: (Any) -> Unit = {},
     onTarget: () -> Unit = {},
@@ -314,6 +319,7 @@ fun Modifier.dragReorder(
     val currentScrollBy by rememberUpdatedState(scrollBy)
     val currentLongPressMs by rememberUpdatedState(longPressMs)
     val currentKeepScroll by rememberUpdatedState(keepScroll)
+    val currentIgnore by rememberUpdatedState(ignore)
     val currentOnLift by rememberUpdatedState(onLift)
     val currentOnTarget by rememberUpdatedState(onTarget)
     val currentOnHoldReleased by rememberUpdatedState(onHoldReleased)
@@ -326,10 +332,11 @@ fun Modifier.dragReorder(
         .pointerInput(state, enabled) {
             if (!enabled) return@pointerInput
             dragGestures(
-                state, vertical, endInset, requireHandle,
+                state, vertical, endInset, requireHandle, instantHandles,
                 visibleKeys = { currentVisibleKeys() },
                 scrollBy = { currentScrollBy(it) },
                 longPressMs = { currentLongPressMs },
+                ignore = { currentIgnore(it) },
                 keepScroll = { currentKeepScroll() },
                 onLift = { currentOnLift(it) },
                 onTarget = { currentOnTarget() },
@@ -344,9 +351,11 @@ private suspend fun PointerInputScope.dragGestures(
     vertical: Boolean,
     endInset: Dp,
     requireHandle: Boolean,
+    instantHandles: Boolean,
     visibleKeys: () -> Collection<Any>,
     scrollBy: suspend (Float) -> Float,
     longPressMs: () -> Long?,
+    ignore: (Offset) -> Boolean,
     keepScroll: () -> Unit,
     onLift: (Any) -> Unit,
     onTarget: () -> Unit,
@@ -382,8 +391,10 @@ private suspend fun PointerInputScope.dragGestures(
             val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
             val slop = viewConfiguration.touchSlop
             val at = state.container.topLeft + down.position
+            if (ignore(at)) return@awaitEachGesture
             val visible = visibleKeys()
-            val armed = state.armedKey?.takeIf { it in visible && state.bounds[it]?.contains(at) == true }
+            val handle = if (instantHandles) state.handles.entries.firstOrNull { (k, r) -> k in visible && r.contains(at) }?.key else null
+            val armed = state.armedKey?.takeIf { it in visible && state.bounds[it]?.contains(at) == true } ?: handle
             if (armed == null && state.armedKey != null) state.arm(null)
             if (armed == null) {
                 // Wait out the hold without taking anything, so taps and scrolls behave as always.

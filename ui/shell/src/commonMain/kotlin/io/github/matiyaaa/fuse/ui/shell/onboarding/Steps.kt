@@ -92,6 +92,9 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
     var suggestionsLoaded by remember { mutableStateOf(false) }
     val suggestionSel = remember { LinearSelection() }
     val next = state::next
+    // Replayed as a rehearsal (developer options), steps change nothing outside preferences, and
+    // those are put back when it ends.
+    val live = !app.dev.rehearsing
 
     LaunchedEffect(storage) {
         if (storage == StorageState.GRANTED || storage == StorageState.NOT_NEEDED) {
@@ -168,12 +171,14 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
             },
             actions = listOf(
                 StepAction(if (chosen.isEmpty() && sources.isNotEmpty()) "Continue" else "Use these", primary = true, enabled = chosen.isNotEmpty() || sources.isNotEmpty()) {
-                    app.scope.launch {
-                        for (path in chosen.toList()) {
-                            val kind = suggestions.firstOrNull { it.path == path }?.kind ?: LibrarySourceKind.ROMS_ROOT
-                            store.sources.add(path, kind)
+                    if (live) {
+                        app.scope.launch {
+                            for (path in chosen.toList()) {
+                                val kind = suggestions.firstOrNull { it.path == path }?.kind ?: LibrarySourceKind.ROMS_ROOT
+                                store.sources.add(path, kind)
+                            }
+                            store.sources.rescan()
                         }
-                        store.sources.rescan()
                     }
                     next()
                 },
@@ -228,7 +233,7 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
                                 "Install Cartridge ${release.tag.removePrefix("v")}?",
                                 "Fuse downloads the official release from GitHub and hands it to your system's installer, where you confirm it.",
                                 "Download and install",
-                            ) { app.scope.launch { store.cartridge.install(release) } }
+                            ) { if (live) app.scope.launch { store.cartridge.install(release) } }
                         }
                     }
                 },
@@ -283,7 +288,7 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
                     app.textInput = TextInputSpec("RetroAchievements username", "") { user ->
                         app.textInput = TextInputSpec("Web API key", "", "Paste your key") { key ->
                             app.scope.launch {
-                                store.achievements.connect(user.trim(), key.trim())
+                                if (live) store.achievements.connect(user.trim(), key.trim())
                                     .onSuccess { app.toasts.show("Connected as ${user.trim()}") }
                                     .onFailure { app.toasts.show(it.message ?: "Couldn't connect") }
                             }
@@ -300,7 +305,7 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
             actions = listOf(
                 StepAction(if ("sgdb.apikey" in secrets) "Continue" else "Add SteamGridDB key", primary = true) {
                     if ("sgdb.apikey" in secrets) next() else app.textInput = TextInputSpec("SteamGridDB API key", "", "From steamgriddb.com, Preferences, API") { key ->
-                        if (key.isNotBlank()) app.scope.launch { store.credentials.put("sgdb.apikey", key.trim()) }
+                        if (key.isNotBlank() && live) app.scope.launch { store.credentials.put("sgdb.apikey", key.trim()) }
                     }
                 },
                 StepAction("Skip", run = next),
@@ -364,9 +369,13 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
         add(Step(
             "done", "Ready", "You're all set",
             if (total > 0) "$total games across ${withGames.size} systems, ready to play. Press Start anytime for quick settings." else "Fuse keeps looking for games in the background. Press Start anytime for quick settings.",
-            actions = listOf(StepAction("Start playing", primary = true) {
-                store.updatePrefs { it.copy(onboardingDone = true) }
-                app.navigator.replace(Route.Root(io.github.matiyaaa.fuse.model.Destination.HOME))
+            actions = listOf(StepAction(if (live) "Start playing" else "End the rehearsal", primary = true) {
+                if (live) {
+                    store.updatePrefs { it.copy(onboardingDone = true) }
+                    app.navigator.replace(Route.Root(io.github.matiyaaa.fuse.model.Destination.HOME))
+                } else {
+                    app.endRehearsal()
+                }
             }),
             content = { Ignition(lit = true) },
         ))
@@ -510,3 +519,15 @@ private fun ThemePreview(index: Int) {
 }
 
 private fun Modifier.matchParentSizeSafe(): Modifier = this.then(Modifier.fillMaxWidth().heightIn(min = 1.dp).aspectRatio(16f / 10f))
+
+/**
+ * Ends a replayed setup (developer options): the preferences go back to how they were before it
+ * started, and Fuse returns to where the rehearsal began.
+ */
+fun AppState.endRehearsal() {
+    val before = dev.rehearsalPrefs ?: return
+    dev.rehearsalPrefs = null
+    store.updatePrefs { before }
+    back()
+    toasts.show("Setup replayed. Nothing was changed")
+}

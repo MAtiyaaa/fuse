@@ -46,6 +46,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
@@ -261,7 +262,8 @@ fun SystemsScreen(app: AppState) {
                     val selected = (drag.heldKey?.let { it == key } ?: (i == sel.index)) && app.focusZone == FocusZone.CONTENT
                     val carried = moving && i == sel.index
                     val lifted by animateFloatAsState(if (carried) 1f else 0f, Fuse.motion.focusSpring(), label = "carry")
-                    val shape = SquircleShape.fraction(Fuse.geometry.tileCornerFraction)
+                    val fraction = Fuse.geometry.tileCornerFraction
+                    val shape = remember(fraction) { SquircleShape.fraction(fraction) }
                     Tile(
                         selected = selected,
                         glow = card.platform.accent.toColor(),
@@ -305,10 +307,9 @@ fun SystemsScreen(app: AppState) {
 
 /**
  * A system's face on the Systems grid. Systems with their own square art or icon show it whole.
- * Otherwise the card is the system's colour (or its art pack's panel and logo) with its maker on
- * top, its name (or logo) and, at the foot, how many games it has and the emulator they start in,
- * so the grid answers "what runs this?" without opening anything. Small cards keep the name and
- * count only.
+ * Otherwise the card is the system's colour (or its art pack's panel) with its logo, or its name
+ * where it has none. How many games it has and what runs them are in the header above the grid,
+ * for the system in focus, so the cards stay as clean as a shelf of consoles.
  */
 @Composable
 private fun SystemCardFace(card: PlatformCard, height: Dp) {
@@ -319,56 +320,41 @@ private fun SystemCardFace(card: PlatformCard, height: Dp) {
     }
     val c = Fuse.colors
     val accent = card.platform.accent.toColor()
-    // Roomy cards carry the maker and the emulator too; small ones (phones) the name and count.
     val roomy = height >= Size.touch * 2
-    val tiny = height < Size.touch + Space.l
     Box(Modifier.fillMaxSize()) {
         GeneratedArt(title = card.platform.name, accent = accent, slot = ArtSlot.WIDE, showText = false)
         if (art.boxart != null) {
-            // The art pack's tall panel stands at the right end, blended into the card's colour.
+            // The art pack's tall panel stands at the right end, melting into the card's colour.
             Artwork(
                 art.boxart,
-                Modifier.align(Alignment.CenterEnd).fillMaxHeight().fillMaxWidth(0.42f).panelBlend(),
+                Modifier.align(Alignment.CenterEnd).fillMaxHeight().fillMaxWidth(0.42f),
                 contentScale = ContentScale.Crop,
                 focusX = 0.5f,
                 focusY = 0.35f,
             )
+            PanelMelt(accent, Modifier.align(Alignment.CenterEnd).fillMaxHeight().fillMaxWidth(0.42f))
         }
-        // A floor under the words, so they read on any colour.
-        Box(Modifier.fillMaxSize().drawBehind { drawRect(Brush.verticalGradient(0.4f to Color.Transparent, 1f to c.artScrim.copy(alpha = c.artScrim.alpha * 0.7f))) })
-        Column(
+        // A floor under the logo, so it reads on any colour.
+        Box(Modifier.fillMaxSize().drawBehind { drawRect(Brush.verticalGradient(0.4f to Color.Transparent, 1f to c.artScrim.copy(alpha = c.artScrim.alpha * 0.6f))) })
+        Box(
             Modifier.fillMaxSize().padding(if (roomy) Space.m else Space.s + Space.xxs),
-            verticalArrangement = Arrangement.SpaceBetween,
+            contentAlignment = Alignment.BottomStart,
         ) {
-            val maker = card.platform.manufacturer?.uppercase()
-            if (roomy && maker != null) FText(maker, Fuse.type.overline, color = c.onArtMuted, maxLines = 1) else Spacer(Modifier.height(Space.hair))
-            Column(verticalArrangement = Arrangement.spacedBy(Space.xxs)) {
-                val name: @Composable () -> Unit = {
-                    FText(card.platform.shortName, if (roomy) Fuse.type.title else Fuse.type.titleSmall, color = c.onArt, maxLines = 1)
-                }
-                if (art.logo != null) {
-                    Artwork(
-                        art.logo,
-                        Modifier.fillMaxWidth(0.62f).height((height * 0.24f).coerceIn(Space.l + Space.xxs, Size.touch + Space.xl)),
-                        contentScale = ContentScale.Fit,
-                        focusX = 0f,
-                        focusY = 1f,
-                        tint = c.onArt,
-                        fallback = name,
-                    )
-                } else {
-                    name()
-                }
-                if (!tiny) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        FText(gamesText(card.gameCount), Fuse.type.caption.tabular(), color = c.onArt.copy(alpha = 0.9f), maxLines = 1)
-                        if (roomy) {
-                            val emulator = card.emulatorName?.takeIf { card.emulatorInstalled }
-                            FText("  ·  ", Fuse.type.caption, color = c.onArtMuted, maxLines = 1)
-                            FText(emulator ?: "No emulator", Fuse.type.caption, color = if (emulator == null) c.warning else c.onArtMuted, maxLines = 1, modifier = Modifier.weight(1f, fill = false))
-                        }
-                    }
-                }
+            val name: @Composable () -> Unit = {
+                FText(card.platform.shortName, if (roomy) Fuse.type.title else Fuse.type.titleSmall, color = c.onArt, maxLines = 1)
+            }
+            if (art.logo != null) {
+                Artwork(
+                    art.logo,
+                    Modifier.fillMaxWidth(0.6f).height((height * 0.3f).coerceIn(Space.l + Space.xs, Size.touch + Space.xxl)),
+                    contentScale = ContentScale.Fit,
+                    focusX = 0f,
+                    focusY = 1f,
+                    tint = c.onArt,
+                    fallback = name,
+                )
+            } else {
+                name()
             }
         }
         if (!card.emulatorInstalled) {
@@ -378,17 +364,31 @@ private fun SystemCardFace(card: PlatformCard, height: Dp) {
 }
 
 /**
- * A small square standing for a system in lists, pickers and page headers: its own square art or
- * icon where it has one, else its colour with its short name set as large as fits ("PS2",
- * "Switch"), so systems never become ambiguous initials.
+ * The left edge of an art pack's panel, melted into the card's colour with a plain gradient drawn
+ * over it: no offscreen layer per card, which a grid of a dozen systems can't afford on a handheld.
+ */
+@Composable
+private fun PanelMelt(accent: Color, modifier: Modifier) {
+    Box(
+        modifier.drawWithCache {
+            val brush = Brush.horizontalGradient(0f to accent.copy(alpha = 0.92f), 0.3f to accent.copy(alpha = 0.45f), 0.62f to Color.Transparent)
+            onDrawBehind { drawRect(brush) }
+        },
+    )
+}
+
+/**
+ * A small square standing for a system in lists, pickers, search results and page headers: its own
+ * square art or icon where it has one, else its logo on its colour, else its short name set as
+ * large as fits ("PS2", "Switch"), so systems never become ambiguous initials.
  */
 @Composable
 internal fun SystemMark(card: PlatformCard, size: Dp, modifier: Modifier = Modifier) {
     val accent = card.platform.accent.toColor()
-    val shape = SquircleShape.fraction(Fuse.geometry.tileCornerFraction.coerceAtLeast(0.12f) + 0.06f)
-    val generated: @Composable () -> Unit = {
+    val fraction = Fuse.geometry.tileCornerFraction.coerceAtLeast(0.12f) + 0.06f
+    val shape = remember(fraction) { SquircleShape.fraction(fraction) }
+    val name: @Composable () -> Unit = {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            GeneratedArt(title = card.platform.name, accent = accent, slot = ArtSlot.WIDE, showText = false)
             val style = Fuse.type.titleSmall
             BasicText(
                 card.platform.shortName,
@@ -399,19 +399,28 @@ internal fun SystemMark(card: PlatformCard, size: Dp, modifier: Modifier = Modif
             )
         }
     }
+    val generated: @Composable () -> Unit = {
+        Box(Modifier.fillMaxSize()) {
+            GeneratedArt(title = card.platform.name, accent = accent, slot = ArtSlot.WIDE, showText = false)
+            val logo = card.art.logo
+            if (logo != null) {
+                Artwork(
+                    logo,
+                    Modifier.fillMaxSize().padding(size * 0.16f),
+                    contentScale = ContentScale.Fit,
+                    tint = Fuse.colors.onArt,
+                    fallback = name,
+                )
+            } else {
+                name()
+            }
+        }
+    }
     Box(modifier.size(size).clip(shape)) {
         val own = card.art.square ?: card.art.icon
         if (own != null) Artwork(own, Modifier.fillMaxSize(), fallback = generated) else generated()
     }
 }
-
-/** Fades an art pack panel in from its left edge, so it melts into the card's colour. */
-private fun Modifier.panelBlend(): Modifier = this
-    .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
-    .drawWithContent {
-        drawContent()
-        drawRect(Brush.horizontalGradient(0f to Color.Transparent, 0.6f to Color.Black), blendMode = BlendMode.DstIn)
-    }
 
 internal fun gamesText(n: Int) = "$n ${if (n == 1) "game" else "games"}"
 

@@ -192,6 +192,12 @@ class KeyboardState(val autoCapitalize: Boolean = false) {
     /** True while a finger holds the focused key down, so the focus highlight dips with it. */
     internal var touching by mutableStateOf(false)
 
+    /**
+     * True since a finger last touched a key, until the controller or a keyboard moves again. Touch
+     * has no focus to show: the lit cap hides and a tapped key only flashes while it is pressed.
+     */
+    internal var touchMode by mutableStateOf(false)
+
     private var lastShiftTap: TimeSource.Monotonic.ValueTimeMark? = null
     private var lastSpace: TimeSource.Monotonic.ValueTimeMark? = null
 
@@ -236,6 +242,7 @@ class KeyboardState(val autoCapitalize: Boolean = false) {
      */
     fun handle(event: NavEvent, field: EditableText, onDone: () -> Unit, onPaste: (() -> Unit)? = null): NavResult {
         clampFocus()
+        touchMode = false
         when (event.action) {
             NavAction.LEFT, NavAction.RIGHT -> {
                 val step = if (event.action == NavAction.LEFT) -1 else 1
@@ -382,8 +389,10 @@ fun OnScreenKeyboard(
     val rows = state.rows
     var width by remember { mutableIntStateOf(0) }
     val rowGap = rowGapFor(keyHeight)
+    // Focus belongs to the controller and the keyboard; after a touch there is none to show.
+    val focusShown = showFocus && !state.touchMode
     Box(modifier.onSizeChanged { width = it.width }) {
-        if (width > 0) KeyHighlight(state, width, keyHeight, rowGap, visible = showFocus)
+        if (width > 0) KeyHighlight(state, width, keyHeight, rowGap, visible = focusShown)
         Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(rowGap)) {
             rows.forEachIndexed { r, keys ->
                 Row(Modifier.fillMaxWidth()) {
@@ -398,7 +407,7 @@ fun OnScreenKeyboard(
                                     field = field,
                                     position = KeyPosition(state.page, r, col),
                                     doneLabel = doneLabel,
-                                    selected = showFocus && r == state.row && col == state.column,
+                                    selected = focusShown && r == state.row && col == state.column,
                                     enabled = key.kind != KeyKind.PASTE || onPaste != null,
                                     height = keyHeight,
                                     onFocus = { state.row = r; state.column = col },
@@ -546,7 +555,9 @@ private fun BoxScope.KeyHighlight(state: KeyboardState, width: Int, keyHeight: D
                 val ringStroke = Stroke(ringWidth)
                 onDrawBehind {
                     drawPath(body, lip)
-                    drawPath(top, face)
+                    // A press from the controller warms the cap toward the accent as it dips, so
+                    // pressing reads differently from only being on the key.
+                    drawPath(top, lerp(face, accent, 0.35f * dip.value))
                     clipPath(top) { drawPath(top, edge, style = edgeStroke) }
                     if (ring != null && lift > 0.01f) drawPath(ringPath, ring, alpha = lift.coerceIn(0f, 1f), style = ringStroke)
                     // The spark's accent bar, grown from the middle as the key lifts.
@@ -623,8 +634,11 @@ private fun KeyCap(
         function -> c.text.copy(alpha = if (dark) 0.065f else 0.075f)
         else -> c.text.copy(alpha = if (dark) 0.115f else 0.11f)
     }
+    val flash = pressed && state.touchMode && enabled
     val face by animateColorAsState(
         when {
+            // A finger on a key lights it like the focus cap, only for as long as it is down.
+            flash -> c.text
             // The glide highlight shows through where the focused key's face was.
             selected -> faceColor.copy(alpha = 0f)
             (hovered || pressed) && !solid && enabled -> lerp(faceColor, c.text, 0.08f).copy(alpha = faceColor.alpha + 0.06f)
@@ -635,7 +649,7 @@ private fun KeyCap(
     )
     val fg by animateColorAsState(
         when {
-            selected -> c.ink
+            selected || flash -> c.ink
             !enabled -> c.textFaint
             solid -> c.onAccent
             shiftOnce -> c.accent
@@ -672,6 +686,7 @@ private fun KeyCap(
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false)
                     pressed = true
+                    state.touchMode = true
                     onFocus()
                     state.touching = true
                     // Released however the gesture ends, so no key (or the highlight) stays down

@@ -973,16 +973,22 @@ internal fun AuditDriver.cartridgeScreens(exhaustive: Boolean) {
         shoot("installed, RomM server not reachable")
     }
 
-    scenario("home", "flow cartridge widget") {
-        useLibrary()
+    scenario("home", "board cartridge widget") {
+        useLibrary {
+            it.copy(
+                home = io.github.matiyaaa.fuse.model.HomeLayoutConfig(
+                    mode = io.github.matiyaaa.fuse.model.HomeMode.CHANNELS,
+                    board = listOf(
+                        io.github.matiyaaa.fuse.model.HomeWidget("cartridge", io.github.matiyaaa.fuse.model.WidgetKind.CARTRIDGE_DOWNLOADS, 0, width = 2, height = 1),
+                        io.github.matiyaaa.fuse.model.HomeWidget("cartridge2", io.github.matiyaaa.fuse.model.WidgetKind.CARTRIDGE_DOWNLOADS, 1, width = 2, height = 2),
+                    ),
+                ),
+            )
+        }
         setCartridge(cartridgeReady())
         restartApp()
-        waitFor("Continue playing")
-        val shelves = libraryStore.shelvesNow()
-        val glance = shelves.indexOfFirst { it.title == "At a glance" }
-        if (glance < 0) throw NotCovered("No At a glance shelf")
-        tap(PadButton.DPAD_DOWN, glance)
-        tap(PadButton.DPAD_RIGHT, 1)
+        waitFor("Cartridge")
+        tap(PadButton.DPAD_LEFT)
         shoot("Cartridge widget with an active download")
     }
 }

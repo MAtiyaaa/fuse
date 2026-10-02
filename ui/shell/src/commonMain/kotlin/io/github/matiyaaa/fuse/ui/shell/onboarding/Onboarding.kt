@@ -1,5 +1,6 @@
 package io.github.matiyaaa.fuse.ui.shell.onboarding
 
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
@@ -111,12 +112,22 @@ fun OnboardingScreen(app: AppState) {
         app.platform.sounds.play(if (delta > 0) SoundCue.SELECT else SoundCue.BACK)
     }
 
+    // A rehearsal left any other way (the Home button) still puts the preferences back.
+    DisposableEffect(Unit) {
+        onDispose {
+            app.dev.rehearsalPrefs?.let { before ->
+                app.dev.rehearsalPrefs = null
+                app.store.updatePrefs { before }
+            }
+        }
+    }
+
     LaunchedEffect(step.id) {
         app.hero = null
         app.hints = buildList {
             add(Hint(HintButton.CONFIRM, "Choose"))
-            if (state.index > 0) add(Hint(HintButton.BACK, "Back"))
-            if (step.optional) add(Hint(HintButton.MENU, "Skip"))
+            if (state.index > 0 || app.dev.rehearsing) add(Hint(HintButton.BACK, if (state.index > 0) "Back" else "Leave"))
+            if (step.optional || app.dev.skipRequired) add(Hint(HintButton.MENU, "Skip"))
         }
     }
 
@@ -128,12 +139,18 @@ fun OnboardingScreen(app: AppState) {
             NavAction.RIGHT -> if (state.button < buttons.lastIndex) { state.button++; NavResult.MOVED } else NavResult.BLOCKED
             NavAction.SELECT -> {
                 val b = buttons.getOrNull(state.button) ?: return@InputLayer NavResult.BLOCKED
-                if (!b.enabled) return@InputLayer NavResult.BLOCKED
+                // Developer options may press a button a required step keeps off.
+                if (!b.enabled && !app.dev.skipRequired) return@InputLayer NavResult.BLOCKED
                 b.run()
                 NavResult.ACTIVATED
             }
-            NavAction.BACK -> if (state.index > 0) { go(-1); NavResult.CONSUMED } else NavResult.BLOCKED
-            NavAction.QUICK_MENU -> if (step.optional) { go(1); NavResult.ACTIVATED } else NavResult.BLOCKED
+            NavAction.BACK -> when {
+                state.index > 0 -> { go(-1); NavResult.CONSUMED }
+                // A rehearsal can be left from its first step.
+                app.dev.rehearsing -> { app.endRehearsal(); NavResult.CONSUMED }
+                else -> NavResult.BLOCKED
+            }
+            NavAction.QUICK_MENU -> if (step.optional || app.dev.skipRequired) { go(1); NavResult.ACTIVATED } else NavResult.BLOCKED
             // Tabs and sections stay out of the way during setup.
             NavAction.UP, NavAction.DOWN, NavAction.NEXT_SECTION, NavAction.PREVIOUS_SECTION, NavAction.SEARCH, NavAction.CONTEXT -> NavResult.BLOCKED
             else -> NavResult.IGNORED
@@ -177,9 +194,9 @@ private fun StepView(app: AppState, step: Step, state: OnboardingState, isCurren
                     FuseButton(
                         a.label,
                         selected = isCurrent && i == state.button && app.focusZone == FocusZone.CONTENT,
-                        onClick = { state.button = i; if (a.enabled) a.run() },
+                        onClick = { state.button = i; if (a.enabled || app.dev.skipRequired) a.run() },
                         kind = if (a.primary) ButtonKind.PRIMARY else ButtonKind.SECONDARY,
-                        enabled = a.enabled,
+                        enabled = a.enabled || app.dev.skipRequired,
                     )
                 }
             }

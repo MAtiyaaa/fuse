@@ -187,8 +187,8 @@ class ReadmeScreenshots {
         settle(3_000)
         shoot("home")
 
-        // Home, Channels mode, arranged as a user would in Settings, Home.
-        store.updatePrefs { it.copy(home = HomeLayoutConfig(mode = HomeMode.CHANNELS, widgets = SampleLibrary.channelBoard)) }
+        // Home, Channels mode: a board arranged and resized as a user would.
+        store.updatePrefs { it.copy(home = HomeLayoutConfig(mode = HomeMode.CHANNELS, board = SampleLibrary.channelBoard)) }
         settle()
         shoot("home-channels")
         store.updatePrefs { it.copy(home = HomeLayoutConfig()) }

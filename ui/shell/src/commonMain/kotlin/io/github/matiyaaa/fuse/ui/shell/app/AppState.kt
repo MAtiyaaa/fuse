@@ -2,17 +2,20 @@ package io.github.matiyaaa.fuse.ui.shell.app
 
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.vector.ImageVector
 import io.github.matiyaaa.fuse.model.Destination
 import io.github.matiyaaa.fuse.ui.designsystem.components.Hint
 import io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction
+import io.github.matiyaaa.fuse.ui.designsystem.components.ReorderEntry
 import io.github.matiyaaa.fuse.ui.designsystem.components.ToastState
 import io.github.matiyaaa.fuse.ui.designsystem.media.HeroSource
 import io.github.matiyaaa.fuse.ui.shell.platform.PlatformUi
 import io.github.matiyaaa.fuse.ui.shell.store.FuseStore
 import io.github.matiyaaa.fuse.ui.shell.store.PhoneLinkControl
+import io.github.matiyaaa.fuse.ui.shell.store.UiPrefs
 import kotlinx.coroutines.CoroutineScope
 
 /** Where controller focus is: the section tabs at the top, or the page content. */
@@ -65,6 +68,19 @@ data class ChoiceSpec(
 )
 
 /**
+ * A list to put in order, in a dialog: rows with grips that drag, or pick up with A and move with
+ * the D-pad. [onMoved] gets each new order (keys) the moment a row is put down, so the setting
+ * underneath changes as you go.
+ */
+data class ReorderSpec(
+    val title: String,
+    val entries: List<ReorderEntry>,
+    val message: String? = null,
+    val icon: ImageVector? = null,
+    val onMoved: (List<String>) -> Unit,
+)
+
+/**
  * The interface's live state: navigation, focus zone, overlays and what the backdrop shows. One
  * instance per window/screen; the second screen has its own.
  */
@@ -100,6 +116,7 @@ class AppState(
     var confirm by mutableStateOf<ConfirmSpec?>(null)
     var textInput by mutableStateOf<TextInputSpec?>(null)
     var choice by mutableStateOf<ChoiceSpec?>(null)
+    var reorder by mutableStateOf<ReorderSpec?>(null)
 
     /** "Play on which screen?" on a device with two screens. */
     var screenPrompt by mutableStateOf<ScreenPromptSpec?>(null)
@@ -119,6 +136,9 @@ class AppState(
     /** What the room is lit by. Screens set it from their selection. */
     var hero by mutableStateOf<HeroSource?>(null)
 
+    /** Developer options: off until the version in About is tapped five times, and only until Fuse closes. */
+    val dev = DevOptions()
+
     /** Hints for the current selection; screens set them. */
     var hints by mutableStateOf<List<Hint>>(emptyList())
 
@@ -126,7 +146,7 @@ class AppState(
     var launching by mutableStateOf<LaunchVeil?>(null)
 
     val overlayOpen: Boolean
-        get() = quickMenuOpen || contextMenu != null || confirm != null || textInput != null || choice != null || screenPrompt != null || buttonDetect
+        get() = quickMenuOpen || contextMenu != null || confirm != null || textInput != null || choice != null || reorder != null || screenPrompt != null || buttonDetect
 
     fun openContextMenu(spec: ContextMenuSpec) {
         contextMenu = spec
@@ -175,3 +195,40 @@ data class LaunchVeil(
     /** [art] is a cover, not a background: drawn blurred into a colour field behind everything. */
     val artBlurred: Boolean = false,
 )
+
+/**
+ * Options for testing Fuse itself. They are never saved: tapping the version in About five times
+ * turns them on for this launch only, and closing Fuse turns them off again.
+ */
+@Stable
+class DevOptions {
+    /** Taps on the version so far; the fifth turns the options on. */
+    var taps by mutableIntStateOf(0)
+    var enabled by mutableStateOf(false)
+
+    /** Every onboarding step can be skipped and its buttons pressed, required ones included. */
+    var skipRequired by mutableStateOf(false)
+
+    /** A live graph of frame times in the corner, to see lag on the device. */
+    var frameGraph by mutableStateOf(false)
+
+    /**
+     * While setup is replayed as a rehearsal: the preferences as they were before it started.
+     * Nothing a step does outside preferences is carried out, and these are put back at the end.
+     */
+    var rehearsalPrefs by mutableStateOf<UiPrefs?>(null)
+
+    val rehearsing: Boolean get() = rehearsalPrefs != null
+
+    /** Counts a tap on the version; returns how many more it takes (0 once on). */
+    fun tap(): Int {
+        if (enabled) return 0
+        taps++
+        if (taps >= TAPS) enabled = true
+        return (TAPS - taps).coerceAtLeast(0)
+    }
+
+    companion object {
+        const val TAPS = 5
+    }
+}

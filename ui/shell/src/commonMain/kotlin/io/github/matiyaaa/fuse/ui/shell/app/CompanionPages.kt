@@ -58,6 +58,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.shape.PillShape
 import io.github.matiyaaa.fuse.ui.designsystem.shape.SquircleShape
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Durations
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
+import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
 import io.github.matiyaaa.fuse.ui.designsystem.theme.toColor
 import io.github.matiyaaa.fuse.ui.shell.components.ControlTile
@@ -435,7 +436,7 @@ internal fun ControlsPage(store: FuseStore, platform: PlatformUi, onHide: (() ->
             )
             Column(Modifier.fillMaxWidth().weight(1f), verticalArrangement = Arrangement.spacedBy(Space.s)) {
                 tiles.chunked(3).forEach { row ->
-                    Row(Modifier.fillMaxWidth().weight(1f).heightIn(max = 96.dp), horizontalArrangement = Arrangement.spacedBy(Space.s)) {
+                    Row(Modifier.fillMaxWidth().weight(1f).heightIn(min = Size.touch, max = 96.dp), horizontalArrangement = Arrangement.spacedBy(Space.s)) {
                         row.forEach { tile -> tile(Modifier.weight(1f).fillMaxHeight()) }
                     }
                 }

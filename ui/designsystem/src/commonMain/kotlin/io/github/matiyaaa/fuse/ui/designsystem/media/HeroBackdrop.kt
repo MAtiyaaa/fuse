@@ -16,18 +16,32 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.BlurredEdgeTreatment
-import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.paint
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.isUnspecified
+import androidx.compose.ui.graphics.BlurEffect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.TileMode
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import coil3.PlatformContext
 import coil3.compose.AsyncImagePainter
@@ -43,6 +57,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.ambientOn
 import kotlin.math.PI
 import kotlin.math.cos
+import kotlin.math.max
 import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlinx.coroutines.FlowPreview
@@ -273,7 +288,7 @@ private fun HeroLayerView(layer: HeroLayer, brightness: Float, onReady: () -> Un
             layer.alpha.animateTo(1f, motion.tween(Durations.HERO, Easings.Fade))
             onShown()
         }
-        LitRoom(source.accent, Modifier.graphicsLayer { alpha = layer.alpha.value })
+        LitRoom(source.accent, Modifier.graphicsLayer { alpha = layer.alpha.value; compositingStrategy = CompositingStrategy.ModulateAlpha })
         return
     }
     val context = LocalPlatformContext.current
@@ -336,6 +351,9 @@ private fun HeroLayerView(layer: HeroLayer, brightness: Float, onReady: () -> Un
             .fillMaxSize()
             .graphicsLayer {
                 alpha = layer.alpha.value
+                // Fading rooms are drawn straight onto the one below, never through a screen-sized
+                // buffer of their own: a crossfade then costs no more than the rooms themselves.
+                compositingStrategy = CompositingStrategy.ModulateAlpha
                 val d = if (drifting) drift else 0f
                 val zoom = settle.value * (1f + DRIFT_ZOOM * d)
                 scaleX = zoom
@@ -359,25 +377,69 @@ private fun HeroLayerView(layer: HeroLayer, brightness: Float, onReady: () -> Un
             }
         }
         if (!failed) {
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .graphicsLayer { alpha = imageAlpha.value }
-                    .then(if (source.blurred && canBlur) Modifier.blur(48.dp, BlurredEdgeTreatment.Rectangle) else Modifier)
-                    .paint(
-                        painter,
-                        contentScale = ContentScale.Crop,
-                        alignment = focusAlignment(source.focusX, source.focusY),
-                    )
-                    .drawWithContent {
-                        drawContent()
-                        // Box art behind the interface is a colour field, not a picture: darker, and more so unblurred.
-                        if (source.blurred) drawRect(Color.Black.copy(alpha = if (canBlur) 0.35f else 0.6f))
-                    },
-            )
+            val alignment = focusAlignment(source.focusX, source.focusY)
+            val shade = Modifier.drawWithContent {
+                drawContent()
+                // Box art behind the interface is a colour field, not a picture: darker, and more so unblurred.
+                if (source.blurred) drawRect(Color.Black.copy(alpha = if (canBlur) 0.35f else 0.6f))
+            }
+            if (source.blurred && canBlur) {
+                // Blurred once, small, then shown scaled up: the same picture for a single draw a frame.
+                FrozenBlur(painter, loaded = state is AsyncImagePainter.State.Success, alignment, Modifier.fillMaxSize().graphicsLayer { alpha = imageAlpha.value; compositingStrategy = CompositingStrategy.ModulateAlpha }.then(shade))
+            } else {
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .graphicsLayer { alpha = imageAlpha.value; compositingStrategy = CompositingStrategy.ModulateAlpha }
+                        .paint(painter, contentScale = ContentScale.Crop, alignment = alignment)
+                        .then(shade),
+                )
+            }
         }
     }
 }
+
+/**
+ * [painter] (once [loaded]) filling the box like [ContentScale.Crop], blurred by [BOX_ART_BLUR]. The
+ * blur is worked out once per picture, on a copy an eighth of the box's size, and the result is
+ * drawn scaled up: a blurred picture has no detail for the scaling to lose, and the room then costs
+ * one picture a frame instead of a blur over the whole screen every frame (which held every
+ * animation in front of it to the blur's pace).
+ */
+@Composable
+private fun FrozenBlur(painter: Painter, loaded: Boolean, alignment: Alignment, modifier: Modifier) {
+    val layer = rememberGraphicsLayer()
+    val density = LocalDensity.current
+    var box by remember { mutableStateOf(IntSize.Zero) }
+    var frozen by remember(painter) { mutableStateOf<ImageBitmap?>(null) }
+    LaunchedEffect(painter, loaded, box) {
+        if (!loaded || box.width <= 0 || box.height <= 0) return@LaunchedEffect
+        val intrinsic = painter.intrinsicSize
+        if (intrinsic.isUnspecified || intrinsic.width <= 0f || intrinsic.height <= 0f) return@LaunchedEffect
+        val small = IntSize((box.width / FROZEN_SCALE).coerceAtLeast(1), (box.height / FROZEN_SCALE).coerceAtLeast(1))
+        val radius = with(density) { BOX_ART_BLUR.toPx() } / FROZEN_SCALE
+        layer.renderEffect = BlurEffect(radius, radius, TileMode.Clamp)
+        layer.record(density, LayoutDirection.Ltr, small) {
+            val scale = max(small.width / intrinsic.width, small.height / intrinsic.height)
+            val drawn = Size(intrinsic.width * scale, intrinsic.height * scale)
+            val at = alignment.align(IntSize(drawn.width.roundToInt(), drawn.height.roundToInt()), small, LayoutDirection.Ltr)
+            translate(at.x.toFloat(), at.y.toFloat()) { with(painter) { draw(drawn) } }
+        }
+        frozen = layer.toImageBitmap()
+    }
+    Box(
+        modifier
+            .onSizeChanged { box = it }
+            .drawBehind {
+                val image = frozen ?: return@drawBehind
+                drawImage(image, dstSize = IntSize(size.width.roundToInt(), size.height.roundToInt()), filterQuality = FilterQuality.Low)
+            },
+    )
+}
+
+/** How strongly box art behind the interface is blurred, and how much smaller the blur is worked out. */
+private val BOX_ART_BLUR = 48.dp
+private const val FROZEN_SCALE = 8
 
 /** One background decode, the same everywhere, so art warmed ahead of time is found in memory. */
 fun heroRequest(context: PlatformContext, model: Any?, px: Int): ImageRequest =

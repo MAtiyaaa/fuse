@@ -29,6 +29,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.Dp
 import io.github.matiyaaa.fuse.model.FocusStyle
 import io.github.matiyaaa.fuse.ui.designsystem.effects.rememberPressProgress
 import io.github.matiyaaa.fuse.ui.designsystem.shape.SquircleShape
@@ -81,6 +82,11 @@ fun Tile(
     onClick: (() -> Unit)? = null,
     onLongClick: (() -> Unit)? = null,
     interactionSource: MutableInteractionSource? = null,
+    /**
+     * The most a side may grow when the tile lifts or is pressed, for tiles much larger than a game's
+     * (Home's widgets), where the usual share of their size would push them over their neighbours.
+     */
+    maxGrow: Dp? = null,
     content: @Composable BoxScope.() -> Unit,
 ) {
     val motion = Fuse.motion
@@ -149,7 +155,9 @@ fun Tile(
             .graphicsLayer {
                 val p = press
                 val raised = maxOf(lift, hover * HOVER_SHARE)
-                val scale = 1f + (focusScale - 1f) * lift + hoverScale * hover * (1f - lift) - pressDepth * p
+                // A large tile grows by at most maxGrow a side, however wide it is.
+                val cap = maxGrow?.let { 2f * it.toPx() / size.width.coerceAtLeast(1f) } ?: Float.MAX_VALUE
+                val scale = 1f + minOf(focusScale - 1f, cap) * lift + minOf(hoverScale, cap) * hover * (1f - lift) - minOf(pressDepth, cap) * p
                 scaleX = scale
                 scaleY = scale
                 val rest = Elevation.tile.shadow.toPx()

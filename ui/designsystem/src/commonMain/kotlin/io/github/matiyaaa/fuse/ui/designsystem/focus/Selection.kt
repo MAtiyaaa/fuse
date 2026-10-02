@@ -1,5 +1,6 @@
 package io.github.matiyaaa.fuse.ui.designsystem.focus
 
+import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -20,7 +21,12 @@ class LinearSelection(initial: Int = 0) {
     var index by mutableIntStateOf(initial)
 
     /** Clamps into range after the list changed size. */
-    fun clamp(count: Int) {
+    /**
+     * Keeps the index inside [count] items. Screens call this while composing; it reads the index
+     * without subscribing the screen to it, so moving the selection doesn't recompose the screen
+     * that only clamps it.
+     */
+    fun clamp(count: Int) = Snapshot.withoutReadObservation {
         if (count <= 0) index = 0 else if (index >= count) index = count - 1
     }
 
@@ -58,7 +64,12 @@ class LinearSelection(initial: Int = 0) {
 class GridSelection(initial: Int = 0) {
     var index by mutableIntStateOf(initial)
 
-    fun clamp(count: Int) {
+    /**
+     * Keeps the index inside [count] items. Screens call this while composing; it reads the index
+     * without subscribing the screen to it, so moving the selection doesn't recompose the screen
+     * that only clamps it.
+     */
+    fun clamp(count: Int) = Snapshot.withoutReadObservation {
         if (count <= 0) index = 0 else if (index >= count) index = count - 1
     }
 
@@ -109,10 +120,10 @@ class ShelfSelection(initialRow: Int = 0) {
         columns[rowKey] = column
     }
 
-    fun clamp(rowKeys: List<String>, sizeOf: (String) -> Int) {
+    fun clamp(rowKeys: List<String>, sizeOf: (String) -> Int) = Snapshot.withoutReadObservation {
         if (rowKeys.isEmpty()) {
             row = 0
-            return
+            return@withoutReadObservation
         }
         if (row >= rowKeys.size) row = rowKeys.size - 1
         for (key in rowKeys) {

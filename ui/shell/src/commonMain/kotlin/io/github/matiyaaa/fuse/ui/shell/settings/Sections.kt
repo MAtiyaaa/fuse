@@ -31,11 +31,15 @@ import io.github.matiyaaa.fuse.model.ScrapeProviderId
 import io.github.matiyaaa.fuse.model.SoundProfile
 import io.github.matiyaaa.fuse.model.Support
 import io.github.matiyaaa.fuse.model.WidgetKind
+import io.github.matiyaaa.fuse.model.isRow
 import io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction
+import io.github.matiyaaa.fuse.ui.designsystem.components.ReorderEntry
+import io.github.matiyaaa.fuse.ui.designsystem.components.ToastKind
 import io.github.matiyaaa.fuse.ui.designsystem.components.Trailing
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec
+import io.github.matiyaaa.fuse.ui.shell.app.ReorderSpec
 import io.github.matiyaaa.fuse.ui.shell.app.ConfirmSpec
 import io.github.matiyaaa.fuse.ui.shell.app.Route
 import io.github.matiyaaa.fuse.ui.shell.app.addGame
@@ -158,19 +162,17 @@ fun homeRows(app: AppState): List<MenuAction> {
             }
             val shownTabs = p.destinations.filter { app.offers(it) }
             add(MenuAction("dest.order", "Section order", FuseIcons.MoveHorizontal, detail = shownTabs.joinToString("  ·  ") { it.label() }, trailing = Trailing.Chevron, onSelect = {
-                app.choice = ChoiceSpec(
-                    title = "Move a section earlier",
+                app.reorder = ReorderSpec(
+                    title = "Section order",
                     icon = FuseIcons.MoveHorizontal,
-                    options = shownTabs.drop(1).map { d ->
-                        MenuAction("mv.$d", d.label(), d.icon(), onSelect = {
-                            set { s ->
-                                val list = s.destinations.toMutableList()
-                                val i = list.indexOf(d)
-                                if (i > 1) { list.removeAt(i); list.add(i - 1, d) }
-                                s.copy(destinations = list)
-                            }
-                            app.choice = null
-                        })
+                    message = "The order of the top bar. Home always comes first. Drag a row by its grip, or press A to pick it up and move it with the D-pad",
+                    entries = shownTabs.map { d -> ReorderEntry(d.name, d.label(), d.icon(), locked = d == Destination.HOME) },
+                    onMoved = { keys ->
+                        set { s ->
+                            val moved = keys.mapNotNull { k -> Destination.entries.firstOrNull { it.name == k } }
+                            // Sections hidden from this list (not offered here) keep their places after the rest.
+                            s.copy(destinations = moved + s.destinations.filter { it !in moved })
+                        }
                     },
                 )
             }))
@@ -182,28 +184,105 @@ fun homeRows(app: AppState): List<MenuAction> {
                 ) { v -> set { it.copy(appsFilter = v) } })
             }
         }
-        labelled("Widgets") {
-            for (w in p.home.widgets.filter { app.offers(it.kind) }.sortedBy { it.order }) {
-                add(toggleRow("w.${w.id}", w.kind.title(), widgetIcon(w.kind), w.visible) { v ->
-                    set { s -> s.copy(home = s.home.copy(widgets = s.home.widgets.map { if (it.id == w.id) it.copy(visible = v) else it })) }
-                })
-            }
-            val missing = WidgetKind.entries.filter { k -> app.offers(k) && p.home.widgets.none { it.kind == k } }
-            if (missing.isNotEmpty()) {
-                add(MenuAction("w.add", "Add a widget", FuseIcons.CirclePlus, trailing = Trailing.Chevron, onSelect = {
-                    app.choice = ChoiceSpec(
-                        title = "Add to Home",
-                        icon = FuseIcons.CirclePlus,
-                        options = missing.map { k ->
-                            MenuAction("add.$k", k.title(), widgetIcon(k), onSelect = {
+        if (p.home.mode == HomeMode.FLOW) {
+            // Flow is rows of games, systems and apps; the board's widgets don't appear in it.
+            labelled("Rows") {
+                val rows = p.home.widgets.filter { it.kind.isRow && app.offers(it.kind) }.sortedBy { it.order }
+                for (w in rows) {
+                    add(toggleRow("w.${w.id}", w.kind.title(), widgetIcon(w.kind), w.visible) { v ->
+                        set { s -> s.copy(home = s.home.copy(widgets = s.home.widgets.map { if (it.id == w.id) it.copy(visible = v) else it })) }
+                    })
+                }
+                if (rows.size > 1) {
+                    add(MenuAction("rows.order", "Row order", FuseIcons.Rows, detail = rows.filter { it.visible }.joinToString("  ·  ") { it.kind.title() }, trailing = Trailing.Chevron, onSelect = {
+                        app.reorder = ReorderSpec(
+                            title = "Row order",
+                            icon = FuseIcons.Rows,
+                            message = "The order of Home's rows, top first. Hidden rows keep their place for when they come back",
+                            entries = rows.map { w -> ReorderEntry(w.id, w.kind.title(), widgetIcon(w.kind), detail = if (w.visible) null else "Hidden") },
+                            onMoved = { keys ->
                                 set { s ->
-                                    val order = (s.home.widgets.maxOfOrNull { it.order } ?: 0) + 1
-                                    s.copy(home = s.home.copy(widgets = s.home.widgets + io.github.matiyaaa.fuse.model.HomeWidget(k.name.lowercase(), k, order)))
+                                    val byId = s.home.widgets.associateBy { it.id }
+                                    val moved = keys.mapNotNull { byId[it] }
+                                    val rest = s.home.widgets.filter { it.id !in keys }.sortedBy { it.order }
+                                    s.copy(home = s.home.copy(widgets = (moved + rest).mapIndexed { i, w -> w.copy(order = i) }))
                                 }
-                                app.choice = null
-                            })
+                            },
+                        )
+                    }))
+                }
+                val missing = WidgetKind.entries.filter { k -> k.isRow && app.offers(k) && p.home.widgets.none { it.kind == k } }
+                if (missing.isNotEmpty()) {
+                    add(MenuAction("w.add", "Add a row", FuseIcons.CirclePlus, trailing = Trailing.Chevron, onSelect = {
+                        app.choice = ChoiceSpec(
+                            title = "Add a row to Home",
+                            icon = FuseIcons.CirclePlus,
+                            options = missing.map { k ->
+                                MenuAction("add.$k", k.title(), widgetIcon(k), onSelect = {
+                                    set { s ->
+                                        val order = (s.home.widgets.maxOfOrNull { it.order } ?: 0) + 1
+                                        s.copy(home = s.home.copy(widgets = s.home.widgets + io.github.matiyaaa.fuse.model.HomeWidget(k.name.lowercase(), k, order)))
+                                    }
+                                    app.choice = null
+                                })
+                            },
+                        )
+                    }))
+                }
+            }
+        } else {
+            // The board's widgets: their sizes here for the controller; on Home, hold one to move or resize it.
+            labelled("Widgets") {
+                val board = p.home.boardWidgets().filter { app.offers(it.kind) }
+                fun saveBoard(change: (List<io.github.matiyaaa.fuse.model.HomeWidget>) -> List<io.github.matiyaaa.fuse.model.HomeWidget>) =
+                    set { s -> s.copy(home = s.home.copy(board = change(s.home.boardWidgets()).mapIndexed { i, w -> w.copy(order = i) })) }
+                for (w in board) {
+                    val size = w.boardSize
+                    add(MenuAction(
+                        "b.${w.id}", w.kind.title(), widgetIcon(w.kind),
+                        trailing = Trailing.Value("${size.width} by ${size.height}"),
+                        onSelect = {
+                            app.choice = ChoiceSpec(
+                                title = w.kind.title(),
+                                icon = widgetIcon(w.kind),
+                                message = "Its size on Home, in cells across by down. On Home you can also drag its corner",
+                                options = BoardSizes.map { (bw, bh) ->
+                                    MenuAction("size.$bw.$bh", "$bw by $bh", null, trailing = Trailing.Check(size.width == bw && size.height == bh), onSelect = {
+                                        saveBoard { list -> list.map { if (it.id == w.id) it.copy(width = bw, height = bh) else it } }
+                                        app.choice = null
+                                    })
+                                } + MenuAction("remove", "Remove from Home", FuseIcons.Minus, destructive = true, onSelect = {
+                                    saveBoard { list -> list.filterNot { it.id == w.id } }
+                                    app.choice = null
+                                }),
+                            )
                         },
-                    )
+                    ))
+                }
+                val missing = WidgetKind.entries.filter { k -> app.offers(k) && board.none { it.kind == k } }
+                if (missing.isNotEmpty()) {
+                    add(MenuAction("b.add", "Add a widget", FuseIcons.CirclePlus, detail = "It goes at the end of the board", trailing = Trailing.Chevron, onSelect = {
+                        app.choice = ChoiceSpec(
+                            title = "Add a widget",
+                            icon = FuseIcons.CirclePlus,
+                            options = missing.map { k ->
+                                MenuAction("add.$k", k.title(), widgetIcon(k), onSelect = {
+                                    saveBoard { list -> list + io.github.matiyaaa.fuse.model.HomeWidget(k.name.lowercase(), k, list.size) }
+                                    app.choice = null
+                                })
+                            },
+                        )
+                    }))
+                }
+                add(MenuAction("b.reset", "Reset the board", FuseIcons.RotateCcw, detail = "Back to the widgets and sizes Home comes with", onSelect = {
+                    app.confirm = ConfirmSpec(
+                        title = "Reset the board?",
+                        message = "Home goes back to the widgets, sizes and order it came with. Flow's rows stay as they are.",
+                        confirmLabel = "Reset",
+                    ) {
+                        set { s -> s.copy(home = s.home.copy(board = io.github.matiyaaa.fuse.model.HomeLayoutConfig.DefaultBoard)) }
+                        app.toasts.show("Board reset")
+                    }
                 }))
             }
         }
@@ -214,6 +293,9 @@ fun homeRows(app: AppState): List<MenuAction> {
         }
     }
 }
+
+/** The sizes a widget can take on the board, small to large. */
+private val BoardSizes = listOf(1 to 1, 2 to 1, 3 to 1, 4 to 1, 1 to 2, 2 to 2, 3 to 2, 4 to 2, 1 to 3, 2 to 3, 3 to 3, 4 to 3)
 
 private fun widgetIcon(k: WidgetKind) = when (k) {
     WidgetKind.CONTINUE_PLAYING -> FuseIcons.CirclePlay
@@ -580,19 +662,16 @@ fun mediaRows(app: AppState): List<MenuAction> {
             ) {
                 buildList {
                     add(MenuAction("order", "Source order", FuseIcons.Layers, detail = p.scraperOrder.joinToString("  ·  ") { it.displayName }, trailing = Trailing.Chevron, onSelect = {
-                        app.choice = ChoiceSpec(
-                            title = "Move a source earlier",
+                        app.reorder = ReorderSpec(
+                            title = "Source order",
                             icon = FuseIcons.Layers,
-                            message = "Fuse asks sources in this order. RomM data from Cartridge comes first so nothing is scraped twice.",
-                            options = p.scraperOrder.drop(1).map { id ->
-                                MenuAction("mv.$id", id.displayName, null, onSelect = {
-                                    set { s ->
-                                        val l = s.scraperOrder.toMutableList(); val i = l.indexOf(id)
-                                        if (i > 0) { l.removeAt(i); l.add(i - 1, id) }
-                                        s.copy(scraperOrder = l)
-                                    }
-                                    app.choice = null
-                                })
+                            message = "Fuse asks sources in this order. RomM data from Cartridge comes first so nothing is scraped twice",
+                            entries = p.scraperOrder.map { id -> ReorderEntry(id.name, id.displayName) },
+                            onMoved = { keys ->
+                                set { s ->
+                                    val moved = keys.mapNotNull { k -> s.scraperOrder.firstOrNull { it.name == k } }
+                                    s.copy(scraperOrder = moved + s.scraperOrder.filter { it !in moved })
+                                }
                             },
                         )
                     }))
@@ -1075,7 +1154,19 @@ fun updateRows(app: AppState): List<MenuAction> {
 @Composable
 fun aboutRows(app: AppState): List<MenuAction> = buildList {
     app.platform.lastCrashReport()?.let { report -> add(crashRow(app, report)) }
-    add(infoRow("fuse", "Fuse ${app.store.updates.currentVersion}", detail = "A console-style home for your games. Free and open source (GPL-3.0-or-later)", icon = FuseIcons.Info))
+    add(MenuAction(
+        "fuse", "Fuse ${app.store.updates.currentVersion}", FuseIcons.Info,
+        detail = "A console-style home for your games. Free and open source (GPL-3.0-or-later)",
+        // Five taps turn on the developer options, for this launch only.
+        onSelect = {
+            val wasOn = app.dev.enabled
+            val left = app.dev.tap()
+            when {
+                !wasOn && app.dev.enabled -> app.toasts.show("Developer options are on until Fuse closes", ToastKind.SUCCESS)
+                left in 1..3 -> app.toasts.show(if (left == 1) "One more tap for developer options" else "$left more taps for developer options")
+            }
+        },
+    ))
     labelled("Credits") {
         add(infoRow("credits", "Made with", detail = "Kotlin, Compose Multiplatform, SQLDelight, Ktor, Coil. Icons: Lucide (ISC). Fonts: Sora and Manrope (SIL OFL). Emulator launch data: ES-DE (MIT) and Cartridge (MIT). Hashing rules: rcheevos (MIT)", icon = FuseIcons.Blocks))
         add(MenuAction("licences", "Open-source licences", FuseIcons.FileText, detail = "Fuse, its libraries, fonts and icons", trailing = Trailing.Chevron, onSelect = { app.go(Route.Licenses) }))
@@ -1093,6 +1184,27 @@ fun aboutRows(app: AppState): List<MenuAction> = buildList {
     }
     labelled("") {
         add(MenuAction("setup", "Run setup again", FuseIcons.Sparkles, detail = "Games, emulators, controller, Home and theme, one step at a time", trailing = Trailing.Chevron, onSelect = { app.go(Route.Onboarding) }))
+    }
+    if (app.dev.enabled) {
+        labelled("Developer") {
+            add(MenuAction(
+                "dev.setup", "Replay setup", FuseIcons.RotateCcw,
+                detail = "A rehearsal: every step shows, but nothing is added, removed or kept",
+                trailing = Trailing.Chevron,
+                onSelect = {
+                    app.dev.rehearsalPrefs = app.store.prefs.value
+                    app.go(Route.Onboarding)
+                },
+            ))
+            add(toggleRow("dev.skip", "Skip required setup steps", FuseIcons.ChevronsRight, app.dev.skipRequired) { app.dev.skipRequired = it })
+            add(toggleRow("dev.frames", "Frame-time overlay", FuseIcons.Activity, app.dev.frameGraph) { app.dev.frameGraph = it })
+            add(MenuAction("dev.off", "Turn off developer options", FuseIcons.Power, onSelect = {
+                app.dev.enabled = false
+                app.dev.taps = 0
+                app.dev.skipRequired = false
+                app.dev.frameGraph = false
+            }))
+        }
     }
 }
 

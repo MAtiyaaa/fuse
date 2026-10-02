@@ -1,5 +1,8 @@
 package io.github.matiyaaa.fuse.ui.shell.game
 
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
@@ -192,20 +195,24 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
         if (game.content.isNotEmpty()) add(InfoCard.EXTRAS)
         add(InfoCard.FILE)
     }
+    // The detail cards wrap into lines on narrower screens; each line is its own row for the
+    // controller, so Down from the first line reaches the cards under it.
+    var cardsPerLine by remember(game.id) { mutableIntStateOf(3) }
+    val perLine = detailsPerLine(cards.size, cardsPerLine)
+    val lines = cards.chunked(perLine)
     val rows = buildList {
         add("actions")
         if (discs.size > 1) add("discs")
         if (badges.isNotEmpty()) add("achievements")
         if (shots.isNotEmpty()) add("shots")
-        add("details")
+        lines.indices.forEach { add("details:$it") }
     }
     fun sizeOf(key: String) = when (key) {
         "actions" -> actions.size
         "discs" -> discs.size
         "achievements" -> badges.size
         "shots" -> shots.size
-        "details" -> cards.size
-        else -> 0
+        else -> if (key.startsWith("details:")) lines.getOrNull(key.removePrefix("details:").toInt())?.size ?: 0 else 0
     }
     sel.clamp(rows, ::sizeOf)
     val row = rows.getOrNull(sel.row) ?: "actions"
@@ -213,8 +220,15 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
     val focused = app.focusZone == FocusZone.CONTENT
 
     fun openCard(info: InfoCard) {
-        if (info == InfoCard.STARTS) app.emulatorPicker(card)
+        when (info) {
+            InfoCard.STARTS -> app.emulatorPicker(card)
+            InfoCard.FILE -> app.go(Route.FolderBrowser(game.id))
+            else -> Unit
+        }
     }
+    /** The detail card at the selection, when the selection is on a line of them. */
+    fun cardAt(row: String, col: Int): InfoCard? =
+        if (row.startsWith("details:")) lines.getOrNull(row.removePrefix("details:").toInt())?.getOrNull(col) else null
 
     val systems = rememberSystems(app)
     val system = systems[d.platform.id]
@@ -224,8 +238,11 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
     val confirm = when (row) {
         "actions" -> actions.getOrNull(col)?.name
         "discs" -> "Play this disc"
-        "details" -> if (cards.getOrNull(col) == InfoCard.STARTS) "Choose emulator" else null
-        else -> null
+        else -> when (cardAt(row, col)) {
+            InfoCard.STARTS -> "Choose emulator"
+            InfoCard.FILE -> "Open its folder"
+            else -> null
+        }
     }
     // On the More button, confirming already opens the options, so the line says it once.
     val onMore = row == "actions" && actions.getOrNull(col)?.id == "more"
@@ -240,22 +257,31 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
     // Where each section starts in the page, so moving down brings the whole section into view.
     val tops = remember(game.id) { mutableStateMapOf<String, Int>() }
     val inset = with(LocalDensity.current) { Space.l.roundToPx() }
-    LaunchedEffect(row, tops[row]) {
-        val target = if (sel.row == 0) 0 else ((tops[row] ?: 0) - inset).coerceIn(0, scroll.maxValue)
+    // Every line of detail cards scrolls to the Details section, so it stays in view as a whole.
+    val section = if (row.startsWith("details:")) "details" else row
+    LaunchedEffect(section, tops[section]) {
+        val target = if (sel.row == 0) 0 else ((tops[section] ?: 0) - inset).coerceIn(0, scroll.maxValue)
         scroll.animateScrollTo(target, motion.followSpring())
     }
 
     InputLayer(enabled = focused && !app.overlayOpen) { e ->
         when (e.action) {
-            NavAction.UP, NavAction.DOWN, NavAction.LEFT, NavAction.RIGHT -> sel.move(e.action, rows, ::sizeOf).let {
-                if (it == NavResult.IGNORED && e.action == NavAction.LEFT) NavResult.BLOCKED else it
+            NavAction.UP, NavAction.DOWN, NavAction.LEFT, NavAction.RIGHT -> {
+                val from = row
+                val fromCol = col
+                sel.move(e.action, rows, ::sizeOf).also {
+                    // Between lines of detail cards the column carries over, as in a grid.
+                    val to = rows.getOrNull(sel.row)
+                    if (it == NavResult.MOVED && to != from && to != null && to.startsWith("details:") && from.startsWith("details:")) {
+                        sel.setColumn(to, fromCol.coerceAtMost(sizeOf(to) - 1))
+                    }
+                }.let { if (it == NavResult.IGNORED && e.action == NavAction.LEFT) NavResult.BLOCKED else it }
             }
             NavAction.SELECT -> {
                 when (row) {
                     "actions" -> actions.getOrNull(col)?.run?.invoke()
                     "discs" -> discs.getOrNull(col)?.let { disc -> app.play(card, discPath = disc.path) }
-                    "details" -> cards.getOrNull(col)?.let(::openCard)
-                    else -> Unit
+                    else -> cardAt(row, col)?.let(::openCard)
                 }
                 NavResult.ACTIVATED
             }
@@ -428,15 +454,15 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
                 val size by produceState(SIZE_LOADING, game.id) { value = app.store.storage.size(game.id) ?: SIZE_UNKNOWN }
                 // Cards in a line share one height; a line holds as many as fit a readable width,
                 // and four make two even lines rather than three and one.
-                val perLine = if (cards.size == 4 && layout.cardsPerLine == 3) 2 else layout.cardsPerLine.coerceAtMost(cards.size)
-                cards.chunked(perLine).forEachIndexed { line, chunk ->
+                SideEffect { cardsPerLine = layout.cardsPerLine }
+                lines.forEachIndexed { line, chunk ->
                     if (line > 0) Spacer(Modifier.height(Space.l))
                     Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(Space.l)) {
-                        chunk.forEach { info ->
-                            val i = cards.indexOf(info)
-                            val selected = row == "details" && col == i && focused
+                        chunk.forEachIndexed { i, info ->
+                            val key = "details:$line"
+                            val selected = row == key && col == i && focused
                             val tap = {
-                                sel.row = rows.indexOf("details"); sel.setColumn("details", i)
+                                sel.row = rows.indexOf(key); sel.setColumn(key, i)
                                 openCard(info)
                             }
                             val m = Modifier.weight(1f).fillMaxHeight()
@@ -697,7 +723,7 @@ private fun ExtrasCard(d: GameDetail, selected: Boolean, onClick: () -> Unit, mo
 private fun FileCard(d: GameDetail, size: Long, selected: Boolean, onClick: () -> Unit, modifier: Modifier) {
     val game = d.game
     val loc = game.location
-    InfoPanel("On this device", FuseIcons.HardDrive, selected, onClick, modifier) {
+    InfoPanel("On this device", FuseIcons.HardDrive, selected, onClick, modifier, actionable = true) {
         val (folder, name) = splitPath(loc.path)
         Fact(if (loc.kind == LocationKind.FOLDER) "Folder" else "File", name, lines = 2)
         if (folder.isNotEmpty()) Fact("In", shortFolder(folder))
@@ -946,3 +972,6 @@ internal fun playersLabel(players: String): String? {
         else -> "$p players"
     }
 }
+
+/** How many detail cards share a line: four make two even lines rather than three and one. */
+private fun detailsPerLine(cards: Int, fits: Int): Int = (if (cards == 4 && fits == 3) 2 else fits.coerceAtMost(cards)).coerceAtLeast(1)
