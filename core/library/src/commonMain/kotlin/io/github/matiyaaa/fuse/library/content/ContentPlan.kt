@@ -210,7 +210,7 @@ object ContentPlanner {
         for (p in pkgs.sortedWith(order)) {
             val role = role(p.kind) ?: continue
             val cid = p.contentId.uppercase()
-            val licence = matches[cid]
+            val licence = matches[cid]?.takeIf { p.needsLicence }
             val inGame = p.titleId?.let { installed.games[it] }
             val already = when (role) {
                 // A disc game's update leaves a "GD" folder; that isn't the game itself.

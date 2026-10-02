@@ -203,7 +203,12 @@ fun GameContentScreen(app: AppState, id: GameId) {
                         MenuAction(
                             "item.${item.path}", item.fileName, statusIcon(item),
                             detail = itemDetail(item, v),
-                            trailing = if (step != null) Trailing.Progress(null, "Installing") else Trailing.Badge(statusText(item)),
+                            trailing = when {
+                                step != null -> Trailing.Progress(null, "Installing")
+                                // In the emulator: a calm check, not a badge asking for attention.
+                                item.status == ItemStatus.INSTALLED -> Trailing.Check(true)
+                                else -> Trailing.Badge(statusText(item))
+                            },
                             section = roleSection(role, items.size),
                             onSelect = { if (item.status == ItemStatus.NEEDS_LICENCE) chooseLicence(item) else details(item) },
                         ),
@@ -277,10 +282,12 @@ private fun StatusCard(v: GameContentView, progress: InstallProgress?, report: I
     val (icon, tint, headline) = when {
         progress != null -> Triple(FuseIcons.Download, c.accent, "Installing ${progress.step} of ${progress.of}")
         failed != null -> Triple(FuseIcons.Warning, c.warning, failed.failed?.let { "Stopped at ${it.fileName}" } ?: "Not installed")
-        ContentState.MISSING_LICENCE in plan.states -> Triple(FuseIcons.Key, c.warning, "Licence needed")
+        // The game's own licence missing stops everything; a DLC's only stops that DLC.
+        plan.missingLicences.any { it.role == ItemRole.GAME } -> Triple(FuseIcons.Key, c.warning, "Licence needed")
         plan.toInstall.isNotEmpty() && ContentState.NEEDS_INSTALL in plan.states -> Triple(FuseIcons.Download, c.accent, "Needs installation")
+        ContentState.READY in plan.states && plan.toInstall.isEmpty() -> Triple(FuseIcons.CircleCheck, c.success, "Ready to play")
         plan.toInstall.isNotEmpty() -> Triple(FuseIcons.PackagePlus, c.accent, "${countText(plan.toInstall.size)} to add")
-        ContentState.READY in plan.states -> Triple(FuseIcons.CircleCheck, c.success, "Ready to play")
+        ContentState.MISSING_LICENCE in plan.states -> Triple(FuseIcons.Key, c.warning, "Licence needed")
         else -> Triple(FuseIcons.Info, c.textMuted, "Nothing to install yet")
     }
     Panel(modifier) {
