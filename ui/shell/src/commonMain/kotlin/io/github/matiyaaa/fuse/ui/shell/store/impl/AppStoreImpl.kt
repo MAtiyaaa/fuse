@@ -401,7 +401,7 @@ internal class DefaultAppStoreOps(
     private suspend fun runInstall(key: String, app: PackApp) {
         val name = app.name
         try {
-            val (sink, archive, release) = downloads.withPermit { prepare(key, app) }
+            val (sink, archive, release, replaces) = downloads.withPermit { prepare(key, app) }
             try {
                 if (installer.isLocked) setJob(key, StoreJob.Installing(waitingTurn = true))
                 val outcome = installer.withLock {
@@ -410,11 +410,11 @@ internal class DefaultAppStoreOps(
                 }
                 when (outcome) {
                     PackageOutcome.Done -> {
-                        val wasInstalled = key in mutable.value.installed
                         remember(key, StoreInstall(archive.packageName, release.version, release.file?.url, archive.versionCode, ctx.now()))
                         refreshInstalled()
                         clearJob(key)
-                        noticesFlow.tryEmit(if (wasInstalled) "$name is updated." else "$name is installed.")
+                        // Decided before Android installed it: its package broadcast can arrive first.
+                        noticesFlow.tryEmit(if (replaces) "$name is updated." else "$name is installed.")
                     }
                     PackageOutcome.Cancelled -> clearJob(key)
                     is PackageOutcome.Failed -> setJob(
@@ -440,7 +440,8 @@ internal class DefaultAppStoreOps(
         }
     }
 
-    private data class Prepared(val sink: DownloadSink, val archive: ArchiveInfo, val release: StoreRelease)
+    /** What [prepare] made ready: the file, what Android read in it, its release, and whether it replaces an installed build. */
+    private data class Prepared(val sink: DownloadSink, val archive: ArchiveInfo, val release: StoreRelease, val replaces: Boolean)
 
     /** Finds, downloads and verifies [app]'s newest APK. */
     private suspend fun prepare(key: String, app: PackApp): Prepared {
@@ -480,7 +481,7 @@ internal class DefaultAppStoreOps(
             if (current != null && current.versionCode > archive.versionCode) {
                 throw StoreFailure("A newer build of ${app.name} is already installed (${current.versionName ?: "version ${current.versionCode}"}).", retry = false)
             }
-            return Prepared(sink, archive, release)
+            return Prepared(sink, archive, release, replaces = current != null)
         } catch (t: Throwable) {
             sink.discard()
             throw t

@@ -4,6 +4,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -12,11 +13,12 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -91,52 +93,74 @@ internal fun StoreSetup(app: AppState, recommended: StoreVariant, active: Boolea
             else -> NavResult.IGNORED
         }
     }
-    Box(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(top = topPadding), contentAlignment = Alignment.TopCenter) {
+    // Everything fits the screen it is on: the cards take the room left under the words, and on a
+    // short screen the words get smaller and fewer, never pushed off the bottom.
+    BoxWithConstraints(Modifier.fillMaxSize().padding(top = topPadding), contentAlignment = Alignment.TopCenter) {
+        val short = maxHeight < SHORT
+        val tiny = maxHeight < TINY
         Column(
-            Modifier.widthIn(max = 960.dp).fillMaxWidth().padding(horizontal = Space.gutter, vertical = Space.l),
+            Modifier.widthIn(max = 960.dp).fillMaxSize()
+                .padding(start = Space.gutter, end = Space.gutter, top = if (short) Space.xs else Space.l, bottom = Size.hintHeight + Space.s),
             horizontalAlignment = Alignment.Start,
         ) {
-            FText("STORE", Fuse.type.overline, color = c.textMuted, maxLines = 1)
+            if (!short) {
+                FText("STORE", Fuse.type.overline, color = c.textMuted, maxLines = 1)
+                Spacer(Modifier.height(Space.xs))
+            }
+            FText("Choose your Store", if (short) Fuse.type.title else Fuse.type.display, maxLines = 1)
             Spacer(Modifier.height(Space.xs))
-            FText("Choose your Store", Fuse.type.display, maxLines = 1)
-            Spacer(Modifier.height(Space.s))
             FText(
-                "The Store installs emulators and gaming apps from the Obtainium Emulation Pack, a list its community keeps current. Pick the edition for this device; you can change it later in Settings.",
-                Fuse.type.body, color = c.textMuted, maxLines = 3,
+                if (tiny) "Pick the edition for this device. You can change it later in Settings."
+                else "The Store installs emulators and gaming apps from the Obtainium Emulation Pack, a list its community keeps current. Pick the edition for this device; you can change it later in Settings.",
+                if (short) Fuse.type.caption else Fuse.type.body, color = c.textMuted, maxLines = if (short) 2 else 3,
             )
-            Spacer(Modifier.height(Space.xl))
-            Row(horizontalArrangement = Arrangement.spacedBy(Space.l)) {
-                options.forEachIndexed { i, v ->
-                    EditionCard(
-                        v,
-                        recommended = v == recommended,
-                        selected = focused && chosen == i,
-                        modifier = Modifier.weight(1f),
-                    ) { chosen = i; app.focusZone = FocusZone.CONTENT; choose(v) }
+            Spacer(Modifier.height(if (short) Space.m else Space.xl))
+            // The cards share what is left, up to a comfortable size, with room under them for the
+            // chosen card's lift and focus mark.
+            Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.TopStart) {
+                Row(
+                    Modifier.fillMaxWidth().heightIn(max = CARD_MAX).fillMaxHeight().padding(bottom = Space.l),
+                    // Clear room between the cards, also when the chosen one lifts.
+                    horizontalArrangement = Arrangement.spacedBy(if (short) Space.xl else Space.xxl),
+                ) {
+                    options.forEachIndexed { i, v ->
+                        EditionCard(
+                            v,
+                            recommended = v == recommended,
+                            selected = focused && chosen == i,
+                            compact = short,
+                            modifier = Modifier.weight(1f).fillMaxHeight(),
+                        ) { chosen = i; app.focusZone = FocusZone.CONTENT; choose(v) }
+                    }
                 }
             }
-            // Room for the chosen card's lift and its focus mark.
-            Spacer(Modifier.height(Space.xxl))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                FuseIcon(FuseIcons.ShieldCheck, size = Size.iconS, tint = c.textFaint)
-                Spacer(Modifier.size(Space.s))
-                FText(
-                    "Apps install through Android's own installer, which asks you every time.",
-                    Fuse.type.caption, color = c.textMuted, maxLines = 2,
-                )
+            if (!tiny) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    FuseIcon(FuseIcons.ShieldCheck, size = Size.iconS, tint = c.textFaint)
+                    Spacer(Modifier.size(Space.s))
+                    FText(
+                        "Apps install through Android's own installer, which asks you every time.",
+                        Fuse.type.caption, color = c.textMuted, maxLines = 1,
+                    )
+                }
             }
         }
     }
 }
 
+/** Below this height the page's words get smaller; below [TINY] they get fewer. */
+private val SHORT = 560.dp
+private val TINY = 400.dp
+private val CARD_MAX = 320.dp
+
 @Composable
-private fun EditionCard(variant: StoreVariant, recommended: Boolean, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
+private fun EditionCard(variant: StoreVariant, recommended: Boolean, selected: Boolean, compact: Boolean, modifier: Modifier, onClick: () -> Unit) {
     val c = Fuse.colors
     val tint = STORE_TINT.toColor()
     val shape = remember { SquircleShape.fraction(0.08f) }
-    Tile(selected = selected, modifier = modifier.height(300.dp), shape = shape, cornerFraction = 0.08f, glow = tint, onClick = onClick) {
+    Tile(selected = selected, modifier = modifier, shape = shape, cornerFraction = 0.08f, glow = tint, maxGrow = 8.dp, onClick = onClick) {
         Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(c.surfaceRaised, c.surface))))
-        Column(Modifier.fillMaxSize().padding(Space.l)) {
+        Column(Modifier.fillMaxSize().padding(if (compact) Space.m else Space.l)) {
             Box(
                 Modifier.fillMaxWidth().weight(1f).background(
                     Brush.radialGradient(listOf(tint.copy(alpha = 0.22f), Color.Transparent)),
@@ -144,14 +168,18 @@ private fun EditionCard(variant: StoreVariant, recommended: Boolean, selected: B
                 ),
                 contentAlignment = Alignment.Center,
             ) {
-                Device(variant, lerp(c.text, tint, 0.25f), tint, Modifier.fillMaxHeight(0.8f))
+                // The drawing keeps its shape inside whatever room the card has.
+                Device(variant, lerp(c.text, tint, 0.25f), tint, Modifier.fillMaxSize(0.82f))
+            }
+            Spacer(Modifier.height(if (compact) Space.s else Space.m))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                FText(variant.title(), if (compact) Fuse.type.titleSmall else Fuse.type.title, maxLines = 1, modifier = Modifier.weight(1f, fill = false))
                 if (recommended) {
-                    Badge("Recommended here", Modifier.align(Alignment.TopEnd), color = tint, icon = FuseIcons.Sparkle)
+                    Spacer(Modifier.width(Space.s))
+                    Badge("Recommended here", color = tint, icon = FuseIcons.Sparkle)
                 }
             }
-            Spacer(Modifier.height(Space.m))
-            FText(variant.title(), Fuse.type.title, maxLines = 1)
-            FText(variant.detail(), Fuse.type.caption, color = c.textMuted, maxLines = 2, minLines = 2)
+            FText(variant.detail(), Fuse.type.caption, color = c.textMuted, maxLines = if (compact) 1 else 2, minLines = if (compact) 1 else 2)
         }
     }
 }
@@ -160,7 +188,7 @@ private fun EditionCard(variant: StoreVariant, recommended: Boolean, selected: B
 @Composable
 private fun Device(variant: StoreVariant, ink: Color, tint: Color, modifier: Modifier) {
     val ratio = if (variant == StoreVariant.STANDARD) 2.1f else 1.25f
-    Canvas(modifier.aspectRatio(ratio)) {
+    Canvas(modifier.wrapContentSize().aspectRatio(ratio, matchHeightConstraintsFirst = true)) {
         val stroke = Stroke(width = 2.dp.toPx())
         val glass = tint.copy(alpha = 0.22f)
         when (variant) {

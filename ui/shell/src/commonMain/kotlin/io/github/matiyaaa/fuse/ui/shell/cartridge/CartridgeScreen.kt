@@ -91,7 +91,9 @@ import io.github.matiyaaa.fuse.ui.shell.app.room
 import io.github.matiyaaa.fuse.ui.shell.app.systemRoom
 import io.github.matiyaaa.fuse.ui.shell.components.GameIconTile
 import io.github.matiyaaa.fuse.ui.shell.components.LocalGameArt
+import io.github.matiyaaa.fuse.ui.shell.components.ReportScroll
 import io.github.matiyaaa.fuse.ui.shell.components.SystemCardArt
+import io.github.matiyaaa.fuse.ui.shell.components.subTabsRoom
 import io.github.matiyaaa.fuse.ui.shell.components.tileSize
 import io.github.matiyaaa.fuse.ui.shell.home.CartridgeEmblem
 import io.github.matiyaaa.fuse.ui.shell.home.LocalCartridgeIcon
@@ -320,6 +322,9 @@ fun CartridgeContent(app: AppState, embedded: Boolean, active: Boolean, topPaddi
 
     val cartridgeIcon = remember { if (store.apps.supported) AppIconModel(io.github.matiyaaa.fuse.integrations.cartridge.CartridgeProtocol.PACKAGE_NAME) else null }
     val page = rememberLazyListState()
+    // Inside Addons, the tabs above fold away as the page scrolls.
+    ReportScroll(page)
+    val room = subTabsRoom()
     androidx.compose.runtime.CompositionLocalProvider(LocalCartridgeIcon provides cartridgeIcon.takeIf { status.installed }) {
         BoxWithConstraints(Modifier.fillMaxSize()) {
             val compact = maxHeight < 600.dp
@@ -331,11 +336,11 @@ fun CartridgeContent(app: AppState, embedded: Boolean, active: Boolean, topPaddi
             FollowSelection(page, { if (sel.row == 0) 0 else items.indexOf(rows.getOrElse(sel.row) { ACTIONS }).coerceAtLeast(0) }, anchor = 0.1f)
             if (!status.installed && !checked) {
                 // The first read of Cartridge's state and its latest release: the page's shape, quietly.
-                CartridgeSkeleton(Modifier.padding(top = topPadding + Space.l).padding(horizontal = Space.gutter))
+                CartridgeSkeleton(Modifier.padding(top = topPadding + room + Space.l).padding(horizontal = Space.gutter))
             } else LazyColumn(
                 state = page,
                 modifier = Modifier.fillMaxSize().padding(top = topPadding).fadingEdges(top = if (page.canScrollBackward) Space.xl else 0.dp),
-                contentPadding = PaddingValues(top = if (compact) Space.s else Space.m, bottom = Size.hintHeight + Space.xl),
+                contentPadding = PaddingValues(top = room + if (compact) Space.s else Space.m, bottom = Size.hintHeight + Space.xl),
                 verticalArrangement = Arrangement.spacedBy(if (compact) Space.l else Space.xl),
             ) {
                 item(key = "header") {
