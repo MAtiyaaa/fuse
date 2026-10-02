@@ -246,11 +246,13 @@ private fun AppDrawerItem(
             }
         }
         Spacer(Modifier.height(Size.sparkClearance))
+        // The name may use the gap beside the tile, and a second line on small tiles, so it is
+        // rarely cut short.
         FText(
             card.entry.displayTitle, Fuse.type.label,
             color = if (selected) c.text else c.textMuted,
-            maxLines = 1,
-            modifier = Modifier.width(size + Space.l),
+            maxLines = 2,
+            modifier = Modifier.width(size + Space.l + Space.xs),
             align = TextAlign.Center,
         )
     }

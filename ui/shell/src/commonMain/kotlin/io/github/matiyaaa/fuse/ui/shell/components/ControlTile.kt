@@ -116,15 +116,16 @@ fun ControlTile(
                     if (lift > 0.01f) translate(-g, -g) { drawPath(path, ring, alpha = lift.coerceIn(0f, 1f), style = stroke) }
                 }
             }
+            // Before the surface, so a press pushes the whole tile down, not just what is on it.
+            .fuseClickable(shape = shape, role = Role.Button, onLongClick = onLongClick, onClick = onClick)
             .graphicsLayer {
                 this.shape = shape
                 clip = true
             }
             .background(bg)
             .lightEdge(shape, { edgeRest + (edgeLit - edgeRest) * lift.coerceIn(0f, 1f) })
-            .fuseClickable(shape = shape, role = Role.Button, onLongClick = onLongClick, onClick = onClick)
             .semantics { this.selected = selected }
-            .padding(if (compact) Space.s + Space.xxs else Space.m),
+            .padding(if (compact) Space.s else Space.m),
     ) {
         val dim = Modifier.alpha(if (unavailable) 0.45f else 1f)
         ControlWell(icon, active, compact, dim.align(Alignment.TopStart))

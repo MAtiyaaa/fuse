@@ -253,7 +253,7 @@ fun MediaScreen(app: AppState, owner: MediaOwner, title: String, identifyFirst: 
                     "Couldn't search for art", "Fuse couldn't search for art ($failed). Try again, or check your keys in Settings, Media and Scraping.",
                     FuseIcons.CloudOff, error = true,
                 )
-                is ArtworkResult.Options -> if (r.options.isEmpty()) Browser.Message("No ${slotName(k).lowercase()} found", "Try another source in Media and Scraping settings.") else Browser.Options(k, r.options, r.guess)
+                is ArtworkResult.Options -> if (r.options.isEmpty()) Browser.Message("No ${slotName(k).lowercase()} found", "Try another source in Settings, or choose a file.") else Browser.Options(k, r.options, r.guess)
                 is ArtworkResult.NeedsMatch -> {
                     // Several close matches: the user picks the game, then art is searched for it.
                     matchSel.index = 0
@@ -263,7 +263,7 @@ fun MediaScreen(app: AppState, owner: MediaOwner, title: String, identifyFirst: 
                 // says what to try; any other reason is the message under a plain title.
                 is ArtworkResult.Unavailable -> {
                     val sentence = r.reason.removeSuffix(".")
-                    if (sentence.startsWith("No ") && ". " !in sentence) Browser.Message(sentence, "Try another source in Media and Scraping settings, or choose a file.")
+                    if (sentence.startsWith("No ") && ". " !in sentence) Browser.Message(sentence, "Try another source in Settings, or choose a file.")
                     else Browser.Message("Nothing to pick from", r.reason)
                 }
             }

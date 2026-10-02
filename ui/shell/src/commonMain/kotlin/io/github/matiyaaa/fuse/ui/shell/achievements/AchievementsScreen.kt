@@ -170,6 +170,8 @@ private fun NotConnected(app: AppState, configured: Boolean) {
 private fun AchievementsLoading() {
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val badge = badgeSize(maxHeight)
+        // Only whole cards, so the placeholder row never ends in a sliver.
+        val cards = ((maxWidth - Space.gutter * 2 + Space.xl) / (badge * CARD_WIDTH + Space.xl)).toInt().coerceAtLeast(1)
         Column(Modifier.fillMaxSize().padding(top = Size.hudHeight + Space.m)) {
             Row(Modifier.padding(horizontal = Space.gutter), verticalAlignment = Alignment.CenterVertically) {
                 Skeleton(Modifier.size(AVATAR), shape = CircleShape)
@@ -185,7 +187,7 @@ private fun AchievementsLoading() {
                 Skeleton(Modifier.padding(horizontal = Space.gutter).width(badge).height(Space.m))
                 Spacer(Modifier.height(Space.m))
                 Row(Modifier.padding(horizontal = Space.gutter), horizontalArrangement = Arrangement.spacedBy(Space.xl)) {
-                    repeat(4) {
+                    repeat(cards) {
                         Row(Modifier.width(badge * CARD_WIDTH), verticalAlignment = Alignment.CenterVertically) {
                             Skeleton(Modifier.size(badge), shape = SquircleShape.fraction(Fuse.geometry.tileCornerFraction))
                             Spacer(Modifier.width(Space.m))
@@ -233,8 +235,10 @@ private fun Connected(app: AppState, feed: AchievementsFeed) {
         }
     }
 
-    LaunchedEffect(Unit) {
-        app.hints = listOf(Hint(HintButton.CONFIRM, "Open game"), Hint(HintButton.OPTIONS, "Refresh"))
+    // Open game only while there is something to open.
+    val any = rows.isNotEmpty()
+    LaunchedEffect(any) {
+        app.hints = listOfNotNull(Hint(HintButton.CONFIRM, "Open game").takeIf { any }, Hint(HintButton.OPTIONS, "Refresh"))
     }
     InputLayer(enabled = app.focusZone == FocusZone.CONTENT && !app.overlayOpen) { e ->
         when (e.action) {
