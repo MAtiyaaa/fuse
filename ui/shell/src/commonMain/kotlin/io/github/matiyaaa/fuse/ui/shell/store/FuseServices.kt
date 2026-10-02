@@ -52,6 +52,9 @@ interface FuseServices {
     /** Installed apps for the Apps section, or null where the platform has no app list. */
     val apps: AppsProvider?
 
+    /** Installing and removing apps for the Store, or null where Fuse can't (everywhere but Android). */
+    val packages: PackageBridge? get() = null
+
     /** Where to look for existing libraries and firmware on this device. */
     val locations: DeviceLocations
 

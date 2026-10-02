@@ -69,6 +69,9 @@ interface FuseStore {
     /** Backups of what the user made in Fuse, and restoring them. */
     val backup: BackupOps get() = BackupOps.None
 
+    /** The Store, where Fuse can install apps (Android); [AppStoreOps.None] elsewhere. */
+    val appStore: AppStoreOps get() = AppStoreOps.None
+
     /**
      * Starts what Fuse does by itself (scans, art fills, Cartridge, achievements, update checks)
      * when the store was created in safe mode, which holds it back. Does nothing otherwise.

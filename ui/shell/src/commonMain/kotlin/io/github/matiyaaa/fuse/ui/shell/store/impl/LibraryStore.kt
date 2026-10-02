@@ -508,6 +508,7 @@ internal class DefaultLibraryOps(
             emulators.refreshIfStale()
             apps.refreshInstalled()
             cartridge.refreshOnResume()
+            ctx.resumeHooks.value.forEach { it() }
             // A card may have gone in or out while a game ran.
             engine.refreshDrives()
         }

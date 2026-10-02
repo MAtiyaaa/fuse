@@ -90,6 +90,8 @@ internal fun AppSettings.toUiPrefs(scoped: GlobalScoped): UiPrefs {
         captureSound = capture.sound,
         heroDim = appearance.heroDim,
         appsFilter = library.appsFilter,
+        storeVariant = store.variant,
+        storeAutoCheck = store.autoCheck,
     )
 }
 
@@ -160,5 +162,7 @@ internal fun AppSettings.withUiPrefs(prefs: UiPrefs): AppSettings {
         cartridge = cartridge.copy(autoRefreshOnReturn = prefs.autoRefreshFromCartridge, enabled = prefs.cartridgeEnabled, rommDetails = prefs.cartridgeRommDetails),
         updates = updates.copy(checkForUpdates = prefs.checkForUpdates),
         capture = capture.copy(combo = prefs.captureCombo, sound = prefs.captureSound),
+        // What Fuse installed is kept as it is: only the Store writes it.
+        store = store.copy(variant = prefs.storeVariant, autoCheck = prefs.storeAutoCheck),
     )
 }

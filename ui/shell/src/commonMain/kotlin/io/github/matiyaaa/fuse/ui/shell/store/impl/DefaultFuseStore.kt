@@ -16,6 +16,7 @@ import io.github.matiyaaa.fuse.ui.shell.music.BundledMusic
 import io.github.matiyaaa.fuse.ui.shell.store.FuseServices
 import io.github.matiyaaa.fuse.ui.shell.store.FuseStore
 import io.github.matiyaaa.fuse.ui.shell.store.ThemeOps
+import io.github.matiyaaa.fuse.ui.shell.store.AppStoreOps
 import io.github.matiyaaa.fuse.ui.shell.store.UiPrefs
 import io.ktor.client.request.get
 import io.ktor.client.statement.bodyAsChannel
@@ -63,6 +64,8 @@ internal class DefaultFuseStore private constructor(
     override val updates = DefaultUpdateOps(ctx)
     override val storage = DefaultStorageOps(ctx, engine.drives)
     override val settings = DefaultScopedSettingsOps(ctx) { reloadPrefs() }
+    private val appStoreOps = ctx.services.packages?.let { DefaultAppStoreOps(ctx, it, prefsState) { t -> updatePrefs(t) } }
+    override val appStore: AppStoreOps = appStoreOps ?: AppStoreOps.None
     override val backup = DefaultBackupOps(ctx) { restore ->
         writeLock.withLock { restore().also { reloadLocked() } }
     }
@@ -197,6 +200,7 @@ internal class DefaultFuseStore private constructor(
     private fun start() {
         engine.start()
         health.start()
+        appStoreOps?.start()
         ctx.scope.launch {
             for (next in writes) {
                 // A failed write must not stop later ones; retry once, then keep the in-memory value.
@@ -255,6 +259,7 @@ internal class DefaultFuseStore private constructor(
         mediaOps.startSystemArt()
         achievements.load()
         cartridge.start()
+        appStoreOps?.startAutomatic()
         if (data.sources.all().isNotEmpty()) engine.rescan(ScanScope.QUICK)
         achievements.refresh(force = false)
         data.cache.purgeExpired(ctx.now())

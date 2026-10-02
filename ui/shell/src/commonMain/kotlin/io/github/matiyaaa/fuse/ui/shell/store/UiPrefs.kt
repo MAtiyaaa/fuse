@@ -92,6 +92,10 @@ data class UiPrefs(
     val appsFilter: io.github.matiyaaa.fuse.model.AppFilter = io.github.matiyaaa.fuse.model.AppFilter.ALL,
     /** Themes added from a link, a file or pasted text, ready to use. */
     val customThemes: List<ThemeSpec> = emptyList(),
+    /** The Store's edition of the Obtainium Emulation Pack; null until chosen (Android). */
+    val storeVariant: io.github.matiyaaa.fuse.model.StoreVariant? = null,
+    /** The Store checks installed apps for updates by itself. */
+    val storeAutoCheck: Boolean = true,
 ) {
     /** The theme in use: a built-in one, else an added one, else Fuse (an added theme was removed). */
     val theme: ThemeSpec

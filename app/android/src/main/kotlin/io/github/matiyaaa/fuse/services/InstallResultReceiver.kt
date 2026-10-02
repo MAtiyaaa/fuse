@@ -15,7 +15,12 @@ import io.github.matiyaaa.fuse.FuseApplication
  */
 class InstallResultReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        when (val status = intent.getIntExtra(PackageInstaller.EXTRA_STATUS, PackageInstaller.STATUS_FAILURE)) {
+        val status = intent.getIntExtra(PackageInstaller.EXTRA_STATUS, PackageInstaller.STATUS_FAILURE)
+        if (intent.getBooleanExtra(EXTRA_STORE, false)) {
+            store(context, intent, status)
+            return
+        }
+        when (status) {
             PackageInstaller.STATUS_PENDING_USER_ACTION -> {
                 val confirm = confirmationIntent(intent) ?: return
                 val app = context.applicationContext as? FuseApplication
@@ -41,6 +46,28 @@ class InstallResultReceiver : BroadcastReceiver() {
         }
     }
 
+    /**
+     * A Store install or uninstall: Android's confirmation is opened like any other; the outcome
+     * goes to the Store, which tells the user itself.
+     */
+    private fun store(context: Context, intent: Intent, status: Int) {
+        val uninstall = intent.getStringExtra(EXTRA_UNINSTALL)
+        val id = if (uninstall != null) InstallResults.uninstallKey(uninstall) else intent.getIntExtra(PackageInstaller.EXTRA_SESSION_ID, -1)
+        if (status == PackageInstaller.STATUS_PENDING_USER_ACTION) {
+            val confirm = confirmationIntent(intent) ?: return InstallResults.complete(id, InstallResults.outcome(PackageInstaller.STATUS_FAILURE, null))
+            val app = context.applicationContext as? FuseApplication
+            if (app?.activities?.start(confirm) != true) {
+                try {
+                    context.startActivity(confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                } catch (e: RuntimeException) {
+                    InstallResults.complete(id, InstallResults.outcome(PackageInstaller.STATUS_FAILURE, "its confirmation couldn't be shown"))
+                }
+            }
+            return
+        }
+        InstallResults.complete(id, InstallResults.outcome(status, intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE)))
+    }
+
     private fun confirmationIntent(intent: Intent): Intent? =
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             intent.getParcelableExtra(Intent.EXTRA_INTENT, Intent::class.java)
@@ -62,5 +89,11 @@ class InstallResultReceiver : BroadcastReceiver() {
     companion object {
         /** Set on Fuse's own update, so the new version knows to open itself. */
         const val EXTRA_SELF_UPDATE = "io.github.matiyaaa.fuse.SELF_UPDATE"
+
+        /** Set on the Store's installs and uninstalls, whose outcome goes to [InstallResults]. */
+        const val EXTRA_STORE = "io.github.matiyaaa.fuse.STORE"
+
+        /** The package a Store uninstall removes. */
+        const val EXTRA_UNINSTALL = "io.github.matiyaaa.fuse.STORE_UNINSTALL"
     }
 }

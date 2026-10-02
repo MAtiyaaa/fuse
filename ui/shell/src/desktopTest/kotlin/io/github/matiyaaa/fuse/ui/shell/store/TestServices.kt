@@ -53,9 +53,18 @@ internal class FakeServices(
     override val secrets: SecretStore = MemorySecrets()
     /** Hosts of every request made, in order (nothing is found anywhere). */
     val requestHosts: MutableList<String> = java.util.Collections.synchronizedList(mutableListOf())
+    /** Answers a test gives first, before the fake's own (null passes to them). */
+    @Volatile var web: (suspend io.ktor.client.engine.mock.MockRequestHandleScope.(io.ktor.client.request.HttpRequestData) -> io.ktor.client.request.HttpResponseData?)? = null
+
+    /** The Store's view of the system, when a test gives it one (Android has one; desktop doesn't). */
+    override var packages: PackageBridge? = null
+
     override val http = HttpClient(MockEngine { request ->
         requestHosts += request.url.host
-        if (latestRelease != null && request.url.encodedPath.endsWith("/releases/latest")) {
+        val answer = web?.invoke(this, request)
+        if (answer != null) {
+            answer
+        } else if (latestRelease != null && request.url.encodedPath.endsWith("/releases/latest")) {
             respond(latestRelease, HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
         } else if (request.url.host == "raw.githubusercontent.com" && request.url.encodedPath == "/someone/themes/main/ember.json") {
             // A shared theme, as GitHub serves the file behind a page link.

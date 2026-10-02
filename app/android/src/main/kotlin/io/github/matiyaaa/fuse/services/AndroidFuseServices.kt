@@ -12,6 +12,7 @@ import io.github.matiyaaa.fuse.storage.SourceRoot
 import io.github.matiyaaa.fuse.storage.StoragePaths
 import io.github.matiyaaa.fuse.storage.StorageVolumes
 import io.github.matiyaaa.fuse.ui.shell.store.AppsProvider
+import io.github.matiyaaa.fuse.ui.shell.store.PackageBridge
 import io.github.matiyaaa.fuse.ui.shell.store.CartridgeBridge
 import io.github.matiyaaa.fuse.ui.shell.store.DeviceLocations
 import io.github.matiyaaa.fuse.ui.shell.store.EmulatorDetector
@@ -58,6 +59,7 @@ class AndroidFuseServices(
     override val cartridge: CartridgeBridge = AndroidCartridgeBridge(appContext, activities)
     private val releaseInstaller = AndroidReleaseInstaller(appContext, http, activities)
     override val installer: ReleaseInstaller = releaseInstaller
+    override val packages: PackageBridge = AndroidPackageBridge(appContext, activities)
     override val apps: AppsProvider = AndroidAppsProvider(appContext, scope, activities, dualScreen, releaseInstaller::installLocal)
     override val locations: DeviceLocations = AndroidDeviceLocations(storageVolumes)
     override val volumes: VolumeMonitor = io.github.matiyaaa.fuse.storage.AndroidVolumes(appContext)
