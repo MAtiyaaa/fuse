@@ -571,7 +571,7 @@ internal fun AuditDriver.gameScreens(exhaustive: Boolean) {
         openGame("Aurora Outpost")
         tap(PadButton.X)
         tapText("Emulator")
-        waitFor("Use the platform's emulator")
+        waitFor("Use the system's emulator")
         shoot("choice list")
         // Not installed, or (where Fuse can be shown one) not found yet.
         focusAny("Not installed", "Not found")
@@ -648,7 +648,7 @@ internal fun AuditDriver.launchScreens() {
             controls.launchGate = null
         }
         waitFor("Flycast closed right away")
-        shoot("error toast after the launch failed", 700)
+        shoot("problem sheet after the launch failed", 700)
     }
 
     scenario("game", "system") {
@@ -692,7 +692,7 @@ internal fun AuditDriver.launchScreens() {
         openGame("Waystation Nine")
         tap(PadButton.A)
         waitFor("No emulator for")
-        shoot("choice dialog with emulators to install")
+        shoot("problem sheet with emulators to get")
     }
 
     scenario("launch", "opened app only") {

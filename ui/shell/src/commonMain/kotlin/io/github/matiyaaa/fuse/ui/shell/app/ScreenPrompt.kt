@@ -171,7 +171,7 @@ internal fun ScreenPromptOverlay(app: AppState) {
                     }
                     Spacer(Modifier.height(Space.s))
                     FText(
-                        "Leave both unticked for just this time. Settings, Displays changes it later.",
+                        "Leave both unticked for just this time. Settings, Screen and sound changes it later.",
                         Fuse.type.caption,
                         color = Fuse.colors.textFaint,
                         maxLines = 2,

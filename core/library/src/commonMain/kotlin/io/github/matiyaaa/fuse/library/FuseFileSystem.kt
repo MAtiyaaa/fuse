@@ -57,6 +57,13 @@ interface FuseFileSystem {
      */
     suspend fun readText(path: String, maxBytes: Int = DEFAULT_TEXT_LIMIT): String?
 
+    /**
+     * Up to [length] bytes of the file at [path] from [offset] (fewer at its end), or null when it
+     * can't be read or this file system doesn't read bytes. Used to identify discs (a PS2 image's
+     * SYSTEM.CNF and boot program); nothing is ever written.
+     */
+    suspend fun readBytes(path: String, offset: Long, length: Int): ByteArray? = null
+
     /** Lower-case hex MD5 of the file's content, or null when unsupported or unreadable. */
     suspend fun md5(path: String): String?
 

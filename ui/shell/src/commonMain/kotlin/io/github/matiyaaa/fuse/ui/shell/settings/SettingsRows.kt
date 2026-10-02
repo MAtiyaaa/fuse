@@ -46,6 +46,19 @@ fun AppState.group(id: String, label: String, icon: ImageVector, summary: String
     return if (open) listOf(header) + rows().map { it.copy(indent = it.indent + 1) } else listOf(header)
 }
 
+/**
+ * Adds [rows] (another section's rows, brought into this one) under [label]: rows that had no group
+ * of their own take it, and rows that already had one keep theirs. Their ids get [prefix], so rows
+ * from different places never share one.
+ */
+internal fun MutableList<MenuAction>.under(label: String, prefix: String, rows: List<MenuAction>) {
+    for (r in rows) add(r.copy(id = "$prefix.${r.id}", section = r.section ?: label))
+}
+
+/** The last row of a tuning group: puts its settings back as Fuse comes, shown only once one differs. */
+fun defaultsRow(id: String, run: () -> Unit) =
+    MenuAction(id, "Put back the defaults", FuseIcons.RotateCcw, detail = "The rest of your settings stay as they are", onSelect = run)
+
 /** A switch row. */
 fun toggleRow(id: String, label: String, icon: ImageVector, on: Boolean, detail: String? = null, enabled: Boolean = true, set: (Boolean) -> Unit) =
     MenuAction(id, label, icon, detail = detail, trailing = Trailing.Switch(on), enabled = enabled, onSelect = { set(!on) })

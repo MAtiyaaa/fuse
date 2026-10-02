@@ -6,7 +6,9 @@ CREATE TABLE library_source (
     -- LibrarySourceKind name
     kind TEXT NOT NULL,
     enabled INTEGER NOT NULL DEFAULT 1,
-    last_scan_at INTEGER
+    last_scan_at INTEGER,
+    -- The drive the folder lives on (VolumeRef JSON), once Fuse has seen it mounted.
+    volume_json TEXT
 );
 
 selectAll:
@@ -32,3 +34,9 @@ UPDATE library_source SET last_scan_at = :lastScanAt WHERE id = :id;
 
 delete:
 DELETE FROM library_source WHERE id = ?;
+
+setVolume:
+UPDATE library_source SET volume_json = :volumeJson WHERE id = :id;
+
+setPath:
+UPDATE library_source SET path = :path WHERE id = :id;

@@ -17,18 +17,21 @@ import io.github.matiyaaa.fuse.ui.shell.store.AppIconModel
 import io.github.matiyaaa.fuse.ui.shell.store.Art
 import io.github.matiyaaa.fuse.ui.shell.store.FuseServices
 import io.github.matiyaaa.fuse.ui.shell.store.GameCard
+import io.github.matiyaaa.fuse.ui.shell.store.Unavailable
 import kotlin.time.Clock
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.retryWhen
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 
@@ -62,6 +65,19 @@ internal class StoreContext(
     val systemOrder = MutableStateFlow(initialSettings.library.systemOrder)
     val installed = MutableStateFlow<List<InstalledEmulator>>(emptyList())
 
+    /** The last launch problems, newest last, for the diagnostics report. Kept in memory only. */
+    val recentProblems = MutableStateFlow<List<Pair<Long, io.github.matiyaaa.fuse.ui.shell.store.Problem>>>(emptyList())
+
+    fun recordProblem(problem: io.github.matiyaaa.fuse.ui.shell.store.Problem) {
+        recentProblems.update { (it + (now() to problem)).takeLast(10) }
+    }
+
+    /** True once emulators were looked for: until then, "none installed" means "not known yet". */
+    val emulatorsDetected = MutableStateFlow(false)
+
+    /** Library folders that can't be read right now ([Drives]); their games show as unavailable. */
+    val offline = MutableStateFlow<List<OfflineRoot>>(emptyList())
+
     fun now(): Long = Clock.System.now().toEpochMilliseconds()
 
     fun platform(id: PlatformId): Platform? = platforms.byId(id)
@@ -78,8 +94,9 @@ internal class StoreContext(
         return (day - weekday) * DAY_MS - offset
     }
 
-    fun summaryToCard(summary: GameSummary, media: MediaSet?): GameCard {
+    fun summaryToCard(summary: GameSummary, media: MediaSet?, offlineRoots: List<OfflineRoot> = offline.value): GameCard {
         val platform = platform(summary.platformId)
+        val away = if (offlineRoots.isEmpty() || summary.isApp) null else offlineRoots.firstOrNull { it.holds(summary.folderPath) }
         return GameCard(
             id = summary.id,
             platformId = summary.platformId,
@@ -97,6 +114,7 @@ internal class StoreContext(
             discs = summary.discCount,
             missing = summary.missing,
             isApp = summary.isApp,
+            unavailable = away?.let { Unavailable(it.driveLabel, it.state) },
         )
     }
 
@@ -116,8 +134,8 @@ internal class StoreContext(
             if (list.isEmpty()) {
                 flowOf(emptyList())
             } else {
-                data.media.observeFor(list.map { MediaOwner.OfGame(it.id) }).map { media ->
-                    list.map { summaryToCard(it, media[MediaOwner.OfGame(it.id)]) }
+                combine(data.media.observeFor(list.map { MediaOwner.OfGame(it.id) }), offline) { media, roots ->
+                    list.map { summaryToCard(it, media[MediaOwner.OfGame(it.id)], roots) }
                 }
             }
         }

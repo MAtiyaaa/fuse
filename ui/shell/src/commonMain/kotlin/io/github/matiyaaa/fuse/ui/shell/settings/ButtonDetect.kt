@@ -201,7 +201,7 @@ private fun describe(p: InputProfile): String {
         else -> "Xbox layout"
     }
     val side = if (p.confirmOnRight) "right" else "bottom"
-    return "$layout. Confirm is the $side button and Back is next to it. You can change this in Settings, Inputs."
+    return "$layout. Confirm is the $side button and Back is next to it. You can change this in Settings, Controls."
 }
 
 private enum class Face { TOP, LEFT, RIGHT, BOTTOM }

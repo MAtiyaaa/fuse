@@ -87,6 +87,23 @@ class AndroidFileSystem(
         entry(path.trimEnd('/').substringAfterLast('/').ifEmpty { path }, path)
     }
 
+    override suspend fun readBytes(path: String, offset: Long, length: Int): ByteArray? = withContext(io) {
+        if (offset < 0 || length < 0) return@withContext null
+        try {
+            java.io.RandomAccessFile(File(path), "r").use { f ->
+                if (offset >= f.length()) return@withContext ByteArray(0)
+                f.seek(offset)
+                val out = ByteArray(minOf(length.toLong(), f.length() - offset).toInt())
+                f.readFully(out)
+                out
+            }
+        } catch (e: IOException) {
+            null
+        } catch (e: SecurityException) {
+            null
+        }
+    }
+
     override suspend fun readText(path: String, maxBytes: Int): String? = withContext(io) {
         if (maxBytes <= 0) return@withContext ""
         try {

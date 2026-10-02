@@ -751,6 +751,8 @@ internal fun widgetStage(kind: WidgetKind, key: Any, feed: HomeFeed, cartridge: 
 fun bytesText(bytes: Long): String {
     val gb = bytes / 1_000_000_000.0
     return when {
+        // Drives are sold in terabytes: "1 TB", "1.8 TB", never "1000 GB".
+        gb >= 999.5 -> (gb / 1000).let { tb -> if (tb >= 10) "${tb.toInt()} TB" else "${(tb * 10 + 0.5).toInt() / 10.0} TB".replace(".0 TB", " TB") }
         gb >= 100 -> "${gb.toInt()} GB"
         gb >= 1 -> "${(gb * 10).toInt() / 10.0} GB"
         bytes >= 1_000_000 -> "${bytes / 1_000_000} MB"
@@ -774,7 +776,7 @@ internal fun AppState.openWidget(kind: WidgetKind, feed: HomeFeed, firstGame: Ga
         WidgetKind.RECENT_ACHIEVEMENT, WidgetKind.RECENT_ACHIEVEMENTS, WidgetKind.ACHIEVEMENT_PROGRESS,
         WidgetKind.RECENTLY_MASTERED,
         -> selectTab(Destination.ACHIEVEMENTS)
-        WidgetKind.PLAYTIME_WEEK, WidgetKind.PLAYTIME_TOTAL -> selectTab(Destination.LIBRARY)
+        WidgetKind.PLAYTIME_WEEK, WidgetKind.PLAYTIME_TOTAL -> go(Route.PlayTime)
         WidgetKind.CARTRIDGE_DOWNLOADS -> selectTab(Destination.CARTRIDGE)
         WidgetKind.STORAGE -> go(Route.Storage)
         WidgetKind.CLOCK -> quickMenuOpen = true

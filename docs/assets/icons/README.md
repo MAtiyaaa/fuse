@@ -41,6 +41,10 @@ contains text, so nothing depends on fonts.
 | <img src="android.svg" width="40" height="40" alt=""> | <img src="line/android.svg" width="20" height="20" alt=""> | `android` | `smartphone` | Android |
 | <img src="linux.svg" width="40" height="40" alt=""> | <img src="line/linux.svg" width="20" height="20" alt=""> | `linux` | `monitor` | Linux desktop |
 | <img src="free-software.svg" width="40" height="40" alt=""> | <img src="line/free-software.svg" width="20" height="20" alt=""> | `free-software` | `heart` | Free software |
+| <img src="health.svg" width="40" height="40" alt=""> | <img src="line/health.svg" width="20" height="20" alt=""> | `health` | `heart-pulse` | System health |
+| <img src="backup.svg" width="40" height="40" alt=""> | <img src="line/backup.svg" width="20" height="20" alt=""> | `backup` | `database-backup` | Backup and restore |
+| <img src="search.svg" width="40" height="40" alt=""> | <img src="line/search.svg" width="20" height="20" alt=""> | `search` | `search` | Search |
+| <img src="patches.svg" width="40" height="40" alt=""> | <img src="line/patches.svg" width="20" height="20" alt=""> | `patches` | `bandage` | Emulator patches |
 
 The `android` and `linux` icons are a generic phone and a generic monitor, not platform logos.
 

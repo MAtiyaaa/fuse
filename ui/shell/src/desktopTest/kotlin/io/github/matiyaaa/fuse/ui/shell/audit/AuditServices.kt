@@ -78,6 +78,9 @@ internal class AuditControls(val cache: File) {
     }
 
     val apps: AuditApps = AuditApps.create(File(cache, "app-icons"))
+
+    /** The drives the audit device reports; none by default, like a host that can't tell. */
+    @Volatile var drives: List<io.github.matiyaaa.fuse.model.StorageVolume> = emptyList()
 }
 
 /**
@@ -140,6 +143,10 @@ internal class AuditServices(
     }
 
     override val apps: AppsProvider? = if (desktop) null else controls.apps
+
+    override val volumes = object : io.github.matiyaaa.fuse.ui.shell.store.VolumeMonitor {
+        override suspend fun volumes() = controls.drives
+    }
 
     override val locations = object : DeviceLocations {
         override suspend fun libraryCandidates(): List<LocationHint> = controls.libraryCandidates
@@ -252,6 +259,13 @@ internal class AuditPlatform(
         densityDpi = (size.density * 160).toInt(),
     )
     override val performance: StateFlow<List<PerformanceMetric>> = MutableStateFlow(metrics)
+
+    /** What the file picker hands back next (a backup to restore); null is a cancelled picker. */
+    @Volatile var pickedFile: io.github.matiyaaa.fuse.ui.shell.platform.OpenedFile? = null
+
+    override suspend fun openFile(mimeTypes: List<String>, extensions: List<String>, maxBytes: Long) = pickedFile
+
+    override suspend fun saveFile(name: String, mimeType: String, bytes: ByteArray): String? = "Downloads/$name"
 
     /** Settable, for battery states (charging, full, low). */
     val statusFlow = MutableStateFlow(ScreenshotPlatform.status.value)

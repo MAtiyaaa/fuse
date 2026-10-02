@@ -134,19 +134,28 @@ yet tried by hand on a PC or a Mac.
 - [x] Screenshots and recordings of Fuse on Android, from the quick menu or L3 + R3 (0.1.3)
 - [x] Screenshots and recordings to look at and download from Phone Link, and a bottom screen that stays beside games (0.1.4)
 - [x] Tests for `ui:designsystem` input and selection logic, run in CI with Phone Link's (0.1.4)
+- [x] Nine new themes (19 in all) and a theme page with a live preview (0.1.5)
+- [x] Home's widget board, resizable widgets and a reorder sheet for every list (0.1.6)
+- [x] Drives with a stable identity: a card that is out is offline, never deleted games, and a drive back under another path is followed (0.2.0)
+- [x] System health with a fix for each finding, a diagnostics report with personal data removed, and launch problems that explain themselves (0.2.0)
+- [x] Safe mode after three failed starts, and a copy of the database before every upgrade (0.2.0)
+- [x] Backup and restore of settings, Home, game changes, collections, chosen art and play time (0.2.0)
+- [x] Search filters, typo-tolerant names and searchable settings (0.2.0)
+- [x] An emulator page with a test launch, and why an emulator can't run a game (0.2.0)
+- [x] In-app text size, TV-safe screen edges and a Play time page (0.2.0)
+- [x] PS1 and PS2 disc serials and PCSX2 CRCs, PCSX2 patches with ownership records, PS3 and Vita package installs, and RPCS3 compatibility (0.2.0)
+- [x] A release consistency check in CI (0.2.0)
 - [ ] Screenshots and recordings on Linux, Windows and macOS (the interface is ready; each needs its own capture and encoder)
 - [ ] SAF-only storage mode that works without All files access (emulators that need FileProvider URIs would then be limited)
-- [ ] R8 minification and resource shrinking for release APKs
+- [ ] R8 shrinking on by default for release APKs (rules written and opt-in with `-Pfuse.r8=true` in 0.2.0: 78.0 MB to 50.2 MB; waiting on a shrunk build run on devices)
 - [ ] Screenshot tests for the design system and main screens
 - [ ] Android host tests (not enabled in the build yet)
 - [ ] Localization (all interface text is English today)
-- [ ] In-app text size setting
-- [ ] TV overscan-safe margins
 - [ ] RetroAchievements hashing for 3DS, Saturn, Dreamcast and compressed disc images (CHD, RVZ)
 - [ ] ScreenScraper developer credentials injected into official builds from CI secrets
 - [ ] A pre-release update channel (the setting exists; update checks only look at stable releases)
 - [ ] On-device checks of the launches marked community or unverified (Kenji-NX, ARMSX1, ARMSX2, Strato, Citron, Sudachi, Winlator Frost)
-- [ ] Per-emulator configuration editing: opt-in, shown before anything is written, never automatic
+- [ ] Per-emulator configuration editing beyond PCSX2 patches (RPCS3 and shadPS4 patches next): opt-in, never automatic, and undoing only what Fuse changed
 
 ## Phase 3: More places to play
 

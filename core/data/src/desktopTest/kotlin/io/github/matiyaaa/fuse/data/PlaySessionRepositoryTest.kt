@@ -54,6 +54,33 @@ class PlaySessionRepositoryTest {
     }
 
     @Test
+    fun theReportSplitsTimeAtTodayTheWeekAndTheMonth() = runBlocking {
+        TestDb().use { t ->
+            val (a, b) = t.twoGames()
+            val sessions = t.data.playSessions
+            val monday = TestDb.BASE_TIME - 12 * hour // 2026-09-28 00:00 UTC
+            val today = monday + 24 * hour // Tuesday
+            val month = monday - 27 * 24 * hour // 2026-09-01
+
+            // Across last Sunday's midnight: one hour before the week, one in it.
+            sessions.end(sessions.start(a, null, now = monday - hour), now = monday + hour)
+            // Today, twice on B.
+            sessions.end(sessions.start(b, null, now = today + hour), now = today + 2 * hour)
+            sessions.end(sessions.start(b, null, now = today + 3 * hour), now = today + 3 * hour + 30 * minute)
+            // Last month only.
+            sessions.end(sessions.start(a, null, now = month - 5 * hour), now = month - 4 * hour)
+
+            val r = t.data.playSessions.report(today, monday, month, days = 3).first()
+            assertEquals(5_400L, r.todaySeconds)
+            assertEquals(3_600L + 5_400, r.weekSeconds)
+            assertEquals(7_200L + 5_400, r.monthSeconds)
+            assertEquals(listOf(3_600L, 3_600L, 5_400L), r.days.map { it.seconds })
+            assertEquals(listOf(b to 5_400L, a to 7_200L).sortedByDescending { it.second }, r.monthGames)
+            assertEquals(listOf("gba" to 7_200L + 5_400 + 3_600), r.platforms)
+        }
+    }
+
+    @Test
     fun openSessionsNeverGetInventedDurations() = runBlocking {
         TestDb().use { t ->
             val (a, b) = t.twoGames()

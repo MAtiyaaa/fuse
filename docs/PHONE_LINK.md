@@ -20,11 +20,11 @@ changes Phone Link's own settings.
   page is refused, request bodies are limited to 64 KB, and every answer carries `nosniff`,
   `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer` and a Content Security Policy that only
   allows the app's own files.
-- **Sign-in.** The username and password are set on the device in Settings, Phone Link. The password
+- **Sign-in.** The username and password are set on the device in Settings, Accounts, Phone Link. The password
   is stored as a salted PBKDF2-HMAC-SHA256 hash in Fuse's secret store. Five wrong tries lock
   sign-in for a minute. A signed-in phone gets a random session token in an HTTP-only,
   SameSite=Strict cookie (`fuse_session`), kept until "Sign out all phones" or a password change.
-- Settings, Phone Link, Pair a phone shows a QR code with the address
+- Settings, Accounts, Phone Link, Pair a phone shows a QR code with the address
   (`http://<device address>:<port>/`), the sign-in and how many phones are signed in. A device on
   several networks lets you pick which address the code holds. The code only holds the address;
   signing in still needs the username and password.

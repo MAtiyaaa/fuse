@@ -64,7 +64,7 @@ import io.github.matiyaaa.fuse.ui.shell.store.PhoneLinkControl
 import io.github.matiyaaa.fuse.ui.shell.store.PhoneLinkState
 import kotlinx.coroutines.launch
 
-/** Settings, Phone Link: the switch, pairing, sign-in and what a phone may do. */
+/** Settings, Accounts, Phone Link: the switch, pairing, sign-in and what a phone may do. */
 @Composable
 fun phoneLinkRows(app: AppState): List<MenuAction> {
     val link = app.phoneLink ?: return listOf(

@@ -48,6 +48,7 @@ internal fun Game_summary.toSummary() = GameSummary(
     updateCount = update_count.toInt(),
     discCount = disc_count.toInt(),
     isApp = folder_path == AppGames.FOLDER,
+    folderPath = folder_path,
 )
 
 internal fun GameRow.titles() = GameTitles(title_original, title_cleaned, title_custom, title_metadata, use_cleaned.asBool())

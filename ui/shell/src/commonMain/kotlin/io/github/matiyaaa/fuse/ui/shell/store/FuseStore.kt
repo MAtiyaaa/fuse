@@ -1,5 +1,9 @@
 package io.github.matiyaaa.fuse.ui.shell.store
 
+import io.github.matiyaaa.fuse.data.backup.BackupArchive
+import io.github.matiyaaa.fuse.data.backup.BackupPart
+import io.github.matiyaaa.fuse.data.backup.BackupProblem
+import io.github.matiyaaa.fuse.data.backup.RestoreReport
 import io.github.matiyaaa.fuse.model.AchievementState
 import io.github.matiyaaa.fuse.model.AppFilter
 import io.github.matiyaaa.fuse.model.AppKind
@@ -59,8 +63,127 @@ interface FuseStore {
     val storage: StorageOps
     val themes: ThemeOps
 
+    /** What Fuse found wrong with the setup, and how to fix it. */
+    val health: HealthOps get() = HealthOps.None
+
+    /** Backups of what the user made in Fuse, and restoring them. */
+    val backup: BackupOps get() = BackupOps.None
+
+    /**
+     * Starts what Fuse does by itself (scans, art fills, Cartridge, achievements, update checks)
+     * when the store was created in safe mode, which holds it back. Does nothing otherwise.
+     */
+    fun resumeAutomaticWork() = Unit
+
     /** A song that ships with Fuse ([io.github.matiyaaa.fuse.ui.shell.music.BundledMusic]) as a file the player can open. */
     suspend fun bundledTrack(id: String): String? = null
+}
+
+/**
+ * System health: everything Fuse can tell is wrong or needs attention in the setup (library
+ * folders and drives, emulators, firmware, playlists, provider keys, updates), each told as a
+ * [Problem] with what to do. Only what Fuse can really check is reported; what it can't know is
+ * left out rather than guessed.
+ */
+interface HealthOps {
+    val report: StateFlow<HealthReport>
+
+    /** Checks everything again, game files included. */
+    fun check()
+
+    /**
+     * A diagnostics report for a bug report: versions, systems, emulators found, drives and folders
+     * with their state, integrations on or off, the health findings and recent launch problems, plus
+     * [device] lines the interface knows. Personal folder names and anything secret are removed.
+     * Nothing is saved or sent; the caller shows it first.
+     */
+    suspend fun diagnostics(device: List<String> = emptyList(), crash: String? = null): String = ""
+
+    object None : HealthOps {
+        override val report: StateFlow<HealthReport> = MutableStateFlow(HealthReport())
+        override fun check() = Unit
+    }
+}
+
+/**
+ * Backups (`.fusebackup`): settings, how Fuse looks and Home, each game's changes (names,
+ * favourites, emulators, systems, details), collections, chosen art and play time. Never games,
+ * firmware, keys or passwords. Restoring merges into this library: it never deletes, games the
+ * backup names that aren't here are left out, and a copy of how things were is kept first.
+ */
+interface BackupOps {
+    /** Makes a backup of everything now; null when it couldn't be made. */
+    suspend fun create(): BackupMade? = null
+
+    /** Opens [bytes] as a backup and tells what restoring it would do. */
+    suspend fun open(bytes: ByteArray): BackupOpened = BackupOpened.Failed(BackupProblem.NOT_A_BACKUP)
+
+    /** Restores [parts] of [backup]. Null when nothing could be restored (and nothing changed). */
+    suspend fun restore(backup: BackupPreview, parts: Set<BackupPart>): RestoreReport? = null
+
+    /** True while the copy made before this session's last restore can be put back. */
+    val canUndo: StateFlow<Boolean> get() = MutableStateFlow(false)
+
+    /** Puts settings, look and Home back as they were before the last restore. */
+    suspend fun undo(): Boolean = false
+
+    object None : BackupOps
+}
+
+/** A backup made now: its file name and bytes, and what it holds. */
+class BackupMade(
+    val name: String,
+    val bytes: ByteArray,
+    val games: Int,
+    val collections: Int,
+    val sessions: Int,
+    val pictures: Int,
+)
+
+sealed interface BackupOpened {
+    data class Ready(val preview: BackupPreview) : BackupOpened
+    data class Failed(val problem: BackupProblem) : BackupOpened
+}
+
+/** What an opened backup holds and how much of it fits this library. */
+class BackupPreview internal constructor(
+    internal val archive: BackupArchive,
+    val createdAt: Long,
+    val fuseVersion: String,
+    val host: String,
+    /** Games the backup has changes for. */
+    val games: Int,
+    /** Of [games], those found in this library. */
+    val gamesHere: Int,
+    val collections: Int,
+    val sessions: Int,
+    val pictures: Int,
+    val hasSettings: Boolean,
+    /** Made by a newer Fuse; what this one doesn't know is left out. */
+    val newer: Boolean,
+)
+
+/** One thing System health found, and what it is about: the whole setup, a system or a game. */
+data class HealthIssue(
+    /** Stable for the same finding, so lists keep their place as checks run again. */
+    val id: String,
+    val problem: Problem,
+    val platform: PlatformId? = null,
+    val game: GameId? = null,
+)
+
+data class HealthReport(
+    val issues: List<HealthIssue> = emptyList(),
+    /** When the last full check (game files included) finished; null before it has run. */
+    val checkedAt: Long? = null,
+    val checking: Boolean = false,
+) {
+    /** How the setup is overall: the most serious issue, or healthy. */
+    val worst: Severity get() = issues.maxOfOrNull { it.problem.severity } ?: Severity.HEALTHY
+
+    fun forPlatform(platform: PlatformId): List<HealthIssue> = issues.filter { it.platform == platform && it.game == null }
+
+    fun forGame(game: GameId): List<HealthIssue> = issues.filter { it.game == game }
 }
 
 /**
@@ -114,18 +237,44 @@ data class StorageUsage(
     val finished: Boolean,
 )
 
-/** A drive: its size, what's free, and how much of it is games, by system. */
+/**
+ * A drive the library is on: its size, what's free, and how much of it is games, by system. A drive
+ * that is out ([online] false) keeps its place with what Fuse last knew of it.
+ */
 data class VolumeUsage(
     val label: String,
     val totalBytes: Long,
     val freeBytes: Long,
     val gamesBytes: Long,
     val systems: List<SystemShare>,
+    /** The drive's id ([io.github.matiyaaa.fuse.model.StorageVolume.id]), or a stand-in where the system has none. */
+    val id: String = label,
+    val kind: io.github.matiyaaa.fuse.model.VolumeKind = io.github.matiyaaa.fuse.model.VolumeKind.OTHER,
+    val removable: Boolean = false,
+    val online: Boolean = true,
+    /** When an offline drive was last seen connected. */
+    val lastSeenAt: Long? = null,
+    /** Games stored on it (measured or, while offline, last known). */
+    val games: Int = 0,
+    val readOnly: Boolean = false,
+    /** Where it is mounted and its filesystem, for technical details only. */
+    val mountPath: String? = null,
+    val fsType: String? = null,
 )
 
 data class SystemShare(val platform: PlatformId, val name: String, val accent: Long, val bytes: Long)
 
-data class GameSize(val card: GameCard, val bytes: Long, val files: Int)
+/**
+ * What one game takes, on which drive ([volumeId], matching [VolumeUsage.id]). A game whose drive is
+ * out shows the size the last scan saw ([lastKnown]).
+ */
+data class GameSize(
+    val card: GameCard,
+    val bytes: Long,
+    val files: Int,
+    val volumeId: String? = null,
+    val lastKnown: Boolean = false,
+)
 
 data class DeleteReport(val deleted: Int, val freedBytes: Long, val failed: List<String>)
 
@@ -177,6 +326,44 @@ interface LibraryOps {
     suspend fun launchCandidates(id: GameId): List<String>
 
     /**
+     * What a PlayStation or PS2 disc image says about itself (its serial, and PCSX2's CRC for PS2
+     * discs), read from the image once and remembered. Null for other games, compressed images and
+     * images that can't be read.
+     */
+    suspend fun discIdentity(id: GameId): io.github.matiyaaa.fuse.library.disc.DiscIdentity? = null
+
+    /**
+     * What RPCS3's public compatibility list says about the PS3 game [id], by its title id. Asks
+     * rpcs3.net only when called (the user asked), sending only the title id; answers are kept a week.
+     */
+    suspend fun rpcs3Compatibility(id: GameId): CompatibilityAnswer = CompatibilityAnswer.Unreachable
+
+    /**
+     * The PCSX2 patches for the PS2 game [id] (its patch files and PCSX2's bundled ones), each with
+     * who turned it on. Reads only.
+     */
+    suspend fun pcsx2Patches(id: GameId): Pcsx2PatchList = Pcsx2PatchList.Unavailable("Not here", "PCSX2's patches can only be changed from Fuse on a computer.")
+
+    /**
+     * Turns the patch [name] on or off in PCSX2's settings for [id]. Fuse turns off only patches it
+     * turned on itself; anything set in PCSX2 stays as it is. False when nothing changed.
+     */
+    suspend fun setPcsx2Patch(id: GameId, name: String, on: Boolean): Boolean = false
+
+    /** Packages of [id] (its own file, its updates and extra content) that an installed emulator can install. */
+    suspend fun packages(id: GameId): List<PackageOption> = emptyList()
+
+    /**
+     * Starts [option]'s emulator installing it, with [key] when it needs one. The key goes only to
+     * the emulator: it is never kept, logged or sent anywhere.
+     */
+    suspend fun installPackage(option: PackageOption, key: String? = null): LaunchOutcome =
+        LaunchOutcome.Problem(Problem("Packages can't be installed here", "This device can't run emulator installers.", ProblemKind.EMULATOR))
+
+    /** Play time today, this week, this month and in all, per day, per game and per system. */
+    fun playTime(): Flow<PlayTimeReport> = kotlinx.coroutines.flow.flowOf(PlayTimeReport(loaded = true))
+
+    /**
      * Files the game under [platform] for good (a rescan keeps it), or back under the system its
      * folder says when null. Its emulator choice goes with the old system.
      */
@@ -213,6 +400,22 @@ interface SourceOps {
     suspend fun suggestions(): List<SuggestedSource>
     fun rescan(scope: ScanScope = ScanScope.QUICK, platform: PlatformId? = null)
     fun refreshBios()
+
+    /** Every library folder with the drive it is on and whether Fuse can read it right now. */
+    val status: StateFlow<List<io.github.matiyaaa.fuse.model.SourceStatus>> get() = MutableStateFlow(emptyList())
+
+    /** The drives mounted now. */
+    val volumes: StateFlow<List<io.github.matiyaaa.fuse.model.StorageVolume>> get() = MutableStateFlow(emptyList())
+
+    /** Looks at the drives again ("Retry" after plugging one in); folders that came back are scanned. */
+    fun refreshDrives() = Unit
+
+    /**
+     * For a folder in [io.github.matiyaaa.fuse.model.SourceState.OTHER_DRIVE]: the user says the drive
+     * mounted there now holds this library (a card that was reformatted or cloned). False when the
+     * folder can't be read there.
+     */
+    suspend fun adoptDrive(source: io.github.matiyaaa.fuse.model.LibrarySourceId): Boolean = false
 }
 
 data class SuggestedSource(val path: String, val label: String, val kind: LibrarySourceKind, val platformsFound: Int)
@@ -222,6 +425,18 @@ interface EmulatorOps {
     fun refresh()
     /** Emulators that could run [platform], installed ones first, with notes. */
     fun optionsFor(platform: PlatformId): List<EmulatorOption>
+
+    /**
+     * Emulators for [game]'s system, each saying why it can't run this game when it can't (the
+     * file type, a folder it can't open, not installed). Checks only; nothing is written or started.
+     */
+    suspend fun optionsForGame(game: GameId): List<EmulatorOption> = emptyList()
+
+    /** What Fuse knows about [emulator]; null when it doesn't know it on this device. */
+    suspend fun details(emulator: EmulatorId): EmulatorDetails? = null
+
+    /** A game to try [emulator] with: one on its systems, played most recently, whose file is here. */
+    suspend fun testGame(emulator: EmulatorId): GameCard? = null
     suspend fun setPlatformEmulator(platform: PlatformId, emulator: EmulatorId?)
     suspend fun openEmulator(emulator: EmulatorId)
     fun limitations(emulator: EmulatorId): List<String>

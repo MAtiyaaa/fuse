@@ -33,8 +33,14 @@ import kotlinx.coroutines.withContext
 /** Where startup is. */
 sealed interface StartState {
     data object Loading : StartState
-    data class Ready(val store: FuseStore, val services: DesktopFuseServices, val phoneLink: PhoneLinkServer? = null) : StartState
-    data class Failed(val message: String) : StartState
+    data class Ready(
+        val store: FuseStore,
+        val services: DesktopFuseServices,
+        val phoneLink: PhoneLinkServer? = null,
+        val safeMode: io.github.matiyaaa.fuse.ui.shell.app.SafeMode? = null,
+    ) : StartState
+    /** Startup failed: [message] says what it means for the user, [detail] is the system's own words. */
+    data class Failed(val message: String, val detail: String? = null) : StartState
 }
 
 /**
@@ -99,20 +105,48 @@ class DesktopSession(
 
     val windowMode: WindowMode get() = if (fullscreen) WindowMode.FULLSCREEN else baseMode
 
+    /** Counts starts that never settled, in Fuse's data folder (see [StartupGuard]). */
+    private val guardFile = File(dirs.data, "startup-guard")
+    private val guard = io.github.matiyaaa.fuse.ui.shell.app.StartupGuard(
+        load = { guardFile.takeIf { it.isFile }?.readText()?.trim()?.toIntOrNull() ?: 0 },
+        save = { n -> guardFile.writeText(n.toString()) },
+    )
+
+    /**
+     * Safe mode when asked (`--safe-mode`, or a file named `safe-mode` in Fuse's data folder, used
+     * once) or after the last starts never settled.
+     */
+    private fun safeMode(): io.github.matiyaaa.fuse.ui.shell.app.SafeMode? {
+        val failing = guard.begin()
+        val recovery = File(dirs.data, "safe-mode")
+        val asked = "--safe-mode" in args || recovery.exists().also { if (it) recovery.delete() }
+        return when {
+            asked -> io.github.matiyaaa.fuse.ui.shell.app.SafeMode(io.github.matiyaaa.fuse.ui.shell.app.SafeMode.Reason.REQUESTED)
+            failing -> io.github.matiyaaa.fuse.ui.shell.app.SafeMode(io.github.matiyaaa.fuse.ui.shell.app.SafeMode.Reason.REPEATED_FAILURES, guard.failedBefore)
+            else -> null
+        }
+    }
+
+    /** This start ran long enough: the next one starts with a clean count. */
+    fun settled() = guard.settle()
+
     /** Builds the services and the store off the UI thread; the splash shows until then. */
     fun start() {
         gamepads.start()
         scope.launch {
             try {
+                val safe = withContext(Dispatchers.IO) { safeMode() }
+                if (safe != null) Log.info("starting in safe mode (${safe.reason})")
                 val services = withContext(Dispatchers.IO) { DesktopFuseServices.create(dirs, scope) }
                 services.launcherHooks.onGameExited = { EventQueue.invokeLater { bringToFront() } }
-                val store = createFuseStore(services, scope)
-                startState = StartState.Ready(store, services, startPhoneLink(store, services))
+                val store = createFuseStore(services, scope, safeMode = safe != null)
+                // Phone Link waits for a normal start: safe mode runs nothing that listens on the network.
+                startState = StartState.Ready(store, services, if (safe == null) startPhoneLink(store, services) else null, safe)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Throwable) {
                 Log.warn("startup failed", e)
-                startState = StartState.Failed(e.message?.takeIf { it.isNotBlank() } ?: e.javaClass.simpleName)
+                startState = StartState.Failed(StartupFailure.explain(e, dirs.data), e.message?.takeIf { it.isNotBlank() } ?: e.javaClass.simpleName)
             }
         }
     }
@@ -243,6 +277,27 @@ class DesktopSession(
 
         override fun trigger(button: PadButton, value: Float) = EventQueue.invokeLater {
             if (focused || value <= 0f) router.trigger(button, value, InputSource.GAMEPAD)
+        }
+    }
+}
+
+/** Words for a start that failed, by what failed: never a bare exception. */
+internal object StartupFailure {
+    fun explain(e: Throwable, dataDir: String): String {
+        val text = generateSequence(e) { it.cause }.mapNotNull { it.message }.joinToString(" ")
+        return when {
+            "newer than this Fuse" in text ->
+                "Your library was last opened by a newer version of Fuse, and this one can't read it without risking it. " +
+                    "Install that version again. Nothing was changed or deleted."
+            "locked" in text.lowercase() || "busy" in text.lowercase() ->
+                "Another copy of Fuse seems to have your library open. Close it, then start Fuse again. Nothing was changed."
+            "readonly" in text.lowercase() || "read-only" in text.lowercase() || "permission" in text.lowercase() ->
+                "Fuse can't write to its data folder ($dataDir). Check that your user can write there, then start Fuse again."
+            "disk" in text.lowercase() && "full" in text.lowercase() ->
+                "The drive Fuse keeps its data on is full. Free some space, then start Fuse again. Nothing was deleted."
+            else ->
+                "Something stopped Fuse from opening your library. Nothing was deleted: your library and settings are in $dataDir. " +
+                    "Start Fuse with --safe-mode to try with everything optional turned off."
         }
     }
 }

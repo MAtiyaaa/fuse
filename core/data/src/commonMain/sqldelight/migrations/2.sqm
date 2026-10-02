@@ -1,0 +1,3 @@
+-- 0.2.0: the drive each library folder lives on (a VolumeRef as JSON), so an unplugged drive reads
+-- as offline instead of every game on it as missing, and a drive mounted under a new path is found.
+ALTER TABLE library_source ADD COLUMN volume_json TEXT;

@@ -204,7 +204,7 @@ fun QuickMenu(app: AppState) {
         if (release != null && !app.store.updates.inPlace) {
             add(QuickRow.Item(MenuAction(
                 "update", "Get ${release.name}", FuseIcons.External, detail = "Opens its release page",
-                onSelect = { close(); app.go(Route.Settings("updates")) },
+                onSelect = { close(); app.go(Route.Settings("about")) },
             )))
         } else if (release != null) {
             val ready = updateState is UpdateState.Ready
@@ -213,9 +213,9 @@ fun QuickMenu(app: AppState) {
                 detail = when (val u = updateState) {
                     is UpdateState.Downloading -> "Downloading" + (u.progress?.let { " ${(it * 100).toInt()}%" } ?: "")
                     is UpdateState.Ready -> "Downloaded and checked"
-                    else -> "Download it in Settings, Updates"
+                    else -> "Download it in Settings, About"
                 },
-                onSelect = { close(); if (ready) app.applyUpdate() else app.go(Route.Settings("updates")) },
+                onSelect = { close(); if (ready) app.applyUpdate() else app.go(Route.Settings("about")) },
             )))
         }
         add(QuickRow.Item(MenuAction(

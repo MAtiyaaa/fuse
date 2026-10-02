@@ -41,7 +41,11 @@ import kotlinx.coroutines.withContext
 /** Where app start-up is. Activities show a plain splash until [Ready]. */
 sealed interface Startup {
     data object Loading : Startup
-    data class Ready(val store: FuseStore, val phoneLink: PhoneLinkControl? = null) : Startup
+    data class Ready(
+        val store: FuseStore,
+        val phoneLink: PhoneLinkControl? = null,
+        val safeMode: io.github.matiyaaa.fuse.ui.shell.app.SafeMode? = null,
+    ) : Startup
     data class Failed(val message: String) : Startup
 }
 
@@ -72,7 +76,7 @@ class FuseApplication : Application(), SingletonImageLoader.Factory {
     lateinit var services: AndroidFuseServices
         private set
 
-    val platformUi: AndroidPlatformUi by lazy { AndroidPlatformUi(this, activities, appScope, services.volumes, crashLog) }
+    val platformUi: AndroidPlatformUi by lazy { AndroidPlatformUi(this, activities, appScope, services.storageVolumes, crashLog) }
 
     /** The second-screen companion, shared by the main screen and the game launcher. */
     val companions: CompanionScreens by lazy { CompanionScreens(this) }
@@ -91,19 +95,58 @@ class FuseApplication : Application(), SingletonImageLoader.Factory {
         http = FuseHttp.client(OkHttp.create(), FuseHttpConfig(appVersion = BuildConfig.VERSION_NAME))
         services = AndroidFuseServices(this, data, http, appScope, activities, companions)
 
+    }
+
+    /**
+     * Counts interface starts that never settled, in private preferences written synchronously, so
+     * a crash right after still finds the count (see [StartupGuard]).
+     */
+    private val guard by lazy {
+        val prefs = getSharedPreferences("startup", MODE_PRIVATE)
+        io.github.matiyaaa.fuse.ui.shell.app.StartupGuard(
+            load = { prefs.getInt("unsettled", 0) },
+            save = { n -> prefs.edit().putInt("unsettled", n).commit() },
+        )
+    }
+
+    @Volatile private var started = false
+
+    /**
+     * Starts the store, once, when an interface first shows: the process can also start in the
+     * background (an install result, the system checking Fuse), and only interface starts count
+     * towards safe mode. [askedSafe] is the launcher shortcut "Start in safe mode".
+     */
+    @Synchronized
+    fun beginInterface(askedSafe: Boolean) {
+        if (started) return
+        started = true
+        val failing = guard.begin()
+        val safe = when {
+            askedSafe -> io.github.matiyaaa.fuse.ui.shell.app.SafeMode(io.github.matiyaaa.fuse.ui.shell.app.SafeMode.Reason.REQUESTED)
+            failing -> io.github.matiyaaa.fuse.ui.shell.app.SafeMode(io.github.matiyaaa.fuse.ui.shell.app.SafeMode.Reason.REPEATED_FAILURES, guard.failedBefore)
+            else -> null
+        }
         appScope.launch {
             _startup.value = try {
-                val store = createFuseStore(services, appScope)
-                Startup.Ready(store, startPhoneLink(store))
+                val store = createFuseStore(services, appScope, safeMode = safe != null)
+                // Safe mode runs nothing that listens on the network.
+                Startup.Ready(store, if (safe == null) startPhoneLink(store) else null, safe)
             } catch (e: CancellationException) {
                 throw e
             } catch (t: Throwable) {
                 Log.e(TAG, "Fuse could not start: ${t.javaClass.name}")
-                Startup.Failed("Fuse could not load its library and settings (${t.javaClass.simpleName}).")
+                crashLog.recordNonFatal(t)
+                Startup.Failed(
+                    "Fuse couldn't open your library and settings. Nothing was deleted. " +
+                        "Long-press Fuse's icon and choose Start in safe mode, or restart the device and try again.",
+                )
             }
             (_startup.value as? Startup.Ready)?.store?.let(::followLowPower)
         }
     }
+
+    /** This start ran long enough, or Fuse went to the background normally: the next start counts from zero. */
+    fun settled() = guard.settle()
 
     /**
      * Phone Link's server. It follows the switch in Settings and lives as long as the process, so a

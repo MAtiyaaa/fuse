@@ -28,6 +28,10 @@ data class UiPrefs(
     val glass: GlassSettings = GlassSettings(),
     val crt: CrtSettings = CrtSettings(),
     val highContrastFocus: Boolean = false,
+    /** Text size: 1 as designed, 1.15 (Large) or 1.3 (Extra large). */
+    val textScale: Float = 1f,
+    /** Room kept clear at every edge, in percent, for TVs that cut the picture's edges off. */
+    val screenMargin: Int = 0,
     val home: HomeLayoutConfig = HomeLayoutConfig(),
     val destinations: List<Destination> = Destination.entries,
     val defaultLayout: LibraryLayout = LibraryLayout.ICON,

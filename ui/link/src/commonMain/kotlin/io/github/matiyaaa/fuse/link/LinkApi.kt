@@ -88,7 +88,7 @@ internal class LinkApi(
         return when (val r = auth.login(username, password)) {
             is LoginResult.Ok -> Login.Ok(r.token)
             LoginResult.Wrong -> Login.Failed(error("The username and password don't match the ones set on the device."), HttpStatusCode.Unauthorized)
-            LoginResult.NoAccount -> Login.Failed(error("Phone Link has no account yet. Set one on the device in Settings, Phone Link."), HttpStatusCode.Unauthorized)
+            LoginResult.NoAccount -> Login.Failed(error("Phone Link has no account yet. Set one on the device in Settings, Accounts, Phone Link."), HttpStatusCode.Unauthorized)
             is LoginResult.Locked -> Login.Failed(
                 buildJsonObject {
                     put("error", "Too many tries. Wait a minute, then try again.")

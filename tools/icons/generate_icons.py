@@ -92,6 +92,16 @@ ICONS = {
     "LifeBuoy": "life-buoy", "BookOpen": "book-open",
     # Keyboard.
     "Space": "space",
+    # 0.2.0 The Everything Update: drives, health, backups, patches, variants and text size.
+    "Usb": "usb", "SdCard": "card-sim", "HardDriveDownload": "hard-drive-download", "FolderSync": "folder-sync",
+    "FolderX": "folder-x", "HeartPulse": "heart-pulse", "Stethoscope": "stethoscope", "ShieldAlert": "shield-alert",
+    "BadgeAlert": "badge-alert", "FileWarning": "file-warning", "FileSearch": "file-search", "Bug": "bug",
+    "ClipboardList": "clipboard-list", "ClipboardCheck": "clipboard-check", "ArchiveRestore": "archive-restore",
+    "DatabaseBackup": "database-backup", "SaveCheck": "save-check", "PackageCheck": "package-check",
+    "PackageOpen": "package-open", "Bandage": "bandage", "GitCompare": "git-compare", "Group": "group",
+    "Ungroup": "ungroup", "Layers2": "layers-2", "Boxes": "boxes", "TextSize": "a-large-small",
+    "ListRestart": "list-restart", "ZapOff": "zap-off", "ChartBar": "chart-bar", "CalendarDays": "calendar-days",
+    "FilterX": "filter-x", "Tags": "tags", "ScanEye": "scan-eye", "MonitorCheck": "monitor-check", "ServerCog": "server-cog",
 }
 
 NUM = r"-?(?:\d+\.?\d*|\.\d+)(?:e-?\d+)?"

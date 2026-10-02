@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -45,6 +46,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import io.github.matiyaaa.fuse.integrations.KeyCheck
 import io.github.matiyaaa.fuse.model.NavAction
 import io.github.matiyaaa.fuse.ui.designsystem.components.FText
 import io.github.matiyaaa.fuse.ui.designsystem.components.Hint
@@ -72,6 +74,7 @@ import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.FocusZone
 import io.github.matiyaaa.fuse.ui.shell.app.Route
 import io.github.matiyaaa.fuse.ui.shell.app.rememberPageState
+import io.github.matiyaaa.fuse.ui.shell.store.Severity
 import kotlin.math.ceil
 
 /** One settings section: an id used in routes, a label and its rows. */
@@ -83,8 +86,10 @@ class SettingsSection(
     val rows: @Composable (AppState) -> List<MenuAction>,
     /** False on devices the section means nothing on (Cartridge on Windows and macOS). */
     val available: (AppState) -> Boolean = { true },
-    /** The heading the section is listed under, so eighteen sections read as five groups. */
+    /** The heading the section is listed under, so twelve sections read as five groups. */
     val group: String? = null,
+    /** What the section's row in the list shows on its right: how many findings, an update. Nothing when all is well. */
+    val status: @Composable (AppState) -> Trailing = { Trailing.None },
 )
 
 /** Where Settings is: the section, the row, and whether the rows have focus. */
@@ -92,37 +97,82 @@ private class SettingsPlace(section: Int, rows: Boolean) {
     val sectionSel = LinearSelection(section)
     val rowSel = LinearSelection()
     var inRows by mutableStateOf(rows)
+
+    /** The row asked for has been chosen; coming back keeps wherever the user went since. */
+    var landed = false
 }
 
-private const val LOOK = "Look and feel"
+private const val PERSONAL = "Personalize"
 private const val GAMES = "Games"
 private const val DEVICE = "This device"
 private const val CONNECTIONS = "Connections"
 private const val GENERAL = "General"
 
 val settingsSections: List<SettingsSection> = listOf(
-    SettingsSection("appearance", "Appearance", FuseIcons.Palette, "Theme, motion, glass, CRT", ::appearanceRows, group = LOOK),
-    SettingsSection("home", "Home", FuseIcons.Home, "Style, rows or widgets, top bar", ::homeRows, group = LOOK),
-    SettingsSection("library", "Library", FuseIcons.Library, "Folders, scanning, names", ::libraryRows, group = GAMES),
-    SettingsSection("systems", "Systems", FuseIcons.Chip, "Per-system emulator, folders, BIOS", ::systemsRows, group = GAMES),
-    SettingsSection("emulators", "Emulators", FuseIcons.Joystick, "What Fuse found installed", ::emulatorRows, group = GAMES),
-    SettingsSection("media", "Media and Scraping", FuseIcons.Images, "Art sources, keys, matching, previews", ::mediaRows, group = GAMES),
-    SettingsSection("achievements", "Achievements", FuseIcons.Trophy, "RetroAchievements", ::achievementRows, group = GAMES),
-    SettingsSection("cartridge", "Cartridge", FuseIcons.CloudDownload, "Your RomM companion", ::cartridgeRows, available = { it.platform.features.cartridge }, group = GAMES),
-    SettingsSection("inputs", "Inputs", FuseIcons.Gamepad, "Buttons, layout, repeat", ::inputRows, group = DEVICE),
-    SettingsSection("sound", "Sound", FuseIcons.Music, "Menu music and interface sounds", ::soundRows, group = DEVICE),
-    SettingsSection("displays", "Displays", FuseIcons.DualScreen, "Second screen and launching", ::displayRows, group = DEVICE),
-    SettingsSection("performance", "Performance and Power", FuseIcons.Gauge, "Profile and Low Power Mode", ::performanceRows, group = DEVICE),
-    SettingsSection("network", "Network", FuseIcons.Wifi, "What Fuse connects to", ::networkRows, group = CONNECTIONS),
-    SettingsSection("phonelink", "Phone Link", FuseIcons.Smartphone, "Your library from a phone on the same Wi-Fi", ::phoneLinkRows, group = CONNECTIONS),
-    SettingsSection("storage", "Storage", FuseIcons.HardDrive, "File access and caches", ::storageRows, group = GENERAL),
-    SettingsSection("privacy", "Privacy", FuseIcons.ShieldCheck, "No telemetry, where data goes", ::privacyRows, group = GENERAL),
-    SettingsSection("updates", "Updates", FuseIcons.Download, "New versions of Fuse", ::updateRows, group = GENERAL),
-    SettingsSection("about", "About", FuseIcons.Info, "Version, licences, setup", ::aboutRows, group = GENERAL),
+    SettingsSection("appearance", "Appearance", FuseIcons.Palette, "Theme, game art, glass and CRT", ::appearanceRows, group = PERSONAL),
+    SettingsSection("accessibility", "Accessibility", FuseIcons.Accessibility, "Text size, screen edges, motion, focus", ::accessibilityRows, group = PERSONAL),
+    SettingsSection("home", "Home", FuseIcons.Home, "Style, rows or widgets, top bar", ::homeRows, group = PERSONAL),
+    SettingsSection("library", "Library", FuseIcons.Library, "Folders, scanning, browsing, names", ::libraryRows, group = GAMES),
+    SettingsSection("systems", "Systems and emulators", FuseIcons.Chip, "Each system, and the emulators found", ::systemsRows, group = GAMES),
+    SettingsSection("media", "Art and details", FuseIcons.Images, "Filling art, previews, sources and keys", ::mediaRows, group = GAMES, status = ::mediaStatus),
+    SettingsSection("inputs", "Controls", FuseIcons.Gamepad, "Buttons, mapping, repeat and sticks", ::inputRows, group = DEVICE),
+    SettingsSection("displays", "Screen and sound", FuseIcons.Monitor, "Music, sounds, screens, performance", ::screenAndSoundRows, group = DEVICE),
+    SettingsSection("accounts", "Accounts", FuseIcons.CircleUser, "RetroAchievements, Cartridge, Phone Link", ::accountsRows, group = CONNECTIONS),
+    SettingsSection("health", "System health", FuseIcons.HeartPulse, "What needs attention, and a bug report", ::healthRows, group = GENERAL, status = ::healthStatus),
+    SettingsSection("storage", "Storage and backups", FuseIcons.HardDrive, "File access, drives, backup and restore", ::storageAndBackupRows, group = GENERAL),
+    SettingsSection("about", "About", FuseIcons.Info, "Updates, privacy, licences, setup", ::aboutRows, group = GENERAL, status = ::aboutStatus),
 )
 
 /**
- * Settings as two panes: the sections on the room at the left, listed under five headings, and the
+ * Sections 0.2.0 folded into others, by their old ids, so a link to one (a problem's "Open
+ * settings", an older route) still lands in the right place.
+ */
+val settingsAliases: Map<String, String> = mapOf(
+    "emulators" to "systems",
+    "sound" to "displays",
+    "performance" to "displays",
+    "achievements" to "accounts",
+    "cartridge" to "accounts",
+    "phonelink" to "accounts",
+    "backup" to "storage",
+    "updates" to "about",
+    "privacy" to "about",
+    "network" to "about",
+)
+
+/** The section [id] names now, following [settingsAliases]. */
+fun settingsSectionId(id: String?): String? = id?.let { settingsAliases[it] ?: it }
+
+/** Opens Settings on [section] (an old id works too), with [group] unfolded so [row] can be landed on. */
+fun AppState.openSettings(section: String, row: String? = null, group: String? = null) {
+    if (group != null) openGroups[group] = true
+    go(Route.Settings(settingsSectionId(section), row))
+}
+
+/** How many findings need attention or fixing; notes alone show nothing. */
+@Composable
+private fun healthStatus(app: AppState): Trailing {
+    val n = rememberHealthIssues(app).count { it.problem.severity >= Severity.ATTENTION }
+    return if (n > 0) Trailing.Badge(n.toString()) else Trailing.None
+}
+
+/** An update waiting to be downloaded or installed. */
+@Composable
+private fun aboutStatus(app: AppState): Trailing {
+    val available by app.store.updates.available.collectAsState()
+    return if (available != null) Trailing.Badge("Update") else Trailing.None
+}
+
+/** A source whose key was turned down. */
+@Composable
+private fun mediaStatus(app: AppState): Trailing {
+    val checks by app.store.media.keyChecks.collectAsState()
+    val rejected = checks.values.count { it is KeyCheck.Rejected }
+    return if (rejected > 0) Trailing.Badge(rejected.toString()) else Trailing.None
+}
+
+/**
+ * Settings as two panes: the twelve sections on the room at the left, listed under five headings, and the
  * chosen section's settings on a panel at the right. Both lists glide their highlight from row to
  * row, and the section keeps a quiet marker while its rows have focus. Everything applies
  * immediately; there is no Save button. Settings that can differ per system or per game say where
@@ -133,11 +183,12 @@ val settingsSections: List<SettingsSection> = listOf(
  * so more rows fit.
  */
 @Composable
-fun SettingsScreen(app: AppState, initialSection: String?) {
+fun SettingsScreen(app: AppState, initialSection: String?, initialRow: String? = null) {
     val sections = remember { settingsSections.filter { it.available(app) } }
     // Back from a screen Settings opened (a file picker, Storage) returns to the same row.
-    val place = rememberPageState(app.navigator, "settings.${initialSection.orEmpty()}") {
-        SettingsPlace(sections.indexOfFirst { it.id == initialSection }.coerceAtLeast(0), initialSection != null)
+    val place = rememberPageState(app.navigator, "settings.${initialSection.orEmpty()}.${initialRow.orEmpty()}") {
+        val id = settingsSectionId(initialSection)
+        SettingsPlace(sections.indexOfFirst { it.id == id }.coerceAtLeast(0), initialSection != null)
     }
     val sectionSel = place.sectionSel
     val rowSel = place.rowSel
@@ -145,6 +196,11 @@ fun SettingsScreen(app: AppState, initialSection: String?) {
     val section = sections[sectionSel.index]
     val rows = section.rows(app)
     rowSel.clamp(rows.size)
+    if (!place.landed && initialRow != null) {
+        val at = rows.indexOfFirst { it.label == initialRow }
+        if (at >= 0) rowSel.index = at
+        place.landed = true
+    }
 
     LaunchedEffect(inRows, section.id) {
         app.hero = null
@@ -176,12 +232,14 @@ fun SettingsScreen(app: AppState, initialSection: String?) {
     // Appearance leads with the theme in use; selecting the card opens every theme, as the Theme row does.
     val openThemes: (() -> Unit)? = if (section.id == "appearance") ({ app.go(Route.Themes) }) else null
 
+    val statuses = sections.map { it.status(app) }
+
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val narrow = maxWidth < NARROW_BELOW
         val short = maxHeight < SHORT_BELOW
         // On a narrow screen the sections have the whole width, so each says what is in it.
-        val sectionRows = sections.map { s ->
-            MenuAction(s.id, s.label, s.icon, detail = s.summary.takeIf { narrow }, section = s.group, onSelect = {
+        val sectionRows = sections.mapIndexed { i, s ->
+            MenuAction(s.id, s.label, s.icon, detail = s.summary.takeIf { narrow }, trailing = statuses[i], section = s.group, onSelect = {
                 sectionSel.index = sections.indexOf(s)
                 rowSel.index = 0
                 inRows = true

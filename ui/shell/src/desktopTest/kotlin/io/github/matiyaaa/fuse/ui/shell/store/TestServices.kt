@@ -48,7 +48,8 @@ internal class FakeServices(
     var exit: CompletableDeferred<Unit>? = null
 
     override val appVersion = "0.0.1"
-    override val fs: FuseFileSystem = JavaFileSystem()
+    val javaFs = JavaFileSystem()
+    override val fs: FuseFileSystem = javaFs
     override val secrets: SecretStore = MemorySecrets()
     /** Hosts of every request made, in order (nothing is found anywhere). */
     val requestHosts: MutableList<String> = java.util.Collections.synchronizedList(mutableListOf())
@@ -59,6 +60,14 @@ internal class FakeServices(
         } else if (request.url.host == "raw.githubusercontent.com" && request.url.encodedPath == "/someone/themes/main/ember.json") {
             // A shared theme, as GitHub serves the file behind a page link.
             respond("""{"fuseTheme": 1, "name": "Ember", "colors": {"accent": "#FF7A59"}}""", HttpStatusCode.OK)
+        } else if (request.url.host == "rpcs3.net" && request.url.parameters["g"] == "BLUS30443") {
+            respond(
+                """{"return_code": 0, "results": {"BLUS30443": {"title": "Demon's Souls", "status": "Playable", "date": "2020-05-04", "thread": 194290}}}""",
+                HttpStatusCode.OK,
+            )
+        } else if (request.url.host == "rpcs3.net") {
+            // An id the list doesn't know: it searches text instead and answers with another game.
+            respond("""{"return_code": 2, "search_term": "x", "results": {"BLES00917": {"title": "F1 2010", "status": "Playable"}}}""", HttpStatusCode.OK)
         } else if (request.url.host == "raw.githubusercontent.com" && request.url.encodedPath.endsWith("/big.json")) {
             respond("x".repeat(70_000), HttpStatusCode.OK)
         } else {
@@ -140,6 +149,39 @@ internal class FakeServices(
         return file.absolutePath
     }
 
+    override suspend fun readFile(path: String, maxBytes: Int): ByteArray? =
+        File(path).takeIf { it.isFile && it.length() <= maxBytes }?.readBytes()
+
+    override suspend fun keepFile(relativePath: String, bytes: ByteArray): String? {
+        require(!relativePath.contains("..")) { "Kept files never leave the data folder" }
+        val file = File(cache, "kept/$relativePath")
+        file.parentFile.mkdirs()
+        file.writeBytes(bytes)
+        return file.absolutePath
+    }
+
+    /** Where the fake PCSX2 keeps its data; null when it isn't set up. */
+    @Volatile var pcsx2Home: io.github.matiyaaa.fuse.launch.patches.Pcsx2Home? = null
+
+    override val emulatorFiles = object : EmulatorFiles {
+        override suspend fun pcsx2(installed: InstalledEmulator) = pcsx2Home
+        override suspend fun zipText(zip: String, entry: String): String? =
+            java.util.zip.ZipFile(zip).use { z -> z.getEntry(entry)?.let { e -> z.getInputStream(e).use { it.readBytes().decodeToString() } } }
+        override suspend fun write(path: String, text: String): Boolean {
+            val root = pcsx2Home?.dataRoot ?: return false
+            if (!path.startsWith("$root/")) return false
+            File(path).also { it.parentFile.mkdirs() }.writeText(text)
+            return true
+        }
+    }
+
+    /** The drives the fake system reports; null reports none, like a host that can't tell. */
+    @Volatile var drives: List<io.github.matiyaaa.fuse.model.StorageVolume>? = null
+
+    override val volumes = object : VolumeMonitor {
+        override suspend fun volumes() = drives.orEmpty()
+    }
+
     override fun utcOffsetMillis() = 0L
 }
 
@@ -164,9 +206,13 @@ internal class MemorySecrets : SecretStore {
 }
 
 internal class JavaFileSystem : FuseFileSystem {
+    /** Runs before each listing, so a test can change the world in the middle of a scan. */
+    @Volatile var beforeList: ((String) -> Unit)? = null
+
     override suspend fun delete(path: String): Boolean = File(path).let { !it.exists() || it.deleteRecursively() }
 
     override suspend fun list(path: String): List<FsEntry> {
+        beforeList?.invoke(path)
         val dir = File(path)
         val children = dir.listFiles() ?: throw FsAccessException(path, "Unreadable")
         return children.map { FsEntry(it.name, it.absolutePath, it.isDirectory, it.length(), it.lastModified()) }
@@ -178,6 +224,14 @@ internal class JavaFileSystem : FuseFileSystem {
 
     override suspend fun readText(path: String, maxBytes: Int): String? = File(path).takeIf { it.isFile }?.let {
         it.inputStream().use { s -> String(s.readNBytes(maxBytes)) }
+    }
+
+    override suspend fun readBytes(path: String, offset: Long, length: Int): ByteArray? = File(path).takeIf { it.isFile }?.let { f ->
+        java.io.RandomAccessFile(f, "r").use { r ->
+            if (offset >= r.length()) return@use ByteArray(0)
+            r.seek(offset)
+            ByteArray(minOf(length.toLong(), r.length() - offset).toInt()).also { r.readFully(it) }
+        }
     }
 
     override suspend fun md5(path: String): String? = null

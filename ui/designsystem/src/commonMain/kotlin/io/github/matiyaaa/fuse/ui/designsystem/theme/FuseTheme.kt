@@ -92,10 +92,11 @@ fun FuseTheme(
     glass: GlassSettings? = null,
     highContrastFocus: Boolean = false,
     animateChanges: Boolean = false,
+    textScale: Float = 1f,
     content: @Composable () -> Unit,
 ) {
     if (!animateChanges) {
-        FuseThemeLocals(spec, motion, quality, glyphs, glass, highContrastFocus, content)
+        FuseThemeLocals(spec, motion, quality, glyphs, glass, highContrastFocus, textScale, content)
         return
     }
     val reduced = (motion ?: spec.motion) == MotionProfile.REDUCED
@@ -103,7 +104,7 @@ fun FuseTheme(
         requested = ThemeLookKey(spec, glass, highContrastFocus),
         animate = !reduced && quality.animatedBackground,
     ) { shown ->
-        FuseThemeLocals(shown.spec, motion, quality, glyphs, shown.glass, shown.highContrastFocus, content)
+        FuseThemeLocals(shown.spec, motion, quality, glyphs, shown.glass, shown.highContrastFocus, textScale, content)
     }
 }
 
@@ -115,6 +116,7 @@ private fun FuseThemeLocals(
     glyphs: GlyphConfig,
     glass: GlassSettings?,
     highContrastFocus: Boolean,
+    textScale: Float,
     content: @Composable () -> Unit,
 ) {
     val colors = remember(spec) { FuseColors.from(spec.palette) }
@@ -128,7 +130,7 @@ private fun FuseThemeLocals(
             highContrastFocus = highContrastFocus,
         )
     }
-    val type = rememberFuseTypography()
+    val type = rememberFuseTypography(textScale)
     val motionSpec = remember(motion, spec.motion) { FuseMotion(motion ?: spec.motion) }
     val selection = remember(colors) { TextSelectionColors(colors.accent, colors.accent.copy(alpha = 0.3f)) }
     CompositionLocalProvider(

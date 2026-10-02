@@ -1,5 +1,6 @@
 package io.github.matiyaaa.fuse.data
 
+import io.github.matiyaaa.fuse.data.backup.BackupRepository
 import io.github.matiyaaa.fuse.data.db.FuseDatabase
 import io.github.matiyaaa.fuse.data.repo.AppOverrideRepository
 import io.github.matiyaaa.fuse.data.repo.CacheRepository
@@ -9,8 +10,10 @@ import io.github.matiyaaa.fuse.data.repo.GameRepository
 import io.github.matiyaaa.fuse.data.repo.LibraryIndexer
 import io.github.matiyaaa.fuse.data.repo.LibrarySourceRepository
 import io.github.matiyaaa.fuse.data.repo.MediaRepository
+import io.github.matiyaaa.fuse.data.repo.OwnedChangesRepository
 import io.github.matiyaaa.fuse.data.repo.PlaySessionRepository
 import io.github.matiyaaa.fuse.data.repo.TitleCleanupRepository
+import io.github.matiyaaa.fuse.data.search.SearchRepository
 import io.github.matiyaaa.fuse.data.settings.ScopedSettingsRepository
 import io.github.matiyaaa.fuse.data.settings.SettingsStore
 import kotlinx.coroutines.CoroutineDispatcher
@@ -36,4 +39,7 @@ class FuseData(
     val titleCleanup by lazy { TitleCleanupRepository(database, dispatcher, clock) }
     val settings by lazy { SettingsStore(database, dispatcher, clock) }
     val scopedSettings by lazy { ScopedSettingsRepository(database, settings, dispatcher, clock) }
+    val backup by lazy { BackupRepository(database, dispatcher, clock) }
+    val search by lazy { SearchRepository(database, dispatcher) }
+    val owned by lazy { OwnedChangesRepository(database, dispatcher, clock) }
 }

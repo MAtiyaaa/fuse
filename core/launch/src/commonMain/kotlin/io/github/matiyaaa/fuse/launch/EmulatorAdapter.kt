@@ -87,7 +87,7 @@ interface EmulatorAdapter {
     val platforms: Set<PlatformId>
     val capabilities: AdapterCapabilities
 
-    /** Human readable caveats, shown in Settings -> Emulators. */
+    /** Human readable caveats, shown in Settings, Systems and emulators. */
     val limitations: List<String>
 
     /** Where the launch description comes from (ES-DE commit, source file, vendor doc). */
@@ -106,6 +106,13 @@ interface EmulatorAdapter {
     /** Always available without detection (native Android apps, Linux `.desktop` shortcuts). */
     val builtIn: Boolean get() = false
 
+    /**
+     * Opens shortcuts and programs of their own (a `.desktop`, `.lnk` or `.app`), not a system's
+     * games: it only counts as a system's emulator where [EmulatorPriority] names it (Steam and PC
+     * games), never for a console just because it accepts any system's shortcuts.
+     */
+    val shortcutsOnly: Boolean get() = false
+
     /** True when this adapter can never start a specific game and only opens the app. */
     val opensAppOnly: Boolean get() = false
 
@@ -114,6 +121,18 @@ interface EmulatorAdapter {
 
     /** Emulator-specific wording for where to install [kind] content (for example "Install to NAND"). */
     fun installHint(kind: ContentKind): String? = null
+
+    /** File types it installs from its command line (`pkg`), empty when it can't. */
+    val packageExtensions: Set<String> get() = emptySet()
+
+    /** True when installing a package needs its licence key (Vita3K's zRIF). */
+    val packageNeedsKey: Boolean get() = false
+
+    /**
+     * The command that installs the package at [path] in [installed], with [key] when it needs one;
+     * null when it can't install that file. Nothing is run here.
+     */
+    fun packageInstall(installed: InstalledEmulator, path: String, key: String? = null): LaunchPlan.Command? = null
 
     /** Describes how to start [LaunchRequest.game]. Pure: no I/O, nothing is launched. */
     fun plan(request: LaunchRequest): LaunchPlan

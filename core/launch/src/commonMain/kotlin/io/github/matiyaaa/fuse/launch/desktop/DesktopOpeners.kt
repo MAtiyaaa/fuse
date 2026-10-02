@@ -33,6 +33,7 @@ object WindowsShortcutAdapter : EmulatorAdapter {
     override val confidence = Confidence.VERIFIED_ESDE
     override val homepage: String? = null
     override val builtIn = true
+    override val shortcutsOnly = true
 
     val extensions = setOf("exe", "lnk", "url", "bat", "cmd")
 
@@ -87,6 +88,7 @@ object MacOpenAdapter : EmulatorAdapter {
     override val confidence = Confidence.VERIFIED_ESDE
     override val homepage: String? = null
     override val builtIn = true
+    override val shortcutsOnly = true
 
     private val scripts = setOf("command", "sh")
 

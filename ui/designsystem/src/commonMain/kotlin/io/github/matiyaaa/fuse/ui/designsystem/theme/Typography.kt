@@ -55,8 +55,12 @@ data class FuseTypography(
  */
 fun TextStyle.tabular(): TextStyle = copy(fontFeatureSettings = "tnum")
 
+/**
+ * The type scale. [textScale] enlarges it for reading from further away: reading text by the
+ * whole amount, titles (already large) by half of it.
+ */
 @Composable
-fun rememberFuseTypography(): FuseTypography {
+fun rememberFuseTypography(textScale: Float = 1f): FuseTypography {
     val sora = FontFamily(
         Font(Res.font.sora_medium, FontWeight.Medium),
         Font(Res.font.sora_semibold, FontWeight.SemiBold),
@@ -68,19 +72,20 @@ fun rememberFuseTypography(): FuseTypography {
         Font(Res.font.manrope_semibold, FontWeight.SemiBold),
         Font(Res.font.manrope_bold, FontWeight.Bold),
     )
-    return remember(sora, manrope) { fuseTypography(sora, manrope) }
+    return remember(sora, manrope, textScale) { fuseTypography(sora, manrope, textScale) }
 }
 
-private fun fuseTypography(sora: FontFamily, manrope: FontFamily): FuseTypography {
+private fun fuseTypography(sora: FontFamily, manrope: FontFamily, scale: Float): FuseTypography {
+    val titleScale = 1f + (scale - 1f) / 2f
     val trim = LineHeightStyle(LineHeightStyle.Alignment.Center, LineHeightStyle.Trim.Both)
     // Titles balance their lines where the platform can, so a wrapped title never leaves a single
     // word on its last line. Reading text keeps the platform's quicker default.
-    fun display(size: Int, line: Int, weight: FontWeight, tracking: Double) = TextStyle(
-        fontFamily = sora, fontWeight = weight, fontSize = size.sp, lineHeight = line.sp,
+    fun display(size: Int, line: Int, weight: FontWeight, tracking: Double, k: Float = titleScale) = TextStyle(
+        fontFamily = sora, fontWeight = weight, fontSize = (size * k).sp, lineHeight = (line * k).sp,
         letterSpacing = tracking.em, lineHeightStyle = trim, lineBreak = LineBreak.Heading,
     )
     fun text(size: Int, line: Int, weight: FontWeight, tracking: Double = 0.0) = TextStyle(
-        fontFamily = manrope, fontWeight = weight, fontSize = size.sp, lineHeight = line.sp,
+        fontFamily = manrope, fontWeight = weight, fontSize = (size * scale).sp, lineHeight = (line * scale).sp,
         letterSpacing = tracking.em, lineHeightStyle = trim,
     )
     return FuseTypography(
@@ -93,8 +98,8 @@ private fun fuseTypography(sora: FontFamily, manrope: FontFamily): FuseTypograph
         label = text(13, 18, FontWeight.SemiBold, 0.005),
         caption = text(12, 16, FontWeight.Medium, 0.01),
         overline = text(11, 14, FontWeight.Bold, 0.14),
-        numeric = display(15, 20, FontWeight.SemiBold, 0.0).tabular(),
+        numeric = display(15, 20, FontWeight.SemiBold, 0.0, scale).tabular(),
         numericLarge = display(40, 44, FontWeight.SemiBold, -0.02).tabular(),
-        numericSmall = display(12, 16, FontWeight.SemiBold, 0.01).tabular(),
+        numericSmall = display(12, 16, FontWeight.SemiBold, 0.01, scale).tabular(),
     )
 }

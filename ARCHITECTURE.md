@@ -20,6 +20,11 @@ they start at the repository root.
 - [Input routing](#input-routing)
 - [Selection models](#selection-models)
 - [FuseStore and FuseServices](#fusestore-and-fuseservices)
+- [Drives](#drives)
+- [Health, problems and safe mode](#health-problems-and-safe-mode)
+- [Backups](#backups)
+- [Search](#search)
+- [Emulator files and patches](#emulator-files-and-patches)
 - [Database and migrations](#database-and-migrations)
 - [Security model](#security-model)
 - [Threading](#threading)
@@ -329,15 +334,19 @@ The interface and the platform meet through three interfaces in `ui:shell`:
 
 - **`FuseStore`** (`store/FuseStore.kt`) is everything the interface reads and does: preferences,
   library, sources and scans, emulators, media, collections, achievements, apps, Cartridge, scoped
-  settings, credentials and updates. Reads are `StateFlow`s or `Flow`s; writes are suspend functions
+  settings, credentials, updates, storage, themes, System health (`HealthOps`) and backups
+  (`BackupOps`). Reads are `StateFlow`s or `Flow`s; writes are suspend functions
   or fire-and-forget calls that run on background dispatchers. Screens only talk to this interface.
 - **`FuseServices`** (`store/FuseServices.kt`) is what the shared store needs from the operating
   system: the database (`FuseData`), a `FuseFileSystem` (read-only except the Storage screen's delete), the `SecretStore`, the shared
   `HttpClient`, Fuse's cache directory, and the `EmulatorDetector`, `GameLauncher`, `CartridgeBridge`,
-  `ReleaseInstaller`, `AppsProvider` and `DeviceLocations` implementations.
+  `ReleaseInstaller`, `AppsProvider` and `DeviceLocations` implementations, the `VolumeMonitor` that
+  reports mounted drives, ranged binary reads (`FuseFileSystem.readBytes`) for disc images, kept files
+  outside the cache (`keepFile`, for restored pictures), and `EmulatorFiles` for the few emulator
+  settings Fuse changes on request (desktop only).
 - **`PlatformUi`** (`platform/PlatformUi.kt`) is what the interface can ask of the system directly:
   status, displays, performance metrics, sounds, haptics, the Home role, storage access, quick
-  controls, video previews. A missing capability is reported in `PlatformFeatures` and its screens
+  controls, video previews, and the system's save and open dialogs (`saveFile`, `openFile`). A missing capability is reported in `PlatformFeatures` and its screens
   are hidden rather than shown broken.
 
 `DefaultFuseStore` composes `core:library`, `core:launch`, `core:integrations` and `core:data` over a
@@ -347,14 +356,101 @@ apps. `createFuseStore` in `store/StoreFactory.kt` is its entry point. It is tes
 sessions, playlists written only to the cache, persisted settings, and UI flows driven by controller
 presses.
 
+## Drives
+
+`core:library/storage/Volumes.kt` holds the rules; each app reports its drives through `VolumeMonitor`
+(Linux mountinfo with `/dev/disk/by-uuid`, by-label and sysfs; Windows volume serials; macOS
+`diskutil`; Android `StorageManager` volumes and media broadcasts). Every `StorageVolume` has a stable
+id (`uuid:`, `vsn:`, `android:`), or a weak `mount:` id when the system gives none.
+
+- A library folder remembers its drive as a `VolumeRef` (id, label, kind, its path inside the drive).
+  `Volumes.evaluate` gives each folder a `SourceState`: online, offline, moved, another drive in its
+  place, folder missing, or no access. Only an online folder is scanned, so games on a drive that is
+  out are never marked missing; a scan's results are checked against the drives again before they
+  are applied, for a drive pulled mid-scan.
+- A drive back under another path is followed: `LibrarySourceRepository.relink` moves every stored
+  path of that folder (games, discs, content, local media, folder state) in one transaction, and
+  refuses when the new paths are already taken.
+- Weak ids never make a readable folder offline, and "another drive" needs both drives removable.
+
+## Health, problems and safe mode
+
+- **`Problem`** (`store/UiModels.kt`) is how anything that went wrong is told: a title, what it
+  means, its kind and severity, a reassurance ("nothing was changed"), actions and technical
+  details. Launch failures (`LaunchProblems.kt`), System health findings and start failures all use
+  it, and `ProblemSheet.kt` draws it.
+- **System health** (`store/impl/Health.kt`) follows the store's state for the cheap checks
+  (folders and drives, emulators, firmware, keys, missing games, updates) and reads small text files
+  after scans for the rest (every disc a playlist names, every track a cue or gdi lists). Unknown is
+  never reported as missing.
+- **The diagnostics report** (`DiagnosticsReport.kt`) is built only when asked and shown in full
+  before it is saved or copied. `redact` replaces the home folder with `~`, user folder names with
+  `<user>`, and removes query strings, key and password parameters and bearer tokens.
+- **Safe mode** (`app/SafeMode.kt`): `StartupGuard` counts starts that never settle; after three in
+  a row the interface starts with Fuse's own theme, reduced motion and no automatic work until the
+  user leaves safe mode. Saved settings are never changed by it.
+
+## Backups
+
+`core:data/backup` builds and applies `.fusebackup` files: a zip with `manifest.json`,
+`content.json` and the user's own pictures under `media/`. A backup holds the settings document,
+scoped settings, each game's own changes, collections, user-chosen media and play sessions, never
+games, firmware, secrets or scraped art. Games are named by `GameKey`: their path, their path inside
+the library folder, and their file name, so a library on another card still matches; two candidates
+are never guessed between. A restore runs in one transaction and merges: values the backup sets win,
+values it leaves unset never erase, sessions are never counted twice, and a copy of how settings were
+is kept so they can be put back. Rows recording what Fuse changed in emulators' files (`owned.*`) are
+left out, since on another device the same setting may be the user's own.
+
+## Search
+
+`core:data/search` parses the query (`SearchSyntax`: words plus `key:value` filters, quotes for
+spaces, a filter still being typed), ranks names (`SearchRank`: whole, start, word starts, anywhere,
+initials, then one or two typos by edit distance) and runs both over an in-memory index of the
+library (`SearchRepository`, kept current while search is open). Filters about things outside a game
+(its system, collections and drive) are answered by the store (`SearchStore.kt`), which also turns
+filters into chips and offers values for the filter being typed. Settings are found through
+`SettingsIndex`, which lists sections and the rows people look for with other words for them, and
+the folded group a row sits in, so opening it unfolds that group first.
+
+## Settings
+
+Settings has twelve sections under five headings (Personalize, Games, This device, Connections,
+General), listed in `settingsSections` (`ui:shell/settings/SettingsScreen.kt`). Each section's rows
+come from functions in `settings/Sections.kt`; a section made of several (Screen and sound, Accounts,
+Storage and backups, About) brings them in with `under`, which keeps each function the single owner
+of its rows and gives their ids a prefix so none repeat. Rarely changed settings fold into groups
+(`AppState.group`) whose header always says how they stand ("Default", "3 changed", "1 key
+rejected"), and tuning groups end with a way back to the defaults. A section can show a status on
+its row in the list (findings, a waiting update, a rejected key). Sections merged in 0.2.0 keep
+their old ids in `settingsAliases`, so every older link still lands in the right place.
+
+## Emulator files and patches
+
+Fuse changes an emulator's own files only when the user asks, and only what it can undo exactly.
+
+- **Disc identity** (`core:library/disc`): `PlayStationDisc` reads ISO 9660 images (2048-byte and raw
+  2352-byte sectors) for SYSTEM.CNF and the boot program, giving the serial and PCSX2's CRC by
+  PCSX2's own rules; `ParamSfo` reads PARAM.SFO for PS3 title ids.
+- **PCSX2 patches** (`core:launch/patches`): `Pnach` lists patches as PCSX2 does, `IniText` edits
+  PCSX2's per-game settings without disturbing anything else in them, and `Pcsx2PatchRules` decides
+  who turned each patch on. Fuse turns patches on with `Enable = name` in
+  `gamesettings/SERIAL_CRC.ini` and records each in `OwnedChangesRepository`; it only ever removes a
+  line it recorded, and forgets a record as soon as the user removes that line in PCSX2. The desktop
+  `EmulatorFiles` writes only inside a PCSX2 data folder it found, atomically, keeping the file as it
+  was in Fuse's own data the first time it changes it.
+- **Package installs**: `EmulatorAdapter.packageInstall` builds RPCS3's `--installpkg` and Vita3K's
+  `--pkg ... --zrif ...` commands. The zRIF goes only into Vita3K's arguments; Fuse never stores or
+  logs it.
+
 ## Database and migrations
 
 `core:data` owns one SQLDelight database, `FuseDatabase`, with its schema in
 `core/data/src/commonMain/sqldelight/io/github/matiyaaa/fuse/data/db/*.sq`.
 
-- **Tables** (schema version 2; `migrations/1.sqm` added a game's chosen system, `platform_override`
+- **Tables** (schema version 3; `migrations/1.sqm` added a game's chosen system, `platform_override`
   next to `platform_scanned`, the app type in `app_override.kind`, and `folder_path` in
-  `game_summary`): `library_source`, `game`, `game_content`, `game_disc`, `game_genre`,
+  `game_summary`; `migrations/2.sqm` added `library_source.volume_json`, the drive a folder is on): `library_source`, `game`, `game_content`, `game_disc`, `game_genre`,
   `folder_state`, `media`, `play_session`, `game_collection`, `collection_game`, `setting`,
   `app_override`, `kv_cache`, `title_cleanup_history`, and the view `game_summary`.
 - **Migrations.** The schema snapshot for each released version is kept in
@@ -367,6 +463,10 @@ presses.
   `DesktopDatabase` tracks the version in `PRAGMA user_version`, creates or migrates inside a
   transaction with foreign keys off, refuses a database written by a newer Fuse, and opens runtime
   connections with foreign keys on, WAL and a 5 second busy timeout.
+- **A copy before every upgrade.** Before a database written by an older Fuse is migrated, a
+  consistent copy is kept next to it (`fuse.db.before-v<version>.bak`): `VACUUM INTO` on the desktop,
+  a copy of the closed file and its write-ahead log on Android. A schema problem is never solved by
+  wiping the database.
 - **Settings.** Global settings are one JSON document (`AppSettings`, stored at `(GLOBAL, '', 'app')`
   in `setting`) with a `version` field; unknown fields are ignored and unknown enum values fall back
   to defaults, so older and newer versions can read each other's settings. Scoped settings are rows
@@ -403,6 +503,10 @@ presses.
   discards the download on a mismatch.
 - **No telemetry.** There is no analytics, crash reporting or usage tracking code.
   `PrivacySettings.telemetry` exists only so the Privacy screen can say so, and is always false.
+- **Licence keys stay with the emulator.** A Vita package's zRIF is asked for each time, passed only
+  in Vita3K's arguments and never kept, logged or included in a report or backup.
+- **Emulator files are changed only on request**, inside the emulator's own data folder, with the
+  original kept first; see [Emulator files and patches](#emulator-files-and-patches).
 
 ## Threading
 

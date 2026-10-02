@@ -94,6 +94,58 @@ class AndroidPlatformUi(
         displayMonitor.refresh()
     }
 
+    override suspend fun saveFile(name: String, mimeType: String, bytes: ByteArray): String? {
+        val requests = activities.main ?: return null
+        val uri = requests.createDocument(name, mimeType) ?: return null
+        return kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            try {
+                appContext.contentResolver.openOutputStream(uri, "wt")?.use { it.write(bytes) } ?: return@withContext null
+                displayName(uri)?.first ?: name
+            } catch (e: Exception) {
+                null
+            }
+        }
+    }
+
+    override suspend fun openFile(mimeTypes: List<String>, extensions: List<String>, maxBytes: Long): io.github.matiyaaa.fuse.ui.shell.platform.OpenedFile? {
+        val requests = activities.main ?: return null
+        val uri = requests.openDocument(mimeTypes.ifEmpty { listOf("*/*") }.toTypedArray()) ?: return null
+        return kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            try {
+                val (name, size) = displayName(uri) ?: ("file" to 0L)
+                if (size > maxBytes) return@withContext null
+                val bytes = appContext.contentResolver.openInputStream(uri)?.use { input -> input.readNBytesCompat(maxBytes + 1) } ?: return@withContext null
+                if (bytes.size > maxBytes) null else io.github.matiyaaa.fuse.ui.shell.platform.OpenedFile(name, bytes)
+            } catch (e: Exception) {
+                null
+            }
+        }
+    }
+
+    /** A document's name and size as its provider reports them. */
+    private fun displayName(uri: android.net.Uri): Pair<String, Long>? = try {
+        appContext.contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME, android.provider.OpenableColumns.SIZE), null, null, null)?.use { c ->
+            if (!c.moveToFirst()) return@use null
+            val name = c.getString(0) ?: return@use null
+            name to (if (c.isNull(1)) 0L else c.getLong(1))
+        }
+    } catch (e: Exception) {
+        null
+    }
+
+    private fun java.io.InputStream.readNBytesCompat(limit: Long): ByteArray {
+        val out = java.io.ByteArrayOutputStream()
+        val buffer = ByteArray(64 * 1024)
+        var total = 0L
+        while (total < limit) {
+            val n = read(buffer, 0, minOf(buffer.size.toLong(), limit - total).toInt())
+            if (n < 0) break
+            out.write(buffer, 0, n)
+            total += n
+        }
+        return out.toByteArray()
+    }
+
     override fun openUrl(url: String) {
         val uri = url.toUri()
         if (uri.scheme != "https" && uri.scheme != "http") return

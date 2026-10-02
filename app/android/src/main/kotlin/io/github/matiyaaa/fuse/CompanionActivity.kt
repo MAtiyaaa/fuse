@@ -41,6 +41,8 @@ open class CompanionActivity : ComponentActivity() {
         )
         super.onCreate(savedInstanceState)
         if (leaveMainScreen()) return
+        // Android can start the second screen's Home before Fuse's own screen: the store starts here then.
+        if (isDisplayHome) app.beginInterface(askedSafe = false)
         val role = if (isDisplayHome) "Home companion" else "Companion"
         SecondScreenLog.add("$role running on display ${displayIdCompat()}")
         window.addFlags(WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH)

@@ -60,6 +60,8 @@ import io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec
 import io.github.matiyaaa.fuse.ui.shell.app.FocusZone
 import io.github.matiyaaa.fuse.ui.shell.app.Route
 import io.github.matiyaaa.fuse.ui.shell.app.hasTwoScreens
+import io.github.matiyaaa.fuse.ui.shell.app.icon
+import io.github.matiyaaa.fuse.ui.shell.app.showProblem
 import io.github.matiyaaa.fuse.ui.shell.app.screenName
 import io.github.matiyaaa.fuse.ui.shell.systems.SystemMark
 import io.github.matiyaaa.fuse.ui.shell.systems.gamesText
@@ -121,7 +123,18 @@ fun PlatformSettingsScreen(app: AppState, platformId: PlatformId) {
     val reveal = rememberReveal(platformId)
     val p = card?.platform
     val on = listOf(true to "On", false to "Off")
+    val health = rememberHealthIssues(app).filter { it.platform == platformId }
+    val usage by app.store.storage.usage.collectAsState()
     val rows = if (card == null || p == null) emptyList() else buildList {
+        // What System health found about this system leads the page: it is what needs doing.
+        health.take(5).forEach { issue ->
+            add(MenuAction(
+                "health.${issue.id}", issue.problem.title, issue.problem.kind.icon(),
+                detail = issue.problem.message, trailing = Trailing.Chevron, section = "Needs attention",
+                onSelect = { app.showProblem(issue.problem) },
+            ))
+        }
+        if (health.size > 5) add(MenuAction("health.more", "${health.size - 5} more in System health", FuseIcons.HeartPulse, trailing = Trailing.Chevron, section = "Needs attention", onSelect = { app.go(Route.Settings("health")) }))
         val playing = "Playing"
         add(MenuAction("emulator", "Emulator", FuseIcons.Chip, trailing = Trailing.Value(card.emulatorName ?: "None installed"), detail = "${card.installedEmulators} installed for ${p.shortName}", section = playing, onSelect = { app.platformEmulatorPicker(card) }))
         add(app.scopedRow(ScopedSettings.FolderMode, platformId, "Folder behaviour", FuseIcons.FolderOpen, listOf(
@@ -163,6 +176,16 @@ fun PlatformSettingsScreen(app: AppState, platformId: PlatformId) {
             }.trim().ifBlank { null },
             icon = if (bios.state == BiosState.MISSING || bios.state == BiosState.PARTIAL) FuseIcons.Warning else FuseIcons.Key,
         ).copy(section = files))
+        // A system can span drives; where its games are, once Storage has measured them.
+        val drives = usage?.volumes.orEmpty()
+        val byDrive = usage?.games.orEmpty().filter { it.card.platformId == platformId }.groupBy { it.volumeId }
+        if (drives.size > 1 && byDrive.isNotEmpty()) {
+            add(infoRow(
+                "drives", "Where its games are",
+                detail = drives.filter { byDrive[it.id] != null }.joinToString("  ·  ") { v -> "${v.label}: ${byDrive[v.id]?.size ?: 0}" + if (!v.online) " (not connected)" else "" },
+                icon = FuseIcons.HardDrive,
+            ).copy(section = files))
+        }
         if (card.romFolders.isEmpty()) add(infoRow("rom.none", "ROM folder", value = "None found", icon = FuseIcons.Folder).copy(section = files))
         for (folder in card.romFolders) add(infoRow("rom.$folder", "ROM folder", detail = folder, icon = FuseIcons.Folder).copy(section = files))
         val tools = "Tools"

@@ -42,9 +42,24 @@ class LinuxCommandAdapter(val def: LinuxEmulatorDef, override val host: Host = H
     override val idFileExtensions: Set<String> =
         def.modes.filter { it.idFile }.flatMap { it.extensions.orEmpty() }.toSet()
     override val opensAppOnly: Boolean get() = def.openAppOnlyReason != null
+    override val shortcutsOnly: Boolean get() = def.shortcutsOnly
 
     override fun accepts(target: LaunchTarget, platform: PlatformId): Boolean =
         opensAppOnly || def.modes.select(target, platform) != null
+
+    override val packageExtensions: Set<String> get() = def.packageInstall?.extensions.orEmpty()
+    override val packageNeedsKey: Boolean get() = def.packageInstall?.needsKey == true
+
+    override fun packageInstall(installed: InstalledEmulator, path: String, key: String?): LaunchPlan.Command? {
+        val spec = def.packageInstall ?: return null
+        if (path.substringAfterLast('.', "").lowercase() !in spec.extensions) return null
+        if (spec.needsKey && key.isNullOrBlank()) return null
+        val args = spec.args.map { it.replace("{FILE}", path).replace("{KEY}", key.orEmpty().trim()) }
+        // Programs that read their settings from their own folder (ES-DE's %EMUDIR%) install from there too.
+        val ownFolder = def.modes.any { it.spec.workingDir == "{EMUDIR}" }
+        val dir = if (ownFolder) installed.appId.replace('\\', '/').substringBeforeLast('/', "").ifEmpty { null } else null
+        return LaunchPlan.Command(id, invocation(installed) + args, workingDir = dir, target = LaunchTarget.File(path))
+    }
 
     override fun installHint(kind: ContentKind): String? =
         def.installHint?.takeIf { kind == ContentKind.DLC || kind == ContentKind.UPDATE }

@@ -19,6 +19,7 @@ import io.github.matiyaaa.fuse.ui.shell.store.EmulatorDetector
 import io.github.matiyaaa.fuse.ui.shell.store.FuseServices
 import io.github.matiyaaa.fuse.ui.shell.store.GameLauncher
 import io.github.matiyaaa.fuse.ui.shell.store.ReleaseInstaller
+import io.github.matiyaaa.fuse.ui.shell.store.VolumeMonitor
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
 import kotlinx.coroutines.CoroutineScope
@@ -69,6 +70,9 @@ class DesktopFuseServices private constructor(
     /** No Apps section on a desktop: Fuse manages games there, not programs. */
     override val apps: AppsProvider? = null
     override val locations: DeviceLocations = DesktopLocations(folders)
+    override val volumes: VolumeMonitor = io.github.matiyaaa.fuse.desktop.platform.DesktopVolumes(os)
+    override val emulatorFiles: io.github.matiyaaa.fuse.ui.shell.store.EmulatorFiles =
+        DesktopEmulatorFiles(os, backups = java.io.File(dirs.data, "emulator-backups"))
 
     override fun writeCacheFile(relativePath: String, content: String): String? = writeBelow(cacheDir, relativePath, content)
 
@@ -84,6 +88,20 @@ class DesktopFuseServices private constructor(
             return@withContext null
         }
         writeBelow(cacheDir, relativePath) { bytes }
+    }
+
+    override suspend fun readFile(path: String, maxBytes: Int): ByteArray? = withContext(Dispatchers.IO) {
+        try {
+            File(path).takeIf { it.isFile && it.length() <= maxBytes }?.readBytes()
+        } catch (e: IOException) {
+            null
+        } catch (e: SecurityException) {
+            null
+        }
+    }
+
+    override suspend fun keepFile(relativePath: String, bytes: ByteArray): String? = withContext(Dispatchers.IO) {
+        writeBelow(dirs.data, relativePath) { bytes }
     }
 
     override fun utcOffsetMillis(): Long = TimeZone.getDefault().getOffset(System.currentTimeMillis()).toLong()

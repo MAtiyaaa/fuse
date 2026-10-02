@@ -44,13 +44,19 @@ import io.github.matiyaaa.fuse.ui.shell.store.GameDetail
 import io.github.matiyaaa.fuse.ui.shell.store.GameQuery
 import io.github.matiyaaa.fuse.ui.shell.store.HomeFeed
 import io.github.matiyaaa.fuse.ui.shell.store.LaunchOutcome
+import io.github.matiyaaa.fuse.ui.shell.store.Unavailable
 import io.github.matiyaaa.fuse.ui.shell.store.LibraryOps
 import io.github.matiyaaa.fuse.ui.shell.store.PlatformCard
 import io.github.matiyaaa.fuse.ui.shell.store.PlaytimeSummary
 import io.github.matiyaaa.fuse.ui.shell.store.RunResult
+import io.github.matiyaaa.fuse.ui.shell.store.PlayTimeReport
 import io.github.matiyaaa.fuse.ui.shell.store.SearchResults
 import io.github.matiyaaa.fuse.ui.shell.store.StorageSummary
+import io.ktor.client.request.get
+import io.ktor.client.statement.bodyAsText
+import io.ktor.http.isSuccess
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -58,6 +64,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
@@ -135,7 +142,9 @@ internal class DefaultLibraryOps(
             .sortedBy { userOrder[it.id] ?: catalogOrder[it.id] ?: Int.MAX_VALUE }
             .map { p ->
                 val (chosen, layout) = choices[p.id] ?: ("" to p.defaultLayout)
-                val candidates = ctx.registry.forPlatform(p.id, ctx.host)
+                // Shortcut openers count only where the priority list names them (Steam, PC games).
+                val named = ctx.registry.priority(p.id, ctx.host).toSet()
+                val candidates = ctx.registry.forPlatform(p.id, ctx.host).filter { !it.shortcutsOnly || it.id in named }
                 // Built-in adapters (Android apps) need nothing installed.
                 val installedIds = installed.map { it.id }.toSet() + candidates.filter { it.builtIn }.map { it.id }
                 val chosenId = chosen.takeIf { it.isNotBlank() }?.let(::EmulatorId)
@@ -153,6 +162,7 @@ internal class DefaultLibraryOps(
                     bios = bios[p.id] ?: if (p.bios == null) BiosStatus.NotRequired else BiosStatus(io.github.matiyaaa.fuse.model.BiosState.UNKNOWN),
                     layout = layout,
                     romFolders = folders[p.id].orEmpty(),
+                    emulatorChosen = chosenId,
                 )
             }
     }.flowOn(Dispatchers.Default).resilient().stateIn(ctx.scope, SharingStarted.Eagerly, emptyList())
@@ -248,22 +258,15 @@ internal class DefaultLibraryOps(
         return ctx.cards(sorted)
     }
 
-    override fun search(query: String): Flow<SearchResults> = flow {
-        val q = query.trim()
-        if (q.isEmpty()) {
-            emit(SearchResults())
-            return@flow
-        }
-        val games = ctx.cardsOnce(data.games.search(q, limit = 60))
-        val systems = platforms.value.filter {
-            it.platform.name.contains(q, ignoreCase = true) ||
-                it.platform.shortName.contains(q, ignoreCase = true) ||
-                it.platform.id.value.equals(q, ignoreCase = true)
-        }
-        val appCards = if (apps.supported) apps.search(q) else emptyList()
-        val cols = collections.collections.value.filter { it.name.contains(q, ignoreCase = true) }
-        emit(SearchResults(q, games, systems, appCards, cols))
-    }.flowOn(Dispatchers.Default)
+    private val searcher by lazy {
+        LibrarySearcher(
+            ctx, platforms, collections.collections, engine.status,
+            apps = { q -> if (apps.supported) apps.search(q) else emptyList() },
+            collectionsShown = { ctx.settings.value.library.collectionsEnabled },
+        )
+    }
+
+    override fun search(query: String): Flow<SearchResults> = flow { emit(searcher.search(query)) }.flowOn(Dispatchers.Default)
 
     // Game page -------------------------------------------------------------------------------------
 
@@ -279,7 +282,10 @@ internal class DefaultLibraryOps(
             combine(data.playSessions.sessions(id), achievements.gameState(game)) { sessions, ra ->
                 sessions.filter { it.endedAt != null && it.startedAt >= weekStart }.sumOf { it.durationSeconds ?: 0 } to ra
             },
-        ) { media, installed, platformEmulator, cols, (week, ra) ->
+        ) { media, installed, platformEmulator, cols, (week, ra) -> Detail(media, installed, platformEmulator, cols, week, ra) }
+            .combine(ctx.offline) { parts, roots -> parts to roots.takeIf { game.appId == null }?.firstOrNull { it.holds(game.location.path) } }
+            .map { (parts, away) ->
+            val (media, installed, platformEmulator, cols, week, ra) = parts
             val resolved = ctx.resolver.resolve(
                 game,
                 platformEmulator.value.takeIf { it.isNotBlank() }?.let(::EmulatorId),
@@ -296,9 +302,21 @@ internal class DefaultLibraryOps(
                 achievements = ra,
                 collections = cols,
                 secondsThisWeek = week,
+                unavailable = away?.let { Unavailable(it.driveLabel, it.state) },
+                missing = record.missing,
             )
         }
     }.flowOn(Dispatchers.Default)
+
+    /** What the game page combines before it knows the game's drive. */
+    private data class Detail(
+        val media: io.github.matiyaaa.fuse.model.MediaSet,
+        val installed: List<InstalledEmulator>,
+        val platformEmulator: io.github.matiyaaa.fuse.model.Resolved<String>,
+        val cols: List<io.github.matiyaaa.fuse.model.GameCollection>,
+        val week: Long,
+        val ra: io.github.matiyaaa.fuse.model.AchievementState?,
+    )
 
     private fun choiceOf(game: Game, platform: Platform, resolved: ResolvedLaunch, installed: List<InstalledEmulator>): EmulatorChoice {
         val name = resolved.installed?.name ?: resolved.adapter?.name
@@ -342,9 +360,23 @@ internal class DefaultLibraryOps(
 
     // Launching -------------------------------------------------------------------------------------
 
-    override suspend fun launch(id: GameId, emulator: EmulatorId?, discPath: String?, display: LaunchDisplay?): LaunchOutcome {
-        val stored = data.games.get(id) ?: return LaunchOutcome.Failed("This game is no longer in your library.")
-        val platform = ctx.platform(stored.platformId) ?: return LaunchOutcome.Failed("Fuse doesn't know this system.")
+    override suspend fun launch(id: GameId, emulator: EmulatorId?, discPath: String?, display: LaunchDisplay?): LaunchOutcome =
+        launchGame(id, emulator, discPath, display).also { outcome ->
+            if (outcome is LaunchOutcome.Problem) ctx.recordProblem(outcome.problem)
+        }
+
+    private suspend fun launchGame(id: GameId, emulator: EmulatorId?, discPath: String?, display: LaunchDisplay?): LaunchOutcome {
+        val stored = data.games.get(id) ?: return LaunchOutcome.Problem(LaunchProblems.gone())
+        val platform = ctx.platform(stored.platformId) ?: return LaunchOutcome.Problem(LaunchProblems.unknownSystem(stored.platformId))
+        // A game on a drive that is out says which drive to connect, before anything is tried.
+        if (stored.appId == null) {
+            engine.drives.offlineFor(stored.location.path)?.let { root ->
+                return LaunchOutcome.Problem(LaunchProblems.unavailable(root, stored.displayTitle, root.lastSeenAt?.let(::describeWhen)))
+            }
+            if (discPath == null && stored.location.path.let(FsPath::isAbsolute) && !exists(stored.location.launchPath)) {
+                return LaunchOutcome.Problem(LaunchProblems.fileMissing(stored.displayTitle, stored.location.launchPath))
+            }
+        }
         var game = stored
         if (discPath != null) {
             game = game.copy(
@@ -392,16 +424,18 @@ internal class DefaultLibraryOps(
 
         val installedEmulator = resolved.installed
         if (installedEmulator == null) {
-            val suggestions = ctx.registry.forPlatform(game.platformId, ctx.host).filterNot { it.opensAppOnly }.take(3).map { it.name }
-            return LaunchOutcome.NeedsEmulator(platform.name, suggestions)
+            val suggestions = ctx.registry.forPlatform(game.platformId, ctx.host).filterNot { it.opensAppOnly }.take(3)
+                .map { it.name to emulators.homepage(it.id) }
+            return LaunchOutcome.Problem(LaunchProblems.noEmulator(platform.name, platform.id, suggestions))
         }
+        val android = ctx.host == io.github.matiyaaa.fuse.model.Host.ANDROID
         return when (val plan = resolved.plan) {
-            is LaunchPlan.Unsupported -> LaunchOutcome.Unsupported(plan.reason)
+            is LaunchPlan.Unsupported -> LaunchOutcome.Problem(LaunchProblems.unsupported(plan.reason, id))
             is LaunchPlan.OpenAppOnly -> when (val r = ctx.services.launcher.openApp(plan.appId)) {
                 is RunResult.Started -> LaunchOutcome.OpenedAppOnly(installedEmulator.name, plan.reason)
                 is RunResult.OpenedAppInstead -> LaunchOutcome.OpenedAppOnly(installedEmulator.name, r.reason)
-                RunResult.NotInstalled -> notInstalled(installedEmulator)
-                is RunResult.Failed -> LaunchOutcome.Failed(r.message)
+                RunResult.NotInstalled -> notInstalled(installedEmulator, id)
+                is RunResult.Failed -> LaunchOutcome.Problem(LaunchProblems.refused(installedEmulator, id, r.message, android))
             }
             is LaunchPlan.AndroidIntent, is LaunchPlan.Command -> when (val r = ctx.services.launcher.run(resolved, displayId)) {
                 is RunResult.Started -> {
@@ -410,16 +444,28 @@ internal class DefaultLibraryOps(
                 }
                 // Only the app opened; which game gets played there is unknown, so no session is recorded.
                 is RunResult.OpenedAppInstead -> LaunchOutcome.OpenedAppOnly(installedEmulator.name, r.reason)
-                RunResult.NotInstalled -> notInstalled(installedEmulator)
-                is RunResult.Failed -> LaunchOutcome.Failed(r.message)
+                RunResult.NotInstalled -> notInstalled(installedEmulator, id)
+                is RunResult.Failed -> LaunchOutcome.Problem(LaunchProblems.refused(installedEmulator, id, r.message, android))
             }
         }
     }
 
-    private fun notInstalled(emulator: InstalledEmulator): LaunchOutcome {
+    private fun notInstalled(emulator: InstalledEmulator, game: GameId): LaunchOutcome {
         emulators.refresh()
-        return LaunchOutcome.Failed("${emulator.name} isn't installed any more. Pick another emulator for this game.")
+        return LaunchOutcome.Problem(LaunchProblems.emulatorGone(emulator, game))
     }
+
+    private suspend fun exists(path: String): Boolean = try {
+        ctx.services.fs.stat(path) != null
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        // Unknown is not missing: let the emulator try.
+        true
+    }
+
+    /** "today at 2:14 PM" style wording for when a drive was last seen. */
+    private fun describeWhen(at: Long): String = TimeWords.relative(at, ctx.now(), ctx.services.utcOffsetMillis())
 
     /**
      * Opens an honest play session: it ends when the emulator process exits (Linux) or when Fuse
@@ -462,6 +508,8 @@ internal class DefaultLibraryOps(
             emulators.refreshIfStale()
             apps.refreshInstalled()
             cartridge.refreshOnResume()
+            // A card may have gone in or out while a game ran.
+            engine.refreshDrives()
         }
     }
 
@@ -520,6 +568,242 @@ internal class DefaultLibraryOps(
     }
 
     override suspend fun undoCleanNames(): Boolean = data.titleCleanup.undoLast() != null
+
+    override suspend fun packages(id: GameId): List<io.github.matiyaaa.fuse.ui.shell.store.PackageOption> {
+        val game = data.games.get(id) ?: return emptyList()
+        if (ctx.installed.value.isEmpty()) emulators.detectNow()
+        val installers = ctx.registry.forPlatform(game.platformId, ctx.host)
+            .filter { it.packageExtensions.isNotEmpty() }
+            .mapNotNull { a -> ctx.installed.value.firstOrNull { it.id == a.id }?.let { a to it } }
+        if (installers.isEmpty()) return emptyList()
+        val extensions = installers.flatMap { it.first.packageExtensions }.toSet()
+        val files = LinkedHashMap<String, String>()
+        if (game.location.kind == LocationKind.FILE && Paths.extension(game.location.launchPath).lowercase() in extensions) {
+            files[game.location.launchPath] = "Game"
+        }
+        game.content.filter { !it.isDirectory && Paths.extension(it.path).lowercase() in extensions }.forEach { files[it.path] = packageKind(it.name) }
+        // Packages kept beside the game (an update or extra content for it): the same serial, or a name that starts with its own.
+        val serial = game.tags.serial?.uppercase()
+        val title = io.github.matiyaaa.fuse.data.TitleText.normalize(game.titles.cleaned ?: game.titles.original)
+        val folders = listOfNotNull(game.location.path.takeIf { game.location.kind == LocationKind.FOLDER }, FsPath.parent(game.location.path))
+        for (folder in folders.distinct()) {
+            val entries = try { ctx.services.fs.list(folder) } catch (e: CancellationException) { throw e } catch (e: Exception) { emptyList() }
+            for (e in entries) {
+                if (e.isDirectory || e.extension !in extensions || e.path in files) continue
+                val name = e.name.substringBeforeLast('.')
+                val same = (serial != null && name.uppercase().contains(serial)) ||
+                    (title.length >= 3 && io.github.matiyaaa.fuse.data.TitleText.normalize(name).startsWith(title))
+                if (same) files[e.path] = packageKind(e.name)
+            }
+        }
+        return files.entries.flatMap { (path, kind) ->
+            val ext = Paths.extension(path).lowercase()
+            installers.filter { (a, _) -> ext in a.packageExtensions }.map { (a, inst) ->
+                io.github.matiyaaa.fuse.ui.shell.store.PackageOption(path, kind, Paths.fileName(path), a.id, inst.name, a.packageNeedsKey)
+            }
+        }
+    }
+
+    override suspend fun installPackage(option: io.github.matiyaaa.fuse.ui.shell.store.PackageOption, key: String?): LaunchOutcome {
+        val adapter = ctx.registry[option.emulator]
+        val installed = ctx.installed.value.firstOrNull { it.id == option.emulator }
+        if (adapter == null || installed == null) return LaunchOutcome.Problem(io.github.matiyaaa.fuse.ui.shell.store.Problem(
+                "${option.emulatorName} isn't installed any more", "Install it again, then try once more.", io.github.matiyaaa.fuse.ui.shell.store.ProblemKind.EMULATOR,
+            ))
+        if (!exists(option.path)) return LaunchOutcome.Problem(LaunchProblems.fileMissing(option.fileName, option.path))
+        val plan = adapter.packageInstall(installed, option.path, key)
+            ?: return LaunchOutcome.Problem(io.github.matiyaaa.fuse.ui.shell.store.Problem(
+                if (adapter.packageNeedsKey && key.isNullOrBlank()) "${option.emulatorName} needs the package's key" else "${option.emulatorName} can't install this file",
+                if (adapter.packageNeedsKey) "Paste the zRIF that came with ${option.fileName}. Fuse passes it to ${option.emulatorName} and keeps no copy." else "${option.fileName} isn't a package ${option.emulatorName} installs.",
+                io.github.matiyaaa.fuse.ui.shell.store.ProblemKind.FILE,
+            ))
+        val launch = io.github.matiyaaa.fuse.launch.ResolvedLaunch(adapter, installed, io.github.matiyaaa.fuse.launch.ChoiceSource.GAME, plan.target, plan)
+        return when (val r = ctx.services.launcher.run(launch)) {
+            is io.github.matiyaaa.fuse.ui.shell.store.RunResult.Failed -> LaunchOutcome.Problem(io.github.matiyaaa.fuse.ui.shell.store.Problem(
+                "${option.emulatorName} didn't start", "Its installer couldn't be opened. Open ${option.emulatorName} and install the package from its menu.", io.github.matiyaaa.fuse.ui.shell.store.ProblemKind.EMULATOR,
+                details = r.message,
+            ))
+            is io.github.matiyaaa.fuse.ui.shell.store.RunResult.NotInstalled -> LaunchOutcome.Problem(io.github.matiyaaa.fuse.ui.shell.store.Problem(
+                "${option.emulatorName} isn't installed any more", "Install it again, then try once more.", io.github.matiyaaa.fuse.ui.shell.store.ProblemKind.EMULATOR,
+            ))
+            else -> LaunchOutcome.Started
+        }
+    }
+
+    override suspend fun rpcs3Compatibility(id: GameId): io.github.matiyaaa.fuse.ui.shell.store.CompatibilityAnswer {
+        val game = data.games.get(id) ?: return io.github.matiyaaa.fuse.ui.shell.store.CompatibilityAnswer.NoTitleId
+        val titleId = ps3TitleId(game) ?: return io.github.matiyaaa.fuse.ui.shell.store.CompatibilityAnswer.NoTitleId
+        val compat = io.github.matiyaaa.fuse.integrations.rpcs3.Rpcs3Compatibility
+        val serializer = io.github.matiyaaa.fuse.integrations.rpcs3.Rpcs3Compat.serializer()
+        data.cache.get(COMPAT_CACHE, titleId, serializer, ctx.now())?.let { return io.github.matiyaaa.fuse.ui.shell.store.CompatibilityAnswer.Listed(it) }
+        val body = try {
+            kotlinx.coroutines.withTimeout(15_000) {
+                val response = ctx.services.http.get(compat.url(titleId))
+                if (!response.status.isSuccess()) null else response.bodyAsText()
+            }
+        } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
+            null
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            null
+        } ?: return io.github.matiyaaa.fuse.ui.shell.store.CompatibilityAnswer.Unreachable
+        val entry = compat.parse(body, titleId) ?: return io.github.matiyaaa.fuse.ui.shell.store.CompatibilityAnswer.NotListed(titleId)
+        data.cache.put(COMPAT_CACHE, titleId, entry, serializer, ctx.now(), ttlMs = 7 * 24 * HOUR_MS)
+        return io.github.matiyaaa.fuse.ui.shell.store.CompatibilityAnswer.Listed(entry)
+    }
+
+    /** Everything needed to read or change one game's PCSX2 patches. */
+    private class PatchContext(
+        val files: io.github.matiyaaa.fuse.ui.shell.store.EmulatorFiles,
+        val settingsPath: String,
+        val game: io.github.matiyaaa.fuse.launch.patches.IniText,
+        val owned: Set<String>,
+        val statuses: List<io.github.matiyaaa.fuse.launch.patches.PatchStatus>,
+        val view: io.github.matiyaaa.fuse.ui.shell.store.Pcsx2PatchList.Ready,
+    )
+
+    private suspend fun patchContext(id: GameId): Pair<PatchContext?, io.github.matiyaaa.fuse.ui.shell.store.Pcsx2PatchList.Unavailable?> {
+        fun no(title: String, reason: String) = null to io.github.matiyaaa.fuse.ui.shell.store.Pcsx2PatchList.Unavailable(title, reason)
+        val files = ctx.services.emulatorFiles ?: return no("Not on this device", "PCSX2's patches can be changed from Fuse on a computer. On this device, change them in the emulator.")
+        if (ctx.installed.value.isEmpty()) emulators.detectNow()
+        val pcsx2 = ctx.installed.value.firstOrNull { it.id.value.substringAfter('.') == "pcsx2" }
+            ?: return no("PCSX2 isn't installed", "Install PCSX2, start it once so it sets up its folders, and its patches show here.")
+        val home = files.pcsx2(pcsx2) ?: return no("PCSX2 isn't set up yet", "Start PCSX2 once and finish its first-run setup, then come back.")
+        val disc = discIdentity(id) ?: return no(
+            "Fuse can't read this disc",
+            "Patches are filed under the game's serial and CRC, which Fuse reads from ISO and BIN images. Compressed images (CHD, CSO) aren't read; change their patches in PCSX2.",
+        )
+        val crc = disc.crc ?: return no("Not a PS2 disc", "This image doesn't start a PS2 program, so PCSX2 has no patches for it.")
+        val rules = io.github.matiyaaa.fuse.launch.patches.Pcsx2PatchRules
+        val parse = io.github.matiyaaa.fuse.launch.patches.Pnach
+        val fs = ctx.services.fs
+        // Patch files on disk come first, as in PCSX2; a name already listed isn't listed again.
+        val patches = LinkedHashMap<String, io.github.matiyaaa.fuse.launch.patches.PnachPatch>()
+        var unlabelled = false
+        val onDisk = try { fs.list(home.patches) } catch (e: CancellationException) { throw e } catch (e: Exception) { emptyList() }
+        for (f in onDisk.filter { !it.isDirectory && rules.matchesPnach(it.name, disc.serial, crc) }.sortedBy { it.name }) {
+            val text = fs.readText(f.path, 1024 * 1024) ?: continue
+            if (parse.hasUnlabelled(text)) unlabelled = true
+            parse.parse(text).forEach { patches.putIfAbsent(it.name, it) }
+        }
+        var bundledRead = home.patchesZip != null
+        if (!unlabelled && home.patchesZip != null) {
+            for (entry in rules.zipEntries(disc.serial, crc)) {
+                val text = files.zipText(home.patchesZip!!, entry) ?: continue
+                parse.parse(text).forEach { patches.putIfAbsent(it.name, it) }
+                break
+            }
+        }
+        if (unlabelled) bundledRead = true
+        val settingsPath = "${home.gameSettings}/${rules.gameSettingsName(disc.serial, crc)}"
+        val game = io.github.matiyaaa.fuse.launch.patches.IniText(fs.readText(settingsPath, 1024 * 1024) ?: "")
+        val global = fs.readText(home.settingsFile, 1024 * 1024)?.let { io.github.matiyaaa.fuse.launch.patches.IniText(it) }
+        // A patch taken out in PCSX2 since Fuse turned it on is no longer Fuse's.
+        val enabled = game.values(rules.SECTION, rules.ENABLE).toSet()
+        val recorded = data.owned.get(PATCH_OWNERSHIP, settingsPath)
+        val owned = recorded.filter { it in enabled }.toSet()
+        // Forgotten for good, so turning it on again in PCSX2 later makes it the user's.
+        if (owned != recorded) data.owned.set(PATCH_OWNERSHIP, settingsPath, owned)
+        val statuses = rules.states(patches.values.toList(), game, global, owned)
+        val view = io.github.matiyaaa.fuse.ui.shell.store.Pcsx2PatchList.Ready(disc.serial, disc.crcText ?: "", statuses, bundledRead)
+        return PatchContext(files, settingsPath, game, owned, statuses, view) to null
+    }
+
+    override suspend fun pcsx2Patches(id: GameId): io.github.matiyaaa.fuse.ui.shell.store.Pcsx2PatchList {
+        val (context, unavailable) = patchContext(id)
+        return context?.view ?: unavailable!!
+    }
+
+    override suspend fun setPcsx2Patch(id: GameId, name: String, on: Boolean): Boolean {
+        val context = patchContext(id).first ?: return false
+        val status = context.statuses.firstOrNull { it.patch.name == name } ?: return false
+        val owned = io.github.matiyaaa.fuse.launch.patches.Pcsx2PatchRules.change(status, on, context.game, context.owned) ?: return false
+        if (!context.files.write(context.settingsPath, context.game.toString())) return false
+        data.owned.set(PATCH_OWNERSHIP, context.settingsPath, owned)
+        return true
+    }
+
+    /** A PS3 game's title id: from its name, else from the PARAM.SFO of a game folder. */
+    private suspend fun ps3TitleId(game: io.github.matiyaaa.fuse.model.Game): String? {
+        val compat = io.github.matiyaaa.fuse.integrations.rpcs3.Rpcs3Compatibility
+        game.tags.serial?.uppercase()?.replace("-", "")?.takeIf(compat::isTitleId)?.let { return it }
+        if (game.location.kind != LocationKind.FOLDER) return null
+        for (rel in listOf("PS3_GAME/PARAM.SFO", "PARAM.SFO")) {
+            val bytes = ctx.services.fs.readBytes(FsPath.join(game.location.path, rel), 0, 64 * 1024) ?: continue
+            io.github.matiyaaa.fuse.library.disc.ParamSfo.strings(bytes)["TITLE_ID"]?.trim()?.uppercase()?.takeIf(compat::isTitleId)?.let { return it }
+        }
+        return null
+    }
+
+    /** What a package file is, from its name: an update, extra content, or the game itself. */
+    private fun packageKind(name: String): String {
+        val n = name.lowercase()
+        return when {
+            listOf("update", "[upd]", "patch").any { it in n } || Regex("""\bv\d+\.\d+""").containsMatchIn(n) -> "Update"
+            listOf("dlc", "add-on", "addon").any { it in n } -> "Extra content"
+            else -> "Package"
+        }
+    }
+
+    private val discs by lazy { io.github.matiyaaa.fuse.library.disc.PlayStationDisc(ctx.services.fs) }
+
+    override suspend fun discIdentity(id: GameId): io.github.matiyaaa.fuse.library.disc.DiscIdentity? {
+        val game = data.games.get(id) ?: return null
+        if (game.platformId.value !in DISC_PLATFORMS || game.appId != null) return null
+        val path = discImage(game) ?: return null
+        val stat = ctx.services.fs.stat(path) ?: return null
+        val key = "$path|${stat.sizeBytes}|${stat.modifiedAt}"
+        val serializer = io.github.matiyaaa.fuse.library.disc.DiscIdentity.serializer()
+        data.cache.get(DISC_CACHE, key, serializer, ctx.now())?.let { return it }
+        val found = try {
+            withContext(Dispatchers.Default) { discs.identify(path) }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            null
+        } ?: return null
+        data.cache.put(DISC_CACHE, key, found, serializer, ctx.now(), ttlMs = null)
+        return found
+    }
+
+    /** The image to read: the first disc, and for a cue sheet the track file it names first. */
+    private suspend fun discImage(game: io.github.matiyaaa.fuse.model.Game): String? {
+        val path = game.discs.firstOrNull()?.path ?: game.location.launchPath
+        val ext = Paths.extension(path).lowercase()
+        if (ext in setOf("iso", "bin", "img")) return path
+        if (ext != "cue") return null
+        val cue = ctx.services.fs.readText(path, 64 * 1024) ?: return null
+        val name = Regex("""(?im)^\s*FILE\s+"([^"]+)"""").find(cue)?.groupValues?.get(1) ?: return null
+        val dir = FsPath.parent(path) ?: return null
+        return FsPath.join(dir, name.replace('\\', '/'))
+    }
+
+    override fun playTime(): Flow<PlayTimeReport> = flow {
+        val offset = ctx.services.utcOffsetMillis()
+        val day = (ctx.now() + offset).floorDiv(TimeWords.DAY_MS)
+        val today = day * TimeWords.DAY_MS - offset
+        val month = TimeWords.firstOfMonth(day) * TimeWords.DAY_MS - offset
+        emitAll(
+            combine(data.playSessions.report(today, ctx.weekStart(), month), data.playSessions.totalSeconds(), platforms) { r, totals, cards ->
+                val byId = cards.associateBy { it.platform.id }
+                val games = ctx.cardsOnce(r.monthGames.take(10).mapNotNull { data.games.summary(it.first) })
+                    .associateBy { it.id }
+                PlayTimeReport(
+                    todaySeconds = r.todaySeconds,
+                    weekSeconds = r.weekSeconds,
+                    monthSeconds = r.monthSeconds,
+                    trackedSeconds = totals.trackedSeconds,
+                    importedSeconds = totals.importedSeconds,
+                    days = r.days.map { it.seconds },
+                    month = TimeWords.monthName(day),
+                    games = r.monthGames.take(10).mapNotNull { (id, s) -> games[id]?.let { it to s } },
+                    systems = r.platforms.mapNotNull { (id, s) -> byId[PlatformId(id)]?.let { it to s } },
+                    loaded = true,
+                )
+            },
+        )
+    }.flowOn(Dispatchers.Default)
 
     override suspend fun launchCandidates(id: GameId): List<String> {
         val game = data.games.get(id) ?: return emptyList()
@@ -638,3 +922,15 @@ private fun SortOrder.comparator(): Comparator<io.github.matiyaaa.fuse.data.repo
 }
 
 private const val HOUR_MS = 3_600_000L
+
+/** Systems whose disc images say their serial in SYSTEM.CNF. */
+private val DISC_PLATFORMS = setOf("ps2", "psx")
+
+/** Cache namespace for [io.github.matiyaaa.fuse.library.disc.DiscIdentity], keyed by path, size and change time. */
+private const val DISC_CACHE = "disc.identity"
+
+/** Cache namespace for RPCS3 compatibility entries, by title id. */
+private const val COMPAT_CACHE = "rpcs3.compat"
+
+/** Where Fuse records the PCSX2 patches it turned on itself, by game settings file. */
+private const val PATCH_OWNERSHIP = "pcsx2.patches"

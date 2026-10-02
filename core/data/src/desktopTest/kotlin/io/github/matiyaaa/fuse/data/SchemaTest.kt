@@ -19,13 +19,13 @@ import kotlinx.coroutines.runBlocking
 
 class SchemaTest {
     @Test
-    fun schemaIsVersionTwo() {
-        assertEquals(2L, FuseDatabase.Schema.version)
+    fun schemaIsVersionThree() {
+        assertEquals(3L, FuseDatabase.Schema.version)
     }
 
     @Test
     fun freshDatabaseHasEveryTableAndForeignKeys() = TestDb().use { t ->
-        assertEquals(2L, DesktopDatabase.userVersion(t.driver))
+        assertEquals(3L, DesktopDatabase.userVersion(t.driver))
         val tables = t.driver.strings("SELECT name FROM sqlite_master WHERE type IN ('table', 'view')").toSet()
         val expected = setOf(
             "library_source", "game", "game_summary", "game_content", "game_disc", "game_genre", "folder_state",
@@ -56,7 +56,7 @@ class SchemaTest {
             assertEquals(listOf("wal"), driver.strings("PRAGMA journal_mode"))
         }
         DesktopDatabase.openDriver(path).use { driver ->
-            assertEquals(2L, DesktopDatabase.userVersion(driver))
+            assertEquals(3L, DesktopDatabase.userVersion(driver))
             assertEquals(listOf("/roms"), FuseData(FuseDatabase(driver)).sources.all().map { it.path })
             assertEquals(listOf("1"), driver.strings("PRAGMA foreign_keys"))
         }
@@ -65,7 +65,7 @@ class SchemaTest {
     }
 
     @Test
-    fun aVersionOneLibraryMovesToVersionTwoAndKeepsItsGames() {
+    fun aVersionOneLibraryMovesToTheCurrentVersionAndKeepsItsGames() {
         val dir = createTempDirectory("fuse-db").toFile()
         val path = File(dir, "fuse.db").path
         // 1.db is the schema 0.0.1 to 0.0.5 shipped with.
@@ -83,7 +83,7 @@ class SchemaTest {
             old.execute(null, "INSERT INTO app_override(app_id, pinned) VALUES ('com.example/.Main', 1)", 0)
         }
         DesktopDatabase.openDriver(path).use { driver ->
-            assertEquals(2L, DesktopDatabase.userVersion(driver))
+            assertEquals(3L, DesktopDatabase.userVersion(driver))
             assertEquals(listOf("snes"), driver.strings("SELECT platform_scanned FROM game"))
             assertEquals(listOf(""), driver.strings("SELECT platform_override FROM game"))
             assertEquals(listOf(""), driver.strings("SELECT kind FROM app_override"))
@@ -94,6 +94,45 @@ class SchemaTest {
                 assertEquals(PlatformId("sfam"), data.games.get(id)?.platformId)
                 data.games.setPlatformOverride(id, null)
                 assertEquals(PlatformId("snes"), data.games.get(id)?.platformId)
+            }
+        }
+        dir.deleteRecursively()
+    }
+
+    @Test
+    fun aVersionTwoLibraryKeepsEverythingAndLearnsDrivesLater() {
+        val dir = createTempDirectory("fuse-db").toFile()
+        val path = File(dir, "fuse.db").path
+        // 2.db is the schema 0.0.6 to 0.1.6 shipped with.
+        File("src/commonMain/sqldelight/databases/2.db").copyTo(File(path))
+        JdbcSqliteDriver("jdbc:sqlite:$path", Properties()).use { old ->
+            old.execute(null, "PRAGMA user_version = 2", 0)
+            old.execute(null, "INSERT INTO library_source(path, label, kind, enabled) VALUES ('/run/media/me/GAMES/ROMs', 'ROMs', 'ROMS_ROOT', 1)", 0)
+            old.execute(
+                null,
+                "INSERT INTO game(platform_id, platform_scanned, source_id, folder_path, path, kind, launch_path, interpretation, " +
+                    "title_original, title_custom, favorite, search_title, sort_title, added_at, updated_at) " +
+                    "VALUES ('psx', 'psx', 1, '/run/media/me/GAMES/ROMs/psx', '/run/media/me/GAMES/ROMs/psx/MGS.m3u', 'FILE', " +
+                    "'/run/media/me/GAMES/ROMs/psx/MGS.m3u', 'SINGLE_FILE', 'MGS', 'Metal Gear Solid', 1, 'mgs', 'mgs', 1, 1)",
+                0,
+            )
+        }
+        DesktopDatabase.openDriver(path).use { driver ->
+            assertEquals(3L, DesktopDatabase.userVersion(driver))
+            // A copy of the 0.1.6 library is kept from before the migration.
+            val backup = File(DesktopDatabase.backupPath(path))
+            assertTrue(backup.isFile && backup.length() > 0)
+            JdbcSqliteDriver("jdbc:sqlite:${backup.path}", Properties()).use { copy ->
+                assertEquals(2L, DesktopDatabase.userVersion(copy))
+                assertEquals(listOf("Metal Gear Solid"), copy.strings("SELECT title_custom FROM game"))
+            }
+            val data = FuseData(FuseDatabase(driver))
+            runBlocking {
+                val source = data.sources.all().single()
+                assertEquals(null, source.volume)
+                val game = data.games.get(data.games.observeAll().first().single().id)!!
+                assertEquals("Metal Gear Solid", game.displayTitle)
+                assertTrue(game.favorite)
             }
         }
         dir.deleteRecursively()

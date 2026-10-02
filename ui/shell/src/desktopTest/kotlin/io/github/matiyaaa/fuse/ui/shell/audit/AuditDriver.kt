@@ -50,7 +50,7 @@ import kotlinx.coroutines.runBlocking
 /** What the test window shows: the whole app for one store, or the companion screen. */
 internal sealed interface AuditView {
     data object Blank : AuditView
-    data class App(val store: FuseStore, val platform: PlatformUi, val generation: Int) : AuditView
+    data class App(val store: FuseStore, val platform: PlatformUi, val generation: Int, val safeMode: io.github.matiyaaa.fuse.ui.shell.app.SafeMode? = null) : AuditView
     data class Companion(val store: FuseStore, val platform: PlatformUi, val mode: DualScreenMode, val onHide: (() -> Unit)? = null) : AuditView
 }
 
@@ -148,9 +148,9 @@ internal class AuditDriver(
     }
 
     /** Shows [store] in a freshly started app. */
-    fun show(store: FuseStore, platform: PlatformUi = this.platform) {
+    fun show(store: FuseStore, platform: PlatformUi = this.platform, safeMode: io.github.matiyaaa.fuse.ui.shell.app.SafeMode? = null) {
         val generation = ((view as? AuditView.App)?.generation ?: 0) + 1
-        view = AuditView.App(store, platform, generation)
+        view = AuditView.App(store, platform, generation, safeMode)
         settle(1_600)
     }
 
@@ -167,7 +167,7 @@ internal class AuditDriver(
             when (val v = view) {
                 AuditView.Blank -> Unit
                 is AuditView.App -> key(v.generation) {
-                    FuseApp(v.store, v.platform, router, phoneLink)
+                    FuseApp(v.store, v.platform, router, phoneLink, safeMode = v.safeMode)
                     ExtraToasts(v.store, v.platform)
                 }
                 is AuditView.Companion -> key(v.mode, v.store) { CompanionApp(v.store, v.platform, v.mode, v.onHide) }

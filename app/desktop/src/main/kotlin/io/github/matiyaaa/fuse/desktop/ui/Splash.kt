@@ -31,7 +31,7 @@ import androidx.compose.ui.unit.sp
  * reason is shown instead of an endless wait.
  */
 @Composable
-fun Splash(error: String? = null) {
+fun Splash(error: String? = null, detail: String? = null) {
     Box(Modifier.fillMaxSize().background(FuseBrand.Ink), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(28.dp)) {
             val glow = if (error == null) {
@@ -52,8 +52,16 @@ fun Splash(error: String? = null) {
                 BasicText(
                     error,
                     modifier = Modifier.widthIn(max = 640.dp).padding(horizontal = 24.dp),
-                    style = TextStyle(color = FuseBrand.Mark.copy(alpha = 0.6f), fontSize = 15.sp, textAlign = TextAlign.Center),
+                    style = TextStyle(color = FuseBrand.Mark.copy(alpha = 0.78f), fontSize = 16.sp, lineHeight = 24.sp, textAlign = TextAlign.Center),
                 )
+                // The system's own words, small and last, for a bug report.
+                if (detail != null && detail != error) {
+                    BasicText(
+                        detail,
+                        modifier = Modifier.widthIn(max = 640.dp).padding(horizontal = 24.dp),
+                        style = TextStyle(color = FuseBrand.Mark.copy(alpha = 0.4f), fontSize = 12.sp, textAlign = TextAlign.Center),
+                    )
+                }
             }
         }
     }

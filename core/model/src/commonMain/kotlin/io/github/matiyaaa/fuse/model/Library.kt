@@ -12,6 +12,8 @@ data class LibrarySource(
     val enabled: Boolean = true,
     /** Epoch millis of the last completed scan. */
     val lastScanAt: Long? = null,
+    /** The drive the folder lives on, once Fuse has seen it mounted. */
+    val volume: VolumeRef? = null,
 )
 
 @Serializable

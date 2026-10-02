@@ -55,6 +55,9 @@ interface FuseServices {
     /** Where to look for existing libraries and firmware on this device. */
     val locations: DeviceLocations
 
+    /** The drives mounted now, and word when one comes or goes. */
+    val volumes: VolumeMonitor get() = VolumeMonitor.None
+
     /**
      * Writes a small text file below [cacheDir] (for example `playlists/42/Game.m3u`) and returns
      * its absolute path, or null when it could not be written. [relativePath] never leaves the cache.
@@ -68,8 +71,46 @@ interface FuseServices {
      */
     suspend fun cacheFile(relativePath: String, content: suspend () -> ByteArray): String? = null
 
+    /**
+     * The bytes of the file at [path] (a picture the user chose, for a backup), or null when it
+     * can't be read or is larger than [maxBytes].
+     */
+    suspend fun readFile(path: String, maxBytes: Int): ByteArray? = null
+
+    /**
+     * Writes [bytes] to [relativePath] below Fuse's own data folder, where it is kept (unlike the
+     * cache): restored pictures and the backup made before a restore. Returns the absolute path, or
+     * null when it could not be written. [relativePath] never leaves that folder.
+     */
+    suspend fun keepFile(relativePath: String, bytes: ByteArray): String? = null
+
+    /**
+     * Emulators' own settings files, for the few changes Fuse makes there when asked (PCSX2 patches).
+     * Null where Fuse can't reach them (Android).
+     */
+    val emulatorFiles: EmulatorFiles? get() = null
+
     /** Offset of local time from UTC right now, for "today" and "this week" playtime buckets. */
     fun utcOffsetMillis(): Long
+}
+
+/**
+ * The drives the system has mounted: internal storage, SD cards, USB drives, second disks. Library
+ * folders remember theirs, so an unplugged drive reads as offline rather than as deleted games.
+ */
+interface VolumeMonitor {
+    /** Every mounted drive Fuse could keep games on. Never throws; empty when the system won't say. */
+    suspend fun volumes(): List<io.github.matiyaaa.fuse.model.StorageVolume>
+
+    /**
+     * Calls [onChange] (on any thread) when a drive is mounted, unmounted or moved, where the system
+     * tells; null when it can't, and Fuse then looks on resume and before every scan.
+     */
+    fun watch(onChange: () -> Unit): AutoCloseable? = null
+
+    object None : VolumeMonitor {
+        override suspend fun volumes(): List<io.github.matiyaaa.fuse.model.StorageVolume> = emptyList()
+    }
 }
 
 /** Finds installed emulators and where they keep their firmware. */
@@ -249,4 +290,19 @@ interface DeviceLocations {
 
     /** Where Fuse's file picker starts: internal storage and SD cards, or the home folder and drives. */
     suspend fun storageRoots(): List<LocationHint> = emptyList()
+}
+
+/**
+ * Emulator settings files. Reads anything; writes only inside a data folder this returned, atomically,
+ * after keeping a copy of the file as it was before Fuse first changed it.
+ */
+interface EmulatorFiles {
+    /** Where the PCSX2 install [installed] keeps its data; null when it hasn't been set up or can't be found. */
+    suspend fun pcsx2(installed: io.github.matiyaaa.fuse.model.InstalledEmulator): io.github.matiyaaa.fuse.launch.patches.Pcsx2Home?
+
+    /** The text of [entry] inside the zip at [zip], or null. */
+    suspend fun zipText(zip: String, entry: String): String?
+
+    /** Writes [text] to [path] inside a known emulator data folder; false when it may not or could not. */
+    suspend fun write(path: String, text: String): Boolean
 }

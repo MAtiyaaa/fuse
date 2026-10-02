@@ -28,7 +28,10 @@ object DesktopDatabase {
         }
         File(path).absoluteFile.parentFile?.mkdirs()
         val url = "jdbc:sqlite:$path"
-        JdbcSqliteDriver(url, properties(foreignKeys = false, wal = true)).use { prepare(it) }
+        JdbcSqliteDriver(url, properties(foreignKeys = false, wal = true)).use { driver ->
+            backupBeforeMigrating(driver, path)
+            prepare(driver)
+        }
         return JdbcSqliteDriver(url, properties(foreignKeys = true, wal = true))
     }
 
@@ -39,6 +42,24 @@ object DesktopDatabase {
         mapper = { cursor -> QueryResult.Value(if (cursor.next().value) cursor.getLong(0) ?: 0L else 0L) },
         parameters = 0,
     ).value
+
+    /** Where the copy of the database at [path] made before migrating to [version] is kept. */
+    fun backupPath(path: String, version: Long = FuseDatabase.Schema.version): String = "$path.before-v$version.bak"
+
+    /**
+     * Before an older database is migrated, a consistent copy of it is written next to it
+     * ([backupPath]), so a migration that goes wrong can never cost the library. One copy is kept per
+     * target version. A failed copy stops the migration rather than risk it unprotected.
+     */
+    private fun backupBeforeMigrating(driver: SqlDriver, path: String) {
+        val current = userVersion(driver)
+        if (current <= 0L || current >= FuseDatabase.Schema.version) return
+        val backup = File(backupPath(path))
+        if (backup.exists()) backup.delete()
+        // VACUUM INTO writes a complete, consistent copy, write-ahead log included.
+        driver.execute(null, "VACUUM INTO '${backup.absolutePath.replace("'", "''")}'", 0)
+        check(backup.isFile && backup.length() > 0) { "Could not copy the library before updating it" }
+    }
 
     private fun prepare(driver: SqlDriver) {
         val schema = FuseDatabase.Schema

@@ -25,8 +25,12 @@ android {
 
     buildTypes {
         getByName("release") {
-            // R8 stays off until keep rules for Ktor, kotlinx.serialization and SQLDelight are written.
-            isMinifyEnabled = false
+            // R8 (shrinking only, see proguard-rules.pro) is opt-in with -Pfuse.r8=true until a shrunk
+            // build has been run on devices; the default release stays exactly as before.
+            val shrink = providers.gradleProperty("fuse.r8").orNull == "true"
+            isMinifyEnabled = shrink
+            isShrinkResources = shrink
+            if (shrink) proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             signingConfig = if (hasReleaseKey) {
                 signingConfigs.getByName("release")
             } else {

@@ -168,6 +168,10 @@ object LinuxCatalog {
             capabilities = caps(folders = FolderSupport.DIRECTORY, installed = true),
             titleIdMode = TitleIdMode.OPTIONAL,
             installHint = "File > Install Packages/Raps/Edats",
+            packageInstall = PackageInstallSpec(
+                setOf("pkg"), listOf("--installpkg", "{FILE}"),
+                source = "RPCS3 rpcs3/rpcs3.cpp: --installpkg <path> (\"Forces the emulator to install this pkg file\")",
+            ),
             limitations = listOf("Folder games are passed as the game folder (disc structure); a .ps3 file with a serial starts an installed game."),
         ),
         LinuxEmulatorDef(
@@ -282,6 +286,10 @@ object LinuxCatalog {
             capabilities = caps(folders = FolderSupport.NONE, installed = true),
             titleIdMode = TitleIdMode.REQUIRED,
             limitations = listOf("Games must be installed in Vita3K first; Fuse starts them by title id."),
+            packageInstall = PackageInstallSpec(
+                setOf("pkg"), listOf("--pkg", "{FILE}", "--zrif", "{KEY}"), needsKey = true,
+                source = "Vita3K vita3k/config/src/config.cpp: --pkg <path> needs --zrif <key> (base64)",
+            ),
         ),
         LinuxEmulatorDef(
             id = "linux.xemu", name = "xemu", platforms = platforms("xbox"),
@@ -374,6 +382,7 @@ object LinuxCatalog {
             source = esde("OS-SHELL rule; 'Shortcut or script' command %STARTDIR%=%GAMEDIR% %EMULATOR_OS-SHELL% %ROM%"),
             confidence = VERIFIED_ESDE,
             capabilities = caps(folders = FolderSupport.NONE),
+            shortcutsOnly = true,
         ),
     )
 

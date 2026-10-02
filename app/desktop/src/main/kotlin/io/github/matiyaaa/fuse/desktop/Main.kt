@@ -114,7 +114,7 @@ private fun ApplicationScope.FuseWindow(session: DesktopSession) {
             ) {
                 when (val s = session.startState) {
                     StartState.Loading -> Splash()
-                    is StartState.Failed -> Splash(error = s.message)
+                    is StartState.Failed -> Splash(error = s.message, detail = s.detail)
                     is StartState.Ready -> {
                         val lowMemory = session.platform.device.tier == DeviceTier.LOW
                         setSingletonImageLoaderFactory { context ->
@@ -123,7 +123,7 @@ private fun ApplicationScope.FuseWindow(session: DesktopSession) {
                                 add(SvgDecoder.Factory())
                             }
                         }
-                        FuseApp(s.store, session.platform, session.router, s.phoneLink)
+                        FuseApp(s.store, session.platform, session.router, s.phoneLink, safeMode = s.safeMode, onSettled = session::settled)
                     }
                 }
             }

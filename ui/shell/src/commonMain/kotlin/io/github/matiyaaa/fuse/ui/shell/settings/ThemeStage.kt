@@ -641,7 +641,7 @@ internal fun FocusStyle.icon(): ImageVector = when (this) {
     FocusStyle.BAR -> FuseIcons.Minus
 }
 
-/** The same names Settings, Appearance, Motion uses. */
+/** The same names Settings, Accessibility, Motion uses. */
 internal fun MotionProfile.label(): String = when (this) {
     MotionProfile.REDUCED -> "Reduced"
     MotionProfile.MINIMAL -> "Minimal"
@@ -649,7 +649,7 @@ internal fun MotionProfile.label(): String = when (this) {
     MotionProfile.ENHANCED -> "Enhanced"
 }
 
-/** The same names Settings, Sound uses. */
+/** The same names Settings, Screen and sound uses. */
 internal fun SoundProfile.label(): String = when (this) {
     SoundProfile.OFF -> "Off"
     SoundProfile.SOFT -> "Soft"

@@ -108,6 +108,10 @@ data class AppearanceSettings(
     val heroDim: Float = 0.3f,
     /** Adds an outline to the focused element on top of the glow. */
     val highContrastFocus: Boolean = false,
+    /** How large text is: 1 as designed, up to 1.3 for reading from further away. */
+    val textScale: Float = 1f,
+    /** Room kept clear at every edge, in percent of the screen, for TVs that cut the picture's edges off. */
+    val screenMargin: Int = 0,
     /** Themes added from a link, a file or pasted text, kept as they were written. */
     val customThemes: List<StoredTheme> = emptyList(),
 )
@@ -193,7 +197,7 @@ data class LibraryPreferences(
     val systemArtStyle: String = "CLASSIC",
     /** Confirm on a game opens its page instead of starting it. */
     val selectOpensGamePage: Boolean = false,
-    /** Phone Link's server runs while this is on (Settings, Phone Link). */
+    /** Phone Link's server runs while this is on (Settings, Accounts, Phone Link). */
     val phoneLinkEnabled: Boolean = false,
     /** Collections as a whole; off hides them everywhere (they are kept). */
     val collectionsEnabled: Boolean = true,

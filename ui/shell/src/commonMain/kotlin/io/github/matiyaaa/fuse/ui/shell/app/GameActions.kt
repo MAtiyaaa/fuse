@@ -1,5 +1,6 @@
 package io.github.matiyaaa.fuse.ui.shell.app
 
+import io.github.matiyaaa.fuse.launch.patches.PatchState
 import io.github.matiyaaa.fuse.model.CartridgeRoute
 import io.github.matiyaaa.fuse.model.FolderPolicy
 import io.github.matiyaaa.fuse.model.GameId
@@ -12,8 +13,13 @@ import io.github.matiyaaa.fuse.ui.designsystem.components.Trailing
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
 import io.github.matiyaaa.fuse.ui.designsystem.sound.SoundCue
 import io.github.matiyaaa.fuse.ui.shell.cartridge.uploadToRomm
+import io.github.matiyaaa.fuse.ui.shell.store.CompatibilityAnswer
 import io.github.matiyaaa.fuse.ui.shell.store.GameCard
 import io.github.matiyaaa.fuse.ui.shell.store.LaunchOutcome
+import io.github.matiyaaa.fuse.ui.shell.store.PackageOption
+import io.github.matiyaaa.fuse.ui.shell.store.Problem
+import io.github.matiyaaa.fuse.ui.shell.store.ProblemKind
+import io.github.matiyaaa.fuse.ui.shell.store.Severity
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -64,31 +70,9 @@ private fun AppState.launch(card: GameCard, emulator: io.github.matiyaaa.fuse.mo
                 launching = null
                 toasts.show("${outcome.appName}: ${outcome.reason}", ToastKind.INFO, durationMs = 6000)
             }
-            is LaunchOutcome.NeedsEmulator -> {
+            is LaunchOutcome.Problem -> {
                 launching = null
-                platform.sounds.play(SoundCue.ERROR)
-                choice = ChoiceSpec(
-                    icon = FuseIcons.Chip,
-                    title = "No emulator for ${outcome.platformName}",
-                    message = if (outcome.suggestions.isEmpty()) {
-                        "Install an emulator for this system, then come back. Fuse notices new apps automatically."
-                    } else {
-                        "Install one of these, then come back. Fuse notices new apps automatically."
-                    },
-                    options = outcome.suggestions.mapIndexed { i, s ->
-                        MenuAction("s$i", s, FuseIcons.Package, onSelect = { choice = null })
-                    } + MenuAction("ok", "OK", FuseIcons.Check, section = "", onSelect = { choice = null }),
-                )
-            }
-            is LaunchOutcome.Failed -> {
-                launching = null
-                platform.sounds.play(SoundCue.ERROR)
-                toasts.show(outcome.message, ToastKind.ERROR, durationMs = 6000)
-            }
-            is LaunchOutcome.Unsupported -> {
-                launching = null
-                platform.sounds.play(SoundCue.ERROR)
-                toasts.show(outcome.message, ToastKind.WARNING, durationMs = 7000)
+                showProblem(outcome.problem, card, retry = { launch(card, emulator, discPath, display) })
             }
         }
     }
@@ -131,6 +115,16 @@ fun AppState.gameMenu(card: GameCard, fromDetail: Boolean = false, extra: List<M
         add(MenuAction("system", "System", FuseIcons.Layers, detail = if (card.isApp) "Android, or back to being an app" else "If it landed in the wrong one", trailing = Trailing.Value(card.platformShort), onSelect = { systemPicker(card) }))
         // An Android game always starts as its app.
         if (!card.isApp) add(MenuAction("emulator", "Emulator", FuseIcons.Chip, trailing = Trailing.Chevron, onSelect = { emulatorPicker(card) }))
+        if (!card.isApp && card.platformId.value == "ps2") {
+            add(MenuAction("patches", "PCSX2 Patches", FuseIcons.Bandage, detail = "Widescreen, 60 FPS and other fixes PCSX2 has for this game", trailing = Trailing.Chevron, onSelect = { pcsx2PatchPicker(card) }))
+        }
+        if (!card.isApp && card.platformId.value == "ps3") {
+            add(MenuAction("compat", "How It Runs in RPCS3", FuseIcons.Gauge, detail = "From RPCS3's compatibility list. Asks rpcs3.net with the game's title id", trailing = Trailing.Chevron, onSelect = { showCompatibility(card) }))
+        }
+        // RPCS3 and Vita3K install packages (the game, updates, extra content) from their command line.
+        if (!card.isApp && card.platformId.value in PACKAGE_SYSTEMS) {
+            add(MenuAction("packages", "Install Packages", FuseIcons.PackageOpen, detail = "Updates and extra content, installed by the emulator", trailing = Trailing.Chevron, onSelect = { packagePicker(card) }))
+        }
         if (hasTwoScreens && !io.github.matiyaaa.fuse.launch.DualScreenPlatforms.usesSecondScreen(card.platformId)) {
             add(MenuAction("screen", "Screen", FuseIcons.DualScreen, detail = "Top, bottom, or ask when it starts", trailing = Trailing.Chevron, onSelect = { screenPicker(card) }))
         }
@@ -212,34 +206,258 @@ fun AppState.collectionPicker(game: GameId, title: String) {
 }
 
 fun AppState.emulatorPicker(card: GameCard) {
-    val options = store.emulators.optionsFor(card.platformId)
     contextMenu = null
-    choice = ChoiceSpec(
-        icon = FuseIcons.Chip,
-        title = "Emulator for ${card.title}",
-        message = "The platform's choice is used unless you pick one here.",
-        options = listOf(
-            MenuAction("default", "Use the platform's emulator", FuseIcons.Layers, onSelect = {
-                scope.launch { store.library.setEmulator(card.id, null) }
-                choice = null
-            }),
-        ) + options.map { o ->
-            val locate = !o.installed && store.emulators.canLocate
-            MenuAction(
-                "e${o.id}", o.name, FuseIcons.Chip,
-                detail = if (locate) "Not found. Show Fuse where it is" else o.note ?: if (o.installed) null else "Not installed",
-                unavailableReason = if (o.installed || locate) null else "Not installed on this device",
-                onSelect = {
-                    if (locate) {
-                        startLocate(LocateRequest(o.id, o.name, game = card.id))
-                    } else {
-                        scope.launch { store.library.setEmulator(card.id, o.id) }
-                        choice = null
-                    }
+    scope.launch {
+        // Each emulator is checked against this game, so one that can't open it says why.
+        val options = store.emulators.optionsForGame(card.id).ifEmpty { store.emulators.optionsFor(card.platformId) }
+        choice = ChoiceSpec(
+            icon = FuseIcons.Chip,
+            title = "Emulator for ${card.title}",
+            message = "The system's choice is used unless you pick one here.",
+            options = listOf(
+                MenuAction("default", "Use the system's emulator", FuseIcons.Layers, onSelect = {
+                    scope.launch { store.library.setEmulator(card.id, null) }
+                    choice = null
+                }),
+            ) + options.sortedBy { it.unavailable != null }.map { o ->
+                val locate = !o.installed && store.emulators.canLocate
+                MenuAction(
+                    "e${o.id}", o.name, FuseIcons.Chip,
+                    detail = if (locate) "Not found. Show Fuse where it is" else o.note ?: if (o.installed) null else "Not installed",
+                    unavailableReason = if (locate) null else o.unavailable ?: if (o.installed) null else "Not installed on this device",
+                    onSelect = {
+                        if (locate) {
+                            startLocate(LocateRequest(o.id, o.name, game = card.id))
+                        } else {
+                            scope.launch { store.library.setEmulator(card.id, o.id) }
+                            choice = null
+                        }
+                    },
+                )
+            },
+        )
+    }
+}
+
+/**
+ * An emulator's page: what it is and how Fuse found it, the systems it runs and is chosen for, how
+ * well Fuse knows it, its limits, and actions (open it, try it with a game, its website, forget
+ * where it was located).
+ */
+fun AppState.showEmulator(id: io.github.matiyaaa.fuse.model.EmulatorId) {
+    scope.launch {
+        val d = store.emulators.details(id) ?: return@launch
+        val test = if (d.installed) store.emulators.testGame(id) else null
+        val actions = buildList {
+            if (d.installed) {
+                add(MenuAction("open", "Open ${d.name}", FuseIcons.External, detail = "Its own settings, controls and firmware", onSelect = {
+                    contextMenu = null
+                    scope.launch { store.emulators.openEmulator(id) }
+                }))
+                add(MenuAction(
+                    "test", if (test != null) "Try it with ${test.title}" else "Try it with a game", FuseIcons.Play,
+                    detail = when {
+                        test == null -> null
+                        d.opensAppOnly -> "Opens ${d.name}; it doesn't take games from other apps"
+                        else -> "Starts this game in ${d.name}, without changing which emulator it uses"
+                    },
+                    unavailableReason = if (test == null) "No game on its systems is in your library" else null,
+                    onSelect = {
+                        contextMenu = null
+                        if (test != null) play(test, emulator = id)
+                    },
+                ))
+            }
+            add(MenuAction(
+                "systems", if (d.systems.size == 1) d.systems.single() else "${d.systems.size} systems", FuseIcons.Chip,
+                detail = when {
+                    d.chosenFor.isNotEmpty() -> "Chosen for ${d.chosenFor.joinToString(", ")}"
+                    d.systems.size in 2..8 -> d.systems.joinToString(", ")
+                    else -> null
                 },
+                section = "Runs",
+            ))
+            add(MenuAction("support", "How Fuse starts it", if (d.opensAppOnly) FuseIcons.AppWindow else FuseIcons.Rocket, detail = if (d.opensAppOnly) "Opens the app; choose the game there" else d.support, section = "Runs"))
+            d.limitations.forEachIndexed { i, l ->
+                add(MenuAction("limit.$i", l, FuseIcons.Info, section = "Good to know"))
+            }
+            if (d.installed) {
+                add(MenuAction(
+                    "found", d.foundVia?.let { "Found via $it" } ?: "Installed", FuseIcons.Search,
+                    detail = d.locatedAt ?: d.appId,
+                    section = "On this device",
+                ))
+            }
+            if (d.locatedAt != null) {
+                add(MenuAction("forget", "Forget where it is", FuseIcons.Undo, detail = "Fuse looks for it again by itself", section = "On this device", onSelect = {
+                    contextMenu = null
+                    scope.launch { store.emulators.forget(id) }
+                }))
+            }
+            d.homepage?.let { url ->
+                add(MenuAction("site", "Website", FuseIcons.Globe, detail = url, trailing = io.github.matiyaaa.fuse.ui.designsystem.components.Trailing.Chevron, section = "On this device", onSelect = {
+                    contextMenu = null
+                    platform.openUrl(url)
+                }))
+            }
+        }
+        openContextMenu(ContextMenuSpec(
+            title = d.name + (d.version?.let { "  $it" } ?: ""),
+            subtitle = if (d.installed) "Installed" else "Not installed on this device",
+            icon = FuseIcons.Joystick,
+            actions = actions,
+        ))
+    }
+}
+
+private val PACKAGE_SYSTEMS = setOf("ps3", "psvita")
+
+/**
+ * The game's PCSX2 patches with a check for each that is on. Fuse turns on any that are off and
+ * turns off only those it turned on; ones set in PCSX2 say so and stay as they are.
+ */
+fun AppState.pcsx2PatchPicker(card: GameCard) {
+    contextMenu = null
+    scope.launch {
+        when (val list = store.library.pcsx2Patches(card.id)) {
+            is io.github.matiyaaa.fuse.ui.shell.store.Pcsx2PatchList.Unavailable -> showProblem(Problem(
+                list.title, list.reason, ProblemKind.EMULATOR, Severity.INFO, reassurance = null,
+            ))
+            is io.github.matiyaaa.fuse.ui.shell.store.Pcsx2PatchList.Ready -> {
+                if (list.patches.isEmpty()) {
+                    showProblem(Problem(
+                        "No patches for ${card.title}",
+                        "PCSX2 has none filed under ${list.serial} (CRC ${list.crc})" + if (list.bundledRead) "." else ", in its patches folder. Its bundled patches couldn't be read on this system; check the game's Patches tab in PCSX2.",
+                        ProblemKind.EMULATOR, Severity.INFO, reassurance = null,
+                    ))
+                    return@launch
+                }
+                choice = ChoiceSpec(
+                    icon = FuseIcons.Bandage,
+                    title = "PCSX2 patches",
+                    message = "${list.serial}, CRC ${list.crc}. Changes apply the next time the game starts in PCSX2. Fuse only turns off what it turned on.",
+                    options = list.patches.map { s ->
+                        val about = listOfNotNull(s.patch.description, s.patch.author?.let { "by $it" }).joinToString("  ·  ").ifEmpty { null }
+                        MenuAction(
+                            "patch.${s.patch.name}", s.patch.name, FuseIcons.Bandage,
+                            detail = when (s.state) {
+                                PatchState.ON_BY_FUSE -> listOfNotNull("On, turned on in Fuse", about).joinToString("  ·  ")
+                                else -> about
+                            },
+                            trailing = Trailing.Check(s.on),
+                            unavailableReason = when (s.state) {
+                                PatchState.ON_IN_PCSX2 -> "On, turned on in PCSX2. Change it there"
+                                PatchState.ON_FOR_ALL_GAMES -> "On for every game in PCSX2's settings"
+                                PatchState.OFF_IN_PCSX2 -> "Turned off for this game in PCSX2"
+                                else -> null
+                            },
+                            onSelect = {
+                                scope.launch {
+                                    val ok = store.library.setPcsx2Patch(card.id, s.patch.name, !s.on)
+                                    if (!ok) toasts.show("Couldn't change PCSX2's settings for this game", ToastKind.WARNING)
+                                    pcsx2PatchPicker(card)
+                                }
+                            },
+                        )
+                    },
+                )
+            }
+        }
+    }
+}
+
+/** What RPCS3's compatibility list says about [card], as a sheet with a link to its report. */
+fun AppState.showCompatibility(card: GameCard) {
+    contextMenu = null
+    toasts.show("Asking RPCS3's compatibility list")
+    scope.launch {
+        val problem = when (val a = store.library.rpcs3Compatibility(card.id)) {
+            is CompatibilityAnswer.Listed -> {
+                val e = a.entry
+                Problem(
+                    title = "${e.status.label} in RPCS3",
+                    message = e.status.meaning + (e.date?.let { " Last tested on $it, as ${e.titleId}." } ?: ""),
+                    kind = ProblemKind.EMULATOR,
+                    severity = when (e.status) {
+                        io.github.matiyaaa.fuse.integrations.rpcs3.Rpcs3Status.PLAYABLE -> Severity.HEALTHY
+                        io.github.matiyaaa.fuse.integrations.rpcs3.Rpcs3Status.INGAME -> Severity.INFO
+                        io.github.matiyaaa.fuse.integrations.rpcs3.Rpcs3Status.INTRO, io.github.matiyaaa.fuse.integrations.rpcs3.Rpcs3Status.LOADABLE -> Severity.ATTENTION
+                        io.github.matiyaaa.fuse.integrations.rpcs3.Rpcs3Status.NOTHING -> Severity.BROKEN
+                    },
+                    reassurance = null,
+                    actions = listOfNotNull(e.reportUrl?.let { io.github.matiyaaa.fuse.ui.shell.store.ProblemAction.OpenLink(it, "Read the report") }),
+                    details = "RPCS3 compatibility list, rpcs3.net/compatibility. Ratings are the RPCS3 team's; results depend on your settings and hardware.",
+                )
+            }
+            CompatibilityAnswer.NoTitleId -> Problem(
+                "No title id for ${card.title}",
+                "RPCS3's list is searched by title id (like BLUS30443). Put it in the file or folder name, or keep the game as a folder with its PARAM.SFO.",
+                ProblemKind.FILE, Severity.INFO, reassurance = null,
             )
-        },
-    )
+            is CompatibilityAnswer.NotListed -> Problem(
+                "${a.titleId} isn't on RPCS3's list",
+                "Nobody has reported how this release runs yet. Other regions of the same game may be listed.",
+                ProblemKind.EMULATOR, Severity.INFO, reassurance = null,
+                actions = listOf(io.github.matiyaaa.fuse.ui.shell.store.ProblemAction.OpenLink("https://rpcs3.net/compatibility?g=" + a.titleId, "Search the list")),
+            )
+            CompatibilityAnswer.Unreachable -> Problem(
+                "Couldn't reach rpcs3.net",
+                "Check your connection and try again.",
+                ProblemKind.NETWORK, Severity.ATTENTION, reassurance = null,
+                actions = listOf(io.github.matiyaaa.fuse.ui.shell.store.ProblemAction.Retry()),
+            )
+        }
+        showProblem(problem, card) { showCompatibility(card) }
+    }
+}
+
+/** The game's packages an installed emulator can install, each started in its installer when chosen. */
+fun AppState.packagePicker(card: GameCard) {
+    contextMenu = null
+    scope.launch {
+        val options = store.library.packages(card.id)
+        if (options.isEmpty()) {
+            showProblem(Problem(
+                title = "Nothing to install for ${card.title}",
+                message = "Fuse installs .pkg files (the game, its updates and extra content) with RPCS3 or Vita3K on a computer. None of this game's files is one, or neither emulator is installed.",
+                kind = ProblemKind.EMULATOR,
+                severity = Severity.INFO,
+                reassurance = null,
+            ))
+            return@launch
+        }
+        fun install(o: PackageOption, key: String?) {
+            choice = null
+            scope.launch {
+                when (val r = store.library.installPackage(o, key)) {
+                    is LaunchOutcome.Problem -> showProblem(r.problem)
+                    else -> toasts.show("${o.emulatorName} is installing ${o.fileName}", ToastKind.SUCCESS)
+                }
+            }
+        }
+        choice = ChoiceSpec(
+            icon = FuseIcons.PackageOpen,
+            title = "Install packages",
+            message = "The emulator opens and installs it. Nothing else changes.",
+            options = options.map { o ->
+                MenuAction(
+                    "p${o.path}.${o.emulator}", o.fileName, FuseIcons.Package,
+                    detail = "${o.kind}  ·  with ${o.emulatorName}" + if (o.needsKey) "  ·  needs its zRIF" else "",
+                    onSelect = {
+                        if (!o.needsKey) {
+                            install(o, null)
+                        } else {
+                            choice = null
+                            // The key is only handed to the emulator; Fuse keeps no copy.
+                            textInput = TextInputSpec("zRIF for ${o.fileName}", "", placeholder = "Paste the zRIF", secret = true, capitalize = false, doneLabel = "Install") { key ->
+                                if (key.isNotBlank()) install(o, key)
+                            }
+                        }
+                    },
+                )
+            },
+        )
+    }
 }
 
 fun AppState.folderPolicyPicker(card: GameCard) {

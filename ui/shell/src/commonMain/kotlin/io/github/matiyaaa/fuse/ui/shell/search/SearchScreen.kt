@@ -55,8 +55,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
+import io.github.matiyaaa.fuse.data.search.FilterKey
+import io.github.matiyaaa.fuse.data.search.SearchSyntax
 import io.github.matiyaaa.fuse.model.CollectionKind
 import io.github.matiyaaa.fuse.model.NavAction
+import io.github.matiyaaa.fuse.ui.designsystem.components.Chip
 import io.github.matiyaaa.fuse.ui.designsystem.components.EditableText
 import io.github.matiyaaa.fuse.ui.designsystem.components.EmptyState
 import io.github.matiyaaa.fuse.ui.designsystem.components.FText
@@ -99,7 +102,13 @@ import io.github.matiyaaa.fuse.ui.shell.components.agoText
 import io.github.matiyaaa.fuse.ui.shell.store.AppCard
 import io.github.matiyaaa.fuse.ui.shell.store.GameCard
 import io.github.matiyaaa.fuse.ui.shell.store.PlatformCard
+import io.github.matiyaaa.fuse.ui.shell.store.SearchChip
 import io.github.matiyaaa.fuse.ui.shell.store.SearchResults
+import io.github.matiyaaa.fuse.ui.shell.store.SearchSuggestion
+import io.github.matiyaaa.fuse.ui.shell.settings.SettingHit
+import io.github.matiyaaa.fuse.ui.shell.settings.SettingsIndex
+import io.github.matiyaaa.fuse.ui.shell.settings.openSettings
+import io.github.matiyaaa.fuse.ui.shell.settings.settingsSections
 import io.github.matiyaaa.fuse.ui.shell.systems.SystemMark
 import io.github.matiyaaa.fuse.ui.shell.systems.gamesText
 import kotlin.math.abs
@@ -110,10 +119,26 @@ import kotlinx.coroutines.launch
 
 /** The kinds of result, in the order their groups are listed. */
 private enum class HitKind(val label: String, val icon: ImageVector) {
+    SUGGESTION("Narrow it down", FuseIcons.Filter),
     GAME("Games", FuseIcons.Gamepad),
     SYSTEM("Systems", FuseIcons.Chip),
     APP("Apps", FuseIcons.AppWindow),
     COLLECTION("Collections", FuseIcons.Bookmark),
+    SETTING("Settings", FuseIcons.Settings),
+}
+
+/** The icon a kind of filter is drawn with, in chips and suggestions. */
+internal fun FilterKey.icon(): ImageVector = when (this) {
+    FilterKey.PLATFORM -> FuseIcons.Chip
+    FilterKey.YEAR -> FuseIcons.CalendarDays
+    FilterKey.FAVORITE -> FuseIcons.Heart
+    FilterKey.PLAYED -> FuseIcons.History
+    FilterKey.MISSING -> FuseIcons.FileWarning
+    FilterKey.HIDDEN -> FuseIcons.EyeOff
+    FilterKey.COLLECTION -> FuseIcons.Bookmark
+    FilterKey.GENRE -> FuseIcons.Tag
+    FilterKey.DEVELOPER -> FuseIcons.Users
+    FilterKey.DRIVE -> FuseIcons.HardDrive
 }
 
 private sealed interface Hit {
@@ -121,6 +146,9 @@ private sealed interface Hit {
     val title: String
     val detail: String
     val kind: HitKind
+
+    /** The heading over this result's group. */
+    val group: String get() = kind.label
 
     data class Game(val card: GameCard) : Hit {
         override val key = "g${card.id.value}"
@@ -143,6 +171,30 @@ private sealed interface Hit {
         override val title = card.entry.displayTitle
         override val kind = HitKind.APP
         override val detail = if (card.entry.isGame) "Game app" else "App"
+    }
+
+    data class Suggestion(val s: SearchSuggestion, val choosing: Boolean) : Hit {
+        override val key = "s${s.key}.${s.text}"
+        override val title = s.label
+        override val kind = HitKind.SUGGESTION
+        override val detail = s.detail.orEmpty()
+        override val group = if (!choosing) kind.label else when (s.key) {
+            FilterKey.PLATFORM -> "Systems"
+            FilterKey.YEAR -> "Decades"
+            FilterKey.PLAYED -> "When"
+            FilterKey.GENRE -> "Genres"
+            FilterKey.COLLECTION -> "Collections"
+            FilterKey.DRIVE -> "Drives"
+            FilterKey.DEVELOPER -> "Developers"
+            FilterKey.FAVORITE, FilterKey.MISSING, FilterKey.HIDDEN -> "Yes or no"
+        }
+    }
+
+    data class Setting(val hit: SettingHit) : Hit {
+        override val key = "set.${hit.topic.section}.${hit.topic.row}"
+        override val title = hit.title
+        override val kind = HitKind.SETTING
+        override val detail = hit.path
     }
 
     data class Collection(val c: io.github.matiyaaa.fuse.model.GameCollection) : Hit {
@@ -172,12 +224,18 @@ fun SearchScreen(app: AppState) {
     val flow = remember {
         androidx.compose.runtime.snapshotFlow { field.text }
             .debounce(90)
-            .flatMapLatest { q -> if (q.isBlank()) flowOf(SearchResults()) else app.store.library.search(q.trim()) }
+            .flatMapLatest { q -> app.store.library.search(q) }
     }
     val results by flow.collectAsState(initial = SearchResults())
+    val sections = remember { settingsSections.filter { it.available(app) } }
     val hits = remember(results) {
-        results.games.map { Hit.Game(it) } + results.platforms.map { Hit.System(it) } +
-            results.apps.map { Hit.App(it) } + results.collections.filter { app.store.prefs.value.collectionsEnabled }.map { Hit.Collection(it) }
+        // Settings are found by name alone, never with filters.
+        val settings = if (results.chips.isEmpty()) SettingsIndex.search(results.query, sections, cartridge = app.platform.features.cartridge).map { Hit.Setting(it) } else emptyList()
+        val choosing = SearchSyntax.parse(results.query).pending != null
+        results.suggestions.map { Hit.Suggestion(it, choosing) } +
+            results.games.map { Hit.Game(it) } + results.platforms.map { Hit.System(it) } +
+            results.apps.map { Hit.App(it) } + results.collections.filter { app.store.prefs.value.collectionsEnabled }.map { Hit.Collection(it) } +
+            settings
     }
     sel.clamp(hits.size)
     // The results belong to what was typed a moment ago; until they arrive the old ones stay.
@@ -211,6 +269,12 @@ fun SearchScreen(app: AppState) {
             is Hit.System -> app.go(Route.PlatformGames(hit.card.platform.id))
             is Hit.App -> app.openApp(hit.card)
             is Hit.Collection -> app.go(Route.CollectionGames(hit.c.id, hit.c.name))
+            is Hit.Setting -> hit.hit.topic.let { t -> app.openSettings(t.section, t.row, t.group) }
+            // A filter goes into the search; the keys take over again for what comes next.
+            is Hit.Suggestion -> {
+                field.replaceAll(hit.s.text)
+                inResults = false
+            }
         }
     }
 
@@ -248,11 +312,15 @@ fun SearchScreen(app: AppState) {
             KeyboardField(
                 field,
                 Modifier.fillMaxWidth().reveal(reveal, 0),
-                placeholder = "Games, systems, apps",
+                placeholder = "Games, systems, settings",
                 leading = FuseIcons.Search,
                 focused = !inResults,
                 onClear = { field.replaceAll("") },
             )
+            if (results.chips.isNotEmpty()) {
+                Spacer(Modifier.height(Space.s))
+                FilterChips(results.chips) { token -> field.replaceAll(SearchSyntax.remove(field.text, token)) }
+            }
             Spacer(Modifier.height(if (compact) Space.m else Space.l))
             OnScreenKeyboard(
                 keyboard, field, { if (hits.isNotEmpty()) inResults = true },
@@ -333,23 +401,27 @@ private fun ColumnScope.ResultsPane(
     val nothing = !blank && hits.isEmpty() && settledQuery.isNotBlank()
     Box(modifier.weight(1f).fillMaxWidth()) {
         when {
-            blank -> Box(message, contentAlignment = Alignment.Center) {
+            blank && hits.isEmpty() -> Box(message, contentAlignment = Alignment.Center) {
                 EmptyState(
                     FuseIcons.Search,
                     "Search your library",
-                    message = "Games, systems, apps and collections, all on this device. Results appear as you type.",
+                    message = "Games, systems, apps, collections and settings, all on this device. Results appear as you type.",
                     compact = true,
                 )
             }
             nothing -> Box(message, contentAlignment = Alignment.Center) {
                 EmptyState(
                     FuseIcons.SearchX,
-                    "Nothing matches “${query.trim()}”",
-                    message = "Check the spelling, or try a shorter part of a title or a system's name.",
+                    if (query.contains(':')) "No games fit these filters" else "Nothing matches “${query.trim()}”",
+                    message = if (query.contains(':')) "No game fits every filter. Take one off, or try another value." else "Check the spelling, or try a shorter part of a title or a system's name.",
                     compact = true,
                 )
             }
-            else -> ResultList(app, hits, query, sel, showSelection, compact, onTap)
+            else -> {
+                // Only the name words are picked out; filters and what's typed after one aren't in names.
+                val words = remember(query) { SearchSyntax.parse(query).let { q -> if (q.pending != null) q.pending!!.second else q.text } }
+                ResultList(app, hits, words, sel, showSelection, compact, onTap)
+            }
         }
     }
 }
@@ -435,7 +507,7 @@ private fun ResultList(
                 item(key = "kind.${h.kind}", contentType = "label") {
                     val count = layout.countOf(h.kind)
                     SectionLabel(
-                        h.kind.label,
+                        h.group,
                         Modifier.padding(start = BAR + Space.m, top = if (i == 0) Space.xs else Space.l, bottom = Space.xs),
                         count = count.toString(),
                         icon = h.kind.icon,
@@ -483,8 +555,36 @@ private fun HitThumb(h: Hit, size: androidx.compose.ui.unit.Dp) {
         is Hit.App -> Artwork(h.card.icon, Modifier.size(size).clip(shape), contentScale = androidx.compose.ui.layout.ContentScale.Fit, fallback = {
             GeneratedArt(h.title, c.accent, slot = ArtSlot.ICON)
         })
-        is Hit.Collection -> Box(Modifier.size(size).clip(shape).background(c.text.copy(alpha = if (c.isDark) 0.08f else 0.06f)), contentAlignment = Alignment.Center) {
-            FuseIcon(if (h.c.kind == CollectionKind.SERIES) FuseIcons.Sparkles else FuseIcons.Bookmark, size = Size.iconM, tint = c.textMuted)
+        is Hit.Collection -> IconWell(if (h.c.kind == CollectionKind.SERIES) FuseIcons.Sparkles else FuseIcons.Bookmark, size, shape)
+        is Hit.Setting -> IconWell(h.hit.section.icon, size, shape)
+        is Hit.Suggestion -> IconWell(h.s.key.icon(), size, shape)
+    }
+}
+
+@Composable
+private fun IconWell(icon: ImageVector, size: Dp, shape: androidx.compose.ui.graphics.Shape) {
+    val c = Fuse.colors
+    Box(Modifier.size(size).clip(shape).background(c.text.copy(alpha = if (c.isDark) 0.08f else 0.06f)), contentAlignment = Alignment.Center) {
+        FuseIcon(icon, size = Size.iconM, tint = c.textMuted)
+    }
+}
+
+/** The filters in the search as chips; tapping one takes it out. One that can't be read is marked. */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+private fun FilterChips(chips: List<SearchChip>, onRemove: (String) -> Unit) {
+    val c = Fuse.colors
+    androidx.compose.foundation.layout.FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(Space.xs),
+        verticalArrangement = Arrangement.spacedBy(Space.xs),
+    ) {
+        chips.forEach { chip ->
+            Chip(
+                if (chip.valid) chip.label else "Can't read ${chip.label}",
+                icon = if (chip.valid) chip.key?.icon() ?: FuseIcons.Filter else FuseIcons.CircleX,
+                color = if (chip.valid) c.text else c.warning,
+                onClick = { onRemove(chip.token) },
+            )
         }
     }
 }

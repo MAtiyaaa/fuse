@@ -116,9 +116,18 @@ import kotlinx.coroutines.flow.map
  * desktop window) because that is where raw input arrives.
  */
 @Composable
-fun FuseApp(store: FuseStore, platform: PlatformUi, router: InputRouter, phoneLink: PhoneLinkControl? = null) {
+fun FuseApp(
+    store: FuseStore,
+    platform: PlatformUi,
+    router: InputRouter,
+    phoneLink: PhoneLinkControl? = null,
+    /** Start in safe mode (see [SafeMode]); null starts normally. */
+    safeMode: SafeMode? = null,
+    /** Called once this start has run long enough to count as settled ([StartupGuard.settle]). */
+    onSettled: () -> Unit = {},
+) {
     val base = rememberCoroutineScope()
-    val prefs by store.prefs.collectAsState()
+    val stored by store.prefs.collectAsState()
     val app = remember {
         lateinit var state: AppState
         // Everything screens start runs here. A failure shows a message; it never closes Fuse.
@@ -127,8 +136,16 @@ fun FuseApp(store: FuseStore, platform: PlatformUi, router: InputRouter, phoneLi
                 state.toasts.show("Something went wrong (${t::class.simpleName ?: "error"}). Fuse kept running.", ToastKind.ERROR)
             },
         )
-        state = AppState(store, platform, scope, if (prefs.onboardingDone) Route.Root(Destination.HOME) else Route.Onboarding, phoneLink)
+        state = AppState(store, platform, scope, if (stored.onboardingDone) Route.Root(Destination.HOME) else Route.Onboarding, phoneLink)
+        state.safeMode = safeMode
         state
+    }
+    // Safe mode draws with Fuse's own look and no effects; what is saved never changes.
+    val prefs = if (app.safeMode != null) stored.inSafeMode() else stored
+    LaunchedEffect(Unit) {
+        if (app.safeMode != null) app.showSafeMode()
+        delay(StartupGuard.SETTLE_MS)
+        onSettled()
     }
     val spec = prefs.theme
     val quality = RenderQuality.of(prefs.performance, platform.device, prefs.lowPower)
@@ -219,13 +236,17 @@ fun FuseApp(store: FuseStore, platform: PlatformUi, router: InputRouter, phoneLi
         glass = prefs.glass,
         highContrastFocus = prefs.highContrastFocus,
         animateChanges = true,
+        textScale = prefs.textScale,
     ) {
         CompositionLocalProvider(LocalInputRouter provides router, LocalUiSounds provides platform.sounds) {
             BoxWithConstraints(Modifier.fillMaxSize().background(Fuse.colors.ink)) {
+                // The room fills the whole screen; everything on it keeps clear of edges a TV cuts off.
+                Room(app, prefs.showHero, spec.background, prefs.heroDim, prefs.glass, prefs.videoPreview, prefs.videoDelaySeconds, spec.ambient)
+                val margin = prefs.screenMargin.coerceIn(0, 10) / 100f
+                BoxWithConstraints(Modifier.fillMaxSize().padding(horizontal = maxWidth * margin, vertical = maxHeight * margin)) {
                 val metrics = remember(maxWidth, maxHeight) { TileMetrics.forHeight(maxHeight, maxWidth) }
                 val borders = rememberTileBorders(store)
                 CompositionLocalProvider(LocalTileMetrics provides metrics, LocalTileBorders provides borders, LocalGameArt provides prefs.gameArt) {
-                    Room(app, prefs.showHero, spec.background, prefs.heroDim, prefs.glass, prefs.videoPreview, prefs.videoDelaySeconds, spec.ambient)
                     ArtWarmup(app)
                     ShellInput(app)
                     Pages(app, visibleTabs(app, prefs))
@@ -275,8 +296,9 @@ fun FuseApp(store: FuseStore, platform: PlatformUi, router: InputRouter, phoneLi
                     ToastHost(app.toasts)
                     app.capture?.let { CaptureOverlay(it) }
                     LaunchVeilView(app)
-                    if (prefs.crt.enabled && quality.crtShader) CrtOverlay(prefs.crt)
                 }
+                }
+                if (prefs.crt.enabled && quality.crtShader) CrtOverlay(prefs.crt)
             }
         }
     }
@@ -407,11 +429,12 @@ private fun Pages(app: AppState, tabs: List<Destination>) {
                     Route.PhoneLink -> io.github.matiyaaa.fuse.ui.shell.settings.PhoneLinkScreen(app)
                     is Route.GameInfo -> GameScreen(app, route.game)
                     is Route.Media -> MediaScreen(app, route.owner, route.title, route.identify)
-                    is Route.Settings -> SettingsScreen(app, route.section)
+                    is Route.Settings -> SettingsScreen(app, route.section, route.row)
                     is Route.PlatformSettings -> PlatformSettingsScreen(app, route.platform)
                     Route.Search -> SearchScreen(app)
                     Route.Controls -> io.github.matiyaaa.fuse.ui.shell.settings.ControlsScreen(app)
                     Route.Licenses -> io.github.matiyaaa.fuse.ui.shell.settings.LicensesScreen(app)
+                    Route.PlayTime -> io.github.matiyaaa.fuse.ui.shell.library.PlayTimeScreen(app)
                     Route.Themes -> io.github.matiyaaa.fuse.ui.shell.settings.ThemesScreen(app)
                     Route.Onboarding -> OnboardingScreen(app)
                     is Route.FolderBrowser -> FolderBrowserScreen(app, route.game)
@@ -556,7 +579,7 @@ private fun MenuMusic(app: AppState, player: MenuMusicPlayer?) {
     val music = prefs.music
     val setup = app.navigator.current == Route.Onboarding
     val track = when {
-        !music.enabled -> null
+        !music.enabled || app.safeMode != null -> null
         setup -> BundledMusic.ONBOARDING
         else -> music.track
     }
@@ -591,7 +614,7 @@ private fun FillFinishedToast(app: AppState) {
         if (f.cancelled || (app.navigator.current as? Route.Settings)?.section == "media") return@LaunchedEffect
         // Fuse's own fills speak up only when they found something.
         if (f.automatic && f.added == 0 && f.details == 0) return@LaunchedEffect
-        val needs = f.needsYou.size.takeIf { it > 0 }?.let { " $it need you in Settings, Media and Scraping." } ?: ""
+        val needs = f.needsYou.size.takeIf { it > 0 }?.let { " $it need you in Settings, Art and details." } ?: ""
         val lead = if (f.automatic) "Found art for your games" else "Fill finished"
         app.toasts.show("$lead. ${io.github.matiyaaa.fuse.ui.shell.settings.fillSummary(f)}.$needs")
     }
@@ -600,12 +623,18 @@ private fun FillFinishedToast(app: AppState) {
 /** What is working in the background, for the top line: recordings, art fills, uploads, downloads and updates. */
 @Composable
 private fun hudActivities(app: AppState): List<HudActivity> {
+    val health = io.github.matiyaaa.fuse.ui.shell.settings.rememberHealthIssues(app)
     val update by app.store.updates.state.collectAsState()
     val available by app.store.updates.available.collectAsState()
     val cartridge by app.store.cartridge.status.collectAsState()
     val fill by app.store.media.fillProgress.collectAsState()
     val recordingTime = rememberRecordingTime(app.capture)
     return buildList {
+        // Safe mode stays in view, calmly, with its way out a press away.
+        if (app.safeMode != null) add(HudActivity("safe", FuseIcons.LifeBuoy, "Safe mode. Select for what it means and how to leave it", steady = true) { app.showSafeMode() })
+        // Only something that keeps Fuse from working claims a place in the top line.
+        val broken = health.firstOrNull { it.problem.severity == io.github.matiyaaa.fuse.ui.shell.store.Severity.BROKEN }
+        if (broken != null) add(HudActivity("health", FuseIcons.BadgeAlert, "${broken.problem.title}. Select to fix it", attention = true) { app.showProblem(broken.problem) })
         // A recording runs: the ring fills toward its 30 minute limit, and a press stops it.
         if (recordingTime != null) {
             val since = (app.capture?.state as? CaptureController.State.Recording)?.since
@@ -636,9 +665,9 @@ private fun hudActivities(app: AppState): List<HudActivity> {
             ) { app.selectTab(io.github.matiyaaa.fuse.model.Destination.CARTRIDGE) })
         }
         when (val u = update) {
-            is UpdateState.Downloading -> add(HudActivity("update", FuseIcons.Download, "Downloading ${u.release.name}", progress = u.progress) { app.go(Route.Settings("updates")) })
-            is UpdateState.Ready -> add(HudActivity("update", FuseIcons.Refresh, "${u.release.name} is ready: restart to update", attention = true) { app.go(Route.Settings("updates")) })
-            else -> if (available != null) add(HudActivity("update", FuseIcons.Download, "${available?.name} is available", attention = true) { app.go(Route.Settings("updates")) })
+            is UpdateState.Downloading -> add(HudActivity("update", FuseIcons.Download, "Downloading ${u.release.name}", progress = u.progress) { app.go(Route.Settings("about")) })
+            is UpdateState.Ready -> add(HudActivity("update", FuseIcons.Refresh, "${u.release.name} is ready: restart to update", attention = true) { app.go(Route.Settings("about")) })
+            else -> if (available != null) add(HudActivity("update", FuseIcons.Download, "${available?.name} is available", attention = true) { app.go(Route.Settings("about")) })
         }
     }
 }

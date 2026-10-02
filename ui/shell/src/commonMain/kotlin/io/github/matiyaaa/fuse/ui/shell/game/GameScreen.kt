@@ -108,6 +108,7 @@ import io.github.matiyaaa.fuse.ui.shell.app.gameMenu
 import io.github.matiyaaa.fuse.ui.shell.app.gameRoom
 import io.github.matiyaaa.fuse.ui.shell.app.play
 import io.github.matiyaaa.fuse.ui.shell.app.rememberSystems
+import io.github.matiyaaa.fuse.ui.shell.app.showProblem
 import io.github.matiyaaa.fuse.ui.shell.components.LocalTileMetrics
 import io.github.matiyaaa.fuse.ui.shell.components.agoText
 import io.github.matiyaaa.fuse.ui.shell.components.playtimeText
@@ -172,12 +173,20 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
     val sel = remember(game.id) { ShelfSelection() }
     val scroll = rememberScrollState()
     val reveal = rememberReveal(game.id)
+    // What System health found about this game (a disc its playlist names that's gone, an emulator
+    // that isn't installed any more): told under Play, and a button away.
+    val issues = io.github.matiyaaa.fuse.ui.shell.settings.rememberHealthIssues(app).filter { it.game == game.id }
 
     // Play first, then the emulator it starts in, then the quick actions, then everything else.
-    val actions = listOf(
-        DetailAction("play", "Play", FuseIcons.Play, "Play", primary = true) { app.play(card) },
+    val actions = listOfNotNull(
+        // A game Fuse can't reach right now keeps its Play button (pressing it explains why), drawn
+        // as not ready, so the page never promises a start it knows won't happen.
+        DetailAction("play", "Play", if (d.unavailable != null) FuseIcons.HardDrive else FuseIcons.Play, "Play", primary = d.unavailable == null && !d.missing) { app.play(card) },
         DetailAction("emu", d.emulator.selected?.name ?: "Choose emulator", if (d.emulator.selected == null) FuseIcons.Warning else FuseIcons.Chip, "Choose emulator") {
             app.emulatorPicker(card)
+        },
+        issues.firstOrNull()?.let { issue ->
+            DetailAction("health", null, FuseIcons.BadgeAlert, "What needs attention") { app.showProblem(issue.problem, card) }
         },
         DetailAction("fav", null, FuseIcons.Heart, if (game.favorite) "Remove from favourites" else "Add to favourites") {
             app.scope.launch { app.store.library.setFavorite(game.id, !game.favorite) }
@@ -223,6 +232,7 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
         when (info) {
             InfoCard.STARTS -> app.emulatorPicker(card)
             InfoCard.FILE -> app.go(Route.FolderBrowser(game.id))
+            InfoCard.PLAY -> app.go(Route.PlayTime)
             else -> Unit
         }
     }
@@ -241,6 +251,7 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
         else -> when (cardAt(row, col)) {
             InfoCard.STARTS -> "Choose emulator"
             InfoCard.FILE -> "Open its folder"
+            InfoCard.PLAY -> "All play time"
             else -> null
         }
     }
@@ -317,18 +328,22 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
                             FuseButton(
                                 a.label, selected = selected, icon = a.icon,
                                 kind = if (a.primary) ButtonKind.PRIMARY else ButtonKind.SECONDARY,
-                                height = if (a.primary) Size.row else Size.touch,
+                                height = if (a.id == "play") Size.row else Size.touch,
                                 // The emulator reads as a choice: its name, and a chevron for "pick another".
                                 trailingIcon = if (a.id == "emu") FuseIcons.ChevronDown else null,
                                 // Play stays pressable without an emulator: pressing it explains what to install.
                                 enabled = !a.primary || d.emulator.canLaunch || d.emulator.selected != null,
-                                modifier = m.then(if (a.primary) Modifier.widthIn(min = Size.touch * 3) else Modifier),
+                                modifier = m.then(if (a.id == "play") Modifier.widthIn(min = Size.touch * 3) else Modifier),
                                 onClick = tap,
                             )
                         } else {
                             IconButton(
                                 a.icon, selected = selected,
-                                tint = if (a.id == "fav" && game.favorite) c.accent else c.text,
+                                tint = when {
+                                    a.id == "fav" && game.favorite -> c.accent
+                                    a.id == "health" -> c.warning
+                                    else -> c.text
+                                },
                                 contentDescription = a.name,
                                 modifier = m,
                                 onClick = tap,
@@ -353,7 +368,7 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
                             actions.indices.forEach { button(it, Modifier.align(Alignment.CenterVertically)) }
                         }
                     }
-                    LaunchNote(d, Modifier.reveal(reveal, 3))
+                    LaunchNote(d, Modifier.reveal(reveal, 3), issues.firstOrNull()?.problem?.title)
                 }
                 layout.cover?.let { cover ->
                     Spacer(Modifier.width(Space.xxl))
@@ -452,6 +467,8 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
             }
             Section("Details", Modifier.section("details", 8)) {
                 val size by produceState(SIZE_LOADING, game.id) { value = app.store.storage.size(game.id) ?: SIZE_UNKNOWN }
+                // A PlayStation disc's own serial (and PCSX2's CRC), read from the image once.
+                val disc by produceState<io.github.matiyaaa.fuse.library.disc.DiscIdentity?>(null, game.id) { value = app.store.library.discIdentity(game.id) }
                 // Cards in a line share one height; a line holds as many as fit a readable width,
                 // and four make two even lines rather than three and one.
                 SideEffect { cardsPerLine = layout.cardsPerLine }
@@ -470,7 +487,7 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
                                 InfoCard.STARTS -> StartsCard(d, selected, tap, m)
                                 InfoCard.PLAY -> PlayCard(d, selected, tap, m)
                                 InfoCard.EXTRAS -> ExtrasCard(d, selected, tap, m)
-                                InfoCard.FILE -> FileCard(d, size, selected, tap, m)
+                                InfoCard.FILE -> FileCard(d, size, disc, selected, tap, m)
                             }
                         }
                         repeat(perLine - chunk.size) { Spacer(Modifier.weight(1f)) }
@@ -601,8 +618,32 @@ private fun FactChip(text: String, icon: ImageVector? = null, dot: Color? = null
  * warning), or an emulator that opens a folder or only its own app (how it will go).
  */
 @Composable
-private fun LaunchNote(d: GameDetail, modifier: Modifier) {
+private fun LaunchNote(d: GameDetail, modifier: Modifier, attention: String? = null) {
     val c = Fuse.colors
+    if (attention != null && d.unavailable == null) {
+        Row(modifier.padding(top = Space.m), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s)) {
+            FuseIcon(FuseIcons.BadgeAlert, size = Size.iconS, tint = c.warning)
+            FText(attention, Fuse.type.caption, color = c.text, maxLines = 2)
+        }
+        return
+    }
+    // Where the game can't be reached, that comes first, calmly: it isn't broken, it's away.
+    val away = d.unavailable
+    if (away != null || d.missing) {
+        Row(modifier.padding(top = Space.m), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s)) {
+            FuseIcon(if (away != null) FuseIcons.HardDrive else FuseIcons.FileQuestion, size = Size.iconS, tint = if (away != null) c.textMuted else c.warning)
+            FText(
+                when {
+                    away != null && away.state == io.github.matiyaaa.fuse.model.SourceState.OFFLINE ->
+                        "Stored on ${away.driveLabel}, which isn't connected. Connect it to play."
+                    away != null -> "${away.label}. Your game and everything about it are kept."
+                    else -> "The last scan didn't find this game's file. Scan again once it's back."
+                },
+                Fuse.type.caption, color = c.text, maxLines = 2,
+            )
+        }
+        return
+    }
     val summary = launchNote(d) ?: return
     val missing = d.emulator.selected == null
     Row(modifier.padding(top = Space.m), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s)) {
@@ -686,7 +727,7 @@ private fun StartsCard(d: GameDetail, selected: Boolean, onClick: () -> Unit, mo
 private fun PlayCard(d: GameDetail, selected: Boolean, onClick: () -> Unit, modifier: Modifier) {
     val c = Fuse.colors
     val play = d.game.play
-    InfoPanel("Play history", FuseIcons.Clock3, selected, onClick, modifier) {
+    InfoPanel("Play history", FuseIcons.Clock3, selected, onClick, modifier, actionable = true) {
         Fact("Played", if (play.totalSeconds > 0) playtimeText(play.totalSeconds) else "Not yet", numeric = true)
         Fact("Last played", play.lastPlayedAt?.let { agoText(it).replaceFirstChar(Char::uppercase) } ?: "Never")
         if (d.secondsThisWeek > 0) Fact("This week", playtimeText(d.secondsThisWeek), numeric = true)
@@ -720,7 +761,7 @@ private fun ExtrasCard(d: GameDetail, selected: Boolean, onClick: () -> Unit, mo
 
 /** Where the game lives on this device and how Fuse reads it. */
 @Composable
-private fun FileCard(d: GameDetail, size: Long, selected: Boolean, onClick: () -> Unit, modifier: Modifier) {
+private fun FileCard(d: GameDetail, size: Long, disc: io.github.matiyaaa.fuse.library.disc.DiscIdentity?, selected: Boolean, onClick: () -> Unit, modifier: Modifier) {
     val game = d.game
     val loc = game.location
     InfoPanel("On this device", FuseIcons.HardDrive, selected, onClick, modifier, actionable = true) {
@@ -741,6 +782,8 @@ private fun FileCard(d: GameDetail, size: Long, selected: Boolean, onClick: () -
             FolderInterpretation.MULTI_DISC -> "A multi-disc set"
             FolderInterpretation.FOLDER_BROWSER -> "A folder you pick from"
         }, lines = 2)
+        (disc?.serial ?: game.tags.serial)?.let { Fact("Serial", it, numeric = true) }
+        disc?.crcText?.let { Fact("PCSX2 CRC", it, numeric = true) }
         game.tags.regions.takeIf { it.isNotEmpty() }?.let { Fact("Region", it.joinToString(", ")) }
         game.metadata.developer?.let { Fact("Developer", it) }
         game.metadata.publisher?.takeIf { it != game.metadata.developer }?.let { Fact("Publisher", it) }
@@ -960,6 +1003,8 @@ fun GameDetail.toCard(): GameCard = GameCard(
     dlc = game.content.count { it.kind == ContentKind.DLC },
     discs = game.discs.size,
     rommRomId = game.links.rommRomId,
+    missing = missing,
+    unavailable = unavailable,
 )
 
 /** How many can play: "1 player", "1-4 players", or a source's own words ("Single player"). */

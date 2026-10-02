@@ -24,6 +24,12 @@ interface ActivityRequests {
 
     /** Android's screen recording prompt; the granted result, or null when the user said no. */
     suspend fun requestScreenCapture(intent: Intent): ActivityResult?
+
+    /** The document picker's "save as": where the user wants a new [name] file, or null. */
+    suspend fun createDocument(name: String, mimeType: String): Uri? = null
+
+    /** The document picker's "open": a file of [mimeTypes], or null. */
+    suspend fun openDocument(mimeTypes: Array<String>): Uri? = null
 }
 
 /**

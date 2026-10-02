@@ -148,6 +148,10 @@ aligns optically with icons.
 | `numeric` | Sora | SemiBold | 15 / 20 | 0 | Clock, counters (tabular figures) |
 | `numericLarge` | Sora | SemiBold | 40 / 44 | -0.02 | Large statistics (tabular figures) |
 
+**Text size** (Settings, Appearance) scales the whole scale: Large is 1.15 and Extra large 1.3 for the
+Manrope styles and the small numbers, and half of that step for the Sora titles, which are already
+large. Rows and cards grow with their text rather than clipping it.
+
 ## Shapes
 
 `SquircleShape` (`designsystem/shape/SquircleShape.kt`) draws continuous corners: the curvature ramps
@@ -350,6 +354,8 @@ content's scroll. Art-less items get a lit radial gradient in their colour inste
 | `ReorderList` | `components/ReorderList.kt` | Lists made for putting things in order |
 | `Panel` | `components/Panel.kt` | Surfaces, optional glass |
 | `Overlay` | `components/Overlay.kt` | Modal sheets over a scrim |
+| `ProblemOverlay` | `ui/shell/app/ProblemSheet.kt` | Something that went wrong or needs a decision: an icon well tinted by severity, what it means, a reassurance line, actions, and technical details on request |
+| `TextPreviewOverlay` | `ui/shell/app/TextPreview.kt` | Text to read before it is saved or copied (the diagnostics report) |
 | `ToastHost` | `components/Toast.kt` | Short notices |
 | `HintBar` | `components/HintBar.kt` | The hint line |
 | `StatusCluster`, `BatteryGlyph`, `WifiGlyph` | `components/Status.kt` | Status glyphs |
@@ -380,7 +386,7 @@ picture: the controller hides it and waits 150 ms before a screenshot or a recor
 
 - **One icon set.** Interface icons are [Lucide](https://lucide.dev/license) line icons (ISC; a few
   are derived from Feather, MIT), vendored as path data into `designsystem/icons/FuseIcons.kt` by
-  `tools/icons/generate_icons.py`, which lists every icon Fuse uses (167 today). Do not hand-edit the
+  `tools/icons/generate_icons.py`, which lists every icon Fuse uses (305 today). Do not hand-edit the
   generated file and do not mix in other icon sets.
 - **One stroke weight.** Every icon is a 24 x 24 viewport stroked at 1.8 (slightly lighter than
   Lucide's 2, to match the typography at handheld sizes) with round caps and joins, tinted with the
@@ -486,11 +492,15 @@ Low Power Mode keeps navigation exactly as quick; it only drops effects.
   button, whatever the theme.
 - **Reduced motion** (Settings, Appearance, Motion) removes scaling, sliding, parallax, sweeps and
   moving backgrounds and shortens fades to 72 ms or less.
-- **Text size.** Type sizes are in sp, so on Android they follow the system font size. There is no
-  separate in-app text size setting yet ([ROADMAP.md](ROADMAP.md)).
+- **Text size.** Type sizes are in sp, so on Android they follow the system font size, and Fuse's
+  own Text size (Default, Large, Extra large) scales them further; see [Typography](#typography).
+- **Screen edges.** For TVs that cut off the picture's edges, Screen edges keeps everything 2, 4 or 6
+  percent clear of every edge while the background still fills the screen.
+- **Problems say what they mean.** Severity is told by the words and an icon as well as its tint:
+  healthy, a note, needs attention, or broken. A reassurance line says when nothing was changed.
 - **Input.** Everything works with a controller, a keyboard or touch; the touch target token is 48
   dp. The button layout (Xbox, Nintendo or PlayStation) sets the hint glyphs and where confirm sits;
   "Swap confirm and back" swaps the keys themselves, and "Detect my buttons" sets both. Repeat delay and speed, stick deadzone and push threshold, hold time
-  and vibration are adjustable (Settings, Inputs). The input router supports per-button remapping
+  and vibration are adjustable (Settings, Controls). The input router supports per-button remapping
   (`InputProfile.remap`), but there is no remapping screen yet.
 - **Sound and haptics are optional** and never carry information that is not also on screen.
