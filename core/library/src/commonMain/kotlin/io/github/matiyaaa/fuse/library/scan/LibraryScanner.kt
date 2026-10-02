@@ -193,6 +193,8 @@ class LibraryScanner(
                     folderModifiedAt = folder.entry.modifiedAt,
                     games = games,
                     complete = result.complete,
+                    notGames = result.listed,
+                    notGameTrees = result.skipped,
                 )
             }
             if (complete) rememberState(folder.entry, children)

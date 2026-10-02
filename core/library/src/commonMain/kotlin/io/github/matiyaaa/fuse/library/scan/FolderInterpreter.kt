@@ -35,6 +35,10 @@ data class FolderScanResult(
     val complete: Boolean,
     val errors: List<String> = emptyList(),
     val foldersVisited: Int = 0,
+    /** Folders that were read and are not games themselves (a game found earlier there no longer is one). */
+    val listed: Set<String> = emptySet(),
+    /** Emulator data folders skipped whole: nothing below them is a game. */
+    val skipped: Set<String> = emptySet(),
 )
 
 /**
@@ -114,6 +118,8 @@ class FolderInterpreter(
         val onFolder: suspend (String) -> Unit,
     ) {
         val visited = HashSet<String>()
+        val listed = HashSet<String>()
+        val skipped = HashSet<String>()
         val errors = ArrayList<String>()
         var complete = true
         var folders = 0
@@ -130,7 +136,7 @@ class FolderInterpreter(
             folders++
             onFolder(path)
             return try {
-                fs.list(path)
+                fs.list(path).also { listed += path }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: FsAccessException) {
@@ -148,7 +154,10 @@ class FolderInterpreter(
             !entry.isDirectory && entry.extension in platform.extensions &&
                 !ScanRules.isIgnoredFile(entry.name) && !ScanRules.isBiosFile(platform, entry.name)
 
-        fun result(games: List<ScannedGame>) = FolderScanResult(games, complete, errors.toList(), folders)
+        fun result(games: List<ScannedGame>): FolderScanResult {
+            val gamePaths = games.map { it.path }.toSet()
+            return FolderScanResult(games, complete, errors.toList(), folders, listed - gamePaths, skipped.toSet())
+        }
     }
 
     // A level whose files are individual games and whose folders are interpreted one by one.
@@ -164,8 +173,15 @@ class FolderInterpreter(
         walk.hidden += grouping.hidden
         val games = ArrayList<ScannedGame>()
         for ((group, extra) in LooseContent.attach(grouping.groups)) games += fileGame(group, extra, walk)
+        val native = walk.platform.id.value in FOLDER_NATIVE
         for (sub in children.filter { it.isDirectory }.sortedBy { it.name.lowercase() }) {
-            games += interpret(sub, depth + 1, walk)
+            // An emulator's own data folders (saves, caches, system files) are never games.
+            if (native && isEmulatorData(sub.name)) {
+                walk.skipped += sub.path
+                continue
+            }
+            // Its storage folders (Cemu's mlc01/usr/title/00050000) only lead to the games inside.
+            games += interpret(sub, if (native && isEmulatorStorage(sub.name)) depth else depth + 1, walk)
         }
         return games
     }
@@ -192,6 +208,8 @@ class FolderInterpreter(
     private suspend fun auto(folder: FsEntry, children: List<FsEntry>, depth: Int, walk: Walk): List<ScannedGame> {
         dirAsFile(folder, children, walk)?.let { return listOf(it) }
         structure(folder, children, walk)?.let { return listOf(it) }
+        val native = walk.platform.id.value in FOLDER_NATIVE
+        if (native && isEmulatorStorage(folder.name)) return scanLevel(folder.path, children, depth, walk)
 
         val layout = Layout(children, options)
         val grouping = grouper.group(folder.path, children, walk::isGameFile)
@@ -215,7 +233,9 @@ class FolderInterpreter(
         }
         if (layout.baseDirs.isNotEmpty()) return listOf(multiFileGame(folder, children, grouping, layout, walk))
         val games = scanLevel(folder.path, children, depth, walk, grouping)
-        if (games.isEmpty() && walk.platform.id.value in FOLDER_NATIVE) {
+        // Only a folder right inside the system's folder is a game for having nothing Fuse knows in
+        // it; deeper ones are a game's own folders (data, audio, saves), which once made thousands.
+        if (games.isEmpty() && native && depth <= 1) {
             return listOf(folderGame(folder, children, folder.path, FolderInterpretation.FOLDER_IS_GAME, walk))
         }
         return games
@@ -515,6 +535,29 @@ class FolderInterpreter(
         // ES-DE's %INJECT% reads at most 4096 bytes, so real title-id files are never larger.
         const val TITLE_ID_FILE_MAX = 4096L
         val TITLE_ID_FILES = setOf("ps3", "psvita")
+
+        /**
+         * Folders emulators keep beside their games when their storage is copied into a library:
+         * saves, caches, system titles and firmware. Never games, never walked.
+         */
+        val EMULATOR_DATA = setOf(
+            "save", "saves", "savedata", "boss", "sys", "dev_flash", "dev_flash2", "dev_flash3", "dev_usb000",
+            "dev_bdvd", "disc_cache", "crash_report", "caches", "cache", "shadercache", "shader_cache", "logs",
+            "temp", "tmp", "home", "photo", "screenshots", "captures", "trophy", "license", "licenses",
+        )
+
+        /** Emulator storage folders that only lead to the games inside them (Cemu, RPCS3, Vita3K). */
+        val EMULATOR_STORAGE = setOf("mlc01", "dev_hdd0", "ux0", "usr", "title", "app")
+
+        private val TITLE_GROUP = Regex("^[0-9a-f]{8}$", RegexOption.IGNORE_CASE)
+
+        fun isEmulatorData(name: String): Boolean = name.trim().lowercase() in EMULATOR_DATA
+
+        /** Storage folders, and Wii U title groups such as `00050000`. */
+        fun isEmulatorStorage(name: String): Boolean {
+            val n = name.trim().lowercase()
+            return n in EMULATOR_STORAGE || TITLE_GROUP.matches(n)
+        }
 
         /** Platforms whose games are normally folders: an unrecognised folder is still one game. */
         val FOLDER_NATIVE = setOf("ps3", "ps4", "ps5", "psvita", "wiiu", "xbox", "xbox360", "win", "dos", "scummvm")
