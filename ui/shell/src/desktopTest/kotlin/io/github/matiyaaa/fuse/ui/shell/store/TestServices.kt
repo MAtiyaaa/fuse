@@ -60,6 +60,14 @@ internal class FakeServices(
         } else if (request.url.host == "raw.githubusercontent.com" && request.url.encodedPath == "/someone/themes/main/ember.json") {
             // A shared theme, as GitHub serves the file behind a page link.
             respond("""{"fuseTheme": 1, "name": "Ember", "colors": {"accent": "#FF7A59"}}""", HttpStatusCode.OK)
+        } else if (request.url.host == "rpcs3.net" && request.url.parameters["g"] == "BLUS30443") {
+            respond(
+                """{"return_code": 0, "results": {"BLUS30443": {"title": "Demon's Souls", "status": "Playable", "date": "2020-05-04", "thread": 194290}}}""",
+                HttpStatusCode.OK,
+            )
+        } else if (request.url.host == "rpcs3.net") {
+            // An id the list doesn't know: it searches text instead and answers with another game.
+            respond("""{"return_code": 2, "search_term": "x", "results": {"BLES00917": {"title": "F1 2010", "status": "Playable"}}}""", HttpStatusCode.OK)
         } else if (request.url.host == "raw.githubusercontent.com" && request.url.encodedPath.endsWith("/big.json")) {
             respond("x".repeat(70_000), HttpStatusCode.OK)
         } else {
@@ -150,6 +158,21 @@ internal class FakeServices(
         file.parentFile.mkdirs()
         file.writeBytes(bytes)
         return file.absolutePath
+    }
+
+    /** Where the fake PCSX2 keeps its data; null when it isn't set up. */
+    @Volatile var pcsx2Home: io.github.matiyaaa.fuse.launch.patches.Pcsx2Home? = null
+
+    override val emulatorFiles = object : EmulatorFiles {
+        override suspend fun pcsx2(installed: InstalledEmulator) = pcsx2Home
+        override suspend fun zipText(zip: String, entry: String): String? =
+            java.util.zip.ZipFile(zip).use { z -> z.getEntry(entry)?.let { e -> z.getInputStream(e).use { it.readBytes().decodeToString() } } }
+        override suspend fun write(path: String, text: String): Boolean {
+            val root = pcsx2Home?.dataRoot ?: return false
+            if (!path.startsWith("$root/")) return false
+            File(path).also { it.parentFile.mkdirs() }.writeText(text)
+            return true
+        }
     }
 
     /** The drives the fake system reports; null reports none, like a host that can't tell. */

@@ -73,7 +73,7 @@ data class ProblemSpec(
 
 /** Shows [problem] in the problem sheet. */
 fun AppState.showProblem(problem: Problem, card: GameCard? = null, retry: (() -> Unit)? = null) {
-    platform.sounds.play(if (problem.severity == Severity.INFO) SoundCue.OPEN else SoundCue.ERROR)
+    platform.sounds.play(if (problem.severity <= Severity.INFO) SoundCue.OPEN else SoundCue.ERROR)
     this.problem = ProblemSpec(problem, card, retry)
 }
 

@@ -84,6 +84,12 @@ interface FuseServices {
      */
     suspend fun keepFile(relativePath: String, bytes: ByteArray): String? = null
 
+    /**
+     * Emulators' own settings files, for the few changes Fuse makes there when asked (PCSX2 patches).
+     * Null where Fuse can't reach them (Android).
+     */
+    val emulatorFiles: EmulatorFiles? get() = null
+
     /** Offset of local time from UTC right now, for "today" and "this week" playtime buckets. */
     fun utcOffsetMillis(): Long
 }
@@ -284,4 +290,19 @@ interface DeviceLocations {
 
     /** Where Fuse's file picker starts: internal storage and SD cards, or the home folder and drives. */
     suspend fun storageRoots(): List<LocationHint> = emptyList()
+}
+
+/**
+ * Emulator settings files. Reads anything; writes only inside a data folder this returned, atomically,
+ * after keeping a copy of the file as it was before Fuse first changed it.
+ */
+interface EmulatorFiles {
+    /** Where the PCSX2 install [installed] keeps its data; null when it hasn't been set up or can't be found. */
+    suspend fun pcsx2(installed: io.github.matiyaaa.fuse.model.InstalledEmulator): io.github.matiyaaa.fuse.launch.patches.Pcsx2Home?
+
+    /** The text of [entry] inside the zip at [zip], or null. */
+    suspend fun zipText(zip: String, entry: String): String?
+
+    /** Writes [text] to [path] inside a known emulator data folder; false when it may not or could not. */
+    suspend fun write(path: String, text: String): Boolean
 }

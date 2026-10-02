@@ -1,5 +1,6 @@
 package io.github.matiyaaa.fuse.ui.shell.app
 
+import io.github.matiyaaa.fuse.launch.patches.PatchState
 import io.github.matiyaaa.fuse.model.CartridgeRoute
 import io.github.matiyaaa.fuse.model.FolderPolicy
 import io.github.matiyaaa.fuse.model.GameId
@@ -12,6 +13,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.components.Trailing
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
 import io.github.matiyaaa.fuse.ui.designsystem.sound.SoundCue
 import io.github.matiyaaa.fuse.ui.shell.cartridge.uploadToRomm
+import io.github.matiyaaa.fuse.ui.shell.store.CompatibilityAnswer
 import io.github.matiyaaa.fuse.ui.shell.store.GameCard
 import io.github.matiyaaa.fuse.ui.shell.store.LaunchOutcome
 import io.github.matiyaaa.fuse.ui.shell.store.PackageOption
@@ -113,6 +115,12 @@ fun AppState.gameMenu(card: GameCard, fromDetail: Boolean = false, extra: List<M
         add(MenuAction("system", "System", FuseIcons.Layers, detail = if (card.isApp) "Android, or back to being an app" else "If it landed in the wrong one", trailing = Trailing.Value(card.platformShort), onSelect = { systemPicker(card) }))
         // An Android game always starts as its app.
         if (!card.isApp) add(MenuAction("emulator", "Emulator", FuseIcons.Chip, trailing = Trailing.Chevron, onSelect = { emulatorPicker(card) }))
+        if (!card.isApp && card.platformId.value == "ps2") {
+            add(MenuAction("patches", "PCSX2 Patches", FuseIcons.Bandage, detail = "Widescreen, 60 FPS and other fixes PCSX2 has for this game", trailing = Trailing.Chevron, onSelect = { pcsx2PatchPicker(card) }))
+        }
+        if (!card.isApp && card.platformId.value == "ps3") {
+            add(MenuAction("compat", "How It Runs in RPCS3", FuseIcons.Gauge, detail = "From RPCS3's compatibility list. Asks rpcs3.net with the game's title id", trailing = Trailing.Chevron, onSelect = { showCompatibility(card) }))
+        }
         // RPCS3 and Vita3K install packages (the game, updates, extra content) from their command line.
         if (!card.isApp && card.platformId.value in PACKAGE_SYSTEMS) {
             add(MenuAction("packages", "Install Packages", FuseIcons.PackageOpen, detail = "Updates and extra content, installed by the emulator", trailing = Trailing.Chevron, onSelect = { packagePicker(card) }))
@@ -303,6 +311,105 @@ fun AppState.showEmulator(id: io.github.matiyaaa.fuse.model.EmulatorId) {
 }
 
 private val PACKAGE_SYSTEMS = setOf("ps3", "psvita")
+
+/**
+ * The game's PCSX2 patches with a check for each that is on. Fuse turns on any that are off and
+ * turns off only those it turned on; ones set in PCSX2 say so and stay as they are.
+ */
+fun AppState.pcsx2PatchPicker(card: GameCard) {
+    contextMenu = null
+    scope.launch {
+        when (val list = store.library.pcsx2Patches(card.id)) {
+            is io.github.matiyaaa.fuse.ui.shell.store.Pcsx2PatchList.Unavailable -> showProblem(Problem(
+                list.title, list.reason, ProblemKind.EMULATOR, Severity.INFO, reassurance = null,
+            ))
+            is io.github.matiyaaa.fuse.ui.shell.store.Pcsx2PatchList.Ready -> {
+                if (list.patches.isEmpty()) {
+                    showProblem(Problem(
+                        "No patches for ${card.title}",
+                        "PCSX2 has none filed under ${list.serial} (CRC ${list.crc})" + if (list.bundledRead) "." else ", in its patches folder. Its bundled patches couldn't be read on this system; check the game's Patches tab in PCSX2.",
+                        ProblemKind.EMULATOR, Severity.INFO, reassurance = null,
+                    ))
+                    return@launch
+                }
+                choice = ChoiceSpec(
+                    icon = FuseIcons.Bandage,
+                    title = "PCSX2 patches",
+                    message = "${list.serial}, CRC ${list.crc}. Changes apply the next time the game starts in PCSX2. Fuse only turns off what it turned on.",
+                    options = list.patches.map { s ->
+                        val about = listOfNotNull(s.patch.description, s.patch.author?.let { "by $it" }).joinToString("  ·  ").ifEmpty { null }
+                        MenuAction(
+                            "patch.${s.patch.name}", s.patch.name, FuseIcons.Bandage,
+                            detail = when (s.state) {
+                                PatchState.ON_BY_FUSE -> listOfNotNull("On, turned on in Fuse", about).joinToString("  ·  ")
+                                else -> about
+                            },
+                            trailing = Trailing.Check(s.on),
+                            unavailableReason = when (s.state) {
+                                PatchState.ON_IN_PCSX2 -> "On, turned on in PCSX2. Change it there"
+                                PatchState.ON_FOR_ALL_GAMES -> "On for every game in PCSX2's settings"
+                                PatchState.OFF_IN_PCSX2 -> "Turned off for this game in PCSX2"
+                                else -> null
+                            },
+                            onSelect = {
+                                scope.launch {
+                                    val ok = store.library.setPcsx2Patch(card.id, s.patch.name, !s.on)
+                                    if (!ok) toasts.show("Couldn't change PCSX2's settings for this game", ToastKind.WARNING)
+                                    pcsx2PatchPicker(card)
+                                }
+                            },
+                        )
+                    },
+                )
+            }
+        }
+    }
+}
+
+/** What RPCS3's compatibility list says about [card], as a sheet with a link to its report. */
+fun AppState.showCompatibility(card: GameCard) {
+    contextMenu = null
+    toasts.show("Asking RPCS3's compatibility list")
+    scope.launch {
+        val problem = when (val a = store.library.rpcs3Compatibility(card.id)) {
+            is CompatibilityAnswer.Listed -> {
+                val e = a.entry
+                Problem(
+                    title = "${e.status.label} in RPCS3",
+                    message = e.status.meaning + (e.date?.let { " Last tested on $it, as ${e.titleId}." } ?: ""),
+                    kind = ProblemKind.EMULATOR,
+                    severity = when (e.status) {
+                        io.github.matiyaaa.fuse.integrations.rpcs3.Rpcs3Status.PLAYABLE -> Severity.HEALTHY
+                        io.github.matiyaaa.fuse.integrations.rpcs3.Rpcs3Status.INGAME -> Severity.INFO
+                        io.github.matiyaaa.fuse.integrations.rpcs3.Rpcs3Status.INTRO, io.github.matiyaaa.fuse.integrations.rpcs3.Rpcs3Status.LOADABLE -> Severity.ATTENTION
+                        io.github.matiyaaa.fuse.integrations.rpcs3.Rpcs3Status.NOTHING -> Severity.BROKEN
+                    },
+                    reassurance = null,
+                    actions = listOfNotNull(e.reportUrl?.let { io.github.matiyaaa.fuse.ui.shell.store.ProblemAction.OpenLink(it, "Read the report") }),
+                    details = "RPCS3 compatibility list, rpcs3.net/compatibility. Ratings are the RPCS3 team's; results depend on your settings and hardware.",
+                )
+            }
+            CompatibilityAnswer.NoTitleId -> Problem(
+                "No title id for ${card.title}",
+                "RPCS3's list is searched by title id (like BLUS30443). Put it in the file or folder name, or keep the game as a folder with its PARAM.SFO.",
+                ProblemKind.FILE, Severity.INFO, reassurance = null,
+            )
+            is CompatibilityAnswer.NotListed -> Problem(
+                "${a.titleId} isn't on RPCS3's list",
+                "Nobody has reported how this release runs yet. Other regions of the same game may be listed.",
+                ProblemKind.EMULATOR, Severity.INFO, reassurance = null,
+                actions = listOf(io.github.matiyaaa.fuse.ui.shell.store.ProblemAction.OpenLink("https://rpcs3.net/compatibility?g=" + a.titleId, "Search the list")),
+            )
+            CompatibilityAnswer.Unreachable -> Problem(
+                "Couldn't reach rpcs3.net",
+                "Check your connection and try again.",
+                ProblemKind.NETWORK, Severity.ATTENTION, reassurance = null,
+                actions = listOf(io.github.matiyaaa.fuse.ui.shell.store.ProblemAction.Retry()),
+            )
+        }
+        showProblem(problem, card) { showCompatibility(card) }
+    }
+}
 
 /** The game's packages an installed emulator can install, each started in its installer when chosen. */
 fun AppState.packagePicker(card: GameCard) {

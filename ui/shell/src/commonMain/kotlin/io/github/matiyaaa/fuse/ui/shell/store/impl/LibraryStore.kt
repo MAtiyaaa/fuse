@@ -52,6 +52,9 @@ import io.github.matiyaaa.fuse.ui.shell.store.RunResult
 import io.github.matiyaaa.fuse.ui.shell.store.PlayTimeReport
 import io.github.matiyaaa.fuse.ui.shell.store.SearchResults
 import io.github.matiyaaa.fuse.ui.shell.store.StorageSummary
+import io.ktor.client.request.get
+import io.ktor.client.statement.bodyAsText
+import io.ktor.http.isSuccess
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Dispatchers
@@ -627,6 +630,112 @@ internal class DefaultLibraryOps(
         }
     }
 
+    override suspend fun rpcs3Compatibility(id: GameId): io.github.matiyaaa.fuse.ui.shell.store.CompatibilityAnswer {
+        val game = data.games.get(id) ?: return io.github.matiyaaa.fuse.ui.shell.store.CompatibilityAnswer.NoTitleId
+        val titleId = ps3TitleId(game) ?: return io.github.matiyaaa.fuse.ui.shell.store.CompatibilityAnswer.NoTitleId
+        val compat = io.github.matiyaaa.fuse.integrations.rpcs3.Rpcs3Compatibility
+        val serializer = io.github.matiyaaa.fuse.integrations.rpcs3.Rpcs3Compat.serializer()
+        data.cache.get(COMPAT_CACHE, titleId, serializer, ctx.now())?.let { return io.github.matiyaaa.fuse.ui.shell.store.CompatibilityAnswer.Listed(it) }
+        val body = try {
+            kotlinx.coroutines.withTimeout(15_000) {
+                val response = ctx.services.http.get(compat.url(titleId))
+                if (!response.status.isSuccess()) null else response.bodyAsText()
+            }
+        } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
+            null
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            null
+        } ?: return io.github.matiyaaa.fuse.ui.shell.store.CompatibilityAnswer.Unreachable
+        val entry = compat.parse(body, titleId) ?: return io.github.matiyaaa.fuse.ui.shell.store.CompatibilityAnswer.NotListed(titleId)
+        data.cache.put(COMPAT_CACHE, titleId, entry, serializer, ctx.now(), ttlMs = 7 * 24 * HOUR_MS)
+        return io.github.matiyaaa.fuse.ui.shell.store.CompatibilityAnswer.Listed(entry)
+    }
+
+    /** Everything needed to read or change one game's PCSX2 patches. */
+    private class PatchContext(
+        val files: io.github.matiyaaa.fuse.ui.shell.store.EmulatorFiles,
+        val settingsPath: String,
+        val game: io.github.matiyaaa.fuse.launch.patches.IniText,
+        val owned: Set<String>,
+        val statuses: List<io.github.matiyaaa.fuse.launch.patches.PatchStatus>,
+        val view: io.github.matiyaaa.fuse.ui.shell.store.Pcsx2PatchList.Ready,
+    )
+
+    private suspend fun patchContext(id: GameId): Pair<PatchContext?, io.github.matiyaaa.fuse.ui.shell.store.Pcsx2PatchList.Unavailable?> {
+        fun no(title: String, reason: String) = null to io.github.matiyaaa.fuse.ui.shell.store.Pcsx2PatchList.Unavailable(title, reason)
+        val files = ctx.services.emulatorFiles ?: return no("Not on this device", "PCSX2's patches can be changed from Fuse on a computer. On this device, change them in the emulator.")
+        if (ctx.installed.value.isEmpty()) emulators.detectNow()
+        val pcsx2 = ctx.installed.value.firstOrNull { it.id.value.substringAfter('.') == "pcsx2" }
+            ?: return no("PCSX2 isn't installed", "Install PCSX2, start it once so it sets up its folders, and its patches show here.")
+        val home = files.pcsx2(pcsx2) ?: return no("PCSX2 isn't set up yet", "Start PCSX2 once and finish its first-run setup, then come back.")
+        val disc = discIdentity(id) ?: return no(
+            "Fuse can't read this disc",
+            "Patches are filed under the game's serial and CRC, which Fuse reads from ISO and BIN images. Compressed images (CHD, CSO) aren't read; change their patches in PCSX2.",
+        )
+        val crc = disc.crc ?: return no("Not a PS2 disc", "This image doesn't start a PS2 program, so PCSX2 has no patches for it.")
+        val rules = io.github.matiyaaa.fuse.launch.patches.Pcsx2PatchRules
+        val parse = io.github.matiyaaa.fuse.launch.patches.Pnach
+        val fs = ctx.services.fs
+        // Patch files on disk come first, as in PCSX2; a name already listed isn't listed again.
+        val patches = LinkedHashMap<String, io.github.matiyaaa.fuse.launch.patches.PnachPatch>()
+        var unlabelled = false
+        val onDisk = try { fs.list(home.patches) } catch (e: CancellationException) { throw e } catch (e: Exception) { emptyList() }
+        for (f in onDisk.filter { !it.isDirectory && rules.matchesPnach(it.name, disc.serial, crc) }.sortedBy { it.name }) {
+            val text = fs.readText(f.path, 1024 * 1024) ?: continue
+            if (parse.hasUnlabelled(text)) unlabelled = true
+            parse.parse(text).forEach { patches.putIfAbsent(it.name, it) }
+        }
+        var bundledRead = home.patchesZip != null
+        if (!unlabelled && home.patchesZip != null) {
+            for (entry in rules.zipEntries(disc.serial, crc)) {
+                val text = files.zipText(home.patchesZip!!, entry) ?: continue
+                parse.parse(text).forEach { patches.putIfAbsent(it.name, it) }
+                break
+            }
+        }
+        if (unlabelled) bundledRead = true
+        val settingsPath = "${home.gameSettings}/${rules.gameSettingsName(disc.serial, crc)}"
+        val game = io.github.matiyaaa.fuse.launch.patches.IniText(fs.readText(settingsPath, 1024 * 1024) ?: "")
+        val global = fs.readText(home.settingsFile, 1024 * 1024)?.let { io.github.matiyaaa.fuse.launch.patches.IniText(it) }
+        // A patch taken out in PCSX2 since Fuse turned it on is no longer Fuse's.
+        val enabled = game.values(rules.SECTION, rules.ENABLE).toSet()
+        val recorded = data.owned.get(PATCH_OWNERSHIP, settingsPath)
+        val owned = recorded.filter { it in enabled }.toSet()
+        // Forgotten for good, so turning it on again in PCSX2 later makes it the user's.
+        if (owned != recorded) data.owned.set(PATCH_OWNERSHIP, settingsPath, owned)
+        val statuses = rules.states(patches.values.toList(), game, global, owned)
+        val view = io.github.matiyaaa.fuse.ui.shell.store.Pcsx2PatchList.Ready(disc.serial, disc.crcText ?: "", statuses, bundledRead)
+        return PatchContext(files, settingsPath, game, owned, statuses, view) to null
+    }
+
+    override suspend fun pcsx2Patches(id: GameId): io.github.matiyaaa.fuse.ui.shell.store.Pcsx2PatchList {
+        val (context, unavailable) = patchContext(id)
+        return context?.view ?: unavailable!!
+    }
+
+    override suspend fun setPcsx2Patch(id: GameId, name: String, on: Boolean): Boolean {
+        val context = patchContext(id).first ?: return false
+        val status = context.statuses.firstOrNull { it.patch.name == name } ?: return false
+        val owned = io.github.matiyaaa.fuse.launch.patches.Pcsx2PatchRules.change(status, on, context.game, context.owned) ?: return false
+        if (!context.files.write(context.settingsPath, context.game.toString())) return false
+        data.owned.set(PATCH_OWNERSHIP, context.settingsPath, owned)
+        return true
+    }
+
+    /** A PS3 game's title id: from its name, else from the PARAM.SFO of a game folder. */
+    private suspend fun ps3TitleId(game: io.github.matiyaaa.fuse.model.Game): String? {
+        val compat = io.github.matiyaaa.fuse.integrations.rpcs3.Rpcs3Compatibility
+        game.tags.serial?.uppercase()?.replace("-", "")?.takeIf(compat::isTitleId)?.let { return it }
+        if (game.location.kind != LocationKind.FOLDER) return null
+        for (rel in listOf("PS3_GAME/PARAM.SFO", "PARAM.SFO")) {
+            val bytes = ctx.services.fs.readBytes(FsPath.join(game.location.path, rel), 0, 64 * 1024) ?: continue
+            io.github.matiyaaa.fuse.library.disc.ParamSfo.strings(bytes)["TITLE_ID"]?.trim()?.uppercase()?.takeIf(compat::isTitleId)?.let { return it }
+        }
+        return null
+    }
+
     /** What a package file is, from its name: an update, extra content, or the game itself. */
     private fun packageKind(name: String): String {
         val n = name.lowercase()
@@ -819,3 +928,9 @@ private val DISC_PLATFORMS = setOf("ps2", "psx")
 
 /** Cache namespace for [io.github.matiyaaa.fuse.library.disc.DiscIdentity], keyed by path, size and change time. */
 private const val DISC_CACHE = "disc.identity"
+
+/** Cache namespace for RPCS3 compatibility entries, by title id. */
+private const val COMPAT_CACHE = "rpcs3.compat"
+
+/** Where Fuse records the PCSX2 patches it turned on itself, by game settings file. */
+private const val PATCH_OWNERSHIP = "pcsx2.patches"

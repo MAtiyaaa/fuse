@@ -71,6 +71,8 @@ class DesktopFuseServices private constructor(
     override val apps: AppsProvider? = null
     override val locations: DeviceLocations = DesktopLocations(folders)
     override val volumes: VolumeMonitor = io.github.matiyaaa.fuse.desktop.platform.DesktopVolumes(os)
+    override val emulatorFiles: io.github.matiyaaa.fuse.ui.shell.store.EmulatorFiles =
+        DesktopEmulatorFiles(os, backups = java.io.File(dirs.data, "emulator-backups"))
 
     override fun writeCacheFile(relativePath: String, content: String): String? = writeBelow(cacheDir, relativePath, content)
 

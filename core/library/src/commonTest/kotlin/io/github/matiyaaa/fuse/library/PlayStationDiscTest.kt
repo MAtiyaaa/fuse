@@ -118,3 +118,37 @@ class PlayStationDiscTest {
         assertEquals("DATA\\SLPM_650.09", PlayStationDisc.bootFileName("cdrom0:\\DATA\\SLPM_650.09;1"))
     }
 }
+
+class ParamSfoTest {
+    /** A PARAM.SFO with TITLE_ID, TITLE and one integer, laid out as RPCS3 writes them. */
+    private fun sfo(): ByteArray {
+        val entries = listOf(Triple("ATTRIBUTE", 0x0404, byteArrayOf(5, 0, 0, 0)), Triple("TITLE", 0x0204, "Sky Racer\u0000".encodeToByteArray()), Triple("TITLE_ID", 0x0204, "NPUB30001\u0000".encodeToByteArray()))
+        val keyTable = entries.map { (k, _, _) -> (k + "\u0000").encodeToByteArray() }
+        val keysStart = 20 + entries.size * 16
+        val dataStart = keysStart + keyTable.sumOf { it.size }
+        val out = ByteArray(dataStart + entries.sumOf { it.third.size })
+        fun le(at: Int, v: Int, n: Int) { for (i in 0 until n) out[at + i] = (v ushr (8 * i)).toByte() }
+        out[1] = 'P'.code.toByte(); out[2] = 'S'.code.toByte(); out[3] = 'F'.code.toByte()
+        le(4, 0x101, 4); le(8, keysStart, 4); le(12, dataStart, 4); le(16, entries.size, 4)
+        var keyOff = 0
+        var dataOff = 0
+        entries.forEachIndexed { i, (_, fmt, data) ->
+            val at = 20 + i * 16
+            le(at, keyOff, 2); le(at + 2, fmt, 2); le(at + 4, data.size, 4); le(at + 8, data.size, 4); le(at + 12, dataOff, 4)
+            keyTable[i].copyInto(out, keysStart + keyOff)
+            data.copyInto(out, dataStart + dataOff)
+            keyOff += keyTable[i].size
+            dataOff += data.size
+        }
+        return out
+    }
+
+    @Test
+    fun readsItsTextValues() {
+        val values = io.github.matiyaaa.fuse.library.disc.ParamSfo.strings(sfo())
+        assertEquals("NPUB30001", values["TITLE_ID"])
+        assertEquals("Sky Racer", values["TITLE"])
+        assertNull(values["ATTRIBUTE"])
+        assertEquals(emptyMap(), io.github.matiyaaa.fuse.library.disc.ParamSfo.strings("hello world, not sfo".encodeToByteArray()))
+    }
+}

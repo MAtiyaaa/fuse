@@ -1059,7 +1059,7 @@ fun performanceRows(app: AppState): List<MenuAction> {
 @Composable
 fun networkRows(app: AppState): List<MenuAction> = buildList {
     if (app.platform.features.wifiSettings) add(MenuAction("wifi", "Wi-Fi settings", FuseIcons.Wifi, trailing = Trailing.Chevron, onSelect = { app.platform.quick.openWifi() }))
-    add(infoRow("where", "What Fuse connects to", detail = "Only services you set up: RetroAchievements, SteamGridDB, IGDB, TheGamesDB, ScreenScraper, libretro thumbnails, and GitHub to check for updates. Your library works fully offline", icon = FuseIcons.Globe))
+    add(infoRow("where", "What Fuse connects to", detail = "Only services you set up: RetroAchievements, SteamGridDB, IGDB, TheGamesDB, ScreenScraper, libretro thumbnails, GitHub to check for updates, and rpcs3.net when you ask how a PS3 game runs. Your library works fully offline", icon = FuseIcons.Globe))
 }
 
 @Composable

@@ -315,6 +315,33 @@ data class EmulatorOption(
     val unavailable: String? = null,
 )
 
+/** A PS2 game's PCSX2 patches and who turned each on, or why Fuse can't show them. */
+sealed interface Pcsx2PatchList {
+    data class Ready(
+        val serial: String,
+        val crc: String,
+        val patches: List<io.github.matiyaaa.fuse.launch.patches.PatchStatus>,
+        /** False when PCSX2's bundled patches couldn't be read here (only patch files in its patches folder are listed). */
+        val bundledRead: Boolean,
+    ) : Pcsx2PatchList
+
+    data class Unavailable(val title: String, val reason: String) : Pcsx2PatchList
+}
+
+/** What RPCS3's compatibility list says about a PS3 game, asked for by the user. */
+sealed interface CompatibilityAnswer {
+    data class Listed(val entry: io.github.matiyaaa.fuse.integrations.rpcs3.Rpcs3Compat) : CompatibilityAnswer
+
+    /** The game's title id isn't known (not in its name, no PARAM.SFO), so there is nothing to ask with. */
+    data object NoTitleId : CompatibilityAnswer
+
+    /** The list has no entry for this title id. */
+    data class NotListed(val titleId: String) : CompatibilityAnswer
+
+    /** rpcs3.net couldn't be reached. */
+    data object Unreachable : CompatibilityAnswer
+}
+
 /** A package (a game, an update, extra content) an emulator can install from its command line. */
 data class PackageOption(
     val path: String,

@@ -332,6 +332,24 @@ interface LibraryOps {
      */
     suspend fun discIdentity(id: GameId): io.github.matiyaaa.fuse.library.disc.DiscIdentity? = null
 
+    /**
+     * What RPCS3's public compatibility list says about the PS3 game [id], by its title id. Asks
+     * rpcs3.net only when called (the user asked), sending only the title id; answers are kept a week.
+     */
+    suspend fun rpcs3Compatibility(id: GameId): CompatibilityAnswer = CompatibilityAnswer.Unreachable
+
+    /**
+     * The PCSX2 patches for the PS2 game [id] (its patch files and PCSX2's bundled ones), each with
+     * who turned it on. Reads only.
+     */
+    suspend fun pcsx2Patches(id: GameId): Pcsx2PatchList = Pcsx2PatchList.Unavailable("Not here", "PCSX2's patches can only be changed from Fuse on a computer.")
+
+    /**
+     * Turns the patch [name] on or off in PCSX2's settings for [id]. Fuse turns off only patches it
+     * turned on itself; anything set in PCSX2 stays as it is. False when nothing changed.
+     */
+    suspend fun setPcsx2Patch(id: GameId, name: String, on: Boolean): Boolean = false
+
     /** Packages of [id] (its own file, its updates and extra content) that an installed emulator can install. */
     suspend fun packages(id: GameId): List<PackageOption> = emptyList()
 
