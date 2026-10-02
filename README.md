@@ -271,9 +271,11 @@ Play.
 - **Steam and Windows games** start through GameNative, GameHub Lite, Winlator Cmod, WinNative or
   Bannerlator on Android, through Steam or `.desktop` shortcuts on Linux, and as they are on Windows
   (`.exe` games, `.lnk` shortcuts and `.bat` scripts).
-- **DLC and updates**: Fuse explains, per emulator, how they are used. PS3 and Vita packages (the
-  game, its updates and extra content) can be installed with RPCS3 or Vita3K from the game's options;
-  Vita3K's zRIF key is asked for each time and never kept.
+- **DLC and updates**: Fuse explains, per emulator, how they are used.
+- **Installs PS3, Vita and 3DS games itself**: packages, updates, DLC and licences, from any drive,
+  into RPCS3, Vita3K and Azahar. They go in the right order, missing licences are shown first, and
+  each step is checked in the emulator's storage. The game page says Ready to play, Needs
+  installation, Missing licence, or Update or DLC available locally.
 - **Every emulator has a page**: how it was found, what it runs, how Fuse starts it and its limits,
   with a test launch. A game's emulator list says why one can't open that game.
 - **PCSX2 patches** (widescreen, 60 FPS and more) for a PS2 game, turned on in PCSX2's own settings
