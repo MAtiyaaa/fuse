@@ -270,16 +270,20 @@ interface WindowControls {
 data class PickedFile(val path: String, val name: String)
 
 /**
- * Loops one song under Fuse's menus. Fuse says what it wants ([setSong], [setVolume], [setPlaying]);
- * the platform also keeps it quiet while Fuse is in the background, and fades in and out.
+ * Everything the menu music should be right now: the file to loop ([song], null for silence), how
+ * loud (0..1) and whether it may be heard ([playing] false while a game starts or runs).
+ */
+data class MusicState(val song: String?, val volume: Float, val playing: Boolean)
+
+/**
+ * Loops one song under Fuse's menus. Fuse says what it wants as a whole ([apply]); the platform also
+ * keeps it quiet while Fuse is in the background, and fades in and out.
+ *
+ * [apply] is idempotent and self-healing: the player compares the state with what it is really
+ * doing (a song open and healthy, the volume set, playing or not) and repairs any difference. The
+ * same state applied twice after a player error starts the song again, so nothing ever has to be
+ * switched off and on to bring the music back. Volume changes reach the song that is playing at once.
  */
 interface MenuMusicPlayer {
-    /** The file to loop, or null for silence. Changing songs while music plays crossfades. */
-    fun setSong(path: String?)
-
-    /** 0..1 */
-    fun setVolume(volume: Float)
-
-    /** False fades the music out (a game is starting or running); true fades it back in. */
-    fun setPlaying(playing: Boolean)
+    fun apply(state: MusicState)
 }

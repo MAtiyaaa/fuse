@@ -273,9 +273,7 @@ internal class AuditPlatform(
 
     /** A silent player, so the Sound settings show what a device with audio shows. */
     override val music: MenuMusicPlayer = object : MenuMusicPlayer {
-        override fun setSong(path: String?) = Unit
-        override fun setVolume(volume: Float) = Unit
-        override fun setPlaying(playing: Boolean) = Unit
+        override fun apply(state: io.github.matiyaaa.fuse.ui.shell.platform.MusicState) = Unit
     }
 
     companion object {
