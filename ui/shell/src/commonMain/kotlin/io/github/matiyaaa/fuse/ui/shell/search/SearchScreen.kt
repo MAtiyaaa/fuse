@@ -187,12 +187,17 @@ fun SearchScreen(app: AppState) {
         onDispose { app.keyboardTarget = null }
     }
     val current = hits.getOrNull(sel.index)
-    LaunchedEffect(inResults, current is Hit.Game) {
+    val anyHits = hits.isNotEmpty()
+    LaunchedEffect(inResults, current is Hit.Game, anyHits) {
         app.hero = null
         app.hints = if (inResults) {
             listOfNotNull(Hint(HintButton.CONFIRM, "Open"), if (current is Hit.Game) Hint(HintButton.OPTIONS, "Options") else null, Hint(HintButton.BACK, "Back"))
         } else {
-            listOf(Hint(HintButton.CONFIRM, "Type"), Hint(HintButton.OPTIONS, "Delete"), Hint(HintButton.SEARCH, "Space"), Hint(HintButton.NEXT, "Cursor"), Hint(HintButton.MENU, "Results"))
+            // "Results" only while there are some to go to.
+            listOfNotNull(
+                Hint(HintButton.CONFIRM, "Type"), Hint(HintButton.OPTIONS, "Delete"), Hint(HintButton.SEARCH, "Space"), Hint(HintButton.NEXT, "Cursor"),
+                if (anyHits) Hint(HintButton.MENU, "Results") else null,
+            )
         }
     }
 
@@ -232,6 +237,8 @@ fun SearchScreen(app: AppState) {
         val stacked = maxWidth < Size.touch * 14
         val compact = maxHeight < Size.touch * 12
         val keyHeight = if (compact || stacked) Size.touch - Space.s else Size.touch - Space.xs
+        // The keys' width; on a narrow keyboard the last key says the short "Done", which fits.
+        val keysWidth = if (stacked) maxWidth - Space.gutter * 2 else (maxWidth - Space.gutter * 2 - Space.xxl) / 2
         val inputs: @Composable ColumnScope.() -> Unit = {
             KeyboardField(
                 field,
@@ -246,7 +253,7 @@ fun SearchScreen(app: AppState) {
                 keyboard, field, { if (hits.isNotEmpty()) inResults = true },
                 modifier = Modifier.reveal(reveal, 1),
                 keyHeight = keyHeight,
-                doneLabel = "Results",
+                doneLabel = if (keysWidth < Size.touch * 9) "Done" else "Results",
                 showFocus = !inResults && app.focusZone == FocusZone.CONTENT,
                 onPaste = { app.pasteInto(field) },
                 onKey = { app.platform.haptics.tick() },

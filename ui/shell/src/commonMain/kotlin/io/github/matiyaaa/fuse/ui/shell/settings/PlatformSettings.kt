@@ -128,6 +128,10 @@ fun PlatformSettingsScreen(app: AppState, platformId: PlatformId) {
             FolderPolicy.AUTO to "Automatic", FolderPolicy.FOLDER_AS_GAME to "Folder is the game",
             FolderPolicy.FOLDER_BROWSER to "Open as a folder", FolderPolicy.FILE to "Files only",
         ), detail = "How folders inside ${p.shortName}'s folder are read. Nothing on disk changes").copy(section = playing))
+        if (app.hasTwoScreens && !io.github.matiyaaa.fuse.launch.DualScreenPlatforms.usesSecondScreen(platformId)) {
+            add(app.scopedRow(ScopedSettings.LaunchScreen, platformId, "Games open on", FuseIcons.DualScreen, LaunchDisplay.entries.map { it to screenName(it) }, detail = "Where this system's games start. A game can have its own in its options").copy(section = playing))
+        }
+        add(app.scopedRow(ScopedSettings.GenerateM3u, platformId, "Disc playlists", FuseIcons.Disc, on, detail = "Multi-disc games get a playlist in Fuse's storage (never in your folder)").copy(section = playing))
         val look = "How its games look"
         add(app.scopedRow(ScopedSettings.Layout, platformId, "View", FuseIcons.Grid, LibraryLayout.entries.map { it to when (it) {
             LibraryLayout.ICON -> "Grid"; LibraryLayout.CAPSULE -> "Capsules"; LibraryLayout.COVER_GRID -> "Cover grid"; LibraryLayout.COMPACT_LIST -> "List"
@@ -140,11 +144,6 @@ fun PlatformSettingsScreen(app: AppState, platformId: PlatformId) {
             BorderStyle(mode = BorderMode.PLATFORM_DEFAULT) to "System frame",
             BorderStyle(mode = BorderMode.PLATFORM_DEFAULT, logoOverlay = true) to "System frame with logo",
         ), detail = "A frame in ${p.shortName}'s colour around its games' art").copy(section = look))
-        val launching = "Launching"
-        if (app.hasTwoScreens && !io.github.matiyaaa.fuse.launch.DualScreenPlatforms.usesSecondScreen(platformId)) {
-            add(app.scopedRow(ScopedSettings.LaunchScreen, platformId, "Games open on", FuseIcons.DualScreen, LaunchDisplay.entries.map { it to screenName(it) }, detail = "Where this system's games start. A game can have its own in its options").copy(section = launching))
-        }
-        add(app.scopedRow(ScopedSettings.GenerateM3u, platformId, "Disc playlists", FuseIcons.Disc, on, detail = "Multi-disc games get a playlist in Fuse's storage (never in your folder)").copy(section = launching))
         val details = "Art and details"
         add(app.scopedRow(ScopedSettings.ScrapeEnabled, platformId, "Find art and details", FuseIcons.Wand, on).copy(section = details))
         add(app.scopedRow(ScopedSettings.Matching, platformId, "Matching", FuseIcons.Target, listOf(MatchStrictness.EXACT to "Exact", MatchStrictness.NORMAL to "Normal", MatchStrictness.AGGRESSIVE to "Aggressive")).copy(section = details))

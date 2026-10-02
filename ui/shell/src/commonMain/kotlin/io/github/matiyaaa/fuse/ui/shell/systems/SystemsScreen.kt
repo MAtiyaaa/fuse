@@ -189,12 +189,15 @@ fun SystemsScreen(app: AppState) {
         columns = ((usable + gap) / (target + gap)).toInt().coerceIn(if (maxWidth < Size.touch * 12) 2 else 3, 8)
         val cardHeight = (usable - gap * (columns - 1)) / columns / Aspect.SYSTEM_CARD
         val compactHeader = maxHeight < Size.touch * 12
+        // A phone held upright gives the header the whole width; wider screens keep the art's side free.
+        val headerWidth = if (maxWidth < Size.touch * 14) 1f else 0.62f
         // The art pack's panel stands on the right, unless the user chose a background for the system.
         if (current?.art?.hero == null) SystemShowcase(current, Modifier.align(Alignment.CenterEnd).fillMaxHeight().width(maxHeight * 0.46f))
         Column(Modifier.fillMaxSize()) {
             Spacer(Modifier.height(Size.hudHeight + if (compactHeader) Space.s else Space.xl))
             SystemHeader(
                 current, compactHeader, Modifier.padding(horizontal = Space.gutter).reveal(reveal, 0),
+                widthFraction = headerWidth,
                 moving = if (moving && systems.isNotEmpty()) "Moving, place ${sel.index + 1} of ${systems.size}" else null,
             )
             Spacer(Modifier.height(if (compactHeader) Space.xs else Space.m))
@@ -488,24 +491,40 @@ internal fun SystemHeader(
                     name()
                 }
             }
-            if (showMeta) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s)) {
-                FText(gamesText(s.gameCount), Fuse.type.bodyStrong.tabular(), color = c.text, maxLines = 1)
-                FText("·", Fuse.type.body, color = c.textFaint)
-                if (s.emulatorInstalled && s.emulatorName != null) {
-                    FuseIcon(FuseIcons.Chip, size = Size.iconS, tint = c.textMuted)
-                    FText(s.emulatorName, Fuse.type.body, color = c.textMuted, maxLines = 1)
-                } else {
-                    FuseIcon(FuseIcons.Warning, size = Size.iconS, tint = c.warning)
-                    FText("No emulator installed", Fuse.type.body, color = c.warning, maxLines = 1)
-                }
-                // Only firmware Fuse knows is missing is told here; one it can't check is never a warning.
-                firmwareProblem(s)?.let { problem ->
-                    FText("·", Fuse.type.body, color = c.textFaint)
-                    FuseIcon(FuseIcons.Key, size = Size.iconS, tint = c.warning)
-                    FText(problem, Fuse.type.body, color = c.warning, maxLines = 1)
+            if (showMeta) BoxWithConstraints(Modifier.fillMaxWidth()) {
+                // Only firmware Fuse knows is missing is told; one it can't check is never a warning.
+                val problem = firmwareProblem(s)
+                // Where the line would crowd (a phone held upright), the firmware gets its own line.
+                val apart = problem != null && maxWidth < Size.touch * 10
+                Column(verticalArrangement = Arrangement.spacedBy(Space.xs)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s)) {
+                        FText(gamesText(s.gameCount), Fuse.type.bodyStrong.tabular(), color = c.text, maxLines = 1)
+                        FText("·", Fuse.type.body, color = c.textFaint)
+                        if (s.emulatorInstalled && s.emulatorName != null) {
+                            FuseIcon(FuseIcons.Chip, size = Size.iconS, tint = c.textMuted)
+                            FText(s.emulatorName, Fuse.type.body, color = c.textMuted, maxLines = 1, modifier = Modifier.weight(1f, fill = false))
+                        } else {
+                            FuseIcon(FuseIcons.Warning, size = Size.iconS, tint = c.warning)
+                            FText("No emulator installed", Fuse.type.body, color = c.warning, maxLines = 1, modifier = Modifier.weight(1f, fill = false))
+                        }
+                        if (problem != null && !apart) {
+                            FText("·", Fuse.type.body, color = c.textFaint)
+                            FirmwareProblem(problem)
+                        }
+                    }
+                    if (problem != null && apart) FirmwareProblem(problem)
                 }
             }
         }
+    }
+}
+
+/** A firmware warning in the header: a key and what is wrong, in the warning colour. */
+@Composable
+private fun FirmwareProblem(problem: String) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s)) {
+        FuseIcon(FuseIcons.Key, size = Size.iconS, tint = Fuse.colors.warning)
+        FText(problem, Fuse.type.body, color = Fuse.colors.warning, maxLines = 1)
     }
 }
 
@@ -572,6 +591,9 @@ fun AppState.systemMenu(card: PlatformCard, onMove: (() -> Unit)? = null): Conte
         art = card.art.square ?: card.art.icon,
         actions = listOfNotNull(
             MenuAction("open", "Open", FuseIcons.Grid, onSelect = { closeOverlays(); go(Route.PlatformGames(p.id)) }),
+            onMove?.let { move ->
+                MenuAction("move", "Move this system", FuseIcons.Move, detail = "Or hold confirm. By touch, hold it and drag", onSelect = { closeOverlays(); move() })
+            },
             MenuAction("settings", "System Settings", FuseIcons.Settings, trailing = Trailing.Chevron, onSelect = { closeOverlays(); go(Route.PlatformSettings(p.id)) }),
             MenuAction("media", "Change System Media", FuseIcons.Image, detail = "Icon, background and logo for ${p.shortName}", trailing = Trailing.Chevron, onSelect = {
                 closeOverlays(); go(Route.Media(owner, p.name))
@@ -595,11 +617,6 @@ fun AppState.systemMenu(card: PlatformCard, onMove: (() -> Unit)? = null): Conte
             if (!store.cartridge.status.value.installed) null else MenuAction("cartridge", "Browse in Cartridge", FuseIcons.CloudDownload, onSelect = {
                 closeOverlays(); store.cartridge.open(CartridgeRoute.Platform(p.id.value))
             }),
-            // Arranging is about the screen, not the system, so it sits apart at the foot (holding
-            // confirm on the card does the same).
-            onMove?.let { move ->
-                MenuAction("move", "Move this system", FuseIcons.Move, detail = "Or hold confirm. By touch, hold it and drag", section = "Arrange", onSelect = { closeOverlays(); move() })
-            },
         ),
     )
 }
