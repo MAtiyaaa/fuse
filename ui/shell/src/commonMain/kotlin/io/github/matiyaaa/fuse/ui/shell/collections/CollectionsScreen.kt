@@ -32,6 +32,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.addOutline
@@ -294,15 +298,16 @@ private fun MediaSet.hero(): io.github.matiyaaa.fuse.model.MediaItem? = all(io.g
 private fun io.github.matiyaaa.fuse.model.MediaItem.model(): Any? = localPath ?: remoteUrl
 
 /**
- * The card that makes a new collection: an outlined, empty slot with a plus, so it reads as a place
- * to put something rather than a collection of its own.
+ * The card that makes a new collection: an empty slot with a dashed edge and a plus, so it reads as
+ * a place to put something rather than a collection of its own. Its states (hover, focus, press)
+ * are the same as every collection card's: they come from [Tile], over a face that is opaque, so
+ * the lifted tile's shadow never shows through it.
  */
 @Composable
-private fun NewCollectionCard(selected: Boolean, artHeight: Dp, onClick: () -> Unit, modifier: Modifier) {
+internal fun NewCollectionCard(selected: Boolean, artHeight: Dp, onClick: () -> Unit, modifier: Modifier) {
     val c = Fuse.colors
     val fraction = Fuse.geometry.tileCornerFraction * 0.6f
-    val shape = SquircleShape.fraction(fraction)
-    val dash = c.hairlineStrong
+    val shape = remember(fraction) { SquircleShape.fraction(fraction) }
     Column(modifier) {
         Tile(
             selected = selected,
@@ -311,26 +316,48 @@ private fun NewCollectionCard(selected: Boolean, artHeight: Dp, onClick: () -> U
             cornerFraction = fraction,
             onClick = onClick,
         ) {
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .background(c.surfaceDim.copy(alpha = if (c.isDark) 0.55f else 0.8f))
-                    .drawWithCache {
-                        // A dashed edge just inside the card's own outline.
-                        val outline = Path().apply { addOutline(shape.createOutline(size, layoutDirection, this@drawWithCache)) }
-                        val on = Space.s.toPx()
-                        val stroke = Stroke(width = Size.focusStroke.toPx() * 1.5f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(on, on * 0.75f)))
-                        onDrawBehind { drawPath(outline, dash, style = stroke) }
-                    },
-                contentAlignment = Alignment.Center,
-            ) {
+            SlotFace(shape, dashed = true) {
                 Box(Modifier.size(Size.thumb).clip(CircleShape).background(c.text.copy(alpha = if (c.isDark) 0.1f else 0.08f)), contentAlignment = Alignment.Center) {
-                    FuseIcon(FuseIcons.Plus, size = Size.iconM, tint = c.text)
+                    FuseIcon(FuseIcons.Plus, size = Size.iconM, tint = if (selected) c.accent else c.text)
                 }
             }
         }
         CardLabel("New collection", "Pick its games next", selected)
     }
+}
+
+/**
+ * The face of a card with nothing to show yet: a well in the theme's dim surface, made opaque over
+ * the room (a translucent face would let the tile's shadow through as a dark box when it lifts),
+ * with a soft light from the top and, when [dashed], a dashed edge drawn just inside the outline so
+ * the tile's clip never halves it.
+ */
+@Composable
+private fun SlotFace(shape: androidx.compose.ui.graphics.Shape, dashed: Boolean = false, content: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit) {
+    val c = Fuse.colors
+    val fill = c.surfaceDim.compositeOver(c.ink)
+    val light = c.text.copy(alpha = if (c.isDark) 0.04f else 0.03f)
+    val dash = c.hairlineStrong
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(fill)
+            .background(Brush.verticalGradient(listOf(light, Color.Transparent)))
+            .drawWithCache {
+                val stroke = Size.focusStroke.toPx()
+                val inset = stroke / 2 + 1f
+                val inner = androidx.compose.ui.geometry.Size(size.width - inset * 2, size.height - inset * 2)
+                val outline = Path().apply {
+                    addOutline(shape.createOutline(inner, layoutDirection, this@drawWithCache))
+                    translate(Offset(inset, inset))
+                }
+                val on = Space.s.toPx()
+                val style = Stroke(width = stroke, pathEffect = PathEffect.dashPathEffect(floatArrayOf(on, on * 0.75f)))
+                onDrawBehind { if (dashed) drawPath(outline, dash, style = style) }
+            },
+        contentAlignment = Alignment.Center,
+        content = content,
+    )
 }
 
 @Composable
@@ -347,11 +374,12 @@ private fun CollectionCard(
     val games by remember(collection.id) { app.store.library.games(GameQuery(collection = collection.id)) }.collectAsState(initial = emptyList())
     val media by remember(collection.id) { app.store.media.media(MediaOwner.OfCollection(collection.id)) }.collectAsState(initial = MediaSet.Empty)
     val fraction = Fuse.geometry.tileCornerFraction * 0.6f
+    val shape = remember(fraction) { SquircleShape.fraction(fraction) }
     Column(modifier) {
         Tile(
             selected = selected,
             modifier = Modifier.fillMaxWidth().height(artHeight),
-            shape = SquircleShape.fraction(fraction),
+            shape = shape,
             cornerFraction = fraction,
             glow = games.firstOrNull()?.accent?.toColor() ?: c.accent,
             onClick = onClick,
@@ -363,7 +391,7 @@ private fun CollectionCard(
                 games.isNotEmpty() -> CoverCollage(games, artHeight, background = media.hero()?.model())
                 // Its games are still on their way: the card holds its place.
                 collection.gameCount > 0 -> Box(Modifier.fillMaxSize().skeleton())
-                else -> Box(Modifier.fillMaxSize().background(c.surfaceDim.copy(alpha = if (c.isDark) 0.55f else 0.8f)), contentAlignment = Alignment.Center) {
+                else -> SlotFace(shape) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(Space.xs)) {
                         FuseIcon(if (collection.kind == CollectionKind.SERIES) FuseIcons.Sparkles else FuseIcons.Bookmark, size = Size.iconM, tint = c.textMuted)
                         FText("No games yet", Fuse.type.caption, color = c.textMuted, maxLines = 1, align = TextAlign.Center)
