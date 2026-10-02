@@ -64,11 +64,7 @@ internal class DefaultContentOps(
 
     override suspend fun view(id: GameId, picked: Map<String, String>, keys: Map<String, String>): GameContentView? {
         val game = ctx.data.games.get(id) ?: return null
-        val kind = when (game.platformId.value) {
-            "ps3" -> ContentEmulator.RPCS3
-            "psvita" -> ContentEmulator.VITA3K
-            else -> return null
-        }
+        val kind = kindFor(game) ?: return null
         val sources = sources(game)
         if (sources.isEmpty) return null
         val target = target(game, kind)
@@ -171,7 +167,11 @@ internal class DefaultContentOps(
             val after = installedContent(target)
             if (!verified(item, after, startedAt)) {
                 val said = scrub(result.output, key).lines().filter { it.isNotBlank() }.takeLast(12).joinToString("\n")
-                val why = if (result.timedOut) "took too long and was stopped" else "finished, but ${item.fileName} isn't in its storage"
+                val why = when {
+                    result.timedOut -> "took too long and was stopped"
+                    view.plan.emulator == ContentEmulator.AZAHAR && result.exitCode in AZAHAR_FAILURES -> "couldn't install ${item.fileName}: ${AZAHAR_FAILURES.getValue(result.exitCode!!)}"
+                    else -> "finished, but ${item.fileName} isn't in its storage"
+                }
                 return InstallReport(done.toList(), item, "${target.installed.name} $why. Nothing after it was installed.", said.ifEmpty { null })
             }
             record(item)
@@ -183,6 +183,11 @@ internal class DefaultContentOps(
     /** Whether [item] is in the emulator now, as its storage shows. */
     private suspend fun verified(item: PlanItem, after: InstalledContent, startedAt: Long): Boolean {
         val id = item.titleId
+        if (after.emulator == ContentEmulator.AZAHAR) {
+            // Each 3DS title (game, update, DLC) has a folder of its own, its version in its TMD.
+            val have = id?.let { after.games[it] } ?: return false
+            return item.version == null || PsPackages.compareVersions(have.version, item.version) >= 0
+        }
         return when (item.role) {
             ItemRole.LICENCE -> (item.contentId ?: item.installAs?.let { FsPath.stem(it) })?.let(after::hasLicence) == true
             // On PS3 a "GD" folder is a disc game's update, not the game; a Vita game's own category is "gd".
@@ -257,6 +262,8 @@ internal class DefaultContentOps(
         val all = own.read(files)
         val ids = (all.packages.filter { p -> p.path == game.location.launchPath || game.content.any { it.path == p.path } }.mapNotNull { it.titleId } +
             all.archives.filter { a -> a.path == game.location.launchPath }.map { it.titleId } +
+            all.cias.filter { c -> c.path == game.location.launchPath || game.content.any { it.path == c.path } }.map { it.gameId } +
+            all.cartridges.filterKeys { it == game.location.launchPath }.values +
             listOfNotNull(game.tags.serial?.uppercase())).toSet()
         if (ids.isEmpty()) return all
         val inFolder = beside == null
@@ -266,6 +273,8 @@ internal class DefaultContentOps(
             // A .rap under another name is only this game's when it is in the game's own folder.
             licences = all.licences.filter { l -> l.titleId?.let { it in ids } ?: (inFolder || FsPath.parent(l.path) != beside) },
             keys = all.keys.filter { it.titleId in ids },
+            cias = all.cias.filter { it.gameId in ids },
+            cartridges = all.cartridges.filterValues { it in ids },
             unreadable = all.unreadable.filter { p -> inFolder || FsPath.parent(p) != beside || ids.any { p.contains(it, ignoreCase = true) } },
         )
     }
@@ -285,6 +294,7 @@ internal class DefaultContentOps(
             when (kind) {
                 ContentEmulator.RPCS3 -> files.rpcs3Storage(inst)
                 ContentEmulator.VITA3K -> files.vita3kStorage(inst)
+                ContentEmulator.AZAHAR -> files.azaharStorage(inst)
             }
         } else {
             emptyList()
@@ -297,7 +307,27 @@ internal class DefaultContentOps(
         return when (target.kind) {
             ContentEmulator.RPCS3 -> reader.rpcs3(target.storage)
             ContentEmulator.VITA3K -> reader.vita3k(target.storage)
+            ContentEmulator.AZAHAR -> reader.azahar(target.storage)
         }
+    }
+
+    /**
+     * The file an installed 3DS game starts from (its installed title's first content), for a game
+     * kept as a .cia, which Azahar never plays itself. Null when it isn't installed.
+     */
+    suspend fun bootFile(id: GameId): String? {
+        val game = ctx.data.games.get(id) ?: return null
+        if (kindFor(game) != ContentEmulator.AZAHAR) return null
+        val cia = io.github.matiyaaa.fuse.library.content.Cia.read(ctx.services.fs, game.location.launchPath) ?: return null
+        val installed = installedContent(target(game, ContentEmulator.AZAHAR))
+        return installed.bootFiles[cia.gameId]
+    }
+
+    private fun kindFor(game: Game): ContentEmulator? = when (game.platformId.value) {
+        "ps3" -> ContentEmulator.RPCS3
+        "psvita" -> ContentEmulator.VITA3K
+        "3ds", "new-nintendo-3ds" -> ContentEmulator.AZAHAR
+        else -> null
     }
 
     /** Files Fuse installed and saw take (PS3 DLC can't be told apart in RPCS3's storage otherwise). */
@@ -328,7 +358,16 @@ internal class DefaultContentOps(
 
     private companion object {
         const val RECORDS = "content.installed"
-        val NEAR_EXTENSIONS = setOf("pkg", "rap", "edat", "rif", "vpk", "zip")
+        val NEAR_EXTENSIONS = setOf("pkg", "rap", "edat", "rif", "vpk", "zip", "cia")
+
+        /** Azahar's exit codes for a failed install: its InstallStatus plus 2 (src/core/hle/service/am/am.h). */
+        val AZAHAR_FAILURES = mapOf(
+            3 to "it couldn't open the file",
+            4 to "the file wasn't found",
+            5 to "the install was stopped",
+            6 to "it isn't a valid CIA",
+            7 to "the CIA is encrypted. Azahar installs decrypted CIAs only",
+        )
 
         /** What Vita3K prints once a .vpk/.zip is in (or can't be): it would start the game next (main.cpp). */
         val VITA_ARCHIVE_DONE = Regex("installed successfully|will auto-boot|not a supported content|installation failed|already installed|Failed to refresh apps list", RegexOption.IGNORE_CASE)

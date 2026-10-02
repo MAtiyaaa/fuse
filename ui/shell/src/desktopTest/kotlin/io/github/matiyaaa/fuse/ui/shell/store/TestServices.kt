@@ -185,6 +185,7 @@ internal class FakeServices(
 
         override suspend fun rpcs3Storage(installed: InstalledEmulator) = listOfNotNull(rpcs3Hdd)
         override suspend fun vita3kStorage(installed: InstalledEmulator) = listOfNotNull(vitaPref)
+        override suspend fun azaharStorage(installed: InstalledEmulator) = listOfNotNull(azaharSdmc)
         override suspend fun runInstaller(run: InstallerRun, onOutput: (String) -> Unit): InstallerResult {
             installerRuns += run
             return contentInstaller(run)
@@ -201,6 +202,7 @@ internal class FakeServices(
     /** RPCS3's dev_hdd0 and Vita3K's pref path for the fake, and what its installer does with each run. */
     @Volatile var rpcs3Hdd: String? = null
     @Volatile var vitaPref: String? = null
+    @Volatile var azaharSdmc: String? = null
     val installerRuns: MutableList<InstallerRun> = java.util.Collections.synchronizedList(mutableListOf())
     @Volatile var contentInstaller: (InstallerRun) -> InstallerResult = { InstallerResult(0, "") }
 

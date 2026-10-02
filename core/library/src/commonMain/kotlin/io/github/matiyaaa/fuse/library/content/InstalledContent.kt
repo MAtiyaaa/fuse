@@ -9,6 +9,7 @@ import kotlin.coroutines.cancellation.CancellationException
 enum class ContentEmulator(val label: String) {
     RPCS3("RPCS3"),
     VITA3K("Vita3K"),
+    AZAHAR("Azahar"),
 }
 
 /** One title folder in an emulator's storage, as its PARAM.SFO describes it. */
@@ -44,6 +45,8 @@ data class InstalledContent(
     val workBin: Set<String> = emptySet(),
     /** Licence files by content id, where Fuse can read one back (Vita `.rif`, for a zRIF). */
     val licenceFiles: Map<String, String> = emptyMap(),
+    /** The file an installed title starts from, by title id (Azahar: its first content's `.app`). */
+    val bootFiles: Map<String, String> = emptyMap(),
 ) {
     val readable: Boolean get() = roots.isNotEmpty()
 
@@ -127,6 +130,35 @@ class InstalledContentReader(private val fs: FuseFileSystem) {
             }
         }
         return InstalledContent(ContentEmulator.VITA3K, roots, games, patches, addons, licences, workBin, files)
+    }
+
+    /**
+     * Azahar's SD cards (its `sdmc` folders) among [candidates]: every installed title under
+     * `Nintendo 3DS/<id0>/<id1>/title/<high>/<low>`, with the version its TMD gives. Games, their
+     * updates and their DLC are all keyed by their own title id.
+     */
+    suspend fun azahar(candidates: List<String>): InstalledContent {
+        val roots = candidates.map(FsPath::normalize).distinct().filter { isDir(FsPath.join(it, "Nintendo 3DS")) }
+        val titles = LinkedHashMap<String, InstalledTitle>()
+        val boot = HashMap<String, String>()
+        for (root in roots) {
+            for (high in listOf(Cia.GAME, Cia.UPDATE, Cia.DLC)) {
+                val group = FsPath.parent(Cia.titleDir(root, high + "00000000")) ?: continue
+                for (dir in list(group).filter { it.isDirectory && it.name.length == 8 }) {
+                    val content = FsPath.join(dir.path, "content")
+                    val tmdFile = list(content).firstOrNull { !it.isDirectory && it.extension == "tmd" } ?: continue
+                    val tmd = fs.readBytes(tmdFile.path, 0, 0x10000)?.let(Cia::tmd) ?: continue
+                    val id = tmd.titleId
+                    if (id != (high + dir.name).uppercase()) continue
+                    titles.putIfAbsent(id, InstalledTitle(id, dir.path, tmd.version, null, null))
+                    tmd.contents[0]?.let { cid ->
+                        val app = FsPath.join(content, ((cid and 0xFFFFFFFFL) + 0x100000000L).toString(16).substring(1) + ".app")
+                        if (fs.stat(app) != null) boot.putIfAbsent(id, app)
+                    }
+                }
+            }
+        }
+        return InstalledContent(ContentEmulator.AZAHAR, roots, titles, bootFiles = boot)
     }
 
     private suspend fun sfo(path: String): Map<String, String>? =

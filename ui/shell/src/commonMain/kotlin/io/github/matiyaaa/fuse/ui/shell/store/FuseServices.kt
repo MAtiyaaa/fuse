@@ -318,6 +318,9 @@ interface EmulatorFiles {
     /** Vita3K's pref paths for [installed] (where its `ux0` lives): `config.yml`'s `pref-path`, else its defaults. */
     suspend fun vita3kStorage(installed: io.github.matiyaaa.fuse.model.InstalledEmulator): List<String> = emptyList()
 
+    /** Azahar's emulated SD card (`sdmc`) for [installed]: a custom one from its settings, else in its user folder. */
+    suspend fun azaharStorage(installed: io.github.matiyaaa.fuse.model.InstalledEmulator): List<String> = emptyList()
+
     /**
      * Runs an emulator's own installer and waits for it to finish (or for [InstallerRun.stopWhen] to
      * show in its output, then stops it). Null where Fuse can't run programs.

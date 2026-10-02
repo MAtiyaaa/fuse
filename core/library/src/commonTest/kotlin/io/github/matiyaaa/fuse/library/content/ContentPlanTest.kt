@@ -29,6 +29,7 @@ class ContentPlanTest {
         val installed = when (emulator) {
             ContentEmulator.RPCS3 -> InstalledContentReader(fs).rpcs3(storage)
             ContentEmulator.VITA3K -> InstalledContentReader(fs).vita3k(storage)
+            ContentEmulator.AZAHAR -> InstalledContentReader(fs).azahar(storage)
         }
         return ContentPlanner.plan(emulator, sources, installed, recorded, picked)
     }

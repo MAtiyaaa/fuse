@@ -82,6 +82,7 @@ internal class DefaultFuseStore private constructor(
             updatePrefs { it.copy(cleanDisplayNames = enabled) }
         }
         library.onGamesAdded = findArt
+        library.installedBoot = { id -> content.bootFile(id) }
         library.notInstalled = { id ->
             content.view(id)?.takeIf { it.plan.storageReadable && !it.plan.gameInstalled && it.mode == io.github.matiyaaa.fuse.ui.shell.store.InstallMode.FUSE }?.let { v ->
                 io.github.matiyaaa.fuse.ui.shell.store.Problem(

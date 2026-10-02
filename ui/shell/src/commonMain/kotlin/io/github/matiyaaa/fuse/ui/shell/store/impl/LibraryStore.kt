@@ -377,10 +377,7 @@ internal class DefaultLibraryOps(
                 return LaunchOutcome.Problem(LaunchProblems.fileMissing(stored.displayTitle, stored.location.launchPath))
             }
         }
-        // A package plays only once it is installed: say so, a button away from installing it.
-        if (discPath == null && io.github.matiyaaa.fuse.launch.InstallOnlyFiles.matches(stored.platformId, stored.location.launchPath)) {
-            notInstalled(id)?.let { return LaunchOutcome.Problem(it) }
-        }
+
         var game = stored
         if (discPath != null) {
             game = game.copy(
@@ -394,6 +391,12 @@ internal class DefaultLibraryOps(
             )
         }
         if (emulator != null) game = game.copy(emulatorOverride = emulator)
+        // A package plays only once it is installed: say so, a button away from installing it. An
+        // installed 3DS .cia starts from its installed title, which is what Azahar plays.
+        if (discPath == null && io.github.matiyaaa.fuse.launch.InstallOnlyFiles.matches(stored.platformId, stored.location.launchPath)) {
+            notInstalled(id)?.let { return LaunchOutcome.Problem(it) }
+            installedBoot(id)?.let { boot -> game = game.copy(location = game.location.copy(launchPath = boot)) }
+        }
 
         if (ctx.installed.value.isEmpty()) emulators.detectNow()
         val installed = ctx.installed.value
@@ -558,6 +561,9 @@ internal class DefaultLibraryOps(
      * to Fuse's content installs; only asked for games whose file is a package.
      */
     var notInstalled: suspend (GameId) -> io.github.matiyaaa.fuse.ui.shell.store.Problem? = { null }
+
+    /** The installed title a package game starts from instead of its package, when there is one. */
+    var installedBoot: suspend (GameId) -> String? = { null }
 
     private fun afterGamesAdded(ids: List<GameId>) = onGamesAdded(ids)
 

@@ -207,6 +207,45 @@ class DesktopEmulatorFiles(
         (fromConfig + dataRoots.map { it.absolutePath }).map { it.replace('\\', '/').trimEnd('/') }.distinct()
     }
 
+    /**
+     * Azahar's SD card (src/common/common_paths.h, file_util.cpp): `sdmc` in its user folder, which
+     * is a `user` folder next to the program when there is one (portable), else %APPDATA%\\Azahar on
+     * Windows, ~/Library/Application Support/Azahar on macOS, and $XDG_DATA_HOME/azahar-emu (or
+     * ~/.local/share/azahar-emu, inside ~/.var/app for the Flatpak) on Linux. A custom SD card set in
+     * its settings (`use_custom_storage`, `sdmc_directory` in qt-config.ini) comes first.
+     */
+    override suspend fun azaharStorage(installed: InstalledEmulator): List<String> = withContext(Dispatchers.IO) {
+        val flatpak = installed.detectedVia == "Flatpak"
+        val program = if (flatpak) null else File(installed.appId).takeIf { it.isAbsolute }
+        val portable = program?.let { appRoot(it) }?.let { File(it, "user") }?.takeIf { it.isDirectory }
+        val user = portable ?: when (os) {
+            DesktopOs.WINDOWS -> env["APPDATA"]?.let { File(it, "Azahar") }
+            DesktopOs.MACOS -> File(home, "Library/Application Support/Azahar")
+            DesktopOs.LINUX -> if (flatpak) {
+                File(home, ".var/app/org.azahar_emu.Azahar/data/azahar-emu")
+            } else {
+                env["XDG_DATA_HOME"]?.takeIf { it.startsWith("/") }?.let { File(it, "azahar-emu") } ?: File(home, ".local/share/azahar-emu")
+            }
+        }
+        val configs = listOfNotNull(
+            user?.let { File(it, "config/qt-config.ini") },
+            if (os == DesktopOs.LINUX && portable == null) {
+                if (flatpak) File(home, ".var/app/org.azahar_emu.Azahar/config/azahar-emu/qt-config.ini")
+                else File(env["XDG_CONFIG_HOME"]?.takeIf { it.startsWith("/") } ?: "$home/.config", "azahar-emu/qt-config.ini")
+            } else {
+                null
+            },
+        )
+        val custom = configs.firstNotNullOfOrNull { c ->
+            val ini = runCatching { IniText(c.readText()) }.getOrNull() ?: return@firstNotNullOfOrNull null
+            val on = ini.values("Data%20Storage", "use_custom_storage").lastOrNull() ?: ini.values("Data Storage", "use_custom_storage").lastOrNull()
+            val dir = ini.values("Data%20Storage", "sdmc_directory").lastOrNull() ?: ini.values("Data Storage", "sdmc_directory").lastOrNull()
+            dir?.takeIf { on == "true" && it.isNotBlank() }
+        }
+        (listOfNotNull(custom) + listOfNotNull(user?.let { File(it, "sdmc").absolutePath }))
+            .map { it.replace('\\', '/').trimEnd('/') }.distinct()
+    }
+
     override suspend fun runInstaller(run: InstallerRun, onOutput: (String) -> Unit): InstallerResult = withContext(Dispatchers.IO) {
         val builder = ProcessBuilder(run.argv).redirectErrorStream(true)
         run.workingDir?.let { builder.directory(File(it)) }
