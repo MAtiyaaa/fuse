@@ -175,7 +175,7 @@ fun GameIconTile(
         val inset = markInset(minOf(dims.width, dims.height), corner)
         TileBorder(border, accent, corner, label, inset, badgeAt = if (poster) Alignment.TopStart else Alignment.BottomStart)
         // On posters the tag shares the top edge with the marks.
-        GameMarks(card, Modifier.align(Alignment.TopEnd), inset = inset, maxShare = if (poster && label != null) SHARED_TOP else 1f)
+        GameMarks(card, Modifier.align(Alignment.TopEnd), inset = inset, reserve = if (poster && label != null) tagRoom(label, dims.width) else 0.dp)
     }
 }
 
@@ -212,7 +212,7 @@ fun GameCoverTile(
         )
         val inset = markInset(width, corner)
         TileBorder(border, accent, corner, label, inset, badgeAt = Alignment.TopStart)
-        GameMarks(card, Modifier.align(Alignment.TopEnd), inset = inset, maxShare = if (label != null) SHARED_TOP else 1f)
+        GameMarks(card, Modifier.align(Alignment.TopEnd), inset = inset, reserve = if (label != null) tagRoom(label, width) else 0.dp)
     }
 }
 
@@ -320,11 +320,11 @@ val LocalTileShowsFavourite = staticCompositionLocalOf { true }
  * A game's state marks in a tile's top corner, one consistent family: small dark-glass discs lit
  * along their top edge, each holding one icon (a pill with its number for several discs). The most
  * important mark sits in the corner and the rest line up beside it; marks that would not fit the
- * tile's width (or [maxShare] of it, where a platform tag shares the top edge) are left out rather
+ * tile's width (less [reserve] at its start, where a platform tag shares the top edge) are left out rather
  * than crowding the art.
  */
 @Composable
-internal fun GameMarks(card: GameCard, modifier: Modifier = Modifier, inset: Dp = Space.s, maxShare: Float = 1f) {
+internal fun GameMarks(card: GameCard, modifier: Modifier = Modifier, inset: Dp = Space.s, reserve: Dp = 0.dp) {
     val marks = card.marks(favourite = LocalTileShowsFavourite.current)
     if (marks.isEmpty()) return
     val gap = Space.xs
@@ -334,7 +334,7 @@ internal fun GameMarks(card: GameCard, modifier: Modifier = Modifier, inset: Dp 
             .padding(inset)
             .semantics { contentDescription = marks.joinToString(", ") { it.words } },
     ) { measurables, constraints ->
-        val room = (constraints.maxWidth * maxShare).toInt()
+        val room = constraints.maxWidth - reserve.roundToPx()
         val loose = Constraints(maxWidth = constraints.maxWidth, maxHeight = constraints.maxHeight)
         val gapPx = gap.roundToPx()
         val placeables = measurables.map { it.measure(loose) }
@@ -419,6 +419,16 @@ internal fun GameMarksInline(card: GameCard, modifier: Modifier = Modifier, emph
  */
 internal fun markInset(short: Dp, cornerFraction: Float): Dp =
     maxOf(short * TAG_INSET, short * cornerFraction * CORNER_CLEAR).coerceIn(Space.xs, Space.l)
+
+/**
+ * Room to keep for a platform tag in the top corner of a cover [width] wide, so marks beside it never
+ * touch it: about as wide as the tag generated art (or a border) sets there, with a gap after it.
+ * Tags are sized from the art's short side, so this follows them on every tile size.
+ */
+internal fun tagRoom(label: String, width: Dp): Dp {
+    val type = (width * TAG_TYPE).coerceIn(TAG_TYPE_MIN, TAG_TYPE_MAX)
+    return type * (TAG_LETTER * label.length + TAG_PADDING) + Space.xs
+}
 
 /**
  * A system's short name as a small uppercase tag, the same tag generated art carries: for list rows
@@ -643,8 +653,16 @@ private const val MARK_EDGE = 0.22f
 /** Platform tags and marks sit this share of the art's short side in from its edges. */
 private const val TAG_INSET = 0.07f
 
-/** Share of a cover's top edge its marks may take, leaving the rest to the platform tag. */
-private const val SHARED_TOP = 0.55f
+
+/**
+ * How generated art sizes its platform tag: type at this share of the art's short side, within these
+ * bounds, each letter (with its tracking) about this many of its size wide, plus the pill's padding.
+ */
+private const val TAG_TYPE = 0.062f
+private val TAG_TYPE_MIN = 8.dp
+private val TAG_TYPE_MAX = 11.dp
+private const val TAG_LETTER = 0.86f
+private const val TAG_PADDING = 1.4f
 
 /** How much of the corner radius a mark keeps clear of, so it never meets the curve. */
 private const val CORNER_CLEAR = 0.3f

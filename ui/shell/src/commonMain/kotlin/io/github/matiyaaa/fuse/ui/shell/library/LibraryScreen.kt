@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -526,7 +527,8 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
             else -> (maxH * STAGE_SHARE).coerceIn(STAGE_MIN, STAGE_MAX)
         }
         // The stage's title: the hero face where there is room for it.
-        val stageTitle = if (compactHeader) Fuse.type.display else Fuse.type.hero
+        // A short or narrow screen (a phone held upright) sets it in the display face instead.
+        val stageTitle = if (compactHeader || maxW < STACK_WIDTH) Fuse.type.display else Fuse.type.hero
         Column(Modifier.fillMaxSize()) {
             Spacer(Modifier.height(Size.hudHeight + if (systemCard != null) lerp(if (compactHeader) Space.xs else Space.m, Space.xxs, collapse) else 0.dp))
             Box(Modifier.reveal(entry, 0)) {
@@ -556,6 +558,7 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
                     filteredTo = platforms.firstOrNull { it.platform.id == state.system }?.platform?.shortName,
                     action = emptyAction,
                     selected = gridFocused,
+                    compact = compactHeader,
                 )
                 else -> CompositionLocalProvider(
                     LocalTileShowsSystem provides !inSystem,
@@ -856,13 +859,16 @@ private fun CompactList(
     val showsSystem = LocalTileShowsSystem.current
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val side = maxWidth >= SIDE_PANEL_MIN
+        // A list as narrow as a phone held upright gives each row's details a line of their own.
+        val dense = maxWidth - Space.gutter * 2 < DENSE_LIST
+        val short = maxHeight < SHORT_SCREEN
         Row(Modifier.fillMaxSize().padding(horizontal = Space.gutter)) {
             GlidingList(
                 list, state.grid.index, listState, focused,
                 Modifier.weight(LIST_WEIGHT).fillMaxHeight(),
             ) { i, card, sel ->
                 GameRow(
-                    card, sel, showsSystem,
+                    card, sel, showsSystem, dense,
                     Modifier.reveal(reveal, 2 + i),
                     onClick = { onTap(i) },
                     onLongClick = { onLong(i) },
@@ -870,7 +876,7 @@ private fun CompactList(
             }
             if (side && selected != null) {
                 Spacer(Modifier.width(Space.xxl))
-                ListPreview(selected, showsSystem, Modifier.weight(PREVIEW_WEIGHT).fillMaxHeight().reveal(reveal, 1))
+                ListPreview(selected, showsSystem, compact = short, modifier = Modifier.weight(PREVIEW_WEIGHT).fillMaxHeight().reveal(reveal, 1))
             }
         }
     }
@@ -992,15 +998,26 @@ private fun rowEdge(pos: Float, info: LazyListLayoutInfo, gapPx: Float, bottom: 
 
 /**
  * One game in the List layout: its art, its title, its marks, its platform tag and its play time in
- * a column of tabular figures. Hover and press come from [fuseClickable]; selection is drawn by the
- * list's gliding highlight.
+ * a column of tabular figures ([dense]: the details on a second line under the title, so a narrow
+ * list never squeezes the name). Hover and press come from [fuseClickable]; selection is drawn by
+ * the list's gliding highlight.
  */
 @Composable
-private fun GameRow(card: GameCard, selected: Boolean, showsSystem: Boolean, modifier: Modifier, onClick: () -> Unit, onLongClick: () -> Unit) {
+private fun GameRow(
+    card: GameCard,
+    selected: Boolean,
+    showsSystem: Boolean,
+    dense: Boolean,
+    modifier: Modifier,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+) {
     val c = Fuse.colors
     val shape = RoundedCornerShape(Fuse.geometry.control)
     val thumbCorner = Fuse.geometry.tileCornerFraction.coerceAtLeast(THUMB_CORNER_MIN) + THUMB_CORNER_EXTRA
     val thumb = remember(thumbCorner) { SquircleShape.fraction(thumbCorner) }
+    val played = if (card.playSeconds > 0) playtimeText(card.playSeconds) else ""
+    val timeColor = if (selected) c.textMuted else c.textFaint
     Row(
         modifier
             .fillMaxWidth()
@@ -1017,13 +1034,28 @@ private fun GameRow(card: GameCard, selected: Boolean, showsSystem: Boolean, mod
             fallback = { GeneratedArt(card.title, card.accent.toColor(), slot = ArtSlot.ICON) },
         )
         Spacer(Modifier.width(Space.m))
-        FText(
-            card.title,
-            if (selected) Fuse.type.bodyStrong else Fuse.type.body,
-            color = if (card.missing) c.textFaint else c.text,
-            maxLines = 1,
-            modifier = Modifier.weight(1f),
-        )
+        val title: @Composable (Modifier) -> Unit = { m ->
+            FText(
+                card.title,
+                if (selected) Fuse.type.bodyStrong else Fuse.type.body,
+                color = if (card.missing) c.textFaint else c.text,
+                maxLines = 1,
+                modifier = m,
+            )
+        }
+        if (dense) {
+            // The name keeps the whole width; the system, marks and play time follow underneath.
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Space.xxs)) {
+                title(Modifier)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s)) {
+                    if (showsSystem) PlatformTag(card.platformShort, emphasised = selected)
+                    GameMarksInline(card, emphasised = selected)
+                    if (played.isNotEmpty()) FText(played, Fuse.type.numericSmall, color = timeColor, maxLines = 1)
+                }
+            }
+            return@Row
+        }
+        title(Modifier.weight(1f))
         GameMarksInline(card, Modifier.padding(start = Space.m), emphasised = selected)
         if (showsSystem) {
             Spacer(Modifier.width(Space.m))
@@ -1031,9 +1063,9 @@ private fun GameRow(card: GameCard, selected: Boolean, showsSystem: Boolean, mod
         }
         Spacer(Modifier.width(Space.m))
         FText(
-            if (card.playSeconds > 0) playtimeText(card.playSeconds) else "",
+            played,
             Fuse.type.numericSmall,
-            color = if (selected) c.textMuted else c.textFaint,
+            color = timeColor,
             maxLines = 1,
             align = TextAlign.End,
             modifier = Modifier.width(PLAYTIME_COLUMN),
@@ -1041,15 +1073,28 @@ private fun GameRow(card: GameCard, selected: Boolean, showsSystem: Boolean, mod
     }
 }
 
-/** Beside the list: the selected game's cover, lifted like a tile, and its stage underneath. */
+/**
+ * Beside the list: the selected game's cover, lifted like a tile, and its stage underneath. The
+ * stage always gets the room it needs; the cover takes what is left, up to [PREVIEW_COVER] of the
+ * height, so a short screen gets a smaller cover rather than a stage running into the hint line.
+ */
 @Composable
-private fun ListPreview(card: GameCard, showsSystem: Boolean, modifier: Modifier) {
+private fun ListPreview(card: GameCard, showsSystem: Boolean, compact: Boolean, modifier: Modifier) {
     val corner = coverCornerFraction()
     val shape = remember(corner) { SquircleShape.fraction(corner) }
     BoxWithConstraints(modifier.padding(top = CONTENT_TOP, bottom = Size.hintHeight + Space.l)) {
-        val coverHeight = (maxHeight * PREVIEW_COVER).coerceAtMost(maxWidth / Aspect.BOX)
-        Column {
-            Tile(selected = false, modifier = Modifier.height(coverHeight).aspectRatio(Aspect.BOX), shape = shape, cornerFraction = corner, showSpark = false) {
+        val coverMax = (maxHeight * PREVIEW_COVER).coerceAtMost(maxWidth / Aspect.BOX)
+        Column(Modifier.fillMaxHeight()) {
+            Tile(
+                selected = false,
+                modifier = Modifier
+                    .weight(1f, fill = false)
+                    .heightIn(max = coverMax)
+                    .aspectRatio(Aspect.BOX, matchHeightConstraintsFirst = true),
+                shape = shape,
+                cornerFraction = corner,
+                showSpark = false,
+            ) {
                 Artwork(
                     card.art.boxart ?: card.art.grid ?: card.art.square ?: card.art.icon,
                     Modifier.fillMaxSize(),
@@ -1057,11 +1102,12 @@ private fun ListPreview(card: GameCard, showsSystem: Boolean, modifier: Modifier
                     fallback = { GeneratedArt(card.title, card.accent.toColor(), slot = ArtSlot.BOX, label = card.platformShort.takeIf { showsSystem }) },
                 )
             }
-            Spacer(Modifier.height(Space.l))
+            Spacer(Modifier.height(if (compact) Space.m else Space.l))
             Stage(
                 card.stage().let { if (showsSystem) it else it.copy(eyebrow = null) },
-                logoHeight = Space.x4,
-                titleStyle = Fuse.type.display,
+                logoHeight = if (compact) Space.x3 else Space.x4,
+                titleStyle = if (compact) Fuse.type.title else Fuse.type.display,
+                inlineEyebrow = compact,
             )
         }
     }
@@ -1150,6 +1196,7 @@ private fun LibraryEmpty(
     filteredTo: String?,
     action: EmptyAction?,
     selected: Boolean,
+    compact: Boolean = false,
 ) {
     val series = collection?.kind == CollectionKind.SERIES
     val (icon, title, body) = when (scope) {
@@ -1179,10 +1226,10 @@ private fun LibraryEmpty(
         contentAlignment = Alignment.Center,
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            EmptyState(icon = icon, title = title, message = message)
+            EmptyState(icon = icon, title = title, message = message, compact = compact)
             // The action sits outside the state's arrival layer, so its focus ring is never cut.
             if (action != null) {
-                Spacer(Modifier.height(Space.xl))
+                Spacer(Modifier.height(if (compact) Space.l else Space.xl))
                 FuseButton(action.label, selected = selected, onClick = action.run, kind = ButtonKind.PRIMARY, icon = action.icon)
             }
         }
@@ -1303,6 +1350,9 @@ private val SIDE_PANEL_MIN = 720.dp
 
 /** The preview cover's height, as a share of the panel's. */
 private const val PREVIEW_COVER = 0.56f
+
+/** Lists narrower than this put each row's system, marks and play time under its name. */
+private val DENSE_LIST = 400.dp
 
 /** The column of play times in the List layout: wide enough for "12 h 30 min". */
 private val PLAYTIME_COLUMN = Space.x4 + Space.l

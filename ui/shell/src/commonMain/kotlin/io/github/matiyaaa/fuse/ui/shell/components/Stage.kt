@@ -8,6 +8,7 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -163,27 +164,41 @@ fun Stage(
 
 /**
  * The stage on one line, for layouts that give their height to the art (the Cover grid): the title
- * in the title face, then the meta and tags quietly after it. Swaps with a quick fade.
+ * in the title face, then the meta and tags quietly after it. On a narrow screen the meta and tags
+ * take a line of their own under the title, so neither is cut short. Swaps with a quick fade.
  */
 @Composable
 fun StageLine(info: StageInfo?, modifier: Modifier = Modifier) {
     val motion = Fuse.motion
     val c = Fuse.colors
-    AnimatedContent(
-        targetState = info,
-        modifier = modifier,
-        contentKey = { it?.key },
-        transitionSpec = { fadeIn(motion.fade(Durations.FAST)) togetherWith fadeOut(motion.fade(Durations.INSTANT)) },
-        contentAlignment = Alignment.CenterStart,
-        label = "stage line",
-    ) { s ->
-        Row(Modifier.heightIn(min = Size.badge), verticalAlignment = Alignment.CenterVertically) {
-            if (s == null) return@Row
-            FText(s.title, Fuse.type.title, color = c.text, maxLines = 1, modifier = Modifier.weight(1f, fill = false))
+    BoxWithConstraints(modifier) {
+        val stacked = maxWidth < STACKED_LINE
+        AnimatedContent(
+            targetState = info,
+            contentKey = { it?.key },
+            transitionSpec = { fadeIn(motion.fade(Durations.FAST)) togetherWith fadeOut(motion.fade(Durations.INSTANT)) },
+            contentAlignment = Alignment.CenterStart,
+            label = "stage line",
+        ) { s ->
+            if (s == null) {
+                Spacer(Modifier.height(Size.badge))
+                return@AnimatedContent
+            }
             val meta = s.copy(meta = listOfNotNull(s.eyebrow) + s.meta)
-            if (meta.meta.isNotEmpty() || meta.tags.isNotEmpty()) {
-                Spacer(Modifier.width(Space.m))
-                MetaLine(meta, Fuse.type.label, Modifier.weight(1f, fill = false))
+            val hasMeta = meta.meta.isNotEmpty() || meta.tags.isNotEmpty()
+            if (stacked) {
+                Column(verticalArrangement = Arrangement.spacedBy(Space.xs)) {
+                    FText(s.title, Fuse.type.title, color = c.text, maxLines = 1)
+                    if (hasMeta) MetaLine(meta, Fuse.type.label, Modifier, wrap = true)
+                }
+                return@AnimatedContent
+            }
+            Row(Modifier.heightIn(min = Size.badge), verticalAlignment = Alignment.CenterVertically) {
+                FText(s.title, Fuse.type.title, color = c.text, maxLines = 1, modifier = Modifier.weight(1f, fill = false))
+                if (hasMeta) {
+                    Spacer(Modifier.width(Space.m))
+                    MetaLine(meta, Fuse.type.label, Modifier.weight(1f, fill = false))
+                }
             }
         }
     }
@@ -322,6 +337,9 @@ fun agoText(epochMs: Long, now: Long = kotlin.time.Clock.System.now().toEpochMil
         else -> "${minutes / (60 * 24 * 30)} months ago"
     }
 }
+
+/** Below this width the one-line stage puts its meta and tags under the title. */
+private val STACKED_LINE = 600.dp
 
 /** A title never runs wider than this, so a long one wraps into a block instead of a banner. */
 private val TITLE_MAX = 720.dp
