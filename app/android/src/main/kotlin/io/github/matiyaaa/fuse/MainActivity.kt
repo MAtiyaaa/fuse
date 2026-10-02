@@ -82,6 +82,13 @@ class MainActivity : ComponentActivity(), ActivityRequests {
     }
     private val permissionSlot = ResultSlot(false)
     private val permissionLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()) { permissionSlot.complete(it) }
+    private val createSlot = ResultSlot<Uri?>(null)
+    private var createType = "application/octet-stream"
+    private val createLauncher = registerForActivityResult(object : ActivityResultContracts.CreateDocument("*/*") {
+        override fun createIntent(context: android.content.Context, input: String): Intent = super.createIntent(context, input).setType(createType)
+    }) { createSlot.complete(it) }
+    private val openSlot = ResultSlot<Uri?>(null)
+    private val openLauncher = registerForActivityResult(ActivityResultContracts.OpenDocument()) { openSlot.complete(it) }
     private val captureSlot = ResultSlot<ActivityResult?>(null)
     private val captureLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         captureSlot.complete(it.takeIf { r -> r.resultCode == RESULT_OK && r.data != null })
@@ -310,6 +317,13 @@ class MainActivity : ComponentActivity(), ActivityRequests {
     }
 
     override suspend fun pickAudio(): Uri? = audioSlot.request { audioLauncher.launch(arrayOf("audio/*")) }
+
+    override suspend fun createDocument(name: String, mimeType: String): Uri? = createSlot.request {
+        createType = mimeType
+        createLauncher.launch(name)
+    }
+
+    override suspend fun openDocument(mimeTypes: Array<String>): Uri? = openSlot.request { openLauncher.launch(mimeTypes) }
 
     override suspend fun requestRole(intent: Intent): Boolean = roleSlot.request { roleLauncher.launch(intent) }
 

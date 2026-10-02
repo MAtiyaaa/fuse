@@ -106,6 +106,13 @@ interface EmulatorAdapter {
     /** Always available without detection (native Android apps, Linux `.desktop` shortcuts). */
     val builtIn: Boolean get() = false
 
+    /**
+     * Opens shortcuts and programs of their own (a `.desktop`, `.lnk` or `.app`), not a system's
+     * games: it only counts as a system's emulator where [EmulatorPriority] names it (Steam and PC
+     * games), never for a console just because it accepts any system's shortcuts.
+     */
+    val shortcutsOnly: Boolean get() = false
+
     /** True when this adapter can never start a specific game and only opens the app. */
     val opensAppOnly: Boolean get() = false
 

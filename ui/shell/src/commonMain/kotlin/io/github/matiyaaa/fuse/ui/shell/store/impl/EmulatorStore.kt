@@ -42,6 +42,7 @@ internal class DefaultEmulatorOps(private val ctx: StoreContext) : EmulatorOps {
         lastDetect = ctx.now()
         // Keep one entry per adapter id; the first detection wins (catalog order).
         ctx.installed.value = found.distinctBy { it.id }
+        ctx.emulatorsDetected.value = true
     }
 
     override fun optionsFor(platform: PlatformId): List<EmulatorOption> {

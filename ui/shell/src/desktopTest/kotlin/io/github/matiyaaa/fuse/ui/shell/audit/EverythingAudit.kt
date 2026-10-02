@@ -78,4 +78,37 @@ internal fun AuditDriver.everythingScreens() {
         settle(800)
         shoot("Home in safe mode, with its chip in the top line")
     }
+
+    scenario("health", "system health") {
+        useLibrary()
+        openSettings()
+        tap(PadButton.DPAD_DOWN, sectionIndex("health"))
+        tap(PadButton.DPAD_RIGHT)
+        waitFor("Diagnostics report")
+        settle(2_500)
+        shoot("findings, most serious first")
+        tapText("PlayStation firmware missing")
+        waitFor("PlayStation settings")
+        shoot("a finding opened", 900)
+        tap(PadButton.B)
+        tapText("Diagnostics report")
+        waitFor("Check it before you share it")
+        settle(900)
+        shoot("the diagnostics report to read before saving")
+        tap(PadButton.DPAD_DOWN, 6)
+        settle(600)
+        shoot("the report scrolled")
+        tap(PadButton.B)
+    }
+
+    scenario("health", "a system's page") {
+        useLibrary()
+        tab(io.github.matiyaaa.fuse.model.Destination.SYSTEMS)
+        settle()
+        tap(PadButton.X)
+        waitFor("System Settings")
+        tapText("System Settings")
+        settle(1_500)
+        shoot("a system with what needs attention first")
+    }
 }

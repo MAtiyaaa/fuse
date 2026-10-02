@@ -107,6 +107,8 @@ data class PlatformCard(
     val bios: BiosStatus,
     val layout: LibraryLayout,
     val romFolders: List<String>,
+    /** The emulator the user chose for the system, when they did (it may no longer be installed). */
+    val emulatorChosen: EmulatorId? = null,
 )
 
 /** Everything the game page shows. */
@@ -258,6 +260,10 @@ sealed interface ProblemAction {
     data class RemoveSource(val source: io.github.matiyaaa.fuse.model.LibrarySourceId, override val label: String = "Remove this folder") : ProblemAction
     data class Rescan(override val label: String = "Scan again") : ProblemAction
     data class LeaveSafeMode(override val label: String = "Leave safe mode") : ProblemAction
+
+    /** The library's list of games whose files weren't found. */
+    data class ShowMissing(override val label: String = "Show these games") : ProblemAction
+    data class OpenHealth(override val label: String = "System health") : ProblemAction
 
     /** Back to Fuse's own theme with standard motion and no glass or CRT, saved. */
     data class ResetAppearance(override val label: String = "Reset appearance") : ProblemAction

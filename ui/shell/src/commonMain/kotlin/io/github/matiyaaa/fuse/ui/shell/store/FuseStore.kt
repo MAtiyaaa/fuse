@@ -59,6 +59,9 @@ interface FuseStore {
     val storage: StorageOps
     val themes: ThemeOps
 
+    /** What Fuse found wrong with the setup, and how to fix it. */
+    val health: HealthOps get() = HealthOps.None
+
     /**
      * Starts what Fuse does by itself (scans, art fills, Cartridge, achievements, update checks)
      * when the store was created in safe mode, which holds it back. Does nothing otherwise.
@@ -67,6 +70,55 @@ interface FuseStore {
 
     /** A song that ships with Fuse ([io.github.matiyaaa.fuse.ui.shell.music.BundledMusic]) as a file the player can open. */
     suspend fun bundledTrack(id: String): String? = null
+}
+
+/**
+ * System health: everything Fuse can tell is wrong or needs attention in the setup (library
+ * folders and drives, emulators, firmware, playlists, provider keys, updates), each told as a
+ * [Problem] with what to do. Only what Fuse can really check is reported; what it can't know is
+ * left out rather than guessed.
+ */
+interface HealthOps {
+    val report: StateFlow<HealthReport>
+
+    /** Checks everything again, game files included. */
+    fun check()
+
+    /**
+     * A diagnostics report for a bug report: versions, systems, emulators found, drives and folders
+     * with their state, integrations on or off, the health findings and recent launch problems, plus
+     * [device] lines the interface knows. Personal folder names and anything secret are removed.
+     * Nothing is saved or sent; the caller shows it first.
+     */
+    suspend fun diagnostics(device: List<String> = emptyList(), crash: String? = null): String = ""
+
+    object None : HealthOps {
+        override val report: StateFlow<HealthReport> = MutableStateFlow(HealthReport())
+        override fun check() = Unit
+    }
+}
+
+/** One thing System health found, and what it is about: the whole setup, a system or a game. */
+data class HealthIssue(
+    /** Stable for the same finding, so lists keep their place as checks run again. */
+    val id: String,
+    val problem: Problem,
+    val platform: PlatformId? = null,
+    val game: GameId? = null,
+)
+
+data class HealthReport(
+    val issues: List<HealthIssue> = emptyList(),
+    /** When the last full check (game files included) finished; null before it has run. */
+    val checkedAt: Long? = null,
+    val checking: Boolean = false,
+) {
+    /** How the setup is overall: the most serious issue, or healthy. */
+    val worst: Severity get() = issues.maxOfOrNull { it.problem.severity } ?: Severity.HEALTHY
+
+    fun forPlatform(platform: PlatformId): List<HealthIssue> = issues.filter { it.platform == platform && it.game == null }
+
+    fun forGame(game: GameId): List<HealthIssue> = issues.filter { it.game == game }
 }
 
 /**

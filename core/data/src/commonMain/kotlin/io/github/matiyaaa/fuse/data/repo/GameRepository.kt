@@ -134,6 +134,16 @@ class GameRepository(
     }
 
     /** Local games linked to each RetroAchievements game id (for the COMPLETED collection). */
+    /** Games set to an emulator of their own, present and in the library. */
+    suspend fun emulatorOverrides(): Map<GameId, EmulatorId> = withContext(dispatcher) {
+        q.selectEmulatorOverrides().executeAsList().mapNotNull { r -> r.emulator_override?.let { GameId(r.id) to EmulatorId(it) } }.toMap()
+    }
+
+    /** Games with a playlist, sheet or several discs, by their launch file, at most [limit]. */
+    suspend fun playlistGames(limit: Int = 5_000): List<Pair<GameId, String>> = withContext(dispatcher) {
+        q.selectPlaylistGames(limit.toLong()).executeAsList().map { GameId(it.id) to it.launch_path }
+    }
+
     suspend fun idsForRetroAchievements(raGameIds: Collection<Long>): Map<Long, List<GameId>> = withContext(dispatcher) {
         raGameIds.distinct().chunked(SQL_CHUNK)
             .flatMap { q.selectIdsByRaGameIds(it).executeAsList() }

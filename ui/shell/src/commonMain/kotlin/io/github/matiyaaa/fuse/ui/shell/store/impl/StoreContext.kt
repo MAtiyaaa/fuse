@@ -31,6 +31,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.retryWhen
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 
@@ -63,6 +64,16 @@ internal class StoreContext(
      */
     val systemOrder = MutableStateFlow(initialSettings.library.systemOrder)
     val installed = MutableStateFlow<List<InstalledEmulator>>(emptyList())
+
+    /** The last launch problems, newest last, for the diagnostics report. Kept in memory only. */
+    val recentProblems = MutableStateFlow<List<Pair<Long, io.github.matiyaaa.fuse.ui.shell.store.Problem>>>(emptyList())
+
+    fun recordProblem(problem: io.github.matiyaaa.fuse.ui.shell.store.Problem) {
+        recentProblems.update { (it + (now() to problem)).takeLast(10) }
+    }
+
+    /** True once emulators were looked for: until then, "none installed" means "not known yet". */
+    val emulatorsDetected = MutableStateFlow(false)
 
     /** Library folders that can't be read right now ([Drives]); their games show as unavailable. */
     val offline = MutableStateFlow<List<OfflineRoot>>(emptyList())

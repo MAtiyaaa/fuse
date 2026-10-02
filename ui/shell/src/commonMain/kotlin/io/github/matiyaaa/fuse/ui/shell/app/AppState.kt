@@ -118,6 +118,9 @@ class AppState(
     var choice by mutableStateOf<ChoiceSpec?>(null)
     var reorder by mutableStateOf<ReorderSpec?>(null)
 
+    /** Text to read before it is saved or shared ([TextPreviewOverlay]). */
+    var textPreview by mutableStateOf<TextPreviewSpec?>(null)
+
     /** Set while Fuse runs in safe mode ([SafeMode]); cleared when the user leaves it. */
     var safeMode by mutableStateOf<SafeMode?>(null)
 
@@ -152,7 +155,7 @@ class AppState(
     var launching by mutableStateOf<LaunchVeil?>(null)
 
     val overlayOpen: Boolean
-        get() = quickMenuOpen || contextMenu != null || confirm != null || textInput != null || choice != null || reorder != null || screenPrompt != null || buttonDetect || problem != null
+        get() = quickMenuOpen || contextMenu != null || confirm != null || textInput != null || choice != null || reorder != null || screenPrompt != null || buttonDetect || problem != null || textPreview != null
 
     fun openContextMenu(spec: ContextMenuSpec) {
         contextMenu = spec
@@ -166,6 +169,7 @@ class AppState(
         choice = null
         screenPrompt = null
         problem = null
+        textPreview = null
         buttonDetect = false
     }
 

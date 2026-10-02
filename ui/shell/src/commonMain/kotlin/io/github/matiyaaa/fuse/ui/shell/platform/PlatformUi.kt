@@ -59,12 +59,28 @@ interface PlatformUi {
     /** Puts [text] on the system clipboard; false where that isn't possible. */
     suspend fun writeClipboardText(text: String): Boolean = false
 
+    /**
+     * Saves [bytes] as a file named [name] where the user chooses (the system's save dialog, or
+     * Android's document picker). Returns where it went, in words for people, or null when the
+     * user cancelled or this system can't save files.
+     */
+    suspend fun saveFile(name: String, mimeType: String, bytes: ByteArray): String? = null
+
+    /**
+     * Lets the user pick a file to open (a backup to restore), of [mimeTypes] or with one of
+     * [extensions]. Its name and content, at most [maxBytes]; null when cancelled, too large or unreadable.
+     */
+    suspend fun openFile(mimeTypes: List<String>, extensions: List<String>, maxBytes: Long): OpenedFile? = null
+
     /** The last crash Fuse recorded (time, version, thread, stack trace), or null when there is none. */
     fun lastCrashReport(): String? = null
 
     /** Forgets the recorded crash, after the user has seen or shared it. */
     fun clearCrashReport() {}
 }
+
+/** A file the user picked to open: its name and its bytes. */
+class OpenedFile(val name: String, val bytes: ByteArray)
 
 private val NoSecondScreenLog: StateFlow<List<String>> = MutableStateFlow(emptyList())
 

@@ -617,6 +617,7 @@ private fun FillFinishedToast(app: AppState) {
 /** What is working in the background, for the top line: recordings, art fills, uploads, downloads and updates. */
 @Composable
 private fun hudActivities(app: AppState): List<HudActivity> {
+    val health = io.github.matiyaaa.fuse.ui.shell.settings.rememberHealthIssues(app)
     val update by app.store.updates.state.collectAsState()
     val available by app.store.updates.available.collectAsState()
     val cartridge by app.store.cartridge.status.collectAsState()
@@ -625,6 +626,9 @@ private fun hudActivities(app: AppState): List<HudActivity> {
     return buildList {
         // Safe mode stays in view, calmly, with its way out a press away.
         if (app.safeMode != null) add(HudActivity("safe", FuseIcons.LifeBuoy, "Safe mode. Select for what it means and how to leave it", steady = true) { app.showSafeMode() })
+        // Only something that keeps Fuse from working claims a place in the top line.
+        val broken = health.firstOrNull { it.problem.severity == io.github.matiyaaa.fuse.ui.shell.store.Severity.BROKEN }
+        if (broken != null) add(HudActivity("health", FuseIcons.BadgeAlert, "${broken.problem.title}. Select to fix it", attention = true) { app.showProblem(broken.problem) })
         // A recording runs: the ring fills toward its 30 minute limit, and a press stops it.
         if (recordingTime != null) {
             val since = (app.capture?.state as? CaptureController.State.Recording)?.since

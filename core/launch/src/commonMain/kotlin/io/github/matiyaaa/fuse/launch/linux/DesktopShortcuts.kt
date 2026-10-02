@@ -103,6 +103,7 @@ object DesktopShortcutAdapter : EmulatorAdapter {
     override val homepage: String? = null
     override val idFileExtensions = setOf("desktop")
     override val builtIn = true
+    override val shortcutsOnly = true
 
     override fun accepts(target: LaunchTarget, platform: PlatformId): Boolean =
         Paths.extension(target.path.orEmpty()) == "desktop"

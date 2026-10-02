@@ -64,6 +64,7 @@ internal class DefaultFuseStore private constructor(
     override val storage = DefaultStorageOps(ctx, engine.drives)
     override val settings = DefaultScopedSettingsOps(ctx) { reloadPrefs() }
     override val library: DefaultLibraryOps
+    override val health: DefaultHealthOps
 
     init {
         mediaOps = DefaultMediaOps(ctx, credentials)
@@ -74,6 +75,7 @@ internal class DefaultFuseStore private constructor(
             updatePrefs { it.copy(cleanDisplayNames = enabled) }
         }
         library.onGamesAdded = findArt
+        health = DefaultHealthOps(ctx, engine, library, mediaOps, updates, { credentials.stored.value }, { cartridge.status.value })
     }
 
     override val media get() = mediaOps
@@ -187,6 +189,7 @@ internal class DefaultFuseStore private constructor(
 
     private fun start() {
         engine.start()
+        health.start()
         ctx.scope.launch {
             for (next in writes) {
                 // A failed write must not stop later ones; retry once, then keep the in-memory value.

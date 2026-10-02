@@ -136,7 +136,9 @@ internal class DefaultLibraryOps(
             .sortedBy { userOrder[it.id] ?: catalogOrder[it.id] ?: Int.MAX_VALUE }
             .map { p ->
                 val (chosen, layout) = choices[p.id] ?: ("" to p.defaultLayout)
-                val candidates = ctx.registry.forPlatform(p.id, ctx.host)
+                // Shortcut openers count only where the priority list names them (Steam, PC games).
+                val named = ctx.registry.priority(p.id, ctx.host).toSet()
+                val candidates = ctx.registry.forPlatform(p.id, ctx.host).filter { !it.shortcutsOnly || it.id in named }
                 // Built-in adapters (Android apps) need nothing installed.
                 val installedIds = installed.map { it.id }.toSet() + candidates.filter { it.builtIn }.map { it.id }
                 val chosenId = chosen.takeIf { it.isNotBlank() }?.let(::EmulatorId)
@@ -154,6 +156,7 @@ internal class DefaultLibraryOps(
                     bios = bios[p.id] ?: if (p.bios == null) BiosStatus.NotRequired else BiosStatus(io.github.matiyaaa.fuse.model.BiosState.UNKNOWN),
                     layout = layout,
                     romFolders = folders[p.id].orEmpty(),
+                    emulatorChosen = chosenId,
                 )
             }
     }.flowOn(Dispatchers.Default).resilient().stateIn(ctx.scope, SharingStarted.Eagerly, emptyList())
@@ -358,7 +361,12 @@ internal class DefaultLibraryOps(
 
     // Launching -------------------------------------------------------------------------------------
 
-    override suspend fun launch(id: GameId, emulator: EmulatorId?, discPath: String?, display: LaunchDisplay?): LaunchOutcome {
+    override suspend fun launch(id: GameId, emulator: EmulatorId?, discPath: String?, display: LaunchDisplay?): LaunchOutcome =
+        launchGame(id, emulator, discPath, display).also { outcome ->
+            if (outcome is LaunchOutcome.Problem) ctx.recordProblem(outcome.problem)
+        }
+
+    private suspend fun launchGame(id: GameId, emulator: EmulatorId?, discPath: String?, display: LaunchDisplay?): LaunchOutcome {
         val stored = data.games.get(id) ?: return LaunchOutcome.Problem(LaunchProblems.gone())
         val platform = ctx.platform(stored.platformId) ?: return LaunchOutcome.Problem(LaunchProblems.unknownSystem(stored.platformId))
         // A game on a drive that is out says which drive to connect, before anything is tried.

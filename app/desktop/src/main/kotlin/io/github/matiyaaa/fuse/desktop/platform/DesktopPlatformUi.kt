@@ -100,7 +100,13 @@ class DesktopPlatformUi(
     override val sounds: UiSounds get() = desktopSounds
     override val haptics: Haptics = Haptics.None
     override val homeRole: HomeRole? = null
-    override val storage: StorageAccess = DesktopStorage(dirs, window)
+    private val files = DesktopStorage(dirs, window)
+    override val storage: StorageAccess = files
+
+    override suspend fun saveFile(name: String, mimeType: String, bytes: ByteArray): String? = files.saveFile(name, bytes)
+
+    override suspend fun openFile(mimeTypes: List<String>, extensions: List<String>, maxBytes: Long): io.github.matiyaaa.fuse.ui.shell.platform.OpenedFile? =
+        files.openFile("Open", "Fuse files", extensions, maxBytes)
     override val quick: QuickControls = quickControls
 
     /** No desktop video player is bundled yet, so previews are off rather than half working. */

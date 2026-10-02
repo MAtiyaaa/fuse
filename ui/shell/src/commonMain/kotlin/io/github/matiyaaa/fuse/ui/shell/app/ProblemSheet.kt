@@ -147,6 +147,14 @@ fun AppState.runProblemAction(action: ProblemAction, spec: ProblemSpec?) {
             store.sources.rescan(ScanScope.QUICK)
             toasts.show("Scanning your library")
         }
+        is ProblemAction.ShowMissing -> {
+            navigator.remembered("lib.all") { io.github.matiyaaa.fuse.ui.shell.library.LibraryViewState() }.apply {
+                segment = io.github.matiyaaa.fuse.ui.shell.library.LibrarySegment.MISSING
+                system = null
+            }
+            navigator.replace(Route.Root(io.github.matiyaaa.fuse.model.Destination.LIBRARY))
+        }
+        is ProblemAction.OpenHealth -> go(Route.Settings("health"))
         is ProblemAction.LeaveSafeMode -> {
             safeMode = null
             store.resumeAutomaticWork()
@@ -294,5 +302,7 @@ private fun ProblemAction.icon(): ImageVector = when (this) {
     is ProblemAction.RemoveSource -> FuseIcons.FolderX
     is ProblemAction.Rescan -> FuseIcons.ScanSearch
     is ProblemAction.LeaveSafeMode -> FuseIcons.LogOut
+    is ProblemAction.ShowMissing -> FuseIcons.FileSearch
+    is ProblemAction.OpenHealth -> FuseIcons.HeartPulse
     is ProblemAction.ResetAppearance -> FuseIcons.Paintbrush
 }

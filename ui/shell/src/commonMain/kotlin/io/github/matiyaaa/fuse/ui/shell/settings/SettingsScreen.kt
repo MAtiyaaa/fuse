@@ -115,6 +115,7 @@ val settingsSections: List<SettingsSection> = listOf(
     SettingsSection("performance", "Performance and Power", FuseIcons.Gauge, "Profile and Low Power Mode", ::performanceRows, group = DEVICE),
     SettingsSection("network", "Network", FuseIcons.Wifi, "What Fuse connects to", ::networkRows, group = CONNECTIONS),
     SettingsSection("phonelink", "Phone Link", FuseIcons.Smartphone, "Your library from a phone on the same Wi-Fi", ::phoneLinkRows, group = CONNECTIONS),
+    SettingsSection("health", "System health", FuseIcons.HeartPulse, "What needs attention, and a report for bugs", ::healthRows, group = GENERAL),
     SettingsSection("storage", "Storage", FuseIcons.HardDrive, "File access and caches", ::storageRows, group = GENERAL),
     SettingsSection("privacy", "Privacy", FuseIcons.ShieldCheck, "No telemetry, where data goes", ::privacyRows, group = GENERAL),
     SettingsSection("updates", "Updates", FuseIcons.Download, "New versions of Fuse", ::updateRows, group = GENERAL),

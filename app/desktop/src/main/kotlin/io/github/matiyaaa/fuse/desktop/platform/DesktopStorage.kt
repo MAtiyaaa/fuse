@@ -58,6 +58,84 @@ internal class DesktopStorage(private val dirs: FuseDirs, private val host: Dial
         return withContext(Dispatchers.IO) { copyMusic(File(picked)) }
     }
 
+    /**
+     * Saves [bytes] as [name] where the user picks in the system's save dialog. The file is written
+     * to a temporary name first and moved into place, so a half-written file never appears.
+     */
+    suspend fun saveFile(name: String, bytes: ByteArray): String? {
+        val target = host.withDialog { pickSave(name) } ?: return null
+        return withContext(Dispatchers.IO) {
+            try {
+                val file = File(target)
+                val temp = File(file.parentFile, ".${file.name}.part")
+                temp.writeBytes(bytes)
+                Files.move(temp.toPath(), file.toPath(), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
+                file.absoluteFile.fusePath
+            } catch (e: Exception) {
+                Log.warn("could not save $name", e)
+                null
+            }
+        }
+    }
+
+    /** A file with one of [extensions] the user picks, at most [maxBytes]. */
+    suspend fun openFile(title: String, label: String, extensions: List<String>, maxBytes: Long): io.github.matiyaaa.fuse.ui.shell.platform.OpenedFile? {
+        val picked = host.withDialog { pick(title, Filter(label, extensions)) } ?: return null
+        return withContext(Dispatchers.IO) {
+            val file = File(picked)
+            if (!file.isFile || file.length() > maxBytes) return@withContext null
+            runCatching { io.github.matiyaaa.fuse.ui.shell.platform.OpenedFile(file.name, file.readBytes()) }.getOrNull()
+        }
+    }
+
+    /** The save dialog: zenity or kdialog on Linux, the system's own on Windows and macOS, else Swing's. */
+    private suspend fun pickSave(name: String): String? {
+        val suggested = File(dirs.home, name).path
+        if (DesktopOs.current == DesktopOs.LINUX) {
+            val result = withContext(Dispatchers.IO) {
+                val zenity = Processes.which("zenity")
+                val kdialog = Processes.which("kdialog")
+                val preferKde = (System.getenv("XDG_CURRENT_DESKTOP") ?: "").contains("KDE", ignoreCase = true)
+                val argv = when {
+                    kdialog != null && (preferKde || zenity == null) -> listOf(kdialog, "--title", "Save", "--getsavefilename", suggested)
+                    zenity != null -> listOf(zenity, "--file-selection", "--save", "--confirm-overwrite", "--title=Save", "--filename=$suggested")
+                    else -> null
+                } ?: return@withContext NoTool
+                val out = Processes.run(argv, timeoutMs = 30 * 60 * 1000L) ?: return@withContext NoTool
+                if (out.exitCode != 0) null else out.stdout.trim().lineSequence().firstOrNull()?.takeIf { it.startsWith("/") }
+            }
+            if (result !== NoTool) return result as String?
+        } else {
+            return suspendCancellableCoroutine { cont ->
+                SwingUtilities.invokeLater {
+                    val path = try {
+                        val dialog = java.awt.FileDialog(host.parent as? java.awt.Frame, "Save", java.awt.FileDialog.SAVE).apply {
+                            directory = dirs.home
+                            file = name
+                            isVisible = true
+                        }
+                        dialog.file?.let { File(dialog.directory, it).absolutePath }
+                    } catch (e: Exception) {
+                        Log.warn("save dialog failed", e)
+                        null
+                    }
+                    if (cont.isActive) cont.resume(path)
+                }
+            }
+        }
+        return suspendCancellableCoroutine { cont ->
+            SwingUtilities.invokeLater {
+                val path = try {
+                    val chooser = JFileChooser(dirs.home).apply { selectedFile = File(suggested) }
+                    if (chooser.showSaveDialog(host.parent) == JFileChooser.APPROVE_OPTION) chooser.selectedFile?.absolutePath else null
+                } catch (e: Exception) {
+                    null
+                }
+                if (cont.isActive) cont.resume(path)
+            }
+        }
+    }
+
     /** File types a picker offers: a label and extensions. */
     private class Filter(val label: String, val extensions: List<String>)
 
