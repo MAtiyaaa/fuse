@@ -129,7 +129,7 @@ fun LicensesScreen(app: AppState) {
             Spacer(Modifier.height(if (short) Space.m else Space.l))
             val list = @Composable { m: Modifier ->
                 Panel(m) {
-                    MenuList(actions, sel, modifier = Modifier.padding(Space.s).menuEdges(actions, sel.index))
+                    MenuList(actions, sel, modifier = Modifier.padding(Space.s), fadeEdges = true)
                 }
             }
             val reader = @Composable { m: Modifier ->

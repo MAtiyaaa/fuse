@@ -246,7 +246,8 @@ fun PhoneLinkScreen(app: AppState) {
                         MenuList(
                             rows, sel,
                             showSelection = app.focusZone == FocusZone.CONTENT,
-                            modifier = Modifier.padding(Space.s).menuEdges(rows, sel.index),
+                            modifier = Modifier.padding(Space.s),
+                            fadeEdges = true,
                         )
                     }
                 }
@@ -260,7 +261,8 @@ fun PhoneLinkScreen(app: AppState) {
                         MenuList(
                             rows, sel,
                             showSelection = app.focusZone == FocusZone.CONTENT,
-                            modifier = Modifier.padding(Space.s).menuEdges(rows, sel.index),
+                            modifier = Modifier.padding(Space.s),
+                            fadeEdges = true,
                         )
                     }
                 }

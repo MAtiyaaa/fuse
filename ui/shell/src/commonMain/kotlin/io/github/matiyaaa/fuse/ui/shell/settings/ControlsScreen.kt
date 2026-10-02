@@ -254,7 +254,8 @@ fun ControlsScreen(app: AppState) {
                     MenuList(
                         actions, sel,
                         showSelection = app.focusZone == FocusZone.CONTENT,
-                        modifier = Modifier.padding(Space.s).menuEdges(actions, sel.index),
+                        modifier = Modifier.padding(Space.s),
+                            fadeEdges = true,
                     )
                 }
                 if (!narrow) {

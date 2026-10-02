@@ -1,5 +1,6 @@
 package io.github.matiyaaa.fuse.ui.designsystem.focus
 
+import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -41,7 +42,12 @@ fun packCells(spans: List<Int>, columns: Int): List<GridCell> {
 class SpatialSelection(initial: Int = 0) {
     var index by mutableIntStateOf(initial)
 
-    fun clamp(count: Int) {
+    /**
+     * Keeps the index inside [count] items. Screens call this while composing; it reads the index
+     * without subscribing the screen to it, so moving the selection doesn't recompose the screen
+     * that only clamps it.
+     */
+    fun clamp(count: Int) = Snapshot.withoutReadObservation {
         if (count <= 0) index = 0 else if (index >= count) index = count - 1
     }
 

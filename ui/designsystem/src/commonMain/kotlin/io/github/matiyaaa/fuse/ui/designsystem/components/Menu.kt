@@ -59,7 +59,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import io.github.matiyaaa.fuse.model.CornerFamily
 import io.github.matiyaaa.fuse.model.NavAction
-import io.github.matiyaaa.fuse.ui.designsystem.focus.FollowSelection
 import io.github.matiyaaa.fuse.ui.designsystem.focus.LinearSelection
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
@@ -80,6 +79,12 @@ import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.sqrt
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.graphics.Brush
+import io.github.matiyaaa.fuse.ui.designsystem.focus.KeepSelectionInView
 
 /** What the right side of a menu row shows. */
 sealed interface Trailing {
@@ -483,48 +488,80 @@ fun MenuList(
     header: (@Composable () -> Unit)? = null,
     /** Takes all the height it may; off for lists in dialogs, which are only as tall as their rows. */
     fill: Boolean = true,
+    /**
+     * Fades the top and bottom while there are rows beyond them, in the colour of the [Panel] the
+     * list sits on (a plain gradient, no offscreen layer). Off outside a panel.
+     */
+    fadeEdges: Boolean = false,
 ) {
     val c = Fuse.colors
     val motion = Fuse.motion
     val state = rememberLazyListState()
     val headerOffset = if (header != null) 1 else 0
-    // Where each action sits among the list's items, after the header and any group dividers.
-    val layout = remember(actions, headerOffset) { MenuLayout.of(actions, headerOffset) }
+    // Where each action sits among the list's items, after the header and any group dividers. Keyed
+    // on what the rows are, not on the list object, which callers often rebuild every composition.
+    val layoutKey = actions.map { Triple(it.id, it.section, it.indent) }
+    val layout = remember(layoutKey, headerOffset) { MenuLayout.of(actions, headerOffset) }
     val currentLayout by rememberUpdatedState(layout)
-    // On the first row the list follows its very first item, so a group name above that row stays in
-    // view when the list opens (a [header] keeps its old behaviour: the first row is followed).
-    FollowSelection(state, { if (selection.index == 0 && headerOffset == 0) 0 else currentLayout.itemOf(selection.index) }, anchor = 0.3f)
+    // The row a finger just chose: the highlight lands on it at once and the list doesn't move
+    // under the finger. A controller or keyboard move clears it.
+    val touched = remember { intArrayOf(-1) }
+    var touchedIndex by remember { mutableIntStateOf(-1) }
+    LaunchedEffect(selection.index) { if (selection.index != touchedIndex) touchedIndex = -1 }
+    // The list scrolls only as far as it takes to show the chosen row whole, with about a row to
+    // spare, the way menus scroll; on the first row it shows the very top, so a group name above
+    // that row stays in view (a [header] keeps the first row followed instead).
+    val margin = with(LocalDensity.current) { MENU_SCROLL_MARGIN.roundToPx() }
+    KeepSelectionInView(
+        state,
+        { if (selection.index == 0 && headerOffset == 0) 0 else currentLayout.itemOf(selection.index) },
+        margin,
+        enabled = { touchedIndex < 0 || touchedIndex != selection.index },
+    )
 
     // The highlight: its top and bottom edges glide (in action index space) on their own springs.
-    val target = selection.index.coerceIn(0, (actions.size - 1).coerceAtLeast(0)).toFloat()
-    val top = remember { Animatable(target) }
-    val bottom = remember { Animatable(target) }
+    // The selection is read in the effect and in drawing only, never in composition, so moving
+    // along a long list (Storage has hundreds of rows) doesn't recompose the list itself.
+    val currentActions by rememberUpdatedState(actions)
+    val start = remember { selection.index.coerceIn(0, (actions.size - 1).coerceAtLeast(0)).toFloat() }
+    val top = remember { Animatable(start) }
+    val bottom = remember { Animatable(start) }
     val visible = showSelection && actions.isNotEmpty()
     val shown by animateFloatAsState(if (visible) 1f else 0f, motion.tween(if (visible) Durations.FAST else Durations.INSTANT), label = "hl")
     val quiet by animateFloatAsState(if (dimSelection) 1f else 0f, motion.tween(Durations.BASE), label = "hlQuiet")
+    val dangerMix = remember { Animatable(0f) }
     val ids = layout.ids
     val lastIds = remember { arrayOfNulls<List<String>>(1) }
-    LaunchedEffect(target, ids) {
-        // A new list, or a highlight nobody can see, starts in place instead of travelling.
-        val newList = lastIds[0] != null && lastIds[0] != ids
+    LaunchedEffect(ids) {
+        // A new list starts its highlight in place instead of travelling.
+        var newList = lastIds[0] != null && lastIds[0] != ids
         lastIds[0] = ids
-        if (motion.reduced || shown < 0.05f || newList) {
-            top.snapTo(target)
-            bottom.snapTo(target)
-            return@LaunchedEffect
+        snapshotFlow { selection.index.coerceIn(0, (currentActions.size - 1).coerceAtLeast(0)) }.collect { index ->
+            val target = index.toFloat()
+            launch { dangerMix.animateTo(if (currentActions.getOrNull(index)?.destructive == true) 1f else 0f, motion.tween(Durations.FAST)) }
+            // A highlight nobody can see, or a row a finger chose, lands at once (a tap must never
+            // show a neighbouring row first).
+            val tapped = touched[0] == index
+            touched[0] = -1
+            if (motion.reduced || shown < 0.05f || newList || tapped) {
+                newList = false
+                top.snapTo(target)
+                bottom.snapTo(target)
+                return@collect
+            }
+            // A long jump (a page, a held direction) glides in from the neighbouring row only: the list
+            // is scrolling to follow already, and a highlight sweeping past many rows would distract.
+            if (abs(target - top.value) > 1.5f || abs(target - bottom.value) > 1.5f) {
+                val from = if (target > top.value) target - 1f else target + 1f
+                top.snapTo(from)
+                bottom.snapTo(from)
+            }
+            val down = target >= bottom.value
+            val lead = spring<Float>(dampingRatio = 0.9f, stiffness = 1400f)
+            val trail = spring<Float>(dampingRatio = 0.95f, stiffness = 700f)
+            launch { top.animateTo(target, if (down) trail else lead) }
+            launch { bottom.animateTo(target, if (down) lead else trail) }
         }
-        // A long jump (a page, a held direction) glides in from the neighbouring row only: the list
-        // is scrolling to follow already, and a highlight sweeping past many rows would distract.
-        if (abs(target - top.value) > 1.5f || abs(target - bottom.value) > 1.5f) {
-            val from = if (target > top.value) target - 1f else target + 1f
-            top.snapTo(from)
-            bottom.snapTo(from)
-        }
-        val down = target >= bottom.value
-        val lead = spring<Float>(dampingRatio = 0.9f, stiffness = 1400f)
-        val trail = spring<Float>(dampingRatio = 0.95f, stiffness = 700f)
-        launch { top.animateTo(target, if (down) trail else lead) }
-        launch { bottom.animateTo(target, if (down) lead else trail) }
     }
     val fillSelected = c.rowHighlight(false)
     val fillDanger = c.rowHighlight(true)
@@ -554,11 +591,31 @@ fun MenuList(
         }
     }
     val rise = motion.revealRise
-    val selectedIsDestructive = actions.getOrNull(selection.index)?.destructive == true
-    val danger01 by animateFloatAsState(if (selectedIsDestructive) 1f else 0f, motion.tween(Durations.FAST), label = "hlDanger")
 
+    val panelFill = if (fadeEdges) LocalPanelFill.current else null
+    val edgeTop = remember { Animatable(0f) }
+    val edgeBottom = remember { Animatable(0f) }
+    if (panelFill != null) {
+        LaunchedEffect(state) {
+            snapshotFlow { state.canScrollBackward to state.canScrollForward }.collect { (up, down) ->
+                launch { edgeTop.animateTo(if (up) 1f else 0f, motion.tween(Durations.FAST)) }
+                launch { edgeBottom.animateTo(if (down) 1f else 0f, motion.tween(Durations.FAST)) }
+            }
+        }
+    }
+    val edges = if (panelFill == null) Modifier else Modifier.drawWithCache {
+        val top = MENU_EDGE_TOP.toPx().coerceAtMost(size.height / 3)
+        val bottom = MENU_EDGE_BOTTOM.toPx().coerceAtMost(size.height / 3)
+        val topBrush = Brush.verticalGradient(0f to panelFill, 1f to panelFill.copy(alpha = 0f), startY = 0f, endY = top)
+        val bottomBrush = Brush.verticalGradient(0f to panelFill.copy(alpha = 0f), 1f to panelFill, startY = size.height - bottom, endY = size.height)
+        onDrawWithContent {
+            drawContent()
+            if (edgeTop.value > 0f) drawRect(topBrush, size = androidx.compose.ui.geometry.Size(size.width, top), alpha = edgeTop.value)
+            if (edgeBottom.value > 0f) drawRect(bottomBrush, topLeft = Offset(0f, size.height - bottom), size = androidx.compose.ui.geometry.Size(size.width, bottom), alpha = edgeBottom.value)
+        }
+    }
     LazyColumn(
-        modifier = (if (fill) modifier.fillMaxHeight() else modifier).drawWithCache {
+        modifier = (if (fill) modifier.fillMaxHeight() else modifier).then(edges).drawWithCache {
             val outlineWidth = Size.focusStroke.toPx()
             val outlineStroke = Stroke(outlineWidth)
             onDrawBehind {
@@ -569,8 +626,9 @@ fun MenuList(
             if (b <= t) return@onDrawBehind
             val h = b - t
             val r = corner.toPx().coerceAtMost(h / 2)
+            val danger01 = dangerMix.value
             val fillColor = lerp(lerp(fillSelected, fillDanger, danger01), fillQuiet, quiet)
-            val arrived = revealAt(target.toInt())
+            val arrived = revealAt(selection.index)
             clipRect {
                 drawRoundRect(fillColor, Offset(0f, t), size.copy(height = h), CornerRadius(r), alpha = shown * arrived)
                 // High contrast focus outlines the selected row as well (not the quiet marker).
@@ -623,6 +681,8 @@ fun MenuList(
                     marked = showSelection && dimSelection && i == selection.index,
                     highlight = false,
                     onClick = {
+                        touched[0] = i
+                        touchedIndex = i
                         selection.select(i, actions.size)
                         if (a.enabled && a.unavailableReason == null) a.onSelect()
                     },
@@ -748,3 +808,10 @@ private val LEVEL_TEXT = 40.dp
 
 /** Where a row's content (its icon) starts: after the bar and its gap. Headers line up with it. */
 private val ROW_CONTENT_START: Dp = BAR_WIDTH + Space.m
+
+/** About a row of room kept beyond the chosen row as a menu scrolls, so the next row shows. */
+private val MENU_SCROLL_MARGIN = 40.dp
+
+/** How far the panel-coloured fades reach into a list at its top and bottom. */
+private val MENU_EDGE_TOP = 24.dp
+private val MENU_EDGE_BOTTOM = 32.dp

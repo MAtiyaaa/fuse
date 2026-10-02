@@ -1,5 +1,11 @@
 package io.github.matiyaaa.fuse.ui.shell.app
 
+import kotlin.time.TimeSource
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.EnterTransition
+import kotlinx.coroutines.flow.collectLatest
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.produceState
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.SizeTransform
@@ -288,7 +294,14 @@ private fun Room(
     ambient: io.github.matiyaaa.fuse.model.AmbientSpec,
 ) {
     val quality = Fuse.quality
-    val hero = app.hero
+    // While the selection runs (a held direction, a quick run of presses), the room waits for it to
+    // rest before it decodes and fades in the next art: every step would otherwise start a crossfade.
+    val hero by produceState(app.hero) {
+        snapshotFlow { app.hero }.collectLatest { next ->
+            if (next?.id != value?.id) delay(HERO_SETTLE_MS)
+            value = next
+        }
+    }
     // The theme's own room is always underneath, so art fading in or out never shows a bare screen.
     AmbientBackground(if (style == BackgroundStyle.HERO) BackgroundStyle.SOLID else style, hero?.accent ?: Fuse.colors.accent, Modifier.fillMaxSize(), ambient = ambient)
     if (showHero) {
@@ -345,9 +358,16 @@ private fun Pages(app: AppState, tabs: List<Destination>) {
         val d = (route as? Route.Root)?.destination ?: return 0
         return tabs.indexOf(d).takeIf { it >= 0 } ?: (tabs.size + d.ordinal)
     }
+    // When the next page arrives while the last one is still sliding in (a shoulder button tapped
+    // again and again), it switches at once: stacking half-composed pages is what made quick runs lag.
+    val lastSwitch = remember { arrayOf<TimeSource.Monotonic.ValueTimeMark?>(null) }
     AnimatedContent(
         targetState = nav.current,
         transitionSpec = {
+            val now = TimeSource.Monotonic.markNow()
+            val quick = lastSwitch[0]?.let { (now - it).inWholeMilliseconds < QUICK_SWITCH_MS } == true
+            lastSwitch[0] = now
+            if (quick) return@AnimatedContent (EnterTransition.None togetherWith ExitTransition.None).using(SizeTransform(clip = false))
             val dir = when (nav.direction) {
                 NavDirection.FORWARD -> 1
                 NavDirection.BACK -> -1
@@ -355,7 +375,7 @@ private fun Pages(app: AppState, tabs: List<Destination>) {
             }
             val shift = motion.slideFraction
             val enter = fadeIn(tween(motion.ms(Durations.BASE), delayMillis = motion.ms(Durations.INSTANT) / 2, easing = Easings.Fade)) +
-                slideInHorizontally(motion.tween(Durations.SLOW, Easings.Enter)) { (it * shift * dir).toInt() }
+                slideInHorizontally(motion.tween(Durations.BASE, Easings.Enter)) { (it * shift * dir).toInt() }
             val exit = fadeOut(motion.tween(Durations.FAST, Easings.Standard)) +
                 slideOutHorizontally(motion.tween(Durations.FAST, Easings.Standard)) { (-it * shift * 0.5f * dir).toInt() }
             (enter togetherWith exit).using(SizeTransform(clip = false))
@@ -616,3 +636,9 @@ private fun hudActivities(app: AppState): List<HudActivity> {
         }
     }
 }
+
+/** How long a selection must rest before the room fades in its art. */
+private const val HERO_SETTLE_MS = 90L
+
+/** A page that arrives sooner than this after the last one switches without a transition. */
+private const val QUICK_SWITCH_MS = 300L

@@ -183,7 +183,8 @@ fun StorageScreen(app: AppState) {
                             showSelection = app.focusZone == FocusZone.CONTENT,
                             header = header,
                             fill = !(u == null || empty),
-                            modifier = Modifier.padding(Space.s).menuEdges(rows, sel.index),
+                            modifier = Modifier.padding(Space.s),
+                            fadeEdges = true,
                         )
                         when {
                             // Rows shaped like the games still being measured.

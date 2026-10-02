@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.graphics.Brush
@@ -83,9 +84,16 @@ fun Panel(
             .litEdge(shape, top = Color.White.copy(alpha = edge), rest = hairline),
     ) {
         val scope = this
-        CompositionLocalProvider(LocalOverlaySurface provides false) { scope.content() }
+        CompositionLocalProvider(LocalOverlaySurface provides false, LocalPanelFill provides fill) { scope.content() }
     }
 }
+
+/**
+ * The fill of the [Panel] around a composable, or null outside one. Lists on a panel fade their
+ * edges into this colour with a plain gradient, which costs nothing like an offscreen layer that
+ * erases the content would.
+ */
+val LocalPanelFill = staticCompositionLocalOf<Color?> { null }
 
 /** The lit edge of a glass panel in a dark theme. */
 private const val GLASS_EDGE = 0.22f

@@ -1,5 +1,6 @@
 package io.github.matiyaaa.fuse.ui.shell.library
 
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
@@ -497,10 +498,14 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
         // Inside a system, saying which system each game is for says nothing.
         val inSystem = systemCard != null
         fun stageOf(card: GameCard?) = card?.stage()?.let { if (inSystem) it.copy(eyebrow = null) else it }
+        // Read through derived state, so scrolling recomposes the screen only when this flips, not on
+        // every frame of the scroll.
+        val listScrolled by remember(listState) { derivedStateOf { listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 24 } }
+        val gridScrolled by remember(gridState) { derivedStateOf { gridState.firstVisibleItemIndex > 0 || gridState.firstVisibleItemScrollOffset > 24 } }
         // A system's page folds its header away once you are past the first row, so more games fit.
         val folded = when {
             systemCard == null || list.isNullOrEmpty() || layout == LibraryLayout.CAPSULE -> false
-            touchScroll -> if (layout == LibraryLayout.COMPACT_LIST) listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 24 else gridState.firstVisibleItemIndex > 0 || gridState.firstVisibleItemScrollOffset > 24
+            touchScroll -> if (layout == LibraryLayout.COMPACT_LIST) listScrolled else gridScrolled
             layout == LibraryLayout.COMPACT_LIST -> state.grid.index >= 3
             else -> state.grid.index >= columns
         }

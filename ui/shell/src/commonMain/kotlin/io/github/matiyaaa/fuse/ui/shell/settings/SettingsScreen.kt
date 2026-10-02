@@ -197,7 +197,7 @@ fun SettingsScreen(app: AppState, initialSection: String?) {
                     MenuList(
                         sectionRows, sectionSel,
                         showSelection = focused,
-                        modifier = Modifier.weight(1f).padding(bottom = Size.hintHeight).menuEdges(sectionRows, sectionSel.index).reveal(1),
+                        modifier = Modifier.weight(1f).padding(bottom = Size.hintHeight).reveal(1),
                     )
                 } else {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -232,7 +232,7 @@ fun SettingsScreen(app: AppState, initialSection: String?) {
                         sectionRows, sectionSel,
                         showSelection = focused,
                         dimSelection = inRows,
-                        modifier = Modifier.width(sidebar).fillMaxHeight().menuEdges(sectionRows, sectionSel.index).reveal(1),
+                        modifier = Modifier.width(sidebar).fillMaxHeight().reveal(1),
                     )
                     Spacer(Modifier.width(Space.xl))
                     SectionPanel(panelRows, rowSel, focused && inRows, openThemes, short, Modifier.weight(1f).fillMaxHeight().reveal(2))
@@ -275,7 +275,8 @@ private fun SectionPanel(
             rows, selection,
             showSelection = focused,
             header = openThemes?.let { open -> { ThemeCard(short, open, Modifier.padding(bottom = Space.s)) } },
-            modifier = Modifier.padding(Space.s).menuEdges(rows, selection.index, header = cardHeight),
+            modifier = Modifier.padding(Space.s),
+                            fadeEdges = true,
         )
     }
 }
@@ -461,111 +462,6 @@ internal fun ThemeSwatch(modifier: Modifier = Modifier) {
     )
 }
 
-// ----------------------------------------------------------------------------------- list edges
-
-/**
- * Softens the top and bottom edges of a [MenuList] while there are rows beyond them, so a long list
- * fades into its panel instead of ending in a hard cut, and a list at rest is never faded.
- *
- * MenuList keeps its scroll position to itself, so this works it out the way the list scrolls: the
- * selected row is kept 30% of the way down, between the top and the end. Row heights are estimated
- * from their text, which is close enough for a fade. [header] is the height of the list's header.
- * Put it after any padding, so it measures the list itself.
- */
-@Composable
-internal fun Modifier.menuEdges(actions: List<MenuAction>, selected: Int, header: Dp = 0.dp): Modifier {
-    val density = LocalDensity.current
-    var box by remember { mutableStateOf(IntSize.Zero) }
-    val edges = remember(actions, selected, box, header) {
-        if (box == IntSize.Zero) {
-            false to false
-        } else {
-            with(density) { listEdges(actions, selected, box.width.toDp(), box.height.toDp(), header) }
-        }
-    }
-    val motion = Fuse.motion
-    val top by animateFloatAsState(if (edges.first) 1f else 0f, motion.tween(Durations.FAST), label = "edgeTop")
-    val bottom by animateFloatAsState(if (edges.second) 1f else 0f, motion.tween(Durations.FAST), label = "edgeBottom")
-    return this
-        .onSizeChanged { box = it }
-        .softEdges(Space.xl, Space.xxl, { top }, { bottom })
-}
-
-/** Whether a list of [actions] [width] wide and [height] tall has rows above and below its view. */
-private fun listEdges(actions: List<MenuAction>, selected: Int, width: Dp, height: Dp, header: Dp): Pair<Boolean, Boolean> {
-    if (actions.isEmpty()) return false to false
-    val gap = Space.xxs.value
-    var y = if (header > 0.dp) header.value + gap else 0f
-    val tops = FloatArray(actions.size)
-    var previous: String? = null
-    actions.forEachIndexed { i, a ->
-        val s = a.section
-        if (s != null && (i == 0 || s != previous)) y += labelHeight(first = i == 0, blank = s.isBlank()) + gap
-        previous = s
-        tops[i] = y
-        y += rowHeight(a, width.value) + gap
-    }
-    val total = y - gap
-    val room = (total - height.value).coerceAtLeast(0f)
-    val i = selected.coerceIn(0, actions.size - 1)
-    // The first row of a list without a header is followed by its very top (its group label).
-    val followed = if (i == 0 && header == 0.dp) 0f else tops[i]
-    val scroll = (followed - height.value * FOLLOW_ANCHOR).coerceIn(0f, room)
-    return (scroll > 1f) to (scroll < room - 1f)
-}
-
-/** A group label's height in a MenuList: overline text, its padding and the divider above it. */
-private fun labelHeight(first: Boolean, blank: Boolean): Float = when {
-    first && blank -> Space.xxs.value
-    first -> (Space.xs + LABEL_LINE + Space.xs + Space.xxs).value
-    blank -> (Space.xs + Size.divider + Space.xs + Space.xxs).value
-    else -> (Space.xs + Size.divider + Space.m + LABEL_LINE + Space.xs + Space.xxs).value
-}
-
-/** A MenuRow's height: its title and detail lines, wrapped at an estimate of their width. */
-private fun rowHeight(a: MenuAction, width: Float): Float {
-    val trailing = when (val t = a.trailing) {
-        Trailing.None -> 0f
-        Trailing.Chevron -> 18f
-        is Trailing.Value -> t.text.length * LABEL_CHAR
-        is Trailing.Switch -> 46f
-        is Trailing.Check -> 22f
-        is Trailing.Inherited -> t.from.length * LABEL_CHAR + 40f
-        is Trailing.Badge -> 28f
-        is Trailing.Progress -> 112f
-        is Trailing.Disclosure -> (t.summary?.length ?: 0) * LABEL_CHAR + 26f
-        is Trailing.Level -> 116f
-    }
-    val lead = ROW_BAR + (Space.m + (if (a.icon != null) Size.iconXL + Space.m else 0.dp)).value + a.indent * Space.l.value
-    val text = (width - lead - Space.m.value - trailing - Space.l.value).coerceAtLeast(80f)
-    fun lines(s: String, char: Float, max: Int) = s.split('\n').sumOf { ceil(it.length * char / text).toInt().coerceAtLeast(1) }.coerceAtMost(max)
-    val title = lines(a.label, TITLE_CHAR, 2) * TITLE_LINE
-    val detail = (a.unavailableReason ?: a.detail)?.let { Space.xxs.value + lines(it, CAPTION_CHAR, 3) * CAPTION_LINE } ?: 0f
-    return maxOf(Size.row.value, Space.s.value * 2 + title + detail)
-}
-
-/** Fades the edges by [topStrength] and [bottomStrength] (0..1), drawn without recomposing. */
-private fun Modifier.softEdges(top: Dp, bottom: Dp, topStrength: () -> Float, bottomStrength: () -> Float): Modifier = this
-    .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
-    .drawWithContent {
-        drawContent()
-        val h = size.height
-        val ts = topStrength().coerceIn(0f, 1f)
-        val bs = bottomStrength().coerceIn(0f, 1f)
-        if (h <= 0f || (ts <= 0f && bs <= 0f)) return@drawWithContent
-        val t = (top.toPx() / h).coerceIn(0f, 0.5f)
-        val b = (bottom.toPx() / h).coerceIn(0f, 0.5f)
-        drawRect(
-            Brush.verticalGradient(
-                0f to Color.Black.copy(alpha = 1f - ts),
-                t to Color.Black,
-                1f - b to Color.Black,
-                1f to Color.Black.copy(alpha = 1f - bs),
-            ),
-            blendMode = BlendMode.DstIn,
-        )
-    }
-
 /** Below this width the panes take turns; below this height the heading shrinks to one line. */
 private val NARROW_BELOW = 640.dp
 private val SHORT_BELOW = 560.dp
@@ -578,15 +474,5 @@ private val SIDEBAR_MAX = 320.dp
 /** Picture shape of the theme card: the screen's own proportion. */
 private const val SWATCH_ASPECT = 16f / 10f
 
-/** Where FollowSelection keeps a menu's selected row, as a share of the list's height. */
-private const val FOLLOW_ANCHOR = 0.3f
-
-// Text metrics for estimating row heights (dp per character, and line heights), and the width of a
-// row's accent bar, which every row keeps room for.
+/** The width of a menu row's accent bar, which the theme card lines up with. */
 private const val ROW_BAR = 3f
-private const val TITLE_CHAR = 7.9f
-private const val CAPTION_CHAR = 6.3f
-private const val LABEL_CHAR = 7.0f
-private const val TITLE_LINE = 22f
-private const val CAPTION_LINE = 16f
-private val LABEL_LINE = 14.dp

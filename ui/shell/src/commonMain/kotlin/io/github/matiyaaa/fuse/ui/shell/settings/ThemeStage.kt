@@ -38,7 +38,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawBehind
@@ -66,7 +65,6 @@ import io.github.matiyaaa.fuse.model.Destination
 import io.github.matiyaaa.fuse.model.FocusStyle
 import io.github.matiyaaa.fuse.model.GameArtStyle
 import io.github.matiyaaa.fuse.model.MotionProfile
-import io.github.matiyaaa.fuse.model.PlatformId
 import io.github.matiyaaa.fuse.model.SoundProfile
 import io.github.matiyaaa.fuse.model.SystemStatus
 import io.github.matiyaaa.fuse.model.ThemePalette
@@ -86,7 +84,6 @@ import io.github.matiyaaa.fuse.ui.designsystem.shape.PillShape
 import io.github.matiyaaa.fuse.ui.designsystem.icons.HintButton
 import io.github.matiyaaa.fuse.ui.designsystem.media.ArtSlot
 import io.github.matiyaaa.fuse.ui.designsystem.media.GeneratedArt
-import io.github.matiyaaa.fuse.ui.designsystem.media.HeroBackdrop
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Durations
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Easings
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Elevation
@@ -100,7 +97,6 @@ import io.github.matiyaaa.fuse.ui.designsystem.theme.toColor
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.Hud
 import io.github.matiyaaa.fuse.ui.shell.app.HudScrim
-import io.github.matiyaaa.fuse.ui.shell.app.gameRoom
 import io.github.matiyaaa.fuse.ui.shell.app.offers
 import io.github.matiyaaa.fuse.ui.shell.components.GameIconTile
 import io.github.matiyaaa.fuse.ui.shell.components.GameWideTile
@@ -139,15 +135,12 @@ private const val STAGE_ITEMS = 6
 internal data class StageScene(
     val games: List<GameCard>,
     val systems: List<PlatformCard>,
-    val systemsById: Map<PlatformId, PlatformCard>,
     val status: SystemStatus,
     val tabs: List<Destination>,
     val clock24h: Boolean,
     val showWifi: Boolean,
     val showBluetooth: Boolean,
-    val showHero: Boolean,
     val showLogo: Boolean,
-    val heroDim: Float,
     /** The player's own Motion setting, which wins over a theme's (null follows the theme). */
     val motion: MotionProfile?,
     val gameArt: GameArtStyle,
@@ -166,21 +159,17 @@ internal fun rememberStageScene(app: AppState): StageScene {
             .take(STAGE_ITEMS)
     }
     val systems = remember(feed, platforms) { feed.systems.ifEmpty { platforms.filter { it.gameCount > 0 } }.take(STAGE_ITEMS + 2) }
-    val byId = remember(platforms) { platforms.associateBy { it.platform.id } }
     val tabs = (listOf(Destination.HOME) + prefs.destinations.filter { it != Destination.HOME })
         .filter { app.offers(it) && (it != Destination.CARTRIDGE || cartridge.installed) }
     return StageScene(
         games = games,
         systems = systems,
-        systemsById = byId,
         status = status,
         tabs = tabs,
         clock24h = prefs.clock24h,
         showWifi = prefs.showWifi,
         showBluetooth = prefs.showBluetooth,
-        showHero = prefs.showHero,
         showLogo = prefs.showLogo,
-        heroDim = prefs.heroDim,
         motion = prefs.motion,
         gameArt = prefs.gameArt,
     )
@@ -190,8 +179,8 @@ internal fun rememberStageScene(app: AppState): StageScene {
  * The stage: a large, live picture of Fuse in [spec]. It is the real thing, not a drawing of it:
  * Home's own top line, title, shelves of the player's games and hint line, composed in the theme on
  * a 1280 x 720 screen and scaled to fit, over the theme's own moving background (or, for themes lit
- * by game art, the first game's room). Each new theme arrives with its focused tile lifting, so its
- * focus style is seen in motion.
+ * by game art, a room lit in the theme's accent, never one game's art). Each new theme arrives with
+ * its focused tile lifting, so its focus style is seen in motion.
  *
  * While the gallery's selection runs across cards the stage waits for it to rest, then crossfades;
  * changes to the same theme (the studio's) show at once, in place. [flourish] counts the times a
@@ -311,32 +300,17 @@ private fun MiniHome(spec: ThemeSpec, scene: StageScene) {
     val metrics = LocalTileMetrics.current
     val game = scene.games.firstOrNull()
     val heroRoom = spec.background == BackgroundStyle.HERO
-    // The game whose art lights the room, for themes that are lit by game art.
-    val lit = game?.takeIf { heroRoom && scene.showHero }
-    val art = lit != null
-    val glass = spec.glass
+    // Themes lit by game art preview their own room: the theme's accent as the light, never your
+    // games' art (which would make every art theme look like the game you happened to be on).
+    val art = false
     Box(Modifier.fillMaxSize().background(c.ink)) {
         AmbientBackground(
             if (heroRoom) BackgroundStyle.SOLID else spec.background,
-            if (heroRoom && game != null) game.accent.toColor() else c.accent,
+            c.accent,
             Modifier.fillMaxSize(),
             ambient = spec.ambient,
             fps = 24,
         )
-        if (lit != null) {
-            // The room as Fuse lights it: the game's art, frosted under glass.
-            val blur = if (glass.enabled && Fuse.quality.blur) maxOf(glass.heroBlur, glass.blur * 0.5f) else 0f
-            HeroBackdrop(
-                source = gameRoom(lit.id, lit.art, lit.accent, scene.systemsById[lit.platformId]),
-                modifier = Modifier
-                    .fillMaxSize()
-                    .then(if (blur > 0f) Modifier.blur(blur.dp) else Modifier)
-                    .graphicsLayer { alpha = if (glass.enabled) glass.backgroundOpacity else 1f },
-                dim = if (glass.enabled) glass.overlayDarkness * 0.6f else scene.heroDim,
-                gradient = if (glass.enabled) glass.gradientStrength else 0.9f,
-                brightness = if (glass.enabled) glass.heroBrightness else 1f,
-            )
-        }
         HudScrim(art = art)
         Hud(
             destinations = scene.tabs,

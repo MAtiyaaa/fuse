@@ -63,6 +63,33 @@ suspend fun LazyListState.follow(index: Int, anchor: Float = 0.12f, animate: Boo
     if (animate) animateScrollBy(delta, spec) else scrollBy(delta)
 }
 
+/**
+ * Scrolls only as far as it takes to show [index] whole, with [marginPx] to spare, the way a menu
+ * or a list of settings is expected to scroll: moving inside what is already on screen moves
+ * nothing, and the list steps along as the selection reaches its edge. An item that isn't laid out
+ * yet is jumped to.
+ */
+suspend fun LazyListState.keepInView(index: Int, marginPx: Int, animate: Boolean = true, spec: AnimationSpec<Float> = followSpec) {
+    if (layoutInfo.viewportSize == IntSize.Zero) snapshotFlow { layoutInfo.viewportSize }.first { it != IntSize.Zero }
+    val info = layoutInfo
+    val start = info.viewportStartOffset
+    val end = info.viewportEndOffset
+    val item = info.visibleItemsInfo.firstOrNull { it.index == index }
+    if (item == null) {
+        scrollToItem(index, -marginPx)
+        return
+    }
+    val top = item.offset - start
+    val bottom = item.offset + item.size - end
+    val delta = when {
+        top < marginPx -> (top - marginPx).toFloat()
+        bottom > -marginPx -> (bottom + marginPx).toFloat().coerceAtMost((top - marginPx).toFloat().coerceAtLeast(0f))
+        else -> 0f
+    }
+    if (delta == 0f) return
+    if (animate) animateScrollBy(delta, spec) else scrollBy(delta)
+}
+
 /** Grid version: keeps the selected row near [anchor] of the viewport height. */
 suspend fun LazyGridState.follow(index: Int, anchor: Float = 0.2f, animate: Boolean = true, spec: AnimationSpec<Float> = followSpec) {
     // As for lists: measure only once the grid has been laid out.
@@ -99,6 +126,21 @@ fun FollowSelection(state: LazyListState, selected: () -> Int, anchor: Float = 0
     LaunchedEffect(state) {
         // Paused while [enabled] is false (an item held by touch), then catches up.
         followEach(snapshotFlow { if (on()) current() else null }) { state.follow(it, anchor, animate, spec) }
+    }
+}
+
+/**
+ * [keepInView] for every new [selected] index, measured after the frame that changed it, like
+ * [FollowSelection]. While [enabled] is false (the selection was just made by a finger, on the row
+ * it touched) nothing scrolls under the finger.
+ */
+@Composable
+fun KeepSelectionInView(state: LazyListState, selected: () -> Int, marginPx: Int, enabled: () -> Boolean = { true }) {
+    val current by rememberUpdatedState(selected)
+    val on by rememberUpdatedState(enabled)
+    val spec by rememberUpdatedState(Fuse.motion.followScroll())
+    LaunchedEffect(state) {
+        followEach(snapshotFlow { if (on()) current() else null }) { state.keepInView(it, marginPx, spec = spec) }
     }
 }
 
