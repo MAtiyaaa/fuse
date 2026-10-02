@@ -144,6 +144,8 @@ data class AppearanceSettings(
     val screenMargin: Int = 0,
     /** Themes added from a link, a file or pasted text, kept as they were written. */
     val customThemes: List<StoredTheme> = emptyList(),
+    /** Fuse's mark lights up when Fuse starts. */
+    val startupAnimation: Boolean = true,
 )
 
 /**
