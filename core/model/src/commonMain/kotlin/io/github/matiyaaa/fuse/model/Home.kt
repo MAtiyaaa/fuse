@@ -68,6 +68,10 @@ data class BoardSize(val width: Int, val height: Int) {
     }
 }
 
+/** Where a widget's top left corner sits on the board, in cells. */
+@Serializable
+data class GridSpot(val column: Int, val row: Int)
+
 /** The size a widget of this kind takes on the board until it is resized. */
 val WidgetKind.boardSize: BoardSize
     get() = when (this) {
@@ -94,6 +98,12 @@ data class HomeWidget(
     val width: Int? = null,
     /** Cells down on the board; null for the kind's own size. */
     val height: Int? = null,
+    /**
+     * Where it sits on the board, per board width in columns (a landscape board has four, a phone
+     * held upright two), so each keeps its own arrangement. Empty until the board is first arranged:
+     * the board then packs widgets in [order], the way it did before widgets had places.
+     */
+    val spots: Map<Int, GridSpot> = emptyMap(),
 ) {
     /** Its size on the board: what it was resized to, else its kind's. */
     val boardSize: BoardSize

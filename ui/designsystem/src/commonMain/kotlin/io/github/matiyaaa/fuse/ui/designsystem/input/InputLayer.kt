@@ -24,7 +24,9 @@ val LocalInputRouter = staticCompositionLocalOf<InputRouter> { error("No InputRo
  * of the highest [priority] receives actions first; a [modal] layer stops unhandled actions from
  * reaching the layers below it (dialogs, menus). Set [longPress] when holding confirm should become
  * [io.github.matiyaaa.fuse.model.NavAction.REORDER] here, and [repeats] for other actions that should
- * repeat while their button is held (directions always do).
+ * repeat while their button is held (directions always do). With [holdModifier], holding that
+ * action's button changes what the directions do (see [InputRouter.heldModifier]); a quick press of
+ * it still arrives as itself.
  */
 @Composable
 fun InputLayer(
@@ -33,6 +35,7 @@ fun InputLayer(
     modal: Boolean = false,
     longPress: Boolean = false,
     repeats: Set<io.github.matiyaaa.fuse.model.NavAction> = emptySet(),
+    holdModifier: io.github.matiyaaa.fuse.model.NavAction? = null,
     onAction: (NavEvent) -> NavResult,
 ) {
     val router = LocalInputRouter.current
@@ -40,14 +43,14 @@ fun InputLayer(
     val holder = remember { arrayOfNulls<InputRouter.Registration>(1) }
     DisposableEffect(router, priority) {
         val registration = router.register(priority, modal, longPress) { handler.value(it) }
-        registration.update(enabled, modal, longPress, { handler.value(it) }, repeats)
+        registration.update(enabled, modal, longPress, { handler.value(it) }, repeats, holdModifier)
         holder[0] = registration
         onDispose {
             registration.remove()
             holder[0] = null
         }
     }
-    SideEffect { holder[0]?.update(enabled, modal, longPress, { handler.value(it) }, repeats) }
+    SideEffect { holder[0]?.update(enabled, modal, longPress, { handler.value(it) }, repeats, holdModifier) }
 }
 
 /** Maps a Compose key to Fuse's physical button names (desktop keyboards, some Android keyboards). */

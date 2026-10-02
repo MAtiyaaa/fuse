@@ -186,15 +186,19 @@ internal fun AuditDriver.homeChannels(exhaustive: Boolean) {
         shoot("carried widget moved one place on")
         tap(PadButton.A)
         shoot("put down, still arranging")
-        // Options, Resize: the D-pad grows and shrinks it.
-        tap(PadButton.X)
-        waitFor("Resize")
-        tapText("Resize")
+        // Hold Options (X): the chosen widget turns to resizing; the D-pad grows it while held.
+        router.press(PadButton.X, io.github.matiyaaa.fuse.ui.designsystem.input.InputSource.GAMEPAD)
+        settle(400)
+        shoot("holding X, the widget shows it can be resized")
         tap(PadButton.DPAD_RIGHT)
+        settle(300)
         tap(PadButton.DPAD_DOWN)
-        shoot("resizing with the D-pad, the others make room")
-        tap(PadButton.A)
-        shoot("new size kept")
+        shoot("X held with right and down, the others make room")
+        tap(PadButton.DPAD_LEFT, 3)
+        shoot("shrunk to its smallest, a further press bumps")
+        router.release(PadButton.X, io.github.matiyaaa.fuse.ui.designsystem.input.InputSource.GAMEPAD)
+        settle(300)
+        shoot("let go, the new size kept and still arranging")
         tap(PadButton.B)
         shoot("done arranging")
     }
@@ -216,7 +220,10 @@ internal fun AuditDriver.homeChannels(exhaustive: Boolean) {
         settle(1_200)
         shoot("dropped, the board still arranging")
         // Drag a corner to resize: the size follows the finger cell by cell.
-        val grip = describedBounds("Resize Storage").first().center
+        touch { down(textCentre("STORAGE")); up() }
+        settle(400)
+        shoot("chosen while arranging, its handles show")
+        val grip = describedBounds("Resize Storage from its corner").first().center
         touch { down(grip) }
         settle(100)
         touch { moveTo(grip + androidx.compose.ui.geometry.Offset(150f, 120f)) }
@@ -224,6 +231,9 @@ internal fun AuditDriver.homeChannels(exhaustive: Boolean) {
         touch { moveTo(grip + androidx.compose.ui.geometry.Offset(330f, 290f)) }
         settle(600)
         shoot("a corner dragged, the widget grows a cell each way")
+        touch { moveTo(grip + androidx.compose.ui.geometry.Offset(2_000f, 290f)) }
+        settle(600)
+        shoot("dragged past the edge, it stops at the largest that fits")
         touch { up() }
         settle(1_000)
         shoot("let go, the new size kept")

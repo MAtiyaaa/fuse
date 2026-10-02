@@ -102,6 +102,10 @@ ICONS = {
     "Ungroup": "ungroup", "Layers2": "layers-2", "Boxes": "boxes", "TextSize": "a-large-small",
     "ListRestart": "list-restart", "ZapOff": "zap-off", "ChartBar": "chart-bar", "CalendarDays": "calendar-days",
     "FilterX": "filter-x", "Tags": "tags", "ScanEye": "scan-eye", "MonitorCheck": "monitor-check", "ServerCog": "server-cog",
+    # 0.3.0: the Store and editing Home's board.
+    "Store": "store", "ShoppingBag": "shopping-bag", "Scaling": "scaling", "MoveDiagonal": "move-diagonal-2",
+    "ArrowDownToLine": "arrow-down-to-line", "CircleArrowDown": "circle-arrow-down", "CloudCheck": "cloud-check",
+    "PackagePlus": "package-plus",
 }
 
 NUM = r"-?(?:\d+\.?\d*|\.\d+)(?:e-?\d+)?"
