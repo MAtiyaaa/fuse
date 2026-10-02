@@ -394,7 +394,8 @@ fun ChannelHome(app: AppState) {
             }
         }
         val wells by animateFloatAsState(if (arranging) 1f else 0f, motion.fade(Durations.BASE), label = "wells")
-        CompositionLocalProvider(LocalHomeTime provides time) {
+        val cartridgeIcon = remember { if (app.store.apps.supported) io.github.matiyaaa.fuse.ui.shell.store.AppIconModel(io.github.matiyaaa.fuse.integrations.cartridge.CartridgeProtocol.PACKAGE_NAME) else null }
+        CompositionLocalProvider(LocalHomeTime provides time, LocalCartridgeIcon provides cartridgeIcon.takeIf { cartridge.installed }) {
             Column(Modifier.fillMaxSize()) {
                 Spacer(Modifier.height(Size.hudHeight))
                 Box(

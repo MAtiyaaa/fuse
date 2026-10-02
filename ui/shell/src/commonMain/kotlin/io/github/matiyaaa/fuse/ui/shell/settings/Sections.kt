@@ -363,7 +363,7 @@ private fun widgetIcon(k: WidgetKind) = when (k) {
     WidgetKind.PLAYTIME_WEEK -> FuseIcons.CalendarClock
     WidgetKind.MOST_PLAYED -> FuseIcons.TrendingUp
     WidgetKind.CURRENT_GAME -> FuseIcons.Gamepad
-    WidgetKind.CARTRIDGE_DOWNLOADS -> FuseIcons.CloudDownload
+    WidgetKind.CARTRIDGE_DOWNLOADS -> io.github.matiyaaa.fuse.ui.designsystem.icons.FuseMarks.Cartridge
     WidgetKind.STORAGE -> FuseIcons.HardDrive
     WidgetKind.CLOCK -> FuseIcons.Clock
 }
