@@ -142,6 +142,11 @@ class LaunchResolver(
         val isIdFile = loc.kind == LocationKind.FILE && ext in adapter.idFileExtensions
         val serial = game.tags.serial?.trim()?.ifEmpty { null }
 
+        // A package (.pkg, a Vita .vpk or .zip) is installed into the emulator, never started: what
+        // was installed starts by its title id, which the scanner read from the package.
+        if (serial != null && adapter.titleIdMode != TitleIdMode.NONE && InstallOnlyFiles.matches(game.platformId, loc.launchPath)) {
+            return TargetResult.Ok(LaunchTarget.TitleId(serial))
+        }
         if (!isIdFile) {
             when (adapter.titleIdMode) {
                 TitleIdMode.REQUIRED -> return serial?.let { TargetResult.Ok(LaunchTarget.TitleId(it)) }
@@ -310,6 +315,21 @@ class LaunchResolver(
                 adapter, c.installed, source, t.target, plan, intent,
                 alternatives = others, playlistRequest = t.playlist, notes = notes.toList(),
             )
+        }
+    }
+}
+
+/**
+ * Files an emulator installs rather than starts: PlayStation 3 and Vita packages, and the Vita's
+ * `.vpk`/`.zip` dumps. Once installed, the game starts by its title id.
+ */
+object InstallOnlyFiles {
+    fun matches(platform: io.github.matiyaaa.fuse.model.PlatformId, path: String): Boolean {
+        val ext = Paths.extension(path).lowercase()
+        return when (platform.value) {
+            "ps3" -> ext == "pkg"
+            "psvita" -> ext == "pkg" || ext == "vpk" || ext == "zip"
+            else -> false
         }
     }
 }
