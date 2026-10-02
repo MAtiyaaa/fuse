@@ -374,6 +374,7 @@ object LinuxCatalog {
             source = esde("OS-SHELL rule; 'Shortcut or script' command %STARTDIR%=%GAMEDIR% %EMULATOR_OS-SHELL% %ROM%"),
             confidence = VERIFIED_ESDE,
             capabilities = caps(folders = FolderSupport.NONE),
+            shortcutsOnly = true,
         ),
     )
 

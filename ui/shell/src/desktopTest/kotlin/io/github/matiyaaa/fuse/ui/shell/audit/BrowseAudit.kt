@@ -571,7 +571,7 @@ internal fun AuditDriver.gameScreens(exhaustive: Boolean) {
         openGame("Aurora Outpost")
         tap(PadButton.X)
         tapText("Emulator")
-        waitFor("Use the platform's emulator")
+        waitFor("Use the system's emulator")
         shoot("choice list")
         // Not installed, or (where Fuse can be shown one) not found yet.
         focusAny("Not installed", "Not found")

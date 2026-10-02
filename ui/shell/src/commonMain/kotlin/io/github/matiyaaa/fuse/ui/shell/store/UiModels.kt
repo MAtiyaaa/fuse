@@ -286,4 +286,34 @@ sealed interface ProblemAction {
 
 /** Emulator choice option for pickers. */
 @Immutable
-data class EmulatorOption(val id: EmulatorId, val name: String, val installed: Boolean, val note: String?)
+data class EmulatorOption(
+    val id: EmulatorId,
+    val name: String,
+    val installed: Boolean,
+    val note: String?,
+    /** Why it can't be chosen for this game (it can't open this kind of file, it isn't installed); null when it can. */
+    val unavailable: String? = null,
+)
+
+/** Everything Fuse knows about one emulator, for its page in Settings. */
+data class EmulatorDetails(
+    val id: EmulatorId,
+    val name: String,
+    val version: String?,
+    val installed: Boolean,
+    /** How it was found ("Flatpak", "PATH", "Located"), and the app or program found. */
+    val foundVia: String?,
+    val appId: String?,
+    /** Where the user pointed Fuse at it, when they did. */
+    val locatedAt: String?,
+    /** Names of the systems it runs. */
+    val systems: List<String>,
+    /** Systems whose games go to it because it was chosen for them. */
+    val chosenFor: List<String>,
+    /** How sure Fuse is that it starts games the way Fuse asks, in words. */
+    val support: String,
+    val limitations: List<String>,
+    val homepage: String?,
+    /** True when it only opens its own app (the game is picked there). */
+    val opensAppOnly: Boolean,
+)

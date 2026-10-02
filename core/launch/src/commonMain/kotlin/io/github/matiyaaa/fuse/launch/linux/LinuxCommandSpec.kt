@@ -55,6 +55,8 @@ data class LinuxEmulatorDef(
     val openAppOnlyReason: String? = null,
     val usesRetroArchCores: Boolean = false,
     val installHint: String? = null,
+    /** Runs only its own kind of file (scripts) on every system; see [io.github.matiyaaa.fuse.launch.EmulatorAdapter.shortcutsOnly]. */
+    val shortcutsOnly: Boolean = false,
 )
 
 /** How a Linux program was found. [label] is what [io.github.matiyaaa.fuse.model.InstalledEmulator.detectedVia] holds. */

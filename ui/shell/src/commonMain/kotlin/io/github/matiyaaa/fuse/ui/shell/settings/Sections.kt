@@ -38,6 +38,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.components.ToastKind
 import io.github.matiyaaa.fuse.ui.designsystem.components.Trailing
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
+import io.github.matiyaaa.fuse.ui.shell.app.showEmulator
 import io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec
 import io.github.matiyaaa.fuse.ui.shell.app.ReorderSpec
 import io.github.matiyaaa.fuse.ui.shell.app.ConfirmSpec
@@ -550,7 +551,7 @@ fun emulatorRows(app: AppState): List<MenuAction> {
                         if (limits.isNotEmpty()) append("\n" + limits.joinToString("\n"))
                     },
                     trailing = Trailing.Chevron,
-                    onSelect = { app.scope.launch { app.store.emulators.openEmulator(e.id) } },
+                    onSelect = { app.showEmulator(e.id) },
                 ))
             }
         }

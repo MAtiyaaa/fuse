@@ -190,34 +190,108 @@ fun AppState.collectionPicker(game: GameId, title: String) {
 }
 
 fun AppState.emulatorPicker(card: GameCard) {
-    val options = store.emulators.optionsFor(card.platformId)
     contextMenu = null
-    choice = ChoiceSpec(
-        icon = FuseIcons.Chip,
-        title = "Emulator for ${card.title}",
-        message = "The platform's choice is used unless you pick one here.",
-        options = listOf(
-            MenuAction("default", "Use the platform's emulator", FuseIcons.Layers, onSelect = {
-                scope.launch { store.library.setEmulator(card.id, null) }
-                choice = null
-            }),
-        ) + options.map { o ->
-            val locate = !o.installed && store.emulators.canLocate
-            MenuAction(
-                "e${o.id}", o.name, FuseIcons.Chip,
-                detail = if (locate) "Not found. Show Fuse where it is" else o.note ?: if (o.installed) null else "Not installed",
-                unavailableReason = if (o.installed || locate) null else "Not installed on this device",
-                onSelect = {
-                    if (locate) {
-                        startLocate(LocateRequest(o.id, o.name, game = card.id))
-                    } else {
-                        scope.launch { store.library.setEmulator(card.id, o.id) }
-                        choice = null
-                    }
+    scope.launch {
+        // Each emulator is checked against this game, so one that can't open it says why.
+        val options = store.emulators.optionsForGame(card.id).ifEmpty { store.emulators.optionsFor(card.platformId) }
+        choice = ChoiceSpec(
+            icon = FuseIcons.Chip,
+            title = "Emulator for ${card.title}",
+            message = "The system's choice is used unless you pick one here.",
+            options = listOf(
+                MenuAction("default", "Use the system's emulator", FuseIcons.Layers, onSelect = {
+                    scope.launch { store.library.setEmulator(card.id, null) }
+                    choice = null
+                }),
+            ) + options.sortedBy { it.unavailable != null }.map { o ->
+                val locate = !o.installed && store.emulators.canLocate
+                MenuAction(
+                    "e${o.id}", o.name, FuseIcons.Chip,
+                    detail = if (locate) "Not found. Show Fuse where it is" else o.note ?: if (o.installed) null else "Not installed",
+                    unavailableReason = if (locate) null else o.unavailable ?: if (o.installed) null else "Not installed on this device",
+                    onSelect = {
+                        if (locate) {
+                            startLocate(LocateRequest(o.id, o.name, game = card.id))
+                        } else {
+                            scope.launch { store.library.setEmulator(card.id, o.id) }
+                            choice = null
+                        }
+                    },
+                )
+            },
+        )
+    }
+}
+
+/**
+ * An emulator's page: what it is and how Fuse found it, the systems it runs and is chosen for, how
+ * well Fuse knows it, its limits, and actions (open it, try it with a game, its website, forget
+ * where it was located).
+ */
+fun AppState.showEmulator(id: io.github.matiyaaa.fuse.model.EmulatorId) {
+    scope.launch {
+        val d = store.emulators.details(id) ?: return@launch
+        val test = if (d.installed) store.emulators.testGame(id) else null
+        val actions = buildList {
+            if (d.installed) {
+                add(MenuAction("open", "Open ${d.name}", FuseIcons.External, detail = "Its own settings, controls and firmware", onSelect = {
+                    contextMenu = null
+                    scope.launch { store.emulators.openEmulator(id) }
+                }))
+                add(MenuAction(
+                    "test", if (test != null) "Try it with ${test.title}" else "Try it with a game", FuseIcons.Play,
+                    detail = when {
+                        test == null -> null
+                        d.opensAppOnly -> "Opens ${d.name}; it doesn't take games from other apps"
+                        else -> "Starts this game in ${d.name}, without changing which emulator it uses"
+                    },
+                    unavailableReason = if (test == null) "No game on its systems is in your library" else null,
+                    onSelect = {
+                        contextMenu = null
+                        if (test != null) play(test, emulator = id)
+                    },
+                ))
+            }
+            add(MenuAction(
+                "systems", if (d.systems.size == 1) d.systems.single() else "${d.systems.size} systems", FuseIcons.Chip,
+                detail = when {
+                    d.chosenFor.isNotEmpty() -> "Chosen for ${d.chosenFor.joinToString(", ")}"
+                    d.systems.size in 2..8 -> d.systems.joinToString(", ")
+                    else -> null
                 },
-            )
-        },
-    )
+                section = "Runs",
+            ))
+            add(MenuAction("support", "How Fuse starts it", if (d.opensAppOnly) FuseIcons.AppWindow else FuseIcons.Rocket, detail = if (d.opensAppOnly) "Opens the app; choose the game there" else d.support, section = "Runs"))
+            d.limitations.forEachIndexed { i, l ->
+                add(MenuAction("limit.$i", l, FuseIcons.Info, section = "Good to know"))
+            }
+            if (d.installed) {
+                add(MenuAction(
+                    "found", d.foundVia?.let { "Found via $it" } ?: "Installed", FuseIcons.Search,
+                    detail = d.locatedAt ?: d.appId,
+                    section = "On this device",
+                ))
+            }
+            if (d.locatedAt != null) {
+                add(MenuAction("forget", "Forget where it is", FuseIcons.Undo, detail = "Fuse looks for it again by itself", section = "On this device", onSelect = {
+                    contextMenu = null
+                    scope.launch { store.emulators.forget(id) }
+                }))
+            }
+            d.homepage?.let { url ->
+                add(MenuAction("site", "Website", FuseIcons.Globe, detail = url, trailing = io.github.matiyaaa.fuse.ui.designsystem.components.Trailing.Chevron, section = "On this device", onSelect = {
+                    contextMenu = null
+                    platform.openUrl(url)
+                }))
+            }
+        }
+        openContextMenu(ContextMenuSpec(
+            title = d.name + (d.version?.let { "  $it" } ?: ""),
+            subtitle = if (d.installed) "Installed" else "Not installed on this device",
+            icon = FuseIcons.Joystick,
+            actions = actions,
+        ))
+    }
 }
 
 fun AppState.folderPolicyPicker(card: GameCard) {

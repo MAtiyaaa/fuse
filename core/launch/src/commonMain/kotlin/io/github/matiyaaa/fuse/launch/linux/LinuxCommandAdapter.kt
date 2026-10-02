@@ -42,6 +42,7 @@ class LinuxCommandAdapter(val def: LinuxEmulatorDef, override val host: Host = H
     override val idFileExtensions: Set<String> =
         def.modes.filter { it.idFile }.flatMap { it.extensions.orEmpty() }.toSet()
     override val opensAppOnly: Boolean get() = def.openAppOnlyReason != null
+    override val shortcutsOnly: Boolean get() = def.shortcutsOnly
 
     override fun accepts(target: LaunchTarget, platform: PlatformId): Boolean =
         opensAppOnly || def.modes.select(target, platform) != null

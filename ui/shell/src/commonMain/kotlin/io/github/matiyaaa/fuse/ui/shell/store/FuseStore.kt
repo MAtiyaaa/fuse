@@ -387,6 +387,18 @@ interface EmulatorOps {
     fun refresh()
     /** Emulators that could run [platform], installed ones first, with notes. */
     fun optionsFor(platform: PlatformId): List<EmulatorOption>
+
+    /**
+     * Emulators for [game]'s system, each saying why it can't run this game when it can't (the
+     * file type, a folder it can't open, not installed). Checks only; nothing is written or started.
+     */
+    suspend fun optionsForGame(game: GameId): List<EmulatorOption> = emptyList()
+
+    /** What Fuse knows about [emulator]; null when it doesn't know it on this device. */
+    suspend fun details(emulator: EmulatorId): EmulatorDetails? = null
+
+    /** A game to try [emulator] with: one on its systems, played most recently, whose file is here. */
+    suspend fun testGame(emulator: EmulatorId): GameCard? = null
     suspend fun setPlatformEmulator(platform: PlatformId, emulator: EmulatorId?)
     suspend fun openEmulator(emulator: EmulatorId)
     fun limitations(emulator: EmulatorId): List<String>
