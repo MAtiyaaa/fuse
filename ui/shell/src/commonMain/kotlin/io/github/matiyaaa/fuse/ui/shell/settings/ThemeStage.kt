@@ -38,6 +38,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithCache
@@ -72,14 +73,15 @@ import io.github.matiyaaa.fuse.model.ThemeSpec
 import io.github.matiyaaa.fuse.ui.designsystem.background.AmbientBackground
 import io.github.matiyaaa.fuse.ui.designsystem.background.CrtOverlay
 import io.github.matiyaaa.fuse.ui.designsystem.components.Badge
-import io.github.matiyaaa.fuse.ui.designsystem.components.Chip
 import io.github.matiyaaa.fuse.ui.designsystem.components.FText
 import io.github.matiyaaa.fuse.ui.designsystem.components.Hint
 import io.github.matiyaaa.fuse.ui.designsystem.components.HintBar
 import io.github.matiyaaa.fuse.ui.designsystem.components.SectionLabel
 import io.github.matiyaaa.fuse.ui.designsystem.components.Tile
 import io.github.matiyaaa.fuse.ui.designsystem.effects.elevated
+import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
+import io.github.matiyaaa.fuse.ui.designsystem.shape.PillShape
 import io.github.matiyaaa.fuse.ui.designsystem.icons.HintButton
 import io.github.matiyaaa.fuse.ui.designsystem.media.ArtSlot
 import io.github.matiyaaa.fuse.ui.designsystem.media.GeneratedArt
@@ -485,32 +487,60 @@ internal fun ThemeFacts(
             FText(line, Fuse.type.body, color = c.textMuted, maxLines = 1)
         }
         Spacer(Modifier.height(if (compact) Space.s else Space.m))
-        FittingRow(gap = Space.s, modifier = Modifier.fillMaxWidth()) {
-            for (t in traits) Chip(t.label, icon = t.icon, color = c.textMuted, background = c.text.copy(alpha = if (c.isDark) 0.07f else 0.06f))
+        FittingRow(gap = Space.s, lines = if (compact) 1 else 2, modifier = Modifier.fillMaxWidth()) {
+            for (t in traits) TraitChip(t)
         }
     }
 }
 
+/** One trait as a small quiet chip: its icon and its name, in caption type so a full set fits a line. */
+@Composable
+private fun TraitChip(trait: Trait) {
+    val c = Fuse.colors
+    Row(
+        Modifier
+            .height(Size.chipCompact)
+            .clip(PillShape)
+            .background(c.text.copy(alpha = if (c.isDark) 0.07f else 0.06f))
+            .padding(horizontal = Space.m - Space.xxs),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        FuseIcon(trait.icon, size = Size.iconXS, tint = c.textMuted)
+        Spacer(Modifier.width(Space.xs + Space.xxs))
+        FText(trait.label, Fuse.type.caption, color = c.textMuted, maxLines = 1)
+    }
+}
+
 /**
- * A row that shows as many of its children as fit on one line, in order, and leaves the rest out
- * rather than squeezing or wrapping them, so the block under the stage keeps one height.
+ * A row that shows as many of its children as fit in [lines] lines, in order, and leaves the rest
+ * out rather than squeezing them, so the block under the stage never grows past its room. Lines are
+ * [gap] apart, and so are the children on a line.
  */
 @Composable
-private fun FittingRow(gap: Dp, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+private fun FittingRow(gap: Dp, lines: Int, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
     Layout(content, modifier) { measurables, constraints ->
         val space = gap.roundToPx()
         val placeables = measurables.map { it.measure(constraints.copy(minWidth = 0, minHeight = 0)) }
         val xs = ArrayList<Int>(placeables.size)
+        val rows = ArrayList<Int>(placeables.size)
+        var line = 0
         var end = 0
         for (p in placeables) {
-            val x = if (xs.isEmpty()) 0 else end + space
-            if (x + p.width > constraints.maxWidth) break
+            var x = if (end == 0 && (xs.isEmpty() || rows.last() != line)) 0 else end + space
+            if (x + p.width > constraints.maxWidth) {
+                if (line + 1 >= lines || xs.isEmpty()) break
+                line++
+                x = 0
+            }
             xs += x
+            rows += line
             end = x + p.width
         }
-        val height = placeables.take(xs.size).maxOfOrNull { it.height } ?: 0
+        val lineHeight = placeables.take(xs.size).maxOfOrNull { it.height } ?: 0
+        val used = if (xs.isEmpty()) 0 else rows.last() + 1
+        val height = if (used == 0) 0 else lineHeight * used + space * (used - 1)
         layout(if (constraints.hasBoundedWidth) constraints.maxWidth else end, height) {
-            xs.forEachIndexed { i, x -> placeables[i].place(x, (height - placeables[i].height) / 2) }
+            xs.forEachIndexed { i, x -> placeables[i].place(x, rows[i] * (lineHeight + space) + (lineHeight - placeables[i].height) / 2) }
         }
     }
 }

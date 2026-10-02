@@ -2,12 +2,12 @@ package io.github.matiyaaa.fuse.ui.shell.settings
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
-import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -21,15 +21,15 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
-import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -56,6 +56,7 @@ import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
@@ -68,9 +69,9 @@ import io.github.matiyaaa.fuse.model.ThemeCodec
 import io.github.matiyaaa.fuse.model.ThemeSpec
 import io.github.matiyaaa.fuse.ui.designsystem.background.AmbientBackground
 import io.github.matiyaaa.fuse.ui.designsystem.background.CrtOverlay
-import io.github.matiyaaa.fuse.ui.designsystem.components.Badge
 import io.github.matiyaaa.fuse.ui.designsystem.components.FText
 import io.github.matiyaaa.fuse.ui.designsystem.components.Hint
+import io.github.matiyaaa.fuse.ui.designsystem.components.IconBadge
 import io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction
 import io.github.matiyaaa.fuse.ui.designsystem.components.Tile
 import io.github.matiyaaa.fuse.ui.designsystem.components.ToastKind
@@ -87,7 +88,6 @@ import io.github.matiyaaa.fuse.ui.designsystem.input.InputLayer
 import io.github.matiyaaa.fuse.ui.designsystem.input.NavResult
 import io.github.matiyaaa.fuse.ui.designsystem.shape.squirclePath
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Durations
-import io.github.matiyaaa.fuse.ui.designsystem.theme.Easings
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.FuseTheme
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
@@ -412,20 +412,24 @@ fun ThemesScreen(app: AppState) {
             val gap = Space.l
             val columns = ((width + gap) / (cardMin + gap)).toInt().coerceIn(2, 5)
             view.columns = columns
-            Gallery(
-                app = app,
-                view = view,
-                items = items,
-                focusIndex = focusIndex,
-                columns = columns,
-                gap = gap,
-                inUseId = prefs.themeId,
-                reveal = reveal,
-                revealFrom = revealFrom,
-                onOpen = { open(it) },
-                onOptions = { options(it) },
-                modifier = m,
-            )
+            FilterSwitch(view.filter, m) { f ->
+                val shown = f == view.filter
+                Gallery(
+                    app = app,
+                    view = view,
+                    filter = f,
+                    items = if (shown) items else remember(f, customs) { itemsFor(f, customs) },
+                    focusIndex = if (shown) focusIndex else -1,
+                    columns = columns,
+                    gap = gap,
+                    inUseId = prefs.themeId,
+                    reveal = reveal,
+                    revealFrom = revealFrom,
+                    onOpen = { open(it) },
+                    onOptions = { options(it) },
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
         }
 
         if (portrait) {
@@ -447,7 +451,7 @@ fun ThemesScreen(app: AppState) {
                         Column(Modifier.padding(horizontal = gutter)) {
                             studioHeader(s, Modifier.padding(start = Space.s))
                             Spacer(Modifier.height(Space.s))
-                            StudioPanel(app, s, look ?: rememberStudioLook(s), Modifier.weight(1f), active = s === studio, compact = true, narrow = true, onSave = { save(s) }, onLeave = { leaveStudio(s) })
+                            StudioPanel(app, s, look ?: rememberStudioLook(s), Modifier.weight(1f).padding(bottom = Size.hintHeight + Space.s), active = s === studio, compact = true, narrow = true, onSave = { save(s) }, onLeave = { leaveStudio(s) })
                         }
                     }
                 }
@@ -506,7 +510,7 @@ private val SHORT_BELOW = 560.dp
 private val COMPACT_WIDTH = 600.dp
 
 /** The stage takes up to half the width; the gallery the rest. */
-private const val STAGE_SHARE = 0.5f
+private const val STAGE_SHARE = 0.52f
 private val STAGE_MIN = 200.dp
 
 /** Height kept under the stage for its facts: title, line and chips; short screens drop the line. */
@@ -518,7 +522,7 @@ private val CARD_MIN = 150.dp
 private const val CARD_SHARE = 0.12f
 
 /** The studio shows its swatch strip and icon wells from this column width up. */
-private val STUDIO_WIDE = 520.dp
+private val STUDIO_WIDE = 496.dp
 
 /**
  * The right-hand pane: the gallery, or the studio while one is open. Switching slides the new pane
@@ -543,14 +547,36 @@ private fun PaneSwitch(studio: StudioState?, modifier: Modifier, content: @Compo
 }
 
 /**
+ * The gallery under a new filter: the cards slide a little the way the filter moved as they fade
+ * in, the old ones fade out quicker; only fades under Reduced motion.
+ */
+@Composable
+private fun FilterSwitch(filter: ThemeFilter, modifier: Modifier, content: @Composable (ThemeFilter) -> Unit) {
+    val motion = Fuse.motion
+    AnimatedContent(
+        targetState = filter,
+        modifier = modifier,
+        transitionSpec = {
+            val dir = if (targetState.ordinal > initialState.ordinal) 1 else -1
+            val shift = if (motion.reduced) 0 else dir
+            (fadeIn(motion.enter(Durations.BASE)) + slideInHorizontally(motion.enter(Durations.SLOW)) { it / 16 * shift }) togetherWith
+                (fadeOut(motion.exit(Durations.FAST)) + slideOutHorizontally(motion.exit(Durations.FAST)) { -it / 16 * shift })
+        },
+        label = "themesFilter",
+    ) { f -> content(f) }
+}
+
+/**
  * The gallery: theme cards in a grid that follows the selection, each a small picture of Home in
- * that theme, then the cards that make or add one. Cards lift with the spark of the theme in use,
- * like every tile; the one in use is marked, and so are the ones you added.
+ * that theme with its name set where Home sets a title, then the cards that make or add one. Cards
+ * lift with the spark of the theme in use, like every tile; the one in use carries a check and the
+ * ones you made or added a mark of their own. Yours ends with a line on what belongs there.
  */
 @Composable
 private fun Gallery(
     app: AppState,
     view: ThemesView,
+    filter: ThemeFilter,
     items: List<ThemeItem>,
     focusIndex: Int,
     columns: Int,
@@ -562,17 +588,19 @@ private fun Gallery(
     onOptions: (ThemeItem.Of) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val grid = remember(view.filter) { androidx.compose.foundation.lazy.grid.LazyGridState() }
-    FollowSelection(grid, { focusIndex }, anchor = 0.12f)
+    val grid = remember(filter) { LazyGridState() }
+    // A gallery on its way out (the filter changed) has no selection to follow.
+    FollowSelection(grid, { focusIndex.coerceAtLeast(0) }, anchor = 0.12f, enabled = { focusIndex >= 0 })
     val bleed = Space.l
     LazyVerticalGrid(
         columns = GridCells.Fixed(columns),
         state = grid,
         // The grid reaches past the pane on both sides, so a lifted card's ring and glow are never cut.
-        modifier = modifier.bleed(bleed).fadingEdges(grid, top = Space.l, bottom = Space.xl),
+        modifier = modifier.bleed(bleed).fadingEdges(grid, top = Space.xl, bottom = Space.xl),
         contentPadding = PaddingValues(start = bleed, end = bleed, top = Space.l, bottom = Size.hintHeight + Space.x4),
         horizontalArrangement = Arrangement.spacedBy(gap),
-        verticalArrangement = Arrangement.spacedBy(Space.l),
+        // Room under each row for the focused card's spark bar before the next row starts.
+        verticalArrangement = Arrangement.spacedBy(Size.sparkClearance),
     ) {
         itemsIndexed(items, key = { _, item -> item.key }) { i, item ->
             val focused = i == focusIndex && !view.inFilters && view.studio == null
@@ -606,6 +634,18 @@ private fun Gallery(
                 ThemeItem.Add -> CreateCard("Add a theme", make = false, selected = selected, onClick = tap, modifier = m)
             }
         }
+        if (filter == ThemeFilter.YOURS) {
+            item(key = "themes.yours.note", span = { GridItemSpan(maxLineSpan) }) {
+                Row(Modifier.padding(top = Space.xs).reveal(reveal, revealFrom + items.size / columns + 1), verticalAlignment = Alignment.Top) {
+                    FuseIcon(FuseIcons.Info, size = Size.iconS, tint = Fuse.colors.textFaint)
+                    Spacer(Modifier.width(Space.s))
+                    FText(
+                        "Make your own from any theme, or add one someone shared. Any theme can be copied as a file to change or pass on.",
+                        Fuse.type.caption, color = Fuse.colors.textMuted, maxLines = 3,
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -622,9 +662,9 @@ private fun Modifier.bleed(x: Dp): Modifier = layout { measurable, constraints -
 }
 
 /**
- * A theme in the gallery: its picture as a tile (lifting with the spark of the theme in use, like
- * every tile), and its name under it with its marks: In use for the theme in use, Yours for one you
- * made or added.
+ * A theme in the gallery: its picture as a tile, lifting with the spark of the theme in use like
+ * every tile. Its marks sit in the top corner, as marks on art do: a check in the accent for the
+ * theme in use (it pops in when you choose it), and a person for one you made or added.
  */
 @Composable
 private fun ThemeCard(
@@ -638,87 +678,78 @@ private fun ThemeCard(
 ) {
     val c = Fuse.colors
     val motion = Fuse.motion
-    // The name and marks read as one item, selected with the card, for screen readers and the UI audit.
-    Column(modifier.semantics(mergeDescendants = true) { this.selected = selected }) {
-        Tile(
-            selected = selected,
-            modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f),
-            glow = spec.palette.accent.toColor(),
-            onClick = onClick,
-            onLongClick = onLongClick,
-        ) {
-            ThemePreview(spec, animate = false, modifier = Modifier.fillMaxSize())
-        }
-        Spacer(Modifier.height(Size.sparkClearance))
-        Row(Modifier.heightIn(min = Size.badge - Space.xs), verticalAlignment = Alignment.CenterVertically) {
-            FText(spec.name, Fuse.type.label, color = if (selected || inUse) c.text else c.textMuted, maxLines = 1, modifier = Modifier.weight(1f, fill = false))
+    Tile(
+        selected = selected,
+        // The card and its name read as one item, selected with the card, for screen readers and the UI audit.
+        modifier = modifier.fillMaxWidth().aspectRatio(16f / 9f).semantics { this.selected = selected },
+        glow = spec.palette.accent.toColor(),
+        onClick = onClick,
+        onLongClick = onLongClick,
+    ) {
+        ThemePreview(spec, animate = false, modifier = Modifier.fillMaxSize())
+        Row(Modifier.align(Alignment.TopEnd).padding(Space.s), horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
+            if (yours) {
+                IconBadge(FuseIcons.UserRound, Modifier.semantics { contentDescription = "Yours" }, tint = c.onArt, size = Size.badge)
+            }
             AnimatedVisibility(
                 visible = inUse,
-                enter = expandHorizontally(motion.enter(Durations.BASE)) + fadeIn(motion.fade(Durations.BASE)) + scaleIn(motion.enter(Durations.SLOW), initialScale = 0.6f),
-                exit = shrinkHorizontally(motion.exit(Durations.FAST)) + fadeOut(motion.exit(Durations.INSTANT)),
+                enter = fadeIn(motion.fade(Durations.FAST)) + scaleIn(if (motion.reduced) motion.fade(Durations.FAST) else spring(dampingRatio = 0.55f, stiffness = 520f), initialScale = if (motion.reduced) 1f else 0.4f),
+                exit = fadeOut(motion.exit(Durations.FAST)),
             ) {
-                Row {
-                    Spacer(Modifier.width(Space.s))
-                    Badge("In use", icon = FuseIcons.Check)
-                }
-            }
-            if (yours) {
-                Spacer(Modifier.width(Space.s))
-                Badge("Yours", color = c.textMuted, filled = false)
+                IconBadge(FuseIcons.Check, Modifier.semantics { contentDescription = "In use" }, tint = c.onAccent, background = c.accent, size = Size.badge)
             }
         }
     }
 }
 
 /**
- * The cards at the end of the gallery. Make your own shows a few swatches over a soft wash of the
- * accent; Add a theme a dashed frame, a place for something new.
+ * The cards at the end of the gallery, each saying what it does: Make your own over a soft wash of
+ * the accent with a few swatches, Add a theme in a dashed frame, a place for something new.
  */
 @Composable
 private fun CreateCard(label: String, make: Boolean, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val c = Fuse.colors
-    Column(modifier.semantics(mergeDescendants = true) { this.selected = selected }) {
-        Tile(selected = selected, modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f), onClick = onClick) {
-            val frame = c.text.copy(alpha = if (c.isDark) 0.2f else 0.26f)
-            val wash = c.accent
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .background(c.surfaceDim)
-                    .drawWithCache {
-                        val glow = Brush.radialGradient(
-                            0f to wash.copy(alpha = if (make) 0.24f else 0.1f),
-                            1f to Color.Transparent,
-                            center = Offset(size.width * 0.5f, size.height * 0.55f),
-                            radius = size.maxDimension * 0.6f,
-                        )
-                        val inset = Space.s.toPx()
-                        val dash = Space.s.toPx()
-                        val stroke = Stroke(Size.stroke.toPx() * 1.5f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(dash, dash * 0.75f)))
-                        val r = minOf(size.width, size.height) * 0.12f
-                        onDrawBehind {
-                            drawRect(glow)
-                            if (!make) {
-                                drawRoundRect(frame, Offset(inset, inset), size.copy(width = size.width - inset * 2, height = size.height - inset * 2), CornerRadius(r), style = stroke)
-                            }
+    Tile(
+        selected = selected,
+        modifier = modifier.fillMaxWidth().aspectRatio(16f / 9f).semantics { this.selected = selected },
+        onClick = onClick,
+    ) {
+        val frame = c.text.copy(alpha = if (c.isDark) 0.2f else 0.26f)
+        val wash = c.accent
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(c.surfaceDim)
+                .drawWithCache {
+                    val glow = Brush.radialGradient(
+                        0f to wash.copy(alpha = if (make) 0.22f else 0.08f),
+                        1f to Color.Transparent,
+                        center = Offset(size.width * 0.5f, size.height * 0.4f),
+                        radius = size.maxDimension * 0.6f,
+                    )
+                    val inset = Space.s.toPx()
+                    val dash = Space.s.toPx()
+                    val stroke = Stroke(Size.stroke.toPx() * 1.5f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(dash, dash * 0.75f)))
+                    val r = minOf(size.width, size.height) * 0.12f
+                    onDrawBehind {
+                        drawRect(glow)
+                        if (!make) {
+                            drawRoundRect(frame, Offset(inset, inset), size.copy(width = size.width - inset * 2, height = size.height - inset * 2), CornerRadius(r), style = stroke)
                         }
-                    },
-                contentAlignment = Alignment.Center,
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Box(Modifier.size(Size.touch).clip(CircleShape).background(c.accentSoft), contentAlignment = Alignment.Center) {
-                        FuseIcon(if (make) FuseIcons.Paintbrush else FuseIcons.Plus, size = Size.iconL, tint = c.accent)
                     }
-                    if (make) {
-                        Spacer(Modifier.height(Space.s))
-                        SwatchDots()
-                    }
+                },
+            contentAlignment = Alignment.Center,
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Box(Modifier.size(Size.chip).clip(CircleShape).background(c.accentSoft), contentAlignment = Alignment.Center) {
+                    FuseIcon(if (make) FuseIcons.Paintbrush else FuseIcons.Plus, size = Size.iconM, tint = c.accent)
                 }
+                Spacer(Modifier.height(Space.s))
+                FText(label, Fuse.type.label, color = if (selected) c.text else c.text.copy(alpha = 0.88f), maxLines = 1)
+                // Both cards keep the same block height, so their labels line up across the row.
+                Spacer(Modifier.height(Space.s))
+                if (make) SwatchDots() else Spacer(Modifier.height(Size.dot))
             }
-        }
-        Spacer(Modifier.height(Size.sparkClearance))
-        Row(Modifier.heightIn(min = Size.badge - Space.xs), verticalAlignment = Alignment.CenterVertically) {
-            FText(label, Fuse.type.label, color = if (selected) c.text else c.textMuted, maxLines = 1)
         }
     }
 }
@@ -744,9 +775,9 @@ private fun SwatchDots() {
 /**
  * A small picture of Fuse in [spec], drawn in the theme itself: its background (moving only while
  * [animate], and never against the Motion setting or Low Power Mode), the top line, the theme's name
- * where Home sets a game's title, a shelf of wide tiles with the first one lifted in the theme's own
- * focus style, the next shelf below and the hint line. The layout is Home's, scaled to the width it
- * is given; the name is set larger than scale so it reads on a card.
+ * where Home sets a game's title, and a shelf of wide tiles with the first one lifted in the theme's
+ * own focus style. The layout is Home's, scaled to the width it is given; the name is set larger
+ * than scale so it reads on a card. The stage shows the whole of Home; this is its thumbnail.
  */
 @Composable
 internal fun ThemePreview(spec: ThemeSpec, animate: Boolean, modifier: Modifier = Modifier) {
@@ -789,10 +820,10 @@ private const val TITLE_TOP = 0.215f
 
 /**
  * Everything in a preview but its background and name, drawn in one pass from paths built once per
- * size: the top line (mark, tabs with the first one active, status), the title's meta line, two
- * shelves (the first tile lifted with the theme's focus: a glow and bar, a ring, or a wide bar), the
- * fade under the hint line and the hints themselves. Thin marks keep a minimum weight so they read
- * on a small card.
+ * size: the top line (mark, tabs with the first one active, status), the title's meta line, the
+ * first shelf (its first tile lifted with the theme's focus: a glow and bar, a ring, or a wide bar)
+ * and the fade at the foot of the screen. The shelves below and the hint line are left out: on a
+ * card they are only noise. Thin marks keep a minimum weight so they read on a small card.
  */
 @Composable
 private fun MiniChrome(modifier: Modifier = Modifier) {
@@ -840,9 +871,6 @@ private fun MiniChrome(modifier: Modifier = Modifier) {
             val wideW = 304f * u
             val gap = 24f * u
             val wide = squirclePath(wideW, wideH, minOf(wideW, wideH) * fraction, 0.6f)
-            val square = 137f * u
-            val squareTop = tileTop + wideH + 24f * u + 40f * u
-            val squarePath = squirclePath(square, square, square * fraction, 0.6f)
             val lift = 1.07f
             val liftedW = wideW * lift
             val liftedH = wideH * lift
@@ -854,7 +882,6 @@ private fun MiniChrome(modifier: Modifier = Modifier) {
             val edgeStroke = Stroke(hair)
             val focusFill = Brush.verticalGradient(listOf(lerp(raised, accent, 0.62f), lerp(surface, accent, 0.22f)), startY = 0f, endY = liftedH)
             val restFill = Brush.verticalGradient(listOf(lerp(raised, text, if (dark) 0.06f else 0.03f), surface), startY = 0f, endY = wideH)
-            val squareFill = Brush.verticalGradient(listOf(lerp(raised, accent, 0.1f), surface), startY = 0f, endY = square)
             val glowColor = if (style == FocusStyle.GLOW) accent else shadow
             val glow = Brush.radialGradient(
                 0f to glowColor.copy(alpha = if (style == FocusStyle.GLOW) 0.45f else 0.35f),
@@ -864,8 +891,6 @@ private fun MiniChrome(modifier: Modifier = Modifier) {
             )
             val barH = thick(3f * (if (style == FocusStyle.BAR) 1.3f else 1f) * 1.6f)
             val fade = Brush.verticalGradient(0.86f to Color.Transparent, 0.93f to ink.copy(alpha = 0.78f), 1f to ink.copy(alpha = 0.94f), startY = 0f, endY = h)
-            val hintY = h - 30f * u
-            val glyphR = maxOf(11f * u, hair * 2.5f)
 
             onDrawBehind {
                 // Top line: mark, tabs (the first active, with its accent underline) and status.
@@ -905,27 +930,8 @@ private fun MiniChrome(modifier: Modifier = Modifier) {
                     drawRoundRect(accent, Offset(gutter + wideW / 2 - bw / 2, fy + liftedH + maxOf(7f * u, hair * 2f)), androidx.compose.ui.geometry.Size(bw, barH), CornerRadius(barH / 2))
                 }
 
-                // The next shelf, quieter, running off the bottom.
-                drawRoundRect(muted.copy(alpha = 0.45f), Offset(gutter, squareTop - 26f * u - bar / 2), androidx.compose.ui.geometry.Size(110f * u, bar * 0.8f), CornerRadius(bar / 2))
-                var sx = gutter
-                while (sx < w) {
-                    translate(sx, squareTop) {
-                        drawPath(squarePath, squareFill, alpha = 0.72f)
-                        drawPath(squarePath, edge, style = edgeStroke, alpha = 0.72f)
-                    }
-                    sx += square + gap
-                }
-
-                // The fade under the hint line, and the hints.
+                // The fade under the hint line.
                 drawRect(fade)
-                var hx = w - gutter
-                for (len in floatArrayOf(66f, 76f, 46f)) {
-                    hx -= len * u
-                    drawRoundRect(muted, Offset(hx, hintY - bar / 2), androidx.compose.ui.geometry.Size(len * u, bar), CornerRadius(bar / 2))
-                    hx -= 10f * u + glyphR * 2
-                    drawCircle(text.copy(alpha = if (dark) 0.85f else 0.75f), glyphR, Offset(hx + glyphR, hintY))
-                    hx -= 32f * u
-                }
             }
         },
     )

@@ -389,7 +389,7 @@ internal fun StudioPanel(
                 Modifier
                     .fadingEdges(scroll, top = Space.m, bottom = Space.xl)
                     .verticalScroll(scroll)
-                    .padding(Space.s)
+                    .padding(Space.xs)
                     .drawBehind {
                         if (shown <= 0.01f) return@drawBehind
                         val top = glide.start.toPx()
@@ -406,7 +406,6 @@ internal fun StudioPanel(
                         val curve = if (r > bh / 2) r - kotlin.math.sqrt(r * r - (bh / 2) * (bh / 2)) else 0f
                         drawRoundRect(accent, Offset(curve, top + (h - bh) / 2), androidx.compose.ui.geometry.Size(Size.sparkHeight.toPx(), bh), CornerRadius(Size.sparkHeight.toPx() / 2), alpha = shown)
                     },
-                verticalArrangement = Arrangement.spacedBy(Space.xxs),
             ) {
                 for (row in rows) {
                     StudioRowView(
