@@ -12,13 +12,18 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.unit.IntSize
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Durations
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Easings
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.FuseMotion
-import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 
 private val followSpec: AnimationSpec<Float> = spring(dampingRatio = 1f, stiffness = 600f)
 
@@ -80,6 +85,11 @@ suspend fun LazyGridState.follow(index: Int, anchor: Float = 0.2f, animate: Bool
 /**
  * Follows [selected] whenever it changes. The newest [selected] lambda is always used, so a caller
  * may pass a plain value captured at composition (a shelf's column) and still be followed.
+ *
+ * A selection can change in the same moment as the items do (a shelf moved down one place, rows
+ * arriving): each move is measured only once the list has laid that change out, so the list never
+ * follows the place an item used to be. While it waits, the glide already under way carries on, so
+ * holding a direction stays one smooth run.
  */
 @Composable
 fun FollowSelection(state: LazyListState, selected: () -> Int, anchor: Float = 0.12f, animate: Boolean = true, enabled: () -> Boolean = { true }) {
@@ -88,7 +98,7 @@ fun FollowSelection(state: LazyListState, selected: () -> Int, anchor: Float = 0
     val spec by rememberUpdatedState(Fuse.motion.followScroll())
     LaunchedEffect(state) {
         // Paused while [enabled] is false (an item held by touch), then catches up.
-        snapshotFlow { if (on()) current() else null }.collectLatest { if (it != null) state.follow(it, anchor, animate, spec) }
+        followEach(snapshotFlow { if (on()) current() else null }) { state.follow(it, anchor, animate, spec) }
     }
 }
 
@@ -98,6 +108,29 @@ fun FollowSelection(state: LazyGridState, selected: () -> Int, anchor: Float = 0
     val on by rememberUpdatedState(enabled)
     val spec by rememberUpdatedState(Fuse.motion.followScroll())
     LaunchedEffect(state) {
-        snapshotFlow { if (on()) current() else null }.collectLatest { if (it != null) state.follow(it, anchor, animate, spec) }
+        followEach(snapshotFlow { if (on()) current() else null }) { state.follow(it, anchor, animate, spec) }
+    }
+}
+
+/**
+ * Runs [follow] for each new selection after the layout of the frame it changed in: two frames on,
+ * that frame's measure pass has run. The previous follow keeps going until then and is only
+ * replaced when the new one starts, so following never pauses between steps.
+ */
+private suspend fun followEach(selections: Flow<Int?>, follow: suspend (Int) -> Unit) = coroutineScope {
+    var running: Job? = null
+    selections.collect { index ->
+        val previous = running
+        running = if (index == null) {
+            previous?.cancel()
+            null
+        } else {
+            launch {
+                withFrameNanos {}
+                withFrameNanos {}
+                previous?.cancelAndJoin()
+                follow(index)
+            }
+        }
     }
 }
