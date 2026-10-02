@@ -14,7 +14,7 @@ class InMemoryFileSystem : FuseFileSystem {
     private class Dir(mtime: Long) : Node(mtime) {
         val children = LinkedHashMap<String, Node>()
     }
-    private class File(mtime: Long, val size: Long, val content: String?, val md5: String?) : Node(mtime)
+    private class File(mtime: Long, val size: Long, val content: String?, val md5: String?, val bytes: ByteArray? = null) : Node(mtime)
     private class Link(mtime: Long, val target: String) : Node(mtime)
 
     private val root = Dir(0)
@@ -46,6 +46,24 @@ class InMemoryFileSystem : FuseFileSystem {
         val now = tick()
         parent.children[FsPath.name(p)] = File(now, if (content != null && size == 1L) content.length.toLong() else size, content, md5)
         parent.mtime = now
+        return this
+    }
+
+    /** Creates or replaces a file holding [data] (read back by [readBytes]). */
+    fun bytes(path: String, data: ByteArray): InMemoryFileSystem {
+        val p = FsPath.normalize(path)
+        val parent = mkdirs(FsPath.parent(p) ?: "/")
+        val now = tick()
+        parent.children[FsPath.name(p)] = File(now, data.size.toLong(), null, null, data)
+        parent.mtime = now
+        return this
+    }
+
+    /** Removes the entry at [path] (and everything in it). */
+    fun remove(path: String): InMemoryFileSystem {
+        val p = FsPath.normalize(path)
+        val parent = resolve(FsPath.parent(p) ?: "/")?.first as? Dir ?: return this
+        if (parent.children.remove(FsPath.name(p)) != null) parent.mtime = tick()
         return this
     }
 
@@ -141,7 +159,14 @@ class InMemoryFileSystem : FuseFileSystem {
 
     override suspend fun readText(path: String, maxBytes: Int): String? {
         val file = resolve(FsPath.normalize(path))?.first as? File ?: return null
-        return (file.content ?: "").take(maxBytes)
+        return (file.content ?: file.bytes?.decodeToString() ?: "").take(maxBytes)
+    }
+
+    override suspend fun readBytes(path: String, offset: Long, length: Int): ByteArray? {
+        val file = resolve(FsPath.normalize(path))?.first as? File ?: return null
+        val data = file.bytes ?: file.content?.encodeToByteArray() ?: return null
+        if (offset < 0 || offset > data.size) return null
+        return data.copyOfRange(offset.toInt(), minOf(data.size.toLong(), offset + length).toInt())
     }
 
     override suspend fun md5(path: String): String? {
