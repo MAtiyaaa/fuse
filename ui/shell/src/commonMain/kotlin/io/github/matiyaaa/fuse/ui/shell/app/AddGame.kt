@@ -28,6 +28,8 @@ private fun AppKind.noun(): String = when (this) {
     AppKind.GAME -> "a game"
     AppKind.APP -> "an app"
     AppKind.EMULATOR -> "an emulator"
+    AppKind.STREAMING -> "a streaming app"
+    AppKind.TOOL -> "a tool"
 }
 
 /** What saying [kind] does to [title], for a message after the choice. */
@@ -35,6 +37,8 @@ private fun AppState.kindDone(title: String, kind: AppKind): String = when (kind
     AppKind.GAME -> if (store.apps.gamesInLibrary) "$title is in Android with your games" else "$title is under Games in Apps"
     AppKind.APP -> "$title is an app"
     AppKind.EMULATOR -> "$title is under Emulators in Apps"
+    AppKind.STREAMING -> "$title is under Streaming in Apps"
+    AppKind.TOOL -> "$title is under Tools in Apps"
 }
 
 /** "Type" in an app's options: a game joins the Android system, an emulator lists under Emulators. */
@@ -55,6 +59,8 @@ fun AppState.appKindPicker(app: AppCard) {
             MenuAction("game", "Game", FuseIcons.Gamepad, detail = gameDetail, trailing = Trailing.Check(entry.kind == AppKind.GAME), onSelect = { pick(AppKind.GAME) }),
             MenuAction("app", "App", FuseIcons.AppWindow, detail = "Stays in Apps only", trailing = Trailing.Check(entry.kind == AppKind.APP), onSelect = { pick(AppKind.APP) }),
             MenuAction("emulator", "Emulator", FuseIcons.Chip, detail = "Lists under Emulators in Apps", trailing = Trailing.Check(entry.kind == AppKind.EMULATOR), onSelect = { pick(AppKind.EMULATOR) }),
+            MenuAction("streaming", "Streaming", FuseIcons.Cast, detail = "Plays games from your PC or console. Lists under Streaming", trailing = Trailing.Check(entry.kind == AppKind.STREAMING), onSelect = { pick(AppKind.STREAMING) }),
+            MenuAction("tool", "Tool", FuseIcons.Wrench, detail = "Frontends, drivers and other helpers. Lists under Tools", trailing = Trailing.Check(entry.kind == AppKind.TOOL), onSelect = { pick(AppKind.TOOL) }),
         ) + listOfNotNull(
             if (entry.chosenKind != null) {
                 MenuAction("auto", "Let Fuse decide", FuseIcons.Sparkles, detail = "Fuse takes it for ${entry.detectedKind.noun()}", section = "", onSelect = { pick(null) })

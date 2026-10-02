@@ -15,7 +15,7 @@ object Platforms {
         "arcade", "neogeoaes", "neo-geo-cd", "neo-geo-pocket", "neo-geo-pocket-color",
         "tg16", "turbografx-cd", "atari2600", "atari5200", "atari7800", "lynx", "jaguar",
         "wonderswan", "wonderswan-color", "xbox", "xbox360", "win", "dos", "steam", "android",
-        "scummvm", "msx", "c64", "amiga", "3do", "colecovision", "intellivision", "vectrex",
+        "scummvm", "msx", "c64", "amiga", "3do", "colecovision", "intellivision", "vectrex", "pico8", "flash",
     ).map(::PlatformId)
 
     private val known = all.toSet()

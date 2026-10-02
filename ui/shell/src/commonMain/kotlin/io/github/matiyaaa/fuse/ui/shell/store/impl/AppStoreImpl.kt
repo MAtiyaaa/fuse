@@ -1,5 +1,8 @@
 package io.github.matiyaaa.fuse.ui.shell.store.impl
 
+import io.github.matiyaaa.fuse.ui.shell.store.InFuse
+import io.github.matiyaaa.fuse.model.AppKind
+import io.github.matiyaaa.fuse.model.KnownApps
 import io.github.matiyaaa.fuse.data.settings.StoreInstall
 import io.github.matiyaaa.fuse.integrations.ApiResult
 import io.github.matiyaaa.fuse.integrations.obtainium.ApkChoice
@@ -266,18 +269,32 @@ internal class DefaultAppStoreOps(
             allowIdChange = app.allowIdChange,
             systems = systemsOf(app, pkg),
             color = app.categories.firstNotNullOfOrNull { colors[it] },
+            inFuse = inFuseOf(app, pkg),
         )
     }
 
     /** What the app plays, from Fuse's own emulator catalogue (by package, else by its name). */
-    private fun systemsOf(app: PackApp, pkg: String?): List<PlatformId> {
+    private fun systemsOf(app: PackApp, pkg: String?): List<PlatformId> =
+        defsOf(app, pkg).flatMap { it.platforms }.distinct().sortedBy { it.value }
+
+    private fun defsOf(app: PackApp, pkg: String?): List<io.github.matiyaaa.fuse.launch.android.AndroidEmulatorDef> {
         val defs = AndroidEmulatorCatalog.defs
         val byPackage = pkg?.let { p -> defs.filter { p in it.packages } }.orEmpty()
-        val matched = byPackage.ifEmpty {
+        return byPackage.ifEmpty {
             val base = app.name.substringBefore(" (").trim()
             defs.filter { it.name.equals(base, ignoreCase = true) }
         }
-        return matched.flatMap { it.platforms }.distinct().sortedBy { it.value }
+    }
+
+    /** What Fuse does with [app] once installed: from its emulator entries, else from what Apps knows of it. */
+    private fun inFuseOf(app: PackApp, pkg: String?): InFuse {
+        val defs = defsOf(app, pkg)
+        if (defs.isNotEmpty()) return if (defs.any { it.modes.isNotEmpty() }) InFuse.LAUNCHES_GAMES else InFuse.OPENS_APP
+        return when (pkg?.let(KnownApps::kindOf)) {
+            AppKind.STREAMING -> InFuse.STREAMING
+            AppKind.TOOL -> InFuse.TOOL
+            else -> if (app.rules.trackOnly) InFuse.NOTHING else InFuse.TOOL
+        }
     }
 
     // What is installed

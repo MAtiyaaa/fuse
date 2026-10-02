@@ -28,12 +28,46 @@ data class AppEntry(
     val kind: AppKind get() = chosenKind ?: detectedKind
 }
 
-/** What an installed app is to Fuse. */
+/**
+ * What an installed app is to Fuse. Streaming apps (game streaming from a PC or console) and tools
+ * (frontends, drivers, utilities for emulation) have lists of their own in Apps.
+ */
 @Serializable
-enum class AppKind { GAME, APP, EMULATOR }
+enum class AppKind { GAME, APP, EMULATOR, STREAMING, TOOL }
 
 @Serializable
-enum class AppFilter { PINNED, GAMES, EMULATORS, ALL }
+enum class AppFilter { PINNED, GAMES, EMULATORS, STREAMING, TOOLS, ALL }
+
+/**
+ * Apps from the Store's catalogue (the Obtainium Emulation Pack) that aren't emulators Fuse launches
+ * games with, by package: game streaming, and the frontends and tools around emulation. Emulators are
+ * known from the launch catalog instead.
+ */
+object KnownApps {
+    private val streaming = setOf("com.limelight", "com.limelight.noir")
+
+    private val tools = setOf(
+        // Frontends
+        "com.nendo.argosy", "dev.cannoli.scorza", "rip.moth.cocoonshell", "com.k2.consolelauncher",
+        "com.magneticchen.daijishou", "com.neogamelab.neostation", "org.pegasus_frontend.android",
+        "com.retrohrai.launcher", "com.iisulauncher", "org.es_de.frontend",
+        // Ports and other launchers
+        "org.force9.starboard",
+        // Utilities
+        "com.moonbench.bifrost", "it.ottaviomiele.chd", "com.aure.clustertune", "com.quantumsoul.esde_android",
+        "com.esde.companion", "com.producdevity.emureadylite", "com.emulnk", "jr.brian.home", "pup.app.mimir",
+        "xyz.blacksheep.mjolnir", "local.nova.diagnostic", "de.langerhans.odintools", "app.nanostack.pixelguide",
+        "com.kei.pulse", "com.raofflineproxy", "com.med.sleepmanager", "com.github.catfriend1.syncthingfork",
+        "dev.imranr.obtainium", "dev.imranr.obtainium.fdroid",
+    )
+
+    /** What the app with [packageName] is, when Fuse knows it; null otherwise. */
+    fun kindOf(packageName: String): AppKind? = when (packageName) {
+        in streaming -> AppKind.STREAMING
+        in tools -> AppKind.TOOL
+        else -> null
+    }
+}
 
 /**
  * Installed apps played as games: library games in the Android system, started as the app. They are

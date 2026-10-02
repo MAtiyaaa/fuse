@@ -36,6 +36,8 @@ internal object AndroidPcDefs {
             apps = listOf(
                 app("com.winlator.cmod", ".XServerDisplayActivity"),
                 app("com.winlator.vanilla", "com.winlator.cmod.XServerDisplayActivity"),
+                // Winlator-Ludashi: a Cmod fork whose releases install as their own package.
+                app("com.winlator.ludashi", "com.winlator.cmod.XServerDisplayActivity"),
                 app("com.ludashi.benchmark", "com.winlator.cmod.XServerDisplayActivity"),
                 app("com.tencent.ig", "com.winlator.cmod.XServerDisplayActivity"),
             ),

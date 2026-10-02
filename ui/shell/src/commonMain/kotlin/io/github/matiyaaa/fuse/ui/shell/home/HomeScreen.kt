@@ -598,6 +598,8 @@ private fun ShelfItem.stage(shelf: Shelf?, feed: HomeFeed, cartridge: CartridgeS
         io.github.matiyaaa.fuse.model.AppKind.GAME -> "Android game"
         io.github.matiyaaa.fuse.model.AppKind.EMULATOR -> "Emulator"
         io.github.matiyaaa.fuse.model.AppKind.APP -> "App"
+        io.github.matiyaaa.fuse.model.AppKind.STREAMING -> "Streaming"
+        io.github.matiyaaa.fuse.model.AppKind.TOOL -> "Tool"
     })
     is ShelfItem.Collection -> StageInfo(key = key, title = collection.name, eyebrow = "Collection", meta = listOf(gamesText(collection.gameCount)), accent = accent)
     is ShelfItem.Widget -> widgetStage(kind, key, feed, cartridge, time, accent)

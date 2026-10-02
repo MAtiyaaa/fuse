@@ -816,6 +816,49 @@ internal object AndroidConsoleDefs {
             source = esde("XENDROID"), confidence = VERIFIED_ESDE,
         ),
 
+        AndroidEmulatorDef(
+            id = "x360-mobile", name = "X360 Mobile",
+            apps = listOf(app("emu.x360mobile.com")),
+            platforms = platforms("xbox360"), modes = emptyList(),
+            source = "Ashnar2602/X360-Mobile---OFFICIAL README (external front-end launching mentioned, the intent not published)",
+            confidence = UNVERIFIED, homepage = "https://github.com/Ashnar2602/X360-Mobile---OFFICIAL",
+            openAppOnlyReason = "X360 Mobile hasn't published how other apps can start a game in it yet. Fuse opens X360 Mobile instead.",
+        ),
+        AndroidEmulatorDef(
+            id = "gopher64", name = "Gopher64",
+            apps = listOf(app("io.github.gopher64.gopher64", ".SlintActivity")),
+            platforms = platforms("n64"), modes = emptyList(),
+            source = "gopher64/gopher64 android-project AndroidManifest.xml (N64Activity exported=\"false\")",
+            confidence = VERIFIED_SOURCE, homepage = "https://github.com/gopher64/gopher64",
+            openAppOnlyReason = "Gopher64 doesn't let other apps start its emulator, so no frontend can open a game in it. Fuse opens Gopher64 instead.",
+        ),
+        AndroidEmulatorDef(
+            id = "pico8-android", name = "Pico8 Android",
+            apps = listOf(app("io.wip.pico8", "com.godot.game.GodotAppLauncher")),
+            platforms = platforms("pico8"),
+            modes = listOf(fileExt(viewSaf, "p8", "png", label = "Cart")),
+            source = "Macs75/pico8-android wiki, Frontends-Integration.md (am start -n io.wip.pico8/com.godot.game.GodotAppLauncher " +
+                "-a android.intent.action.VIEW -d {file_uri})",
+            confidence = VERIFIED_SOURCE, homepage = "https://github.com/Macs75/pico8-android",
+            limitations = listOf(
+                "Needs your own PICO-8 (the Raspberry Pi build), which the app asks for on its first start.",
+                "A cart named Splore.p8 opens Splore.",
+            ),
+        ),
+        AndroidEmulatorDef(
+            id = "swiff", name = "Swiff",
+            apps = listOf(app("io.navivani.swiff", ".MainActivity")),
+            platforms = platforms("flash"),
+            modes = listOf(fileExt(intent(action = VIEW, data = SAF, mimeType = "application/octet-stream"), "swiffid", label = "Swiff game file")),
+            source = "NaviVani-dev/Swiff wiki, Frontend-Support.md (VIEW a .swiffid file, type application/octet-stream, " +
+                "io.navivani.swiff/.MainActivity)",
+            confidence = VERIFIED_SOURCE, homepage = "https://github.com/NaviVani-dev/Swiff",
+            limitations = listOf(
+                "Swiff starts the games in its own library from the .swiffid files its Frontend sync writes. " +
+                    "Add a .swf to Swiff first; Fuse then finds its .swiffid in the folder you synced to.",
+            ),
+        ),
+
         // Multi-system front ends without an external per-game launch
         AndroidEmulatorDef(
             id = "lemuroid", name = "Lemuroid",

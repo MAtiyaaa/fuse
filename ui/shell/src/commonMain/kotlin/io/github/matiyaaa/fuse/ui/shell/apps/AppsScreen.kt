@@ -77,7 +77,19 @@ import io.github.matiyaaa.fuse.ui.shell.components.ViewTabs
 import io.github.matiyaaa.fuse.ui.shell.store.AppCard
 import kotlinx.coroutines.launch
 
-private val filters = listOf(AppFilter.PINNED to "Pinned", AppFilter.EMULATORS to "Emulators", AppFilter.ALL to "All apps")
+private val allFilters = listOf(
+    AppFilter.PINNED to "Pinned", AppFilter.EMULATORS to "Emulators", AppFilter.STREAMING to "Streaming",
+    AppFilter.TOOLS to "Tools", AppFilter.ALL to "All apps",
+)
+
+/** Streaming and Tools only show when some app is one; the other lists always do. */
+private fun filtersFor(kinds: Set<AppKind>) = allFilters.filter { (f, _) ->
+    when (f) {
+        AppFilter.STREAMING -> AppKind.STREAMING in kinds
+        AppFilter.TOOLS -> AppKind.TOOL in kinds
+        else -> true
+    }
+}
 
 /**
  * Where the Apps tab was: which list, whether focus was on the lists, and the selected app in each.
@@ -106,7 +118,9 @@ fun AppsScreen(app: AppState) {
         }
         return
     }
-    val view = rememberRouteState(app.navigator, "apps") { AppsViewState(store.prefs.value.appsFilter.takeIf { f -> filters.any { it.first == f } } ?: AppFilter.ALL) }
+    val everything by remember { store.apps.apps(AppFilter.ALL) }.collectAsState(initial = emptyList())
+    val filters = filtersFor(everything.map { it.entry.kind }.toSet())
+    val view = rememberRouteState(app.navigator, "apps") { AppsViewState(store.prefs.value.appsFilter.takeIf { f -> allFilters.any { it.first == f } } ?: AppFilter.ALL) }
     val filterIndex = filters.indexOfFirst { it.first == view.filter }.coerceAtLeast(0)
     val filter = filters[filterIndex].first
     val inFilters = view.inFilters
@@ -173,6 +187,8 @@ fun AppsScreen(app: AppState) {
                     when (filter) {
                         AppFilter.PINNED -> EmptyState(FuseIcons.Pin, "Nothing pinned yet", message = "Pin apps from their options to keep them here.")
                         AppFilter.EMULATORS -> EmptyState(FuseIcons.Chip, "No emulators found", message = "Set an app's Type to Emulator in its options.")
+                        AppFilter.STREAMING -> EmptyState(FuseIcons.Cast, "No streaming apps", message = "Moonlight and Artemis are in the Store.")
+                        AppFilter.TOOLS -> EmptyState(FuseIcons.Wrench, "No tools yet")
                         else -> EmptyState(FuseIcons.AppWindow, "No apps found")
                     }
                 }
@@ -302,13 +318,17 @@ fun AppState.appMenu(app: AppCard): ContextMenuSpec {
                     AppKind.GAME -> FuseIcons.Gamepad
                     AppKind.APP -> FuseIcons.AppWindow
                     AppKind.EMULATOR -> FuseIcons.Chip
+                    AppKind.STREAMING -> FuseIcons.Cast
+                    AppKind.TOOL -> FuseIcons.Wrench
                 },
-                detail = if (store.apps.gamesInLibrary) "Game, app or emulator. Games join the Android system" else "Game, app or emulator",
+                detail = if (store.apps.gamesInLibrary) "Game, app, emulator, streaming or tool. Games join the Android system" else "Game, app, emulator, streaming or tool",
                 trailing = Trailing.Value(
                     when (app.entry.kind) {
                         AppKind.GAME -> "Game"
                         AppKind.APP -> "App"
                         AppKind.EMULATOR -> "Emulator"
+                        AppKind.STREAMING -> "Streaming"
+                        AppKind.TOOL -> "Tool"
                     },
                 ),
                 onSelect = { appKindPicker(app) },
