@@ -59,6 +59,12 @@ interface FuseStore {
     val storage: StorageOps
     val themes: ThemeOps
 
+    /**
+     * Starts what Fuse does by itself (scans, art fills, Cartridge, achievements, update checks)
+     * when the store was created in safe mode, which holds it back. Does nothing otherwise.
+     */
+    fun resumeAutomaticWork() = Unit
+
     /** A song that ships with Fuse ([io.github.matiyaaa.fuse.ui.shell.music.BundledMusic]) as a file the player can open. */
     suspend fun bundledTrack(id: String): String? = null
 }

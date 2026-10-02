@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Long-press Fuse's icon: "Start in safe mode" starts Fuse with its own theme and nothing optional
+  running, even when something makes it fail on every start. Settings stay as they were.
+-->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutDisabledMessage="@string/shortcut_safe_mode_disabled"
+        android:shortcutId="safe_mode"
+        android:shortcutLongLabel="@string/shortcut_safe_mode_long"
+        android:shortcutShortLabel="@string/shortcut_safe_mode_short">
+        <intent
+            android:action="android.intent.action.MAIN"
+            android:targetClass="io.github.matiyaaa.fuse.MainActivity"
+            android:targetPackage="io.github.matiyaaa.fuse">
+            <extra
+                android:name="io.github.matiyaaa.fuse.SAFE_MODE"
+                android:value="true" />
+        </intent>
+    </shortcut>
+</shortcuts>

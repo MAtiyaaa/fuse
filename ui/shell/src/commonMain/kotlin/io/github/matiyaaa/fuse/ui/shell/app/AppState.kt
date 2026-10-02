@@ -118,6 +118,9 @@ class AppState(
     var choice by mutableStateOf<ChoiceSpec?>(null)
     var reorder by mutableStateOf<ReorderSpec?>(null)
 
+    /** Set while Fuse runs in safe mode ([SafeMode]); cleared when the user leaves it. */
+    var safeMode by mutableStateOf<SafeMode?>(null)
+
     /** Something went wrong or needs attention, told with what can be done ([ProblemOverlay]). */
     var problem by mutableStateOf<ProblemSpec?>(null)
 

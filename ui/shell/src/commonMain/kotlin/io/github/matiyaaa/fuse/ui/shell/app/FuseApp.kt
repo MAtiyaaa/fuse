@@ -116,9 +116,18 @@ import kotlinx.coroutines.flow.map
  * desktop window) because that is where raw input arrives.
  */
 @Composable
-fun FuseApp(store: FuseStore, platform: PlatformUi, router: InputRouter, phoneLink: PhoneLinkControl? = null) {
+fun FuseApp(
+    store: FuseStore,
+    platform: PlatformUi,
+    router: InputRouter,
+    phoneLink: PhoneLinkControl? = null,
+    /** Start in safe mode (see [SafeMode]); null starts normally. */
+    safeMode: SafeMode? = null,
+    /** Called once this start has run long enough to count as settled ([StartupGuard.settle]). */
+    onSettled: () -> Unit = {},
+) {
     val base = rememberCoroutineScope()
-    val prefs by store.prefs.collectAsState()
+    val stored by store.prefs.collectAsState()
     val app = remember {
         lateinit var state: AppState
         // Everything screens start runs here. A failure shows a message; it never closes Fuse.
@@ -127,8 +136,16 @@ fun FuseApp(store: FuseStore, platform: PlatformUi, router: InputRouter, phoneLi
                 state.toasts.show("Something went wrong (${t::class.simpleName ?: "error"}). Fuse kept running.", ToastKind.ERROR)
             },
         )
-        state = AppState(store, platform, scope, if (prefs.onboardingDone) Route.Root(Destination.HOME) else Route.Onboarding, phoneLink)
+        state = AppState(store, platform, scope, if (stored.onboardingDone) Route.Root(Destination.HOME) else Route.Onboarding, phoneLink)
+        state.safeMode = safeMode
         state
+    }
+    // Safe mode draws with Fuse's own look and no effects; what is saved never changes.
+    val prefs = if (app.safeMode != null) stored.inSafeMode() else stored
+    LaunchedEffect(Unit) {
+        if (app.safeMode != null) app.showSafeMode()
+        delay(StartupGuard.SETTLE_MS)
+        onSettled()
     }
     val spec = prefs.theme
     val quality = RenderQuality.of(prefs.performance, platform.device, prefs.lowPower)
@@ -556,7 +573,7 @@ private fun MenuMusic(app: AppState, player: MenuMusicPlayer?) {
     val music = prefs.music
     val setup = app.navigator.current == Route.Onboarding
     val track = when {
-        !music.enabled -> null
+        !music.enabled || app.safeMode != null -> null
         setup -> BundledMusic.ONBOARDING
         else -> music.track
     }
@@ -606,6 +623,8 @@ private fun hudActivities(app: AppState): List<HudActivity> {
     val fill by app.store.media.fillProgress.collectAsState()
     val recordingTime = rememberRecordingTime(app.capture)
     return buildList {
+        // Safe mode stays in view, calmly, with its way out a press away.
+        if (app.safeMode != null) add(HudActivity("safe", FuseIcons.LifeBuoy, "Safe mode. Select for what it means and how to leave it", steady = true) { app.showSafeMode() })
         // A recording runs: the ring fills toward its 30 minute limit, and a press stops it.
         if (recordingTime != null) {
             val since = (app.capture?.state as? CaptureController.State.Recording)?.since

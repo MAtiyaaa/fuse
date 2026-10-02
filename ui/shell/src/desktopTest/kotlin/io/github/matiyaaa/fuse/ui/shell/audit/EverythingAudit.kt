@@ -68,4 +68,14 @@ internal fun AuditDriver.everythingScreens() {
             store.sources.refreshDrives()
         }
     }
+
+    scenario("safe mode", "after starts that failed") {
+        useLibrary { it.withTheme(io.github.matiyaaa.fuse.ui.designsystem.theme.ThemePresets.byId("crt")) }
+        show(libraryStore, safeMode = io.github.matiyaaa.fuse.ui.shell.app.SafeMode(io.github.matiyaaa.fuse.ui.shell.app.SafeMode.Reason.REPEATED_FAILURES, 3))
+        waitFor("Fuse started in safe mode")
+        shoot("the safe mode sheet over Home", 900)
+        tapText("Close")
+        settle(800)
+        shoot("Home in safe mode, with its chip in the top line")
+    }
 }

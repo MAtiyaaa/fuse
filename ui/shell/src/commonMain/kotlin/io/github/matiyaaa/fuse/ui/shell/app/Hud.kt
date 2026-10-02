@@ -345,6 +345,8 @@ data class HudActivity(
     val label: String,
     val progress: Float? = null,
     val attention: Boolean = false,
+    /** A state rather than work (safe mode): the ring stays quiet, with no turning arc. */
+    val steady: Boolean = false,
     val onClick: () -> Unit,
 )
 
@@ -353,7 +355,7 @@ private fun HudActivityChip(a: HudActivity) {
     val c = Fuse.colors
     val sweep by animateFloatAsState((a.progress ?: 0f).coerceIn(0f, 1f), Fuse.motion.value(), label = "activity")
     // An unknown amount turns; under Reduced motion and in Low Power Mode it rests as a quarter arc.
-    val turning = a.progress == null && !a.attention && !Fuse.motion.reduced && Fuse.quality.animatedBackground
+    val turning = a.progress == null && !a.attention && !a.steady && !Fuse.motion.reduced && Fuse.quality.animatedBackground
     val angle = if (turning) {
         rememberInfiniteTransition(label = "spin").animateFloat(0f, 360f, infiniteRepeatable(tween(1100, easing = LinearEasing)), label = "angle")
     } else {
@@ -379,7 +381,7 @@ private fun HudActivityChip(a: HudActivity) {
                         drawArc(c.text.copy(alpha = 0.14f), 0f, 360f, false, Offset(inset, inset), arc, style = track)
                         when {
                             a.progress != null -> drawArc(c.accent, -90f, 360f * sweep, false, Offset(inset, inset), arc, style = line)
-                            !a.attention -> drawArc(c.accent, angle?.value ?: -90f, 90f, false, Offset(inset, inset), arc, style = line)
+                            !a.attention && !a.steady -> drawArc(c.accent, angle?.value ?: -90f, 90f, false, Offset(inset, inset), arc, style = line)
                         }
                         if (a.attention) drawCircle(c.accent, radius = Size.dot.toPx() / 2, center = Offset(size.width - Size.dot.toPx() * 0.75f, Size.dot.toPx() * 0.75f))
                     }

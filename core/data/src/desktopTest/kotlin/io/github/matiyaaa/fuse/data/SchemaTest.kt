@@ -119,6 +119,13 @@ class SchemaTest {
         }
         DesktopDatabase.openDriver(path).use { driver ->
             assertEquals(3L, DesktopDatabase.userVersion(driver))
+            // A copy of the 0.1.6 library is kept from before the migration.
+            val backup = File(DesktopDatabase.backupPath(path))
+            assertTrue(backup.isFile && backup.length() > 0)
+            JdbcSqliteDriver("jdbc:sqlite:${backup.path}", Properties()).use { copy ->
+                assertEquals(2L, DesktopDatabase.userVersion(copy))
+                assertEquals(listOf("Metal Gear Solid"), copy.strings("SELECT title_custom FROM game"))
+            }
             val data = FuseData(FuseDatabase(driver))
             runBlocking {
                 val source = data.sources.all().single()

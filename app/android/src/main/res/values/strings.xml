@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The launcher shortcut that starts Fuse with everything optional turned off. -->
+    <string name="shortcut_safe_mode_short">Safe mode</string>
+    <string name="shortcut_safe_mode_long">Start in safe mode</string>
+    <string name="shortcut_safe_mode_disabled">Fuse is already running</string>
+</resources>

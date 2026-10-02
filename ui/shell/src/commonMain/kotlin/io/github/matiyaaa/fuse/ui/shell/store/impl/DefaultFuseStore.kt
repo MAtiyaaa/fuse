@@ -201,17 +201,30 @@ internal class DefaultFuseStore private constructor(
             library.recoverSession()
             cleanExistingNamesOnce()
             credentials.load()
-            mediaOps.startSystemArt()
-            achievements.load()
             emulators.detectNow()
-            cartridge.start()
             collections.start()
             apps.start()
-            if (data.sources.all().isNotEmpty()) engine.rescan(ScanScope.QUICK)
-            achievements.refresh(force = false)
-            data.cache.purgeExpired(ctx.now())
-            runCatching { updates.checkIfDue() }
+            if (!safe) startAutomatic()
         }
+    }
+
+    /** Set in safe mode until the user leaves it: nothing runs by itself meanwhile. */
+    private var safe = false
+    private var automaticStarted = false
+
+    override fun resumeAutomaticWork() {
+        if (!safe) return
+        safe = false
+        ctx.scope.launch { startAutomatic() }
+    }
+
+    /**
+     * What Fuse does by itself once it is up: system art, achievements, Cartridge, a quick scan,
+     * cache upkeep, the update check, and filling new games' art after scans. Safe mode holds it back.
+     */
+    private suspend fun startAutomatic() {
+        if (automaticStarted) return
+        automaticStarted = true
         // Games a scan found (downloads included) are identified and filled first, once Cartridge's
         // RomM details, read right after the scan, have had a moment to land.
         ctx.scope.launch {
@@ -229,6 +242,13 @@ internal class DefaultFuseStore private constructor(
                 }
             }
         }
+        mediaOps.startSystemArt()
+        achievements.load()
+        cartridge.start()
+        if (data.sources.all().isNotEmpty()) engine.rescan(ScanScope.QUICK)
+        achievements.refresh(force = false)
+        data.cache.purgeExpired(ctx.now())
+        runCatching { updates.checkIfDue() }
     }
 
     companion object {
@@ -243,10 +263,13 @@ internal class DefaultFuseStore private constructor(
         /** How long new games wait for Cartridge's RomM details before they are filled. */
         const val NEW_GAMES_DELAY_MS = 1_500L
 
-        suspend fun create(services: FuseServices, scope: CoroutineScope): DefaultFuseStore {
+        suspend fun create(services: FuseServices, scope: CoroutineScope, safeMode: Boolean = false): DefaultFuseStore {
             val settings = services.data.settings.current()
             val ctx = StoreContext(services, scope, settings)
-            return DefaultFuseStore(ctx, settings.toUiPrefs(globalScoped(ctx))).also { it.start() }
+            return DefaultFuseStore(ctx, settings.toUiPrefs(globalScoped(ctx))).also {
+                it.safe = safeMode
+                it.start()
+            }
         }
 
         private suspend fun globalScoped(ctx: StoreContext): GlobalScoped {

@@ -234,7 +234,7 @@ data class Problem(
 }
 
 /** What a problem is about, for its icon. */
-enum class ProblemKind { DRIVE, EMULATOR, FILE, ACCESS, FIRMWARE, NETWORK, ACCOUNT, DATA, DISPLAY, GENERAL }
+enum class ProblemKind { DRIVE, EMULATOR, FILE, ACCESS, FIRMWARE, NETWORK, ACCOUNT, DATA, DISPLAY, RECOVERY, GENERAL }
 
 /** How much a problem matters. Never alarming: the worst is "Broken", for something that can't work. */
 enum class Severity { HEALTHY, INFO, ATTENTION, BROKEN }
@@ -257,6 +257,10 @@ sealed interface ProblemAction {
     data class AdoptDrive(val source: io.github.matiyaaa.fuse.model.LibrarySourceId, override val label: String = "It's the same library") : ProblemAction
     data class RemoveSource(val source: io.github.matiyaaa.fuse.model.LibrarySourceId, override val label: String = "Remove this folder") : ProblemAction
     data class Rescan(override val label: String = "Scan again") : ProblemAction
+    data class LeaveSafeMode(override val label: String = "Leave safe mode") : ProblemAction
+
+    /** Back to Fuse's own theme with standard motion and no glass or CRT, saved. */
+    data class ResetAppearance(override val label: String = "Reset appearance") : ProblemAction
 }
 
 /** Emulator choice option for pickers. */

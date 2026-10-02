@@ -88,6 +88,7 @@ fun ProblemKind.icon(): ImageVector = when (this) {
     ProblemKind.ACCOUNT -> FuseIcons.UserRound
     ProblemKind.DATA -> FuseIcons.Database
     ProblemKind.DISPLAY -> FuseIcons.Monitor
+    ProblemKind.RECOVERY -> FuseIcons.LifeBuoy
     ProblemKind.GENERAL -> FuseIcons.Alert
 }
 
@@ -146,7 +147,39 @@ fun AppState.runProblemAction(action: ProblemAction, spec: ProblemSpec?) {
             store.sources.rescan(ScanScope.QUICK)
             toasts.show("Scanning your library")
         }
+        is ProblemAction.LeaveSafeMode -> {
+            safeMode = null
+            store.resumeAutomaticWork()
+            toasts.show("Fuse is running normally again", ToastKind.SUCCESS)
+        }
+        is ProblemAction.ResetAppearance -> {
+            store.updatePrefs {
+                it.withTheme(io.github.matiyaaa.fuse.ui.designsystem.theme.ThemePresets.Fuse)
+                    .copy(motion = null, glass = io.github.matiyaaa.fuse.model.GlassSettings(), crt = io.github.matiyaaa.fuse.model.CrtSettings(), videoPreview = true)
+            }
+            toasts.show("Appearance is back to Fuse's own", ToastKind.SUCCESS)
+        }
     }
+}
+
+/** The safe mode sheet: why Fuse is in it, that nothing was lost, and the ways out. */
+fun AppState.showSafeMode() {
+    val mode = safeMode ?: return
+    val repeated = mode.reason == SafeMode.Reason.REPEATED_FAILURES
+    showProblem(
+        Problem(
+            title = "Fuse started in safe mode",
+            message = if (repeated) {
+                "The last ${mode.failedStarts} starts didn't finish. Fuse is running with its own look, without effects, music or video, and nothing starts by itself, so you can change what went wrong."
+            } else {
+                "You asked Fuse to start safely. It is running with its own look, without effects, music or video, and nothing starts by itself."
+            },
+            kind = ProblemKind.RECOVERY,
+            severity = Severity.INFO,
+            reassurance = "Your library, settings and themes are kept exactly as they were.",
+            actions = listOf(ProblemAction.LeaveSafeMode(), ProblemAction.ResetAppearance(), ProblemAction.OpenSettings("about", "Settings")),
+        ),
+    )
 }
 
 /**
@@ -260,4 +293,6 @@ private fun ProblemAction.icon(): ImageVector = when (this) {
     is ProblemAction.AdoptDrive -> FuseIcons.FolderSync
     is ProblemAction.RemoveSource -> FuseIcons.FolderX
     is ProblemAction.Rescan -> FuseIcons.ScanSearch
+    is ProblemAction.LeaveSafeMode -> FuseIcons.LogOut
+    is ProblemAction.ResetAppearance -> FuseIcons.Paintbrush
 }

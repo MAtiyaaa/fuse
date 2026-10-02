@@ -2,6 +2,7 @@ package io.github.matiyaaa.fuse
 
 import android.annotation.SuppressLint
 import android.content.Intent
+import androidx.compose.foundation.clickable
 import android.graphics.Color as AndroidColor
 import android.net.Uri
 import android.os.Bundle
@@ -92,6 +93,7 @@ class MainActivity : ComponentActivity(), ActivityRequests {
             navigationBarStyle = SystemBarStyle.dark(AndroidColor.TRANSPARENT),
         )
         super.onCreate(savedInstanceState)
+        app.beginInterface(askedSafe = intent?.getStringExtra(EXTRA_SAFE_MODE) == "true" || intent?.getBooleanExtra(EXTRA_SAFE_MODE, false) == true)
         enterImmersive()
         preferRefreshRate(RefreshPreference.of(PerformanceProfile.AUTOMATIC, app.platformUi.device.tier, lowPower = false))
         app.platformUi.quick.applyTo(window)
@@ -131,6 +133,8 @@ class MainActivity : ComponentActivity(), ActivityRequests {
                     // A game or another app is in front: the sound is theirs, and the companion stays
                     // beside them on the second screen (see CompanionScreens).
                     Lifecycle.Event.ON_STOP -> {
+                        // Leaving for a game or another app is a start that went fine.
+                        if (store != null) app.settled()
                         stoppedAt = android.os.SystemClock.uptimeMillis()
                         companions.onMainStopped()
                         app.platformUi.music.setForeground(false)
@@ -180,11 +184,32 @@ class MainActivity : ComponentActivity(), ActivityRequests {
             when (val s = startup) {
                 // A plain ink screen, the same colour as the system splash, so nothing flashes.
                 Startup.Loading -> Unit
-                is Startup.Failed -> BasicText(
-                    s.message,
-                    style = TextStyle(color = Color(0xFFE6E8EF), fontSize = 18.sp, textAlign = TextAlign.Center),
-                    modifier = Modifier.align(Alignment.Center).padding(32.dp),
-                )
+                is Startup.Failed -> androidx.compose.foundation.layout.Column(
+                    Modifier.align(Alignment.Center).padding(32.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    BasicText(
+                        "Fuse could not start",
+                        style = TextStyle(color = Color(0xFFE6E8EF), fontSize = 22.sp, textAlign = TextAlign.Center),
+                    )
+                    androidx.compose.foundation.layout.Spacer(Modifier.padding(top = 12.dp))
+                    BasicText(
+                        s.message,
+                        style = TextStyle(color = Color(0xB3E6E8EF), fontSize = 16.sp, lineHeight = 24.sp, textAlign = TextAlign.Center),
+                    )
+                    // As the Home app, the way out must never depend on Fuse working.
+                    androidx.compose.foundation.layout.Spacer(Modifier.padding(top = 24.dp))
+                    BasicText(
+                        "Open Android settings",
+                        style = TextStyle(color = Color(0xFFFF6A3D), fontSize = 18.sp, textAlign = TextAlign.Center),
+                        modifier = Modifier.clickable { runCatching { startActivity(Intent(android.provider.Settings.ACTION_SETTINGS)) } }.padding(12.dp),
+                    )
+                    BasicText(
+                        "Choose another Home app",
+                        style = TextStyle(color = Color(0xFFFF6A3D), fontSize = 18.sp, textAlign = TextAlign.Center),
+                        modifier = Modifier.clickable { runCatching { startActivity(Intent(android.provider.Settings.ACTION_HOME_SETTINGS)) } }.padding(12.dp),
+                    )
+                }
                 is Startup.Ready -> {
                     val focus = remember { FocusRequester() }
                     Box(
@@ -196,7 +221,7 @@ class MainActivity : ComponentActivity(), ActivityRequests {
                             .focusRequester(focus)
                             .focusable(),
                     ) {
-                        FuseApp(s.store, app.platformUi, router, s.phoneLink)
+                        FuseApp(s.store, app.platformUi, router, s.phoneLink, safeMode = s.safeMode, onSettled = app::settled)
                     }
                     LaunchedEffect(Unit) { focus.requestFocus() }
                 }
@@ -295,6 +320,9 @@ class MainActivity : ComponentActivity(), ActivityRequests {
     companion object {
         /** Set by [HomeActivity]: this start is a press of Home. */
         const val EXTRA_HOME = "io.github.matiyaaa.fuse.HOME"
+
+        /** Set by the launcher shortcut "Start in safe mode" (res/xml/shortcuts.xml). */
+        const val EXTRA_SAFE_MODE = "io.github.matiyaaa.fuse.SAFE_MODE"
 
         /** How soon after leaving the screen a Home press still counts as made inside Fuse. */
         private const val HOME_PRESS_MS = 1_000L
