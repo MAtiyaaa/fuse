@@ -129,6 +129,18 @@ class PerfHarness {
             driver.settle(1_500)
             measure("library-dpad", frames = 90, everyFrames = 6) { press(PadButton.DPAD_DOWN) }
             measure("library-fling", frames = 60, everyFrames = 60) { driver.touch { swipeUp(startY = height * 0.85f, endY = height * 0.25f, durationMillis = 120) } }
+            // The same run without the room's art, then in Low Power Mode: what the backdrop and the
+            // effects cost of every frame.
+            if (only.any { it.startsWith("library-") }) {
+                store.updatePrefs { it.copy(showHero = false) }
+                driver.settle(1_000)
+                measure("library-dpad-nohero", frames = 90, everyFrames = 6) { press(PadButton.DPAD_UP) }
+                store.updatePrefs { it.copy(showHero = true, lowPower = true) }
+                driver.settle(1_000)
+                measure("library-dpad-lowpower", frames = 90, everyFrames = 6) { press(PadButton.DPAD_DOWN) }
+                store.updatePrefs { it.copy(lowPower = false) }
+                driver.settle(1_000)
+            }
 
             // Settings: the longest section, down its rows, then a fling.
             driver.openSettings()

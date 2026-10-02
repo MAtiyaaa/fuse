@@ -322,6 +322,8 @@ private fun Room(
         val blur = if (glass.enabled && quality.blur) maxOf(glass.heroBlur, glass.blur * 0.5f) else 0f
         HeroBackdrop(
             source = hero,
+            // The selection has already rested (above); the room changes at once.
+            settleMs = 0,
             modifier = Modifier.fillMaxSize()
                 .then(if (blur > 0f) Modifier.blur(blur.dp) else Modifier)
                 .graphicsLayer { alpha = if (glass.enabled) glass.backgroundOpacity else 1f },
@@ -642,7 +644,7 @@ private fun hudActivities(app: AppState): List<HudActivity> {
 }
 
 /** How long a selection must rest before the room fades in its art. */
-private const val HERO_SETTLE_MS = 90L
+private const val HERO_SETTLE_MS = 160L
 
 /** A page that arrives sooner than this after the last one switches without a transition. */
 private const val QUICK_SWITCH_MS = 300L
