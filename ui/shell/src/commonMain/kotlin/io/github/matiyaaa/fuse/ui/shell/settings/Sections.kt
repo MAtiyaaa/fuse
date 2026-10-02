@@ -881,6 +881,22 @@ fun cartridgeRows(app: AppState): List<MenuAction> {
             if (s.installed && s.bridge && s.protocol < 2) "Needs a newer Cartridge. Games it downloaded then get RomM's description, genres, series, cover and logo"
             else "Games Cartridge downloaded get RomM's description, genres, series, cover and logo. Your own edits and picks stay",
         ) { v -> app.store.updatePrefs { it.copy(cartridgeRommDetails = v) } })
+        add(MenuAction(
+            "rommcheck", "Check RomM matches again", FuseIcons.ShieldCheck,
+            detail = "Puts back the name, details and art of any game RomM mixed up with another",
+            onSelect = {
+                app.scope.launch {
+                    val undone = app.store.cartridge.checkRommMatches()
+                    app.toasts.show(
+                        when (undone) {
+                            0 -> "Every game with RomM's details is the right one"
+                            1 -> "Put back one game RomM had mixed up"
+                            else -> "Put back $undone games RomM had mixed up"
+                        },
+                    )
+                }
+            },
+        ))
     }
 }
 

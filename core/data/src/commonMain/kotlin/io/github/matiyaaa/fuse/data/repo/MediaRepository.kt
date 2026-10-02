@@ -156,6 +156,17 @@ class MediaRepository(
         q.deleteKind(owner.type(), owner.key(), kind.name).value.toInt()
     }
 
+    /** Removes the art [source] gave [owner] (never the user's picks). Returns the count. */
+    suspend fun removeSource(owner: MediaOwner, source: MediaSource): Int = withContext(dispatcher) {
+        require(source != MediaSource.USER) { "USER media goes through reset" }
+        q.deleteSource(owner.type(), owner.key(), source.name).value.toInt()
+    }
+
+    /** Removes every picture of [owner] except the user's own picks. Returns the count. */
+    suspend fun removeNonUser(owner: MediaOwner): Int = withContext(dispatcher) {
+        q.deleteNonUser(owner.type(), owner.key()).value.toInt()
+    }
+
     /**
      * Visible games (present, not removed) lacking any of [kinds], with the kinds each lacks. Scoped
      * to one platform, or the whole library when [platformId] is null. Feeds bulk Fill Missing.

@@ -149,12 +149,17 @@ class StoreIntegrationTest {
         // The user already picked their own cover for Final Fantasy VII.
         store.media.setFromFile(io.github.matiyaaa.fuse.model.MediaOwner.OfGame(ff7.id), MediaKind.BOXART, "/home/me/ff7.png")
 
+        // Cartridge's pictures: a cover and a logo it has, and one it lost.
+        val pictures = File(root.parentFile, "cartridge-" + root.name).apply { mkdirs() }
+        val awCover = File(pictures, "aw").apply { writeBytes(PNG + byteArrayOf(1)) }
+        val awLogo = File(pictures, "77-r.png").apply { writeBytes(PNG + byteArrayOf(2)) }
         services.cartridgeGames = listOf(
             io.github.matiyaaa.fuse.model.CartridgeGame(
                 romId = 77, path = "file://" + File(root, "gba/Advance Wars (USA).gba").absolutePath.replace(" ", "%20"),
                 title = "Advance Wars", platformSlug = "gba", summary = "Orange Star goes to war.", year = 2001,
                 genres = listOf("Strategy"), developer = "Intelligent Systems", publisher = "Nintendo", rating = 91,
-                players = "1-4", series = listOf("Wars"), cover = "/cartridge/imgcache/aw", logo = "/cartridge/logos/77-r.png",
+                players = "1-4", series = listOf("Wars"), cover = awCover.absolutePath, logo = awLogo.absolutePath,
+                screenshot = File(pictures, "gone.png").absolutePath,
                 updatedAt = 10,
             ),
             // Cartridge saved the two discs as a folder; Fuse lists the game by its discs.
@@ -174,15 +179,91 @@ class StoreIntegrationTest {
         assertEquals("Wars", meta.franchise)
         assertEquals(91, meta.rating)
         assertEquals(77L, detail.game.links.rommRomId)
-        val cover = withTimeout(10_000) { store.library.game(wars.id).first { it?.media?.boxart != null } }!!.media
-        assertEquals("/cartridge/imgcache/aw", cover.boxart?.model)
+        // Pictures are copied into Fuse's own folder; the one Cartridge lost is never recorded.
+        val cover = withTimeout(10_000) { store.library.game(wars.id).first { it?.media?.boxart != null && it.media.logo != null } }!!.media
         assertEquals(io.github.matiyaaa.fuse.model.MediaSource.ROMM, cover.boxart?.source)
-        assertEquals("/cartridge/logos/77-r.png", cover.logo?.model)
+        val keptCover = File(assertNotNull(cover.boxart?.model))
+        assertTrue(keptCover.path.contains("kept/romm/") && keptCover.name.endsWith(".png"), keptCover.path)
+        assertTrue(keptCover.readBytes().contentEquals(awCover.readBytes()))
+        assertTrue(File(assertNotNull(cover.logo?.model)).readBytes().contentEquals(awLogo.readBytes()))
+        assertEquals(null, cover.screenshots.firstOrNull { it.source == io.github.matiyaaa.fuse.model.MediaSource.ROMM })
 
         // The folder matched the one game inside it; the user's cover stayed.
         val ff7Detail = withTimeout(10_000) { store.library.game(ff7.id).first { it?.game?.metadata?.genres == listOf("RPG") } }!!
         assertEquals(78L, ff7Detail.game.links.rommRomId)
         assertEquals("/home/me/ff7.png", ff7Detail.media.boxart?.model)
+    }
+
+    @Test
+    fun anotherGamesRommDetailsAreNeverTakenAndEarlierOnesAreUndone(): Unit = runBlocking {
+        val services = FakeServices(FuseData(DesktopDatabase.open(freshDb())), cache)
+        val store = createFuseStore(services, scope)
+        store.sources.add(root.absolutePath, LibrarySourceKind.ROMS_ROOT)
+        awaitScan(store)
+        val wars = store.library.games(GameQuery(platform = PlatformId("gba"))).first().single()
+        val ff7 = store.library.games(GameQuery(platform = PlatformId("psx"))).first().single()
+
+        // An earlier version gave Final Fantasy VII another game's name, details and logo.
+        services.data.games.applyMetadata(
+            ff7.id,
+            io.github.matiyaaa.fuse.model.GameMetadata(genres = listOf("Platform"), franchise = "Ratchet & Clank", source = io.github.matiyaaa.fuse.model.MetadataSource.ROMM),
+            titleFromMetadata = "Ratchet & Clank",
+            onlyFillEmpty = false,
+        )
+        services.data.games.updateLinks(ff7.id) { it.copy(rommRomId = 500) }
+        val owner = io.github.matiyaaa.fuse.model.MediaOwner.OfGame(ff7.id)
+        services.data.media.putScraped(owner, listOf(io.github.matiyaaa.fuse.model.MediaItem(MediaKind.LOGO, io.github.matiyaaa.fuse.model.MediaSource.ROMM, localPath = "/gone/logo.png")), io.github.matiyaaa.fuse.model.MediaFillMode.FILL_MISSING)
+        assertEquals("Ratchet & Clank", services.data.games.get(ff7.id)?.displayTitle)
+
+        // Cartridge now says Advance Wars' file is Ratchet & Clank on the PS2: nothing of it is taken.
+        services.cartridgeGames = listOf(
+            io.github.matiyaaa.fuse.model.CartridgeGame(
+                romId = 501, path = File(root, "gba/Advance Wars (USA).gba").absolutePath, title = "Ratchet & Clank",
+                platformSlug = "ps2", summary = "Not this game.", updatedAt = 1,
+            ),
+        )
+        services.cartridgeStatus = CartridgeStatus(installed = true, version = "0.9.11", bridge = true, protocol = 2, gamesRevision = 1)
+        store.cartridge.refresh()
+
+        // The check (run once on start, and from Settings) puts Final Fantasy VII's own name back and
+        // drops RomM's logo and link.
+        assertEquals(1, store.cartridge.checkRommMatches())
+        val fixed = withTimeout(10_000) { store.library.game(ff7.id).first { it?.game?.titles?.metadata == null } }!!
+        assertTrue(fixed.game.displayTitle.startsWith("Final Fantasy VII"), fixed.game.displayTitle)
+        assertEquals(null, fixed.game.links.rommRomId)
+        assertEquals(null, fixed.game.metadata.franchise)
+        assertEquals(null, services.data.media.get(owner).first(MediaKind.LOGO))
+
+        delay(500)
+        val untouched = assertNotNull(services.data.games.get(wars.id))
+        assertTrue(untouched.displayTitle.startsWith("Advance Wars"), untouched.displayTitle)
+        assertEquals(null, untouched.links.rommRomId)
+        assertEquals(null, untouched.metadata.description)
+        assertEquals(0, store.cartridge.checkRommMatches())
+    }
+
+    @Test
+    fun resetNameAndDetailsKeepsTheUsersOwn(): Unit = runBlocking {
+        val services = FakeServices(FuseData(DesktopDatabase.open(freshDb())), cache)
+        val store = createFuseStore(services, scope)
+        store.sources.add(root.absolutePath, LibrarySourceKind.ROMS_ROOT)
+        awaitScan(store)
+        val wars = store.library.games(GameQuery(platform = PlatformId("gba"))).first().single()
+        val owner = io.github.matiyaaa.fuse.model.MediaOwner.OfGame(wars.id)
+        services.data.games.applyMetadata(
+            wars.id, io.github.matiyaaa.fuse.model.GameMetadata(description = "Wrong", source = io.github.matiyaaa.fuse.model.MetadataSource.IGDB),
+            titleFromMetadata = "Dino Crisis", onlyFillEmpty = false,
+        )
+        services.data.media.putScraped(owner, listOf(io.github.matiyaaa.fuse.model.MediaItem(MediaKind.HERO, io.github.matiyaaa.fuse.model.MediaSource.IGDB, remoteUrl = "https://x/hero.jpg")), io.github.matiyaaa.fuse.model.MediaFillMode.FILL_MISSING)
+        store.media.setFromFile(owner, MediaKind.BOXART, "/home/me/aw.png")
+
+        assertTrue(store.media.resetDetails(wars.id))
+        val game = assertNotNull(services.data.games.get(wars.id))
+        assertTrue(game.displayTitle.startsWith("Advance Wars"), game.displayTitle)
+        assertEquals(null, game.metadata.description)
+        val media = services.data.media.get(owner)
+        assertEquals(null, media.first(MediaKind.HERO))
+        assertEquals("/home/me/aw.png", media.first(MediaKind.BOXART)?.model)
     }
 
     @Test
@@ -522,5 +603,9 @@ class StoreIntegrationTest {
             store.library.platforms.first { systems -> systems.sumOf { it.gameCount } == 2 }
             store.sources.scan.first { it.phase == ScanPhase.DONE }
         }
+    }
+
+    private companion object {
+        val PNG = byteArrayOf(0x89.toByte(), 'P'.code.toByte(), 'N'.code.toByte(), 'G'.code.toByte(), 0x0D, 0x0A, 0x1A, 0x0A)
     }
 }

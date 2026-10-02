@@ -310,6 +310,7 @@ fun FuseApp(
     LaunchedEffect(Unit) { store.library.onResume() }
     // The Store's news (an app installed, updated or removed), wherever the user is.
     LaunchedEffect(Unit) { store.appStore.notices.collect { app.toasts.show(it) } }
+    LaunchedEffect(Unit) { store.cartridge.notices.collect { app.toasts.show(it) } }
 }
 
 /** The background: theme renderer, then the selected item's art with video after it rests. */

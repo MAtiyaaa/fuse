@@ -185,6 +185,9 @@ UPDATE game SET ra_game_id = :raGameId, sgdb_game_id = :sgdbGameId, igdb_id = :i
     romm_rom_id = :rommRomId, steam_app_id = :steamAppId, updated_at = :now
 WHERE id = :id;
 
+selectWithMetadataFrom:
+SELECT id FROM game WHERE metadata_json LIKE '%"source":"' || :source || '"%';
+
 setMetadata:
 UPDATE game SET metadata_json = :metadataJson, release_year = :releaseYear,
     title_metadata = :titleMetadata, search_title = :searchTitle, sort_title = :sortTitle,

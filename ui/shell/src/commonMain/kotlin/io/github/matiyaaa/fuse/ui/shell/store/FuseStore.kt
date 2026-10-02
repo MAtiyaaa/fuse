@@ -491,6 +491,12 @@ interface MediaOps {
     suspend fun identify(game: GameId): IdentifyResult
     /** Links [game] to [candidate]: takes its name and details and replaces scraped art. False when the source no longer lists it. */
     suspend fun acceptCandidate(game: GameId, candidate: ScrapeCandidate): Boolean
+    /**
+     * Forgets what sources said about [game]: the name and details they gave it and the art they
+     * found (RomM's included). The user's own name and picks and art from the game's folder stay.
+     * For a game a source mixed up with another. False when the game is gone.
+     */
+    suspend fun resetDetails(game: GameId): Boolean
     val providers: StateFlow<List<ProviderStatus>>
     /** The last key check per provider; empty until a check ran. Checks run after a key is saved. */
     val keyChecks: StateFlow<Map<ScrapeProviderId, io.github.matiyaaa.fuse.integrations.KeyCheck?>>
@@ -614,6 +620,15 @@ interface CartridgeOps {
      * included. Cartridge shows what it would send and uploads only after the user confirms there.
      */
     suspend fun upload(game: GameId): UploadHandoff
+
+    /** Short messages for the user, such as names put back after RomM had mixed games up. */
+    val notices: kotlinx.coroutines.flow.Flow<String> get() = kotlinx.coroutines.flow.emptyFlow()
+
+    /**
+     * Checks every game that has RomM's details against its own names and puts back the ones that
+     * are another game's (see CartridgeDetails). Returns how many were put back.
+     */
+    suspend fun checkRommMatches(): Int = 0
 }
 
 /** What happened when Fuse handed a game to Cartridge to upload. */

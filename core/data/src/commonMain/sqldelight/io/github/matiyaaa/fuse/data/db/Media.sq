@@ -51,6 +51,12 @@ DELETE FROM media WHERE owner_type = ? AND owner_id = ? AND kind = ? AND source 
 deleteKind:
 DELETE FROM media WHERE owner_type = ? AND owner_id = ? AND kind = ?;
 
+deleteSource:
+DELETE FROM media WHERE owner_type = ? AND owner_id = ? AND source = ? AND source <> 'USER';
+
+deleteNonUser:
+DELETE FROM media WHERE owner_type = ? AND owner_id = ? AND source <> 'USER';
+
 deleteOwner:
 DELETE FROM media WHERE owner_type = ? AND owner_id = ?;
 

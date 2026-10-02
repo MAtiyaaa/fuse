@@ -605,6 +605,19 @@ internal class DefaultMediaOps(
         }
     }
 
+    override suspend fun resetDetails(game: GameId): Boolean {
+        val g = ctx.data.games.get(game) ?: return false
+        ctx.data.games.replaceMetadata(game, metadata = null, titleMetadata = null)
+        val owner = MediaOwner.OfGame(game)
+        for (source in SCRAPED_SOURCES) ctx.data.media.removeSource(owner, source)
+        if (g.links.rommRomId != null) ctx.data.games.updateLinks(game) { it.copy(rommRomId = null) }
+        // RomM's details come back only if they fit the game (CartridgeDetails), and a fill may try again.
+        ctx.data.cache.remove("cartridge.romm", "g${game.value}")
+        ctx.data.cache.remove("cartridge.romm.before", "g${game.value}")
+        ctx.data.cache.remove(FILL_TRIED, game.value.toString())
+        return true
+    }
+
     override suspend fun acceptCandidate(game: GameId, candidate: ScrapeCandidate): Boolean {
         val g = ctx.data.games.get(game) ?: return false
         val plan = FillPlanner.plan(media.get(MediaOwner.OfGame(game)), MediaFillMode.REPLACE_ALL, FILLABLE)
@@ -621,6 +634,11 @@ internal class DefaultMediaOps(
         return true
     }
 }
+
+/** Art that came from a source rather than from the user or the game's folder. */
+private val SCRAPED_SOURCES = listOf(
+    MediaSource.ROMM, MediaSource.STEAMGRIDDB, MediaSource.IGDB, MediaSource.THEGAMESDB, MediaSource.SCREENSCRAPER, MediaSource.LIBRETRO,
+)
 
 private val namedSearch = setOf(ScrapeProviderId.STEAMGRIDDB, ScrapeProviderId.IGDB, ScrapeProviderId.THEGAMESDB)
 
