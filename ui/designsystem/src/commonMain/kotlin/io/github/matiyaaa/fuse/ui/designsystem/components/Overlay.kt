@@ -111,7 +111,7 @@ private fun overlayEnter(edge: OverlayEdge, motion: FuseMotion): EnterTransition
         OverlayEdge.BOTTOM ->
             slideInVertically(move) { it / 8 } + scaleIn(grow, initialScale = 0.98f, transformOrigin = TransformOrigin(0.5f, 1f)) + fade
         OverlayEdge.CENTER ->
-            scaleIn(motion.tween(Durations.BASE, Easings.Enter), initialScale = 0.96f) + fade
+            scaleIn(motion.tween(Durations.BASE, Easings.Enter), initialScale = motion.overlayScale) + fade
     }
 }
 

@@ -30,7 +30,6 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
-import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import io.github.matiyaaa.fuse.model.CornerFamily
@@ -79,20 +78,20 @@ internal fun rememberAtomPress(interaction: InteractionSource, enabled: Boolean 
     return remember(hover, press) { AtomPress(hover, press) }
 }
 
-/** Laid over an element under the mouse pointer. */
-internal fun FuseColors.hoverOverlay(): Color = text.copy(alpha = if (isDark) 0.06f else 0.05f)
+/** Laid over an element under the mouse pointer: the hover role, so atoms and [PressIndication] agree. */
+internal fun FuseColors.hoverOverlay(): Color = hover
 
-/** Laid over an element while it is pressed. */
-internal fun FuseColors.pressOverlay(): Color = text.copy(alpha = if (isDark) 0.10f else 0.08f)
+/** Laid over an element while it is pressed: the pressed role. */
+internal fun FuseColors.pressOverlay(): Color = pressed
 
 /** Quiet fills for wells and tracks: the text colour at a low strength, so every theme gets one. */
 internal fun FuseColors.quietFill(alpha: Float = 0.08f): Color = text.copy(alpha = alpha)
 
 /**
  * The top surface of the elevation family: overlays (dialogs, menus, sheets) sit a step lighter than
- * the panels they cover in dark themes, and on plain white in light ones.
+ * the panels they cover in dark themes, and on plain white in light ones (the surfaceOverlay role).
  */
-internal fun FuseColors.overlaySurface(): Color = if (isDark) lerp(surfaceRaised, text, 0.035f) else surface
+internal fun FuseColors.overlaySurface(): Color = surfaceOverlay
 
 /** The theme's control shape: a pill, except in sharp themes, where controls keep their corners. */
 @Composable
@@ -106,9 +105,9 @@ internal fun controlShape(): Shape =
 internal fun controlRingShape(gap: Dp = RING_GAP): Shape =
     if (Fuse.geometry.family == CornerFamily.SHARP) RoundedCornerShape(Fuse.geometry.control + gap) else PillShape
 
-/** Space between an element and its focus ring, and the ring's width. */
-internal val RING_GAP: Dp = 3.dp
-internal val RING_WIDTH: Dp = 2.dp
+/** Space between an element and its focus ring, and the ring's width (the same as a tile's ring). */
+internal val RING_GAP: Dp = io.github.matiyaaa.fuse.ui.designsystem.theme.Size.focusGap
+internal val RING_WIDTH: Dp = io.github.matiyaaa.fuse.ui.designsystem.theme.Size.focusStroke
 
 /**
  * A focus ring just outside the element, so focusing never changes the layout. As [progress] rises

@@ -13,6 +13,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
+import io.github.matiyaaa.fuse.ui.designsystem.theme.Elevation
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 
 /**
@@ -44,34 +45,30 @@ fun Panel(
         else -> c.surface
     }
     val fill = if (glass.enabled) base.copy(alpha = glass.surfaceOpacity) else base
-    val elevation = when {
-        !shadow || glass.enabled -> 0f
-        overlay -> 24f
-        raised -> 8f
-        else -> 4f
+    // One elevation family: the shadow and the strength of the lit edge come from the level the
+    // panel is at (Elevation.panel, raised or overlay), the same as every other lifted surface.
+    val level = when {
+        overlay -> Elevation.overlay
+        raised -> Elevation.raised
+        else -> Elevation.panel
     }
-    // White only shows on dark fills; light themes get a firmer white so the edge still catches.
-    val edge = when {
-        !c.isDark -> 0.7f
-        glass.enabled -> 0.22f
-        overlay -> 0.15f
-        raised -> 0.13f
-        else -> 0.11f
-    }
+    val elevation = if (!shadow || glass.enabled) 0.dp else level.shadow
+    // Glass keeps a brighter edge: it is what makes a frosted panel read as glass.
+    val edge = if (glass.enabled && c.isDark) GLASS_EDGE else level.edgeAlpha(c.isDark)
     val sheen = when {
         !c.isDark -> 0f
         glass.enabled -> 0.07f
         else -> 0.03f
     }
-    val shadowColor = if (c.isDark) Color.Black else c.text.copy(alpha = 0.55f)
+    val shadowColor = c.shadow
     val hairline = c.hairline
     Box(
         modifier
             .graphicsLayer {
                 this.shape = shape
                 clip = true
-                if (elevation > 0f) {
-                    shadowElevation = elevation * density
+                if (elevation > 0.dp) {
+                    shadowElevation = elevation.toPx()
                     spotShadowColor = shadowColor
                     ambientShadowColor = shadowColor.copy(alpha = shadowColor.alpha * 0.5f)
                 }
@@ -89,3 +86,6 @@ fun Panel(
         CompositionLocalProvider(LocalOverlaySurface provides false) { scope.content() }
     }
 }
+
+/** The lit edge of a glass panel in a dark theme. */
+private const val GLASS_EDGE = 0.22f

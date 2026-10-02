@@ -148,7 +148,8 @@ fun ProgressBar(value: Float?, modifier: Modifier = Modifier, color: Color = Fus
     val track = Fuse.colors.text.copy(alpha = 0.12f)
     val motion = Fuse.motion
     if (value != null) {
-        val v by animateFloatAsState(value.coerceIn(0f, 1f), motion.tween(Durations.SLOW), label = "progress")
+        // An interruptible spring, so a value that keeps changing (a download) flows instead of stepping.
+        val v by animateFloatAsState(value.coerceIn(0f, 1f), motion.value(), label = "progress")
         Spacer(
             modifier.height(height).drawBehind {
                 val r = CornerRadius(size.height / 2)
@@ -187,7 +188,7 @@ fun ProgressBar(value: Float?, modifier: Modifier = Modifier, color: Color = Fus
 }
 
 private const val INDETERMINATE_MS = 1500
-private val TRACK = 4.dp
+private val TRACK = Size.track
 
 /**
  * Circular progress (achievement completion, downloads): a round-capped arc on a faint ring that
@@ -203,7 +204,7 @@ fun ProgressRing(
     trackColor: Color = Fuse.colors.text.copy(alpha = 0.12f),
     content: (@Composable () -> Unit)? = null,
 ) {
-    val v by animateFloatAsState(value.coerceIn(0f, 1f), Fuse.motion.tween(Durations.DELIBERATE), label = "ring")
+    val v by animateFloatAsState(value.coerceIn(0f, 1f), Fuse.motion.value(), label = "ring")
     Box(
         modifier.size(size).drawWithCache {
             val s = stroke.toPx()
@@ -315,7 +316,10 @@ fun SliderBar(
                         }
                     },
                 )
-                .drawBehind {
+                .drawWithCache {
+                    val edgeStroke = Stroke(1.dp.toPx())
+                    val ringStroke = Stroke(Size.focusStroke.toPx())
+                    onDrawBehind {
                     val v = if (dragging) current.coerceIn(0f, 1f) else eased
                     val th = (4f + 2f * sel).dp.toPx()
                     val knobR = (7f + 3f * sel + 1.5f * grab).dp.toPx()
@@ -329,9 +333,10 @@ fun SliderBar(
                     drawRoundRect(fill, Offset(0f, cy - th / 2), androidx.compose.ui.geometry.Size(x.coerceAtLeast(th), th), r)
                     drawCircle(shade, knobR, Offset(x, cy + 1.dp.toPx()))
                     drawCircle(knob, knobR, Offset(x, cy))
-                    if (knobEdge.alpha > 0f) drawCircle(knobEdge, knobR, Offset(x, cy), style = Stroke(1.dp.toPx()))
+                    if (knobEdge.alpha > 0f) drawCircle(knobEdge, knobR, Offset(x, cy), style = edgeStroke)
                     if (sel > 0.01f) {
-                        drawCircle(ring.copy(alpha = ring.alpha * sel), knobR + (1f + 2f * sel).dp.toPx() + 1.dp.toPx(), Offset(x, cy), style = Stroke(2.dp.toPx()))
+                        drawCircle(ring.copy(alpha = ring.alpha * sel), knobR + (1f + 2f * sel).dp.toPx() + 1.dp.toPx(), Offset(x, cy), style = ringStroke)
+                    }
                     }
                 },
         )
@@ -493,7 +498,9 @@ fun SegmentedControl(
             .height(Size.touch - Space.xs)
             .clip(shape)
             .background(c.quietFill())
-            .drawBehind {
+            .drawWithCache {
+                val ringStroke = Stroke(1.5.dp.toPx())
+                onDrawBehind {
                 val inset = 3.dp.toPx()
                 val segW = (size.width - inset * 2) / count
                 val left = inset + segW * glide.start
@@ -509,8 +516,9 @@ fun SegmentedControl(
                         Offset(left - 1.dp.toPx(), inset - 1.dp.toPx()),
                         androidx.compose.ui.geometry.Size(w + 2.dp.toPx(), h + 2.dp.toPx()),
                         CornerRadius(r.x + 1.dp.toPx()),
-                        style = Stroke(1.5.dp.toPx()),
+                        style = ringStroke,
                     )
+                }
                 }
             }
             .padding(Space.xxs + 1.dp),
@@ -601,7 +609,7 @@ fun Chip(
     }
 }
 
-private val CHIP_ICON = 14.dp
+private val CHIP_ICON = Size.iconXS
 
 /**
  * A small solid label that marks a state on a tile or row ("New", "Update", "2"). [filled] badges
@@ -646,9 +654,9 @@ private val BADGE_HEIGHT = 20.dp
 fun IconBadge(
     icon: ImageVector,
     modifier: Modifier = Modifier,
-    tint: Color = Color.White,
+    tint: Color = Fuse.colors.onArt,
     background: Color = Color.Black.copy(alpha = 0.55f),
-    size: Dp = 24.dp,
+    size: Dp = Size.badge,
 ) {
     Box(
         modifier
@@ -658,7 +666,8 @@ fun IconBadge(
             .litEdge(CircleShape, top = Color.White.copy(alpha = 0.22f), rest = Color.White.copy(alpha = 0.06f), reach = size / 2),
         contentAlignment = Alignment.Center,
     ) {
-        FuseIcon(icon, size = size * 0.58f, tint = tint)
+        // Size.badgeIcon in the standard badge, in proportion at other sizes.
+        FuseIcon(icon, size = Size.badgeIcon * (size / Size.badge), tint = tint)
     }
 }
 
@@ -672,11 +681,14 @@ fun StatusDot(ok: Boolean?, modifier: Modifier = Modifier) {
         label = "statusDot",
     )
     Spacer(
-        modifier.size(10.dp).drawBehind {
-            when (ok) {
-                true -> drawCircle(color)
-                false -> drawCircle(color, radius = size.minDimension / 2 - 1.dp.toPx(), style = Stroke(2.dp.toPx()))
-                null -> drawCircle(color, radius = size.minDimension / 3)
+        modifier.size(10.dp).drawWithCache {
+            val ringStroke = Stroke(2.dp.toPx())
+            onDrawBehind {
+                when (ok) {
+                    true -> drawCircle(color)
+                    false -> drawCircle(color, radius = size.minDimension / 2 - 1.dp.toPx(), style = ringStroke)
+                    null -> drawCircle(color, radius = size.minDimension / 3)
+                }
             }
         },
     )

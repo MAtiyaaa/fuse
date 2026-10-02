@@ -779,8 +779,9 @@ private fun KeyCap(
                     .shadow(12.dp, RoundedCornerShape(radius))
                     .clip(RoundedCornerShape(radius))
                     .background(c.surfaceRaised)
-                    .drawBehind {
-                        drawRect(Brush.verticalGradient(0f to Color.White.copy(alpha = if (dark) 0.08f else 0f), 0.5f to Color.Transparent))
+                    .drawWithCache {
+                        val sheen = Brush.verticalGradient(0f to Color.White.copy(alpha = if (dark) 0.08f else 0f), 0.5f to Color.Transparent)
+                        onDrawBehind { drawRect(sheen) }
                     },
                 contentAlignment = Alignment.Center,
             ) {

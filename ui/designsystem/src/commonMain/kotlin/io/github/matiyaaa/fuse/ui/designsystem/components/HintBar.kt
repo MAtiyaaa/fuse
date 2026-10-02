@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
@@ -129,6 +130,7 @@ private fun HintItem(entry: HintEntry, flash: HintFlash?, onGone: () -> Unit) {
         onGone()
     }
     val pulse = remember { Animatable(0f) }
+    val lit by remember { derivedStateOf { pulse.value > 0.5f } }
     val count = if (entry.nth == 0) flash?.pulses?.get(entry.button) ?: 0 else 0
     LaunchedEffect(count) {
         if (count == 0) return@LaunchedEffect
@@ -164,14 +166,17 @@ private fun HintItem(entry: HintEntry, flash: HintFlash?, onGone: () -> Unit) {
                     val s = 1f - 0.14f * p
                     scaleX = s
                     scaleY = s
+                    // The flash brightens the glyph through its layer, so the glyph itself is not
+                    // rebuilt on every frame of it.
+                    alpha = 0.9f + 0.1f * pulse.value
                 },
                 contentAlignment = Alignment.Center,
             ) {
                 ButtonGlyph(
                     entry.button,
                     size = GLYPH,
-                    color = c.text.copy(alpha = 0.9f + 0.1f * pulse.value),
-                    emphasized = entry.button == HintButton.CONFIRM || pulse.value > 0.5f,
+                    color = c.text,
+                    emphasized = entry.button == HintButton.CONFIRM || lit,
                 )
             }
             Spacer(Modifier.width(Space.s))

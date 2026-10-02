@@ -53,9 +53,11 @@ fun EmptyState(
 ) {
     val c = Fuse.colors
     val motion = Fuse.motion
-    val arrive = remember { Animatable(0f) }
-    LaunchedEffect(Unit) { arrive.animateTo(1f, motion.tween(Durations.SLOW, Easings.Enter)) }
-    val rise = if (motion.reduced) 0f else 12f
+    // In Low Power Mode it is simply there; under Reduced motion it only fades.
+    val animate = Fuse.quality.animatedBackground
+    val arrive = remember { Animatable(if (animate) 0f else 1f) }
+    LaunchedEffect(Unit) { if (arrive.value < 1f) arrive.animateTo(1f, motion.tween(Durations.SLOW, Easings.Enter)) }
+    val rise = motion.revealRise.value
     val disc = if (compact) 64.dp else 88.dp
     val wash = tint.copy(alpha = if (c.isDark) 0.1f else 0.08f)
     val edge = Color.White.copy(alpha = if (c.isDark) 0.14f else 0.6f)

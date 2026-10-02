@@ -5,7 +5,9 @@ import androidx.compose.foundation.gestures.ScrollableState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -37,24 +39,23 @@ fun Modifier.fadingEdges(state: ScrollableState, top: Dp = 24.dp, bottom: Dp = 4
 
 private fun Modifier.fadingEdges(top: Dp, bottom: Dp, topStrength: () -> Float, bottomStrength: () -> Float): Modifier = this
     .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
-    .drawWithContent {
-        drawContent()
-        val h = size.height
-        if (h <= 0f) return@drawWithContent
-        val ts = topStrength().coerceIn(0f, 1f)
-        val bs = bottomStrength().coerceIn(0f, 1f)
-        if (ts <= 0f && bs <= 0f) return@drawWithContent
-        val t = (top.toPx() / h).coerceIn(0f, 0.5f)
-        val b = (bottom.toPx() / h).coerceIn(0f, 0.5f)
-        drawRect(
-            Brush.verticalGradient(
-                0f to Color.Black.copy(alpha = 1f - ts),
-                t to Color.Black,
-                1f - b to Color.Black,
-                1f to Color.Black.copy(alpha = 1f - bs),
-            ),
-            blendMode = BlendMode.DstIn,
-        )
+    .drawWithCache {
+        // Each edge is a gradient built once per size and erased out of the content (DstOut) at the
+        // edge's current strength, so scrolling and easing an edge in never allocate a brush.
+        val t = top.toPx().coerceAtMost(size.height / 2)
+        val b = bottom.toPx().coerceAtMost(size.height / 2)
+        val topBrush = Brush.verticalGradient(0f to Color.Black, 1f to Color.Transparent, startY = 0f, endY = t)
+        val bottomBrush = Brush.verticalGradient(0f to Color.Transparent, 1f to Color.Black, startY = size.height - b, endY = size.height)
+        onDrawWithContent {
+            drawContent()
+            if (size.height <= 0f) return@onDrawWithContent
+            val ts = topStrength().coerceIn(0f, 1f)
+            val bs = bottomStrength().coerceIn(0f, 1f)
+            if (ts > 0f && t > 0f) drawRect(topBrush, size = Size(size.width, t), alpha = ts, blendMode = BlendMode.DstOut)
+            if (bs > 0f && b > 0f) {
+                drawRect(bottomBrush, topLeft = Offset(0f, size.height - b), size = Size(size.width, b), alpha = bs, blendMode = BlendMode.DstOut)
+            }
+        }
     }
 
 /**
@@ -64,18 +65,17 @@ private fun Modifier.fadingEdges(top: Dp, bottom: Dp, topStrength: () -> Float, 
 fun Modifier.fadingEdgesHorizontal(start: Boolean, end: Boolean, width: Dp = 40.dp): Modifier =
     if (!start && !end) this else this
         .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
-        .drawWithContent {
-            drawContent()
+        .drawWithCache {
             val w = size.width
-            if (w <= 0f) return@drawWithContent
-            val f = (width.toPx() / w).coerceIn(0f, 0.5f)
-            drawRect(
-                Brush.horizontalGradient(
-                    0f to if (start) Color.Transparent else Color.Black,
-                    f to Color.Black,
-                    1f - f to Color.Black,
-                    1f to if (end) Color.Transparent else Color.Black,
-                ),
-                blendMode = BlendMode.DstIn,
+            val f = if (w > 0f) (width.toPx() / w).coerceIn(0f, 0.5f) else 0f
+            val brush = Brush.horizontalGradient(
+                0f to if (start) Color.Transparent else Color.Black,
+                f to Color.Black,
+                1f - f to Color.Black,
+                1f to if (end) Color.Transparent else Color.Black,
             )
+            onDrawWithContent {
+                drawContent()
+                if (w > 0f) drawRect(brush, blendMode = BlendMode.DstIn)
+            }
         }

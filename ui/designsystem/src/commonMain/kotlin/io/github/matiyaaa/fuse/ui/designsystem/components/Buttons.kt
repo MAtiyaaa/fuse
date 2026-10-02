@@ -87,6 +87,8 @@ fun FuseButton(
     val hover = c.hoverOverlay()
     val sink = c.pressOverlay()
     val focus = c.focus
+    val shadowColor = c.shadow
+    val pressDepth = 1f - motion.pressScale
     // Quiet buttons at rest lie flat; anything solid casts a soft shadow that deepens as it lifts.
     val solid = kind == ButtonKind.PRIMARY || kind == ButtonKind.SECONDARY || selected
     // Quiet kinds invert when selected, which reads without colour; the coloured kinds keep their
@@ -95,12 +97,15 @@ fun FuseButton(
     Row(
         modifier
             .graphicsLayer {
-                val s = if (motion.reduced) 1f else 1f + 0.04f * lift - 0.03f * press.pressed
+                // Pressing sinks it as far as any pressed element (the motion profile's press scale).
+                val s = if (motion.reduced) 1f else 1f + 0.04f * lift - pressDepth * press.pressed
                 scaleX = s
                 scaleY = s
                 alpha = if (enabled) 1f else 0.4f
                 if (solid && enabled) {
                     shadowElevation = (1.5f + 6f * lift) * density
+                    spotShadowColor = shadowColor
+                    ambientShadowColor = shadowColor.copy(alpha = shadowColor.alpha * 0.5f)
                     this.shape = shape
                 }
             }
@@ -173,10 +178,12 @@ fun IconButton(
     val shape = controlShape()
     val hover = c.hoverOverlay()
     val sink = c.pressOverlay()
+    // Small round targets press a little deeper than wide buttons, so the dip still shows.
+    val pressDepth = (1f - motion.pressScale) * 1.4f
     Box(
         modifier
             .graphicsLayer {
-                val s = if (motion.reduced) 1f else 1f + 0.06f * lift - 0.05f * press.pressed
+                val s = if (motion.reduced) 1f else 1f + 0.06f * lift - pressDepth * press.pressed
                 scaleX = s
                 scaleY = s
                 alpha = if (enabled) 1f else 0.4f
