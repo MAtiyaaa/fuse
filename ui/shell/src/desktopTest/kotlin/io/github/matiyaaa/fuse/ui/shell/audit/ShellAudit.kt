@@ -16,6 +16,7 @@ import io.github.matiyaaa.fuse.ui.shell.app.CompanionPage
 import io.github.matiyaaa.fuse.ui.shell.app.VolumeTarget
 import io.github.matiyaaa.fuse.ui.shell.app.Spotlight
 import io.github.matiyaaa.fuse.ui.shell.screenshots.ScreenshotPlatform
+import io.github.matiyaaa.fuse.ui.shell.settings.settingsSectionId
 import io.github.matiyaaa.fuse.ui.shell.settings.settingsSections
 import io.github.matiyaaa.fuse.ui.shell.store.GameQuery
 import io.github.matiyaaa.fuse.ui.shell.store.LocationHint
@@ -43,7 +44,7 @@ internal fun AuditDriver.openSettings() {
     tap(PadButton.START)
     waitFor("Arrange Home")
     tapText("Settings")
-    waitFor("Theme, motion, glass, CRT")
+    waitFor("Theme, game art, glass and CRT")
     settle()
 }
 
@@ -67,7 +68,7 @@ private fun AuditDriver.storageForPicker() {
     controls.storageRoots = listOf(LocationHint(folder.absolutePath, "Internal storage"), LocationHint(root.absolutePath, "SD card 4E21-9A0C"))
 }
 
-internal fun sectionIndex(id: String) = settingsSections.indexOfFirst { it.id == id }.also { check(it >= 0) { "No settings section $id" } }
+internal fun sectionIndex(id: String) = settingsSections.indexOfFirst { it.id == settingsSectionId(id) }.also { check(it >= 0) { "No settings section $id" } }
 
 // ----------------------------------------------------------------------------------- overlays
 
@@ -185,7 +186,7 @@ internal fun AuditDriver.overlayScreens(exhaustive: Boolean) {
     }
 
     if (!exhaustive) return
-    // Theme opens its own page now; Game art and Motion are plain choice lists (Settings, Appearance).
+    // Theme opens its own page now; Game art (Appearance) and Motion (Accessibility) are plain choice lists.
     scenario("overlays", "choice list") {
         useLibrary()
         openSettings()
@@ -197,6 +198,9 @@ internal fun AuditDriver.overlayScreens(exhaustive: Boolean) {
         shoot("Game art, each choice with a line about it")
         tap(PadButton.B)
         waitGone("Posters")
+        openSettings()
+        tap(PadButton.DPAD_DOWN, sectionIndex("accessibility"))
+        tap(PadButton.DPAD_RIGHT)
         tapText("Motion")
         waitFor("Enhanced")
         var moved = 0
@@ -363,8 +367,9 @@ internal fun AuditDriver.settingsScreens(exhaustive: Boolean) {
         openSettings()
         settle()
         shoot("sections: no Cartridge")
-        tap(PadButton.DPAD_DOWN, sectionIndex("emulators"))
+        tap(PadButton.DPAD_DOWN, sectionIndex("systems"))
         tap(PadButton.DPAD_RIGHT)
+        tapText("Finding emulators")
         waitFor("Locate an emulator")
         settle()
         shoot("emulators: locate and folders")
@@ -472,8 +477,7 @@ internal fun AuditDriver.settingsScreens(exhaustive: Boolean) {
         openSettings()
         tap(PadButton.DPAD_DOWN, sectionIndex("about"))
         tap(PadButton.DPAD_RIGHT)
-        tap(PadButton.DPAD_DOWN, 2)
-        tap(PadButton.A)
+        tapText("Open-source licences")
         waitFor("built on the work of others")
         shoot("Fuse licence")
         tap(PadButton.DPAD_DOWN)

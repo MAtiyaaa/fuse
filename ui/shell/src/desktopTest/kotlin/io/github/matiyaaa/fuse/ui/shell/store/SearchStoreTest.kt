@@ -72,8 +72,8 @@ class SearchStoreTest {
     fun settingsAreFoundByTheirNamesAndOtherWords() {
         val rumble = SettingsIndex.search("rumble", settingsSections)
         assertEquals("Vibration", rumble.first().title)
-        assertEquals("Settings, Inputs", rumble.first().path)
-        assertEquals("Backup and restore", SettingsIndex.search("backup", settingsSections).first().section.label)
+        assertEquals("Settings, Controls", rumble.first().path)
+        assertEquals("Storage and backups", SettingsIndex.search("backup", settingsSections).first().section.label)
         assertTrue(SettingsIndex.search("x", settingsSections).isEmpty())
     }
 }

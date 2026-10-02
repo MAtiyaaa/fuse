@@ -501,6 +501,6 @@ Low Power Mode keeps navigation exactly as quick; it only drops effects.
 - **Input.** Everything works with a controller, a keyboard or touch; the touch target token is 48
   dp. The button layout (Xbox, Nintendo or PlayStation) sets the hint glyphs and where confirm sits;
   "Swap confirm and back" swaps the keys themselves, and "Detect my buttons" sets both. Repeat delay and speed, stick deadzone and push threshold, hold time
-  and vibration are adjustable (Settings, Inputs). The input router supports per-button remapping
+  and vibration are adjustable (Settings, Controls). The input router supports per-button remapping
   (`InputProfile.remap`), but there is no remapping screen yet.
 - **Sound and haptics are optional** and never carry information that is not also on screen.

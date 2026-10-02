@@ -31,7 +31,7 @@
   reduced motion, no glass, CRT, video or music, and nothing running by itself. Your settings are
   untouched, and leaving safe mode turns everything back on. You can also ask for it: `--safe-mode`
   on a computer, or the Start in safe mode shortcut on Android.
-- **Backup and restore.** Settings, Backup and restore makes one `.fusebackup` file with your
+- **Backup and restore.** Settings, Storage and backups makes one `.fusebackup` file with your
   settings, the look and Home, what you changed on each game (names, favourites, emulators,
   systems, details), collections, the art you chose (with its pictures) and play time. Restoring
   shows what the file holds and how many of its games are in this library, then brings back
@@ -50,7 +50,7 @@
   - Names are found by their start, a word, their initials (`mgs`) or with a small typo (`zelad`).
   - Settings are searchable too, by their names and the words people use for them ("rumble" finds
     Vibration), and open on the right row.
-- **An emulator's own page.** Settings, Emulators opens each one: how and where it was found, the
+- **An emulator's own page.** Settings, Systems and emulators opens each one: how and where it was found, the
   systems it runs and which it's chosen for, how Fuse starts it, its limits, and its website. **Try
   it with a game** starts your most recently played game on its systems in it, without changing
   anything.
@@ -59,9 +59,9 @@
 - **Play time.** A page with today, this week, this month and all time, the last 30 days as bars,
   your most played games this month and time per system. Open it from a game's Play history card
   or the play time widgets.
-- **Text size and screen edges.** Appearance has Text size (Default, Large, Extra large) for
-  reading from the sofa, and Screen edges, which keeps everything clear of edges a TV cuts off
-  while the background still fills the screen.
+- **Text size and screen edges.** Settings, Accessibility has Text size (Default, Large, Extra
+  large) for reading from the sofa, and Screen edges, which keeps everything clear of edges a TV
+  cuts off while the background still fills the screen.
 - **PlayStation disc details.** For PS1 and PS2 games in ISO or BIN images, the game page shows the
   serial read from the disc itself, and for PS2 discs the CRC PCSX2 files its patches under.
 - **PCSX2 patches.** A PS2 game's options list the patches PCSX2 has for it (widescreen, 60 FPS and
@@ -77,6 +77,13 @@
 
 ## Changed
 
+- **Settings, reorganised.** Twelve sections instead of twenty, under Personalize, Games, This
+  device, Connections and General: Accessibility gathers text size, screen edges, motion and focus;
+  Systems and emulators, Screen and sound (with performance), Accounts (RetroAchievements, Cartridge,
+  Phone Link), Storage and backups, and About (with updates, privacy and network) each bring related
+  settings together. Rarely changed settings fold away under a line that says how they stand, tuning
+  can be put back to its defaults, and the list marks findings, a waiting update or a rejected key.
+  Nothing was removed, search opens folded settings, and older links land in the right place.
 - Before an older database is upgraded, Fuse keeps a copy of it next to the original.
 - On Android, Fuse's library starts when its screen first shows, so the system starting Fuse in the
   background never counts as a failed start.

@@ -48,7 +48,7 @@ fun rememberHealthIssues(app: AppState): List<HealthIssue> {
                 message = "Phones can't connect right now. Another app may be using its network port; restarting Fuse usually frees it.",
                 kind = ProblemKind.NETWORK,
                 reassurance = null,
-                actions = listOf(ProblemAction.OpenSettings("phonelink", "Phone Link")),
+                actions = listOf(ProblemAction.OpenSettings("accounts", "Phone Link")),
                 details = error,
             )))
         }

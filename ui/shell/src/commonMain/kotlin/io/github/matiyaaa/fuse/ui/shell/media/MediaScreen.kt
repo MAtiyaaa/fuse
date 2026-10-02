@@ -199,7 +199,7 @@ fun MediaScreen(app: AppState, owner: MediaOwner, title: String, identifyFirst: 
             }
             browser = when (result) {
                 null -> Browser.Message(
-                    "Couldn't search", "Fuse couldn't search ($failed). Try again, or check your keys in Settings, Media and Scraping.",
+                    "Couldn't search", "Fuse couldn't search ($failed). Try again, or check your keys in Settings, Art and details.",
                     FuseIcons.CloudOff, error = true,
                 )
                 is IdentifyResult.Matches ->
@@ -250,7 +250,7 @@ fun MediaScreen(app: AppState, owner: MediaOwner, title: String, identifyFirst: 
             }
             browser = when (val r = result) {
                 null -> Browser.Message(
-                    "Couldn't search for art", "Fuse couldn't search for art ($failed). Try again, or check your keys in Settings, Media and Scraping.",
+                    "Couldn't search for art", "Fuse couldn't search for art ($failed). Try again, or check your keys in Settings, Art and details.",
                     FuseIcons.CloudOff, error = true,
                 )
                 is ArtworkResult.Options -> if (r.options.isEmpty()) Browser.Message("No ${slotName(k).lowercase()} found", "Try another source in Settings, or choose a file.") else Browser.Options(k, r.options, r.guess)

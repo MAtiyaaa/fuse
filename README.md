@@ -244,7 +244,7 @@ Play.
   folders, picked with Fuse's own file picker.
 - **Quick rescans** only read the folders that changed.
 - **Your files, left alone.** Fuse never moves or renames your files, and deletes a game's files only
-  when you ask in Settings, Storage and confirm (never from Phone Link). Missing games are marked,
+  when you ask in Settings, Storage and backups and confirm (never from Phone Link). Missing games are marked,
   not removed, and playlists for multi-disc games are written to Fuse's own cache.
 - **BIOS checks** report Unknown, never Missing, when a location cannot be read.
 
@@ -489,7 +489,7 @@ flowchart LR
 
 To pair them:
 
-1. Install Cartridge 0.9.10 or newer (Settings, Cartridge in Fuse can install it from Cartridge's
+1. Install Cartridge 0.9.10 or newer (Settings, Accounts, Cartridge in Fuse can install it from Cartridge's
    GitHub releases after you confirm). RomM's details, each game's download progress and uploading
    games to RomM need Cartridge 0.9.11 "The Bridge Expansion", with bridge protocols 2 and 3 (in
    review as [MAtiyaaa/cartridge#30](https://github.com/MAtiyaaa/cartridge/pull/30)).
@@ -522,7 +522,7 @@ Fuse contains **no telemetry, analytics, advertising or crash reporting**, and y
 fully offline. Fuse only contacts a service after you set it up: RetroAchievements, SteamGridDB, IGDB,
 TheGamesDB, ScreenScraper and libretro thumbnails receive only what they need to answer (for example a
 game's title, or your own API key). The one service used without setup is GitHub, to check for new
-versions of Fuse; you can turn automatic checks off in Settings, Updates, and nothing is ever
+versions of Fuse; you can turn automatic checks off in Settings, About, and nothing is ever
 downloaded or installed without your confirmation. rpcs3.net is asked, with only a game's title id,
 when you choose How It Runs in RPCS3. Backups and diagnostics reports are files you save yourself;
 Fuse never sends them anywhere. API keys and passwords are kept in the system's
@@ -569,7 +569,7 @@ Third-party components keep their own licences; see [THIRD_PARTY_NOTICES.md](THI
   [RetroAchievements](https://retroachievements.org/).
 - **Music by boipurple.** Fuse's menu music is the album *jam channel* by boipurple: puddleworld
   plays under the menus and alright apothecary during setup, and every song on the album can be
-  picked in Settings, Sound. The songs remain the artist's own and are not covered by Fuse's
+  picked in Settings, Screen and sound. The songs remain the artist's own and are not covered by Fuse's
   licence.
 - [Lucide](https://lucide.dev/) icons (ISC), and the [Sora](https://github.com/sora-xor/sora-font) and
   [Manrope](https://github.com/googlefonts/manrope) typefaces (SIL Open Font License).

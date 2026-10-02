@@ -287,7 +287,7 @@ sealed interface ProblemAction {
     data class OpenLink(val url: String, override val label: String) : ProblemAction
     data class CheckDrives(override val label: String = "Check drives again") : ProblemAction
     data class OpenStorage(override val label: String = "Storage") : ProblemAction
-    data class OpenSettings(val section: String, override val label: String) : ProblemAction
+    data class OpenSettings(val section: String, override val label: String, val group: String? = null) : ProblemAction
     data class GrantAccess(override val label: String = "Allow access") : ProblemAction
     data class OpenSystem(val platform: io.github.matiyaaa.fuse.model.PlatformId, override val label: String) : ProblemAction
     data class OpenGame(val game: GameId, override val label: String) : ProblemAction

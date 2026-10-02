@@ -285,7 +285,7 @@ internal class DefaultMediaOps(
                 when {
                     outcome.searched.isEmpty() -> "No artwork source is set up. Add a SteamGridDB key in Settings."
                     (kind == MediaKind.ICON || kind == MediaKind.SQUARE) && ScrapeProviderId.STEAMGRIDDB !in outcome.searched ->
-                        "${if (kind == MediaKind.ICON) "Icons come" else "Square box art comes"} from SteamGridDB. Add a SteamGridDB key in Settings, Media and Scraping."
+                        "${if (kind == MediaKind.ICON) "Icons come" else "Square box art comes"} from SteamGridDB. Add a SteamGridDB key in Settings, Art and details."
                     else -> "No ${kind.label()} found for this game."
                 },
             )
@@ -592,12 +592,12 @@ internal class DefaultMediaOps(
         val (request, coordinator) = request(g, emptySet(), metadata = true, collectAll = false)
         // Only these search by name; the keyless sources look art up by file name.
         if (request.configured.none { it in namedSearch }) {
-            return IdentifyResult.Unavailable("Identify game searches SteamGridDB, IGDB and TheGamesDB. Add a key for one of them in Settings, Media and Scraping.")
+            return IdentifyResult.Unavailable("Identify game searches SteamGridDB, IGDB and TheGamesDB. Add a key for one of them in Settings, Art and details.")
         }
         return when (val outcome = coordinator.candidates(request.copy(priority = request.priority.filter { it in namedSearch }, maxCandidates = 12))) {
             is ScrapeOutcome.NeedsReview -> IdentifyResult.Matches(request.query.title, outcome.candidates)
             is ScrapeOutcome.NotFound -> IdentifyResult.Unavailable(
-                if (outcome.searched.isEmpty()) "No source is set up. Add a SteamGridDB, IGDB or TheGamesDB key in Settings, Media and Scraping."
+                if (outcome.searched.isEmpty()) "No source is set up. Add a SteamGridDB, IGDB or TheGamesDB key in Settings, Art and details."
                 else "Nothing found for \"${request.query.title}\". Try another search name.",
             )
             is ScrapeOutcome.ProviderErrors -> IdentifyResult.Unavailable(outcome.errors.firstOrNull()?.let { "${it.provider.displayName}: ${it.failure.message}" } ?: "The sources couldn't be reached.")

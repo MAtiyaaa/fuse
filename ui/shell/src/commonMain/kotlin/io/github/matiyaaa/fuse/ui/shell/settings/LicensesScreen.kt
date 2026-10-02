@@ -72,7 +72,7 @@ private val docs = listOf(
         "music", "Music", "jam channel by ${BundledMusic.ARTIST}. The songs Fuse plays under its menus",
         inline = "${BundledMusic.CREDIT}.\n\n" +
             "Fuse plays these songs under its menus: puddleworld by default and alright apothecary during " +
-            "first-time setup. Pick another one, or a song of your own, in Settings, Sound.\n\n" +
+            "first-time setup. Pick another one, or a song of your own, in Settings, Screen and sound.\n\n" +
             "The songs are the work of ${BundledMusic.ARTIST} and are not covered by Fuse's licence. They ship " +
             "with Fuse so it has music out of the box; all rights stay with the artist.",
     ),

@@ -292,7 +292,7 @@ internal class DefaultHealthOps(
                     title = "${provider.displayName} didn't accept your key",
                     message = "Art and details from ${provider.displayName} are skipped until the key works. The other sources carry on.",
                     kind = ProblemKind.ACCOUNT,
-                    actions = listOf(ProblemAction.OpenSettings("media", "Media and Scraping")),
+                    actions = listOf(ProblemAction.OpenSettings("media", "Sources and keys", group = "media.sources")),
                     details = rejected.reason,
                 ),
             )
@@ -319,7 +319,7 @@ internal class DefaultHealthOps(
                 message = "Fuse keeps running the version you have. Try again when the connection is steady.",
                 kind = ProblemKind.NETWORK,
                 reassurance = "Nothing was installed or changed.",
-                actions = listOf(ProblemAction.OpenSettings("updates", "Updates")),
+                actions = listOf(ProblemAction.OpenSettings("about", "Updates")),
                 details = failed.message,
             ),
         )

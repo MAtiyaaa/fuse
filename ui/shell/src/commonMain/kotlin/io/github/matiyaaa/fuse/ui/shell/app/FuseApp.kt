@@ -614,7 +614,7 @@ private fun FillFinishedToast(app: AppState) {
         if (f.cancelled || (app.navigator.current as? Route.Settings)?.section == "media") return@LaunchedEffect
         // Fuse's own fills speak up only when they found something.
         if (f.automatic && f.added == 0 && f.details == 0) return@LaunchedEffect
-        val needs = f.needsYou.size.takeIf { it > 0 }?.let { " $it need you in Settings, Media and Scraping." } ?: ""
+        val needs = f.needsYou.size.takeIf { it > 0 }?.let { " $it need you in Settings, Art and details." } ?: ""
         val lead = if (f.automatic) "Found art for your games" else "Fill finished"
         app.toasts.show("$lead. ${io.github.matiyaaa.fuse.ui.shell.settings.fillSummary(f)}.$needs")
     }
@@ -665,9 +665,9 @@ private fun hudActivities(app: AppState): List<HudActivity> {
             ) { app.selectTab(io.github.matiyaaa.fuse.model.Destination.CARTRIDGE) })
         }
         when (val u = update) {
-            is UpdateState.Downloading -> add(HudActivity("update", FuseIcons.Download, "Downloading ${u.release.name}", progress = u.progress) { app.go(Route.Settings("updates")) })
-            is UpdateState.Ready -> add(HudActivity("update", FuseIcons.Refresh, "${u.release.name} is ready: restart to update", attention = true) { app.go(Route.Settings("updates")) })
-            else -> if (available != null) add(HudActivity("update", FuseIcons.Download, "${available?.name} is available", attention = true) { app.go(Route.Settings("updates")) })
+            is UpdateState.Downloading -> add(HudActivity("update", FuseIcons.Download, "Downloading ${u.release.name}", progress = u.progress) { app.go(Route.Settings("about")) })
+            is UpdateState.Ready -> add(HudActivity("update", FuseIcons.Refresh, "${u.release.name} is ready: restart to update", attention = true) { app.go(Route.Settings("about")) })
+            else -> if (available != null) add(HudActivity("update", FuseIcons.Download, "${available?.name} is available", attention = true) { app.go(Route.Settings("about")) })
         }
     }
 }

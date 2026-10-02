@@ -87,7 +87,7 @@ interface EmulatorAdapter {
     val platforms: Set<PlatformId>
     val capabilities: AdapterCapabilities
 
-    /** Human readable caveats, shown in Settings -> Emulators. */
+    /** Human readable caveats, shown in Settings, Systems and emulators. */
     val limitations: List<String>
 
     /** Where the launch description comes from (ES-DE commit, source file, vendor doc). */

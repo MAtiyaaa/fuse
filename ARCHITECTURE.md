@@ -410,7 +410,20 @@ initials, then one or two typos by edit distance) and runs both over an in-memor
 library (`SearchRepository`, kept current while search is open). Filters about things outside a game
 (its system, collections and drive) are answered by the store (`SearchStore.kt`), which also turns
 filters into chips and offers values for the filter being typed. Settings are found through
-`SettingsIndex`, which lists sections and the rows people look for with other words for them.
+`SettingsIndex`, which lists sections and the rows people look for with other words for them, and
+the folded group a row sits in, so opening it unfolds that group first.
+
+## Settings
+
+Settings has twelve sections under five headings (Personalize, Games, This device, Connections,
+General), listed in `settingsSections` (`ui:shell/settings/SettingsScreen.kt`). Each section's rows
+come from functions in `settings/Sections.kt`; a section made of several (Screen and sound, Accounts,
+Storage and backups, About) brings them in with `under`, which keeps each function the single owner
+of its rows and gives their ids a prefix so none repeat. Rarely changed settings fold into groups
+(`AppState.group`) whose header always says how they stand ("Default", "3 changed", "1 key
+rejected"), and tuning groups end with a way back to the defaults. A section can show a status on
+its row in the list (findings, a waiting update, a rejected key). Sections merged in 0.2.0 keep
+their old ids in `settingsAliases`, so every older link still lands in the right place.
 
 ## Emulator files and patches
 

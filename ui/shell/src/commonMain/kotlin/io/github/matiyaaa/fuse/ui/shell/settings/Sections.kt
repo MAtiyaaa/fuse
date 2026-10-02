@@ -15,6 +15,8 @@ import io.github.matiyaaa.fuse.model.Destination
 import io.github.matiyaaa.fuse.model.DualScreenMode
 import io.github.matiyaaa.fuse.model.GameArtStyle
 import io.github.matiyaaa.fuse.model.GlyphStyle
+import io.github.matiyaaa.fuse.model.GlassSettings
+import io.github.matiyaaa.fuse.model.CrtSettings
 import io.github.matiyaaa.fuse.model.HomeMode
 import io.github.matiyaaa.fuse.model.LaunchDisplay
 import io.github.matiyaaa.fuse.model.LibraryLayout
@@ -110,27 +112,51 @@ fun appearanceRows(app: AppState): List<MenuAction> {
         labelled("Effects") {
             add(toggleRow("glass", "Glass panels", FuseIcons.Layers, p.glass.enabled, "Frosted, translucent menus") { v -> set { it.copy(glass = it.glass.copy(enabled = v)) } })
             if (p.glass.enabled) {
-                add(app.percentRow("glass.opacity", "Panel opacity", FuseIcons.Droplet, p.glass.surfaceOpacity) { v -> set { it.copy(glass = it.glass.copy(surfaceOpacity = v.coerceAtLeast(0.3f))) } }.copy(indent = 1))
-                add(app.choiceRow("glass.blur", "Blur strength", FuseIcons.Aperture, p.glass.blur, listOf(0f, 12f, 24f, 36f, 48f).map { it to if (it == 0f) "Off" else "${it.toInt()}" }) { v -> set { it.copy(glass = it.glass.copy(blur = v)) } }.copy(indent = 1))
-                add(app.percentRow("glass.hero", "Background brightness", FuseIcons.Sun, p.glass.heroBrightness) { v -> set { it.copy(glass = it.glass.copy(heroBrightness = v.coerceAtLeast(0.2f))) } }.copy(indent = 1))
-                add(app.percentRow("glass.gradient", "Gradient strength", FuseIcons.Contrast, p.glass.gradientStrength) { v -> set { it.copy(glass = it.glass.copy(gradientStrength = v)) } }.copy(indent = 1))
+                val g = p.glass
+                val d = GlassSettings()
+                val custom = g.surfaceOpacity != d.surfaceOpacity || g.blur != d.blur || g.heroBrightness != d.heroBrightness || g.gradientStrength != d.gradientStrength
+                addAll(app.group("appearance.glass", "Glass tuning", FuseIcons.Sliders, summary = if (custom) "Custom" else "Default", detail = "Opacity, blur and how the art shows through") {
+                    buildList {
+                        add(app.percentRow("glass.opacity", "Panel opacity", FuseIcons.Droplet, g.surfaceOpacity) { v -> set { it.copy(glass = it.glass.copy(surfaceOpacity = v.coerceAtLeast(0.3f))) } })
+                        add(app.choiceRow("glass.blur", "Blur strength", FuseIcons.Aperture, g.blur, listOf(0f, 12f, 24f, 36f, 48f).map { it to if (it == 0f) "Off" else "${it.toInt()}" }) { v -> set { it.copy(glass = it.glass.copy(blur = v)) } })
+                        add(app.percentRow("glass.hero", "Background brightness", FuseIcons.Sun, g.heroBrightness) { v -> set { it.copy(glass = it.glass.copy(heroBrightness = v.coerceAtLeast(0.2f))) } })
+                        add(app.percentRow("glass.gradient", "Gradient strength", FuseIcons.Blend, g.gradientStrength) { v -> set { it.copy(glass = it.glass.copy(gradientStrength = v)) } })
+                        if (custom) add(defaultsRow("glass.reset") {
+                            set { it.copy(glass = it.glass.copy(surfaceOpacity = d.surfaceOpacity, blur = d.blur, heroBrightness = d.heroBrightness, gradientStrength = d.gradientStrength)) }
+                            app.toasts.show("Glass is back to its defaults")
+                        })
+                    }
+                }.map { it.copy(indent = it.indent + 1) })
             }
             add(toggleRow("crt", "CRT effect", FuseIcons.Tv, p.crt.enabled, "Scanlines and phosphor glow. Turns itself off in Low Power Mode") { v -> set { it.copy(crt = it.crt.copy(enabled = v)) } })
             if (p.crt.enabled) {
-                add(app.percentRow("crt.scan", "Scanlines", FuseIcons.Rows, p.crt.scanlines) { v -> set { it.copy(crt = it.crt.copy(scanlines = v)) } }.copy(indent = 1))
-                add(app.percentRow("crt.curve", "Curvature", FuseIcons.Corners, p.crt.curvature) { v -> set { it.copy(crt = it.crt.copy(curvature = v)) } }.copy(indent = 1))
-                add(app.percentRow("crt.bloom", "Bloom", FuseIcons.Sparkle, p.crt.bloom) { v -> set { it.copy(crt = it.crt.copy(bloom = v)) } }.copy(indent = 1))
-                add(app.percentRow("crt.color", "Colour separation", FuseIcons.Blend, p.crt.chromatic) { v -> set { it.copy(crt = it.crt.copy(chromatic = v)) } }.copy(indent = 1))
-                add(app.percentRow("crt.vignette", "Vignette", FuseIcons.Contrast, p.crt.vignette) { v -> set { it.copy(crt = it.crt.copy(vignette = v)) } }.copy(indent = 1))
+                val c = p.crt
+                val d = CrtSettings()
+                val custom = c.copy(enabled = d.enabled) != d
+                addAll(app.group("appearance.crt", "CRT tuning", FuseIcons.Sliders, summary = if (custom) "Custom" else "Default", detail = "Scanlines, curvature, bloom, colour and vignette") {
+                    buildList {
+                        add(app.percentRow("crt.scan", "Scanlines", FuseIcons.Rows, c.scanlines) { v -> set { it.copy(crt = it.crt.copy(scanlines = v)) } })
+                        add(app.percentRow("crt.curve", "Curvature", FuseIcons.Corners, c.curvature) { v -> set { it.copy(crt = it.crt.copy(curvature = v)) } })
+                        add(app.percentRow("crt.bloom", "Bloom", FuseIcons.Sparkle, c.bloom) { v -> set { it.copy(crt = it.crt.copy(bloom = v)) } })
+                        add(app.percentRow("crt.color", "Colour separation", FuseIcons.Blend, c.chromatic) { v -> set { it.copy(crt = it.crt.copy(chromatic = v)) } })
+                        add(app.percentRow("crt.vignette", "Vignette", FuseIcons.Contrast, c.vignette) { v -> set { it.copy(crt = it.crt.copy(vignette = v)) } })
+                        if (custom) add(defaultsRow("crt.reset") {
+                            set { it.copy(crt = d.copy(enabled = it.crt.enabled)) }
+                            app.toasts.show("The CRT effect is back to its defaults")
+                        })
+                    }
+                }.map { it.copy(indent = it.indent + 1) })
             }
         }
-        labelled("Motion and focus") {
-            add(app.choiceRow(
-                "motion", "Motion", FuseIcons.Activity, p.motion, listOf(null, MotionProfile.REDUCED, MotionProfile.MINIMAL, MotionProfile.STANDARD, MotionProfile.ENHANCED).map { it to motionName(it) },
-                detail = "Reduced keeps only short fades: no scaling, sliding or moving backgrounds",
-            ) { v -> set { it.copy(motion = v) } })
-            add(toggleRow("contrast", "High contrast focus", FuseIcons.Accessibility, p.highContrastFocus, "Adds an outline to everything that's selected") { v -> set { it.copy(highContrastFocus = v) } })
-        }
+    }
+}
+
+/** Reading and moving around comfortably: text size, screen edges, motion and a stronger focus. */
+@Composable
+fun accessibilityRows(app: AppState): List<MenuAction> {
+    val p by app.store.prefs.collectAsState()
+    val set = app.store::updatePrefs
+    return buildList {
         labelled("Reading") {
             add(app.choiceRow(
                 "textsize", "Text size", FuseIcons.TextSize, p.textScale,
@@ -142,6 +168,13 @@ fun appearanceRows(app: AppState): List<MenuAction> {
                 listOf(0 to "Use all of it", 2 to "2% in", 4 to "4% in", 6 to "6% in"),
                 detail = "Keeps everything clear of edges a TV cuts off. The background still fills the screen",
             ) { v -> set { it.copy(screenMargin = v) } })
+        }
+        labelled("Motion and focus") {
+            add(app.choiceRow(
+                "motion", "Motion", FuseIcons.Activity, p.motion, listOf(null, MotionProfile.REDUCED, MotionProfile.MINIMAL, MotionProfile.STANDARD, MotionProfile.ENHANCED).map { it to motionName(it) },
+                detail = "Reduced keeps only short fades: no scaling, sliding or moving backgrounds",
+            ) { v -> set { it.copy(motion = v) } })
+            add(toggleRow("contrast", "High contrast focus", FuseIcons.ScanEye, p.highContrastFocus, "Adds an outline to everything that's selected") { v -> set { it.copy(highContrastFocus = v) } })
         }
     }
 }
@@ -167,12 +200,18 @@ fun homeRows(app: AppState): List<MenuAction> {
             }) { v -> set { it.copy(home = it.home.copy(mode = v)) } })
         }
         labelled("Top bar") {
-            for (d in Destination.entries.filter { it != Destination.HOME && app.offers(it) && (it != Destination.CARTRIDGE || p.cartridgeEnabled) }) {
-                val visible = d in p.destinations
-                add(toggleRow("dest.$d", "${d.label()} in the top bar", d.icon(), visible) { v ->
-                    set { it.copy(destinations = if (v) (it.destinations + d).sortedBy { x -> Destination.entries.indexOf(x) } else it.destinations - d) }
-                })
-            }
+            val offered = Destination.entries.filter { it != Destination.HOME && app.offers(it) && (it != Destination.CARTRIDGE || p.cartridgeEnabled) }
+            addAll(app.group(
+                "home.tabs", "Sections in the top bar", FuseIcons.PanelTop,
+                summary = "${offered.count { it in p.destinations }} of ${offered.size}",
+                detail = "Which sections have a tab. Home always does",
+            ) {
+                offered.map { d ->
+                    toggleRow("dest.$d", d.label(), d.icon(), d in p.destinations) { v ->
+                        set { it.copy(destinations = if (v) (it.destinations + d).sortedBy { x -> Destination.entries.indexOf(x) } else it.destinations - d) }
+                    }
+                }
+            })
             val shownTabs = p.destinations.filter { app.offers(it) }
             add(MenuAction("dest.order", "Section order", FuseIcons.MoveHorizontal, detail = shownTabs.joinToString("  ·  ") { it.label() }, trailing = Trailing.Chevron, onSelect = {
                 app.reorder = ReorderSpec(
@@ -196,6 +235,9 @@ fun homeRows(app: AppState): List<MenuAction> {
                     detail = "The list the Apps tab shows first. It keeps your place when you come back",
                 ) { v -> set { it.copy(appsFilter = v) } })
             }
+            add(toggleRow("clock24", "24-hour clock", FuseIcons.Clock, p.clock24h) { v -> set { it.copy(clock24h = v) } })
+            add(toggleRow("wifi", "Wi-Fi in the top bar", FuseIcons.Wifi, p.showWifi) { v -> set { it.copy(showWifi = v) } })
+            add(toggleRow("bt", "Bluetooth in the top bar", FuseIcons.Bluetooth, p.showBluetooth) { v -> set { it.copy(showBluetooth = v) } })
         }
         if (p.home.mode == HomeMode.FLOW) {
             // Flow is rows of games, systems and apps; the board's widgets don't appear in it.
@@ -299,11 +341,6 @@ fun homeRows(app: AppState): List<MenuAction> {
                 }))
             }
         }
-        labelled("Status area") {
-            add(toggleRow("clock24", "24-hour clock", FuseIcons.Clock, p.clock24h) { v -> set { it.copy(clock24h = v) } })
-            add(toggleRow("wifi", "Show Wi-Fi in the status area", FuseIcons.Wifi, p.showWifi) { v -> set { it.copy(showWifi = v) } })
-            add(toggleRow("bt", "Show Bluetooth in the status area", FuseIcons.Bluetooth, p.showBluetooth) { v -> set { it.copy(showBluetooth = v) } })
-        }
     }
 }
 
@@ -364,13 +401,13 @@ fun libraryRows(app: AppState): List<MenuAction> {
             add(MenuAction("scan", "Scan for changes", FuseIcons.Refresh, detail = "Only folders that changed. Also runs whenever you return to Fuse", trailing = Trailing.Value(scan.phase.name.lowercase().replaceFirstChar { it.uppercase() }), onSelect = {
                 app.store.sources.rescan(ScanScope.QUICK); app.toasts.show("Scanning")
             }))
-            add(app.confirmRow("fullscan", "Full rescan", FuseIcons.RefreshDot, "Rescan everything?", "Fuse reads every folder again. It can take a while on large libraries; you can keep using Fuse meanwhile. Your edits are kept.", "Rescan") {
+            add(app.confirmRow("fullscan", "Full rescan", FuseIcons.RefreshDot, "Rescan everything?", "Fuse reads every folder again. It can take a while on large libraries; you can keep using Fuse meanwhile. Your edits are kept.", "Rescan", detail = "Every folder, read again. Your edits are kept") {
                 app.store.sources.rescan(ScanScope.FULL)
             })
-            add(MenuAction("bios", "Check BIOS again", FuseIcons.Key, onSelect = { app.store.sources.refreshBios(); app.toasts.show("Checking BIOS files") }))
+            add(MenuAction("bios", "Check BIOS again", FuseIcons.Key, detail = "After adding firmware to a BIOS folder", onSelect = { app.store.sources.refreshBios(); app.toasts.show("Checking BIOS files") }))
         }
         labelled("Browsing") {
-            add(app.choiceRow("layout", "Default view", FuseIcons.Grid, p.defaultLayout, LibraryLayout.entries.map { it to layoutName(it) }) { v -> app.store.updatePrefs { it.copy(defaultLayout = v) } })
+            add(app.choiceRow("layout", "Default view", FuseIcons.Grid, p.defaultLayout, LibraryLayout.entries.map { it to layoutName(it) }, detail = "How the Library first shows your games") { v -> app.store.updatePrefs { it.copy(defaultLayout = v) } })
             add(app.choiceRow(
                 "select", "Selecting a game", FuseIcons.Play, p.openGamePage,
                 listOf(false to "Plays it", true to "Opens its page"),
@@ -411,42 +448,50 @@ fun libraryRows(app: AppState): List<MenuAction> {
                 ))
             }
         }
-        labelled("Names") {
-            add(MenuAction(
-                "clean", "Clean display names", FuseIcons.Eraser,
-                detail = "Hides tags like (USA) and [!] in titles. Files are never renamed",
-                trailing = Trailing.Switch(p.cleanDisplayNames),
-                onSelect = {
-                    if (p.cleanDisplayNames) {
-                        app.scope.launch { app.store.library.applyCleanNames(false) }
-                    } else {
-                        app.confirm = ConfirmSpec(
-                            "Clean display names?",
-                            "Fuse guesses which parts of a file name are tags (region, revision, dump codes) and hides them from titles. The guess can be wrong, for example with games whose real name contains brackets. Your files keep their names, custom titles always win, and you can undo this from here.",
-                            "Preview and apply",
-                        ) {
-                            app.scope.launch {
-                                val preview = app.store.library.previewCleanNames()
-                                app.choice = ChoiceSpec(
-                                    title = "${preview.size} titles will change",
-                                    icon = FuseIcons.Eraser,
-                                    message = preview.take(6).joinToString("\n") { (a, b) -> "$a  ->  $b" },
-                                    options = listOf(
-                                        MenuAction("apply", "Apply", FuseIcons.Check, onSelect = {
-                                            app.choice = null
-                                            app.scope.launch { app.store.library.applyCleanNames(true); app.toasts.show("Titles cleaned. Undo from Library settings.") }
-                                        }),
-                                        MenuAction("cancel", "Cancel", FuseIcons.Close, onSelect = { app.choice = null }),
-                                    ),
-                                )
+        labelled("") {
+            addAll(app.group(
+                "library.names", "Display names", FuseIcons.Eraser,
+                summary = if (p.cleanDisplayNames) "Cleaned" else "As in the files",
+                detail = "Hide tags like (USA) and [!] from titles",
+            ) {
+                buildList {
+                    add(MenuAction(
+                        "clean", "Clean display names", FuseIcons.Eraser,
+                        detail = "Hides tags like (USA) and [!] in titles. Files are never renamed",
+                        trailing = Trailing.Switch(p.cleanDisplayNames),
+                        onSelect = {
+                            if (p.cleanDisplayNames) {
+                                app.scope.launch { app.store.library.applyCleanNames(false) }
+                            } else {
+                                app.confirm = ConfirmSpec(
+                                    "Clean display names?",
+                                    "Fuse guesses which parts of a file name are tags (region, revision, dump codes) and hides them from titles. The guess can be wrong, for example with games whose real name contains brackets. Your files keep their names, custom titles always win, and you can undo this from here.",
+                                    "Preview and apply",
+                                ) {
+                                    app.scope.launch {
+                                        val preview = app.store.library.previewCleanNames()
+                                        app.choice = ChoiceSpec(
+                                            title = "${preview.size} titles will change",
+                                            icon = FuseIcons.Eraser,
+                                            message = preview.take(6).joinToString("\n") { (a, b) -> "$a  ->  $b" },
+                                            options = listOf(
+                                                MenuAction("apply", "Apply", FuseIcons.Check, onSelect = {
+                                                    app.choice = null
+                                                    app.scope.launch { app.store.library.applyCleanNames(true); app.toasts.show("Titles cleaned. Undo from Library settings.") }
+                                                }),
+                                                MenuAction("cancel", "Cancel", FuseIcons.Close, onSelect = { app.choice = null }),
+                                            ),
+                                        )
+                                    }
+                                }
                             }
-                        }
-                    }
-                },
-            ))
-            add(MenuAction("clean.undo", "Undo last name cleanup", FuseIcons.Undo, onSelect = {
-                app.scope.launch { if (app.store.library.undoCleanNames()) app.toasts.show("Titles restored") else app.toasts.show("Nothing to undo") }
-            }))
+                        },
+                    ))
+                    add(MenuAction("clean.undo", "Undo last name cleanup", FuseIcons.Undo, onSelect = {
+                        app.scope.launch { if (app.store.library.undoCleanNames()) app.toasts.show("Titles restored") else app.toasts.show("Nothing to undo") }
+                    }))
+                }
+            })
         }
     }
 }
@@ -457,6 +502,7 @@ fun systemsRows(app: AppState): List<MenuAction> {
     val prefs by app.store.prefs.collectAsState()
     val systems = platforms.filter { it.gameCount > 0 }
     val artProgress by app.store.media.systemArtProgress.collectAsState()
+    val emulators = emulatorRows(app)
     return buildList {
         // Each system's own settings first; how systems look and are ordered after.
         labelled("Your systems") {
@@ -470,6 +516,7 @@ fun systemsRows(app: AppState): List<MenuAction> {
             }
             if (systems.isEmpty()) add(infoRow("none", "No systems yet", detail = "Systems appear once Fuse finds games for them", icon = FuseIcons.Chip))
         }
+        addAll(emulators)
         labelled("Order and art") {
             add(MenuAction(
                 "order.reset", "Reset system order", FuseIcons.RotateCcw,
@@ -520,29 +567,14 @@ fun systemsRows(app: AppState): List<MenuAction> {
     }
 }
 
+/** The emulators Fuse found (each opens its own page), then how Fuse looks for them, folded. */
 @Composable
 fun emulatorRows(app: AppState): List<MenuAction> {
     val installed by app.store.emulators.installed.collectAsState()
+    val folders by app.store.emulators.searchFolders.collectAsState()
     return buildList {
-        labelled("Finding emulators") {
-            add(MenuAction("refresh", "Look for emulators again", FuseIcons.Refresh, detail = "Fuse also notices installs and removals on its own", onSelect = {
-                app.store.emulators.refresh(); app.toasts.show("Looking for emulators")
-            }))
-            if (app.store.emulators.canLocate) {
-                val folders by app.store.emulators.searchFolders.collectAsState()
-                add(MenuAction("locate", "Locate an emulator", FuseIcons.Search, detail = "Show Fuse where one is when it wasn't found", trailing = Trailing.Chevron, onSelect = {
-                    app.locatePicker()
-                }))
-                add(MenuAction(
-                    "folders", "Emulator folders", FuseIcons.FolderOpen,
-                    detail = if (folders.isEmpty()) "Add folders Fuse searches for emulators" else folders.joinToString("\n"),
-                    trailing = Trailing.Value(if (folders.isEmpty()) "None" else "${folders.size}"),
-                    onSelect = { app.emulatorFoldersPicker() },
-                ))
-            }
-        }
-        labelled("Installed") {
-            if (installed.isEmpty()) add(infoRow("none", "No emulators found", detail = "Install an emulator for a system and it appears here", icon = FuseIcons.SearchX))
+        labelled("Emulators") {
+            if (installed.isEmpty()) add(infoRow("emu.none", "No emulators found", detail = "Install an emulator for a system and it appears here", icon = FuseIcons.SearchX))
             for (e in installed.sortedBy { it.name.lowercase() }) {
                 val limits = app.store.emulators.limitations(e.id)
                 add(MenuAction(
@@ -566,6 +598,28 @@ fun emulatorRows(app: AppState): List<MenuAction> {
                     onSelect = { app.showEmulator(e.id) },
                 ))
             }
+            addAll(app.group(
+                "systems.finding", "Finding emulators", FuseIcons.FolderSearch,
+                summary = if (app.store.emulators.canLocate && folders.isNotEmpty()) "${folders.size} ${if (folders.size == 1) "folder" else "folders"}" else null,
+                detail = "Look again, or show Fuse where one is",
+            ) {
+                buildList {
+                    add(MenuAction("refresh", "Look for emulators again", FuseIcons.Refresh, detail = "Fuse also notices installs and removals on its own", onSelect = {
+                        app.store.emulators.refresh(); app.toasts.show("Looking for emulators")
+                    }))
+                    if (app.store.emulators.canLocate) {
+                        add(MenuAction("locate", "Locate an emulator", FuseIcons.Search, detail = "Show Fuse where one is when it wasn't found", trailing = Trailing.Chevron, onSelect = {
+                            app.locatePicker()
+                        }))
+                        add(MenuAction(
+                            "folders", "Emulator folders", FuseIcons.FolderOpen,
+                            detail = if (folders.isEmpty()) "Add folders Fuse searches for emulators" else folders.joinToString("\n"),
+                            trailing = Trailing.Value(if (folders.isEmpty()) "None" else "${folders.size}"),
+                            onSelect = { app.emulatorFoldersPicker() },
+                        ))
+                    }
+                }
+            })
         }
     }
 }
@@ -636,33 +690,45 @@ fun mediaRows(app: AppState): List<MenuAction> {
                 add(app.choiceRow("video.delay", "Preview delay", FuseIcons.Timer, p.videoDelaySeconds, listOf(5, 10, 15, 20, 30).map { it to "$it seconds" }) { v -> set { it.copy(videoDelaySeconds = v) } }.copy(indent = 1))
             }
         }
-        labelled("Matching") {
-            add(app.choiceRow("lang", "Preferred language", FuseIcons.Earth, p.scraperLanguage, listOf("en" to "English", "fr" to "French", "de" to "German", "es" to "Spanish", "it" to "Italian", "pt" to "Portuguese", "ja" to "Japanese", "zh" to "Chinese", "ko" to "Korean")) { v -> set { it.copy(scraperLanguage = v) } })
-            add(app.choiceRow("region", "Preferred region", FuseIcons.Map, p.scraperRegion, listOf("any" to "Any region", "us" to "USA", "eu" to "Europe", "jp" to "Japan", "wor" to "World")) { v -> set { it.copy(scraperRegion = v) } })
-            add(app.choiceRow(
-                "match", "Matching", FuseIcons.Target, p.matching,
-                listOf(MatchStrictness.EXACT to "Exact", MatchStrictness.NORMAL to "Normal", MatchStrictness.AGGRESSIVE to "Aggressive"),
-                detail = "How sure Fuse must be before it uses a match without asking",
-                optionDetail = {
-                    when (it) {
-                        MatchStrictness.EXACT -> "Only identical names on the same system"
-                        MatchStrictness.NORMAL -> "Clear best matches; anything close is shown to you"
-                        MatchStrictness.AGGRESSIVE -> "Accepts looser matches. Can pick the wrong game"
-                    }
-                },
-            ) { v ->
-                if (v == MatchStrictness.AGGRESSIVE) {
-                    app.confirm = ConfirmSpec("Use aggressive matching?", "Fuse will accept looser matches without asking, so some games may get the wrong art or details. Custom art is never replaced.", "Use aggressive") {
-                        set { it.copy(matching = v) }
-                    }
-                } else set { it.copy(matching = v) }
+        // Set once and rarely touched again: how sure a match must be, where art comes from, and the keys for it.
+        labelled("Matching and sources") {
+            val languages = listOf("en" to "English", "fr" to "French", "de" to "German", "es" to "Spanish", "it" to "Italian", "pt" to "Portuguese", "ja" to "Japanese", "zh" to "Chinese", "ko" to "Korean")
+            val regions = listOf("any" to "Any region", "us" to "USA", "eu" to "Europe", "jp" to "Japan", "wor" to "World")
+            addAll(app.group(
+                "media.matching", "Matching", FuseIcons.Target,
+                summary = listOfNotNull(
+                    languages.firstOrNull { it.first == p.scraperLanguage }?.second,
+                    regions.firstOrNull { it.first == p.scraperRegion }?.second,
+                    p.matching.name.lowercase().replaceFirstChar { it.uppercase() },
+                ).joinToString("  ·  "),
+                detail = "Language, region and how sure Fuse must be",
+            ) {
+                buildList {
+                    add(app.choiceRow("lang", "Preferred language", FuseIcons.Earth, p.scraperLanguage, languages) { v -> set { it.copy(scraperLanguage = v) } })
+                    add(app.choiceRow("region", "Preferred region", FuseIcons.Map, p.scraperRegion, regions) { v -> set { it.copy(scraperRegion = v) } })
+                    add(app.choiceRow(
+                        "match", "Strictness", FuseIcons.Crosshair, p.matching,
+                        listOf(MatchStrictness.EXACT to "Exact", MatchStrictness.NORMAL to "Normal", MatchStrictness.AGGRESSIVE to "Aggressive"),
+                        detail = "How sure Fuse must be before it uses a match without asking",
+                        optionDetail = {
+                            when (it) {
+                                MatchStrictness.EXACT -> "Only identical names on the same system"
+                                MatchStrictness.NORMAL -> "Clear best matches; anything close is shown to you"
+                                MatchStrictness.AGGRESSIVE -> "Accepts looser matches. Can pick the wrong game"
+                            }
+                        },
+                    ) { v ->
+                        if (v == MatchStrictness.AGGRESSIVE) {
+                            app.confirm = ConfirmSpec("Use aggressive matching?", "Fuse will accept looser matches without asking, so some games may get the wrong art or details. Custom art is never replaced.", "Use aggressive") {
+                                set { it.copy(matching = v) }
+                            }
+                        } else set { it.copy(matching = v) }
+                    })
+                    add(app.confirmRow("replace", "Replace all scraped art", FuseIcons.RotateCcw, "Replace scraped art?", "Fuse fetches art again for every game and replaces art it scraped before. Art you chose yourself stays.", "Replace") {
+                        app.store.media.fill(MediaFillMode.REPLACE_ALL, MediaKind.Fillable)
+                    })
+                }
             })
-            add(app.confirmRow("replace", "Replace all scraped art", FuseIcons.RotateCcw, "Replace scraped art?", "Fuse fetches art again for every game and replaces art it scraped before. Art you chose yourself stays.", "Replace") {
-                app.store.media.fill(MediaFillMode.REPLACE_ALL, MediaKind.Fillable)
-            })
-        }
-        // Set once and rarely touched again: where art comes from, and the keys for it.
-        labelled("Sources") {
             addAll(app.group(
                 "media.sources", "Sources and keys", FuseIcons.Database,
                 summary = when {
@@ -903,21 +969,45 @@ fun inputRows(app: AppState): List<MenuAction> {
             add(toggleRow("swap", "Swap confirm and back", FuseIcons.Swap, i.swapConfirmBack, if (i.confirmOnRight) "Now: confirm is the right button" else "Now: confirm is the bottom button") { v -> setInput { it.copy(swapConfirmBack = v) } })
             add(toggleRow("keyhints", "Keyboard hints when typing", FuseIcons.Keyboard, i.autoGlyphs, "Show keyboard keys in hints after a keyboard key is used") { v -> setInput { it.copy(autoGlyphs = v) } })
         }
-        labelled("Holding a direction") {
-            add(app.choiceRow("delay", "Repeat delay", FuseIcons.Timer, i.repeatDelayMs, listOf(180, 220, 280, 350, 450).map { it to "$it ms" }, detail = "How long a held direction waits before repeating") { v -> setInput { it.copy(repeatDelayMs = v) } })
-            add(app.choiceRow("speed", "Repeat speed", FuseIcons.Zap, i.repeatIntervalMs, listOf(40 to "Fastest", 55 to "Fast", 70 to "Normal", 100 to "Relaxed", 140 to "Slow")) { v -> setInput { it.copy(repeatIntervalMs = v) } })
-            add(toggleRow("accel", "Speed up while held", FuseIcons.Rocket, i.repeatAccelerate) { v -> setInput { it.copy(repeatAccelerate = v) } })
-        }
-        labelled("Sticks and feel") {
-            add(app.percentRow("deadzone", "Stick deadzone", FuseIcons.Target, i.stickDeadzone) { v -> setInput { it.copy(stickDeadzone = v.coerceIn(0.05f, 0.6f)) } })
-            add(app.percentRow("threshold", "Stick push to move", FuseIcons.Crosshair, i.navigationThreshold) { v -> setInput { it.copy(navigationThreshold = v.coerceIn(0.2f, 0.95f)) } })
-            add(app.choiceRow("long", "Hold time", FuseIcons.Hand, i.longPressMs, listOf(400, 550, 700, 900).map { it to "$it ms" }, detail = "Holding confirm (or a long touch) arranges Home and opens options") { v -> setInput { it.copy(longPressMs = v) } })
-            add(app.percentRow("vibration", "Vibration", FuseIcons.Vibrate, i.vibration) { v -> setInput { it.copy(vibration = v) } })
-        }
         labelled("Mapping") {
             add(MenuAction("mapping", "Button mapping and test", FuseIcons.Joystick, detail = if (i.remap.isEmpty()) "Standard layout. See what Fuse receives from each button" else "${i.remap.size} custom mappings", trailing = Trailing.Chevron, onSelect = { app.go(Route.Controls) }))
         }
-        labelled("") { addAll(captureRows(app, p)) }
+        labelled("Feel") {
+            val d = io.github.matiyaaa.fuse.model.InputProfile()
+            val changed = listOf(
+                i.repeatDelayMs != d.repeatDelayMs, i.repeatIntervalMs != d.repeatIntervalMs, i.repeatAccelerate != d.repeatAccelerate,
+                i.stickDeadzone != d.stickDeadzone, i.navigationThreshold != d.navigationThreshold, i.longPressMs != d.longPressMs, i.vibration != d.vibration,
+            ).count { it }
+            addAll(app.group(
+                "inputs.feel", "Repeat and sticks", FuseIcons.SlidersVertical,
+                summary = when (changed) {
+                    0 -> "Default"
+                    1 -> "1 changed"
+                    else -> "$changed changed"
+                },
+                detail = "Holding a direction, stick deadzone, hold time and vibration",
+            ) {
+                buildList {
+                    add(app.choiceRow("delay", "Repeat delay", FuseIcons.Timer, i.repeatDelayMs, listOf(180, 220, 280, 350, 450).map { it to "$it ms" }, detail = "How long a held direction waits before repeating") { v -> setInput { it.copy(repeatDelayMs = v) } })
+                    add(app.choiceRow("speed", "Repeat speed", FuseIcons.Zap, i.repeatIntervalMs, listOf(40 to "Fastest", 55 to "Fast", 70 to "Normal", 100 to "Relaxed", 140 to "Slow")) { v -> setInput { it.copy(repeatIntervalMs = v) } })
+                    add(toggleRow("accel", "Speed up while held", FuseIcons.Rocket, i.repeatAccelerate) { v -> setInput { it.copy(repeatAccelerate = v) } })
+                    add(app.percentRow("deadzone", "Stick deadzone", FuseIcons.Target, i.stickDeadzone) { v -> setInput { it.copy(stickDeadzone = v.coerceIn(0.05f, 0.6f)) } })
+                    add(app.percentRow("threshold", "Stick push to move", FuseIcons.Crosshair, i.navigationThreshold) { v -> setInput { it.copy(navigationThreshold = v.coerceIn(0.2f, 0.95f)) } })
+                    add(app.choiceRow("long", "Hold time", FuseIcons.Hand, i.longPressMs, listOf(400, 550, 700, 900).map { it to "$it ms" }, detail = "Holding confirm (or a long touch) arranges Home and opens options") { v -> setInput { it.copy(longPressMs = v) } })
+                    add(app.percentRow("vibration", "Vibration", FuseIcons.Vibrate, i.vibration) { v -> setInput { it.copy(vibration = v) } })
+                    if (changed > 0) add(defaultsRow("feel.reset") {
+                        setInput {
+                            it.copy(
+                                repeatDelayMs = d.repeatDelayMs, repeatIntervalMs = d.repeatIntervalMs, repeatAccelerate = d.repeatAccelerate,
+                                stickDeadzone = d.stickDeadzone, navigationThreshold = d.navigationThreshold, longPressMs = d.longPressMs, vibration = d.vibration,
+                            )
+                        }
+                        app.toasts.show("Repeat and sticks are back to their defaults")
+                    })
+                }
+            })
+            addAll(captureRows(app, p))
+        }
     }
 }
 
@@ -947,7 +1037,6 @@ private fun captureRows(app: AppState, p: io.github.matiyaaa.fuse.ui.shell.store
 @Composable
 fun displayRows(app: AppState): List<MenuAction> {
     val p by app.store.prefs.collectAsState()
-    val displays by app.platform.displays.collectAsState()
     val log by app.platform.secondScreenLog.collectAsState()
     val d = p.display
     return buildList {
@@ -961,10 +1050,8 @@ fun displayRows(app: AppState): List<MenuAction> {
                 add(autostartRow(app, w))
             }
         }
-        labelled("Second screen") {
-            if (!app.platform.features.secondScreen) {
-                add(infoRow("none", "One screen", detail = "Second-screen options appear when a second display is connected", icon = FuseIcons.Monitor))
-            }
+        // Every second-screen option, shown in full where there is one and folded where there isn't.
+        val second = buildList {
             add(app.choiceRow(
                 "mode", "Second screen", FuseIcons.DualScreen, d.mode,
                 // Playing on the second screen is now "Games open on"; the old choice stays listed only while it's set.
@@ -1015,19 +1102,21 @@ fun displayRows(app: AppState): List<MenuAction> {
             }
             add(toggleRow("perf", "Show performance on the second screen", FuseIcons.ChartLine, d.companionShowsPerformance, "Only values the system really reports; nothing is estimated") { v -> app.store.updatePrefs { it.copy(display = it.display.copy(companionShowsPerformance = v)) } })
             add(toggleRow("touch", "Touch controls on the second screen", FuseIcons.Hand, d.companionTouchControls) { v -> app.store.updatePrefs { it.copy(display = it.display.copy(companionTouchControls = v)) } })
-        }
-        labelled("Connected displays") {
-            for (disp in displays) {
-                add(infoRow(
-                    "disp.${disp.id}", disp.name + if (disp.isPrimary) " (main)" else "",
-                    "${disp.widthPx}x${disp.heightPx}  ${disp.refreshRate.toInt()} Hz",
-                    detail = when (disp.canLaunchActivities) {
-                        Support.YES -> "Games can be opened here"
-                        Support.NO -> "This display can't run other apps"
-                        Support.UNKNOWN -> if (disp.isPrimary) null else "Fuse checks when you first launch a game here"
+    }
+        labelled("Second screen") {
+            if (app.platform.features.secondScreen) {
+                addAll(second)
+            } else {
+                addAll(app.group(
+                    "displays.second", "When a second screen is connected", FuseIcons.DualScreen,
+                    summary = when (d.mode) {
+                        DualScreenMode.OFF -> "Off"
+                        DualScreenMode.LIBRARY_COMPANION -> "Selected game"
+                        DualScreenMode.GAME_COMPANION -> "Companion"
+                        DualScreenMode.REVERSE -> "Games play there"
                     },
-                    icon = FuseIcons.Monitor,
-                ))
+                    detail = "There's one screen now. These apply once a second display is connected",
+                ) { second })
             }
         }
     }
@@ -1036,9 +1125,10 @@ fun displayRows(app: AppState): List<MenuAction> {
 @Composable
 fun performanceRows(app: AppState): List<MenuAction> {
     val p by app.store.prefs.collectAsState()
+    val displays by app.platform.displays.collectAsState()
     val cap = app.platform.device
     return buildList {
-        labelled("Profile") {
+        labelled("Performance") {
             add(app.choiceRow(
                 "profile", "Performance profile", FuseIcons.Gauge, p.performance,
                 listOf(PerformanceProfile.AUTOMATIC to "Automatic", PerformanceProfile.LOW_POWER to "Low power", PerformanceProfile.BALANCED to "Balanced", PerformanceProfile.HIGH_QUALITY to "High quality"),
@@ -1048,11 +1138,44 @@ fun performanceRows(app: AppState): List<MenuAction> {
             add(toggleRow("low", "Low Power Mode", FuseIcons.Leaf, p.lowPower, "60 Hz, no video previews, blur, moving backgrounds or CRT; lighter artwork and a smaller image cache. Navigation stays quick") { v -> app.store.updatePrefs { it.copy(lowPower = v) } })
             add(toggleRow("overlay", "Performance overlay", FuseIcons.ChartLine, p.performanceOverlay, "Fuse's own frame rate, memory and temperatures, only as the system reports them. Other apps' frame rates can't be read") { v -> app.store.updatePrefs { it.copy(performanceOverlay = v) } })
         }
-        labelled("This device") {
-            add(infoRow("cpu", "Processor", "${cap.cpuCores} cores", icon = FuseIcons.Chip))
-            add(infoRow("ram", "Memory", "${(cap.totalRamMb / 1024.0 * 10).toInt() / 10.0} GB", icon = FuseIcons.Memory))
-            add(infoRow("screen", "Screen", "${cap.screenWidthPx}x${cap.screenHeightPx}, up to ${cap.maxRefreshRate.toInt()} Hz", icon = FuseIcons.Monitor))
+        labelled("") {
+            addAll(app.group(
+                "displays.device", "About this device", FuseIcons.Laptop,
+                summary = "${cap.cpuCores} cores  ·  ${(cap.totalRamMb / 1024.0 * 10).toInt() / 10.0} GB",
+                detail = "Processor, memory and the displays Fuse can see",
+            ) {
+                buildList {
+                    add(infoRow("cpu", "Processor", "${cap.cpuCores} cores", icon = FuseIcons.Chip))
+                    add(infoRow("ram", "Memory", "${(cap.totalRamMb / 1024.0 * 10).toInt() / 10.0} GB", icon = FuseIcons.Memory))
+                    add(infoRow("screen", "Screen", "${cap.screenWidthPx}x${cap.screenHeightPx}, up to ${cap.maxRefreshRate.toInt()} Hz", icon = FuseIcons.Monitor))
+                    for (disp in displays) {
+                        add(infoRow(
+                            "disp.${disp.id}", disp.name + if (disp.isPrimary) " (main)" else "",
+                            "${disp.widthPx}x${disp.heightPx}  ${disp.refreshRate.toInt()} Hz",
+                            detail = when (disp.canLaunchActivities) {
+                                Support.YES -> "Games can be opened here"
+                                Support.NO -> "This display can't run other apps"
+                                Support.UNKNOWN -> if (disp.isPrimary) null else "Fuse checks when you first launch a game here"
+                            },
+                            icon = FuseIcons.MonitorCheck,
+                        ))
+                    }
+                }
+            })
         }
+    }
+}
+
+/** Sound, the screens Fuse is on and how hard it works, with what the device is folded at the end. */
+@Composable
+fun screenAndSoundRows(app: AppState): List<MenuAction> {
+    val sound = soundRows(app)
+    val screens = displayRows(app)
+    val performance = performanceRows(app)
+    return buildList {
+        under("Sound", "sound", sound)
+        under("This screen", "screen", screens)
+        under("Performance", "perf", performance)
     }
 }
 
@@ -1060,6 +1183,30 @@ fun performanceRows(app: AppState): List<MenuAction> {
 fun networkRows(app: AppState): List<MenuAction> = buildList {
     if (app.platform.features.wifiSettings) add(MenuAction("wifi", "Wi-Fi settings", FuseIcons.Wifi, trailing = Trailing.Chevron, onSelect = { app.platform.quick.openWifi() }))
     add(infoRow("where", "What Fuse connects to", detail = "Only services you set up: RetroAchievements, SteamGridDB, IGDB, TheGamesDB, ScreenScraper, libretro thumbnails, GitHub to check for updates, and rpcs3.net when you ask how a PS3 game runs. Your library works fully offline", icon = FuseIcons.Globe))
+}
+
+/** The services Fuse signs in to or pairs with: RetroAchievements, Cartridge where it runs, and phones. */
+@Composable
+fun accountsRows(app: AppState): List<MenuAction> {
+    val achievements = achievementRows(app)
+    val cartridge = if (app.platform.features.cartridge) cartridgeRows(app) else emptyList()
+    val phone = phoneLinkRows(app)
+    return buildList {
+        under("RetroAchievements", "ra", achievements)
+        under("Cartridge", "cartridge", cartridge)
+        under("Phone Link", "phone", phone)
+    }
+}
+
+/** Where games live and what Fuse may do with them, then backing up and restoring. */
+@Composable
+fun storageAndBackupRows(app: AppState): List<MenuAction> {
+    val files = storageRows(app)
+    val backups = backupRows(app)
+    return buildList {
+        under("Files and drives", "files", files)
+        under("Backups", "backup", backups.map { if (it.section == "Privacy") it.copy(section = null) else it })
+    }
 }
 
 @Composable
@@ -1161,11 +1308,14 @@ fun updateRows(app: AppState): List<MenuAction> {
 }
 
 /**
- * What Fuse is, who it is built on and where it lives. The credits come right after the version, so
- * the licences are two steps down.
+ * What Fuse is and keeping it current: the version (five taps for developer options), updates,
+ * privacy and what Fuse connects to, setup and licences, then the credits folded away.
  */
 @Composable
 fun aboutRows(app: AppState): List<MenuAction> = buildList {
+    val updates = updateRows(app).filter { it.id != "version" }
+    val privacy = privacyRows(app)
+    val network = networkRows(app)
     app.platform.lastCrashReport()?.let { report -> add(crashRow(app, report)) }
     add(MenuAction(
         "fuse", "Fuse ${app.store.updates.currentVersion}", FuseIcons.Info,
@@ -1180,23 +1330,28 @@ fun aboutRows(app: AppState): List<MenuAction> = buildList {
             }
         },
     ))
-    labelled("Credits") {
-        add(infoRow("credits", "Made with", detail = "Kotlin, Compose Multiplatform, SQLDelight, Ktor, Coil. Icons: Lucide (ISC). Fonts: Sora and Manrope (SIL OFL). Emulator launch data: ES-DE (MIT) and Cartridge (MIT). Hashing rules: rcheevos (MIT)", icon = FuseIcons.Blocks))
-        add(MenuAction("licences", "Open-source licences", FuseIcons.FileText, detail = "Fuse, its libraries, fonts and icons", trailing = Trailing.Chevron, onSelect = { app.go(Route.Licenses) }))
-        add(MenuAction(
-            "cartridge.credit", "Cartridge by abdu2304", FuseIcons.CloudDownload,
-            detail = "The RomM companion Fuse pairs with. github.com/abdu2304/cartridge",
-            trailing = Trailing.Chevron,
-            onSelect = { app.platform.openUrl("https://github.com/abdu2304/cartridge") },
-        ))
-        add(infoRow("trademarks", "Trademarks", detail = "Console and game names belong to their owners. Fuse ships no console artwork, sounds, BIOS or games", icon = FuseIcons.Tag))
-    }
-    labelled("Links") {
-        add(MenuAction("website", "Website", FuseIcons.Globe, detail = "matiyaaa.github.io/fuse: downloads and themes", trailing = Trailing.Chevron, onSelect = { app.platform.openUrl("https://matiyaaa.github.io/fuse/") }))
-        add(MenuAction("source", "Source code", FuseIcons.External, detail = "github.com/MAtiyaaa/fuse", trailing = Trailing.Chevron, onSelect = { app.platform.openUrl("https://github.com/MAtiyaaa/fuse") }))
-    }
-    labelled("") {
+    under("Updates", "update", updates)
+    // What Fuse keeps to itself and what it connects to, with deleting keys set apart after both.
+    under("Privacy and network", "privacy", privacy.filter { it.section == null })
+    under("Privacy and network", "net", network)
+    under("", "privacy", privacy.filter { it.section != null })
+    labelled("Fuse") {
         add(MenuAction("setup", "Run setup again", FuseIcons.Sparkles, detail = "Games, emulators, controller, Home and theme, one step at a time", trailing = Trailing.Chevron, onSelect = { app.go(Route.Onboarding) }))
+        add(MenuAction("licences", "Open-source licences", FuseIcons.FileText, detail = "Fuse, its libraries, fonts and icons", trailing = Trailing.Chevron, onSelect = { app.go(Route.Licenses) }))
+        addAll(app.group("about.credits", "Credits and links", FuseIcons.Heart, detail = "Who Fuse is built on, and where it lives") {
+            listOf(
+                infoRow("credits", "Made with", detail = "Kotlin, Compose Multiplatform, SQLDelight, Ktor, Coil. Icons: Lucide (ISC). Fonts: Sora and Manrope (SIL OFL). Emulator launch data: ES-DE (MIT) and Cartridge (MIT). Hashing rules: rcheevos (MIT)", icon = FuseIcons.Blocks),
+                MenuAction(
+                    "cartridge.credit", "Cartridge by abdu2304", FuseIcons.CloudDownload,
+                    detail = "The RomM companion Fuse pairs with. github.com/abdu2304/cartridge",
+                    trailing = Trailing.Chevron,
+                    onSelect = { app.platform.openUrl("https://github.com/abdu2304/cartridge") },
+                ),
+                infoRow("trademarks", "Trademarks", detail = "Console and game names belong to their owners. Fuse ships no console artwork, sounds, BIOS or games", icon = FuseIcons.Tag),
+                MenuAction("website", "Website", FuseIcons.Globe, detail = "matiyaaa.github.io/fuse: downloads and themes", trailing = Trailing.Chevron, onSelect = { app.platform.openUrl("https://matiyaaa.github.io/fuse/") }),
+                MenuAction("source", "Source code", FuseIcons.External, detail = "github.com/MAtiyaaa/fuse", trailing = Trailing.Chevron, onSelect = { app.platform.openUrl("https://github.com/MAtiyaaa/fuse") }),
+            )
+        })
     }
     if (app.dev.enabled) {
         labelled("Developer") {

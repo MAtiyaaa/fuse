@@ -51,7 +51,7 @@ identifiers, analytics or crash reports, backups, diagnostics reports, or licenc
 package's zRIF goes only to Vita3K on your device). Fuse contains no telemetry. The one way a game's files
 leave the device is an upload you start and confirm, which Cartridge sends to your own RomM server.
 
-**Filling art by itself.** With "Find art by itself" on (Settings, Media and Scraping; on by
+**Filling art by itself.** With "Find art by itself" on (Settings, Art and details; on by
 default), Fuse runs "Fill missing art" on its own a few seconds after a scan and after a key is
 saved, for games still missing art or details, with the same sources and requests as a fill you
 start. Games it recently looked for without finding more are skipped. Each source is searched by the
@@ -124,8 +124,8 @@ tile art of the Box art layout and Home.
 animation filters. NSFW, humour and epilepsy-warning assets are excluded by default. Requests are
 paced 100 ms apart, at most four at a time.
 
-**Key checks.** Saving a SteamGridDB, IGDB or TheGamesDB key (or choosing Test keys in Settings, Media
-and Scraping) makes one real request with it (`verifyKey` / `verifyCredentials`, returning a
+**Key checks.** Saving a SteamGridDB, IGDB or TheGamesDB key (or choosing Test keys in Settings, Art and
+details) makes one real request with it (`verifyKey` / `verifyCredentials`, returning a
 `KeyCheck`), so Settings can say Working, Key rejected or Offline. Keys and client ids are stripped of
 whitespace and invisible characters when saved.
 
@@ -236,7 +236,7 @@ and the User-Agent with Fuse's version.
 
 ## How scraping picks a match
 
-`scrape/ScrapeCoordinator.kt` asks providers in your order (Settings, Media and Scraping; Local media
+`scrape/ScrapeCoordinator.kt` asks providers in your order (Settings, Art and details; Local media
 and RomM come first by default). Only providers that have the credentials they need are asked.
 Metadata providers are tried first, then artwork-only ones. Fuse's own `TitleMatcher` scores each result and
 explains the score; a result is accepted without asking only when it clears the chosen strictness
@@ -403,11 +403,11 @@ app watches the file's folder and re-reads it after changes (files up to 16 MB).
 
 On resume (and when the bridge reports a change), Fuse reads the status, shows download progress in
 the Cartridge section and the Cartridge Downloads widget, and, when "Pick up new downloads on return"
-is on (Settings, Cartridge; on by default), rescans the folders Cartridge saved to
+is on (Settings, Accounts, Cartridge; on by default), rescans the folders Cartridge saved to
 (`CartridgeSettings.autoRefreshOnReturn`) with a quick scan. With protocol 2 the Downloads panel,
 the top line and Phone Link show each game in the queue.
 
-When "Details and art from RomM" is on (Settings, Cartridge; on by default,
+When "Details and art from RomM" is on (Settings, Accounts, Cartridge; on by default,
 `CartridgeSettings.rommDetails`), Fuse reads the downloaded games whenever they or the library change
 and, for each one (`CartridgeDetails`):
 
@@ -476,7 +476,7 @@ executable on Linux (`ReleaseInstaller`). A digest mismatch deletes the download
 failure; on Linux an existing file is never overwritten. Every release also
 carries a `SHA256SUMS.txt` you can check by hand (see [README.md](README.md#install)).
 
-**Automatic checks.** "Check automatically" (Settings, Updates) is on by default and checks once a
+**Automatic checks.** "Check automatically" (Settings, About) is on by default and checks once a
 day. Turn it off and Fuse only contacts GitHub when you press "Check for updates" or
 "Install Cartridge".
 

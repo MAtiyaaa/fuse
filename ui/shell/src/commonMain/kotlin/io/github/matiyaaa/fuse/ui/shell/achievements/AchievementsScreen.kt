@@ -123,7 +123,7 @@ private fun NotConnected(app: AppState, configured: Boolean) {
     InputLayer(enabled = app.focusZone == FocusZone.CONTENT && !app.overlayOpen) { e ->
         when (e.action) {
             NavAction.SELECT -> when {
-                !configured -> { app.go(Route.Settings("achievements")); NavResult.ACTIVATED }
+                !configured -> { app.go(Route.Settings("accounts")); NavResult.ACTIVATED }
                 slow -> { retry(); NavResult.ACTIVATED }
                 else -> NavResult.BLOCKED
             }
@@ -161,7 +161,7 @@ private fun NotConnected(app: AppState, configured: Boolean) {
                 actionLabel = "Connect",
                 actionSelected = focused,
                 actionIcon = FuseIcons.Link,
-                onAction = { app.go(Route.Settings("achievements")) },
+                onAction = { app.go(Route.Settings("accounts")) },
             )
         }
     }

@@ -25,7 +25,7 @@ import io.github.matiyaaa.fuse.ui.shell.store.ProblemKind
 import io.github.matiyaaa.fuse.ui.shell.store.Severity
 import kotlinx.coroutines.launch
 
-/** Settings, Backup and restore: make a backup file, restore one (choosing what), and put settings back after a restore. */
+/** Settings, Storage and backups: make a backup file, restore one (choosing what), and put settings back after a restore. */
 @Composable
 fun backupRows(app: AppState): List<MenuAction> {
     val canUndo by app.store.backup.canUndo.collectAsState()

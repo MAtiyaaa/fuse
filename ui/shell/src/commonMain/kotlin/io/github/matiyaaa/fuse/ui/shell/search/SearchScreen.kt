@@ -107,6 +107,7 @@ import io.github.matiyaaa.fuse.ui.shell.store.SearchResults
 import io.github.matiyaaa.fuse.ui.shell.store.SearchSuggestion
 import io.github.matiyaaa.fuse.ui.shell.settings.SettingHit
 import io.github.matiyaaa.fuse.ui.shell.settings.SettingsIndex
+import io.github.matiyaaa.fuse.ui.shell.settings.openSettings
 import io.github.matiyaaa.fuse.ui.shell.settings.settingsSections
 import io.github.matiyaaa.fuse.ui.shell.systems.SystemMark
 import io.github.matiyaaa.fuse.ui.shell.systems.gamesText
@@ -229,7 +230,7 @@ fun SearchScreen(app: AppState) {
     val sections = remember { settingsSections.filter { it.available(app) } }
     val hits = remember(results) {
         // Settings are found by name alone, never with filters.
-        val settings = if (results.chips.isEmpty()) SettingsIndex.search(results.query, sections).map { Hit.Setting(it) } else emptyList()
+        val settings = if (results.chips.isEmpty()) SettingsIndex.search(results.query, sections, cartridge = app.platform.features.cartridge).map { Hit.Setting(it) } else emptyList()
         val choosing = SearchSyntax.parse(results.query).pending != null
         results.suggestions.map { Hit.Suggestion(it, choosing) } +
             results.games.map { Hit.Game(it) } + results.platforms.map { Hit.System(it) } +
@@ -268,7 +269,7 @@ fun SearchScreen(app: AppState) {
             is Hit.System -> app.go(Route.PlatformGames(hit.card.platform.id))
             is Hit.App -> app.openApp(hit.card)
             is Hit.Collection -> app.go(Route.CollectionGames(hit.c.id, hit.c.name))
-            is Hit.Setting -> app.go(Route.Settings(hit.hit.topic.section, hit.hit.topic.row))
+            is Hit.Setting -> hit.hit.topic.let { t -> app.openSettings(t.section, t.row, t.group) }
             // A filter goes into the search; the keys take over again for what comes next.
             is Hit.Suggestion -> {
                 field.replaceAll(hit.s.text)

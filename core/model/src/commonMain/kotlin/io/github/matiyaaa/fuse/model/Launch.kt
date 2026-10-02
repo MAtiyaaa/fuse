@@ -152,7 +152,7 @@ data class InstalledEmulator(
     val appId: String,
     val version: String? = null,
     val platforms: Set<PlatformId>,
-    /** How it was found, for Settings -> Emulators (for example "Flatpak", "PATH", "AppImage"). */
+    /** How it was found, for Settings, Systems and emulators (for example "Flatpak", "PATH", "AppImage"). */
     val detectedVia: String,
     /** True when this is a fork/rename matched by family rather than an exact known package. */
     val isFamilyMatch: Boolean = false,

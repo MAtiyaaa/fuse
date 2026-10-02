@@ -173,10 +173,10 @@ internal fun AuditDriver.everythingScreens() {
     scenario("emulators", "an emulator's page and choosing one for a game") {
         useLibrary()
         openSettings()
-        tap(PadButton.DPAD_DOWN, sectionIndex("emulators"))
+        tap(PadButton.DPAD_DOWN, sectionIndex("systems"))
         tap(PadButton.DPAD_RIGHT)
-        waitFor("Look for emulators again")
         val first = runBlocking { libraryStore.emulators.installed.value.minByOrNull { it.name.lowercase() } } ?: throw NotCovered("No emulators in the audit library")
+        waitFor(first.name)
         tapText(first.name, substring = true)
         waitFor("How Fuse starts it")
         settle(900)
@@ -188,6 +188,18 @@ internal fun AuditDriver.everythingScreens() {
         waitFor("Emulator for")
         settle(900)
         shoot("emulators for one game, with why some can't run it", 900)
+    }
+
+    scenario("settings2", "a folded setting found by search") {
+        useLibrary { it.copy(crt = it.crt.copy(enabled = true)) }
+        search("scanlines")
+        waitFor("CRT effect")
+        tap(PadButton.START)
+        tap(PadButton.A)
+        // The tuning under the switch opens with it, so the slider asked for is right there.
+        waitFor("Curvature")
+        settle(900)
+        shoot("CRT tuning unfolded under its switch")
     }
 
     scenario("reading", "extra large text, kept clear of a TV's edges") {

@@ -53,6 +53,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.sound.SoundCue
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
+import io.github.matiyaaa.fuse.ui.shell.settings.openSettings
 import io.github.matiyaaa.fuse.ui.shell.store.GameCard
 import io.github.matiyaaa.fuse.ui.shell.store.Problem
 import io.github.matiyaaa.fuse.ui.shell.store.ProblemAction
@@ -125,7 +126,7 @@ fun AppState.runProblemAction(action: ProblemAction, spec: ProblemSpec?) {
             toasts.show("Looking at your drives")
         }
         is ProblemAction.OpenStorage -> go(Route.Storage)
-        is ProblemAction.OpenSettings -> go(Route.Settings(action.section))
+        is ProblemAction.OpenSettings -> openSettings(action.section, group = action.group)
         is ProblemAction.GrantAccess -> platform.storage.request()
         is ProblemAction.OpenSystem -> go(Route.PlatformSettings(action.platform))
         is ProblemAction.OpenGame -> go(Route.GameInfo(action.game))
