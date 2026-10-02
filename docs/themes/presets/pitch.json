@@ -7,14 +7,17 @@
   "dark": true,
   "colors": {
     "background": "#000000",
-    "surface": "#0D0D0F",
-    "surfaceRaised": "#17171A",
-    "accent": "#EDEDED",
-    "accentSoft": "#EDEDED26",
+    "surface": "#0C0C0E",
+    "surfaceRaised": "#161619",
+    "accent": "#F2F2F2",
+    "accentSoft": "#F2F2F226",
     "onAccent": "#0A0A0A",
-    "text": "#E8E8EA",
-    "textMuted": "#8E8E95",
-    "focus": "#FFFFFF"
+    "text": "#EDEDEF",
+    "textMuted": "#9E9EA6",
+    "focus": "#FFFFFF",
+    "success": "#5FD49A",
+    "warning": "#E8B45A",
+    "danger": "#F0717E"
   },
   "background": {
     "style": "solid",

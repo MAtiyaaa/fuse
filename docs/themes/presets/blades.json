@@ -6,15 +6,18 @@
   "extends": "blades",
   "dark": true,
   "colors": {
-    "background": "#0A0F0B",
-    "surface": "#131B15",
-    "surfaceRaised": "#1C281F",
-    "accent": "#86DC5C",
-    "accentSoft": "#86DC5C33",
-    "onAccent": "#08140A",
-    "text": "#F1F6F0",
-    "textMuted": "#A2B0A0",
-    "focus": "#FFFFFF"
+    "background": "#080E0A",
+    "surface": "#111A14",
+    "surfaceRaised": "#1A271E",
+    "accent": "#8FE36A",
+    "accentSoft": "#8FE36A33",
+    "onAccent": "#07140A",
+    "text": "#F1F7EF",
+    "textMuted": "#ABBBA8",
+    "focus": "#FFFFFF",
+    "success": "#4FE0B6",
+    "warning": "#FFC85E",
+    "danger": "#FF6B6B"
   },
   "background": {
     "style": "aurora",
