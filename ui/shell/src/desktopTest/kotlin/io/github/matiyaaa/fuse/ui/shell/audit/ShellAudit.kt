@@ -47,6 +47,17 @@ internal fun AuditDriver.openSettings() {
     settle()
 }
 
+/** Settings, Appearance, then Theme: the theme page, once its gallery is in. */
+private fun AuditDriver.openThemes() {
+    openSettings()
+    tap(PadButton.DPAD_DOWN, sectionIndex("appearance"))
+    tap(PadButton.DPAD_RIGHT)
+    // Its rows may be laid out under the sections (a phone held upright): Theme is the first.
+    settle(600)
+    tapText("Theme")
+    waitFor("built in")
+}
+
 /** A downloads folder with a game file and an APK, and the library as an SD card, for the file picker. */
 private fun AuditDriver.storageForPicker() {
     val folder = File(root.parentFile, "audit-downloads").apply { mkdirs() }
@@ -533,7 +544,8 @@ internal fun AuditDriver.lookScreens() {
             waitFor("Continue playing")
             tap(PadButton.DPAD_LEFT)
             shoot("Home", 2_000)
-            tap(PadButton.R1)
+            // Along the top line to the Library (Systems comes first).
+            tab(io.github.matiyaaa.fuse.model.Destination.LIBRARY)
             waitFor("Recently played")
             shoot("Library")
             home()
@@ -545,31 +557,7 @@ internal fun AuditDriver.lookScreens() {
         }
     }
 
-    scenario("settings", "themes gallery") {
-        useLibrary()
-        // A theme someone shared, added as if from its link.
-        val shared = """{"fuseTheme": 1, "name": "Deep Sea", "author": "a friend", "extends": "wave", "colors": {"background": "#051216", "surface": "#0C1E24", "surfaceRaised": "#132A31", "accent": "#3FD6C6", "onAccent": "#03201C", "text": "#ECF8F7", "textMuted": "#9DB8B6"}, "background": {"style": "wave", "secondary": "#7FB2FF"}, "focus": "glow"}"""
-        val parsed = libraryStore.themes.parse(shared) as io.github.matiyaaa.fuse.model.ThemeCodec.Imported
-        kotlinx.coroutines.runBlocking { libraryStore.themes.add(parsed.spec, shared, "https://example.com/deep-sea.json", apply = false) }
-        openSettings()
-        tap(PadButton.DPAD_DOWN, sectionIndex("appearance"))
-        tap(PadButton.DPAD_RIGHT)
-        waitFor("Game art")
-        tapText("Theme")
-        waitFor("built in")
-        shoot("every theme, the one in use chosen", 1_500)
-        tap(PadButton.X)
-        waitFor("Copy as a theme file")
-        shoot("a theme's options")
-        tap(PadButton.B)
-        tap(PadButton.DPAD_DOWN, 3)
-        tap(PadButton.DPAD_RIGHT, 4)
-        shoot("the added theme and the card that adds one", 1_200)
-        tap(PadButton.A)
-        waitFor("From a link or text")
-        shoot("ways to add a theme")
-        tap(PadButton.B)
-    }
+    themeScreens()
 
     scenario("effects", "performance overlay") {
         useLibrary { it.copy(performanceOverlay = true) }
@@ -811,6 +799,82 @@ internal fun AuditDriver.companionScreens() {
 
 // -------------------------------------------------------------------------------- key screens
 
+/** The theme page: the gallery and its filters, the studio and a save, and a bright theme; at every size. */
+internal fun AuditDriver.themeScreens() {
+    scenario("settings", "themes gallery") {
+        useLibrary()
+        // A theme someone shared, added as if from its link.
+        val shared = """{"fuseTheme": 1, "name": "Deep Sea", "author": "a friend", "extends": "wave", "colors": {"background": "#051216", "surface": "#0C1E24", "surfaceRaised": "#132A31", "accent": "#3FD6C6", "onAccent": "#03201C", "text": "#ECF8F7", "textMuted": "#9DB8B6"}, "background": {"style": "wave", "secondary": "#7FB2FF"}, "focus": "glow"}"""
+        val parsed = libraryStore.themes.parse(shared) as io.github.matiyaaa.fuse.model.ThemeCodec.Imported
+        kotlinx.coroutines.runBlocking { libraryStore.themes.add(parsed.spec, shared, "https://example.com/deep-sea.json", apply = false) }
+        openThemes()
+        // The page is heavy to draw at TV size headless: give the first frame time to arrive.
+        shoot("every theme, the one in use chosen", 3_000)
+        tap(PadButton.X)
+        waitFor("Copy as a theme file")
+        shoot("a theme's options")
+        tap(PadButton.B)
+        // The stage follows the focus: down a row to another theme.
+        tap(PadButton.DPAD_DOWN)
+        shoot("another theme on the stage", 1_500)
+        // Up into the filters, along to Yours: the added theme, then the cards that make and add one.
+        tap(PadButton.DPAD_UP, 3)
+        tap(PadButton.DPAD_RIGHT, 3)
+        waitFor("Deep Sea")
+        shoot("your themes, the filters focused")
+        tap(PadButton.DPAD_DOWN)
+        focusText("Deep Sea") { nav(NavAction.RIGHT) }
+        shoot("the added theme on the stage", 1_500)
+        // Along the grid, onto the next row where this one ends (the number of columns follows the size).
+        focusText("Add a theme") { if (nav(NavAction.RIGHT) != NavResult.MOVED) { nav(NavAction.DOWN); repeat(6) { nav(NavAction.LEFT) } } }
+        shoot("the card that adds one")
+        tap(PadButton.A)
+        waitFor("From a link or text")
+        shoot("ways to add a theme")
+        tap(PadButton.B)
+        // The studio, from the card that makes one: it starts from the theme in use.
+        focusText("Make your own") { if (nav(NavAction.LEFT) != NavResult.MOVED) { nav(NavAction.UP); repeat(6) { nav(NavAction.RIGHT) } } }
+        tap(PadButton.A)
+        waitFor("Accent colour")
+        shoot("the studio, starting from the theme in use", 2_500)
+        tap(PadButton.DPAD_RIGHT, 6)
+        tap(PadButton.DPAD_DOWN)
+        tap(PadButton.DPAD_RIGHT, 7)
+        tap(PadButton.DPAD_DOWN)
+        tap(PadButton.DPAD_RIGHT)
+        tap(PadButton.DPAD_DOWN)
+        tap(PadButton.DPAD_RIGHT)
+        shoot("the studio, a new colour, background, corners and focus", 3_000)
+        focusText("Save as your theme")
+        tap(PadButton.A)
+        waitFor("Name your theme")
+        clearTyping()
+        type("Night Market")
+        shoot("naming the theme")
+        router.textInput?.submit()
+        waitFor("Night Market")
+        shoot("saved, your theme in use", 3_000)
+    }
+
+    scenario("settings", "themes gallery bright") {
+        useLibrary { it.copy(themeId = ThemePresets.Noon.id) }
+        openThemes()
+        shoot("a bright theme in use", 3_000)
+        tap(PadButton.X)
+        waitFor("Make your own from it")
+        tapText("Make your own from it")
+        waitFor("Accent colour")
+        tap(PadButton.DPAD_RIGHT, 5)
+        tap(PadButton.DPAD_DOWN)
+        tap(PadButton.DPAD_RIGHT, 2)
+        shoot("the studio in a bright theme", 3_000)
+        tap(PadButton.B)
+        waitFor("Leave without saving?")
+        shoot("leaving asks first")
+        tap(PadButton.B)
+    }
+}
+
 /** The screens every other size gets: enough to judge each layout at that size. */
 internal fun AuditDriver.keyScreens() {
     homeFlow(exhaustive = false)
@@ -824,4 +888,5 @@ internal fun AuditDriver.keyScreens() {
     cartridgeScreens(exhaustive = false)
     appsScreens(exhaustive = false)
     onboardingScreens(exhaustive = false)
+    themeScreens()
 }
