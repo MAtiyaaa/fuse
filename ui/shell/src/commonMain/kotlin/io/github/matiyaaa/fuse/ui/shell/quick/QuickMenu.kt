@@ -41,6 +41,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import io.github.matiyaaa.fuse.model.ConnectionState
 import io.github.matiyaaa.fuse.model.Destination
+import io.github.matiyaaa.fuse.model.DualScreenMode
 import io.github.matiyaaa.fuse.model.HomeMode
 import io.github.matiyaaa.fuse.model.NavAction
 import io.github.matiyaaa.fuse.model.ScanPhase
@@ -123,6 +124,9 @@ fun QuickMenu(app: AppState) {
     val brightness by platform.quick.brightness.collectAsState()
     val volume by platform.quick.volume.collectAsState()
     val isHome = platform.homeRole?.isHome?.collectAsState()?.value ?: false
+    val displays by platform.displays.collectAsState()
+    // Only with a second screen there: Off, On (the selected game) or Companion (beside the game).
+    val twoScreens = features.secondScreen || displays.count { it.isOn } > 1
     var row by remember { mutableIntStateOf(0) }
     var col by remember { mutableIntStateOf(0) }
 
@@ -159,6 +163,23 @@ fun QuickMenu(app: AppState) {
             }
         }
         add(QuickTile("Display", FuseIcons.Monitor) { close(); app.go(Route.Settings("displays")) })
+        if (twoScreens) {
+            val mode = prefs.display.mode
+            add(QuickTile(
+                "Second screen", FuseIcons.DualScreen, active = mode != DualScreenMode.OFF,
+                detail = secondScreenText(mode),
+            ) {
+                val next = nextSecondScreen(mode)
+                app.store.updatePrefs { it.copy(display = it.display.copy(mode = next)) }
+                app.toasts.show(
+                    when (next) {
+                        DualScreenMode.OFF -> "Second screen is off"
+                        DualScreenMode.LIBRARY_COMPANION -> "Second screen shows the selected game"
+                        else -> "Second screen is your companion while you play"
+                    },
+                )
+            })
+        }
         add(QuickTile("Controller", FuseIcons.Gamepad) { close(); app.go(Route.Settings("inputs")) })
         add(QuickTile("Performance", FuseIcons.Gauge, detail = performanceLabel(prefs.performance)) {
             val next = prefs.performance.next()
@@ -460,4 +481,19 @@ private fun connectionText(state: ConnectionState): String? = when (state) {
     ConnectionState.ON -> "On"
     ConnectionState.OFF -> "Off"
     ConnectionState.UNKNOWN -> null
+}
+
+/** What the second screen tile says: Off, On (the selected game) or Companion. */
+internal fun secondScreenText(mode: DualScreenMode): String = when (mode) {
+    DualScreenMode.OFF -> "Off"
+    DualScreenMode.LIBRARY_COMPANION -> "On"
+    DualScreenMode.GAME_COMPANION -> "Companion"
+    DualScreenMode.REVERSE -> "Games play there"
+}
+
+/** The next of Off, On and Companion. Playing on the second screen is only chosen in Settings. */
+internal fun nextSecondScreen(mode: DualScreenMode): DualScreenMode = when (mode) {
+    DualScreenMode.OFF -> DualScreenMode.LIBRARY_COMPANION
+    DualScreenMode.LIBRARY_COMPANION -> DualScreenMode.GAME_COMPANION
+    DualScreenMode.GAME_COMPANION, DualScreenMode.REVERSE -> DualScreenMode.OFF
 }
