@@ -108,14 +108,26 @@ internal fun AuditDriver.homeFlow(exhaustive: Boolean) {
     scenario("home", "flow arranging") {
         useLibrary()
         waitFor("Continue playing")
-        tap(PadButton.DPAD_DOWN)
+        // Holding A on a shelf of games picks the whole shelf up; up and down place it.
+        tap(PadButton.DPAD_LEFT)
         hold(PadButton.A)
-        waitFor("Moving")
-        shoot("holding A on the Systems shelf picks it up")
+        waitFor("Up and down to place it")
+        shoot("holding A on a shelf of games picks the shelf up")
         tap(PadButton.DPAD_DOWN)
         shoot("shelf moved down one place")
         tap(PadButton.A)
+        waitGone("Up and down to place it")
         shoot("put down")
+        // On the Systems shelf, holding A picks up just that system; left and right place it.
+        focusHint("Hold to move") { tap(PadButton.DPAD_UP) }
+        hold(PadButton.A)
+        waitFor("Left and right to place it")
+        shoot("holding A on a system picks the system up")
+        tap(PadButton.DPAD_RIGHT)
+        shoot("system moved right one place")
+        tap(PadButton.A)
+        waitGone("Left and right to place it")
+        shoot("system put down")
     }
     scenario("home", "posters") {
         useLibrary { it.copy(gameArt = io.github.matiyaaa.fuse.model.GameArtStyle.POSTER) }
@@ -206,9 +218,9 @@ internal fun AuditDriver.homeEmpty() {
         tap(PadButton.DPAD_RIGHT)
         shoot("Run setup focused")
 
-        tap(PadButton.R1)
+        tab(Destination.LIBRARY)
         shoot("Library with no games")
-        tap(PadButton.R1)
+        tab(Destination.SYSTEMS)
         shoot("Systems with no games")
         home()
 

@@ -82,7 +82,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size as GeometrySize
@@ -902,21 +901,16 @@ fun KeyboardField(
                     maxLines = 1,
                     softWrap = false,
                     onTextLayout = { layout = it },
+                    // The shared editing marks: rounded selection blocks, and a caret the height of
+                    // the glyphs that glides to each new place and blinks without recomposing.
                     modifier = Modifier
-                        .drawBehind {
-                            val l = layout ?: return@drawBehind
-                            val sel = value.selection
-                            if (!sel.collapsed && sel.max <= shown.length) drawPath(l.getPathForRange(sel.min, sel.max), c.accent.copy(alpha = 0.35f))
-                        }
-                        .drawWithContent {
-                            drawContent()
-                            val l = layout ?: return@drawWithContent
-                            if (focused && value.selection.collapsed) {
-                                val r = l.getCursorRect(value.selection.start.coerceIn(0, shown.length))
-                                val w = 2.dp.toPx()
-                                drawRoundRect(c.accent, Offset(r.left - w / 2, r.top), GeometrySize(w, r.height), CornerRadius(w / 2), alpha = blink.value)
-                            }
-                        },
+                        .editingSelection({ layout }, value.selection)
+                        .editingCaret(
+                            { layout },
+                            offset = value.selection.start,
+                            visible = focused && value.selection.collapsed,
+                            alpha = { blink.value },
+                        ),
                 )
             }
         }
@@ -939,7 +933,7 @@ fun KeyboardField(
                     Spacer(Modifier.width(Space.s))
                     Box(
                         Modifier
-                            .size(26.dp)
+                            .size(Size.chipCompact)
                             .graphicsLayer { if (!motion.reduced) { val k = if (pressed) 0.92f else 1f; scaleX = k; scaleY = k } }
                             .clip(CircleShape)
                             .background(fill)
@@ -947,7 +941,7 @@ fun KeyboardField(
                             .clickable(interaction, null, onClick = onClear),
                         contentAlignment = Alignment.Center,
                     ) {
-                        FuseIcon(FuseIcons.Close, size = 14.dp, tint = c.text)
+                        FuseIcon(FuseIcons.Close, size = Size.iconXS, tint = c.text)
                     }
                 }
             }

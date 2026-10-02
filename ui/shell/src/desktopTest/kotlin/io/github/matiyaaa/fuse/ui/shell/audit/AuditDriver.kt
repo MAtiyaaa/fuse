@@ -292,6 +292,41 @@ internal class AuditDriver(
         throw NotCovered("\"$text\" was never selected")
     }
 
+    /**
+     * Moves with [step] until a selected item shows any of [texts] (each matched as part of its
+     * text): for rows whose wording depends on the device ("Not installed", "Not found").
+     */
+    fun focusAny(vararg texts: String, step: () -> Unit = { tap(PadButton.DPAD_DOWN) }) {
+        waitFor(texts.first().take(1))
+        repeat(40) {
+            settle(STEP_MS)
+            val on = texts.any { t ->
+                ui.onAllNodes(androidx.compose.ui.test.hasText(t, substring = true) and androidx.compose.ui.test.isSelected()).fetchSemanticsNodes().isNotEmpty()
+            }
+            if (on) return
+            step()
+        }
+        throw NotCovered("None of ${texts.joinToString { "\"$it\"" }} was ever selected")
+    }
+
+    /**
+     * Moves with [step] until the hint line offers [label]: how a screen says what is chosen when its
+     * items carry no selection a test can read (a row of a page, a download). Waits a little after
+     * each step, since the hints follow the selection a frame or two later.
+     */
+    fun focusHint(label: String, step: () -> Unit = { tap(PadButton.DPAD_DOWN) }) {
+        repeat(40) {
+            settle(HINT_STEP_MS)
+            if (hasExactText(label)) return
+            step()
+        }
+        throw NotCovered("The hint \"$label\" never showed")
+    }
+
+    /** True when some text on screen reads exactly [text] (a hint, a button label), not just contains it. */
+    fun hasExactText(text: String): Boolean =
+        ui.onAllNodesWithText(text, substring = false, ignoreCase = false, useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()
+
     fun waitFor(text: String, timeoutMs: Long = 15_000, ignoreCase: Boolean = true) =
         pumpUntil("\"$text\"", timeoutMs) { hasText(text, ignoreCase) }
 
@@ -462,6 +497,7 @@ internal class AuditDriver(
     companion object {
         const val SETTLE_MS = 1_400L
         const val STEP_MS = 90L
+        private const val HINT_STEP_MS = 260L
         private const val FRAME_MS = 16L
         private const val MAX_STEP_MS = 250L
     }

@@ -12,11 +12,13 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.unit.IntSize
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Durations
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Easings
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.FuseMotion
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.first
 
 private val followSpec: AnimationSpec<Float> = spring(dampingRatio = 1f, stiffness = 600f)
 
@@ -38,6 +40,9 @@ fun FuseMotion.followScroll(): AnimationSpec<Float> =
  * [anchor] is where the selected item's leading edge should sit, as a fraction of the viewport.
  */
 suspend fun LazyListState.follow(index: Int, anchor: Float = 0.12f, animate: Boolean = true, spec: AnimationSpec<Float> = followSpec) {
+    // Before the first layout the viewport is empty, so the anchor would come out as 0 and pin the
+    // item to the top, hiding the rows above it (a list opened on its fifth row). Wait for it.
+    if (layoutInfo.viewportSize == IntSize.Zero) snapshotFlow { layoutInfo.viewportSize }.first { it != IntSize.Zero }
     val info = layoutInfo
     val inner = info.viewportSize.let { if (info.orientation == androidx.compose.foundation.gestures.Orientation.Horizontal) it.width else it.height } -
         info.beforeContentPadding - info.afterContentPadding
@@ -55,6 +60,8 @@ suspend fun LazyListState.follow(index: Int, anchor: Float = 0.12f, animate: Boo
 
 /** Grid version: keeps the selected row near [anchor] of the viewport height. */
 suspend fun LazyGridState.follow(index: Int, anchor: Float = 0.2f, animate: Boolean = true, spec: AnimationSpec<Float> = followSpec) {
+    // As for lists: measure only once the grid has been laid out.
+    if (layoutInfo.viewportSize == IntSize.Zero) snapshotFlow { layoutInfo.viewportSize }.first { it != IntSize.Zero }
     val info = layoutInfo
     val viewport = info.viewportEndOffset - info.viewportStartOffset
     val item = info.visibleItemsInfo.firstOrNull { it.index == index }

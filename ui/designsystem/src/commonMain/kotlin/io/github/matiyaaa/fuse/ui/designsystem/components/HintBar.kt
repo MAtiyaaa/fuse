@@ -32,8 +32,8 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.unit.dp
 import io.github.matiyaaa.fuse.ui.designsystem.icons.ButtonGlyph
+import io.github.matiyaaa.fuse.ui.designsystem.icons.ButtonGlyphDefaults
 import io.github.matiyaaa.fuse.ui.designsystem.icons.HintButton
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Durations
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Easings
@@ -137,17 +137,21 @@ private fun HintItem(entry: HintEntry, flash: HintFlash?, onGone: () -> Unit) {
     }
     AnimatedVisibility(
         visibleState = entry.visible,
+        // The room opens and closes without clipping: a clipped hint shows half a glyph while it
+        // moves (a cut disc reads as a rendering fault). Unclipped, the hint is drawn whole beside
+        // the room it is opening, so it only fades in once most of that room is there, and it
+        // fades out at once on the way out, never sitting over its neighbour.
         enter = if (motion.reduced) {
             fadeIn(motion.fade(Durations.FAST))
         } else {
-            expandHorizontally(motion.tween(Durations.BASE, Easings.Standard), expandFrom = Alignment.End) +
-                fadeIn(motion.tween(Durations.BASE, Easings.Fade))
+            expandHorizontally(motion.tween(Durations.BASE, Easings.Standard), expandFrom = Alignment.End, clip = false) +
+                fadeIn(tween(motion.ms(Durations.FAST), delayMillis = motion.ms(ENTER_FADE_DELAY), easing = Easings.Fade))
         },
         exit = if (motion.reduced) {
             fadeOut(motion.fade(Durations.INSTANT))
         } else {
-            shrinkHorizontally(motion.tween(Durations.BASE, Easings.Standard), shrinkTowards = Alignment.End) +
-                fadeOut(motion.tween(Durations.FAST, Easings.Standard))
+            shrinkHorizontally(motion.tween(Durations.BASE, Easings.Standard), shrinkTowards = Alignment.End, clip = false) +
+                fadeOut(motion.tween(Durations.INSTANT, Easings.Standard))
         },
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -186,6 +190,11 @@ private fun HintItem(entry: HintEntry, flash: HintFlash?, onGone: () -> Unit) {
     }
 }
 
-/** Glyph size and the space between one hint and the next (wider than glyph to label, so pairs read as pairs). */
-private val GLYPH = 22.dp
+/** Glyph size (the one every glyph beside label text uses). */
+private val GLYPH = ButtonGlyphDefaults.Size
+
+/** The space between one hint and the next: wider than glyph to label, so pairs read as pairs. */
 private val HINT_GAP = Space.l + Space.xs
+
+/** How far into its opening a new hint starts to fade in (base ms; about a third of the way). */
+private const val ENTER_FADE_DELAY = 70
