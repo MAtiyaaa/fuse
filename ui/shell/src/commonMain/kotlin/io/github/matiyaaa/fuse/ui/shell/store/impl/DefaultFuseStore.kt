@@ -63,6 +63,9 @@ internal class DefaultFuseStore private constructor(
     override val updates = DefaultUpdateOps(ctx)
     override val storage = DefaultStorageOps(ctx, engine.drives)
     override val settings = DefaultScopedSettingsOps(ctx) { reloadPrefs() }
+    override val backup = DefaultBackupOps(ctx) { restore ->
+        writeLock.withLock { restore().also { reloadLocked() } }
+    }
     override val library: DefaultLibraryOps
     override val health: DefaultHealthOps
 
@@ -153,6 +156,8 @@ internal class DefaultFuseStore private constructor(
     }
 
     private suspend fun persist(prefs: UiPrefs) = writeLock.withLock {
+        // A newer value replaced this one (a later change, or a restore reloading everything): it is written instead.
+        if (prefs != prefsState.value) return@withLock
         ctx.settings.value = data.settings.update { it.withUiPrefs(prefs) }
         val scoped = data.scopedSettings
         val global = ScopeRef.Global
@@ -162,7 +167,9 @@ internal class DefaultFuseStore private constructor(
     }
 
     /** Re-reads preferences after a global scoped setting changed outside [updatePrefs]. */
-    private suspend fun reloadPrefs() = writeLock.withLock {
+    private suspend fun reloadPrefs() = writeLock.withLock { reloadLocked() }
+
+    private suspend fun reloadLocked() {
         val settings = data.settings.current()
         ctx.settings.value = settings
         prefsState.value = settings.toUiPrefs(globalScoped(ctx))

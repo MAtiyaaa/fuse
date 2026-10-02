@@ -77,6 +77,37 @@ class AndroidFuseServices(
         writeCacheBytes(relativePath, bytes)
     }
 
+    override suspend fun readFile(path: String, maxBytes: Int): ByteArray? = withContext(Dispatchers.IO) {
+        try {
+            File(path).takeIf { it.isFile && it.length() <= maxBytes }?.readBytes()
+        } catch (e: IOException) {
+            null
+        } catch (e: SecurityException) {
+            null
+        }
+    }
+
+    override suspend fun keepFile(relativePath: String, bytes: ByteArray): String? = withContext(Dispatchers.IO) {
+        if (!StoragePaths.isSafeRelative(relativePath)) return@withContext null
+        try {
+            val root = appContext.filesDir.canonicalFile
+            val file = File(root, relativePath).canonicalFile.takeIf { it.path.startsWith(root.path + File.separator) } ?: return@withContext null
+            val parent = file.parentFile ?: return@withContext null
+            if (!parent.isDirectory && !parent.mkdirs()) return@withContext null
+            val temp = File(parent, ".${file.name}.tmp")
+            temp.writeBytes(bytes)
+            if (!temp.renameTo(file)) {
+                temp.delete()
+                return@withContext null
+            }
+            file.absolutePath
+        } catch (e: IOException) {
+            null
+        } catch (e: SecurityException) {
+            null
+        }
+    }
+
     /** The file for [relativePath] inside the cache, or null when the path would leave it. */
     private fun cacheTarget(relativePath: String): File? {
         if (!StoragePaths.isSafeRelative(relativePath)) return null

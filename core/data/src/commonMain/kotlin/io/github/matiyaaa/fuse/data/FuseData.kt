@@ -1,5 +1,6 @@
 package io.github.matiyaaa.fuse.data
 
+import io.github.matiyaaa.fuse.data.backup.BackupRepository
 import io.github.matiyaaa.fuse.data.db.FuseDatabase
 import io.github.matiyaaa.fuse.data.repo.AppOverrideRepository
 import io.github.matiyaaa.fuse.data.repo.CacheRepository
@@ -36,4 +37,5 @@ class FuseData(
     val titleCleanup by lazy { TitleCleanupRepository(database, dispatcher, clock) }
     val settings by lazy { SettingsStore(database, dispatcher, clock) }
     val scopedSettings by lazy { ScopedSettingsRepository(database, settings, dispatcher, clock) }
+    val backup by lazy { BackupRepository(database, dispatcher, clock) }
 }

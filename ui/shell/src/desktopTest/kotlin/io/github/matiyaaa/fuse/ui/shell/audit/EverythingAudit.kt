@@ -111,4 +111,39 @@ internal fun AuditDriver.everythingScreens() {
         settle(1_500)
         shoot("a system with what needs attention first")
     }
+
+    scenario("backup", "backup and restore") {
+        useLibrary()
+        val store = libraryStore
+        val picker = platform as AuditPlatform
+        val made = runBlocking {
+            val game = store.library.games(GameQuery()).first().first()
+            store.library.setFavorite(game.id, true)
+            store.backup.create()
+        } ?: error("No backup was made")
+        openSettings()
+        tap(PadButton.DPAD_DOWN, sectionIndex("backup"))
+        tap(PadButton.DPAD_RIGHT)
+        waitFor("Back up now")
+        settle(1_200)
+        shoot("make one, restore one")
+
+        picker.pickedFile = io.github.matiyaaa.fuse.ui.shell.platform.OpenedFile(made.name, made.bytes)
+        tapText("Restore a backup")
+        waitFor("Restore this backup?")
+        settle(900)
+        shoot("what the backup holds, and the parts to restore", 900)
+        tapText("Look and Home")
+        waitFor("Put settings back")
+        settle(600)
+        shoot("restored, with settings able to go back")
+
+        picker.pickedFile = io.github.matiyaaa.fuse.ui.shell.platform.OpenedFile("notes.txt", "hello".encodeToByteArray())
+        tapText("Restore a backup")
+        waitFor("That isn't a Fuse backup")
+        settle(600)
+        shoot("a file that isn't a backup", 900)
+        tap(PadButton.B)
+        picker.pickedFile = null
+    }
 }

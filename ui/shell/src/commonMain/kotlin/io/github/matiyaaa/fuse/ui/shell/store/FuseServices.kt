@@ -71,6 +71,19 @@ interface FuseServices {
      */
     suspend fun cacheFile(relativePath: String, content: suspend () -> ByteArray): String? = null
 
+    /**
+     * The bytes of the file at [path] (a picture the user chose, for a backup), or null when it
+     * can't be read or is larger than [maxBytes].
+     */
+    suspend fun readFile(path: String, maxBytes: Int): ByteArray? = null
+
+    /**
+     * Writes [bytes] to [relativePath] below Fuse's own data folder, where it is kept (unlike the
+     * cache): restored pictures and the backup made before a restore. Returns the absolute path, or
+     * null when it could not be written. [relativePath] never leaves that folder.
+     */
+    suspend fun keepFile(relativePath: String, bytes: ByteArray): String? = null
+
     /** Offset of local time from UTC right now, for "today" and "this week" playtime buckets. */
     fun utcOffsetMillis(): Long
 }

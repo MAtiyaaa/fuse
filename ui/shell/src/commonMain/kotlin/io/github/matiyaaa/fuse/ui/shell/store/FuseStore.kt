@@ -1,5 +1,9 @@
 package io.github.matiyaaa.fuse.ui.shell.store
 
+import io.github.matiyaaa.fuse.data.backup.BackupArchive
+import io.github.matiyaaa.fuse.data.backup.BackupPart
+import io.github.matiyaaa.fuse.data.backup.BackupProblem
+import io.github.matiyaaa.fuse.data.backup.RestoreReport
 import io.github.matiyaaa.fuse.model.AchievementState
 import io.github.matiyaaa.fuse.model.AppFilter
 import io.github.matiyaaa.fuse.model.AppKind
@@ -62,6 +66,9 @@ interface FuseStore {
     /** What Fuse found wrong with the setup, and how to fix it. */
     val health: HealthOps get() = HealthOps.None
 
+    /** Backups of what the user made in Fuse, and restoring them. */
+    val backup: BackupOps get() = BackupOps.None
+
     /**
      * Starts what Fuse does by itself (scans, art fills, Cartridge, achievements, update checks)
      * when the store was created in safe mode, which holds it back. Does nothing otherwise.
@@ -97,6 +104,64 @@ interface HealthOps {
         override fun check() = Unit
     }
 }
+
+/**
+ * Backups (`.fusebackup`): settings, how Fuse looks and Home, each game's changes (names,
+ * favourites, emulators, systems, details), collections, chosen art and play time. Never games,
+ * firmware, keys or passwords. Restoring merges into this library: it never deletes, games the
+ * backup names that aren't here are left out, and a copy of how things were is kept first.
+ */
+interface BackupOps {
+    /** Makes a backup of everything now; null when it couldn't be made. */
+    suspend fun create(): BackupMade? = null
+
+    /** Opens [bytes] as a backup and tells what restoring it would do. */
+    suspend fun open(bytes: ByteArray): BackupOpened = BackupOpened.Failed(BackupProblem.NOT_A_BACKUP)
+
+    /** Restores [parts] of [backup]. Null when nothing could be restored (and nothing changed). */
+    suspend fun restore(backup: BackupPreview, parts: Set<BackupPart>): RestoreReport? = null
+
+    /** True while the copy made before this session's last restore can be put back. */
+    val canUndo: StateFlow<Boolean> get() = MutableStateFlow(false)
+
+    /** Puts settings, look and Home back as they were before the last restore. */
+    suspend fun undo(): Boolean = false
+
+    object None : BackupOps
+}
+
+/** A backup made now: its file name and bytes, and what it holds. */
+class BackupMade(
+    val name: String,
+    val bytes: ByteArray,
+    val games: Int,
+    val collections: Int,
+    val sessions: Int,
+    val pictures: Int,
+)
+
+sealed interface BackupOpened {
+    data class Ready(val preview: BackupPreview) : BackupOpened
+    data class Failed(val problem: BackupProblem) : BackupOpened
+}
+
+/** What an opened backup holds and how much of it fits this library. */
+class BackupPreview internal constructor(
+    internal val archive: BackupArchive,
+    val createdAt: Long,
+    val fuseVersion: String,
+    val host: String,
+    /** Games the backup has changes for. */
+    val games: Int,
+    /** Of [games], those found in this library. */
+    val gamesHere: Int,
+    val collections: Int,
+    val sessions: Int,
+    val pictures: Int,
+    val hasSettings: Boolean,
+    /** Made by a newer Fuse; what this one doesn't know is left out. */
+    val newer: Boolean,
+)
 
 /** One thing System health found, and what it is about: the whole setup, a system or a game. */
 data class HealthIssue(

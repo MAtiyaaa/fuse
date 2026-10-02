@@ -260,6 +260,13 @@ internal class AuditPlatform(
     )
     override val performance: StateFlow<List<PerformanceMetric>> = MutableStateFlow(metrics)
 
+    /** What the file picker hands back next (a backup to restore); null is a cancelled picker. */
+    @Volatile var pickedFile: io.github.matiyaaa.fuse.ui.shell.platform.OpenedFile? = null
+
+    override suspend fun openFile(mimeTypes: List<String>, extensions: List<String>, maxBytes: Long) = pickedFile
+
+    override suspend fun saveFile(name: String, mimeType: String, bytes: ByteArray): String? = "Downloads/$name"
+
     /** Settable, for battery states (charging, full, low). */
     val statusFlow = MutableStateFlow(ScreenshotPlatform.status.value)
     override val status: StateFlow<SystemStatus> = statusFlow

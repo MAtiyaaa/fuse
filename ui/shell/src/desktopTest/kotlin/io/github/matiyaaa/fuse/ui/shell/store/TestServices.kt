@@ -141,6 +141,17 @@ internal class FakeServices(
         return file.absolutePath
     }
 
+    override suspend fun readFile(path: String, maxBytes: Int): ByteArray? =
+        File(path).takeIf { it.isFile && it.length() <= maxBytes }?.readBytes()
+
+    override suspend fun keepFile(relativePath: String, bytes: ByteArray): String? {
+        require(!relativePath.contains("..")) { "Kept files never leave the data folder" }
+        val file = File(cache, "kept/$relativePath")
+        file.parentFile.mkdirs()
+        file.writeBytes(bytes)
+        return file.absolutePath
+    }
+
     /** The drives the fake system reports; null reports none, like a host that can't tell. */
     @Volatile var drives: List<io.github.matiyaaa.fuse.model.StorageVolume>? = null
 

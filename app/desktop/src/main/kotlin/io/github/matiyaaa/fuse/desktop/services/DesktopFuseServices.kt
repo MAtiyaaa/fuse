@@ -88,6 +88,20 @@ class DesktopFuseServices private constructor(
         writeBelow(cacheDir, relativePath) { bytes }
     }
 
+    override suspend fun readFile(path: String, maxBytes: Int): ByteArray? = withContext(Dispatchers.IO) {
+        try {
+            File(path).takeIf { it.isFile && it.length() <= maxBytes }?.readBytes()
+        } catch (e: IOException) {
+            null
+        } catch (e: SecurityException) {
+            null
+        }
+    }
+
+    override suspend fun keepFile(relativePath: String, bytes: ByteArray): String? = withContext(Dispatchers.IO) {
+        writeBelow(dirs.data, relativePath) { bytes }
+    }
+
     override fun utcOffsetMillis(): Long = TimeZone.getDefault().getOffset(System.currentTimeMillis()).toLong()
 
     override fun close() {
