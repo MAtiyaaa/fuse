@@ -156,7 +156,7 @@ class PerfHarness {
             driver.tap(PadButton.DPAD_DOWN, settingsSections.indexOfFirst { it.id == "storage" })
             driver.tap(PadButton.DPAD_RIGHT)
             driver.tapText("Games and space")
-            driver.waitFor("Showing", 30_000)
+            driver.waitFor("All systems", 30_000)
             driver.settle(3_000)
             measure("storage-dpad", frames = 120, everyFrames = 4) { press(PadButton.DPAD_DOWN) }
             measure("storage-fling", frames = 60, everyFrames = 60) { driver.touch { swipeUp(startY = height * 0.85f, endY = height * 0.3f, durationMillis = 120) } }

@@ -308,6 +308,17 @@ internal fun AuditDriver.settingsScreens(exhaustive: Boolean) {
         shoot("off")
     }
 
+    // Storage at every size: two panes when wide, the systems as a filter row when narrow.
+    scenario("settings", "storage at a glance") {
+        useLibrary()
+        openSettings()
+        tap(PadButton.DPAD_DOWN, sectionIndex("storage"))
+        tap(PadButton.DPAD_RIGHT)
+        tapText("Games and space")
+        waitFor("Delete selected games")
+        settle(2_500)
+        shoot("drives, systems and games")
+    }
     if (!exhaustive) return
 
     scenario("settings", "add a game") {
@@ -399,25 +410,34 @@ internal fun AuditDriver.settingsScreens(exhaustive: Boolean) {
         tap(PadButton.DPAD_DOWN, sectionIndex("storage"))
         tap(PadButton.DPAD_RIGHT)
         tapText("Games and space")
-        waitFor("Showing")
+        waitFor("All systems")
         settle(2_500)
-        shoot("drives and games by size")
-        tapText("Showing")
-        waitFor("Show games from")
-        tap(PadButton.B)
+        shoot("drives and systems beside the games by size")
         // Pick the two largest games.
-        tapText("Showing")
-        tap(PadButton.B)
         tap(PadButton.DPAD_DOWN)
         tap(PadButton.A)
         tap(PadButton.DPAD_DOWN)
         tap(PadButton.A)
         settle(600)
         shoot("two games picked")
-        // The drives follow the list down, for screens without touch.
+        // Over to the systems: the largest one filters the games, a second press shows all again.
+        tap(PadButton.DPAD_LEFT)
+        tap(PadButton.DPAD_DOWN)
+        settle(400)
+        shoot("systems pane focused")
+        tap(PadButton.A)
+        settle(600)
+        shoot("one system's games")
+        tap(PadButton.DPAD_RIGHT)
+        settle(400)
+        shoot("back on the games, the system shown stays marked")
+        tap(PadButton.DPAD_LEFT)
+        tap(PadButton.A)
+        tap(PadButton.DPAD_RIGHT)
+        // The games scroll on their own; the systems stay where they are.
         tap(PadButton.DPAD_DOWN, 12)
         settle(900)
-        shoot("further down the games, the drives scrolled along")
+        shoot("further down the games, the systems stay")
         tap(PadButton.DPAD_UP, 12)
         tapText("Delete 2 games", step = PadButton.DPAD_UP, substring = true)
         waitFor("This can't be undone")
