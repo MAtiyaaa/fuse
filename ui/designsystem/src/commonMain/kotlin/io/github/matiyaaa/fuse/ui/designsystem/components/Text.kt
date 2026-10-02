@@ -17,9 +17,9 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
+import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
 
 /**
@@ -80,9 +80,9 @@ fun SectionLabel(
         }
         if (rule) {
             Spacer(Modifier.width(Space.m))
-            Box(Modifier.weight(1f).height(1.dp).background(Fuse.colors.hairline))
+            Box(Modifier.weight(1f).height(Size.divider).background(Fuse.colors.hairline))
         }
     }
 }
 
-private val SECTION_ICON = 14.dp
+private val SECTION_ICON = Size.iconXS

@@ -121,8 +121,14 @@ internal fun AuditDriver.homeFlow(exhaustive: Boolean) {
         // On the Systems shelf, holding A picks up just that system; left and right place it.
         focusHint("Hold to move") { tap(PadButton.DPAD_UP) }
         hold(PadButton.A)
-        waitFor("Left and right to place it")
-        shoot("holding A on a system picks the system up")
+        if (runCatching { waitFor("Left and right to place it", 3_000) }.isFailure) {
+            // Recorded, so a hold that stops working shows in the manifest, then reached the other way.
+            gap("home", "flow arranging", "holding A on a system", "Holding A on the Systems shelf did not pick the system up; it was moved from its options instead")
+            tap(PadButton.X)
+            tapText("Move this system")
+            waitFor("Left and right to place it")
+        }
+        shoot("a system picked up")
         tap(PadButton.DPAD_RIGHT)
         shoot("system moved right one place")
         tap(PadButton.A)
