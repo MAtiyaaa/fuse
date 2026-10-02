@@ -118,6 +118,13 @@ class AppState(
     var choice by mutableStateOf<ChoiceSpec?>(null)
     var reorder by mutableStateOf<ReorderSpec?>(null)
 
+    /**
+     * Licence files picked and zRIFs pasted for installs, by "gameId|contentId". Kept in memory for
+     * this run of Fuse only, never written down, so a key goes no further than the emulator.
+     */
+    val contentPicks = androidx.compose.runtime.mutableStateMapOf<String, String>()
+    val contentKeys = androidx.compose.runtime.mutableStateMapOf<String, String>()
+
     /** Text to read before it is saved or shared ([TextPreviewOverlay]). */
     var textPreview by mutableStateOf<TextPreviewSpec?>(null)
 

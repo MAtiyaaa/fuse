@@ -47,14 +47,16 @@ class LinuxCommandAdapter(val def: LinuxEmulatorDef, override val host: Host = H
     override fun accepts(target: LaunchTarget, platform: PlatformId): Boolean =
         opensAppOnly || def.modes.select(target, platform) != null
 
-    override val packageExtensions: Set<String> get() = def.packageInstall?.extensions.orEmpty()
+    override val packageExtensions: Set<String> get() = def.packageInstall?.let { it.extensions + it.archives }.orEmpty()
     override val packageNeedsKey: Boolean get() = def.packageInstall?.needsKey == true
 
     override fun packageInstall(installed: InstalledEmulator, path: String, key: String?): LaunchPlan.Command? {
         val spec = def.packageInstall ?: return null
-        if (path.substringAfterLast('.', "").lowercase() !in spec.extensions) return null
-        if (spec.needsKey && key.isNullOrBlank()) return null
-        val args = spec.args.map { it.replace("{FILE}", path).replace("{KEY}", key.orEmpty().trim()) }
+        val ext = path.substringAfterLast('.', "").lowercase()
+        val archive = ext in spec.archives
+        if (!archive && ext !in spec.extensions) return null
+        if (!archive && spec.needsKey && key.isNullOrBlank()) return null
+        val args = (if (archive) spec.archiveArgs else spec.args).map { it.replace("{FILE}", path).replace("{KEY}", key.orEmpty().trim()) }
         // Programs that read their settings from their own folder (ES-DE's %EMUDIR%) install from there too.
         val ownFolder = def.modes.any { it.spec.workingDir == "{EMUDIR}" }
         val dir = if (ownFolder) installed.appId.replace('\\', '/').substringBeforeLast('/', "").ifEmpty { null } else null

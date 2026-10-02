@@ -130,6 +130,7 @@ fun AppState.runProblemAction(action: ProblemAction, spec: ProblemSpec?) {
         is ProblemAction.GrantAccess -> platform.storage.request()
         is ProblemAction.OpenSystem -> go(Route.PlatformSettings(action.platform))
         is ProblemAction.OpenGame -> go(Route.GameInfo(action.game))
+        is ProblemAction.InstallContent -> go(Route.GameContent(action.game))
         is ProblemAction.AdoptDrive -> scope.launch {
             val ok = store.sources.adoptDrive(action.source)
             toasts.show(if (ok) "Fuse will use this drive for the library" else "That folder can't be read on this drive", if (ok) ToastKind.SUCCESS else ToastKind.WARNING)
@@ -299,6 +300,7 @@ private fun ProblemAction.icon(): ImageVector = when (this) {
     is ProblemAction.GrantAccess -> FuseIcons.LockOpen
     is ProblemAction.OpenSystem -> FuseIcons.Layers
     is ProblemAction.OpenGame -> FuseIcons.Gamepad
+    is ProblemAction.InstallContent -> FuseIcons.Download
     is ProblemAction.AdoptDrive -> FuseIcons.FolderSync
     is ProblemAction.RemoveSource -> FuseIcons.FolderX
     is ProblemAction.Rescan -> FuseIcons.ScanSearch
