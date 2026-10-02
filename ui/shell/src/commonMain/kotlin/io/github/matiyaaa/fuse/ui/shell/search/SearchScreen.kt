@@ -26,6 +26,7 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -188,14 +189,17 @@ fun SearchScreen(app: AppState) {
     }
     val current = hits.getOrNull(sel.index)
     val anyHits = hits.isNotEmpty()
-    LaunchedEffect(inResults, current is Hit.Game, anyHits) {
+    // On a phone held upright the hint line has room for fewer hints.
+    var narrow by remember { mutableStateOf(false) }
+    LaunchedEffect(inResults, current is Hit.Game, anyHits, narrow) {
         app.hero = null
         app.hints = if (inResults) {
             listOfNotNull(Hint(HintButton.CONFIRM, "Open"), if (current is Hit.Game) Hint(HintButton.OPTIONS, "Options") else null, Hint(HintButton.BACK, "Back"))
         } else {
             // "Results" only while there are some to go to.
             listOfNotNull(
-                Hint(HintButton.CONFIRM, "Type"), Hint(HintButton.OPTIONS, "Delete"), Hint(HintButton.SEARCH, "Space"), Hint(HintButton.NEXT, "Cursor"),
+                Hint(HintButton.CONFIRM, "Type"), Hint(HintButton.OPTIONS, "Delete"), Hint(HintButton.SEARCH, "Space"),
+                if (narrow) null else Hint(HintButton.NEXT, "Cursor"),
                 if (anyHits) Hint(HintButton.MENU, "Results") else null,
             )
         }
@@ -235,9 +239,10 @@ fun SearchScreen(app: AppState) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
         // A phone held upright stacks the keys over the results; anything wider sets them side by side.
         val stacked = maxWidth < Size.touch * 14
+        SideEffect { narrow = stacked }
         val compact = maxHeight < Size.touch * 12
         val keyHeight = if (compact || stacked) Size.touch - Space.s else Size.touch - Space.xs
-        // The keys' width; on a narrow keyboard the last key says the short "Done", which fits.
+        // The keys' width; on a narrow keyboard the last key says something shorter that fits.
         val keysWidth = if (stacked) maxWidth - Space.gutter * 2 else (maxWidth - Space.gutter * 2 - Space.xxl) / 2
         val inputs: @Composable ColumnScope.() -> Unit = {
             KeyboardField(
@@ -253,7 +258,11 @@ fun SearchScreen(app: AppState) {
                 keyboard, field, { if (hits.isNotEmpty()) inResults = true },
                 modifier = Modifier.reveal(reveal, 1),
                 keyHeight = keyHeight,
-                doneLabel = if (keysWidth < Size.touch * 9) "Done" else "Results",
+                doneLabel = when {
+                    keysWidth < Size.touch * 7 -> "Go"
+                    keysWidth < Size.touch * 9 -> "Done"
+                    else -> "Results"
+                },
                 showFocus = !inResults && app.focusZone == FocusZone.CONTENT,
                 onPaste = { app.pasteInto(field) },
                 onKey = { app.platform.haptics.tick() },
@@ -400,7 +409,7 @@ private fun ResultList(
         contentPadding = PaddingValues(bottom = Size.hintHeight + Space.xl),
         modifier = Modifier
             .fillMaxSize()
-            .fadingEdges(list, top = Space.l, bottom = Space.x3)
+            .fadingEdges(list, top = Space.l, bottom = Size.hintHeight + Space.l)
             .drawBehind {
                 if (shown <= 0.01f || hits.isEmpty()) return@drawBehind
                 val info = list.layoutInfo

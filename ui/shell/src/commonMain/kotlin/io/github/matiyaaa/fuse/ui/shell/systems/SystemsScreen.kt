@@ -220,7 +220,7 @@ fun SystemsScreen(app: AppState) {
                 columns = GridCells.Fixed(columns),
                 state = grid,
                 modifier = Modifier
-                    .fadingEdges(grid, top = Space.l, bottom = Space.x3)
+                    .fadingEdges(grid, top = Space.xl, bottom = Size.hintHeight + Space.l)
                     .dragReorder(
                         drag,
                         visibleKeys = { grid.layoutInfo.visibleItemsInfo.map { it.key } },
@@ -495,7 +495,7 @@ internal fun SystemHeader(
                 // Only firmware Fuse knows is missing is told; one it can't check is never a warning.
                 val problem = firmwareProblem(s)
                 // Where the line would crowd (a phone held upright), the firmware gets its own line.
-                val apart = problem != null && maxWidth < Size.touch * 10
+                val apart = problem != null && maxWidth < Size.touch * 8
                 Column(verticalArrangement = Arrangement.spacedBy(Space.xs)) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s)) {
                         FText(gamesText(s.gameCount), Fuse.type.bodyStrong.tabular(), color = c.text, maxLines = 1)

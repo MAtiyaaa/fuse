@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
@@ -222,7 +223,7 @@ fun CollectionsScreen(app: AppState) {
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(columns),
                     state = grid,
-                    modifier = Modifier.weight(1f).fadingEdges(grid, top = Space.xl, bottom = Space.x3),
+                    modifier = Modifier.weight(1f).fadingEdges(grid, top = Space.xl, bottom = Size.hintHeight + Space.l),
                     contentPadding = PaddingValues(start = Space.gutter, end = Space.gutter, top = Space.l, bottom = Size.hintHeight + Space.x4),
                     horizontalArrangement = Arrangement.spacedBy(gap),
                     verticalArrangement = Arrangement.spacedBy(Space.xl),
@@ -243,6 +244,18 @@ fun CollectionsScreen(app: AppState) {
                                 app, item.collection, selected, artHeight, tap,
                                 onLongClick = { state.inTabs = false; sel.index = i; app.openContextMenu(app.collectionMenu(item.collection)) },
                                 modifier = rise,
+                            )
+                        }
+                    }
+                    // None of your own yet: the card above is the way in, and this says what it is for.
+                    if (view == CollectionsView.COLLECTIONS && mine.isEmpty()) {
+                        item(key = "none", span = { GridItemSpan(maxLineSpan) }) {
+                            EmptyState(
+                                FuseIcons.Bookmark,
+                                "No collections yet",
+                                modifier = Modifier.fillMaxWidth().padding(top = Space.xl).reveal(reveal, 2),
+                                message = "Gather games into shelves of your own: couch co-op, a weekend queue, the ones you love. Make one with the card above, or from any game's options.",
+                                compact = true,
                             )
                         }
                     }

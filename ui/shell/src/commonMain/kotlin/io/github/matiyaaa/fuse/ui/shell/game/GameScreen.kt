@@ -282,36 +282,49 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
                     Spacer(Modifier.height(Space.l))
                     FactChips(d, Modifier.reveal(reveal, 1))
                     Spacer(Modifier.height(Space.xl))
-                    FlowRow(
-                        Modifier.reveal(reveal, 2),
-                        horizontalArrangement = Arrangement.spacedBy(Space.m),
-                        verticalArrangement = Arrangement.spacedBy(Space.m),
-                    ) {
-                        actions.forEachIndexed { i, a ->
-                            val selected = row == "actions" && col == i && focused
-                            val tap = { sel.row = 0; sel.setColumn("actions", i); a.run() }
-                            if (a.label != null) {
-                                FuseButton(
-                                    a.label, selected = selected, icon = a.icon,
-                                    kind = if (a.primary) ButtonKind.PRIMARY else ButtonKind.SECONDARY,
-                                    height = if (a.primary) Size.row else Size.touch,
-                                    // The emulator reads as a choice: its name, and a chevron for "pick another".
-                                    trailingIcon = if (a.id == "emu") FuseIcons.ChevronDown else null,
-                                    // Play stays pressable without an emulator: pressing it explains what to install.
-                                    enabled = !a.primary || d.emulator.canLaunch || d.emulator.selected != null,
-                                    modifier = Modifier.align(Alignment.CenterVertically)
-                                        .then(if (a.primary) Modifier.widthIn(min = Size.touch * 3) else Modifier),
-                                    onClick = tap,
-                                )
-                            } else {
-                                IconButton(
-                                    a.icon, selected = selected,
-                                    tint = if (a.id == "fav" && game.favorite) c.accent else c.text,
-                                    contentDescription = a.name,
-                                    modifier = Modifier.align(Alignment.CenterVertically),
-                                    onClick = tap,
-                                )
+                    // One button, drawn the same in either arrangement below.
+                    val button: @Composable (Int, Modifier) -> Unit = { i, m ->
+                        val a = actions[i]
+                        val selected = row == "actions" && col == i && focused
+                        val tap = { sel.row = 0; sel.setColumn("actions", i); a.run() }
+                        if (a.label != null) {
+                            FuseButton(
+                                a.label, selected = selected, icon = a.icon,
+                                kind = if (a.primary) ButtonKind.PRIMARY else ButtonKind.SECONDARY,
+                                height = if (a.primary) Size.row else Size.touch,
+                                // The emulator reads as a choice: its name, and a chevron for "pick another".
+                                trailingIcon = if (a.id == "emu") FuseIcons.ChevronDown else null,
+                                // Play stays pressable without an emulator: pressing it explains what to install.
+                                enabled = !a.primary || d.emulator.canLaunch || d.emulator.selected != null,
+                                modifier = m.then(if (a.primary) Modifier.widthIn(min = Size.touch * 3) else Modifier),
+                                onClick = tap,
+                            )
+                        } else {
+                            IconButton(
+                                a.icon, selected = selected,
+                                tint = if (a.id == "fav" && game.favorite) c.accent else c.text,
+                                contentDescription = a.name,
+                                modifier = m,
+                                onClick = tap,
+                            )
+                        }
+                    }
+                    if (layout.stackActions) {
+                        // A phone held upright: Play and the emulator span the width, the quick
+                        // actions share one row under them, so nothing wraps raggedly.
+                        Column(Modifier.reveal(reveal, 2), verticalArrangement = Arrangement.spacedBy(Space.m)) {
+                            actions.indices.filter { actions[it].label != null }.forEach { button(it, Modifier.fillMaxWidth()) }
+                            Row(horizontalArrangement = Arrangement.spacedBy(Space.m)) {
+                                actions.indices.filter { actions[it].label == null }.forEach { button(it, Modifier) }
                             }
+                        }
+                    } else {
+                        FlowRow(
+                            Modifier.reveal(reveal, 2),
+                            horizontalArrangement = Arrangement.spacedBy(Space.m),
+                            verticalArrangement = Arrangement.spacedBy(Space.m),
+                        ) {
+                            actions.indices.forEach { button(it, Modifier.align(Alignment.CenterVertically)) }
                         }
                     }
                     LaunchNote(d, Modifier.reveal(reveal, 3))
@@ -455,6 +468,8 @@ private data class GameLayout(
     /** The widest a paragraph should run. */
     val reading: Dp,
     val cardsPerLine: Int,
+    /** Narrow screens set the actions in full-width rows instead of one wrapping line. */
+    val stackActions: Boolean,
 ) {
     companion object {
         fun of(width: Dp, height: Dp): GameLayout {
@@ -470,6 +485,7 @@ private data class GameLayout(
                     content >= Size.touch * 10 -> 2
                     else -> 1
                 },
+                stackActions = content < Size.touch * 10,
             )
         }
     }
