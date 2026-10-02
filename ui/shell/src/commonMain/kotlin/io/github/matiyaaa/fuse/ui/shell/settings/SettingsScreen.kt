@@ -36,6 +36,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.addOutline
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.FirstBaseline
 import androidx.compose.ui.layout.onSizeChanged
@@ -208,7 +209,7 @@ fun SettingsScreen(app: AppState, initialSection: String?) {
                         SectionHeading(section, Modifier.weight(1f), compact = true)
                     }
                     Spacer(Modifier.height(Space.m))
-                    SectionPanel(panelRows, rowSel, focused && inRows, openThemes, short = true, Modifier.weight(1f).reveal(1))
+                    SectionPanel(panelRows, rowSel, focused && inRows, openThemes, short = true, Modifier.weight(1f).padding(bottom = Size.hintHeight + Space.s).reveal(1))
                 }
             }
         } else {
@@ -283,7 +284,7 @@ private fun SectionPanel(
  * The heading of a page Settings opens (Controls, Storage, Phone Link, Licences): its name in the
  * display face and a muted line under it, the same as Settings' own, so moving between them reads
  * as one place. [short] screens get a smaller name. [status] sits after the line (a progress bar, a
- * state).
+ * state), or under it when [stacked] (narrow screens, where the line needs the whole width).
  */
 @Composable
 internal fun SettingsPageHeading(
@@ -291,13 +292,23 @@ internal fun SettingsPageHeading(
     subtitle: String,
     short: Boolean,
     modifier: Modifier = Modifier,
+    stacked: Boolean = false,
     status: (@Composable () -> Unit)? = null,
 ) {
     Column(modifier, verticalArrangement = Arrangement.spacedBy(Space.xxs)) {
         FText(title, if (short) Fuse.type.title else Fuse.type.display, maxLines = 1)
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            FText(subtitle, if (short) Fuse.type.caption else Fuse.type.body, color = Fuse.colors.textMuted, maxLines = 2, modifier = Modifier.weight(1f, fill = false))
+        val line = @Composable { m: Modifier ->
+            FText(subtitle, if (short) Fuse.type.caption else Fuse.type.body, color = Fuse.colors.textMuted, maxLines = 2, modifier = m)
+        }
+        if (stacked || status == null) {
+            line(Modifier)
             if (status != null) {
+                Spacer(Modifier.height(Space.xs))
+                status()
+            }
+        } else {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                line(Modifier.weight(1f, fill = false))
                 Spacer(Modifier.width(Space.l))
                 status()
             }
@@ -351,27 +362,30 @@ private fun ThemeCard(short: Boolean, onOpen: () -> Unit, modifier: Modifier = M
 
 private fun themeCardHeight(short: Boolean): Dp = if (short) Size.thumbL + Space.m * 2 - Space.s else Size.thumbL + Space.xl + Space.m
 
-/** The theme's colours in a row of small dots: the room, its panels, the text and the accent. */
+/**
+ * The theme's colours as a row of small chips in its tile corners: the room, its panels, the muted
+ * and main text, and the accent. Each has a hairline so the room's chip still shows on the card.
+ */
 @Composable
 private fun Palette() {
     val c = Fuse.colors
-    val dots = listOf(c.ink, c.surfaceRaised, c.textMuted, c.text, c.accent)
-    val ring = c.text.copy(alpha = if (c.isDark) 0.22f else 0.2f)
-    val edge = c.surface
-    val d = Size.iconS + Space.xxs
-    // Each dot overlaps the one before by a quarter, outlined in the panel colour so they stay apart.
+    val chips = listOf(c.ink, c.surfaceRaised, c.textMuted, c.text, c.accent)
+    val edge = c.text.copy(alpha = if (c.isDark) 0.2f else 0.18f)
+    val shape = SquircleShape.fraction(Fuse.geometry.tileCornerFraction.coerceAtLeast(0.12f) + 0.06f)
+    val d = Size.iconS
+    val gap = Space.xs
     Spacer(
-        Modifier.size(width = d + d * 0.75f * (dots.size - 1), height = d).drawWithCache {
-            val r = size.height / 2
-            val step = r * 1.5f
-            val outline = androidx.compose.ui.graphics.drawscope.Stroke(1.5.dp.toPx())
+        Modifier.size(width = d * chips.size + gap * (chips.size - 1), height = d).drawWithCache {
+            val side = size.height
+            val step = side + gap.toPx()
+            val outline = Path().apply { addOutline(shape.createOutline(androidx.compose.ui.geometry.Size(side, side), layoutDirection, this@drawWithCache)) }
             val hair = androidx.compose.ui.graphics.drawscope.Stroke(1.dp.toPx())
             onDrawBehind {
-                dots.forEachIndexed { i, color ->
-                    val center = Offset(r + i * step, r)
-                    drawCircle(color, r, center)
-                    drawCircle(ring, r - 0.5.dp.toPx(), center, style = hair)
-                    if (i > 0) drawCircle(edge, r + 0.75.dp.toPx(), center, style = outline)
+                chips.forEachIndexed { i, color ->
+                    translate(left = i * step) {
+                        drawPath(outline, color)
+                        drawPath(outline, edge, style = hair)
+                    }
                 }
             }
         },

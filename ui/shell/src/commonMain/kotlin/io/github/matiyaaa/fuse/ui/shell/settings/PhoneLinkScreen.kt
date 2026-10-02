@@ -85,7 +85,7 @@ fun phoneLinkRows(app: AppState): List<MenuAction> {
             onSelect = { app.go(Route.PhoneLink) },
         ))
         addAll(phoneLinkAccountRows(app, link, state))
-        labelled("What a phone can do") { addAll(phoneLinkInfoRows()) }
+        labelled("") { addAll(phoneLinkInfoRows()) }
     }
 }
 
@@ -217,7 +217,7 @@ fun PhoneLinkScreen(app: AppState) {
                 ))
             }
         }
-        labelled("What a phone can do") { addAll(phoneLinkInfoRows()) }
+        labelled("") { addAll(phoneLinkInfoRows()) }
     }
     sel.clamp(rows.size)
 
@@ -228,7 +228,7 @@ fun PhoneLinkScreen(app: AppState) {
         val short = maxHeight < SHORT_BELOW
         Column(Modifier.fillMaxSize().padding(horizontal = if (wide) Space.gutter else Space.gutterCompact)) {
             Spacer(Modifier.height(Size.hudHeight + if (short) Space.s else Space.l))
-            SettingsPageHeading("Phone Link", "Your library from a phone on the same Wi-Fi", short, Modifier.reveal(0)) {
+            SettingsPageHeading("Phone Link", "Your library from a phone on the same Wi-Fi", short, Modifier.reveal(0), stacked = !wide) {
                 LinkStatus(on, state, address)
             }
             Spacer(Modifier.height(if (short) Space.m else Space.l))
@@ -251,11 +251,18 @@ fun PhoneLinkScreen(app: AppState) {
                     }
                 }
             } else {
-                Panel(Modifier.fillMaxSize().padding(bottom = Size.hintHeight + Space.s).reveal(1)) {
-                    MenuList(
-                        rows, sel, modifier = Modifier.padding(Space.s), showSelection = app.focusZone == FocusZone.CONTENT,
-                        header = { PairingCard(link, on, state, address, QR_COMPACT, true, Modifier.fillMaxWidth().padding(vertical = Space.l)) },
-                    )
+                // The code stays in view above the rows; the steps give way to one line.
+                Column(Modifier.fillMaxSize().padding(bottom = Size.hintHeight + Space.s), verticalArrangement = Arrangement.spacedBy(Space.l)) {
+                    Panel(Modifier.fillMaxWidth().reveal(1)) {
+                        PairingCard(link, on, state, address, QR_COMPACT, false, Modifier.fillMaxWidth().padding(Space.l))
+                    }
+                    Panel(Modifier.fillMaxWidth().weight(1f).reveal(2)) {
+                        MenuList(
+                            rows, sel,
+                            showSelection = app.focusZone == FocusZone.CONTENT,
+                            modifier = Modifier.padding(Space.s).menuEdges(rows, sel.index),
+                        )
+                    }
                 }
             }
         }
@@ -395,4 +402,4 @@ private val ADDRESS_ROOM = 48.dp
 /** The code's size: as large as the card allows within these, and on narrow screens. */
 private val QR_MIN = 112.dp
 private val QR_MAX = 300.dp
-private val QR_COMPACT = 200.dp
+private val QR_COMPACT = 168.dp

@@ -47,6 +47,7 @@ import io.github.matiyaaa.fuse.ui.shell.app.label
 import io.github.matiyaaa.fuse.ui.shell.app.locatePicker
 import io.github.matiyaaa.fuse.ui.shell.app.offers
 import io.github.matiyaaa.fuse.ui.shell.app.screenName
+import io.github.matiyaaa.fuse.ui.shell.home.bytesText
 import io.github.matiyaaa.fuse.ui.shell.home.title
 import io.github.matiyaaa.fuse.ui.shell.music.BundledMusic
 import io.github.matiyaaa.fuse.ui.shell.platform.StorageState
@@ -972,6 +973,7 @@ fun networkRows(app: AppState): List<MenuAction> = buildList {
 @Composable
 fun storageRows(app: AppState): List<MenuAction> {
     val storage by app.platform.storage.state.collectAsState()
+    val usage by app.store.storage.usage.collectAsState()
     return buildList {
         add(MenuAction(
             "access", "File access", FuseIcons.HardDrive,
@@ -984,9 +986,12 @@ fun storageRows(app: AppState): List<MenuAction> {
             trailing = Trailing.Value(if (storage == StorageState.GRANTED || storage == StorageState.NOT_NEEDED) "Allowed" else "Allow"),
             onSelect = { app.platform.storage.request() },
         ))
+        // What the last measurement found, when there is one; otherwise what the page is for.
+        val measured = usage?.takeIf { it.finished && it.games.isNotEmpty() }
         add(MenuAction(
-            "space", "Games and space", FuseIcons.HardDrive,
-            detail = "What each game takes on each drive, and deleting games you're done with",
+            "space", "Games and space", FuseIcons.ChartPie,
+            detail = measured?.let { u -> "${u.games.size} games take ${bytesText(u.games.sumOf { it.bytes })}. See each drive, and delete games you're done with" }
+                ?: "What each game takes on each drive, and deleting games you're done with",
             trailing = Trailing.Chevron,
             onSelect = { app.go(Route.Storage) },
         ))
