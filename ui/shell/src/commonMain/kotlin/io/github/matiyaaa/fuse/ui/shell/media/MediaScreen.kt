@@ -2,8 +2,6 @@ package io.github.matiyaaa.fuse.ui.shell.media
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -16,17 +14,15 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
-import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
@@ -47,9 +43,14 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import io.github.matiyaaa.fuse.model.ArtworkOption
@@ -65,18 +66,29 @@ import io.github.matiyaaa.fuse.model.ScrapeCandidate
 import io.github.matiyaaa.fuse.model.ScrapeProviderId
 import io.github.matiyaaa.fuse.ui.designsystem.components.ButtonKind
 import io.github.matiyaaa.fuse.ui.designsystem.components.Chip
+import io.github.matiyaaa.fuse.ui.designsystem.components.EmptyState
 import io.github.matiyaaa.fuse.ui.designsystem.components.FText
 import io.github.matiyaaa.fuse.ui.designsystem.components.FuseButton
 import io.github.matiyaaa.fuse.ui.designsystem.components.Hint
+import io.github.matiyaaa.fuse.ui.designsystem.components.IconBadge
 import io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction
+import io.github.matiyaaa.fuse.ui.designsystem.components.MenuArt
+import io.github.matiyaaa.fuse.ui.designsystem.components.MenuList
 import io.github.matiyaaa.fuse.ui.designsystem.components.SectionLabel
-import io.github.matiyaaa.fuse.ui.designsystem.components.Spinner
+import io.github.matiyaaa.fuse.ui.designsystem.components.Skeleton
+import io.github.matiyaaa.fuse.ui.designsystem.components.SkeletonRow
+import io.github.matiyaaa.fuse.ui.designsystem.components.SkeletonText
 import io.github.matiyaaa.fuse.ui.designsystem.components.Tile
+import io.github.matiyaaa.fuse.ui.designsystem.components.Trailing
 import io.github.matiyaaa.fuse.ui.designsystem.components.fadingEdges
+import io.github.matiyaaa.fuse.ui.designsystem.effects.fuseClickable
+import io.github.matiyaaa.fuse.ui.designsystem.effects.rememberReveal
+import io.github.matiyaaa.fuse.ui.designsystem.effects.reveal
 import io.github.matiyaaa.fuse.ui.designsystem.focus.FollowSelection
 import io.github.matiyaaa.fuse.ui.designsystem.focus.GridSelection
 import io.github.matiyaaa.fuse.ui.designsystem.focus.LinearSelection
 import io.github.matiyaaa.fuse.ui.designsystem.icons.ButtonGlyph
+import io.github.matiyaaa.fuse.ui.designsystem.icons.ButtonGlyphDefaults
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
 import io.github.matiyaaa.fuse.ui.designsystem.icons.HintButton
@@ -85,7 +97,10 @@ import io.github.matiyaaa.fuse.ui.designsystem.input.LayerPriority
 import io.github.matiyaaa.fuse.ui.designsystem.input.NavResult
 import io.github.matiyaaa.fuse.ui.designsystem.media.Artwork
 import io.github.matiyaaa.fuse.ui.designsystem.shape.PillShape
+import io.github.matiyaaa.fuse.ui.designsystem.shape.SquircleShape
+import io.github.matiyaaa.fuse.ui.designsystem.theme.Aspect
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
+import io.github.matiyaaa.fuse.ui.designsystem.theme.Radius
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
@@ -93,9 +108,13 @@ import io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec
 import io.github.matiyaaa.fuse.ui.shell.app.ConfirmSpec
 import io.github.matiyaaa.fuse.ui.shell.app.FocusZone
 import io.github.matiyaaa.fuse.ui.shell.app.TextInputSpec
+import io.github.matiyaaa.fuse.ui.shell.components.ROW_CONTENT_START
+import io.github.matiyaaa.fuse.ui.shell.components.controlWellShape
+import io.github.matiyaaa.fuse.ui.shell.components.rememberRowHighlight
 import io.github.matiyaaa.fuse.ui.shell.store.ArtworkResult
 import io.github.matiyaaa.fuse.ui.shell.store.IdentifyResult
 import io.github.matiyaaa.fuse.ui.shell.store.SearchTitle
+import kotlin.math.roundToInt
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
@@ -112,10 +131,12 @@ private val slots = listOf(
 
 private sealed interface Browser {
     data object Closed : Browser
-    data class Loading(val label: String? = null) : Browser
+    /** On its way: art of [art] (shown as a grid of its shape), or matches when [art] is null. */
+    data class Loading(val label: String? = null, val art: MediaKind? = null) : Browser
     /** Art to pick; [guess] is the game it was found for when that was a best guess by name. */
     data class Options(val kind: MediaKind, val options: List<ArtworkOption>, val guess: ScrapeCandidate? = null) : Browser
-    data class Message(val text: String) : Browser
+    /** What happened ([title]) and what to do ([text]); [error] when something failed rather than found nothing. */
+    data class Message(val title: String, val text: String, val icon: ImageVector = FuseIcons.SearchX, val error: Boolean = false) : Browser
     /** Games the sources list for [query]; after picking one, art of [then] is searched when set. */
     data class Matches(val query: String, val candidates: List<ScrapeCandidate>, val then: MediaKind?) : Browser
 }
@@ -167,18 +188,24 @@ fun MediaScreen(app: AppState, owner: MediaOwner, title: String, identifyFirst: 
         browser = Browser.Loading(searchTitle?.let { "Searching for \"${it.current}\"" })
         matchSel.index = 0
         app.scope.launch {
+            var failed: String? = null
             val result = try {
                 app.store.media.identify(id)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Throwable) {
-                IdentifyResult.Unavailable("Fuse couldn't search (${e::class.simpleName}). Try again, or check your keys in Settings, Media and Scraping.")
+                failed = e::class.simpleName
+                null
             }
             browser = when (result) {
+                null -> Browser.Message(
+                    "Couldn't search", "Fuse couldn't search ($failed). Try again, or check your keys in Settings, Media and Scraping.",
+                    FuseIcons.CloudOff, error = true,
+                )
                 is IdentifyResult.Matches ->
-                    if (result.candidates.isEmpty()) Browser.Message("Nothing found for \"${result.query}\". Try another search name.")
+                    if (result.candidates.isEmpty()) Browser.Message("No matches", "Nothing found for \"${result.query}\". Try another search name.")
                     else Browser.Matches(result.query, result.candidates, then)
-                is IdentifyResult.Unavailable -> Browser.Message(result.reason)
+                is IdentifyResult.Unavailable -> Browser.Message("Couldn't identify this game", result.reason, FuseIcons.CloudOff)
             }
         }
     }
@@ -208,25 +235,37 @@ fun MediaScreen(app: AppState, owner: MediaOwner, title: String, identifyFirst: 
     }
 
     fun browse(k: MediaKind) {
-        browser = Browser.Loading()
+        browser = Browser.Loading("Looking for ${slotName(k).lowercase()}", art = k)
         grid.index = 0
         app.scope.launch {
+            var failed: String? = null
             val result = try {
                 app.store.media.artworkOptions(owner, k)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Throwable) {
-                // Errors too (a class that failed to load), so the spinner always gives way to a message.
-                ArtworkResult.Unavailable("Fuse couldn't search for art (${e::class.simpleName}). Try again, or check your keys in Settings, Media and Scraping.")
+                // Errors too (a class that failed to load), so loading always gives way to a message.
+                failed = e::class.simpleName
+                null
             }
             browser = when (val r = result) {
-                is ArtworkResult.Options -> if (r.options.isEmpty()) Browser.Message("No ${slotName(k).lowercase()} found. Try another source in Media and Scraping settings.") else Browser.Options(k, r.options, r.guess)
+                null -> Browser.Message(
+                    "Couldn't search for art", "Fuse couldn't search for art ($failed). Try again, or check your keys in Settings, Media and Scraping.",
+                    FuseIcons.CloudOff, error = true,
+                )
+                is ArtworkResult.Options -> if (r.options.isEmpty()) Browser.Message("No ${slotName(k).lowercase()} found", "Try another source in Settings, or choose a file.") else Browser.Options(k, r.options, r.guess)
                 is ArtworkResult.NeedsMatch -> {
                     // Several close matches: the user picks the game, then art is searched for it.
                     matchSel.index = 0
                     Browser.Matches(searchTitle?.current ?: title, r.candidates, then = k)
                 }
-                is ArtworkResult.Unavailable -> Browser.Message(r.reason)
+                // A one-line reason that already says nothing was found is the title, and the message
+                // says what to try; any other reason is the message under a plain title.
+                is ArtworkResult.Unavailable -> {
+                    val sentence = r.reason.removeSuffix(".")
+                    if (sentence.startsWith("No ") && ". " !in sentence) Browser.Message(sentence, "Try another source in Settings, or choose a file.")
+                    else Browser.Message("Nothing to pick from", r.reason)
+                }
             }
         }
     }
@@ -244,7 +283,10 @@ fun MediaScreen(app: AppState, owner: MediaOwner, title: String, identifyFirst: 
             }
             titleVersion++
             if (!linked) {
-                browser = Browser.Message("${candidate.provider.displayName} didn't return ${candidate.title} this time. Try again, or pick another match.")
+                browser = Browser.Message(
+                    "Couldn't use this match", "${candidate.provider.displayName} didn't return ${candidate.title} this time. Try again, or pick another match.",
+                    FuseIcons.CloudOff, error = true,
+                )
                 return@launch
             }
             app.toasts.show("This is now ${candidate.title}")
@@ -390,6 +432,9 @@ fun MediaScreen(app: AppState, owner: MediaOwner, title: String, identifyFirst: 
 
     val c = Fuse.colors
     val listFocused = app.focusZone == FocusZone.CONTENT && adj == null && options == null && matches == null
+    val reveal = rememberReveal(owner)
+    val highlight = rememberRowHighlight()
+    highlight.Follow(highlight.bounds[sel.index]?.takeIf { listFocused })
     BoxWithConstraints(Modifier.fillMaxSize()) {
     // On handheld screens the list narrows so the art beside it keeps a useful size.
     val listWidth = (maxWidth * 0.36f).coerceIn(260.dp, 380.dp)
@@ -413,17 +458,38 @@ fun MediaScreen(app: AppState, owner: MediaOwner, title: String, identifyFirst: 
                 }
             }
         }
+        // Each row reports its height (for scrolling) and its place (for the gliding highlight).
+        // The place is read outside the reveal's layer, so a row still rising in reports where it lands.
+        fun rowModifier(i: Int) = Modifier
+            .onPlaced { coords ->
+                val y = coords.positionInParent().y
+                highlight.place(i, y, y + coords.size.height)
+            }
+            .bringIntoViewRequester(rowRequesters[i])
+            .onSizeChanged { if (rowHeights[i] != it.height) rowHeights = rowHeights + (i to it.height) }
+            .reveal(reveal, 2 + i)
         // The list scrolls below the top line, never under it.
         Column(Modifier.width(listWidth).fillMaxHeight()) {
         Spacer(Modifier.height(Size.hudHeight))
-        Column(Modifier.fillMaxWidth().weight(1f).fadingEdges(top = Space.l, bottom = 0.dp).verticalScroll(listScroll).padding(bottom = Size.hintHeight + Space.l)) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .weight(1f)
+                .fadingEdges(listScroll, top = Space.l, bottom = Space.xl)
+                .verticalScroll(listScroll)
+                .padding(bottom = Size.hintHeight + Space.l)
+                .then(highlight.drawModifier()),
+        ) {
             Spacer(Modifier.height(Space.l))
-            FText("Manage media", Fuse.type.display)
-            FText(title, Fuse.type.body, color = c.textMuted, maxLines = 1)
-            Spacer(Modifier.height(Space.l))
+            Column(Modifier.reveal(reveal, 0)) {
+                FText("Manage media", Fuse.type.display, maxLines = 1)
+                Spacer(Modifier.height(Space.xxs))
+                FText(title, Fuse.type.body, color = c.textMuted, maxLines = 1)
+            }
+            Spacer(Modifier.height(Space.xl))
             if (gameRows.isNotEmpty()) {
-                SectionLabel("Game", Modifier.padding(horizontal = Space.m))
-                Spacer(Modifier.height(Space.xs))
+                SectionLabel("Game", Modifier.padding(start = ROW_CONTENT_START).reveal(reveal, 1))
+                Spacer(Modifier.height(Space.s))
                 gameRows.forEachIndexed { i, row ->
                     val st = searchTitle
                     MediaRow(
@@ -433,15 +499,16 @@ fun MediaScreen(app: AppState, owner: MediaOwner, title: String, identifyFirst: 
                             GameRow.SEARCH_AS -> if (st?.custom == true) "Search as · your search name" else "Search as · the game's title"
                             GameRow.IDENTIFY -> "Pick the right game from your sources"
                         },
-                        modifier = Modifier.bringIntoViewRequester(rowRequesters[i]).onSizeChanged { if (rowHeights[i] != it.height) rowHeights = rowHeights + (i to it.height) },
+                        modifier = rowModifier(i),
                         onClick = { sel.index = i; runGameRow(row) },
                     ) {
-                        FuseIcon(if (row == GameRow.SEARCH_AS) FuseIcons.TextCursor else FuseIcons.ScanSearch, size = 20.dp, tint = c.textMuted)
+                        FuseIcon(if (row == GameRow.SEARCH_AS) FuseIcons.TextCursor else FuseIcons.ScanSearch, size = Size.iconM, tint = c.textMuted)
                     }
+                    if (i < gameRows.lastIndex) Spacer(Modifier.height(Space.xxs))
                 }
-                Spacer(Modifier.height(Space.l))
-                SectionLabel("Artwork", Modifier.padding(horizontal = Space.m))
-                Spacer(Modifier.height(Space.xs))
+                Spacer(Modifier.height(Space.xl))
+                SectionLabel("Artwork", Modifier.padding(start = ROW_CONTENT_START).reveal(reveal, 1 + gameRows.size))
+                Spacer(Modifier.height(Space.s))
             }
             slots.forEachIndexed { slot, (k, name) ->
                 val i = gameRows.size + slot
@@ -449,35 +516,23 @@ fun MediaScreen(app: AppState, owner: MediaOwner, title: String, identifyFirst: 
                     selected = i == sel.index && listFocused,
                     name = name,
                     detail = sourceLine(media, k),
-                    modifier = Modifier.bringIntoViewRequester(rowRequesters[i]).onSizeChanged { if (rowHeights[i] != it.height) rowHeights = rowHeights + (i to it.height) },
+                    modifier = rowModifier(i),
                     onClick = { sel.index = i; app.choice = ChoiceSpec(name, sourceLine(media, k), slotActions(k)) },
                 ) {
                     val m = media.first(k)
                     if (m != null && k != MediaKind.VIDEO) Artwork(m.model, Modifier.fillMaxSize(), contentScale = if (k == MediaKind.LOGO) ContentScale.Fit else ContentScale.Crop)
-                    else FuseIcon(if (k == MediaKind.VIDEO) FuseIcons.Film else FuseIcons.Image, size = 18.dp, tint = c.textFaint)
+                    else FuseIcon(if (k == MediaKind.VIDEO) FuseIcons.Film else FuseIcons.Image, size = Size.iconM, tint = c.textFaint)
                 }
+                if (slot < slots.lastIndex) Spacer(Modifier.height(Space.xxs))
             }
         }
         }
         Spacer(Modifier.width(between))
-        Box(Modifier.weight(1f).fillMaxHeight().padding(top = Size.hudHeight + Space.l, bottom = Size.hintHeight + Space.l)) {
+        Box(Modifier.weight(1f).fillMaxHeight().padding(top = Size.hudHeight + Space.l, bottom = Size.hintHeight + Space.l).reveal(reveal, 2)) {
             when (val b = browser) {
-                is Browser.Loading -> Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
-                    Spinner()
-                    b.label?.let {
-                        Spacer(Modifier.height(Space.m))
-                        FText(it, Fuse.type.body, color = c.textMuted, maxLines = 2)
-                    }
-                }
-                is Browser.Message -> Column {
-                    FText(b.text, Fuse.type.body, color = c.textMuted)
-                    Spacer(Modifier.height(Space.m))
-                    Row(horizontalArrangement = Arrangement.spacedBy(Space.s)) {
-                        FuseButton("Close", selected = true, onClick = { browser = Browser.Closed })
-                        if (gameId != null) FuseButton("Change search name", selected = false, onClick = { editSearchName(thenIdentify = false) }, icon = FuseIcons.TextCursor)
-                    }
-                }
-                is Browser.Options -> ArtworkGrid(b, grid, onColumns = { optionCols = it }, onIdentify = { identify(then = b.kind) }) { opt ->
+                is Browser.Loading -> LoadingPane(b)
+                is Browser.Message -> MessagePane(b, onRename = if (gameId != null) ({ editSearchName(thenIdentify = false) }) else null)
+                is Browser.Options -> ArtworkGrid(b, grid, current = media.first(b.kind)?.remoteUrl, onColumns = { optionCols = it }, onIdentify = { identify(then = b.kind) }) { opt ->
                     app.scope.launch { app.store.media.apply(owner, opt) }
                     browser = Browser.Closed
                 }
@@ -489,23 +544,27 @@ fun MediaScreen(app: AppState, owner: MediaOwner, title: String, identifyFirst: 
     }
 }
 
-/** One row of the left column: a thumbnail or icon, a name and a caption. */
+/**
+ * One row of the left column: a thumbnail or icon in a well, a name and a caption, laid out like a
+ * menu row so the list's gliding highlight and its accent bar sit on it the same way.
+ */
 @Composable
 private fun MediaRow(selected: Boolean, name: String, detail: String, modifier: Modifier = Modifier, onClick: () -> Unit, thumb: @Composable () -> Unit) {
     val c = Fuse.colors
     Row(
-        modifier.fillMaxWidth().clip(RoundedCornerShape(Fuse.geometry.control))
-            .background(if (selected) c.text.copy(alpha = 0.1f) else Color.Transparent)
-            .clickable(remember { MutableInteractionSource() }, null, onClick = onClick)
-            .padding(horizontal = Space.m, vertical = Space.s),
+        modifier
+            .fillMaxWidth()
+            .heightIn(min = Size.row)
+            .fuseClickable(shape = RoundedCornerShape(Fuse.geometry.control), scale = false, onClick = onClick)
+            .semantics { this.selected = selected }
+            .padding(end = Space.l, top = Space.s, bottom = Space.s),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(Modifier.width(3.dp).height(24.dp).background(if (selected) c.accent else Color.Transparent, RoundedCornerShape(2.dp)))
+        Spacer(Modifier.width(ROW_CONTENT_START))
+        Box(Modifier.size(Size.thumb).clip(controlWellShape()).background(c.text.copy(alpha = if (selected) 0.12f else 0.06f)), contentAlignment = Alignment.Center) { thumb() }
         Spacer(Modifier.width(Space.m))
-        Box(Modifier.size(44.dp).clip(RoundedCornerShape(8.dp)).background(c.text.copy(alpha = 0.06f)), contentAlignment = Alignment.Center) { thumb() }
-        Spacer(Modifier.width(Space.m))
-        Column(Modifier.weight(1f)) {
-            FText(name, Fuse.type.bodyStrong, maxLines = 1)
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Space.xxs)) {
+            FText(name, Fuse.type.bodyStrong, color = if (selected) c.text else c.text.copy(alpha = 0.92f), maxLines = 1)
             FText(detail, Fuse.type.caption, color = c.textMuted, maxLines = 1)
         }
     }
@@ -547,12 +606,72 @@ private fun GamePanel(row: GameRow, searchTitle: SearchTitle?, title: String) {
     }
 }
 
-/** Matches from the sources, best first, with where each comes from. */
+/**
+ * Art or matches on their way, in the shape they will arrive in: tiles of the slot's shape, or rows
+ * of matches, under a line that says what is being looked for.
+ */
+@Composable
+private fun LoadingPane(b: Browser.Loading) {
+    Column {
+        FText(b.label ?: "Searching", Fuse.type.body, color = Fuse.colors.textMuted, maxLines = 1)
+        Spacer(Modifier.height(Space.l))
+        val kind = b.art
+        if (kind != null) {
+            BoxWithConstraints {
+                val columns = optionColumns(kind, maxWidth)
+                val cell = (maxWidth - Space.m * (columns - 1)) / columns
+                val shape = SquircleShape.fraction(Fuse.geometry.tileCornerFraction)
+                Column(verticalArrangement = Arrangement.spacedBy(Space.l)) {
+                    repeat(2) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(Space.m)) {
+                            repeat(columns) {
+                                Column(Modifier.width(cell)) {
+                                    Skeleton(Modifier.fillMaxWidth().aspectRatio(kind.aspect ?: 2.2f), shape = shape)
+                                    Spacer(Modifier.height(Size.sparkClearance))
+                                    SkeletonText(Modifier.fillMaxWidth(0.7f), lines = 1, style = Fuse.type.caption)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        } else {
+            Column(verticalArrangement = Arrangement.spacedBy(Space.xxs)) { repeat(5) { SkeletonRow() } }
+        }
+    }
+}
+
+/**
+ * Why there is nothing to pick: what happened and what to do, in the danger colour when something
+ * failed. For a game, renaming the search is one tap away.
+ */
+@Composable
+private fun MessagePane(b: Browser.Message, onRename: (() -> Unit)?) {
+    Column(Modifier.fillMaxSize().padding(bottom = Space.x4), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
+        EmptyState(b.icon, b.title, message = b.text, tint = if (b.error) Fuse.colors.danger else Fuse.colors.text)
+        if (onRename != null) {
+            Spacer(Modifier.height(Space.xl))
+            FuseButton("Change search name", selected = false, onClick = onRename, icon = FuseIcons.TextCursor)
+        }
+    }
+}
+
+/** Matches from the sources, best first, with where each comes from and how close it is. */
 @Composable
 private fun MatchList(b: Browser.Matches, sel: LinearSelection, onPick: (ScrapeCandidate) -> Unit, onRename: () -> Unit) {
     val c = Fuse.colors
-    val state = rememberLazyListState()
-    FollowSelection(state, { sel.index }, anchor = 0.2f)
+    val actions = remember(b) {
+        b.candidates.mapIndexed { i, m ->
+            MenuAction(
+                "${m.provider}.${m.providerGameId}.$i",
+                m.title,
+                detail = listOfNotNull(m.provider.displayName, m.platformName, m.year?.toString()).joinToString("  ·  "),
+                art = MenuArt(m.previewUrl, square = true, fallbackTitle = m.title, wide = false),
+                trailing = Trailing.Badge("${(m.confidence * 100).roundToInt()}%"),
+                onSelect = { sel.index = i; onPick(m) },
+            )
+        }
+    }
     Column {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
@@ -560,36 +679,13 @@ private fun MatchList(b: Browser.Matches, sel: LinearSelection, onPick: (ScrapeC
                 Spacer(Modifier.height(Space.xs))
                 FText("For \"${b.query}\"", Fuse.type.bodyStrong, maxLines = 1)
             }
-            FuseButton("Change search name", selected = false, onClick = onRename, icon = FuseIcons.TextCursor, kind = ButtonKind.GHOST, height = 40.dp)
+            Spacer(Modifier.width(Space.m))
+            FuseButton("Change search name", selected = false, onClick = onRename, icon = FuseIcons.TextCursor, kind = ButtonKind.GHOST, height = Size.rowCompact - Space.xs)
         }
         Spacer(Modifier.height(Space.m))
-        LazyColumn(state = state, verticalArrangement = Arrangement.spacedBy(Space.xs), contentPadding = PaddingValues(bottom = Space.xxl)) {
-            itemsIndexed(b.candidates, key = { i, m -> "${m.provider}.${m.providerGameId}.$i" }) { i, m ->
-                val selected = i == sel.index
-                Row(
-                    Modifier.fillMaxWidth().clip(RoundedCornerShape(Fuse.geometry.control))
-                        .background(if (selected) c.text.copy(alpha = 0.1f) else Color.Transparent)
-                        .clickable(remember { MutableInteractionSource() }, null) { sel.index = i; onPick(m) }
-                        .padding(horizontal = Space.m, vertical = Space.s),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Box(Modifier.width(3.dp).height(28.dp).background(if (selected) c.accent else Color.Transparent, RoundedCornerShape(2.dp)))
-                    Spacer(Modifier.width(Space.m))
-                    Box(Modifier.size(width = 40.dp, height = 56.dp).clip(RoundedCornerShape(6.dp)).background(c.text.copy(alpha = 0.06f)), contentAlignment = Alignment.Center) {
-                        val preview = m.previewUrl
-                        if (preview != null) Artwork(preview, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-                        else FuseIcon(FuseIcons.Gamepad, size = 18.dp, tint = c.textFaint)
-                    }
-                    Spacer(Modifier.width(Space.m))
-                    Column(Modifier.weight(1f)) {
-                        FText(m.title, Fuse.type.bodyStrong, maxLines = 1)
-                        FText(listOfNotNull(m.provider.displayName, m.platformName, m.year?.toString()).joinToString("  ·  "), Fuse.type.caption, color = c.textMuted, maxLines = 1)
-                    }
-                    Spacer(Modifier.width(Space.m))
-                    Chip("${(m.confidence * 100).toInt()}%", color = if (m.confidence >= 0.8f) c.accent else c.textMuted)
-                }
-            }
-        }
+        Box(Modifier.fillMaxWidth().height(Size.divider).background(c.hairline))
+        Spacer(Modifier.height(Space.s))
+        MenuList(actions, sel)
     }
 }
 
@@ -601,10 +697,10 @@ private fun Preview(media: MediaSet, kind: MediaKind, adjusting: MediaKind?, fx:
     // The art is as large as fits: never wider than the pane, never taller than the space left
     // under the label and above the details, whatever its shape (tall covers on a short screen).
     val aspect = kind.aspect ?: 2.6f
-    val below = (if (kind == MediaKind.SCREENSHOT && media.screenshots.size > 1) 54.dp + Space.m else 0.dp) + (if (m != null) 32.dp + Space.m else 0.dp)
+    val below = (if (kind == MediaKind.SCREENSHOT && media.screenshots.size > 1) SHOT_THUMB / Aspect.SCREENSHOT + Space.m else 0.dp) + (if (m != null) Size.chip + Space.m else 0.dp)
     val roomH = (maxHeight - 28.dp - Space.m - below).coerceAtLeast(80.dp)
     val tileW = minOf(maxWidth, roomH * aspect, 640.dp)
-    val thumbs = ((maxWidth + Space.s) / (96.dp + Space.s)).toInt().coerceIn(1, 6)
+    val thumbs = ((maxWidth + Space.s) / (SHOT_THUMB + Space.s)).toInt().coerceIn(1, 6)
     Column {
         SectionLabel(if (adjusting != null) "Adjusting ${slotName(kind).lowercase()}" else slotName(kind))
         Spacer(Modifier.height(Space.m))
@@ -618,22 +714,35 @@ private fun Preview(media: MediaSet, kind: MediaKind, adjusting: MediaKind?, fx:
                     zoom = if (adjusting != null) zoom else m.zoom,
                 )
                 if (adjusting != null) {
+                    val mark = c.onArt
                     Canvas(Modifier.fillMaxSize()) {
                         val p = Offset(size.width * fx, size.height * fy)
-                        drawCircle(Color.White, radius = 14.dp.toPx(), center = p, style = Stroke(2.dp.toPx()))
-                        drawCircle(Color.White, radius = 3.dp.toPx(), center = p)
+                        drawCircle(c.artScrim, radius = Space.l.toPx(), center = p, style = Stroke(Size.focusStroke.toPx() * 2))
+                        drawCircle(mark, radius = Space.l.toPx(), center = p, style = Stroke(Size.focusStroke.toPx()))
+                        drawCircle(mark, radius = Space.xs.toPx() - Space.hair.toPx(), center = p)
                     }
                 }
             } else {
-                Box(Modifier.fillMaxSize().background(c.surfaceRaised), contentAlignment = Alignment.Center) {
-                    FText("Nothing yet", Fuse.type.body, color = c.textMuted)
+                // An empty slot says what goes here and how to fill it, inside the frame it will take.
+                Box(Modifier.fillMaxSize().background(c.surfaceDim), contentAlignment = Alignment.Center) {
+                    val name = slotName(kind).lowercase()
+                    if (tileW / aspect >= EMPTY_FRAME_MIN) {
+                        EmptyState(
+                            if (kind == MediaKind.VIDEO) FuseIcons.Film else FuseIcons.Image,
+                            "No $name yet",
+                            message = if (kind == MediaKind.VIDEO) "Videos come from your sources when they have one." else "Find one from your sources, or choose a file.",
+                            compact = true,
+                        )
+                    } else {
+                        FText("No $name yet", Fuse.type.body, color = c.textMuted, maxLines = 1)
+                    }
                 }
             }
         }
         if (kind == MediaKind.SCREENSHOT && media.screenshots.size > 1) {
             Spacer(Modifier.height(Space.m))
             Row(horizontalArrangement = Arrangement.spacedBy(Space.s)) {
-                media.screenshots.take(thumbs).forEach { s -> Artwork(s.model, Modifier.size(width = 96.dp, height = 54.dp).clip(RoundedCornerShape(6.dp))) }
+                media.screenshots.take(thumbs).forEach { s -> Artwork(s.model, Modifier.width(SHOT_THUMB).aspectRatio(Aspect.SCREENSHOT).clip(RoundedCornerShape(Radius.s))) }
             }
         }
         m?.let {
@@ -657,8 +766,13 @@ private fun optionColumns(kind: MediaKind, width: Dp): Int {
     return ((width + Space.m) / (cell + Space.m)).toInt().coerceIn(2, 6)
 }
 
+/**
+ * Art from the sources for one slot, as tiles of the slot's own shape with where each comes from
+ * under it. The art in use now ([current]) is marked with a check, so picking reads as a choice.
+ */
 @Composable
-private fun ArtworkGrid(b: Browser.Options, grid: GridSelection, onColumns: (Int) -> Unit, onIdentify: () -> Unit, onPick: (ArtworkOption) -> Unit) {
+private fun ArtworkGrid(b: Browser.Options, grid: GridSelection, current: String?, onColumns: (Int) -> Unit, onIdentify: () -> Unit, onPick: (ArtworkOption) -> Unit) {
+    val c = Fuse.colors
     val state = rememberLazyGridState()
     FollowSelection(state, { grid.index }, anchor = 0.15f)
     BoxWithConstraints {
@@ -673,46 +787,52 @@ private fun ArtworkGrid(b: Browser.Options, grid: GridSelection, onColumns: (Int
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.m)) {
                 FText(
                     "Found by name as ${guess.title}${guess.year?.let { " ($it)" }.orEmpty()}",
-                    Fuse.type.body, color = Fuse.colors.textMuted, maxLines = 1, modifier = Modifier.weight(1f, fill = false),
+                    Fuse.type.body, color = c.textMuted, maxLines = 1, modifier = Modifier.weight(1f, fill = false),
                 )
                 Row(
                     Modifier
                         .clip(PillShape)
-                        .background(Fuse.colors.text.copy(alpha = 0.08f))
-                        .clickable(remember { MutableInteractionSource() }, null, onClick = onIdentify)
+                        .background(c.text.copy(alpha = 0.08f))
+                        .fuseClickable(shape = PillShape, onClick = onIdentify)
                         .padding(start = Space.xs, end = Space.m, top = Space.xs, bottom = Space.xs),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(Space.s),
                 ) {
-                    ButtonGlyph(HintButton.OPTIONS, size = 22.dp)
+                    ButtonGlyph(HintButton.OPTIONS, size = ButtonGlyphDefaults.Size)
                     FText("Not this game? Identify it", Fuse.type.label, maxLines = 1)
                 }
             }
         }
-        Spacer(Modifier.height(Space.m))
+        Spacer(Modifier.height(Space.s))
         LazyVerticalGrid(
             columns = GridCells.Fixed(columns),
             state = state,
+            modifier = Modifier.fadingEdges(state, top = Space.l, bottom = Space.xl),
             horizontalArrangement = Arrangement.spacedBy(Space.m),
-            verticalArrangement = Arrangement.spacedBy(Space.l),
-            contentPadding = PaddingValues(bottom = Space.xxl),
+            verticalArrangement = Arrangement.spacedBy(Space.m),
+            // Room above the first row for a lifted tile.
+            contentPadding = PaddingValues(top = Space.s, bottom = Space.xxl),
         ) {
             itemsIndexed(b.options) { i, opt ->
+                val inUse = current != null && (opt.url == current || opt.thumbUrl == current)
                 Column {
                     Tile(selected = i == grid.index, modifier = Modifier.fillMaxWidth().aspectRatio(b.kind.aspect ?: 2.2f), onClick = { grid.index = i; onPick(opt) }) {
-                        Box(Modifier.fillMaxSize().background(Fuse.colors.surfaceRaised)) {
+                        Box(Modifier.fillMaxSize().background(c.surfaceRaised)) {
                             Artwork(opt.thumbUrl ?: opt.url, Modifier.fillMaxSize(), contentScale = if (b.kind == MediaKind.LOGO) ContentScale.Fit else ContentScale.Crop)
+                            if (inUse) IconBadge(FuseIcons.Check, Modifier.align(Alignment.TopEnd).padding(Space.s), tint = c.onAccent, background = c.accent, size = Size.badge)
                         }
                     }
-                    Spacer(Modifier.height(Space.xs))
+                    // Clear of the focused tile's spark bar.
+                    Spacer(Modifier.height(Size.sparkClearance - Space.xs))
                     FText(
                         // System art pack options carry the pack's name as their author.
                         listOfNotNull(
+                            if (inUse) "In use" else null,
                             if (opt.provider == ScrapeProviderId.LOCAL && opt.author != null) opt.author else opt.provider.displayName,
                             opt.style,
                             opt.width?.let { "${it}x${opt.height}" },
                         ).joinToString("  ·  "),
-                        Fuse.type.caption, color = Fuse.colors.textMuted, maxLines = 1,
+                        Fuse.type.caption, color = if (inUse) c.accent else c.textMuted, maxLines = 1,
                     )
                 }
             }
@@ -720,6 +840,12 @@ private fun ArtworkGrid(b: Browser.Options, grid: GridSelection, onColumns: (Int
     }
     }
 }
+
+/** The row of screenshots under the preview: each this wide, 16:9. */
+private val SHOT_THUMB = Space.x5
+
+/** Below this height a slot's frame shows a single line for an empty slot instead of the full message. */
+private val EMPTY_FRAME_MIN = Space.x5 + Space.x4 + Space.xxl
 
 private fun fill(app: AppState, owner: MediaOwner, mode: MediaFillMode, kinds: Set<MediaKind>) {
     val game = (owner as? MediaOwner.OfGame)?.id
