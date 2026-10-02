@@ -320,53 +320,37 @@ fun ThemesScreen(app: AppState) {
 
     val stage: @Composable (Modifier) -> Unit = { m -> ThemeStage(stageSpec, scene, m, flourish = view.flourish) }
     val facts: @Composable (Modifier, Boolean) -> Unit = { m, compact ->
-        when {
-            look != null -> ThemeFacts(
-                title = look.spec.name,
-                line = look.spec.tagline,
-                palette = look.spec.palette,
-                secondary = look.spec.ambient.secondary,
-                traits = traitsOf(look.spec),
-                modifier = m,
-                compact = compact,
+        val f = when {
+            look != null -> factsOf(look.spec, key = "studio")
+            current is ThemeItem.Of -> factsOf(
+                current.spec,
+                line = listOfNotNull(current.spec.author?.let { "by $it" }, current.spec.tagline.takeIf { it.isNotBlank() }).joinToString("  ·  "),
+                inUse = current.spec.id == prefs.themeId,
+                yours = current.custom,
             )
-            current is ThemeItem.Of -> {
-                val spec = current.spec
-                ThemeFacts(
-                    title = spec.name,
-                    line = listOfNotNull(spec.author?.let { "by $it" }, spec.tagline.takeIf { it.isNotBlank() }).joinToString("  ·  "),
-                    palette = spec.palette,
-                    secondary = spec.ambient.secondary,
-                    traits = traitsOf(spec),
-                    modifier = m,
-                    inUse = spec.id == prefs.themeId,
-                    yours = current.custom,
-                    compact = compact,
-                )
-            }
-            current == ThemeItem.Make -> ThemeFacts(
+            current == ThemeItem.Make -> factsOf(
+                inUseSpec,
+                key = ThemeItem.Make.key,
                 title = "Make your own",
                 line = "Start from ${inUseSpec.name} and change its colour, background, corners and more",
-                palette = inUseSpec.palette,
-                secondary = inUseSpec.ambient.secondary,
-                traits = traitsOf(inUseSpec),
-                modifier = m,
-                compact = compact,
             )
-            else -> ThemeFacts(
+            else -> Facts(
+                key = ThemeItem.Add.key,
                 title = "Add a theme",
                 line = "A theme is a small file anyone can write. Fuse shows what it is before adding it",
                 palette = null,
                 secondary = null,
                 traits = listOf(Trait(FuseIcons.Link, "A link or text"), Trait(FuseIcons.Import, "A file"), Trait(FuseIcons.Globe, "Fuse's website")),
-                modifier = m,
-                compact = compact,
             )
         }
+        ThemeFacts(f, m, compact)
     }
-    val filters: @Composable (Modifier) -> Unit = { m ->
+    // Every filter shows its count where there is room; a narrow pane counts the active one only.
+    val filters: @Composable (Modifier, Boolean) -> Unit = { m, narrow ->
         ViewTabs(
-            items = ThemeFilter.entries.map { f -> ViewTab(f.label, badge = countOf(f, customs).takeIf { it > 0 }?.toString()) },
+            items = ThemeFilter.entries.map { f ->
+                ViewTab(f.label, badge = countOf(f, customs).takeIf { it > 0 && (!narrow || f == view.filter) }?.toString())
+            },
             active = view.filter.ordinal,
             focused = view.filter.ordinal.takeIf { view.inFilters && app.focusZone == FocusZone.CONTENT && studio == null },
             onSelect = { i ->
@@ -444,7 +428,7 @@ fun ThemesScreen(app: AppState) {
                 PaneSwitch(studio, Modifier.weight(1f)) { s ->
                     if (s == null) {
                         Column {
-                            filters(Modifier.offset(x = gutter - Space.m).reveal(reveal, 3))
+                            filters(Modifier.offset(x = gutter - Space.m).reveal(reveal, 3), contentWidth < NARROW_TABS)
                             grid(Modifier.weight(1f).padding(horizontal = gutter), contentWidth, 4)
                         }
                     } else {
@@ -471,7 +455,7 @@ fun ThemesScreen(app: AppState) {
                     Spacer(Modifier.width(paneGap))
                     Box(Modifier.weight(1f)) {
                         PaneSwitch(studio, Modifier.fillMaxWidth()) { s ->
-                            if (s == null) filters(Modifier.offset(x = -Space.m).reveal(reveal, 1)) else studioHeader(s, Modifier.padding(start = Space.s, bottom = Space.xxs))
+                            if (s == null) filters(Modifier.offset(x = -Space.m).reveal(reveal, 1), sideWidth < NARROW_TABS) else studioHeader(s, Modifier.padding(start = Space.s, bottom = Space.xxs))
                         }
                     }
                 }
@@ -520,6 +504,9 @@ private val FACTS_SHORT = Size.badge + Space.s + Size.chipCompact
 /** Gallery cards are at least this wide, or this share of the content on large screens. */
 private val CARD_MIN = 150.dp
 private const val CARD_SHARE = 0.12f
+
+/** Below this width the filters count only the one that is active, so all four fit. */
+private val NARROW_TABS = 440.dp
 
 /** The studio shows its swatch strip and icon wells from this column width up. */
 private val STUDIO_WIDE = 496.dp

@@ -1,6 +1,7 @@
 package io.github.matiyaaa.fuse.ui.shell.settings
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
@@ -310,7 +311,9 @@ private fun MiniHome(spec: ThemeSpec, scene: StageScene) {
     val metrics = LocalTileMetrics.current
     val game = scene.games.firstOrNull()
     val heroRoom = spec.background == BackgroundStyle.HERO
-    val art = heroRoom && scene.showHero && game != null
+    // The game whose art lights the room, for themes that are lit by game art.
+    val lit = game?.takeIf { heroRoom && scene.showHero }
+    val art = lit != null
     val glass = spec.glass
     Box(Modifier.fillMaxSize().background(c.ink)) {
         AmbientBackground(
@@ -320,11 +323,11 @@ private fun MiniHome(spec: ThemeSpec, scene: StageScene) {
             ambient = spec.ambient,
             fps = 24,
         )
-        if (art && game != null) {
+        if (lit != null) {
             // The room as Fuse lights it: the game's art, frosted under glass.
             val blur = if (glass.enabled && Fuse.quality.blur) maxOf(glass.heroBlur, glass.blur * 0.5f) else 0f
             HeroBackdrop(
-                source = gameRoom(game.id, game.art, game.accent, scene.systemsById[game.platformId]),
+                source = gameRoom(lit.id, lit.art, lit.accent, scene.systemsById[lit.platformId]),
                 modifier = Modifier
                     .fillMaxSize()
                     .then(if (blur > 0f) Modifier.blur(blur.dp) else Modifier)
@@ -447,48 +450,74 @@ internal fun traitsOf(spec: ThemeSpec): List<Trait> = buildList {
 }
 
 /**
- * What sits under the stage: [title] with its marks ([inUse], [yours]) and the theme's palette,
- * a quiet [line] under it, then [traits] as chips (as many as fit on one line, most telling first).
- * [compact] drops the line and tightens the title, for short screens.
+ * What the block under the stage says: a [title] with its marks ([inUse], [yours]), the theme's
+ * [palette] (and [secondary] light), a quiet [line], and its [traits]. [key] tells one subject
+ * from the next, so the block crossfades between themes but updates in place as the studio's
+ * draft changes.
+ */
+@Immutable
+internal data class Facts(
+    val key: Any,
+    val title: String,
+    val line: String?,
+    val palette: ThemePalette?,
+    val secondary: Long?,
+    val traits: List<Trait>,
+    val inUse: Boolean = false,
+    val yours: Boolean = false,
+)
+
+/** [Facts] for a theme. */
+internal fun factsOf(spec: ThemeSpec, key: Any = spec.id, title: String = spec.name, line: String? = spec.tagline, inUse: Boolean = false, yours: Boolean = false) =
+    Facts(key, title, line, spec.palette, spec.ambient.secondary, traitsOf(spec), inUse, yours)
+
+/**
+ * What sits under the stage: the title with its marks and the theme's palette, a quiet line under
+ * it, then the traits as chips (as many as fit in two lines, most telling first). A new subject
+ * fades in as the old one fades out, quicker, with no movement. [compact] drops the line, keeps the
+ * chips to one line and tightens the title, for short screens.
  */
 @Composable
-internal fun ThemeFacts(
-    title: String,
-    line: String?,
-    palette: ThemePalette?,
-    secondary: Long?,
-    traits: List<Trait>,
-    modifier: Modifier = Modifier,
-    inUse: Boolean = false,
-    yours: Boolean = false,
-    compact: Boolean = false,
-) {
+internal fun ThemeFacts(facts: Facts, modifier: Modifier = Modifier, compact: Boolean = false) {
+    val motion = Fuse.motion
+    AnimatedContent(
+        targetState = facts,
+        modifier = modifier,
+        contentKey = { it.key },
+        transitionSpec = { (fadeIn(motion.fade(Durations.FAST)) togetherWith fadeOut(motion.exit(Durations.INSTANT))).using(SizeTransform(clip = false)) },
+        contentAlignment = Alignment.TopStart,
+        label = "themeFacts",
+    ) { f -> FactsBody(f, compact) }
+}
+
+@Composable
+private fun FactsBody(f: Facts, compact: Boolean) {
     val c = Fuse.colors
-    Column(modifier) {
+    Column(Modifier.fillMaxWidth()) {
         Row(Modifier.fillMaxWidth().heightIn(min = Size.badge), verticalAlignment = Alignment.CenterVertically) {
             Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
-                FText(title, if (compact) Fuse.type.titleSmall else Fuse.type.title, maxLines = 1, modifier = Modifier.weight(1f, fill = false))
-                if (inUse) {
+                FText(f.title, if (compact) Fuse.type.titleSmall else Fuse.type.title, maxLines = 1, modifier = Modifier.weight(1f, fill = false))
+                if (f.inUse) {
                     Spacer(Modifier.width(Space.s))
                     Badge("In use", icon = FuseIcons.Check)
                 }
-                if (yours) {
+                if (f.yours) {
                     Spacer(Modifier.width(Space.s))
                     Badge("Yours", color = c.textMuted, filled = false)
                 }
             }
-            if (palette != null) {
+            if (f.palette != null) {
                 Spacer(Modifier.width(Space.m))
-                PaletteSwatches(palette, secondary)
+                PaletteSwatches(f.palette, f.secondary)
             }
         }
-        if (!compact && !line.isNullOrBlank()) {
+        if (!compact && !f.line.isNullOrBlank()) {
             Spacer(Modifier.height(Space.xxs))
-            FText(line, Fuse.type.body, color = c.textMuted, maxLines = 1)
+            FText(f.line, Fuse.type.body, color = c.textMuted, maxLines = 1)
         }
         Spacer(Modifier.height(if (compact) Space.s else Space.m))
         FittingRow(gap = Space.s, lines = if (compact) 1 else 2, modifier = Modifier.fillMaxWidth()) {
-            for (t in traits) TraitChip(t)
+            for (t in f.traits) TraitChip(t)
         }
     }
 }
