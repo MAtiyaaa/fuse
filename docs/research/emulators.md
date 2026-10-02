@@ -376,6 +376,21 @@ Checked on 2 October 2026 against each project's own source or frontend guide.
 Starboard (`org.force9.starboard`) runs PortMaster ports it installs itself and has no per-game
 launch, so it is listed under Tools in Apps rather than as an emulator.
 
+### 3.15 Installing games, updates, DLC and licences from outside the emulator (0.2.4)
+
+Checked on 2 October 2026 against each project's source. Only these installers are used, and a step
+counts as installed only when the emulator's storage shows it.
+
+| Emulator | Mechanism | Source | Notes |
+|---|---|---|---|
+| RPCS3 (Linux, Windows, macOS) | `rpcs3 --headless --installpkg <file>` for `.pkg`, `.rap` and `.edat` | `rpcs3/rpcs3.cpp` (headless branch calls `main_window::InstallPackages(nullptr, ...)`); `rpcs3qt/main_window.cpp` `InstallFileInExData` | Always exits 0; a `.rap` is copied to `exdata` under its own file name, and boots need exactly `<contentId>.rap` |
+| RPCS3 firmware | `--installfw <PS3UPDAT.PUP>` | `rpcs3/rpcs3.cpp` | Not used yet: firmware is checked in BIOS and firmware |
+| Vita3K (Linux, Windows, macOS) | `Vita3K --pkg <file> --zrif <key>` (installs and quits); a `.vpk`/`.zip` as content path (installs, then starts it) | `vita3k/config/src/config.cpp`, `vita3k/main.cpp`, `vita3k/packages/src/pkg.cpp`, `license.cpp` | Patches decrypt with the game's licence; `find_pkg_zrif` makes a zRIF from `ux0/license/<id>/<contentId>.rif` |
+| Azahar (Linux, Windows, macOS) | `azahar -i <file.cia>` | `src/citra_qt/citra_qt.cpp` | Exit 0 success, `InstallStatus + 2` failure (3 open, 4 not found, 5 aborted, 6 invalid, 7 encrypted); a `.cia` given to play is never started |
+| aPS3e, RPCSX, ARMSX3 (Android) | None from outside: installs run from their own file pickers (`InstallGame.install_pkg` in aPS3e; RPCSX's activity isn't exported) | Their `AndroidManifest.xml` and sources | Fuse guides: the files in order, then opens the emulator |
+| Vita3K (Android) | None from outside: `.pkg` installs from its own screens (`NativeLib.installPkg`) | `android/` in Vita3K | Launching installed games by `-r <title id>` works (AppStartParameters) |
+| Eden, Ryujinx, Cemu, Dolphin, PPSSPP, xemu | No documented command line install (NAND or title installs are menu-only, or the formats play directly) | Their command line parsers | Updates and DLC are explained per emulator, as before |
+
 ---
 
 ## 4. PC/Windows launchers

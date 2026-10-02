@@ -654,8 +654,40 @@ exactly.
   shown and never changed. The file as it was is kept in Fuse's data (`emulator-backups/`) the first
   time Fuse changes it, and every write is atomic. Rules from PCSX2's `pcsx2/Patch.cpp`,
   `pcsx2/VMManager.cpp` and `pcsx2/Pcsx2Config.cpp`.
-- **Package installs.** RPCS3 installs a `.pkg` with `--installpkg <path>` (RPCS3's `rpcs3/rpcs3.cpp`)
-  and Vita3K with `--pkg <path> --zrif <key>` (Vita3K's `vita3k/config/src/config.cpp`). The zRIF is
-  asked for each time and passed only in Vita3K's arguments; Fuse never keeps or logs it.
+- **Installed content (games, updates, DLC, licences).** Fuse-native, with nothing of RomM or
+  Cartridge involved. Fuse reads the unencrypted parts of each file and plans the install:
+  - `.pkg` headers as RPCS3 (`rpcs3/Crypto/unpkg.h`), Vita3K (`vita3k/packages/src/pkg.cpp`) and
+    pkg2zip read them: content id, title id, content type, DRM type and patch flag, and a Vita
+    package's plain PARAM.SFO.
+  - A `.vpk`/`.zip`'s `sce_sys/param.sfo`, through its ZIP directory.
+  - `.rap` (named by content id), `.edat` (NPD header), `.rif`/`work.bin`, and zRIF keys (the pkg2zip
+    dictionary).
+  - A 3DS `.cia`'s TMD.
+
+  It reads what the emulator already holds: RPCS3's `dev_hdd0` (its config folder, or where
+  `vfs.yml` moves it: `game/<title id>/PARAM.SFO`, `home/*/exdata`), Vita3K's pref path
+  (`ux0/app`, `ux0/patch`, `ux0/addcont`, `ux0/license`), and Azahar's SD card (`title/<high>/<low>`
+  TMDs).
+
+  The order is: licences, the game, updates oldest first, then DLC. Each step goes through the
+  emulator's own documented installer:
+  - RPCS3: `--headless --installpkg <file>`, once per file. It copies `.rap`/`.edat` into exdata
+    under the file's own name, so a `.rap` under another name is staged in Fuse's folder as
+    `<contentId>.rap`.
+  - Vita3K: `--pkg <file> --zrif <key>`, or a `.vpk`/`.zip` given as its content path. Vita3K starts
+    the game after installing an archive, so Fuse stops it once its log says the install is done.
+  - Azahar: `-i <file.cia>`, whose exit code is InstallStatus + 2.
+
+  RPCS3 always exits 0, so no exit code is trusted. A step only counts when the title shows up in
+  the emulator's storage afterwards. PS3 DLC goes into the game's own folder, so Fuse records the
+  DLC it saw go in.
+
+  Fuse never writes into an emulator's storage, settings or saves. zRIFs (found beside the game,
+  made from a `.rif` the way Vita3K's `find_pkg_zrif` does, or pasted) are passed only in Vita3K's
+  arguments and kept in memory for that run of Fuse.
+
+  aPS3e, RPCSX, ARMSX3 and Vita3K on Android only install from their own menus (no exported or
+  documented install entry), so there the page is a guide: the files in order, and the emulator to
+  open.
 - **Disc identity.** The serial and PCSX2 CRC are read from the image itself (SYSTEM.CNF and the boot
   program, as in `pcsx2/CDVD/CDVD.cpp` and `pcsx2/Elfheader.cpp`); nothing is written.
