@@ -1,41 +1,78 @@
 package io.github.matiyaaa.fuse.ui.shell.settings
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.addOutline
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.FirstBaseline
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import io.github.matiyaaa.fuse.model.NavAction
 import io.github.matiyaaa.fuse.ui.designsystem.components.FText
 import io.github.matiyaaa.fuse.ui.designsystem.components.Hint
+import io.github.matiyaaa.fuse.ui.designsystem.components.IconButton
 import io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction
 import io.github.matiyaaa.fuse.ui.designsystem.components.MenuList
 import io.github.matiyaaa.fuse.ui.designsystem.components.Panel
+import io.github.matiyaaa.fuse.ui.designsystem.components.Trailing
 import io.github.matiyaaa.fuse.ui.designsystem.components.handleMenuAction
+import io.github.matiyaaa.fuse.ui.designsystem.effects.fuseClickable
+import io.github.matiyaaa.fuse.ui.designsystem.effects.lightEdge
+import io.github.matiyaaa.fuse.ui.designsystem.effects.reveal
 import io.github.matiyaaa.fuse.ui.designsystem.focus.LinearSelection
+import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
 import io.github.matiyaaa.fuse.ui.designsystem.icons.HintButton
 import io.github.matiyaaa.fuse.ui.designsystem.input.InputLayer
 import io.github.matiyaaa.fuse.ui.designsystem.input.NavResult
+import io.github.matiyaaa.fuse.ui.designsystem.shape.SquircleShape
+import io.github.matiyaaa.fuse.ui.designsystem.theme.Durations
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.FocusZone
+import io.github.matiyaaa.fuse.ui.shell.app.Route
 import io.github.matiyaaa.fuse.ui.shell.app.rememberPageState
+import kotlin.math.ceil
 
 /** One settings section: an id used in routes, a label and its rows. */
 class SettingsSection(
@@ -46,6 +83,8 @@ class SettingsSection(
     val rows: @Composable (AppState) -> List<MenuAction>,
     /** False on devices the section means nothing on (Cartridge on Windows and macOS). */
     val available: (AppState) -> Boolean = { true },
+    /** The heading the section is listed under, so eighteen sections read as five groups. */
+    val group: String? = null,
 )
 
 /** Where Settings is: the section, the row, and whether the rows have focus. */
@@ -55,31 +94,43 @@ private class SettingsPlace(section: Int, rows: Boolean) {
     var inRows by mutableStateOf(rows)
 }
 
+private const val LOOK = "Look and feel"
+private const val GAMES = "Games"
+private const val DEVICE = "This device"
+private const val CONNECTIONS = "Connections"
+private const val GENERAL = "General"
+
 val settingsSections: List<SettingsSection> = listOf(
-    SettingsSection("appearance", "Appearance", FuseIcons.Palette, "Theme, motion, glass, CRT", ::appearanceRows),
-    SettingsSection("home", "Home", FuseIcons.Home, "Style, shelves, sections, Home screen", ::homeRows),
-    SettingsSection("library", "Library", FuseIcons.Library, "Folders, scanning, names", ::libraryRows),
-    SettingsSection("systems", "Systems", FuseIcons.Chip, "Per-system emulator, folders, BIOS", ::systemsRows),
-    SettingsSection("emulators", "Emulators", FuseIcons.Joystick, "What Fuse found installed", ::emulatorRows),
-    SettingsSection("media", "Media and Scraping", FuseIcons.Images, "Art sources, keys, matching, previews", ::mediaRows),
-    SettingsSection("achievements", "Achievements", FuseIcons.Trophy, "RetroAchievements", ::achievementRows),
-    SettingsSection("cartridge", "Cartridge", FuseIcons.CloudDownload, "Your RomM companion", ::cartridgeRows, available = { it.platform.features.cartridge }),
-    SettingsSection("inputs", "Inputs", FuseIcons.Gamepad, "Buttons, layout, repeat", ::inputRows),
-    SettingsSection("sound", "Sound", FuseIcons.Music, "Menu music and interface sounds", ::soundRows),
-    SettingsSection("displays", "Displays", FuseIcons.DualScreen, "Second screen and launching", ::displayRows),
-    SettingsSection("performance", "Performance and Power", FuseIcons.Gauge, "Profile and Low Power Mode", ::performanceRows),
-    SettingsSection("network", "Network", FuseIcons.Wifi, "What Fuse connects to", ::networkRows),
-    SettingsSection("phonelink", "Phone Link", FuseIcons.Smartphone, "Your library from a phone on the same Wi-Fi", ::phoneLinkRows),
-    SettingsSection("storage", "Storage", FuseIcons.HardDrive, "File access and caches", ::storageRows),
-    SettingsSection("privacy", "Privacy", FuseIcons.ShieldCheck, "No telemetry, where data goes", ::privacyRows),
-    SettingsSection("updates", "Updates", FuseIcons.Download, "New versions of Fuse", ::updateRows),
-    SettingsSection("about", "About", FuseIcons.Info, "Version, licences, setup", ::aboutRows),
+    SettingsSection("appearance", "Appearance", FuseIcons.Palette, "Theme, motion, glass, CRT", ::appearanceRows, group = LOOK),
+    SettingsSection("home", "Home", FuseIcons.Home, "Style, shelves, sections, Home screen", ::homeRows, group = LOOK),
+    SettingsSection("library", "Library", FuseIcons.Library, "Folders, scanning, names", ::libraryRows, group = GAMES),
+    SettingsSection("systems", "Systems", FuseIcons.Chip, "Per-system emulator, folders, BIOS", ::systemsRows, group = GAMES),
+    SettingsSection("emulators", "Emulators", FuseIcons.Joystick, "What Fuse found installed", ::emulatorRows, group = GAMES),
+    SettingsSection("media", "Media and Scraping", FuseIcons.Images, "Art sources, keys, matching, previews", ::mediaRows, group = GAMES),
+    SettingsSection("achievements", "Achievements", FuseIcons.Trophy, "RetroAchievements", ::achievementRows, group = GAMES),
+    SettingsSection("cartridge", "Cartridge", FuseIcons.CloudDownload, "Your RomM companion", ::cartridgeRows, available = { it.platform.features.cartridge }, group = GAMES),
+    SettingsSection("inputs", "Inputs", FuseIcons.Gamepad, "Buttons, layout, repeat", ::inputRows, group = DEVICE),
+    SettingsSection("sound", "Sound", FuseIcons.Music, "Menu music and interface sounds", ::soundRows, group = DEVICE),
+    SettingsSection("displays", "Displays", FuseIcons.DualScreen, "Second screen and launching", ::displayRows, group = DEVICE),
+    SettingsSection("performance", "Performance and Power", FuseIcons.Gauge, "Profile and Low Power Mode", ::performanceRows, group = DEVICE),
+    SettingsSection("network", "Network", FuseIcons.Wifi, "What Fuse connects to", ::networkRows, group = CONNECTIONS),
+    SettingsSection("phonelink", "Phone Link", FuseIcons.Smartphone, "Your library from a phone on the same Wi-Fi", ::phoneLinkRows, group = CONNECTIONS),
+    SettingsSection("storage", "Storage", FuseIcons.HardDrive, "File access and caches", ::storageRows, group = GENERAL),
+    SettingsSection("privacy", "Privacy", FuseIcons.ShieldCheck, "No telemetry, where data goes", ::privacyRows, group = GENERAL),
+    SettingsSection("updates", "Updates", FuseIcons.Download, "New versions of Fuse", ::updateRows, group = GENERAL),
+    SettingsSection("about", "About", FuseIcons.Info, "Version, licences, setup", ::aboutRows, group = GENERAL),
 )
 
 /**
- * Settings as two panes: sections on the left, the section's settings on the right. Everything
- * applies immediately; there is no Save button. Settings that can differ per system or per game say
- * where their current value comes from.
+ * Settings as two panes: the sections on the room at the left, listed under five headings, and the
+ * chosen section's settings on a panel at the right. Both lists glide their highlight from row to
+ * row, and the section keeps a quiet marker while its rows have focus. Everything applies
+ * immediately; there is no Save button. Settings that can differ per system or per game say where
+ * their current value comes from.
+ *
+ * On a narrow screen (a phone held upright) the panes take turns: the sections, then the chosen
+ * section's rows with a way back. On a short one (a 6 inch handheld) the heading shrinks to one line
+ * so more rows fit.
  */
 @Composable
 fun SettingsScreen(app: AppState, initialSection: String?) {
@@ -120,42 +171,422 @@ fun SettingsScreen(app: AppState, initialSection: String?) {
         }
     }
 
-    Row(Modifier.fillMaxSize().padding(horizontal = Space.gutter)) {
-        Column(Modifier.width(300.dp).fillMaxHeight()) {
-            Spacer(Modifier.height(Size.hudHeight + Space.l))
-            FText("Settings", Fuse.type.display)
-            Spacer(Modifier.height(Space.l))
-            MenuList(
-                sections.map { s ->
-                    MenuAction(s.id, s.label, s.icon, onSelect = {
-                        sectionSel.index = sections.indexOf(s)
-                        rowSel.index = 0
-                        inRows = true
-                        app.focusZone = FocusZone.CONTENT
-                    })
-                },
-                sectionSel,
-                showSelection = app.focusZone == FocusZone.CONTENT,
-                dimSelection = inRows,
-                modifier = Modifier.padding(bottom = Size.hintHeight),
-            )
+    val focused = app.focusZone == FocusZone.CONTENT
+    val panelRows = rows.map { r -> r.copy(onSelect = { rowSel.index = rows.indexOf(r); inRows = true; r.onSelect() }) }
+    // Appearance leads with the theme in use; selecting the card opens every theme, as the Theme row does.
+    val openThemes: (() -> Unit)? = if (section.id == "appearance") ({ app.go(Route.Themes) }) else null
+
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val narrow = maxWidth < NARROW_BELOW
+        val short = maxHeight < SHORT_BELOW
+        // On a narrow screen the sections have the whole width, so each says what is in it.
+        val sectionRows = sections.map { s ->
+            MenuAction(s.id, s.label, s.icon, detail = s.summary.takeIf { narrow }, section = s.group, onSelect = {
+                sectionSel.index = sections.indexOf(s)
+                rowSel.index = 0
+                inRows = true
+                app.focusZone = FocusZone.CONTENT
+            })
         }
-        Spacer(Modifier.width(Space.xl))
-        Column(Modifier.weight(1f).fillMaxHeight()) {
-            Spacer(Modifier.height(Size.hudHeight + Space.l))
-            FText(section.label, Fuse.type.title)
-            FText(section.summary, Fuse.type.body, color = Fuse.colors.textMuted)
-            Spacer(Modifier.height(Space.l))
-            Box(Modifier.weight(1f)) {
-                Panel(Modifier.fillMaxSize().padding(bottom = Size.hintHeight + Space.s)) {
+        if (narrow) {
+            Column(Modifier.fillMaxSize().padding(horizontal = Space.gutterCompact)) {
+                Spacer(Modifier.height(Size.hudHeight + Space.m))
+                if (!inRows) {
+                    FText("Settings", Fuse.type.display, maxLines = 1, modifier = Modifier.reveal(0))
+                    Spacer(Modifier.height(Space.l))
                     MenuList(
-                        rows.map { r -> r.copy(onSelect = { rowSel.index = rows.indexOf(r); inRows = true; r.onSelect() }) },
-                        rowSel,
-                        showSelection = inRows && app.focusZone == FocusZone.CONTENT,
-                        modifier = Modifier.padding(Space.s),
+                        sectionRows, sectionSel,
+                        showSelection = focused,
+                        modifier = Modifier.weight(1f).padding(bottom = Size.hintHeight).menuEdges(sectionRows, sectionSel.index).reveal(1),
                     )
+                } else {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(
+                            FuseIcons.ChevronLeft, selected = false, onClick = { inRows = false },
+                            size = Size.touch - Space.xs, contentDescription = "Sections",
+                        )
+                        Spacer(Modifier.width(Space.m))
+                        SectionHeading(section, Modifier.weight(1f), compact = true)
+                    }
+                    Spacer(Modifier.height(Space.m))
+                    SectionPanel(panelRows, rowSel, focused && inRows, openThemes, short = true, Modifier.weight(1f).padding(bottom = Size.hintHeight + Space.s).reveal(1))
+                }
+            }
+        } else {
+            val sidebar = ((maxWidth - Space.gutter * 2) * SIDEBAR_SHARE).coerceIn(SIDEBAR_MIN, SIDEBAR_MAX)
+            Column(Modifier.fillMaxSize().padding(horizontal = Space.gutter)) {
+                Spacer(Modifier.height(Size.hudHeight + if (short) Space.s else Space.l))
+                // One heading line across both panes: Settings, then where in it you are. Their
+                // baselines meet, and both panes start on the same line below.
+                Row(Modifier.fillMaxWidth().reveal(0)) {
+                    FText(
+                        "Settings", if (short) Fuse.type.title else Fuse.type.display, maxLines = 1,
+                        modifier = Modifier.width(sidebar).alignBy(FirstBaseline),
+                    )
+                    Spacer(Modifier.width(Space.xl))
+                    SectionHeading(section, Modifier.weight(1f).alignBy(FirstBaseline), compact = short)
+                }
+                Spacer(Modifier.height(if (short) Space.m else Space.l))
+                Row(Modifier.weight(1f).padding(bottom = Size.hintHeight + Space.s)) {
+                    MenuList(
+                        sectionRows, sectionSel,
+                        showSelection = focused,
+                        dimSelection = inRows,
+                        modifier = Modifier.width(sidebar).fillMaxHeight().menuEdges(sectionRows, sectionSel.index).reveal(1),
+                    )
+                    Spacer(Modifier.width(Space.xl))
+                    SectionPanel(panelRows, rowSel, focused && inRows, openThemes, short, Modifier.weight(1f).fillMaxHeight().reveal(2))
                 }
             }
         }
     }
 }
+
+/** The chosen section's name with its summary: under it, or after it on one line when space is short. */
+@Composable
+private fun SectionHeading(section: SettingsSection, modifier: Modifier, compact: Boolean) {
+    if (compact) {
+        Row(modifier, verticalAlignment = Alignment.Bottom) {
+            FText(section.label, Fuse.type.titleSmall, maxLines = 1, modifier = Modifier.alignByBaseline())
+            Spacer(Modifier.width(Space.m))
+            FText(section.summary, Fuse.type.caption, color = Fuse.colors.textMuted, maxLines = 1, modifier = Modifier.weight(1f, fill = false).alignByBaseline())
+        }
+    } else {
+        Column(modifier, verticalArrangement = Arrangement.spacedBy(Space.xxs)) {
+            FText(section.label, Fuse.type.title, maxLines = 1)
+            FText(section.summary, Fuse.type.body, color = Fuse.colors.textMuted, maxLines = 1)
+        }
+    }
+}
+
+/** The rows of a section on their panel; Appearance leads with the theme in use. */
+@Composable
+private fun SectionPanel(
+    rows: List<MenuAction>,
+    selection: LinearSelection,
+    focused: Boolean,
+    openThemes: (() -> Unit)?,
+    short: Boolean,
+    modifier: Modifier,
+) {
+    val cardHeight = if (openThemes != null) themeCardHeight(short) + Space.s else 0.dp
+    Panel(modifier) {
+        MenuList(
+            rows, selection,
+            showSelection = focused,
+            header = openThemes?.let { open -> { ThemeCard(short, open, Modifier.padding(bottom = Space.s)) } },
+            modifier = Modifier.padding(Space.s).menuEdges(rows, selection.index, header = cardHeight),
+        )
+    }
+}
+
+/**
+ * The heading of a page Settings opens (Controls, Storage, Phone Link, Licences): its name in the
+ * display face and a muted line under it, the same as Settings' own, so moving between them reads
+ * as one place. [short] screens get a smaller name. [status] sits after the line (a progress bar, a
+ * state), or under it when [stacked] (narrow screens, where the line needs the whole width).
+ */
+@Composable
+internal fun SettingsPageHeading(
+    title: String,
+    subtitle: String,
+    short: Boolean,
+    modifier: Modifier = Modifier,
+    stacked: Boolean = false,
+    status: (@Composable () -> Unit)? = null,
+) {
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(Space.xxs)) {
+        FText(title, if (short) Fuse.type.title else Fuse.type.display, maxLines = 1)
+        val line = @Composable { m: Modifier ->
+            FText(subtitle, if (short) Fuse.type.caption else Fuse.type.body, color = Fuse.colors.textMuted, maxLines = 2, modifier = m)
+        }
+        if (stacked || status == null) {
+            line(Modifier)
+            if (status != null) {
+                Spacer(Modifier.height(Space.xs))
+                status()
+            }
+        } else {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                line(Modifier.weight(1f, fill = false))
+                Spacer(Modifier.width(Space.l))
+                status()
+            }
+        }
+    }
+}
+
+// ----------------------------------------------------------------------------------- theme card
+
+/**
+ * The theme in use, as a small live picture over its name and tagline: it is drawn from the
+ * interface's own colours and shapes, so it changes the moment the theme does. It sits right above
+ * the Theme row, which opens every theme; a tap on it does the same.
+ */
+@Composable
+private fun ThemeCard(short: Boolean, onOpen: () -> Unit, modifier: Modifier = Modifier) {
+    val c = Fuse.colors
+    val spec = Fuse.look.spec
+    val shape = RoundedCornerShape(Fuse.geometry.control)
+    val pictureHeight = themeCardHeight(short) - Space.m * 2
+    Row(
+        modifier
+            .fillMaxWidth()
+            .height(themeCardHeight(short))
+            .graphicsLayer {
+                this.shape = shape
+                clip = true
+            }
+            .background(c.text.copy(alpha = if (c.isDark) 0.05f else 0.04f))
+            .lightEdge(shape, if (c.isDark) 0.1f else 0.5f)
+            .fuseClickable(shape = shape, scale = false, role = Role.Button, onClickLabel = "Themes", onClick = onOpen)
+            // The picture starts where the rows' icons do.
+            .padding(start = Space.m + ROW_BAR.dp, top = Space.m, bottom = Space.m, end = Space.m),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        ThemeSwatch(Modifier.height(pictureHeight).width(pictureHeight * SWATCH_ASPECT))
+        Spacer(Modifier.width(Space.l))
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Space.xxs)) {
+            FText(spec.name, Fuse.type.titleSmall, maxLines = 1)
+            FText(
+                listOfNotNull(spec.tagline.takeIf { it.isNotBlank() }, spec.author?.let { "by $it" }).joinToString("  ·  "),
+                Fuse.type.caption, color = c.textMuted, maxLines = if (short) 1 else 2,
+            )
+        }
+        if (!short) {
+            Spacer(Modifier.width(Space.l))
+            Palette()
+        }
+    }
+}
+
+private fun themeCardHeight(short: Boolean): Dp = if (short) Size.thumbL + Space.m * 2 - Space.s else Size.thumbL + Space.xl + Space.m
+
+/**
+ * The theme's colours as a row of small chips in its tile corners: the room, its panels, the muted
+ * and main text, and the accent. Each has a hairline so the room's chip still shows on the card.
+ */
+@Composable
+private fun Palette() {
+    val c = Fuse.colors
+    val chips = listOf(c.ink, c.surfaceRaised, c.textMuted, c.text, c.accent)
+    val edge = c.text.copy(alpha = if (c.isDark) 0.2f else 0.18f)
+    val shape = SquircleShape.fraction(Fuse.geometry.tileCornerFraction.coerceAtLeast(0.12f) + 0.06f)
+    val d = Size.iconS
+    val gap = Space.xs
+    Spacer(
+        Modifier.size(width = d * chips.size + gap * (chips.size - 1), height = d).drawWithCache {
+            val side = size.height
+            val step = side + gap.toPx()
+            val outline = Path().apply { addOutline(shape.createOutline(androidx.compose.ui.geometry.Size(side, side), layoutDirection, this@drawWithCache)) }
+            val hair = androidx.compose.ui.graphics.drawscope.Stroke(1.dp.toPx())
+            onDrawBehind {
+                chips.forEachIndexed { i, color ->
+                    translate(left = i * step) {
+                        drawPath(outline, color)
+                        drawPath(outline, edge, style = hair)
+                    }
+                }
+            }
+        },
+    )
+}
+
+/**
+ * A tiny picture of Fuse in the current theme: the room with the game's light rising from the
+ * bottom left, the top line, a title, and a row of tiles with the second one chosen over its spark
+ * bar, in the theme's tile corners. Everything is built once per size and colour set.
+ */
+@Composable
+internal fun ThemeSwatch(modifier: Modifier = Modifier) {
+    val c = Fuse.colors
+    val corner = Fuse.geometry.tileCornerFraction
+    val shape = SquircleShape.fraction((corner * 0.9f).coerceAtLeast(0.08f))
+    Spacer(
+        modifier
+            .graphicsLayer {
+                this.shape = shape
+                clip = true
+            }
+            .drawWithCache {
+                val w = size.width
+                val h = size.height
+                val glow = Brush.radialGradient(
+                    listOf(c.accent.copy(alpha = if (c.isDark) 0.45f else 0.3f), Color.Transparent),
+                    center = Offset(w * 0.12f, h * 1.1f),
+                    radius = w * 0.9f,
+                )
+                val tile = h * 0.3f
+                val chosen = tile * 1.16f
+                val gap = tile * 0.24f
+                val baseline = h * 0.86f
+                val tiles = (0 until 4).map { i ->
+                    val s = if (i == 1) chosen else tile
+                    val x = w * 0.09f + i * (tile + gap) + if (i > 1) chosen - tile else 0f
+                    val path = Path().apply {
+                        addOutline(SquircleShape.fraction(corner.coerceAtLeast(0.08f)).createOutline(androidx.compose.ui.geometry.Size(s, s), layoutDirection, this@drawWithCache))
+                        translate(Offset(x, baseline - s - if (i == 1) h * 0.04f else 0f))
+                    }
+                    path
+                }
+                val bar = h * 0.035f
+                val barX = w * 0.09f + tile + gap + chosen * 0.3f
+                val tileFill = lerp(c.surfaceRaised, c.text, 0.06f)
+                val chosenFill = lerp(c.surfaceRaised, c.accent, 0.38f)
+                val pill = CornerRadius(h)
+                onDrawBehind {
+                    drawRect(c.ink)
+                    drawRect(glow)
+                    // The top line: the mark, three section tabs (the first chosen) and the clock.
+                    val y = h * 0.12f
+                    val m = h * 0.075f
+                    drawRoundRect(c.text.copy(alpha = 0.9f), Offset(w * 0.09f, y), androidx.compose.ui.geometry.Size(m, m), CornerRadius(m * 0.3f))
+                    for (i in 0 until 3) {
+                        drawRoundRect(
+                            c.text.copy(alpha = if (i == 0) 0.85f else 0.3f),
+                            Offset(w * 0.09f + m * 2f + i * w * 0.11f, y + m * 0.3f),
+                            androidx.compose.ui.geometry.Size(w * 0.08f, m * 0.4f),
+                            pill,
+                        )
+                    }
+                    drawRoundRect(c.text.copy(alpha = 0.5f), Offset(w * 0.8f, y + m * 0.3f), androidx.compose.ui.geometry.Size(w * 0.11f, m * 0.4f), pill)
+                    // The selected game's title and a quiet meta line.
+                    drawRoundRect(c.text.copy(alpha = 0.9f), Offset(w * 0.09f, h * 0.33f), androidx.compose.ui.geometry.Size(w * 0.38f, h * 0.07f), pill)
+                    drawRoundRect(c.textMuted.copy(alpha = 0.6f), Offset(w * 0.09f, h * 0.45f), androidx.compose.ui.geometry.Size(w * 0.24f, h * 0.04f), pill)
+                    tiles.forEachIndexed { i, p -> drawPath(p, if (i == 1) chosenFill else tileFill) }
+                    drawRoundRect(c.accent, Offset(barX, baseline + h * 0.02f), androidx.compose.ui.geometry.Size(chosen * 0.4f, bar), CornerRadius(bar / 2))
+                }
+            }
+            .lightEdge(shape, if (c.isDark) 0.22f else 0.6f),
+    )
+}
+
+// ----------------------------------------------------------------------------------- list edges
+
+/**
+ * Softens the top and bottom edges of a [MenuList] while there are rows beyond them, so a long list
+ * fades into its panel instead of ending in a hard cut, and a list at rest is never faded.
+ *
+ * MenuList keeps its scroll position to itself, so this works it out the way the list scrolls: the
+ * selected row is kept 30% of the way down, between the top and the end. Row heights are estimated
+ * from their text, which is close enough for a fade. [header] is the height of the list's header.
+ * Put it after any padding, so it measures the list itself.
+ */
+@Composable
+internal fun Modifier.menuEdges(actions: List<MenuAction>, selected: Int, header: Dp = 0.dp): Modifier {
+    val density = LocalDensity.current
+    var box by remember { mutableStateOf(IntSize.Zero) }
+    val edges = remember(actions, selected, box, header) {
+        if (box == IntSize.Zero) {
+            false to false
+        } else {
+            with(density) { listEdges(actions, selected, box.width.toDp(), box.height.toDp(), header) }
+        }
+    }
+    val motion = Fuse.motion
+    val top by animateFloatAsState(if (edges.first) 1f else 0f, motion.tween(Durations.FAST), label = "edgeTop")
+    val bottom by animateFloatAsState(if (edges.second) 1f else 0f, motion.tween(Durations.FAST), label = "edgeBottom")
+    return this
+        .onSizeChanged { box = it }
+        .softEdges(Space.xl, Space.xxl, { top }, { bottom })
+}
+
+/** Whether a list of [actions] [width] wide and [height] tall has rows above and below its view. */
+private fun listEdges(actions: List<MenuAction>, selected: Int, width: Dp, height: Dp, header: Dp): Pair<Boolean, Boolean> {
+    if (actions.isEmpty()) return false to false
+    val gap = Space.xxs.value
+    var y = if (header > 0.dp) header.value + gap else 0f
+    val tops = FloatArray(actions.size)
+    var previous: String? = null
+    actions.forEachIndexed { i, a ->
+        val s = a.section
+        if (s != null && (i == 0 || s != previous)) y += labelHeight(first = i == 0, blank = s.isBlank()) + gap
+        previous = s
+        tops[i] = y
+        y += rowHeight(a, width.value) + gap
+    }
+    val total = y - gap
+    val room = (total - height.value).coerceAtLeast(0f)
+    val i = selected.coerceIn(0, actions.size - 1)
+    // The first row of a list without a header is followed by its very top (its group label).
+    val followed = if (i == 0 && header == 0.dp) 0f else tops[i]
+    val scroll = (followed - height.value * FOLLOW_ANCHOR).coerceIn(0f, room)
+    return (scroll > 1f) to (scroll < room - 1f)
+}
+
+/** A group label's height in a MenuList: overline text, its padding and the divider above it. */
+private fun labelHeight(first: Boolean, blank: Boolean): Float = when {
+    first && blank -> Space.xxs.value
+    first -> (Space.xs + LABEL_LINE + Space.xs + Space.xxs).value
+    blank -> (Space.xs + Size.divider + Space.xs + Space.xxs).value
+    else -> (Space.xs + Size.divider + Space.m + LABEL_LINE + Space.xs + Space.xxs).value
+}
+
+/** A MenuRow's height: its title and detail lines, wrapped at an estimate of their width. */
+private fun rowHeight(a: MenuAction, width: Float): Float {
+    val trailing = when (val t = a.trailing) {
+        Trailing.None -> 0f
+        Trailing.Chevron -> 18f
+        is Trailing.Value -> t.text.length * LABEL_CHAR
+        is Trailing.Switch -> 46f
+        is Trailing.Check -> 22f
+        is Trailing.Inherited -> t.from.length * LABEL_CHAR + 40f
+        is Trailing.Badge -> 28f
+        is Trailing.Progress -> 112f
+        is Trailing.Disclosure -> (t.summary?.length ?: 0) * LABEL_CHAR + 26f
+        is Trailing.Level -> 116f
+    }
+    val lead = ROW_BAR + (Space.m + (if (a.icon != null) Size.iconXL + Space.m else 0.dp)).value + a.indent * Space.l.value
+    val text = (width - lead - Space.m.value - trailing - Space.l.value).coerceAtLeast(80f)
+    fun lines(s: String, char: Float, max: Int) = s.split('\n').sumOf { ceil(it.length * char / text).toInt().coerceAtLeast(1) }.coerceAtMost(max)
+    val title = lines(a.label, TITLE_CHAR, 2) * TITLE_LINE
+    val detail = (a.unavailableReason ?: a.detail)?.let { Space.xxs.value + lines(it, CAPTION_CHAR, 3) * CAPTION_LINE } ?: 0f
+    return maxOf(Size.row.value, Space.s.value * 2 + title + detail)
+}
+
+/** Fades the edges by [topStrength] and [bottomStrength] (0..1), drawn without recomposing. */
+private fun Modifier.softEdges(top: Dp, bottom: Dp, topStrength: () -> Float, bottomStrength: () -> Float): Modifier = this
+    .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+    .drawWithContent {
+        drawContent()
+        val h = size.height
+        val ts = topStrength().coerceIn(0f, 1f)
+        val bs = bottomStrength().coerceIn(0f, 1f)
+        if (h <= 0f || (ts <= 0f && bs <= 0f)) return@drawWithContent
+        val t = (top.toPx() / h).coerceIn(0f, 0.5f)
+        val b = (bottom.toPx() / h).coerceIn(0f, 0.5f)
+        drawRect(
+            Brush.verticalGradient(
+                0f to Color.Black.copy(alpha = 1f - ts),
+                t to Color.Black,
+                1f - b to Color.Black,
+                1f to Color.Black.copy(alpha = 1f - bs),
+            ),
+            blendMode = BlendMode.DstIn,
+        )
+    }
+
+/** Below this width the panes take turns; below this height the heading shrinks to one line. */
+private val NARROW_BELOW = 640.dp
+private val SHORT_BELOW = 560.dp
+
+/** The section list takes this share of the width, within these bounds. */
+private const val SIDEBAR_SHARE = 0.27f
+private val SIDEBAR_MIN = 256.dp
+private val SIDEBAR_MAX = 320.dp
+
+/** Picture shape of the theme card: the screen's own proportion. */
+private const val SWATCH_ASPECT = 16f / 10f
+
+/** Where FollowSelection keeps a menu's selected row, as a share of the list's height. */
+private const val FOLLOW_ANCHOR = 0.3f
+
+// Text metrics for estimating row heights (dp per character, and line heights), and the width of a
+// row's accent bar, which every row keeps room for.
+private const val ROW_BAR = 3f
+private const val TITLE_CHAR = 7.9f
+private const val CAPTION_CHAR = 6.3f
+private const val LABEL_CHAR = 7.0f
+private const val TITLE_LINE = 22f
+private const val CAPTION_LINE = 16f
+private val LABEL_LINE = 14.dp

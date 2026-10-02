@@ -8,6 +8,33 @@ import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec
 import io.github.matiyaaa.fuse.ui.shell.app.ConfirmSpec
 import io.github.matiyaaa.fuse.ui.shell.app.TextInputSpec
+import kotlin.math.roundToInt
+
+/*
+ * Every settings row has the same anatomy (a MenuRow): an icon in its well, a title, an optional
+ * detail line, and on the right what the row holds. The right side always says what selecting the
+ * row does:
+ *
+ * - a switch flips in place (toggleRow),
+ * - a value opens a choice list (choiceRow, textRow), a meter and a percentage for levels (percentRow),
+ * - a chevron opens a page or a list of its own,
+ * - nothing for information (infoRow) and for actions that run straight away or after a question
+ *   (confirmRow, red when it deletes something).
+ *
+ * Long sections put their rows under small labels with [labelled]; rarely changed settings fold
+ * into a [group] at the end of a section.
+ */
+
+/**
+ * Puts the rows [rows] adds under one labelled group of a section page: the list draws a divider and
+ * [label] above the first of them. A blank [label] draws the divider alone, which sets a dangerous
+ * action apart from the settings above it.
+ */
+internal inline fun MutableList<MenuAction>.labelled(label: String, rows: MutableList<MenuAction>.() -> Unit) {
+    val from = size
+    rows()
+    for (i in from until size) this[i] = this[i].copy(section = label)
+}
 
 /**
  * A group of rows that opens in place: its header shows [summary] and a chevron, and while open its
@@ -23,7 +50,10 @@ fun AppState.group(id: String, label: String, icon: ImageVector, summary: String
 fun toggleRow(id: String, label: String, icon: ImageVector, on: Boolean, detail: String? = null, enabled: Boolean = true, set: (Boolean) -> Unit) =
     MenuAction(id, label, icon, detail = detail, trailing = Trailing.Switch(on), enabled = enabled, onSelect = { set(!on) })
 
-/** A row that shows its value and opens a choice list. */
+/**
+ * A row that shows its value and opens a choice list. The list opens under the row's own icon and
+ * title, with the current value checked.
+ */
 fun <T> AppState.choiceRow(
     id: String,
     label: String,
@@ -39,6 +69,7 @@ fun <T> AppState.choiceRow(
         choice = ChoiceSpec(
             title = label,
             message = detail,
+            icon = icon,
             options = options.map { (value, name) ->
                 MenuAction("$id.$name", name, null, detail = optionDetail(value), trailing = Trailing.Check(value == current), onSelect = {
                     set(value)
@@ -49,15 +80,21 @@ fun <T> AppState.choiceRow(
     })
 }
 
-/** A 0..1 value offered as steps (controller friendly), shown as a percentage. */
+/** The steps a level row offers: every tenth from none to full. */
+private val levelSteps = (0..10).map { it / 10f }
+
+/**
+ * A 0..1 level (volume, dimming, opacity) offered as tenths, which suits a controller: a short meter
+ * and its percentage show how much at a glance, and the choice list checks the nearest step.
+ */
 fun AppState.percentRow(id: String, label: String, icon: ImageVector, value: Float, detail: String? = null, set: (Float) -> Unit): MenuAction =
     choiceRow(
         id, label, icon,
-        current = (value * 20).toInt() / 20f,
-        options = listOf(0f, 0.1f, 0.2f, 0.3f, 0.4f, 0.5f, 0.6f, 0.7f, 0.8f, 0.9f, 1f).map { it to "${(it * 100).toInt()}%" },
+        current = levelSteps.minBy { kotlin.math.abs(it - value) },
+        options = levelSteps.map { it to "${(it * 100).roundToInt()}%" },
         detail = detail,
         set = set,
-    )
+    ).copy(trailing = Trailing.Level(value.coerceIn(0f, 1f), "${(value * 100).roundToInt()}%"))
 
 /** A row that asks for text (API keys, names). Secret values are never shown back. */
 fun AppState.textRow(
