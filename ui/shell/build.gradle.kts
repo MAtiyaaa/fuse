@@ -42,10 +42,16 @@ val screenshotTests = "io.github.matiyaaa.fuse.ui.shell.screenshots.*"
 //     ./gradlew :ui:shell:desktopAudit -Pfuse.audit.dir=/tmp/fuse-audit [-Pfuse.audit.only=home,library/all] [-Pfuse.audit.sizes=M,H]
 val auditTests = "io.github.matiyaaa.fuse.ui.shell.audit.*"
 
+// Frame cost of the interactions that must stay smooth (scrolling, tab and system runs), with a JFR
+// profile. Never part of desktopTest, check or CI; run it on purpose and compare runs:
+//     ./gradlew :ui:shell:desktopPerf -Pfuse.perf.dir=/tmp/fuse-perf [-Pfuse.perf.only=settings,storage]
+val perfTests = "io.github.matiyaaa.fuse.ui.shell.perf.*"
+
 tasks.named<Test>("desktopTest") {
     filter {
         excludeTestsMatching(screenshotTests)
         excludeTestsMatching(auditTests)
+        excludeTestsMatching(perfTests)
     }
 }
 
@@ -83,6 +89,23 @@ tasks.register<Test>("desktopAudit") {
     systemProperty("fuse.audit.only", providers.gradleProperty("fuse.audit.only").getOrElse(""))
     systemProperty("fuse.audit.sizes", providers.gradleProperty("fuse.audit.sizes").getOrElse(""))
     // Every screen at several sizes takes a while; the coroutine test default of one minute is too short.
+    systemProperty("kotlinx.coroutines.test.default_timeout", "40m")
+    maxHeapSize = "1536m"
+    testLogging { showStandardStreams = true }
+    outputs.upToDateWhen { false }
+}
+
+tasks.register<Test>("desktopPerf") {
+    description = "Measures frame times of laggy-prone interactions into -Pfuse.perf.dir, with a JFR profile."
+    group = "verification"
+    val desktopTest = tasks.named<Test>("desktopTest").get()
+    testClassesDirs = desktopTest.testClassesDirs
+    classpath = desktopTest.classpath
+    filter { includeTestsMatching(perfTests) }
+    val dir: String? = providers.gradleProperty("fuse.perf.dir").orNull?.let { rootProject.file(it).absolutePath }
+    doFirst { check(dir != null) { "Pass the output folder: -Pfuse.perf.dir=<folder>" } }
+    systemProperty("fuse.perf.dir", dir.orEmpty())
+    systemProperty("fuse.perf.only", providers.gradleProperty("fuse.perf.only").getOrElse(""))
     systemProperty("kotlinx.coroutines.test.default_timeout", "40m")
     maxHeapSize = "1536m"
     testLogging { showStandardStreams = true }
