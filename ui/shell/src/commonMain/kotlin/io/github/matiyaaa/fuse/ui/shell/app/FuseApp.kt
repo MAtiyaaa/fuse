@@ -236,13 +236,17 @@ fun FuseApp(
         glass = prefs.glass,
         highContrastFocus = prefs.highContrastFocus,
         animateChanges = true,
+        textScale = prefs.textScale,
     ) {
         CompositionLocalProvider(LocalInputRouter provides router, LocalUiSounds provides platform.sounds) {
             BoxWithConstraints(Modifier.fillMaxSize().background(Fuse.colors.ink)) {
+                // The room fills the whole screen; everything on it keeps clear of edges a TV cuts off.
+                Room(app, prefs.showHero, spec.background, prefs.heroDim, prefs.glass, prefs.videoPreview, prefs.videoDelaySeconds, spec.ambient)
+                val margin = prefs.screenMargin.coerceIn(0, 10) / 100f
+                BoxWithConstraints(Modifier.fillMaxSize().padding(horizontal = maxWidth * margin, vertical = maxHeight * margin)) {
                 val metrics = remember(maxWidth, maxHeight) { TileMetrics.forHeight(maxHeight, maxWidth) }
                 val borders = rememberTileBorders(store)
                 CompositionLocalProvider(LocalTileMetrics provides metrics, LocalTileBorders provides borders, LocalGameArt provides prefs.gameArt) {
-                    Room(app, prefs.showHero, spec.background, prefs.heroDim, prefs.glass, prefs.videoPreview, prefs.videoDelaySeconds, spec.ambient)
                     ArtWarmup(app)
                     ShellInput(app)
                     Pages(app, visibleTabs(app, prefs))
@@ -292,8 +296,9 @@ fun FuseApp(
                     ToastHost(app.toasts)
                     app.capture?.let { CaptureOverlay(it) }
                     LaunchVeilView(app)
-                    if (prefs.crt.enabled && quality.crtShader) CrtOverlay(prefs.crt)
                 }
+                }
+                if (prefs.crt.enabled && quality.crtShader) CrtOverlay(prefs.crt)
             }
         }
     }
@@ -429,6 +434,7 @@ private fun Pages(app: AppState, tabs: List<Destination>) {
                     Route.Search -> SearchScreen(app)
                     Route.Controls -> io.github.matiyaaa.fuse.ui.shell.settings.ControlsScreen(app)
                     Route.Licenses -> io.github.matiyaaa.fuse.ui.shell.settings.LicensesScreen(app)
+                    Route.PlayTime -> io.github.matiyaaa.fuse.ui.shell.library.PlayTimeScreen(app)
                     Route.Themes -> io.github.matiyaaa.fuse.ui.shell.settings.ThemesScreen(app)
                     Route.Onboarding -> OnboardingScreen(app)
                     is Route.FolderBrowser -> FolderBrowserScreen(app, route.game)

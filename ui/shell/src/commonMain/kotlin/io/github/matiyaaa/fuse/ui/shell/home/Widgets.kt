@@ -776,7 +776,7 @@ internal fun AppState.openWidget(kind: WidgetKind, feed: HomeFeed, firstGame: Ga
         WidgetKind.RECENT_ACHIEVEMENT, WidgetKind.RECENT_ACHIEVEMENTS, WidgetKind.ACHIEVEMENT_PROGRESS,
         WidgetKind.RECENTLY_MASTERED,
         -> selectTab(Destination.ACHIEVEMENTS)
-        WidgetKind.PLAYTIME_WEEK, WidgetKind.PLAYTIME_TOTAL -> selectTab(Destination.LIBRARY)
+        WidgetKind.PLAYTIME_WEEK, WidgetKind.PLAYTIME_TOTAL -> go(Route.PlayTime)
         WidgetKind.CARTRIDGE_DOWNLOADS -> selectTab(Destination.CARTRIDGE)
         WidgetKind.STORAGE -> go(Route.Storage)
         WidgetKind.CLOCK -> quickMenuOpen = true

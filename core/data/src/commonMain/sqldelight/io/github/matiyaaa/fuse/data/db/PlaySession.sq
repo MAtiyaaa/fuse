@@ -35,3 +35,13 @@ SELECT started_at, ended_at FROM play_session WHERE ended_at IS NOT NULL AND end
 
 byGame:
 SELECT * FROM play_session WHERE game_id = ? ORDER BY started_at DESC, id DESC;
+
+-- Sessions that ended after :since, with their game (play time pages).
+endedAfterWithGame:
+SELECT game_id, started_at, ended_at FROM play_session WHERE ended_at IS NOT NULL AND ended_at > :since;
+
+-- All play time per system: what Fuse saw plus what was imported.
+secondsByPlatform:
+SELECT platform_id, SUM(tracked_seconds + imported_seconds) AS seconds FROM game
+WHERE removed_at IS NULL AND tracked_seconds + imported_seconds > 0
+GROUP BY platform_id ORDER BY seconds DESC;

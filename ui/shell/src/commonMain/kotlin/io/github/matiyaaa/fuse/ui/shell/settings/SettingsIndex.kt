@@ -26,6 +26,8 @@ object SettingsIndex {
         SettingTopic("appearance", "CRT effect", "scanlines retro tv curvature"),
         SettingTopic("appearance", "Motion", "animations reduce motion"),
         SettingTopic("appearance", "High contrast focus", "accessibility visibility outline"),
+        SettingTopic("appearance", "Text size", "font bigger larger smaller accessibility read"),
+        SettingTopic("appearance", "Screen edges", "overscan tv safe area margin cut off borders"),
         SettingTopic("home", "Home style", "flow widgets rows layout"),
         SettingTopic("home", "Add a widget", "board clock weather"),
         SettingTopic("home", "Row order", "rows reorder"),

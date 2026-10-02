@@ -38,6 +38,14 @@ internal object TimeWords {
         return "$y-${m.toString().padStart(2, '0')}-${d.toString().padStart(2, '0')}"
     }
 
+    /** The day number of the first of [epochDay]'s month. */
+    fun firstOfMonth(epochDay: Long): Long = epochDay - (civil(epochDay).third - 1)
+
+    /** "October" for a day number since 1970-01-01. */
+    fun monthName(epochDay: Long): String = FULL_MONTHS[civil(epochDay).second - 1]
+
+    private val FULL_MONTHS = listOf("January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December")
+
     /** Year, month and day of a day number since 1970-01-01 (civil-from-days, proleptic Gregorian). */
     private fun civil(epochDay: Long): Triple<Long, Int, Int> {
         val z = epochDay + 719_468

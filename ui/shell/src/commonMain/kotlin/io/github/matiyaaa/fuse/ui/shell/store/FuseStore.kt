@@ -325,6 +325,9 @@ interface LibraryOps {
     /** Folder browser for FOLDER_BROWSER games: files inside the game folder that could be launched. */
     suspend fun launchCandidates(id: GameId): List<String>
 
+    /** Play time today, this week, this month and in all, per day, per game and per system. */
+    fun playTime(): Flow<PlayTimeReport> = kotlinx.coroutines.flow.flowOf(PlayTimeReport(loaded = true))
+
     /**
      * Files the game under [platform] for good (a rescan keeps it), or back under the system its
      * folder says when null. Its emulator choice goes with the old system.

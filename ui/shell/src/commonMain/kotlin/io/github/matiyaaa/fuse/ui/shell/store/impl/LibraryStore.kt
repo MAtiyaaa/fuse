@@ -49,6 +49,7 @@ import io.github.matiyaaa.fuse.ui.shell.store.LibraryOps
 import io.github.matiyaaa.fuse.ui.shell.store.PlatformCard
 import io.github.matiyaaa.fuse.ui.shell.store.PlaytimeSummary
 import io.github.matiyaaa.fuse.ui.shell.store.RunResult
+import io.github.matiyaaa.fuse.ui.shell.store.PlayTimeReport
 import io.github.matiyaaa.fuse.ui.shell.store.SearchResults
 import io.github.matiyaaa.fuse.ui.shell.store.StorageSummary
 import kotlinx.coroutines.CancellationException
@@ -59,6 +60,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
@@ -562,6 +564,32 @@ internal class DefaultLibraryOps(
     }
 
     override suspend fun undoCleanNames(): Boolean = data.titleCleanup.undoLast() != null
+
+    override fun playTime(): Flow<PlayTimeReport> = flow {
+        val offset = ctx.services.utcOffsetMillis()
+        val day = (ctx.now() + offset).floorDiv(TimeWords.DAY_MS)
+        val today = day * TimeWords.DAY_MS - offset
+        val month = TimeWords.firstOfMonth(day) * TimeWords.DAY_MS - offset
+        emitAll(
+            combine(data.playSessions.report(today, ctx.weekStart(), month), data.playSessions.totalSeconds(), platforms) { r, totals, cards ->
+                val byId = cards.associateBy { it.platform.id }
+                val games = ctx.cardsOnce(r.monthGames.take(10).mapNotNull { data.games.summary(it.first) })
+                    .associateBy { it.id }
+                PlayTimeReport(
+                    todaySeconds = r.todaySeconds,
+                    weekSeconds = r.weekSeconds,
+                    monthSeconds = r.monthSeconds,
+                    trackedSeconds = totals.trackedSeconds,
+                    importedSeconds = totals.importedSeconds,
+                    days = r.days.map { it.seconds },
+                    month = TimeWords.monthName(day),
+                    games = r.monthGames.take(10).mapNotNull { (id, s) -> games[id]?.let { it to s } },
+                    systems = r.platforms.mapNotNull { (id, s) -> byId[PlatformId(id)]?.let { it to s } },
+                    loaded = true,
+                )
+            },
+        )
+    }.flowOn(Dispatchers.Default)
 
     override suspend fun launchCandidates(id: GameId): List<String> {
         val game = data.games.get(id) ?: return emptyList()

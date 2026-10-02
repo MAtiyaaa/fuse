@@ -24,6 +24,19 @@ import kotlinx.coroutines.withContext
 /** Play time on one day, for the small chart. [dayStart] is local midnight as epoch millis. */
 data class DailyPlaytime(val dayStart: Long, val seconds: Long)
 
+/** Where the time went: today, this week, this month, per day, per game this month, per system ever. */
+data class PlayReport(
+    val todaySeconds: Long = 0,
+    val weekSeconds: Long = 0,
+    val monthSeconds: Long = 0,
+    /** Seconds per local day, oldest first, ending today. */
+    val days: List<DailyPlaytime> = emptyList(),
+    /** Games by time played since the month began, most first. */
+    val monthGames: List<Pair<GameId, Long>> = emptyList(),
+    /** Every second per system, tracked and imported, most first. */
+    val platforms: List<Pair<String, Long>> = emptyList(),
+)
+
 /** Library-wide play time. Imported time is kept apart from what Fuse observed. */
 data class PlaytimeTotals(val trackedSeconds: Long, val importedSeconds: Long) {
     val totalSeconds: Long get() = trackedSeconds + importedSeconds
@@ -156,6 +169,50 @@ class PlaySessionRepository(
                 }
             }
             List(days) { DailyPlaytime(windowStart + it * DAY_MS, buckets[it] / 1000) }
+        }.flowOn(dispatcher)
+    }
+
+    /**
+     * The play report for windows starting at [todayStart], [weekStart] and [monthStart] (local
+     * midnights the caller works out), with [days] daily totals ending today. Only observed time
+     * counts toward the windows; a session crossing a boundary counts only its part inside.
+     */
+    fun report(todayStart: Long, weekStart: Long, monthStart: Long, days: Int = 30): Flow<PlayReport> {
+        require(days > 0)
+        val windowStart = todayStart - (days - 1) * DAY_MS
+        val since = minOf(windowStart, weekStart, monthStart)
+        return q.endedAfterWithGame(since).asFlow().mapToList(dispatcher).map { rows ->
+            fun overlap(from: Long, to: Long, start: Long) = (to - maxOf(from, start)).coerceAtLeast(0)
+            val buckets = LongArray(days)
+            val perGame = HashMap<Long, Long>()
+            var today = 0L
+            var week = 0L
+            var month = 0L
+            for (r in rows) {
+                val end = r.ended_at ?: continue
+                today += overlap(r.started_at, end, todayStart)
+                week += overlap(r.started_at, end, weekStart)
+                val m = overlap(r.started_at, end, monthStart)
+                month += m
+                if (m > 0) perGame[r.game_id] = (perGame[r.game_id] ?: 0) + m
+                var from = maxOf(r.started_at, windowStart)
+                while (from < end) {
+                    val index = ((from - windowStart) / DAY_MS).toInt()
+                    if (index >= days) break
+                    val until = minOf(end, windowStart + (index + 1) * DAY_MS)
+                    buckets[index] += until - from
+                    from = until
+                }
+            }
+            val platforms = db.playSessionQueries.secondsByPlatform().executeAsList().map { it.platform_id to (it.seconds ?: 0L) }
+            PlayReport(
+                todaySeconds = today / 1000,
+                weekSeconds = week / 1000,
+                monthSeconds = month / 1000,
+                days = List(days) { DailyPlaytime(windowStart + it * DAY_MS, buckets[it] / 1000) },
+                monthGames = perGame.entries.sortedByDescending { it.value }.map { GameId(it.key) to it.value / 1000 },
+                platforms = platforms,
+            )
         }.flowOn(dispatcher)
     }
 

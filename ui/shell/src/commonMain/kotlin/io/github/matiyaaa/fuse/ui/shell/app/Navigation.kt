@@ -32,6 +32,9 @@ sealed interface Route {
     data object Search : Route
     data object Controls : Route
     data object Licenses : Route
+
+    /** Where play time went: today, this week, this month, per day, per game and per system. */
+    data object PlayTime : Route
     data object Themes : Route
     data object Onboarding : Route
     data class FolderBrowser(val game: GameId) : Route

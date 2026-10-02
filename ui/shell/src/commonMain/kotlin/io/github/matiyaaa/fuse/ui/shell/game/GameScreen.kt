@@ -232,6 +232,7 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
         when (info) {
             InfoCard.STARTS -> app.emulatorPicker(card)
             InfoCard.FILE -> app.go(Route.FolderBrowser(game.id))
+            InfoCard.PLAY -> app.go(Route.PlayTime)
             else -> Unit
         }
     }
@@ -250,6 +251,7 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
         else -> when (cardAt(row, col)) {
             InfoCard.STARTS -> "Choose emulator"
             InfoCard.FILE -> "Open its folder"
+            InfoCard.PLAY -> "All play time"
             else -> null
         }
     }
@@ -723,7 +725,7 @@ private fun StartsCard(d: GameDetail, selected: Boolean, onClick: () -> Unit, mo
 private fun PlayCard(d: GameDetail, selected: Boolean, onClick: () -> Unit, modifier: Modifier) {
     val c = Fuse.colors
     val play = d.game.play
-    InfoPanel("Play history", FuseIcons.Clock3, selected, onClick, modifier) {
+    InfoPanel("Play history", FuseIcons.Clock3, selected, onClick, modifier, actionable = true) {
         Fact("Played", if (play.totalSeconds > 0) playtimeText(play.totalSeconds) else "Not yet", numeric = true)
         Fact("Last played", play.lastPlayedAt?.let { agoText(it).replaceFirstChar(Char::uppercase) } ?: "Never")
         if (d.secondsThisWeek > 0) Fact("This week", playtimeText(d.secondsThisWeek), numeric = true)

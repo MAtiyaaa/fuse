@@ -189,4 +189,43 @@ internal fun AuditDriver.everythingScreens() {
         settle(900)
         shoot("emulators for one game, with why some can't run it", 900)
     }
+
+    scenario("reading", "extra large text, kept clear of a TV's edges") {
+        useLibrary { it.copy(textScale = 1.3f, screenMargin = 4) }
+        settle(1_500)
+        shoot("Home")
+        openGame("Emberline Saga")
+        settle(900)
+        shoot("a game's page")
+        tap(PadButton.B)
+        tab(io.github.matiyaaa.fuse.model.Destination.LIBRARY)
+        settle(1_200)
+        shoot("the library")
+        openSettings()
+        tap(PadButton.DPAD_RIGHT)
+        settle(900)
+        shoot("settings")
+    }
+
+    scenario("reading", "large text") {
+        useLibrary { it.copy(textScale = 1.15f) }
+        settle(1_500)
+        shoot("Home")
+        openSettings()
+        tap(PadButton.DPAD_RIGHT)
+        settle(900)
+        shoot("settings")
+    }
+
+    scenario("playtime", "where the time went") {
+        useLibrary()
+        openGame("Emberline Saga")
+        // From Play down to the detail cards, then across to Play history.
+        tap(PadButton.DPAD_DOWN)
+        tap(PadButton.DPAD_RIGHT)
+        tap(PadButton.A)
+        waitFor("Last 30 days")
+        settle(1_500)
+        shoot("today, this week, this month, all time, days, games and systems")
+    }
 }

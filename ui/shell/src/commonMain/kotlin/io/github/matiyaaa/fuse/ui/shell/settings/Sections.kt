@@ -131,6 +131,18 @@ fun appearanceRows(app: AppState): List<MenuAction> {
             ) { v -> set { it.copy(motion = v) } })
             add(toggleRow("contrast", "High contrast focus", FuseIcons.Accessibility, p.highContrastFocus, "Adds an outline to everything that's selected") { v -> set { it.copy(highContrastFocus = v) } })
         }
+        labelled("Reading") {
+            add(app.choiceRow(
+                "textsize", "Text size", FuseIcons.TextSize, p.textScale,
+                listOf(1f to "Default", 1.15f to "Large", 1.3f to "Extra large"),
+                detail = "Larger text for reading from the sofa. Titles grow a little less",
+            ) { v -> set { it.copy(textScale = v) } })
+            add(app.choiceRow(
+                "margin", "Screen edges", FuseIcons.Maximize, p.screenMargin,
+                listOf(0 to "Use all of it", 2 to "2% in", 4 to "4% in", 6 to "6% in"),
+                detail = "Keeps everything clear of edges a TV cuts off. The background still fills the screen",
+            ) { v -> set { it.copy(screenMargin = v) } })
+        }
     }
 }
 

@@ -174,6 +174,26 @@ data class PlaytimeSummary(
     val currentSince: Long? = null,
 )
 
+/** Where play time went: today, this week, this month, all of it, per day, per game and per system. */
+@Immutable
+data class PlayTimeReport(
+    val todaySeconds: Long = 0,
+    val weekSeconds: Long = 0,
+    val monthSeconds: Long = 0,
+    /** Time Fuse saw, and time imported from elsewhere (Steam, RetroAchievements). */
+    val trackedSeconds: Long = 0,
+    val importedSeconds: Long = 0,
+    /** Seconds per day for the last 30 days, oldest first, ending today. */
+    val days: List<Long> = emptyList(),
+    /** "October": the month [monthSeconds] and [games] are about. */
+    val month: String = "",
+    val games: List<Pair<GameCard, Long>> = emptyList(),
+    val systems: List<Pair<PlatformCard, Long>> = emptyList(),
+    val loaded: Boolean = false,
+) {
+    val totalSeconds: Long get() = trackedSeconds + importedSeconds
+}
+
 @Immutable
 data class AchievementsFeed(
     val user: AchievementUser,
