@@ -26,6 +26,8 @@ Versions of everything else live in `gradle/libs.versions.toml`.
 | Android debug APK | `./gradlew :app:android:assembleDebug` | `app/android/build/outputs/apk/debug/` |
 | Install on a connected device | `./gradlew :app:android:installDebug` | |
 | Android release APK | `./gradlew :app:android:assembleRelease` | `app/android/build/outputs/apk/release/` (see [signing](#release-signing)) |
+| Shrunk Android release APK (R8, opt-in) | `./gradlew :app:android:assembleRelease -Pfuse.r8=true` | 50.2 MB instead of 78.0 MB in 0.2.0; shrinking only, no renaming (`app/android/proguard-rules.pro`). Off by default until a shrunk build has been run on devices |
+| Check the release files agree | `scripts/check-release.sh` | Version, notes, RELEASE_NOTES.md and CHANGELOG.md; run by CI on every pull request |
 | Run the desktop app | `./gradlew :app:desktop:run` | |
 | Compile the desktop app | `./gradlew :app:desktop:compileKotlin` | |
 | Compile the shell for desktop | `./gradlew :ui:shell:compileKotlinDesktop` | |
@@ -155,7 +157,7 @@ others. A last job rewrites `SHA256SUMS.txt` for every file there. Started by ha
 `desktop_only`, the workflow builds the desktop packages again and adds them to the existing release
 of the current version, without touching the APK. So a release is: add
 `docs/releases/<version>.md`, bump `fuse.version`, `fuse.versionCode` and `fuse.releaseName`, and
-merge to `main`.
+merge to `main`. `scripts/check-release.sh` (run in CI) fails when these disagree.
 
 Fuse announces an update only once the release has the build for the device it runs on, so a Mac
 doesn't hear about a release before its disk image is attached.

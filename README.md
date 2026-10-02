@@ -29,7 +29,7 @@ Home screen.
 <a href="https://github.com/MAtiyaaa/fuse/releases/latest"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/brand/button-macos-dark.svg"><img src="docs/assets/brand/button-macos-light.svg" height="48" alt="Download for macOS"></picture></a>
 
 <sub>Android 9 or newer &nbsp;·&nbsp; 64-bit x86 Linux AppImage &nbsp;·&nbsp; Windows 10 and 11 &nbsp;·&nbsp; macOS on Apple silicon and Intel &nbsp;·&nbsp; <a href="#install">checksums and install notes</a></sub><br>
-<sub>0.1.4 is the Gallery Update: download your screenshots and recordings from your phone, a bottom screen that stays while you play, and systems that stay where you drop them. <a href="#where-fuse-stands">Here is where it stands.</a></sub><br>
+<sub>0.2.0 is the Everything Update: SD cards and drives that can come and go, System health, backups, search that understands filters, PCSX2 patches and much more. <a href="#where-fuse-stands">Here is where it stands.</a></sub><br>
 <sub>Or download from <a href="https://matiyaaa.github.io/fuse/">Fuse's website</a>, which always offers the latest version for your system.</sub>
 
 <br>
@@ -145,7 +145,7 @@ Play.
     <td width="33%" valign="top">
       <img src="docs/assets/icons/read-only.svg" width="44" height="44" alt=""><br>
       <b>Your files, left alone</b><br>
-      <sub>Fuse never moves or renames your files, and deletes a game's files only when you ask in Storage and confirm. Games that go missing are marked, not removed.</sub>
+      <sub>Fuse never moves or renames your files, and deletes a game's files only when you ask in Storage and confirm. A card or drive that is out is offline, never deleted games, and a drive back under another path is followed.</sub>
     </td>
     <td width="33%" valign="top">
       <img src="docs/assets/icons/artwork.svg" width="44" height="44" alt=""><br>
@@ -179,7 +179,7 @@ Play.
     <td width="33%" valign="top">
       <img src="docs/assets/icons/storage.svg" width="44" height="44" alt=""><br>
       <b>Storage at a glance</b><br>
-      <sub>Each drive as a bar by system, every game by the space it takes, and deleting the games you're done with, after a confirmation that names what goes.</sub>
+      <sub>Every drive by name, connected or not, as a bar by system, every game by the space it takes, and deleting the games you're done with, after a confirmation that names what goes.</sub>
     </td>
     <td width="33%" valign="top">
       <img src="docs/assets/icons/collections.svg" width="44" height="44" alt=""><br>
@@ -196,12 +196,29 @@ Play.
     <td width="33%" valign="top">
       <img src="docs/assets/icons/accessibility.svg" width="44" height="44" alt=""><br>
       <b>Focus you can always see</b><br>
-      <sub>The focus spark never relies on colour alone. Four motion levels, including Reduced, and High contrast focus.</sub>
+      <sub>The focus spark never relies on colour alone. Four motion levels, including Reduced, High contrast focus, three text sizes, and margins for TVs that cut off the picture's edges.</sub>
     </td>
     <td width="33%" valign="top">
       <img src="docs/assets/icons/privacy.svg" width="44" height="44" alt=""><br>
       <b>Private by design</b><br>
       <sub>No telemetry, analytics, ads or crash reporting. Online services are used only after you set them up.</sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="33%" valign="top">
+      <img src="docs/assets/icons/health.svg" width="44" height="44" alt=""><br>
+      <b>System health</b><br>
+      <sub>What needs attention in your setup, most serious first, each with the fix: folders, drives, emulators, firmware, playlists and keys. A diagnostics report for bug reports, with anything personal taken out.</sub>
+    </td>
+    <td width="33%" valign="top">
+      <img src="docs/assets/icons/backup.svg" width="44" height="44" alt=""><br>
+      <b>Backup and restore</b><br>
+      <sub>One file with your settings, Home, what you changed on games, collections, chosen art and play time. Restoring merges and never deletes, and finds your games on another card. Never games, firmware or keys.</sub>
+    </td>
+    <td width="33%" valign="top">
+      <img src="docs/assets/icons/search.svg" width="44" height="44" alt=""><br>
+      <b>Search that understands</b><br>
+      <sub>Filters like <code>platform:snes</code>, <code>year:1990s</code> or <code>played:week</code> as chips, values offered as you type so a controller never has to spell them, typos forgiven, and every setting findable.</sub>
     </td>
   </tr>
 </table>
@@ -254,8 +271,17 @@ Play.
 - **Steam and Windows games** start through GameNative, GameHub Lite, Winlator Cmod, WinNative or
   Bannerlator on Android, through Steam or `.desktop` shortcuts on Linux, and as they are on Windows
   (`.exe` games, `.lnk` shortcuts and `.bat` scripts).
-- **DLC and updates**: Fuse explains, per emulator, how they are used. It never installs content
-  itself.
+- **DLC and updates**: Fuse explains, per emulator, how they are used. PS3 and Vita packages (the
+  game, its updates and extra content) can be installed with RPCS3 or Vita3K from the game's options;
+  Vita3K's zRIF key is asked for each time and never kept.
+- **Every emulator has a page**: how it was found, what it runs, how Fuse starts it and its limits,
+  with a test launch. A game's emulator list says why one can't open that game.
+- **PCSX2 patches** (widescreen, 60 FPS and more) for a PS2 game, turned on in PCSX2's own settings
+  for that game. Fuse only turns off what it turned on, and leaves anything set in PCSX2 alone.
+- **PlayStation disc details**: the serial and PCSX2's CRC, read from ISO and BIN images.
+- **How a PS3 game runs in RPCS3**, from RPCS3's compatibility list, asked only when you choose it.
+- **Problems that explain themselves**: when a game can't start, Fuse says why, that nothing was
+  changed, and offers the fix. If Fuse itself fails to start three times, it starts in **safe mode**.
 
 </details>
 
@@ -290,8 +316,8 @@ Play.
   phone's home screen (Channels): 19 kinds of widgets, each designed for every size from one cell to
   four by three.
 - **Library** layouts from square box art to capsules to covers to a compact list; **Systems**, **Apps**
-  (on Android), **Search**, game pages, a media manager, a folder browser, the **quick menu** and a
-  guided setup.
+  (on Android), **Search** with filters, game pages, a media manager, a folder browser, the **quick
+  menu**, a **Play time** page and a guided setup.
 - **Nineteen themes** and community themes from a link or a file ([docs/THEMES.md](docs/THEMES.md)), square
   box art or tall posters, four motion levels including Reduced, High contrast focus, optional glass
   panels and CRT effect, and interface sounds synthesised on the fly.
@@ -365,11 +391,12 @@ Linux app, isn't offered on Windows and macOS.
 ## Where Fuse stands
 
 > [!IMPORTANT]
-> **Fuse 0.1.4 "The Gallery Update" is still early.** It lets you download your screenshots and
-> recordings from your phone, keeps the bottom screen beside your games, and fixes systems that
-> moved back after a drag (see [the release notes](docs/releases/0.1.4.md)); 0.1.3 brought
-> screenshots and recordings, 0.1.2 moving things by touch, Fuse's own look, community themes and a website, 0.1.1
-> redesigned the bottom screen of dual-screen handhelds, and 0.1.0 brought Fuse to Windows and macOS. The
+> **Fuse 0.2.0 "The Everything Update" is still early.** It makes Fuse sturdier where it counts:
+> SD cards and drives that come and go without games disappearing, System health with a fix for
+> each finding, safe mode after failed starts, backups, search with filters, an emulator page with a
+> test launch, PCSX2 patches and PS3 and Vita package installs (see
+> [the release notes](docs/releases/0.2.0.md)). 0.1.6 brought the resizable widget board, 0.1.4
+> downloads from your phone, 0.1.3 screenshots and recordings, and 0.1.0 Windows and macOS. The
 > shared core (library scanning, launch resolution, integrations and the database) and the interface
 > are in place and tested where it matters. The Android app builds and passes its unit tests and lint, and has been tried on one
 > handheld so far. The Linux app builds, passes its tests, packages as an AppImage and starts in a
@@ -496,7 +523,9 @@ fully offline. Fuse only contacts a service after you set it up: RetroAchievemen
 TheGamesDB, ScreenScraper and libretro thumbnails receive only what they need to answer (for example a
 game's title, or your own API key). The one service used without setup is GitHub, to check for new
 versions of Fuse; you can turn automatic checks off in Settings, Updates, and nothing is ever
-downloaded or installed without your confirmation. API keys and passwords are kept in the system's
+downloaded or installed without your confirmation. rpcs3.net is asked, with only a game's title id,
+when you choose How It Runs in RPCS3. Backups and diagnostics reports are files you save yourself;
+Fuse never sends them anywhere. API keys and passwords are kept in the system's
 secure storage, never in logs or in the database. [INTEGRATIONS.md](INTEGRATIONS.md) lists exactly
 what each service receives and when.
 

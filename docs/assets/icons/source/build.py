@@ -66,6 +66,10 @@ ICONS = [
     ('windows', 'AppWindow', 'Windows'),
     ('macos', 'Laptop', 'macOS'),
     ('free-software', 'Heart', 'Free software'),
+    ('health', 'HeartPulse', 'System health'),
+    ('backup', 'DatabaseBackup', 'Backup and restore'),
+    ('search', 'Search', 'Search'),
+    ('patches', 'Bandage', 'Emulator patches'),
 ]
 
 # Badge geometry, in the 48 x 48 tile

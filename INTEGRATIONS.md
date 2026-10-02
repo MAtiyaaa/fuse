@@ -26,6 +26,8 @@ and redact credentials from every error message (`redact()`, see
 - [Cartridge bridge protocol](#cartridge-bridge-protocol)
 - [GitHub Releases](#github-releases)
 - [Steam and Windows launchers](#steam-and-windows-launchers)
+- [RPCS3 compatibility list](#rpcs3-compatibility-list)
+- [Emulators' own files](#emulators-own-files)
 
 ## Summary: what leaves the device
 
@@ -39,12 +41,14 @@ and redact credentials from every error message (`redact()`, see
 | Libretro thumbnails | Nothing | The system folder name and candidate game names in image URLs | When you fill artwork |
 | System art (Art Book Next) | Nothing | The pack's system name (for example `snes`) in file URLs on raw.githubusercontent.com | When a platform's system art or the style picker is shown and the files are not cached yet |
 | GitHub Releases | Nothing | A request for the latest release of Fuse or Cartridge, your IP address and the User-Agent with Fuse's version | Update checks (automatic check can be turned off) and "Install Cartridge"; downloads only after you confirm |
+| RPCS3 compatibility list (rpcs3.net) | Nothing | A PS3 game's title id (for example `BLUS30443`), your IP address and the User-Agent | Only when you choose How It Runs in RPCS3 in a PS3 game's options; the answer is kept a week |
 | Cartridge | Nothing | Nothing leaves the device through Fuse: Fuse reads Cartridge's local status and opens it with deep links. "Upload to RomM" hands Cartridge a game's file paths; Cartridge uploads the files to your own RomM server only after you confirm there | On resume and when Cartridge reports a change; uploads only when you start one and confirm it in Cartridge |
 
 The "When" column describes the store that drives these clients (`DefaultFuseStore`). The "Sent by Fuse" column is what the clients in `core:integrations` can send.
 
 Never sent anywhere by Fuse: ROM files, your folder paths, your play time, your collections, device
-identifiers, analytics or crash reports. Fuse contains no telemetry. The one way a game's files
+identifiers, analytics or crash reports, backups, diagnostics reports, or licence keys (a Vita
+package's zRIF goes only to Vita3K on your device). Fuse contains no telemetry. The one way a game's files
 leave the device is an upload you start and confirm, which Cartridge sends to your own RomM server.
 
 **Filling art by itself.** With "Find art by itself" on (Settings, Media and Scraping; on by
@@ -513,3 +517,38 @@ the expected activity exists and is exported before using an entry.
 | `.desktop` shortcuts (Steam, Heroic, Lutris, emulator shortcuts) | `gio launch <file>` when GLib's `gio` is installed, otherwise the file's `Exec=` line with field codes removed |
 
 **Leaves the device.** Nothing; these are local app launches.
+
+## RPCS3 compatibility list
+
+**What it is.** RPCS3's public list of how each PS3 release runs, rated Playable, Ingame, Intro,
+Loadable or Nothing (`rpcs3.net/compatibility?api=v1&g=<title id>`).
+
+**When Fuse asks.** Only when you choose How It Runs in RPCS3 in a PS3 game's options. Fuse sends the
+game's title id, taken from its file or folder name or from a game folder's `PARAM.SFO`, and nothing
+else. For an id the list doesn't know, the service answers with a text search over other games, so
+Fuse trusts only an entry whose key is exactly the asked id. Answers are kept a week in Fuse's cache.
+
+**Code.** `core/integrations/.../rpcs3/Rpcs3Compatibility.kt` (parsing), `LibraryStore` (the request
+and the cache).
+
+## Emulators' own files
+
+Fuse changes an emulator's files only when you ask, never automatically, and only what it can undo
+exactly.
+
+- **PCSX2 patches** (Linux, Windows, macOS). Fuse finds PCSX2's data folder the way PCSX2 does
+  (portable mode next to the program; otherwise Documents\PCSX2, `$XDG_CONFIG_HOME/PCSX2` or
+  `~/.config/PCSX2`, `~/.var/app/net.pcsx2.PCSX2/config/PCSX2` for the Flatpak, and
+  `~/Library/Application Support/PCSX2`), following folders moved in `inis/PCSX2.ini`'s `[Folders]`.
+  Patches are read from `patches/SERIAL_CRC*.pnach` and PCSX2's bundled `resources/patches.zip` (not
+  readable inside a running AppImage). Turning one on adds `Enable = <name>` under `[Patches]` in
+  `gamesettings/SERIAL_CRC.ini`; Fuse records it and only ever removes lines it recorded. Patches you
+  set in PCSX2, ones on for every game (widescreen, no interlacing) and ones you turned off there are
+  shown and never changed. The file as it was is kept in Fuse's data (`emulator-backups/`) the first
+  time Fuse changes it, and every write is atomic. Rules from PCSX2's `pcsx2/Patch.cpp`,
+  `pcsx2/VMManager.cpp` and `pcsx2/Pcsx2Config.cpp`.
+- **Package installs.** RPCS3 installs a `.pkg` with `--installpkg <path>` (RPCS3's `rpcs3/rpcs3.cpp`)
+  and Vita3K with `--pkg <path> --zrif <key>` (Vita3K's `vita3k/config/src/config.cpp`). The zRIF is
+  asked for each time and passed only in Vita3K's arguments; Fuse never keeps or logs it.
+- **Disc identity.** The serial and PCSX2 CRC are read from the image itself (SYSTEM.CNF and the boot
+  program, as in `pcsx2/CDVD/CDVD.cpp` and `pcsx2/Elfheader.cpp`); nothing is written.
