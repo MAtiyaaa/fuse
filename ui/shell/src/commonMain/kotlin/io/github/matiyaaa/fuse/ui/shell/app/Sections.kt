@@ -1,0 +1,85 @@
+package io.github.matiyaaa.fuse.ui.shell.app
+
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.graphics.vector.ImageVector
+import io.github.matiyaaa.fuse.model.CartridgeStatus
+import io.github.matiyaaa.fuse.model.Destination
+import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
+import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseMarks
+import io.github.matiyaaa.fuse.ui.shell.store.UiPrefs
+
+/**
+ * How Fuse's sections present themselves on this device. This is the one place that decides the
+ * one difference between platforms: where Fuse has its Store (Android), the Cartridge section is
+ * **Addons**, holding Cartridge and the Store; everywhere else it is **Cartridge**, as it always
+ * was. The section keeps its saved identity ([Destination.CARTRIDGE]) either way, so a tab order or
+ * a hidden tab carries over unchanged.
+ */
+@Immutable
+class Sections(
+    /** True where the Cartridge section is Addons (the Store exists here). */
+    val addons: Boolean,
+) {
+    fun label(d: Destination): String = when (d) {
+        Destination.HOME -> "Home"
+        Destination.LIBRARY -> "Library"
+        Destination.SYSTEMS -> "Systems"
+        Destination.ACHIEVEMENTS -> "Achievements"
+        Destination.APPS -> "Apps"
+        Destination.CARTRIDGE -> if (addons) "Addons" else "Cartridge"
+    }
+
+    fun icon(d: Destination): ImageVector = when (d) {
+        Destination.HOME -> FuseIcons.Home
+        Destination.LIBRARY -> FuseIcons.Library
+        Destination.SYSTEMS -> FuseIcons.Chip
+        Destination.ACHIEVEMENTS -> FuseIcons.Trophy
+        Destination.APPS -> FuseIcons.Smartphone
+        Destination.CARTRIDGE -> if (addons) FuseIcons.Blocks else FuseMarks.Cartridge
+    }
+
+    /**
+     * Whether [d] has a tab, given what this device [offers] and Cartridge's [status]. Cartridge's
+     * own tab waits for Cartridge to be installed; Addons always has the Store, so it is always there.
+     */
+    fun showsTab(d: Destination, offers: Boolean, status: CartridgeStatus): Boolean = offers && when {
+        d != Destination.CARTRIDGE -> true
+        addons -> true
+        else -> status.installed
+    }
+
+    /** Whether Settings offers a tab for [d]: Cartridge's only while Cartridge is turned on in Fuse. */
+    fun offersTab(d: Destination, offers: Boolean, prefs: UiPrefs): Boolean =
+        d != Destination.HOME && offers && (d != Destination.CARTRIDGE || addons || prefs.cartridgeEnabled)
+}
+
+/** How this device presents its sections (see [Sections]). */
+internal val AppState.sections: Sections get() = Sections(addons = store.appStore.supported)
+
+/** The tabs shown in the top line: Home first, then the user's order, each offered and present here. */
+@Composable
+internal fun rememberTabs(app: AppState, prefs: UiPrefs): List<Destination> {
+    val cartridge by app.store.cartridge.status.collectAsState()
+    val sections = app.sections
+    return (listOf(Destination.HOME) + prefs.destinations.filter { it != Destination.HOME })
+        .filter { sections.showsTab(it, app.offers(it), cartridge) }
+}
+
+/** Which part of Addons is showing. */
+enum class AddonsPart { CARTRIDGE, STORE }
+
+/** Opens Cartridge: its own section, or the Cartridge part of Addons. */
+internal fun AppState.openCartridge() {
+    addonsPart = AddonsPart.CARTRIDGE
+    selectTab(Destination.CARTRIDGE)
+}
+
+/** Opens the Store in Addons, on the page of the app with [key] when given. */
+internal fun AppState.openStore(key: String? = null) {
+    addonsPart = AddonsPart.STORE
+    selectTab(Destination.CARTRIDGE)
+    if (key != null) go(Route.StoreApp(key))
+}

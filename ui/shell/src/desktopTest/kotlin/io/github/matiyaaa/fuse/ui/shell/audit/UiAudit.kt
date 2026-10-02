@@ -97,6 +97,8 @@ class UiAudit {
 
     @Test fun m13Everything() = audit(AuditSize.M) { everythingScreens() }
 
+    @Test fun m14Addons() = audit(AuditSize.M) { addonsScreens() }
+
     /** Every widget at every size, at the Deck's size: the same layout in dp for far fewer pixels. */
     @Test fun widgetGallery() = audit(AuditSize.D) { widgetGallery() }
 

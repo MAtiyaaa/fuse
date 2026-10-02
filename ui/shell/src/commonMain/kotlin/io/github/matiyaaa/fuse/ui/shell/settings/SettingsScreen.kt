@@ -117,6 +117,10 @@ val settingsSections: List<SettingsSection> = listOf(
     SettingsSection("media", "Art and details", FuseIcons.Images, "Filling art, previews, sources and keys", ::mediaRows, group = GAMES, status = ::mediaStatus),
     SettingsSection("inputs", "Controls", FuseIcons.Gamepad, "Buttons, mapping, repeat and sticks", ::inputRows, group = DEVICE),
     SettingsSection("displays", "Screen and sound", FuseIcons.Monitor, "Music, sounds, screens, performance", ::screenAndSoundRows, group = DEVICE),
+    SettingsSection(
+        "store", "Store", FuseIcons.Store, "Edition, catalogue, update checks", ::storeRows,
+        available = { it.store.appStore.supported }, group = CONNECTIONS,
+    ),
     SettingsSection("accounts", "Accounts", FuseIcons.CircleUser, "RetroAchievements, Cartridge, Phone Link", ::accountsRows, group = CONNECTIONS),
     SettingsSection("health", "System health", FuseIcons.HeartPulse, "What needs attention, and a bug report", ::healthRows, group = GENERAL, status = ::healthStatus),
     SettingsSection("storage", "Storage and backups", FuseIcons.HardDrive, "File access, drives, backup and restore", ::storageAndBackupRows, group = GENERAL),

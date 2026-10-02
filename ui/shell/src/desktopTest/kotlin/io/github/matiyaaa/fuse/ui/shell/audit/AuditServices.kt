@@ -29,6 +29,7 @@ import io.github.matiyaaa.fuse.ui.shell.store.FuseServices
 import io.github.matiyaaa.fuse.ui.shell.store.GameLauncher
 import io.github.matiyaaa.fuse.ui.shell.store.LocationHint
 import io.github.matiyaaa.fuse.ui.shell.store.RunResult
+import io.ktor.client.engine.mock.respondError
 import java.io.File
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -95,6 +96,19 @@ internal class AuditServices(
 ) : FuseServices by base {
     /** Windows and macOS: no app list, and emulators the user can point Fuse at. */
     private val desktop = host == Host.WINDOWS || host == Host.MACOS
+
+    /** Android has the Store: its catalogue and releases come from [AuditStore], its apps from [AuditPackages]. */
+    override val packages: io.github.matiyaaa.fuse.ui.shell.store.PackageBridge? =
+        if (host == Host.ANDROID) AuditPackages(File(base.cacheDir, "store")) else null
+
+    override val http: io.ktor.client.HttpClient =
+        if (host == Host.ANDROID) {
+            io.ktor.client.HttpClient(io.ktor.client.engine.mock.MockEngine { request ->
+                AuditStore.answer(this, request) ?: respondError(io.ktor.http.HttpStatusCode.NotFound)
+            })
+        } else {
+            base.http
+        }
 
     override val fs: FuseFileSystem = object : FuseFileSystem by base.fs {
         override suspend fun list(path: String): List<FsEntry> {

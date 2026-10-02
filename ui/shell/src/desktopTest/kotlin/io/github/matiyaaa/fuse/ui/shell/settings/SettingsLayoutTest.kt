@@ -25,8 +25,10 @@ class SettingsLayoutTest {
     }
 
     @Test
-    fun twelveSectionsUnderFiveHeadings() {
-        assertEquals(12, settingsSections.size)
+    fun twelveSectionsUnderFiveHeadingsAndTheStoreWhereItRuns() {
+        // Twelve everywhere, and the Store's own section where Fuse has a Store (Android).
+        assertEquals(13, settingsSections.size)
+        assertEquals("Connections", settingsSections.first { it.id == "store" }.group)
         assertEquals(listOf("Personalize", "Games", "This device", "Connections", "General"), settingsSections.mapNotNull { it.group }.distinct())
         assertEquals(ids.size, settingsSections.size)
         // Summaries fit the narrow list on one line.

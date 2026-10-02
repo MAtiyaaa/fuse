@@ -250,7 +250,8 @@ fun FuseApp(
                 CompositionLocalProvider(LocalTileMetrics provides metrics, LocalTileBorders provides borders, LocalGameArt provides prefs.gameArt) {
                     ArtWarmup(app)
                     ShellInput(app)
-                    Pages(app, visibleTabs(app, prefs))
+                    val tabs = rememberTabs(app, prefs)
+                    Pages(app, tabs)
                     val route = app.navigator.current
                     if (route != Route.Onboarding) {
                         val status by platform.status.collectAsState()
@@ -258,7 +259,8 @@ fun FuseApp(
                         val page = hudPage(app.navigator.stack)
                         HudScrim(art = prefs.showHero && app.hero != null)
                         Hud(
-                            destinations = visibleTabs(app, prefs),
+                            destinations = tabs,
+                            sections = app.sections,
                             active = if (page == null) app.navigator.root?.destination else null,
                             activeButton = page,
                             tabsFocused = app.focusZone == FocusZone.TABS,
@@ -306,6 +308,8 @@ fun FuseApp(
 
     // Leaving Fuse (a game started) and coming back.
     LaunchedEffect(Unit) { store.library.onResume() }
+    // The Store's news (an app installed, updated or removed), wherever the user is.
+    LaunchedEffect(Unit) { store.appStore.notices.collect { app.toasts.show(it) } }
 }
 
 /** The background: theme renderer, then the selected item's art with video after it rests. */
@@ -421,7 +425,7 @@ private fun Pages(app: AppState, tabs: List<Destination>) {
                         Destination.SYSTEMS -> SystemsScreen(app)
                         Destination.ACHIEVEMENTS -> io.github.matiyaaa.fuse.ui.shell.achievements.AchievementsScreen(app)
                         Destination.APPS -> AppsScreen(app)
-                        Destination.CARTRIDGE -> CartridgeScreen(app)
+                        Destination.CARTRIDGE -> if (app.sections.addons) io.github.matiyaaa.fuse.ui.shell.addons.AddonsScreen(app) else CartridgeScreen(app)
                     }
                     is Route.PlatformGames -> LibraryScreen(app, LibraryScope.OfPlatform(route.platform))
                     is Route.CollectionGames -> LibraryScreen(app, LibraryScope.OfCollection(route.collection, route.name))
@@ -440,6 +444,7 @@ private fun Pages(app: AppState, tabs: List<Destination>) {
                     Route.Onboarding -> OnboardingScreen(app)
                     is Route.FolderBrowser -> FolderBrowserScreen(app, route.game)
                     is Route.PickFile -> io.github.matiyaaa.fuse.ui.shell.files.FilePickerScreen(app, route.purpose, route.locate)
+                    is Route.StoreApp -> io.github.matiyaaa.fuse.ui.shell.addons.StoreAppScreen(app, route.key)
                 }
             }
         }
@@ -469,7 +474,7 @@ internal fun hudPage(stack: List<Route>): HudButton? {
 @Composable
 private fun ShellInput(app: AppState) {
     val prefs by app.store.prefs.collectAsState()
-    val tabs = visibleTabs(app, prefs)
+    val tabs = rememberTabs(app, prefs)
     val onboarding = app.navigator.current == Route.Onboarding
     InputLayer(priority = LayerPriority.SHELL) { e ->
         if (onboarding) return@InputLayer NavResult.IGNORED
@@ -522,14 +527,6 @@ private fun ShellInput(app: AppState) {
             else -> NavResult.IGNORED
         }
     }
-}
-
-/** The tabs shown in the top line: Home first, then the user's order. Cartridge needs Cartridge, Apps an app list. */
-@Composable
-private fun visibleTabs(app: AppState, prefs: io.github.matiyaaa.fuse.ui.shell.store.UiPrefs): List<Destination> {
-    val cartridge by app.store.cartridge.status.collectAsState()
-    return (listOf(Destination.HOME) + prefs.destinations.filter { it != Destination.HOME })
-        .filter { app.offers(it) && (it != Destination.CARTRIDGE || cartridge.installed) }
 }
 
 private fun AppState.runHudButton(button: HudButton) = when (button) {
@@ -629,6 +626,7 @@ private fun hudActivities(app: AppState): List<HudActivity> {
     val available by app.store.updates.available.collectAsState()
     val cartridge by app.store.cartridge.status.collectAsState()
     val fill by app.store.media.fillProgress.collectAsState()
+    val shop by app.store.appStore.state.collectAsState()
     val recordingTime = rememberRecordingTime(app.capture)
     return buildList {
         // Safe mode stays in view, calmly, with its way out a press away.
@@ -656,14 +654,21 @@ private fun hudActivities(app: AppState): List<HudActivity> {
             add(HudActivity(
                 "upload", FuseIcons.Upload, "Uploading ${u.title} to RomM",
                 progress = u.progress.takeIf { u.state == io.github.matiyaaa.fuse.model.UploadState.UPLOADING },
-            ) { app.selectTab(io.github.matiyaaa.fuse.model.Destination.CARTRIDGE) })
+            ) { app.openCartridge() })
         }
         if (cartridge.installed && (cartridge.activeDownloads > 0 || cartridge.queue.any { it.state == io.github.matiyaaa.fuse.model.QueueState.DOWNLOADING })) {
             val current = cartridge.queue.firstOrNull { it.state == io.github.matiyaaa.fuse.model.QueueState.DOWNLOADING }
             add(HudActivity(
                 "cartridge", FuseIcons.CloudDownload, "Cartridge is downloading ${current?.title ?: cartridge.currentTitle ?: "a game"}",
                 progress = current?.progress ?: cartridge.progress,
-            ) { app.selectTab(io.github.matiyaaa.fuse.model.Destination.CARTRIDGE) })
+            ) { app.openCartridge() })
+        }
+        // Store installs carry on anywhere in Fuse; the top line keeps them in view.
+        val installing = shop.jobs.filter { (_, j) -> j.active && j !is io.github.matiyaaa.fuse.ui.shell.store.StoreJob.Uninstalling }
+        installing.entries.firstOrNull()?.let { (key, job) ->
+            val name = shop.app(key)?.name ?: "an app"
+            val label = if (installing.size > 1) "Store: ${installing.size} apps on their way" else "$name  ·  ${io.github.matiyaaa.fuse.ui.shell.addons.jobShort(job)}"
+            add(HudActivity("store", FuseIcons.Store, label, progress = io.github.matiyaaa.fuse.ui.shell.addons.jobProgress(job)) { app.openStore(key) })
         }
         when (val u = update) {
             is UpdateState.Downloading -> add(HudActivity("update", FuseIcons.Download, "Downloading ${u.release.name}", progress = u.progress) { app.go(Route.Settings("about")) })

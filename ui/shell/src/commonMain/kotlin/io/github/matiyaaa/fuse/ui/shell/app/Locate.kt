@@ -11,12 +11,12 @@ import kotlinx.coroutines.launch
 
 /**
  * Whether this device has [d] at all: Apps needs an app list (Android), Cartridge a platform it runs
- * on (Android and Linux). What isn't offered is left out of the tabs, Settings and Home, not shown
- * empty.
+ * on (Android and Linux), or the Store, which makes it Addons (see [Sections]). What isn't offered is
+ * left out of the tabs, Settings and Home, not shown empty.
  */
 internal fun AppState.offers(d: Destination): Boolean = when (d) {
     Destination.APPS -> store.apps.supported
-    Destination.CARTRIDGE -> platform.features.cartridge
+    Destination.CARTRIDGE -> platform.features.cartridge || store.appStore.supported
     else -> true
 }
 

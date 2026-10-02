@@ -98,6 +98,7 @@ import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.Hud
 import io.github.matiyaaa.fuse.ui.shell.app.HudScrim
 import io.github.matiyaaa.fuse.ui.shell.app.offers
+import io.github.matiyaaa.fuse.ui.shell.app.sections
 import io.github.matiyaaa.fuse.ui.shell.components.GameIconTile
 import io.github.matiyaaa.fuse.ui.shell.components.GameWideTile
 import io.github.matiyaaa.fuse.ui.shell.components.LocalGameArt
@@ -137,6 +138,7 @@ internal data class StageScene(
     val systems: List<PlatformCard>,
     val status: SystemStatus,
     val tabs: List<Destination>,
+    val sections: io.github.matiyaaa.fuse.ui.shell.app.Sections,
     val clock24h: Boolean,
     val showWifi: Boolean,
     val showBluetooth: Boolean,
@@ -159,13 +161,15 @@ internal fun rememberStageScene(app: AppState): StageScene {
             .take(STAGE_ITEMS)
     }
     val systems = remember(feed, platforms) { feed.systems.ifEmpty { platforms.filter { it.gameCount > 0 } }.take(STAGE_ITEMS + 2) }
+    val sections = app.sections
     val tabs = (listOf(Destination.HOME) + prefs.destinations.filter { it != Destination.HOME })
-        .filter { app.offers(it) && (it != Destination.CARTRIDGE || cartridge.installed) }
+        .filter { sections.showsTab(it, app.offers(it), cartridge) }
     return StageScene(
         games = games,
         systems = systems,
         status = status,
         tabs = tabs,
+        sections = sections,
         clock24h = prefs.clock24h,
         showWifi = prefs.showWifi,
         showBluetooth = prefs.showBluetooth,
@@ -314,6 +318,7 @@ private fun MiniHome(spec: ThemeSpec, scene: StageScene) {
         HudScrim(art = art)
         Hud(
             destinations = scene.tabs,
+            sections = scene.sections,
             active = Destination.HOME,
             tabsFocused = false,
             status = scene.status,

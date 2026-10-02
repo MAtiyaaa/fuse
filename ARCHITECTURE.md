@@ -20,6 +20,7 @@ they start at the repository root.
 - [Input routing](#input-routing)
 - [Selection models](#selection-models)
 - [FuseStore and FuseServices](#fusestore-and-fuseservices)
+- [Sections per platform: Addons and the Store](#sections-per-platform-addons-and-the-store)
 - [Drives](#drives)
 - [Health, problems and safe mode](#health-problems-and-safe-mode)
 - [Backups](#backups)
@@ -355,6 +356,33 @@ apps. `createFuseStore` in `store/StoreFactory.kt` is its entry point. It is tes
 `ui/shell/src/desktopTest`: scanning a temporary library, launching through a fake launcher, play
 sessions, playlists written only to the cache, persisted settings, and UI flows driven by controller
 presses.
+
+## Sections per platform: Addons and the Store
+
+Where Fuse can install apps (Android, where `FuseServices.packages` is a `PackageBridge`),
+`FuseStore.appStore` is the Store and the Cartridge section is **Addons**, holding Cartridge and the
+Store as two tabs. Everywhere else `appStore` is `AppStoreOps.None` and the section is Cartridge as it
+always was. One class decides this, `app/Sections.kt` (`Sections`, read as `AppState.sections`):
+the section's label and icon, whether it has a tab, and whether Settings offers it. The Hud, the tab
+list, the quick menu, Settings and the theme preview all ask it, so there are no platform checks
+elsewhere. The section keeps its saved identity (`Destination.CARTRIDGE`), so tab order and hidden
+tabs carry over.
+
+The Store is in layers, each tested on its own:
+
+- `core:integrations` `obtainium/`: the pack's format, its fetching, and resolving an app's newest
+  release and file by the pack's rules (see [INTEGRATIONS.md](INTEGRATIONS.md#the-store-obtainium-emulation-pack)).
+- `ui:shell` `store/AppStoreOps.kt`: the Store's state (`StoreState`: catalogue, installed apps,
+  releases, jobs) and operations; `store/impl/AppStoreImpl.kt` keeps the catalogue and releases in
+  `kv_cache`, what Fuse installed in `AppSettings.store`, and runs every install, update and
+  uninstall as a job in the store's scope (one per app, two downloads at once, one Android
+  confirmation at a time), so jobs carry on while the user is elsewhere; `ApkDownloader` downloads
+  over HTTPS only.
+- `PackageBridge` (`store/PackageBridge.kt`): what the system provides. Android's
+  `AndroidPackageBridge` reads packages, downloads into `cache/store`, and installs and uninstalls
+  through `PackageInstaller`, with `InstallResultReceiver` routing results to the waiting call.
+- `ui:shell` `addons/`: Addons' tabs, the Store's shelves, an app's page (`Route.StoreApp`) and the
+  first choice of edition.
 
 ## Drives
 

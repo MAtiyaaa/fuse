@@ -99,6 +99,8 @@ but we credit every source:
 | [Cartridge](https://github.com/abdu2304/cartridge) by abdu2304 | MIT. Copyright (c) 2026 abdu2304 | The approach of matching emulator forks by words in the package name or label (its `FAMILIES` table); Fuse pairs with the app and installs it from the [MAtiyaaa/cartridge](https://github.com/MAtiyaaa/cartridge) fork until the bridge is merged upstream | Re-expressed in `AndroidFamilies`; the bridge protocol is a contract shared by both apps. The licence is in `files/licenses/LICENSE-cartridge.txt` and in Settings, About, Licences |
 | Emulator and launcher sources and vendor guides (Dolphin, PPSSPP, melonDS, Azahar, Eden, Vita3K, aPS3e, ARMSX3, Flycast, GameNative, Winlator Cmod, WinNative, Bannerlator, GameHub Lite and others) | Various | Intent actions, extras and exported activities, cited per adapter | Facts only; see [docs/research/emulators.md](docs/research/emulators.md) |
 | Daijisho platform files, GlazedBelmont community ES-DE configs | No licence | Cross-checking facts only | Nothing copied |
+| [Obtainium](https://github.com/ImranR98/Obtainium) by Imran Remtulla | GPL-3.0 | How a source's settings choose a release and a file: link finding and natural sorting on download pages, release filters and sort methods, version extraction templates, the processor-type filter | Reimplemented in `core/integrations` `obtainium/` (`PackResolver`, `HtmlLinks`, `ApkPicker`, `VersionText`) so the pack's entries resolve as their authors intend; no Obtainium code is copied |
+| [Obtainium Emulation Pack](https://github.com/RJNY/Obtainium-Emulation-Pack) by RJNY | Public domain (Unlicense) | The Store's catalogue: each app, its source and the settings that find its releases | Downloaded at runtime and cached on the device. Copies of both editions (release v7.18.0) are test fixtures in `core/integrations/src/desktopTest/resources/obtainium`, with the links of a few apps' download pages saved there for the same tests |
 
 ## Online services
 
@@ -115,6 +117,7 @@ cached on their device. None of it is part of Fuse's distribution.
 | Libretro thumbnails | [Repository](https://github.com/libretro-thumbnails/libretro-thumbnails) (no licence file; images belong to their owners). Fetched at runtime, never bundled |
 | Art Book Next system art | [Repository](https://github.com/anthonycaccese/art-book-next-es-de), [CC BY-NC-SA 2.0](https://creativecommons.org/licenses/by-nc-sa/2.0/). Theme by Anthony Caccese; system logos modified from Dan Patrick's console logos; Noir artwork set by tenlevels with help from f8less; Outline artwork set by Joppa Fallston; some artwork by theUnBurn. Fetched at runtime from a pinned commit, never bundled, credited wherever it is shown |
 | GitHub REST API | [Releases API](https://docs.github.com/en/rest/releases/releases), [GitHub Terms of Service](https://docs.github.com/en/site-policy/github-terms/github-terms-of-service) |
+| Apps in the Store | Each app comes from the source the Obtainium Emulation Pack names (its developers' GitHub releases or download page), under that app's own licence, downloaded by the user. Fuse distributes none of them |
 
 ### Screenshots
 

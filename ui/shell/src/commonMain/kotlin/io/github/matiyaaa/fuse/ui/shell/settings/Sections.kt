@@ -49,8 +49,7 @@ import io.github.matiyaaa.fuse.ui.shell.app.addGame
 import io.github.matiyaaa.fuse.ui.shell.app.applyUpdate
 import io.github.matiyaaa.fuse.ui.shell.app.emulatorFoldersPicker
 import io.github.matiyaaa.fuse.ui.shell.app.hasTwoScreens
-import io.github.matiyaaa.fuse.ui.shell.app.icon
-import io.github.matiyaaa.fuse.ui.shell.app.label
+import io.github.matiyaaa.fuse.ui.shell.app.sections
 import io.github.matiyaaa.fuse.ui.shell.app.locatePicker
 import io.github.matiyaaa.fuse.ui.shell.app.offers
 import io.github.matiyaaa.fuse.ui.shell.app.screenName
@@ -200,25 +199,26 @@ fun homeRows(app: AppState): List<MenuAction> {
             }) { v -> set { it.copy(home = it.home.copy(mode = v)) } })
         }
         labelled("Top bar") {
-            val offered = Destination.entries.filter { it != Destination.HOME && app.offers(it) && (it != Destination.CARTRIDGE || p.cartridgeEnabled) }
+            val sections = app.sections
+            val offered = Destination.entries.filter { sections.offersTab(it, app.offers(it), p) }
             addAll(app.group(
                 "home.tabs", "Sections in the top bar", FuseIcons.PanelTop,
                 summary = "${offered.count { it in p.destinations }} of ${offered.size}",
                 detail = "Which sections have a tab. Home always does",
             ) {
                 offered.map { d ->
-                    toggleRow("dest.$d", d.label(), d.icon(), d in p.destinations) { v ->
+                    toggleRow("dest.$d", sections.label(d), sections.icon(d), d in p.destinations) { v ->
                         set { it.copy(destinations = if (v) (it.destinations + d).sortedBy { x -> Destination.entries.indexOf(x) } else it.destinations - d) }
                     }
                 }
             })
             val shownTabs = p.destinations.filter { app.offers(it) }
-            add(MenuAction("dest.order", "Section order", FuseIcons.MoveHorizontal, detail = shownTabs.joinToString("  ·  ") { it.label() }, trailing = Trailing.Chevron, onSelect = {
+            add(MenuAction("dest.order", "Section order", FuseIcons.MoveHorizontal, detail = shownTabs.joinToString("  ·  ") { sections.label(it) }, trailing = Trailing.Chevron, onSelect = {
                 app.reorder = ReorderSpec(
                     title = "Section order",
                     icon = FuseIcons.MoveHorizontal,
                     message = "The order of the top bar. Home always comes first. Drag a row by its grip, or press A to pick it up and move it with the D-pad",
-                    entries = shownTabs.map { d -> ReorderEntry(d.name, d.label(), d.icon(), locked = d == Destination.HOME) },
+                    entries = shownTabs.map { d -> ReorderEntry(d.name, sections.label(d), sections.icon(d), locked = d == Destination.HOME) },
                     onMoved = { keys ->
                         set { s ->
                             val moved = keys.mapNotNull { k -> Destination.entries.firstOrNull { it.name == k } }
