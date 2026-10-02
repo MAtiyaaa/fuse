@@ -199,9 +199,24 @@ data class SearchResults(
     val platforms: List<PlatformCard> = emptyList(),
     val apps: List<AppCard> = emptyList(),
     val collections: List<GameCollection> = emptyList(),
+    /** The filters in the search, as chips to read and take back out. */
+    val chips: List<SearchChip> = emptyList(),
+    /** Filters to add, or values for the filter being typed. */
+    val suggestions: List<SearchSuggestion> = emptyList(),
 ) {
     val isEmpty: Boolean get() = games.isEmpty() && platforms.isEmpty() && apps.isEmpty() && collections.isEmpty()
 }
+
+/** A filter in a search, in words ("PlayStation", "1995 to 1999"); [valid] is false for one that can't be read. */
+data class SearchChip(val token: String, val key: io.github.matiyaaa.fuse.data.search.FilterKey?, val label: String, val valid: Boolean = true)
+
+/** Something to add to a search: [text] is the whole search after choosing it. */
+data class SearchSuggestion(
+    val label: String,
+    val detail: String?,
+    val text: String,
+    val key: io.github.matiyaaa.fuse.data.search.FilterKey,
+)
 
 /** Result of asking to play a game, shown to the user when it didn't simply start. */
 sealed interface LaunchOutcome {

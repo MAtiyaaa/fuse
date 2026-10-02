@@ -1,0 +1,10 @@
+-- What search looks through (0.2.0). Queries only; no tables of their own.
+
+searchRows:
+SELECT * FROM game_summary WHERE removed_at IS NULL;
+
+searchGenres:
+SELECT gg.game_id, gg.genre FROM game_genre gg JOIN game g ON g.id = gg.game_id WHERE g.removed_at IS NULL;
+
+searchDetails:
+SELECT id, metadata_json FROM game WHERE removed_at IS NULL AND metadata_json IS NOT NULL;

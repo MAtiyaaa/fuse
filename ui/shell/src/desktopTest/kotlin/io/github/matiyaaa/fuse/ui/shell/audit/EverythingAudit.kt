@@ -146,4 +146,27 @@ internal fun AuditDriver.everythingScreens() {
         tap(PadButton.B)
         picker.pickedFile = null
     }
+
+    scenario("search2", "filters, suggestions and settings") {
+        useLibrary()
+        search("")
+        tap(PadButton.DPAD_LEFT)
+        settle(900)
+        shoot("nothing typed: filters to start with")
+        search("platform:")
+        settle(900)
+        shoot("a filter being typed lists its values")
+        search("platform:snes ")
+        settle(900)
+        shoot("a system filter as a chip")
+        search("year:1990s fav:yes year:soon ")
+        settle(900)
+        shoot("several filters, one unreadable")
+        search("emberlin")
+        settle(900)
+        shoot("a name with a letter missing")
+        search("vibration")
+        settle(900)
+        shoot("settings found by name")
+    }
 }

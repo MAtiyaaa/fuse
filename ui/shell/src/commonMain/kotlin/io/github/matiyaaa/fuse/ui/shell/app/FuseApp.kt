@@ -424,7 +424,7 @@ private fun Pages(app: AppState, tabs: List<Destination>) {
                     Route.PhoneLink -> io.github.matiyaaa.fuse.ui.shell.settings.PhoneLinkScreen(app)
                     is Route.GameInfo -> GameScreen(app, route.game)
                     is Route.Media -> MediaScreen(app, route.owner, route.title, route.identify)
-                    is Route.Settings -> SettingsScreen(app, route.section)
+                    is Route.Settings -> SettingsScreen(app, route.section, route.row)
                     is Route.PlatformSettings -> PlatformSettingsScreen(app, route.platform)
                     Route.Search -> SearchScreen(app)
                     Route.Controls -> io.github.matiyaaa.fuse.ui.shell.settings.ControlsScreen(app)

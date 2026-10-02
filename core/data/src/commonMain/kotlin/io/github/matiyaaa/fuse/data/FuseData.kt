@@ -12,6 +12,7 @@ import io.github.matiyaaa.fuse.data.repo.LibrarySourceRepository
 import io.github.matiyaaa.fuse.data.repo.MediaRepository
 import io.github.matiyaaa.fuse.data.repo.PlaySessionRepository
 import io.github.matiyaaa.fuse.data.repo.TitleCleanupRepository
+import io.github.matiyaaa.fuse.data.search.SearchRepository
 import io.github.matiyaaa.fuse.data.settings.ScopedSettingsRepository
 import io.github.matiyaaa.fuse.data.settings.SettingsStore
 import kotlinx.coroutines.CoroutineDispatcher
@@ -38,4 +39,5 @@ class FuseData(
     val settings by lazy { SettingsStore(database, dispatcher, clock) }
     val scopedSettings by lazy { ScopedSettingsRepository(database, settings, dispatcher, clock) }
     val backup by lazy { BackupRepository(database, dispatcher, clock) }
+    val search by lazy { SearchRepository(database, dispatcher) }
 }

@@ -252,22 +252,15 @@ internal class DefaultLibraryOps(
         return ctx.cards(sorted)
     }
 
-    override fun search(query: String): Flow<SearchResults> = flow {
-        val q = query.trim()
-        if (q.isEmpty()) {
-            emit(SearchResults())
-            return@flow
-        }
-        val games = ctx.cardsOnce(data.games.search(q, limit = 60))
-        val systems = platforms.value.filter {
-            it.platform.name.contains(q, ignoreCase = true) ||
-                it.platform.shortName.contains(q, ignoreCase = true) ||
-                it.platform.id.value.equals(q, ignoreCase = true)
-        }
-        val appCards = if (apps.supported) apps.search(q) else emptyList()
-        val cols = collections.collections.value.filter { it.name.contains(q, ignoreCase = true) }
-        emit(SearchResults(q, games, systems, appCards, cols))
-    }.flowOn(Dispatchers.Default)
+    private val searcher by lazy {
+        LibrarySearcher(
+            ctx, platforms, collections.collections, engine.status,
+            apps = { q -> if (apps.supported) apps.search(q) else emptyList() },
+            collectionsShown = { ctx.settings.value.library.collectionsEnabled },
+        )
+    }
+
+    override fun search(query: String): Flow<SearchResults> = flow { emit(searcher.search(query)) }.flowOn(Dispatchers.Default)
 
     // Game page -------------------------------------------------------------------------------------
 

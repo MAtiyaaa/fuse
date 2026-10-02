@@ -92,6 +92,9 @@ private class SettingsPlace(section: Int, rows: Boolean) {
     val sectionSel = LinearSelection(section)
     val rowSel = LinearSelection()
     var inRows by mutableStateOf(rows)
+
+    /** The row asked for has been chosen; coming back keeps wherever the user went since. */
+    var landed = false
 }
 
 private const val LOOK = "Look and feel"
@@ -135,10 +138,10 @@ val settingsSections: List<SettingsSection> = listOf(
  * so more rows fit.
  */
 @Composable
-fun SettingsScreen(app: AppState, initialSection: String?) {
+fun SettingsScreen(app: AppState, initialSection: String?, initialRow: String? = null) {
     val sections = remember { settingsSections.filter { it.available(app) } }
     // Back from a screen Settings opened (a file picker, Storage) returns to the same row.
-    val place = rememberPageState(app.navigator, "settings.${initialSection.orEmpty()}") {
+    val place = rememberPageState(app.navigator, "settings.${initialSection.orEmpty()}.${initialRow.orEmpty()}") {
         SettingsPlace(sections.indexOfFirst { it.id == initialSection }.coerceAtLeast(0), initialSection != null)
     }
     val sectionSel = place.sectionSel
@@ -147,6 +150,11 @@ fun SettingsScreen(app: AppState, initialSection: String?) {
     val section = sections[sectionSel.index]
     val rows = section.rows(app)
     rowSel.clamp(rows.size)
+    if (!place.landed && initialRow != null) {
+        val at = rows.indexOfFirst { it.label == initialRow }
+        if (at >= 0) rowSel.index = at
+        place.landed = true
+    }
 
     LaunchedEffect(inRows, section.id) {
         app.hero = null

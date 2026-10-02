@@ -26,7 +26,8 @@ sealed interface Route {
     data class GameInfo(val game: GameId) : Route
     /** Manage media; [identify] opens Identify game straight away (a game a fill couldn't name). */
     data class Media(val owner: MediaOwner, val title: String, val identify: Boolean = false) : Route
-    data class Settings(val section: String? = null) : Route
+    /** Settings at [section], with the row labelled [row] chosen (from search). */
+    data class Settings(val section: String? = null, val row: String? = null) : Route
     data class PlatformSettings(val platform: PlatformId) : Route
     data object Search : Route
     data object Controls : Route
