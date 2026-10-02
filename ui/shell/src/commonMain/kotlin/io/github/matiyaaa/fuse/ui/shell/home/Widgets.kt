@@ -72,6 +72,11 @@ import io.github.matiyaaa.fuse.ui.shell.store.HomeFeed
 import kotlin.time.Clock
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
+import io.github.matiyaaa.fuse.model.Destination
+import io.github.matiyaaa.fuse.ui.shell.app.AppState
+import io.github.matiyaaa.fuse.ui.shell.app.Route
+import io.github.matiyaaa.fuse.ui.shell.app.activateGame
+import io.github.matiyaaa.fuse.ui.shell.store.GameCard
 
 /** Width of a widget card for its span, in tile units, so widgets line up with game tiles. */
 @Composable
@@ -725,5 +730,27 @@ fun bytesText(bytes: Long): String {
         bytes >= 1_000_000 -> "${bytes / 1_000_000} MB"
         bytes > 0 -> "${((bytes + 999) / 1_000).coerceAtLeast(1)} KB"
         else -> "0 KB"
+    }
+}
+
+/**
+ * Where a widget leads when it is opened, the same on the board and in Flow: each one opens the
+ * place its numbers come from. [firstGame] is the game a game widget shows first, if any.
+ */
+internal fun AppState.openWidget(kind: WidgetKind, feed: HomeFeed, firstGame: GameCard? = null) {
+    when (kind) {
+        WidgetKind.CONTINUE_PLAYING, WidgetKind.RECENTLY_PLAYED, WidgetKind.PINNED_GAMES, WidgetKind.CURRENT_GAME,
+        WidgetKind.MOST_PLAYED, WidgetKind.FAVORITES, WidgetKind.RECENTLY_ADDED,
+        -> firstGame?.let { activateGame(it) } ?: selectTab(Destination.LIBRARY)
+        WidgetKind.SYSTEMS -> selectTab(Destination.SYSTEMS)
+        WidgetKind.PINNED_APPS -> selectTab(Destination.APPS)
+        WidgetKind.COLLECTIONS -> feed.collections.firstOrNull()?.let { go(Route.CollectionGames(it.id, it.name)) } ?: go(Route.Collections)
+        WidgetKind.RECENT_ACHIEVEMENT, WidgetKind.RECENT_ACHIEVEMENTS, WidgetKind.ACHIEVEMENT_PROGRESS,
+        WidgetKind.RECENTLY_MASTERED,
+        -> selectTab(Destination.ACHIEVEMENTS)
+        WidgetKind.PLAYTIME_WEEK, WidgetKind.PLAYTIME_TOTAL -> selectTab(Destination.LIBRARY)
+        WidgetKind.CARTRIDGE_DOWNLOADS -> selectTab(Destination.CARTRIDGE)
+        WidgetKind.STORAGE -> go(Route.Storage)
+        WidgetKind.CLOCK -> quickMenuOpen = true
     }
 }

@@ -90,14 +90,13 @@ class PerfHarness {
             driver.waitFor("Continue playing", 30_000)
             driver.settle(2_000)
 
-            val recording = Recording().apply {
-                enable("jdk.ExecutionSample").withPeriod(Duration.ofMillis(5))
-                start()
-            }
-            val testThread = Thread.currentThread().name
-
             fun measure(name: String, frames: Int, everyFrames: Int, action: (Int) -> Unit) {
                 if (only.isNotEmpty() && only.none { name.startsWith(it) }) return
+                val recording = Recording().apply {
+                    enable("jdk.ExecutionSample").withPeriod(Duration.ofMillis(2))
+                    enable("jdk.NativeMethodSample").withPeriod(Duration.ofMillis(2))
+                    start()
+                }
                 val times = ArrayList<Double>(frames)
                 for (f in 0 until frames) {
                     if (f % everyFrames == 0) action(f / everyFrames)
@@ -105,7 +104,12 @@ class PerfHarness {
                     mainClock.advanceTimeBy(FRAME_MS)
                     times += (System.nanoTime() - t0) / 1e6
                 }
+                recording.stop()
+                val jfr = File(outDir, "$name.jfr")
+                recording.dump(jfr.toPath())
+                recording.close()
                 results += name to times
+                profiles += name to profile(jfr)
                 println("Perf: $name ${summary(times)}")
                 driver.settle(600)
             }
@@ -153,11 +157,7 @@ class PerfHarness {
             measure("options-dpad", frames = 60, everyFrames = 5) { i -> press(if (i < 7) PadButton.DPAD_DOWN else PadButton.DPAD_UP) }
             press(PadButton.B)
 
-            recording.stop()
-            val jfr = File(outDir, "perf.jfr")
-            recording.dump(jfr.toPath())
-            recording.close()
-            writeSummary(jfr, testThread)
+            writeSummary()
         }
     }
 
@@ -186,37 +186,48 @@ class PerfHarness {
         return "frames=${s.size} mean=%.1f p50=%.1f p95=%.1f max=%.1f ms".format(s.average(), p(0.5), p(0.95), s.last())
     }
 
+    private val profiles = mutableListOf<Pair<String, String>>()
+
     /**
-     * The frame table, and where the busiest thread (the one composing and drawing) spent its time:
-     * split into composition, layout and drawing, then Fuse's own code (inclusive) and the top of
-     * the stack (self).
+     * Where the UI thread spent one interaction: by phase (composition, layout, drawing, the rest),
+     * then Fuse's own code (inclusive) and the top of the stack (self). Java and native samples both
+     * count, so Skia's drawing shows under the Java frame that asked for it.
      */
-    private fun writeSummary(jfr: File, @Suppress("UNUSED_PARAMETER") testThread: String) {
-        val events = RecordingFile.readAllEvents(jfr.toPath()).filter { it.eventType.name == "jdk.ExecutionSample" }
-        val byThread = events.groupBy { it.getThread("sampledThread")?.javaName ?: "?" }
-        val thread = byThread.maxByOrNull { it.value.size }?.key
+    private fun profile(jfr: File): String {
+        val events = RecordingFile.readAllEvents(jfr.toPath()).filter { it.eventType.name == "jdk.ExecutionSample" || it.eventType.name == "jdk.NativeMethodSample" }
+        val ui = events.filter { it.getThread("sampledThread")?.javaName?.startsWith("AWT-EventQueue") == true }
         val inclusive = HashMap<String, Int>()
         val self = HashMap<String, Int>()
         val phases = HashMap<String, Int>()
         var samples = 0
-        for (e in byThread[thread].orEmpty()) {
+        for (e in ui) {
             val frames = e.stackTrace?.frames ?: continue
             samples++
             val names = frames.map { "${it.method.type.name}.${it.method.name}" }
-            frames.firstOrNull()?.let { f -> self.merge("${f.method.type.name}.${f.method.name}", 1, Int::plus) }
-            names.filter { it.startsWith("io.github.matiyaaa") }.distinct().forEach { inclusive.merge(it, 1, Int::plus) }
-            // Innermost phase wins: drawing inside a layout pass counts as drawing.
+            self.merge(names.firstOrNull() ?: "?", 1, Int::plus)
+            names.filter { it.startsWith("io.github.matiyaaa") }.map { it.substringBefore("\$\$Lambda") }.distinct().forEach { inclusive.merge(it, 1, Int::plus) }
             val phase = names.firstNotNullOfOrNull { n ->
                 when {
-                    ".draw" in n || n.startsWith("org.jetbrains.skia") || "DrawScope" in n || "GraphicsLayer" in n -> "draw"
-                    "MeasureAndLayoutDelegate" in n || ".measure" in n || ".remeasure" in n || ".placeAt" in n -> "layout"
+                    n.startsWith("org.jetbrains.skia") || ".draw" in n || "DrawScope" in n || "GraphicsLayer" in n || "RenderNode" in n -> "draw"
+                    "MeasureAndLayoutDelegate" in n || ".measure" in n || ".remeasure" in n || ".placeAt" in n || "LayoutNode.layout" in n -> "layout"
                     "Recomposer" in n || "ComposerImpl" in n || "recompose" in n -> "compose"
                     else -> null
                 }
             } ?: "other"
             phases.merge(phase, 1, Int::plus)
         }
-        println("Perf: threads by samples: " + byThread.entries.sortedByDescending { it.value.size }.take(6).joinToString { "${it.key}=${it.value.size}" })
+        fun pct(n: Int) = "%5.1f%%".format(n * 100.0 / samples.coerceAtLeast(1))
+        return buildString {
+            appendLine("UI thread samples: $samples (every 2 ms)")
+            appendLine("Phases: " + phases.entries.sortedByDescending { it.value }.joinToString("  ") { "${it.key} ${pct(it.value).trim()}" })
+            appendLine("Fuse code, inclusive:")
+            inclusive.entries.sortedByDescending { it.value }.take(30).forEach { appendLine("${pct(it.value)}  ${it.key}") }
+            appendLine("Self:")
+            self.entries.sortedByDescending { it.value }.take(15).forEach { appendLine("${pct(it.value)}  ${it.key}") }
+        }
+    }
+
+    private fun writeSummary() {
         val out = buildString {
             appendLine("| Interaction | Frames | Mean ms | p50 | p95 | Max |")
             appendLine("|---|---|---|---|---|---|")
@@ -225,17 +236,11 @@ class PerfHarness {
                 fun p(q: Double) = s[((s.size - 1) * q).toInt()]
                 appendLine("| $name | ${s.size} | %.1f | %.1f | %.1f | %.1f |".format(s.average(), p(0.5), p(0.95), s.last()))
             }
-            appendLine()
-            appendLine("Samples on the busiest thread ($thread): $samples")
-            appendLine()
-            appendLine("By phase:")
-            phases.entries.sortedByDescending { it.value }.forEach { appendLine("%5.1f%%  %s".format(it.value * 100.0 / samples.coerceAtLeast(1), it.key)) }
-            appendLine()
-            appendLine("Fuse code, inclusive share:")
-            inclusive.entries.sortedByDescending { it.value }.take(60).forEach { appendLine("%5.1f%%  %s".format(it.value * 100.0 / samples.coerceAtLeast(1), it.key)) }
-            appendLine()
-            appendLine("Self time (top of stack):")
-            self.entries.sortedByDescending { it.value }.take(40).forEach { appendLine("%5.1f%%  %s".format(it.value * 100.0 / samples.coerceAtLeast(1), it.key)) }
+            for ((name, text) in profiles) {
+                appendLine()
+                appendLine("## $name")
+                append(text)
+            }
         }
         File(outDir, "summary.md").writeText(out)
         println(out)

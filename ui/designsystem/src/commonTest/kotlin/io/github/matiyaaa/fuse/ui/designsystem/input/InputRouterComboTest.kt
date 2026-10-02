@@ -110,6 +110,29 @@ class InputRouterComboTest {
     }
 
     @Test
+    fun theRightStickOpensTheQuickMenuWhenLetGo() = runTest {
+        val (r, seen) = router()
+        r.press(PadButton.R3, pad)
+        runCurrent()
+        assertEquals(emptyList<Any>(), seen)
+        r.release(PadButton.R3, pad)
+        runCurrent()
+        assertEquals(listOf<Any>(NavAction.QUICK_MENU), seen)
+    }
+
+    @Test
+    fun theRightStickPressedJustBeforeTheLeftIsAScreenshotNotTheQuickMenu() = runTest {
+        val (r, seen) = router()
+        r.press(PadButton.R3, pad)
+        advanceTimeBy(60)
+        r.press(PadButton.L3, pad)
+        r.release(PadButton.R3, pad)
+        r.release(PadButton.L3, pad)
+        runCurrent()
+        assertEquals(listOf<Any>(ComboGesture.TAP), seen)
+    }
+
+    @Test
     fun withNoListenerTheSticksAreOrdinaryButtons() = runTest {
         val (r, seen) = router(InputProfile(remap = mapOf(PadButton.L3 to NavAction.HOME)))
         r.onCaptureCombo = null
@@ -118,6 +141,7 @@ class InputRouterComboTest {
         r.release(PadButton.R3, pad)
         r.release(PadButton.L3, pad)
         runCurrent()
-        assertEquals(listOf<Any>(NavAction.HOME), seen)
+        // Each stick does its own thing at once: the remapped left one, and the right one's quick menu.
+        assertEquals(listOf<Any>(NavAction.HOME, NavAction.QUICK_MENU), seen)
     }
 }

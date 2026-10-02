@@ -203,7 +203,7 @@ fun FlowHome(app: AppState) {
             is ShelfItem.System -> app.go(Route.PlatformGames(i.card.platform.id))
             is ShelfItem.App -> app.openApp(i.card)
             is ShelfItem.Collection -> app.go(Route.CollectionGames(i.collection.id, i.collection.name))
-            is ShelfItem.Widget -> openWidget(app, i.kind)
+            is ShelfItem.Widget -> app.openWidget(i.kind, feed)
         }
     }
 
@@ -610,16 +610,6 @@ private fun ShelfItem.hero(systems: Map<io.github.matiyaaa.fuse.model.PlatformId
     else -> null
 }
 
-private fun openWidget(app: AppState, kind: WidgetKind) {
-    when (kind) {
-        WidgetKind.CARTRIDGE_DOWNLOADS -> app.selectTab(Destination.CARTRIDGE)
-        WidgetKind.RECENT_ACHIEVEMENT, WidgetKind.RECENT_ACHIEVEMENTS, WidgetKind.ACHIEVEMENT_PROGRESS,
-        WidgetKind.RECENTLY_MASTERED -> app.selectTab(Destination.ACHIEVEMENTS)
-        WidgetKind.STORAGE -> app.go(Route.Storage)
-        WidgetKind.CLOCK -> app.quickMenuOpen = true
-        else -> app.selectTab(Destination.LIBRARY)
-    }
-}
 
 private fun shelfMenu(app: AppState, shelf: Shelf, onArrange: () -> Unit): ContextMenuSpec = ContextMenuSpec(
     title = shelf.title,

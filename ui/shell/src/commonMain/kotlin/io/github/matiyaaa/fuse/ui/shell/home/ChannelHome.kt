@@ -196,20 +196,7 @@ fun ChannelHome(app: AppState) {
         ) + app.homeStyleActions(),
     )
 
-    fun open(w: HomeWidget) {
-        when (w.kind) {
-            WidgetKind.SYSTEMS -> app.selectTab(Destination.SYSTEMS)
-            WidgetKind.PINNED_APPS -> app.selectTab(Destination.APPS)
-            WidgetKind.COLLECTIONS -> feed.collections.firstOrNull()?.let { app.go(Route.CollectionGames(it.id, it.name)) }
-            WidgetKind.CONTINUE_PLAYING, WidgetKind.RECENTLY_PLAYED, WidgetKind.PINNED_GAMES, WidgetKind.CURRENT_GAME ->
-                firstGame(w.kind, feed)?.let { app.activateGame(it) }
-            WidgetKind.FAVORITES, WidgetKind.RECENTLY_ADDED, WidgetKind.MOST_PLAYED ->
-                app.selectTab(Destination.LIBRARY)
-            WidgetKind.CARTRIDGE_DOWNLOADS -> app.selectTab(Destination.CARTRIDGE)
-            WidgetKind.CLOCK -> app.quickMenuOpen = true
-            else -> app.selectTab(Destination.ACHIEVEMENTS)
-        }
-    }
+    fun open(w: HomeWidget) = app.openWidget(w.kind, feed, firstGame(w.kind, feed))
 
     BoxWithConstraints(
         Modifier.fillMaxSize()
