@@ -2,6 +2,7 @@ package io.github.matiyaaa.fuse.ui.shell.app
 
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -13,6 +14,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.media.HeroSource
 import io.github.matiyaaa.fuse.ui.shell.platform.PlatformUi
 import io.github.matiyaaa.fuse.ui.shell.store.FuseStore
 import io.github.matiyaaa.fuse.ui.shell.store.PhoneLinkControl
+import io.github.matiyaaa.fuse.ui.shell.store.UiPrefs
 import kotlinx.coroutines.CoroutineScope
 
 /** Where controller focus is: the section tabs at the top, or the page content. */
@@ -119,6 +121,9 @@ class AppState(
     /** What the room is lit by. Screens set it from their selection. */
     var hero by mutableStateOf<HeroSource?>(null)
 
+    /** Developer options: off until the version in About is tapped five times, and only until Fuse closes. */
+    val dev = DevOptions()
+
     /** Hints for the current selection; screens set them. */
     var hints by mutableStateOf<List<Hint>>(emptyList())
 
@@ -175,3 +180,40 @@ data class LaunchVeil(
     /** [art] is a cover, not a background: drawn blurred into a colour field behind everything. */
     val artBlurred: Boolean = false,
 )
+
+/**
+ * Options for testing Fuse itself. They are never saved: tapping the version in About five times
+ * turns them on for this launch only, and closing Fuse turns them off again.
+ */
+@Stable
+class DevOptions {
+    /** Taps on the version so far; the fifth turns the options on. */
+    var taps by mutableIntStateOf(0)
+    var enabled by mutableStateOf(false)
+
+    /** Every onboarding step can be skipped and its buttons pressed, required ones included. */
+    var skipRequired by mutableStateOf(false)
+
+    /** A live graph of frame times in the corner, to see lag on the device. */
+    var frameGraph by mutableStateOf(false)
+
+    /**
+     * While setup is replayed as a rehearsal: the preferences as they were before it started.
+     * Nothing a step does outside preferences is carried out, and these are put back at the end.
+     */
+    var rehearsalPrefs by mutableStateOf<UiPrefs?>(null)
+
+    val rehearsing: Boolean get() = rehearsalPrefs != null
+
+    /** Counts a tap on the version; returns how many more it takes (0 once on). */
+    fun tap(): Int {
+        if (enabled) return 0
+        taps++
+        if (taps >= TAPS) enabled = true
+        return (TAPS - taps).coerceAtLeast(0)
+    }
+
+    companion object {
+        const val TAPS = 5
+    }
+}

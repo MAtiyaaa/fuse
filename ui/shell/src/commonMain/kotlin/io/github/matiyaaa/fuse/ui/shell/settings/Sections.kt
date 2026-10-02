@@ -1,5 +1,6 @@
 package io.github.matiyaaa.fuse.ui.shell.settings
 
+import io.github.matiyaaa.fuse.ui.designsystem.components.ToastKind
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -1075,7 +1076,19 @@ fun updateRows(app: AppState): List<MenuAction> {
 @Composable
 fun aboutRows(app: AppState): List<MenuAction> = buildList {
     app.platform.lastCrashReport()?.let { report -> add(crashRow(app, report)) }
-    add(infoRow("fuse", "Fuse ${app.store.updates.currentVersion}", detail = "A console-style home for your games. Free and open source (GPL-3.0-or-later)", icon = FuseIcons.Info))
+    add(MenuAction(
+        "fuse", "Fuse ${app.store.updates.currentVersion}", FuseIcons.Info,
+        detail = "A console-style home for your games. Free and open source (GPL-3.0-or-later)",
+        // Five taps turn on the developer options, for this launch only.
+        onSelect = {
+            val wasOn = app.dev.enabled
+            val left = app.dev.tap()
+            when {
+                !wasOn && app.dev.enabled -> app.toasts.show("Developer options are on until Fuse closes", ToastKind.SUCCESS)
+                left in 1..3 -> app.toasts.show(if (left == 1) "One more tap for developer options" else "$left more taps for developer options")
+            }
+        },
+    ))
     labelled("Credits") {
         add(infoRow("credits", "Made with", detail = "Kotlin, Compose Multiplatform, SQLDelight, Ktor, Coil. Icons: Lucide (ISC). Fonts: Sora and Manrope (SIL OFL). Emulator launch data: ES-DE (MIT) and Cartridge (MIT). Hashing rules: rcheevos (MIT)", icon = FuseIcons.Blocks))
         add(MenuAction("licences", "Open-source licences", FuseIcons.FileText, detail = "Fuse, its libraries, fonts and icons", trailing = Trailing.Chevron, onSelect = { app.go(Route.Licenses) }))
@@ -1093,6 +1106,27 @@ fun aboutRows(app: AppState): List<MenuAction> = buildList {
     }
     labelled("") {
         add(MenuAction("setup", "Run setup again", FuseIcons.Sparkles, detail = "Games, emulators, controller, Home and theme, one step at a time", trailing = Trailing.Chevron, onSelect = { app.go(Route.Onboarding) }))
+    }
+    if (app.dev.enabled) {
+        labelled("Developer") {
+            add(MenuAction(
+                "dev.setup", "Replay setup", FuseIcons.RotateCcw,
+                detail = "A rehearsal: every step shows, but nothing is added, removed or kept",
+                trailing = Trailing.Chevron,
+                onSelect = {
+                    app.dev.rehearsalPrefs = app.store.prefs.value
+                    app.go(Route.Onboarding)
+                },
+            ))
+            add(toggleRow("dev.skip", "Skip required setup steps", FuseIcons.ChevronsRight, app.dev.skipRequired) { app.dev.skipRequired = it })
+            add(toggleRow("dev.frames", "Frame-time overlay", FuseIcons.Activity, app.dev.frameGraph) { app.dev.frameGraph = it })
+            add(MenuAction("dev.off", "Turn off developer options", FuseIcons.Power, onSelect = {
+                app.dev.enabled = false
+                app.dev.taps = 0
+                app.dev.skipRequired = false
+                app.dev.frameGraph = false
+            }))
+        }
     }
 }
 

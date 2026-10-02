@@ -81,6 +81,7 @@ import io.github.matiyaaa.fuse.ui.shell.cartridge.CartridgeScreen
 import io.github.matiyaaa.fuse.ui.shell.components.LocalGameArt
 import io.github.matiyaaa.fuse.ui.shell.components.LocalTileBorders
 import io.github.matiyaaa.fuse.ui.shell.components.LocalTileMetrics
+import io.github.matiyaaa.fuse.ui.shell.components.FrameTimeOverlay
 import io.github.matiyaaa.fuse.ui.shell.components.PerformanceOverlay
 import io.github.matiyaaa.fuse.ui.shell.components.TileBorders
 import io.github.matiyaaa.fuse.ui.shell.game.FolderBrowserScreen
@@ -254,6 +255,9 @@ fun FuseApp(store: FuseStore, platform: PlatformUi, router: InputRouter, phoneLi
                         val metrics by platform.performance.collectAsState()
                         // Under the status it extends, where it covers the least of any page.
                         PerformanceOverlay(metrics, Modifier.align(Alignment.TopEnd).padding(end = Space.gutter, top = Size.hudHeight + Space.xs))
+                    }
+                    if (app.dev.frameGraph) {
+                        FrameTimeOverlay(Modifier.align(Alignment.TopStart).padding(start = Space.gutter, top = Size.hudHeight + Space.xs))
                     }
                     // Content fades out under the hint line, so hints never sit on top of tiles.
                     if (app.hints.isNotEmpty()) {
