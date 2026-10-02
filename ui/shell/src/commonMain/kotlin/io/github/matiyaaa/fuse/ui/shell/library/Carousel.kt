@@ -4,9 +4,11 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -17,16 +19,21 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.input.pointer.util.addPointerInputChange
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import io.github.matiyaaa.fuse.ui.designsystem.theme.Aspect
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
 import io.github.matiyaaa.fuse.ui.shell.components.GameCoverTile
+import io.github.matiyaaa.fuse.ui.shell.components.GameTileSkeleton
+import io.github.matiyaaa.fuse.ui.shell.components.coverCornerFraction
 import io.github.matiyaaa.fuse.ui.shell.store.GameCard
 import kotlinx.coroutines.launch
 import kotlin.math.abs
@@ -65,9 +72,9 @@ fun CoverCarousel(
     LaunchedEffect(selected) { position.animateTo(selected.toFloat(), motion.followSpring()) }
     val latestSettle by rememberUpdatedState(onSettle)
 
-    BoxWithConstraints(modifier.fillMaxWidth().height(itemWidth * 1.5f * 1.22f)) {
+    BoxWithConstraints(modifier.fillMaxWidth().height(itemWidth * STRIP_HEIGHT)) {
         val width = constraints.maxWidth.toFloat()
-        val density = androidx.compose.ui.platform.LocalDensity.current
+        val density = LocalDensity.current
         val step = with(density) { (itemWidth + Space.l).toPx() }
         // Where the selected cover's left edge sits.
         val origin = start?.let { with(density) { it.toPx() } } ?: (width * anchor)
@@ -113,8 +120,8 @@ fun CoverCarousel(
                                 val d = i - position.value
                                 // Extra breathing room right next to the selected cover.
                                 val push = when {
-                                    d > 0 -> minOf(d, 1f) * step * 0.18f
-                                    d < 0 -> maxOf(d, -1f) * step * 0.18f
+                                    d > 0 -> minOf(d, 1f) * step * PUSH
+                                    d < 0 -> maxOf(d, -1f) * step * PUSH
                                     else -> 0f
                                 }
                                 IntOffset((origin + d * step + push).roundToInt(), 0)
@@ -129,7 +136,7 @@ fun CoverCarousel(
                                 // passed fade out quickly as they slide past the edge.
                                 val ahead = (1f - DISTANCE_DIM * (d - 1f).coerceAtLeast(0f)).coerceIn(0.25f, 1f)
                                 alpha = if (start != null && signed < 0f) (1f + signed * PASSED_FADE).coerceIn(0f, 1f) else ahead
-                                transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 1f)
+                                transformOrigin = TransformOrigin(0.5f, 1f)
                             },
                     )
                 }
@@ -137,6 +144,45 @@ fun CoverCarousel(
         }
     }
 }
+
+/**
+ * Capsule Mode's strip while its games are on their way: cover outlines in the places and sizes the
+ * covers will take (the first where the selected cover rests, the ones after it smaller and dimmer),
+ * with the calm shared shimmer over them, so nothing moves when the games arrive.
+ */
+@Composable
+internal fun CarouselSkeleton(itemWidth: Dp, start: Dp, modifier: Modifier = Modifier) {
+    val corner = coverCornerFraction()
+    BoxWithConstraints(modifier.fillMaxWidth().height(itemWidth * STRIP_HEIGHT)) {
+        val density = LocalDensity.current
+        val step = with(density) { (itemWidth + Space.l).toPx() }
+        val origin = with(density) { start.toPx() }
+        val count = (ceil((constraints.maxWidth - origin) / step).toInt() + 1).coerceAtLeast(1)
+        for (i in 0 until count) {
+            GameTileSkeleton(
+                Modifier
+                    .align(Alignment.CenterStart)
+                    .offset { IntOffset((origin + i * step + if (i > 0) step * PUSH else 0f).roundToInt(), 0) }
+                    .graphicsLayer {
+                        val s = 1f - NEIGHBOUR_SHRINK * minOf(i.toFloat(), 1.5f)
+                        scaleX = s
+                        scaleY = s
+                        alpha = (1f - DISTANCE_DIM * (i - 1f).coerceAtLeast(0f)).coerceIn(0.25f, 1f)
+                        transformOrigin = TransformOrigin(0.5f, 1f)
+                    }
+                    .width(itemWidth)
+                    .aspectRatio(Aspect.CAPSULE),
+                corner,
+            )
+        }
+    }
+}
+
+/** The strip's height against a cover's width: a 2:3 cover with room for its lift and spark. */
+private const val STRIP_HEIGHT = 1.5f * 1.22f
+
+/** Extra room either side of the selected cover, as a share of one step. */
+private const val PUSH = 0.18f
 
 /** How far a flick carries the strip: the covers it would pass in this long at release speed. */
 private const val FLING_SECONDS = 0.18f

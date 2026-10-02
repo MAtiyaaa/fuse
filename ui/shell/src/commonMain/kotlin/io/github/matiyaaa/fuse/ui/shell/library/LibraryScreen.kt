@@ -62,6 +62,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.lerp
 import io.github.matiyaaa.fuse.model.CollectionId
 import io.github.matiyaaa.fuse.model.CollectionKind
+import io.github.matiyaaa.fuse.model.GameArtStyle
 import io.github.matiyaaa.fuse.model.GameCollection
 import io.github.matiyaaa.fuse.model.GameId
 import io.github.matiyaaa.fuse.model.LibraryLayout
@@ -125,6 +126,7 @@ import io.github.matiyaaa.fuse.ui.shell.components.GameCoverTile
 import io.github.matiyaaa.fuse.ui.shell.components.GameIconTile
 import io.github.matiyaaa.fuse.ui.shell.components.GameMarksInline
 import io.github.matiyaaa.fuse.ui.shell.components.GameTileSkeleton
+import io.github.matiyaaa.fuse.ui.shell.components.baseForWidth
 import io.github.matiyaaa.fuse.ui.shell.components.LocalGameArt
 import io.github.matiyaaa.fuse.ui.shell.components.LocalTileMetrics
 import io.github.matiyaaa.fuse.ui.shell.components.LocalTileShowsFavourite
@@ -586,10 +588,9 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
                             )
                         }
                         Spacer(Modifier.height(if (inSystem) lerp(Space.m, Space.s, collapse) else lerp(Space.l, Space.s, collapse)))
-                        val tileW = LocalGameArt.current.tileSize(metrics.icon).width
-                        val cols = ((maxW - Space.gutter * 2 + metrics.gap) / (tileW + metrics.gap)).toInt().coerceAtLeast(2)
+                        val (cols, base) = iconGrid(maxW, metrics, LocalGameArt.current)
                         columns = cols
-                        IconGrid(list, state, gridState, cols, metrics.icon, metrics.gap, reveal, onTap = { i -> tapAt(i, list) }, onLong = { i -> state.pick(i, list); options(list[i]) }, focused = gridFocused)
+                        IconGrid(list, state, gridState, cols, base, metrics.gap, reveal, onTap = { i -> tapAt(i, list) }, onLong = { i -> state.pick(i, list); options(list[i]) }, focused = gridFocused)
                     }
                     LibraryLayout.CAPSULE -> {
                         Box(Modifier.fillMaxWidth().weight(1f).padding(horizontal = Space.gutter).reveal(reveal, 1), contentAlignment = Alignment.BottomStart) {
@@ -628,6 +629,17 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
             }
         }
     }
+}
+
+/**
+ * The Grid layout's columns on a screen [width] wide, and the base tile size that fills each column
+ * exactly, so a row runs from gutter to gutter with square (or poster) tiles, never stretched ones.
+ */
+private fun iconGrid(width: Dp, metrics: TileMetrics, style: GameArtStyle): Pair<Int, Dp> {
+    val room = width - Space.gutter * 2
+    val cols = ((room + metrics.gap) / (style.tileSize(metrics.icon).width + metrics.gap)).toInt().coerceAtLeast(2)
+    val cell = (room - metrics.gap * (cols - 1)) / cols
+    return cols to style.baseForWidth(cell)
 }
 
 internal fun sortLabel(s: SortOrder) = when (s) {
@@ -1041,9 +1053,8 @@ private fun ListPreview(card: GameCard, showsSystem: Boolean, modifier: Modifier
                 Artwork(
                     card.art.boxart ?: card.art.grid ?: card.art.square ?: card.art.icon,
                     Modifier.fillMaxSize(),
-                    // The stage underneath names the game, so a generated cover carries its initials,
-                    // as its row's thumbnail does, rather than the title twice.
-                    fallback = { GeneratedArt(card.title, card.accent.toColor(), slot = ArtSlot.ICON) },
+                    // The same generated cover the Cover grid shows, so a game looks the same in every layout.
+                    fallback = { GeneratedArt(card.title, card.accent.toColor(), slot = ArtSlot.BOX, label = card.platformShort.takeIf { showsSystem }) },
                 )
             }
             Spacer(Modifier.height(Space.l))
@@ -1070,8 +1081,8 @@ internal fun LibrarySkeleton(layout: LibraryLayout, metrics: TileMetrics, maxW: 
                 StageSkeleton(Modifier.fillMaxWidth().height(stageHeight).padding(horizontal = Space.gutter))
                 Spacer(Modifier.height(Space.l))
                 val style = LocalGameArt.current
-                val tile = style.tileSize(metrics.icon)
-                val cols = ((maxW - Space.gutter * 2 + metrics.gap) / (tile.width + metrics.gap)).toInt().coerceAtLeast(2)
+                val (cols, base) = iconGrid(maxW, metrics, style)
+                val tile = style.tileSize(base)
                 Column(Modifier.padding(start = Space.gutter, top = Space.s), verticalArrangement = Arrangement.spacedBy(metrics.gap + Space.s)) {
                     repeat(SKELETON_ROWS) {
                         Row(horizontalArrangement = Arrangement.spacedBy(metrics.gap)) {
@@ -1090,16 +1101,7 @@ internal fun LibrarySkeleton(layout: LibraryLayout, metrics: TileMetrics, maxW: 
             LibraryLayout.CAPSULE -> {
                 StageSkeleton(Modifier.fillMaxWidth().weight(1f).padding(horizontal = Space.gutter))
                 Spacer(Modifier.height(Space.xl))
-                val w = metrics.capsuleWidth * CAPSULE_SCALE
-                Row(
-                    Modifier.fillMaxWidth().height(w * 1.5f * 1.22f).padding(start = Space.gutter),
-                    horizontalArrangement = Arrangement.spacedBy(Space.l),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    repeat(SKELETON_CAPSULES) { i ->
-                        GameTileSkeleton(Modifier.width(if (i == 0) w else w * 0.88f).aspectRatio(Aspect.CAPSULE), coverCornerFraction())
-                    }
-                }
+                CarouselSkeleton(metrics.capsuleWidth * CAPSULE_SCALE, start = Space.gutter)
                 Spacer(Modifier.height(Size.hintHeight + Space.l))
             }
             LibraryLayout.COMPACT_LIST -> {
@@ -1162,7 +1164,7 @@ private fun LibraryEmpty(
             "Put games in this system's folder, or get them from your RomM server with Cartridge. They appear here on their own.",
         )
         LibraryScope.All -> when (segment) {
-            LibrarySegment.FAVORITES -> Triple(FuseIcons.Heart, "No favourites yet", "Mark a game as a favourite from its options and it waits for you here.")
+            LibrarySegment.FAVORITES -> Triple(FuseIcons.Heart, "No favourites yet", "Choose Add to Favourites in a game's options.")
             LibrarySegment.RECENT -> Triple(FuseIcons.History, "Nothing played yet", "Games you play show up here, newest first.")
             LibrarySegment.MISSING -> Triple(FuseIcons.CheckCheck, "Nothing is missing", "Games whose files disappear are listed here, so you can find them again or let Fuse forget them.")
             LibrarySegment.HIDDEN -> Triple(FuseIcons.EyeOff, "No hidden games", "Games you hide from their options wait here.")
@@ -1248,9 +1250,8 @@ fun CollectionTile(collection: GameCollection, selected: Boolean, height: Dp, on
 /** Loading that takes longer than this shows the skeleton; anything quicker never flashes it. */
 private const val SKELETON_DELAY_MS = 160L
 
-/** Rows of tile placeholders in the Grid layout's skeleton, and placeholders in other layouts. */
+/** Rows of tile placeholders in the Grid layout's skeleton, and rows in the List's. */
 private const val SKELETON_ROWS = 3
-private const val SKELETON_CAPSULES = 8
 private const val SKELETON_LIST_ROWS = 14
 
 /** Widths of the list skeleton's title bars, so the column reads as names of different lengths. */

@@ -71,7 +71,16 @@ val LocalGameArt = staticCompositionLocalOf { GameArtStyle.BOX_ART }
  */
 fun GameArtStyle.tileSize(base: Dp): DpSize = when (this) {
     GameArtStyle.BOX_ART -> DpSize(base, base)
-    GameArtStyle.POSTER -> DpSize(base * 0.8f, base * 1.2f)
+    GameArtStyle.POSTER -> DpSize(base * POSTER_WIDTH, base * POSTER_HEIGHT)
+}
+
+/**
+ * The base size whose [tileSize] is exactly [width] wide: for grids whose columns set the width, so
+ * a tile fills its column and keeps its shape instead of being stretched to it.
+ */
+fun GameArtStyle.baseForWidth(width: Dp): Dp = when (this) {
+    GameArtStyle.BOX_ART -> width
+    GameArtStyle.POSTER -> width / POSTER_WIDTH
 }
 
 /** Corner of a game tile in this art style, as a fraction of its short side. Posters are softer, like a case. */
@@ -602,6 +611,10 @@ fun AppTile(
         }
     }
 }
+
+/** A poster's width and height against the square it replaces: about the same area, taller. */
+private const val POSTER_WIDTH = 0.8f
+private const val POSTER_HEIGHT = 1.2f
 
 /** Art of a game whose file is missing is dimmed, so the tile reads as "not here right now". */
 private const val MISSING_ART_ALPHA = 0.45f

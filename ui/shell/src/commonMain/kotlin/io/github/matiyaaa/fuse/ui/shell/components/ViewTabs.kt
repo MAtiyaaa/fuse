@@ -107,7 +107,8 @@ fun ViewTabs(
         requesters[shown]?.bringIntoView(Rect(-edge, 0f, w + edge, 1f))
     }
     val accent = c.accent
-    val startPad = gutter - Space.m
+    // The first tab's name lines up with the gutter; its outline reaches into it.
+    val startPad = gutter - TAB_PAD
     Row(
         modifier
             .fadingEdgesHorizontal(start = scroll.value > 0, end = scroll.value < scroll.maxValue, width = Space.xxl)
@@ -175,16 +176,18 @@ private fun TabLabel(
     )
     val focus by animateFloatAsState(if (focused) 1f else 0f, motion.tween(Durations.FAST), label = "tab focus")
     val shape = rememberLineShape()
+    // The name is placed inside the tab's padding, which its own position leaves out.
+    val pad = with(LocalDensity.current) { TAB_PAD.toPx() }
     Row(
         modifier
             .fuseClickable(shape = shape, role = Role.Tab, onClick = onClick)
             .lineFocus(shape, { focus }, lineFocusFill(), c.focus)
             .semantics { this.selected = focused }
-            .padding(horizontal = Space.m, vertical = Space.s),
+            .padding(horizontal = TAB_PAD, vertical = Space.s),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Row(
-            Modifier.onPlaced { onName(it.positionInParent().x + it.size.width / 2f) },
+            Modifier.onPlaced { onName(pad + it.positionInParent().x + it.size.width / 2f) },
             verticalAlignment = Alignment.CenterVertically,
         ) {
             if (tab.icon != null) {
@@ -272,6 +275,9 @@ internal fun Modifier.lineFocus(shape: Shape, focus: () -> Float, fill: Color, r
         )
     }
 }
+
+/** Room either side of a tab's name, inside its focus outline. */
+private val TAB_PAD = Space.m
 
 /** Room above and below the tabs: the bar lives in the bottom one, clear of the focus outline. */
 private val LINE_ROOM = Space.xs + Size.sparkHeight
