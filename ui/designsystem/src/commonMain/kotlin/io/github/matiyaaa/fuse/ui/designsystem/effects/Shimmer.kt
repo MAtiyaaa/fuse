@@ -31,6 +31,8 @@ import io.github.matiyaaa.fuse.ui.designsystem.theme.LocalFuseLook
 import io.github.matiyaaa.fuse.ui.designsystem.theme.LocalFuseMotion
 import io.github.matiyaaa.fuse.ui.designsystem.theme.LocalRenderQuality
 import io.github.matiyaaa.fuse.ui.designsystem.theme.ambientOn
+import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
@@ -130,6 +132,8 @@ private class ShimmerNode(
                         phase = next
                         invalidateDraw()
                     }
+                    // While the light rests, sleep until its next pass instead of waking every frame.
+                    if (next < 0f) delay(((1f - t) * Durations.SHIMMER).toLong().coerceAtLeast(1L))
                 }
             } finally {
                 running = false
@@ -150,7 +154,8 @@ private class ShimmerNode(
             val o = shape.createOutline(size, layoutDirection, this)
             outline = o
             path = Path().apply { addOutline(o) }
-            bandWidth = (size.minDimension * 1.2f).coerceIn(80f, 360f)
+            // One band width for every placeholder, so the light lines up across blocks of any size.
+            bandWidth = BAND.toPx()
             // A soft band, a little angled, defined around x = 0 and moved by translation.
             band = Brush.linearGradient(
                 0f to Color.Transparent,
@@ -178,6 +183,9 @@ private class ShimmerNode(
 
     private companion object {
         const val FRAME_MS = 33L
+
+        /** The width of the band of light. */
+        val BAND = 200.dp
 
         /** Share of each cycle the light is moving; it rests for the rest. */
         const val PASS = 0.62f

@@ -185,15 +185,23 @@ internal fun AuditDriver.overlayScreens(exhaustive: Boolean) {
     }
 
     if (!exhaustive) return
+    // Theme opens its own page now; Game art and Motion are plain choice lists (Settings, Appearance).
     scenario("overlays", "choice list") {
         useLibrary()
         openSettings()
+        tap(PadButton.DPAD_DOWN, sectionIndex("appearance"))
         tap(PadButton.DPAD_RIGHT)
-        tap(PadButton.A)
-        waitFor("Crossbar")
-        shoot("theme choice list with taglines")
-        tap(PadButton.DPAD_DOWN, 8)
-        shoot("theme choice list, last theme focused")
+        waitFor("Game art")
+        tapText("Game art")
+        waitFor("Posters")
+        shoot("Game art, each choice with a line about it")
+        tap(PadButton.B)
+        waitGone("Posters")
+        tapText("Motion")
+        waitFor("Enhanced")
+        var moved = 0
+        while (moved < 10 && nav(NavAction.DOWN) == NavResult.MOVED) moved++
+        shoot("Motion, last choice focused")
         tap(PadButton.B)
     }
 }
@@ -529,7 +537,8 @@ internal fun AuditDriver.onboardingScreens(exhaustive: Boolean) {
         waitFor("You're all set")
         shoot("done", 2_500)
         tap(PadButton.A)
-        waitFor("Continue playing", 30_000)
+        // Nothing has been played yet, so Home opens on the games the scan just found.
+        waitFor("New in your library", 30_000)
         shoot("first Home after setup", 2_500)
     }
 }
@@ -564,7 +573,8 @@ internal fun AuditDriver.lookScreens() {
         waitFor("Continue playing")
         tap(PadButton.DPAD_LEFT)
         shoot("on Home")
-        tap(PadButton.R1)
+        libraryTab()
+        waitFor("Recently played")
         shoot("on Library")
     }
 
@@ -573,7 +583,8 @@ internal fun AuditDriver.lookScreens() {
         waitFor("Continue playing")
         tap(PadButton.DPAD_LEFT)
         shoot("on Home")
-        tap(PadButton.R1)
+        libraryTab()
+        waitFor("Recently played")
         shoot("on Library")
         openSettings()
         tap(PadButton.DPAD_RIGHT)
@@ -585,7 +596,8 @@ internal fun AuditDriver.lookScreens() {
         waitFor("Continue playing")
         tap(PadButton.DPAD_LEFT)
         shoot("on Home")
-        tap(PadButton.R1)
+        libraryTab()
+        waitFor("Recently played")
         shoot("on Library")
     }
 
@@ -605,9 +617,10 @@ internal fun AuditDriver.lookScreens() {
         waitFor("Continue playing")
         tap(PadButton.DPAD_LEFT)
         shoot("Home, Nintendo glyphs")
-        tap(PadButton.Y)
+        // Nintendo pads report their buttons by label, and X (on top) is the options button there.
+        tap(PadButton.X)
         waitFor("Game Info")
-        shoot("options menu opened with Y on the Nintendo layout")
+        shoot("options menu opened with X on the Nintendo layout")
     }
 
     scenario("hints", "playstation glyphs") {

@@ -73,6 +73,8 @@ import io.github.matiyaaa.fuse.ui.designsystem.theme.Durations
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Easings
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.FuseColors
+import io.github.matiyaaa.fuse.ui.designsystem.theme.FuseMotion
+import io.github.matiyaaa.fuse.ui.designsystem.theme.flourishOn
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
 import kotlinx.coroutines.launch
@@ -200,7 +202,7 @@ fun MenuRow(
             }
             .clip(shape)
             .background(bg)
-            .then(if (outline != null) Modifier.border(2.dp, outline, shape) else Modifier)
+            .then(if (outline != null) Modifier.border(Size.focusStroke, outline, shape) else Modifier)
             .drawBehind { if (!selected && press.hovered > 0f) drawRect(hover, alpha = press.hovered) }
             .clickable(interaction, null, enabled = available, onClick = onClick)
             // Screen readers (and the UI audit) can tell which row the controller is on.
@@ -381,11 +383,11 @@ private fun CheckMark(on: Boolean) {
 @Composable
 private fun LevelMeter(fraction: Float, selected: Boolean) {
     val c = Fuse.colors
-    val v by animateFloatAsState(fraction.coerceIn(0f, 1f), Fuse.motion.tween(Durations.SLOW), label = "level")
+    val v by animateFloatAsState(fraction.coerceIn(0f, 1f), Fuse.motion.value(), label = "level")
     val track = c.text.copy(alpha = 0.12f)
     val fill = if (selected) c.accent else c.text.copy(alpha = 0.55f)
     Spacer(
-        Modifier.width(LEVEL_METER).height(4.dp).drawBehind {
+        Modifier.width(LEVEL_METER).height(Size.track).drawBehind {
             val r = CornerRadius(size.height / 2)
             drawRoundRect(track, cornerRadius = r)
             if (v > 0f) drawRoundRect(fill, size = size.copy(width = (size.width * v).coerceAtLeast(size.height)), cornerRadius = r)
@@ -438,7 +440,7 @@ fun MenuHeader(
         }
         if (divider) {
             Spacer(Modifier.height(Space.m))
-            Box(Modifier.fillMaxWidth().padding(horizontal = Space.xs).height(1.dp).background(c.hairline))
+            Box(Modifier.fillMaxWidth().padding(horizontal = Space.xs).height(Size.divider).background(c.hairline))
             Spacer(Modifier.height(Space.s))
         }
     }
@@ -450,7 +452,7 @@ private fun MenuSectionHeader(label: String, first: Boolean) {
     val c = Fuse.colors
     Column(Modifier.fillMaxWidth().padding(top = if (first) 0.dp else Space.xs, bottom = Space.xxs)) {
         if (!first) {
-            Box(Modifier.fillMaxWidth().padding(horizontal = Space.xs).height(1.dp).background(c.hairline))
+            Box(Modifier.fillMaxWidth().padding(horizontal = Space.xs).height(Size.divider).background(c.hairline))
         }
         if (label.isNotBlank()) {
             SectionLabel(label, Modifier.padding(start = ROW_CONTENT_START, top = if (first) Space.xs else Space.m, bottom = Space.xs))
@@ -533,31 +535,38 @@ fun MenuList(
     val outline = if (Fuse.look.highContrastFocus) c.focus else null
     // Rows rise into place and fade in once, a little after one another, when the list first
     // appears (never again on changes or moves). Off under Reduced motion and in Low Power Mode.
-    val revealOn = !motion.reduced && Fuse.quality.animatedBackground
+    // The rise and stagger are the motion profile's, the same as every other reveal.
+    val revealOn = motion.flourishOn(Fuse.quality)
+    val riseMs = motion.ms(REVEAL_RISE_MS)
+    val staggerMs = motion.staggerMs
+    val revealMs = riseMs + staggerMs * (REVEAL_ROWS - 1)
     val reveal = remember { Animatable(if (revealOn) 0f else 1f) }
     LaunchedEffect(Unit) {
-        if (reveal.value < 1f) reveal.animateTo(1f, tween(REVEAL_RISE_MS + REVEAL_STAGGER_MS * (REVEAL_ROWS - 1), easing = LinearEasing))
+        if (reveal.value < 1f) reveal.animateTo(1f, tween(revealMs, easing = LinearEasing))
     }
     val revealAt: (Int) -> Float = { i ->
         if (reveal.value >= 1f) {
             1f
         } else {
-            val elapsed = reveal.value * (REVEAL_RISE_MS + REVEAL_STAGGER_MS * (REVEAL_ROWS - 1))
-            val t = ((elapsed - REVEAL_STAGGER_MS * i.coerceAtMost(REVEAL_ROWS - 1)) / REVEAL_RISE_MS).coerceIn(0f, 1f)
+            val elapsed = reveal.value * revealMs
+            val t = ((elapsed - staggerMs * i.coerceAtMost(REVEAL_ROWS - 1)) / riseMs).coerceIn(0f, 1f)
             Easings.Enter.transform(t)
         }
     }
-    val rise = 10.dp
+    val rise = motion.revealRise
     val selectedIsDestructive = actions.getOrNull(selection.index)?.destructive == true
     val danger01 by animateFloatAsState(if (selectedIsDestructive) 1f else 0f, motion.tween(Durations.FAST), label = "hlDanger")
 
     LazyColumn(
-        modifier = (if (fill) modifier.fillMaxHeight() else modifier).drawBehind {
-            if (shown <= 0.01f || actions.isEmpty()) return@drawBehind
+        modifier = (if (fill) modifier.fillMaxHeight() else modifier).drawWithCache {
+            val outlineWidth = Size.focusStroke.toPx()
+            val outlineStroke = Stroke(outlineWidth)
+            onDrawBehind {
+            if (shown <= 0.01f || actions.isEmpty()) return@onDrawBehind
             val info = state.layoutInfo
-            val t = layout.edge(top.value, info, gapPx = Space.xxs.toPx(), bottom = false) ?: return@drawBehind
-            val b = layout.edge(bottom.value, info, gapPx = Space.xxs.toPx(), bottom = true) ?: return@drawBehind
-            if (b <= t) return@drawBehind
+            val t = layout.edge(top.value, info, gapPx = Space.xxs.toPx(), bottom = false) ?: return@onDrawBehind
+            val b = layout.edge(bottom.value, info, gapPx = Space.xxs.toPx(), bottom = true) ?: return@onDrawBehind
+            if (b <= t) return@onDrawBehind
             val h = b - t
             val r = corner.toPx().coerceAtMost(h / 2)
             val fillColor = lerp(lerp(fillSelected, fillDanger, danger01), fillQuiet, quiet)
@@ -566,14 +575,14 @@ fun MenuList(
                 drawRoundRect(fillColor, Offset(0f, t), size.copy(height = h), CornerRadius(r), alpha = shown * arrived)
                 // High contrast focus outlines the selected row as well (not the quiet marker).
                 if (outline != null) {
-                    val sw = 2.dp.toPx()
+                    val sw = outlineWidth
                     drawRoundRect(
                         outline,
                         Offset(sw / 2, t + sw / 2),
                         androidx.compose.ui.geometry.Size(size.width - sw, h - sw),
                         CornerRadius((r - sw / 2).coerceAtLeast(0f)),
                         alpha = shown * arrived * (1f - quiet),
-                        style = Stroke(sw),
+                        style = outlineStroke,
                     )
                 }
                 val barAlpha = shown * arrived * (1f - quiet)
@@ -590,6 +599,7 @@ fun MenuList(
                         alpha = barAlpha,
                     )
                 }
+            }
             }
         },
         state = state,
@@ -720,9 +730,8 @@ private fun FuseColors.rowHighlight(destructive: Boolean): Color =
 /** The quieter fill of a row marked as current while focus is elsewhere. */
 private fun FuseColors.rowMarked(): Color = text.copy(alpha = if (isDark) 0.05f else 0.04f)
 
-private const val REVEAL_RISE_MS = 220
-private const val REVEAL_STAGGER_MS = 25
-private const val REVEAL_ROWS = 8
+private const val REVEAL_RISE_MS = Durations.BASE
+private const val REVEAL_ROWS = FuseMotion.STAGGER_MAX
 
 private val MENU_ART_WIDTH = 104.dp
 private val MENU_ART_HEIGHT = 44.dp

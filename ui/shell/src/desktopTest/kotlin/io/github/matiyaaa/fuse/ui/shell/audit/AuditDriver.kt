@@ -292,6 +292,55 @@ internal class AuditDriver(
         throw NotCovered("\"$text\" was never selected")
     }
 
+    /**
+     * Moves with [step] until a selected item shows any of [texts] (each matched as part of its
+     * text): for rows whose wording depends on the device ("Not installed", "Not found").
+     */
+    fun focusAny(vararg texts: String, step: () -> Unit = { tap(PadButton.DPAD_DOWN) }) {
+        waitFor(texts.first().take(1))
+        repeat(40) {
+            settle(STEP_MS)
+            val on = texts.any { t ->
+                ui.onAllNodes(androidx.compose.ui.test.hasText(t, substring = true) and androidx.compose.ui.test.isSelected()).fetchSemanticsNodes().isNotEmpty()
+            }
+            if (on) return
+            step()
+        }
+        throw NotCovered("None of ${texts.joinToString { "\"$it\"" }} was ever selected")
+    }
+
+    /**
+     * Moves with [step] until the hint line offers [label]: how a screen says what is chosen when its
+     * items carry no selection a test can read (a row of a page, a download). After each step it
+     * gives the hints time to follow the selection (they change a few frames later, and frames are
+     * slow on a busy machine), so it never steps past the item it is looking for.
+     */
+    fun focusHint(label: String, step: () -> Unit = { tap(PadButton.DPAD_DOWN) }) {
+        repeat(40) { i ->
+            if (i > 0) step()
+            if (pumpFor(HINT_WAIT_MS) { hasExactText(label) }) return
+        }
+        throw NotCovered("The hint \"$label\" never showed")
+    }
+
+    /** Lets frames run for up to [ms] until [condition] holds; false when it never did. */
+    private fun pumpFor(ms: Long, condition: () -> Boolean): Boolean {
+        val end = System.currentTimeMillis() + ms
+        var last = System.nanoTime()
+        while (System.currentTimeMillis() < end) {
+            val now = System.nanoTime()
+            ui.mainClock.advanceTimeBy(((now - last) / 1_000_000).coerceIn(FRAME_MS, MAX_STEP_MS))
+            last = now
+            if (condition()) return true
+            Thread.sleep(10)
+        }
+        return false
+    }
+
+    /** True when some text on screen reads exactly [text] (a hint, a button label), not just contains it. */
+    fun hasExactText(text: String): Boolean =
+        ui.onAllNodesWithText(text, substring = false, ignoreCase = false, useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()
+
     fun waitFor(text: String, timeoutMs: Long = 15_000, ignoreCase: Boolean = true) =
         pumpUntil("\"$text\"", timeoutMs) { hasText(text, ignoreCase) }
 
@@ -462,6 +511,7 @@ internal class AuditDriver(
     companion object {
         const val SETTLE_MS = 1_400L
         const val STEP_MS = 90L
+        private const val HINT_WAIT_MS = 1_200L
         private const val FRAME_MS = 16L
         private const val MAX_STEP_MS = 250L
     }

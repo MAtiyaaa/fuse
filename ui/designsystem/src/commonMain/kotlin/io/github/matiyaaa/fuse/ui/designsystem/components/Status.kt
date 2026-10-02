@@ -27,6 +27,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.unit.dp
 import io.github.matiyaaa.fuse.model.ConnectionState
 import io.github.matiyaaa.fuse.model.SystemStatus
@@ -176,6 +177,12 @@ fun BatteryCapsule(percent: Int, charging: Boolean, modifier: Modifier = Modifie
             val checkStroke = Stroke(h * 0.16f, cap = StrokeCap.Round, join = StrokeJoin.Round)
             val fillBrush = Brush.verticalGradient(listOf(fill, fill.copy(alpha = fill.alpha * 0.78f)), startY = inset, endY = inset + inner.height)
             val band = inner.width * 0.35f
+            // The charging light, built once at x = 0 and moved by translation while it runs.
+            val sweepBrush = Brush.horizontalGradient(
+                listOf(Color.White.copy(alpha = 0f), Color.White.copy(alpha = 0.32f), Color.White.copy(alpha = 0f)),
+                startX = 0f,
+                endX = band,
+            )
             onDrawBehind {
                 drawRoundRect(outline, Offset(stroke / 2, stroke / 2), body, CornerRadius(radius), style = outlineStroke)
                 drawRoundRect(outline, Offset(size.width - nubW, size.height * 0.32f), Size(nubW, size.height * 0.36f), CornerRadius(nubW * 0.6f))
@@ -185,11 +192,7 @@ fun BatteryCapsule(percent: Int, charging: Boolean, modifier: Modifier = Modifie
                     if (sweep != null) {
                         val x = inset - band + (w + band) * sweep.value
                         clipRect(inset, inset, inset + w, inset + inner.height) {
-                            drawRect(
-                                Brush.horizontalGradient(listOf(Color.White.copy(alpha = 0f), Color.White.copy(alpha = 0.32f), Color.White.copy(alpha = 0f)), startX = x, endX = x + band),
-                                Offset(x, inset),
-                                Size(band, inner.height),
-                            )
+                            translate(left = x) { drawRect(sweepBrush, Offset(0f, inset), Size(band, inner.height)) }
                         }
                     }
                 }

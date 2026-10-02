@@ -27,6 +27,8 @@ import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import io.github.matiyaaa.fuse.model.FocusStyle
 import io.github.matiyaaa.fuse.ui.designsystem.effects.rememberPressProgress
 import io.github.matiyaaa.fuse.ui.designsystem.shape.SquircleShape
@@ -283,7 +285,9 @@ fun Tile(
                 }
             }
             .clip(shape)
-            .then(clickable),
+            .then(clickable)
+            // Screen readers (and UI tests) can tell which tile the controller is on.
+            .semantics { this.selected = selected },
         content = content,
     )
 }

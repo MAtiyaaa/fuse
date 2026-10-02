@@ -82,7 +82,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size as GeometrySize
@@ -499,6 +498,8 @@ private fun BoxScope.KeyHighlight(state: KeyboardState, width: Int, keyHeight: D
     val shape = RoundedCornerShape(radius)
     val scaleTo = motion.keyLift()
     val reduced = motion.reduced
+    // High contrast focus rings the focused key too, as it rings every focused tile and button.
+    val ring = if (Fuse.look.highContrastFocus) c.focus else null
     Box(
         Modifier
             .matchParentSize()
@@ -537,10 +538,17 @@ private fun BoxScope.KeyHighlight(state: KeyboardState, width: Int, keyHeight: D
                 // The bar sits a quarter of the way into the gap below; tight rows get a slimmer one.
                 val barGap = rowGap.toPx() / 4
                 val barH = Size.sparkHeight.toPx() * (if (rowGap < Space.m) 0.8f else 1f)
+                val ringWidth = Size.focusStroke.toPx()
+                val ringOut = Size.focusGap.toPx() + ringWidth / 2
+                val ringPath = Path().apply {
+                    addRoundRect(RoundRect(-ringOut, -ringOut, w + ringOut, h + ringOut, CornerRadius((corner.x + ringOut).coerceAtMost(h / 2 + ringOut))))
+                }
+                val ringStroke = Stroke(ringWidth)
                 onDrawBehind {
                     drawPath(body, lip)
                     drawPath(top, face)
                     clipPath(top) { drawPath(top, edge, style = edgeStroke) }
+                    if (ring != null && lift > 0.01f) drawPath(ringPath, ring, alpha = lift.coerceIn(0f, 1f), style = ringStroke)
                     // The spark's accent bar, grown from the middle as the key lifts.
                     val barW = Size.sparkWidth.toPx() * 0.8f * lift
                     if (barW > 0.5f) {
@@ -780,8 +788,9 @@ private fun KeyCap(
                     .shadow(12.dp, RoundedCornerShape(radius))
                     .clip(RoundedCornerShape(radius))
                     .background(c.surfaceRaised)
-                    .drawBehind {
-                        drawRect(Brush.verticalGradient(0f to Color.White.copy(alpha = if (dark) 0.08f else 0f), 0.5f to Color.Transparent))
+                    .drawWithCache {
+                        val sheen = Brush.verticalGradient(0f to Color.White.copy(alpha = if (dark) 0.08f else 0f), 0.5f to Color.Transparent)
+                        onDrawBehind { drawRect(sheen) }
                     },
                 contentAlignment = Alignment.Center,
             ) {
@@ -902,21 +911,16 @@ fun KeyboardField(
                     maxLines = 1,
                     softWrap = false,
                     onTextLayout = { layout = it },
+                    // The shared editing marks: rounded selection blocks, and a caret the height of
+                    // the glyphs that glides to each new place and blinks without recomposing.
                     modifier = Modifier
-                        .drawBehind {
-                            val l = layout ?: return@drawBehind
-                            val sel = value.selection
-                            if (!sel.collapsed && sel.max <= shown.length) drawPath(l.getPathForRange(sel.min, sel.max), c.accent.copy(alpha = 0.35f))
-                        }
-                        .drawWithContent {
-                            drawContent()
-                            val l = layout ?: return@drawWithContent
-                            if (focused && value.selection.collapsed) {
-                                val r = l.getCursorRect(value.selection.start.coerceIn(0, shown.length))
-                                val w = 2.dp.toPx()
-                                drawRoundRect(c.accent, Offset(r.left - w / 2, r.top), GeometrySize(w, r.height), CornerRadius(w / 2), alpha = blink.value)
-                            }
-                        },
+                        .editingSelection({ layout }, value.selection)
+                        .editingCaret(
+                            { layout },
+                            offset = value.selection.start,
+                            visible = focused && value.selection.collapsed,
+                            alpha = { blink.value },
+                        ),
                 )
             }
         }
@@ -939,7 +943,7 @@ fun KeyboardField(
                     Spacer(Modifier.width(Space.s))
                     Box(
                         Modifier
-                            .size(26.dp)
+                            .size(Size.chipCompact)
                             .graphicsLayer { if (!motion.reduced) { val k = if (pressed) 0.92f else 1f; scaleX = k; scaleY = k } }
                             .clip(CircleShape)
                             .background(fill)
@@ -947,7 +951,7 @@ fun KeyboardField(
                             .clickable(interaction, null, onClick = onClear),
                         contentAlignment = Alignment.Center,
                     ) {
-                        FuseIcon(FuseIcons.Close, size = 14.dp, tint = c.text)
+                        FuseIcon(FuseIcons.Close, size = Size.iconXS, tint = c.text)
                     }
                 }
             }
