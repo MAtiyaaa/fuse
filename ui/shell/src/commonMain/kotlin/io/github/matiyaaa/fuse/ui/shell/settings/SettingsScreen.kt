@@ -572,7 +572,7 @@ private val SHORT_BELOW = 560.dp
 
 /** The section list takes this share of the width, within these bounds. */
 private const val SIDEBAR_SHARE = 0.27f
-private val SIDEBAR_MIN = 232.dp
+private val SIDEBAR_MIN = 256.dp
 private val SIDEBAR_MAX = 320.dp
 
 /** Picture shape of the theme card: the screen's own proportion. */

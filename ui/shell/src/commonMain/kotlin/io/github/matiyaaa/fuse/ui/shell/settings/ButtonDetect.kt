@@ -129,7 +129,8 @@ fun ButtonDetectOverlay(app: AppState) {
 
     val motion = Fuse.motion
     Overlay(visible = open, onDismiss = ::close, edge = OverlayEdge.CENTER) {
-        Panel(Modifier.widthIn(min = PANEL_MIN, max = PANEL_MAX)) {
+        // As wide as it may be, but never wider than the screen less its margins.
+        Panel(Modifier.padding(horizontal = Space.gutterCompact).widthIn(max = PANEL_MAX)) {
             Column(Modifier.padding(Space.xl), horizontalAlignment = Alignment.CenterHorizontally) {
                 AnimatedContent(stage, transitionSpec = { fadeIn(motion.fade(180)) togetherWith fadeOut(motion.fade(120)) }, label = "detect") { s ->
                     Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -137,7 +138,7 @@ fun ButtonDetectOverlay(app: AppState) {
                             when (s) {
                                 DetectStage.RIGHT_BUTTON -> "Step 1 of 2"
                                 DetectStage.CONFIRM -> "Step 2 of 2"
-                                DetectStage.DONE -> "Done"
+                                DetectStage.DONE -> "Detected"
                             },
                             color = if (s == DetectStage.DONE) Fuse.colors.success else Fuse.colors.textMuted,
                         )
@@ -279,7 +280,6 @@ private fun DetectedFaces(p: InputProfile) {
     }
 }
 
-/** One face button's size in the pictures, and the overlay's width. */
+/** One face button's size in the pictures, and the overlay's widest. */
 private val FACE = Size.iconXL
-private val PANEL_MIN = 460.dp
 private val PANEL_MAX = 560.dp

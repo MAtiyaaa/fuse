@@ -272,7 +272,7 @@ fun ControlsScreen(app: AppState) {
         }
 
         Overlay(visible = testing, onDismiss = { testing = false }, edge = OverlayEdge.CENTER) {
-            Panel(Modifier.widthIn(min = TEST_MIN, max = TEST_MAX)) {
+            Panel(Modifier.padding(horizontal = Space.gutterCompact).widthIn(max = TEST_MAX)) {
                 Column(Modifier.padding(vertical = Space.l, horizontal = Space.xl), horizontalAlignment = Alignment.CenterHorizontally) {
                     MenuHeader(
                         "Button test", icon = FuseIcons.Joystick, divider = false,
@@ -292,7 +292,7 @@ fun ControlsScreen(app: AppState) {
         }
         Overlay(visible = capturing != null, onDismiss = { capturing = null }, edge = OverlayEdge.CENTER) {
             val target = capturing
-            Panel(Modifier.widthIn(min = CAPTURE_MIN, max = CAPTURE_MAX)) {
+            Panel(Modifier.padding(horizontal = Space.gutterCompact).widthIn(max = CAPTURE_MAX)) {
                 Column(Modifier.padding(Space.xl), horizontalAlignment = Alignment.CenterHorizontally) {
                     FText("Press a button for", Fuse.type.label, color = Fuse.colors.textMuted, maxLines = 1)
                     Spacer(Modifier.height(Space.xxs))
@@ -464,7 +464,6 @@ private const val STICK_Y = BODY_TOP + 3.2f
 private val PAD_UNIT_MIN = 22.dp
 private val PAD_UNIT_MAX = 40.dp
 
-private val TEST_MIN = 420.dp
+/** The test and capture dialogs' widest; on narrow screens they keep a margin instead. */
 private val TEST_MAX = 560.dp
-private val CAPTURE_MIN = 340.dp
 private val CAPTURE_MAX = 420.dp
