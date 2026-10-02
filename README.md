@@ -286,12 +286,13 @@ Play.
   deadzones, **Detect my buttons** (Xbox, Nintendo or PlayStation layout from two presses), and hint
   glyphs for Xbox, Nintendo, PlayStation or keyboard.
 - A **button mapping** screen with capture and a live button test that no button can leave by accident.
-- **Home** as a flowing dashboard (Flow) or a board of tiles you arrange (Channels), with 19 kinds of
-  widgets.
+- **Home** as a flowing dashboard of rows (Flow) or a board of widgets you move and resize like a
+  phone's home screen (Channels): 19 kinds of widgets, each designed for every size from one cell to
+  four by three.
 - **Library** layouts from square box art to capsules to covers to a compact list; **Systems**, **Apps**
   (on Android), **Search**, game pages, a media manager, a folder browser, the **quick menu** and a
   guided setup.
-- **Ten themes** and community themes from a link or a file ([docs/THEMES.md](docs/THEMES.md)), square
+- **Nineteen themes** and community themes from a link or a file ([docs/THEMES.md](docs/THEMES.md)), square
   box art or tall posters, four motion levels including Reduced, High contrast focus, optional glass
   panels and CRT effect, and interface sounds synthesised on the fly.
 - A **performance overlay** that only shows metrics the device can really measure.

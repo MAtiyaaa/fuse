@@ -19,7 +19,7 @@ import io.github.matiyaaa.fuse.ui.shell.store.FuseStore
 import java.io.File
 import kotlinx.coroutines.runBlocking
 
-/** Every kind of Home shelf in one Flow layout, with the small widgets side by side in "At a glance". */
+/** Every kind of Home row in one Flow layout (the widgets that aren't rows are skipped, as on a device). */
 internal val EveryShelf: List<HomeWidget> = listOf(
     WidgetKind.CONTINUE_PLAYING,
     WidgetKind.PINNED_GAMES,
@@ -41,7 +41,6 @@ internal fun FuseStore.shelvesNow(): List<Shelf> = buildShelves(
     prefs.value.home.widgets,
     library.home.value,
     achievements.configured.value,
-    cartridge.status.value.installed,
 )
 
 private fun ShelfStyle.words(): String = when (this) {
@@ -96,7 +95,7 @@ internal fun AuditDriver.homeFlow(exhaustive: Boolean) {
                 shelf.items.forEachIndexed { j, item ->
                     if (j > 0 && nav(NavAction.RIGHT) != NavResult.MOVED) throw NotCovered("Could not move to widget ${j + 1}")
                     val kind = (item as ShelfItem.Widget).kind
-                    shoot("At a glance, ${kind.title()} widget focused")
+                    shoot("${shelf.title}, ${kind.title()} widget focused")
                 }
             } else if (shelf.style !in seen || shelf.title == "Pinned" || shelf.title == "Recently played") {
                 shoot("${shelf.title} (${shelf.style.words()})")
@@ -165,51 +164,96 @@ internal fun AuditDriver.homeFlow(exhaustive: Boolean) {
     }
 }
 
-/** Home in Channels mode: the board, moving around it, and carrying a channel. */
+/** Home in Channels mode: the widget board, arranging it with the controller and by touch, and every widget at every size. */
 internal fun AuditDriver.homeChannels(exhaustive: Boolean) {
-    scenario("home", "channels") {
-        useLibrary { it.copy(home = HomeLayoutConfig(mode = HomeMode.CHANNELS, widgets = AuditSamples.channelBoard)) }
+    scenario("home", "board") {
+        useLibrary { it.copy(home = HomeLayoutConfig(mode = HomeMode.CHANNELS)) }
         waitFor("Continue playing")
         tap(PadButton.DPAD_LEFT)
-        shoot("board, default focus", 2_000)
+        shoot("the board as it comes", 2_000)
         if (!exhaustive) return@scenario
-        tap(PadButton.DPAD_DOWN)
-        shoot("board, second row focused")
         tap(PadButton.DPAD_RIGHT)
-        shoot("board, next channel focused")
+        shoot("clock focused")
+        tap(PadButton.DPAD_DOWN, 2)
+        shoot("further down, the board scrolls")
+        tap(PadButton.DPAD_UP, 2)
+        tap(PadButton.DPAD_LEFT)
+        // Arranging with the controller: hold A to pick up, the D-pad to move.
         hold(PadButton.A)
         waitFor("Put down")
-        shoot("holding A picks the channel up")
+        shoot("holding A arranges the board and picks the widget up")
         tap(PadButton.DPAD_RIGHT)
-        shoot("carried channel moved right")
+        shoot("carried widget moved one place on")
         tap(PadButton.A)
-        shoot("put down")
+        shoot("put down, still arranging")
+        // Options, Resize: the D-pad grows and shrinks it.
+        tap(PadButton.X)
+        waitFor("Resize")
+        tapText("Resize")
+        tap(PadButton.DPAD_RIGHT)
+        tap(PadButton.DPAD_DOWN)
+        shoot("resizing with the D-pad, the others make room")
+        tap(PadButton.A)
+        shoot("new size kept")
+        tap(PadButton.B)
+        shoot("done arranging")
     }
-    scenario("home", "channels drag by touch") {
-        useLibrary { it.copy(home = HomeLayoutConfig(mode = HomeMode.CHANNELS, widgets = AuditSamples.channelBoard)) }
+    scenario("home", "board by touch") {
+        useLibrary { it.copy(home = HomeLayoutConfig(mode = HomeMode.CHANNELS)) }
         waitFor("Continue playing")
-        // Hold the channel's tile, just above its name.
-        val from = textCentre("Continue playing") + androidx.compose.ui.geometry.Offset(0f, -80f)
-        // Past the middle of the next channel along, so it takes that place.
-        val to = from + androidx.compose.ui.geometry.Offset(1_100f, 0f)
+        // Hold a widget: the board starts arranging and the widget lifts under the finger.
+        val from = textCentre("STORAGE") + androidx.compose.ui.geometry.Offset(0f, 60f)
         touch { down(from) }
-        advanceExactly(600)
-        shoot("held, the channel floats over its shadow")
+        advanceExactly(700)
+        shoot("held, the board arranges and the widget lifts")
+        val to = from + androidx.compose.ui.geometry.Offset(-700f, 330f)
         touch { moveTo(from + (to - from) * 0.5f) }
         settle(150)
         touch { moveTo(to) }
         settle(500)
-        shoot("dragged right, the others slide over")
+        shoot("dragged, the others spring to their new places")
         touch { up() }
         settle(1_200)
-        shoot("dropped")
+        shoot("dropped, the board still arranging")
+        // Drag a corner to resize: the size follows the finger cell by cell.
+        val grip = describedBounds("Resize Storage").first().center
+        touch { down(grip) }
+        settle(100)
+        touch { moveTo(grip + androidx.compose.ui.geometry.Offset(150f, 120f)) }
+        settle(150)
+        touch { moveTo(grip + androidx.compose.ui.geometry.Offset(330f, 290f)) }
+        settle(600)
+        shoot("a corner dragged, the widget grows a cell each way")
+        touch { up() }
+        settle(1_000)
+        shoot("let go, the new size kept")
     }
-    if (!exhaustive) return
-    scenario("home", "channels default widgets") {
-        useLibrary { it.copy(home = HomeLayoutConfig(mode = HomeMode.CHANNELS)) }
-        waitFor("Continue playing")
-        tap(PadButton.DPAD_LEFT)
-        shoot("board with the default widget list")
+}
+
+/**
+ * Every widget at every size its face is designed for: one cell, a strip, a column, a square of
+ * four, and the large shapes (three by two, four by one, four by three, two by three).
+ */
+internal fun AuditDriver.widgetGallery() {
+    val pages = listOf(
+        "small, wide, tall and square" to listOf(1 to 1, 2 to 1, 1 to 2, 2 to 2),
+        "full strip, three by two and a column" to listOf(4 to 1, 3 to 2, 1 to 2),
+        "two by three and four by two" to listOf(2 to 3, 2 to 2, 2 to 1),
+        "four by three" to listOf(4 to 3),
+    )
+    for (kind in WidgetKind.entries) {
+        scenario("widgets", kind.title()) {
+            useLibrary { it.copy(home = HomeLayoutConfig(mode = HomeMode.CHANNELS, board = emptyList())) }
+            controls.cartridge = AuditSamples.cartridgeBusy
+            libraryStore.cartridge.refresh()
+            for ((name, sizes) in pages) {
+                val board = sizes.mapIndexed { i, (w, h) -> HomeWidget("${kind.name.lowercase()}$i", kind, i, width = w, height = h) }
+                libraryStore.updatePrefs { it.copy(home = HomeLayoutConfig(mode = HomeMode.CHANNELS, board = board)) }
+                settle(1_500)
+                tap(PadButton.DPAD_LEFT)
+                shoot(name, 1_500)
+            }
+        }
     }
 }
 

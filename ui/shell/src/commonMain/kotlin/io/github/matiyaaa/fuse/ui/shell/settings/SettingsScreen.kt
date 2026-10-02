@@ -102,7 +102,7 @@ private const val GENERAL = "General"
 
 val settingsSections: List<SettingsSection> = listOf(
     SettingsSection("appearance", "Appearance", FuseIcons.Palette, "Theme, motion, glass, CRT", ::appearanceRows, group = LOOK),
-    SettingsSection("home", "Home", FuseIcons.Home, "Style, shelves, sections, Home screen", ::homeRows, group = LOOK),
+    SettingsSection("home", "Home", FuseIcons.Home, "Style, rows or widgets, top bar", ::homeRows, group = LOOK),
     SettingsSection("library", "Library", FuseIcons.Library, "Folders, scanning, names", ::libraryRows, group = GAMES),
     SettingsSection("systems", "Systems", FuseIcons.Chip, "Per-system emulator, folders, BIOS", ::systemsRows, group = GAMES),
     SettingsSection("emulators", "Emulators", FuseIcons.Joystick, "What Fuse found installed", ::emulatorRows, group = GAMES),

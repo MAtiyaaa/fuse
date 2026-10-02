@@ -95,6 +95,9 @@ class UiAudit {
 
     @Test fun m12Companion() = audit(AuditSize.M) { companionScreens() }
 
+    /** Every widget at every size, at the Deck's size: the same layout in dp for far fewer pixels. */
+    @Test fun widgetGallery() = audit(AuditSize.D) { widgetGallery() }
+
     @Test fun companionSecondScreen() = audit(AuditSize.C) { companionScreens() }
 
     @Test fun keyScreensH() = audit(AuditSize.H) { keyScreens() }

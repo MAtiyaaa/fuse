@@ -311,15 +311,15 @@ internal object SampleLibrary {
      * and the clock.
      */
     val channelBoard: List<HomeWidget> = listOf(
-        WidgetKind.CONTINUE_PLAYING,
-        WidgetKind.FAVORITES,
-        WidgetKind.SYSTEMS,
-        WidgetKind.PLAYTIME_WEEK,
-        WidgetKind.PLAYTIME_TOTAL,
-        WidgetKind.RECENTLY_ADDED,
-        WidgetKind.COLLECTIONS,
-        WidgetKind.CLOCK,
-    ).mapIndexed { i, k -> HomeWidget(id = k.name.lowercase(), kind = k, order = i) }
+        Triple(WidgetKind.CONTINUE_PLAYING, 2, 2),
+        Triple(WidgetKind.CLOCK, 1, 1),
+        Triple(WidgetKind.PLAYTIME_TOTAL, 1, 1),
+        Triple(WidgetKind.PLAYTIME_WEEK, 2, 1),
+        Triple(WidgetKind.SYSTEMS, 2, 1),
+        Triple(WidgetKind.RECENTLY_ADDED, 2, 1),
+        Triple(WidgetKind.FAVORITES, 2, 1),
+        Triple(WidgetKind.COLLECTIONS, 2, 1),
+    ).mapIndexed { i, (k, w, h) -> HomeWidget(id = k.name.lowercase(), kind = k, order = i, width = w, height = h) }
 
     val platformCount: Int get() = games.map { it.folder }.distinct().size
 

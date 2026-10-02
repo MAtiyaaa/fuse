@@ -22,7 +22,7 @@ class HomeArrangeTest {
 
     @Test
     fun aShelfOfSeveralWidgetsMovesAsOne() {
-        // "At a glance" holds two widgets; the shelf after it is one.
+        // A block of two widgets moves as one; the shelf after it is one widget.
         val widgets = listOf(w("clock", 0), w("week", 1), w("games", 2))
         val blocks = listOf(listOf("clock", "week"), listOf("games"))
         assertEquals(listOf("games", "clock", "week"), ids(HomeArrange.moveBlock(widgets, blocks, 0, 1)))

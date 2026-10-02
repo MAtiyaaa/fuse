@@ -2,6 +2,7 @@ package io.github.matiyaaa.fuse.ui.shell.home
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -122,10 +123,10 @@ fun WidgetContent(kind: WidgetKind, feed: HomeFeed, cartridge: CartridgeStatus, 
     val c = Fuse.colors
     val tint = widgetTint(kind, feed, cartridge)
     BoxWithConstraints(Modifier.fillMaxSize().widgetSurface(c.surfaceRaised, tint.copy(alpha = if (c.isDark) WASH_DARK else WASH_LIGHT))) {
-        val room = WidgetRoom(compact = maxHeight < COMPACT_BELOW, wide = maxWidth >= maxHeight * WIDE_RATIO, small = maxWidth < SMALL_BELOW)
+        val room = widgetRoom(maxWidth, maxHeight)
         CompositionLocalProvider(LocalWidgetRoom provides room) {
         Column(Modifier.fillMaxSize().padding(if (room.compact) Space.m else Space.l)) {
-            val note = emptyNote(kind, feed)
+            val note = widgetEmptyNote(kind, feed)
             if (note != null) {
                 // A channel can be placed before it has anything to show: it says what will fill it.
                 EmptyFace(widgetIcon(kind), widgetLabel(kind), note)
@@ -151,14 +152,14 @@ fun WidgetContent(kind: WidgetKind, feed: HomeFeed, cartridge: CartridgeStatus, 
 }
 
 /** The name in a face's header: the widget's title, or a shorter one where a one-tile card needs it. */
-private fun widgetLabel(kind: WidgetKind): String = when (kind) {
+internal fun widgetLabel(kind: WidgetKind): String = when (kind) {
     // "Total playtime" would be cut short on a one-tile card.
     WidgetKind.PLAYTIME_TOTAL -> "All time"
     else -> kind.title()
 }
 
 /** What fills a widget that has nothing to show yet, or null when it has. */
-private fun emptyNote(kind: WidgetKind, feed: HomeFeed): String? {
+internal fun widgetEmptyNote(kind: WidgetKind, feed: HomeFeed): String? {
     val a = feed.achievements
     val connect = "Connect RetroAchievements in Settings"
     return when (kind) {
@@ -187,10 +188,24 @@ private fun emptyNote(kind: WidgetKind, feed: HomeFeed): String? {
 
 /** A face with nothing to show yet: its header, and what will fill it where the value would be. */
 @Composable
-private fun ColumnScope.EmptyFace(icon: ImageVector, label: String, note: String) {
+internal fun ColumnScope.EmptyFace(icon: ImageVector, label: String, note: String) {
+    val c = Fuse.colors
     WidgetHeader(icon, label)
+    if (LocalWidgetRoom.current.roomy) {
+        // A large face says it in the middle, under its icon, rather than in a corner of an empty card.
+        Spacer(Modifier.weight(1f))
+        Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+            Box(Modifier.size(Size.touch).clip(androidx.compose.foundation.shape.CircleShape).background(c.text.copy(alpha = 0.07f)), contentAlignment = Alignment.Center) {
+                FuseIcon(icon, size = Size.iconL, tint = c.textMuted)
+            }
+            Spacer(Modifier.height(Space.m))
+            FText(note, Fuse.type.label, color = c.textMuted, align = TextAlign.Center, maxLines = 3)
+        }
+        Spacer(Modifier.weight(1.3f))
+        return
+    }
     Spacer(Modifier.weight(1f))
-    FText(note, Fuse.type.label, color = Fuse.colors.textMuted, maxLines = 2)
+    FText(note, Fuse.type.label, color = c.textMuted, maxLines = 2)
 }
 
 /** The time Home shows on its stage, shared with the clock card so they turn over together. */
@@ -200,16 +215,27 @@ internal val LocalHomeTime = compositionLocalOf<String?> { null }
  * How much room a face has: [compact] when short, [wide] when it can put a chart beside its value,
  * [small] when narrow too (one tile on a handheld), where only the essentials fit.
  */
-private class WidgetRoom(val compact: Boolean, val wide: Boolean, val small: Boolean = false) {
+internal class WidgetRoom(val compact: Boolean, val wide: Boolean, val small: Boolean = false, val roomy: Boolean = false) {
     /** A short, narrow card: header, value and at most a few words under it. */
     val tiny: Boolean get() = compact && small
 }
 
+/** How much room a face [width] by [height] has. */
+internal fun widgetRoom(width: Dp, height: Dp) = WidgetRoom(
+    compact = height < COMPACT_BELOW,
+    wide = width >= height * WIDE_RATIO,
+    small = width < SMALL_BELOW,
+    roomy = height >= ROOMY_FROM && width >= ROOMY_FROM,
+)
+
 /** The room of the face being drawn, so its value can size itself to it. */
-private val LocalWidgetRoom = staticCompositionLocalOf { WidgetRoom(compact = false, wide = false) }
+internal val LocalWidgetRoom = staticCompositionLocalOf { WidgetRoom(compact = false, wide = false) }
 
 /** Narrower than this a face is a single handheld tile. */
 private val SMALL_BELOW = 120.dp
+
+/** From this height and width a face is large enough to centre what it says. */
+private val ROOMY_FROM = 220.dp
 
 /** Below this height a face is short (a 6 inch handheld's shelf) and keeps to its essentials. */
 private val COMPACT_BELOW = 120.dp
@@ -218,8 +244,8 @@ private val COMPACT_BELOW = 120.dp
 private const val WIDE_RATIO = 1.8f
 
 /** Strength of a face's corner light in its own colour, in dark and light themes. */
-private const val WASH_DARK = 0.13f
-private const val WASH_LIGHT = 0.08f
+internal const val WASH_DARK = 0.13f
+internal const val WASH_LIGHT = 0.08f
 
 /** The icon that leads a widget's header (and its channel's label). */
 internal fun widgetIcon(kind: WidgetKind): ImageVector = when (kind) {
@@ -261,7 +287,7 @@ internal fun widgetTint(kind: WidgetKind, feed: HomeFeed, cartridge: CartridgeSt
     }
 }
 
-private fun storageLow(feed: HomeFeed): Boolean = feed.storage?.let { it.freeBytes.toFloat() / it.totalBytes.coerceAtLeast(1) < 0.1f } ?: false
+internal fun storageLow(feed: HomeFeed): Boolean = feed.storage?.let { it.freeBytes.toFloat() / it.totalBytes.coerceAtLeast(1) < 0.1f } ?: false
 
 /** The raised fill with a soft light in [wash] gathering in its top right corner. Built once per size. */
 internal fun Modifier.widgetSurface(base: Color, wash: Color): Modifier = drawWithCache {
@@ -284,7 +310,7 @@ internal fun Modifier.widgetSurface(base: Color, wash: Color): Modifier = drawWi
  * than a name cut short.
  */
 @Composable
-private fun WidgetHeader(icon: ImageVector, label: String, tint: Color = Fuse.colors.textMuted, trailing: String? = null, short: String? = null) {
+internal fun WidgetHeader(icon: ImageVector, label: String, tint: Color = Fuse.colors.textMuted, trailing: String? = null, short: String? = null) {
     val c = Fuse.colors
     val style = Fuse.type.overline
     val measurer = rememberTextMeasurer()
@@ -306,7 +332,7 @@ private fun WidgetHeader(icon: ImageVector, label: String, tint: Color = Fuse.co
 }
 
 @Composable
-private fun WidgetCaption(text: String, color: Color = Fuse.colors.textMuted, modifier: Modifier = Modifier) {
+internal fun WidgetCaption(text: String, color: Color = Fuse.colors.textMuted, modifier: Modifier = Modifier) {
     FText(text, Fuse.type.caption, color = color, maxLines = 1, modifier = modifier)
 }
 
@@ -316,7 +342,7 @@ private fun WidgetCaption(text: String, color: Color = Fuse.colors.textMuted, mo
  * a minute") is set smaller, on up to two lines.
  */
 @Composable
-private fun WidgetValue(text: String, modifier: Modifier = Modifier) {
+internal fun WidgetValue(text: String, modifier: Modifier = Modifier) {
     val t = Fuse.type
     val c = Fuse.colors
     if (!text.any { it.isDigit() }) {
@@ -473,7 +499,7 @@ private fun dayInitials(count: Int): List<String> {
 }
 
 /** Today as "Thursday" and "1 October", for the clock. */
-private fun todayParts(): Pair<String, String> {
+internal fun todayParts(): Pair<String, String> {
     val t = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault())
     val day = t.dayOfWeek.name.lowercase().replaceFirstChar { it.uppercase() }
     val month = t.month.name.lowercase().replaceFirstChar { it.uppercase() }
@@ -549,7 +575,7 @@ private fun ColumnScope.RecentAchievement(feed: HomeFeed, room: WidgetRoom) {
 }
 
 @Composable
-private fun BadgeFallback() {
+internal fun BadgeFallback() {
     val c = Fuse.colors
     Box(Modifier.fillMaxSize().widgetSurface(c.surface, c.warning.copy(alpha = 0.2f)), contentAlignment = Alignment.Center) {
         FuseIcon(FuseIcons.Trophy, size = Size.iconM, tint = c.warning)
@@ -608,7 +634,7 @@ private fun ColumnScope.RecentlyMastered(feed: HomeFeed, room: WidgetRoom) {
  * show different numbers: the item downloading now (its own progress when the queue reports one,
  * else the queue's), and how many wait behind it.
  */
-private class CartridgeNow(val title: String?, val progress: Float?, val waiting: Int) {
+internal class CartridgeNow(val title: String?, val progress: Float?, val waiting: Int) {
     val percent: String? get() = progress?.let { "${(it * 100).toInt()}%" }
 
     companion object {

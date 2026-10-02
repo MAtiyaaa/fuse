@@ -212,7 +212,27 @@ Panels share the tiles' lit top edge, so menus, dialogs and cards read as the sa
 - **Edges.** Near the list's ends the list scrolls by itself. The held item takes the nearest place,
   and the scroll is pinned by index, so the list never jumps.
 - **Handles.** With handles, only part of an item lifts it: a Home shelf by its title. Its own items
-  keep their holds.
+  keep their holds. With instant handles a touch on a grip lifts at once (lists made for ordering).
+- **Ordering sheets.** `ReorderList` (`components/ReorderList.kt`) is a list made for putting things in
+  order: every row has a grip, a locked row (Home in the section order) shows a lock and keeps its
+  place, and with the controller A picks a row up, the D-pad moves it and A puts it down. Settings
+  uses it for the section order, the scraper order and Flow's rows.
+
+### The widget board
+
+Channels is a board of widgets, like a phone's home screen. The grid is four cells across (two on a
+phone held upright); a cell is 60% as tall as it is wide (86% upright), between 96 and 240 dp. A
+widget is one to four cells across and one to three down, and `packBoard` (`focus/SpatialSelection.kt`)
+places each in turn at the first place it fits, reading from the top left, so a small widget fills a
+gap a large one left. Every face is designed for five shapes (`home/BoardFaces.kt`): one cell, a strip,
+a column, a square of four and anything larger, and the room the face really has decides how many
+covers, rows or chips fit. A new shape crossfades in.
+
+Arranging: widgets wobble by under a degree (less for wider ones), each on its own beat, with a remove
+badge at the top left corner and a resize arc at the bottom right. Moves and resizes reflow the board
+on a spring (damping 0.78, stiffness 420); the widget under a finger never lags behind it. Resizing by
+touch snaps in whole cells, with a haptic tick for each. Focused, a widget grows at most 6 dp a side,
+lifted 10 dp, whatever its size.
 
 ## Motion
 
@@ -254,7 +274,10 @@ that follow the selection use a no-bounce spring (stiffness 520), or a short twe
 ### The hero backdrop
 
 `HeroBackdrop` (`designsystem/media/HeroBackdrop.kt`) never flashes. While the selection is moving it
-waits for it to rest (110 ms) so fast scrolling never queues dozens of image decodes. The previous
+waits for it to rest (110 ms; the app's room waits 160 ms) so fast scrolling never queues dozens of
+image decodes or crossfades. Box art behind the interface is blurred once per picture, on a copy an
+eighth of the screen's size, and drawn scaled up; rooms crossfade by modulating their own alpha,
+never through a buffer the size of the screen. The previous
 art stays fully visible until the new art has decoded; then the new layer fades in over 380 ms while
 settling from 103.5% to 100% scale over 620 ms. Under Reduced motion it only fades, in 72 ms.
 Layers that never finished loading are dropped, at most three are kept, and everything under a fully
@@ -324,6 +347,7 @@ content's scroll. Art-less items get a lit radial gradient in their colour inste
 | `FuseButton`, `IconButton` | `components/Buttons.kt` | Pill buttons: primary, secondary, ghost and danger |
 | `Toggle`, `SliderBar`, `ProgressBar`, `ProgressRing`, `Spinner`, `Chip`, `StatusDot` | `components/Controls.kt` | |
 | `MenuRow`, `MenuList` | `components/Menu.kt` | Settings and option menus |
+| `ReorderList` | `components/ReorderList.kt` | Lists made for putting things in order |
 | `Panel` | `components/Panel.kt` | Surfaces, optional glass |
 | `Overlay` | `components/Overlay.kt` | Modal sheets over a scrim |
 | `ToastHost` | `components/Toast.kt` | Short notices |

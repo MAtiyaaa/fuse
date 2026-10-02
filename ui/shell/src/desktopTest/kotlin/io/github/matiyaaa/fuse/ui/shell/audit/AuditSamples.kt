@@ -111,21 +111,22 @@ internal object AuditSamples {
         "Pocket Picks" to listOf("Pixel Pilgrims", "Tinderbox Tales", "Stylus Stories", "Folded Maps"),
     )
 
-    /**
-     * A Channels board as a user would arrange it in Settings, Home: the default list without the
-     * RetroAchievements and Cartridge widgets (neither is set up here), plus playtime, collections
-     * and the clock.
-     */
-    val channelBoard: List<HomeWidget> = listOf(
-        WidgetKind.CONTINUE_PLAYING,
-        WidgetKind.FAVORITES,
-        WidgetKind.SYSTEMS,
-        WidgetKind.PLAYTIME_WEEK,
-        WidgetKind.PLAYTIME_TOTAL,
-        WidgetKind.RECENTLY_ADDED,
-        WidgetKind.COLLECTIONS,
-        WidgetKind.CLOCK,
-    ).mapIndexed { i, k -> HomeWidget(id = k.name.lowercase(), kind = k, order = i) }
+    /** Cartridge downloading a game with two more waiting, and one done earlier. */
+    val cartridgeBusy = io.github.matiyaaa.fuse.model.CartridgeStatus(
+        installed = true,
+        bridge = true,
+        connected = true,
+        activeDownloads = 1,
+        queuedDownloads = 2,
+        progress = 0.42f,
+        currentTitle = "Starfall Tactics",
+        queue = listOf(
+            io.github.matiyaaa.fuse.model.CartridgeQueueItem(1, "Starfall Tactics", "snes", io.github.matiyaaa.fuse.model.QueueState.DOWNLOADING, 42, 100),
+            io.github.matiyaaa.fuse.model.CartridgeQueueItem(2, "Moonlit Harbour", "gba", io.github.matiyaaa.fuse.model.QueueState.QUEUED, 0, null),
+            io.github.matiyaaa.fuse.model.CartridgeQueueItem(3, "Pixel Rally", "n64", io.github.matiyaaa.fuse.model.QueueState.QUEUED, 0, null),
+        ),
+        recent = listOf(io.github.matiyaaa.fuse.model.CartridgeDownload(4, "Velvet Orbit", "dc", null, 0)),
+    )
 
     val platformCount: Int get() = games.map { it.folder }.distinct().size
 

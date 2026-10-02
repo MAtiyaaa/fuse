@@ -487,7 +487,7 @@ internal fun AuditDriver.settingsScreens(exhaustive: Boolean) {
         tap(PadButton.START)
         waitFor("Arrange Home")
         tapText("Arrange Home")
-        waitFor("Style, shelves, sections")
+        waitFor("Style, rows or widgets")
         shoot("Arrange Home from the quick menu")
     }
 }
