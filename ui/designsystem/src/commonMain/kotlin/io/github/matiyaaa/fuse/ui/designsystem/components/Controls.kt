@@ -384,7 +384,8 @@ fun FillSlider(
     val grab by animateFloatAsState(if (dragging) 1f else 0f, motion.tween(Durations.FAST), label = "fillGrab")
     val current by rememberUpdatedState(value)
     val change by rememberUpdatedState(onChange)
-    val shape = RoundedCornerShape(Radius.l)
+    // Soft corners, but never rounder than the theme's panels (sharp themes keep their edges).
+    val shape = RoundedCornerShape(Fuse.geometry.panel.coerceAtMost(Radius.l))
     val accent = c.accent
     val handle = c.onAccent
     val content: @Composable (Color) -> Unit = { tint ->
@@ -579,6 +580,8 @@ fun Chip(
     val fill by animateColorAsState(if (selected) c.text else background, motion.tween(Durations.FAST), label = "chipFill")
     val tint by animateColorAsState(if (selected) c.ink else color, motion.tween(Durations.FAST), label = "chipTint")
     val hover = c.hoverOverlay()
+    // Chips are pills like the buttons, and keep the theme's corners in sharp themes.
+    val shape = controlShape()
     Row(
         modifier
             .graphicsLayer {
@@ -587,8 +590,8 @@ fun Chip(
                 scaleY = s
             }
             // The ring sits just outside the chip, so focusing never changes the layout.
-            .ringOutside({ ring }, c.focus, PillShape)
-            .clip(PillShape)
+            .ringOutside({ ring }, c.focus, controlRingShape())
+            .clip(shape)
             .then(
                 if (onClick != null) {
                     Modifier.clickable(interaction, null, onClick = onClick).semantics { this.selected = focused }

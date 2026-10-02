@@ -498,6 +498,8 @@ private fun BoxScope.KeyHighlight(state: KeyboardState, width: Int, keyHeight: D
     val shape = RoundedCornerShape(radius)
     val scaleTo = motion.keyLift()
     val reduced = motion.reduced
+    // High contrast focus rings the focused key too, as it rings every focused tile and button.
+    val ring = if (Fuse.look.highContrastFocus) c.focus else null
     Box(
         Modifier
             .matchParentSize()
@@ -536,10 +538,17 @@ private fun BoxScope.KeyHighlight(state: KeyboardState, width: Int, keyHeight: D
                 // The bar sits a quarter of the way into the gap below; tight rows get a slimmer one.
                 val barGap = rowGap.toPx() / 4
                 val barH = Size.sparkHeight.toPx() * (if (rowGap < Space.m) 0.8f else 1f)
+                val ringWidth = Size.focusStroke.toPx()
+                val ringOut = Size.focusGap.toPx() + ringWidth / 2
+                val ringPath = Path().apply {
+                    addRoundRect(RoundRect(-ringOut, -ringOut, w + ringOut, h + ringOut, CornerRadius((corner.x + ringOut).coerceAtMost(h / 2 + ringOut))))
+                }
+                val ringStroke = Stroke(ringWidth)
                 onDrawBehind {
                     drawPath(body, lip)
                     drawPath(top, face)
                     clipPath(top) { drawPath(top, edge, style = edgeStroke) }
+                    if (ring != null && lift > 0.01f) drawPath(ringPath, ring, alpha = lift.coerceIn(0f, 1f), style = ringStroke)
                     // The spark's accent bar, grown from the middle as the key lifts.
                     val barW = Size.sparkWidth.toPx() * 0.8f * lift
                     if (barW > 0.5f) {
