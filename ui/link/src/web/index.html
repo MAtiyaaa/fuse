@@ -5,16 +5,20 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' https: data:; connect-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'">
 <meta name="referrer" content="no-referrer">
-<meta name="color-scheme" content="dark">
-<meta name="theme-color" content="#0B0D12">
+<meta name="color-scheme" content="dark light">
+<meta name="theme-color" content="#07080B" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#F4F2EE" media="(prefers-color-scheme: light)">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Fuse">
 <meta name="description" content="Manage your Fuse library and download your captures from your phone.">
 <title>Fuse Phone Link</title>
-<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Crect width='48' height='48' rx='12' fill='%230B0D12'/%3E%3Cg transform='translate(10 10) scale(1.1667)' fill='none' stroke='%23E6E8EF' stroke-width='2.4' stroke-linecap='round'%3E%3Crect x='1.2' y='1.2' width='21.6' height='21.6' rx='6.7'/%3E%3Cpath d='M6.72 16.8C10.08 16.8 10.56 8.16 15.36 8.16'/%3E%3Ccircle cx='16.8' cy='7.2' r='1.9' fill='%23FF6A3D' stroke='none'/%3E%3C/g%3E%3C/svg%3E">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Crect width='48' height='48' rx='12' fill='%2307080B'/%3E%3Cg transform='translate(10 10) scale(1.1667)' fill='none' stroke='%23F3F4F6' stroke-width='2.4' stroke-linecap='round'%3E%3Crect x='1.2' y='1.2' width='21.6' height='21.6' rx='6.7'/%3E%3Cpath d='M6.72 16.8C10.08 16.8 10.56 8.16 15.36 8.16'/%3E%3Ccircle cx='16.8' cy='7.2' r='1.9' fill='%23FF6A3D' stroke='none'/%3E%3C/g%3E%3C/svg%3E">
 <link rel="manifest" href="/manifest.webmanifest">
+<link rel="preload" href="/manrope-500.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/manrope-600.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/sora-600.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/app.css">
 <script type="module" src="/app.js"></script>
 </head>
@@ -26,13 +30,14 @@
 -->
 <svg class="sprite" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
 <defs>
-<radialGradient id="spark-glow"><stop offset="0" stop-color="#FF6A3D" stop-opacity=".85"/><stop offset="1" stop-color="#FF6A3D" stop-opacity="0"/></radialGradient>
+<radialGradient id="spark-glow"><stop class="mark-glow" offset="0" stop-color="#FF6A3D" stop-opacity=".85"/><stop class="mark-glow" offset="1" stop-color="#FF6A3D" stop-opacity="0"/></radialGradient>
 </defs>
-<symbol id="fuse-mark" viewBox="0 0 24 24"><rect x="1.2" y="1.2" width="21.6" height="21.6" rx="6.7" fill="none" stroke="currentColor" stroke-width="2.4"/><path d="M6.72 16.8C10.08 16.8 10.56 8.16 15.36 8.16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><circle cx="16.8" cy="7.2" r="5.3" fill="url(#spark-glow)" stroke="none"/><circle cx="16.8" cy="7.2" r="1.7" fill="#FF6A3D" stroke="none"/></symbol>
+<symbol id="fuse-mark" viewBox="0 0 24 24"><rect x="1.2" y="1.2" width="21.6" height="21.6" rx="6.7" fill="none" stroke="currentColor" stroke-width="2.4"/><path d="M6.72 16.8C10.08 16.8 10.56 8.16 15.36 8.16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><circle cx="16.8" cy="7.2" r="5.3" fill="url(#spark-glow)" stroke="none"/><circle class="mark-spark" cx="16.8" cy="7.2" r="1.7" fill="#FF6A3D" stroke="none"/></symbol>
 <symbol id="i-gamepad-2" viewBox="0 0 24 24"><path d="M6 11L10 11"/><path d="M8 9L8 13"/><path d="M15 12L15.01 12"/><path d="M18 10L18.01 10"/><path d="M17.32 5H6.68a4 4 0 0 0-3.978 3.59c-.006.052-.01.101-.017.152C2.604 9.416 2 14.456 2 16a3 3 0 0 0 3 3c1 0 1.5-.5 2-1l1.414-1.414A2 2 0 0 1 9.828 16h4.344a2 2 0 0 1 1.414.586L17 18c.5.5 1 1 2 1a3 3 0 0 0 3-3c0-1.545-.604-6.584-.685-7.258-.007-.05-.011-.1-.017-.151A4 4 0 0 0 17.32 5z"/></symbol>
 <symbol id="i-library" viewBox="0 0 24 24"><path d="m16 6 4 14"/><path d="M12 6v14"/><path d="M8 8v12"/><path d="M4 4v16"/></symbol>
 <symbol id="i-wrench" viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.106-3.105c.32-.322.863-.22.983.218a6 6 0 0 1-8.259 7.057l-7.91 7.91a1 1 0 0 1-2.999-3l7.91-7.91a6 6 0 0 1 7.057-8.259c.438.12.54.662.219.984z"/></symbol>
 <symbol id="i-search" viewBox="0 0 24 24"><path d="m21 21-4.34-4.34"/><path d="M3 11a8 8 0 1 0 16 0a8 8 0 1 0 -16 0Z"/></symbol>
+<symbol id="i-search-x" viewBox="0 0 24 24"><path d="m13.5 8.5-5 5"/><path d="m8.5 8.5 5 5"/><path d="M3 11a8 8 0 1 0 16 0a8 8 0 1 0 -16 0Z"/><path d="m21 21-4.3-4.3"/></symbol>
 <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
 <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
 <symbol id="i-chevron-left" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></symbol>
@@ -170,7 +175,7 @@
         <div class="conn" data-conn data-state="connecting"><span class="conn-dot" aria-hidden="true"></span><span class="conn-label"></span></div>
       </header>
       <div class="cap-bar">
-        <div id="cap-filters" class="chips cap-chips" role="group" aria-label="Show"></div>
+        <div id="cap-filters" class="seg" role="group" aria-label="Show"></div>
       </div>
       <div class="lib-meta cap-meta">
         <p id="cap-total" class="lib-count" aria-live="polite"></p>
@@ -204,10 +209,12 @@
 
   <nav class="tabbar" aria-label="Sections">
     <div class="tabbar-inner">
-      <button class="tab-btn" type="button" data-tab="now" aria-current="page"><span class="tab-spark" aria-hidden="true"></span><svg class="i" aria-hidden="true"><use href="#i-gamepad-2"/></svg><span>Now</span></button>
-      <button class="tab-btn" type="button" data-tab="library"><span class="tab-spark" aria-hidden="true"></span><svg class="i" aria-hidden="true"><use href="#i-library"/></svg><span>Library</span></button>
-      <button class="tab-btn" type="button" data-tab="captures" hidden><span class="tab-spark" aria-hidden="true"></span><svg class="i" aria-hidden="true"><use href="#i-images"/></svg><span>Captures</span></button>
-      <button class="tab-btn" type="button" data-tab="tools"><span class="tab-spark" aria-hidden="true"></span><svg class="i" aria-hidden="true"><use href="#i-wrench"/></svg><span>Tools</span></button>
+      <svg class="tabbar-mark" aria-hidden="true"><use href="#fuse-mark"/></svg>
+      <button class="tab-btn" type="button" data-tab="now" aria-current="page"><svg class="i" aria-hidden="true"><use href="#i-gamepad-2"/></svg><span>Now</span></button>
+      <button class="tab-btn" type="button" data-tab="library"><svg class="i" aria-hidden="true"><use href="#i-library"/></svg><span>Library</span></button>
+      <button class="tab-btn" type="button" data-tab="captures" hidden><svg class="i" aria-hidden="true"><use href="#i-images"/></svg><span>Captures</span></button>
+      <button class="tab-btn" type="button" data-tab="tools"><svg class="i" aria-hidden="true"><use href="#i-wrench"/></svg><span>Tools</span></button>
+      <span class="tab-glide" aria-hidden="true"></span>
     </div>
   </nav>
 </div>

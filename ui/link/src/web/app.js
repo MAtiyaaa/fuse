@@ -34,15 +34,18 @@ const QUEUE_STATES = {
 };
 // Original, desaturated hues used when a system has no accent of its own.
 const FALLBACK_ACCENTS = ['#7D8BA8', '#5E9C8F', '#8C84B8', '#B25E5E', '#7867B5', '#5B6FB5', '#C9A45C', '#5A8FBF'];
-const INK_A = [11, 12, 16];
-const INK_B = [5, 6, 8];
-const WHITE = [255, 255, 255];
 const NET_ERROR = "Can't reach Fuse. Check that the device is on and on the same Wi-Fi as this phone.";
 const SVGNS = 'http://www.w3.org/2000/svg';
 
 const nf = new Intl.NumberFormat('en');
-const reducedMotion = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : { matches: false };
-const coarse = window.matchMedia ? window.matchMedia('(pointer: coarse)') : { matches: false };
+const media = (q) => (window.matchMedia ? window.matchMedia(q) : { matches: false });
+const reducedMotion = media('(prefers-reduced-motion: reduce)');
+const coarse = media('(pointer: coarse)');
+const wideScreen = media('(min-width: 900px)');
+// Entry reveals: about 25 ms between neighbours, at most 8 deep (Motion.kt, STAGGER and STAGGER_MAX).
+const STAGGER_MAX = 8;
+// The near-black generated art sinks into (GeneratedArt.kt, Night).
+const NIGHT = [7, 8, 12];
 
 // ---- State
 
@@ -145,8 +148,84 @@ function icon(name, cls) {
   return svg;
 }
 
+function svgEl(tag, attrs) {
+  const el = document.createElementNS(SVGNS, tag);
+  for (const k of Object.keys(attrs || {})) el.setAttribute(k, String(attrs[k]));
+  return el;
+}
+
+/** A round-capped arc turning on a faint ring, like Fuse's Spinner. */
 function spinner(cls) {
-  return h('span', { class: 'spinner' + (cls ? ' ' + cls : ''), 'aria-hidden': 'true' });
+  const s = h('span', { class: 'spinner' + (cls ? ' ' + cls : ''), 'aria-hidden': 'true' });
+  const svg = svgEl('svg', { viewBox: '0 0 24 24', focusable: 'false' });
+  svg.append(svgEl('circle', { class: 'sp-track', cx: 12, cy: 12, r: 9 }), svgEl('circle', { class: 'sp-arc', cx: 12, cy: 12, r: 9 }));
+  s.append(svg);
+  return s;
+}
+
+/**
+ * Content arriving: each element rises a little and fades in, its neighbours a beat after it
+ * (effects/Reveal.kt). Once per arrival; refreshes and re-renders never replay it. Reduced motion
+ * leaves a short fade (the CSS sets the rise and stagger to nothing).
+ */
+function reveal(nodes, start = 0) {
+  const list = Array.from(nodes || []).filter((n) => n instanceof Element && !n.hidden);
+  if (!list.length) return;
+  for (const n of list) n.classList.remove('rv');
+  void document.body.offsetWidth;
+  list.forEach((n, i) => {
+    n.style.setProperty('--i', String(Math.min(start + i, STAGGER_MAX)));
+    n.classList.add('rv');
+    const done = (e) => {
+      if (e.target !== n || e.animationName !== 'reveal') return;
+      n.removeEventListener('animationend', done);
+      n.classList.remove('rv');
+    };
+    n.addEventListener('animationend', done);
+  });
+}
+
+/**
+ * Moves a gliding marker (the chosen chip's pill, a segmented switch's thumb) onto [target]. It
+ * glides when [animate] and motion allows, and only when it actually moves.
+ */
+function placeGlide(glider, target, animate) {
+  if (!glider || !target) return;
+  const x = target.offsetLeft;
+  const w = target.offsetWidth;
+  if (!w) return;
+  if (glider._x === x && glider._w === w) return;
+  const first = glider._x == null;
+  glider._x = x;
+  glider._w = w;
+  if (animate && !first) {
+    glider.classList.add('is-moving');
+    clearTimeout(glider._t);
+    glider._t = setTimeout(() => glider.classList.remove('is-moving'), 480);
+  } else {
+    glider.classList.remove('is-moving');
+  }
+  glider.style.setProperty('--gx', `${x}px`);
+  glider.style.setProperty('--gw', `${w}px`);
+}
+
+/** Counts that change in place roll to their new value instead of jumping (Motion.value). */
+function rollNumber(el, value, render) {
+  const from = el._v;
+  el._v = value;
+  cancelAnimationFrame(el._raf || 0);
+  if (from == null || from === value || reducedMotion.matches || document.hidden) {
+    render(value);
+    return;
+  }
+  const t0 = performance.now();
+  const step = (t) => {
+    const k = Math.min(1, (t - t0) / 420);
+    const eased = 1 - (1 - k) ** 3;
+    render(Math.round(from + (value - from) * eased));
+    if (k < 1) el._raf = requestAnimationFrame(step);
+  };
+  el._raf = requestAnimationFrame(step);
 }
 
 function btn(label, opts = {}) {
@@ -197,10 +276,11 @@ function cardHead(ic, title, text, aside, iconCls) {
     aside ? h('div.card-head-aside', aside) : null);
 }
 
+/** Empty, no-result and error states, as Fuse's EmptyState: a lit disc, what happened, what to do. */
 function emptyState(ic, title, text, action, opts = {}) {
   return h('div', { class: 'empty' + (opts.compact ? ' empty-compact' : '') },
-    h('div', { class: 'empty-icon' + (opts.danger ? ' is-danger' : '') }, icon(ic)),
-    h('p.empty-title', title),
+    h('div', { class: 'empty-icon' + (opts.danger ? ' is-danger' : ''), 'aria-hidden': 'true' }, icon(ic)),
+    h('p.empty-title', { role: 'heading', 'aria-level': '2' }, title),
     text ? h('p.empty-text', text) : null,
     action || null);
 }
@@ -208,7 +288,7 @@ function emptyState(ic, title, text, action, opts = {}) {
 function errorState(title, err, retry) {
   const offline = err && err.status === 0;
   return emptyState(offline ? 'wifi-off' : 'circle-alert', title, (err && err.message) || 'Something went wrong.',
-    retry ? btn('Try again', { icon: 'refresh-cw', onClick: retry }) : null, { danger: true });
+    retry ? btn('Try again', { icon: 'refresh-cw', kind: 'primary', onClick: retry }) : null, { danger: true });
 }
 
 // ---- Formatting
@@ -357,52 +437,233 @@ function safeUrl(u) {
   return null;
 }
 
-function placeholder(title, system, withText) {
-  const acc = accentFor(system);
-  const seed = hashStr(title);
+// Generated art, the same composition Fuse draws on the device (media/GeneratedArt.kt): the same
+// seed, the same random sequence and the same lights, so a game without art looks alike on both.
+
+/** FNV-1a over the lower-cased title, as artSeed. */
+function artSeed(title) {
+  const s = String(title || '').toLowerCase();
+  let x = 0x811C9DC5 | 0;
+  for (let i = 0; i < s.length; i += 1) {
+    x ^= s.charCodeAt(i);
+    x = Math.imul(x, 0x01000193);
+  }
+  return x;
+}
+
+/** The app's small 64-bit generator (Rng), in BigInt so it repeats exactly. */
+class ArtRng {
+  constructor(seed) {
+    this.s = BigInt.asIntN(64, BigInt(seed) * -7046029254386353131n + 0x632BE59BD9B4E019n);
+  }
+
+  next() {
+    this.s = BigInt.asIntN(64, this.s * 6364136223846793005n + 1442695040888963407n);
+    return Number((BigInt.asUintN(64, this.s) >> 40n) & 0xFFFFFFn) / 16777216;
+  }
+
+  pick(n) {
+    return Math.min(n - 1, Math.max(0, Math.floor(this.next() * n)));
+  }
+}
+
+function toHsv(c) {
+  const [r, g, b] = c.map((v) => v / 255);
+  const max = Math.max(r, g, b);
+  const d = max - Math.min(r, g, b);
+  let hue = 0;
+  if (d !== 0) {
+    if (max === r) hue = 60 * (((g - b) / d) % 6);
+    else if (max === g) hue = 60 * ((b - r) / d + 2);
+    else hue = 60 * ((r - g) / d + 4);
+  }
+  if (hue < 0) hue += 360;
+  return [hue, max === 0 ? 0 : d / max, max];
+}
+
+function fromHsv(hue, s, v) {
+  const f = (n) => {
+    const k = (n + hue / 60) % 6;
+    return v - v * s * Math.max(0, Math.min(k, 4 - k, 1));
+  };
+  return [f(5), f(3), f(1)].map((x) => Math.round(x * 255));
+}
+
+/** A brighter take on a colour for the lights, so muted system colours still glow. */
+function vivid(c) {
+  const [hue, s, v] = toHsv(c);
+  return fromHsv(hue, Math.min(s * 1.18 + 0.06, 0.82), Math.max(v, 0.8));
+}
+
+/** The bounce light: the hue turned away from yellow and green, so nothing turns muddy. */
+function bounceOf(c) {
+  const [hue, s, v] = toHsv(c);
+  const turned = (((hue + (hue >= 90 && hue <= 300 ? 28 : -28)) % 360) + 360) % 360;
+  return fromHsv(turned, s, v);
+}
+
+const f1 = (v) => Math.round(v * 10) / 10;
+
+/** Generated art as an SVG of [ar] (width / height), drawn in the system's accent. */
+function generatedArt(title, acc, ar) {
+  const W = 120;
+  const H = W / ar;
+  const short = Math.min(W, H);
+  const long = Math.max(W, H);
+  const rng = new ArtRng(artSeed(title));
+  const leanRight = rng.next() < 0.5;
+  const key = vivid(acc);
+  const bounce = vivid(bounceOf(acc));
+  rng.next();
+  const id = uid('ga');
+  const kx = W * (0.16 + 0.68 * rng.next());
+  const ky = H * (-0.1 + 0.4 * rng.next());
+  const keyR = long * (0.72 + 0.25 * rng.next());
+  const svg = svgEl('svg', { viewBox: `0 0 ${f1(W)} ${f1(H)}`, preserveAspectRatio: 'xMidYMid slice', focusable: 'false' });
+  const defs = svgEl('defs');
+  const stop = (offset, color, opacity = 1) => svgEl('stop', { offset, 'stop-color': rgb(color), 'stop-opacity': opacity });
+  const base = svgEl('linearGradient', { id: `${id}b`, gradientUnits: 'userSpaceOnUse', x1: leanRight ? 0 : W, y1: 0, x2: f1(leanRight ? W * 0.65 : W * 0.35), y2: f1(H) });
+  base.append(stop(0, mix(NIGHT, acc, 0.5)), stop(0.55, mix(NIGHT, acc, 0.26)), stop(1, mix(NIGHT, acc, 0.08)));
+  const keyG = svgEl('radialGradient', { id: `${id}k`, gradientUnits: 'userSpaceOnUse', cx: f1(kx), cy: f1(ky), r: f1(keyR) });
+  keyG.append(stop(0, key, 0.6), stop(0.32, key, 0.24), stop(1, key, 0));
+  const bx = kx > W / 2 ? W * 0.08 : W * 0.92;
+  const bounceG = svgEl('radialGradient', { id: `${id}o`, gradientUnits: 'userSpaceOnUse', cx: f1(bx), cy: f1(H * 1.08), r: f1(long * 0.78) });
+  bounceG.append(stop(0, bounce, 0.28), stop(1, bounce, 0));
+  const vig = svgEl('radialGradient', { id: `${id}v`, gradientUnits: 'userSpaceOnUse', cx: f1(W / 2), cy: f1(H * 0.42), r: f1(Math.hypot(W, H) * 0.62) });
+  vig.append(stop(0.5, [0, 0, 0], 0), stop(1, [0, 0, 0], 0.42));
+  defs.append(base, keyG, bounceG, vig);
+  const rect = (fill) => svgEl('rect', { width: f1(W), height: f1(H), fill });
+  svg.append(defs, rect(`url(#${id}b)`), rect(`url(#${id}k)`), rect(`url(#${id}o)`));
+  const line = Math.min(2.5, Math.max(1, short / 140));
+  const pattern = rng.pick(4);
+  if (pattern === 0) {
+    // Rings spreading from the key light.
+    const step = short * 0.24;
+    for (let i = 1; i <= 8; i += 1) {
+      svg.append(svgEl('circle', { cx: f1(kx), cy: f1(ky), r: f1(step * i), fill: 'none', stroke: '#fff', 'stroke-width': line, 'stroke-opacity': Math.round(85 * (1 - i / 10)) / 1000 }));
+    }
+  } else if (pattern === 1) {
+    // Waving contour lines, like a map of a hill.
+    const amp = short * (0.05 + 0.04 * rng.next());
+    const phase = rng.next() * 2 * Math.PI;
+    const tilt = (leanRight ? -1 : 1) * H * 0.25;
+    let d = '';
+    for (let i = 0; i <= 9; i += 1) {
+      const y = (H * (i + 0.5)) / 9;
+      d += `M${f1(-W * 0.05)} ${f1(y - tilt * 0.5)}`;
+      for (let s = 1; s <= 24; s += 1) {
+        const t = s / 24;
+        const wave = Math.sin(phase + t * 2.4 * Math.PI + i * 0.55) * amp;
+        d += `L${f1(-W * 0.05 + W * 1.1 * t)} ${f1(y + tilt * (t - 0.5) + wave)}`;
+      }
+    }
+    svg.append(svgEl('path', { d, fill: 'none', stroke: '#fff', 'stroke-width': line, 'stroke-opacity': 0.055 }));
+  } else if (pattern === 2) {
+    // A halftone of dots gathering where the key light falls.
+    const step = Math.max(short / 10, 6);
+    let d = '';
+    for (let y = step / 2, row = 0; y < H + step; y += step * 0.87, row += 1) {
+      for (let x = row % 2 === 0 ? step / 2 : step; x < W + step; x += step) {
+        const r = step * 0.17 * (1 - (Math.hypot(x - kx, y - ky) / long) * 1.7);
+        if (r > step * 0.035) d += `M${f1(x - r)} ${f1(y)}a${f1(r)} ${f1(r)} 0 1 0 ${f1(2 * r)} 0a${f1(r)} ${f1(r)} 0 1 0 ${f1(-2 * r)} 0`;
+      }
+    }
+    if (d) svg.append(svgEl('path', { d, fill: '#fff', 'fill-opacity': 0.065 }));
+  } else {
+    // Large folded planes, as if the light fell across creased paper.
+    const a = rng.next();
+    const b = rng.next();
+    const pts = (list) => list.map(([x, y]) => `${f1(x)},${f1(y)}`).join(' ');
+    const light = leanRight
+      ? [[W * (0.25 + 0.3 * a), 0], [W, 0], [W, H * (0.55 + 0.3 * b)]]
+      : [[0, 0], [W * (0.45 + 0.3 * a), 0], [0, H * (0.55 + 0.3 * b)]];
+    const shade = leanRight
+      ? [[0, H * (0.35 + 0.3 * b)], [W * (0.55 + 0.3 * a), H], [0, H]]
+      : [[W, H * (0.35 + 0.3 * b)], [W * (0.45 - 0.3 * a), H], [W, H]];
+    svg.append(
+      svgEl('polygon', { points: pts(light), fill: '#fff', 'fill-opacity': 0.055 }),
+      svgEl('polygon', { points: pts(shade), fill: '#000', 'fill-opacity': 0.16 }),
+      svgEl('line', { x1: f1(W * (leanRight ? 0.25 + 0.3 * a : 0.45 + 0.3 * a)), y1: 0, x2: f1(leanRight ? W : 0), y2: f1(H * (0.55 + 0.3 * b)), stroke: '#fff', 'stroke-opacity': 0.08, 'stroke-width': 1 }));
+  }
+  svg.append(rect(`url(#${id}v)`));
+  return svg;
+}
+
+/**
+ * Generated art for a title with no picture: the lit composition, the title's initials in the
+ * display face (sized from the frame's height, as the app does) and, on larger frames, the
+ * system's short name as a small tag.
+ */
+function placeholder(title, system, withText, opts = {}) {
+  const ar = opts.ar > 0 ? opts.ar : 1;
   const ph = h('span.ph', { 'aria-hidden': 'true' });
-  ph.style.setProperty('--ph-a', rgb(mix(INK_A, acc, 0.42)));
-  ph.style.setProperty('--ph-b', rgb(mix(INK_B, acc, 0.12)));
-  ph.style.setProperty('--ph-l', rgba(mix(acc, WHITE, 0.25), 0.55));
-  ph.style.setProperty('--ph-x', `${20 + (seed % 60)}%`);
-  ph.style.setProperty('--ph-y', `${10 + (Math.floor(seed / 7) % 40)}%`);
+  ph.append(generatedArt(title, accentFor(system), ar));
   if (withText) {
     const ini = initialsOf(title);
     if (ini) {
-      if (ini.length > 2) ph.classList.add('is-long');
-      ph.append(h('span', ini));
+      const size = (ini.length > 2 ? 0.24 : 0.31) / ar;
+      const span = h('span.ph-ini', ini);
+      span.style.setProperty('--ph-fs', `${f1(size * 100)}cqi`);
+      ph.append(span);
+    }
+    const tag = opts.tag ? String(opts.tag) : '';
+    if (tag && ar <= 1.05) {
+      ph.classList.add('is-tagged');
+      ph.append(h('span.ph-tag', tag));
     }
   }
   return ph;
 }
 
+/** Parses an aspect ratio given as a number or as "460 / 215". */
+function ratioOf(v) {
+  if (typeof v === 'number') return v;
+  const m = /^\s*([\d.]+)\s*(?:\/\s*([\d.]+))?\s*$/.exec(String(v || ''));
+  if (!m) return 0;
+  const r = Number(m[1]) / (m[2] ? Number(m[2]) : 1);
+  return Number.isFinite(r) ? r : 0;
+}
+
 /**
- * An image box that fades the picture in once loaded and falls back to generated art (a lit
- * gradient in the system's accent with the title's initials) when there is no picture or it fails.
+ * An image box that fades the picture in once loaded and falls back to generated art when there is
+ * no picture or it fails. With [fit], a picture clearly wider than its frame (square box art in a
+ * portrait frame) is drawn whole over a soft copy of itself instead of being cropped.
  */
 function art(url, opts = {}) {
-  const { title = '', system = '', text = true, blur = false, contain = false, eager = false, flat = false, alt = '', alsoTry = null } = opts;
+  const { title = '', system = '', text = true, blur = false, contain = false, eager = false, flat = false, alt = '', alsoTry = null, fit = false, tag = '' } = opts;
+  const ar = ratioOf(opts.ar);
   const box = h('span', { class: 'art' + (blur ? ' is-blur' : '') + (contain ? ' is-contain' : '') + (flat ? ' is-flat' : '') });
   const src = safeUrl(url);
   const fallback = () => {
     box.classList.remove('is-loading');
     box.classList.add('is-missing');
-    box.prepend(placeholder(title, system, text && !blur));
+    box.prepend(placeholder(title, system, text && !blur, { ar, tag }));
   };
   if (!src) {
     fallback();
     return box;
   }
   const img = document.createElement('img');
+  const loaded = () => {
+    box.classList.remove('is-loading');
+    box.classList.add('is-loaded');
+    if (!fit || !ar || contain || box.classList.contains('is-fitted')) return;
+    const r = img.naturalWidth / img.naturalHeight;
+    if (Number.isFinite(r) && r > ar * 1.18) {
+      const soft = img.cloneNode();
+      soft.className = 'art-soft';
+      soft.alt = '';
+      soft.setAttribute('aria-hidden', 'true');
+      box.insertBefore(soft, img);
+      box.classList.add('is-fitted');
+    }
+  };
   img.alt = alt;
   img.decoding = 'async';
   img.loading = eager ? 'eager' : 'lazy';
   img.referrerPolicy = 'no-referrer';
   img.draggable = false;
-  img.addEventListener('load', () => {
-    box.classList.remove('is-loading');
-    box.classList.add('is-loaded');
-  }, { once: true });
+  img.addEventListener('load', loaded, { once: true });
   const second = safeUrl(alsoTry);
   img.addEventListener('error', function onError() {
     if (second && img.src !== second && !img.dataset.retried) {
@@ -418,16 +679,22 @@ function art(url, opts = {}) {
   img.src = src;
   box.append(img);
   if (img.complete && img.naturalWidth) {
-    box.classList.remove('is-loading');
-    box.classList.add('is-loaded');
+    img.removeEventListener('load', loaded);
+    loaded();
   }
   return box;
 }
 
+/** A system's colour as the lit gradient generated art uses, for small marks and badges. */
+function systemFill(acc) {
+  const key = vivid(acc);
+  return `radial-gradient(120% 90% at 28% 0%, ${rgba(key, 0.42)}, transparent 70%), linear-gradient(160deg, ${rgb(mix(NIGHT, acc, 0.5))}, ${rgb(mix(NIGHT, acc, 0.22))})`;
+}
+
 function platBadge(platform, small) {
-  const acc = accentFor(platform);
-  const el = h('span', { class: 'plat' + (small ? ' plat-sm' : ''), 'aria-hidden': 'true' }, sysShort(platform).slice(0, 5));
-  el.style.setProperty('--plat', `linear-gradient(135deg, ${rgb(mix(INK_A, acc, 0.62))}, ${rgb(mix(INK_B, acc, 0.3))})`);
+  const label = sysShort(platform).slice(0, 6);
+  const el = h('span', { class: 'plat' + (small ? ' plat-sm' : '') + (label.length > 4 ? ' is-long' : ''), 'aria-hidden': 'true' }, label);
+  el.style.setProperty('--plat', systemFill(accentFor(platform)));
   return el;
 }
 
@@ -439,9 +706,9 @@ function sysLogoBox(sys) {
   }
   const logo = safeUrl(sys.logo);
   const fallbackBadge = () => {
-    const acc = accentFor(sys.id);
-    box.style.setProperty('background', `linear-gradient(135deg, ${rgb(mix(INK_A, acc, 0.62))}, ${rgb(mix(INK_B, acc, 0.3))})`);
-    box.replaceChildren(h('span.plat-text', String(sys.shortName || sys.name || sys.id || '').slice(0, 5)));
+    box.style.setProperty('background', systemFill(accentFor(sys.id)));
+    const label = String(sys.shortName || sys.name || sys.id || '').slice(0, 6);
+    box.replaceChildren(h('span', { class: 'plat-text' + (label.length > 4 ? ' is-long' : '') }, label));
     box.classList.add('is-badge');
   };
   if (logo) {
@@ -674,7 +941,7 @@ function openMenu({ title, subtitle, items, onPick }) {
       h('span.menu-item-main',
         h('span.menu-item-title', it.title),
         it.sub ? h('span.menu-item-sub', it.sub) : null),
-      icon('check', 'menu-check'));
+      h('span.check-disc', { 'aria-hidden': 'true' }, icon('check')));
     b.addEventListener('click', async () => {
       await closeLayer(layer);
       onPick(it.id);
@@ -683,6 +950,7 @@ function openMenu({ title, subtitle, items, onPick }) {
   }
   layer = openModal({ title, subtitle, body: list });
   layer.focus = list.querySelector('[aria-checked="true"]') || list.firstElementChild;
+  reveal(list.children, 1);
   return layer;
 }
 
@@ -726,13 +994,17 @@ async function checkSession() {
     else showSignin();
   } catch (e) {
     E.boot.classList.add('is-error');
-    E.bootText.textContent = e.message || NET_ERROR;
+    // The title already says Fuse can't be reached: the line under it says what to check.
+    E.bootText.textContent = e.status === 0
+      ? 'Check that Fuse is running with Phone Link on, and that this phone is on the same Wi-Fi.'
+      : e.message || NET_ERROR;
     E.bootMsg.hidden = false;
-    E.bootRetry.focus();
+    if (!coarse.matches) E.bootRetry.focus();
   }
 }
 
 function applySessionInfo() {
+  applyTheme(S.session.theme);
   const dev = S.session.device;
   if (typeof dev === 'string' && dev.trim()) {
     E.signinSub.replaceChildren('Sign in to manage the Fuse library on ', h('span.nowrap', dev.trim()), '.');
@@ -750,8 +1022,10 @@ function applySessionInfo() {
 const lock = { until: 0, timer: 0 };
 
 function showSignin(note) {
+  const wasShown = !E.signin.hidden;
   show('signin');
   window.scrollTo(0, 0);
+  if (!wasShown) reveal($$('.signin-inner > *', E.signin));
   hideSigninError();
   if (note) {
     E.noteText.textContent = note;
@@ -855,6 +1129,123 @@ function enterApp() {
   startLive();
 }
 
+// ---- Theme: the device's own theme when it sends one, else the Fuse theme (or Daylight on a phone
+// set to light) from the stylesheet. The roles are derived the way FuseColors.from derives them.
+
+function parseColor(v) {
+  const m = /^#?([0-9a-f]{6})([0-9a-f]{2})?$/i.exec(String(v || '').trim());
+  if (!m) return null;
+  const n = parseInt(m[1], 16);
+  return { c: [(n >> 16) & 255, (n >> 8) & 255, n & 255], a: m[2] ? parseInt(m[2], 16) / 255 : 1 };
+}
+
+function luminance(c) {
+  const ch = (v) => {
+    const x = v / 255;
+    return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4;
+  };
+  return 0.2126 * ch(c[0]) + 0.7152 * ch(c[1]) + 0.0722 * ch(c[2]);
+}
+
+function contrast(a, b) {
+  const la = luminance(a);
+  const lb = luminance(b);
+  return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+}
+
+let themeKey = '';
+function applyTheme(t) {
+  const root = document.documentElement;
+  const p = t && typeof t === 'object' ? t : null;
+  const get = (k) => p && parseColor(p[k]);
+  const need = ['background', 'surface', 'surfaceRaised', 'accent', 'text', 'textMuted'];
+  const key = p ? JSON.stringify(p) : '';
+  if (key === themeKey) return;
+  themeKey = key;
+  // Only the style properties are touched (never the style attribute itself, which the page's
+  // Content Security Policy rightly refuses).
+  for (const k of root._themeKeys || []) root.style.removeProperty(k);
+  root._themeKeys = [];
+  if (!p || !need.every((k) => get(k))) {
+    root.removeAttribute('data-theme');
+    root.removeAttribute('data-light');
+    syncThemeColor();
+    return;
+  }
+  const dark = p.dark !== false;
+  const ink = get('background').c;
+  const surface = get('surface').c;
+  const raised = get('surfaceRaised').c;
+  const text = get('text').c;
+  const muted = get('textMuted').c;
+  const accent = get('accent').c;
+  const soft = get('accentSoft');
+  const on = get('onAccent');
+  const role = (k, fallback) => (get(k) ? get(k).c : fallback);
+  // Tertiary text: muted faded as far as it can go while still reading at 4.5:1 everywhere.
+  let faint = 0.62;
+  while (faint < 0.92 && ![ink, surface, raised].every((bg) => contrast(mix(bg, muted, faint), bg) >= 4.5)) faint += 0.02;
+  const success = role('success', [61, 214, 140]);
+  const warning = role('warning', [255, 181, 71]);
+  const danger = role('danger', [255, 93, 108]);
+  const shadow = dark ? [0, 0, 0] : mix(text, [0, 0, 0], 0.4);
+  const v = {
+    '--ink': rgb(ink),
+    '--dim': rgb(dark ? mix(ink, surface, 0.5) : mix(ink, text, 0.04)),
+    '--surface': rgb(surface),
+    '--raised': rgb(raised),
+    '--overlay': rgb(dark ? mix(raised, text, 0.035) : surface),
+    '--text': rgb(text),
+    '--muted': rgb(muted),
+    '--faint': rgba(muted, Math.min(0.92, faint).toFixed(2)),
+    '--hairline': rgba(text, dark ? 0.09 : 0.14),
+    '--hairline-strong': rgba(text, dark ? 0.16 : 0.24),
+    '--hover': rgba(text, dark ? 0.06 : 0.05),
+    '--pressed': rgba(text, dark ? 0.1 : 0.08),
+    '--skeleton': rgba(text, 0.07),
+    '--shimmer': rgba([255, 255, 255], dark ? 0.07 : 0.55),
+    '--accent': rgb(accent),
+    '--accent-soft': soft ? rgba(soft.c, soft.a.toFixed(3)) : rgba(accent, 0.2),
+    '--accent-line': rgba(accent, 0.6),
+    '--on-accent': rgb(on ? on.c : luminance(accent) > 0.4 ? [12, 12, 14] : [255, 255, 255]),
+    '--focus': rgb(role('focus', dark ? [255, 255, 255] : text)),
+    '--success': rgb(success),
+    '--warning': rgb(warning),
+    '--danger': rgb(danger),
+    '--success-soft': rgba(success, dark ? 0.13 : 0.11),
+    '--warning-soft': rgba(warning, dark ? 0.13 : 0.11),
+    '--danger-soft': rgba(danger, dark ? 0.13 : 0.1),
+    '--scrim': rgba(dark ? ink : text, dark ? 0.72 : 0.42),
+    '--glass': rgba(surface, dark ? 0.82 : 0.84),
+    '--shadow': shadow.join(', '),
+    '--edge-tile': dark ? '.14' : '.55',
+    '--edge-panel': dark ? '.12' : '.5',
+    '--edge-raised': dark ? '.16' : '.6',
+    '--edge-overlay': dark ? '.18' : '.7',
+  };
+  if (!dark) {
+    v['--sh-panel'] = '0 1px 2px rgba(var(--shadow), .08), 0 6px 18px -6px rgba(var(--shadow), .16)';
+    v['--sh-raised'] = '0 2px 4px rgba(var(--shadow), .08), 0 10px 26px -8px rgba(var(--shadow), .2)';
+    v['--sh-overlay'] = '0 8px 20px rgba(var(--shadow), .12), 0 24px 64px -12px rgba(var(--shadow), .3)';
+  }
+  v['color-scheme'] = dark ? 'dark' : 'light';
+  for (const k of Object.keys(v)) root.style.setProperty(k, v[k]);
+  root._themeKeys = Object.keys(v);
+  root.setAttribute('data-theme', 'device');
+  root.toggleAttribute('data-light', !dark);
+  syncThemeColor();
+}
+
+/** The browser's own bars take the room's colour: the device theme's, or the page's own per scheme. */
+function syncThemeColor() {
+  const device = document.documentElement.getAttribute('data-theme') === 'device';
+  const ink = device ? document.documentElement.style.getPropertyValue('--ink').trim() : '';
+  for (const m of $$('meta[name="theme-color"]')) {
+    if (!m.dataset.ink) m.dataset.ink = m.getAttribute('content') || '';
+    m.setAttribute('content', ink || m.dataset.ink);
+  }
+}
+
 function signedOut(note) {
   S.signedIn = false;
   stopLive();
@@ -917,19 +1308,17 @@ function selectTab(tab, opts = {}) {
   }
   if (!opts.initial) S.scroll[S.tab] = window.scrollY;
   S.tab = tab;
+  let shown = null;
   for (const sec of $$('.tab', E.shell)) {
     const on = sec.dataset.tab === tab;
     sec.hidden = !on;
-    if (on && !opts.initial) {
-      sec.classList.remove('is-entering');
-      void sec.offsetWidth;
-      sec.classList.add('is-entering');
-    }
+    if (on) shown = sec;
   }
   for (const b of $$('.tab-btn', E.shell)) {
     if (b.dataset.tab === tab) b.setAttribute('aria-current', 'page');
     else b.removeAttribute('aria-current');
   }
+  placeTabGlide(!opts.initial);
   quiet(() => history.replaceState(history.state, '', `#${tab}`));
   window.scrollTo(0, S.scroll[tab] || 0);
   if (tab === 'library') {
@@ -938,6 +1327,47 @@ function selectTab(tab, opts = {}) {
   }
   if (tab === 'tools') updateTools();
   if (tab === 'captures') ensureCaptures();
+  if (shown) {
+    // Entering a section: its title, then its blocks in reading order, rise into place.
+    reveal($$(':scope > .topbar, :scope > .lib-bar, :scope > .lib-meta, :scope > .grid, :scope > .lib-status, :scope > .cap-bar, :scope > .cap-meta, :scope > .tab-body > *, :scope > .cap-body > *', shown));
+    S.enteredAt = performance.now();
+    relayoutGlides();
+  }
+}
+
+/**
+ * The spark in the tab bar: a short accent bar under (on a wide screen, below) the active section.
+ * It glides to the next tab with its leading edge first and the trailing one catching up.
+ */
+function placeTabGlide(animate) {
+  const g = E.tabGlide;
+  const b = E.shell && $(`.tab-btn[data-tab="${S.tab}"]`, E.shell);
+  if (!g || !b || !b.offsetWidth) return;
+  const width = g.parentElement.clientWidth;
+  const bar = wideScreen.matches ? 18 : 28;
+  const center = b.offsetLeft + b.offsetWidth / 2;
+  const left = Math.round(center - bar / 2);
+  const right = Math.round(width - (center + bar / 2));
+  const prev = g._left;
+  g._left = left;
+  if (animate && prev != null && prev !== left) {
+    g.classList.toggle('to-right', left > prev);
+    g.classList.toggle('to-left', left < prev);
+    g.classList.add('is-moving');
+    clearTimeout(g._t);
+    g._t = setTimeout(() => g.classList.remove('is-moving'), 500);
+  } else if (!animate) {
+    g.classList.remove('is-moving');
+  }
+  g.style.setProperty('--gl', `${left}px`);
+  g.style.setProperty('--gr', `${right}px`);
+}
+
+/** Puts every gliding marker back in place after a resize, a font arriving or a tab showing. */
+function relayoutGlides() {
+  placeTabGlide(false);
+  if (E.libChips && E.libChips._glide) placeGlide(E.libChips._glide, $('.chip[aria-pressed="true"]', E.libChips), false);
+  if (E.capFilters && E.capFilters._seg) placeGlide(E.capFilters._seg.glide, $('.seg-btn[aria-pressed="true"]', E.capFilters), false);
 }
 
 function setConn(state) {
@@ -1183,9 +1613,9 @@ function nowSkeleton() {
     h('div.sk', { style: { width: '36px', height: '36px', 'border-radius': '10px', flex: 'none' } }),
     h('div.row-main', h('div.sk.sk-line', { style: { width: '64%' } }), h('div.sk.sk-line', { style: { width: '36%' } })));
   return h('div.now-skel', { 'aria-busy': 'true', 'aria-label': 'Loading' },
-    h('div.section', h('div.sk.sk-block', { style: { height: '228px' } })),
+    h('div.section', h('div.sk.sk-block', { style: { height: '240px' } })),
     h('div.section',
-      h('div.sk.sk-title', { style: { width: '36%', 'margin-bottom': '14px' } }),
+      h('div.sk.sk-title', { style: { width: '36%', 'margin-bottom': '12px' } }),
       h('div.card', skRow(), skRow(), skRow())));
 }
 
@@ -1204,6 +1634,7 @@ function renderNow() {
     }
     return;
   }
+  let arriving = false;
   if (!nowUI) {
     nowUI = {
       playing: h('section.section', { 'aria-label': 'Playing now' }),
@@ -1213,10 +1644,13 @@ function renderNow() {
     };
     nowUI.fill.append(sectionHead('Art fill'), nowUI.fillCard.el);
     E.nowBody.replaceChildren(nowUI.playing, nowUI.cart, nowUI.fill);
+    arriving = true;
   }
   updatePlaying();
   updateCartridge();
   updateFillViews();
+  // What replaces the placeholders rises in, card by card; later updates change in place.
+  if (arriving && S.tab === 'now') reveal($$(':scope > .section > *', E.nowBody));
 }
 
 function updatePlaying() {
@@ -1234,10 +1668,10 @@ function playingCard(g, since) {
   const meta = [sysName(g.system, g.systemName), g.year].filter(Boolean).join(' \u00B7 ');
   const card = h('button.playing', { type: 'button', 'aria-label': `Playing now: ${title}. Open the game page.` },
     h('span.playing-bg',
-      art(g.hero || g.cover, { title, system: g.system, blur: !g.hero && !!g.cover, text: false, eager: true, flat: true })),
+      art(g.hero || g.cover, { title, system: g.system, blur: !g.hero, text: false, eager: true, flat: true, ar: 1.6 })),
     icon('chevron-right', 'playing-chevron'),
     h('span.playing-row',
-      h('span.playing-cover', art(g.cover, { title, system: g.system, eager: true })),
+      h('span.playing-cover', art(g.cover, { title, system: g.system, eager: true, fit: true, ar: 0.72, tag: sysShort(g.system) })),
       h('span.playing-main',
         h('span.live-label', h('span.live-dot'), 'Playing now'),
         h('span.playing-title', title),
@@ -1305,7 +1739,13 @@ function updateCartridge() {
     if (frac != null && frac > 1) frac /= 100;
     if (frac == null && curQ && num(curQ.total) > 0) frac = num(curQ.received) / num(curQ.total);
     setBar(refs.cur.bar, frac);
-    refs.cur.pct.replaceChildren(frac == null ? '' : String(Math.floor(clamp01(frac) * 100)), frac == null ? '' : h('small', '%'));
+    const pctEl = refs.cur.pct;
+    if (frac == null) {
+      pctEl._v = null;
+      pctEl.replaceChildren();
+    } else {
+      rollNumber(pctEl, Math.floor(clamp01(frac) * 100), (n) => pctEl.replaceChildren(String(n), h('small', '%')));
+    }
     const size = curQ && num(curQ.total) > 0 ? `${fmtBytes(curQ.received)} of ${fmtBytes(curQ.total)}` : '';
     refs.cur.sub.textContent = [sysShort(cur.platform), size].filter(Boolean).join(' \u00B7 ');
   }
@@ -1417,21 +1857,25 @@ function recentRow(r) {
 // Fill progress card, shown on Now and on Tools.
 function createFillCard() {
   const iconBox = h('div.card-icon', icon('wand-sparkles'));
-  const title = h('p.card-title');
-  const text = h('p.card-text');
+  const titleText = h('span');
   const cancel = btn('Cancel', { size: 'sm', onClick: cancelFill });
   const dismiss = h('button.icon-btn', { type: 'button', 'aria-label': 'Dismiss' }, icon('x'));
   dismiss.addEventListener('click', () => {
     S.fillDismissed = true;
     updateFillViews();
   });
+  // The action sits on the title's line, so the lines under it keep the card's full width.
+  const title = h('p.card-title', titleText, cancel, dismiss);
+  const text = h('p.card-text');
   const bar = progressBar('Art fill progress');
   const current = h('span.fill-current');
-  const count = h('span.pill.pill-accent.fill-count');
+  const count = h('span.fill-count');
+  const note = h('p.fill-note', { hidden: true });
   const el = h('div.card.fill-card',
-    h('div.card-head', iconBox, h('div.card-head-main', title, text), h('div.card-head-aside', cancel, dismiss)),
+    h('div.card-head', iconBox, h('div.card-head-main', title, text)),
     bar,
-    h('div.fill-stats', current, count));
+    h('div.fill-stats', current, count),
+    note);
   let finishedShown = null;
   function update(f) {
     const fin = !!f.finished;
@@ -1446,20 +1890,22 @@ function createFillCard() {
     }
     cancel.hidden = fin;
     dismiss.hidden = !fin;
+    let paused = [];
     if (fin) {
-      title.textContent = f.automatic ? 'Art search finished' : 'Art fill finished';
+      titleText.textContent = f.automatic ? 'Art search finished' : 'Art fill finished';
       text.textContent = total > 0 ? `Checked ${plural(total, 'game', 'games')}.` : 'Nothing needed filling.';
       setBar(bar, 1);
       current.textContent = '';
     } else {
-      title.textContent = f.pending ? 'Starting' : f.automatic ? 'Finding art for new games' : 'Filling art';
-      const paused = Array.isArray(f.paused) ? f.paused.filter((n) => typeof n === 'string') : [];
-      const note = paused.length ? ` ${paused.join(' and ')} ${paused.length === 1 ? 'is' : 'are'} out of requests for now, using the others.` : '';
-      text.textContent = (total > 0 ? `${nf.format(Math.min(done, total))} of ${plural(total, 'game', 'games')} checked.` : 'Getting the list of games ready.') + note;
+      titleText.textContent = f.pending ? 'Starting' : f.automatic ? 'Finding art for new games' : 'Filling art';
+      paused = Array.isArray(f.paused) ? f.paused.filter((n) => typeof n === 'string') : [];
+      text.textContent = total > 0 ? `${nf.format(Math.min(done, total))} of ${plural(total, 'game', 'games')} checked` : 'Getting the list of games ready';
       setBar(bar, total > 0 ? done / total : null);
       current.replaceChildren(f.current ? 'Working on ' : '', f.current ? h('b', String(f.current)) : '');
     }
-    count.textContent = `${plural(added, 'image', 'images')} added`;
+    note.hidden = !paused.length;
+    note.replaceChildren(...(paused.length ? [icon('hourglass'), h('span', `${paused.join(' and ')} ${paused.length === 1 ? 'is' : 'are'} out of requests for now, using the others.`)] : []));
+    rollNumber(count, added, (n) => { count.textContent = `${plural(n, 'image', 'images')} added`; });
   }
   return { el, update };
 }
@@ -1505,12 +1951,19 @@ function ensureLibrary() {
 }
 
 function renderChipSkeleton() {
+  E.libChips.classList.remove('has-glide');
+  E.libChips._glide = null;
   E.libChips.replaceChildren(...[64, 88, 72, 96, 70].map((w) => h('span.chip.sk', { style: { width: `${w}px` }, 'aria-hidden': 'true' })));
 }
 
 function renderChips() {
   const chips = [chip('', 'All', null)].concat(S.systems.map((s) => chip(s.id, s.name || s.shortName || String(s.id), s)));
-  E.libChips.replaceChildren(...chips);
+  // The chosen chip's pill is one element that glides from chip to chip.
+  const glide = h('span.chip-glide', { 'aria-hidden': 'true' });
+  E.libChips._glide = glide;
+  E.libChips.classList.add('has-glide');
+  E.libChips.replaceChildren(glide, ...chips);
+  placeGlide(glide, $('.chip[aria-pressed="true"]', E.libChips), false);
 }
 
 function chip(id, label, sys) {
@@ -1536,6 +1989,7 @@ function setSystem(id, el) {
   if (L.system === id) return;
   L.system = id;
   for (const c of $$('.chip', E.libChips)) c.setAttribute('aria-pressed', String(c.dataset.id === id));
+  placeGlide(E.libChips._glide, el, true);
   if (el && el.scrollIntoView) el.scrollIntoView({ inline: 'nearest', block: 'nearest', behavior: reducedMotion.matches ? 'auto' : 'smooth' });
   reloadLibrary();
 }
@@ -1615,11 +2069,13 @@ async function fetchPage(offset, limit, keep) {
     removeSkel();
     if (offset === 0) {
       L.items = items;
-      const els = items.map((g, i) => tileFor(g, i, keep));
+      const els = items.map((g) => tileFor(g));
       E.grid.replaceChildren(...els);
+      // A fresh list rises in, its first tiles a beat apart; a quiet refresh just shows.
+      if (!keep) reveal(els.slice(0, 24));
     } else {
       L.items = L.items.concat(items);
-      E.grid.append(...items.map((g, i) => tileFor(g, i, false)));
+      E.grid.append(...items.map((g) => tileFor(g)));
     }
     // Trust `total` when the server sends it: a server may cap `limit` and return fewer items.
     L.done = L.total != null ? L.items.length >= L.total || items.length === 0 : items.length < limit;
@@ -1650,17 +2106,14 @@ function removeSkel() {
   L.skel = [];
 }
 
-function tileFor(g, i, quiet) {
+function tileFor(g) {
   const sig = JSON.stringify([g.title, g.cover, g.system, g.systemName, g.year, g.favorite, L.system === '', S.systems.length]);
   const hit = L.cache.get(g.id);
   if (hit && hit.sig === sig) {
-    hit.el.classList.add('is-static');
     hit.el._game = g;
     return hit.el;
   }
   const el = tile(g, L.system === '');
-  if (quiet) el.classList.add('is-static');
-  else el.style.setProperty('animation-delay', `${Math.min(i, 18) * 16}ms`);
   L.cache.set(g.id, { sig, el });
   if (L.cache.size > 1500) L.cache.delete(L.cache.keys().next().value);
   return el;
@@ -1671,7 +2124,7 @@ function tile(g, showSystem) {
   const meta = [showSystem ? sysShort(g.system, g.systemName) : null, g.year].filter(Boolean).join(' \u00B7 ');
   const b = h('button.tile', { type: 'button', 'aria-label': [title, sysName(g.system, g.systemName), g.year, g.favorite ? 'favorite' : null].filter(Boolean).join(', ') },
     h('span.tile-art',
-      art(g.cover, { title, system: g.system }),
+      art(g.cover, { title, system: g.system, fit: true, ar: 0.72, tag: sysShort(g.system, g.systemName) }),
       g.favorite ? h('span.fav', { 'aria-hidden': 'true' }, icon('heart')) : null),
     h('span.tile-title', { 'aria-hidden': 'true' }, title),
     meta ? h('span.tile-meta', { 'aria-hidden': 'true' }, meta) : null);
@@ -1688,6 +2141,11 @@ function updateLibCount() {
   const n = L.total;
   const sys = L.system ? S.sysById.get(L.system) : null;
   let text;
+  // Nothing found: the empty state below says so, and what to do.
+  if (n === 0) {
+    E.libCount.textContent = '';
+    return;
+  }
   if (L.query) text = `${plural(n, 'game', 'games')} for ${quote(L.query)}`;
   else if (sys) text = `${nf.format(n)} ${sys.name} ${n === 1 ? 'game' : 'games'}`;
   else text = plural(n, 'game', 'games');
@@ -1709,7 +2167,7 @@ function updateLibStatus() {
     const sys = L.system ? S.sysById.get(L.system) : null;
     let node;
     if (L.query) {
-      node = emptyState('search', `No games match ${quote(L.query)}`,
+      node = emptyState('search-x', `No games match ${quote(L.query)}`,
         sys ? `Nothing on ${sys.name} matches. Try another name or system.` : 'Try a shorter or different name.',
         btn('Clear search', { icon: 'x', onClick: () => {
           E.libQ.value = '';
@@ -1815,9 +2273,9 @@ async function loadGame(opts = {}) {
 function gameSkeleton() {
   return h('div', { 'aria-busy': 'true', 'aria-label': 'Loading' },
     h('div.meta-chips', [72, 96, 64].map((w) => h('span.sk', { style: { width: `${w}px`, height: '30px', 'border-radius': '999px' } }))),
-    h('div.stats', h('div.sk', { style: { height: '74px', 'border-radius': '16px' } }), h('div.sk', { style: { height: '74px', 'border-radius': '16px' } })),
+    h('div.stats', h('div.sk', { style: { height: '76px', 'border-radius': '18px' } }), h('div.sk', { style: { height: '76px', 'border-radius': '18px' } })),
     h('div.g-section',
-      h('div.sk.sk-title', { style: { width: '30%', 'margin-bottom': '14px' } }),
+      h('div.sk.sk-title', { style: { width: '30%', 'margin-bottom': '12px' } }),
       h('div.card', ['96%', '88%', '92%', '60%'].map((w) => h('div.sk.sk-line', { style: { width: w } })))));
 }
 
@@ -1832,9 +2290,9 @@ function renderGameHead(d) {
   keyed(g.hero, JSON.stringify([heroUrl, d.cover, title, d.system, S.systems.length]), () =>
     heroUrl
       ? art(heroUrl, { title, system: d.system, text: false, eager: true, flat: true })
-      : art(d.cover, { title, system: d.system, text: false, blur: true, eager: true, flat: true }));
+      : art(d.cover, { title, system: d.system, text: false, blur: true, eager: true, flat: true, ar: 1.6 }));
   g.glow.style.setProperty('--glow', rgba(acc, 0.3));
-  keyed(g.cover, JSON.stringify([d.cover, title, d.system, S.systems.length]), () => art(d.cover, { title, system: d.system, eager: true }));
+  keyed(g.cover, JSON.stringify([d.cover, title, d.system, S.systems.length]), () => art(d.cover, { title, system: d.system, eager: true, fit: true, ar: 0.72, tag: sysShort(d.system, d.systemName) }));
   const dot = h('span.sys-dot');
   dot.style.setProperty('--sys', rgb(acc));
   const sysLine = [sysName(d.system, d.systemName), d.year].filter(Boolean).join(' \u00B7 ');
@@ -1850,9 +2308,13 @@ function renderGame() {
   if (!g || !g.data) return;
   const d = g.data;
   const y = g.el.scrollTop;
+  const arriving = !g.shown;
+  g.shown = true;
   renderGameHead(d);
-  g.body.replaceChildren(...gameSections(d));
+  const sections = gameSections(d);
+  g.body.replaceChildren(...sections);
   g.el.scrollTop = y;
+  if (arriving) reveal(sections);
   requestAnimationFrame(() => {
     const desc = g.body.querySelector('.desc.is-clamped');
     const more = g.body.querySelector('.desc-more');
@@ -2033,7 +2495,7 @@ function artCard(d) {
     if (missing) {
       thumb = h('span', { class: `art art-empty k-${k.kind}` }, icon('image'));
     } else {
-      thumb = art(url, { title: d.title, system: d.system, contain: k.contain, text: k.kind === 'square' || k.kind === 'icon' || k.kind === 'cover' });
+      thumb = art(url, { title: d.title, system: d.system, contain: k.contain, text: k.kind === 'square' || k.kind === 'icon' || k.kind === 'cover', fit: k.kind === 'cover', ar: k.ar });
       thumb.classList.add(`k-${k.kind}`);
       if (k.contain) thumb.classList.add('logo-bg');
       if (k.kind === 'screenshot' && shots.length > 1) thumb.append(h('span.art-count', `+${shots.length - 1}`));
@@ -2073,16 +2535,24 @@ function candidateRow(c, systemId, onPick) {
   const sub = [c.platformName, c.year].filter((v) => v != null && v !== '').join(' \u00B7 ');
   const title = c.title || 'Untitled';
   const row = h('button.cand', { type: 'button', 'aria-label': [title, sub, c.provider ? `from ${c.provider}` : null, conf != null ? `${conf} percent match` : null].filter(Boolean).join(', ') },
-    art(c.preview, { title, system: systemId }),
+    art(c.preview, { title, system: systemId, fit: true, ar: 48 / 66 }),
     h('span.cand-main', { 'aria-hidden': 'true' },
-      c.provider ? h('span.cand-prov', c.provider) : null,
+      c.provider ? h('span.cand-prov.overline', c.provider) : null,
       h('span.cand-title', title),
       sub ? h('span.cand-sub', sub) : null),
-    conf != null ? h('span', { class: 'conf ' + (conf >= 80 ? 'is-high' : conf >= 50 ? 'is-mid' : 'is-low'), 'aria-hidden': 'true' },
-      h('span.conf-val', `${conf}%`),
-      h('span.conf-label', 'match')) : null);
+    conf != null ? confMeter(conf) : null);
   row.addEventListener('click', () => onPick(row));
   return row;
+}
+
+/** How sure the source is: the value over a short meter (Trailing.Level). */
+function confMeter(conf) {
+  const fill = h('i');
+  fill.style.setProperty('width', `${conf}%`);
+  return h('span', { class: 'conf ' + (conf >= 80 ? 'is-high' : conf >= 50 ? 'is-mid' : 'is-low'), 'aria-hidden': 'true' },
+    h('span.conf-val', `${conf}%`),
+    h('span.conf-meter', fill),
+    h('span.conf-label', 'match'));
 }
 
 function candSkeleton() {
@@ -2149,6 +2619,7 @@ function openIdentify(d) {
         }));
       }
       body.replaceChildren(...[q ? h('p.cand-query', 'Results for ', h('b', quote(q))) : null, list].filter(Boolean));
+      reveal(list.children);
     } catch (e) {
       if (e.status === 401 || !layer.open) return;
       body.replaceChildren(errorState("Couldn't look for matches", e, load));
@@ -2190,7 +2661,7 @@ function openArtPicker(d, k) {
     grid.style.setProperty('--opt-ar', k.ar);
     for (const o of opts) {
       const inUse = currentUrl ? o.url === currentUrl : k.kind === 'screenshot' && shots.has(o.url);
-      const a = art(o.thumb || o.url, { title: d.title, system: d.system, contain: k.contain, text: false, alsoTry: o.thumb ? o.url : null });
+      const a = art(o.thumb || o.url, { title: d.title, system: d.system, contain: k.contain, text: false, alsoTry: o.thumb ? o.url : null, fit: true, ar: k.ar });
       if (k.contain) a.classList.add('logo-bg');
       if (inUse) a.append(h('span.opt-badge', { 'aria-hidden': 'true' }, icon('check'), 'In use'));
       const size = num(o.width) > 0 && num(o.height) > 0 ? `${num(o.width)} \u00D7 ${num(o.height)}` : '';
@@ -2204,6 +2675,7 @@ function openArtPicker(d, k) {
       grid.append(el);
     }
     body.replaceChildren(grid);
+    reveal(grid.children);
   };
 
   const choose = async (o, el, a, grid) => {
@@ -2460,6 +2932,7 @@ function resetCaptures() {
   if (!E.capBody) return;
   E.capBody.replaceChildren();
   E.capFilters.replaceChildren();
+  E.capFilters._seg = null;
   E.capTotal.textContent = '';
   E.capSelect.hidden = true;
   setSelecting(false);
@@ -2504,21 +2977,38 @@ function shownCaptures() {
   return C.items;
 }
 
-function renderCapFilters() {
+/** All, Screenshots and Recordings as one segmented switch whose thumb glides to the choice. */
+function renderCapFilters(animate = false) {
   const pictures = C.items.filter((c) => !c.video).length;
   const counts = { all: C.items.length, pictures, videos: C.items.length - pictures };
-  E.capFilters.replaceChildren(...CAP_FILTERS.map((f) => {
-    const b = h('button.chip', { type: 'button', 'aria-pressed': String(C.filter === f.id) },
-      h('span', f.label),
-      C.loaded ? h('span.chip-count', nf.format(counts[f.id])) : null);
-    b.addEventListener('click', () => {
-      if (C.filter === f.id) return;
-      C.filter = f.id;
-      renderCaptures();
-      window.scrollTo(0, 0);
+  if (!E.capFilters._seg) {
+    const glide = h('span.seg-glide', { 'aria-hidden': 'true' });
+    const btns = CAP_FILTERS.map((f) => {
+      const count = h('span.chip-count');
+      const b = h('button.seg-btn', { type: 'button', 'aria-pressed': 'false' }, h('span', f.label), count);
+      b.dataset.id = f.id;
+      b._count = count;
+      b.addEventListener('click', () => {
+        if (C.filter === f.id) return;
+        C.filter = f.id;
+        C.revealNext = true;
+        renderCapFilters(true);
+        renderCaptures();
+        window.scrollTo(0, 0);
+      });
+      return b;
     });
-    return b;
-  }));
+    E.capFilters.replaceChildren(glide, ...btns);
+    E.capFilters._seg = { glide, btns };
+  }
+  let current = null;
+  for (const b of E.capFilters._seg.btns) {
+    const on = b.dataset.id === C.filter;
+    b.setAttribute('aria-pressed', String(on));
+    b._count.textContent = C.loaded ? nf.format(counts[b.dataset.id]) : '';
+    if (on) current = b;
+  }
+  placeGlide(E.capFilters._seg.glide, current, animate);
 }
 
 function renderCaptures() {
@@ -2554,11 +3044,16 @@ function renderCaptures() {
     }
     cur.items.push(c);
   }
-  E.capBody.replaceChildren(...groups.map((g) => h('section.cap-day', { 'aria-label': dayLabel(g.at) },
+  const arriving = C.revealNext || !E.capBody.querySelector('.cap-tile:not(.is-skeleton)');
+  C.revealNext = false;
+  const days = groups.map((g) => h('section.cap-day', { 'aria-label': dayLabel(g.at) },
     h('div.cap-day-head',
       h('h2.cap-day-title', dayLabel(g.at)),
       h('span.cap-day-count', plural(g.items.length, 'capture', 'captures'))),
-    h('div.cap-grid', g.items.map(capTile)))));
+    h('div.cap-grid', g.items.map(capTile))));
+  E.capBody.replaceChildren(...days);
+  // Pictures replacing their placeholders (or a new filter) rise in, day by day.
+  if (arriving) reveal(days);
   syncSelection();
 }
 
@@ -2614,7 +3109,6 @@ function capTile(c) {
       c.video ? h('span.cap-badge', { 'aria-hidden': 'true' }, icon('play'), length ? h('span', length) : null) : null,
       h('span.cap-check', { 'aria-hidden': 'true' }, icon('check'))),
     h('span.cap-time', { 'aria-hidden': 'true' }, timeLabel(c.takenAt)));
-  b.style.setProperty('animation-delay', `${Math.min(C.tiles.size, 18) * 14}ms`);
   holdToSelect(b, c.id);
   b.addEventListener('click', () => {
     if (b._held) {
@@ -2751,7 +3245,7 @@ function openCapture(id) {
   prev.addEventListener('click', () => stepCapture(-1));
   next.addEventListener('click', () => stepCapture(1));
   download.addEventListener('click', () => downloadCaptures([v.list[v.index].id], download));
-  swipe(stage, (dir) => stepCapture(dir));
+  swipe(stage, (dir) => stepCapture(dir), (dir) => V === v && v.index + dir >= 0 && v.index + dir < v.list.length);
   V = v;
   E.layers.append(el);
   pushLayer(layer);
@@ -2805,24 +3299,62 @@ function showCapture(dir = 0) {
   v.next.disabled = v.index === v.list.length - 1;
 }
 
-/** A horizontal swipe on [el] (pictures only: a video's own controls take the touch). */
-function swipe(el, onSwipe) {
+/**
+ * A horizontal swipe on [el] (pictures only: a video's own controls take the touch). The picture
+ * follows the finger, resists at either end, and settles back if the swipe was too short.
+ */
+function swipe(el, onSwipe, canGo) {
   let start = null;
+  let moved = null;
   el.addEventListener('pointerdown', (e) => {
-    if (e.target.closest('video')) return;
-    start = { x: e.clientX, y: e.clientY, t: Date.now() };
+    if (e.target.closest('video') || (e.pointerType === 'mouse' && e.button !== 0)) return;
+    start = { x: e.clientX, y: e.clientY, t: Date.now(), id: e.pointerId, dragging: false };
   });
-  el.addEventListener('pointerup', (e) => {
-    if (!start) return;
+  el.addEventListener('pointermove', (e) => {
+    if (!start || e.pointerId !== start.id) return;
+    const dx = e.clientX - start.x;
+    const dy = e.clientY - start.y;
+    if (!start.dragging) {
+      if (Math.abs(dx) < 8 || Math.abs(dx) < Math.abs(dy) * 1.2) return;
+      start.dragging = true;
+      quiet(() => el.setPointerCapture(e.pointerId));
+      moved = reducedMotion.matches ? null : el.firstElementChild;
+      if (moved) {
+        moved.classList.remove('from-right', 'from-left', 'is-settling');
+        moved.classList.add('is-dragging');
+      }
+    }
+    if (!moved) return;
+    const k = canGo(dx < 0 ? 1 : -1) ? 1 : 0.3;
+    moved.style.setProperty('transform', `translateX(${Math.round(dx * k)}px)`);
+  });
+  const end = (e, cancelled) => {
+    if (!start || e.pointerId !== start.id) return;
     const dx = e.clientX - start.x;
     const dy = e.clientY - start.y;
     const quick = Date.now() - start.t < 600;
+    const far = Math.abs(dx) > Math.max(80, el.clientWidth * 0.22);
+    const dir = dx < 0 ? 1 : -1;
+    const go = !cancelled && Math.abs(dx) > Math.abs(dy) * 1.4 && ((quick && Math.abs(dx) > 56) || far) && canGo(dir);
+    const m = moved;
     start = null;
-    if (quick && Math.abs(dx) > 56 && Math.abs(dx) > Math.abs(dy) * 1.4) onSwipe(dx < 0 ? 1 : -1);
-  });
-  el.addEventListener('pointercancel', () => {
-    start = null;
-  });
+    moved = null;
+    if (m) m.classList.remove('is-dragging');
+    if (go) {
+      onSwipe(dir);
+      return;
+    }
+    if (m) {
+      m.classList.add('is-settling');
+      m.style.setProperty('transform', 'translateX(0px)');
+      setTimeout(() => {
+        m.classList.remove('is-settling');
+        m.style.removeProperty('transform');
+      }, 320);
+    }
+  };
+  el.addEventListener('pointerup', (e) => end(e, false));
+  el.addEventListener('pointercancel', (e) => end(e, true));
 }
 
 document.addEventListener('keydown', (e) => {
@@ -2879,6 +3411,7 @@ function init() {
   E.capCount = $('#cap-count');
   E.capAll = $('#cap-all');
   E.capDownload = $('#cap-download');
+  E.tabGlide = $('.tab-glide');
 
   E.countdown.setAttribute('aria-live', 'off');
 
@@ -2950,6 +3483,14 @@ function init() {
   } else {
     window.addEventListener('scroll', checkSentinel, { passive: true });
   }
+
+  // Gliding markers are placed from layout: put them back when it changes.
+  let resizeRaf = 0;
+  window.addEventListener('resize', () => {
+    cancelAnimationFrame(resizeRaf);
+    resizeRaf = requestAnimationFrame(relayoutGlides);
+  }, { passive: true });
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(relayoutGlides);
 
   setInterval(tick, 1000);
   checkSession();

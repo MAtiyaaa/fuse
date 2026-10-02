@@ -176,6 +176,55 @@
     } catch (e) { /* the section stays empty */ }
     if (!list.length) { $("#themes").hidden = true; return; }
     for (const t of list) row.append(themeCard(t));
+    themeFilter(list);
+  }
+
+  // Dark or bright, from the room colour itself, so a community theme sorts itself too.
+  function isBright(t) {
+    const m = /^#?([0-9a-f]{6})/i.exec((t.colors && t.colors.background) || "");
+    if (!m) return false;
+    const n = parseInt(m[1], 16);
+    const ch = (v) => { const x = v / 255; return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4; };
+    return 0.2126 * ch((n >> 16) & 255) + 0.7152 * ch((n >> 8) & 255) + 0.0722 * ch(n & 255) > 0.4;
+  }
+
+  // All, Dark and Bright: a segmented switch whose thumb glides to the choice.
+  function themeFilter(list) {
+    const seg = $("[data-theme-filter]");
+    const cards = $$(".theme", $("[data-themes]"));
+    const bright = list.map(isBright);
+    const counts = { all: list.length, dark: bright.filter((b) => !b).length, bright: bright.filter(Boolean).length };
+    const total = $("[data-theme-count]");
+    if (total) total.textContent = String(list.length);
+    cards.forEach((c, i) => { c.dataset.tone = bright[i] ? "bright" : "dark"; });
+    if (!seg) return;
+    for (const [k, v] of Object.entries(counts)) { const b = $(`[data-count="${k}"]`, seg); if (b) b.textContent = String(v); }
+    seg.hidden = false;
+    const glide = $(".seg-glide", seg);
+    const place = (animate) => {
+      const on = $('.seg-btn[aria-pressed="true"]', seg);
+      if (!on || !glide) return;
+      glide.classList.toggle("is-moving", !!animate && !reduced);
+      glide.style.setProperty("--gx", `${on.offsetLeft}px`);
+      glide.style.setProperty("--gw", `${on.offsetWidth}px`);
+    };
+    for (const b of $$(".seg-btn", seg)) {
+      b.addEventListener("click", () => {
+        const f = b.dataset.filter;
+        for (const o of $$(".seg-btn", seg)) o.setAttribute("aria-pressed", String(o === b));
+        place(true);
+        const shown = [];
+        for (const c of cards) {
+          c.hidden = !(f === "all" || c.dataset.tone === f);
+          if (!c.hidden) shown.push(c);
+        }
+        if (current && current.hidden) { current.classList.remove("is-focused"); current = null; }
+        revealAll(shown);
+      });
+    }
+    place(false);
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => place(false));
+    window.addEventListener("resize", () => place(false), { passive: true });
   }
 
   function themeCard(t) {
@@ -192,6 +241,8 @@
     s.setProperty("--t-corner", { soft: "28%", round: "34%", sharp: "10%", pill: "50%" }[t.corners] || "28%");
     s.setProperty("--glow", t.colors.accent);
 
+    const frame = document.createElement("div");
+    frame.className = "frame";
     const preview = document.createElement("div");
     preview.className = "preview";
     const bg = document.createElement("div");
@@ -210,9 +261,15 @@
     pname.textContent = t.name;
     preview.append(pname);
 
+    const spark = document.createElement("i");
+    spark.className = "spark";
+    spark.setAttribute("aria-hidden", "true");
+    frame.append(preview, spark);
+
     const meta = document.createElement("div");
     meta.className = "meta-line";
     const text = document.createElement("div");
+    text.className = "meta-text";
     const b = document.createElement("b");
     b.textContent = t.name;
     const small = document.createElement("small");
@@ -221,10 +278,14 @@
     const copy = document.createElement("button");
     copy.className = "copy";
     copy.type = "button";
-    copy.textContent = "Copy link";
+    copy.setAttribute("aria-label", `Copy a link to ${t.name}`);
+    copy.innerHTML = LINK_ICON;
+    const label = document.createElement("span");
+    label.textContent = "Copy link";
+    copy.append(label);
     copy.addEventListener("click", (e) => { e.stopPropagation(); copyLink(t, copy); });
     meta.append(text, copy);
-    card.append(preview, meta);
+    card.append(frame, meta);
     card.addEventListener("keydown", (e) => { if (e.key === "Enter") copyLink(t, copy); });
     card.dataset.activate = "copy";
     return card;
@@ -344,13 +405,24 @@
     },
   };
 
+  // Lucide icons (ISC): link and check.
+  const LINK_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>';
+  const CHECK_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>';
+
   async function copyLink(t, button) {
     const link = SITE + t.path;
+    const label = $("span", button);
     try {
       await navigator.clipboard.writeText(link);
-      button.textContent = "Copied";
+      button.classList.add("is-done");
+      $("svg", button).outerHTML = CHECK_ICON;
+      if (label) label.textContent = "Copied";
       toast(`Copied. In Fuse: Settings, Appearance, Theme, Add a theme`);
-      setTimeout(() => { button.textContent = "Copy link"; }, 2200);
+      setTimeout(() => {
+        button.classList.remove("is-done");
+        $("svg", button).outerHTML = LINK_ICON;
+        if (label) label.textContent = "Copy link";
+      }, 2200);
     } catch (e) {
       window.prompt("Copy this link", link);
     }
@@ -370,7 +442,8 @@
 
   let current = null;
 
-  function tiles() { return $$("[data-row]").filter((r) => !r.closest("[hidden]")).map((r) => $$(".tile", r)).filter((t) => t.length); }
+  const visible = (t) => !t.hidden && !t.closest("[hidden]") && t.offsetParent !== null;
+  function tiles() { return $$("[data-row] .tile").filter(visible); }
 
   function choose(tile, scroll = true) {
     if (!tile) return;
@@ -381,30 +454,47 @@
     if (scroll) tile.scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "center", inline: "nearest" });
   }
 
+  // Moves like the app's spatial selection: sideways along the tiles that share a line with this
+  // one, up and down to the nearest line, landing on the tile nearest the one you're on. Works the
+  // same for a scrolling shelf and for a grid that wraps.
   function move(dx, dy) {
-    const rows = tiles();
-    if (!rows.length) return;
-    if (!current || !document.body.contains(current)) { choose(rows[0][0]); return; }
-    const r = rows.findIndex((row) => row.includes(current));
-    if (r < 0) { choose(rows[0][0]); return; }
+    const all = tiles();
+    if (!all.length) return;
+    if (!current || !document.body.contains(current) || !visible(current)) { choose(all[0]); return; }
+    const r = current.getBoundingClientRect();
+    const cx = r.left + r.width / 2;
+    const cy = r.top + r.height / 2;
+    let best = null;
+    let bestScore = Infinity;
     if (dx) {
-      const i = rows[r].indexOf(current) + dx;
-      if (i >= 0 && i < rows[r].length) choose(rows[r][i]);
-      return;
+      for (const t of all) {
+        if (t === current) continue;
+        const b = t.getBoundingClientRect();
+        const ddx = b.left + b.width / 2 - cx;
+        const overlap = Math.min(b.bottom, r.bottom) - Math.max(b.top, r.top);
+        if (Math.sign(ddx) !== dx || overlap < Math.min(b.height, r.height) * 0.4) continue;
+        if (Math.abs(ddx) < bestScore) { best = t; bestScore = Math.abs(ddx); }
+      }
+    } else {
+      // The nearest line in that direction first, then the tile in it nearest this one.
+      let line = Infinity;
+      for (const t of all) {
+        if (t === current) continue;
+        const b = t.getBoundingClientRect();
+        const ddy = dy > 0 ? b.top - (r.bottom - 4) : (r.top + 4) - b.bottom;
+        if (ddy >= 0) line = Math.min(line, ddy);
+      }
+      if (line === Infinity) return;
+      for (const t of all) {
+        if (t === current) continue;
+        const b = t.getBoundingClientRect();
+        const ddy = dy > 0 ? b.top - (r.bottom - 4) : (r.top + 4) - b.bottom;
+        if (ddy < 0 || ddy > line + Math.min(b.height, r.height) * 0.5) continue;
+        const d = Math.abs(b.left + b.width / 2 - cx);
+        if (d < bestScore) { best = t; bestScore = d; }
+      }
     }
-    const next = rows[r + dy];
-    if (!next) return;
-    // The tile in the next row nearest the one you're on, as the app's spatial moves do.
-    const x = current.getBoundingClientRect();
-    const cx = x.left + x.width / 2;
-    let best = next[0];
-    let bestD = Infinity;
-    for (const t of next) {
-      const b = t.getBoundingClientRect();
-      const d = Math.abs(b.left + b.width / 2 - cx);
-      if (d < bestD) { best = t; bestD = d; }
-    }
-    choose(best);
+    if (best) choose(best);
   }
 
   function activate() {
@@ -470,14 +560,78 @@
 
   function followSections() {
     const tabs = $$(".tab[data-tab]");
+    const glide = $(".tab-glide");
     const sections = tabs.map((t) => document.getElementById(t.dataset.tab)).filter(Boolean);
+    let lastLeft = null;
+    const place = (animate) => {
+      const on = tabs.find((t) => t.classList.contains("is-active"));
+      if (!glide) return;
+      glide.classList.toggle("is-on", !!on);
+      if (!on) return;
+      const nav = glide.parentElement;
+      const bar = 18;
+      const center = on.offsetLeft + on.offsetWidth / 2;
+      const left = Math.round(center - bar / 2);
+      const right = Math.round(nav.scrollWidth - (center + bar / 2));
+      glide.classList.toggle("to-right", !!animate && lastLeft != null && left > lastLeft);
+      glide.classList.toggle("to-left", !!animate && lastLeft != null && left < lastLeft);
+      lastLeft = left;
+      glide.style.setProperty("--gl", `${left}px`);
+      glide.style.setProperty("--gr", `${right}px`);
+    };
     const io = new IntersectionObserver((entries) => {
       for (const e of entries) {
         if (!e.isIntersecting) continue;
         tabs.forEach((t) => t.classList.toggle("is-active", t.dataset.tab === e.target.id));
+        place(true);
       }
     }, { rootMargin: "-40% 0px -55% 0px" });
     sections.forEach((s) => io.observe(s));
+    window.addEventListener("resize", () => place(false), { passive: true });
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => place(false));
+  }
+
+  // ------------------------------------------------------------------ entry reveal
+
+  // Shelves rise into place as they come into view: the label, then the first tiles a beat apart
+  // (25 ms, at most eight deep), once. Nothing is hidden before it, so a page that never scrolls,
+  // prints or runs without observers still shows everything.
+  function revealAll(nodes) {
+    const list = nodes.filter((n) => n && !n.hidden);
+    list.forEach((n) => n.classList.remove("rv"));
+    void document.body.offsetWidth;
+    list.forEach((n, i) => {
+      n.style.setProperty("--i", String(Math.min(i, 8)));
+      n.classList.add("rv");
+      n.addEventListener("animationend", function done(e) {
+        if (e.target !== n || e.animationName !== "reveal") return;
+        n.removeEventListener("animationend", done);
+        n.classList.remove("rv");
+      });
+    });
+  }
+
+  function revealShelves() {
+    if (!("IntersectionObserver" in window)) return;
+    const io = new IntersectionObserver((entries) => {
+      for (const e of entries) {
+        if (!e.isIntersecting) continue;
+        io.unobserve(e.target);
+        const shelf = e.target;
+        const parts = $$(":scope > .label, :scope > .lede, :scope > .seg, :scope > .also, :scope > .release-line", shelf);
+        const row = $("[data-row]", shelf);
+        const first = row ? $$(".tile", row).filter((t) => !t.hidden).slice(0, 8) : [];
+        revealAll(parts.concat(first));
+      }
+    }, { rootMargin: "0px 0px 12% 0px" });
+    $$(".shelf").forEach((s) => io.observe(s));
+    const show = $(".showcase");
+    if (show) {
+      const io2 = new IntersectionObserver((entries) => {
+        if (entries.some((e) => e.isIntersecting)) { io2.disconnect(); revealAll([show]); }
+      }, { rootMargin: "0px 0px 12% 0px" });
+      io2.observe(show);
+    }
   }
 
   // ------------------------------------------------------------------ start
@@ -485,6 +639,8 @@
   clock();
   setInterval(clock, 15000);
   followSections();
+  revealAll($$(".stage > *"));
+  revealShelves();
   const mine = placeMine();
   if (mine) choose(mine, false);
   loadRelease().then(applyRelease);
