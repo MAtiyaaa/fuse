@@ -229,7 +229,7 @@ class MainActivity : ComponentActivity(), ActivityRequests {
                             .focusRequester(focus)
                             .focusable(),
                     ) {
-                        FuseApp(s.store, app.platformUi, router, s.phoneLink, safeMode = s.safeMode, onSettled = app::settled)
+                        FuseApp(s.store, app.platformUi, router, s.phoneLink, safeMode = s.safeMode, onSettled = app::settled, startupIntro = true)
                     }
                     LaunchedEffect(Unit) { focus.requestFocus() }
                 }

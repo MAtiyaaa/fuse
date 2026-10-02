@@ -161,7 +161,9 @@ fun AppState.gameMenu(card: GameCard, fromDetail: Boolean = false, extra: List<M
                 }))
             } else {
                 add(MenuAction("find", "Find in Cartridge", FuseIcons.CloudDownload, onSelect = {
-                    closeOverlays(); store.cartridge.open(CartridgeRoute.Search(card.title, null))
+                    // Cartridge finds a game by every word of the search, so only the name goes:
+                    // "(USA, Europe) (SGB Enhanced)" in a file name would match nothing on RomM.
+                    closeOverlays(); store.cartridge.open(CartridgeRoute.Search(io.github.matiyaaa.fuse.library.parse.SearchTitles.clean(card.title), card.platformId.value))
                 }))
                 // Games Cartridge downloaded are on RomM already, and apps have no files to send.
                 if (!card.isApp) add(MenuAction("upload", "Upload to RomM", FuseIcons.Upload, detail = "Through Cartridge, with its other discs, DLC and updates", onSelect = { uploadToRomm(card) }))
