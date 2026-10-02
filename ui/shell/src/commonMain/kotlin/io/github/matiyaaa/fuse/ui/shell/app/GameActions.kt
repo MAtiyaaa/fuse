@@ -323,7 +323,7 @@ fun AppState.showEmulator(id: io.github.matiyaaa.fuse.model.EmulatorId) {
     }
 }
 
-private val PACKAGE_SYSTEMS = setOf("ps3", "psvita")
+private val PACKAGE_SYSTEMS = setOf("ps3", "psvita", "3ds", "new-nintendo-3ds")
 
 /**
  * The game's PCSX2 patches with a check for each that is on. Fuse turns on any that are off and

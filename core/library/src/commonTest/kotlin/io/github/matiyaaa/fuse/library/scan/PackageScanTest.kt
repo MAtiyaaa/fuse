@@ -71,3 +71,22 @@ class PackageScanTest {
         assertEquals("PCSA00001", game.tags.serial)
     }
 }
+
+/** 3DS updates and DLC kept as .cia join their game. */
+class ThreeDsScanTest {
+    private val fs = InMemoryFileSystem()
+
+    @Test
+    fun updateCiasJoinTheirCartridge() = runTest {
+        fs.bytes("/ROMs/3ds/Pokemon X.3ds", ContentFixtures.cartridge("0004000000055D00"))
+            .bytes("/ROMs/3ds/Pokemon X Update.cia", ContentFixtures.cia("0004000E00055D00", 1 shl 10))
+            .bytes("/ROMs/3ds/Pokemon X DLC.cia", ContentFixtures.cia("0004008C00055D00", 0))
+            .bytes("/ROMs/3ds/Zelda.cia", ContentFixtures.cia("0004000000033500", 0))
+        val games = FolderInterpreter(fs).scanPlatformFolder(PlatformCatalog.byId("3ds")!!, "/ROMs/3ds", LibrarySourceId(1)).games
+        assertEquals(2, games.size, games.joinToString { it.title + ":" + it.path + ":" + it.content.size })
+        val pokemon = games.single { it.title.startsWith("Pokemon") }
+        assertEquals(setOf(ContentKind.UPDATE, ContentKind.DLC), pokemon.content.map { it.kind }.toSet())
+        // A 3DS title id isn't a serial anything else understands.
+        assertEquals(null, pokemon.tags.serial)
+    }
+}

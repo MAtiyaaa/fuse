@@ -195,6 +195,54 @@ class ContentInstallStoreTest {
     }
 
     @Test
+    fun threeDsCiasInstallWithAzaharAndPlayFromTheInstalledTitle(): Unit = runBlocking {
+        val sdmc = File(cache, "azahar/sdmc").also { File(it, "Nintendo 3DS").mkdirs() }
+        File(root, "3ds").mkdirs()
+        File(root, "3ds/Pokemon X.cia").writeBytes(Pkg.cia("0004000000055D00", 0))
+        File(root, "3ds/Pokemon X Update.cia").writeBytes(Pkg.cia("0004000E00055D00", 1 shl 10))
+        val services = FakeServices(
+            FuseData(DesktopDatabase.open(File(cache, "fuse.db").absolutePath)), cache,
+            installedEmulators = listOf(InstalledEmulator(EmulatorId("linux.azahar"), "Azahar", Host.LINUX, "/usr/bin/azahar", platforms = setOf(PlatformId("3ds")), detectedVia = "PATH")),
+        ).also { it.azaharSdmc = sdmc.absolutePath }
+        fun installed(id: String, version: Int, app: Boolean) {
+            val dir = File(sdmc, "Nintendo 3DS/${"0".repeat(32)}/${"0".repeat(32)}/title/${id.take(8).lowercase()}/${id.drop(8).lowercase()}/content").also { it.mkdirs() }
+            File(dir, "00000000.tmd").writeBytes(Pkg.tmd(id, version, 0x2A))
+            if (app) File(dir, "0000002a.app").writeBytes(ByteArray(16))
+        }
+        // The first time, the update is "encrypted": Azahar says so in its exit code.
+        var encrypted = true
+        services.contentInstaller = { run ->
+            assertEquals("-i", run.argv[run.argv.size - 2])
+            val file = File(run.argv.last())
+            when {
+                file.name == "Pokemon X.cia" -> { installed("0004000000055D00", 0, app = true); InstallerResult(0, "Installed CIA successfully.") }
+                encrypted -> InstallerResult(7, "Failed to install CIA: CIA is encrypted.")
+                else -> { installed("0004000E00055D00", 1 shl 10, app = false); InstallerResult(0, "Installed CIA successfully.") }
+            }
+        }
+        val store = createFuseStore(services, scope)
+        store.sources.add(root.absolutePath, LibrarySourceKind.ROMS_ROOT)
+        val games = withTimeout(20_000) { store.library.games(GameQuery()).first { g -> g.any { it.platformId == PlatformId("3ds") } } }
+        val pokemon = games.single { it.platformId == PlatformId("3ds") }
+        assertEquals(listOf(ContentState.NEEDS_INSTALL, ContentState.UPDATE_AVAILABLE), store.content.view(pokemon.id)!!.states)
+
+        val first = store.content.install(pokemon.id)
+        assertFalse(first.ok)
+        assertTrue(first.message.orEmpty().contains("encrypted"), first.message)
+        assertEquals(1, first.installed.size, "the game went in before the update stopped")
+
+        encrypted = false
+        assertTrue(store.content.install(pokemon.id).ok)
+        assertEquals(listOf(ContentState.READY), store.content.view(pokemon.id)!!.states)
+
+        // Azahar never plays a .cia: Play starts the installed title's first content.
+        assertIs<LaunchOutcome.Started>(store.library.launch(pokemon.id))
+        val target = services.launched.last().target
+        assertIs<io.github.matiyaaa.fuse.model.LaunchTarget.File>(target)
+        assertTrue(target.path.endsWith("/title/00040000/00055d00/content/0000002a.app"), target.path)
+    }
+
+    @Test
     fun gamesWithNothingToInstallHaveNoContentPage(): Unit = runBlocking {
         File(root, "ps3/Metal Gear Solid 4 [BLUS30109].iso").writeBytes(ByteArray(64))
         val services = services()
@@ -251,6 +299,27 @@ private object Pkg {
     }
 
     fun ps3(contentId: String, type: Int, flags: Int = 0, drm: Int, version: String? = null) = pkg(1, contentId, type, flags, drm, version, null)
+
+    /** A TMD (RSA-2048 signature, header at 0x140) for [titleId] with one content, [contentId]. */
+    fun tmd(titleId: String, version: Int, contentId: Int = 0): ByteArray {
+        val h = 0x140
+        val out = ByteArray(h + 0xC4 + 0x900 + 0x30)
+        be32(0x10004).copyInto(out, 0)
+        for (i in 0 until 8) out[h + 0x4C + i] = titleId.substring(i * 2, i * 2 + 2).toInt(16).toByte()
+        out[h + 0x9C] = (version shr 8).toByte(); out[h + 0x9D] = version.toByte(); out[h + 0x9F] = 1
+        be32(contentId).copyInto(out, h + 0xC4 + 0x900)
+        return out
+    }
+
+    /** A CIA: a little-endian header, then certificate chain, ticket and TMD, aligned to 64 bytes. */
+    fun cia(titleId: String, version: Int): ByteArray {
+        val t = tmd(titleId, version)
+        val out = ByteArray(0x2DC0 + t.size + 0x40)
+        fun le(at: Int, v: Int) { for (i in 0 until 4) out[at + i] = (v ushr (8 * i)).toByte() }
+        le(0, 0x2020); le(0x08, 0xA00); le(0x0C, 0x350); le(0x10, t.size)
+        t.copyInto(out, 0x2DC0)
+        return out
+    }
 
     fun vita(contentId: String, category: String) = pkg(
         2, contentId, 0x15, 0, 2, null,

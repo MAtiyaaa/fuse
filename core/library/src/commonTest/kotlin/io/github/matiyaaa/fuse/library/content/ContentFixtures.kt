@@ -89,6 +89,43 @@ object ContentFixtures {
         byteArrayOf('N'.code.toByte(), 'P'.code.toByte(), 'D'.code.toByte(), 0) + be32(4) + be32(licence) + be32(0) +
             contentId.encodeToByteArray().copyOf(0x30) + ByteArray(0x40)
 
+    /** A TMD signed RSA-2048 (header at 0x140): [titleId] (16 hex digits), [version], and content ids by index. */
+    fun tmd(titleId: String, version: Int, contents: List<Long> = listOf(0L)): ByteArray {
+        val header = 0x140
+        val out = ByteArray(header + 0xC4 + 0x900 + contents.size * 0x30)
+        be32(0x10004).copyInto(out, 0)
+        for (i in 0 until 8) out[header + 0x4C + i] = titleId.substring(i * 2, i * 2 + 2).toInt(16).toByte()
+        out[header + 0x9C] = (version shr 8).toByte(); out[header + 0x9D] = version.toByte()
+        out[header + 0x9F] = contents.size.toByte()
+        contents.forEachIndexed { i, cid ->
+            val at = header + 0xC4 + 0x900 + i * 0x30
+            be32(cid.toInt()).copyInto(out, at)
+            out[at + 5] = i.toByte()
+        }
+        return out
+    }
+
+    /** A CIA: its little-endian header, then the certificate chain, ticket and TMD, each aligned to 64 bytes. */
+    fun cia(titleId: String, version: Int): ByteArray {
+        val tmd = tmd(titleId, version)
+        fun le(b: ByteArray, at: Int, v: Int) { for (i in 0 until 4) b[at + i] = (v ushr (8 * i)).toByte() }
+        val head = ByteArray(0x2020)
+        le(head, 0, 0x2020); le(head, 0x08, 0xA00); le(head, 0x0C, 0x350); le(head, 0x10, tmd.size)
+        val certAt = 0x2040
+        val ticketAt = certAt + 0xA00
+        val tmdAt = (ticketAt + 0x350 + 63) / 64 * 64
+        val out = ByteArray(tmdAt + tmd.size + 0x100)
+        head.copyInto(out, 0)
+        tmd.copyInto(out, tmdAt)
+        return out
+    }
+
+    /** The start of a 3DS cartridge image: "NCSD" at 0x100, the media id (title id, little-endian) at 0x108. */
+    fun cartridge(titleId: String): ByteArray = ByteArray(0x400).also { b ->
+        "NCSD".encodeToByteArray().copyInto(b, 0x100)
+        for (i in 0 until 8) b[0x108 + i] = titleId.substring(14 - i * 2, 16 - i * 2).toInt(16).toByte()
+    }
+
     fun be32(v: Int): ByteArray = byteArrayOf((v ushr 24).toByte(), (v ushr 16).toByte(), (v ushr 8).toByte(), v.toByte())
 
     fun b64(s: String): ByteArray = Base64.Default.decode(s)

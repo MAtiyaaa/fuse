@@ -1042,4 +1042,4 @@ internal fun playersLabel(players: String): String? {
 private fun detailsPerLine(cards: Int, fits: Int): Int = (if (cards == 4 && fits == 3) 2 else fits.coerceAtMost(cards)).coerceAtLeast(1)
 
 /** Systems whose games can come as packages that Fuse installs into the emulator. */
-private val CONTENT_SYSTEMS = setOf("ps3", "psvita")
+private val CONTENT_SYSTEMS = setOf("ps3", "psvita", "3ds", "new-nintendo-3ds")

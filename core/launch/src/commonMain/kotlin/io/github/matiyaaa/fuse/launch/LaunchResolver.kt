@@ -320,8 +320,9 @@ class LaunchResolver(
 }
 
 /**
- * Files an emulator installs rather than starts: PlayStation 3 and Vita packages, and the Vita's
- * `.vpk`/`.zip` dumps. Once installed, the game starts by its title id.
+ * Files an emulator installs rather than starts: PlayStation 3 and Vita packages, the Vita's
+ * `.vpk`/`.zip` dumps, and 3DS `.cia` files. Once installed, a PlayStation game starts by its title
+ * id and a 3DS game from its installed title.
  */
 object InstallOnlyFiles {
     fun matches(platform: io.github.matiyaaa.fuse.model.PlatformId, path: String): Boolean {
@@ -329,6 +330,8 @@ object InstallOnlyFiles {
         return when (platform.value) {
             "ps3" -> ext == "pkg"
             "psvita" -> ext == "pkg" || ext == "vpk" || ext == "zip"
+            // Azahar only installs a .cia; the installed title is what plays.
+            "3ds", "new-nintendo-3ds" -> ext == "cia"
             else -> false
         }
     }

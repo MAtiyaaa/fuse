@@ -4,6 +4,7 @@ import io.github.matiyaaa.fuse.library.FsAccessException
 import io.github.matiyaaa.fuse.library.FsEntry
 import io.github.matiyaaa.fuse.library.FsPath
 import io.github.matiyaaa.fuse.library.FuseFileSystem
+import io.github.matiyaaa.fuse.library.content.Cia
 import io.github.matiyaaa.fuse.library.content.ContentSourceReader
 import io.github.matiyaaa.fuse.library.content.PackageKind
 import io.github.matiyaaa.fuse.library.content.PsPackages
@@ -84,7 +85,7 @@ class FolderInterpreter(
     private val contentReader = ContentSourceReader(fs)
 
     /** What a package file is, from its header: its title id, and UPDATE or DLC for content that isn't the game. */
-    private data class PackageInfo(val titleId: String?, val kind: ContentKind?, val title: String?, val notAGame: Boolean = false)
+    private data class PackageInfo(val titleId: String?, val kind: ContentKind?, val title: String?, val notAGame: Boolean = false, val serial: Boolean = true)
 
     /**
      * Scans one platform folder: its files are games (grouped into disc sets, with loose updates and
@@ -349,7 +350,7 @@ class FolderInterpreter(
             kind = LocationKind.FOLDER,
             launchPath = main?.primary?.path ?: folder.path,
             title = title,
-            tags = mergeTags(folderTags, main?.let { m -> tagsOf(m).let { t -> if (t.serial == null) t.copy(serial = walk.packages[m.primary.path]?.titleId) else t } }),
+            tags = mergeTags(folderTags, main?.let { m -> tagsOf(m).let { t -> if (t.serial == null) t.copy(serial = walk.packages[m.primary.path]?.takeIf { it.serial }?.titleId) else t } }),
             content = content,
             discs = main?.discs.orEmpty(),
             sizeBytes = sizeBytes,
@@ -512,10 +513,20 @@ class FolderInterpreter(
      */
     private suspend fun readPackages(groups: List<FileGroup>, walk: Walk): List<FileGroup> {
         val id = walk.platform.id.value
-        if (id != "ps3" && id != "psvita") return groups
+        if (id != "ps3" && id != "psvita" && id != "3ds" && id != "new-nintendo-3ds") return groups
+        val threeDs = id == "3ds" || id == "new-nintendo-3ds"
         return groups.filter { g ->
             val f = g.primary
-            val info = walk.packages[f.path] ?: when (f.extension) {
+            val info = walk.packages[f.path] ?: (if (threeDs) {
+                // A 3DS update or DLC .cia joins its game by the game's title id (never shown as a serial).
+                when (f.extension) {
+                    "cia" -> Cia.read(fs, f.path)?.let { c ->
+                        PackageInfo(c.gameId, if (c.kind == PackageKind.UPDATE) ContentKind.UPDATE else if (c.kind == PackageKind.DLC) ContentKind.DLC else null, null, serial = false)
+                    }
+                    "3ds", "cci" -> Cia.cartridgeId(fs, f.path)?.let { PackageInfo(it, null, null, serial = false) }
+                    else -> null
+                }
+            } else when (f.extension) {
                 "pkg" -> PsPackages.read(fs, f.path)?.let { p ->
                     PackageInfo(
                         p.titleId,
@@ -531,7 +542,7 @@ class FolderInterpreter(
                     PackageInfo(a.titleId, if (a.category == "gp") ContentKind.UPDATE else if (a.category == "ac") ContentKind.DLC else null, a.title)
                 } ?: PackageInfo(null, null, null, notAGame = f.extension == "zip")
                 else -> null
-            }?.also { walk.packages[f.path] = it }
+            })?.also { walk.packages[f.path] = it }
             info?.notAGame != true
         }
     }
@@ -563,7 +574,7 @@ class FolderInterpreter(
         kind = LocationKind.FILE,
         launchPath = group.primary.path,
         title = packageTitle(group, walk) ?: group.title,
-        tags = tagsOf(group).let { tags -> if (tags.serial == null) tags.copy(serial = walk.packages[group.primary.path]?.titleId ?: injectedSerial(group.primary)) else tags },
+        tags = tagsOf(group).let { tags -> if (tags.serial == null) tags.copy(serial = walk.packages[group.primary.path]?.takeIf { it.serial }?.titleId ?: injectedSerial(group.primary)) else tags },
         content = extra,
         discs = group.discs,
         sizeBytes = group.sizeBytes,

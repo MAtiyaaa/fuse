@@ -142,6 +142,31 @@ object ContentPlanner {
     ): ContentPlan = when (emulator) {
         ContentEmulator.RPCS3 -> ps3(sources, installed, recorded, picked, playsWithoutInstall)
         ContentEmulator.VITA3K -> vita(sources, installed, recorded, picked, playsWithoutInstall)
+        ContentEmulator.AZAHAR -> threeDs(sources, installed, playsWithoutInstall)
+    }
+
+    /**
+     * Nintendo 3DS: the game's CIA, then its updates oldest first, then its DLC, each installed by
+     * Azahar (`-i`) into its SD card, where each one's own title folder shows it is in. A CIA needs
+     * no licence (it has to be decrypted already; Azahar refuses encrypted ones).
+     */
+    private fun threeDs(sources: ContentSources, installed: InstalledContent, playsWithoutInstall: Boolean): ContentPlan {
+        val items = ArrayList<PlanItem>()
+        val order = compareBy<CiaFile>({ it.kind.ordinal }, { it.version.split('.').map { v -> v.toIntOrNull() ?: 0 }.fold(0L) { a, v -> a * 1000 + v } }, { it.fileName.lowercase() })
+        for (c in sources.cias.sortedWith(order)) {
+            val role = role(c.kind)
+            if (role == null || role == ItemRole.LICENCE) {
+                items += PlanItem(ItemRole.GAME, c.path, c.titleId, null, c.version, ItemStatus.UNSUPPORTED, sizeBytes = c.sizeBytes, why = "A system title, not a game, update or DLC")
+                continue
+            }
+            val have = installed.games[c.titleId]
+            val done = have != null && PsPackages.compareVersions(have.version, c.version) >= 0
+            items += PlanItem(role, c.path, c.titleId, null, c.version, if (done) ItemStatus.INSTALLED else ItemStatus.READY, LicenceMatch(c.titleId, LicenceSource.BUILT_IN), c.sizeBytes)
+        }
+        val planned = supersede(items)
+        val games = sources.cias.map { it.gameId }.toSet() + sources.cartridges.values
+        val gameInstalled = games.any { installed.games[it] != null }
+        return ContentPlan(ContentEmulator.AZAHAR, games, planned, installed.readable, gameInstalled, playsWithoutInstall || sources.cartridges.isNotEmpty())
     }
 
     private fun ps3(

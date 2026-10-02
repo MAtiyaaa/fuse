@@ -210,6 +210,11 @@ object LinuxCatalog {
             modes = listOf(file("{ROM}")),
             source = esde("AZAHAR"), confidence = VERIFIED_ESDE, homepage = "https://azahar-emu.org/",
             capabilities = caps(installed = true),
+            packageInstall = PackageInstallSpec(
+                setOf("cia"), listOf("-i", "{FILE}"),
+                source = "Azahar src/citra_qt/citra_qt.cpp: --install/-i <file> installs a CIA and exits " +
+                    "(0 on success, InstallStatus + 2 on failure); a .cia given to play is never started, only offered for install",
+            ),
         ),
         LinuxEmulatorDef(
             id = "linux.azaharplus", name = "AzaharPlus", platforms = N3DS,

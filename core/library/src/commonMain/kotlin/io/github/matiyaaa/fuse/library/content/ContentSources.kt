@@ -30,11 +30,15 @@ data class ContentSources(
     val licences: List<Licence> = emptyList(),
     val keys: List<ZrifKey> = emptyList(),
     val unreadable: List<String> = emptyList(),
+    /** Nintendo 3DS installables. */
+    val cias: List<CiaFile> = emptyList(),
+    /** 3DS cartridge images and the game title id each holds (they play as they are; their updates install). */
+    val cartridges: Map<String, String> = emptyMap(),
 ) {
-    val isEmpty: Boolean get() = packages.isEmpty() && archives.isEmpty()
+    val isEmpty: Boolean get() = packages.isEmpty() && archives.isEmpty() && cias.isEmpty()
 
     /** The title ids these files are for. */
-    val titleIds: Set<String> get() = (packages.mapNotNull { it.titleId } + archives.map { it.titleId }).toSet()
+    val titleIds: Set<String> get() = (packages.mapNotNull { it.titleId } + archives.map { it.titleId } + cias.map { it.gameId } + cartridges.values).toSet()
 }
 
 /**
@@ -75,10 +79,14 @@ class ContentSourceReader(private val fs: FuseFileSystem, private val maxDepth: 
         val licences = ArrayList<Licence>()
         val keys = ArrayList<ZrifKey>()
         val unreadable = ArrayList<String>()
+        val cias = ArrayList<CiaFile>()
+        val cartridges = LinkedHashMap<String, String>()
         for (f in files) {
             val name = f.name.lowercase()
             when {
                 f.extension == "pkg" -> PsPackages.read(fs, f.path)?.let(packages::add) ?: run { unreadable += f.path }
+                f.extension == "cia" -> Cia.read(fs, f.path)?.let(cias::add) ?: run { unreadable += f.path }
+                f.extension == "3ds" || f.extension == "cci" -> Cia.cartridgeId(fs, f.path)?.let { cartridges[f.path] = it }
                 f.extension == "vpk" || f.extension == "zip" -> vitaArchive(f)?.let(archives::add)
                 // A .rap is 16 bytes; one under another name is still a licence, matched later.
                 f.extension == "rap" -> if (f.sizeBytes == Licences.RAP_SIZE) {
@@ -99,7 +107,7 @@ class ContentSourceReader(private val fs: FuseFileSystem, private val maxDepth: 
                 }
             }
         }
-        return ContentSources(packages, archives, licences, keys.distinctBy { it.zrif }, unreadable)
+        return ContentSources(packages, archives, licences, keys.distinctBy { it.zrif }, unreadable, cias, cartridges)
     }
 
     /** A `.vpk`/`.zip` holding a Vita title (its `sce_sys/param.sfo`), or null for any other archive. */
