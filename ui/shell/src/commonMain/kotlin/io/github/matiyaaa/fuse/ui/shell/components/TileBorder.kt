@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -14,9 +15,12 @@ import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawOutline
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import io.github.matiyaaa.fuse.model.BorderMode
 import io.github.matiyaaa.fuse.model.BorderShape
@@ -44,26 +48,41 @@ val LocalTileBorders = staticCompositionLocalOf { TileBorders() }
 /** False inside a system's own page, where every tile would name the same system. */
 val LocalTileShowsSystem = staticCompositionLocalOf { true }
 
+/** Whether this border names the system on the tile itself, so generated art needn't tag it too. */
+val BorderStyle.carriesTag: Boolean get() = mode != BorderMode.OFF && logoOverlay
+
 /**
  * Draws a game tile's dynamic border inside the tile's clip: a frame in the platform's colour
- * (optionally a gradient), the user's own frame image, and an optional system badge.
+ * (optionally a gradient), the user's own frame image, and an optional system badge. The badge is
+ * the same small uppercase tag generated art carries, filled with the frame's colour, [inset] from
+ * the corner like the tile's marks. It sits where generated art puts its tag ([badgeAt]): bottom left
+ * on square tiles, top left on covers, whose title is at the bottom.
  */
 @Composable
-fun BoxScope.TileBorder(style: BorderStyle, accent: Color, cornerFraction: Float, badge: String?) {
+fun BoxScope.TileBorder(
+    style: BorderStyle,
+    accent: Color,
+    cornerFraction: Float,
+    badge: String?,
+    inset: Dp = Space.s,
+    badgeAt: Alignment = Alignment.BottomStart,
+) {
     if (style.mode == BorderMode.OFF) return
     val color = style.accent?.toColor() ?: accent
     val frame = style.customFramePath.takeIf { style.mode == BorderMode.CUSTOM }
     if (frame != null) {
         Artwork(frame, Modifier.fillMaxSize(), contentScale = ContentScale.FillBounds, fadeIn = false)
     } else {
-        val shape = when (style.shape) {
-            BorderShape.ROUNDED -> SquircleShape.fraction(cornerFraction)
-            BorderShape.SQUARE -> SquircleShape.fraction(0f)
-            BorderShape.CIRCLE -> SquircleShape.fraction(0.5f)
+        val shape = remember(style.shape, cornerFraction) {
+            when (style.shape) {
+                BorderShape.ROUNDED -> SquircleShape.fraction(cornerFraction)
+                BorderShape.SQUARE -> SquircleShape.fraction(0f)
+                BorderShape.CIRCLE -> SquircleShape.fraction(0.5f)
+            }
         }
         Box(
             Modifier.fillMaxSize().drawWithCache {
-                val width = 3.dp.toPx()
+                val width = FRAME_WIDTH.toPx()
                 val outline = shape.createOutline(size, layoutDirection, this)
                 val brush = if (style.gradient) {
                     Brush.linearGradient(
@@ -72,26 +91,38 @@ fun BoxScope.TileBorder(style: BorderStyle, accent: Color, cornerFraction: Float
                         end = Offset(size.width, size.height),
                     )
                 } else {
-                    Brush.linearGradient(listOf(color, color))
+                    SolidColor(color)
                 }
+                val stroke = Stroke(width * 2)
                 onDrawWithContent {
                     drawContent()
                     // Centred on the clip edge, so exactly the inner half shows and follows the corners.
-                    drawOutline(outline, brush, style = Stroke(width * 2))
+                    drawOutline(outline, brush, style = stroke)
                 }
             },
         )
     }
     if (style.logoOverlay && badge != null) {
+        // Dark words on a light frame colour, light ones on a deep one, so the tag always reads.
+        val words = if (color.luminance() > LIGHT_FRAME) Fuse.colors.ink else Fuse.colors.onArt
         Box(
             Modifier
-                .align(Alignment.BottomStart)
-                .padding(Space.s)
+                .align(badgeAt)
+                .padding(inset)
                 .clip(PillShape)
-                .background(color.copy(alpha = 0.85f))
-                .padding(horizontal = Space.s, vertical = 2.dp),
+                .background(color.copy(alpha = BADGE_FILL))
+                .padding(horizontal = Space.s - Space.xxs, vertical = Space.xxs),
         ) {
-            FText(badge, Fuse.type.caption, color = Fuse.colors.ink, maxLines = 1)
+            FText(badge.uppercase(), Fuse.type.overline, color = words, maxLines = 1)
         }
     }
 }
+
+/** Width of the frame inside the tile's edge. */
+private val FRAME_WIDTH = 3.dp
+
+/** The system badge's fill, a little translucent so the frame colour stays soft. */
+private const val BADGE_FILL = 0.88f
+
+/** Frame colours lighter than this take dark words on their badge. */
+private const val LIGHT_FRAME = 0.42f
