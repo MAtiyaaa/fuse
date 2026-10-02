@@ -46,6 +46,12 @@ interface DualScreenHandoff {
 
     /** On the main thread, just before a game or app opens on the second screen: it takes that screen. */
     fun beforeSecondScreenLaunch() = beforeDualScreenGame()
+
+    /**
+     * On the main thread, just before Fuse opens anything (a game, an app). Fuse going to the
+     * background right after is its own doing; at any other time another app came to the front.
+     */
+    fun beforeLaunch() {}
 }
 
 /**
@@ -63,6 +69,8 @@ class AndroidGameLauncher(
     /** The platform id of the library game at a path, when there is one. */
     private val platformAt: suspend (path: String) -> String? = { null },
     private val dualScreen: DualScreenHandoff? = null,
+    /** The other screen as [io.github.matiyaaa.fuse.platform.DisplayMonitor] chooses it (real, on, not a recording). */
+    private val secondScreen: () -> Int? = { null },
 ) : GameLauncher {
     private val appContext = context.applicationContext
     private val pm = appContext.packageManager
@@ -83,6 +91,9 @@ class AndroidGameLauncher(
 
     /** The first display that isn't the built-in one, preferring presentation displays. */
     override fun secondaryDisplayId(): Int? {
+        // The screen the companion and Settings, Second screen, call the second one: never a
+        // recording or casting display, never one that is off.
+        secondScreen()?.let { return it }
         val displays = appContext.getSystemService(DisplayManager::class.java) ?: return null
         val presentation = displays.getDisplays(DisplayManager.DISPLAY_CATEGORY_PRESENTATION)
             .firstOrNull { it.displayId != Display.DEFAULT_DISPLAY }
@@ -328,6 +339,7 @@ class AndroidGameLauncher(
         screens: Screens = Screens.APP,
     ): RunResult = withContext(Dispatchers.Main) {
         val second = displayId != null && displayId != Display.DEFAULT_DISPLAY
+        dualScreen?.beforeLaunch()
         when {
             screens == Screens.BOTH -> dualScreen?.beforeDualScreenGame()
             // A game or app sent to the second screen keeps it to itself: the companion steps aside.
@@ -370,12 +382,13 @@ class AndroidGameLauncher(
     }
 
     /** Starts [intent] from Fuse's window when it has one, else from the app. */
-    private fun startWith(intent: Intent, options: ActivityOptions, @Suppress("UNUSED_PARAMETER") displayId: Int?) {
+    private fun startWith(intent: Intent, options: ActivityOptions, displayId: Int?) {
+        val sent = onScreen(intent, displayId)
         val activity = activities.current
         if (activity != null) {
-            activity.startActivity(intent, options.toBundle())
+            activity.startActivity(sent, options.toBundle())
         } else {
-            appContext.startActivity(Intent(intent).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), options.toBundle())
+            appContext.startActivity(Intent(sent).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), options.toBundle())
         }
     }
 
@@ -397,3 +410,17 @@ class AndroidGameLauncher(
         val DUAL_SCREEN_PLATFORMS: Set<String> = DualScreenPlatforms.ids.map { it.value }.toSet()
     }
 }
+
+/**
+ * [intent] as it goes to [displayId]. An app already running on the other screen keeps its task
+ * there, and Android brings that task back where it is, whatever screen was asked for; a launch
+ * meant for another screen therefore asks for a task of its own there (Android's multi-display
+ * guidance: FLAG_ACTIVITY_NEW_TASK with FLAG_ACTIVITY_MULTIPLE_TASK). Apps that allow only one
+ * task (singleTask, singleInstance) are unaffected and open where Android puts them.
+ */
+internal fun onScreen(intent: Intent, displayId: Int?): Intent =
+    if (displayId != null && displayId != Display.DEFAULT_DISPLAY) {
+        Intent(intent).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_MULTIPLE_TASK)
+    } else {
+        intent
+    }

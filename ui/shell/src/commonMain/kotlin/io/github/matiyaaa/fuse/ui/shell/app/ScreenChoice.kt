@@ -37,9 +37,11 @@ fun AppState.askScreen(
     accent: Long,
     itemLabel: String,
     groupLabel: String,
+    /** [art] is an icon or logo, fitted whole in the screen rather than filling it. */
+    fitArt: Boolean = false,
     onPick: (LaunchDisplay, ScreenMemory) -> Unit,
 ) {
-    screenPrompt = ScreenPromptSpec(verb, subject, art, accent, itemLabel, groupLabel, onPick)
+    screenPrompt = ScreenPromptSpec(verb, subject, art, accent, itemLabel, groupLabel, onPick, fitArt)
 }
 
 /**
@@ -83,7 +85,7 @@ fun AppState.openApp(app: AppCard) {
         scope.launch { store.apps.launch(app, stored) }
         return
     }
-    askScreen("Open", app.entry.displayTitle, app.icon, ACCENT_APPS, "Always for this app", "Always for all apps") { display, memory ->
+    askScreen("Open", app.entry.displayTitle, app.icon, ACCENT_APPS, "Always for this app", "Always for all apps", fitArt = true) { display, memory ->
         when (memory) {
             ScreenMemory.ONCE -> Unit
             ScreenMemory.ITEM -> store.updatePrefs { it.copy(display = it.display.copy(appScreens = it.display.appScreens + (app.entry.id to display))) }
