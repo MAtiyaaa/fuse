@@ -4,6 +4,7 @@ import io.ktor.client.HttpClient
 import io.ktor.client.request.HttpRequestBuilder
 import io.ktor.client.request.request
 import io.ktor.client.statement.bodyAsText
+import io.ktor.client.statement.request
 import io.ktor.http.Headers
 import io.ktor.http.HttpHeaders
 import kotlinx.coroutines.CancellationException
@@ -12,8 +13,8 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.serialization.DeserializationStrategy
 import kotlinx.serialization.json.Json
 
-/** A fully read response: status, headers and body text. */
-internal class RawResponse(val status: Int, val body: String, val headers: Headers) {
+/** A fully read response: status, headers, body text and the address it finally came from (after redirects). */
+internal class RawResponse(val status: Int, val body: String, val headers: Headers, val url: String = "") {
     val isSuccess: Boolean get() = status in 200..299
 }
 
@@ -49,7 +50,7 @@ internal class ProviderHttp(
         val host = builder.url.host
         val run: suspend () -> RawResponse = {
             val response = http.request(builder)
-            RawResponse(response.status.value, response.bodyAsText(), response.headers)
+            RawResponse(response.status.value, response.bodyAsText(), response.headers, response.request.url.toString())
         }
         return try {
             val raw = limiter?.withPermit(host, run) ?: run()
