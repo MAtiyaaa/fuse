@@ -25,18 +25,23 @@ class DesktopEmulatorFilesTest {
         home.deleteRecursively()
     }
 
+    /** Paths as Fuse reports them on every system: forward slashes. */
+    private fun p(f: File) = f.absolutePath.replace('\\', '/')
+
     private fun pcsx2(appId: String, via: String = "PATH") =
         InstalledEmulator(EmulatorId("linux.pcsx2"), "PCSX2", Host.LINUX, appId, platforms = setOf(PlatformId("ps2")), detectedVia = via)
 
     @Test
     fun linuxFindsItsConfigFolderAndFollowsMovedFolders() = runBlocking {
         val data = File(home, ".config/PCSX2").apply { File(this, "inis").mkdirs() }
-        File(data, "inis/PCSX2.ini").writeText("[Folders]\nPatches = /srv/my-patches\n")
+        // An absolute path on this system, wherever the tests run.
+        val moved = File(home, "srv/my-patches")
+        File(data, "inis/PCSX2.ini").writeText("[Folders]\nPatches = ${p(moved)}\n")
         val files = DesktopEmulatorFiles(DesktopOs.LINUX, env = emptyMap(), home = home.absolutePath, backups = backups)
         val found = files.pcsx2(pcsx2("/usr/bin/pcsx2-qt"))!!
-        assertEquals(data.absolutePath, found.dataRoot)
-        assertEquals("/srv/my-patches", found.patches)
-        assertEquals("${data.absolutePath}/gamesettings", found.gameSettings)
+        assertEquals(p(data), found.dataRoot)
+        assertEquals(p(moved), found.patches)
+        assertEquals("${p(data)}/gamesettings", found.gameSettings)
     }
 
     @Test
@@ -45,7 +50,7 @@ class DesktopEmulatorFilesTest {
         assertNull(files.pcsx2(pcsx2("net.pcsx2.PCSX2", via = "Flatpak")), "not set up yet")
         val data = File(home, ".var/app/net.pcsx2.PCSX2/config/PCSX2").apply { File(this, "inis").mkdirs() }
         File(data, "inis/PCSX2.ini").writeText("")
-        assertEquals(data.absolutePath, files.pcsx2(pcsx2("net.pcsx2.PCSX2", via = "Flatpak"))!!.dataRoot)
+        assertEquals(p(data), files.pcsx2(pcsx2("net.pcsx2.PCSX2", via = "Flatpak"))!!.dataRoot)
     }
 
     @Test
@@ -56,8 +61,8 @@ class DesktopEmulatorFilesTest {
         File(app, "resources/patches.zip").writeBytes(ByteArray(4))
         val files = DesktopEmulatorFiles(DesktopOs.WINDOWS, env = mapOf("USERPROFILE" to home.absolutePath), home = home.absolutePath, backups = backups)
         val found = files.pcsx2(pcsx2(File(app, "pcsx2-qt.exe").absolutePath))!!
-        assertEquals(app.absolutePath, found.dataRoot)
-        assertEquals(File(app, "resources/patches.zip").absolutePath, found.patchesZip)
+        assertEquals(p(app), found.dataRoot)
+        assertEquals(p(File(app, "resources/patches.zip")), found.patchesZip)
     }
 
     @Test
