@@ -144,6 +144,9 @@ fun FuseApp(
     // Safe mode draws with Fuse's own look and no effects; what is saved never changes.
     val prefs = if (app.safeMode != null) stored.inSafeMode() else stored
     LaunchedEffect(Unit) {
+        // The startup animation, once per start of Fuse (a window made again doesn't replay it).
+        if (!StartupIntro.played && app.safeMode == null && stored.startupAnimation) app.intro = true
+        StartupIntro.played = true
         if (app.safeMode != null) app.showSafeMode()
         delay(StartupGuard.SETTLE_MS)
         onSettled()
@@ -303,6 +306,7 @@ fun FuseApp(
                     ToastHost(app.toasts)
                     app.capture?.let { CaptureOverlay(it) }
                     LaunchVeilView(app)
+                    if (app.intro) StartupIntroOverlay(onDone = { app.intro = false })
                 }
                 }
                 if (prefs.crt.enabled && quality.crtShader) CrtOverlay(prefs.crt)

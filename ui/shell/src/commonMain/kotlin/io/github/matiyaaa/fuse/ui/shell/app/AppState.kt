@@ -118,6 +118,9 @@ class AppState(
     var choice by mutableStateOf<ChoiceSpec?>(null)
     var reorder by mutableStateOf<ReorderSpec?>(null)
 
+    /** Fuse's startup animation is playing ([StartupIntroOverlay]). */
+    var intro by mutableStateOf(false)
+
     /**
      * Licence files picked and zRIFs pasted for installs, by "gameId|contentId". Kept in memory for
      * this run of Fuse only, never written down, so a key goes no further than the emulator.

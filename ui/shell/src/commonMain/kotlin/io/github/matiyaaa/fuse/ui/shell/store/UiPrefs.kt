@@ -88,6 +88,8 @@ data class UiPrefs(
     /** Recordings include Fuse's own sound. */
     val captureSound: Boolean = true,
     val heroDim: Float = 0.3f,
+    /** Fuse's mark lights up when Fuse starts ([io.github.matiyaaa.fuse.ui.shell.app.StartupIntroOverlay]). */
+    val startupAnimation: Boolean = true,
     /** Which of its lists the Apps tab opens on: Pinned, Emulators or All apps. */
     val appsFilter: io.github.matiyaaa.fuse.model.AppFilter = io.github.matiyaaa.fuse.model.AppFilter.ALL,
     /** Themes added from a link, a file or pasted text, ready to use. */
