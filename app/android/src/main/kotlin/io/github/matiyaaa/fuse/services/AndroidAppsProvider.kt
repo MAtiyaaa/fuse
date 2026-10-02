@@ -113,6 +113,7 @@ class AndroidAppsProvider(
         try {
             if (!apps.isActivityEnabled(component, user)) return@withContext RunResult.NotInstalled
             val other = displayId != null && displayId != Display.DEFAULT_DISPLAY
+            dualScreen?.beforeLaunch()
             if (other) dualScreen?.beforeSecondScreenLaunch()
             try {
                 start(apps, component, displayId)
@@ -141,7 +142,7 @@ class AndroidAppsProvider(
         }
         val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER).setComponent(component)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)
-        activity.startActivity(intent, options(displayId).toBundle())
+        activity.startActivity(onScreen(intent, displayId), options(displayId).toBundle())
     }
 
     private fun options(displayId: Int?): ActivityOptions {

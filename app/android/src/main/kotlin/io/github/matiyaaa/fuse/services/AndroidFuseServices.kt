@@ -37,6 +37,8 @@ class AndroidFuseServices(
     scope: CoroutineScope,
     activities: ActivityHolder,
     dualScreen: DualScreenHandoff? = null,
+    /** The other screen's display id, as Fuse's display monitor chooses it. */
+    secondScreen: () -> Int? = { null },
 ) : FuseServices {
     private val appContext = context.applicationContext
     val storageVolumes = StorageVolumes(appContext)
@@ -55,6 +57,7 @@ class AndroidFuseServices(
         sources = { data.sources.all().filter { it.enabled }.map { SourceRoot(it.path, it.kind) } },
         platformAt = { path -> data.games.idByPath(path)?.let { data.games.summary(it) }?.platformId?.value },
         dualScreen = dualScreen,
+        secondScreen = secondScreen,
     )
     override val cartridge: CartridgeBridge = AndroidCartridgeBridge(appContext, activities)
     private val releaseInstaller = AndroidReleaseInstaller(appContext, http, activities)
