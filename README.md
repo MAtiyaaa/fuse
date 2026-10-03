@@ -29,7 +29,7 @@ Home screen.
 <a href="https://github.com/MAtiyaaa/fuse/releases/latest"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/brand/button-macos-dark.svg"><img src="docs/assets/brand/button-macos-light.svg" height="48" alt="Download for macOS"></picture></a>
 
 <sub>Android 9 or newer &nbsp;·&nbsp; 64-bit x86 Linux AppImage &nbsp;·&nbsp; Windows 10 and 11 &nbsp;·&nbsp; macOS on Apple silicon and Intel &nbsp;·&nbsp; <a href="#install">checksums and install notes</a></sub><br>
-<sub>0.2.0 is the Everything Update: SD cards and drives that can come and go, System health, backups, search that understands filters, PCSX2 patches and much more. <a href="#where-fuse-stands">Here is where it stands.</a></sub><br>
+<sub>0.2.5 is the Ignition Update: Fuse lights up with its own logo, and games and apps open cleanly on the bottom screen. 0.2.4 taught it to install PS3, Vita and 3DS games itself. <a href="#where-fuse-stands">Here is where it stands.</a></sub><br>
 <sub>Or download from <a href="https://matiyaaa.github.io/fuse/">Fuse's website</a>, which always offers the latest version for your system.</sub>
 
 <br>
@@ -393,17 +393,20 @@ Linux app, isn't offered on Windows and macOS.
 ## Where Fuse stands
 
 > [!IMPORTANT]
-> **Fuse 0.2.0 "The Everything Update" is still early.** It makes Fuse sturdier where it counts:
-> SD cards and drives that come and go without games disappearing, System health with a fix for
-> each finding, safe mode after failed starts, backups, search with filters, an emulator page with a
-> test launch, PCSX2 patches and PS3 and Vita package installs (see
-> [the release notes](docs/releases/0.2.0.md)). 0.1.6 brought the resizable widget board, 0.1.4
-> downloads from your phone, 0.1.3 screenshots and recordings, and 0.1.0 Windows and macOS. The
-> shared core (library scanning, launch resolution, integrations and the database) and the interface
-> are in place and tested where it matters. The Android app builds and passes its unit tests and lint, and has been tried on one
-> handheld so far. The Linux app builds, passes its tests, packages as an AppImage and starts in a
-> virtual display. The Windows and macOS builds pass their tests and a self-test of the packaged app
-> on each system in CI, but haven't been tried by hand on a PC or Mac yet. Expect rough edges and
+> **Fuse 0.2.5 "The Ignition Update" is still early.** It starts with Fuse's own logo burning in, and
+> opens games and apps cleanly on a dual-screen handheld's bottom screen (see
+> [the release notes](docs/releases/0.2.5.md)). 0.2.4 brought installs of PS3, Vita and 3DS games,
+> their updates, DLC and licences into RPCS3, Vita3K and Azahar through each emulator's own
+> installer, checked step by step, 0.2.3 brought the guided Theme Studio and Store
+> support for every app it lists, 0.2.1 the Store and Addons, 0.2.0 SD cards and drives that come and
+> go, System health, backups and PCSX2 patches, 0.1.6 the resizable widget board, 0.1.4 downloads
+> from your phone, 0.1.3 screenshots and recordings, and 0.1.0 Windows and macOS. The shared core
+> (library scanning, launch resolution, integrations and the database) and the interface are in
+> place and tested where it matters. The Android app builds and passes its unit tests and lint, and
+> has been tried on one handheld so far. The Linux app builds, passes its tests, packages as an
+> AppImage and starts in a virtual display. The Windows and macOS builds pass their tests and a
+> self-test of the packaged app on each system in CI, but haven't been tried by hand on a PC or Mac
+> yet. Installing into real emulators hasn't been tried by hand yet either. Expect rough edges and
 > changes between versions.
 
 Not there yet: checks on more handhelds and on Windows and Mac computers, signed Windows and macOS

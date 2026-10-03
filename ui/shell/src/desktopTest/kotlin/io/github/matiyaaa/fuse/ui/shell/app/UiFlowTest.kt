@@ -11,10 +11,14 @@ import io.github.matiyaaa.fuse.data.db.DesktopDatabase
 import io.github.matiyaaa.fuse.model.CapabilityProfile
 import io.github.matiyaaa.fuse.model.DisplayInfo
 import io.github.matiyaaa.fuse.model.Host
+import io.github.matiyaaa.fuse.model.LaunchDisplay
 import io.github.matiyaaa.fuse.model.LaunchPlan
 import io.github.matiyaaa.fuse.model.LibrarySourceKind
 import io.github.matiyaaa.fuse.model.PadButton
 import io.github.matiyaaa.fuse.model.PerformanceMetric
+import io.github.matiyaaa.fuse.model.PlatformId
+import io.github.matiyaaa.fuse.model.ScopeRef
+import io.github.matiyaaa.fuse.model.ScopedSettings
 import io.github.matiyaaa.fuse.model.SystemStatus
 import io.github.matiyaaa.fuse.ui.designsystem.input.InputRouter
 import io.github.matiyaaa.fuse.ui.designsystem.input.InputSource
@@ -118,6 +122,42 @@ class UiFlowTest {
         assertTrue(plan.argv.any { it.endsWith("Advance Wars (USA).gba") }, plan.argv.toString())
         assertEquals("linux.mgba", plan.emulatorId.value)
     }
+
+    @Test
+    fun aGameOpenedOnTheOtherScreenLeavesFuseUsableHere() = runComposeUiTest {
+        val services = newServices().also { it.secondDisplay = 2 }
+        val store: FuseStore = runBlocking {
+            createFuseStore(services, scope).also { s ->
+                s.updatePrefs { it.copy(onboardingDone = true) }
+                s.sources.add(root.absolutePath, LibrarySourceKind.ROMS_ROOT)
+                withTimeout(20_000) { s.library.home.first { feed -> feed.recentlyAdded.isNotEmpty() } }
+                s.settings.set(ScopedSettings.LaunchScreen, ScopeRef.platform(PlatformId("gba")), LaunchDisplay.SECONDARY)
+            }
+        }
+        val router = InputRouter(scope)
+        mainClock.autoAdvance = false
+        setContent { FuseApp(store, TwoScreenPlatform, router) }
+
+        pumpUntil { onAllNodesWithText("NEW IN YOUR LIBRARY").fetchSemanticsNodes().isNotEmpty() }
+        router.tap(PadButton.DPAD_DOWN)
+        pumpUntil { onAllNodesWithText("Advance Wars", substring = true).fetchSemanticsNodes().isNotEmpty() }
+        router.tap(PadButton.A)
+        pumpUntil { services.launched.isNotEmpty() }
+        assertEquals(2, services.launchedOn.single(), "The game went to the bottom screen")
+
+        // Fuse stays in front on this screen: the veil marks the moment and lifts, so the controller
+        // works here again, instead of holding the screen for the four seconds a full launch takes.
+        val launchedAt = mainClock.currentTime
+        mainClock.autoAdvance = true
+        waitUntil(timeoutMillis = 15_000) { onAllNodesWithText("Starting").fetchSemanticsNodes().isEmpty() }
+        val shown = mainClock.currentTime - launchedAt
+        assertTrue(shown < 2_500, "The veil stayed ${shown} ms")
+    }
+}
+
+/** A handheld with a second screen that games can open on. */
+private object TwoScreenPlatform : PlatformUi by TestPlatform {
+    override val features = PlatformFeatures(windowModes = true, launchOnOtherDisplay = true)
 }
 
 /**

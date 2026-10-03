@@ -145,11 +145,7 @@ class AndroidAppsProvider(
         activity.startActivity(onScreen(intent, displayId), options(displayId).toBundle())
     }
 
-    private fun options(displayId: Int?): ActivityOptions {
-        val options = activities.revealOptions() ?: ActivityOptions.makeBasic()
-        if (displayId != null) options.launchDisplayId = displayId
-        return options
-    }
+    private fun options(displayId: Int?): ActivityOptions = activities.launchOptions(displayId)
 
     /** Reads the APK's package and name, then hands it to Android's installer, which asks the user. */
     override suspend fun installApk(path: String): ApkInstall {

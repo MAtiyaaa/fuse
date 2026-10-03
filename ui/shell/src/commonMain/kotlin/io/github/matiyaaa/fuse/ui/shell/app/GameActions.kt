@@ -22,6 +22,9 @@ import io.github.matiyaaa.fuse.ui.shell.store.Severity
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
+/** How long the launch veil stays when the game opened on the other screen, beside Fuse. */
+internal const val SECOND_SCREEN_VEIL_MS = 900L
+
 /** What confirming a game tile does: play it, or open its page when the user chose that. */
 fun AppState.activateGame(card: GameCard) {
     if (store.prefs.value.openGamePage) go(Route.GameInfo(card.id)) else play(card)
@@ -60,8 +63,10 @@ private fun AppState.launch(card: GameCard, emulator: io.github.matiyaaa.fuse.mo
     scope.launch {
         when (val outcome = store.library.launch(card.id, emulator, discPath, display)) {
             LaunchOutcome.Started -> {
-                // The veil lifts when Fuse is paused by the emulator; this is only a safety net.
-                delay(4_000)
+                // On the other screen the game opens beside Fuse, which stays in front here: the
+                // veil only marks the moment. Otherwise the emulator covers Fuse, and the veil is
+                // gone by the time Fuse is back.
+                delay(if (display == io.github.matiyaaa.fuse.model.LaunchDisplay.SECONDARY) SECOND_SCREEN_VEIL_MS else 4_000L)
                 launching = null
             }
             is LaunchOutcome.OpenedAppOnly -> {

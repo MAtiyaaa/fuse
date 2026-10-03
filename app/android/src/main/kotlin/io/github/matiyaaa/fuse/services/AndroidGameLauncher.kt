@@ -375,11 +375,7 @@ class AndroidGameLauncher(
         RunResult.Failed("Fuse couldn't start $name.")
     }
 
-    private fun options(displayId: Int?): ActivityOptions {
-        val options = activities.revealOptions() ?: ActivityOptions.makeBasic()
-        if (displayId != null) options.launchDisplayId = displayId
-        return options
-    }
+    private fun options(displayId: Int?): ActivityOptions = activities.launchOptions(displayId)
 
     /** Starts [intent] from Fuse's window when it has one, else from the app. */
     private fun startWith(intent: Intent, options: ActivityOptions, displayId: Int?) {
