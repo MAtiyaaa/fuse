@@ -102,7 +102,7 @@ internal val catalogPlatforms: List<Platform> = listOf(
     ),
     platform(
         "ps3", "PlayStation 3", "PS3", CONSOLE, SONY, "Sony", 2006,
-        "iso ps3 ps3dir desktop", "ps3-psn playstation3", 0xFF6E7F99, ra = 82,
+        "iso ps3 ps3dir desktop pkg", "ps3-psn playstation3", 0xFF6E7F99, ra = 82,
         aspect = BLU_RAY_CASE, bios = KnownBios.ps3,
     ),
     platform(
@@ -120,7 +120,7 @@ internal val catalogPlatforms: List<Platform> = listOf(
     ),
     platform(
         "psvita", "PlayStation Vita", "Vita", HANDHELD, SONY, "Sony", 2011,
-        "psvita vpk", "vita psv playstationvita", 0xFF5A8FBF, aspect = 0.78f, bios = KnownBios.psvita,
+        "psvita vpk pkg zip", "vita psv playstationvita", 0xFF5A8FBF, aspect = 0.78f, bios = KnownBios.psvita,
     ),
 
     // Nintendo

@@ -109,6 +109,7 @@ fun appearanceRows(app: AppState): List<MenuAction> {
             add(toggleRow("logo", "Title logos", FuseIcons.Type, p.showLogo, "Show logo art instead of the written title when a game has one") { v -> set { it.copy(showLogo = v) } })
             add(app.percentRow("dim", "Background dimming", FuseIcons.SunDim, p.heroDim, "Darker keeps text readable over bright art") { v -> set { it.copy(heroDim = v) } })
         }
+        add(toggleRow("intro", "Startup animation", FuseIcons.Sparkles, p.startupAnimation, "Fuse's mark lights up when Fuse starts. Any button skips it") { v -> set { it.copy(startupAnimation = v) } })
         labelled("Effects") {
             add(toggleRow("glass", "Glass panels", FuseIcons.Layers, p.glass.enabled, "Frosted, translucent menus") { v -> set { it.copy(glass = it.glass.copy(enabled = v)) } })
             if (p.glass.enabled) {
@@ -1380,6 +1381,11 @@ fun aboutRows(app: AppState): List<MenuAction> = buildList {
                     app.dev.rehearsalPrefs = app.store.prefs.value
                     app.go(Route.Onboarding)
                 },
+            ))
+            add(MenuAction(
+                "dev.intro", "Play startup animation", FuseIcons.Sparkles,
+                detail = "Plays it now, as when Fuse starts",
+                onSelect = { app.intro = true },
             ))
             if (app.store.appStore.supported) {
                 add(MenuAction(

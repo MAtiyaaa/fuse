@@ -47,6 +47,7 @@ import io.github.matiyaaa.fuse.ui.shell.settings.importThemeFile
 import io.github.matiyaaa.fuse.ui.shell.app.FilePurpose
 import io.github.matiyaaa.fuse.ui.shell.app.FocusZone
 import io.github.matiyaaa.fuse.ui.shell.app.LocateRequest
+import io.github.matiyaaa.fuse.ui.shell.app.pickLicence
 import io.github.matiyaaa.fuse.ui.shell.app.addGameFile
 import io.github.matiyaaa.fuse.ui.shell.app.installApkGame
 import io.github.matiyaaa.fuse.ui.shell.app.locateEmulator
@@ -68,7 +69,7 @@ private class PickerPlace {
  * is (a macOS app is picked like a file).
  */
 @Composable
-fun FilePickerScreen(app: AppState, purpose: FilePurpose, locate: LocateRequest? = null) {
+fun FilePickerScreen(app: AppState, purpose: FilePurpose, locate: LocateRequest? = null, licence: io.github.matiyaaa.fuse.ui.shell.app.LicencePick? = null) {
     val place = rememberRouteState(app.navigator, "pickfile.$purpose") { PickerPlace() }
     val sel = place.selection
     var listing by androidx.compose.runtime.remember { mutableStateOf<BrowseListing?>(null) }
@@ -100,6 +101,7 @@ fun FilePickerScreen(app: AppState, purpose: FilePurpose, locate: LocateRequest?
             purpose == FilePurpose.APK -> app.installApkGame(entry.path)
             purpose == FilePurpose.EMULATOR -> Unit
             purpose == FilePurpose.THEME -> app.importThemeFile(entry.path)
+            purpose == FilePurpose.LICENCE -> licence?.let { app.pickLicence(it, entry.path) }
             else -> app.addGameFile(entry.path)
         }
     }
@@ -113,6 +115,7 @@ fun FilePickerScreen(app: AppState, purpose: FilePurpose, locate: LocateRequest?
             FilePurpose.APK -> e.isDirectory || FsPath.extension(e.name) == "apk"
             FilePurpose.EMULATOR -> e.isDirectory || isProgram(e)
             FilePurpose.THEME -> e.isDirectory || FsPath.extension(e.name) == "json"
+            FilePurpose.LICENCE -> e.isDirectory || isLicenceFile(e.name, licence?.vita == true)
         }
     }
     val rows = buildList {
@@ -126,7 +129,7 @@ fun FilePickerScreen(app: AppState, purpose: FilePurpose, locate: LocateRequest?
                     )
                     e.isDirectory -> MenuAction("d.${e.path}", e.name, FuseIcons.Folder, trailing = Trailing.Chevron, onSelect = { open(e) })
                     else -> MenuAction(
-                        "f.${e.path}", e.name, when (purpose) { FilePurpose.APK -> FuseIcons.Package; FilePurpose.THEME -> FuseIcons.Palette; else -> FuseIcons.File },
+                        "f.${e.path}", e.name, when (purpose) { FilePurpose.APK -> FuseIcons.Package; FilePurpose.THEME -> FuseIcons.Palette; FilePurpose.LICENCE -> FuseIcons.Key; else -> FuseIcons.File },
                         detail = fileDetail(e, purpose),
                         trailing = Trailing.Value(bytesText(e.sizeBytes)),
                         onSelect = { open(e) },
@@ -155,6 +158,7 @@ fun FilePickerScreen(app: AppState, purpose: FilePurpose, locate: LocateRequest?
                     FilePurpose.THEME -> "Choose a theme file"
                     FilePurpose.EMULATOR -> "Where is ${locate?.name ?: "the emulator"}?"
                     FilePurpose.GAME -> "Choose a game file"
+                    FilePurpose.LICENCE -> if (licence?.vita == true) "Choose the licence or zRIF" else "Choose the .rap licence"
                 },
                 Fuse.type.title, maxLines = 1,
             )
@@ -201,6 +205,12 @@ private fun Trail(l: BrowseListing?) {
     }
 }
 
+/** Files that can hold a licence: a PS3 .rap, or for the Vita a .rif, work.bin or a text file with its zRIF. */
+private fun isLicenceFile(name: String, vita: Boolean): Boolean {
+    val ext = FsPath.extension(name)
+    return if (vita) ext in setOf("rif", "zrif", "txt", "tsv", "bin") else ext == "rap"
+}
+
 /** A program Fuse can run: a Windows .exe, a macOS app (a folder), or a file without an extension. */
 private fun isProgram(e: BrowseEntry): Boolean {
     val ext = FsPath.extension(e.name)
@@ -211,6 +221,7 @@ private fun isProgram(e: BrowseEntry): Boolean {
 private fun fileDetail(e: BrowseEntry, purpose: FilePurpose): String? {
     if (purpose == FilePurpose.APK) return "Android app"
     if (purpose == FilePurpose.THEME) return "Theme file"
+    if (purpose == FilePurpose.LICENCE) return "Licence"
     val systems = PlatformCatalog.forExtension(FsPath.extension(e.name))
     return when {
         systems.isEmpty() -> null
@@ -229,6 +240,7 @@ private fun Empty(l: BrowseListing, purpose: FilePurpose) {
             purpose == FilePurpose.APK -> "No APK files or folders here."
             purpose == FilePurpose.EMULATOR -> "No programs or folders here."
             purpose == FilePurpose.THEME -> "No theme files (.json) or folders here."
+            purpose == FilePurpose.LICENCE -> "No licence files or folders here."
             else -> "This folder is empty."
         },
         Fuse.type.body,
@@ -253,6 +265,7 @@ private fun Guide(purpose: FilePurpose, selected: MenuAction?, modifier: Modifie
                         FilePurpose.EMULATOR -> FuseIcons.Joystick
                         FilePurpose.GAME -> FuseIcons.Gamepad
                         FilePurpose.THEME -> FuseIcons.Palette
+                        FilePurpose.LICENCE -> FuseIcons.Key
                     },
                     size = 28.dp, tint = c.accent,
                 )
@@ -263,6 +276,7 @@ private fun Guide(purpose: FilePurpose, selected: MenuAction?, modifier: Modifie
                     FilePurpose.EMULATOR -> "Show Fuse where ${locate?.name ?: "it"} is"
                     FilePurpose.GAME -> "Add a game from anywhere"
                     FilePurpose.THEME -> "Add a theme from a file"
+                    FilePurpose.LICENCE -> "The licence for this content"
                 },
                 Fuse.type.titleSmall,
             )
@@ -276,6 +290,8 @@ private fun Guide(purpose: FilePurpose, selected: MenuAction?, modifier: Modifie
                         "Pick the file, then the system it's for. It joins your library with art and details, and stays where it is on your storage."
                     FilePurpose.THEME ->
                         "Pick a theme's .json file. Fuse shows what it is before adding it, and keeps a copy, so the file can go afterwards."
+                    FilePurpose.LICENCE ->
+                        "Pick the licence that came with it. Fuse hands it to the emulator under the name it looks for, and keeps nothing; the file stays where it is."
                 },
                 Fuse.type.body,
                 color = c.textMuted,

@@ -467,9 +467,17 @@ Fuse changes an emulator's own files only when the user asks, and only what it c
   line it recorded, and forgets a record as soon as the user removes that line in PCSX2. The desktop
   `EmulatorFiles` writes only inside a PCSX2 data folder it found, atomically, keeping the file as it
   was in Fuse's own data the first time it changes it.
-- **Package installs**: `EmulatorAdapter.packageInstall` builds RPCS3's `--installpkg` and Vita3K's
-  `--pkg ... --zrif ...` commands. The zRIF goes only into Vita3K's arguments; Fuse never stores or
-  logs it.
+- **Installed content**: `core/library/content` reads packages, archives, licences and CIAs
+  (`PsPackages`, `ZipReader`, `Inflate`, `Licences`, `Cia`), and what an emulator holds
+  (`InstalledContentReader`). From both, `ContentPlanner` makes a `ContentPlan`: the items in install
+  order, each `INSTALLED`, `READY`, `NEEDS_LICENCE`, `SUPERSEDED` or `UNSUPPORTED`, and the game's
+  `ContentState`s.
+
+  `DefaultContentOps` (ui/shell) builds each step's command with `EmulatorAdapter.packageInstall`
+  (RPCS3 `--headless --installpkg`, Vita3K `--pkg --zrif` or an archive, Azahar `-i`). It runs it
+  through `EmulatorFiles.runInstaller` (desktop) and verifies it by reading the emulator's storage
+  again. `InstallOnlyFiles` makes an installed package game start by its title id (or, for a 3DS
+  `.cia`, from its installed title).
 
 ## Database and migrations
 
@@ -531,8 +539,9 @@ Fuse changes an emulator's own files only when the user asks, and only what it c
   discards the download on a mismatch.
 - **No telemetry.** There is no analytics, crash reporting or usage tracking code.
   `PrivacySettings.telemetry` exists only so the Privacy screen can say so, and is always false.
-- **Licence keys stay with the emulator.** A Vita package's zRIF is asked for each time, passed only
-  in Vita3K's arguments and never kept, logged or included in a report or backup.
+- **Licence keys stay with the emulator.** A Vita package's zRIF (found beside the game, made from
+  its `.rif`, or pasted) is passed only in Vita3K's arguments, held in memory for that run of Fuse,
+  removed from installer output Fuse shows, and never kept, logged or included in a report or backup.
 - **Emulator files are changed only on request**, inside the emulator's own data folder, with the
   original kept first; see [Emulator files and patches](#emulator-files-and-patches).
 

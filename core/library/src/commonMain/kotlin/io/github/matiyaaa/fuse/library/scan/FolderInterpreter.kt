@@ -4,6 +4,10 @@ import io.github.matiyaaa.fuse.library.FsAccessException
 import io.github.matiyaaa.fuse.library.FsEntry
 import io.github.matiyaaa.fuse.library.FsPath
 import io.github.matiyaaa.fuse.library.FuseFileSystem
+import io.github.matiyaaa.fuse.library.content.Cia
+import io.github.matiyaaa.fuse.library.content.ContentSourceReader
+import io.github.matiyaaa.fuse.library.content.PackageKind
+import io.github.matiyaaa.fuse.library.content.PsPackages
 import io.github.matiyaaa.fuse.library.parse.FilenameParser
 import io.github.matiyaaa.fuse.library.parse.NameFlags
 import io.github.matiyaaa.fuse.library.parse.Serials
@@ -61,6 +65,11 @@ data class FolderScanResult(
  * 5. no game files at its root: organisational. On folder-native platforms (PS3, Wii U, Xbox,
  *    Vita, PC) a folder that yields nothing is kept as one folder game so it is never lost.
  *
+ * PlayStation 3 and Vita packages are told apart by their headers ([PsPackages]): an update or DLC
+ * package belongs to the game package (or disc, or folder) with the same title id, a `.zip` on the
+ * Vita is only a game when it holds a Vita title, and a package game carries its title id, which is
+ * what it starts with once installed.
+ *
  * [FolderPolicy.FOLDER_AS_GAME] makes every folder one game (the best file inside, else the
  * folder), [FolderPolicy.FOLDER_BROWSER] makes it one entry the user browses, and
  * [FolderPolicy.FILE] only counts files and walks every folder.
@@ -73,6 +82,10 @@ class FolderInterpreter(
     private val options: ScanOptions = ScanOptions(),
 ) {
     private val grouper = DiscGrouper(fs)
+    private val contentReader = ContentSourceReader(fs)
+
+    /** What a package file is, from its header: its title id, and UPDATE or DLC for content that isn't the game. */
+    private data class PackageInfo(val titleId: String?, val kind: ContentKind?, val title: String?, val notAGame: Boolean = false, val serial: Boolean = true)
 
     /**
      * Scans one platform folder: its files are games (grouped into disc sets, with loose updates and
@@ -127,6 +140,15 @@ class FolderInterpreter(
         // Files owned by a playlist or cue sheet at a higher level (an .m3u listing "Discs/x.chd").
         val hidden = HashSet<String>()
 
+        /** Package headers read during this walk, by path. */
+        val packages = HashMap<String, PackageInfo>()
+
+        /** UPDATE or DLC for a package that isn't a game, else what its name says. */
+        fun kindOf(group: FileGroup): ContentKind? = packages[group.primary.path]?.kind ?: LooseContent.markerKind(group)
+
+        /** What tells titles apart: a package's title id, else the name. */
+        fun titleKeyOf(group: FileGroup): String = packages[group.primary.path]?.titleId ?: LooseContent.titleKey(group.parsed.baseTitle)
+
         fun isHidden(game: ScannedGame): Boolean =
             FsPath.normalize(game.launchPath) in hidden || FsPath.normalize(game.path) in hidden
 
@@ -172,7 +194,7 @@ class FolderInterpreter(
         val grouping = precomputed ?: grouper.group(dir, children, walk::isGameFile)
         walk.hidden += grouping.hidden
         val games = ArrayList<ScannedGame>()
-        for ((group, extra) in LooseContent.attach(grouping.groups)) games += fileGame(group, extra, walk)
+        for ((group, extra) in attach(readPackages(grouping.groups, walk), walk)) games += fileGame(group, extra, walk)
         val native = walk.platform.id.value in FOLDER_NATIVE
         for (sub in children.filter { it.isDirectory }.sortedBy { it.name.lowercase() }) {
             // An emulator's own data folders (saves, caches, system files) are never games.
@@ -212,10 +234,10 @@ class FolderInterpreter(
         if (native && isEmulatorStorage(folder.name)) return scanLevel(folder.path, children, depth, walk)
 
         val layout = Layout(children, options)
-        val grouping = grouper.group(folder.path, children, walk::isGameFile)
+        val grouped = grouper.group(folder.path, children, walk::isGameFile)
+        val grouping = grouped.copy(groups = readPackages(grouped.groups, walk))
         walk.hidden += grouping.hidden
-        val titles = grouping.groups.filter { LooseContent.markerKind(it) == null }
-            .map { LooseContent.titleKey(it.parsed.baseTitle) }.toSet()
+        val titles = grouping.groups.filter { walk.kindOf(it) == null }.map { walk.titleKeyOf(it) }.toSet()
 
         if (titles.size >= 2) return scanLevel(folder.path, children, depth, walk, grouping)
         if (titles.size == 1) {
@@ -226,7 +248,7 @@ class FolderInterpreter(
             if (layout.otherDirs.isNotEmpty()) {
                 val nested = layout.otherDirs.flatMap { interpret(it, depth + 1, walk) }
                 if (nested.isNotEmpty()) {
-                    return LooseContent.attach(grouping.groups).map { (g, extra) -> fileGame(g, extra, walk) } + nested
+                    return attach(grouping.groups, walk).map { (g, extra) -> fileGame(g, extra, walk) } + nested
                 }
             }
             return listOf(multiFileGame(folder, children, grouping, layout, walk))
@@ -284,23 +306,23 @@ class FolderInterpreter(
         var sizeBytes = directFileSize(children)
         var modifiedAt = maxOf(folder.modifiedAt, children.maxOfOrNull { it.modifiedAt } ?: 0L)
 
-        var main = pickMain(grouping.groups.filter { LooseContent.markerKind(it) == null }, title, walk.platform)
+        var main = pickMain(grouping.groups.filter { walk.kindOf(it) == null }, title, walk.platform)
         extraGroups += grouping.groups.filter { it !== main }
         for (baseDir in layout.baseDirs) {
             val entries = walk.list(baseDir.path) ?: continue
             sizeBytes += entries.filter { !it.isDirectory }.sumOf { it.sizeBytes }
             modifiedAt = maxOf(modifiedAt, entries.maxOfOrNull { it.modifiedAt } ?: 0L)
-            val baseGrouping = grouper.group(baseDir.path, entries, walk::isGameFile)
+            val baseGroups = readPackages(grouper.group(baseDir.path, entries, walk::isGameFile).groups, walk)
             val candidate = if (main == null) {
-                pickMain(baseGrouping.groups.filter { LooseContent.markerKind(it) == null }, title, walk.platform)
+                pickMain(baseGroups.filter { walk.kindOf(it) == null }, title, walk.platform)
             } else {
                 null
             }
             if (candidate != null) main = candidate
-            extraGroups += baseGrouping.groups.filter { it !== candidate }
+            extraGroups += baseGroups.filter { it !== candidate }
         }
 
-        for (group in extraGroups) content += LooseContent.child(LooseContent.childKind(group), group)
+        for (group in extraGroups) content += LooseContent.child(walk.packages[group.primary.path]?.kind ?: LooseContent.childKind(group), group)
 
         val grouped = grouping.groups.flatMap { g -> g.members.map { FsPath.normalize(it.path) } }.toSet()
         for (file in children.filter { !it.isDirectory }) {
@@ -328,7 +350,7 @@ class FolderInterpreter(
             kind = LocationKind.FOLDER,
             launchPath = main?.primary?.path ?: folder.path,
             title = title,
-            tags = mergeTags(folderTags, main?.let { tagsOf(it) }),
+            tags = mergeTags(folderTags, main?.let { m -> tagsOf(m).let { t -> if (t.serial == null) t.copy(serial = walk.packages[m.primary.path]?.takeIf { it.serial }?.titleId) else t } }),
             content = content,
             discs = main?.discs.orEmpty(),
             sizeBytes = sizeBytes,
@@ -485,20 +507,86 @@ class FolderInterpreter(
         )
     }
 
+    /**
+     * Reads the header of each package among [groups] (PS3 and Vita only; a few kilobytes each) and
+     * returns the groups that are games or game content: a `.zip` without a Vita title is left out.
+     */
+    private suspend fun readPackages(groups: List<FileGroup>, walk: Walk): List<FileGroup> {
+        val id = walk.platform.id.value
+        if (id != "ps3" && id != "psvita" && id != "3ds" && id != "new-nintendo-3ds") return groups
+        val threeDs = id == "3ds" || id == "new-nintendo-3ds"
+        return groups.filter { g ->
+            val f = g.primary
+            val info = walk.packages[f.path] ?: (if (threeDs) {
+                // A 3DS update or DLC .cia joins its game by the game's title id (never shown as a serial).
+                when (f.extension) {
+                    "cia" -> Cia.read(fs, f.path)?.let { c ->
+                        PackageInfo(c.gameId, if (c.kind == PackageKind.UPDATE) ContentKind.UPDATE else if (c.kind == PackageKind.DLC) ContentKind.DLC else null, null, serial = false)
+                    }
+                    "3ds", "cci" -> Cia.cartridgeId(fs, f.path)?.let { PackageInfo(it, null, null, serial = false) }
+                    else -> null
+                }
+            } else when (f.extension) {
+                "pkg" -> PsPackages.read(fs, f.path)?.let { p ->
+                    PackageInfo(
+                        p.titleId,
+                        when (p.kind) {
+                            PackageKind.UPDATE -> ContentKind.UPDATE
+                            PackageKind.DLC -> ContentKind.DLC
+                            else -> null
+                        },
+                        p.title,
+                    )
+                }
+                "vpk", "zip" -> contentReader.vitaArchive(f)?.let { a ->
+                    PackageInfo(a.titleId, if (a.category == "gp") ContentKind.UPDATE else if (a.category == "ac") ContentKind.DLC else null, a.title)
+                } ?: PackageInfo(null, null, null, notAGame = f.extension == "zip")
+                else -> null
+            })?.also { walk.packages[f.path] = it }
+            info?.notAGame != true
+        }
+    }
+
+    /**
+     * [LooseContent.attach], then each update and DLC package goes to the game with its title id
+     * (a package game, a disc or a folder named with it). One whose game isn't here stays on its own.
+     */
+    private fun attach(groups: List<FileGroup>, walk: Walk): List<Pair<FileGroup, List<ChildContent>>> {
+        if (walk.packages.isEmpty()) return LooseContent.attach(groups)
+        val extras = groups.filter { walk.packages[it.primary.path]?.kind != null }
+        val rest = groups.filter { g -> extras.none { it === g } }
+        val attached = LooseContent.attach(rest).map { (g, c) -> g to c.toMutableList() }
+        val alone = ArrayList<Pair<FileGroup, List<ChildContent>>>()
+        for (x in extras) {
+            val info = walk.packages.getValue(x.primary.path)
+            val owner = info.titleId?.let { id ->
+                attached.firstOrNull { (g, _) -> (walk.packages[g.primary.path]?.titleId ?: g.parsed.tags.serial?.uppercase()) == id }
+            }
+            if (owner != null) owner.second += LooseContent.child(info.kind!!, x) else alone += x to emptyList()
+        }
+        return attached + alone
+    }
+
     private suspend fun fileGame(group: FileGroup, extra: List<ChildContent>, walk: Walk): ScannedGame = ScannedGame(
         platformId = walk.platform.id,
         sourceId = walk.sourceId,
         path = group.primary.path,
         kind = LocationKind.FILE,
         launchPath = group.primary.path,
-        title = group.title,
-        tags = tagsOf(group).let { tags -> if (tags.serial == null) tags.copy(serial = injectedSerial(group.primary)) else tags },
+        title = packageTitle(group, walk) ?: group.title,
+        tags = tagsOf(group).let { tags -> if (tags.serial == null) tags.copy(serial = walk.packages[group.primary.path]?.takeIf { it.serial }?.titleId ?: injectedSerial(group.primary)) else tags },
         content = extra,
         discs = group.discs,
         sizeBytes = group.sizeBytes,
         modifiedAt = group.modifiedAt,
         interpretation = if (group.kind == GroupKind.SINGLE) FolderInterpretation.SINGLE_FILE else FolderInterpretation.MULTI_DISC,
     )
+
+    /** A Vita package's own title, for a file named only with its content id or title id. */
+    private fun packageTitle(group: FileGroup, walk: Walk): String? {
+        val title = walk.packages[group.primary.path]?.title ?: return null
+        return title.takeIf { CODE_NAME.containsMatchIn(group.title) && !LooseContent.sameTitle(group.title, title) }
+    }
 
     /**
      * ES-DE's `.ps3` and `.psvita` files are tiny text files holding only a title id (for emulators
@@ -531,6 +619,9 @@ class FolderInterpreter(
 
     private companion object {
         const val SFO_READ_LIMIT = 8 * 1024
+
+        /** A name that is a content id or a bare title id (`UP9000-PCSA00001_00-...`, `PCSA00001`). */
+        val CODE_NAME = Regex("^([A-Z]{2}\\d{4}-)?[A-Z]{4}\\d{5}([_\\s-]|$)")
 
         // ES-DE's %INJECT% reads at most 4096 bytes, so real title-id files are never larger.
         const val TITLE_ID_FILE_MAX = 4096L

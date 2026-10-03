@@ -16,7 +16,6 @@ import io.github.matiyaaa.fuse.ui.shell.cartridge.uploadToRomm
 import io.github.matiyaaa.fuse.ui.shell.store.CompatibilityAnswer
 import io.github.matiyaaa.fuse.ui.shell.store.GameCard
 import io.github.matiyaaa.fuse.ui.shell.store.LaunchOutcome
-import io.github.matiyaaa.fuse.ui.shell.store.PackageOption
 import io.github.matiyaaa.fuse.ui.shell.store.Problem
 import io.github.matiyaaa.fuse.ui.shell.store.ProblemKind
 import io.github.matiyaaa.fuse.ui.shell.store.Severity
@@ -123,7 +122,7 @@ fun AppState.gameMenu(card: GameCard, fromDetail: Boolean = false, extra: List<M
         }
         // RPCS3 and Vita3K install packages (the game, updates, extra content) from their command line.
         if (!card.isApp && card.platformId.value in PACKAGE_SYSTEMS) {
-            add(MenuAction("packages", "Install Packages", FuseIcons.PackageOpen, detail = "Updates and extra content, installed by the emulator", trailing = Trailing.Chevron, onSelect = { packagePicker(card) }))
+            add(MenuAction("packages", "Installed Content", FuseIcons.PackageOpen, detail = "The game, its updates, DLC and licences, installed by Fuse", trailing = Trailing.Chevron, onSelect = { openGameContent(card) }))
         }
         if (hasTwoScreens && !io.github.matiyaaa.fuse.launch.DualScreenPlatforms.usesSecondScreen(card.platformId)) {
             add(MenuAction("screen", "Screen", FuseIcons.DualScreen, detail = "Top, bottom, or ask when it starts", trailing = Trailing.Chevron, onSelect = { screenPicker(card) }))
@@ -162,7 +161,9 @@ fun AppState.gameMenu(card: GameCard, fromDetail: Boolean = false, extra: List<M
                 }))
             } else {
                 add(MenuAction("find", "Find in Cartridge", FuseIcons.CloudDownload, onSelect = {
-                    closeOverlays(); store.cartridge.open(CartridgeRoute.Search(card.title, null))
+                    // Cartridge finds a game by every word of the search, so only the name goes:
+                    // "(USA, Europe) (SGB Enhanced)" in a file name would match nothing on RomM.
+                    closeOverlays(); store.cartridge.open(CartridgeRoute.Search(io.github.matiyaaa.fuse.library.parse.SearchTitles.clean(card.title), card.platformId.value))
                 }))
                 // Games Cartridge downloaded are on RomM already, and apps have no files to send.
                 if (!card.isApp) add(MenuAction("upload", "Upload to RomM", FuseIcons.Upload, detail = "Through Cartridge, with its other discs, DLC and updates", onSelect = { uploadToRomm(card) }))
@@ -324,7 +325,7 @@ fun AppState.showEmulator(id: io.github.matiyaaa.fuse.model.EmulatorId) {
     }
 }
 
-private val PACKAGE_SYSTEMS = setOf("ps3", "psvita")
+private val PACKAGE_SYSTEMS = setOf("ps3", "psvita", "3ds", "new-nintendo-3ds")
 
 /**
  * The game's PCSX2 patches with a check for each that is on. Fuse turns on any that are off and
@@ -425,53 +426,17 @@ fun AppState.showCompatibility(card: GameCard) {
     }
 }
 
-/** The game's packages an installed emulator can install, each started in its installer when chosen. */
-fun AppState.packagePicker(card: GameCard) {
-    contextMenu = null
-    scope.launch {
-        val options = store.library.packages(card.id)
-        if (options.isEmpty()) {
-            showProblem(Problem(
-                title = "Nothing to install for ${card.title}",
-                message = "Fuse installs .pkg files (the game, its updates and extra content) with RPCS3 or Vita3K on a computer. None of this game's files is one, or neither emulator is installed.",
-                kind = ProblemKind.EMULATOR,
-                severity = Severity.INFO,
-                reassurance = null,
-            ))
-            return@launch
-        }
-        fun install(o: PackageOption, key: String?) {
-            choice = null
-            scope.launch {
-                when (val r = store.library.installPackage(o, key)) {
-                    is LaunchOutcome.Problem -> showProblem(r.problem)
-                    else -> toasts.show("${o.emulatorName} is installing ${o.fileName}", ToastKind.SUCCESS)
-                }
-            }
-        }
-        choice = ChoiceSpec(
-            icon = FuseIcons.PackageOpen,
-            title = "Install packages",
-            message = "The emulator opens and installs it. Nothing else changes.",
-            options = options.map { o ->
-                MenuAction(
-                    "p${o.path}.${o.emulator}", o.fileName, FuseIcons.Package,
-                    detail = "${o.kind}  ·  with ${o.emulatorName}" + if (o.needsKey) "  ·  needs its zRIF" else "",
-                    onSelect = {
-                        if (!o.needsKey) {
-                            install(o, null)
-                        } else {
-                            choice = null
-                            // The key is only handed to the emulator; Fuse keeps no copy.
-                            textInput = TextInputSpec("zRIF for ${o.fileName}", "", placeholder = "Paste the zRIF", secret = true, capitalize = false, doneLabel = "Install") { key ->
-                                if (key.isNotBlank()) install(o, key)
-                            }
-                        }
-                    },
-                )
-            },
-        )
-    }
+/** A PS3 or Vita game's packages, updates, DLC and licences, and installing them ([Route.GameContent]). */
+fun AppState.openGameContent(card: GameCard) {
+    closeOverlays()
+    go(Route.GameContent(card.id))
+}
+
+/** Uses the licence at [path] for [pick], for this run of Fuse only, then goes back to the game's content. */
+fun AppState.pickLicence(pick: LicencePick, path: String) {
+    contentPicks["${pick.game.value}|${pick.contentId}"] = path
+    navigator.pop()
+    toasts.show("Licence chosen. Fuse checks it before installing", ToastKind.SUCCESS)
 }
 
 fun AppState.folderPolicyPicker(card: GameCard) {

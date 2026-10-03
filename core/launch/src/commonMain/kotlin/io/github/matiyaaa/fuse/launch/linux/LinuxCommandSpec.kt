@@ -71,6 +71,9 @@ data class PackageInstallSpec(
     val args: List<String>,
     val needsKey: Boolean = false,
     val source: String,
+    /** Archives it installs when given as its game ([archiveArgs]); no key needed (Vita3K's .vpk and .zip). */
+    val archives: Set<String> = emptySet(),
+    val archiveArgs: List<String> = listOf("{FILE}"),
 )
 
 /** How a Linux program was found. [label] is what [io.github.matiyaaa.fuse.model.InstalledEmulator.detectedVia] holds. */

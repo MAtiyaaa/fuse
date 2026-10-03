@@ -176,6 +176,11 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
     // What System health found about this game (a disc its playlist names that's gone, an emulator
     // that isn't installed any more): told under Play, and a button away.
     val issues = io.github.matiyaaa.fuse.ui.shell.settings.rememberHealthIssues(app).filter { it.game == game.id }
+    // A PS3 or Vita game's content: installed or not, a licence missing, updates and DLC waiting.
+    val content by produceState<io.github.matiyaaa.fuse.ui.shell.store.GameContentView?>(null, game.id, game.content, app.store.content.progress.collectAsState().value == null) {
+        value = if (!card.isApp && game.platformId.value in CONTENT_SYSTEMS) app.store.content.view(game.id) else null
+    }
+    val contentStates = content?.states.orEmpty()
 
     // Play first, then the emulator it starts in, then the quick actions, then everything else.
     val actions = listOfNotNull(
@@ -184,6 +189,12 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
         DetailAction("play", "Play", if (d.unavailable != null) FuseIcons.HardDrive else FuseIcons.Play, "Play", primary = d.unavailable == null && !d.missing) { app.play(card) },
         DetailAction("emu", d.emulator.selected?.name ?: "Choose emulator", if (d.emulator.selected == null) FuseIcons.Warning else FuseIcons.Chip, "Choose emulator") {
             app.emulatorPicker(card)
+        },
+        content?.let { v ->
+            val install = io.github.matiyaaa.fuse.library.content.ContentState.NEEDS_INSTALL in contentStates && v.mode != io.github.matiyaaa.fuse.ui.shell.store.InstallMode.UNAVAILABLE
+            DetailAction("content", if (install) "Install" else null, if (install) FuseIcons.Download else FuseIcons.PackageOpen, "Installed content") {
+                app.go(Route.GameContent(game.id))
+            }
         },
         issues.firstOrNull()?.let { issue ->
             DetailAction("health", null, FuseIcons.BadgeAlert, "What needs attention") { app.showProblem(issue.problem, card) }
@@ -318,6 +329,14 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
                     GameTitle(d, layout, app.store.prefs.value.showLogo, Modifier.reveal(reveal, 0))
                     Spacer(Modifier.height(Space.l))
                     FactChips(d, Modifier.reveal(reveal, 1))
+                    if (contentStates.isNotEmpty()) {
+                        Spacer(Modifier.height(Space.m))
+                        FlowRow(Modifier.reveal(reveal, 1), horizontalArrangement = Arrangement.spacedBy(Space.s), verticalArrangement = Arrangement.spacedBy(Space.s)) {
+                            contentStates.forEach { s ->
+                                io.github.matiyaaa.fuse.ui.designsystem.components.Chip(s.label, icon = stateIcon(s), color = stateColor(s))
+                            }
+                        }
+                    }
                     Spacer(Modifier.height(Space.xl))
                     // One button, drawn the same in either arrangement below.
                     val button: @Composable (Int, Modifier) -> Unit = { i, m ->
@@ -341,6 +360,7 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
                                 a.icon, selected = selected,
                                 tint = when {
                                     a.id == "fav" && game.favorite -> c.accent
+                                    a.id == "content" && io.github.matiyaaa.fuse.library.content.ContentState.MISSING_LICENCE in contentStates -> c.warning
                                     a.id == "health" -> c.warning
                                     else -> c.text
                                 },
@@ -1020,3 +1040,6 @@ internal fun playersLabel(players: String): String? {
 
 /** How many detail cards share a line: four make two even lines rather than three and one. */
 private fun detailsPerLine(cards: Int, fits: Int): Int = (if (cards == 4 && fits == 3) 2 else fits.coerceAtMost(cards)).coerceAtLeast(1)
+
+/** Systems whose games can come as packages that Fuse installs into the emulator. */
+private val CONTENT_SYSTEMS = setOf("ps3", "psvita", "3ds", "new-nintendo-3ds")

@@ -694,6 +694,17 @@ internal fun AuditDriver.launchScreens() {
         tap(PadButton.B)
     }
 
+    scenario("launch", "which screen for an app") {
+        useLibrary(twoScreens)
+        tab(Destination.APPS)
+        waitFor("All apps")
+        tap(PadButton.DPAD_LEFT)
+        tap(PadButton.A)
+        waitFor("OPEN ON WHICH SCREEN?")
+        shoot("an app's icon whole on the lit screen")
+        tap(PadButton.B)
+    }
+
     scenario("launch", "needs emulator") {
         useLibrary()
         openGame("Waystation Nine")
