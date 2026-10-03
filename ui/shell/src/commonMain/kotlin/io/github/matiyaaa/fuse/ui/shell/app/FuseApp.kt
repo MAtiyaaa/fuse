@@ -126,6 +126,8 @@ fun FuseApp(
     safeMode: SafeMode? = null,
     /** Called once this start has run long enough to count as settled ([StartupGuard.settle]). */
     onSettled: () -> Unit = {},
+    /** Plays the startup animation on this start when it is on in Settings (the apps do; tests and renders don't). */
+    startupIntro: Boolean = false,
 ) {
     val base = rememberCoroutineScope()
     val stored by store.prefs.collectAsState()
@@ -144,6 +146,9 @@ fun FuseApp(
     // Safe mode draws with Fuse's own look and no effects; what is saved never changes.
     val prefs = if (app.safeMode != null) stored.inSafeMode() else stored
     LaunchedEffect(Unit) {
+        // The startup animation, once per start of Fuse (a window made again doesn't replay it).
+        if (startupIntro && !StartupIntro.played && app.safeMode == null && stored.startupAnimation) app.intro = true
+        StartupIntro.played = true
         if (app.safeMode != null) app.showSafeMode()
         delay(StartupGuard.SETTLE_MS)
         onSettled()
@@ -303,6 +308,7 @@ fun FuseApp(
                     ToastHost(app.toasts)
                     app.capture?.let { CaptureOverlay(it) }
                     LaunchVeilView(app)
+                    if (app.intro) StartupIntroOverlay(onDone = { app.intro = false })
                 }
                 }
                 if (prefs.crt.enabled && quality.crtShader) CrtOverlay(prefs.crt)
@@ -448,7 +454,8 @@ private fun Pages(app: AppState, tabs: List<Destination>) {
                     Route.Themes -> io.github.matiyaaa.fuse.ui.shell.settings.ThemesScreen(app)
                     Route.Onboarding -> OnboardingScreen(app)
                     is Route.FolderBrowser -> FolderBrowserScreen(app, route.game)
-                    is Route.PickFile -> io.github.matiyaaa.fuse.ui.shell.files.FilePickerScreen(app, route.purpose, route.locate)
+                    is Route.GameContent -> io.github.matiyaaa.fuse.ui.shell.game.GameContentScreen(app, route.game)
+                    is Route.PickFile -> io.github.matiyaaa.fuse.ui.shell.files.FilePickerScreen(app, route.purpose, route.locate, route.licence)
                     is Route.StoreApp -> io.github.matiyaaa.fuse.ui.shell.addons.StoreAppScreen(app, route.key)
                 }
             }

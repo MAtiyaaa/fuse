@@ -72,6 +72,9 @@ interface FuseStore {
     /** The Store, where Fuse can install apps (Android); [AppStoreOps.None] elsewhere. */
     val appStore: AppStoreOps get() = AppStoreOps.None
 
+    /** Games, updates, DLC and licences installed into RPCS3 and Vita3K by Fuse itself. */
+    val content: ContentOps get() = ContentOps.None
+
     /**
      * Starts what Fuse does by itself (scans, art fills, Cartridge, achievements, update checks)
      * when the store was created in safe mode, which holds it back. Does nothing otherwise.
@@ -352,16 +355,6 @@ interface LibraryOps {
      * turned on itself; anything set in PCSX2 stays as it is. False when nothing changed.
      */
     suspend fun setPcsx2Patch(id: GameId, name: String, on: Boolean): Boolean = false
-
-    /** Packages of [id] (its own file, its updates and extra content) that an installed emulator can install. */
-    suspend fun packages(id: GameId): List<PackageOption> = emptyList()
-
-    /**
-     * Starts [option]'s emulator installing it, with [key] when it needs one. The key goes only to
-     * the emulator: it is never kept, logged or sent anywhere.
-     */
-    suspend fun installPackage(option: PackageOption, key: String? = null): LaunchOutcome =
-        LaunchOutcome.Problem(Problem("Packages can't be installed here", "This device can't run emulator installers.", ProblemKind.EMULATOR))
 
     /** Play time today, this week, this month and in all, per day, per game and per system. */
     fun playTime(): Flow<PlayTimeReport> = kotlinx.coroutines.flow.flowOf(PlayTimeReport(loaded = true))

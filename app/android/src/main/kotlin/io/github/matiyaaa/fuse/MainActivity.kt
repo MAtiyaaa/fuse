@@ -100,6 +100,7 @@ class MainActivity : ComponentActivity(), ActivityRequests {
             navigationBarStyle = SystemBarStyle.dark(AndroidColor.TRANSPARENT),
         )
         super.onCreate(savedInstanceState)
+        io.github.matiyaaa.fuse.services.UpdateRelaunch.clearReopenNotice(this)
         app.beginInterface(askedSafe = intent?.getStringExtra(EXTRA_SAFE_MODE) == "true" || intent?.getBooleanExtra(EXTRA_SAFE_MODE, false) == true)
         enterImmersive()
         preferRefreshRate(RefreshPreference.of(PerformanceProfile.AUTOMATIC, app.platformUi.device.tier, lowPower = false))
@@ -228,7 +229,7 @@ class MainActivity : ComponentActivity(), ActivityRequests {
                             .focusRequester(focus)
                             .focusable(),
                     ) {
-                        FuseApp(s.store, app.platformUi, router, s.phoneLink, safeMode = s.safeMode, onSettled = app::settled)
+                        FuseApp(s.store, app.platformUi, router, s.phoneLink, safeMode = s.safeMode, onSettled = app::settled, startupIntro = true)
                     }
                     LaunchedEffect(Unit) { focus.requestFocus() }
                 }

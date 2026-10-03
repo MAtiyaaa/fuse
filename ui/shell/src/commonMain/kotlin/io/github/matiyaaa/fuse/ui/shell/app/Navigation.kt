@@ -41,12 +41,19 @@ sealed interface Route {
     data object Themes : Route
     data object Onboarding : Route
     data class FolderBrowser(val game: GameId) : Route
-    /** Fuse's own file picker, for "Add a game" and for locating an emulator ([locate]). */
-    data class PickFile(val purpose: FilePurpose, val locate: LocateRequest? = null) : Route
+
+    /** A PS3 or Vita game's packages, updates, DLC and licences, and installing them into its emulator. */
+    data class GameContent(val game: GameId) : Route
+
+    /** Fuse's own file picker, for "Add a game", for locating an emulator ([locate]) and for a licence ([licence]). */
+    data class PickFile(val purpose: FilePurpose, val locate: LocateRequest? = null, val licence: LicencePick? = null) : Route
 }
 
 /** What a file is picked for. */
-enum class FilePurpose { APK, GAME, EMULATOR, THEME }
+enum class FilePurpose { APK, GAME, EMULATOR, THEME, LICENCE }
+
+/** A licence to pick for [contentId] of [game] (a PS3 `.rap`, or a Vita `.rif`, `work.bin` or file with its zRIF). */
+data class LicencePick(val game: GameId, val contentId: String, val vita: Boolean)
 
 /**
  * An emulator to locate, and what then uses it: a system ([platform]) or a game ([game]) the user

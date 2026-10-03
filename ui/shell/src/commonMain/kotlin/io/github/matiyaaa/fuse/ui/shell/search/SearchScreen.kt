@@ -125,6 +125,7 @@ private enum class HitKind(val label: String, val icon: ImageVector) {
     APP("Apps", FuseIcons.AppWindow),
     COLLECTION("Collections", FuseIcons.Bookmark),
     SETTING("Settings", FuseIcons.Settings),
+    ROMM("On RomM", FuseIcons.CloudDownload),
 }
 
 /** The icon a kind of filter is drawn with, in chips and suggestions. */
@@ -164,6 +165,14 @@ private sealed interface Hit {
         override val kind = HitKind.SYSTEM
         override val detail = listOfNotNull(card.platform.shortName, gamesText(card.gameCount), card.emulatorName?.takeIf { card.emulatorInstalled })
             .joinToString("  ·  ")
+    }
+
+    /** The same words searched in RomM, through Cartridge: for games not in this library (another system's). */
+    data class Romm(val query: String) : Hit {
+        override val key = "romm"
+        override val title = "Search RomM for \u201c$query\u201d"
+        override val kind = HitKind.ROMM
+        override val detail = "In Cartridge, every system on your RomM server"
     }
 
     data class App(val card: AppCard) : Hit {
@@ -235,7 +244,11 @@ fun SearchScreen(app: AppState) {
         results.suggestions.map { Hit.Suggestion(it, choosing) } +
             results.games.map { Hit.Game(it) } + results.platforms.map { Hit.System(it) } +
             results.apps.map { Hit.App(it) } + results.collections.filter { app.store.prefs.value.collectionsEnabled }.map { Hit.Collection(it) } +
-            settings
+            settings + listOfNotNull(
+                // Plain words (no filters), with Cartridge there: the same search on the RomM server.
+                results.query.trim().takeIf { it.length >= 2 && results.chips.isEmpty() && SearchSyntax.parse(it).pending == null && app.store.cartridge.status.value.installed }
+                    ?.let { Hit.Romm(it) },
+            )
     }
     sel.clamp(hits.size)
     // The results belong to what was typed a moment ago; until they arrive the old ones stay.
@@ -270,6 +283,7 @@ fun SearchScreen(app: AppState) {
             is Hit.App -> app.openApp(hit.card)
             is Hit.Collection -> app.go(Route.CollectionGames(hit.c.id, hit.c.name))
             is Hit.Setting -> hit.hit.topic.let { t -> app.openSettings(t.section, t.row, t.group) }
+            is Hit.Romm -> app.store.cartridge.open(io.github.matiyaaa.fuse.model.CartridgeRoute.Search(hit.query, null))
             // A filter goes into the search; the keys take over again for what comes next.
             is Hit.Suggestion -> {
                 field.replaceAll(hit.s.text)
@@ -558,6 +572,7 @@ private fun HitThumb(h: Hit, size: androidx.compose.ui.unit.Dp) {
         is Hit.Collection -> IconWell(if (h.c.kind == CollectionKind.SERIES) FuseIcons.Sparkles else FuseIcons.Bookmark, size, shape)
         is Hit.Setting -> IconWell(h.hit.section.icon, size, shape)
         is Hit.Suggestion -> IconWell(h.s.key.icon(), size, shape)
+        is Hit.Romm -> IconWell(FuseIcons.CloudDownload, size, shape)
     }
 }
 

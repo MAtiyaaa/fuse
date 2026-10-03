@@ -977,6 +977,7 @@ internal fun AuditDriver.keyScreens() {
     libraryScreens(exhaustive = false)
     systemsScreens(exhaustive = false)
     gameScreens(exhaustive = false)
+    contentScreens()
     searchScreens(exhaustive = false)
     overlayScreens(exhaustive = false)
     settingsScreens(exhaustive = false)

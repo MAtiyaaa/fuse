@@ -80,6 +80,8 @@ data class ScreenPromptSpec(
     /** "Always for PlayStation games". */
     val groupLabel: String,
     val onPick: (LaunchDisplay, ScreenMemory) -> Unit,
+    /** The art is an app's icon: drawn whole, centred on the lit screen, never cropped to its shape. */
+    val fitArt: Boolean = false,
 )
 
 private val screens = listOf(LaunchDisplay.PRIMARY, LaunchDisplay.SECONDARY)
@@ -147,6 +149,7 @@ internal fun ScreenPromptOverlay(app: AppState) {
                             ScreenCard(
                                 display = d,
                                 art = s.art,
+                                fitArt = s.fitArt,
                                 accent = Color(s.accent),
                                 focused = row == 0 && screen == i,
                                 marked = row == 1 && screen == i,
@@ -195,7 +198,12 @@ private fun Header(s: ScreenPromptSpec, compact: Boolean) {
                 .background(c.text.copy(alpha = if (c.isDark) 0.08f else 0.06f)),
             contentAlignment = Alignment.Center,
         ) {
-            if (s.art != null) Artwork(s.art, Modifier.fillMaxSize()) else FuseIcon(FuseIcons.DualScreen, size = Size.iconL, tint = c.text)
+            when {
+                s.art == null -> FuseIcon(FuseIcons.DualScreen, size = Size.iconL, tint = c.text)
+                // An app's icon keeps its own shape inside the well.
+                s.fitArt -> Artwork(s.art, Modifier.fillMaxSize().padding(Space.s), contentScale = androidx.compose.ui.layout.ContentScale.Fit)
+                else -> Artwork(s.art, Modifier.fillMaxSize())
+            }
         }
         Spacer(Modifier.width(Space.m))
         Column(verticalArrangement = Arrangement.spacedBy(Space.xxs)) {
@@ -214,6 +222,7 @@ private fun Header(s: ScreenPromptSpec, compact: Boolean) {
 private fun ScreenCard(
     display: LaunchDisplay,
     art: Any?,
+    fitArt: Boolean,
     accent: Color,
     focused: Boolean,
     /** The screen last chosen while the focus is on the ticks below. */
@@ -252,7 +261,7 @@ private fun ScreenCard(
             .padding(vertical = if (compact) Space.m else Space.l, horizontal = Space.m),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Handheld(lit = display, art = art, accent = accent, width = deviceWidth, dim = !focused)
+        Handheld(lit = display, art = art, fitArt = fitArt, accent = accent, width = deviceWidth, dim = !focused)
         Spacer(Modifier.height(if (compact) Space.s else Space.m))
         Row(verticalAlignment = Alignment.CenterVertically) {
             FuseIcon(screenIcon(display), size = Size.iconS, tint = if (focused) c.accent else c.textMuted)
@@ -276,7 +285,7 @@ private fun ScreenCard(
  * with the bottom screen between a D-pad and four face buttons. The [lit] screen shows [art].
  */
 @Composable
-private fun Handheld(lit: LaunchDisplay, art: Any?, accent: Color, width: Dp, dim: Boolean) {
+private fun Handheld(lit: LaunchDisplay, art: Any?, fitArt: Boolean, accent: Color, width: Dp, dim: Boolean) {
     val c = Fuse.colors
     val shell = c.text.copy(alpha = if (dim) 0.07f else 0.1f)
     val outline = c.text.copy(alpha = if (dim) 0.16f else 0.24f)
@@ -286,14 +295,14 @@ private fun Handheld(lit: LaunchDisplay, art: Any?, accent: Color, width: Dp, di
             Modifier.width(width).aspectRatio(16f / 10f).clip(corner).background(shell).border(Size.stroke, outline, corner)
                 .padding(width * 0.05f),
         ) {
-            Screen(on = lit == LaunchDisplay.PRIMARY, art = art, accent = accent, modifier = Modifier.fillMaxSize())
+            Screen(on = lit == LaunchDisplay.PRIMARY, art = art, fitArt = fitArt, accent = accent, modifier = Modifier.fillMaxSize())
         }
         Row(Modifier.width(width * 0.72f).height(width * 0.035f), horizontalArrangement = Arrangement.SpaceBetween) {
             repeat(2) { Box(Modifier.width(width * 0.16f).fillMaxHeight().background(outline, RoundedCornerShape(50))) }
         }
         Box(Modifier.width(width).aspectRatio(16f / 10.5f).clip(corner).background(shell).border(Size.stroke, outline, corner)) {
             Screen(
-                on = lit == LaunchDisplay.SECONDARY, art = art, accent = accent,
+                on = lit == LaunchDisplay.SECONDARY, art = art, fitArt = fitArt, accent = accent,
                 modifier = Modifier.align(Alignment.Center).fillMaxHeight(0.78f).aspectRatio(1.05f),
             )
             DPad(outline, Modifier.align(Alignment.CenterStart).padding(start = width * 0.06f).size(width * 0.14f))
@@ -302,9 +311,12 @@ private fun Handheld(lit: LaunchDisplay, art: Any?, accent: Color, width: Dp, di
     }
 }
 
-/** One screen of the handheld: the game lit on it, or dark glass. */
+/**
+ * One screen of the handheld: the game lit on it, or dark glass. A game's art fills the screen; an
+ * app's icon ([fitArt]) sits whole in its middle on the lit glass, never cut to the screen's shape.
+ */
 @Composable
-private fun Screen(on: Boolean, art: Any?, accent: Color, modifier: Modifier) {
+private fun Screen(on: Boolean, art: Any?, fitArt: Boolean, accent: Color, modifier: Modifier) {
     val c = Fuse.colors
     val glass = RoundedCornerShape(Radius.xs)
     Box(
@@ -317,8 +329,15 @@ private fun Screen(on: Boolean, art: Any?, accent: Color, modifier: Modifier) {
                     Modifier.background(c.surfaceDim).border(Size.stroke, c.hairline, glass)
                 },
             ),
+        contentAlignment = Alignment.Center,
     ) {
-        if (on && art != null) Artwork(art, Modifier.fillMaxSize())
+        if (on && art != null) {
+            if (fitArt) {
+                Artwork(art, Modifier.fillMaxHeight(0.66f).aspectRatio(1f), contentScale = androidx.compose.ui.layout.ContentScale.Fit)
+            } else {
+                Artwork(art, Modifier.fillMaxSize())
+            }
+        }
     }
 }
 

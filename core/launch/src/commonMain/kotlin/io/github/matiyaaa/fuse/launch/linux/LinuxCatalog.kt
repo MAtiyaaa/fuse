@@ -169,8 +169,9 @@ object LinuxCatalog {
             titleIdMode = TitleIdMode.OPTIONAL,
             installHint = "File > Install Packages/Raps/Edats",
             packageInstall = PackageInstallSpec(
-                setOf("pkg"), listOf("--installpkg", "{FILE}"),
-                source = "RPCS3 rpcs3/rpcs3.cpp: --installpkg <path> (\"Forces the emulator to install this pkg file\")",
+                setOf("pkg", "rap", "edat"), listOf("--headless", "--installpkg", "{FILE}"),
+                source = "RPCS3 rpcs3/rpcs3.cpp: --installpkg <path> (\"Forces the emulator to install this pkg file\"); with --headless it " +
+                    "installs without a window and quits (main_window::InstallPackages(nullptr, ...)); .rap and .edat files are copied into exdata under their own names",
             ),
             limitations = listOf("Folder games are passed as the game folder (disc structure); a .ps3 file with a serial starts an installed game."),
         ),
@@ -209,6 +210,11 @@ object LinuxCatalog {
             modes = listOf(file("{ROM}")),
             source = esde("AZAHAR"), confidence = VERIFIED_ESDE, homepage = "https://azahar-emu.org/",
             capabilities = caps(installed = true),
+            packageInstall = PackageInstallSpec(
+                setOf("cia"), listOf("-i", "{FILE}"),
+                source = "Azahar src/citra_qt/citra_qt.cpp: --install/-i <file> installs a CIA and exits " +
+                    "(0 on success, InstallStatus + 2 on failure); a .cia given to play is never started, only offered for install",
+            ),
         ),
         LinuxEmulatorDef(
             id = "linux.azaharplus", name = "AzaharPlus", platforms = N3DS,
@@ -288,7 +294,9 @@ object LinuxCatalog {
             limitations = listOf("Games must be installed in Vita3K first; Fuse starts them by title id."),
             packageInstall = PackageInstallSpec(
                 setOf("pkg"), listOf("--pkg", "{FILE}", "--zrif", "{KEY}"), needsKey = true,
-                source = "Vita3K vita3k/config/src/config.cpp: --pkg <path> needs --zrif <key> (base64)",
+                source = "Vita3K vita3k/config/src/config.cpp: --pkg <path> needs --zrif <key> (base64) and quits when installed; " +
+                    "a .vpk/.zip given as content-path is installed (main.cpp install_archive), then started",
+                archives = setOf("vpk", "zip"),
             ),
         ),
         LinuxEmulatorDef(

@@ -182,7 +182,29 @@ internal class FakeServices(
             File(path).also { it.parentFile.mkdirs() }.writeText(text)
             return true
         }
+
+        override suspend fun rpcs3Storage(installed: InstalledEmulator) = listOfNotNull(rpcs3Hdd)
+        override suspend fun vita3kStorage(installed: InstalledEmulator) = listOfNotNull(vitaPref)
+        override suspend fun azaharStorage(installed: InstalledEmulator) = listOfNotNull(azaharSdmc)
+        override suspend fun runInstaller(run: InstallerRun, onOutput: (String) -> Unit): InstallerResult {
+            installerRuns += run
+            return contentInstaller(run)
+        }
+        override suspend fun stage(source: String, name: String): String? {
+            val dir = File(cache, "staged").also { it.mkdirs() }
+            return File(source).copyTo(File(dir, name), overwrite = true).absolutePath
+        }
+        override suspend fun clearStaged() {
+            File(cache, "staged").deleteRecursively()
+        }
     }
+
+    /** RPCS3's dev_hdd0 and Vita3K's pref path for the fake, and what its installer does with each run. */
+    @Volatile var rpcs3Hdd: String? = null
+    @Volatile var vitaPref: String? = null
+    @Volatile var azaharSdmc: String? = null
+    val installerRuns: MutableList<InstallerRun> = java.util.Collections.synchronizedList(mutableListOf())
+    @Volatile var contentInstaller: (InstallerRun) -> InstallerResult = { InstallerResult(0, "") }
 
     /** The drives the fake system reports; null reports none, like a host that can't tell. */
     @Volatile var drives: List<io.github.matiyaaa.fuse.model.StorageVolume>? = null
