@@ -57,7 +57,6 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.Outline
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -517,32 +516,13 @@ fun HudScrim(art: Boolean, modifier: Modifier = Modifier) {
 }
 
 /**
- * Fuse's mark: a rounded frame with a lit fuse line running into it and a spark at the end.
- * Original artwork, drawn in code.
+ * Fuse's mark: a squircle frame with a lit fuse line running into it and a spark at the end, drawn
+ * from the brand art ([BrandArt]).
  */
 @Composable
 fun FuseMark(modifier: Modifier = Modifier, color: Color = Fuse.colors.text, spark: Color = Fuse.colors.accent) {
     Canvas(modifier) {
-        val w = size.width
-        val stroke = w * 0.1f
-        drawRoundRect(
-            color,
-            topLeft = Offset(stroke / 2, stroke / 2),
-            size = GSize(w - stroke, w - stroke),
-            cornerRadius = CornerRadius(w * 0.28f),
-            style = Stroke(stroke),
-        )
-        val fuse = Path().apply {
-            moveTo(w * 0.28f, w * 0.7f)
-            cubicTo(w * 0.42f, w * 0.7f, w * 0.44f, w * 0.34f, w * 0.64f, w * 0.34f)
-        }
-        drawPath(fuse, color, style = Stroke(stroke, cap = StrokeCap.Round))
-        drawCircle(
-            Brush.radialGradient(listOf(spark, spark.copy(alpha = 0f)), center = Offset(w * 0.7f, w * 0.3f), radius = w * 0.22f),
-            radius = w * 0.22f,
-            center = Offset(w * 0.7f, w * 0.3f),
-        )
-        drawCircle(spark, radius = w * 0.07f, center = Offset(w * 0.7f, w * 0.3f))
+        drawBrandMark(Offset.Zero, size.width, color, spark)
     }
 }
 

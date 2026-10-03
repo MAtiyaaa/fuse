@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # Checks that a release is consistent before it is merged: gradle.properties names the version, its
 # notes exist with the title and the New, Changed and Fixed sections, RELEASE_NOTES.md is a copy of
-# them, and CHANGELOG.md lists the version. The release workflow publishes exactly these files.
+# them, CHANGELOG.md lists the version, and the README's "Where Fuse stands" names it (the website
+# reads the version from the release itself, but the README is written by hand and goes stale). The
+# release workflow publishes exactly these files.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -28,5 +30,8 @@ else
   cmp -s "$notes" RELEASE_NOTES.md || fail "RELEASE_NOTES.md differs from $notes"
 fi
 grep -q "^| $version | $name | \[docs/releases/$version.md\]" CHANGELOG.md || fail "CHANGELOG.md has no row for $version ($name)"
+
+grep -q "^> \*\*Fuse $version \"$name\"" README.md || fail "README.md's \"Where Fuse stands\" doesn't name Fuse $version \"$name\""
+grep -q "<sub>$version is the " README.md || fail "README.md's download line doesn't name $version"
 
 exit "$status"

@@ -4,10 +4,8 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.offset
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -17,9 +15,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -31,10 +27,7 @@ import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.em
-import io.github.matiyaaa.fuse.ui.designsystem.components.FText
 import io.github.matiyaaa.fuse.ui.designsystem.input.InputLayer
 import io.github.matiyaaa.fuse.ui.designsystem.input.LayerPriority
 import io.github.matiyaaa.fuse.ui.designsystem.input.NavResult
@@ -52,18 +45,20 @@ internal object StartupIntro {
     var played = false
 
     /** The whole intro, in milliseconds; the reduced-motion version is a short fade. */
-    const val LENGTH_MS = 2_700
+    const val LENGTH_MS = 3_200
     const val REDUCED_MS = 1_000
 
     /** Where a skipped intro jumps to: the opening out. */
-    const val EXIT_AT_MS = 2_100
+    const val EXIT_AT_MS = 2_600
 }
 
 /**
- * Fuse's startup: its mark lights like a fuse. A spark catches at the end of the line, runs along it
- * shedding embers, and at the top the frame ignites around it in a burst of light; "Fuse" rises
- * under the mark, and the whole thing opens out into the interface. Any button skips it. With
- * reduced motion it is the finished mark, held a moment, then faded.
+ * Fuse's startup: its mark lights like a fuse, then writes its name. A spark catches at the end of
+ * the line and runs along it shedding embers; where it reaches the spark the frame ignites around it
+ * in a burst of light. The lit mark glides aside and the wordmark burns in beside it, letter by
+ * letter, white-hot at the edge and cooling behind, until the two stand as Fuse's lockup, the same
+ * art as the website and the README. Then it opens out into the interface. Any button skips it.
+ * With reduced motion it is the finished lockup, held a moment, then faded.
  *
  * Plays once when Fuse starts (or the device starts with Fuse as its Home), when Settings, Screen
  * and sound, Startup animation is on; Settings, Developer can play it again.
@@ -105,11 +100,9 @@ internal fun StartupIntroOverlay(onDone: () -> Unit) {
         NavResult.CONSUMED
     }
 
-    val embers = remember { embers() }
-    val ink = c.ink
-    val accent = c.accent
-    val text = c.text
-    val warm = lerp(accent, Color.White, 0.55f)
+    val markEmbers = remember { markEmbers() }
+    val wordEmbers = remember { wordEmbers() }
+    val colors = IntroColors(ink = c.ink, text = c.text, accent = c.accent)
 
     BoxWithConstraints(
         Modifier
@@ -118,37 +111,20 @@ internal fun StartupIntroOverlay(onDone: () -> Unit) {
             .graphicsLayer { alpha = 1f - phase(t, if (reduced) length * 0.6f else EXIT_FADE_FROM, length.toFloat()).ease() },
         contentAlignment = Alignment.Center,
     ) {
-        val markDp = (min(maxWidth.value, maxHeight.value) * 0.22f).coerceIn(96f, 220f).dp
+        // The lockup's capitals: large, but the whole lockup always fits across the screen.
+        val capDp = min(min(maxWidth.value, maxHeight.value) * 0.17f, maxWidth.value * 0.78f / BrandArt.LOCKUP_W).coerceIn(28f, 150f).dp
         Canvas(Modifier.fillMaxSize()) {
-            // The room: ink, warmed by the spark's light as it grows.
-            drawRect(ink)
-            val m = markDp.toPx()
-            val lift = m * 0.32f * phase(t, WORD_FROM, WORD_TO).easeOut()
-            val origin = Offset(size.width / 2 - m / 2, size.height / 2 - m / 2 - lift)
+            drawRect(colors.ink)
+            val lockup = Lockup(center, capDp.toPx())
             val exit = phase(t, EXIT_FROM, length.toFloat()).easeIn()
-            val scale = 1f + exit * 0.35f
-            withTransform({ scale(scale, scale, pivot = origin + Offset(m / 2, m / 2)) }) {
+            withTransform({ scale(1f + exit * 0.3f, 1f + exit * 0.3f, pivot = center) }) {
                 if (reduced) {
-                    drawFinishedMark(origin, m, text, accent)
+                    drawBrandMark(lockup.markAt, lockup.mark, colors.text, colors.accent)
+                    drawWordmark(lockup.wordAt, lockup.cap, colors.text)
                 } else {
-                    drawIgnition(t, origin, m, text, accent, warm, embers)
+                    drawIntro(t, lockup, colors, markEmbers, wordEmbers)
                 }
             }
-        }
-        // "Fuse", rising under the mark as the burst settles; letters close up as they arrive.
-        val word = if (reduced) 1f else phase(t, WORD_FROM, WORD_TO).easeOut()
-        val wordOut = if (reduced) 0f else phase(t, EXIT_FROM, EXIT_FROM + 300f)
-        Box(
-            Modifier
-                .offset(y = markDp * 0.5f + markDp * 0.05f * (1f - word))
-                .graphicsLayer { alpha = word * (1f - wordOut) },
-        ) {
-            FText(
-                "Fuse",
-                Fuse.type.display.copy(fontWeight = FontWeight.SemiBold, letterSpacing = (0.04f + 0.3f * (1f - word)).em),
-                color = text,
-                maxLines = 1,
-            )
         }
     }
 }
@@ -158,49 +134,96 @@ private const val CATCH_TO = 320f
 private const val RUN_FROM = 280f
 private const val RUN_TO = 1_180f
 private const val BURST_AT = 1_180f
-private const val FRAME_TO = 1_620f
-private const val WORD_FROM = 1_420f
-private const val WORD_TO = 2_050f
-private const val EXIT_FROM = 2_150f
-private const val EXIT_FADE_FROM = 2_250f
+private const val FRAME_TO = 1_600f
+private const val GLIDE_FROM = 1_420f
+private const val GLIDE_TO = 1_960f
+private const val BURN_FROM = 1_720f
+private const val BURN_TO = 2_480f
+private const val EXIT_FROM = 2_650f
+private const val EXIT_FADE_FROM = 2_750f
 
-/** The fuse line inside the mark, in the mark's own units (as [FuseMark] draws it). */
-private fun fusePath(o: Offset, m: Float) = Path().apply {
-    moveTo(o.x + m * 0.28f, o.y + m * 0.7f)
-    cubicTo(o.x + m * 0.42f, o.y + m * 0.7f, o.x + m * 0.44f, o.y + m * 0.34f, o.x + m * 0.64f, o.y + m * 0.34f)
+/** How much bigger the mark is while it lights, centred, than in the finished lockup. */
+private const val SOLO = 1.4f
+
+/** The burning edge's band, in wordmark units: white-hot at the front, cooling to the letters' colour behind. */
+private const val BAND = 70f
+
+private class IntroColors(val ink: Color, val text: Color, val accent: Color) {
+    val warm = mix(accent, Color.White, 0.55f)
+    val hot = mix(accent, Color.White, 0.9f)
 }
 
-/** The frame, starting at its bottom left corner, so it lights from where the fuse began. */
-private fun framePath(o: Offset, m: Float): Path {
-    val s = m * 0.1f
-    return Path().apply {
-        addRoundRect(RoundRect(o.x + s / 2, o.y + s / 2, o.x + m - s / 2, o.y + m - s / 2, CornerRadius(m * 0.28f)))
+/** Fuse's horizontal lockup centred on [center], with capitals [cap] tall (as the brand's lockup.py lays it out). */
+private class Lockup(center: Offset, val cap: Float) {
+    val mark = cap * BrandArt.LOCKUP_MARK
+    private val left = center.x - cap * BrandArt.LOCKUP_W / 2
+    val markAt = Offset(left, center.y - mark / 2)
+    val wordAt = Offset(left + mark + cap * BrandArt.LOCKUP_GAP, center.y - cap / 2)
+
+    /** Where the mark lights: bigger, in the middle of the screen. */
+    val soloMark = mark * SOLO
+    val soloAt = Offset(center.x - soloMark / 2, center.y - soloMark / 2)
+}
+
+private fun DrawScope.drawIntro(t: Float, lockup: Lockup, colors: IntroColors, markEmbers: List<Ember>, wordEmbers: List<Ember>) {
+    // The mark lights in the middle, then glides aside into the lockup as the word begins.
+    val glide = phase(t, GLIDE_FROM, GLIDE_TO).easeInOut()
+    val markSize = lockup.soloMark + (lockup.mark - lockup.soloMark) * glide
+    val markAt = lockup.soloAt + (lockup.markAt - lockup.soloAt) * glide
+    val k = markSize / BrandArt.MARK
+
+    val fuse = PathMeasure().apply { setPath(BrandArt.fuse, false) }
+    val run = phase(t, RUN_FROM, RUN_TO).easeInOut()
+    val head = if (t < BURST_AT) fuse.getPosition(fuse.length * run) else BrandArt.SPARK
+    val burst = phase(t, BURST_AT, BURST_AT + 650f)
+
+    // The room's glow: the spark lights everything, brightest as it bursts, settling as the word burns.
+    val glow = (phase(t, 0f, RUN_TO) * 0.35f + (1f - burst) * if (t >= BURST_AT) 0.45f else 0f).coerceIn(0f, 0.6f) *
+        (1f - 0.55f * phase(t, GLIDE_FROM, BURN_TO))
+    val lightAt = markAt + head * k
+    drawRect(
+        Brush.radialGradient(
+            listOf(colors.accent.copy(alpha = glow), colors.accent.copy(alpha = glow * 0.25f), Color.Transparent),
+            center = lightAt,
+            radius = size.maxDimension * 0.6f,
+        ),
+    )
+
+    withTransform({
+        translate(markAt.x, markAt.y)
+        scale(k, k, pivot = Offset.Zero)
+    }) {
+        drawIgnitingMark(t, fuse, run, head, burst, colors, markEmbers)
+    }
+
+    // The flash as the frame ignites, over everything.
+    if (t >= BURST_AT && t < BURST_AT + 220f) {
+        drawRect(Color.White.copy(alpha = (1f - phase(t, BURST_AT, BURST_AT + 220f)) * 0.12f))
+    }
+
+    if (t >= BURN_FROM) {
+        withTransform({
+            translate(lockup.wordAt.x, lockup.wordAt.y)
+            scale(lockup.cap / BrandArt.CAP, lockup.cap / BrandArt.CAP, pivot = Offset.Zero)
+        }) {
+            drawBurningWord(t, colors, wordEmbers)
+        }
     }
 }
 
-private fun DrawScope.drawIgnition(t: Float, o: Offset, m: Float, text: Color, accent: Color, warm: Color, embers: List<Ember>) {
-    val stroke = m * 0.1f
-    val line = fusePath(o, m)
-    val measure = PathMeasure().apply { setPath(line, false) }
-    val length = measure.length
-    val run = phase(t, RUN_FROM, RUN_TO).easeInOut()
-    val head = measure.getPosition(length * run)
-    val spark = Offset(o.x + m * 0.7f, o.y + m * 0.3f)
-    val burst = phase(t, BURST_AT, BURST_AT + 650f)
-
-    // The room's glow: the spark lights everything, brightest as it bursts.
-    val glow = (phase(t, 0f, RUN_TO) * 0.35f + (1f - burst) * if (t >= BURST_AT) 0.45f else 0f).coerceIn(0f, 0.6f)
-    val lightAt = if (t < BURST_AT) head else spark
-    drawRect(
-        Brush.radialGradient(listOf(accent.copy(alpha = glow), accent.copy(alpha = glow * 0.25f), Color.Transparent), center = lightAt, radius = size.maxDimension * 0.6f),
-    )
+/** The mark, in its own 100 units: the fuse burning in, the frame igniting, the spark and its burst. */
+private fun DrawScope.drawIgnitingMark(t: Float, fuse: PathMeasure, run: Float, head: Offset, burst: Float, colors: IntroColors, embers: List<Ember>) {
+    val stroke = BrandArt.MARK_STROKE
+    val length = fuse.length
+    // The lit glow round the line and frame cools away as the lockup settles, leaving the brand's clean mark.
+    val cool = 1f - phase(t, GLIDE_FROM, BURN_TO)
 
     // The burnt line behind the spark: a lit core over a soft glow.
     if (run > 0f) {
         val burnt = Path()
-        measure.getSegment(0f, length * run, burnt, true)
-        drawPath(burnt, accent.copy(alpha = 0.35f), style = Stroke(stroke * 2.4f, cap = StrokeCap.Round))
-        drawPath(burnt, text, style = Stroke(stroke, cap = StrokeCap.Round))
+        fuse.getSegment(0f, length * run, burnt, true)
+        drawPath(burnt, colors.accent.copy(alpha = 0.35f * cool), style = Stroke(stroke * 2.4f, cap = StrokeCap.Round))
+        drawPath(burnt, colors.text, style = Stroke(stroke, cap = StrokeCap.Round))
     }
 
     // Embers shed along the way, falling and fading.
@@ -208,60 +231,104 @@ private fun DrawScope.drawIgnition(t: Float, o: Offset, m: Float, text: Color, a
         val born = RUN_FROM + (RUN_TO - RUN_FROM) * e.at
         val age = (t - born) / e.life
         if (age !in 0f..1f) continue
-        val from = measure.getPosition(length * phase(born, RUN_FROM, RUN_TO).easeInOut())
-        val p = from + Offset(cos(e.angle) * e.speed * m * age, sin(e.angle) * e.speed * m * age + m * 0.35f * age * age)
-        drawCircle(lerp(warm, accent, age), radius = m * e.size * (1f - age * 0.6f), center = p, alpha = (1f - age) * 0.9f)
+        val from = fuse.getPosition(length * phase(born, RUN_FROM, RUN_TO).easeInOut())
+        val p = from + Offset(cos(e.angle) * e.speed * 100f * age, sin(e.angle) * e.speed * 100f * age + 35f * age * age)
+        drawCircle(mix(colors.warm, colors.accent, age), radius = 100f * e.size * (1f - age * 0.6f), center = p, alpha = (1f - age) * 0.9f)
     }
 
-    // The frame ignites from where the fuse began, running all the way round.
+    // The frame ignites from its top, beside the spark, running both ways round to meet at the bottom.
     val frameRun = phase(t, BURST_AT - 60f, FRAME_TO).easeOut()
     if (frameRun > 0f) {
-        val frame = framePath(o, m)
-        val fm = PathMeasure().apply { setPath(frame, true) }
+        val fm = PathMeasure().apply { setPath(BrandArt.frame, true) }
+        val half = fm.length * frameRun / 2
         val lit = Path()
-        fm.getSegment(0f, fm.length * frameRun, lit, true)
-        drawPath(lit, accent.copy(alpha = 0.3f * (1f - burst * 0.5f)), style = Stroke(stroke * 2.2f, cap = StrokeCap.Round))
-        drawPath(lit, text, style = Stroke(stroke, cap = StrokeCap.Round))
+        fm.getSegment(0f, half, lit, true)
+        fm.getSegment(fm.length - half, fm.length, lit, true)
+        drawPath(lit, colors.accent.copy(alpha = 0.3f * (1f - burst * 0.5f) * cool), style = Stroke(stroke * 2.2f, cap = StrokeCap.Round))
+        drawPath(lit, colors.text, style = Stroke(stroke, cap = StrokeCap.Round))
     }
 
-    // The spark: catching at the start, running, then resting at the top as the mark's own.
-    val at = when {
-        t < BURST_AT -> head
-        else -> {
-            val settle = phase(t, BURST_AT, BURST_AT + 260f).easeOut()
-            head + (spark - head) * settle
-        }
-    }
+    // The spark: catching at the start, running, then resting as the mark's own.
     val catch = phase(t, 0f, CATCH_TO).easeOut()
     val flicker = 1f + 0.18f * sin(t / 38f) * (1f - phase(t, BURST_AT, BURST_AT + 400f))
-    val haloR = m * (0.08f + 0.18f * catch) * flicker * (1f + (1f - burst) * if (t >= BURST_AT) 0.6f else 0f)
-    drawCircle(Brush.radialGradient(listOf(warm, accent.copy(alpha = 0.6f), Color.Transparent), center = at, radius = haloR), radius = haloR, center = at)
-    drawCircle(lerp(Color.White, accent, phase(t, BURST_AT, BURST_AT + 500f)), radius = m * 0.07f * catch, center = at)
+    val swell = 1f + (1f - burst) * if (t >= BURST_AT) 0.6f else 0f
+    val settled = phase(t, BURST_AT, BURST_AT + 500f)
+    val haloR = (8f + 18f * catch) * flicker * swell
+    val halo = haloR + (BrandArt.GLOW_R - haloR) * settled
+    drawCircle(
+        Brush.radialGradient(listOf(colors.warm, colors.accent.copy(alpha = 0.6f), Color.Transparent), center = head, radius = halo),
+        radius = halo,
+        center = head,
+        alpha = 1f - settled,
+    )
+    if (settled > 0f) {
+        drawCircle(BrandArt.glow(colors.accent), radius = BrandArt.GLOW_R, center = BrandArt.SPARK, alpha = settled)
+    }
+    drawCircle(Color.White, radius = BrandArt.CORE_R * catch, center = head, alpha = 1f - settled)
+    if (settled > 0f) {
+        drawCircle(BrandArt.core(colors.accent), radius = BrandArt.CORE_R, center = BrandArt.SPARK, alpha = settled)
+    }
 
-    // The burst: a ring of light opening from the spark, and a flash.
+    // The burst: rings of light opening from the spark.
     if (t >= BURST_AT && burst < 1f) {
-        val r = m * (0.15f + 1.9f * burst.easeOut())
-        drawCircle(accent.copy(alpha = (1f - burst) * 0.85f), radius = r, center = spark, style = Stroke(m * 0.05f * (1f - burst) + 1f))
-        drawCircle(warm.copy(alpha = (1f - burst) * 0.5f), radius = r * 0.62f, center = spark, style = Stroke(m * 0.025f * (1f - burst) + 1f))
-        drawRect(Color.White.copy(alpha = (1f - phase(t, BURST_AT, BURST_AT + 220f)) * 0.12f))
+        val r = 15f + 190f * burst.easeOut()
+        drawCircle(colors.accent.copy(alpha = (1f - burst) * 0.85f), radius = r, center = BrandArt.SPARK, style = Stroke(5f * (1f - burst) + 1f))
+        drawCircle(colors.warm.copy(alpha = (1f - burst) * 0.5f), radius = r * 0.62f, center = BrandArt.SPARK, style = Stroke(2.5f * (1f - burst) + 1f))
     }
 }
 
-/** The mark as it is when lit: the frame, the line and the spark. */
-private fun DrawScope.drawFinishedMark(o: Offset, m: Float, text: Color, accent: Color) {
-    val stroke = m * 0.1f
-    drawPath(framePath(o, m), text, style = Stroke(stroke))
-    drawPath(fusePath(o, m), text, style = Stroke(stroke, cap = StrokeCap.Round))
-    val spark = Offset(o.x + m * 0.7f, o.y + m * 0.3f)
-    drawCircle(Brush.radialGradient(listOf(accent, accent.copy(alpha = 0f)), center = spark, radius = m * 0.22f), radius = m * 0.22f, center = spark)
-    drawCircle(accent, radius = m * 0.07f, center = spark)
+/** Where the burning edge is along the word, in wordmark units: from just before the F to past the e. */
+private fun edgeAt(t: Float): Float = -10f + (BrandArt.WORD_W + BAND + 20f) * phase(t, BURN_FROM, BURN_TO).ease()
+
+/** The wordmark burning in from the left, in its own units (capitals 100 tall). */
+private fun DrawScope.drawBurningWord(t: Float, colors: IntroColors, embers: List<Ember>) {
+    val edge = edgeAt(t)
+    val burning = t < BURN_TO
+
+    // The light of the burn, travelling with the edge and dying down as it finishes.
+    val heat = phase(t, BURN_FROM, BURN_FROM + 120f) * (1f - phase(t, BURN_TO - 160f, BURN_TO + 220f))
+    if (heat > 0f) {
+        val at = Offset(edge.coerceAtMost(BrandArt.WORD_W), 52f)
+        drawCircle(
+            Brush.radialGradient(listOf(colors.accent.copy(alpha = 0.42f * heat), colors.accent.copy(alpha = 0.12f * heat), Color.Transparent), center = at, radius = 95f),
+            radius = 95f,
+            center = at,
+        )
+    }
+
+    if (burning) {
+        drawPath(
+            BrandArt.wordmark,
+            Brush.horizontalGradient(
+                0f to colors.text,
+                0.42f to colors.accent,
+                0.8f to colors.warm,
+                0.95f to colors.hot,
+                1f to colors.hot.copy(alpha = 0f),
+                startX = edge - BAND,
+                endX = edge,
+            ),
+        )
+    } else {
+        drawPath(BrandArt.wordmark, colors.text)
+    }
+
+    // Sparks thrown off the burning edge, falling and fading.
+    for (e in embers) {
+        val born = BURN_FROM + (BURN_TO - BURN_FROM) * e.at
+        val age = (t - born) / e.life
+        if (age !in 0f..1f) continue
+        val from = Offset(edgeAt(born).coerceIn(0f, BrandArt.WORD_W), e.y)
+        val p = from + Offset(cos(e.angle) * e.speed * 100f * age, sin(e.angle) * e.speed * 100f * age + 60f * age * age)
+        drawCircle(mix(colors.hot, colors.accent, age), radius = 100f * e.size * (1f - age * 0.6f), center = p, alpha = (1f - age) * 0.85f)
+    }
 }
 
-/** One ember: when along the run it is shed (0..1), which way and how fast it flies, how big, how long it lives. */
-private class Ember(val at: Float, val angle: Float, val speed: Float, val size: Float, val life: Float)
+/** One ember: when along its run it is shed (0..1), which way and how fast it flies, how big, how long it lives, and its height on a letter. */
+private class Ember(val at: Float, val angle: Float, val speed: Float, val size: Float, val life: Float, val y: Float = 0f)
 
 /** The same embers every time: the intro is a designed moment, not noise. */
-private fun embers(): List<Ember> {
+private fun markEmbers(): List<Ember> {
     val r = Random(0xF05E)
     return List(26) {
         Ember(
@@ -275,6 +342,21 @@ private fun embers(): List<Ember> {
     }
 }
 
+/** Sparks off the word's burning edge: thrown back and up from the letters, then falling. */
+private fun wordEmbers(): List<Ember> {
+    val r = Random(0xF05F)
+    return List(22) {
+        Ember(
+            at = it / 22f + r.nextFloat() * 0.04f,
+            angle = (PI * (1.0 + r.nextDouble() * 0.6)).toFloat(),
+            speed = 0.2f + r.nextFloat() * 0.35f,
+            size = 0.01f + r.nextFloat() * 0.016f,
+            life = 320f + r.nextFloat() * 340f,
+            y = 15f + r.nextFloat() * 75f,
+        )
+    }
+}
+
 /** How far [t] is between [from] and [to], 0..1. */
 private fun phase(t: Float, from: Float, to: Float): Float = ((t - from) / (to - from)).coerceIn(0f, 1f)
 
@@ -282,10 +364,3 @@ private fun Float.easeOut(): Float = 1f - (1f - this) * (1f - this) * (1f - this
 private fun Float.easeIn(): Float = this * this * this
 private fun Float.easeInOut(): Float = if (this < 0.5f) 4f * this * this * this else 1f - (-2f * this + 2f).let { it * it * it } / 2f
 private fun Float.ease(): Float = this * this * (3f - 2f * this)
-
-private fun lerp(a: Color, b: Color, f: Float): Color = Color(
-    a.red + (b.red - a.red) * f,
-    a.green + (b.green - a.green) * f,
-    a.blue + (b.blue - a.blue) * f,
-    a.alpha + (b.alpha - a.alpha) * f,
-)
