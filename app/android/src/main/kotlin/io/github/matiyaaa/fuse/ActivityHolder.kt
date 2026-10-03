@@ -8,6 +8,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.view.Display
 import androidx.activity.result.ActivityResult
 import java.lang.ref.WeakReference
 
@@ -92,6 +93,20 @@ class ActivityHolder(private val app: Application) : Application.ActivityLifecyc
         val view = current?.window?.decorView ?: return null
         if (view.width <= 0 || view.height <= 0) return null
         return ActivityOptions.makeClipRevealAnimation(view, view.width / 2, view.height / 2, 0, 0)
+    }
+
+    /**
+     * Options for opening something on [displayId] (null: wherever Android puts it). On Fuse's own
+     * screen it reveals from Fuse's window; on another screen it opens plainly there, since a reveal
+     * is measured from Fuse's window and would play from the wrong place on the other screen.
+     */
+    fun launchOptions(displayId: Int?): ActivityOptions {
+        @Suppress("DEPRECATION") // Activity.getDisplay() is Android 11 and newer
+        val here = current?.windowManager?.defaultDisplay?.displayId ?: Display.DEFAULT_DISPLAY
+        val elsewhere = displayId != null && displayId != here
+        val options = (if (elsewhere) null else revealOptions()) ?: ActivityOptions.makeBasic()
+        if (displayId != null) options.launchDisplayId = displayId
+        return options
     }
 
     val context: Context get() = current ?: app
