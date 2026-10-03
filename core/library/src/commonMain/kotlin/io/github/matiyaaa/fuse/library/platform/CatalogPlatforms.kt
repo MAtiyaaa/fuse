@@ -354,6 +354,16 @@ internal val catalogPlatforms: List<Platform> = listOf(
         "scummvm", "ScummVM", "ScummVM", PC_GAMES, PC, null, null,
         "scummvm svm", "", 0xFF6FA36F, policy = FolderPolicy.FOLDER_AS_GAME, aspect = BLU_RAY_CASE,
     ),
+    // PICO-8 carts are .p8 text or .p8.png pictures (ES-DE reads both).
+    platform(
+        "pico8", "PICO-8", "PICO-8", CONSOLE, OTHER, "Lexaloffle", 2015,
+        "p8 png", "pico-8 pico", 0xFFE0475B, aspect = JEWEL_CASE,
+    ),
+    // Flash games: .swf files, or Swiff's .swiffid files for the games in its own library.
+    platform(
+        "flash", "Flash", "Flash", PC_GAMES, OTHER, "Adobe", 1996,
+        "swf swiffid", "adobeflash flashgames swf", 0xFFD8402F, aspect = JEWEL_CASE,
+    ),
     platform(
         "android", "Android", "Android", PlatformKind.ANDROID, ANDROID, "Google", null,
         "app", "androidgames androidapps", 0xFF79A86B, aspect = JEWEL_CASE,

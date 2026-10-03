@@ -116,4 +116,6 @@ class UiAudit {
     @Test fun keyScreensV() = audit(AuditSize.V) { keyScreens() }
 
     @Test fun keyScreensT() = audit(AuditSize.T) { keyScreens() }
+
+    @Test fun keyScreensU() = audit(AuditSize.U) { keyScreens() }
 }

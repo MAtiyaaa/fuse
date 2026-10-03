@@ -6,15 +6,18 @@
   "extends": "blossom",
   "dark": true,
   "colors": {
-    "background": "#100D1D",
-    "surface": "#1A1629",
-    "surfaceRaised": "#242036",
-    "accent": "#FF9CC2",
-    "accentSoft": "#FF9CC233",
-    "onAccent": "#2A0A19",
-    "text": "#F9F1F6",
-    "textMuted": "#BBB0C6",
-    "focus": "#FFE3EE"
+    "background": "#110D1F",
+    "surface": "#1B162C",
+    "surfaceRaised": "#26203A",
+    "accent": "#FFA3C7",
+    "accentSoft": "#FFA3C733",
+    "onAccent": "#2B0A1A",
+    "text": "#FBF2F7",
+    "textMuted": "#C3B6CE",
+    "focus": "#FFE3EE",
+    "success": "#7FE3B8",
+    "warning": "#FFCB80",
+    "danger": "#FF7C93"
   },
   "background": {
     "style": "petals",

@@ -235,6 +235,35 @@ class FolderInterpreterTest {
         assertEquals("/roms/psp/Lumines", scan("psp", "/roms/psp").games.single().launchPath)
     }
 
+    // A folder-native system's game folder with data folders inside is one game, not one per folder.
+    @Test
+    fun foldersInsideAFolderNativeGameAreNeverGames() = runTest {
+        fs.file("/roms/scummvm/Monkey Island/MONKEY.000", size = 10)
+        fs.file("/roms/scummvm/Monkey Island/audio/track1.ogg", size = 10)
+        fs.file("/roms/scummvm/Monkey Island/video/intro/part1.smk", size = 10)
+        fs.file("/roms/scummvm/Monkey Island/video/intro/part2.smk", size = 10)
+        fs.file("/roms/scummvm/Day of the Tentacle/TENTACLE.000", size = 10)
+
+        val games = scan("scummvm", "/roms/scummvm").games
+        assertEquals(listOf("Day of the Tentacle", "Monkey Island"), games.map { it.title }.sorted())
+        assertEquals("/roms/scummvm/Monkey Island", games.byTitle("Monkey Island").path)
+    }
+
+    // Cemu's own folder copied into the library: its installed title, and none of its other folders.
+    @Test
+    fun emulatorSystemFoldersDoNotBecomeGames() = runTest {
+        val mlc = "/roms/wiiu/mlc01"
+        fs.file("$mlc/usr/title/00050000/101c9500/code/U-King.rpx", size = 100)
+        fs.file("$mlc/usr/title/00050000/101c9500/meta/meta.xml", size = 10)
+        fs.file("$mlc/usr/title/00050000/101c9500/content/data.bin", size = 10)
+        for (i in 1..40) fs.file("$mlc/usr/save/00050000/1010ed00/user/8000000$i/save.dat", size = 10)
+        fs.file("$mlc/sys/title/0005001b/10056000/content/x.bin", size = 10)
+        fs.file("$mlc/usr/boss/00050000/a/b.dat", size = 10)
+
+        val games = scan("wiiu", "/roms/wiiu").games
+        assertEquals(listOf("$mlc/usr/title/00050000/101c9500"), games.map { it.path })
+    }
+
     @Test
     fun pcGameFolderPicksTheOneRealProgram() = runTest {
         fs.file("/roms/win/Hollow Knight/hollow_knight.exe")

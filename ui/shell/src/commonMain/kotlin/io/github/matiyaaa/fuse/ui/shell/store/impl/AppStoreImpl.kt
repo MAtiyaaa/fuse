@@ -1,5 +1,9 @@
 package io.github.matiyaaa.fuse.ui.shell.store.impl
 
+import io.github.matiyaaa.fuse.integrations.obtainium.AppIconFinder
+import io.github.matiyaaa.fuse.ui.shell.store.InFuse
+import io.github.matiyaaa.fuse.model.AppKind
+import io.github.matiyaaa.fuse.model.KnownApps
 import io.github.matiyaaa.fuse.data.settings.StoreInstall
 import io.github.matiyaaa.fuse.integrations.ApiResult
 import io.github.matiyaaa.fuse.integrations.obtainium.ApkChoice
@@ -70,6 +74,8 @@ internal class DefaultAppStoreOps(
     private var token: String? = null
     private val resolver = PackResolver(ctx.services.http, githubToken = { token })
     private val downloader = ApkDownloader(ctx.services.http)
+    private val iconFinder = AppIconFinder(ctx.services.http)
+    private var iconJob: Job? = null
     private val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
 
     private val mutable = MutableStateFlow(
@@ -151,8 +157,39 @@ internal class DefaultAppStoreOps(
 
     override fun allowInstalls() = bridge.requestInstallPermission()
 
+    /** The installed app's own icon, else the icon it publishes (looked up once, see [findIcons]). */
     override fun iconModel(key: String): Any? =
-        mutable.value.installed[key]?.packageName?.let(bridge::iconModel)
+        mutable.value.installed[key]?.packageName?.let(bridge::iconModel) ?: mutable.value.icons[key]
+
+    /**
+     * Looks up the icon each app publishes, a few at a time, once per app (the answer, or that there
+     * is none, is kept for weeks). Icons appear as they are found.
+     */
+    private fun findIcons(apps: Map<String, PackApp>) {
+        iconJob?.cancel()
+        iconJob = ctx.scope.launch {
+            val known = HashMap<String, String>()
+            val missing = ArrayList<Pair<String, PackApp>>()
+            for ((key, app) in apps) {
+                when (val cached = cache.entry(ICONS, app.url)?.takeUnless { it.isExpired(ctx.now()) }?.valueJson) {
+                    null -> missing += key to app
+                    "\"\"" -> Unit
+                    else -> known[key] = cached.trim('"')
+                }
+            }
+            if (known.isNotEmpty()) mutable.update { it.copy(icons = it.icons + known) }
+            val lookups = Semaphore(ICON_LOOKUPS)
+            kotlinx.coroutines.coroutineScope {
+                for ((key, app) in missing) launch {
+                    lookups.withPermit {
+                        val found = runCatching { iconFinder.find(app.url) }.getOrNull()
+                        cache.put(ICONS, app.url, "\"${found.orEmpty()}\"", ctx.now(), if (found != null) ICON_FOUND_MS else ICON_NONE_MS)
+                        if (found != null) mutable.update { it.copy(icons = it.icons + (key to found)) }
+                    }
+                }
+            }
+        }
+    }
 
     override fun launch(key: String): Boolean =
         mutable.value.installed[key]?.packageName?.let(bridge::launch) ?: false
@@ -235,6 +272,7 @@ internal class DefaultAppStoreOps(
             noticesFlow.tryEmit("${previous[key]?.name ?: "A download"} stopped: it isn't in this edition of the Store.")
         }
         mutable.update { s -> s.copy(jobs = s.jobs.filterKeys { it in byKey }) }
+        findIcons(byKey)
         // Cached releases appear at once, without a request.
         for (key in byKey.keys) if (key !in mutable.value.releases) cachedRelease(key)?.let { (r, at) -> mutable.update { s -> s.copy(releases = s.releases + (key to ReleaseCheck.Ready(r, at))) } }
     }
@@ -266,18 +304,32 @@ internal class DefaultAppStoreOps(
             allowIdChange = app.allowIdChange,
             systems = systemsOf(app, pkg),
             color = app.categories.firstNotNullOfOrNull { colors[it] },
+            inFuse = inFuseOf(app, pkg),
         )
     }
 
     /** What the app plays, from Fuse's own emulator catalogue (by package, else by its name). */
-    private fun systemsOf(app: PackApp, pkg: String?): List<PlatformId> {
+    private fun systemsOf(app: PackApp, pkg: String?): List<PlatformId> =
+        defsOf(app, pkg).flatMap { it.platforms }.distinct().sortedBy { it.value }
+
+    private fun defsOf(app: PackApp, pkg: String?): List<io.github.matiyaaa.fuse.launch.android.AndroidEmulatorDef> {
         val defs = AndroidEmulatorCatalog.defs
         val byPackage = pkg?.let { p -> defs.filter { p in it.packages } }.orEmpty()
-        val matched = byPackage.ifEmpty {
+        return byPackage.ifEmpty {
             val base = app.name.substringBefore(" (").trim()
             defs.filter { it.name.equals(base, ignoreCase = true) }
         }
-        return matched.flatMap { it.platforms }.distinct().sortedBy { it.value }
+    }
+
+    /** What Fuse does with [app] once installed: from its emulator entries, else from what Apps knows of it. */
+    private fun inFuseOf(app: PackApp, pkg: String?): InFuse {
+        val defs = defsOf(app, pkg)
+        if (defs.isNotEmpty()) return if (defs.any { it.modes.isNotEmpty() }) InFuse.LAUNCHES_GAMES else InFuse.OPENS_APP
+        return when (pkg?.let(KnownApps::kindOf)) {
+            AppKind.STREAMING -> InFuse.STREAMING
+            AppKind.TOOL -> InFuse.TOOL
+            else -> if (app.rules.trackOnly) InFuse.NOTHING else InFuse.TOOL
+        }
     }
 
     // What is installed
@@ -598,6 +650,10 @@ internal class DefaultAppStoreOps(
     }
 
     companion object {
+        const val ICONS = "store.icons"
+        const val ICON_LOOKUPS = 4
+        const val ICON_FOUND_MS = 30L * 24 * 60 * 60 * 1000
+        const val ICON_NONE_MS = 7L * 24 * 60 * 60 * 1000
         const val TOKEN_KEY = "store.github.token"
         private const val CATALOGUE = "store.catalogue"
         private const val RELEASES = "store.release"

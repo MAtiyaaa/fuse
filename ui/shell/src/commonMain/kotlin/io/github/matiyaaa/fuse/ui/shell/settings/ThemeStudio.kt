@@ -1,5 +1,13 @@
 package io.github.matiyaaa.fuse.ui.shell.settings
 
+import io.github.matiyaaa.fuse.ui.designsystem.theme.tabular
+import androidx.compose.ui.unit.dp
+import kotlin.math.roundToInt
+import kotlin.math.abs
+import io.github.matiyaaa.fuse.ui.shell.app.TextInputSpec
+import io.github.matiyaaa.fuse.model.ThemePalette
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.foundation.border
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.fadeIn
@@ -122,68 +130,241 @@ private val Backgrounds: List<BackgroundStyle> =
 /** The id the studio's draft goes by while it is being made, so the stage changes it in place. */
 private const val STUDIO_ID = "studio"
 
-/** One line of the studio, top to bottom. */
-internal enum class StudioRow(val label: String, val icon: ImageVector) {
-    ACCENT("Accent colour", FuseIcons.Paintbrush),
-    BACKGROUND("Background", FuseIcons.Image),
-    CORNERS("Corners", FuseIcons.Corners),
-    FOCUS("Focus", FuseIcons.Target),
-    MOTION("Motion", FuseIcons.Activity),
-    SOUND("Sounds", FuseIcons.Volume),
-    GLASS("Glass panels", FuseIcons.Layers),
-    CRT("CRT effect", FuseIcons.Tv),
-    SAVE("Save as your theme", FuseIcons.Save),
+/**
+ * The studio's steps, in the order it guides you through them. Each has a line saying what it is
+ * for; you can move between them freely (the shoulder buttons, or the dots at the top).
+ */
+internal enum class StudioStep(val title: String, val guide: String) {
+    ROOM("The room", "Light or dark, then the colours of the room and the panels on it."),
+    TEXT("Text", "Words in the main colour, details in a quieter one. Both should read well."),
+    ACCENT("Accent", "The spark: what's selected, buttons and progress, and the text on them."),
+    SIGNALS("Focus and signals", "The outline on what you're on, and the colours for done, careful and wrong."),
+    SHAPE("Shape", "How round tiles and panels are, and how the one you're on stands out."),
+    SCENE("Background", "The scene behind everything: which one, how bright and how lively."),
+    EFFECTS("Effects", "Frosted glass panels and an old screen's glow, each with its own amount."),
+    FEEL("Motion and sound", "How the interface moves and sounds as you use it."),
+    SAVE("Save", "Check what reads well, then keep it as your theme."),
 }
 
+/** A colour the studio lets you change, what it sits on, and how strongly it must stand out there. */
+internal enum class ColorRole(val label: String, val note: String) {
+    BACKGROUND("Room", "Behind everything"),
+    SURFACE("Panels", "Menus, sheets and cards"),
+    RAISED("Raised panels", "Panels on panels, selected rows"),
+    TEXT("Text", "Titles and everything you read"),
+    MUTED("Details text", "Captions, counts and hints"),
+    ACCENT("Accent colour", "Buttons, progress and what's chosen"),
+    ON_ACCENT("Text on the accent", "Words and icons on accent buttons"),
+    FOCUS("Focus colour", "The outline on what you're on"),
+    SUCCESS("Done", "Installed, saved, ready"),
+    WARNING("Careful", "Offline, needs a look"),
+    DANGER("Wrong", "Errors and deleting"),
+    SECOND_LIGHT("Second colour", "The scene's other light"),
+}
+
+internal enum class RowKind { COLOR, CHOICE, SWITCH, LEVEL, ACTION }
+
+/** One line of the studio. [step] is where it lives; [role] is the colour a COLOR row changes. */
+internal enum class StudioRow(val label: String, val icon: ImageVector, val step: StudioStep?, val kind: RowKind, val role: ColorRole? = null) {
+    MODE("Light or dark", FuseIcons.SunMoon, StudioStep.ROOM, RowKind.CHOICE),
+    ROOM_COLOR("Room", FuseIcons.Square, StudioStep.ROOM, RowKind.COLOR, ColorRole.BACKGROUND),
+    SURFACE("Panels", FuseIcons.PanelsTop, StudioStep.ROOM, RowKind.COLOR, ColorRole.SURFACE),
+    RAISED("Raised panels", FuseIcons.Layers, StudioStep.ROOM, RowKind.COLOR, ColorRole.RAISED),
+    TEXT("Text", FuseIcons.Type, StudioStep.TEXT, RowKind.COLOR, ColorRole.TEXT),
+    MUTED("Details text", FuseIcons.TextSize, StudioStep.TEXT, RowKind.COLOR, ColorRole.MUTED),
+    ACCENT("Accent colour", FuseIcons.Paintbrush, StudioStep.ACCENT, RowKind.COLOR, ColorRole.ACCENT),
+    ON_ACCENT("Text on the accent", FuseIcons.CircleDot, StudioStep.ACCENT, RowKind.COLOR, ColorRole.ON_ACCENT),
+    FOCUS_COLOR("Focus colour", FuseIcons.Crosshair, StudioStep.SIGNALS, RowKind.COLOR, ColorRole.FOCUS),
+    SUCCESS("Done", FuseIcons.CircleCheck, StudioStep.SIGNALS, RowKind.COLOR, ColorRole.SUCCESS),
+    WARNING("Careful", FuseIcons.Warning, StudioStep.SIGNALS, RowKind.COLOR, ColorRole.WARNING),
+    DANGER("Wrong", FuseIcons.CircleX, StudioStep.SIGNALS, RowKind.COLOR, ColorRole.DANGER),
+    CORNERS("Corners", FuseIcons.Corners, StudioStep.SHAPE, RowKind.CHOICE),
+    FOCUS("Focus", FuseIcons.Target, StudioStep.SHAPE, RowKind.CHOICE),
+    BACKGROUND("Background", FuseIcons.Image, StudioStep.SCENE, RowKind.CHOICE),
+    LIGHT("Brightness", FuseIcons.SunDim, StudioStep.SCENE, RowKind.LEVEL),
+    SPEED("Movement", FuseIcons.Waves, StudioStep.SCENE, RowKind.LEVEL),
+    SECOND("Second colour", FuseIcons.Blend, StudioStep.SCENE, RowKind.COLOR, ColorRole.SECOND_LIGHT),
+    GLASS("Glass panels", FuseIcons.Layers, StudioStep.EFFECTS, RowKind.SWITCH),
+    BLUR("Glass blur", FuseIcons.Droplet, StudioStep.EFFECTS, RowKind.LEVEL),
+    OPACITY("Glass cover", FuseIcons.Contrast, StudioStep.EFFECTS, RowKind.LEVEL),
+    CRT("CRT effect", FuseIcons.Tv, StudioStep.EFFECTS, RowKind.SWITCH),
+    SCANLINES("Scanlines", FuseIcons.Rows, StudioStep.EFFECTS, RowKind.LEVEL),
+    BLOOM("Glow", FuseIcons.Sparkle, StudioStep.EFFECTS, RowKind.LEVEL),
+    MOTION("Motion", FuseIcons.Activity, StudioStep.FEEL, RowKind.CHOICE),
+    SOUND("Sounds", FuseIcons.Volume, StudioStep.FEEL, RowKind.CHOICE),
+    SAVE("Save as your theme", FuseIcons.Save, StudioStep.SAVE, RowKind.ACTION),
+    NEXT("Next", FuseIcons.ArrowRight, null, RowKind.ACTION),
+}
+
+/** The lines shown while a colour is being changed: its hue, saturation and lightness, and the rest. */
+internal enum class EditRow(val label: String, val icon: ImageVector, val kind: RowKind) {
+    HUE("Hue", FuseIcons.Palette, RowKind.LEVEL),
+    SATURATION("Saturation", FuseIcons.Droplet, RowKind.LEVEL),
+    LIGHTNESS("Lightness", FuseIcons.SunDim, RowKind.LEVEL),
+    CODE("Type a colour code", FuseIcons.Hash, RowKind.ACTION),
+    FIX("Make it easy to read", FuseIcons.Wand, RowKind.ACTION),
+    RESET("Back to the theme's colour", FuseIcons.RotateCcw, RowKind.ACTION),
+    DONE("Done", FuseIcons.Check, RowKind.ACTION),
+}
+
+/** A line of the panel: a row of the step, or a line of the colour being changed. */
+internal sealed interface StudioLine {
+    data class Main(val row: StudioRow) : StudioLine
+    data class Edit(val row: EditRow) : StudioLine
+}
+
+/** How well a colour stands out on what it sits on: the lowest ratio, and what it needs. */
+@Immutable
+internal data class Legibility(val ratio: Double, val needs: Double) {
+    val ok: Boolean get() = ratio >= needs
+}
+
+/** Everything the studio can change, as one value (to tell whether anything changed). */
+@Immutable
+internal data class StudioValues(
+    val dark: Boolean,
+    val colors: Map<ColorRole, Long>,
+    val background: BackgroundStyle,
+    val light: Float,
+    val speed: Float,
+    val corners: CornerFamily,
+    val focus: FocusStyle,
+    val motion: MotionProfile,
+    val sound: SoundProfile,
+    val glass: Boolean,
+    val blur: Float,
+    val opacity: Float,
+    val crt: Boolean,
+    val scanlines: Float,
+    val bloom: Float,
+)
+
 /**
- * A theme being made in the studio: it starts as [base] and changes one trait at a time. [editing]
- * is the added theme being changed (saving under its name replaces it); [extendsId] is the built-in
+ * A theme being made in the studio: it starts as [base] and is changed step by step. [editing] is
+ * the added theme being changed (saving under its name replaces it); [extendsId] is the built-in
  * theme the file will name in `extends`, which brings along what the file doesn't spell out (how
  * sections are laid out, the finer glass settings).
  */
 @Stable
 internal class StudioState(val base: ThemeSpec, val editing: ThemeSpec?, val extendsId: String?) {
-    /** The theme's own accent first, then the curated colours that suit its room. */
-    val swatches: List<Swatch> =
-        listOf(Swatch("Its own", base.palette.accent)) + (if (base.palette.dark) DarkAccents else BrightAccents).filter { it.argb != base.palette.accent }
+    private val initial: StudioValues = valuesOf(base)
 
-    var accent by mutableIntStateOf(0)
-    var background by mutableStateOf(base.background)
-    var corners by mutableStateOf(base.geometry)
-    var focus by mutableStateOf(base.focus)
-    var motion by mutableStateOf(base.motion)
-    var sound by mutableStateOf(base.sound)
-    var glass by mutableStateOf(base.glass.enabled)
-    var crt by mutableStateOf(base.crt.enabled)
-    var row by mutableStateOf(StudioRow.ACCENT)
+    var dark by mutableStateOf(initial.dark)
+    val colors = mutableStateMapOf<ColorRole, Long>().apply { putAll(initial.colors) }
+    var background by mutableStateOf(initial.background)
+    var light by mutableStateOf(initial.light)
+    var speed by mutableStateOf(initial.speed)
+    var corners by mutableStateOf(initial.corners)
+    var focus by mutableStateOf(initial.focus)
+    var motion by mutableStateOf(initial.motion)
+    var sound by mutableStateOf(initial.sound)
+    var glass by mutableStateOf(initial.glass)
+    var blur by mutableStateOf(initial.blur)
+    var opacity by mutableStateOf(initial.opacity)
+    var crt by mutableStateOf(initial.crt)
+    var scanlines by mutableStateOf(initial.scanlines)
+    var bloom by mutableStateOf(initial.bloom)
+
+    var step by mutableStateOf(StudioStep.ROOM)
+    /** The colour being changed, when one is open; its lines replace the step's. */
+    var openColor: ColorRole? by mutableStateOf(null)
+    /** Which line of the panel the controller is on. */
+    var index by mutableIntStateOf(0)
 
     /** Which way the last change went (-1 or 1), so a value slides in from that side. */
     var direction by mutableIntStateOf(1)
 
-    val changed: Boolean
-        get() = accent != 0 || background != base.background || corners != base.geometry || focus != base.focus ||
-            motion != base.motion || sound != base.sound || glass != base.glass.enabled || crt != base.crt.enabled
+    /** The theme's own accent first, then the curated colours that suit its room. */
+    val swatches: List<Swatch>
+        get() = listOf(Swatch("Its own", base.palette.accent)) +
+            (if (dark) DarkAccents else BrightAccents).filter { it.argb != base.palette.accent }
+
+    fun values(): StudioValues = StudioValues(
+        dark, colors.toMap(), background, light, speed, corners, focus, motion, sound, glass, blur, opacity, crt, scanlines, bloom,
+    )
+
+    val changed: Boolean get() = values() != initial
+
+    fun color(role: ColorRole): Long = colors[role] ?: initial.colors.getValue(role)
+
+    /** The lines of the panel now: the open colour's, or the step's (with effect amounts only while the effect is on). */
+    fun lines(): List<StudioLine> {
+        val open = openColor
+        if (open != null) {
+            return EditRow.entries
+                .filter { it != EditRow.FIX || !legibility(open).ok }
+                .map { StudioLine.Edit(it) }
+        }
+        val rows = StudioRow.entries.filter { it.step == step }.filter { r ->
+            when (r) {
+                StudioRow.BLUR, StudioRow.OPACITY -> glass
+                StudioRow.SCANLINES, StudioRow.BLOOM -> crt
+                StudioRow.LIGHT, StudioRow.SPEED, StudioRow.SECOND -> background != BackgroundStyle.HERO && background != BackgroundStyle.SOLID
+                else -> true
+            }
+        }
+        return (rows + if (step != StudioStep.SAVE) listOf(StudioRow.NEXT) else emptyList()).map { StudioLine.Main(it) }
+    }
+
+    fun line(): StudioLine? = lines().getOrNull(index)
 
     fun reset() {
         direction = -1
-        accent = 0
-        background = base.background
-        corners = base.geometry
-        focus = base.focus
-        motion = base.motion
-        sound = base.sound
-        glass = base.glass.enabled
-        crt = base.crt.enabled
+        dark = initial.dark
+        colors.clear()
+        colors.putAll(initial.colors)
+        background = initial.background
+        light = initial.light
+        speed = initial.speed
+        corners = initial.corners
+        focus = initial.focus
+        motion = initial.motion
+        sound = initial.sound
+        glass = initial.glass
+        blur = initial.blur
+        opacity = initial.opacity
+        crt = initial.crt
+        scanlines = initial.scanlines
+        bloom = initial.bloom
+        openColor = null
+        index = index.coerceAtMost(lines().lastIndex)
+    }
+
+    /** Goes to [to], at its first line. */
+    fun go(to: StudioStep) {
+        direction = if (to.ordinal < step.ordinal) -1 else 1
+        openColor = null
+        step = to
+        index = 0
+    }
+
+    fun open(role: ColorRole) {
+        openColor = role
+        index = 0
+    }
+
+    /** Closes the colour being changed, back on its row. */
+    fun close() {
+        val role = openColor ?: return
+        openColor = null
+        index = lines().indexOfFirst { (it as? StudioLine.Main)?.row?.role == role }.coerceAtLeast(0)
     }
 
     /**
-     * Moves [row]'s value by [delta]: choices step through their options and wrap; a switch turns on
-     * to the right and off to the left. False when nothing changed (a switch already that way, Save).
+     * Moves [row]'s value by [delta]: colours get lighter or darker (the accent steps through its
+     * swatches), choices step through their options and wrap, amounts change by a tenth, and a
+     * switch turns on to the right and off to the left. False when nothing changed.
      */
     fun step(row: StudioRow, delta: Int): Boolean {
         direction = if (delta < 0) -1 else 1
         when (row) {
-            StudioRow.ACCENT -> accent = (accent + delta).mod(swatches.size)
+            // Dark is on the left, light on the right.
+            StudioRow.MODE -> if (dark == delta < 0) return false else switchRoom(dark = delta < 0)
+            StudioRow.ACCENT -> {
+                val list = swatches
+                val now = list.indexOfFirst { it.argb == color(ColorRole.ACCENT) }
+                pickAccent(list[(now.coerceAtLeast(0) + delta).mod(list.size)].argb)
+            }
             StudioRow.BACKGROUND -> background = Backgrounds.cycle(background, delta)
             StudioRow.CORNERS -> corners = CornerFamily.entries.cycle(corners, delta)
             StudioRow.FOCUS -> focus = FocusStyle.entries.cycle(focus, delta)
@@ -191,41 +372,157 @@ internal class StudioState(val base: ThemeSpec, val editing: ThemeSpec?, val ext
             StudioRow.SOUND -> sound = SoundProfile.entries.cycle(sound, delta)
             StudioRow.GLASS -> if (glass == delta > 0) return false else glass = delta > 0
             StudioRow.CRT -> if (crt == delta > 0) return false else crt = delta > 0
-            StudioRow.SAVE -> return false
+            StudioRow.LIGHT -> light = level(light, delta, max = 1.5f) ?: return false
+            StudioRow.SPEED -> speed = level(speed, delta, max = 2f) ?: return false
+            StudioRow.BLUR -> blur = (blur + delta * 4f).coerceIn(0f, 48f).takeIf { it != blur } ?: return false
+            StudioRow.OPACITY -> opacity = level(opacity, delta, min = 0.3f, max = 0.95f) ?: return false
+            StudioRow.SCANLINES -> scanlines = level(scanlines, delta) ?: return false
+            StudioRow.BLOOM -> bloom = level(bloom, delta) ?: return false
+            StudioRow.SAVE, StudioRow.NEXT -> return false
+            else -> {
+                val role = row.role ?: return false
+                return nudge(role, EditRow.LIGHTNESS, delta)
+            }
         }
         return true
     }
 
-    /** Flips a switch row. */
-    fun toggle(row: StudioRow) {
-        when (row) {
-            StudioRow.GLASS -> glass = !glass
-            StudioRow.CRT -> crt = !crt
-            else -> Unit
+    /** Changes the open colour's hue (by 10 degrees), saturation or lightness (by 4%). */
+    fun nudge(role: ColorRole, part: EditRow, delta: Int): Boolean {
+        val hsl = Hsl.of(color(role))
+        val next = when (part) {
+            EditRow.HUE -> hsl.copy(h = (hsl.h + delta * 10f).mod(360f))
+            EditRow.SATURATION -> hsl.copy(s = (hsl.s + delta * 0.04f).coerceIn(0f, 1f))
+            EditRow.LIGHTNESS -> hsl.copy(l = (hsl.l + delta * 0.04f).coerceIn(0f, 1f))
+            else -> return false
         }
+        // Very dark or grey colours can look the same after a small turn; only a real change counts.
+        if (next.argb() == color(role)) return false
+        direction = if (delta < 0) -1 else 1
+        set(role, next.argb())
+        return true
+    }
+
+    /** Sets [role]'s colour; a new accent brings the text colour that reads on it. */
+    fun set(role: ColorRole, argb: Long) {
+        val opaque = argb or 0xFF000000L
+        if (role == ColorRole.ACCENT) pickAccent(opaque) else colors[role] = opaque
+    }
+
+    private fun pickAccent(argb: Long) {
+        colors[ColorRole.ACCENT] = argb
+        colors[ColorRole.ON_ACCENT] = Contrast.bestOn(argb)
     }
 
     /** Picks the swatch at [index] (a tap on it). */
     fun pick(index: Int) {
-        direction = if (index < accent) -1 else 1
-        accent = index.coerceIn(0, swatches.lastIndex)
+        val list = swatches
+        val now = list.indexOfFirst { it.argb == color(ColorRole.ACCENT) }
+        direction = if (index < now) -1 else 1
+        pickAccent(list[index.coerceIn(0, list.lastIndex)].argb)
+    }
+
+    /** Puts [role] back to the colour the theme started with. */
+    fun resetColor(role: ColorRole) {
+        set(role, initial.colors.getValue(role))
+    }
+
+    /** Lightens or darkens [role] until it reads well where it sits (or moves the room away from the text). */
+    fun fix(role: ColorRole) {
+        val need = needs(role)
+        val fixed = when (role) {
+            ColorRole.BACKGROUND, ColorRole.SURFACE, ColorRole.RAISED ->
+                Contrast.repair(color(role), listOf(color(ColorRole.TEXT)), need, lighten = !dark)
+            ColorRole.ON_ACCENT -> Contrast.repair(color(role), listOf(color(ColorRole.ACCENT)), need, Contrast.luminance(color(ColorRole.ACCENT)) < 0.4)
+            ColorRole.SECOND_LIGHT -> null
+            else -> Contrast.repair(color(role), against(role), need, lighten = dark)
+        }
+        if (fixed != null) colors[role] = fixed
+    }
+
+    /** What [role] sits on (or, for the room and panels, what sits on them: the text). */
+    private fun against(role: ColorRole): List<Long> = when (role) {
+        ColorRole.BACKGROUND, ColorRole.SURFACE, ColorRole.RAISED -> listOf(color(ColorRole.TEXT))
+        ColorRole.TEXT -> listOf(color(ColorRole.BACKGROUND), color(ColorRole.SURFACE), color(ColorRole.RAISED))
+        ColorRole.MUTED -> listOf(color(ColorRole.SURFACE), color(ColorRole.RAISED))
+        ColorRole.ON_ACCENT -> listOf(color(ColorRole.ACCENT))
+        ColorRole.ACCENT, ColorRole.FOCUS -> listOf(color(ColorRole.BACKGROUND), color(ColorRole.SURFACE))
+        ColorRole.SUCCESS, ColorRole.WARNING, ColorRole.DANGER -> listOf(color(ColorRole.SURFACE))
+        ColorRole.SECOND_LIGHT -> emptyList()
+    }
+
+    /** Words need 4.5:1; outlines, buttons and signals 3:1 (WCAG 2.2, 1.4.3 and 1.4.11). */
+    private fun needs(role: ColorRole): Double = when (role) {
+        ColorRole.ACCENT, ColorRole.FOCUS, ColorRole.SUCCESS, ColorRole.WARNING, ColorRole.DANGER -> 3.0
+        ColorRole.SECOND_LIGHT -> 0.0
+        else -> 4.5
+    }
+
+    fun legibility(role: ColorRole): Legibility {
+        val on = against(role)
+        val ratio = if (on.isEmpty()) 21.0 else on.minOf { Contrast.ratio(color(role), it) }
+        return Legibility(ratio, needs(role))
     }
 
     /**
-     * The theme as it stands, before Fuse checks it. A new accent brings its own soft tint and the
-     * text colour that reads on it; a room that was held still (no light, no movement) wakes up when
-     * it gets a drawn background, or the new background would not show.
+     * Turns the room light or dark: the room, panels and text are made again around the accent's
+     * hue, and the accent and signals are moved until they read on the new room.
+     */
+    fun switchRoom(dark: Boolean) {
+        val on = dark
+        if (on == this.dark) return
+        this.dark = on
+        val hue = Hsl.of(color(ColorRole.ACCENT)).h
+        fun c(s: Float, l: Float) = Hsl(hue, s, l).argb()
+        if (on) {
+            colors[ColorRole.BACKGROUND] = c(0.28f, 0.045f)
+            colors[ColorRole.SURFACE] = c(0.22f, 0.085f)
+            colors[ColorRole.RAISED] = c(0.2f, 0.125f)
+            colors[ColorRole.TEXT] = c(0.25f, 0.96f)
+            colors[ColorRole.MUTED] = c(0.12f, 0.7f)
+            colors[ColorRole.FOCUS] = 0xFFFFFFFF
+            colors[ColorRole.SUCCESS] = 0xFF5FE0A8
+            colors[ColorRole.WARNING] = 0xFFFFC46B
+            colors[ColorRole.DANGER] = 0xFFFF7A86
+        } else {
+            colors[ColorRole.BACKGROUND] = c(0.2f, 0.95f)
+            colors[ColorRole.SURFACE] = 0xFFFFFFFF
+            colors[ColorRole.RAISED] = c(0.25f, 0.975f)
+            colors[ColorRole.TEXT] = c(0.22f, 0.09f)
+            colors[ColorRole.MUTED] = c(0.1f, 0.34f)
+            colors[ColorRole.FOCUS] = c(0.22f, 0.09f)
+            colors[ColorRole.SUCCESS] = 0xFF12804F
+            colors[ColorRole.WARNING] = 0xFF8F5A00
+            colors[ColorRole.DANGER] = 0xFFC0303C
+        }
+        Contrast.repair(color(ColorRole.ACCENT), against(ColorRole.ACCENT), 3.0, lighten = on)?.let { colors[ColorRole.ACCENT] = it }
+        colors[ColorRole.ON_ACCENT] = Contrast.bestOn(color(ColorRole.ACCENT))
+    }
+
+    /**
+     * The theme as it stands, before Fuse checks it. A room that was held still (no light, no
+     * movement) wakes up when it gets a drawn background, or the new background would not show.
      */
     fun draft(): ThemeSpec {
-        val p = base.palette
-        val a = swatches[accent].argb
-        val palette = if (a == p.accent) p else p.copy(
-            accent = a,
-            accentSoft = ((if (p.dark) 0x33L else 0x26L) shl 24) or (a and 0xFFFFFF),
-            onAccent = Contrast.bestOn(a),
+        val accent = color(ColorRole.ACCENT)
+        val palette = ThemePalette(
+            dark = dark,
+            background = color(ColorRole.BACKGROUND), surface = color(ColorRole.SURFACE), surfaceRaised = color(ColorRole.RAISED),
+            accent = accent,
+            accentSoft = if (accent == base.palette.accent && dark == base.palette.dark) base.palette.accentSoft
+            else ((if (dark) 0x33L else 0x26L) shl 24) or (accent and 0xFFFFFF),
+            onAccent = color(ColorRole.ON_ACCENT),
+            textPrimary = color(ColorRole.TEXT), textSecondary = color(ColorRole.MUTED), focusRing = color(ColorRole.FOCUS),
+            success = color(ColorRole.SUCCESS), warning = color(ColorRole.WARNING), danger = color(ColorRole.DANGER),
         )
-        val still = base.ambient.intensity <= 0f || base.ambient.speed <= 0f
-        val ambient = if (background != base.background && background.moves && still) AmbientSpec(secondary = base.ambient.secondary) else base.ambient
+        val still = light <= 0f || speed <= 0f
+        val moves = background != base.background && background.moves && still
+        val ambient = AmbientSpec(
+            intensity = if (moves) 1f else light,
+            speed = if (moves) 1f else speed,
+            // Left alone, the scene keeps the theme's own second light (or none).
+            secondary = color(ColorRole.SECOND_LIGHT).takeIf { it != initial.colors[ColorRole.SECOND_LIGHT] } ?: base.ambient.secondary,
+        )
         return base.copy(
             id = STUDIO_ID,
             name = editing?.name ?: "Your theme",
@@ -238,12 +535,8 @@ internal class StudioState(val base: ThemeSpec, val editing: ThemeSpec?, val ext
             focus = focus,
             motion = motion,
             sound = sound,
-            glass = when {
-                glass == base.glass.enabled -> base.glass
-                glass -> GlassSettings(enabled = true)
-                else -> base.glass.copy(enabled = false)
-            },
-            crt = base.crt.copy(enabled = crt),
+            glass = if (glass) base.glass.copy(enabled = true, blur = blur, surfaceOpacity = opacity) else base.glass.copy(enabled = false),
+            crt = base.crt.copy(enabled = crt, scanlines = scanlines, bloom = bloom),
         )
     }
 
@@ -256,10 +549,84 @@ internal class StudioState(val base: ThemeSpec, val editing: ThemeSpec?, val ext
             val extends = if (!custom) spec.id else file?.let { Regex(""""extends"\s*:\s*"([^"]+)"""").find(it)?.groupValues?.get(1)?.trim()?.lowercase() }
             return StudioState(spec, if (custom) spec else null, extends?.takeIf { ThemePresets.find(it) != null })
         }
+
+        private fun valuesOf(t: ThemeSpec): StudioValues {
+            val p = t.palette
+            return StudioValues(
+                dark = p.dark,
+                colors = mapOf(
+                    ColorRole.BACKGROUND to p.background, ColorRole.SURFACE to p.surface, ColorRole.RAISED to p.surfaceRaised,
+                    ColorRole.TEXT to p.textPrimary, ColorRole.MUTED to p.textSecondary,
+                    ColorRole.ACCENT to p.accent, ColorRole.ON_ACCENT to p.onAccent, ColorRole.FOCUS to p.focusRing,
+                    ColorRole.SUCCESS to (p.success ?: 0xFF3DD68C), ColorRole.WARNING to (p.warning ?: 0xFFFFB547),
+                    ColorRole.DANGER to (p.danger ?: 0xFFFF5D6C),
+                    ColorRole.SECOND_LIGHT to (t.ambient.secondary ?: p.accent),
+                ),
+                background = t.background,
+                light = t.ambient.intensity,
+                speed = t.ambient.speed,
+                corners = t.geometry,
+                focus = t.focus,
+                motion = t.motion,
+                sound = t.sound,
+                glass = t.glass.enabled,
+                blur = t.glass.blur,
+                opacity = t.glass.surfaceOpacity,
+                crt = t.crt.enabled,
+                scanlines = t.crt.scanlines,
+                bloom = t.crt.bloom,
+            )
+        }
     }
 }
 
+/** A tenth up or down, kept in [min]..[max]; null when it is already at the end. */
+private fun level(value: Float, delta: Int, min: Float = 0f, max: Float = 1f): Float? {
+    val next = ((value * 10).roundToInt() + delta).div(10f).coerceIn(min, max)
+    return next.takeIf { abs(it - value) > 0.001f }
+}
+
 private fun <T> List<T>.cycle(current: T, delta: Int): T = this[(indexOf(current).coerceAtLeast(0) + delta).mod(size)]
+
+/** A colour as hue (degrees), saturation and lightness (0..1), for changing one at a time. */
+@Immutable
+internal data class Hsl(val h: Float, val s: Float, val l: Float) {
+    fun argb(): Long {
+        val c = (1f - abs(2 * l - 1f)) * s
+        val x = c * (1f - abs((h / 60f).mod(2f) - 1f))
+        val m = l - c / 2
+        val (r, g, b) = when ((h / 60f).toInt().mod(6)) {
+            0 -> Triple(c, x, 0f)
+            1 -> Triple(x, c, 0f)
+            2 -> Triple(0f, c, x)
+            3 -> Triple(0f, x, c)
+            4 -> Triple(x, 0f, c)
+            else -> Triple(c, 0f, x)
+        }
+        fun ch(v: Float) = ((v + m) * 255f).roundToInt().coerceIn(0, 255).toLong()
+        return 0xFF000000L or (ch(r) shl 16) or (ch(g) shl 8) or ch(b)
+    }
+
+    companion object {
+        fun of(argb: Long): Hsl {
+            val r = ((argb shr 16) and 0xFF) / 255f
+            val g = ((argb shr 8) and 0xFF) / 255f
+            val b = (argb and 0xFF) / 255f
+            val max = maxOf(r, g, b)
+            val min = minOf(r, g, b)
+            val l = (max + min) / 2
+            if (max == min) return Hsl(0f, 0f, l)
+            val d = max - min
+            val s = if (l > 0.5f) d / (2f - max - min) else d / (max + min)
+            val h = when (max) {
+                r -> ((g - b) / d).mod(6f)
+                g -> (b - r) / d + 2f
+                else -> (r - g) / d + 4f
+            } * 60f
+            return Hsl(h, s, l)
+        }
+    }
+}
 
 /** The studio's theme as Fuse will keep it (colours repaired where they would be hard to read) and what was repaired. */
 @Immutable
@@ -282,8 +649,11 @@ internal fun rememberStudioLook(studio: StudioState): StudioLook {
 }
 
 /**
- * The studio's controls, beside the stage: one row per trait, changed with left and right (or a
- * tap on its arrows), switches flipped with confirm, and Save at the end. The highlight glides from
+ * The studio's controls, beside the stage, one step at a time: a header saying which step this is
+ * and what it is for (with a dot per step to jump with), the step's rows, and a row on to the next
+ * step. Rows change with left and right (or a tap on their arrows); a colour opens with confirm into
+ * its hue, saturation and lightness, a code, and a fix when it is hard to read. The shoulder buttons
+ * move between steps; back closes a colour, then steps back, then leaves. The highlight glides from
  * row to row as in every menu. While the studio is open the interface's own sounds follow the
  * draft's, so a new sound profile is heard as you move. [narrow] trades the swatch strip and the
  * icon wells for compact steppers.
@@ -302,69 +672,116 @@ internal fun StudioPanel(
     onLeave: () -> Unit,
 ) {
     val c = Fuse.colors
-    val rows = StudioRow.entries
+    val lines = studio.lines()
+    val index = studio.index.coerceIn(0, lines.lastIndex.coerceAtLeast(0))
+    val current = lines.getOrNull(index)
     val prefs by app.store.prefs.collectAsState()
     val userMotion = prefs.motion
     DisposableEffect(studio) {
         app.platform.sounds.setProfile(studio.sound)
         onDispose { app.platform.sounds.setProfile(app.store.prefs.value.sound) }
     }
-    LaunchedEffect(studio.row, studio.changed, active) {
+    LaunchedEffect(current, studio.changed, active, studio.step) {
         if (!active) return@LaunchedEffect
         app.hints = buildList {
-            when (studio.row) {
-                StudioRow.SAVE -> add(Hint(HintButton.CONFIRM, "Save"))
-                StudioRow.GLASS, StudioRow.CRT -> add(Hint(HintButton.CONFIRM, "Switch"))
-                else -> add(Hint(HintButton.DPAD, "Change"))
+            when (current) {
+                is StudioLine.Main -> when (current.row.kind) {
+                    RowKind.ACTION -> add(Hint(HintButton.CONFIRM, if (current.row == StudioRow.SAVE) "Save" else "Next step"))
+                    RowKind.SWITCH -> add(Hint(HintButton.CONFIRM, "Switch"))
+                    RowKind.COLOR -> { add(Hint(HintButton.DPAD, "Lighter or darker")); add(Hint(HintButton.CONFIRM, "Edit")) }
+                    else -> add(Hint(HintButton.DPAD, "Change"))
+                }
+                is StudioLine.Edit -> if (current.row.kind == RowKind.LEVEL) add(Hint(HintButton.DPAD, "Change")) else add(Hint(HintButton.CONFIRM, "Choose"))
+                null -> Unit
             }
+            if (studio.openColor == null) add(Hint(HintButton.NEXT, "Steps"))
             if (studio.changed) add(Hint(HintButton.OPTIONS, "Start over"))
-            add(Hint(HintButton.BACK, "Leave"))
+            add(Hint(HintButton.BACK, if (studio.openColor != null) "Done" else if (studio.step.ordinal > 0) "Back" else "Leave"))
         }
     }
-    fun change(row: StudioRow, delta: Int): Boolean {
-        val moved = studio.step(row, delta)
-        // A new sound profile is heard straight away, in the move that chose it.
-        if (moved && row == StudioRow.SOUND) app.platform.sounds.setProfile(studio.sound)
-        return moved
+
+    fun nextStep() = StudioStep.entries.getOrNull(studio.step.ordinal + 1)?.let { studio.go(it) }
+
+    fun change(line: StudioLine, delta: Int): Boolean = when (line) {
+        is StudioLine.Main -> studio.step(line.row, delta).also { moved ->
+            // A new sound profile is heard straight away, in the move that chose it.
+            if (moved && line.row == StudioRow.SOUND) app.platform.sounds.setProfile(studio.sound)
+        }
+        is StudioLine.Edit -> studio.openColor?.let { studio.nudge(it, line.row, delta) } ?: false
     }
+
+    fun typeCode(role: ColorRole) {
+        app.textInput = TextInputSpec(
+            role.label, ThemeCodec.hex(studio.color(role)).removePrefix("#").take(6), placeholder = "A colour code, like 2BB673",
+            capitalize = false, doneLabel = "Use it",
+        ) { typed ->
+            val parsed = ThemeCodec.parseColor(if (typed.trim().startsWith("#")) typed.trim() else "#" + typed.trim())
+            if (parsed == null) app.toasts.show("That isn't a colour code. Try six letters and digits, like 2BB673")
+            else studio.set(role, parsed)
+        }
+    }
+
+    fun activate(line: StudioLine) {
+        when (line) {
+            is StudioLine.Main -> when (line.row.kind) {
+                RowKind.ACTION -> if (line.row == StudioRow.SAVE) onSave() else nextStep()
+                RowKind.SWITCH -> studio.step(line.row, if (line.row == StudioRow.GLASS && studio.glass || line.row == StudioRow.CRT && studio.crt) -1 else 1)
+                RowKind.COLOR -> line.row.role?.let(studio::open)
+                RowKind.CHOICE, RowKind.LEVEL -> change(line, 1)
+            }
+            is StudioLine.Edit -> {
+                val role = studio.openColor ?: return
+                when (line.row) {
+                    EditRow.CODE -> typeCode(role)
+                    EditRow.FIX -> studio.fix(role)
+                    EditRow.RESET -> studio.resetColor(role)
+                    EditRow.DONE -> studio.close()
+                    else -> change(line, 1)
+                }
+            }
+        }
+    }
+
     InputLayer(enabled = active && app.focusZone == FocusZone.CONTENT && !app.overlayOpen) { e ->
-        val row = studio.row
+        val line = lines.getOrNull(index) ?: return@InputLayer NavResult.IGNORED
         when (e.action) {
-            NavAction.UP, NavAction.DOWN, NavAction.PAGE_UP, NavAction.PAGE_DOWN -> {
-                val step = when (e.action) {
-                    NavAction.UP -> -1
-                    NavAction.DOWN -> 1
-                    NavAction.PAGE_UP -> -rows.size
-                    else -> rows.size
-                }
-                val next = (row.ordinal + step).coerceIn(0, rows.lastIndex)
-                if (next == row.ordinal) NavResult.BLOCKED else { studio.row = rows[next]; NavResult.MOVED }
+            NavAction.UP, NavAction.DOWN -> {
+                val next = (index + if (e.action == NavAction.UP) -1 else 1).coerceIn(0, lines.lastIndex)
+                if (next == index) NavResult.BLOCKED else { studio.index = next; NavResult.MOVED }
             }
-            NavAction.LEFT, NavAction.RIGHT -> if (change(row, if (e.action == NavAction.LEFT) -1 else 1)) NavResult.MOVED else NavResult.BLOCKED
-            NavAction.SELECT -> {
-                when (row) {
-                    StudioRow.SAVE -> onSave()
-                    StudioRow.GLASS, StudioRow.CRT -> studio.toggle(row)
-                    else -> change(row, 1)
-                }
-                NavResult.ACTIVATED
+            // The shoulder buttons (and the triggers) move between steps.
+            NavAction.PREVIOUS_SECTION, NavAction.NEXT_SECTION, NavAction.PAGE_UP, NavAction.PAGE_DOWN -> {
+                if (studio.openColor != null) return@InputLayer NavResult.BLOCKED
+                val back = e.action == NavAction.PREVIOUS_SECTION || e.action == NavAction.PAGE_UP
+                val to = StudioStep.entries.getOrNull(studio.step.ordinal + if (back) -1 else 1)
+                if (to == null) NavResult.BLOCKED else { studio.go(to); NavResult.MOVED }
             }
+            NavAction.LEFT, NavAction.RIGHT -> if (change(line, if (e.action == NavAction.LEFT) -1 else 1)) NavResult.MOVED else NavResult.BLOCKED
+            NavAction.SELECT -> { activate(line); NavResult.ACTIVATED }
             NavAction.CONTEXT -> if (studio.changed) { studio.reset(); app.platform.sounds.setProfile(studio.sound); NavResult.ACTIVATED } else NavResult.BLOCKED
-            NavAction.BACK -> { onLeave(); NavResult.CONSUMED }
+            NavAction.BACK -> {
+                when {
+                    studio.openColor != null -> studio.close()
+                    studio.step.ordinal > 0 -> studio.go(StudioStep.entries[studio.step.ordinal - 1])
+                    else -> onLeave()
+                }
+                NavResult.CONSUMED
+            }
             else -> NavResult.IGNORED
         }
     }
 
-    // Where each row sits in the scrolling column (top and height, px), for the highlight and scrolling.
-    val bounds = remember { mutableStateMapOf<StudioRow, Pair<Float, Float>>() }
+    // Where each line sits in the scrolling column (top and height, px), for the highlight and scrolling.
+    val bounds = remember { mutableStateMapOf<StudioLine, Pair<Float, Float>>() }
     val scroll = rememberScrollState()
     val density = LocalDensity.current
-    val at = bounds[studio.row]
-    LaunchedEffect(studio.row, at) {
+    val at = current?.let { bounds[it] }
+    LaunchedEffect(current, at) {
         val (top, height) = at ?: return@LaunchedEffect
         val margin = with(density) { Space.l.toPx() }
         val view = scroll.viewportSize.toFloat()
         val target = when {
+            index == 0 -> 0f
             top - margin < scroll.value -> top - margin
             top + height + margin > scroll.value + view -> top + height + margin - view
             else -> return@LaunchedEffect
@@ -385,67 +802,76 @@ internal fun StudioPanel(
 
     Column(modifier) {
         Panel(Modifier.fillMaxWidth().weight(1f, fill = false)) {
-            Column(
-                Modifier
-                    .fadingEdges(scroll, top = Space.m, bottom = Space.xl)
-                    .verticalScroll(scroll)
-                    .padding(Space.xs)
-                    .drawBehind {
-                        if (shown <= 0.01f) return@drawBehind
-                        val top = glide.start.toPx()
-                        val h = glide.size.toPx()
-                        if (h <= 0f) return@drawBehind
-                        val r = corner.toPx().coerceAtMost(h / 2)
-                        drawRoundRect(fill, Offset(0f, top), size.copy(height = h), CornerRadius(r), alpha = shown)
-                        if (outline != null) {
-                            val sw = Size.focusStroke.toPx()
-                            drawRoundRect(outline, Offset(sw / 2, top + sw / 2), size.copy(width = size.width - sw, height = h - sw), CornerRadius((r - sw / 2).coerceAtLeast(0f)), alpha = shown, style = Stroke(sw))
-                        }
-                        // The accent bar, stepped in on strongly rounded rows so it stays inside the curve.
-                        val bh = Size.glyph.toPx().coerceAtMost(h - Space.s.toPx())
-                        val curve = if (r > bh / 2) r - kotlin.math.sqrt(r * r - (bh / 2) * (bh / 2)) else 0f
-                        drawRoundRect(accent, Offset(curve, top + (h - bh) / 2), androidx.compose.ui.geometry.Size(Size.sparkHeight.toPx(), bh), CornerRadius(Size.sparkHeight.toPx() / 2), alpha = shown)
+            Column {
+                StepHeader(studio, compact) { app.focusZone = FocusZone.CONTENT; studio.go(it) }
+                // A step's rows slide in from the side it was reached from.
+                val motion = Fuse.motion
+                AnimatedContent(
+                    targetState = studio.step to studio.openColor,
+                    transitionSpec = {
+                        val shift = if (motion.reduced) 0 else 1
+                        val dir = studio.direction
+                        (fadeIn(motion.fade(Durations.FAST)) + slideInHorizontally(motion.tween(Durations.BASE, Easings.Enter)) { it / 8 * dir * shift }) togetherWith
+                            fadeOut(motion.fade(Durations.INSTANT))
                     },
-            ) {
-                for (row in rows) {
-                    StudioRowView(
-                        row = row,
-                        studio = studio,
-                        look = look,
-                        selected = studio.row == row && app.focusZone == FocusZone.CONTENT,
-                        compact = compact,
-                        narrow = narrow,
-                        detail = when (row) {
-                            StudioRow.MOTION -> userMotion?.let { "Your Motion setting (${it.label()}) is used instead" }
-                            StudioRow.SAVE -> studio.editing?.let { "Saving under its name replaces ${it.name}" } ?: "Name it, and it joins your themes"
-                            else -> null
-                        },
-                        onTap = {
-                            app.focusZone = FocusZone.CONTENT
-                            if (studio.row == row) {
-                                when (row) {
-                                    StudioRow.SAVE -> onSave()
-                                    StudioRow.GLASS, StudioRow.CRT -> studio.toggle(row)
-                                    else -> Unit
+                    label = "studioStep",
+                ) { _ ->
+                    Column(
+                        Modifier
+                            .fadingEdges(scroll, top = Space.m, bottom = Space.xl)
+                            .verticalScroll(scroll)
+                            .padding(Space.xs)
+                            .drawBehind {
+                                if (shown <= 0.01f) return@drawBehind
+                                val top = glide.start.toPx()
+                                val h = glide.size.toPx()
+                                if (h <= 0f) return@drawBehind
+                                val r = corner.toPx().coerceAtMost(h / 2)
+                                drawRoundRect(fill, Offset(0f, top), size.copy(height = h), CornerRadius(r), alpha = shown)
+                                if (outline != null) {
+                                    val sw = Size.focusStroke.toPx()
+                                    drawRoundRect(outline, Offset(sw / 2, top + sw / 2), size.copy(width = size.width - sw, height = h - sw), CornerRadius((r - sw / 2).coerceAtLeast(0f)), alpha = shown, style = Stroke(sw))
                                 }
-                            } else {
-                                studio.row = row
-                                if (row == StudioRow.SAVE) onSave()
-                                if (row == StudioRow.GLASS || row == StudioRow.CRT) studio.toggle(row)
-                            }
-                        },
-                        onStep = { delta ->
-                            app.focusZone = FocusZone.CONTENT
-                            studio.row = row
-                            change(row, delta)
-                        },
-                        onPick = { i ->
-                            app.focusZone = FocusZone.CONTENT
-                            studio.row = row
-                            studio.pick(i)
-                        },
-                        modifier = Modifier.onPlaced { bounds[row] = it.positionInParent().y to it.size.height.toFloat() },
-                    )
+                                // The accent bar, stepped in on strongly rounded rows so it stays inside the curve.
+                                val bh = Size.glyph.toPx().coerceAtMost(h - Space.s.toPx())
+                                val curve = if (r > bh / 2) r - kotlin.math.sqrt(r * r - (bh / 2) * (bh / 2)) else 0f
+                                drawRoundRect(accent, Offset(curve, top + (h - bh) / 2), androidx.compose.ui.geometry.Size(Size.sparkHeight.toPx(), bh), CornerRadius(Size.sparkHeight.toPx() / 2), alpha = shown)
+                            },
+                    ) {
+                        studio.openColor?.let { role -> ColorHeader(studio, role) }
+                        for ((i, line) in lines.withIndex()) {
+                            StudioLineView(
+                                line = line,
+                                studio = studio,
+                                look = look,
+                                selected = i == index && app.focusZone == FocusZone.CONTENT,
+                                compact = compact,
+                                narrow = narrow,
+                                detail = detailOf(line, studio, userMotion?.label()),
+                                onTap = {
+                                    app.focusZone = FocusZone.CONTENT
+                                    val was = studio.index == i
+                                    studio.index = i
+                                    val kind = when (line) {
+                                        is StudioLine.Main -> line.row.kind
+                                        is StudioLine.Edit -> line.row.kind
+                                    }
+                                    if (was || kind == RowKind.ACTION || kind == RowKind.SWITCH || kind == RowKind.COLOR) activate(line)
+                                },
+                                onStep = { delta ->
+                                    app.focusZone = FocusZone.CONTENT
+                                    studio.index = i
+                                    change(line, delta)
+                                },
+                                onPick = { p ->
+                                    app.focusZone = FocusZone.CONTENT
+                                    studio.index = i
+                                    studio.pick(p)
+                                },
+                                modifier = Modifier.onPlaced { bounds[line] = it.positionInParent().y to it.size.height.toFloat() },
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -459,10 +885,110 @@ internal fun StudioPanel(
     }
 }
 
-/** One row of the studio: the trait's icon and name, and its control. Anatomy matches menu rows. */
+/** The line under a row's name: what it is for, or why it reads the way it does. */
+private fun detailOf(line: StudioLine, studio: StudioState, userMotion: String?): String? = when (line) {
+    is StudioLine.Main -> when (line.row) {
+        StudioRow.MOTION -> userMotion?.let { "Your Motion setting ($it) is used instead" }
+        StudioRow.SAVE -> studio.editing?.let { "Saving under its name replaces ${it.name}" } ?: "Name it, and it joins your themes"
+        StudioRow.NEXT -> StudioStep.entries.getOrNull(studio.step.ordinal + 1)?.title
+        StudioRow.MODE -> if (studio.dark) "A dark room. Changing it makes the room and text again" else "A bright room. Changing it makes the room and text again"
+        StudioRow.LIGHT -> "How bright the scene's light is"
+        StudioRow.SPEED -> "How fast it drifts; none holds it still"
+        StudioRow.BLUR -> "How much the art behind the panels softens"
+        StudioRow.OPACITY -> "How much of the panels' colour covers the art"
+        else -> line.row.role?.note
+    }
+    is StudioLine.Edit -> when (line.row) {
+        EditRow.FIX -> "Lightens or darkens it just enough"
+        EditRow.CODE -> "Six letters and digits, like 2BB673"
+        else -> null
+    }
+}
+
+/** The step's place in the studio, its name and what it is for, and a dot per step to jump with. */
 @Composable
-private fun StudioRowView(
-    row: StudioRow,
+private fun StepHeader(studio: StudioState, compact: Boolean, onGo: (StudioStep) -> Unit) {
+    val c = Fuse.colors
+    val step = studio.step
+    Column(Modifier.fillMaxWidth().padding(start = Space.l, end = Space.l, top = if (compact) Space.m else Space.l, bottom = Space.s)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            FText("STEP ${step.ordinal + 1} OF ${StudioStep.entries.size}", Fuse.type.overline, color = c.accent, maxLines = 1)
+            Spacer(Modifier.weight(1f))
+            Row(horizontalArrangement = Arrangement.spacedBy(Space.xs), verticalAlignment = Alignment.CenterVertically) {
+                for (s in StudioStep.entries) {
+                    val on = s == step
+                    val w by animateFloatAsState(if (on) 1f else 0f, Fuse.motion.value(), label = "stepDot")
+                    Box(
+                        Modifier
+                            .height(6.dp)
+                            .width(6.dp + 12.dp * w)
+                            .clip(CircleShape)
+                            .background(if (on) c.accent else if (s.ordinal < step.ordinal) c.text.copy(alpha = 0.45f) else c.text.copy(alpha = 0.16f))
+                            .fuseClickable(shape = CircleShape, scale = false, onClickLabel = s.title) { onGo(s) }
+                            .semantics { contentDescription = s.title },
+                    )
+                }
+            }
+        }
+        Spacer(Modifier.height(Space.xs))
+        FText(studio.openColor?.label ?: step.title, if (compact) Fuse.type.titleSmall else Fuse.type.title, maxLines = 1)
+        if (!compact || studio.openColor == null) {
+            Spacer(Modifier.height(Space.xxs))
+            FText(studio.openColor?.note ?: step.guide, Fuse.type.caption, color = c.textMuted, maxLines = 2)
+        }
+    }
+}
+
+/** The colour being changed: a large swatch, its code, and how well it reads where it sits. */
+@Composable
+private fun ColorHeader(studio: StudioState, role: ColorRole) {
+    val c = Fuse.colors
+    val argb = studio.color(role)
+    Row(Modifier.fillMaxWidth().padding(horizontal = Space.m, vertical = Space.s), verticalAlignment = Alignment.CenterVertically) {
+        Box(
+            Modifier
+                .size(Size.iconXL)
+                .clip(SquircleShape.fraction(0.3f))
+                .background(Color(argb))
+                .border(1.dp, c.hairlineStrong, SquircleShape.fraction(0.3f)),
+        )
+        Spacer(Modifier.width(Space.m))
+        Column(Modifier.weight(1f)) {
+            FText(ThemeCodec.hex(argb).take(7), Fuse.type.bodyStrong.tabular(), maxLines = 1)
+            val sits = when (role) {
+                ColorRole.BACKGROUND, ColorRole.SURFACE, ColorRole.RAISED -> "Text on it"
+                ColorRole.SECOND_LIGHT -> "A light in the scene"
+                else -> "On the room and panels"
+            }
+            FText(sits, Fuse.type.caption, color = c.textMuted, maxLines = 1)
+        }
+        if (role != ColorRole.SECOND_LIGHT) LegibilityBadge(studio.legibility(role))
+    }
+}
+
+/** "Reads well" or "Hard to read", with the ratio: colour is never the only cue. */
+@Composable
+private fun LegibilityBadge(l: Legibility, small: Boolean = false) {
+    val c = Fuse.colors
+    val tint = if (l.ok) c.success else c.warning
+    Row(
+        Modifier
+            .clip(io.github.matiyaaa.fuse.ui.designsystem.shape.PillShape)
+            .background(tint.copy(alpha = 0.14f))
+            .padding(horizontal = Space.s, vertical = Space.xxs),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        FuseIcon(if (l.ok) FuseIcons.Check else FuseIcons.Warning, size = 12.dp, tint = tint)
+        Spacer(Modifier.width(Space.xxs + 2.dp))
+        val ratio = ((l.ratio * 10).roundToInt() / 10.0).let { if (it == it.toInt().toDouble()) it.toInt().toString() else it.toString() }
+        FText(if (small) "$ratio:1" else "${if (l.ok) "Reads well" else "Hard to read"}  $ratio:1", Fuse.type.caption.tabular(), color = tint, maxLines = 1)
+    }
+}
+
+/** One line of the studio: its icon and name, and its control. Anatomy matches menu rows. */
+@Composable
+private fun StudioLineView(
+    line: StudioLine,
     studio: StudioState,
     look: StudioLook,
     selected: Boolean,
@@ -476,74 +1002,165 @@ private fun StudioRowView(
 ) {
     val c = Fuse.colors
     val shape = RoundedCornerShape(Fuse.geometry.control)
+    val (label, icon, kind) = when (line) {
+        is StudioLine.Main -> Triple(
+            if (line.row == StudioRow.NEXT) "Next step" else line.row.label, line.row.icon, line.row.kind,
+        )
+        is StudioLine.Edit -> Triple(line.row.label, line.row.icon, line.row.kind)
+    }
     Row(
         modifier
             .fillMaxWidth()
             .heightIn(min = if (compact) Size.rowCompact else Size.row)
-            .fuseClickable(shape = shape, scale = false, role = if (row == StudioRow.GLASS || row == StudioRow.CRT) Role.Switch else Role.Button, onClick = onTap)
+            .fuseClickable(shape = shape, scale = false, role = if (kind == RowKind.SWITCH) Role.Switch else Role.Button, onClick = onTap)
             // Screen readers (and the UI audit) can tell which row the controller is on.
             .semantics { this.selected = selected }
             .padding(start = Size.sparkHeight + Space.m, end = if (narrow) Space.xs else Space.m),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (!narrow) {
-            Well(row.icon, selected)
+            Well(icon, selected)
             Spacer(Modifier.width(Space.m))
         }
         Column(Modifier.weight(1f).padding(vertical = Space.s), verticalArrangement = Arrangement.spacedBy(Space.xxs)) {
-            FText(row.label, Fuse.type.bodyStrong, color = if (selected) c.text else c.text.copy(alpha = 0.92f), maxLines = 1)
+            FText(label, Fuse.type.bodyStrong, color = if (selected) c.text else c.text.copy(alpha = 0.92f), maxLines = 1)
             if (detail != null) FText(detail, Fuse.type.caption, color = c.textMuted, maxLines = 2)
         }
         Spacer(Modifier.width(if (narrow) Space.s else Space.m))
         val dir = studio.direction
-        when (row) {
-            StudioRow.ACCENT -> if (narrow) {
-                Stepper(studio.accent, dir, selected, onStep) { i ->
+        when (line) {
+            is StudioLine.Edit -> when (line.row) {
+                EditRow.HUE, EditRow.SATURATION, EditRow.LIGHTNESS -> {
+                    val role = studio.openColor
+                    val hsl = role?.let { Hsl.of(studio.color(it)) }
+                    if (hsl != null) {
+                        val value = when (line.row) {
+                            EditRow.HUE -> hsl.h / 360f
+                            EditRow.SATURATION -> hsl.s
+                            else -> hsl.l
+                        }
+                        val ends = when (line.row) {
+                            EditRow.HUE -> (0..6).map { Color(Hsl(it * 60f, hsl.s.coerceAtLeast(0.5f), hsl.l.coerceIn(0.3f, 0.7f)).argb()) }
+                            EditRow.SATURATION -> listOf(Color(hsl.copy(s = 0f).argb()), Color(hsl.copy(s = 1f).argb()))
+                            else -> listOf(Color.Black, Color(hsl.copy(l = 0.5f).argb()), Color.White)
+                        }
+                        StepperShell(selected, narrow, onStep) { Gauge(value, ends, narrow) }
+                    }
+                }
+                EditRow.DONE -> FuseIcon(FuseIcons.Check, size = Size.iconS, tint = if (selected) c.text else c.textMuted, modifier = Modifier.padding(end = Space.xs))
+                else -> FuseIcon(FuseIcons.ChevronRight, size = Size.iconS, tint = if (selected) c.text else c.textMuted, modifier = Modifier.padding(end = Space.xs))
+            }
+            is StudioLine.Main -> when (val row = line.row) {
+                StudioRow.ACCENT -> if (narrow) {
+                    ColorValue(studio, ColorRole.ACCENT, narrow = true)
+                } else {
+                    val list = studio.swatches
+                    val chosen = list.indexOfFirst { it.argb == studio.color(ColorRole.ACCENT) }
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        SwatchDisc(studio.swatches[i].argb, chosen = false, Modifier.size(Size.iconS))
-                        Spacer(Modifier.width(Space.s))
-                        FText(studio.swatches[i].name, Fuse.type.label, maxLines = 1)
+                        if (chosen < 0) {
+                            SwatchDisc(studio.color(ColorRole.ACCENT), chosen = true, Modifier.size(Size.iconM))
+                            Spacer(Modifier.width(Space.m))
+                        }
+                        SwatchStrip(list, chosen, onPick)
                     }
                 }
-            } else {
-                SwatchStrip(studio.swatches, studio.accent, onPick)
-            }
-            StudioRow.BACKGROUND -> Stepper(studio.background, dir, selected, onStep, narrow) { bg ->
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (!narrow) {
-                        BackgroundThumb(look.spec, bg)
+                StudioRow.MODE -> Stepper(studio.dark, dir, selected, onStep, narrow) { d ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        FuseIcon(if (d) FuseIcons.Moon else FuseIcons.Sun, size = Size.iconS, tint = c.textMuted)
                         Spacer(Modifier.width(Space.s))
+                        FText(if (d) "Dark" else "Light", Fuse.type.label, maxLines = 1)
                     }
-                    FText(bg.label(), Fuse.type.label, maxLines = 1)
                 }
-            }
-            StudioRow.CORNERS -> Stepper(studio.corners, dir, selected, onStep, narrow) { f ->
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    CornerGlyph(f)
-                    Spacer(Modifier.width(Space.s))
-                    FText(f.label(), Fuse.type.label, maxLines = 1)
+                StudioRow.BACKGROUND -> Stepper(studio.background, dir, selected, onStep, narrow) { bg ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (!narrow) {
+                            BackgroundThumb(look.spec, bg)
+                            Spacer(Modifier.width(Space.s))
+                        }
+                        FText(bg.label(), Fuse.type.label, maxLines = 1)
+                    }
                 }
-            }
-            StudioRow.FOCUS -> Stepper(studio.focus, dir, selected, onStep, narrow) { f ->
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    FuseIcon(f.icon(), size = Size.iconS, tint = c.textMuted)
-                    Spacer(Modifier.width(Space.s))
-                    FText(f.label(), Fuse.type.label, maxLines = 1)
+                StudioRow.CORNERS -> Stepper(studio.corners, dir, selected, onStep, narrow) { f ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        CornerGlyph(f)
+                        Spacer(Modifier.width(Space.s))
+                        FText(f.label(), Fuse.type.label, maxLines = 1)
+                    }
                 }
-            }
-            StudioRow.MOTION -> Stepper(studio.motion, dir, selected, onStep, narrow) { m -> FText(m.label(), Fuse.type.label, maxLines = 1) }
-            StudioRow.SOUND -> Stepper(studio.sound, dir, selected, onStep, narrow) { s ->
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    FuseIcon(s.icon(), size = Size.iconS, tint = c.textMuted)
-                    Spacer(Modifier.width(Space.s))
-                    FText(s.label(), Fuse.type.label, maxLines = 1)
+                StudioRow.FOCUS -> Stepper(studio.focus, dir, selected, onStep, narrow) { f ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        FuseIcon(f.icon(), size = Size.iconS, tint = c.textMuted)
+                        Spacer(Modifier.width(Space.s))
+                        FText(f.label(), Fuse.type.label, maxLines = 1)
+                    }
                 }
+                StudioRow.MOTION -> Stepper(studio.motion, dir, selected, onStep, narrow) { m -> FText(m.label(), Fuse.type.label, maxLines = 1) }
+                StudioRow.SOUND -> Stepper(studio.sound, dir, selected, onStep, narrow) { s ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        FuseIcon(s.icon(), size = Size.iconS, tint = c.textMuted)
+                        Spacer(Modifier.width(Space.s))
+                        FText(s.label(), Fuse.type.label, maxLines = 1)
+                    }
+                }
+                StudioRow.LIGHT -> StepperShell(selected, narrow, onStep) { Gauge(studio.light / 1.5f, listOf(c.text.copy(alpha = 0.1f), c.accent), narrow) }
+                StudioRow.SPEED -> StepperShell(selected, narrow, onStep) { Gauge(studio.speed / 2f, listOf(c.text.copy(alpha = 0.1f), c.accent), narrow) }
+                StudioRow.BLUR -> StepperShell(selected, narrow, onStep) { Gauge(studio.blur / 48f, listOf(c.text.copy(alpha = 0.1f), c.accent), narrow) }
+                StudioRow.OPACITY -> StepperShell(selected, narrow, onStep) { Gauge(studio.opacity, listOf(c.text.copy(alpha = 0.1f), c.accent), narrow) }
+                StudioRow.SCANLINES -> StepperShell(selected, narrow, onStep) { Gauge(studio.scanlines, listOf(c.text.copy(alpha = 0.1f), c.accent), narrow) }
+                StudioRow.BLOOM -> StepperShell(selected, narrow, onStep) { Gauge(studio.bloom, listOf(c.text.copy(alpha = 0.1f), c.accent), narrow) }
+                StudioRow.GLASS -> Toggle(studio.glass, Modifier.padding(end = Space.xs))
+                StudioRow.CRT -> Toggle(studio.crt, Modifier.padding(end = Space.xs))
+                StudioRow.SAVE, StudioRow.NEXT -> FuseIcon(FuseIcons.ChevronRight, size = Size.iconS, tint = if (selected) c.text else c.textMuted, modifier = Modifier.padding(end = Space.xs))
+                else -> row.role?.let { ColorValue(studio, it, narrow) }
             }
-            StudioRow.GLASS -> Toggle(studio.glass, Modifier.padding(end = Space.xs))
-            StudioRow.CRT -> Toggle(studio.crt, Modifier.padding(end = Space.xs))
-            StudioRow.SAVE -> FuseIcon(FuseIcons.ChevronRight, size = Size.iconS, tint = if (selected) c.text else c.textMuted, modifier = Modifier.padding(end = Space.xs))
         }
     }
+}
+
+/** A colour row's value: how well it reads, its code and a swatch of it. */
+@Composable
+private fun ColorValue(studio: StudioState, role: ColorRole, narrow: Boolean) {
+    val c = Fuse.colors
+    val argb = studio.color(role)
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        if (role != ColorRole.SECOND_LIGHT) {
+            LegibilityBadge(studio.legibility(role), small = narrow)
+            Spacer(Modifier.width(Space.s))
+        }
+        if (!narrow) {
+            FText(ThemeCodec.hex(argb).take(7), Fuse.type.caption.tabular(), color = c.textMuted, maxLines = 1)
+            Spacer(Modifier.width(Space.s))
+        }
+        SwatchDisc(argb, chosen = false, Modifier.size(Size.iconM))
+    }
+}
+
+/** Arrows either side of an amount, like [Stepper] but for a value that slides rather than swaps. */
+@Composable
+private fun StepperShell(selected: Boolean, narrow: Boolean, onStep: (Int) -> Unit, content: @Composable () -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        StepArrow(FuseIcons.ChevronLeft, selected, narrow, "Less") { onStep(-1) }
+        Box(Modifier.widthIn(min = if (narrow) Space.x5 - Space.l else Space.x5 + Space.xl), contentAlignment = Alignment.Center) { content() }
+        StepArrow(FuseIcons.ChevronRight, selected, narrow, "More") { onStep(1) }
+    }
+}
+
+/** An amount as a track in [colors] (a gradient for hue and the like) with a knob at [value] (0..1). */
+@Composable
+private fun Gauge(value: Float, colors: List<Color>, narrow: Boolean) {
+    val c = Fuse.colors
+    val v by animateFloatAsState(value.coerceIn(0f, 1f), Fuse.motion.value(), label = "gauge")
+    Spacer(
+        Modifier.size(width = if (narrow) Space.x5 - Space.l else Space.x5 + Space.l, height = Size.iconS).drawBehind {
+            val h = 6.dp.toPx()
+            val y = (size.height - h) / 2
+            drawRoundRect(Brush.horizontalGradient(colors), Offset(0f, y), androidx.compose.ui.geometry.Size(size.width, h), CornerRadius(h / 2))
+            drawRoundRect(c.hairlineStrong, Offset(0f, y), androidx.compose.ui.geometry.Size(size.width, h), CornerRadius(h / 2), style = Stroke(1.dp.toPx()))
+            val x = (size.width * v).coerceIn(size.height / 2, size.width - size.height / 2)
+            drawCircle(c.surfaceOverlay, size.height / 2, Offset(x, size.height / 2))
+            drawCircle(c.text, size.height / 2, Offset(x, size.height / 2), style = Stroke(2.dp.toPx()))
+        },
+    )
 }
 
 /** The row's icon in a small well shaped like the theme's tiles, as menu rows have. */

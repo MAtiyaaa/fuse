@@ -6,15 +6,18 @@
   "extends": "crossbar",
   "dark": true,
   "colors": {
-    "background": "#071027",
-    "surface": "#0F1B3A",
-    "surfaceRaised": "#17284D",
-    "accent": "#9FC3FF",
-    "accentSoft": "#9FC3FF33",
-    "onAccent": "#061022",
-    "text": "#F2F6FF",
-    "textMuted": "#A9B8D6",
-    "focus": "#FFFFFF"
+    "background": "#061033",
+    "surface": "#0D1C45",
+    "surfaceRaised": "#15295C",
+    "accent": "#A9CBFF",
+    "accentSoft": "#A9CBFF33",
+    "onAccent": "#07122A",
+    "text": "#F3F7FF",
+    "textMuted": "#B0C1E2",
+    "focus": "#FFFFFF",
+    "success": "#6BE3B0",
+    "warning": "#FFCB6B",
+    "danger": "#FF7D8C"
   },
   "background": {
     "style": "wave",

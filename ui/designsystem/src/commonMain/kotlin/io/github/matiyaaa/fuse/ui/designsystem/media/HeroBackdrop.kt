@@ -217,7 +217,9 @@ fun HeroBackdrop(
                     radius = size.maxDimension * 0.7f,
                 )
                 onDrawBehind {
-                    drawRect(Color.Black.copy(alpha = dim))
+                    // A dark room dims the art; a bright one washes it toward its paper, so dark text
+                    // reads on it instead of on a grey haze.
+                    if (colors.isDark) drawRect(Color.Black.copy(alpha = dim)) else drawRect(ink.copy(alpha = (dim + LIGHT_WASH).coerceAtMost(0.9f)))
                     drawRect(left)
                     drawRect(top)
                     drawRect(bottom)
@@ -232,6 +234,9 @@ fun HeroBackdrop(
  * Scrim curves as (position, strength) pairs: strong at the edge, easing out over a long tail.
  * Left: the stage title sits in the first 45%. Top: under the top line. Bottom: tiles and hints.
  */
+/** How much more a bright room washes the art than a dark one dims it. */
+private const val LIGHT_WASH = 0.3f
+
 private val LEFT_SCRIM = floatArrayOf(0f, 1f, 0.12f, 0.92f, 0.24f, 0.77f, 0.36f, 0.59f, 0.48f, 0.37f, 0.6f, 0.18f, 0.7f, 0.07f, 0.8f, 0f)
 private val TOP_SCRIM = floatArrayOf(0f, 1f, 0.06f, 0.72f, 0.12f, 0.4f, 0.18f, 0.16f, 0.24f, 0f)
 private val BOTTOM_SCRIM = floatArrayOf(0.48f, 0f, 0.58f, 0.1f, 0.68f, 0.3f, 0.78f, 0.56f, 0.88f, 0.8f, 1f, 1f)
@@ -279,6 +284,8 @@ private fun LitRoom(accent: Color, modifier: Modifier = Modifier) {
 
 @Composable
 private fun HeroLayerView(layer: HeroLayer, brightness: Float, onReady: () -> Unit, onShown: () -> Unit) {
+    // What the art is shaded with: black in a dark room, the room's own paper in a bright one.
+    val veil = Fuse.colors.let { if (it.isDark) Color.Black else it.ink }
     val motion = Fuse.motion
     val source = layer.source
     val settle = remember { Animatable(1.04f) }
@@ -365,7 +372,7 @@ private fun HeroLayerView(layer: HeroLayer, brightness: Float, onReady: () -> Un
             }
             .drawWithContent {
                 drawContent()
-                if (brightness < 1f) drawRect(Color.Black.copy(alpha = 1f - brightness))
+                if (brightness < 1f) drawRect(veil.copy(alpha = 1f - brightness))
             },
     ) {
         if (placeholder || failed) {
@@ -381,7 +388,7 @@ private fun HeroLayerView(layer: HeroLayer, brightness: Float, onReady: () -> Un
             val shade = Modifier.drawWithContent {
                 drawContent()
                 // Box art behind the interface is a colour field, not a picture: darker, and more so unblurred.
-                if (source.blurred) drawRect(Color.Black.copy(alpha = if (canBlur) 0.35f else 0.6f))
+                if (source.blurred) drawRect(veil.copy(alpha = if (canBlur) 0.35f else 0.6f))
             }
             if (source.blurred && canBlur) {
                 // Blurred once, small, then shown scaled up: the same picture for a single draw a frame.

@@ -107,6 +107,8 @@ data class StoreState(
     val canInstall: Boolean = true,
     /** A GitHub token is set for update checks. */
     val hasGitHubToken: Boolean = false,
+    /** Icons the apps publish themselves (see AppIconFinder), by key, for apps not installed yet. */
+    val icons: Map<String, String> = emptyMap(),
 ) {
     fun app(key: String): StoreApp? = catalogue?.apps?.firstOrNull { it.key == key }
 
@@ -183,7 +185,23 @@ data class StoreApp(
     val systems: List<PlatformId>,
     /** The colour of its first category (ARGB), for its monogram. */
     val color: Long?,
+    /** What Fuse does with it once it is installed. */
+    val inFuse: InFuse = InFuse.NOTHING,
 )
+
+/** What Fuse does with a Store app once it is installed. */
+enum class InFuse {
+    /** An emulator Fuse starts games in. */
+    LAUNCHES_GAMES,
+    /** An emulator other apps can't start games in: Fuse opens it, and you pick the game there. */
+    OPENS_APP,
+    /** Game streaming: listed under Streaming in Apps. */
+    STREAMING,
+    /** A frontend, driver or helper: listed under Tools in Apps. */
+    TOOL,
+    /** Something Fuse doesn't use (the pack itself, driver lists). */
+    NOTHING,
+}
 
 enum class SourceKind { GITHUB, WEB, OTHER }
 

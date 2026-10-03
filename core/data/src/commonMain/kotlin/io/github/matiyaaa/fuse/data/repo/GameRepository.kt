@@ -243,6 +243,39 @@ class GameRepository(
         }
     }
 
+    /** Games whose details came from [source] (for checking RomM's details again). */
+    suspend fun withMetadataFrom(source: MetadataSource): List<GameId> = withContext(dispatcher) {
+        q.selectWithMetadataFrom(source.name).executeAsList().map(::GameId)
+    }
+
+    /**
+     * Puts a game's details and metadata name back to exactly [metadata] and [titleMetadata] (null
+     * clears them): undoing details that turned out to be another game's, or "Reset name and details".
+     * The user's own name ([GameTitles.custom]) is never touched. Returns false when the game is gone.
+     */
+    suspend fun replaceMetadata(id: GameId, metadata: GameMetadata?, titleMetadata: String?): Boolean = withContext(dispatcher) {
+        db.transactionWithResult {
+            val row = q.selectMetadata(id.value).executeAsOneOrNull() ?: return@transactionWithResult false
+            val meta = metadata?.takeIf { it != GameMetadata() }
+            val metaTitle = titleMetadata?.trim()?.takeIf(String::isNotEmpty)
+            val titles = GameTitles(row.title_original, row.title_cleaned, row.title_custom, metaTitle, row.use_cleaned.asBool())
+            q.setMetadata(
+                metadataJson = meta?.let { DataJson.encodeToString(GameMetadata.serializer(), it) },
+                releaseYear = meta?.releaseYear?.toLong(),
+                titleMetadata = metaTitle,
+                searchTitle = TitleText.searchColumn(titles),
+                sortTitle = TitleText.sortColumn(titles),
+                now = clock(),
+                id = id.value,
+            )
+            db.gameContentQueries.deleteGenres(id.value)
+            meta?.genres.orEmpty().map(String::trim).filter(String::isNotEmpty).forEach {
+                db.gameContentQueries.insertGenre(id.value, it)
+            }
+            true
+        }
+    }
+
     /**
      * "Remove from Fuse": hides the game everywhere and marks it removed so a rescan cannot bring it
      * back. Database only: files are never touched, and play time, media and edits are kept so

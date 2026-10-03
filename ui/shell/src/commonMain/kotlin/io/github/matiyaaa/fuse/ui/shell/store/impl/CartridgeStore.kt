@@ -25,6 +25,8 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -69,7 +71,9 @@ internal class DefaultCartridgeOps(
             // The same file can be written differently by the two apps (see CartridgeMatch).
             val match = if (downloads.any { it.path != null }) CartridgeMatch(ctx.data.games.paths()) else null
             downloads.map { d ->
+                // A path that leads to another game (see CartridgeDetails) shows as not found yet.
                 val id = d.path?.let { p -> match?.find(p) }
+                    ?.takeIf { found -> ctx.data.games.get(found)?.let { details.fits(it, d.title, d.platformSlug) } == true }
                 if (id != null && d.romId > 0) rememberRomId(id, d.romId)
                 RecentDownload(d, id?.let { ctx.card(it) })
             }
@@ -85,8 +89,23 @@ internal class DefaultCartridgeOps(
 
     private val enabled: Boolean get() = ctx.settings.value.cartridge.enabled
 
+    private val noticeFlow = MutableSharedFlow<String>(extraBufferCapacity = 4)
+    override val notices: Flow<String> = noticeFlow
+
+    override suspend fun checkRommMatches(): Int = withContext(Dispatchers.Default) {
+        val undone = details.repair()
+        ctx.data.cache.put(REPAIR_NS, REPAIR_KEY, "\"$REPAIR_VERSION\"", ctx.now(), ttlMs = null)
+        undone
+    }
+
     /** Follows the Cartridge switch: watching and reading only while it is on. */
     fun start() {
+        // Once: undo RomM details an earlier version gave games they didn't belong to.
+        ctx.scope.launch(Dispatchers.Default) {
+            if (ctx.data.cache.entry(REPAIR_NS, REPAIR_KEY)?.valueJson == "\"$REPAIR_VERSION\"") return@launch
+            val undone = checkRommMatches()
+            if (undone > 0) noticeFlow.tryEmit(if (undone == 1) "Put back the name of a game RomM had mixed up" else "Put back the names of $undone games RomM had mixed up")
+        }
         ctx.scope.launch { for (request in reads) if (enabled) readNow() }
         // A scan that just finished may have indexed games Cartridge already reported.
         ctx.scope.launch {
@@ -132,6 +151,9 @@ internal class DefaultCartridgeOps(
             } ?: return@launch
             val outcome = details.sync(games, applyDetails = ctx.settings.value.cartridge.rommDetails)
             waitingForScan = outcome.unmatched > 0
+            if (outcome.undone > 0) {
+                noticeFlow.tryEmit(if (outcome.undone == 1) "Put back the name of a game RomM had mixed up" else "Put back the names of ${outcome.undone} games RomM had mixed up")
+            }
         }
     }
 
@@ -309,3 +331,9 @@ internal class DefaultUpdateOps(private val ctx: StoreContext) : UpdateOps {
         const val HOUR_MS = 3_600_000L
     }
 }
+
+private const val REPAIR_NS = "cartridge.romm.repair"
+private const val REPAIR_KEY = "done"
+
+/** Moves when the check of RomM's details changes, so it runs once more. */
+private const val REPAIR_VERSION = 1

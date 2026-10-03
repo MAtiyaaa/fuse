@@ -310,6 +310,7 @@ private fun details(state: StoreState, item: StoreApp): List<Pair<String, String
         },
         "Package" to (item.packageName ?: "Learnt when it is first installed"),
         systemNames(item.systems, 12).takeIf { it.isNotEmpty() }?.let { "Plays" to it.joinToString(", ") },
+        inFuseText(item.inFuse)?.let { "In Fuse" to it },
         catalogue?.let { "Listed in" to "Obtainium Emulation Pack, ${it.variant.title()} edition" + (it.packVersion?.let { v -> " ($v)" } ?: "") },
     )
 }
@@ -383,4 +384,13 @@ private fun ReleaseNotes(lines: List<NoteLine>, modifier: Modifier) {
             NoteLine.Kind.TEXT -> FText(l.text, Fuse.type.body, color = c.text.copy(alpha = 0.86f), maxLines = 6)
         }
     }
+}
+
+/** What Fuse does with an app once it is installed, for its page; null when Fuse doesn't use it. */
+internal fun inFuseText(inFuse: io.github.matiyaaa.fuse.ui.shell.store.InFuse): String? = when (inFuse) {
+    io.github.matiyaaa.fuse.ui.shell.store.InFuse.LAUNCHES_GAMES -> "Starts your games for the systems it plays"
+    io.github.matiyaaa.fuse.ui.shell.store.InFuse.OPENS_APP -> "Opens the app; it doesn't let other apps start a game in it"
+    io.github.matiyaaa.fuse.ui.shell.store.InFuse.STREAMING -> "Listed under Streaming in Apps"
+    io.github.matiyaaa.fuse.ui.shell.store.InFuse.TOOL -> "Listed under Tools in Apps"
+    io.github.matiyaaa.fuse.ui.shell.store.InFuse.NOTHING -> null
 }

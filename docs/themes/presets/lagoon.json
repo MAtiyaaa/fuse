@@ -6,15 +6,18 @@
   "extends": "lagoon",
   "dark": true,
   "colors": {
-    "background": "#03141A",
-    "surface": "#0A2129",
-    "surfaceRaised": "#112D37",
-    "accent": "#43E3D3",
-    "accentSoft": "#43E3D333",
+    "background": "#02131A",
+    "surface": "#09212A",
+    "surfaceRaised": "#102E39",
+    "accent": "#4BE8D7",
+    "accentSoft": "#4BE8D733",
     "onAccent": "#02201D",
-    "text": "#ECFAF9",
-    "textMuted": "#97BCBB",
-    "focus": "#FFFFFF"
+    "text": "#EDFBFA",
+    "textMuted": "#A2C6C5",
+    "focus": "#FFFFFF",
+    "success": "#6FE6A2",
+    "warning": "#FFCA6B",
+    "danger": "#FF7B85"
   },
   "background": {
     "style": "caustics",

@@ -1,5 +1,8 @@
 package io.github.matiyaaa.fuse.ui.shell.collections
 
+import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.Row
+import io.github.matiyaaa.fuse.ui.designsystem.components.FuseButton
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -90,9 +93,8 @@ import io.github.matiyaaa.fuse.ui.shell.store.GameQuery
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
-/** A card on the Collections screen: the "new collection" card, or a collection. */
+/** A card on the Collections screen: a collection. */
 private sealed interface CollectionItem {
-    data object New : CollectionItem
     data class Of(val collection: GameCollection) : CollectionItem
 }
 
@@ -103,14 +105,16 @@ private enum class CollectionsView(val label: String) { COLLECTIONS("Collections
 private class CollectionsViewState {
     var view by mutableStateOf(CollectionsView.COLLECTIONS)
     var inTabs by mutableStateOf(false)
+    /** In the header, on the New collection button rather than a view. */
+    var onNew by mutableStateOf(false)
     private val selections = mutableMapOf<CollectionsView, GridSelection>()
     fun selection(v: CollectionsView): GridSelection = selections.getOrPut(v) { GridSelection() }
 }
 
 /**
- * Collections in two views: your own (after a card to make a new one), and the series Fuse found.
- * Each is a grid of cards made of the games' art. A tap or A opens one; X has its options. Up from
- * the first row reaches the views, and Left and Right switch them.
+ * Collections in two views: your own, and the series Fuse found. Each is a grid of cards made of the
+ * games' art. A tap or A opens one; X has its options. Up from the first row reaches the header:
+ * Left and Right switch the views, and go on to New collection at the end of the row.
  */
 @Composable
 fun CollectionsScreen(app: AppState) {
@@ -123,7 +127,7 @@ fun CollectionsScreen(app: AppState) {
     val view = state.view
     val inTabs = state.inTabs && app.focusZone == FocusZone.CONTENT
     val items: List<CollectionItem> = when (view) {
-        CollectionsView.COLLECTIONS -> listOf(CollectionItem.New) + mine.map { CollectionItem.Of(it) }
+        CollectionsView.COLLECTIONS -> mine.map { CollectionItem.Of(it) }
         CollectionsView.SERIES -> series.map { CollectionItem.Of(it) }
     }
     val sel = state.selection(view)
@@ -145,16 +149,16 @@ fun CollectionsScreen(app: AppState) {
             HeroSource(c.id, currentMedia.hero()?.model() ?: first?.art?.hero ?: first?.art?.grid, first?.accent?.toColor() ?: accent)
         }
         app.hints = when {
+            inTabs && state.onNew -> listOf(Hint(HintButton.CONFIRM, "New collection"))
             inTabs -> listOf(Hint(HintButton.CONFIRM, "Choose"))
+            items.isEmpty() && view == CollectionsView.COLLECTIONS -> listOf(Hint(HintButton.CONFIRM, "New collection"))
             items.isEmpty() -> if (prefs.autoSeries) emptyList() else listOf(Hint(HintButton.CONFIRM, "Turn on Automatic series"))
-            items.getOrNull(sel.index) == CollectionItem.New -> listOf(Hint(HintButton.CONFIRM, "New collection"))
             else -> listOf(Hint(HintButton.CONFIRM, "Open"), Hint(HintButton.OPTIONS, "Options"))
         }
     }
 
     fun open(item: CollectionItem) {
         when (item) {
-            CollectionItem.New -> app.newCollection()
             is CollectionItem.Of -> app.go(Route.CollectionGames(item.collection.id, item.collection.name))
         }
     }
@@ -168,9 +172,21 @@ fun CollectionsScreen(app: AppState) {
         val views = CollectionsView.entries
         if (inTabs) {
             return@InputLayer when (e.action) {
-                NavAction.LEFT -> if (view.ordinal > 0) { show(views[view.ordinal - 1]); NavResult.MOVED } else NavResult.BLOCKED
-                NavAction.RIGHT -> if (view.ordinal < views.lastIndex) { show(views[view.ordinal + 1]); NavResult.MOVED } else NavResult.BLOCKED
-                NavAction.DOWN, NavAction.SELECT -> { state.inTabs = false; NavResult.MOVED }
+                NavAction.LEFT -> when {
+                    state.onNew -> { state.onNew = false; NavResult.MOVED }
+                    view.ordinal > 0 -> { show(views[view.ordinal - 1]); NavResult.MOVED }
+                    else -> NavResult.BLOCKED
+                }
+                NavAction.RIGHT -> when {
+                    state.onNew -> NavResult.BLOCKED
+                    view.ordinal < views.lastIndex -> { show(views[view.ordinal + 1]); NavResult.MOVED }
+                    else -> { state.onNew = true; NavResult.MOVED }
+                }
+                NavAction.SELECT -> {
+                    if (state.onNew) app.newCollection() else state.inTabs = false
+                    NavResult.ACTIVATED
+                }
+                NavAction.DOWN -> { state.inTabs = false; state.onNew = false; NavResult.MOVED }
                 else -> NavResult.IGNORED
             }
         }
@@ -184,7 +200,11 @@ fun CollectionsScreen(app: AppState) {
                 }
             }
             NavAction.SELECT -> {
-                if (items.isEmpty()) { if (view == CollectionsView.SERIES && !prefs.autoSeries) turnOnSeries() } else items.getOrNull(sel.index)?.let(::open)
+                when {
+                    items.isNotEmpty() -> items.getOrNull(sel.index)?.let(::open)
+                    view == CollectionsView.COLLECTIONS -> app.newCollection()
+                    !prefs.autoSeries -> turnOnSeries()
+                }
                 NavResult.ACTIVATED
             }
             NavAction.CONTEXT -> { current?.let { app.openContextMenu(app.collectionMenu(it)) }; NavResult.ACTIVATED }
@@ -204,18 +224,35 @@ fun CollectionsScreen(app: AppState) {
         val artHeight = cardWidth / Aspect.SYSTEM_CARD
         Column(Modifier.fillMaxSize()) {
             Spacer(Modifier.height(Size.hudHeight + if (compact) Space.xs else Space.m))
-            ViewTabs(
-                items = listOf(
-                    ViewTab(CollectionsView.COLLECTIONS.label, icon = FuseIcons.Bookmark, badge = mine.size.toString()),
-                    ViewTab(CollectionsView.SERIES.label, icon = FuseIcons.Sparkles, badge = series.size.takeIf { it > 0 }?.toString()),
-                ),
-                active = view.ordinal,
-                focused = view.ordinal.takeIf { inTabs },
-                onSelect = { i -> show(CollectionsView.entries[i]); state.inTabs = false },
-                modifier = Modifier.reveal(entry, 0),
-            )
+            // The views, and at the end of the same line the way to make a new collection.
+            Row(Modifier.fillMaxWidth().reveal(entry, 0), verticalAlignment = Alignment.CenterVertically) {
+                ViewTabs(
+                    items = listOf(
+                        ViewTab(CollectionsView.COLLECTIONS.label, icon = FuseIcons.Bookmark, badge = mine.size.toString()),
+                        ViewTab(CollectionsView.SERIES.label, icon = FuseIcons.Sparkles, badge = series.size.takeIf { it > 0 }?.toString()),
+                    ),
+                    active = view.ordinal,
+                    focused = view.ordinal.takeIf { inTabs && !state.onNew },
+                    onSelect = { i -> show(CollectionsView.entries[i]); state.inTabs = false; state.onNew = false },
+                    modifier = Modifier.weight(1f),
+                )
+                FuseButton(
+                    "New collection",
+                    selected = inTabs && state.onNew,
+                    icon = FuseIcons.Plus,
+                    kind = if (mine.isEmpty()) io.github.matiyaaa.fuse.ui.designsystem.components.ButtonKind.PRIMARY else io.github.matiyaaa.fuse.ui.designsystem.components.ButtonKind.SECONDARY,
+                    height = if (compact) 40.dp else Size.touch,
+                    onClick = { app.focusZone = FocusZone.CONTENT; app.newCollection() },
+                    modifier = Modifier.padding(start = Space.m, end = Space.gutter),
+                )
+            }
             if (items.isEmpty()) {
-                SeriesEmpty(prefs.autoSeries, selected = !inTabs && app.focusZone == FocusZone.CONTENT, compact = compact, onTurnOn = ::turnOnSeries)
+                val selected = !inTabs && app.focusZone == FocusZone.CONTENT
+                if (view == CollectionsView.SERIES) {
+                    SeriesEmpty(prefs.autoSeries, selected = selected, compact = compact, onTurnOn = ::turnOnSeries)
+                } else {
+                    CollectionsEmpty(selected = selected, compact = compact, onNew = { app.focusZone = FocusZone.CONTENT; app.newCollection() })
+                }
                 return@Column
             }
             // Each view keeps its own scroll, so switching back finds you where you were, and its
@@ -243,7 +280,6 @@ fun CollectionsScreen(app: AppState) {
                         // Row by row as the view opens.
                         val rise = Modifier.reveal(reveal, 1 + i / columns)
                         when (item) {
-                            CollectionItem.New -> NewCollectionCard(selected, artHeight, tap, rise)
                             is CollectionItem.Of -> CollectionCard(
                                 app, item.collection, selected, artHeight, tap,
                                 onLongClick = { state.inTabs = false; sel.index = i; app.openContextMenu(app.collectionMenu(item.collection)) },
@@ -251,21 +287,29 @@ fun CollectionsScreen(app: AppState) {
                             )
                         }
                     }
-                    // None of your own yet: the card above is the way in, and this says what it is for.
-                    if (view == CollectionsView.COLLECTIONS && mine.isEmpty()) {
-                        item(key = "none", span = { GridItemSpan(maxLineSpan) }) {
-                            EmptyState(
-                                FuseIcons.Bookmark,
-                                "No collections yet",
-                                modifier = Modifier.fillMaxWidth().padding(top = Space.xl).reveal(reveal, 2),
-                                message = "Gather games into shelves of your own: couch co-op, a weekend queue, the ones you love. Make one with the card above, or from any game's options.",
-                                compact = true,
-                            )
-                        }
-                    }
                 }
             }
         }
+    }
+}
+
+/** Your own collections, none yet: what they are for, and the button that makes the first. */
+@Composable
+private fun ColumnScope.CollectionsEmpty(selected: Boolean, compact: Boolean, onNew: () -> Unit) {
+    Box(
+        Modifier.weight(1f).fillMaxWidth().padding(horizontal = Space.gutter, vertical = Space.xl).padding(bottom = Size.hintHeight),
+        contentAlignment = Alignment.Center,
+    ) {
+        EmptyState(
+            FuseIcons.Bookmark,
+            "No collections yet",
+            message = "Gather games into shelves of your own: couch co-op, a weekend queue, the ones you love. You can also add a game to one from its options.",
+            actionLabel = "New collection",
+            actionIcon = FuseIcons.Plus,
+            actionSelected = selected,
+            onAction = onNew,
+            compact = compact,
+        )
     }
 }
 
@@ -296,35 +340,6 @@ private fun ColumnScope.SeriesEmpty(on: Boolean, selected: Boolean, compact: Boo
 private fun MediaSet.hero(): io.github.matiyaaa.fuse.model.MediaItem? = all(io.github.matiyaaa.fuse.model.MediaKind.HERO).firstOrNull()
 
 private fun io.github.matiyaaa.fuse.model.MediaItem.model(): Any? = localPath ?: remoteUrl
-
-/**
- * The card that makes a new collection: an empty slot with a dashed edge and a plus, so it reads as
- * a place to put something rather than a collection of its own. Its states (hover, focus, press)
- * are the same as every collection card's: they come from [Tile], over a face that is opaque, so
- * the lifted tile's shadow never shows through it.
- */
-@Composable
-internal fun NewCollectionCard(selected: Boolean, artHeight: Dp, onClick: () -> Unit, modifier: Modifier) {
-    val c = Fuse.colors
-    val fraction = Fuse.geometry.tileCornerFraction * 0.6f
-    val shape = remember(fraction) { SquircleShape.fraction(fraction) }
-    Column(modifier) {
-        Tile(
-            selected = selected,
-            modifier = Modifier.fillMaxWidth().height(artHeight),
-            shape = shape,
-            cornerFraction = fraction,
-            onClick = onClick,
-        ) {
-            SlotFace(shape, dashed = true) {
-                Box(Modifier.size(Size.thumb).clip(CircleShape).background(c.text.copy(alpha = if (c.isDark) 0.1f else 0.08f)), contentAlignment = Alignment.Center) {
-                    FuseIcon(FuseIcons.Plus, size = Size.iconM, tint = if (selected) c.accent else c.text)
-                }
-            }
-        }
-        CardLabel("New collection", "Pick its games next", selected)
-    }
-}
 
 /**
  * The face of a card with nothing to show yet: a well in the theme's dim surface, made opaque over

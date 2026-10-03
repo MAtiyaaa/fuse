@@ -154,7 +154,18 @@ internal class LibraryEngine(private val ctx: StoreContext) : SourceOps {
         requests.trySend(Pending(scope, platform))
     }
 
+    private var rulesChecked = false
+
     private suspend fun runScan(scope: ScanScope, platform: PlatformId?) {
+        // When the rules for what is a game change, the first scan reads every folder again, so
+        // entries the old rules made (a game's own data folders) go away by themselves.
+        if (!rulesChecked) {
+            rulesChecked = true
+            if (data.cache.entry(RULES_NS, RULES_KEY)?.valueJson != "$SCAN_RULES") {
+                data.folderState.forget("")
+                data.cache.put(RULES_NS, RULES_KEY, "$SCAN_RULES", ctx.now(), ttlMs = null)
+            }
+        }
         // Only folders that can be read now: a drive that is out is never scanned, so none of its
         // games is marked missing. They return as they were when the drive does.
         drives.refresh()
@@ -251,3 +262,9 @@ internal class LibraryEngine(private val ctx: StoreContext) : SourceOps {
         const val DRIVE_SETTLE_MS = 1_200L
     }
 }
+
+private const val RULES_NS = "scan.rules"
+private const val RULES_KEY = "version"
+
+/** Moves when the scanner's idea of what a game is changes (2: a game's own folders are never games). */
+private const val SCAN_RULES = 2

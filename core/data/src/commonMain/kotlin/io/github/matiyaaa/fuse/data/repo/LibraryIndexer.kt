@@ -168,9 +168,17 @@ class LibraryIndexer(
         }
 
         var missing = 0
+        var forgotten = 0
         if (scan.complete) {
             for (state in known.values) {
                 if (state.id in seen || state.missing) continue
+                // A folder that is still there but isn't a game (a game's own data folder, which
+                // older versions listed as games): forgotten, unless the user did something with it.
+                if (!state.removed && scan.isNotAGame(state.path) && gq.deleteUntouchedFolder(state.id).value > 0) {
+                    db.mediaQueries.deleteOwner(MediaOwner.OfGame(GameId(state.id)).type(), state.id.toString())
+                    forgotten++
+                    continue
+                }
                 gq.markMissing(now, state.id)
                 if (!state.removed) missing++
             }
@@ -241,4 +249,11 @@ internal fun fingerprint(game: ScannedGame, cleaned: String?, tagsJson: String?)
     f("media")
     game.localMedia.entries.sortedBy { it.key.name }.forEach { f(it.key.name); f(it.value) }
     return fnv1a64(sb.toString())
+}
+
+/** True when [path] was read in this scan and found not to be a game, or lies in a skipped data folder. */
+private fun PlatformFolderScan.isNotAGame(path: String): Boolean {
+    if (path in notGames) return true
+    val p = path.trimEnd('/')
+    return notGameTrees.any { tree -> p.startsWith(tree.trimEnd('/') + "/") || p == tree.trimEnd('/') }
 }

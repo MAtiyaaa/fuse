@@ -29,7 +29,7 @@ object EmulatorPriority {
         listOf("ps4") to ids("bachatas4", "shadps4"),
         listOf("psp") to ids("ppsspp", RA, "lemuroid"),
         listOf("psvita") to ids("vita3k", "emucorev"),
-        listOf("n64") to ids(RA, "m64plus-fz", "mupen64plus-ae", "lemuroid"),
+        listOf("n64") to ids(RA, "m64plus-fz", "mupen64plus-ae", "lemuroid", "gopher64"),
         listOf("nds") to ids("melonds", "melonds-nightly", "watermelonds", "drastic", "seedlessds", "noods", "skyemu", RA, "lemuroid"),
         listOf("nintendo-dsi") to ids("melonds", "melonds-nightly", "watermelonds", "seedlessds", RA),
         listOf("3ds", "new-nintendo-3ds") to ids("azahar", "azaharplus", "citra", "citra-canary", "mandarine", "lime3ds", "citra-mmj", RA, "panda3ds"),
@@ -65,7 +65,7 @@ object EmulatorPriority {
         listOf("jaguar") to ids(RA, "iratajaguar", "mame4droid-current"),
         listOf("wonderswan", "wonderswan-color") to ids(RA, "swan-emu", "lemuroid"),
         listOf("xbox") to ids("x1-box", "hakux", "xenra"),
-        listOf("xbox360") to ids("ax360e", "xendroid", "xenra"),
+        listOf("xbox360") to ids("ax360e", "xendroid", "xenra", "x360-mobile"),
         listOf("win") to ids(
             "winlator-cmod", "winnative", "winlator-glibc", "winlator-proot", "bannerlator", "gamenative", "gamehub-lite",
             "gamehub-lite-local", "winlator", "winlator-frost", "gamehub",
@@ -81,6 +81,8 @@ object EmulatorPriority {
         listOf("colecovision") to ids(RA, "colem", "msx-emu"),
         listOf("intellivision") to ids(RA, "mame4droid-current"),
         listOf("vectrex") to ids(RA, "mame4droid-current"),
+        listOf("pico8") to ids("pico8-android"),
+        listOf("flash") to ids("swiff"),
     )
 
     private val LRA = "linux.retroarch"

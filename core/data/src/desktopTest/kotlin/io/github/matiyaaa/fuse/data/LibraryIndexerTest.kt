@@ -34,6 +34,44 @@ class LibraryIndexerTest {
     private val metroid = scanned("/roms/gba/Metroid Fusion (USA).gba", sizeBytes = 100)
     private val goldenSun = scanned("/roms/gba/Golden Sun (Europe).gba")
 
+    // Older versions listed a game's own data folders as games; the next scan forgets them, unless
+    // the user did something with one.
+    @Test
+    fun folderEntriesThatAreNotGamesAnyMoreAreForgotten() = runBlocking {
+        TestDb().use { t ->
+            val d = t.data
+            fun dir(path: String) = scanned(path, platform = "scummvm").copy(kind = LocationKind.FOLDER, interpretation = FolderInterpretation.FOLDER_IS_GAME)
+            val game = dir("/roms/scummvm/Monkey Island")
+            val audio = dir("/roms/scummvm/Monkey Island/audio")
+            val played = dir("/roms/scummvm/Monkey Island/video")
+            val save = dir("/roms/wiiu/mlc01/usr/save/00050000")
+            d.indexer.apply(report(folder("/roms/scummvm", listOf(game, audio, played), platform = "scummvm")), now = 1_000, cleaner = testCleaner)
+            val playedId = d.games.idByPath(played.path)!!
+            d.games.setFavorite(playedId, true)
+
+            val delta = d.indexer.apply(
+                report(
+                    folder("/roms/scummvm", listOf(game), platform = "scummvm").copy(
+                        notGames = setOf(audio.path, played.path),
+                    ),
+                ),
+                now = 2_000,
+                cleaner = testCleaner,
+            )
+            assertNull(d.games.idByPath(audio.path), "an untouched data folder is forgotten")
+            assertTrue(d.games.get(playedId)!!.favorite, "a favourite is kept, as missing")
+            assertEquals(1, delta.missing)
+
+            d.indexer.apply(report(folder("/roms/wiiu", listOf(save), platform = "wiiu")), now = 3_000, cleaner = testCleaner)
+            d.indexer.apply(
+                report(folder("/roms/wiiu", emptyList(), platform = "wiiu").copy(notGameTrees = setOf("/roms/wiiu/mlc01/usr/save"))),
+                now = 4_000,
+                cleaner = testCleaner,
+            )
+            assertNull(d.games.idByPath(save.path), "a folder inside a skipped data folder is forgotten")
+        }
+    }
+
     @Test
     fun rescansNeverLoseUserData() = runBlocking {
         TestDb().use { t ->

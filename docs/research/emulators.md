@@ -361,6 +361,21 @@ EX+ Alpha source: https://github.com/Rakashazi/emu-ex-plus-alpha/blob/master/ima
 | Sources | https://github.com/Swordfish90/Lemuroid/blob/master/lemuroid-app/src/main/AndroidManifest.xml and `.../app/shared/game/ExternalGameLauncherActivity.kt` |
 | Confidence | **V-SRC** |
 
+### 3.14 Store apps added in 0.2.3 (not in ES-DE)
+
+Checked on 2 October 2026 against each project's own source or frontend guide.
+
+| App | Package | Launch | Source | Confidence |
+|---|---|---|---|---|
+| Pico8 Android (PICO-8) | `io.wip.pico8` | `VIEW` with the cart's URI to `com.godot.game.GodotAppLauncher` (`.p8`, `.p8.png`; `Splore.p8` opens Splore) | Macs75/pico8-android wiki, Frontends-Integration.md (Beacon's `am start`) | **V-SRC** |
+| Swiff (Flash) | `io.navivani.swiff` | `VIEW` with a `.swiffid` file's URI, type `application/octet-stream`, to `.MainActivity` (the file its Frontend sync writes) | NaviVani-dev/Swiff wiki, Frontend-Support.md | **V-SRC** |
+| Gopher64 (N64) | `io.github.gopher64.gopher64` | **App launch only**: `N64Activity` is `exported="false"`; only the launcher `SlintActivity` is exported | gopher64/gopher64 `android-project/app/src/main/AndroidManifest.xml` | **V-SRC** |
+| X360 Mobile (Xbox 360) | `emu.x360mobile.com` | **App launch only**: the README mentions external front-end launching but publishes no intent | Ashnar2602/X360-Mobile---OFFICIAL README | **UNVERIFIED** |
+| Winlator-Ludashi | `com.winlator.ludashi` | Same as Winlator Cmod: `com.winlator.cmod.XServerDisplayActivity` (exported) with a shortcut | StevenMXZ/Winlator-Ludashi `app/src/main/AndroidManifest.xml` | **V-SRC** |
+
+Starboard (`org.force9.starboard`) runs PortMaster ports it installs itself and has no per-game
+launch, so it is listed under Tools in Apps rather than as an emulator.
+
 ---
 
 ## 4. PC/Windows launchers

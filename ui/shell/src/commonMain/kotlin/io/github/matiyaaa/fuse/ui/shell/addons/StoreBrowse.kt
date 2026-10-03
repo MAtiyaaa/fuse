@@ -345,26 +345,37 @@ private fun StoreHeader(state: StoreState, buttons: List<TopButton>, chosen: Int
     val c = Fuse.colors
     val catalogue = state.catalogue ?: return
     Column(Modifier.padding(horizontal = Space.gutter)) {
+        // Where the catalogue comes from, in the theme's accent, then what it is.
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(if (compact) 40.dp else 48.dp).clip(SquircleShape.fraction(0.3f)).background(lerp(STORE_TINT.toColor(), Color.Black, 0.25f)), contentAlignment = Alignment.Center) {
-                FuseIcon(FuseIcons.Store, size = Size.iconM, tint = Color.White)
+            FText("OBTAINIUM EMULATION PACK", Fuse.type.overline, color = c.accent, maxLines = 1)
+            catalogue.packVersion?.let {
+                Spacer(Modifier.width(Space.s))
+                FText(it, Fuse.type.overline, color = c.textFaint, maxLines = 1)
             }
-            Spacer(Modifier.width(Space.m))
-            Column(Modifier.weight(1f)) {
-                FText("${catalogue.apps.size} apps  ·  ${catalogue.variant.title()} edition", Fuse.type.titleSmall, maxLines = 1)
-                val line = when {
-                    state.refreshing -> "Checking for a newer catalogue"
-                    state.refreshProblem != null -> "Offline  ·  catalogue from ${agoText(catalogue.fetchedAt)}"
-                    else -> listOfNotNull("Obtainium Emulation Pack", catalogue.packVersion, "updated ${agoText(catalogue.fetchedAt)}").joinToString("  ·  ")
-                }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (state.refreshProblem != null && !state.refreshing) {
-                        FuseIcon(FuseIcons.CloudOff, size = 14.dp, tint = c.warning)
-                        Spacer(Modifier.width(Space.xs))
-                    }
-                    FText(line, Fuse.type.caption, color = if (state.refreshProblem != null && !state.refreshing) c.warning else c.textMuted, maxLines = 1)
-                }
-            }
+        }
+        Spacer(Modifier.height(Space.xxs))
+        FText("Emulators and gaming apps", if (compact) Fuse.type.titleSmall else Fuse.type.title, maxLines = 1)
+        Spacer(Modifier.height(if (compact) Space.s else Space.m))
+        val offline = state.refreshProblem != null && !state.refreshing
+        Row(horizontalArrangement = Arrangement.spacedBy(Space.s), verticalAlignment = Alignment.CenterVertically) {
+            HeaderChip(
+                if (catalogue.variant == io.github.matiyaaa.fuse.model.StoreVariant.DUAL_SCREEN) FuseIcons.DualScreen else FuseIcons.Smartphone,
+                "${catalogue.variant.title()} edition",
+            )
+            HeaderChip(FuseIcons.Package, if (catalogue.apps.size == 1) "1 app" else "${catalogue.apps.size} apps")
+            HeaderChip(
+                when {
+                    state.refreshing -> FuseIcons.Refresh
+                    offline -> FuseIcons.CloudOff
+                    else -> FuseIcons.Clock
+                },
+                when {
+                    state.refreshing -> "Checking for a newer list"
+                    offline -> "Offline, list from ${agoText(catalogue.fetchedAt)}"
+                    else -> "Updated ${agoText(catalogue.fetchedAt)}"
+                },
+                color = if (offline) c.warning else c.textMuted,
+            )
         }
         Spacer(Modifier.height(Space.m))
         Row(horizontalArrangement = Arrangement.spacedBy(Space.s)) {
@@ -516,5 +527,23 @@ private fun StoreSkeleton(modifier: Modifier) {
                 }
             }
         }
+    }
+}
+
+/** A quiet fact under the Store's title: an icon and a few words in a hairline pill. */
+@Composable
+private fun HeaderChip(icon: androidx.compose.ui.graphics.vector.ImageVector, text: String, color: Color = Fuse.colors.textMuted) {
+    val c = Fuse.colors
+    Row(
+        Modifier
+            .clip(io.github.matiyaaa.fuse.ui.designsystem.shape.PillShape)
+            .background(c.text.copy(alpha = if (c.isDark) 0.05f else 0.04f))
+            .border(1.dp, c.hairline, io.github.matiyaaa.fuse.ui.designsystem.shape.PillShape)
+            .padding(horizontal = Space.m, vertical = Space.xs),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        FuseIcon(icon, size = 14.dp, tint = color)
+        Spacer(Modifier.width(Space.xs + Space.xxs))
+        FText(text, Fuse.type.caption, color = color, maxLines = 1)
     }
 }

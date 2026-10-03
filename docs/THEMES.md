@@ -14,6 +14,25 @@ Open **Settings, Appearance, Theme** and choose **Add a theme**:
 - **From a file.** Pick a `.json` theme file on the device.
 - **Find themes.** Opens the themes on [Fuse's website](https://matiyaaa.github.io/fuse/#themes).
 
+**Make your own** opens the Theme Studio on the theme in use (or **Make your own from it** in any
+theme's options). It goes step by step, and the shoulder buttons move between steps:
+
+1. **The room**: light or dark, and the room, panel and raised panel colours. Turning a theme light
+   or dark makes its room and text again around the accent.
+2. **Text**: the main and details colours.
+3. **Accent**: the accent (curated swatches, or any colour) and the text on it.
+4. **Focus and signals**: the focus outline, and the colours for done, careful and wrong.
+5. **Shape**: corners and the focus style.
+6. **Background**: the scene, its brightness and movement, and its second colour.
+7. **Effects**: glass panels (blur and cover) and the CRT effect (scanlines and glow).
+8. **Motion and sound**.
+9. **Save**.
+
+Every colour opens into hue, saturation and lightness, takes a typed colour code, and shows how
+well it reads where it sits ("Reads well" or "Hard to read", with the contrast ratio). When it is
+hard to read, **Make it easy to read** lightens or darkens it just enough. The stage beside the
+studio shows the theme exactly as it will be saved.
+
 Before anything changes, Fuse shows the theme's name and author and anything it had to repair.
 Added themes live on the device: **Options, Remove** forgets one, and **Options, Copy as a theme
 file** puts any theme, built-in ones included, on the clipboard as a file to start from.
@@ -124,6 +143,7 @@ Each built-in theme can be named in `extends`. They are listed as the gallery sh
 | `sundown` | Sundown | A neon sun over an endless grid | `horizon` |
 | `crt` | CRT | Scanlines and phosphor glow | `grid` |
 | `daylight` | Daylight (bright) | Fuse in a bright room | `hero` |
+| `paper-mint` | Paper Mint (bright) | A bright desk with a cool green accent | `stripes` |
 | `channels` | Channels (bright) | Bright tiles you arrange yourself | `stripes` |
 | `opal` | Opal (bright) | Pearl light that shifts as it settles | `mesh` |
 | `noon` | Noon (bright) | Warm dunes under a high sun | `dunes` |
@@ -149,8 +169,8 @@ and lists each repair when the theme is added:
 
 Every built-in theme is in [`themes/presets`](themes/presets) exactly as Fuse writes it. Copy one,
 change what you like, and keep the rest. Three examples to learn from are in [`themes`](themes):
-[Ember Night](themes/ember-night.json), [Paper Mint](themes/paper-mint.json) and
-[Deep Sea](themes/deep-sea.json).
+[Ember Night](themes/ember-night.json), [Paper Mint](themes/paper-mint.json) (also built in, as
+`paper-mint`) and [Deep Sea](themes/deep-sea.json).
 
 ## Share a theme
 

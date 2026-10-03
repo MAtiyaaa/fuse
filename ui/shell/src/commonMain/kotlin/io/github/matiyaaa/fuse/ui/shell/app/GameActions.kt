@@ -139,6 +139,20 @@ fun AppState.gameMenu(card: GameCard, fromDetail: Boolean = false, extra: List<M
                 scope.launch { lib.rename(card.id, title.ifBlank { null }) }
             }
         }))
+        if (!card.isApp) {
+            add(MenuAction("reset", "Reset Name and Details", FuseIcons.RotateCcw, detail = "For a game mixed up with another. Your own name and art stay", onSelect = {
+                closeOverlays()
+                confirm = ConfirmSpec(
+                    "Reset ${card.title}?",
+                    "Fuse forgets the name, details and art sources gave this game and goes back to its file name. Your own name and the art you chose stay. Find Details and Art looks again.",
+                    "Reset",
+                ) {
+                    scope.launch {
+                        if (store.media.resetDetails(card.id)) toasts.show("Reset. It goes by its file name again")
+                    }
+                }
+            }))
+        }
         if (!card.isApp) add(MenuAction("folder", "Folder Behaviour", FuseIcons.FolderOpen, trailing = Trailing.Chevron, onSelect = { folderPolicyPicker(card) }))
         // Only while Cartridge support is on and Cartridge is installed.
         if (store.cartridge.status.value.installed) {

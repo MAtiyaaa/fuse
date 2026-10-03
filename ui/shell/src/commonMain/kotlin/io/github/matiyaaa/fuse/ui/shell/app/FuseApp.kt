@@ -244,7 +244,11 @@ fun FuseApp(
                 // The room fills the whole screen; everything on it keeps clear of edges a TV cuts off.
                 Room(app, prefs.showHero, spec.background, prefs.heroDim, prefs.glass, prefs.videoPreview, prefs.videoDelaySeconds, spec.ambient)
                 val margin = prefs.screenMargin.coerceIn(0, 10) / 100f
-                BoxWithConstraints(Modifier.fillMaxSize().padding(horizontal = maxWidth * margin, vertical = maxHeight * margin)) {
+                // On an ultrawide screen (wider than about 21:9) the interface keeps a 21:9-like frame
+                // in the middle, so the top line, the pages and the hints stay together; the room
+                // still fills the whole screen around it.
+                val ultrawide = ((maxWidth - maxHeight * MAX_ASPECT) / 2).coerceAtLeast(0.dp)
+                BoxWithConstraints(Modifier.fillMaxSize().padding(horizontal = maxWidth * margin + ultrawide, vertical = maxHeight * margin)) {
                 val metrics = remember(maxWidth, maxHeight) { TileMetrics.forHeight(maxHeight, maxWidth) }
                 val borders = rememberTileBorders(store)
                 CompositionLocalProvider(LocalTileMetrics provides metrics, LocalTileBorders provides borders, LocalGameArt provides prefs.gameArt) {
@@ -310,6 +314,7 @@ fun FuseApp(
     LaunchedEffect(Unit) { store.library.onResume() }
     // The Store's news (an app installed, updated or removed), wherever the user is.
     LaunchedEffect(Unit) { store.appStore.notices.collect { app.toasts.show(it) } }
+    LaunchedEffect(Unit) { store.cartridge.notices.collect { app.toasts.show(it) } }
 }
 
 /** The background: theme renderer, then the selected item's art with video after it rests. */
@@ -683,3 +688,6 @@ private const val HERO_SETTLE_MS = 160L
 
 /** A page that arrives sooner than this after the last one switches without a transition. */
 private const val QUICK_SWITCH_MS = 300L
+
+/** The widest the interface gets (width over height); wider screens centre it. A little over 21:9. */
+private const val MAX_ASPECT = 2.4f

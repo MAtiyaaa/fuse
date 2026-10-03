@@ -81,7 +81,16 @@ class AndroidFuseServices(
 
     override suspend fun readFile(path: String, maxBytes: Int): ByteArray? = withContext(Dispatchers.IO) {
         try {
-            File(path).takeIf { it.isFile && it.length() <= maxBytes }?.readBytes()
+            if (path.startsWith("content://")) {
+                // A picture the user chose, or one another app (Cartridge) hands over: read through
+                // the provider, never more than asked for.
+                appContext.contentResolver.openInputStream(android.net.Uri.parse(path))?.use { input ->
+                    val bytes = input.readNBytesCompat(maxBytes + 1)
+                    bytes.takeIf { it.size <= maxBytes }
+                }
+            } else {
+                File(path).takeIf { it.isFile && it.length() <= maxBytes }?.readBytes()
+            }
         } catch (e: IOException) {
             null
         } catch (e: SecurityException) {
@@ -141,4 +150,16 @@ class AndroidFuseServices(
     }
 
     override fun utcOffsetMillis(): Long = TimeZone.getDefault().getOffset(System.currentTimeMillis()).toLong()
+}
+
+/** Up to [limit] bytes of the stream (InputStream.readNBytes is Android 13 and later). */
+private fun java.io.InputStream.readNBytesCompat(limit: Int): ByteArray {
+    val out = java.io.ByteArrayOutputStream()
+    val buffer = ByteArray(16 * 1024)
+    while (out.size() < limit) {
+        val n = read(buffer, 0, minOf(buffer.size, limit - out.size()))
+        if (n < 0) break
+        out.write(buffer, 0, n)
+    }
+    return out.toByteArray()
 }

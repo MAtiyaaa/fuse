@@ -7,6 +7,7 @@ import io.github.matiyaaa.fuse.model.AppFilter
 import io.github.matiyaaa.fuse.model.AppGames
 import io.github.matiyaaa.fuse.model.AppKind
 import io.github.matiyaaa.fuse.model.Host
+import io.github.matiyaaa.fuse.model.KnownApps
 import io.github.matiyaaa.fuse.model.LaunchDisplay
 import io.github.matiyaaa.fuse.model.LocationKind
 import io.github.matiyaaa.fuse.model.MediaKind
@@ -57,7 +58,13 @@ internal class DefaultAppOps(private val ctx: StoreContext) : AppOps {
         flowOf(emptyList())
     } else {
         combine(provider.apps, overrides.observeAll(), emulatorPackages) { apps, o, emulators ->
-            val detected = apps.map { if (it.packageName in emulators) it.copy(detectedKind = AppKind.EMULATOR) else it }
+            val detected = apps.map {
+                when {
+                    it.packageName in emulators -> it.copy(detectedKind = AppKind.EMULATOR)
+                    // Streaming apps and emulation tools from the Store get lists of their own.
+                    else -> KnownApps.kindOf(it.packageName)?.let { kind -> it.copy(detectedKind = kind) } ?: it
+                }
+            }
             AppOverrideRepository.applyTo(detected, o)
         }
     }
@@ -87,6 +94,8 @@ internal class DefaultAppOps(private val ctx: StoreContext) : AppOps {
             AppFilter.PINNED -> visible.filter { it.pinned }
             AppFilter.GAMES -> visible.filter { it.kind == AppKind.GAME }.sortedBy { it.displayTitle.lowercase() }
             AppFilter.EMULATORS -> visible.filter { it.kind == AppKind.EMULATOR }.sortedBy { it.displayTitle.lowercase() }
+            AppFilter.STREAMING -> visible.filter { it.kind == AppKind.STREAMING }.sortedBy { it.displayTitle.lowercase() }
+            AppFilter.TOOLS -> visible.filter { it.kind == AppKind.TOOL }.sortedBy { it.displayTitle.lowercase() }
             AppFilter.ALL -> visible.sortedBy { it.displayTitle.lowercase() }
         }.map { card(it, icons) }
     }

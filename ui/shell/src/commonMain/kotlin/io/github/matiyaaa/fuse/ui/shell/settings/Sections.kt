@@ -49,6 +49,7 @@ import io.github.matiyaaa.fuse.ui.shell.app.addGame
 import io.github.matiyaaa.fuse.ui.shell.app.applyUpdate
 import io.github.matiyaaa.fuse.ui.shell.app.emulatorFoldersPicker
 import io.github.matiyaaa.fuse.ui.shell.app.hasTwoScreens
+import io.github.matiyaaa.fuse.ui.shell.app.openStore
 import io.github.matiyaaa.fuse.ui.shell.app.sections
 import io.github.matiyaaa.fuse.ui.shell.app.locatePicker
 import io.github.matiyaaa.fuse.ui.shell.app.offers
@@ -881,6 +882,22 @@ fun cartridgeRows(app: AppState): List<MenuAction> {
             if (s.installed && s.bridge && s.protocol < 2) "Needs a newer Cartridge. Games it downloaded then get RomM's description, genres, series, cover and logo"
             else "Games Cartridge downloaded get RomM's description, genres, series, cover and logo. Your own edits and picks stay",
         ) { v -> app.store.updatePrefs { it.copy(cartridgeRommDetails = v) } })
+        add(MenuAction(
+            "rommcheck", "Check RomM matches again", FuseIcons.ShieldCheck,
+            detail = "Puts back the name, details and art of any game RomM mixed up with another",
+            onSelect = {
+                app.scope.launch {
+                    val undone = app.store.cartridge.checkRommMatches()
+                    app.toasts.show(
+                        when (undone) {
+                            0 -> "Every game with RomM's details is the right one"
+                            1 -> "Put back one game RomM had mixed up"
+                            else -> "Put back $undone games RomM had mixed up"
+                        },
+                    )
+                }
+            },
+        ))
     }
 }
 
@@ -1364,6 +1381,17 @@ fun aboutRows(app: AppState): List<MenuAction> = buildList {
                     app.go(Route.Onboarding)
                 },
             ))
+            if (app.store.appStore.supported) {
+                add(MenuAction(
+                    "dev.store", "Restart Store setup", FuseIcons.Store,
+                    detail = "Forgets the chosen edition and opens the Store on its first page",
+                    trailing = Trailing.Chevron,
+                    onSelect = {
+                        app.store.updatePrefs { it.copy(storeVariant = null) }
+                        app.openStore()
+                    },
+                ))
+            }
             add(toggleRow("dev.skip", "Skip required setup steps", FuseIcons.ChevronsRight, app.dev.skipRequired) { app.dev.skipRequired = it })
             add(toggleRow("dev.frames", "Frame-time overlay", FuseIcons.Activity, app.dev.frameGraph) { app.dev.frameGraph = it })
             add(MenuAction("dev.off", "Turn off developer options", FuseIcons.Power, onSelect = {

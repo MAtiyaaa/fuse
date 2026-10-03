@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -591,17 +592,32 @@ private fun NowDownloading(
     val sizes = current?.let { q -> q.total?.let { "${bytesText(q.received)} of ${bytesText(it)}" } }
     val shape = remember { SquircleShape.fraction(0.1f) }
     // A card this wide lifts by a few dp, like Home's widgets, not by its share of its width.
-    Tile(selected = selected, modifier = modifier.fillMaxWidth().height(if (compact) 104.dp else 128.dp), shape = shape, cornerFraction = 0.1f, glow = tint, maxGrow = 6.dp, onClick = onClick) {
-        Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(listOf(lerp(tint, Color.Black, 0.55f), lerp(tint, Color.Black, 0.82f)))))
-        Row(Modifier.fillMaxSize()) {
-            if (system != null) {
-                Box(Modifier.fillMaxHeight().aspectRatio(Aspect.SYSTEM_CARD)) { SystemCardArt(system) }
+    // The card is as tall as what it says (never less than before), so no line is ever cut. The
+    // system's art keeps the width it has at that height and fills whatever height the card takes.
+    val minHeight = if (compact) 104.dp else 128.dp
+    val artWidth = minHeight * Aspect.SYSTEM_CARD
+    Tile(selected = selected, modifier = modifier.fillMaxWidth().heightIn(min = minHeight), shape = shape, cornerFraction = 0.1f, glow = tint, maxGrow = 6.dp, onClick = onClick) {
+        Box(Modifier.matchParentSize().background(Brush.horizontalGradient(listOf(lerp(tint, Color.Black, 0.55f), lerp(tint, Color.Black, 0.82f)))))
+        if (system != null) {
+            Box(Modifier.matchParentSize()) {
+                Box(Modifier.width(artWidth).fillMaxHeight()) { SystemCardArt(system) }
             }
-            Column(Modifier.weight(1f).fillMaxHeight().padding(horizontal = Space.l, vertical = Space.m), verticalArrangement = Arrangement.Center) {
+        }
+        Row(Modifier.fillMaxWidth().heightIn(min = minHeight)) {
+            if (system != null) Spacer(Modifier.width(artWidth))
+            Column(
+                Modifier.weight(1f).heightIn(min = minHeight).padding(horizontal = Space.l, vertical = Space.m),
+                verticalArrangement = Arrangement.Center,
+            ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     FuseIcon(FuseIcons.Download, size = Size.iconS, tint = c.onArtMuted)
                     Spacer(Modifier.width(Space.s))
-                    FText("NOW DOWNLOADING", Fuse.type.overline, color = c.onArtMuted, maxLines = 1, modifier = Modifier.weight(1f))
+                    FText("NOW DOWNLOADING", Fuse.type.overline, color = c.onArtMuted, maxLines = 1, modifier = Modifier.weight(1f, fill = false))
+                    if (others > 0) {
+                        Spacer(Modifier.width(Space.s))
+                        FText("+$others waiting", Fuse.type.caption, color = c.onArtMuted, maxLines = 1)
+                    }
+                    Spacer(Modifier.weight(1f))
                     progress?.let { FText("${(it * 100).toInt()}%", Fuse.type.titleSmall.tabular(), color = c.onArt, maxLines = 1) }
                 }
                 Spacer(Modifier.height(Space.xs))
@@ -609,10 +625,14 @@ private fun NowDownloading(
                 Spacer(Modifier.height(Space.s))
                 ProgressBar(progress, Modifier.fillMaxWidth(), color = lerp(tint, Color.White, 0.25f), height = 4.dp)
                 Spacer(Modifier.height(Space.xs + Space.xxs))
-                FText(
-                    listOfNotNull(system?.platform?.name ?: slug?.uppercase(), sizes, if (others > 0) "$others more waiting" else null).joinToString("  ·  "),
-                    Fuse.type.caption, color = c.onArtMuted, maxLines = 1,
-                )
+                // The system gives way (it ellipsizes); the sizes never do.
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    FText(system?.platform?.name ?: slug?.uppercase().orEmpty(), Fuse.type.caption, color = c.onArtMuted, maxLines = 1, modifier = Modifier.weight(1f))
+                    if (sizes != null) {
+                        Spacer(Modifier.width(Space.m))
+                        FText(sizes, Fuse.type.caption.tabular(), color = c.onArt, maxLines = 1)
+                    }
+                }
             }
         }
     }
