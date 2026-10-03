@@ -29,7 +29,7 @@ Home screen.
 <a href="https://github.com/MAtiyaaa/fuse/releases/latest"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/brand/button-macos-dark.svg"><img src="docs/assets/brand/button-macos-light.svg" height="48" alt="Download for macOS"></picture></a>
 
 <sub>Android 9 or newer &nbsp;·&nbsp; 64-bit x86 Linux AppImage &nbsp;·&nbsp; Windows 10 and 11 &nbsp;·&nbsp; macOS on Apple silicon and Intel &nbsp;·&nbsp; <a href="#install">checksums and install notes</a></sub><br>
-<sub>0.2.4 is the Install Update: Fuse installs PS3, Vita and 3DS games, their updates, DLC and licences into RPCS3, Vita3K and Azahar itself, and lights up with a new startup animation. <a href="#where-fuse-stands">Here is where it stands.</a></sub><br>
+<sub>0.2.5 is the Ignition Update: Fuse lights up with its own logo, and games and apps open cleanly on the bottom screen. 0.2.4 taught it to install PS3, Vita and 3DS games itself. <a href="#where-fuse-stands">Here is where it stands.</a></sub><br>
 <sub>Or download from <a href="https://matiyaaa.github.io/fuse/">Fuse's website</a>, which always offers the latest version for your system.</sub>
 
 <br>
@@ -393,10 +393,11 @@ Linux app, isn't offered on Windows and macOS.
 ## Where Fuse stands
 
 > [!IMPORTANT]
-> **Fuse 0.2.4 "The Install Update" is still early.** It installs PS3, Vita and 3DS games, their
-> updates, DLC and licences into RPCS3, Vita3K and Azahar through each emulator's own installer, and
-> checks that every step took; on Android it guides you through each file in order (see
-> [the release notes](docs/releases/0.2.4.md)). 0.2.3 brought the guided Theme Studio and Store
+> **Fuse 0.2.5 "The Ignition Update" is still early.** It starts with Fuse's own logo burning in, and
+> opens games and apps cleanly on a dual-screen handheld's bottom screen (see
+> [the release notes](docs/releases/0.2.5.md)). 0.2.4 brought installs of PS3, Vita and 3DS games,
+> their updates, DLC and licences into RPCS3, Vita3K and Azahar through each emulator's own
+> installer, checked step by step, 0.2.3 brought the guided Theme Studio and Store
 > support for every app it lists, 0.2.1 the Store and Addons, 0.2.0 SD cards and drives that come and
 > go, System health, backups and PCSX2 patches, 0.1.6 the resizable widget board, 0.1.4 downloads
 > from your phone, 0.1.3 screenshots and recordings, and 0.1.0 Windows and macOS. The shared core
