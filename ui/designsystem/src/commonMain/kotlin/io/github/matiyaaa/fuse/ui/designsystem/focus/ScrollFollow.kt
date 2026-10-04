@@ -91,21 +91,28 @@ suspend fun LazyListState.keepInView(index: Int, marginPx: Int, animate: Boolean
 }
 
 /** Grid version: keeps the selected row near [anchor] of the viewport height. */
-suspend fun LazyGridState.follow(index: Int, anchor: Float = 0.2f, animate: Boolean = true, spec: AnimationSpec<Float> = followSpec) {
+suspend fun LazyGridState.follow(
+    index: Int,
+    anchor: Float = 0.2f,
+    animate: Boolean = true,
+    spec: AnimationSpec<Float> = followSpec,
+    /** Pixels at the top that don't count as in view (a fading edge): the row is kept below them. */
+    inset: Int = 0,
+) {
     // As for lists: measure only once the grid has been laid out.
     if (layoutInfo.viewportSize == IntSize.Zero) snapshotFlow { layoutInfo.viewportSize }.first { it != IntSize.Zero }
     val info = layoutInfo
     val viewport = info.viewportEndOffset - info.viewportStartOffset
     val item = info.visibleItemsInfo.firstOrNull { it.index == index }
     if (item == null) {
-        scrollToItem(index, -(viewport * anchor).toInt().coerceAtMost(0))
+        scrollToItem(index, -maxOf((viewport * anchor).toInt(), inset).coerceAtMost(0))
         return
     }
-    val target = (viewport * anchor).toInt()
+    val target = maxOf((viewport * anchor).toInt(), inset)
     val delta = (item.offset.y - target).toFloat()
     // Only scroll when the row is leaving the comfortable middle band, so moving sideways never scrolls.
     val band = viewport * 0.18f
-    if (kotlin.math.abs(delta) < band && item.offset.y >= 0 && item.offset.y + item.size.height <= viewport) return
+    if (kotlin.math.abs(delta) < band && item.offset.y >= inset && item.offset.y + item.size.height <= viewport) return
     if (animate) animateScrollBy(delta, spec) else scrollBy(delta)
 }
 
@@ -145,12 +152,28 @@ fun KeepSelectionInView(state: LazyListState, selected: () -> Int, marginPx: Int
 }
 
 @Composable
-fun FollowSelection(state: LazyGridState, selected: () -> Int, anchor: Float = 0.2f, animate: Boolean = true, enabled: () -> Boolean = { true }) {
+fun FollowSelection(
+    state: LazyGridState,
+    selected: () -> Int,
+    anchor: Float = 0.2f,
+    animate: Boolean = true,
+    enabled: () -> Boolean = { true },
+    /** Pixels at the top kept clear of the selected row (under a fading edge). */
+    insetPx: Int = 0,
+    /** Anything that changes the rows' size (tiles shrinking as a stage folds): the selection is followed again. */
+    relayout: Any? = null,
+) {
     val current by rememberUpdatedState(selected)
     val on by rememberUpdatedState(enabled)
     val spec by rememberUpdatedState(Fuse.motion.followScroll())
+    val inset by rememberUpdatedState(insetPx)
     LaunchedEffect(state) {
-        followEach(snapshotFlow { if (on()) current() else null }) { state.follow(it, anchor, animate, spec) }
+        followEach(snapshotFlow { if (on()) current() else null }) { state.follow(it, anchor, animate, spec, inset) }
+    }
+    LaunchedEffect(state, relayout) {
+        if (relayout == null || !on()) return@LaunchedEffect
+        withFrameNanos {}
+        state.follow(current(), anchor, animate = false, spec = spec, inset = inset)
     }
 }
 

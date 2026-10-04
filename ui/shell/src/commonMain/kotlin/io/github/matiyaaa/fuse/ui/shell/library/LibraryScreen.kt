@@ -600,7 +600,8 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
                         val tileH = LocalGameArt.current.tileSize(base).height
                         val header = with(density) { headerPx.toDp() }
                         val foldedStage = if (inSystem) logo + Space.xs else Space.x3 + Space.xs
-                        val rowsRoom = maxH - Size.hudHeight - header - foldedStage - Space.s - Size.hintHeight - Space.s - Space.l
+                        // The chosen row keeps clear of the grid's fading top edge, so that room counts too.
+                        val rowsRoom = maxH - Size.hudHeight - header - foldedStage - Space.s - Size.hintHeight - Space.s - Space.xl - Space.s
                         val fit = if (inSystem) 1f else (((rowsRoom / 3) - metrics.gap - Space.s) / tileH).coerceIn(MIN_FOLDED_TILE, 1f)
                         val tileBase = base * (1f - (1f - fit) * collapse)
                         Box(
@@ -797,7 +798,9 @@ private fun IconGrid(
     onLong: (Int) -> Unit,
     focused: Boolean,
 ) {
-    FollowSelection(grid, { state.grid.index }, anchor = 0.05f)
+    // The chosen row stays clear of the top's fading edge, and is followed again as tiles shrink with the folding stage.
+    val fade = with(androidx.compose.ui.platform.LocalDensity.current) { (Space.xl + Space.s).roundToPx() }
+    FollowSelection(grid, { state.grid.index }, anchor = 0.05f, insetPx = fade, relayout = size)
     LazyVerticalGrid(
         columns = GridCells.Fixed(columns),
         state = grid,

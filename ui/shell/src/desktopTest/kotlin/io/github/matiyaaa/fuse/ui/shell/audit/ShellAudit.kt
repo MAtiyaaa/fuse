@@ -950,6 +950,9 @@ internal fun AuditDriver.themeScreens() {
         tap(PadButton.DPAD_RIGHT)
         tap(PadButton.R1)
         waitFor("Background")
+        // The scene starts with your own picture, reached like every row.
+        shoot("the scene step: your own picture first", 2_000)
+        focusText("Background")
         tap(PadButton.DPAD_RIGHT, 7)
         shoot("the studio, a new colour, background, corners and focus", 3_000)
         // Y takes the last change back.

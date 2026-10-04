@@ -29,7 +29,7 @@ Home screen.
 <a href="https://github.com/MAtiyaaa/fuse/releases/latest"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/brand/button-macos-dark.svg"><img src="docs/assets/brand/button-macos-light.svg" height="48" alt="Download for macOS"></picture></a>
 
 <sub>Android 9 or newer &nbsp;·&nbsp; 64-bit x86 Linux AppImage &nbsp;·&nbsp; Windows 10 and 11 &nbsp;·&nbsp; macOS on Apple silicon and Intel &nbsp;·&nbsp; <a href="#install">checksums and install notes</a></sub><br>
-<sub>0.2.5 is the Ignition Update: Fuse lights up with its own logo, and games and apps open cleanly on the bottom screen. 0.2.4 taught it to install PS3, Vita and 3DS games itself. <a href="#where-fuse-stands">Here is where it stands.</a></sub><br>
+<sub>0.2.6 is the Detail Update: a Store on every computer, games that move to an SD card, Steam achievements and RPCS3 trophies, and setup rebuilt. 0.2.5 lit Fuse up with its own logo. <a href="#where-fuse-stands">Here is where it stands.</a></sub><br>
 <sub>Or download from <a href="https://matiyaaa.github.io/fuse/">Fuse's website</a>, which always offers the latest version for your system.</sub>
 
 <br>
@@ -393,9 +393,11 @@ Linux app, isn't offered on Windows and macOS.
 ## Where Fuse stands
 
 > [!IMPORTANT]
-> **Fuse 0.2.5 "The Ignition Update" is still early.** It starts with Fuse's own logo burning in, and
-> opens games and apps cleanly on a dual-screen handheld's bottom screen (see
-> [the release notes](docs/releases/0.2.5.md)). 0.2.4 brought installs of PS3, Vita and 3DS games,
+> **Fuse 0.2.6 "The Detail Update" is still early.** It brings a Store to Linux, Windows and macOS,
+> moves games to an SD card or another drive, sets new drives up for games, shows Steam
+> achievements and RPCS3 trophies, and rebuilds setup (see
+> [the release notes](docs/releases/0.2.6.md)). 0.2.5 started Fuse with its own logo burning in,
+> and opened games and apps cleanly on a dual-screen handheld's bottom screen. 0.2.4 brought installs of PS3, Vita and 3DS games,
 > their updates, DLC and licences into RPCS3, Vita3K and Azahar through each emulator's own
 > installer, checked step by step, 0.2.3 brought the guided Theme Studio and Store
 > support for every app it lists, 0.2.1 the Store and Addons, 0.2.0 SD cards and drives that come and
