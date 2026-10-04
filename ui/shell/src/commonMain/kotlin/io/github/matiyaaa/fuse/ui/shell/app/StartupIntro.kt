@@ -25,6 +25,8 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
@@ -88,7 +90,7 @@ internal fun StartupIntroOverlay(onDone: () -> Unit) {
     }
 
     // Any button skips straight to the opening out.
-    InputLayer(priority = LayerPriority.DIALOG + 50, modal = true) { _ ->
+    fun skip() {
         val exit = if (reduced) length * 0.6f else StartupIntro.EXIT_AT_MS.toFloat()
         if (clock.value < exit) {
             scope.launch {
@@ -97,6 +99,9 @@ internal fun StartupIntroOverlay(onDone: () -> Unit) {
                 onDone()
             }
         }
+    }
+    InputLayer(priority = LayerPriority.DIALOG + 50, modal = true) { _ ->
+        skip()
         NavResult.CONSUMED
     }
 
@@ -108,6 +113,16 @@ internal fun StartupIntroOverlay(onDone: () -> Unit) {
         Modifier
             .fillMaxSize()
             .semantics { contentDescription = "Fuse is starting" }
+            // Touches and clicks never reach the interface underneath; a tap skips, as a button does.
+            .pointerInput(Unit) {
+                awaitPointerEventScope {
+                    while (true) {
+                        val event = awaitPointerEvent(PointerEventPass.Initial)
+                        if (event.changes.any { it.pressed && !it.previousPressed }) skip()
+                        event.changes.forEach { it.consume() }
+                    }
+                }
+            }
             .graphicsLayer { alpha = 1f - phase(t, if (reduced) length * 0.6f else EXIT_FADE_FROM, length.toFloat()).ease() },
         contentAlignment = Alignment.Center,
     ) {
@@ -364,3 +379,20 @@ private fun Float.easeOut(): Float = 1f - (1f - this) * (1f - this) * (1f - this
 private fun Float.easeIn(): Float = this * this * this
 private fun Float.easeInOut(): Float = if (this < 0.5f) 4f * this * this * this else 1f - (-2f * this + 2f).let { it * it * it } / 2f
 private fun Float.ease(): Float = this * this * (3f - 2f * this)
+
+/**
+ * Fuse coming back to the front after time in the background with no game played (the screen was
+ * off, the device slept), and how long it was away. The interface replays the startup animation
+ * after a long enough absence ([AWAY_INTRO_MS]), so waking the device feels like switching it on.
+ */
+internal object Away {
+    private val _returns = kotlinx.coroutines.flow.MutableSharedFlow<Long>(extraBufferCapacity = 1)
+    val returns: kotlinx.coroutines.flow.SharedFlow<Long> = _returns
+
+    fun returned(awayMs: Long) {
+        _returns.tryEmit(awayMs)
+    }
+
+    /** Away this long or longer replays the startup animation. */
+    const val AWAY_INTRO_MS = 10 * 60_000L
+}

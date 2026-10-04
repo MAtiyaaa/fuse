@@ -70,7 +70,7 @@ internal class DefaultAppStoreOps(
     override val supported: Boolean = true
 
     private val cache = ctx.data.cache
-    private val fetcher = PackFetcher(ctx.services.http)
+    private var fetcher = fetcherFor(ctx.settings.value.store.packRepo)
     private var token: String? = null
     private val resolver = PackResolver(ctx.services.http, githubToken = { token })
     private val downloader = ApkDownloader(ctx.services.http)
@@ -80,6 +80,7 @@ internal class DefaultAppStoreOps(
 
     private val mutable = MutableStateFlow(
         StoreState(
+            packRepo = ctx.settings.value.store.packRepo,
             variant = prefs.value.storeVariant,
             recommended = if (bridge.hasSecondScreen) StoreVariant.DUAL_SCREEN else StoreVariant.STANDARD,
             canInstall = bridge.canInstall(),
@@ -257,13 +258,19 @@ internal class DefaultAppStoreOps(
     }
 
     private suspend fun show(variant: StoreVariant, pack: Pack, version: String?, fetchedAt: Long, sourceUrl: String) {
+        lastPack = PackShown(variant, pack, version, fetchedAt, sourceUrl)
         val byKey = LinkedHashMap<String, PackApp>()
         for (app in pack.apps) byKey[keyOf(app)] = app
-        val colors = pack.categories.associate { it.name to it.color }
+        // Apps the user added follow the pack's, under their category.
+        val custom = ctx.settings.value.store.custom.map(::customApp)
+        for (app in custom) byKey.getOrPut(keyOf(app)) { app }
+        val categories = pack.categories.map { StoreCategory(it.name, it.color) } +
+            custom.flatMap { it.categories }.distinct().filter { c -> pack.categories.none { it.name.equals(c, ignoreCase = true) } }.map { StoreCategory(it, OTHER_COLOR) }
+        val colors = categories.associate { it.name to it.color }
         val apps = byKey.map { (key, app) -> storeApp(key, app, colors) }
         val previous = packApps
         packApps = byKey
-        val catalogue = StoreCatalogue(variant, apps, pack.categories.map { StoreCategory(it.name, it.color) }, version, fetchedAt, sourceUrl)
+        val catalogue = StoreCatalogue(variant, apps, categories, version, fetchedAt, sourceUrl)
         // Releases already known stay; apps gone from the edition lose theirs and their jobs.
         mutable.update { s -> s.copy(catalogue = catalogue, releases = s.releases.filterKeys { it in byKey }) }
         for (key in previous.keys - byKey.keys) {
@@ -305,7 +312,77 @@ internal class DefaultAppStoreOps(
             systems = systemsOf(app, pkg),
             color = app.categories.firstNotNullOfOrNull { colors[it] },
             inFuse = inFuseOf(app, pkg),
+            custom = app.id == CUSTOM_ID,
         )
+    }
+
+    // Apps the user adds, and the catalogue's repository
+
+    /** The pack last shown, so an added app can join it without fetching again. */
+    private data class PackShown(val variant: StoreVariant, val pack: Pack, val version: String?, val fetchedAt: Long, val sourceUrl: String)
+
+    @kotlin.concurrent.Volatile private var lastPack: PackShown? = null
+
+    /** An app the user added, as the pack would list it: its GitHub releases, any APK that suits the device. */
+    private fun customApp(c: io.github.matiyaaa.fuse.data.settings.CustomStoreApp) = PackApp(
+        id = CUSTOM_ID,
+        url = c.url,
+        name = c.name,
+        author = c.url.substringAfter("github.com/").substringBefore('/'),
+        categories = listOf(c.category),
+        source = PackSourceKind.GITHUB,
+        allowIdChange = true,
+        preferredApkIndex = null,
+        rules = io.github.matiyaaa.fuse.integrations.obtainium.PackRules(about = "Added by you from ${c.url.substringAfter("://")}.", fallbackToOlderReleases = true),
+    )
+
+    override suspend fun addCustom(url: String, category: String): String? {
+        val clean = url.trim().removeSuffix("/").removeSuffix(".git").let { if (it.startsWith("github.com/")) "https://$it" else it }
+        val match = GITHUB_REPO.matchEntire(clean) ?: return "That isn't a GitHub repository address (github.com/owner/project)."
+        val canonical = "https://github.com/${match.groupValues[1]}/${match.groupValues[2]}"
+        if (ctx.settings.value.store.custom.any { it.url.equals(canonical, ignoreCase = true) } || packApps.values.any { it.url.trimEnd('/').equals(canonical, ignoreCase = true) }) {
+            return "It's already in the Store."
+        }
+        val app = customApp(io.github.matiyaaa.fuse.data.settings.CustomStoreApp(canonical, match.groupValues[2], category.ifBlank { AppStoreOps.OTHER }))
+        // It must be an app this device can install: a release with an APK for it.
+        when (val r = resolver.resolve(app, bridge.abis)) {
+            is ApiResult.Failure -> return friendly(r)
+            is ApiResult.Success -> if (r.value.choice !is ApkChoice.Install) return "${app.name} has no Android app in its releases, so it can't be added."
+        }
+        val next = ctx.data.settings.update { it.copy(store = it.store.copy(custom = it.store.custom + io.github.matiyaaa.fuse.data.settings.CustomStoreApp(canonical, app.name, app.categories.first()))) }
+        ctx.settings.value = next
+        lastPack?.let { show(it.variant, it.pack, it.version, it.fetchedAt, it.sourceUrl) }
+        refreshInstalled()
+        return null
+    }
+
+    override suspend fun removeCustom(key: String) {
+        val url = packApps[key]?.takeIf { it.id == CUSTOM_ID }?.url ?: return
+        val next = ctx.data.settings.update { it.copy(store = it.store.copy(custom = it.store.custom.filterNot { c -> c.url.equals(url, ignoreCase = true) })) }
+        ctx.settings.value = next
+        lastPack?.let { show(it.variant, it.pack, it.version, it.fetchedAt, it.sourceUrl) }
+    }
+
+    override suspend fun setPackRepo(url: String?): String? {
+        val repo = url?.trim()?.removeSuffix("/")?.removeSuffix(".git")?.takeIf { it.isNotEmpty() }?.let { if (it.startsWith("github.com/")) "https://$it" else it }
+        if (repo != null && GITHUB_REPO.matchEntire(repo) == null) return "That isn't a GitHub repository address (github.com/owner/project)."
+        val variant = mutable.value.variant ?: StoreVariant.STANDARD
+        val candidate = fetcherFor(repo)
+        // Only a repository that really publishes a readable catalogue replaces the one in use.
+        val fetched = candidate.fetch(variant)
+        if (fetched is ApiResult.Failure) return "No catalogue there Fuse can read: ${friendly(fetched)}"
+        fetcher = candidate
+        val next = ctx.data.settings.update { it.copy(store = it.store.copy(packRepo = repo)) }
+        ctx.settings.value = next
+        mutable.update { it.copy(packRepo = repo) }
+        fetch(variant)
+        return null
+    }
+
+    /** The catalogue's downloader for [repo], or for the Obtainium Emulation Pack when null. */
+    private fun fetcherFor(repo: String?): PackFetcher {
+        val match = repo?.let { GITHUB_REPO.matchEntire(it) } ?: return PackFetcher(ctx.services.http)
+        return PackFetcher(ctx.services.http, webUrl = repo, rawUrl = "https://raw.githubusercontent.com/${match.groupValues[1]}/${match.groupValues[2]}")
     }
 
     /** What the app plays, from Fuse's own emulator catalogue (by package, else by its name). */
@@ -651,6 +728,11 @@ internal class DefaultAppStoreOps(
 
     companion object {
         const val ICONS = "store.icons"
+
+        /** The id apps the user added carry (their key adds their address). */
+        private const val CUSTOM_ID = "custom"
+        private const val OTHER_COLOR = 0xFF8A93A6
+        private val GITHUB_REPO = Regex("^https://github\\.com/([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+)$")
         const val ICON_LOOKUPS = 4
         const val ICON_FOUND_MS = 30L * 24 * 60 * 60 * 1000
         const val ICON_NONE_MS = 7L * 24 * 60 * 60 * 1000

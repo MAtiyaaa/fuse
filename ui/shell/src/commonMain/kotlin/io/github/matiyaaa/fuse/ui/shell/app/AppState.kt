@@ -131,6 +131,15 @@ class AppState(
     /** Text to read before it is saved or shared ([TextPreviewOverlay]). */
     var textPreview by mutableStateOf<TextPreviewSpec?>(null)
 
+    /** Pictures shown one at a time over everything, top bar included (a game's screenshots). */
+    var gallery by mutableStateOf<GallerySpec?>(null)
+
+    /** Fuse's standby screen is up ([StandbyScreen]): left alone for the user's Standby time. */
+    var standby by mutableStateOf(false)
+
+    /** A Library view asked for from elsewhere (the Favourites widget), opened once and cleared. */
+    var librarySegment by mutableStateOf<io.github.matiyaaa.fuse.ui.shell.library.LibrarySegment?>(null)
+
     /** Set while Fuse runs in safe mode ([SafeMode]); cleared when the user leaves it. */
     var safeMode by mutableStateOf<SafeMode?>(null)
 
@@ -256,3 +265,6 @@ class DevOptions {
         const val TAPS = 5
     }
 }
+
+/** [AppState.gallery]: the pictures, the one to open on, and what to tell the page as they change. */
+class GallerySpec(val pictures: List<Any?>, val start: Int, val onIndex: (Int) -> Unit, val onClose: () -> Unit)

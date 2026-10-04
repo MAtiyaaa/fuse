@@ -81,6 +81,20 @@ interface FuseFileSystem {
      */
     suspend fun delete(path: String): Boolean = false
 
+    /**
+     * Copies the file or folder at [from] (with everything in it; links are skipped) to [to], which
+     * must not exist yet; its parent folders are made. [onBytes] hears each chunk written. Only for
+     * the user's explicit "move these games" in Settings, Storage. False when it could not, and then
+     * whatever it had written is removed again.
+     */
+    suspend fun copy(from: String, to: String, onBytes: (Long) -> Unit = {}): Boolean = false
+
+    /** Free space on the drive holding [path], in bytes, or null when unknown. */
+    suspend fun freeSpace(path: String): Long? = null
+
+    /** Makes the folder at [path] and its parents; true when it exists afterwards. */
+    suspend fun makeDirs(path: String): Boolean = false
+
     /** Joins [parent] and [child] with a single "/". */
     fun join(parent: String, child: String): String = FsPath.join(parent, child)
 

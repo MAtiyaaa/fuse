@@ -215,6 +215,9 @@ class DesktopPlatformUi(
 
     override fun clearCrashReport() = crashLog.clear()
 
+    override val steam: io.github.matiyaaa.fuse.ui.shell.platform.SteamIntegration =
+        DesktopSteam(io.github.matiyaaa.fuse.desktop.services.KnownFolders(dirs.home, os))
+
     override val windowControls: WindowControls = object : WindowControls {
         override val mode: WindowStyle get() = when (windowMode) {
             WindowMode.FULLSCREEN -> WindowStyle.FULLSCREEN

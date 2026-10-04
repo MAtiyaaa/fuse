@@ -39,9 +39,11 @@ fun AppState.askScreen(
     groupLabel: String,
     /** [art] is an icon or logo, fitted whole in the screen rather than filling it. */
     fitArt: Boolean = false,
+    /** A game's art, for its box art in the header. */
+    cover: io.github.matiyaaa.fuse.ui.shell.store.Art? = null,
     onPick: (LaunchDisplay, ScreenMemory) -> Unit,
 ) {
-    screenPrompt = ScreenPromptSpec(verb, subject, art, accent, itemLabel, groupLabel, onPick, fitArt)
+    screenPrompt = ScreenPromptSpec(verb, subject, art, accent, itemLabel, groupLabel, onPick, fitArt, cover)
 }
 
 /**
@@ -62,7 +64,7 @@ internal fun AppState.playOnChosenScreen(card: GameCard, start: (LaunchDisplay?)
         // A long system name gives way to its short one, so the tick fits.
         val system = store.library.platforms.value.firstOrNull { it.platform.id == card.platformId }?.platform?.name
             ?.takeIf { it.length <= 18 } ?: card.platformShort
-        askScreen("Play", card.title, card.art.hero ?: card.art.tile, card.accent, "Always for this game", "Always for $system") { display, memory ->
+        askScreen("Play", card.title, card.art.hero ?: card.art.tile, card.accent, "Always for this game", "Always for $system", cover = card.art) { display, memory ->
             when (memory) {
                 ScreenMemory.ONCE -> Unit
                 ScreenMemory.ITEM -> scope.launch { store.settings.set(ScopedSettings.LaunchScreen, ScopeRef.game(card.id), display) }

@@ -79,6 +79,12 @@ class Navigator(start: Route) {
 
     private val memory = LinkedHashMap<String, Any>()
 
+    /**
+     * Off by the user's choice (Settings, Home, Remember where you were): switching tabs forgets
+     * where you were in each, so every tab opens at its start.
+     */
+    var forgetsTabs = false
+
     fun push(route: Route) {
         if (current == route) return
         direction = NavDirection.FORWARD
@@ -97,6 +103,7 @@ class Navigator(start: Route) {
         val target = Route.Root(destination)
         if (stack.size == 1 && stack[0] == target) return
         direction = NavDirection.LATERAL
+        if (forgetsTabs && root != target) memory.clear()
         stack.clear()
         stack.add(target)
     }

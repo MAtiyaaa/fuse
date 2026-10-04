@@ -58,6 +58,10 @@ import io.github.matiyaaa.fuse.ui.designsystem.components.StatusDot
 import io.github.matiyaaa.fuse.ui.designsystem.components.Trailing
 import io.github.matiyaaa.fuse.ui.designsystem.focus.LinearSelection
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.ui.graphics.graphicsLayer
+import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
+import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
 import io.github.matiyaaa.fuse.ui.designsystem.input.LocalInputRouter
 import io.github.matiyaaa.fuse.ui.designsystem.input.NavResult
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
@@ -95,6 +99,7 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
     // Replayed as a rehearsal (developer options), steps change nothing outside preferences, and
     // those are put back when it ends.
     val live = !app.dev.rehearsing
+    val desktop = platform.host != io.github.matiyaaa.fuse.model.Host.ANDROID
 
     LaunchedEffect(storage) {
         if (storage == StorageState.GRANTED || storage == StorageState.NOT_NEEDED) {
@@ -106,59 +111,91 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
         }
     }
 
+    // Steam on a computer: what is installed, on every drive, all ticked to start with.
+    val steamGames = remember { mutableStateListOf<io.github.matiyaaa.fuse.library.steam.SteamGame>() }
+    val steamChosen = remember { mutableStateListOf<Long>() }
+    var steamLoaded by remember { mutableStateOf(!desktop) }
+    var steamAdded by remember { mutableStateOf<Int?>(null) }
+    val steamSel = remember { LinearSelection() }
+    LaunchedEffect(desktop) {
+        if (!desktop) return@LaunchedEffect
+        val found = runCatching { store.sources.findSteamGames() }.getOrDefault(emptyList())
+        steamGames.clear()
+        steamGames.addAll(found)
+        steamChosen.clear()
+        steamChosen.addAll(found.map { it.appId })
+        steamLoaded = true
+    }
+
     val cap = platform.device
     val scanning = scan.phase == ScanPhase.DISCOVERING || scan.phase == ScanPhase.SCANNING || scan.phase == ScanPhase.SAVING
     val withGames = platforms.filter { it.gameCount > 0 }
 
     return buildList {
+        // ------------------------------------------------------------------------------- start
         add(Step(
             "welcome", "Welcome", "Welcome to Fuse",
             "Your games, emulators and apps in one place, made for a controller. Setup takes about a minute; you can change anything later.",
+            icon = FuseIcons.Sparkles, chapter = Chapters.START,
             actions = listOf(StepAction("Begin", primary = true, run = next)),
             content = { Ignition() },
         ))
         add(Step(
             "device", "This device", "Tuned for this device",
             "Fuse looked at this device to pick how rich the effects can be without slowing anything down. You can change it at the end.",
+            icon = FuseIcons.Gauge, chapter = Chapters.START,
             actions = listOf(StepAction("Continue", primary = true, run = next)),
-            content = {
-                Panel(Modifier.widthIn(max = 460.dp)) {
-                    Column(Modifier.padding(Space.l), verticalArrangement = Arrangement.spacedBy(Space.s)) {
-                        Fact("Processor", "${cap.cpuCores} cores")
-                        Fact("Memory", "${(cap.totalRamMb / 1024.0 * 10).toInt() / 10.0} GB")
-                        Fact("Screen", "${cap.screenWidthPx} x ${cap.screenHeightPx}, ${cap.maxRefreshRate.toInt()} Hz")
-                        Fact("Displays", "${cap.displayCount}")
-                        Spacer(Modifier.height(Space.s))
-                        Chip("Recommended: ${cap.tier.name.lowercase().replaceFirstChar { it.uppercase() }} effects", icon = FuseIcons.Gauge, color = Fuse.colors.accent)
-                    }
-                }
-            },
+            content = { DeviceCard(cap) },
         ))
         val role = platform.homeRole
         if (role != null) add(Step(
             "home", "Home screen", if (isHome) "Fuse is your Home screen" else "Make Fuse your Home screen?",
             if (isHome) "The Home button brings you back here, and your handheld starts straight into Fuse."
             else "Then pressing Home comes back to Fuse and the device starts into it. It's optional: Fuse works the same as a normal app, and you can change this anytime.",
-            optional = true,
+            optional = true, icon = FuseIcons.Home, chapter = Chapters.START,
             actions = if (isHome) listOf(StepAction("Continue", primary = true, run = next))
             else listOf(StepAction("Use Fuse as Home", primary = true) { role.request() }, StepAction("Not now", run = next)),
         ))
+
+        // ------------------------------------------------------------------------------- games
         add(Step(
             "storage", "Your games", "Let Fuse see your games",
             when (storage) {
                 StorageState.GRANTED, StorageState.NOT_NEEDED -> "Access granted. Fuse only reads your folders: it never moves, renames or deletes anything."
                 else -> "Fuse needs to read your game folders and hand games to your emulators. Android calls this \"All files access\". Fuse only reads: nothing is moved, renamed or deleted."
             },
+            icon = FuseIcons.FolderOpen, chapter = Chapters.GAMES,
             actions = if (storage == StorageState.GRANTED || storage == StorageState.NOT_NEEDED) listOf(StepAction("Continue", primary = true, run = next))
             else listOf(StepAction("Allow access", primary = true) { platform.storage.request() }, StepAction("Check again") { platform.storage.refresh() }),
         ))
+        val pickFolder: () -> Unit = {
+            app.scope.launch {
+                val path = platform.storage.pickFolder("Choose a games folder") ?: return@launch
+                if (suggestions.none { it.path == path }) suggestions.add(SuggestedSource(path, path.substringAfterLast('/'), LibrarySourceKind.ROMS_ROOT, 0))
+                if (path !in chosen) chosen.add(path)
+            }
+        }
+        val useChosen: () -> Unit = {
+            if (live) {
+                app.scope.launch {
+                    for (path in chosen.toList()) {
+                        val kind = suggestions.firstOrNull { it.path == path }?.kind ?: LibrarySourceKind.ROMS_ROOT
+                        store.sources.add(path, kind)
+                    }
+                    store.sources.rescan()
+                }
+            }
+            next()
+        }
         add(Step(
             "libraries", "Libraries", if (scanning) "Finding your games" else "Where are your games?",
             when {
                 scanning -> "${scan.gamesFound} games so far. Keep going; this carries on in the background."
-                suggestions.isEmpty() && suggestionsLoaded -> "Fuse didn't find a games folder on its own. Add yours: a ROMs folder, a RomM library, or a single system's folder."
+                suggestions.isEmpty() && suggestionsLoaded -> "Fuse didn't find a games folder on its own. Add yours: a ROMs folder, a RomM library, or a single system's folder. You can also do this later in Settings, Library."
                 else -> "These look like game folders. Pick the ones to use; RomM layouts (roms/<system>) and ES-DE layouts (ROMs/<system>) are both understood."
             },
+            icon = FuseIcons.Library, chapter = Chapters.GAMES,
+            footnote = if (suggestions.isNotEmpty()) "X ticks or unticks the highlighted folder" else null,
             onInput = { e ->
                 when (e.action) {
                     NavAction.UP, NavAction.DOWN -> suggestionSel.move(e.action, suggestions.size, vertical = true).let { if (it == NavResult.IGNORED) NavResult.BLOCKED else it }
@@ -169,92 +206,110 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
                     else -> NavResult.IGNORED
                 }
             },
-            actions = listOf(
-                StepAction(if (chosen.isEmpty() && sources.isNotEmpty()) "Continue" else "Use these", primary = true, enabled = chosen.isNotEmpty() || sources.isNotEmpty()) {
-                    if (live) {
-                        app.scope.launch {
-                            for (path in chosen.toList()) {
-                                val kind = suggestions.firstOrNull { it.path == path }?.kind ?: LibrarySourceKind.ROMS_ROOT
-                                store.sources.add(path, kind)
-                            }
-                            store.sources.rescan()
-                        }
-                    }
-                    next()
-                },
-                StepAction("Add a folder") {
-                    app.scope.launch {
-                        val path = platform.storage.pickFolder("Choose a games folder") ?: return@launch
-                        if (suggestions.none { it.path == path }) suggestions.add(SuggestedSource(path, path.substringAfterLast('/'), LibrarySourceKind.ROMS_ROOT, 0))
-                        if (path !in chosen) chosen.add(path)
-                    }
-                },
-            ),
+            // Only buttons that can do something: nothing found and nothing added means adding one,
+            // or leaving it for later.
+            actions = when {
+                chosen.isNotEmpty() -> listOf(StepAction(if (chosen.size == 1) "Use this folder" else "Use these ${chosen.size}", primary = true, run = useChosen), StepAction("Add a folder", run = pickFolder))
+                sources.isNotEmpty() -> listOf(StepAction("Continue", primary = true, run = next), StepAction("Add a folder", run = pickFolder))
+                else -> listOf(StepAction("Add a folder", primary = true, run = pickFolder), StepAction("Later", run = next))
+            },
             content = {
-                Column(Modifier.widthIn(max = 520.dp)) {
-                    if (!suggestionsLoaded) Spinner()
-                    suggestions.forEachIndexed { i, s ->
-                        MenuRow(
-                            MenuAction(
-                                s.path, s.label, FuseIcons.Folder,
-                                detail = "${s.path}${if (s.platformsFound > 0) "  ·  ${s.platformsFound} systems" else ""}",
-                                trailing = Trailing.Check(s.path in chosen),
-                            ),
-                            selected = i == suggestionSel.index,
-                            onClick = { suggestionSel.index = i; if (s.path in chosen) chosen.remove(s.path) else chosen.add(s.path) },
-                        )
+                when {
+                    !suggestionsLoaded -> Spinner()
+                    suggestions.isEmpty() -> FolderLayouts()
+                    else -> Column(Modifier.widthIn(max = 560.dp).fillMaxWidth()) {
+                        suggestions.forEachIndexed { i, s ->
+                            MenuRow(
+                                MenuAction(
+                                    s.path, s.label, FuseIcons.Folder,
+                                    detail = "${s.path}${if (s.platformsFound > 0) "  ·  ${s.platformsFound} ${if (s.platformsFound == 1) "system" else "systems"}" else ""}",
+                                    trailing = Trailing.Check(s.path in chosen),
+                                ),
+                                selected = i == suggestionSel.index,
+                                onClick = { suggestionSel.index = i; if (s.path in chosen) chosen.remove(s.path) else chosen.add(s.path) },
+                            )
+                        }
+                        if (scanning) ProgressBar(null, Modifier.fillMaxWidth().padding(top = Space.m))
                     }
-                    if (suggestions.isNotEmpty()) FText("X toggles a folder", Fuse.type.caption, color = Fuse.colors.textFaint, modifier = Modifier.padding(Space.m))
-                    if (scanning) ProgressBar(null, Modifier.fillMaxWidth().padding(top = Space.m))
                 }
             },
         ))
-        add(Step(
-            "cartridge", "RomM and Cartridge", when {
-                cartridge.installed && cartridge.bridge -> "Cartridge is linked"
-                cartridge.installed -> "Cartridge found"
-                else -> "Get games from your RomM server"
-            },
-            when {
-                cartridge.installed && cartridge.bridge -> "Downloads from Cartridge appear in Fuse on their own. Open it anytime from the Cartridge tab."
-                cartridge.installed -> "This Cartridge opens from Fuse. Version 0.9.10 or newer adds live download status and direct links."
-                else -> "Cartridge is a companion app that downloads games from your RomM server into the right folders. Install it now or later from the Cartridge tab."
-            },
-            optional = true,
-            actions = if (cartridge.installed) listOf(StepAction("Continue", primary = true, run = next))
-            else listOf(
-                StepAction("Install Cartridge", primary = true) {
-                    app.scope.launch {
-                        val release = store.cartridge.latestRelease()
-                        if (release == null) {
-                            app.toasts.show("Couldn't reach GitHub. You can install Cartridge later from its tab.")
-                        } else {
-                            app.confirm = ConfirmSpec(
-                                "Install Cartridge ${release.tag.removePrefix("v")}?",
-                                "Fuse downloads the official release from GitHub and hands it to your system's installer, where you confirm it.",
-                                "Download and install",
-                            ) { if (live) app.scope.launch { store.cartridge.install(release) } }
+        if (desktop) {
+            val picked = steamGames.filter { it.appId in steamChosen }
+            val drives = steamGames.map { it.library }.distinct().size
+            val pickSteam: () -> Unit = {
+                app.scope.launch {
+                    val path = platform.storage.pickFolder("Choose a Steam library folder") ?: return@launch
+                    val found = store.sources.findSteamGames(path)
+                    val fresh = found.filter { f -> steamGames.none { it.appId == f.appId } }
+                    steamGames.addAll(fresh)
+                    steamChosen.addAll(fresh.map { it.appId })
+                    if (fresh.isEmpty()) app.toasts.show("No Steam games in that folder. Pick the folder holding steamapps")
+                }
+            }
+            add(Step(
+                "steam", "Steam", when {
+                    steamAdded != null -> "Your Steam games are in"
+                    !steamLoaded -> "Looking for Steam games"
+                    steamGames.isEmpty() -> "No Steam games found"
+                    else -> "Play your Steam games here too?"
+                },
+                when {
+                    steamAdded != null -> "${steamAdded} games are in your library under Steam. They start through Steam, and their art fills in like everything else."
+                    !steamLoaded -> "Fuse is reading Steam's library folders on every drive."
+                    steamGames.isEmpty() -> "Fuse looked where Steam keeps its games, on every drive. If yours live somewhere else, choose that Steam library folder, or skip this."
+                    else -> "Fuse found ${steamGames.size} installed games${if (drives > 1) " across $drives drives" else ""}. Add them and they sit next to everything else, each one starting through Steam. Fuse never changes Steam's files."
+                },
+                optional = true, icon = FuseIcons.Gamepad, chapter = Chapters.GAMES,
+                footnote = if (steamGames.isNotEmpty() && steamAdded == null) "X ticks or unticks the highlighted game" else null,
+                onInput = { e ->
+                    when (e.action) {
+                        NavAction.UP, NavAction.DOWN -> steamSel.move(e.action, steamGames.size, vertical = true).let { if (it == NavResult.IGNORED) NavResult.BLOCKED else it }
+                        NavAction.CONTEXT -> {
+                            steamGames.getOrNull(steamSel.index)?.let { g -> if (g.appId in steamChosen) steamChosen.remove(g.appId) else steamChosen.add(g.appId) }
+                            NavResult.ACTIVATED
                         }
+                        else -> NavResult.IGNORED
                     }
                 },
-                StepAction("Skip", run = next),
-            ),
-        ))
+                actions = when {
+                    steamAdded != null -> listOf(StepAction("Continue", primary = true, run = next))
+                    steamGames.isEmpty() -> listOf(StepAction("Choose a Steam folder", primary = true, run = pickSteam), StepAction("Skip", run = next))
+                    else -> listOf(
+                        StepAction(if (picked.size == 1) "Add 1 game" else "Add ${picked.size} games", primary = true, enabled = picked.isNotEmpty(), note = "Tick at least one game to add") {
+                            if (!live) { next(); return@StepAction }
+                            app.scope.launch {
+                                steamAdded = store.sources.addSteamGames(picked)
+                                next()
+                            }
+                        },
+                        StepAction("Another folder", run = pickSteam),
+                        StepAction("No thanks", run = next),
+                    )
+                },
+                content = {
+                    when {
+                        !steamLoaded -> Spinner()
+                        steamGames.isEmpty() -> StepEmblem(FuseIcons.FolderSearch)
+                        else -> SteamList(steamGames, steamChosen, steamSel)
+                    }
+                },
+            ))
+        }
         add(Step(
             "emulators", "Emulators", if (installed.isEmpty()) "No emulators yet" else "${installed.size} emulators found",
             if (installed.isEmpty()) "Install emulators for your systems whenever you like. Fuse notices them automatically and picks the best one for each system."
             else "Fuse picked one for each system. You can choose another per system, or per game, from their options.",
+            icon = FuseIcons.Chip, chapter = Chapters.GAMES,
             actions = listOf(StepAction("Continue", primary = true, run = next), StepAction("Look again") { store.emulators.refresh() }),
             content = {
-                Column(Modifier.widthIn(max = 520.dp), verticalArrangement = Arrangement.spacedBy(Space.xs)) {
-                    for (p in withGames.take(8)) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.m)) {
-                            StatusDot(p.emulatorInstalled)
-                            FText(p.platform.shortName, Fuse.type.bodyStrong, modifier = Modifier.width(72.dp))
-                            FText(p.emulatorName ?: "Nothing installed", Fuse.type.body, color = Fuse.colors.textMuted, maxLines = 1)
-                        }
-                    }
-                    if (withGames.isEmpty()) installed.take(8).forEach { FText(it.name, Fuse.type.body, color = Fuse.colors.textMuted) }
+                if (withGames.isEmpty() && installed.isEmpty()) {
+                    StepEmblem(FuseIcons.Chip)
+                } else {
+                    StatusList(
+                        if (withGames.isNotEmpty()) withGames.take(8).map { p -> Triple(p.emulatorInstalled, p.platform.shortName, p.emulatorName ?: "Nothing installed") }
+                        else installed.take(8).map { Triple(true, it.name, "Ready") },
+                    )
                 }
             },
         ))
@@ -262,27 +317,69 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
         add(Step(
             "bios", "BIOS", if (needsBios.isEmpty()) "No BIOS needed so far" else "BIOS check",
             "Some systems need firmware you dump from your own console. Fuse checks your BIOS folders; when an emulator keeps it in its own storage, Fuse can't look and says so instead of guessing.",
+            icon = FuseIcons.Memory, chapter = Chapters.GAMES,
             actions = listOf(StepAction("Continue", primary = true, run = next), StepAction("Check again") { store.sources.refreshBios() }),
             content = {
-                Column(Modifier.widthIn(max = 520.dp), verticalArrangement = Arrangement.spacedBy(Space.xs)) {
-                    for (p in needsBios.take(8)) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.m)) {
-                            StatusDot(when (p.bios.state) { BiosState.READY -> true; BiosState.MISSING, BiosState.PARTIAL -> false; else -> null })
-                            FText(p.platform.shortName, Fuse.type.bodyStrong, modifier = Modifier.width(72.dp))
-                            FText(
-                                when (p.bios.state) { BiosState.READY -> "Ready"; BiosState.PARTIAL -> "Partly found"; BiosState.MISSING -> "Missing"; else -> "Check inside the emulator" },
-                                Fuse.type.body, color = Fuse.colors.textMuted,
-                            )
-                        }
-                    }
+                if (needsBios.isEmpty()) {
+                    StepEmblem(FuseIcons.ShieldCheck)
+                } else {
+                    StatusList(needsBios.take(8).map { p ->
+                        Triple(
+                            when (p.bios.state) { BiosState.READY -> true; BiosState.MISSING, BiosState.PARTIAL -> false; else -> null },
+                            p.platform.shortName,
+                            when (p.bios.state) { BiosState.READY -> "Ready"; BiosState.PARTIAL -> "Partly found"; BiosState.MISSING -> "Missing"; else -> "Check inside the emulator" },
+                        )
+                    })
                 }
+            },
+        ))
+
+        // ----------------------------------------------------------------------------- connect
+        val cartridgeHere = platform.features.cartridge
+        add(Step(
+            "cartridge", "RomM and Cartridge", when {
+                !cartridgeHere -> "Cartridge runs on Android and Linux"
+                cartridge.installed && cartridge.bridge -> "Cartridge is linked"
+                cartridge.installed -> "Cartridge found"
+                else -> "Get games from your RomM server"
+            },
+            when {
+                !cartridgeHere -> "Cartridge, the companion that downloads games from your RomM server, isn't made for this system. Add your RomM library folder in Settings, Library, and Fuse reads it as it is."
+                cartridge.installed && cartridge.bridge -> "Downloads from Cartridge appear in Fuse on their own. Open it anytime from the Cartridge tab."
+                cartridge.installed -> "This Cartridge opens from Fuse. Version 0.9.10 or newer adds live download status and direct links."
+                else -> "Cartridge is a companion app that downloads games from your RomM server into the right folders. Install it now or later from the Cartridge tab."
+            },
+            optional = true, icon = io.github.matiyaaa.fuse.ui.designsystem.icons.FuseMarks.Cartridge, chapter = Chapters.CONNECT,
+            actions = when {
+                !cartridgeHere -> listOf(
+                    StepAction("Install Cartridge", enabled = false, note = "Cartridge isn't available on Windows or macOS") {},
+                    StepAction("Continue", primary = true, run = next),
+                )
+                cartridge.installed -> listOf(StepAction("Continue", primary = true, run = next))
+                else -> listOf(
+                    StepAction("Install Cartridge", primary = true) {
+                        app.scope.launch {
+                            val release = store.cartridge.latestRelease()
+                            if (release == null) {
+                                app.toasts.show("Couldn't reach GitHub. You can install Cartridge later from its tab.")
+                            } else {
+                                app.confirm = ConfirmSpec(
+                                    "Install Cartridge ${release.tag.removePrefix("v")}?",
+                                    "Fuse downloads the official release from GitHub and hands it to your system's installer, where you confirm it.",
+                                    "Download and install",
+                                ) { if (live) app.scope.launch { store.cartridge.install(release) } }
+                            }
+                        }
+                    },
+                    StepAction("Skip", run = next),
+                )
             },
         ))
         add(Step(
             "ra", "Achievements", if (raConfigured) "RetroAchievements connected" else "Show your achievements?",
             if (raConfigured) "Recent unlocks and progress appear on Home and on each game's page."
             else "Connect RetroAchievements with your username and Web API key (retroachievements.org, Settings, Keys) to see progress in Fuse. The key is stored encrypted on this device.",
-            optional = true,
+            optional = true, icon = FuseIcons.Trophy, chapter = Chapters.CONNECT,
             actions = if (raConfigured) listOf(StepAction("Continue", primary = true, run = next)) else listOf(
                 StepAction("Connect", primary = true) {
                     app.textInput = TextInputSpec("RetroAchievements username", "") { user ->
@@ -301,7 +398,7 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
         add(Step(
             "art", "Artwork", if ("sgdb.apikey" in secrets) "SteamGridDB is ready" else "Better artwork",
             "Fuse uses art from RomM (through Cartridge) and your folders first. A free SteamGridDB key adds box art, covers, backgrounds, logos and icons for everything else. More sources are in Settings, Art and details.",
-            optional = true,
+            optional = true, icon = FuseIcons.Images, chapter = Chapters.CONNECT,
             actions = listOf(
                 StepAction(if ("sgdb.apikey" in secrets) "Continue" else "Add SteamGridDB key", primary = true) {
                     if ("sgdb.apikey" in secrets) next() else app.textInput = TextInputSpec("SteamGridDB API key", "", "From steamgriddb.com, Preferences, API") { key ->
@@ -311,18 +408,23 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
                 StepAction("Skip", run = next),
             ),
         ))
+
+        // ------------------------------------------------------------------------- make it yours
         if (platform.features.secondScreen || displays.size > 1) add(Step(
             "displays", "Displays", "Two screens",
             "Choose what the second screen does. Games can also open on either screen when the device and emulator allow it.",
+            icon = FuseIcons.DualScreen, chapter = Chapters.YOURS,
             actions = listOf(
                 StepAction("Show the selected game", primary = prefs.display.mode == DualScreenMode.LIBRARY_COMPANION) { store.updatePrefs { it.copy(display = it.display.copy(mode = DualScreenMode.LIBRARY_COMPANION)) }; next() },
-                StepAction("Companion while playing") { store.updatePrefs { it.copy(display = it.display.copy(mode = DualScreenMode.GAME_COMPANION)) }; next() },
-                StepAction("Off") { store.updatePrefs { it.copy(display = it.display.copy(mode = DualScreenMode.OFF)) }; next() },
+                StepAction("Companion while playing", primary = prefs.display.mode == DualScreenMode.GAME_COMPANION) { store.updatePrefs { it.copy(display = it.display.copy(mode = DualScreenMode.GAME_COMPANION)) }; next() },
+                StepAction("Off", primary = prefs.display.mode == DualScreenMode.OFF) { store.updatePrefs { it.copy(display = it.display.copy(mode = DualScreenMode.OFF)) }; next() },
             ),
+            content = { DualScreenPreview(state.button) },
         ))
         add(Step(
             "controller", "Controller", "Which button confirms?",
             "Detect your buttons so Fuse knows how your pad is labelled and which button confirms. It takes two presses.",
+            icon = FuseIcons.Gamepad, chapter = Chapters.YOURS,
             actions = listOf(
                 StepAction("Detect my buttons", primary = true) { app.buttonDetect = true },
                 StepAction("Continue", run = next),
@@ -330,19 +432,31 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
             content = { ControllerTest(prefs.input.glyphs == io.github.matiyaaa.fuse.model.GlyphStyle.NINTENDO) },
         ))
         add(Step(
+            "launch", "Choosing a game", "When you choose a game",
+            "Play it straight away, or open its page first, with its art, details, achievements and time played, and Play one press away. The other way is always in the game's options.",
+            icon = FuseIcons.CirclePlay, chapter = Chapters.YOURS,
+            actions = listOf(
+                StepAction("Play straight away", primary = !prefs.openGamePage) { store.updatePrefs { it.copy(openGamePage = false) }; next() },
+                StepAction("Show its page first", primary = prefs.openGamePage) { store.updatePrefs { it.copy(openGamePage = true) }; next() },
+            ),
+            content = { LaunchStylePreview(pagesFirst = state.button == 1) },
+        ))
+        add(Step(
             "homestyle", "Home", "Pick a Home style",
             "Flow is a continuous dashboard of shelves. Channels is a board of tiles you arrange yourself. Either can be rearranged by holding confirm.",
+            icon = FuseIcons.Dashboard, chapter = Chapters.YOURS,
             actions = listOf(
                 StepAction("Flow", primary = prefs.home.mode == HomeMode.FLOW) { store.updatePrefs { it.copy(home = it.home.copy(mode = HomeMode.FLOW)) }; next() },
                 StepAction("Channels", primary = prefs.home.mode == HomeMode.CHANNELS) { store.updatePrefs { it.copy(home = it.home.copy(mode = HomeMode.CHANNELS)) }; next() },
             ),
-            content = { HomeStylePreview(prefs.home.mode) },
+            content = { HomeStylePreview(if (state.button == 1) HomeMode.CHANNELS else HomeMode.FLOW) },
         ))
         val themes = ThemePresets.all
         val themeIndex = themes.indexOfFirst { it.id == prefs.themeId }.coerceAtLeast(0)
         add(Step(
             "theme", "Look", themes[themeIndex].name,
             themes[themeIndex].tagline + ". Use up and down to try themes; they apply right away.",
+            icon = FuseIcons.Palette, chapter = Chapters.YOURS,
             onInput = { e ->
                 when (e.action) {
                     NavAction.UP, NavAction.DOWN -> {
@@ -353,22 +467,28 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
                     else -> NavResult.IGNORED
                 }
             },
+            footnote = "Up and down try the next theme",
             actions = listOf(StepAction("Use ${themes[themeIndex].name}", primary = true, run = next)),
             content = { ThemePreview(themeIndex) },
         ))
         add(Step(
             "performance", "Performance", "Effects and battery",
             "Automatic suits this device. Low Power keeps navigation just as quick but skips video, blur and moving backgrounds.",
+            icon = FuseIcons.Leaf, chapter = Chapters.YOURS,
             actions = listOf(
                 StepAction("Automatic", primary = prefs.performance == PerformanceProfile.AUTOMATIC) { store.updatePrefs { it.copy(performance = PerformanceProfile.AUTOMATIC) }; next() },
-                StepAction("Low power") { store.updatePrefs { it.copy(performance = PerformanceProfile.LOW_POWER) }; next() },
-                StepAction("High quality") { store.updatePrefs { it.copy(performance = PerformanceProfile.HIGH_QUALITY) }; next() },
+                StepAction("Low power", primary = prefs.performance == PerformanceProfile.LOW_POWER) { store.updatePrefs { it.copy(performance = PerformanceProfile.LOW_POWER) }; next() },
+                StepAction("High quality", primary = prefs.performance == PerformanceProfile.HIGH_QUALITY) { store.updatePrefs { it.copy(performance = PerformanceProfile.HIGH_QUALITY) }; next() },
             ),
+            content = { PerformancePreview(state.button) },
         ))
+
+        // ------------------------------------------------------------------------------- ready
         val total = withGames.sumOf { it.gameCount }
         add(Step(
             "done", "Ready", "You're all set",
             if (total > 0) "$total games across ${withGames.size} systems, ready to play. Press Start anytime for quick settings." else "Fuse keeps looking for games in the background. Press Start anytime for quick settings.",
+            icon = FuseIcons.Rocket, chapter = Chapters.READY,
             actions = listOf(StepAction(if (live) "Start playing" else "End the rehearsal", primary = true) {
                 if (live) {
                     store.updatePrefs { it.copy(onboardingDone = true) }
@@ -384,9 +504,96 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
 
 @Composable
 private fun Fact(label: String, value: String) {
-    Row {
-        FText(label, Fuse.type.body, color = Fuse.colors.textMuted, modifier = Modifier.width(120.dp))
-        FText(value, Fuse.type.bodyStrong)
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        FText(label, Fuse.type.body, color = Fuse.colors.textMuted, maxLines = 1, modifier = Modifier.width(120.dp))
+        FText(value, Fuse.type.bodyStrong, maxLines = 1)
+    }
+}
+
+/** What Fuse read about the device, on a panel, with the effects it recommends. */
+@Composable
+private fun DeviceCard(cap: io.github.matiyaaa.fuse.model.CapabilityProfile) {
+    Panel(Modifier.widthIn(max = 460.dp).fillMaxWidth()) {
+        Column(Modifier.padding(Space.xl), verticalArrangement = Arrangement.spacedBy(Space.s)) {
+            Fact("Processor", "${cap.cpuCores} cores")
+            Fact("Memory", "${(cap.totalRamMb / 1024.0 * 10).toInt() / 10.0} GB")
+            Fact("Screen", "${cap.screenWidthPx} x ${cap.screenHeightPx}, ${cap.maxRefreshRate.toInt()} Hz")
+            Fact("Displays", "${cap.displayCount}")
+            Spacer(Modifier.height(Space.s))
+            Chip("Recommended: ${cap.tier.name.lowercase().replaceFirstChar { it.uppercase() }} effects", icon = FuseIcons.Gauge, color = Fuse.colors.accent)
+        }
+    }
+}
+
+/** Systems with a light for each: ready (green), missing (red) or unknown (grey), and a word. */
+@Composable
+private fun StatusList(rows: List<Triple<Boolean?, String, String>>) {
+    Panel(Modifier.widthIn(max = 520.dp).fillMaxWidth()) {
+        Column(Modifier.padding(horizontal = Space.xl, vertical = Space.l), verticalArrangement = Arrangement.spacedBy(Space.s)) {
+            for ((ok, name, word) in rows) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.m)) {
+                    StatusDot(ok)
+                    FText(name, Fuse.type.bodyStrong, maxLines = 1, modifier = Modifier.width(88.dp))
+                    FText(word, Fuse.type.body, color = Fuse.colors.textMuted, maxLines = 2)
+                }
+            }
+        }
+    }
+}
+
+/**
+ * No games folder found: the two layouts Fuse understands, drawn as small folder trees, so it is
+ * clear what to point it at.
+ */
+@Composable
+private fun FolderLayouts() {
+    val c = Fuse.colors
+    Row(horizontalArrangement = Arrangement.spacedBy(Space.l), modifier = Modifier.widthIn(max = 560.dp)) {
+        for ((title, lines) in listOf(
+            "RomM" to listOf("library", "roms", "snes", "psx", "gba"),
+            "ES-DE" to listOf("ROMs", "snes", "psx", "gba"),
+        )) {
+            Panel(Modifier.weight(1f)) {
+                Column(Modifier.padding(Space.l), verticalArrangement = Arrangement.spacedBy(Space.xs)) {
+                    FText(title, Fuse.type.overline, color = c.accent, maxLines = 1)
+                    Spacer(Modifier.height(Space.xs))
+                    lines.forEachIndexed { i, name ->
+                        val depth = when {
+                            title == "RomM" && i >= 2 -> 2
+                            i >= 1 -> 1
+                            else -> 0
+                        }
+                        Row(Modifier.padding(start = 14.dp * depth), verticalAlignment = Alignment.CenterVertically) {
+                            FuseIcon(if (depth == 2 || (title == "ES-DE" && depth == 1)) FuseIcons.Folder else FuseIcons.FolderOpen, size = Size.iconS, tint = if (depth == 0) c.text else c.textMuted)
+                            Spacer(Modifier.width(Space.s))
+                            FText(name, Fuse.type.label, color = if (depth == 0) c.text else c.textMuted, maxLines = 1)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** The Steam games Fuse found: a tick each, the highlighted one followed, and where they are. */
+@Composable
+private fun SteamList(games: List<io.github.matiyaaa.fuse.library.steam.SteamGame>, chosen: List<Long>, sel: LinearSelection) {
+    Panel(Modifier.widthIn(max = 560.dp).fillMaxWidth().heightIn(max = 460.dp)) {
+        io.github.matiyaaa.fuse.ui.designsystem.components.MenuList(
+            games.map { g ->
+                MenuAction(
+                    "steam.${g.appId}", g.name, FuseIcons.Gamepad,
+                    detail = listOfNotNull(
+                        g.library.substringAfterLast('/').ifBlank { g.library },
+                        g.sizeBytes.takeIf { it > 0 }?.let { io.github.matiyaaa.fuse.ui.shell.home.bytesText(it) },
+                    ).joinToString("  ·  "),
+                    trailing = Trailing.Check(g.appId in chosen),
+                )
+            },
+            sel,
+            fill = false,
+            modifier = Modifier.padding(Space.s),
+        )
     }
 }
 
@@ -473,38 +680,275 @@ internal fun ControllerTest(nintendoKeys: Boolean = false) {
     }
 }
 
+/**
+ * A small picture of a screen, for setup's choices: a rounded frame in the theme's raised surface
+ * with [draw] inside it. The one being chosen is lit (an accent edge, full strength, a touch larger)
+ * and the others step back, so moving between the buttons shows what each one means.
+ */
+@Composable
+private fun MiniScreen(
+    label: String,
+    active: Boolean,
+    modifier: Modifier = Modifier,
+    aspect: Float = 16f / 10f,
+    draw: androidx.compose.ui.graphics.drawscope.DrawScope.(lit: Float) -> Unit,
+) {
+    val c = Fuse.colors
+    val lit by androidx.compose.animation.core.animateFloatAsState(if (active) 1f else 0f, Fuse.motion.tween(io.github.matiyaaa.fuse.ui.designsystem.theme.Durations.BASE), label = "mini")
+    val shape = RoundedCornerShape(Fuse.geometry.panel.coerceAtMost(18.dp))
+    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .aspectRatio(aspect)
+                .graphicsLayer {
+                    val s = 0.94f + 0.06f * lit
+                    scaleX = s
+                    scaleY = s
+                    alpha = 0.5f + 0.5f * lit
+                }
+                .clip(shape)
+                .background(c.surfaceRaised)
+                .border(if (active) 2.dp else 1.dp, androidx.compose.ui.graphics.lerp(c.hairline, c.accent, lit), shape),
+        ) {
+            Canvas(Modifier.matchParentSize().padding(Space.m)) { draw(lit) }
+        }
+        Spacer(Modifier.height(Space.m))
+        // Two lines where the stage is narrow (a phone held sideways), centred under its picture.
+        FText(label, Fuse.type.bodyStrong, color = if (active) c.text else c.textMuted, maxLines = 2, align = androidx.compose.ui.text.style.TextAlign.Center)
+    }
+}
+
+/**
+ * One moment of a looping demonstration, 0..1, running only where motion is welcome; held still it
+ * rests at [still], the moment that tells the story best.
+ */
+@Composable
+private fun loopClock(ms: Int, still: Float = 0.8f): Float {
+    if (!Fuse.motion.ambient) return still
+    return androidx.compose.animation.core.rememberInfiniteTransition(label = "loop").animateFloat(
+        0f, 1f, androidx.compose.animation.core.infiniteRepeatable(tween(ms, easing = androidx.compose.animation.core.LinearEasing)), label = "t",
+    ).value
+}
+
+private fun phase(t: Float, from: Float, to: Float): Float = ((t - from) / (to - from)).coerceIn(0f, 1f)
+
+/** A row of game tiles along the bottom of a mini screen, the [chosen] one lifted and lit. */
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.miniTiles(c: io.github.matiyaaa.fuse.ui.designsystem.theme.FuseColors, chosen: Int, lift: Float, y: Float = size.height * 0.5f, n: Int = 5) {
+    val gap = size.width * 0.03f
+    val w = (size.width - gap * (n - 1)) / n
+    val h = w * 1.25f
+    for (i in 0 until n) {
+        val up = if (i == chosen) lift * h * 0.08f else 0f
+        drawRoundRect(
+            if (i == chosen) androidx.compose.ui.graphics.lerp(c.text.copy(alpha = 0.2f), c.accent, lift) else c.text.copy(alpha = 0.16f),
+            Offset(i * (w + gap), y - up), androidx.compose.ui.geometry.Size(w, h), androidx.compose.ui.geometry.CornerRadius(w * 0.16f),
+        )
+    }
+}
+
+/**
+ * The two ways a game can open, played out side by side: a tile is chosen and pressed, then either
+ * the game fills the screen at once, or its page comes first (cover, title, Play), and Play is
+ * pressed there. The way the highlighted button picks is lit.
+ */
+@Composable
+private fun LaunchStylePreview(pagesFirst: Boolean) {
+    val c = Fuse.colors
+    val t = loopClock(3_600)
+    Row(Modifier.widthIn(max = 620.dp).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.l)) {
+        MiniScreen("Straight into the game", active = !pagesFirst, modifier = Modifier.weight(1f)) {
+            val choose = phase(t, 0.05f, 0.25f)
+            val play = phase(t, 0.35f, 0.6f)
+            // The menu: a title bar and tiles.
+            drawRoundRect(c.text.copy(alpha = 0.5f), Offset(0f, 0f), androidx.compose.ui.geometry.Size(size.width * 0.35f, size.height * 0.07f), androidx.compose.ui.geometry.CornerRadius(size.height))
+            miniTiles(c, chosen = 1, lift = choose, y = size.height * 0.32f)
+            // The press: a ring out from the tile.
+            if (play > 0f && play < 1f) {
+                val gap = size.width * 0.03f
+                val w = (size.width - gap * 4) / 5
+                val center = Offset(w + gap + w / 2, size.height * 0.32f + w * 0.62f)
+                drawCircle(c.accent.copy(alpha = 0.6f * (1f - play)), radius = w * (0.4f + play), center = center, style = Stroke(2.dp.toPx()))
+            }
+            // The game, filling the screen.
+            val fill = phase(t, 0.5f, 0.68f) * (1f - phase(t, 0.94f, 1f))
+            if (fill > 0f) {
+                val inset = (1f - fill) * size.minDimension * 0.3f
+                drawRoundRect(
+                    Brush.verticalGradient(listOf(c.accent.copy(alpha = 0.9f), c.accent.copy(alpha = 0.35f), c.ink)),
+                    Offset(inset, inset), androidx.compose.ui.geometry.Size(size.width - inset * 2, size.height - inset * 2),
+                    androidx.compose.ui.geometry.CornerRadius(8.dp.toPx()), alpha = fill,
+                )
+                // Hills and a sun: a game, abstractly.
+                val ground = Path().apply {
+                    moveTo(inset, size.height - inset)
+                    lineTo(inset, size.height * 0.72f)
+                    quadraticTo(size.width * 0.3f, size.height * 0.5f, size.width * 0.55f, size.height * 0.7f)
+                    quadraticTo(size.width * 0.8f, size.height * 0.86f, size.width - inset, size.height * 0.62f)
+                    lineTo(size.width - inset, size.height - inset)
+                    close()
+                }
+                drawPath(ground, c.ink.copy(alpha = 0.7f * fill))
+                drawCircle(Color.White.copy(alpha = 0.85f * fill), radius = size.minDimension * 0.08f, center = Offset(size.width * 0.72f, size.height * 0.3f))
+            }
+        }
+        MiniScreen("The game's page first", active = pagesFirst, modifier = Modifier.weight(1f)) {
+            val choose = phase(t, 0.05f, 0.25f)
+            val page = phase(t, 0.32f, 0.48f) * (1f - phase(t, 0.94f, 1f))
+            val press = phase(t, 0.62f, 0.8f)
+            if (page < 1f) {
+                drawRoundRect(c.text.copy(alpha = 0.5f * (1f - page)), Offset(0f, 0f), androidx.compose.ui.geometry.Size(size.width * 0.35f, size.height * 0.07f), androidx.compose.ui.geometry.CornerRadius(size.height))
+                miniTiles(c, chosen = 1, lift = choose * (1f - page), y = size.height * 0.32f)
+            }
+            if (page > 0f) {
+                val dy = (1f - page) * size.height * 0.08f
+                // Cover, title, a meta line, a description and the Play button.
+                drawRoundRect(c.accent.copy(alpha = 0.75f * page), Offset(0f, dy), androidx.compose.ui.geometry.Size(size.width * 0.3f, size.height * 0.72f), androidx.compose.ui.geometry.CornerRadius(6.dp.toPx()))
+                val x = size.width * 0.36f
+                drawRoundRect(c.text.copy(alpha = 0.85f * page), Offset(x, dy + size.height * 0.04f), androidx.compose.ui.geometry.Size(size.width * 0.46f, size.height * 0.09f), androidx.compose.ui.geometry.CornerRadius(size.height))
+                drawRoundRect(c.text.copy(alpha = 0.35f * page), Offset(x, dy + size.height * 0.2f), androidx.compose.ui.geometry.Size(size.width * 0.3f, size.height * 0.05f), androidx.compose.ui.geometry.CornerRadius(size.height))
+                for (i in 0 until 3) {
+                    drawRoundRect(c.text.copy(alpha = 0.2f * page), Offset(x, dy + size.height * (0.32f + 0.08f * i)), androidx.compose.ui.geometry.Size(size.width * (0.58f - 0.1f * (i % 2)), size.height * 0.035f), androidx.compose.ui.geometry.CornerRadius(size.height))
+                }
+                val pill = androidx.compose.ui.geometry.Size(size.width * 0.24f, size.height * 0.13f)
+                val at = Offset(x, dy + size.height * 0.6f)
+                val pressed = if (press > 0f && press < 1f) 1f - 0.08f * kotlin.math.sin(press * kotlin.math.PI.toFloat()) else 1f
+                drawRoundRect(
+                    c.accent.copy(alpha = page), Offset(at.x + pill.width * (1f - pressed) / 2, at.y + pill.height * (1f - pressed) / 2),
+                    androidx.compose.ui.geometry.Size(pill.width * pressed, pill.height * pressed), androidx.compose.ui.geometry.CornerRadius(size.height),
+                )
+                // A small play triangle on it.
+                val tri = Path().apply {
+                    val cx = at.x + pill.width * 0.5f
+                    val cy = at.y + pill.height * 0.5f
+                    val r = pill.height * 0.22f
+                    moveTo(cx - r * 0.7f, cy - r)
+                    lineTo(cx + r, cy)
+                    lineTo(cx - r * 0.7f, cy + r)
+                    close()
+                }
+                drawPath(tri, c.onAccent.copy(alpha = page))
+                if (press > 0f && press < 1f) {
+                    drawCircle(c.accent.copy(alpha = 0.6f * (1f - press)), radius = pill.width * (0.5f + press * 0.6f), center = Offset(at.x + pill.width / 2, at.y + pill.height / 2), style = Stroke(2.dp.toPx()))
+                }
+            }
+        }
+    }
+}
+
+/** Flow (shelves) and Channels (a board of tiles), the highlighted one lit. */
 @Composable
 private fun HomeStylePreview(mode: HomeMode) {
     val c = Fuse.colors
-    Row(horizontalArrangement = Arrangement.spacedBy(Space.l)) {
+    Row(Modifier.widthIn(max = 620.dp).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.l)) {
         for (m in HomeMode.entries) {
-            val active = m == mode
-            Column(Modifier.width(220.dp)) {
-                Box(
-                    Modifier.fillMaxWidth().aspectRatio(16f / 10f).clip(RoundedCornerShape(Fuse.geometry.panel))
-                        .background(c.surfaceRaised).border(if (active) 2.dp else 1.dp, if (active) c.accent else c.hairline, RoundedCornerShape(Fuse.geometry.panel))
-                        .padding(Space.m),
-                ) {
-                    Canvas(Modifier.matchParentSizeSafe()) {
-                        val t = c.text.copy(alpha = 0.25f)
-                        if (m == HomeMode.FLOW) {
-                            drawRoundRect(t, Offset(0f, 0f), androidx.compose.ui.geometry.Size(size.width * 0.5f, size.height * 0.16f), androidx.compose.ui.geometry.CornerRadius(4f))
-                            for (row in 0..1) for (i in 0..4) {
-                                val w = size.width / 5.6f
-                                drawRoundRect(t, Offset(i * (w + 6f), size.height * (0.35f + row * 0.34f)), androidx.compose.ui.geometry.Size(w, size.height * 0.26f), androidx.compose.ui.geometry.CornerRadius(6f))
-                            }
-                        } else {
-                            for (row in 0..2) for (i in 0..3) {
-                                val w = (size.width - 18f) / 4f
-                                drawRoundRect(t, Offset(i * (w + 6f), row * (size.height / 3f)), androidx.compose.ui.geometry.Size(if (i == 0 && row == 0) w * 2 + 6f else w, size.height / 3f - 6f), androidx.compose.ui.geometry.CornerRadius(8f))
-                            }
-                        }
+            MiniScreen(if (m == HomeMode.FLOW) "Flow" else "Channels", active = m == mode, modifier = Modifier.weight(1f)) { lit ->
+                val t = c.text.copy(alpha = 0.18f + 0.08f * lit)
+                if (m == HomeMode.FLOW) {
+                    drawRoundRect(c.text.copy(alpha = 0.5f), Offset(0f, 0f), androidx.compose.ui.geometry.Size(size.width * 0.45f, size.height * 0.1f), androidx.compose.ui.geometry.CornerRadius(size.height))
+                    for (row in 0..1) for (i in 0..4) {
+                        val w = size.width / 5.6f
+                        val first = row == 0 && i == 0
+                        drawRoundRect(if (first) c.accent.copy(alpha = 0.5f + 0.4f * lit) else t, Offset(i * (w + size.width * 0.03f), size.height * (0.24f + row * 0.38f)), androidx.compose.ui.geometry.Size(w, size.height * 0.3f), androidx.compose.ui.geometry.CornerRadius(6f))
+                    }
+                } else {
+                    val gap = size.width * 0.025f
+                    val w = (size.width - gap * 3) / 4f
+                    val h = (size.height - gap * 2) / 3f
+                    for (row in 0..2) for (i in 0..3) {
+                        if (row == 0 && i == 1) continue
+                        val wide = row == 0 && i == 0
+                        drawRoundRect(if (wide) c.accent.copy(alpha = 0.5f + 0.4f * lit) else t, Offset(i * (w + gap), row * (h + gap)), androidx.compose.ui.geometry.Size(if (wide) w * 2 + gap else w, h), androidx.compose.ui.geometry.CornerRadius(8f))
                     }
                 }
-                Spacer(Modifier.height(Space.s))
-                FText(if (m == HomeMode.FLOW) "Flow" else "Channels", Fuse.type.bodyStrong, color = if (active) c.text else c.textMuted)
             }
         }
+    }
+}
+
+/**
+ * A dual-screen handheld drawn simply, its bottom screen showing what the highlighted choice puts
+ * there: the selected game, the game's companion (achievements, time) while playing, or nothing.
+ */
+@Composable
+private fun DualScreenPreview(button: Int) {
+    val c = Fuse.colors
+    val mode = button.coerceIn(0, 2)
+    val labels = listOf("The selected game", "A companion while you play", "Nothing: the screen stays off")
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Canvas(Modifier.width(260.dp).aspectRatio(0.82f)) {
+            val w = size.width
+            val h = size.height
+            val r = androidx.compose.ui.geometry.CornerRadius(w * 0.06f)
+            // The two halves of the device.
+            drawRoundRect(c.text.copy(alpha = 0.1f), Offset(0f, 0f), androidx.compose.ui.geometry.Size(w, h * 0.49f), r)
+            drawRoundRect(c.text.copy(alpha = 0.1f), Offset(0f, h * 0.51f), androidx.compose.ui.geometry.Size(w, h * 0.49f), r)
+            val pad = w * 0.06f
+            val top = androidx.compose.ui.geometry.Rect(pad, pad, w - pad, h * 0.49f - pad)
+            val bottom = androidx.compose.ui.geometry.Rect(pad, h * 0.51f + pad, w - pad, h - pad)
+            // The top screen: Fuse, with a row of tiles, the second chosen.
+            drawRoundRect(c.ink, top.topLeft, top.size, androidx.compose.ui.geometry.CornerRadius(w * 0.03f))
+            val tw = top.width / 6.2f
+            for (i in 0 until 5) {
+                drawRoundRect(
+                    if (i == 1) c.accent else c.text.copy(alpha = 0.22f),
+                    Offset(top.left + top.width * 0.06f + i * tw * 1.15f, top.top + top.height * (if (i == 1) 0.42f else 0.46f)),
+                    androidx.compose.ui.geometry.Size(tw, tw * 1.25f), androidx.compose.ui.geometry.CornerRadius(tw * 0.15f),
+                )
+            }
+            // The bottom screen.
+            drawRoundRect(if (mode == 2) Color.Black else c.ink, bottom.topLeft, bottom.size, androidx.compose.ui.geometry.CornerRadius(w * 0.03f))
+            when (mode) {
+                0 -> {
+                    drawRoundRect(c.accent.copy(alpha = 0.85f), Offset(bottom.left + bottom.width * 0.08f, bottom.top + bottom.height * 0.14f), androidx.compose.ui.geometry.Size(bottom.width * 0.3f, bottom.height * 0.72f), androidx.compose.ui.geometry.CornerRadius(6.dp.toPx()))
+                    val x = bottom.left + bottom.width * 0.45f
+                    drawRoundRect(c.text.copy(alpha = 0.85f), Offset(x, bottom.top + bottom.height * 0.22f), androidx.compose.ui.geometry.Size(bottom.width * 0.42f, bottom.height * 0.1f), androidx.compose.ui.geometry.CornerRadius(h))
+                    for (i in 0 until 3) drawRoundRect(c.text.copy(alpha = 0.25f), Offset(x, bottom.top + bottom.height * (0.42f + 0.12f * i)), androidx.compose.ui.geometry.Size(bottom.width * (0.38f - 0.06f * i), bottom.height * 0.05f), androidx.compose.ui.geometry.CornerRadius(h))
+                }
+                1 -> {
+                    // A session pill, and achievement badges with a progress bar.
+                    drawRoundRect(c.text.copy(alpha = 0.18f), Offset(bottom.left + bottom.width * 0.3f, bottom.top + bottom.height * 0.12f), androidx.compose.ui.geometry.Size(bottom.width * 0.4f, bottom.height * 0.12f), androidx.compose.ui.geometry.CornerRadius(h))
+                    drawCircle(c.accent, radius = bottom.height * 0.03f, center = Offset(bottom.left + bottom.width * 0.35f, bottom.top + bottom.height * 0.18f))
+                    for (i in 0 until 4) {
+                        drawRoundRect(if (i < 2) c.accent.copy(alpha = 0.8f) else c.text.copy(alpha = 0.2f), Offset(bottom.left + bottom.width * (0.14f + 0.19f * i), bottom.top + bottom.height * 0.38f), androidx.compose.ui.geometry.Size(bottom.width * 0.14f, bottom.width * 0.14f), androidx.compose.ui.geometry.CornerRadius(6.dp.toPx()))
+                    }
+                    drawRoundRect(c.text.copy(alpha = 0.15f), Offset(bottom.left + bottom.width * 0.14f, bottom.top + bottom.height * 0.78f), androidx.compose.ui.geometry.Size(bottom.width * 0.72f, bottom.height * 0.05f), androidx.compose.ui.geometry.CornerRadius(h))
+                    drawRoundRect(c.accent, Offset(bottom.left + bottom.width * 0.14f, bottom.top + bottom.height * 0.78f), androidx.compose.ui.geometry.Size(bottom.width * 0.36f, bottom.height * 0.05f), androidx.compose.ui.geometry.CornerRadius(h))
+                }
+                else -> Unit
+            }
+        }
+        Spacer(Modifier.height(Space.m))
+        FText(labels[mode], Fuse.type.bodyStrong, maxLines = 1)
+    }
+}
+
+/**
+ * What each performance choice looks like: the same screen with its light and motion. Automatic
+ * has some glow, Low power is flat and still, High quality glows and drifts.
+ */
+@Composable
+private fun PerformancePreview(button: Int) {
+    val c = Fuse.colors
+    val t = loopClock(6_000)
+    val choice = button.coerceIn(0, 2)
+    val richness = listOf(0.6f, 0f, 1f)[choice]
+    val label = listOf("Automatic: rich where it is cheap", "Low power: flat, still and quick", "High quality: every effect on")[choice]
+    MiniScreen(label, active = true, modifier = Modifier.widthIn(max = 460.dp).fillMaxWidth()) {
+        if (richness > 0f) {
+            val drift = kotlin.math.sin(t * 2 * kotlin.math.PI.toFloat()) * richness
+            val a = Offset(size.width * (0.25f + 0.1f * drift), size.height * 0.8f)
+            drawCircle(Brush.radialGradient(listOf(c.accent.copy(alpha = 0.55f * richness), Color.Transparent), center = a, radius = size.width * 0.55f), radius = size.width * 0.55f, center = a)
+            if (richness > 0.8f) {
+                for (i in 0 until 14) {
+                    val x = ((i * 0.137f + t * (0.2f + i % 3 * 0.1f)) % 1f) * size.width
+                    val y = size.height * (0.15f + (i * 0.29f) % 0.7f)
+                    drawCircle(Color.White.copy(alpha = 0.35f), radius = 1.5.dp.toPx(), center = Offset(x, y))
+                }
+            }
+        }
+        drawRoundRect(c.text.copy(alpha = 0.6f), Offset(0f, 0f), androidx.compose.ui.geometry.Size(size.width * 0.4f, size.height * 0.08f), androidx.compose.ui.geometry.CornerRadius(size.height))
+        miniTiles(c, chosen = 0, lift = 1f, y = size.height * 0.4f, n = 7)
     }
 }
 

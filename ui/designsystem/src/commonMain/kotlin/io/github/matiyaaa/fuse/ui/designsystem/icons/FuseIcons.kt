@@ -2,6 +2,7 @@
 package io.github.matiyaaa.fuse.ui.designsystem.icons
 
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.unit.dp
 
 /** Fuse's vendored icon set: Lucide line icons, 24 x 24, drawn with round caps and joins. */
 object FuseIcons {
@@ -150,6 +151,18 @@ object FuseIcons {
     val HardDriveDownload: ImageVector by lazy { lineIcon("HardDriveDownload", "M12 2v8", "m16 6-4 4-4-4", "M4 14h16a2 2 0 0 1 2 2v4a2 2 0 0 1 -2 2h-16a2 2 0 0 1 -2 -2v-4a2 2 0 0 1 2 -2Z", "M6 18h.01", "M10 18h.01") }
     val Hash: ImageVector by lazy { lineIcon("Hash", "M4 9L20 9", "M4 15L20 15", "M10 3L8 21", "M16 3L14 21") }
     val Headphones: ImageVector by lazy { lineIcon("Headphones", "M3 14h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a9 9 0 0 1 18 0v7a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3") }
+    /** The heart filled in, for a favourite: the same outline as [Heart], solid. */
+    val HeartFilled: ImageVector by lazy {
+        ImageVector.Builder(name = "HeartFilled", defaultWidth = 24.dp, defaultHeight = 24.dp, viewportWidth = 24f, viewportHeight = 24f)
+            .addPath(
+                pathData = androidx.compose.ui.graphics.vector.addPathNodes("M2 9.5a5.5 5.5 0 0 1 9.591-3.676.56.56 0 0 0 .818 0A5.49 5.49 0 0 1 22 9.5c0 2.29-1.5 4-3 5.5l-5.492 5.313a2 2 0 0 1-3 .019L5 15c-1.5-1.5-3-3.2-3-5.5"),
+                fill = androidx.compose.ui.graphics.SolidColor(androidx.compose.ui.graphics.Color.Black),
+                stroke = androidx.compose.ui.graphics.SolidColor(androidx.compose.ui.graphics.Color.Black),
+                strokeLineWidth = 1.8f,
+                strokeLineJoin = androidx.compose.ui.graphics.StrokeJoin.Round,
+            )
+            .build()
+    }
     val Heart: ImageVector by lazy { lineIcon("Heart", "M2 9.5a5.5 5.5 0 0 1 9.591-3.676.56.56 0 0 0 .818 0A5.49 5.49 0 0 1 22 9.5c0 2.29-1.5 4-3 5.5l-5.492 5.313a2 2 0 0 1-3 .019L5 15c-1.5-1.5-3-3.2-3-5.5") }
     val HeartOff: ImageVector by lazy { lineIcon("HeartOff", "M10.5 4.893a5.5 5.5 0 0 1 1.091.931.56.56 0 0 0 .818 0A5.49 5.49 0 0 1 22 9.5c0 1.872-1.002 3.356-2.187 4.655", "m16.967 16.967-3.459 3.346a2 2 0 0 1-3 .019L5 15c-1.5-1.5-3-3.2-3-5.5a5.5 5.5 0 0 1 2.747-4.761", "m2 2 20 20") }
     val HeartPulse: ImageVector by lazy { lineIcon("HeartPulse", "M2 9.5a5.5 5.5 0 0 1 9.591-3.676.56.56 0 0 0 .818 0A5.49 5.49 0 0 1 22 9.5c0 2.29-1.5 4-3 5.5l-5.492 5.313a2 2 0 0 1-3 .019L5 15c-1.5-1.5-3-3.2-3-5.5", "M3.22 13H9.5l.5-1 2 4.5 2-7 1.5 3.5h5.27") }

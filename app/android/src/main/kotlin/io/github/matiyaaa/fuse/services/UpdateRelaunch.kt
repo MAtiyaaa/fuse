@@ -63,7 +63,7 @@ object UpdateRelaunch {
         }
         if (!shouldRelaunch(armedAt, updated, System.currentTimeMillis(), home)) return
         try {
-            context.startActivity(Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            context.startActivity(Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), mainDisplay())
         } catch (e: RuntimeException) {
             // Not allowed from the background here; the notice below opens it.
         }
@@ -95,6 +95,7 @@ object UpdateRelaunch {
             context, 0,
             Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+            mainDisplay(),
         )
         val version = try {
             context.packageManager.getPackageInfo(context.packageName, 0).versionName
@@ -116,6 +117,13 @@ object UpdateRelaunch {
             // Notifications are off for Fuse.
         }
     }
+
+    /**
+     * Opens on the main (top) screen. Started from the background, Android otherwise picks the
+     * display that last had focus, which on a dual-screen handheld is often the bottom one.
+     */
+    private fun mainDisplay(): android.os.Bundle =
+        android.app.ActivityOptions.makeBasic().setLaunchDisplayId(android.view.Display.DEFAULT_DISPLAY).toBundle()
 
     private fun canDrawOverlays(context: Context): Boolean =
         android.provider.Settings.canDrawOverlays(context)

@@ -87,6 +87,9 @@ interface FuseServices {
      */
     suspend fun keepFile(relativePath: String, bytes: ByteArray): String? = null
 
+    /** Where the Store puts programs on a computer; null on Android (which has [packages]) and in tests. */
+    val desktopApps: io.github.matiyaaa.fuse.ui.shell.store.DesktopInstaller? get() = null
+
     /**
      * Emulators' own settings files, for the few changes Fuse makes there when asked (PCSX2 patches).
      * Null where Fuse can't reach them (Android).
@@ -123,6 +126,9 @@ interface EmulatorDetector {
 
     /** Firmware folders of installed emulators that Fuse can read (RetroArch `system/`, Dolphin `Sys/`). */
     fun biosFolders(installed: List<InstalledEmulator>): List<String> = emptyList()
+
+    /** RPCS3's dev_hdd0 folders on this device, where its trophies are kept. */
+    fun rpcs3DevHdd0(installed: List<InstalledEmulator>): List<String> = emptyList()
 
     /**
      * Paths Fuse can never read on this device (Android 11+ `Android/data` of other apps). Firmware
@@ -293,7 +299,16 @@ interface DeviceLocations {
 
     /** Where Fuse's file picker starts: internal storage and SD cards, or the home folder and drives. */
     suspend fun storageRoots(): List<LocationHint> = emptyList()
+
+    /**
+     * Where Steam is installed on this computer (each folder holding `steamapps`), and the drive
+     * roots to look on for more Steam libraries. Empty where Steam doesn't run (Android).
+     */
+    suspend fun steamRoots(): SteamPlaces = SteamPlaces()
 }
+
+/** Steam's installs ([roots]) and the drives that may hold more of its libraries ([drives]). */
+data class SteamPlaces(val roots: List<String> = emptyList(), val drives: List<String> = emptyList())
 
 /**
  * Emulator settings files. Reads anything; writes only inside a data folder this returned, atomically,

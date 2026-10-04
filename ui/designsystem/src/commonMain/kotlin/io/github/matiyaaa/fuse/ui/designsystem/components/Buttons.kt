@@ -162,6 +162,11 @@ fun IconButton(
     tint: Color = Fuse.colors.text,
     enabled: Boolean = true,
     contentDescription: String? = null,
+    /**
+     * The icon's colour while selected, for a button whose colour says something (a favourite's
+     * heart stays in the accent), so selecting it never hides its state. Null inverts as usual.
+     */
+    selectedTint: Color? = null,
 ) {
     val c = Fuse.colors
     val motion = Fuse.motion
@@ -172,7 +177,7 @@ fun IconButton(
         motion.tween(Durations.FAST),
         label = "ib",
     )
-    val fg by animateColorAsState(if (selected) c.ink else tint, motion.tween(Durations.FAST), label = "ibfg")
+    val fg by animateColorAsState(if (selected) selectedTint ?: c.ink else tint, motion.tween(Durations.FAST), label = "ibfg")
     val lift by animateFloatAsState(if (selected) 1f else 0f, motion.focusSpring(), label = "iblift")
     val highContrast = Fuse.look.highContrastFocus
     val shape = controlShape()

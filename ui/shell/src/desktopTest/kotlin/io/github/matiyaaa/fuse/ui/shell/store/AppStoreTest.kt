@@ -330,4 +330,23 @@ class AppStoreTest {
         assertIs<AppStoreOps.None>(store.appStore)
         assertFalse(store.appStore.supported)
     }
+
+    @Test
+    fun anAppAddedByItsAddressJoinsOtherAndInstalls(): Unit = runBlocking {
+        apk["zeta.apk"] = "com.example.zeta:3:0.3"
+        val (store, bridge) = ready()
+        val ops = store.appStore
+        assertNotNull(ops.addCustom("not a link"))
+        assertNull(ops.addCustom("github.com/example/zeta"))
+        val zeta = eventually("added") { ops.state.value.catalogue?.apps?.firstOrNull { it.custom } }
+        assertEquals("zeta", zeta.name)
+        assertEquals(listOf(AppStoreOps.OTHER), zeta.categories)
+        assertTrue(ops.state.value.catalogue!!.categories.any { it.name == AppStoreOps.OTHER })
+        assertNotNull(ops.addCustom("https://github.com/example/zeta"), "added once only")
+        ops.install(zeta.key)
+        eventually("installed") { ops.state.value.installed[zeta.key] }
+        assertTrue(bridge.installedApps.containsKey("com.example.zeta"))
+        ops.removeCustom(zeta.key)
+        assertTrue(ops.state.value.catalogue!!.apps.none { it.custom })
+    }
 }

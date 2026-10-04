@@ -29,6 +29,15 @@ class AndroidMenuMusic : MenuMusicPlayer {
         var prepared = false
         var dead = false
         var mix = 0f
+
+        /** Played to its end without looping; it waits, silent, for the next song. */
+        var finished = false
+    }
+
+    @Volatile private var ended: ((String) -> Unit)? = null
+
+    override fun onSongEnded(listener: ((String) -> Unit)?) {
+        ended = listener
     }
 
     /** The song that should be heard. */
@@ -86,12 +95,20 @@ class AndroidMenuMusic : MenuMusicPlayer {
             current = null
             if (song != null && (failedPath != song || failures < MAX_FAILURES)) {
                 // With music already playing, the new song fades in over the old one; otherwise it starts at full mix.
-                current = open(song, startMix = if (leaving.isNotEmpty()) 0f else 1f)
+                current = open(song, startMix = if (leaving.isNotEmpty()) 0f else 1f)?.also { it.player.isLooping = wanted.loop }
+            }
+        }
+        current?.takeIf { it.prepared && !it.dead }?.let { v ->
+            runCatching { v.player.isLooping = wanted.loop }
+            // Shuffle was turned off after its song ended: that song loops from the start.
+            if (v.finished && wanted.loop) {
+                v.finished = false
+                runCatching { v.player.seekTo(0) }
             }
         }
         if (audible()) {
             (listOfNotNull(current) + leaving).forEach { v ->
-                if (v.prepared && !v.dead && !v.player.isPlaying) runCatching { v.player.start() }.onFailure { fail(v) }
+                if (v.prepared && !v.dead && !v.finished && !v.player.isPlaying) runCatching { v.player.start() }.onFailure { fail(v) }
             }
         }
         applyVolumes()
@@ -100,7 +117,7 @@ class AndroidMenuMusic : MenuMusicPlayer {
 
     /** Fades [old] out when it was being heard, else lets it go at once. */
     private fun retire(old: Voice) {
-        if (!old.dead && old.prepared && gate > 0f) {
+        if (!old.dead && old.prepared && !old.finished && gate > 0f) {
             leaving += old
         } else {
             release(old)
@@ -120,6 +137,11 @@ class AndroidMenuMusic : MenuMusicPlayer {
             p.setDataSource(path)
             p.isLooping = true
             p.setVolume(0f, 0f)
+            p.setOnCompletionListener {
+                if (voice.dead || p.isLooping) return@setOnCompletionListener
+                voice.finished = true
+                ended?.invoke(path)
+            }
             p.setOnPreparedListener {
                 if (voice.dead) return@setOnPreparedListener
                 voice.prepared = true
@@ -171,7 +193,7 @@ class AndroidMenuMusic : MenuMusicPlayer {
         }, RETRY_MS * failures)
     }
 
-    private fun audible(): Boolean = wanted.playing && foreground && wanted.song != null
+    private fun audible(): Boolean = wanted.playing && wanted.volume > 0f && foreground && wanted.song != null
 
     private fun startTicking() {
         if (ticking) return

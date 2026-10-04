@@ -82,6 +82,8 @@ data class ScreenPromptSpec(
     val onPick: (LaunchDisplay, ScreenMemory) -> Unit,
     /** The art is an app's icon: drawn whole, centred on the lit screen, never cropped to its shape. */
     val fitArt: Boolean = false,
+    /** A game's own art for the header: its box art, as its tile shows it. */
+    val cover: io.github.matiyaaa.fuse.ui.shell.store.Art? = null,
 )
 
 private val screens = listOf(LaunchDisplay.PRIMARY, LaunchDisplay.SECONDARY)
@@ -199,6 +201,11 @@ private fun Header(s: ScreenPromptSpec, compact: Boolean) {
             contentAlignment = Alignment.Center,
         ) {
             when {
+                // A game shows its box art, the picture its tile has, not a crop of its background.
+                s.cover != null -> io.github.matiyaaa.fuse.ui.shell.components.SquareGameArt(
+                    s.cover, Modifier.fillMaxSize(),
+                    fallback = { io.github.matiyaaa.fuse.ui.designsystem.media.GeneratedArt(s.title, Color(s.accent), slot = io.github.matiyaaa.fuse.ui.designsystem.media.ArtSlot.ICON) },
+                )
                 s.art == null -> FuseIcon(FuseIcons.DualScreen, size = Size.iconL, tint = c.text)
                 // An app's icon keeps its own shape inside the well.
                 s.fitArt -> Artwork(s.art, Modifier.fillMaxSize().padding(Space.s), contentScale = androidx.compose.ui.layout.ContentScale.Fit)

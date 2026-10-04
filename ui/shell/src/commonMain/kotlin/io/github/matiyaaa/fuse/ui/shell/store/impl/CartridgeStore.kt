@@ -11,6 +11,7 @@ import io.github.matiyaaa.fuse.model.CartridgeRoute
 import io.github.matiyaaa.fuse.model.CartridgeStatus
 import io.github.matiyaaa.fuse.model.CartridgeUpload
 import io.github.matiyaaa.fuse.model.GameId
+import io.github.matiyaaa.fuse.model.MediaOwner
 import io.github.matiyaaa.fuse.model.ReleaseInfo
 import io.github.matiyaaa.fuse.model.ScanPhase
 import io.github.matiyaaa.fuse.model.ScanScope
@@ -32,6 +33,8 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
@@ -75,9 +78,29 @@ internal class DefaultCartridgeOps(
                 val id = d.path?.let { p -> match?.find(p) }
                     ?.takeIf { found -> ctx.data.games.get(found)?.let { details.fits(it, d.title, d.platformSlug) } == true }
                 if (id != null && d.romId > 0) rememberRomId(id, d.romId)
-                RecentDownload(d, id?.let { ctx.card(it) })
+                d to id
             }
         }
+        // Follows the matched games, so art and details that arrive after the download (RomM's
+        // pictures, a scrape) show on the tile without leaving the page.
+        .flatMapLatest { matched ->
+            val ids = matched.mapNotNull { it.second }.distinct()
+            if (ids.isEmpty()) {
+                flowOf(matched.map { (d, _) -> RecentDownload(d, null) })
+            } else {
+                combine(
+                    ctx.data.media.observeFor(ids.map { MediaOwner.OfGame(it) }),
+                    combine(ids.map { ctx.data.games.observe(it) }) { it.toList() },
+                    ctx.offline,
+                ) { media, _, roots ->
+                    val summaries = ids.mapNotNull { id -> ctx.data.games.summary(id)?.let { id to it } }.toMap()
+                    matched.map { (d, id) ->
+                        RecentDownload(d, id?.let { summaries[it] }?.let { ctx.summaryToCard(it, media[MediaOwner.OfGame(it.id)], roots) })
+                    }
+                }
+            }
+        }
+        .distinctUntilChanged()
         .flowOn(Dispatchers.Default)
         .resilient().stateIn(ctx.scope, SharingStarted.Eagerly, emptyList())
 

@@ -190,7 +190,7 @@ private fun BatteryHero(status: SystemStatus, temperature: String?, modifier: Mo
                 }
                 FText(time ?: stateWord, Fuse.type.titleSmall, color = if (lit) c.success else c.text, maxLines = 1)
                 val caption = listOfNotNull(
-                    if (time != null) stateWord else if (!status.charging) "Time left shows after a few minutes" else null,
+                    if (time != null) stateWord else if (!status.charging) "Time left shows soon" else null,
                     temperature,
                 ).joinToString("  ·  ")
                 if (caption.isNotEmpty()) FText(caption, Fuse.type.caption, color = c.textMuted, maxLines = 1)
@@ -390,6 +390,7 @@ internal fun ControlsPage(store: FuseStore, platform: PlatformUi, onHide: (() ->
                     valueText = if (on) "${(value * 100).roundToInt()}%" else "Off",
                     modifier = Modifier.fillMaxWidth().height(60.dp),
                     enabled = on,
+                    dragText = { "${(it * 100).roundToInt()}%" },
                 )
             }
             val tiles = listOf<@Composable (Modifier) -> Unit>(

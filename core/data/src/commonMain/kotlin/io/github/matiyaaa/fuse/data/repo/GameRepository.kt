@@ -20,6 +20,7 @@ import io.github.matiyaaa.fuse.model.ExternalLinks
 import io.github.matiyaaa.fuse.model.FolderPolicy
 import io.github.matiyaaa.fuse.model.Game
 import io.github.matiyaaa.fuse.model.GameId
+import io.github.matiyaaa.fuse.model.LibrarySourceId
 import io.github.matiyaaa.fuse.model.GameMetadata
 import io.github.matiyaaa.fuse.model.GameTitles
 import io.github.matiyaaa.fuse.model.MediaOwner
@@ -310,6 +311,33 @@ class GameRepository(
             deleted
         }
     }
+
+    /**
+     * Points a game whose files were moved to another drive at their new place: everything of it
+     * under [old] (the folder its files were in) is now under [new], in the library folder [source]
+     * and its system folder [folder]. Its discs and content follow; play time, edits and art stay
+     * with it. False when its path isn't under [old] or another game already has the new one, and
+     * then nothing changes.
+     */
+    suspend fun relocate(id: GameId, source: LibrarySourceId, folder: String, old: String, new: String, now: Long): Boolean =
+        withContext(dispatcher) {
+            val from = old.trimEnd('/')
+            val to = new.trimEnd('/')
+            if (from.isEmpty() || to.isEmpty() || from == to) return@withContext false
+            db.transactionWithResult {
+                val row = q.selectById(id.value).executeAsOneOrNull() ?: return@transactionWithResult false
+                val moved = when {
+                    row.path == from -> to
+                    row.path.startsWith("$from/") -> to + row.path.substring(from.length)
+                    else -> return@transactionWithResult false
+                }
+                if (q.selectIdByPath(moved).executeAsOneOrNull() != null) return@transactionWithResult false
+                db.gameContentQueries.relocateContent(old = from, new = to, id = id.value)
+                db.gameContentQueries.relocateDiscs(old = from, new = to, id = id.value)
+                q.relocateGame(sourceId = source.value, folder = folder, old = from, new = to, now = now, id = id.value)
+                true
+            }
+        }
 
     // Internals -----------------------------------------------------------------------------------
 

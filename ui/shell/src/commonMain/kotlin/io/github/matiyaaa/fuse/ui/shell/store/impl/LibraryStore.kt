@@ -126,10 +126,22 @@ internal class DefaultLibraryOps(
     private val systemOrder: Flow<Pair<List<String>, Map<String, Long>>> =
         combine(ctx.systemOrder, data.settings.settings.map { it.library.systemColors }.distinctUntilChanged(), ::Pair).distinctUntilChanged()
 
+    /** The firmware check, with the systems the user marked as set up shown as ready. */
+    private val biosShown: Flow<Map<PlatformId, BiosStatus>> = combine(
+        engine.bios,
+        data.settings.settings.map { it.library.biosConfirmed.toSet() }.distinctUntilChanged(),
+    ) { checked, confirmed ->
+        val all = checked.keys + confirmed.map(::PlatformId)
+        all.associateWith { id ->
+            val status = checked[id] ?: if (ctx.platform(id)?.bios == null) BiosStatus.NotRequired else BiosStatus(io.github.matiyaaa.fuse.model.BiosState.UNKNOWN)
+            status.confirmedIf(id.value in confirmed)
+        }
+    }
+
     override val platforms: StateFlow<List<PlatformCard>> = combine(
         data.games.platformCounts(),
         ctx.installed,
-        combine(engine.bios, engine.platformFolders, ::Pair),
+        combine(biosShown, engine.platformFolders, ::Pair),
         platformChoices,
         combine(platformArt, systemOrder, ::Pair),
     ) { counts, installed, (bios, folders), choices, (art, orderAndColors) ->
@@ -506,6 +518,11 @@ internal class DefaultLibraryOps(
     }
 
     override fun onResume() {
+        // Back after a while away with no game in between (the screen was off, the device asleep):
+        // the interface welcomes the user back with the startup animation.
+        val pausedAt = awayFrom
+        awayFrom = null
+        if (pausedAt != null && active == null) io.github.matiyaaa.fuse.ui.shell.app.Away.returned(ctx.now() - pausedAt)
         ctx.scope.launch {
             val session = active
             if (session != null && session.endsOnResume) {
@@ -521,7 +538,12 @@ internal class DefaultLibraryOps(
         }
     }
 
-    override fun onPause() = Unit
+    /** When Fuse last went to the background, until it comes back. */
+    @kotlin.concurrent.Volatile private var awayFrom: Long? = null
+
+    override fun onPause() {
+        awayFrom = ctx.now()
+    }
 
     /** On start: closes a session left open when Fuse was stopped while a game ran. */
     suspend fun recoverSession() {

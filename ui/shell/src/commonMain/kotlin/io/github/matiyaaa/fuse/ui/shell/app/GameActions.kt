@@ -1,5 +1,7 @@
 package io.github.matiyaaa.fuse.ui.shell.app
 
+import io.github.matiyaaa.fuse.ui.shell.settings.canMoveGames
+import io.github.matiyaaa.fuse.ui.shell.settings.moveGames
 import io.github.matiyaaa.fuse.launch.patches.PatchState
 import io.github.matiyaaa.fuse.model.CartridgeRoute
 import io.github.matiyaaa.fuse.model.FolderPolicy
@@ -140,7 +142,13 @@ fun AppState.gameMenu(card: GameCard, fromDetail: Boolean = false, extra: List<M
         add(MenuAction("rename", "Rename Display Title", FuseIcons.TextCursor, detail = "The file keeps its name", onSelect = {
             closeOverlays()
             textInput = TextInputSpec("Display title", card.title) { title ->
-                scope.launch { lib.rename(card.id, title.ifBlank { null }) }
+                scope.launch {
+                    lib.rename(card.id, title.ifBlank { null })
+                    // A corrected name brings the right game's details, not the old match's.
+                    if (title.isNotBlank() && title.trim() != card.title && store.media.followRename(card.id, card.title)) {
+                        toasts.show("Looking for details for ${title.trim()}")
+                    }
+                }
             }
         }))
         if (!card.isApp) {
@@ -154,6 +162,16 @@ fun AppState.gameMenu(card: GameCard, fromDetail: Boolean = false, extra: List<M
                     scope.launch {
                         if (store.media.resetDetails(card.id)) toasts.show("Reset. It goes by its file name again")
                     }
+                }
+            }))
+        }
+        // To an SD card or another drive, where there is one to write to.
+        if (!card.isApp && card.unavailable == null && canMoveGames) {
+            add(MenuAction("move", "Move to Another Drive", FuseIcons.FolderSync, detail = "To an SD card or another drive. Play time and art stay", trailing = Trailing.Chevron, onSelect = {
+                closeOverlays()
+                scope.launch {
+                    val bytes = store.storage.size(card.id) ?: 0L
+                    moveGames(listOf(card.id), listOf(card.title), bytes)
                 }
             }))
         }

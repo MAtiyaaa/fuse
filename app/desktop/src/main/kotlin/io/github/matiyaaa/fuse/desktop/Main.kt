@@ -64,6 +64,19 @@ fun main(args: Array<String>) {
     }
 }
 
+/**
+ * A comfortable first window: three quarters of the screen's width at 16:10, never smaller than
+ * 960 by 600 nor larger than the screen leaves room for.
+ */
+private fun firstWindowSize(): DpSize = try {
+    val bounds = java.awt.GraphicsEnvironment.getLocalGraphicsEnvironment().maximumWindowBounds
+    val w = (bounds.width * 0.76f).coerceIn(960f, maxOf(960f, bounds.width - 48f))
+    val h = (w / 1.6f).coerceIn(600f, maxOf(600f, bounds.height - 48f))
+    DpSize(w.dp, h.dp)
+} catch (e: Exception) {
+    DpSize(1280.dp, 800.dp)
+}
+
 @Composable
 private fun ApplicationScope.FuseWindow(session: DesktopSession) {
     val icon = remember { FuseMarkPainter() }
@@ -72,7 +85,7 @@ private fun ApplicationScope.FuseWindow(session: DesktopSession) {
         val state = rememberWindowState(
             placement = session.placement,
             position = WindowPosition(Alignment.Center),
-            size = DpSize(1280.dp, 800.dp),
+            size = remember { firstWindowSize() },
         )
         session.windowState = state
         LaunchedEffect(state) {

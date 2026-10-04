@@ -32,6 +32,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.draw.clip
+import io.github.matiyaaa.fuse.ui.designsystem.effects.fuseClickable
 import androidx.compose.ui.graphics.graphicsLayer
 import io.github.matiyaaa.fuse.ui.designsystem.icons.ButtonGlyph
 import io.github.matiyaaa.fuse.ui.designsystem.icons.ButtonGlyphDefaults
@@ -156,10 +159,27 @@ private fun HintItem(entry: HintEntry, flash: HintFlash?, onGone: () -> Unit) {
                 fadeOut(motion.tween(Durations.INSTANT, Easings.Standard))
         },
     ) {
+        // A hint is also a button: tapping or clicking it does what pressing its button does.
+        val router = io.github.matiyaaa.fuse.ui.designsystem.input.LocalInputRouter.current
+        val action = actionOf(entry.button)
         Row(verticalAlignment = Alignment.CenterVertically) {
             // Every hint brings its own gap, so nothing jumps when the first one folds away (the
             // line is right aligned; the first gap is empty room on its left).
             Spacer(Modifier.width(HINT_GAP))
+            Row(
+                Modifier
+                    .clip(io.github.matiyaaa.fuse.ui.designsystem.shape.PillShape)
+                    .then(
+                        if (action == null) Modifier
+                        else Modifier.fuseClickable(
+                            shape = io.github.matiyaaa.fuse.ui.designsystem.shape.PillShape,
+                            role = androidx.compose.ui.semantics.Role.Button,
+                            onClickLabel = entry.label,
+                        ) { router.dispatch(action, io.github.matiyaaa.fuse.ui.designsystem.input.InputSource.TOUCH) },
+                    )
+                    .padding(horizontal = Space.xs, vertical = Space.xxs),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
             Box(
                 Modifier.graphicsLayer {
                     val p = if (motion.reduced) 0f else pulse.value
@@ -191,8 +211,24 @@ private fun HintItem(entry: HintEntry, flash: HintFlash?, onGone: () -> Unit) {
             ) { label ->
                 FText(label, Fuse.type.label, color = lerpColor(c.textMuted, c.text, pulse.value), maxLines = 1)
             }
+            }
         }
     }
+}
+
+/** What pressing a hint's button does, for a tap on the hint; null for hints that only describe (the D-pad, sticks, holds). */
+private fun actionOf(button: HintButton): io.github.matiyaaa.fuse.model.NavAction? = when (button) {
+    HintButton.CONFIRM -> io.github.matiyaaa.fuse.model.NavAction.SELECT
+    HintButton.BACK -> io.github.matiyaaa.fuse.model.NavAction.BACK
+    HintButton.OPTIONS -> io.github.matiyaaa.fuse.model.NavAction.CONTEXT
+    HintButton.SEARCH -> io.github.matiyaaa.fuse.model.NavAction.SEARCH
+    HintButton.MENU -> io.github.matiyaaa.fuse.model.NavAction.QUICK_MENU
+    HintButton.PREV -> io.github.matiyaaa.fuse.model.NavAction.PREVIOUS_SECTION
+    HintButton.NEXT -> io.github.matiyaaa.fuse.model.NavAction.NEXT_SECTION
+    HintButton.PAGE_PREV -> io.github.matiyaaa.fuse.model.NavAction.PAGE_UP
+    HintButton.PAGE_NEXT -> io.github.matiyaaa.fuse.model.NavAction.PAGE_DOWN
+    HintButton.HOLD_CONFIRM -> io.github.matiyaaa.fuse.model.NavAction.REORDER
+    else -> null
 }
 
 /** Glyph size (the one every glyph beside label text uses). */

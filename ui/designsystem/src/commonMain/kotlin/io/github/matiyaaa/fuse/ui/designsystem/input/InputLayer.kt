@@ -123,9 +123,17 @@ private fun InputRouter.typeInto(event: KeyEvent): Boolean {
     }
     if (event.isCtrlPressed || event.isAltPressed || event.isMetaPressed) return false
     val down = event.type == KeyEventType.KeyDown
+    if (event.key != Key.Backspace) heldBackspace = 0
     when (event.key) {
+        // Held, Backspace repeats as the system repeats it, and after a moment takes whole words,
+        // the way a phone's keyboard does.
         Key.Backspace -> {
-            if (down) input.backspace()
+            if (down) {
+                if (heldBackspace >= WORD_DELETE_AFTER) input.deleteWordBack() else input.backspace()
+                heldBackspace++
+            } else {
+                heldBackspace = 0
+            }
             return true
         }
         Key.Enter, Key.NumPadEnter -> {
@@ -151,3 +159,9 @@ private fun InputRouter.typeInto(event: KeyEvent): Boolean {
     if (down) input.type(codePoint.toChar().toString())
     return true
 }
+
+/** Backspace presses in a row without letting go (the system's repeats), for word deletion. */
+private var heldBackspace = 0
+
+/** Repeats of a held Backspace before it deletes whole words. */
+private const val WORD_DELETE_AFTER = 12

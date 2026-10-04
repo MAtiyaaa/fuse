@@ -45,6 +45,8 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -329,6 +331,15 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
             state.selectedId = null
         }
     }
+    // Another part of Fuse asked for a view (the Favourites widget): it opens on it.
+    if (scope == LibraryScope.All) {
+        LaunchedEffect(app.librarySegment) {
+            val asked = app.librarySegment ?: return@LaunchedEffect
+            app.librarySegment = null
+            choose(asked)
+            state.inHeader = false
+        }
+    }
 
     // An empty view offers the one thing most likely to help.
     val emptyAction: EmptyAction? = when {
@@ -502,9 +513,12 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
         // every frame of the scroll.
         val listScrolled by remember(listState) { derivedStateOf { listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 24 } }
         val gridScrolled by remember(gridState) { derivedStateOf { gridState.firstVisibleItemIndex > 0 || gridState.firstVisibleItemScrollOffset > 24 } }
-        // A system's page folds its header away once you are past the first row, so more games fit.
+        // Past the first row the stage folds away (a system's header with it), so more games fit: on
+        // All, Favourites and Recently played the Grid's stage shrinks and its logo rises until at
+        // least three rows show.
         val folded = when {
-            systemCard == null || list.isNullOrEmpty() || layout == LibraryLayout.CAPSULE -> false
+            list.isNullOrEmpty() || layout == LibraryLayout.CAPSULE -> false
+            systemCard == null && layout != LibraryLayout.ICON -> false
             touchScroll -> if (layout == LibraryLayout.COMPACT_LIST) listScrolled else gridScrolled
             layout == LibraryLayout.COMPACT_LIST -> state.grid.index >= 3
             else -> state.grid.index >= columns
@@ -534,9 +548,11 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
         // The stage's title: the hero face where there is room for it.
         // A short or narrow screen (a phone held upright) sets it in the display face instead.
         val stageTitle = if (compactHeader || maxW < STACK_WIDTH) Fuse.type.display else Fuse.type.hero
+        var headerPx by remember { mutableIntStateOf(0) }
+        val density = LocalDensity.current
         Column(Modifier.fillMaxSize()) {
             Spacer(Modifier.height(Size.hudHeight + if (systemCard != null) lerp(if (compactHeader) Space.xs else Space.m, Space.xxs, collapse) else 0.dp))
-            Box(Modifier.reveal(entry, 0)) {
+            Box(Modifier.reveal(entry, 0).onSizeChanged { headerPx = it.height }) {
                 LibraryHeader(
                     app = app,
                     scope = scope,
@@ -571,14 +587,23 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
                 ) {
                   when (layout) {
                     LibraryLayout.ICON -> {
-                        // The game's logo moves up with the folding header and makes room for another row.
+                        val (cols, base) = iconGrid(maxW, metrics, LocalGameArt.current)
+                        // The game's logo moves up and shrinks with the folding stage and makes room for more rows.
                         val logo = when {
-                            !inSystem && compactHeader -> STAGE_LOGO_SHORT
-                            !inSystem -> STAGE_LOGO
+                            !inSystem && compactHeader -> lerp(STAGE_LOGO_SHORT, Space.xxl, collapse)
+                            !inSystem -> lerp(STAGE_LOGO, Space.x3, collapse)
                             compactHeader -> lerp(STAGE_LOGO_SHORT, Space.xxl, collapse)
                             else -> lerp(Space.x4, Space.xxl + Space.s, collapse)
                         }
-                        val foldedStage = if (inSystem) logo + Space.xs else stageHeight * 0.66f
+                        // Folded, the stage keeps one line (a small logo or the title), and the tiles
+                        // shrink in place just enough for three whole rows to show between it and the hints.
+                        val tileH = LocalGameArt.current.tileSize(base).height
+                        val header = with(density) { headerPx.toDp() }
+                        val foldedStage = if (inSystem) logo + Space.xs else Space.x3 + Space.xs
+                        // The chosen row keeps clear of the grid's fading top edge, so that room counts too.
+                        val rowsRoom = maxH - Size.hudHeight - header - foldedStage - Space.s - Size.hintHeight - Space.s - Space.xl - Space.s
+                        val fit = if (inSystem) 1f else (((rowsRoom / 3) - metrics.gap - Space.s) / tileH).coerceIn(MIN_FOLDED_TILE, 1f)
+                        val tileBase = base * (1f - (1f - fit) * collapse)
                         Box(
                             Modifier
                                 .fillMaxWidth()
@@ -589,16 +614,15 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
                         ) {
                             Stage(
                                 stageOf(selectedCard), showLogo = prefs.showLogo, logoHeight = logo,
-                                titleStyle = if (inSystem) androidx.compose.ui.text.lerp(Fuse.type.display, Fuse.type.title, collapse) else stageTitle,
-                                fold = if (inSystem) collapse else 0f,
+                                titleStyle = if (inSystem) androidx.compose.ui.text.lerp(Fuse.type.display, Fuse.type.title, collapse) else androidx.compose.ui.text.lerp(stageTitle, Fuse.type.title, collapse),
+                                fold = collapse,
                                 // A short screen keeps the stage to two lines, clear of the tabs.
                                 inlineEyebrow = compactHeader,
                             )
                         }
                         Spacer(Modifier.height(if (inSystem) lerp(Space.m, Space.s, collapse) else lerp(Space.l, Space.s, collapse)))
-                        val (cols, base) = iconGrid(maxW, metrics, LocalGameArt.current)
                         columns = cols
-                        IconGrid(list, state, gridState, cols, base, metrics.gap, reveal, onTap = { i -> tapAt(i, list) }, onLong = { i -> state.pick(i, list); options(list[i]) }, focused = gridFocused)
+                        IconGrid(list, state, gridState, cols, tileBase, metrics.gap, reveal, onTap = { i -> tapAt(i, list) }, onLong = { i -> state.pick(i, list); options(list[i]) }, focused = gridFocused)
                     }
                     LibraryLayout.CAPSULE -> {
                         Box(Modifier.fillMaxWidth().weight(1f).padding(horizontal = Space.gutter).reveal(reveal, 1), contentAlignment = Alignment.BottomStart) {
@@ -774,7 +798,9 @@ private fun IconGrid(
     onLong: (Int) -> Unit,
     focused: Boolean,
 ) {
-    FollowSelection(grid, { state.grid.index }, anchor = 0.05f)
+    // The chosen row stays clear of the top's fading edge, and is followed again as tiles shrink with the folding stage.
+    val fade = with(androidx.compose.ui.platform.LocalDensity.current) { (Space.xl + Space.s).roundToPx() }
+    FollowSelection(grid, { state.grid.index }, anchor = 0.05f, insetPx = fade, relayout = size)
     LazyVerticalGrid(
         columns = GridCells.Fixed(columns),
         state = grid,
@@ -784,14 +810,17 @@ private fun IconGrid(
         verticalArrangement = Arrangement.spacedBy(gap + Space.s),
     ) {
         itemsIndexed(list, key = { _, g -> g.id.value }) { i, card ->
-            GameIconTile(
-                card,
-                selected = focused && i == state.grid.index,
-                size = size,
-                modifier = Modifier.reveal(reveal, 2 + i / columns),
-                onClick = { onTap(i) },
-                onLongClick = { onLong(i) },
-            )
+            // Centred in its column, so tiles shrunk by a folded stage keep the grid's rhythm.
+            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
+                GameIconTile(
+                    card,
+                    selected = focused && i == state.grid.index,
+                    size = size,
+                    modifier = Modifier.reveal(reveal, 2 + i / columns),
+                    onClick = { onTap(i) },
+                    onLongClick = { onLong(i) },
+                )
+            }
         }
     }
 }
@@ -1336,6 +1365,9 @@ private val SYSTEM_STAGE_MAX = 124.dp
 
 /** The selected game's logo on the stage, and on a short screen. */
 private val STAGE_LOGO = 84.dp
+
+/** The smallest a folded stage shrinks the Grid's tiles to, as a share of their size. */
+private const val MIN_FOLDED_TILE = 0.62f
 private val STAGE_LOGO_SHORT = 56.dp
 
 /** Logos ahead of the selection are decoded at this size, ready for the stage. */

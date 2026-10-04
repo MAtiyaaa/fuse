@@ -26,6 +26,22 @@ class LinearSelection(initial: Int = 0) {
      * without subscribing the screen to it, so moving the selection doesn't recompose the screen
      * that only clamps it.
      */
+    /**
+     * Keeps the selection on the same row when rows before it come or go ([ids] are the rows' ids,
+     * in order): a warning row that clears above the chosen one doesn't move the choice to its
+     * neighbour. Called while composing, like [clamp], without subscribing to the index.
+     */
+    fun keepOn(ids: List<String>) = Snapshot.withoutReadObservation {
+        val old = lastIds
+        if (old != null && old != ids) {
+            val at = old.getOrNull(index)?.let(ids::indexOf) ?: -1
+            if (at >= 0) index = at
+        }
+        lastIds = ids
+    }
+
+    private var lastIds: List<String>? = null
+
     fun clamp(count: Int) = Snapshot.withoutReadObservation {
         if (count <= 0) index = 0 else if (index >= count) index = count - 1
     }

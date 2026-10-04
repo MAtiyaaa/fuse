@@ -1,5 +1,9 @@
 package io.github.matiyaaa.fuse.ui.shell.game
 
+import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.offset
+import androidx.compose.ui.draw.clip
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.mutableIntStateOf
@@ -35,6 +39,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -101,6 +106,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.theme.tabular
 import io.github.matiyaaa.fuse.ui.designsystem.theme.toColor
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.FocusZone
+import io.github.matiyaaa.fuse.ui.shell.app.GallerySpec
 import io.github.matiyaaa.fuse.ui.shell.app.Route
 import io.github.matiyaaa.fuse.ui.shell.app.collectionPicker
 import io.github.matiyaaa.fuse.ui.shell.app.emulatorPicker
@@ -199,7 +205,7 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
         issues.firstOrNull()?.let { issue ->
             DetailAction("health", null, FuseIcons.BadgeAlert, "What needs attention") { app.showProblem(issue.problem, card) }
         },
-        DetailAction("fav", null, FuseIcons.Heart, if (game.favorite) "Remove from favourites" else "Add to favourites") {
+        DetailAction("fav", null, if (game.favorite) FuseIcons.HeartFilled else FuseIcons.Heart, if (game.favorite) "Remove from favourites" else "Add to favourites") {
             app.scope.launch { app.store.library.setFavorite(game.id, !game.favorite) }
         },
         DetailAction("col", null, FuseIcons.ListPlus, "Add to a collection") { app.collectionPicker(game.id, game.displayTitle) },
@@ -220,22 +226,59 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
     var cardsPerLine by remember(game.id) { mutableIntStateOf(3) }
     val perLine = detailsPerLine(cards.size, cardsPerLine)
     val lines = cards.chunked(perLine)
+    // Facts past what one line shows wait behind a "+" chip above the buttons.
+    val facts = remember(d) { factsOf(d) }
+    val moreFacts = facts.size > SHOWN_FACTS
+    val description = game.metadata.description?.takeIf { it.isNotBlank() }
     val rows = buildList {
+        if (moreFacts) add("facts")
         add("actions")
+        if (description != null) add("about")
         if (discs.size > 1) add("discs")
         if (badges.isNotEmpty()) add("achievements")
         if (shots.isNotEmpty()) add("shots")
         lines.indices.forEach { add("details:$it") }
     }
     fun sizeOf(key: String) = when (key) {
+        "facts", "about" -> 1
         "actions" -> actions.size
         "discs" -> discs.size
         "achievements" -> badges.size
         "shots" -> shots.size
         else -> if (key.startsWith("details:")) lines.getOrNull(key.removePrefix("details:").toInt())?.size ?: 0 else 0
     }
+    // The page opens on Play, whatever sits above it.
+    val opened = remember(game.id) { booleanArrayOf(false) }
+    if (!opened[0]) {
+        sel.row = rows.indexOf("actions").coerceAtLeast(0)
+        opened[0] = true
+    }
     sel.clamp(rows, ::sizeOf)
     val row = rows.getOrNull(sel.row) ?: "actions"
+    // A screenshot opened full screen, by its index.
+    var viewing by remember(game.id) { mutableStateOf<Int?>(null) }
+    fun showFacts() {
+        app.choice = io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec(
+            title = game.displayTitle,
+            icon = FuseIcons.Tags,
+            message = "Everything Fuse knows about this game",
+            // Each group together, in the order the groups first come (collections sit between the
+            // first facts and the rest, so "About" would otherwise show twice).
+            options = facts.withIndex().sortedBy { (_, f) -> facts.indexOfFirst { it.group == f.group } }.map { (i, f) ->
+                io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction("fact.$i", f.text, f.icon ?: FuseIcons.Tag, detail = f.label, section = f.group, onSelect = { app.choice = null })
+            },
+        )
+    }
+    fun readAbout() {
+        val text = description ?: return
+        app.textPreview = io.github.matiyaaa.fuse.ui.shell.app.TextPreviewSpec(
+            title = game.displayTitle,
+            message = listOfNotNull(game.metadata.developer, game.metadata.releaseYear?.toString()).joinToString("  ·  ").ifEmpty { null },
+            text = text,
+            actions = listOf(io.github.matiyaaa.fuse.ui.shell.app.PreviewAction("Close", FuseIcons.Close, primary = true) { app.textPreview = null }),
+            icon = FuseIcons.BookOpen,
+        )
+    }
     val col = sel.column(row)
     val focused = app.focusZone == FocusZone.CONTENT
 
@@ -257,6 +300,9 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
         app.hero = gameRoom(game.id, d.art, d.platform.accent, system)
     }
     val confirm = when (row) {
+        "facts" -> "See every detail"
+        "about" -> "Read it all"
+        "shots" -> "View full screen"
         "actions" -> actions.getOrNull(col)?.name
         "discs" -> "Play this disc"
         else -> when (cardAt(row, col)) {
@@ -268,12 +314,20 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
     }
     // On the More button, confirming already opens the options, so the line says it once.
     val onMore = row == "actions" && actions.getOrNull(col)?.id == "more"
-    LaunchedEffect(row, confirm, onMore) {
-        app.hints = listOfNotNull(
-            confirm?.let { Hint(HintButton.CONFIRM, it) },
-            if (onMore) null else Hint(HintButton.OPTIONS, "Options"),
-            Hint(HintButton.BACK, "Back"),
-        )
+    LaunchedEffect(row, confirm, onMore, viewing != null) {
+        app.hints = if (viewing != null) {
+            // The screenshot viewer: only moving between them and closing.
+            listOfNotNull(
+                if (shots.size > 1) Hint(HintButton.DPAD, "Previous or next") else null,
+                Hint(HintButton.BACK, "Close"),
+            )
+        } else {
+            listOfNotNull(
+                confirm?.let { Hint(HintButton.CONFIRM, it) },
+                if (onMore) null else Hint(HintButton.OPTIONS, "Options"),
+                Hint(HintButton.BACK, "Back"),
+            )
+        }
     }
 
     // Where each section starts in the page, so moving down brings the whole section into view.
@@ -281,12 +335,17 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
     val inset = with(LocalDensity.current) { Space.l.roundToPx() }
     // Every line of detail cards scrolls to the Details section, so it stays in view as a whole.
     val section = if (row.startsWith("details:")) "details" else row
-    LaunchedEffect(section, tops[section]) {
-        val target = if (sel.row == 0) 0 else ((tops[section] ?: 0) - inset).coerceIn(0, scroll.maxValue)
+    LaunchedEffect(section, tops[section], scroll.maxValue) {
+        val target = when {
+            row == "facts" || row == "actions" -> 0
+            // The last section shows the page's very end, so nothing is left below the stick's reach.
+            sel.row == rows.lastIndex -> scroll.maxValue
+            else -> ((tops[section] ?: 0) - inset).coerceIn(0, scroll.maxValue)
+        }
         scroll.animateScrollTo(target, motion.followSpring())
     }
 
-    InputLayer(enabled = focused && !app.overlayOpen) { e ->
+    InputLayer(enabled = focused && !app.overlayOpen && viewing == null) { e ->
         when (e.action) {
             NavAction.UP, NavAction.DOWN, NavAction.LEFT, NavAction.RIGHT -> {
                 val from = row
@@ -301,6 +360,9 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
             }
             NavAction.SELECT -> {
                 when (row) {
+                    "facts" -> showFacts()
+                    "about" -> readAbout()
+                    "shots" -> viewing = col
                     "actions" -> actions.getOrNull(col)?.run?.invoke()
                     "discs" -> discs.getOrNull(col)?.let { disc -> app.play(card, discPath = disc.path) }
                     else -> cardAt(row, col)?.let(::openCard)
@@ -328,7 +390,11 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
                 Column(Modifier.weight(1f)) {
                     GameTitle(d, layout, app.store.prefs.value.showLogo, Modifier.reveal(reveal, 0))
                     Spacer(Modifier.height(Space.l))
-                    FactChips(d, Modifier.reveal(reveal, 1))
+                    FactChips(
+                        d, facts, Modifier.reveal(reveal, 1),
+                        moreSelected = row == "facts" && focused,
+                        onMore = { sel.row = rows.indexOf("facts"); showFacts() },
+                    )
                     if (contentStates.isNotEmpty()) {
                         Spacer(Modifier.height(Space.m))
                         FlowRow(Modifier.reveal(reveal, 1), horizontalArrangement = Arrangement.spacedBy(Space.s), verticalArrangement = Arrangement.spacedBy(Space.s)) {
@@ -365,6 +431,7 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
                                     else -> c.text
                                 },
                                 contentDescription = a.name,
+                                selectedTint = if (a.id == "fav" && game.favorite) c.accent else null,
                                 modifier = m,
                                 onClick = tap,
                             )
@@ -389,6 +456,8 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
                         }
                     }
                     LaunchNote(d, Modifier.reveal(reveal, 3), issues.firstOrNull()?.problem?.title)
+                    Spacer(Modifier.height(Space.l))
+                    TimeTogether(d, Modifier.reveal(reveal, 3))
                 }
                 layout.cover?.let { cover ->
                     Spacer(Modifier.width(Space.xxl))
@@ -410,11 +479,14 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
                 .reveal(reveal, index)
 
             Spacer(Modifier.height(Space.x3))
-            game.metadata.description?.takeIf { it.isNotBlank() }?.let {
+            description?.let {
                 Column(Modifier.section("about", 4).padding(bottom = Space.xxl)) {
                     SectionLabel("About")
                     Spacer(Modifier.height(Space.m))
-                    FText(it, Fuse.type.body, color = c.textMuted, maxLines = 6, modifier = Modifier.widthIn(max = layout.reading))
+                    AboutBlock(
+                        it, selected = row == "about" && focused, reading = layout.reading,
+                        onClick = { sel.row = rows.indexOf("about"); readAbout() },
+                    )
                 }
             }
             if (discs.size > 1) {
@@ -430,8 +502,8 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
                 }
             }
             d.achievements?.let { a ->
-                Section("Achievements", Modifier.section("achievements", 6)) {
-                    AchievementSummary(a.progress, a.earned, a.total, a.pointsEarned, a.points, a.mastered, a.matchedByName)
+                Section(a.source.noun, Modifier.section("achievements", 6), count = a.source.label.takeIf { a.source != io.github.matiyaaa.fuse.model.AchievementSource.RETRO_ACHIEVEMENTS }) {
+                    AchievementSummary(a.progress, a.earned, a.total, a.pointsEarned, a.points.takeIf { a.source.hasPoints } ?: 0, a.mastered, a.matchedByName)
                     if (badges.isNotEmpty()) {
                         Spacer(Modifier.height(Space.l))
                         val list = rememberLazyListState()
@@ -459,7 +531,7 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
                         }
                         badges.getOrNull(col.takeIf { row == "achievements" } ?: -1)?.let { b ->
                             Spacer(Modifier.height(Space.s))
-                            FText("${b.title}: ${b.description} (${b.points} points)", Fuse.type.body, color = c.textMuted, maxLines = 2, modifier = Modifier.widthIn(max = layout.reading))
+                            FText("${b.title}: ${b.description}" + (if (b.points > 0) " (${b.points} points)" else ""), Fuse.type.body, color = c.textMuted, maxLines = 2, modifier = Modifier.widthIn(max = layout.reading))
                         }
                     }
                 }
@@ -477,7 +549,7 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
                             Tile(
                                 selected = row == "shots" && col == i && focused,
                                 modifier = Modifier.height(LocalTileMetrics.current.icon).aspectRatio(Aspect.SCREENSHOT),
-                                onClick = { sel.row = rows.indexOf("shots"); sel.setColumn("shots", i) },
+                                onClick = { sel.row = rows.indexOf("shots"); sel.setColumn("shots", i); viewing = i },
                             ) {
                                 Artwork(s.model, Modifier.fillMaxSize())
                             }
@@ -516,6 +588,11 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
             }
             Spacer(Modifier.height(Size.hintHeight + Space.x4))
         }
+        // The viewer covers the whole app, top bar included, so the app hosts it.
+        LaunchedEffect(viewing) {
+            app.gallery = viewing?.let { start -> GallerySpec(shots.map { it.model }, start, onIndex = { sel.setColumn("shots", it) }, onClose = { viewing = null }) }
+        }
+        DisposableEffect(game.id) { onDispose { app.gallery = null } }
     }
 }
 
@@ -575,39 +652,210 @@ private fun GameTitle(d: GameDetail, layout: GameLayout, showLogo: Boolean, modi
     }
 }
 
+/** One thing Fuse knows about a game: what it is ([label]), the words, and where it is listed. */
+private data class GameFact(val text: String, val icon: ImageVector?, val label: String, val group: String, val dot: Color? = null)
+
+/** How many facts show as chips before the rest wait behind "+". */
+private const val SHOWN_FACTS = 5
+
 /**
- * What Fuse knows about the game, as a line of quiet chips: its system first (with its colour),
- * then year, players and genre when a source said so, then how much you have played it and when,
- * and the collections it is in. Nothing is guessed: a fact Fuse doesn't have is simply left out.
- * The finer play history (this week, sessions) waits in its card further down.
+ * Every fact Fuse has about the game, the ones worth a chip first: its system, year, players and
+ * genre, extras and collections; then everything else (makers, series, every genre, the file's
+ * regions, languages and version). Nothing is guessed: what Fuse doesn't know is left out. Play
+ * time has its own place under the buttons.
  */
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun FactChips(d: GameDetail, modifier: Modifier) {
+private fun factsOf(d: GameDetail): List<GameFact> {
     val game = d.game
     val meta = game.metadata
-    FlowRow(modifier, horizontalArrangement = Arrangement.spacedBy(Space.s), verticalArrangement = Arrangement.spacedBy(Space.s)) {
-        FactChip(d.platform.name, dot = d.platform.accent.toColor())
-        meta.releaseYear?.let { FactChip(it.toString(), FuseIcons.Calendar) }
-        meta.players?.let(::playersLabel)?.let { FactChip(it, FuseIcons.Users) }
-        meta.genres.take(2).joinToString(", ").ifBlank { null }?.let { FactChip(it, FuseIcons.Tag) }
-        if (game.play.totalSeconds > 0) {
-            FactChip("${playtimeText(game.play.totalSeconds)} played", FuseIcons.Clock3)
-        } else {
-            FactChip("Not played yet", FuseIcons.Sparkle)
-        }
-        game.play.lastPlayedAt?.let { FactChip("Played ${agoText(it)}", FuseIcons.History) }
-        // Updates and DLC found beside it, as a store page would list them; the card below says more.
+    val tags = game.tags
+    return buildList {
+        add(GameFact(d.platform.name, null, "System", "About", dot = d.platform.accent.toColor()))
+        meta.releaseYear?.let { add(GameFact(it.toString(), FuseIcons.Calendar, "Released", "About")) }
+        meta.players?.let(::playersLabel)?.let { add(GameFact(it, FuseIcons.Users, "Players", "About")) }
+        meta.genres.firstOrNull()?.let { add(GameFact(it, FuseIcons.Tag, "Genre", "About")) }
         val updates = game.content.count { it.kind == ContentKind.UPDATE }
         val dlc = game.content.count { it.kind == ContentKind.DLC }
         listOfNotNull(
             updates.takeIf { it > 0 }?.let { if (it == 1) "1 update" else "$it updates" },
             dlc.takeIf { it > 0 }?.let { "$it DLC" },
-        ).joinToString(", ").ifEmpty { null }?.let { FactChip(it, FuseIcons.Package) }
-        when (d.collections.size) {
-            0 -> Unit
-            1, 2 -> d.collections.forEach { FactChip(it.name, FuseIcons.Bookmark) }
-            else -> FactChip("In ${d.collections.size} collections", FuseIcons.Bookmark)
+        ).joinToString(", ").ifEmpty { null }?.let { add(GameFact(it, FuseIcons.Package, "Extras", "About")) }
+        d.collections.forEach { add(GameFact(it.name, FuseIcons.Bookmark, "Collection", "Collections")) }
+        meta.genres.drop(1).forEach { add(GameFact(it, FuseIcons.Tag, "Genre", "About")) }
+        meta.franchise?.let { add(GameFact(it, FuseIcons.Layers, "Series", "About")) }
+        meta.developer?.let { add(GameFact(it, FuseIcons.Wrench, "Developer", "About")) }
+        meta.publisher?.takeIf { it != meta.developer }?.let { add(GameFact(it, FuseIcons.Store, "Publisher", "About")) }
+        meta.rating?.let { add(GameFact("$it out of 100", FuseIcons.Star, "Rating", "About")) }
+        tags.regions.takeIf { it.isNotEmpty() }?.let { add(GameFact(it.joinToString(", "), FuseIcons.Globe, "Region", "This copy")) }
+        tags.languages.takeIf { it.isNotEmpty() }?.let { add(GameFact(it.joinToString(", "), FuseIcons.Type, "Languages", "This copy")) }
+        listOfNotNull(tags.version?.let { "Version $it" }, tags.revision?.let { "Revision $it" }).joinToString(", ").ifEmpty { null }
+            ?.let { add(GameFact(it, FuseIcons.Hash, "Version", "This copy")) }
+        tags.flags.forEach { add(GameFact(it, FuseIcons.Info, "Marked", "This copy")) }
+    }
+}
+
+/**
+ * What Fuse knows about the game, as one line of quiet chips: the first few facts, then a "+" chip
+ * that lists them all ([onMore]); it is selectable from the buttons below with Up.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun FactChips(d: GameDetail, facts: List<GameFact>, modifier: Modifier, moreSelected: Boolean, onMore: () -> Unit) {
+    FlowRow(modifier, horizontalArrangement = Arrangement.spacedBy(Space.s), verticalArrangement = Arrangement.spacedBy(Space.s), itemVerticalAlignment = Alignment.CenterVertically) {
+        facts.take(SHOWN_FACTS).forEach { FactChip(it.text, it.icon, it.dot) }
+        if (facts.size > SHOWN_FACTS) MoreChip(facts.size - SHOWN_FACTS, moreSelected, onMore)
+    }
+}
+
+/** "+3": the facts that didn't get a chip, a press away. Lit like a button when selected. */
+@Composable
+private fun MoreChip(count: Int, selected: Boolean, onClick: () -> Unit) {
+    val c = Fuse.colors
+    val fill by androidx.compose.animation.animateColorAsState(if (selected) c.text else c.surfaceDim.copy(alpha = if (c.isDark) 0.62f else 0.72f), Fuse.motion.tween(io.github.matiyaaa.fuse.ui.designsystem.theme.Durations.FAST), label = "moreChip")
+    val tint = if (selected) c.ink else c.text
+    Row(
+        Modifier
+            .height(Size.chipCompact)
+            .clip(PillShape)
+            .background(fill)
+            .border(Size.stroke, if (selected) c.text else c.hairlineStrong, PillShape)
+            .fuseClickable(shape = PillShape, role = androidx.compose.ui.semantics.Role.Button, onClickLabel = "Every detail", onClick = onClick)
+            .padding(horizontal = Space.m),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(Space.xs),
+    ) {
+        FuseIcon(FuseIcons.Plus, size = Size.iconXS, tint = tint)
+        FText(count.toString(), Fuse.type.label.tabular(), color = tint, maxLines = 1)
+    }
+}
+
+/**
+ * The game's description, four lines of it, with "Read it all" under it. Selected, it lifts onto a
+ * soft panel with a focus edge, so the controller can reach it like everything else.
+ */
+@Composable
+private fun AboutBlock(text: String, selected: Boolean, reading: Dp, onClick: () -> Unit) {
+    val c = Fuse.colors
+    val shape = RoundedCornerShape(Fuse.geometry.panel)
+    val lit by animateFloatAsState(if (selected) 1f else 0f, Fuse.motion.tween(io.github.matiyaaa.fuse.ui.designsystem.theme.Durations.FAST), label = "about")
+    Column(
+        Modifier
+            .widthIn(max = reading + Space.l * 2)
+            .offset(x = -Space.l)
+            .clip(shape)
+            .background(c.text.copy(alpha = 0.06f * lit))
+            .border(Size.focusStroke, c.focus.copy(alpha = lit), shape)
+            .fuseClickable(shape = shape, scale = false, role = androidx.compose.ui.semantics.Role.Button, onClickLabel = "Read it all", onClick = onClick)
+            .padding(Space.l),
+    ) {
+        FText(text, Fuse.type.body, color = c.textMuted, maxLines = 4)
+        Spacer(Modifier.height(Space.s))
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
+            FText("Read it all", Fuse.type.label, color = if (selected) c.text else c.accent, maxLines = 1)
+            FuseIcon(FuseIcons.ChevronRight, size = Size.iconXS, tint = if (selected) c.text else c.accent)
+        }
+    }
+}
+
+/**
+ * The time you and this game have spent together, front and centre under Play: the total large,
+ * in a ring of light whose arc fills with this week's share, then sessions, this week and when you
+ * last played. Before the first session it says so, simply.
+ */
+@Composable
+private fun TimeTogether(d: GameDetail, modifier: Modifier) {
+    val c = Fuse.colors
+    val play = d.game.play
+    val shape = RoundedCornerShape(Fuse.geometry.panel)
+    val accent = d.platform.accent.toColor()
+    val share = if (play.totalSeconds > 0) (d.secondsThisWeek.toFloat() / play.totalSeconds).coerceIn(0f, 1f) else 0f
+    val arc by animateFloatAsState(share, Fuse.motion.tween(io.github.matiyaaa.fuse.ui.designsystem.theme.Durations.DELIBERATE), label = "weekArc")
+    Row(
+        modifier
+            .clip(shape)
+            .background(c.surfaceDim.copy(alpha = if (c.isDark) 0.55f else 0.7f))
+            .border(Size.stroke, c.hairline, shape)
+            .padding(horizontal = Space.l, vertical = Space.m),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.size(Size.thumbL), contentAlignment = Alignment.Center) {
+            androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
+                val stroke = 3.dp.toPx()
+                val inset = stroke / 2
+                val box = androidx.compose.ui.geometry.Size(size.width - stroke, size.height - stroke)
+                drawArc(c.text.copy(alpha = 0.12f), 0f, 360f, false, androidx.compose.ui.geometry.Offset(inset, inset), box, style = androidx.compose.ui.graphics.drawscope.Stroke(stroke))
+                if (arc > 0f) {
+                    drawArc(accent, -90f, 360f * arc.coerceAtLeast(0.02f), false, androidx.compose.ui.geometry.Offset(inset, inset), box, style = androidx.compose.ui.graphics.drawscope.Stroke(stroke, cap = androidx.compose.ui.graphics.StrokeCap.Round))
+                }
+            }
+            FuseIcon(if (play.totalSeconds > 0) FuseIcons.Clock3 else FuseIcons.Sparkle, size = Size.iconM, tint = if (play.totalSeconds > 0) c.text else c.textMuted)
+        }
+        Spacer(Modifier.width(Space.l))
+        if (play.totalSeconds <= 0) {
+            Column {
+                FText("Not played yet", Fuse.type.titleSmall, maxLines = 1)
+                FText("Your time together starts with Play", Fuse.type.caption, color = c.textMuted, maxLines = 1)
+            }
+            return@Row
+        }
+        Column {
+            FText(playtimeText(play.totalSeconds), Fuse.type.numericLarge, maxLines = 1)
+            FText("played in all", Fuse.type.caption, color = c.textMuted, maxLines = 1)
+        }
+        val stats = listOfNotNull(
+            play.sessions.takeIf { it > 0 }?.let { (if (it == 1) "1" else it.toString()) to (if (it == 1) "session" else "sessions") },
+            d.secondsThisWeek.takeIf { it > 0 }?.let { playtimeText(it) to "this week" },
+            play.lastPlayedAt?.let { agoText(it).replaceFirstChar(Char::uppercase) to "last played" },
+        )
+        for ((value, label) in stats) {
+            Spacer(Modifier.width(Space.l))
+            Box(Modifier.width(Size.divider).height(Size.thumb).background(c.hairline))
+            Spacer(Modifier.width(Space.l))
+            Column {
+                FText(value, Fuse.type.bodyStrong.tabular(), maxLines = 1)
+                FText(label, Fuse.type.caption, color = c.textMuted, maxLines = 1)
+            }
+        }
+    }
+}
+
+/**
+ * A screenshot full screen over the page: Left and Right (or a swipe) move between them, Back or a
+ * tap on the dark edge closes. Where it is shows under it, "3 of 8".
+ */
+@Composable
+internal fun PictureViewer(shots: List<Any?>, start: Int, onIndex: (Int) -> Unit, onClose: () -> Unit) {
+    val c = Fuse.colors
+    val pager = androidx.compose.foundation.pager.rememberPagerState(initialPage = start.coerceIn(0, (shots.size - 1).coerceAtLeast(0))) { shots.size }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    LaunchedEffect(pager.currentPage) { onIndex(pager.currentPage) }
+    InputLayer(priority = io.github.matiyaaa.fuse.ui.designsystem.input.LayerPriority.DIALOG, modal = true) { e ->
+        when (e.action) {
+            NavAction.LEFT, NavAction.PREVIOUS_SECTION -> { if (pager.currentPage > 0) scope.launch { pager.animateScrollToPage(pager.currentPage - 1) }; NavResult.MOVED }
+            NavAction.RIGHT, NavAction.NEXT_SECTION -> { if (pager.currentPage < shots.lastIndex) scope.launch { pager.animateScrollToPage(pager.currentPage + 1) }; NavResult.MOVED }
+            NavAction.BACK, NavAction.SELECT -> { onClose(); NavResult.CONSUMED }
+            else -> NavResult.CONSUMED
+        }
+    }
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.96f))
+            .fuseClickable(scale = false, onClickLabel = "Close", onClick = onClose),
+        contentAlignment = Alignment.Center,
+    ) {
+        androidx.compose.foundation.pager.HorizontalPager(pager, Modifier.fillMaxSize(), pageSpacing = Space.l) { i ->
+            Box(Modifier.fillMaxSize().padding(start = Space.gutter, end = Space.gutter, top = Space.xl, bottom = Size.hudHeight), contentAlignment = Alignment.Center) {
+                Artwork(shots[i], Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
+            }
+        }
+        Row(
+            Modifier.align(Alignment.BottomCenter).padding(bottom = Space.xl).clip(PillShape).background(c.ink.copy(alpha = 0.7f)).padding(horizontal = Space.l, vertical = Space.s),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(Space.m),
+        ) {
+            FuseIcon(FuseIcons.ChevronLeft, size = Size.iconS, tint = if (pager.currentPage > 0) c.text else c.textFaint)
+            FText("${pager.currentPage + 1} of ${shots.size}", Fuse.type.label.tabular(), maxLines = 1)
+            FuseIcon(FuseIcons.ChevronRight, size = Size.iconS, tint = if (pager.currentPage < shots.lastIndex) c.text else c.textFaint)
         }
     }
 }
@@ -701,7 +949,7 @@ private fun AchievementSummary(progress: Float, earned: Int, total: Int, pointsE
                 if (mastered) FuseIcon(FuseIcons.Crown, size = Size.iconS, tint = c.warning)
                 FText(if (mastered) "Mastered, $earned of $total" else "$earned of $total unlocked", Fuse.type.titleSmall.tabular(), maxLines = 1)
             }
-            FText("$pointsEarned of $points points", Fuse.type.caption.tabular(), color = c.textMuted, maxLines = 1)
+            if (points > 0) FText("$pointsEarned of $points points", Fuse.type.caption.tabular(), color = c.textMuted, maxLines = 1)
             // Found by name: the set is right, but only the version RetroAchievements knows unlocks it.
             if (matchedByName) FText("Matched by name. Unlocks need a supported ROM version", Fuse.type.caption, color = c.textMuted, maxLines = 2)
         }

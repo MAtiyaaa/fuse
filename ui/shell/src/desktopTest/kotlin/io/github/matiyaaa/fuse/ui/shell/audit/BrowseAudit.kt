@@ -89,6 +89,10 @@ internal fun AuditDriver.libraryScreens(exhaustive: Boolean) {
         waitFor("Recently played")
         tap(PadButton.DPAD_LEFT)
         shoot("Icon layout, first game focused (update and DLC badges)")
+        // Past the first row the stage folds and the logo rises, leaving three rows.
+        tap(PadButton.DPAD_DOWN, 2)
+        shoot("Icon layout, scrolled, stage folded", 1_500)
+        tap(PadButton.DPAD_UP, 2)
         for (layout in listOf(LibraryLayout.CAPSULE, LibraryLayout.COVER_GRID, LibraryLayout.COMPACT_LIST)) {
             viewAs(layout, shootChoice = exhaustive && layout == LibraryLayout.CAPSULE)
             shoot("${layout.words()} layout")
@@ -539,6 +543,12 @@ internal fun AuditDriver.gameScreens(exhaustive: Boolean) {
         useLibrary()
         openGame("Emberline Saga")
         shoot("default focus on Play")
+        tap(PadButton.DPAD_UP)
+        shoot("up from Play")
+        tap(PadButton.DPAD_DOWN, 2)
+        shoot("down to the description")
+        tap(PadButton.DPAD_DOWN, 8)
+        shoot("at the very end", 1_500)
     }
 
     scenario("game", "dlc and updates") {
@@ -943,9 +953,7 @@ internal fun AuditDriver.cartridgeScreens(exhaustive: Boolean) {
         tap(PadButton.DPAD_RIGHT, 6)
         shoot("last action focused, the row scrolled")
         if (!exhaustive) return@scenario
-        // Sync, Consoles, Downloads, then Upload
-        tap(PadButton.DPAD_LEFT, 3)
-        tap(PadButton.A)
+        tapText("Upload", step = PadButton.DPAD_LEFT)
         waitFor("Upload a game to RomM")
         shoot("pick a system to upload from")
         tapText("Game Boy Advance")

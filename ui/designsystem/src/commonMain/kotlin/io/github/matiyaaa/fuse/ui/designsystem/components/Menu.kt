@@ -509,12 +509,12 @@ fun MenuList(
     var touchedIndex by remember { mutableIntStateOf(-1) }
     LaunchedEffect(selection.index) { if (selection.index != touchedIndex) touchedIndex = -1 }
     // The list scrolls only as far as it takes to show the chosen row whole, with about a row to
-    // spare, the way menus scroll; on the first row it shows the very top, so a group name above
-    // that row stays in view (a [header] keeps the first row followed instead).
+    // spare, the way menus scroll; on the first row it shows the very top, so a group name or a
+    // [header] above that row (the theme card in Appearance) comes back into view on the way up.
     val margin = with(LocalDensity.current) { MENU_SCROLL_MARGIN.roundToPx() }
     KeepSelectionInView(
         state,
-        { if (selection.index == 0 && headerOffset == 0) 0 else currentLayout.itemOf(selection.index) },
+        { if (selection.index == 0) 0 else currentLayout.itemOf(selection.index) },
         margin,
         enabled = { touchedIndex < 0 || touchedIndex != selection.index },
     )

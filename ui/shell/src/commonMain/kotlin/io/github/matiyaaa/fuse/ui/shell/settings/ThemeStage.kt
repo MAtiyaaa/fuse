@@ -53,6 +53,9 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.layout
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -197,6 +200,8 @@ internal fun ThemeStage(
     scene: StageScene,
     modifier: Modifier = Modifier,
     flourish: Int = 0,
+    /** In the studio: the parts of the miniature the selected setting changes, lit and named. */
+    spotlight: Spotlight? = null,
 ) {
     val c = Fuse.colors
     val motion = Fuse.motion
@@ -258,7 +263,7 @@ internal fun ThemeStage(
                         LocalTileMetrics provides TileMetrics.forHeight(VirtualHeight, VirtualWidth),
                         LocalGameArt provides scene.gameArt,
                     ) {
-                        MiniHome(s, scene)
+                        MiniHome(s, scene, spotlight)
                     }
                 }
             }
@@ -299,15 +304,16 @@ private fun VirtualScreen(modifier: Modifier = Modifier, content: @Composable Bo
  * With no games yet it shows the theme's own name over generated tiles.
  */
 @Composable
-private fun MiniHome(spec: ThemeSpec, scene: StageScene) {
+private fun MiniHome(spec: ThemeSpec, scene: StageScene, spotlight: Spotlight? = null) {
     val c = Fuse.colors
     val metrics = LocalTileMetrics.current
+    val targets = remember { SpotTargets() }
     val game = scene.games.firstOrNull()
     val heroRoom = spec.background == BackgroundStyle.HERO
     // Themes lit by game art preview their own room: the theme's accent as the light, never your
     // games' art (which would make every art theme look like the game you happened to be on).
     val art = false
-    Box(Modifier.fillMaxSize().background(c.ink)) {
+    Box(Modifier.fillMaxSize().background(c.ink).onGloballyPositioned { targets.root = it }) {
         AmbientBackground(
             if (heroRoom) BackgroundStyle.SOLID else spec.background,
             c.accent,
@@ -315,8 +321,9 @@ private fun MiniHome(spec: ThemeSpec, scene: StageScene) {
             ambient = spec.ambient,
             fps = 24,
         )
+        spec.wallpaper?.let { io.github.matiyaaa.fuse.ui.shell.app.WallpaperLayer(it, Modifier.fillMaxSize()) }
         HudScrim(art = art)
-        Hud(
+        Box(Modifier.fillMaxWidth().height(Size.hudHeight).spot(targets, SpotPart.TOP_LINE)) { Hud(
             destinations = scene.tabs,
             sections = scene.sections,
             active = Destination.HOME,
@@ -327,7 +334,7 @@ private fun MiniHome(spec: ThemeSpec, scene: StageScene) {
             showBluetooth = scene.showBluetooth,
             onSelect = {},
             onStatusClick = {},
-        )
+        ) }
         Column(Modifier.fillMaxSize()) {
             Spacer(Modifier.height(Size.hudHeight))
             Box(
@@ -337,18 +344,21 @@ private fun MiniHome(spec: ThemeSpec, scene: StageScene) {
                 Stage(
                     game?.stage() ?: StageInfo(key = spec.id, title = spec.name, meta = listOfNotNull(spec.tagline.takeIf { it.isNotBlank() }), accent = spec.palette.accent),
                     showLogo = scene.showLogo,
+                    modifier = Modifier.spot(targets, SpotPart.TITLE),
                 )
             }
             Spacer(Modifier.height(Space.m))
             // A new focus style or corner family lifts the focused tile again, so it is seen at work.
             key(spec.focus, spec.geometry) {
                 val wide = metrics.icon * 1.25f
-                MiniShelf("Continue playing", count = scene.games.size.takeIf { it > 1 }) {
+                MiniShelf("Continue playing", count = scene.games.size.takeIf { it > 1 }, targets = targets) {
                     if (scene.games.isEmpty()) {
-                        repeat(4) { i -> PlaceholderTile(spec, i, selected = i == 0, width = wide * 1.78f, height = wide) }
+                        repeat(4) { i -> Box(if (i == 0) Modifier.spot(targets, SpotPart.FOCUSED_TILE) else Modifier) { PlaceholderTile(spec, i, selected = i == 0, width = wide * 1.78f, height = wide) } }
                     } else {
                         scene.games.forEachIndexed { i, g ->
-                            GameWideTile(g, selected = i == 0, height = wide, caption = g.lastPlayedAt?.let { "Played ${agoText(it)}" })
+                            Box(if (i == 0) Modifier.spot(targets, SpotPart.FOCUSED_TILE) else Modifier) {
+                                GameWideTile(g, selected = i == 0, height = wide, caption = g.lastPlayedAt?.let { "Played ${agoText(it)}" })
+                            }
                         }
                     }
                 }
@@ -373,8 +383,11 @@ private fun MiniHome(spec: ThemeSpec, scene: StageScene) {
                 .height(Size.hintHeight + Space.xxl)
                 .background(Brush.verticalGradient(0f to Color.Transparent, 0.55f to c.ink.copy(alpha = 0.78f), 1f to c.ink.copy(alpha = 0.94f))),
         )
-        HintBar(MINI_HINTS, Modifier.align(Alignment.BottomEnd).padding(horizontal = Space.gutter, vertical = Space.s))
+        HintBar(MINI_HINTS, Modifier.align(Alignment.BottomEnd).padding(horizontal = Space.gutter, vertical = Space.s).spot(targets, SpotPart.HINTS))
+        // In the studio a panel stands on Home too, so panels, buttons and signals can be seen at work.
+        if (spotlight?.sheet == true) MiniSheet(targets, Modifier.align(Alignment.TopEnd).padding(top = Size.hudHeight + Space.x5 + Space.xl, end = Space.gutter))
         if (spec.crt.enabled && Fuse.quality.crtShader) CrtOverlay(spec.crt)
+        SpotOverlay(targets, spotlight)
     }
 }
 
@@ -382,17 +395,18 @@ private val MINI_HINTS = listOf(Hint(HintButton.CONFIRM, "Play"), Hint(HintButto
 
 /** A shelf of the miniature: its title, then a row of tiles running off the right edge. */
 @Composable
-private fun MiniShelf(title: String, count: Int?, content: @Composable RowScope.() -> Unit) {
+private fun MiniShelf(title: String, count: Int?, targets: SpotTargets? = null, content: @Composable RowScope.() -> Unit) {
     val metrics = LocalTileMetrics.current
     Column(Modifier.fillMaxWidth().padding(top = Space.s)) {
         Row(Modifier.heightIn(min = Size.badge).padding(horizontal = Space.gutter), verticalAlignment = Alignment.CenterVertically) {
-            SectionLabel(title, count = count?.toString())
+            SectionLabel(title, count = count?.toString(), modifier = if (targets != null) Modifier.spot(targets, SpotPart.LABELS) else Modifier)
         }
         Spacer(Modifier.height(Space.s))
         Row(
             Modifier
                 .wrapContentWidth(Alignment.Start, unbounded = true)
-                .padding(start = Space.gutter, bottom = Size.sparkClearance + Space.xs),
+                .padding(start = Space.gutter, bottom = Size.sparkClearance + Space.xs)
+                .then(if (targets != null) Modifier.spot(targets, SpotPart.TILES) else Modifier),
             horizontalArrangement = Arrangement.spacedBy(metrics.gap),
             content = content,
         )
@@ -663,3 +677,136 @@ internal fun SoundProfile.label(): String = when (this) {
 }
 
 internal fun SoundProfile.icon(): ImageVector = if (this == SoundProfile.OFF) FuseIcons.VolumeOff else FuseIcons.Volume
+
+// ---------------------------------------------------------------------------------- spotlight
+
+/** A part of the miniature the studio can point at. */
+internal enum class SpotPart { TOP_LINE, TITLE, LABELS, FOCUSED_TILE, TILES, HINTS, SHEET, SHEET_RAISED, SHEET_MUTED, SHEET_BUTTON, SHEET_SIGNALS }
+
+/**
+ * What the studio's selected setting changes, as the stage shows it: the [parts] it lights (none
+ * lights the whole room), what it is called and a line on what it does, and whether the miniature
+ * needs its panel ([sheet]) to show it.
+ */
+@Immutable
+internal data class Spotlight(val parts: Set<SpotPart>, val title: String, val note: String, val sheet: Boolean = false)
+
+/** Where each part of the miniature is, measured as it is laid out. Not state: the overlay reads it as it draws. */
+private class SpotTargets {
+    var root: androidx.compose.ui.layout.LayoutCoordinates? = null
+    val parts = HashMap<SpotPart, androidx.compose.ui.layout.LayoutCoordinates>()
+}
+
+private fun Modifier.spot(targets: SpotTargets, part: SpotPart): Modifier = onGloballyPositioned { targets.parts[part] = it }
+
+/**
+ * A panel on the miniature's Home, like the options sheet: a title, a Play button in the accent,
+ * a raised (selected) row, a row with a quiet detail line, and three signal chips (done, careful,
+ * wrong). The studio shows it so every colour it changes has somewhere to be seen.
+ */
+@Composable
+private fun MiniSheet(targets: SpotTargets, modifier: Modifier) {
+    val c = Fuse.colors
+    io.github.matiyaaa.fuse.ui.designsystem.components.Panel(modifier.width(360.dp).spot(targets, SpotPart.SHEET)) {
+        Column(Modifier.padding(Space.l), verticalArrangement = Arrangement.spacedBy(Space.s)) {
+            FText("Options", Fuse.type.titleSmall, maxLines = 1)
+            io.github.matiyaaa.fuse.ui.designsystem.components.FuseButton(
+                "Play", selected = false, onClick = {}, icon = io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons.Play,
+                kind = io.github.matiyaaa.fuse.ui.designsystem.components.ButtonKind.PRIMARY,
+                modifier = Modifier.spot(targets, SpotPart.SHEET_BUTTON),
+            )
+            Row(
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(Fuse.geometry.control)).background(c.surfaceRaised).padding(Space.m).spot(targets, SpotPart.SHEET_RAISED),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon(io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons.Heart, size = Size.iconM, tint = c.text)
+                Spacer(Modifier.width(Space.m))
+                FText("Add to favourites", Fuse.type.bodyStrong, maxLines = 1)
+            }
+            Column(Modifier.padding(horizontal = Space.m).spot(targets, SpotPart.SHEET_MUTED)) {
+                FText("Choose emulator", Fuse.type.bodyStrong, maxLines = 1)
+                FText("Picked for this system", Fuse.type.caption, color = c.textMuted, maxLines = 1)
+            }
+            Row(Modifier.spot(targets, SpotPart.SHEET_SIGNALS), horizontalArrangement = Arrangement.spacedBy(Space.s)) {
+                for ((word, tint) in listOf("Ready" to c.success, "Offline" to c.warning, "Missing" to c.danger)) {
+                    Row(
+                        Modifier.clip(io.github.matiyaaa.fuse.ui.designsystem.shape.PillShape).background(tint.copy(alpha = 0.16f)).padding(horizontal = Space.s, vertical = Space.xxs),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Box(Modifier.size(Size.dot).clip(io.github.matiyaaa.fuse.ui.designsystem.shape.PillShape).background(tint))
+                        Spacer(Modifier.width(Space.xs))
+                        FText(word, Fuse.type.caption, color = tint, maxLines = 1)
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * The studio's pointer on the miniature: everything but the parts the selected setting changes
+ * dims, those parts get a breathing accent outline, and a caption names the setting and says what
+ * it does. With no parts (the room, the scene, the CRT) the whole screen is outlined instead.
+ */
+@Composable
+private fun SpotOverlay(targets: SpotTargets, spotlight: Spotlight?) {
+    val c = Fuse.colors
+    val motion = Fuse.motion
+    val shown by androidx.compose.animation.core.animateFloatAsState(if (spotlight != null) 1f else 0f, motion.fade(io.github.matiyaaa.fuse.ui.designsystem.theme.Durations.BASE), label = "spot")
+    var last by remember { mutableStateOf(spotlight) }
+    if (spotlight != null) last = spotlight
+    val s = last ?: return
+    if (shown <= 0.01f) return
+    val pulse = if (motion.ambient) {
+        androidx.compose.animation.core.rememberInfiniteTransition(label = "spotPulse").animateFloat(
+            0f, 1f, androidx.compose.animation.core.infiniteRepeatable(tween(1_400), androidx.compose.animation.core.RepeatMode.Reverse), label = "p",
+        ).value
+    } else {
+        1f
+    }
+    val accent = c.accent
+    Box(Modifier.fillMaxSize()) {
+        androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
+            val root = targets.root
+            val pad = 8.dp.toPx()
+            val radius = androidx.compose.ui.geometry.CornerRadius(14.dp.toPx())
+            val rects = if (root == null || !root.isAttached) emptyList() else s.parts.mapNotNull { p ->
+                targets.parts[p]?.takeIf { it.isAttached }?.let { root.localBoundingBoxOf(it, clipBounds = false).inflate(pad) }
+            }
+            val stroke = Stroke((3f + pulse).dp.toPx())
+            if (rects.isEmpty()) {
+                val inset = 6.dp.toPx()
+                drawRoundRect(
+                    accent.copy(alpha = (0.55f + 0.45f * pulse) * shown),
+                    Offset(inset, inset), androidx.compose.ui.geometry.Size(size.width - inset * 2, size.height - inset * 2), radius, style = stroke,
+                )
+            } else {
+                val dim = androidx.compose.ui.graphics.Path().apply {
+                    fillType = androidx.compose.ui.graphics.PathFillType.EvenOdd
+                    addRect(androidx.compose.ui.geometry.Rect(0f, 0f, size.width, size.height))
+                    rects.forEach { addRoundRect(androidx.compose.ui.geometry.RoundRect(it, radius)) }
+                }
+                drawPath(dim, Color.Black.copy(alpha = 0.55f * shown))
+                rects.forEach { r -> drawRoundRect(accent.copy(alpha = (0.6f + 0.4f * pulse) * shown), r.topLeft, r.size, radius, style = stroke) }
+            }
+        }
+        // The caption: what this setting is, at the top right, clear of the title it may point at.
+        Row(
+            Modifier
+                .align(Alignment.TopEnd)
+                .padding(top = Size.hudHeight + Space.s, end = Space.gutter)
+                .graphicsLayer { alpha = shown }
+                .clip(RoundedCornerShape(Fuse.geometry.control))
+                .background(Color.Black.copy(alpha = 0.78f))
+                .padding(horizontal = Space.l, vertical = Space.m),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(Modifier.size(10.dp).clip(io.github.matiyaaa.fuse.ui.designsystem.shape.PillShape).background(accent))
+            Spacer(Modifier.width(Space.m))
+            Column {
+                FText(s.title, Fuse.type.title, color = Color.White, maxLines = 1)
+                FText(s.note, Fuse.type.body, color = Color.White.copy(alpha = 0.75f), maxLines = 2, modifier = Modifier.widthIn(max = 460.dp))
+            }
+        }
+    }
+}

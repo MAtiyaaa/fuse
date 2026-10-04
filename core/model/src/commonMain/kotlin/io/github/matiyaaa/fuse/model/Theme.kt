@@ -25,7 +25,24 @@ data class ThemeSpec(
     val author: String? = null,
     /** How strongly and how fast the background glows and moves. */
     val ambient: AmbientSpec = AmbientSpec(),
+    /** A picture of the user's own behind everything, in place of the drawn background. */
+    val wallpaper: Wallpaper? = null,
 )
+
+/**
+ * A picture behind the interface: the image file Fuse keeps ([path]), how much it is darkened (or,
+ * in a bright theme, washed out) so text reads over it ([dim], 0..0.9), and which part of it stays in
+ * view when the screen's shape crops it ([align]).
+ */
+@Serializable
+data class Wallpaper(
+    val path: String,
+    val dim: Float = 0.35f,
+    val align: WallpaperAlign = WallpaperAlign.CENTER,
+)
+
+@Serializable
+enum class WallpaperAlign { CENTER, TOP, BOTTOM, LEFT, RIGHT }
 
 /**
  * The background's character: [intensity] scales its light (0 to 1.5), [speed] its movement

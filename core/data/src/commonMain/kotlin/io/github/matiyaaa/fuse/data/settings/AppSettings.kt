@@ -64,7 +64,18 @@ data class StoreSettings(
     val autoCheck: Boolean = true,
     /** Apps Fuse installed or updated, by their key in the catalogue. */
     val installs: Map<String, StoreInstall> = emptyMap(),
+    /** Apps the user added to the Store by their GitHub address, shown under their category. */
+    val custom: List<CustomStoreApp> = emptyList(),
+    /**
+     * The GitHub repository the catalogue comes from, for a fork of the Obtainium Emulation Pack
+     * that publishes its files the same way; null for the pack itself.
+     */
+    val packRepo: String? = null,
 )
+
+/** An app the user added to the Store: its GitHub repository, its name and the category it goes under. */
+@Serializable
+data class CustomStoreApp(val url: String, val name: String, val category: String = "Other")
 
 /**
  * One app Fuse installed from the Store: the package Android installed it as (the first install
@@ -146,6 +157,15 @@ data class AppearanceSettings(
     val customThemes: List<StoredTheme> = emptyList(),
     /** Fuse's mark lights up when Fuse starts. */
     val startupAnimation: Boolean = true,
+    /** Colours picked last in the theme studio, newest first (ARGB), to pick again in one move. */
+    val recentColors: List<Long> = emptyList(),
+    /** Each tab keeps the game or row you were on when you come back to it. */
+    val rememberPlace: Boolean = true,
+    /**
+     * Minutes without a touch, a button or the stick before Fuse dims to its standby screen (which
+     * keeps an OLED screen from wearing in); 0 never.
+     */
+    val standbyMinutes: Int = 5,
 )
 
 /**
@@ -221,6 +241,10 @@ data class LibraryPreferences(
     val cleanedNamesRules: Int = 1,
     /** Systems in the user's order, by platform id. Systems not listed follow in catalog order. */
     val systemOrder: List<String> = emptyList(),
+    /** Systems whose firmware the user marked as set up although Fuse didn't find it all, by platform id. */
+    val biosConfirmed: List<String> = emptyList(),
+    /** Drives Fuse asked about setting up for games (yes or no), by drive id, so it asks once. */
+    val drivesAsked: List<String> = emptyList(),
     /** Fetch system logos and art from the system art pack when a system has none. */
     val systemArtAuto: Boolean = true,
     /** How the Library is sorted. */
@@ -276,6 +300,8 @@ data class MusicSettings(
      * were bundled: the user's own song if there is one, else the default bundled song.
      */
     val track: String? = null,
+    /** Plays Fuse's songs one after another in a random order instead of looping [track]. */
+    val shuffle: Boolean = false,
 )
 
 @Serializable

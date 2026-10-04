@@ -18,15 +18,37 @@ class MenuMusicPlanTest {
         val steps = listOf(1f, 0.5f, 0f, 0.5f)
         val states = steps.map { MenuMusicPlan.state(song, MusicPrefs(volume = it), quiet = false) }
         assertEquals(steps, states.map { it.volume })
-        // The song never changes along the way, so the player never restarts it.
-        states.forEach { assertEquals(song, it.song); assertEquals(true, it.playing) }
+        // The song never changes along the way, so the player never restarts it; at 0 it only pauses.
+        states.forEach { assertEquals(song, it.song); assertEquals(it.volume > 0f, it.playing) }
     }
 
     @Test
-    fun zeroVolumeKeepsTheSongRatherThanTurningMusicOff() {
+    fun zeroVolumeKeepsTheSongButPausesIt() {
         val music = MusicPrefs(volume = 0f)
         assertEquals(BundledMusic.MENU_DEFAULT, MenuMusicPlan.track(music, safeMode = false, onboarding = false))
-        assertEquals(MusicState(song, 0f, true), MenuMusicPlan.state(song, music, quiet = false))
+        // Paused rather than playing silently, so a screen recording never captures a muted song.
+        assertEquals(MusicState(song, 0f, false), MenuMusicPlan.state(song, music, quiet = false))
+    }
+
+    @Test
+    fun shufflePlaysEachSongOnceAndNeverRepeatsRecentOnes() {
+        val shuffle = MusicPrefs(shuffle = true)
+        assertEquals(false, MenuMusicPlan.state(song, shuffle, quiet = false).loop)
+        assertEquals(true, MenuMusicPlan.state(song, MusicPrefs(), quiet = false).loop)
+        assertEquals("mirth", MenuMusicPlan.track(shuffle, safeMode = false, onboarding = false, shuffled = "mirth"))
+        // Setup keeps its own song even with shuffle on.
+        assertEquals(BundledMusic.ONBOARDING, MenuMusicPlan.track(shuffle, safeMode = false, onboarding = true, shuffled = "mirth"))
+        val random = kotlin.random.Random(7)
+        val recent = ArrayDeque<String>()
+        var current: String? = null
+        repeat(200) {
+            val next = MenuMusicPlan.nextShuffled(current, recent.toList(), random)
+            kotlin.test.assertNotEquals(current, next)
+            kotlin.test.assertTrue(next !in recent)
+            recent.addLast(next)
+            if (recent.size > BundledMusic.tracks.size / 2) recent.removeFirst()
+            current = next
+        }
     }
 
     @Test

@@ -41,6 +41,9 @@ interface PlatformUi {
     /** Screenshots and recordings of Fuse's own screen; null where Fuse can't capture it (desktop for now). */
     val capture: ScreenCapture? get() = null
 
+    /** Steam on a computer: Fuse in Steam's library, for Game Mode. Null where there is no Steam (Android). */
+    val steam: SteamIntegration? get() = null
+
     /**
      * Recent second-screen events (companion started or closed and why, refused displays, display
      * changes), oldest first, for a status row in Settings. Empty where there is no companion screen.
@@ -77,6 +80,22 @@ interface PlatformUi {
 
     /** Forgets the recorded crash, after the user has seen or shared it. */
     fun clearCrashReport() {}
+}
+
+/**
+ * Fuse and Steam on a computer. On a Steam Deck (or any SteamOS or gamescope setup) Game Mode only
+ * starts what is in Steam's library, so Fuse can put itself there as a non-Steam game, set to open
+ * full screen. Steam reads its list when it starts, so it must be closed while Fuse writes it.
+ */
+interface SteamIntegration {
+    /** Fuse runs inside SteamOS's Game Mode (or another gamescope session) right now. */
+    val gameMode: Boolean
+
+    /** Whether a Steam user here has Fuse in their library already. */
+    suspend fun added(): Boolean
+
+    /** Adds Fuse (or brings its entry up to date) for every Steam user here; what happened, in words. */
+    suspend fun addFuse(): Result<String>
 }
 
 /** A file the user picked to open: its name and its bytes. */
@@ -270,10 +289,12 @@ interface WindowControls {
 data class PickedFile(val path: String, val name: String)
 
 /**
- * Everything the menu music should be right now: the file to loop ([song], null for silence), how
- * loud (0..1) and whether it may be heard ([playing] false while a game starts or runs).
+ * Everything the menu music should be right now: the file to play ([song], null for silence), how
+ * loud (0..1) and whether it may be heard ([playing] false while a game starts or runs, or at volume
+ * 0). [loop] false plays the song once and then reports it through [MenuMusicPlayer.onSongEnded], so
+ * shuffle can pick the next one.
  */
-data class MusicState(val song: String?, val volume: Float, val playing: Boolean)
+data class MusicState(val song: String?, val volume: Float, val playing: Boolean, val loop: Boolean = true)
 
 /**
  * Loops one song under Fuse's menus. Fuse says what it wants as a whole ([apply]); the platform also
@@ -286,4 +307,10 @@ data class MusicState(val song: String?, val volume: Float, val playing: Boolean
  */
 interface MenuMusicPlayer {
     fun apply(state: MusicState)
+
+    /**
+     * Called with a song's path when it played to its end without looping ([MusicState.loop] false).
+     * May be called on any thread.
+     */
+    fun onSongEnded(listener: ((String) -> Unit)?) = Unit
 }

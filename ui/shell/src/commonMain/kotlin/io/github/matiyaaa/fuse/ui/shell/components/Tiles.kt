@@ -310,7 +310,8 @@ internal fun GameCard.marks(favourite: Boolean = true): List<GameMark> = buildLi
     if (updates > 0) add(GameMark(FuseIcons.ArrowUp, if (updates == 1) "Update" else "$updates updates", MarkTint.PLAIN))
     if (dlc > 0) add(GameMark(FuseIcons.Puzzle, "$dlc DLC", MarkTint.PLAIN))
     if (discs > 1) add(GameMark(FuseIcons.Disc, "$discs discs", MarkTint.PLAIN, count = discs))
-    if (favorite && favourite) add(GameMark(FuseIcons.Heart, "Favourite", MarkTint.PLAIN, onStage = false))
+    // A favourite's heart is on its tile, and named on the stage while the game is selected.
+    if (favorite && favourite) add(GameMark(FuseIcons.HeartFilled, "Favourite", MarkTint.PLAIN))
 }
 
 /**

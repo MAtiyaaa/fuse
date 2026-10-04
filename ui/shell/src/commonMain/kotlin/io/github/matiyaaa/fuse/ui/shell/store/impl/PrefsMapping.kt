@@ -62,6 +62,7 @@ internal fun AppSettings.toUiPrefs(scoped: GlobalScoped): UiPrefs {
         music = MusicPrefs(
             music.enabled, music.volume, music.songPath, music.songName,
             track = music.track ?: if (music.songPath != null) BundledMusic.OWN_SONG else BundledMusic.MENU_DEFAULT,
+            shuffle = music.shuffle,
         ),
         clock24h = statusArea.use24HourClock ?: false,
         showWifi = statusArea.showWifi,
@@ -77,6 +78,8 @@ internal fun AppSettings.toUiPrefs(scoped: GlobalScoped): UiPrefs {
         phoneLinkEnabled = library.phoneLinkEnabled,
         autoSeries = library.autoSeries,
         hiddenSeries = library.hiddenSeries,
+        biosConfirmed = library.biosConfirmed,
+        drivesAsked = library.drivesAsked,
         scraperOrder = scraping.providerOrder,
         scraperLanguage = scraping.preferredLanguage,
         scraperRegion = scraping.preferredRegion ?: ANY_REGION,
@@ -90,6 +93,9 @@ internal fun AppSettings.toUiPrefs(scoped: GlobalScoped): UiPrefs {
         captureSound = capture.sound,
         heroDim = appearance.heroDim,
         startupAnimation = appearance.startupAnimation,
+        recentColors = appearance.recentColors,
+        rememberPlace = appearance.rememberPlace,
+        standbyMinutes = appearance.standbyMinutes,
         appsFilter = library.appsFilter,
         storeVariant = store.variant,
         storeAutoCheck = store.autoCheck,
@@ -118,6 +124,9 @@ internal fun AppSettings.withUiPrefs(prefs: UiPrefs): AppSettings {
             textScale = prefs.textScale,
             screenMargin = prefs.screenMargin,
             startupAnimation = prefs.startupAnimation,
+            recentColors = prefs.recentColors.distinct().take(RECENT_COLORS),
+            rememberPlace = prefs.rememberPlace,
+            standbyMinutes = prefs.standbyMinutes.coerceIn(0, 120),
         ),
         performance = performance.copy(profile = prefs.performance, lowPowerMode = prefs.lowPower, overlay = prefs.performanceOverlay),
         input = prefs.input,
@@ -141,6 +150,8 @@ internal fun AppSettings.withUiPrefs(prefs: UiPrefs): AppSettings {
             phoneLinkEnabled = prefs.phoneLinkEnabled,
             autoSeries = prefs.autoSeries,
             hiddenSeries = prefs.hiddenSeries,
+            biosConfirmed = prefs.biosConfirmed,
+            drivesAsked = prefs.drivesAsked,
             appsFilter = prefs.appsFilter,
             gameArt = prefs.gameArt,
         ),
@@ -155,6 +166,7 @@ internal fun AppSettings.withUiPrefs(prefs: UiPrefs): AppSettings {
             songPath = prefs.music.songPath,
             songName = prefs.music.songName,
             track = prefs.music.track,
+            shuffle = prefs.music.shuffle,
         ),
         statusArea = statusArea.copy(
             use24HourClock = prefs.clock24h,
@@ -168,3 +180,6 @@ internal fun AppSettings.withUiPrefs(prefs: UiPrefs): AppSettings {
         store = store.copy(variant = prefs.storeVariant, autoCheck = prefs.storeAutoCheck),
     )
 }
+
+/** How many recent colours the theme studio keeps. */
+internal const val RECENT_COLORS = 10

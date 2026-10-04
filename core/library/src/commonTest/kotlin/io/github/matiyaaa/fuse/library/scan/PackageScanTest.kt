@@ -70,6 +70,50 @@ class PackageScanTest {
         val game = scan("psvita", "/ROMs/psvita").games.single()
         assertEquals("PCSA00001", game.tags.serial)
     }
+
+    @Test
+    fun aZippedAppFolderIsAVitaGame() = runTest {
+        val sfo = ContentFixtures.sfo("CATEGORY" to "gd", "TITLE" to "Uncharted: Golden Abyss", "TITLE_ID" to "PCSA00029", "APP_VER" to "01.00")
+        val patch = ContentFixtures.sfo("CATEGORY" to "gp", "TITLE" to "Uncharted: Golden Abyss", "TITLE_ID" to "PCSA00029", "APP_VER" to "01.03")
+        fs.bytes(
+            "/ROMs/psvita/Uncharted - Golden Abyss.zip",
+            storedZip("patch/PCSA00029/sce_sys/param.sfo" to patch, "app/PCSA00029/sce_sys/param.sfo" to sfo, "app/PCSA00029/eboot.bin" to ByteArray(64)),
+        )
+        val game = scan("psvita", "/ROMs/psvita").games.single()
+        assertEquals("Uncharted - Golden Abyss", game.title)
+        assertEquals("PCSA00029", game.tags.serial)
+    }
+
+    @Test
+    fun aGameSizedZipFuseCantLookInsideIsStillAGame() = runTest {
+        fs.file("/ROMs/psvita/Uncharted - Golden Abyss.zip", size = 3_200L * 1024 * 1024)
+            .file("/ROMs/psvita/notes.zip", size = 30)
+        val game = scan("psvita", "/ROMs/psvita").games.single()
+        assertEquals("Uncharted - Golden Abyss", game.title)
+    }
+
+    /** A ZIP with its files stored (not compressed), laid out as zipfile writes one. */
+    private fun storedZip(vararg files: Pair<String, ByteArray>): ByteArray {
+        val out = ArrayList<Byte>()
+        val central = ArrayList<Byte>()
+        fun MutableList<Byte>.le(v: Long, n: Int) = repeat(n) { add((v ushr (8 * it)).toByte()) }
+        for ((name, data) in files) {
+            val at = out.size.toLong()
+            val n = name.encodeToByteArray()
+            out.le(0x04034b50, 4); out.le(20, 2); out.le(0, 2); out.le(0, 2); out.le(0, 4); out.le(0, 4)
+            out.le(data.size.toLong(), 4); out.le(data.size.toLong(), 4); out.le(n.size.toLong(), 2); out.le(0, 2)
+            n.forEach(out::add); data.forEach(out::add)
+            central.le(0x02014b50, 4); central.le(20, 2); central.le(20, 2); central.le(0, 2); central.le(0, 2); central.le(0, 4); central.le(0, 4)
+            central.le(data.size.toLong(), 4); central.le(data.size.toLong(), 4); central.le(n.size.toLong(), 2); central.le(0, 2); central.le(0, 2)
+            central.le(0, 2); central.le(0, 2); central.le(0, 4); central.le(at, 4)
+            n.forEach(central::add)
+        }
+        val cdAt = out.size.toLong()
+        out.addAll(central)
+        out.le(0x06054b50, 4); out.le(0, 2); out.le(0, 2); out.le(files.size.toLong(), 2); out.le(files.size.toLong(), 2)
+        out.le(central.size.toLong(), 4); out.le(cdAt, 4); out.le(0, 2)
+        return out.toByteArray()
+    }
 }
 
 /** 3DS updates and DLC kept as .cia join their game. */

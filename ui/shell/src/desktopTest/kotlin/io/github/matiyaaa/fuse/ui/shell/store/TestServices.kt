@@ -59,6 +59,9 @@ internal class FakeServices(
     /** The Store's view of the system, when a test gives it one (Android has one; desktop doesn't). */
     override var packages: PackageBridge? = null
 
+    @Volatile var desktop: DesktopInstaller? = null
+    override val desktopApps: DesktopInstaller? get() = desktop
+
     override val http = HttpClient(MockEngine { request ->
         requestHosts += request.url.host
         val answer = web?.invoke(this, request)
@@ -241,6 +244,14 @@ internal class JavaFileSystem : FuseFileSystem {
     @Volatile var beforeList: ((String) -> Unit)? = null
 
     override suspend fun delete(path: String): Boolean = File(path).let { !it.exists() || it.deleteRecursively() }
+
+    override suspend fun copy(from: String, to: String, onBytes: (Long) -> Unit): Boolean {
+        val dst = File(to)
+        if (dst.exists()) return false
+        return File(from).copyRecursively(dst).also { ok -> if (ok) dst.walkTopDown().filter { it.isFile }.forEach { onBytes(it.length()) } }
+    }
+
+    override suspend fun makeDirs(path: String): Boolean = File(path).let { it.isDirectory || it.mkdirs() }
 
     override suspend fun list(path: String): List<FsEntry> {
         beforeList?.invoke(path)

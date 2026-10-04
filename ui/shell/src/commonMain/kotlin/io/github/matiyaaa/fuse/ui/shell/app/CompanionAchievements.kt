@@ -84,7 +84,10 @@ internal fun AchievementBar(state: AchievementState, onOpen: () -> Unit, modifie
                     if (state.mastered) "Mastered" else "${state.earned} of ${state.total}",
                     Fuse.type.label, maxLines = 1, modifier = Modifier.weight(1f),
                 )
-                FText("${state.pointsEarned} / ${state.points} pts", Fuse.type.caption, color = c.textMuted, maxLines = 1)
+                FText(
+                    if (state.source.hasPoints) "${state.pointsEarned} / ${state.points} pts" else state.source.label,
+                    Fuse.type.caption, color = c.textMuted, maxLines = 1,
+                )
             }
             Spacer(Modifier.height(6.dp))
             ProgressBar(state.progress, Modifier.fillMaxWidth(), color = tint, height = 4.dp)
@@ -149,7 +152,10 @@ private fun AchievementSummary(state: AchievementState, title: String, modifier:
             Spacer(Modifier.width(Space.m))
             Column(Modifier.weight(1f)) {
                 FText(title, Fuse.type.bodyStrong, maxLines = 1)
-                FText("${state.earned} of ${state.total} unlocked  ·  ${state.pointsEarned} of ${state.points} points", Fuse.type.caption, color = c.textMuted, maxLines = 1)
+                FText(
+                    "${state.earned} of ${state.total} unlocked" + if (state.source.hasPoints) "  ·  ${state.pointsEarned} of ${state.points} points" else "  ·  ${state.source.label}",
+                    Fuse.type.caption, color = c.textMuted, maxLines = 1,
+                )
                 if (state.matchedByName) FText("Matched by name: unlocking needs a supported ROM version", Fuse.type.caption, color = c.textFaint, maxLines = 1)
             }
             if (state.mastered) {
@@ -199,7 +205,7 @@ private fun AchievementRow(a: Achievement, modifier: Modifier = Modifier) {
         Spacer(Modifier.width(Space.s))
         Column(horizontalAlignment = Alignment.End) {
             if (a.earned) FuseIcon(FuseIcons.Check, size = 14.dp, tint = c.accent)
-            FText("${a.points}", Fuse.type.label, color = if (a.earned) c.accent else c.textMuted, maxLines = 1)
+            if (a.points > 0) FText("${a.points}", Fuse.type.label, color = if (a.earned) c.accent else c.textMuted, maxLines = 1)
         }
     }
 }

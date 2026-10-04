@@ -66,7 +66,9 @@ internal object AuditStore {
                         "draft":false,"prerelease":false,
                         "body":"## What's new\n- Faster shader compilation on Adreno and Mali GPUs\n- Controller hot-plugging no longer drops the first input\n- Fixed audio crackle after resuming from sleep\n\n## Fixes\n- Save states load correctly after an update\n- [Full changelog](https://github.com/$owner/$repo/compare)",
                         "assets":[{"name":"$repo-$tag-arm64-v8a.apk","browser_download_url":"https://github.com/$owner/$repo/releases/download/$tag/$repo-arm64-v8a.apk","size":$SIZE},
-                                  {"name":"$repo-$tag-x86_64.apk","browser_download_url":"https://github.com/$owner/$repo/releases/download/$tag/$repo-x86_64.apk","size":$SIZE}]}]""",
+                                  {"name":"$repo-$tag-x86_64.apk","browser_download_url":"https://github.com/$owner/$repo/releases/download/$tag/$repo-x86_64.apk","size":$SIZE},
+                                  {"name":"$repo-$tag-windows-x64.zip","browser_download_url":"https://github.com/$owner/$repo/releases/download/$tag/$repo-windows-x64.zip","size":$SIZE},
+                                  {"name":"$repo-$tag-x86_64.AppImage","browser_download_url":"https://github.com/$owner/$repo/releases/download/$tag/$repo-x86_64.AppImage","size":$SIZE}]}]""",
                     HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"),
                 )
             }

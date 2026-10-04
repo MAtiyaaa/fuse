@@ -146,57 +146,66 @@ private fun AppState.cartridgeTooOld(status: CartridgeStatus) {
 fun uploadStateText(u: CartridgeUploadItem): String = when (u.state) {
     UploadState.WAITING -> "Waiting in Cartridge"
     UploadState.UPLOADING -> u.progress?.let { "Uploading, ${(it * 100).toInt()}%" } ?: "Uploading"
-    UploadState.SCANNING -> "RomM is adding it"
+    UploadState.SCANNING -> "Uploaded, RomM is adding it"
     UploadState.DONE -> "On RomM"
     UploadState.FAILED -> u.error ?: "Upload failed"
     UploadState.CANCELLED -> "Cancelled"
 }
 
-/** The games handed to Cartridge to upload: the one going now with its progress, then the latest few. */
+/**
+ * The games handed to Cartridge to upload: the one going now as a card like the download's (art,
+ * the bar in its system's colour, how far along and how long is left), then the latest few in a
+ * quiet list under it.
+ */
 @Composable
-internal fun UploadsPanel(uploads: List<CartridgeUploadItem>, modifier: Modifier = Modifier, maxOthers: Int = 4) {
+internal fun UploadsPanel(uploads: List<CartridgeUploadItem>, modifier: Modifier = Modifier, maxOthers: Int = 4, platforms: List<io.github.matiyaaa.fuse.ui.shell.store.PlatformCard> = emptyList(), compact: Boolean = false, onOpen: () -> Unit = {}) {
     val c = Fuse.colors
-    val current = uploads.firstOrNull { it.active }
-    Panel(modifier) {
-        Column(Modifier.padding(Space.l), verticalArrangement = Arrangement.spacedBy(Space.s)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                SectionLabel(if (current != null) "Uploading to RomM" else "Uploads to RomM", Modifier.weight(1f))
-                current?.progress?.let { FText("${(it * 100).toInt()}%", Fuse.type.label, color = c.accent) }
-            }
-            if (current != null) {
-                FText(current.title, Fuse.type.titleSmall, maxLines = 1)
-                FText(
-                    listOfNotNull(
-                        current.platformSlug.uppercase().ifEmpty { null },
-                        current.total?.let { "${bytesText(current.sent)} of ${bytesText(it)}" },
-                        current.files.takeIf { it > 1 }?.let { "$it files" },
-                        uploadStateText(current),
-                    ).joinToString("  ·  "),
-                    Fuse.type.caption, color = c.textMuted, maxLines = 1,
-                )
-                ProgressBar(if (current.state == UploadState.SCANNING) null else current.progress, Modifier.fillMaxWidth(), height = 6.dp)
-            }
-            val others = uploads.filter { it !== current }.take(maxOthers)
-            if (others.isNotEmpty()) {
-                if (current != null) Spacer(Modifier.height(Space.xs))
-                for (u in others) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.m)) {
-                        FuseIcon(
-                            when (u.state) {
-                                UploadState.DONE -> FuseIcons.CircleCheck
-                                UploadState.FAILED -> FuseIcons.Warning
-                                UploadState.CANCELLED -> FuseIcons.CircleX
-                                else -> FuseIcons.Clock
-                            },
-                            size = 16.dp,
-                            tint = when (u.state) {
-                                UploadState.DONE -> c.success
-                                UploadState.FAILED -> c.warning
-                                else -> c.textMuted
-                            },
-                        )
-                        FText(u.title, Fuse.type.body, maxLines = 1, modifier = Modifier.weight(1f))
-                        FText(uploadStateText(u), Fuse.type.caption, color = c.textMuted, maxLines = 1, modifier = Modifier.widthIn(max = 300.dp))
+    val current = uploads.firstOrNull { it.state == UploadState.UPLOADING || it.state == UploadState.WAITING }
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(Space.m)) {
+        if (current != null) {
+            val system = platforms.firstOrNull { it.platform.id.value == current.platformSlug }
+            TransferCard(
+                label = "UPLOADING TO ROMM",
+                icon = FuseIcons.Upload,
+                title = current.title,
+                system = system,
+                systemName = system?.platform?.name ?: current.platformSlug.uppercase(),
+                slug = current.platformSlug,
+                progress = current.progress,
+                sizes = current.total?.let { "${bytesText(current.sent)} of ${bytesText(it)}" },
+                timeLeft = rememberTimeLeft(current.sent, current.total),
+                waiting = uploads.count { it !== current && it.active },
+                selected = false,
+                compact = compact,
+                modifier = Modifier,
+                note = listOfNotNull(system?.platform?.name ?: current.platformSlug.uppercase().ifEmpty { null }, current.files.takeIf { it > 1 }?.let { "$it files" }).joinToString("  ·  "),
+                onClick = onOpen,
+            )
+        }
+        val others = uploads.filter { it !== current }.take(maxOthers)
+        if (others.isNotEmpty()) {
+            Panel {
+                Column(Modifier.padding(horizontal = Space.l, vertical = Space.m), verticalArrangement = Arrangement.spacedBy(Space.s)) {
+                    SectionLabel("Uploads to RomM")
+                    for (u in others) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.m)) {
+                            FuseIcon(
+                                when (u.state) {
+                                    UploadState.DONE, UploadState.SCANNING -> FuseIcons.CircleCheck
+                                    UploadState.FAILED -> FuseIcons.Warning
+                                    UploadState.CANCELLED -> FuseIcons.CircleX
+                                    else -> FuseIcons.Clock
+                                },
+                                size = 16.dp,
+                                tint = when (u.state) {
+                                    UploadState.DONE, UploadState.SCANNING -> c.success
+                                    UploadState.FAILED -> c.warning
+                                    else -> c.textMuted
+                                },
+                            )
+                            FText(u.title, Fuse.type.body, maxLines = 1, modifier = Modifier.weight(1f))
+                            FText(uploadStateText(u), Fuse.type.caption, color = c.textMuted, maxLines = 1, modifier = Modifier.widthIn(max = 300.dp))
+                        }
                     }
                 }
             }
@@ -214,7 +223,9 @@ fun UploadFinishedToasts(app: AppState) {
             val was = seen.put(u.id, u.state) ?: continue
             if (was == u.state || !(was == UploadState.WAITING || was == UploadState.UPLOADING || was == UploadState.SCANNING)) continue
             when (u.state) {
-                UploadState.DONE -> app.toasts.show("${u.title} is on your RomM server now", ToastKind.SUCCESS)
+                // Every byte is there once RomM starts adding it; that is when the upload is done for you.
+                UploadState.SCANNING -> if (was == UploadState.UPLOADING || was == UploadState.WAITING) app.toasts.show("${u.title} is uploaded. RomM is adding it", ToastKind.SUCCESS)
+                UploadState.DONE -> if (was != UploadState.SCANNING) app.toasts.show("${u.title} is on your RomM server now", ToastKind.SUCCESS)
                 UploadState.FAILED -> app.toasts.show("Uploading ${u.title} failed${u.error?.let { ": $it" } ?: ""}", ToastKind.ERROR, durationMs = 7000)
                 else -> Unit
             }

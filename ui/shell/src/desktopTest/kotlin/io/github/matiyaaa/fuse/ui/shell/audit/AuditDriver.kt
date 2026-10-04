@@ -52,6 +52,8 @@ internal sealed interface AuditView {
     data object Blank : AuditView
     data class App(val store: FuseStore, val platform: PlatformUi, val generation: Int, val safeMode: io.github.matiyaaa.fuse.ui.shell.app.SafeMode? = null) : AuditView
     data class Companion(val store: FuseStore, val platform: PlatformUi, val mode: DualScreenMode, val onHide: (() -> Unit)? = null) : AuditView
+    /** One piece of the interface on its own (the standby screen, which waits minutes to appear). */
+    class Piece(val content: @Composable () -> Unit) : AuditView
 }
 
 /** A shot or navigation step that could not be done; the scenario stops and the gap is recorded. */
@@ -173,6 +175,11 @@ internal class AuditDriver(
                     ExtraToasts(v.store, v.platform)
                 }
                 is AuditView.Companion -> key(v.mode, v.store) { CompanionApp(v.store, v.platform, v.mode, v.onHide) }
+                is AuditView.Piece -> key(v) {
+                    io.github.matiyaaa.fuse.ui.designsystem.theme.FuseTheme {
+                        androidx.compose.runtime.CompositionLocalProvider(io.github.matiyaaa.fuse.ui.designsystem.input.LocalInputRouter provides router) { v.content() }
+                    }
+                }
             }
         }
     }

@@ -48,8 +48,22 @@ data class BiosStatus(
     /** Folders Fuse searched, so the user can see why a result is Unknown. */
     val searched: List<String> = emptyList(),
     val note: String? = null,
+    /**
+     * The user said this system's firmware is set up although Fuse's check didn't find all of it
+     * (it is somewhere Fuse can't look, or named its own way). [state] is then READY; [checked] is
+     * what the check itself said.
+     */
+    val confirmed: Boolean = false,
+    val checked: BiosState? = null,
 ) {
+    /** Marked as set up by the user when [yes] and the check found less than everything. */
+    fun confirmedIf(yes: Boolean): BiosStatus =
+        if (yes && state in OVERRIDABLE) copy(state = BiosState.READY, confirmed = true, checked = state) else this
+
     companion object {
         val NotRequired = BiosStatus(BiosState.NOT_REQUIRED)
+
+        /** What the user can mark as set up: anything the check didn't find whole. */
+        val OVERRIDABLE = setOf(BiosState.MISSING, BiosState.PARTIAL, BiosState.UNKNOWN)
     }
 }

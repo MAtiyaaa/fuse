@@ -103,6 +103,8 @@ data class AchievementState(
      * version RetroAchievements supports.
      */
     val matchedByName: Boolean = false,
+    /** Where the set comes from: RetroAchievements, or what the game's own platform keeps on this device. */
+    val source: AchievementSource = AchievementSource.RETRO_ACHIEVEMENTS,
 ) {
     val progress: Float get() = if (total == 0) 0f else earned.toFloat() / total
     val mastered: Boolean get() = highestAward == "mastered"
@@ -119,3 +121,11 @@ data class RecentAchievement(
     /** The local game, when Fuse matched the RetroAchievements game to one in the library. */
     val localGameId: GameId? = null,
 )
+
+/** Where a game's achievements come from, for how they are named and whether they carry points. */
+@Serializable
+enum class AchievementSource(val label: String, val noun: String, val hasPoints: Boolean) {
+    RETRO_ACHIEVEMENTS("RetroAchievements", "Achievements", true),
+    STEAM("Steam", "Achievements", false),
+    TROPHIES("RPCS3", "Trophies", true),
+}

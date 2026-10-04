@@ -199,6 +199,15 @@ fun homeRows(app: AppState): List<MenuAction> {
             add(app.choiceRow("mode", "Home style", FuseIcons.Dashboard, p.home.mode, listOf(HomeMode.FLOW to "Flow", HomeMode.CHANNELS to "Channels"), optionDetail = {
                 if (it == HomeMode.FLOW) "A continuous dashboard of shelves" else "A board of tiles you arrange yourself"
             }) { v -> set { it.copy(home = it.home.copy(mode = v)) } })
+            add(toggleRow(
+                "rememberplace", "Remember where you were", FuseIcons.Bookmark, p.rememberPlace,
+                if (p.rememberPlace) "Each tab opens on the game or row you left it on" else "Each tab opens at its start",
+            ) { v -> set { it.copy(rememberPlace = v) } })
+            add(app.choiceRow(
+                "standby", "Standby", FuseIcons.MoonStar, p.standbyMinutes,
+                listOf(0 to "Never", 2 to "After 2 minutes", 5 to "After 5 minutes", 10 to "After 10 minutes", 30 to "After 30 minutes"),
+                detail = "When nothing is pressed for a while, Fuse dims to a calm screen that moves, so an OLED screen never wears in. Any button or touch wakes it",
+            ) { v -> set { it.copy(standbyMinutes = v) } })
         }
         labelled("Top bar") {
             val sections = app.sections
@@ -399,6 +408,7 @@ fun libraryRows(app: AppState): List<MenuAction> {
                 onSelect = { app.addGame() },
             ))
         }
+        app.platform.steam?.let { steam -> labelled("Steam") { addAll(steamRows(app, steam)) } }
         labelled("Scanning") {
             add(MenuAction("scan", "Scan for changes", FuseIcons.Refresh, detail = "Only folders that changed. Also runs whenever you return to Fuse", trailing = Trailing.Value(scan.phase.name.lowercase().replaceFirstChar { it.uppercase() }), onSelect = {
                 app.store.sources.rescan(ScanScope.QUICK); app.toasts.show("Scanning")
@@ -902,6 +912,58 @@ fun cartridgeRows(app: AppState): List<MenuAction> {
     }
 }
 
+/**
+ * Steam on a computer: its installed games in the library (found on every drive, or in a folder the
+ * user picks), and Fuse in Steam's library for Game Mode.
+ */
+private fun steamRows(app: AppState, steam: io.github.matiyaaa.fuse.ui.shell.platform.SteamIntegration): List<MenuAction> {
+    fun addFound(games: List<io.github.matiyaaa.fuse.library.steam.SteamGame>) {
+        if (games.isEmpty()) {
+            app.toasts.show("No Steam games found there")
+            return
+        }
+        app.confirm = ConfirmSpec(
+            "Add ${games.size} Steam ${if (games.size == 1) "game" else "games"}?",
+            games.take(6).joinToString("\n") { it.name } + if (games.size > 6) "\nand ${games.size - 6} more" else "",
+            "Add them",
+        ) {
+            app.scope.launch {
+                val n = app.store.sources.addSteamGames(games)
+                app.toasts.show(if (n == 1) "1 Steam game added" else "$n Steam games added")
+            }
+        }
+    }
+    return listOf(
+        MenuAction(
+            "steam.find", "Find Steam games", FuseIcons.FolderSearch,
+            detail = "Every game Steam has installed, on any drive. They start through Steam",
+            onSelect = { app.scope.launch { addFound(app.store.sources.findSteamGames()) } },
+        ),
+        MenuAction(
+            "steam.folder", "Add a Steam library folder", FuseIcons.FolderPlus,
+            detail = "A drive or folder Steam keeps games in that Fuse didn't find",
+            onSelect = {
+                app.scope.launch {
+                    val path = app.platform.storage.pickFolder("Choose a Steam library folder") ?: return@launch
+                    addFound(app.store.sources.findSteamGames(path))
+                }
+            },
+        ),
+        MenuAction(
+            "steam.add", if (steam.gameMode) "Fuse in Game Mode" else "Add Fuse to Steam", FuseIcons.Gamepad,
+            detail = if (steam.gameMode) "Fuse is running in Game Mode now. Cartridge opens inside it, over Fuse" else "So SteamOS's Game Mode can start Fuse, full screen. Close Steam first",
+            enabled = !steam.gameMode,
+            onSelect = {
+                app.scope.launch {
+                    steam.addFuse()
+                        .onSuccess { app.toasts.show(it) }
+                        .onFailure { app.toasts.show(it.message ?: "Couldn't add Fuse to Steam", io.github.matiyaaa.fuse.ui.designsystem.components.ToastKind.ERROR) }
+                }
+            },
+        ),
+    )
+}
+
 /** Menu music and interface sounds, each with its own volume. */
 @Composable
 fun soundRows(app: AppState): List<MenuAction> {
@@ -916,7 +978,8 @@ fun soundRows(app: AppState): List<MenuAction> {
                 add(toggleRow("music", "Menu music", FuseIcons.Music, music.enabled, "Plays in Fuse's menus and stops for games") { v -> setMusic { it.copy(enabled = v) } })
                 add(app.percentRow("musicvolume", "Music volume", FuseIcons.Volume, music.volume, "Low sits nicely under the interface") { v -> setMusic { it.copy(volume = v) } })
                 add(songRow(app, music, ::setMusic))
-                add(infoRow("credit", "Music by ${BundledMusic.ARTIST}", detail = "Fuse's songs are from the album ${BundledMusic.ALBUM}. First-time setup plays ${BundledMusic.byId(BundledMusic.ONBOARDING)?.title}", icon = FuseIcons.Heart))
+                add(toggleRow("shuffle", "Shuffle", FuseIcons.Shuffle, music.shuffle, if (music.shuffle) "A different song each time one ends, from both albums" else "Plays every song in a random order instead of repeating one") { v -> setMusic { it.copy(enabled = true, shuffle = v) } })
+                add(infoRow("credit", "Music by ${BundledMusic.ARTIST}", detail = "Fuse's songs are from the albums ${BundledMusic.ALBUM} and ${BundledMusic.ALBUM_TWO}. First-time setup plays ${BundledMusic.byId(BundledMusic.ONBOARDING)?.title}", icon = FuseIcons.Heart))
             }
         }
         labelled("Interface sounds") {
@@ -929,42 +992,61 @@ fun soundRows(app: AppState): List<MenuAction> {
 /** The menu song: one of the album's songs, or the user's own. Picking one plays it straight away. */
 private fun songRow(app: AppState, music: MusicPrefs, setMusic: ((MusicPrefs) -> MusicPrefs) -> Unit): MenuAction {
     val own = music.track == BundledMusic.OWN_SONG
-    val current = if (own) music.songName ?: "Your song" else BundledMusic.byId(music.track)?.title ?: "None"
+    val current = when {
+        music.shuffle -> "Shuffle"
+        own -> music.songName ?: "Your song"
+        else -> BundledMusic.byId(music.track)?.title ?: "None"
+    }
     fun pickFile() {
         app.choice = null
         app.scope.launch {
             val picked = app.platform.storage.pickAudio("Choose menu music") ?: return@launch
-            setMusic { it.copy(enabled = true, songPath = picked.path, songName = picked.name, track = BundledMusic.OWN_SONG) }
+            setMusic { it.copy(enabled = true, songPath = picked.path, songName = picked.name, track = BundledMusic.OWN_SONG, shuffle = false) }
             app.toasts.show("Menu music: ${picked.name}")
         }
     }
     return MenuAction(
         "song", "Song", FuseIcons.Disc,
-        detail = if (own) "Your own song. Fuse keeps its own copy" else "${BundledMusic.ARTIST}, ${BundledMusic.ALBUM}",
+        detail = when {
+            music.shuffle -> "Every song by ${BundledMusic.ARTIST}, in a random order"
+            own -> "Your own song. Fuse keeps its own copy"
+            else -> "${BundledMusic.ARTIST}, ${BundledMusic.byId(music.track)?.album ?: BundledMusic.ALBUM}"
+        },
         trailing = Trailing.Value(current),
         onSelect = {
             app.choice = ChoiceSpec(
                 title = "Menu music",
                 icon = FuseIcons.Music,
                 message = "${BundledMusic.CREDIT}, or a song of your own. The song you pick plays straight away.",
-                options = BundledMusic.tracks.map { t ->
+                options = listOf(
+                    MenuAction(
+                        "shuffle", "Shuffle", FuseIcons.Shuffle,
+                        detail = "Every song from both albums, a new one each time one ends",
+                        trailing = Trailing.Check(music.shuffle),
+                        onSelect = {
+                            app.choice = null
+                            setMusic { it.copy(enabled = true, shuffle = true) }
+                        },
+                    ),
+                ) + BundledMusic.tracks.map { t ->
                     MenuAction(
                         "t.${t.id}", t.title, FuseIcons.Music,
                         detail = if (t.id == BundledMusic.MENU_DEFAULT) "Fuse's default" else null,
-                        trailing = Trailing.Check(!own && music.track == t.id),
+                        trailing = Trailing.Check(!music.shuffle && !own && music.track == t.id),
+                        section = t.album,
                         onSelect = {
                             app.choice = null
-                            setMusic { it.copy(enabled = true, track = t.id) }
+                            setMusic { it.copy(enabled = true, track = t.id, shuffle = false) }
                         },
                     )
                 } + listOfNotNull(
                     music.songPath?.let { path ->
-                        MenuAction("own", music.songName ?: "Your song", FuseIcons.FolderOpen, detail = "Your own song", trailing = Trailing.Check(own), onSelect = {
+                        MenuAction("own", music.songName ?: "Your song", FuseIcons.FolderOpen, detail = "Your own song", trailing = Trailing.Check(!music.shuffle && own), section = "Your music", onSelect = {
                             app.choice = null
-                            setMusic { it.copy(enabled = true, track = BundledMusic.OWN_SONG, songPath = path) }
+                            setMusic { it.copy(enabled = true, track = BundledMusic.OWN_SONG, songPath = path, shuffle = false) }
                         })
                     },
-                    MenuAction("pick", if (music.songPath == null) "Choose your own song" else "Choose another song", FuseIcons.FileUp, detail = "An audio file on this device. MP3 works everywhere", onSelect = ::pickFile),
+                    MenuAction("pick", if (music.songPath == null) "Choose your own song" else "Choose another song", FuseIcons.FileUp, detail = "An audio file on this device. MP3 works everywhere", section = "Your music", onSelect = ::pickFile),
                 ),
             )
         },

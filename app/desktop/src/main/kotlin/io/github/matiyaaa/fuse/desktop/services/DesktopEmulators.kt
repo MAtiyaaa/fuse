@@ -53,6 +53,18 @@ internal class DesktopEmulatorDetector(
     override fun biosFolders(installed: List<InstalledEmulator>): List<String> =
         (folders.retroArchSystemDirs(installed) + folders.biosRoots()).distinct()
 
+    override fun rpcs3DevHdd0(installed: List<InstalledEmulator>): List<String> {
+        val home = env.homeDir.trimEnd('/')
+        val known = when (os) {
+            DesktopOs.LINUX -> listOf("$home/.config/rpcs3/dev_hdd0", "$home/.var/app/net.rpcs3.RPCS3/config/rpcs3/dev_hdd0")
+            DesktopOs.MACOS -> listOf("$home/Library/Application Support/rpcs3/dev_hdd0")
+            DesktopOs.WINDOWS -> emptyList()
+        }
+        // RPCS3 on Windows keeps everything beside its program.
+        val beside = installed.filter { it.id.value.endsWith(".rpcs3") }.mapNotNull { e -> File(e.appId).parentFile?.let { File(it, "dev_hdd0").path } }
+        return (known + beside).filter { File(it).isDirectory }.map { File(it).absoluteFile.fusePath }.distinct()
+    }
+
     override fun retroArchCorePath(installed: InstalledEmulator, core: String): String? = when (os) {
         DesktopOs.LINUX -> LinuxDetector.findRetroArchCore(env, installed, core)
         DesktopOs.WINDOWS -> WindowsDetector.findRetroArchCore(files, installed, core)
@@ -179,5 +191,10 @@ internal class DesktopLocations(private val folders: KnownFolders) : DeviceLocat
 
     override suspend fun storageRoots(): List<LocationHint> = withContext(Dispatchers.IO) {
         folders.storageRoots().map { LocationHint(it.path, it.label) }
+    }
+
+    override suspend fun steamRoots(): io.github.matiyaaa.fuse.ui.shell.store.SteamPlaces = withContext(Dispatchers.IO) {
+        val (roots, drives) = folders.steamPlaces()
+        io.github.matiyaaa.fuse.ui.shell.store.SteamPlaces(roots, drives)
     }
 }

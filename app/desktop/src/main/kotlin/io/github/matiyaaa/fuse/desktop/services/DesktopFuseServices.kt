@@ -67,6 +67,10 @@ class DesktopFuseServices private constructor(
     override val installer: ReleaseInstaller =
         if (os == DesktopOs.LINUX) DesktopReleaseInstaller(dirs, http) else PageReleaseInstaller(PageReleaseInstaller.platformFor(os))
 
+    /** The Store's programs: fetched from their releases and put where Fuse finds emulators. */
+    override val desktopApps: io.github.matiyaaa.fuse.ui.shell.store.DesktopInstaller =
+        DesktopStoreInstaller(os, File(dirs.home.toString()), File(dirs.cache, "store-downloads"))
+
     /** No Apps section on a desktop: Fuse manages games there, not programs. */
     override val apps: AppsProvider? = null
     override val locations: DeviceLocations = DesktopLocations(folders)

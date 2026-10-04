@@ -232,7 +232,67 @@ interface StorageOps {
      * and forgets the games. Only paths inside the game's library folder are touched.
      */
     suspend fun delete(games: List<GameId>): DeleteReport
+
+    /** Connected drives games can be moved to, each with its games folder when it has one. */
+    suspend fun moveTargets(): List<MoveTarget> = emptyList()
+
+    /** The drive [game]'s files are on (a [MoveTarget.volumeId]), or null when Fuse can't tell. */
+    suspend fun driveOf(game: GameId): String? = null
+
+    /**
+     * Makes a games folder ("ROMs") at the top of the drive [volumeId] and adds it to the library,
+     * so games can be moved there. Its path, or null when the drive can't be written.
+     */
+    suspend fun makeGamesFolder(volumeId: String): String? = null
+
+    /**
+     * Sets a drive up for games: an Emulation folder at [at] (the drive's top when null) with a
+     * ROMs folder holding one folder per system, and a BIOS folder for the systems that need
+     * firmware; the ROMs folder joins the library. Null when the drive can't be written.
+     */
+    suspend fun setUpDrive(volumeId: String, at: String? = null): DriveSetup? = null
+
+    /**
+     * Moves the games' files (every disc, track and folder) into the games folder on [volumeId],
+     * each into its system's folder there, then removes them from where they were. Play time,
+     * edits and art stay with each game. A game is only removed from its old place once its copy
+     * is whole. Runs until done or [cancelMove]; [moving] follows it.
+     */
+    suspend fun move(games: List<GameId>, volumeId: String): MoveReport = MoveReport(0, 0, games.map { it.value.toString() })
+
+    /** The move under way, or null. */
+    val moving: StateFlow<MoveProgress?> get() = MutableStateFlow(null)
+
+    /** Stops a move after the game being copied (which is left where it was). */
+    fun cancelMove() = Unit
 }
+
+/** A drive set up for games: its ROMs folder (now in the library) and how many system folders it got. */
+data class DriveSetup(val romsFolder: String, val systems: Int)
+
+/** A drive games can be moved to: its space, and its games folder (null until one is made). */
+data class MoveTarget(
+    val volumeId: String,
+    val label: String,
+    val kind: io.github.matiyaaa.fuse.model.VolumeKind,
+    val freeBytes: Long,
+    val gamesFolder: String?,
+    val removable: Boolean,
+)
+
+/** A move under way: the game being copied ([index] of [count]) and the bytes so far of all of them. */
+data class MoveProgress(
+    val title: String,
+    val index: Int,
+    val count: Int,
+    val doneBytes: Long,
+    val totalBytes: Long,
+    val to: String,
+    val card: GameCard? = null,
+)
+
+/** How a move went: games moved, bytes moved, and the games that stayed where they were (with why, when one reason covers them). */
+data class MoveReport(val moved: Int, val bytes: Long, val failed: List<String>, val reason: String? = null)
 
 data class StorageUsage(
     val volumes: List<VolumeUsage>,
@@ -412,6 +472,18 @@ interface SourceOps {
      * folder can't be read there.
      */
     suspend fun adoptDrive(source: io.github.matiyaaa.fuse.model.LibrarySourceId): Boolean = false
+
+    /**
+     * The games Steam has installed on this computer, on every drive, plus those in [extra] (a
+     * Steam library folder the user picked). Reads only; empty where there is no Steam.
+     */
+    suspend fun findSteamGames(extra: String? = null): List<io.github.matiyaaa.fuse.library.steam.SteamGame> = emptyList()
+
+    /**
+     * Puts [games] in the library under Steam: Fuse keeps a small shortcut for each in its own
+     * folder (Steam's files are never touched) and plays them through Steam. Returns how many it added.
+     */
+    suspend fun addSteamGames(games: List<io.github.matiyaaa.fuse.library.steam.SteamGame>): Int = 0
 }
 
 data class SuggestedSource(val path: String, val label: String, val kind: LibrarySourceKind, val platformsFound: Int)
@@ -490,6 +562,12 @@ interface MediaOps {
      * For a game a source mixed up with another. False when the game is gone.
      */
     suspend fun resetDetails(game: GameId): Boolean
+    /**
+     * After the user renamed [game] (it went by [previous]): when the details it has were found
+     * under a name that isn't this game's, they are forgotten and looked for again under the new
+     * name, so a corrected game doesn't keep another game's description. True when it looked again.
+     */
+    suspend fun followRename(game: GameId, previous: String): Boolean = false
     val providers: StateFlow<List<ProviderStatus>>
     /** The last key check per provider; empty until a check ran. Checks run after a key is saved. */
     val keyChecks: StateFlow<Map<ScrapeProviderId, io.github.matiyaaa.fuse.integrations.KeyCheck?>>

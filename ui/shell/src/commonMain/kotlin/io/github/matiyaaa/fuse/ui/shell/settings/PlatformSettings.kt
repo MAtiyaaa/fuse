@@ -162,20 +162,22 @@ fun PlatformSettingsScreen(app: AppState, platformId: PlatformId) {
         add(app.scopedRow(ScopedSettings.Matching, platformId, "Matching", FuseIcons.Target, listOf(MatchStrictness.EXACT to "Exact", MatchStrictness.NORMAL to "Normal", MatchStrictness.AGGRESSIVE to "Aggressive")).copy(section = details))
         val files = "Files"
         val bios = card.bios
-        add(infoRow(
-            "bios", "BIOS and firmware",
-            when (bios.state) {
-                BiosState.READY -> "Ready"; BiosState.PARTIAL -> "Partly found"; BiosState.MISSING -> "Missing"
-                BiosState.UNKNOWN -> "Can't check"; BiosState.NOT_REQUIRED -> "Not needed"
-            },
-            detail = buildString {
-                if (bios.found.isNotEmpty()) append("Found: ${bios.found.joinToString(", ")}\n")
-                if (bios.missing.isNotEmpty()) append("Missing: ${bios.missing.joinToString(", ")}\n")
-                bios.note?.let { append(it) }
-                p.bios?.hint?.let { if (bios.state != BiosState.READY) append("\n$it") }
-            }.trim().ifBlank { null },
-            icon = if (bios.state == BiosState.MISSING || bios.state == BiosState.PARTIAL) FuseIcons.Warning else FuseIcons.Key,
-        ).copy(section = files))
+        if (bios.state != BiosState.NOT_REQUIRED) {
+            val checkedAs = bios.checked ?: bios.state
+            add(MenuAction(
+                "bios", "BIOS and firmware", if (bios.state == BiosState.MISSING || bios.state == BiosState.PARTIAL) FuseIcons.Warning else FuseIcons.Key,
+                detail = buildString {
+                    if (bios.confirmed) append("You marked it as set up. Fuse's check said: ${biosWord(checkedAs).lowercase()}\n")
+                    if (bios.found.isNotEmpty()) append("Found: ${bios.found.joinToString(", ")}\n")
+                    if (bios.missing.isNotEmpty()) append("Missing: ${bios.missing.joinToString(", ")}\n")
+                    if (!bios.confirmed) bios.note?.let { append(it) }
+                    p.bios?.hint?.let { if (bios.state != BiosState.READY) append("\n$it") }
+                }.trim().ifBlank { null },
+                trailing = Trailing.Value(if (bios.confirmed) "Set up by you" else biosWord(bios.state)),
+                section = files,
+                onSelect = { app.biosChoice(p.id, p.name, bios) },
+            ))
+        }
         // A system can span drives; where its games are, once Storage has measured them.
         val drives = usage?.volumes.orEmpty()
         val byDrive = usage?.games.orEmpty().filter { it.card.platformId == platformId }.groupBy { it.volumeId }
@@ -196,6 +198,7 @@ fun PlatformSettingsScreen(app: AppState, platformId: PlatformId) {
         }))
         add(MenuAction("rescan", "Rescan ${p.shortName}", FuseIcons.Refresh, detail = "Looks through its folders again for new and moved games", section = tools, onSelect = { app.store.sources.rescan(ScanScope.PLATFORM, platformId); app.toasts.show("Rescanning") }))
     }
+    sel.keepOn(rows.map { it.id })
     sel.clamp(rows.size)
 
     LaunchedEffect(Unit) {
@@ -234,4 +237,48 @@ fun PlatformSettingsScreen(app: AppState, platformId: PlatformId) {
             }
         }
     }
+}
+
+/** A firmware state in a word or two. */
+internal fun biosWord(state: BiosState): String = when (state) {
+    BiosState.READY -> "Ready"
+    BiosState.PARTIAL -> "Partly found"
+    BiosState.MISSING -> "Missing"
+    BiosState.UNKNOWN -> "Can't check"
+    BiosState.NOT_REQUIRED -> "Not needed"
+}
+
+/**
+ * What can be done about a system's firmware: look again, or tell Fuse it is set up when the check
+ * can't see it (an emulator's own folder, a file named its own way), and take that back later.
+ */
+internal fun AppState.biosChoice(platform: io.github.matiyaaa.fuse.model.PlatformId, name: String, bios: io.github.matiyaaa.fuse.model.BiosStatus) {
+    fun mark(on: Boolean) {
+        choice = null
+        store.updatePrefs { prefs ->
+            prefs.copy(biosConfirmed = if (on) (prefs.biosConfirmed + platform.value).distinct() else prefs.biosConfirmed - platform.value)
+        }
+        toasts.show(if (on) "$name firmware marked as set up" else "Fuse goes by its own check for $name again")
+    }
+    val options = buildList {
+        add(MenuAction("again", "Check again", FuseIcons.Refresh, detail = "Looks through the firmware folders once more", onSelect = {
+            choice = null
+            store.sources.refreshBios()
+            toasts.show("Checking $name firmware")
+        }))
+        when {
+            bios.confirmed -> add(MenuAction("undo", "Go by Fuse's check", FuseIcons.RotateCcw, detail = "Shows what the check finds again, warnings included", onSelect = { mark(false) }))
+            bios.state in io.github.matiyaaa.fuse.model.BiosStatus.OVERRIDABLE -> add(MenuAction(
+                "mark", "It's set up", FuseIcons.CircleCheck,
+                detail = "For firmware in a place Fuse can't look or named its own way. Its warnings go away",
+                onSelect = { mark(true) },
+            ))
+        }
+    }
+    choice = ChoiceSpec(
+        title = "$name firmware",
+        message = if (bios.confirmed) "You marked it as set up. Fuse's check said: ${biosWord(bios.checked ?: bios.state).lowercase()}." else "Fuse's check: ${biosWord(bios.state).lowercase()}.",
+        options = options,
+        icon = FuseIcons.Key,
+    )
 }

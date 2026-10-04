@@ -84,3 +84,40 @@ interface DownloadSink {
     /** Closes and deletes the file. */
     suspend fun discard()
 }
+
+/**
+ * Puts programs the Store fetched in place on a computer (Linux, Windows, macOS), where Fuse looks
+ * for emulators: an AppImage made runnable in ~/Applications, a Windows zip unpacked into
+ * ~/Emulators, a macOS app copied into ~/Applications. Only what upstream publishes is used: nothing
+ * is repackaged, and no installer is ever run.
+ */
+interface DesktopInstaller {
+    val host: io.github.matiyaaa.fuse.model.Host
+
+    /** This computer's processor ("x86_64" or "arm64"). */
+    val arch: String
+
+    /** Where programs go, shown on the Store's page. */
+    val folder: String
+
+    /** A new file to download into, below Fuse's own cache. */
+    suspend fun newDownload(fileName: String): DownloadSink?
+
+    /** Bytes free where downloads go, or null when unknown. */
+    fun freeBytes(): Long?
+
+    /**
+     * Puts the download at [file] (published as [fileName], a [kind]) in place as [name], replacing
+     * [previous] (the path an earlier install left) when given. Returns the program's path, or
+     * throws an exception whose message says why it couldn't.
+     */
+    suspend fun install(name: String, file: String, fileName: String, kind: io.github.matiyaaa.fuse.integrations.obtainium.DesktopAssetKind, previous: String?): String
+
+    /** Removes a program Fuse put in place (its file, its folder or its app). */
+    suspend fun remove(path: String): Boolean
+
+    suspend fun exists(path: String): Boolean
+
+    /** Opens the program at [path]; false when it can't. */
+    fun launch(path: String): Boolean
+}

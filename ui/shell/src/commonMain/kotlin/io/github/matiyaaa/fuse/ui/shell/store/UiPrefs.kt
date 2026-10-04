@@ -71,6 +71,10 @@ data class UiPrefs(
     val autoSeries: Boolean = true,
     /** Series Fuse no longer makes (hidden, or kept as the user's own), lower case. */
     val hiddenSeries: List<String> = emptyList(),
+    /** Systems whose firmware the user marked as set up, by platform id. */
+    val biosConfirmed: List<String> = emptyList(),
+    /** Drives Fuse already asked about setting up for games, by drive id. */
+    val drivesAsked: List<String> = emptyList(),
     val scraperOrder: List<ScrapeProviderId> = io.github.matiyaaa.fuse.data.settings.ScrapingSettings.DefaultProviderOrder,
     val scraperLanguage: String = "en",
     val scraperRegion: String = "any",
@@ -90,6 +94,12 @@ data class UiPrefs(
     val heroDim: Float = 0.3f,
     /** Fuse's mark lights up when Fuse starts ([io.github.matiyaaa.fuse.ui.shell.app.StartupIntroOverlay]). */
     val startupAnimation: Boolean = true,
+    /** Colours picked last in the theme studio, newest first. */
+    val recentColors: List<Long> = emptyList(),
+    /** Tabs keep where you were in them; off, each tab opens at its start. */
+    val rememberPlace: Boolean = true,
+    /** Minutes idle before the standby screen; 0 never. */
+    val standbyMinutes: Int = 5,
     /** Which of its lists the Apps tab opens on: Pinned, Emulators or All apps. */
     val appsFilter: io.github.matiyaaa.fuse.model.AppFilter = io.github.matiyaaa.fuse.model.AppFilter.ALL,
     /** Themes added from a link, a file or pasted text, ready to use. */
@@ -129,4 +139,6 @@ data class MusicPrefs(
     val songPath: String? = null,
     val songName: String? = null,
     val track: String = io.github.matiyaaa.fuse.ui.shell.music.BundledMusic.MENU_DEFAULT,
+    /** Every bundled song in a random order, a new one each time a song ends, instead of looping [track]. */
+    val shuffle: Boolean = false,
 )
