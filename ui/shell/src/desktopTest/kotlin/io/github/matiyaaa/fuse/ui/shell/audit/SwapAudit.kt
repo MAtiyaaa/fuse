@@ -1,5 +1,7 @@
 package io.github.matiyaaa.fuse.ui.shell.audit
 
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.unit.dp
 import io.github.matiyaaa.fuse.model.Destination
 import io.github.matiyaaa.fuse.model.DualScreenMode
 import io.github.matiyaaa.fuse.model.HomeLayoutConfig
@@ -112,5 +114,42 @@ internal fun AuditDriver.swapCompanion() {
         shoot("turned off: its own dark backdrop")
         libraryStore.updatePrefs { it.copy(display = it.display.copy(companionFollowsBackground = true)) }
         useLibrary()
+    }
+}
+
+/** Setup's opening, frame by frame. */
+internal fun AuditDriver.setupOpening() {
+    scenario("swap", "setup opening") {
+        view = AuditView.Piece { io.github.matiyaaa.fuse.ui.shell.onboarding.SetupOpening(onDone = {}) }
+        settle(900)
+        shoot("the spark catches the line", 0)
+        settle(800)
+        shoot("running the fuse, shedding embers", 0)
+        settle(900)
+        shoot("the frame traces as the camera pulls back", 0)
+        settle(900)
+        shoot("the mark nearly its size", 0)
+        settle(500)
+        shoot("ignition", 0)
+        settle(700)
+        shoot("the ring and the tiles", 0)
+        settle(900)
+        shoot("the wordmark burning in", 0)
+        settle(700)
+        shoot("the lockup", 0)
+    }
+}
+
+/** Setup's welcome mark drawing itself in, until its spark is lit. */
+internal fun AuditDriver.welcomeMark() {
+    scenario("swap", "welcome mark") {
+        view = AuditView.Piece { io.github.matiyaaa.fuse.ui.shell.onboarding.Ignition() }
+        shoot("lit", 4_000)
+    }
+    scenario("swap", "controller pad") {
+        view = AuditView.Piece { androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.padding(40.dp)) { io.github.matiyaaa.fuse.ui.shell.onboarding.ControllerTest() } }
+        router.press(PadButton.L1, io.github.matiyaaa.fuse.ui.designsystem.input.InputSource.GAMEPAD)
+        shoot("left bumper held", 800)
+        router.release(PadButton.L1, io.github.matiyaaa.fuse.ui.designsystem.input.InputSource.GAMEPAD)
     }
 }

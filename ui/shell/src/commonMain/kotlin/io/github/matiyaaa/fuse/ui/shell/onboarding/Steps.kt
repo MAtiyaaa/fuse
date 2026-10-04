@@ -3,8 +3,6 @@ package io.github.matiyaaa.fuse.ui.shell.onboarding
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,10 +12,12 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -37,7 +37,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathMeasure
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import io.github.matiyaaa.fuse.model.BiosState
@@ -66,13 +69,14 @@ import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
 import io.github.matiyaaa.fuse.ui.designsystem.theme.ThemePresets
-import androidx.compose.ui.graphics.drawscope.withTransform
 import io.github.matiyaaa.fuse.ui.fuseline.Curves
-import io.github.matiyaaa.fuse.ui.shell.app.BrandArt
+import io.github.matiyaaa.fuse.ui.fuseline.Durations
 import io.github.matiyaaa.fuse.ui.fuseline.FuselineValue
 import io.github.matiyaaa.fuse.ui.fuseline.animate
+import io.github.matiyaaa.fuse.ui.fuseline.fuselineFloat
 import io.github.matiyaaa.fuse.ui.fuseline.tween
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
+import io.github.matiyaaa.fuse.ui.shell.app.BrandArt
 import io.github.matiyaaa.fuse.ui.shell.app.ConfirmSpec
 import io.github.matiyaaa.fuse.ui.shell.app.Route
 import io.github.matiyaaa.fuse.ui.shell.app.TextInputSpec
@@ -415,16 +419,26 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
         ))
 
         // ------------------------------------------------------------------------- make it yours
+        // Only where there is a second screen: which of the two holds the menus.
         if (platform.features.secondScreen) add(Step(
-            "displays", "Displays", "Two screens",
-            "Choose what the second screen does. Games can also open on either screen when the device and emulator allow it.",
+            "displays", "Two screens", "Which way round?",
+            "Menus on top keeps Fuse on the main screen, with the chosen game shown below. Menus below puts Fuse on the touch screen, like a 3DS, and gives the main screen to the game you are on. Settings, Screen and sound can change it later.",
             icon = FuseIcons.DualScreen, chapter = Chapters.YOURS,
             actions = listOf(
-                StepAction("Show the selected game", primary = prefs.display.mode == DualScreenMode.LIBRARY_COMPANION) { store.updatePrefs { it.copy(display = it.display.copy(mode = DualScreenMode.LIBRARY_COMPANION)) }; next() },
-                StepAction("Companion while playing", primary = prefs.display.mode == DualScreenMode.GAME_COMPANION) { store.updatePrefs { it.copy(display = it.display.copy(mode = DualScreenMode.GAME_COMPANION)) }; next() },
-                StepAction("Off", primary = prefs.display.mode == DualScreenMode.OFF) { store.updatePrefs { it.copy(display = it.display.copy(mode = DualScreenMode.OFF)) }; next() },
+                StepAction("Menus on top", primary = !prefs.display.flipped && prefs.display.mode != DualScreenMode.OFF) {
+                    store.updatePrefs { it.copy(display = it.display.copy(flipped = false, mode = if (it.display.mode == DualScreenMode.OFF) DualScreenMode.LIBRARY_COMPANION else it.display.mode)) }
+                    next()
+                },
+                StepAction("Menus below", primary = prefs.display.flipped) {
+                    store.updatePrefs { it.copy(display = it.display.copy(flipped = true, mode = if (it.display.mode == DualScreenMode.OFF) DualScreenMode.LIBRARY_COMPANION else it.display.mode)) }
+                    next()
+                },
+                StepAction("One screen", primary = !prefs.display.flipped && prefs.display.mode == DualScreenMode.OFF) {
+                    store.updatePrefs { it.copy(display = it.display.copy(flipped = false, mode = DualScreenMode.OFF)) }
+                    next()
+                },
             ),
-            content = { DualScreenPreview(state.button) },
+            content = { WhichWayPreview(state.button) },
         ))
         add(Step(
             "controller", "Controller", "Which button confirms?",
@@ -608,7 +622,7 @@ private fun SteamList(games: List<io.github.matiyaaa.fuse.library.steam.SteamGam
  * it finished.
  */
 @Composable
-private fun Ignition(lit: Boolean = false) {
+internal fun Ignition(lit: Boolean = false) {
     val c = Fuse.colors
     val trace = remember { FuselineValue(if (lit) 1f else 0f) }
     val spark = remember { FuselineValue(if (lit) 1f else 0f) }
@@ -690,19 +704,21 @@ internal fun ControllerTest(nintendoKeys: Boolean = false) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Box(Modifier.size(width = 340.dp, height = 196.dp)) {
             // The bumpers stand on the pad's shoulders, a little behind its body.
-            Bumper(PadButton.L1, left, Modifier.align(Alignment.TopStart).offset(x = 34.dp, y = 0.dp))
-            Bumper(PadButton.R1, right, Modifier.align(Alignment.TopEnd).offset(x = (-34).dp, y = 0.dp))
+            Bumper(PadButton.L1, left, Modifier.align(Alignment.TopStart).offset(x = 52.dp, y = 6.dp))
+            Bumper(PadButton.R1, right, Modifier.align(Alignment.TopEnd).offset(x = (-52).dp, y = 6.dp))
             val body = c.text.copy(alpha = 0.07f)
             val edge = c.text.copy(alpha = 0.2f)
             Canvas(Modifier.fillMaxWidth().height(172.dp).align(Alignment.BottomCenter)) {
                 val w = size.width
                 val h = size.height
                 // The body: a wide rounded top, the two grips below it.
-                val pad = Path().apply {
-                    addRoundRect(androidx.compose.ui.geometry.RoundRect(w * 0.06f, 0f, w * 0.94f, h * 0.66f, androidx.compose.ui.geometry.CornerRadius(h * 0.3f)))
+                // One outline, the shapes joined, so nothing shows through where they meet.
+                val top = Path().apply { addRoundRect(androidx.compose.ui.geometry.RoundRect(w * 0.06f, 0f, w * 0.94f, h * 0.66f, androidx.compose.ui.geometry.CornerRadius(h * 0.3f))) }
+                val grips = Path().apply {
                     addOval(androidx.compose.ui.geometry.Rect(w * 0.04f, h * 0.28f, w * 0.36f, h))
                     addOval(androidx.compose.ui.geometry.Rect(w * 0.64f, h * 0.28f, w * 0.96f, h))
                 }
+                val pad = Path().apply { op(top, grips, androidx.compose.ui.graphics.PathOperation.Union) }
                 drawPath(pad, body)
                 drawPath(pad, edge, style = Stroke(1.dp.toPx()))
             }
@@ -957,60 +973,114 @@ private fun HomeStylePreview(mode: HomeMode) {
 }
 
 /**
- * A dual-screen handheld drawn simply, its bottom screen showing what the highlighted choice puts
- * there: the selected game, the game's companion (achievements, time) while playing, or nothing.
+ * A dual-screen handheld, drawn plainly, with what each screen holds for the highlighted choice:
+ * Fuse's menus (a top line and a row of tiles) and the showcase of the game they are on (its art,
+ * name and facts). Choosing the other way round slides the two past each other through the hinge,
+ * and One screen leaves the lower screen dark.
  */
 @Composable
-private fun DualScreenPreview(button: Int) {
+private fun WhichWayPreview(button: Int) {
     val c = Fuse.colors
-    val mode = button.coerceIn(0, 2)
-    val labels = listOf("The selected game", "A companion while you play", "Nothing: the screen stays off")
+    val motion = Fuse.motion
+    val choice = button.coerceIn(0, 2)
+    val swap by fuselineFloat(if (choice == 1) 1f else 0f, motion.tween(Durations.SLOW, Curves.Standard), label = "whichWay")
+    val lit by fuselineFloat(if (choice == 2) 0f else 1f, motion.fade(Durations.BASE), label = "secondLit")
+    val labels = listOf("Menus on top, the game below", "Menus below, the game on top", "Only the main screen")
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Canvas(Modifier.width(260.dp).aspectRatio(0.82f)) {
+        Canvas(Modifier.width(280.dp).aspectRatio(0.8f)) {
             val w = size.width
             val h = size.height
-            val r = androidx.compose.ui.geometry.CornerRadius(w * 0.06f)
-            // The two halves of the device.
-            drawRoundRect(c.text.copy(alpha = 0.1f), Offset(0f, 0f), androidx.compose.ui.geometry.Size(w, h * 0.49f), r)
-            drawRoundRect(c.text.copy(alpha = 0.1f), Offset(0f, h * 0.51f), androidx.compose.ui.geometry.Size(w, h * 0.49f), r)
+            val body = c.text.copy(alpha = 0.1f)
+            val corner = androidx.compose.ui.geometry.CornerRadius(w * 0.06f)
+            val hinge = h * 0.02f
+            // The two halves: a wide main screen on top, the smaller touch screen below.
+            drawRoundRect(body, Offset.Zero, androidx.compose.ui.geometry.Size(w, h * 0.5f - hinge), corner)
+            drawRoundRect(body, Offset(w * 0.04f, h * 0.5f + hinge), androidx.compose.ui.geometry.Size(w * 0.92f, h * 0.5f - hinge), corner)
+            drawRoundRect(c.text.copy(alpha = 0.16f), Offset(w * 0.08f, h * 0.5f - hinge), androidx.compose.ui.geometry.Size(w * 0.84f, hinge * 2), androidx.compose.ui.geometry.CornerRadius(hinge))
             val pad = w * 0.06f
-            val top = androidx.compose.ui.geometry.Rect(pad, pad, w - pad, h * 0.49f - pad)
-            val bottom = androidx.compose.ui.geometry.Rect(pad, h * 0.51f + pad, w - pad, h - pad)
-            // The top screen: Fuse, with a row of tiles, the second chosen.
-            drawRoundRect(c.ink, top.topLeft, top.size, androidx.compose.ui.geometry.CornerRadius(w * 0.03f))
-            val tw = top.width / 6.2f
-            for (i in 0 until 5) {
-                drawRoundRect(
-                    if (i == 1) c.accent else c.text.copy(alpha = 0.22f),
-                    Offset(top.left + top.width * 0.06f + i * tw * 1.15f, top.top + top.height * (if (i == 1) 0.42f else 0.46f)),
-                    androidx.compose.ui.geometry.Size(tw, tw * 1.25f), androidx.compose.ui.geometry.CornerRadius(tw * 0.15f),
-                )
-            }
-            // The bottom screen.
-            drawRoundRect(if (mode == 2) Color.Black else c.ink, bottom.topLeft, bottom.size, androidx.compose.ui.geometry.CornerRadius(w * 0.03f))
-            when (mode) {
-                0 -> {
-                    drawRoundRect(c.accent.copy(alpha = 0.85f), Offset(bottom.left + bottom.width * 0.08f, bottom.top + bottom.height * 0.14f), androidx.compose.ui.geometry.Size(bottom.width * 0.3f, bottom.height * 0.72f), androidx.compose.ui.geometry.CornerRadius(6.dp.toPx()))
-                    val x = bottom.left + bottom.width * 0.45f
-                    drawRoundRect(c.text.copy(alpha = 0.85f), Offset(x, bottom.top + bottom.height * 0.22f), androidx.compose.ui.geometry.Size(bottom.width * 0.42f, bottom.height * 0.1f), androidx.compose.ui.geometry.CornerRadius(h))
-                    for (i in 0 until 3) drawRoundRect(c.text.copy(alpha = 0.25f), Offset(x, bottom.top + bottom.height * (0.42f + 0.12f * i)), androidx.compose.ui.geometry.Size(bottom.width * (0.38f - 0.06f * i), bottom.height * 0.05f), androidx.compose.ui.geometry.CornerRadius(h))
+            val top = androidx.compose.ui.geometry.Rect(pad, pad, w - pad, h * 0.5f - hinge - pad)
+            val bottomW = top.height * 1.2f
+            val bottomTop = h * 0.5f + hinge + pad
+            val bottom = androidx.compose.ui.geometry.Rect(w / 2 - bottomW / 2, bottomTop, w / 2 + bottomW / 2, h - pad)
+            val screenCorner = androidx.compose.ui.geometry.CornerRadius(w * 0.025f)
+            drawRoundRect(c.ink, top.topLeft, top.size, screenCorner)
+            drawRoundRect(c.ink, bottom.topLeft, bottom.size, screenCorner)
+            // Where each picture is now: the menus from the top screen to the bottom one as the
+            // choice turns, the showcase the other way.
+            val menus = lerpRect(top, bottom, swap)
+            val show = lerpRect(bottom, top, swap)
+            for (screen in listOf(top, bottom)) {
+                clipRect(screen.left, screen.top, screen.right, screen.bottom) {
+                    val showAlpha = if (screen == bottom) lit else 1f
+                    drawShowcase(show, c, showAlpha)
+                    drawMenus(menus, c)
                 }
-                1 -> {
-                    // A session pill, and achievement badges with a progress bar.
-                    drawRoundRect(c.text.copy(alpha = 0.18f), Offset(bottom.left + bottom.width * 0.3f, bottom.top + bottom.height * 0.12f), androidx.compose.ui.geometry.Size(bottom.width * 0.4f, bottom.height * 0.12f), androidx.compose.ui.geometry.CornerRadius(h))
-                    drawCircle(c.accent, radius = bottom.height * 0.03f, center = Offset(bottom.left + bottom.width * 0.35f, bottom.top + bottom.height * 0.18f))
-                    for (i in 0 until 4) {
-                        drawRoundRect(if (i < 2) c.accent.copy(alpha = 0.8f) else c.text.copy(alpha = 0.2f), Offset(bottom.left + bottom.width * (0.14f + 0.19f * i), bottom.top + bottom.height * 0.38f), androidx.compose.ui.geometry.Size(bottom.width * 0.14f, bottom.width * 0.14f), androidx.compose.ui.geometry.CornerRadius(6.dp.toPx()))
-                    }
-                    drawRoundRect(c.text.copy(alpha = 0.15f), Offset(bottom.left + bottom.width * 0.14f, bottom.top + bottom.height * 0.78f), androidx.compose.ui.geometry.Size(bottom.width * 0.72f, bottom.height * 0.05f), androidx.compose.ui.geometry.CornerRadius(h))
-                    drawRoundRect(c.accent, Offset(bottom.left + bottom.width * 0.14f, bottom.top + bottom.height * 0.78f), androidx.compose.ui.geometry.Size(bottom.width * 0.36f, bottom.height * 0.05f), androidx.compose.ui.geometry.CornerRadius(h))
-                }
-                else -> Unit
             }
+            // One screen: the lower screen is off.
+            if (lit < 1f) drawRoundRect(Color.Black.copy(alpha = (1f - lit) * 0.92f), bottom.topLeft, bottom.size, screenCorner)
         }
         Spacer(Modifier.height(Space.m))
-        FText(labels[mode], Fuse.type.bodyStrong, maxLines = 1)
+        FText(labels[choice], Fuse.type.bodyStrong, maxLines = 1)
     }
+}
+
+private fun lerpRect(a: androidx.compose.ui.geometry.Rect, b: androidx.compose.ui.geometry.Rect, t: Float) = androidx.compose.ui.geometry.Rect(
+    a.left + (b.left - a.left) * t,
+    a.top + (b.top - a.top) * t,
+    a.right + (b.right - a.right) * t,
+    a.bottom + (b.bottom - a.bottom) * t,
+)
+
+/** Fuse's menus in miniature: the top line, a row of tiles with one chosen, and a shelf under it. */
+private fun DrawScope.drawMenus(r: androidx.compose.ui.geometry.Rect, c: io.github.matiyaaa.fuse.ui.designsystem.theme.FuseColors) {
+    val round = androidx.compose.ui.geometry.CornerRadius(r.height)
+    val u = r.width / 20f
+    for (i in 0 until 4) {
+        drawRoundRect(
+            if (i == 0) c.text.copy(alpha = 0.8f) else c.text.copy(alpha = 0.25f),
+            Offset(r.left + u * (1.2f + i * 2.6f), r.top + r.height * 0.1f),
+            androidx.compose.ui.geometry.Size(u * 2f, r.height * 0.05f),
+            round,
+        )
+    }
+    drawRoundRect(c.accent, Offset(r.left + u * 1.2f, r.top + r.height * 0.18f), androidx.compose.ui.geometry.Size(u * 2f, r.height * 0.015f), round)
+    val tile = (r.width - u * 2.4f) / 5.6f
+    for (i in 0 until 5) {
+        val chosen = i == 1
+        val lift = if (chosen) tile * 0.08f else 0f
+        drawRoundRect(
+            if (chosen) c.accent else c.text.copy(alpha = 0.2f),
+            Offset(r.left + u * 1.2f + i * tile * 1.12f, r.top + r.height * 0.32f - lift),
+            androidx.compose.ui.geometry.Size(tile, tile * 1.3f),
+            androidx.compose.ui.geometry.CornerRadius(tile * 0.14f),
+        )
+    }
+    for (i in 0 until 7) {
+        drawRoundRect(
+            c.text.copy(alpha = 0.12f),
+            Offset(r.left + u * 1.2f + i * tile * 0.8f, r.top + r.height * 0.32f + tile * 1.45f),
+            androidx.compose.ui.geometry.Size(tile * 0.7f, tile * 0.7f),
+            androidx.compose.ui.geometry.CornerRadius(tile * 0.12f),
+        )
+    }
+}
+
+/** The chosen game shown large: its art, its name, its facts and the time played. */
+private fun DrawScope.drawShowcase(r: androidx.compose.ui.geometry.Rect, c: io.github.matiyaaa.fuse.ui.designsystem.theme.FuseColors, alpha: Float) {
+    if (alpha <= 0f) return
+    drawRect(
+        Brush.linearGradient(listOf(c.accent.copy(alpha = 0.75f * alpha), c.accent.copy(alpha = 0.18f * alpha)), start = r.topLeft, end = r.bottomRight),
+        r.topLeft, r.size,
+    )
+    drawRect(Brush.verticalGradient(listOf(Color.Transparent, c.ink.copy(alpha = 0.85f * alpha)), startY = r.top + r.height * 0.3f, endY = r.bottom), r.topLeft, r.size)
+    val round = androidx.compose.ui.geometry.CornerRadius(r.height)
+    val x = r.left + r.width * 0.07f
+    drawRoundRect(c.text.copy(alpha = 0.95f * alpha), Offset(x, r.top + r.height * 0.52f), androidx.compose.ui.geometry.Size(r.width * 0.46f, r.height * 0.1f), round)
+    for (i in 0 until 3) {
+        drawRoundRect(c.text.copy(alpha = 0.3f * alpha), Offset(x + i * r.width * 0.15f, r.top + r.height * 0.69f), androidx.compose.ui.geometry.Size(r.width * 0.12f, r.height * 0.06f), round)
+    }
+    drawRoundRect(c.text.copy(alpha = 0.16f * alpha), Offset(x, r.top + r.height * 0.83f), androidx.compose.ui.geometry.Size(r.width * 0.86f, r.height * 0.035f), round)
+    drawRoundRect(c.accent.copy(alpha = alpha), Offset(x, r.top + r.height * 0.83f), androidx.compose.ui.geometry.Size(r.width * 0.5f, r.height * 0.035f), round)
 }
 
 /**

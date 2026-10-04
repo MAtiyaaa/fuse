@@ -92,6 +92,7 @@ import io.github.matiyaaa.fuse.ui.shell.media.MediaScreen
 import io.github.matiyaaa.fuse.ui.shell.music.BundledMusic
 import io.github.matiyaaa.fuse.ui.shell.music.MenuMusicPlan
 import io.github.matiyaaa.fuse.ui.shell.onboarding.OnboardingScreen
+import io.github.matiyaaa.fuse.ui.shell.onboarding.SetupOpening
 import io.github.matiyaaa.fuse.ui.shell.platform.MenuMusicPlayer
 import io.github.matiyaaa.fuse.ui.shell.platform.PlatformUi
 import io.github.matiyaaa.fuse.ui.shell.quick.QuickMenu
@@ -148,7 +149,10 @@ fun FuseApp(
     val prefs = if (app.safeMode != null) stored.inSafeMode() else stored
     LaunchedEffect(Unit) {
         // The startup animation, once per start of Fuse (a window made again doesn't replay it).
-        if (startupIntro && !StartupIntro.played && app.safeMode == null && stored.startupAnimation) app.intro = true
+        // The very first start opens setup with its own, longer opening instead.
+        if (startupIntro && !StartupIntro.played && app.safeMode == null && stored.startupAnimation) {
+            if (stored.onboardingDone) app.intro = true else app.setupOpening = true
+        }
         StartupIntro.played = true
         if (app.safeMode != null) app.showSafeMode()
         delay(StartupGuard.SETTLE_MS)
@@ -344,6 +348,7 @@ fun FuseApp(
                         StandbyHost(app, prefs.clock24h, prefs.startupAnimation && startupIntro)
                     }
                     if (app.intro) StartupIntroOverlay(onDone = { app.intro = false })
+                    if (app.setupOpening) SetupOpening(onDone = { app.setupOpening = false })
                 }
                 }
                 if (prefs.crt.enabled && quality.crtShader) CrtOverlay(prefs.crt)

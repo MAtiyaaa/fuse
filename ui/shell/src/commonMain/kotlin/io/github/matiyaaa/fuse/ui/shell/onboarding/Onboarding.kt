@@ -204,7 +204,7 @@ fun OnboardingScreen(app: AppState) {
         state.button = step.actions.indexOfFirst { it.primary }.coerceAtLeast(0)
     }
 
-    InputLayer(enabled = !app.overlayOpen) { e ->
+    InputLayer(enabled = !app.overlayOpen && !app.setupOpening) { e ->
         step.onInput?.invoke(e)?.let { if (it != NavResult.IGNORED) return@InputLayer it }
         val buttons = step.actions
         when (e.action) {

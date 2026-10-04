@@ -137,4 +137,8 @@ class UiAudit {
     @Test fun swapH() = audit(AuditSize.H) { swapScreens() }
 
     @Test fun swapC() = audit(AuditSize.C) { swapCompanion() }
+
+    @Test fun openingM() = audit(AuditSize.M) { setupOpening() }
+
+    @Test fun openingP() = audit(AuditSize.P) { setupOpening(); welcomeMark() }
 }
