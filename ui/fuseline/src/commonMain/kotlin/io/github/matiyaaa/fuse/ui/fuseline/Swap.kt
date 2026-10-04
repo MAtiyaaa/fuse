@@ -103,8 +103,11 @@ fun <S> Swap(
     val target = remember { arrayOfNulls<IntSize>(1) }
     val scope = androidx.compose.runtime.rememberCoroutineScope()
 
+    // Clipped only while a change is under way (two contents crossing, or the room still moving):
+    // at rest, content that reaches past the room (a lifted card's edge, a focus ring) is whole.
+    val changing = entries.size > 1 || room.isRunning
     Layout(
-        modifier = if (sizing?.clip == true) modifier.clipToBounds() else modifier,
+        modifier = if (sizing?.clip == true && changing) modifier.clipToBounds() else modifier,
         content = {
             for (e in entries) key(e.key) {
                 Appear(e.visibility, enter = e.enter, exit = e.exit, label = label) {

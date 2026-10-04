@@ -87,7 +87,6 @@ internal fun AuditDriver.addonsScreens() {
         waitFor("Your RomM library, on this device")
         shoot("Cartridge inside Addons, not installed")
         // Held A lifts the tab; Right carries it past the Store, and the order is kept.
-        tap(PadButton.DPAD_UP)
         hold(PadButton.A)
         waitFor("Done")
         shoot("a tab lifted to move")
@@ -108,7 +107,7 @@ internal fun AuditDriver.addonsScreens() {
         waitFor("Apps and emulators, their updates and where the catalogue comes from")
         shoot("Addons: Jellyfin, the Store and Cartridge")
         tapText("Store")
-        waitFor("GitHub token")
+        waitFor("Catalogue source")
         tap(PadButton.DPAD_RIGHT)
         shoot("the Store's settings")
     }

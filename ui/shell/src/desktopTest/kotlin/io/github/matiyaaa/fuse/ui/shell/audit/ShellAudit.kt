@@ -906,8 +906,9 @@ internal fun AuditDriver.themeScreens() {
         // The stage follows the focus: down a row to another theme.
         tap(PadButton.DPAD_DOWN)
         shoot("another theme on the stage", 1_500)
-        // Up into the filters, along to Yours: the added theme, then the cards that make and add one.
-        tap(PadButton.DPAD_UP, 3)
+        // Up into the filters (from the second row: the first row, then the filters; one more would
+        // reach the top line), along to Yours: the added theme, then the cards that make and add one.
+        tap(PadButton.DPAD_UP, 2)
         tap(PadButton.DPAD_RIGHT, 3)
         waitFor("Deep Sea")
         shoot("your themes, the filters focused")

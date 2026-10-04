@@ -98,13 +98,24 @@ fun AddonsScreen(app: AppState) {
         app.hints = if (lifted != null) listOf(Hint(HintButton.DPAD, "Move"), Hint(HintButton.CONFIRM, "Done"))
         else listOf(Hint(HintButton.CONFIRM, "Choose"), Hint(HintButton.HOLD_CONFIRM, "Hold to move"))
     }
-    // Registered before the content's own layers, so it hears what they leave: Up from their top.
+    // Up from the top of the page reaches the tabs. Registered before the page's own layers, so it
+    // hears only what they leave.
+    InputLayer(enabled = app.focusZone == FocusZone.CONTENT && !app.overlayOpen && parts.size > 1 && !inTabs) { e ->
+        if (e.action == NavAction.UP) {
+            tabsFocused = true
+            NavResult.MOVED
+        } else {
+            NavResult.IGNORED
+        }
+    }
+    // The tabs, while they have focus: above the page, so holding A on one lifts it to move.
     InputLayer(
-        enabled = app.focusZone == FocusZone.CONTENT && !app.overlayOpen && parts.size > 1,
-        longPress = inTabs && lifted == null,
+        priority = io.github.matiyaaa.fuse.ui.designsystem.input.LayerPriority.SCREEN + 1,
+        enabled = inTabs && !app.overlayOpen,
+        longPress = lifted == null,
     ) { e ->
         val carried = lifted
-        if (inTabs && carried != null) {
+        if (carried != null) {
             val at = parts.indexOf(carried)
             when (e.action) {
                 NavAction.LEFT -> if (at > 0) { move(at, at - 1); NavResult.MOVED } else NavResult.BLOCKED
@@ -112,19 +123,15 @@ fun AddonsScreen(app: AppState) {
                 NavAction.SELECT, NavAction.BACK, NavAction.REORDER, NavAction.DOWN -> { lifted = null; NavResult.ACTIVATED }
                 else -> NavResult.BLOCKED
             }
-        } else if (inTabs) {
+        } else {
             when (e.action) {
                 NavAction.LEFT -> parts.getOrNull(parts.indexOf(part) - 1)?.let { show(it); NavResult.MOVED } ?: NavResult.BLOCKED
                 NavAction.RIGHT -> parts.getOrNull(parts.indexOf(part) + 1)?.let { show(it); NavResult.MOVED } ?: NavResult.BLOCKED
                 NavAction.DOWN, NavAction.SELECT -> { tabsFocused = false; NavResult.MOVED }
                 NavAction.REORDER -> { lifted = part; NavResult.ACTIVATED }
+                // Up has nowhere further to go but the top line, which the app handles.
                 else -> NavResult.IGNORED
             }
-        } else if (e.action == NavAction.UP) {
-            tabsFocused = true
-            NavResult.MOVED
-        } else {
-            NavResult.IGNORED
         }
     }
     // Leaving the tabs puts down whatever the controller held.
