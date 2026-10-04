@@ -1200,25 +1200,12 @@ fun displayRows(app: AppState): List<MenuAction> {
                     },
                 ))
             }
+            add(toggleRow("bg", "Same background as the main screen", FuseIcons.Image, d.companionFollowsBackground, "Its scene or picture behind what the second screen shows") { v -> app.store.updatePrefs { it.copy(display = it.display.copy(companionFollowsBackground = v)) } })
             add(toggleRow("perf", "Show performance on the second screen", FuseIcons.ChartLine, d.companionShowsPerformance, "Only values the system really reports; nothing is estimated") { v -> app.store.updatePrefs { it.copy(display = it.display.copy(companionShowsPerformance = v)) } })
             add(toggleRow("touch", "Touch controls on the second screen", FuseIcons.Hand, d.companionTouchControls) { v -> app.store.updatePrefs { it.copy(display = it.display.copy(companionTouchControls = v)) } })
     }
-        labelled("Second screen") {
-            if (app.platform.features.secondScreen) {
-                addAll(second)
-            } else {
-                addAll(app.group(
-                    "displays.second", "When a second screen is connected", FuseIcons.DualScreen,
-                    summary = when (d.mode) {
-                        DualScreenMode.OFF -> "Off"
-                        DualScreenMode.LIBRARY_COMPANION -> "Selected game"
-                        DualScreenMode.GAME_COMPANION -> "Companion"
-                        DualScreenMode.REVERSE -> "Games play there"
-                    },
-                    detail = "There's one screen now. These apply once a second display is connected",
-                ) { second })
-            }
-        }
+        // Only a device with a second screen mentions one.
+        if (app.platform.features.secondScreen) labelled("Second screen") { addAll(second) }
     }
 }
 

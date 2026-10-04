@@ -103,6 +103,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Radius
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
+import io.github.matiyaaa.fuse.ui.fuseline.fuselineScrollTo
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec
 import io.github.matiyaaa.fuse.ui.shell.app.ConfirmSpec
@@ -450,8 +451,8 @@ fun MediaScreen(app: AppState, owner: MediaOwner, title: String, identifyFirst: 
         var rowHeights by remember { mutableStateOf(mapOf<Int, Int>()) }
         LaunchedEffect(sel.index) {
             when (sel.index) {
-                0 -> listScroll.animateScrollTo(0)
-                rowCount - 1 -> listScroll.animateScrollTo(listScroll.maxValue)
+                0 -> listScroll.fuselineScrollTo(0)
+                rowCount - 1 -> listScroll.fuselineScrollTo(listScroll.maxValue)
                 else -> {
                     val h = (rowHeights[sel.index] ?: 0).toFloat()
                     rowRequesters.getOrNull(sel.index)?.bringIntoView(Rect(0f, -above, 1f, h + below))

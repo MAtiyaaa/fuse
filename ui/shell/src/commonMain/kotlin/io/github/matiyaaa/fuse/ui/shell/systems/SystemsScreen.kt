@@ -1,14 +1,5 @@
 package io.github.matiyaaa.fuse.ui.shell.systems
 
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.Crossfade
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.VisibilityThreshold
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.scrollBy
@@ -27,13 +18,13 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.text.BasicText
-import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -71,8 +62,8 @@ import io.github.matiyaaa.fuse.model.NavAction
 import io.github.matiyaaa.fuse.model.ScanScope
 import io.github.matiyaaa.fuse.ui.designsystem.components.EmptyState
 import io.github.matiyaaa.fuse.ui.designsystem.components.FText
-import io.github.matiyaaa.fuse.ui.designsystem.components.IconBadge
 import io.github.matiyaaa.fuse.ui.designsystem.components.Hint
+import io.github.matiyaaa.fuse.ui.designsystem.components.IconBadge
 import io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction
 import io.github.matiyaaa.fuse.ui.designsystem.components.Tile
 import io.github.matiyaaa.fuse.ui.designsystem.components.Trailing
@@ -80,9 +71,9 @@ import io.github.matiyaaa.fuse.ui.designsystem.components.fadingEdges
 import io.github.matiyaaa.fuse.ui.designsystem.effects.rememberReveal
 import io.github.matiyaaa.fuse.ui.designsystem.effects.reveal
 import io.github.matiyaaa.fuse.ui.designsystem.focus.FollowSelection
+import io.github.matiyaaa.fuse.ui.designsystem.focus.GridSelection
 import io.github.matiyaaa.fuse.ui.designsystem.focus.ReorderDefaults
 import io.github.matiyaaa.fuse.ui.designsystem.focus.carried
-import io.github.matiyaaa.fuse.ui.designsystem.focus.GridSelection
 import io.github.matiyaaa.fuse.ui.designsystem.focus.dragReorder
 import io.github.matiyaaa.fuse.ui.designsystem.focus.rememberDragReorderState
 import io.github.matiyaaa.fuse.ui.designsystem.focus.reorderItem
@@ -96,14 +87,22 @@ import io.github.matiyaaa.fuse.ui.designsystem.media.Artwork
 import io.github.matiyaaa.fuse.ui.designsystem.media.GeneratedArt
 import io.github.matiyaaa.fuse.ui.designsystem.media.HeroSource
 import io.github.matiyaaa.fuse.ui.designsystem.media.PrefetchArt
-import io.github.matiyaaa.fuse.ui.designsystem.theme.Aspect
-import io.github.matiyaaa.fuse.ui.designsystem.theme.Durations
 import io.github.matiyaaa.fuse.ui.designsystem.shape.SquircleShape
+import io.github.matiyaaa.fuse.ui.designsystem.theme.Aspect
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
 import io.github.matiyaaa.fuse.ui.designsystem.theme.tabular
 import io.github.matiyaaa.fuse.ui.designsystem.theme.toColor
+import io.github.matiyaaa.fuse.ui.fuseline.Crossfade
+import io.github.matiyaaa.fuse.ui.fuseline.Durations
+import io.github.matiyaaa.fuse.ui.fuseline.Spring
+import io.github.matiyaaa.fuse.ui.fuseline.Swap
+import io.github.matiyaaa.fuse.ui.fuseline.fadeIn
+import io.github.matiyaaa.fuse.ui.fuseline.fadeOut
+import io.github.matiyaaa.fuse.ui.fuseline.fuselineFloat
+import io.github.matiyaaa.fuse.ui.fuseline.spring
+import io.github.matiyaaa.fuse.ui.fuseline.togetherWith
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec
 import io.github.matiyaaa.fuse.ui.shell.app.ContextMenuSpec
@@ -261,7 +260,7 @@ fun SystemsScreen(app: AppState) {
                     // While held, the selection stays on the held system wherever it would land.
                     val selected = (drag.heldKey?.let { it == key } ?: (i == sel.index)) && app.focusZone == FocusZone.CONTENT
                     val carried = moving && i == sel.index
-                    val lifted by animateFloatAsState(if (carried) 1f else 0f, Fuse.motion.focusSpring(), label = "carry")
+                    val lifted by fuselineFloat(if (carried) 1f else 0f, Fuse.motion.focusSpring(), label = "carry")
                     val fraction = Fuse.geometry.tileCornerFraction
                     val shape = remember(fraction) { SquircleShape.fraction(fraction) }
                     Tile(
@@ -456,7 +455,7 @@ internal fun SystemHeader(
 ) {
     val c = Fuse.colors
     val motion = Fuse.motion
-    AnimatedContent(
+    Swap(
         targetState = card,
         modifier = modifier.fillMaxWidth(widthFraction).foldAway(collapse),
         contentKey = { it?.platform?.id },
@@ -466,7 +465,7 @@ internal fun SystemHeader(
     ) { s ->
         if (s == null) {
             Spacer(Modifier.height(logoHeight))
-            return@AnimatedContent
+            return@Swap
         }
         Column(verticalArrangement = Arrangement.spacedBy(if (compact) Space.xs else Space.s)) {
             if (showMeta) {

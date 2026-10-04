@@ -1,6 +1,5 @@
 package io.github.matiyaaa.fuse.ui.designsystem.media
 
-import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -33,8 +32,10 @@ import coil3.request.ImageRequest
 import coil3.request.crossfade
 import coil3.size.Scale
 import io.github.matiyaaa.fuse.ui.designsystem.effects.shimmer
-import io.github.matiyaaa.fuse.ui.designsystem.theme.Durations
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
+import io.github.matiyaaa.fuse.ui.fuseline.Durations
+import io.github.matiyaaa.fuse.ui.fuseline.FuselineValue
+import io.github.matiyaaa.fuse.ui.fuseline.fadeIn
 import kotlinx.coroutines.delay
 
 /**
@@ -93,8 +94,8 @@ fun Artwork(
     val success = state as? AsyncImagePainter.State.Success
     val failed = state is AsyncImagePainter.State.Error
     val fromMemory = success?.result?.dataSource == DataSource.MEMORY_CACHE
-    val alpha = remember(model) { Animatable(0f) }
-    val fade = Fuse.motion.fade<Float>(Durations.BASE)
+    val alpha = remember(model) { FuselineValue(0f) }
+    val fade = Fuse.motion.fade(Durations.BASE)
     // Read through a derived state so the fade itself never recomposes this.
     val shown by remember(alpha) { derivedStateOf { alpha.value >= 1f } }
     // Only art that fills its slot gets a placeholder: never logos, tinted marks or overlays.

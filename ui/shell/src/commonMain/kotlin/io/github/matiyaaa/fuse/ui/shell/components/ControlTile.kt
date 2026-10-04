@@ -1,9 +1,5 @@
 package io.github.matiyaaa.fuse.ui.shell.components
 
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,24 +8,24 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.Stable
-import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.ReadOnlyComposable
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size as GeoSize
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.addOutline
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.translate
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size as GeoSize
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.Layout
@@ -42,12 +38,17 @@ import io.github.matiyaaa.fuse.ui.designsystem.effects.fuseClickable
 import io.github.matiyaaa.fuse.ui.designsystem.effects.lightEdge
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
 import io.github.matiyaaa.fuse.ui.designsystem.shape.SquircleShape
-import io.github.matiyaaa.fuse.ui.designsystem.theme.Durations
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Elevation
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
 import io.github.matiyaaa.fuse.ui.designsystem.theme.flourishOn
+import io.github.matiyaaa.fuse.ui.fuseline.Durations
+import io.github.matiyaaa.fuse.ui.fuseline.FuselineValue
+import io.github.matiyaaa.fuse.ui.fuseline.fuselineColor
+import io.github.matiyaaa.fuse.ui.fuseline.fuselineFloat
+import io.github.matiyaaa.fuse.ui.fuseline.spring
+import io.github.matiyaaa.fuse.ui.fuseline.tween
 import kotlin.math.sqrt
 import kotlinx.coroutines.launch
 
@@ -83,7 +84,7 @@ fun ControlTile(
     val c = Fuse.colors
     val motion = Fuse.motion
     val shape = controlTileShape()
-    val bg by animateColorAsState(
+    val bg by fuselineColor(
         when {
             active -> c.accent.copy(alpha = if (c.isDark) 0.13f else 0.1f)
             selected -> c.text.copy(alpha = if (c.isDark) 0.11f else 0.08f)
@@ -92,8 +93,8 @@ fun ControlTile(
         motion.tween(Durations.BASE),
         label = "tile",
     )
-    val lift by animateFloatAsState(if (selected) 1f else 0f, motion.focusSpring(), label = "tile lift")
-    val stateColor by animateColorAsState(if (active) c.accent else c.textMuted, motion.tween(Durations.BASE), label = "tile state")
+    val lift by fuselineFloat(if (selected) 1f else 0f, motion.focusSpring(), label = "tile lift")
+    val stateColor by fuselineColor(if (active) c.accent else c.textMuted, motion.tween(Durations.BASE), label = "tile state")
     val ring = c.focus
     val edgeRest = Elevation.tile.edgeAlpha(c.isDark)
     val edgeLit = Elevation.tileFocused.edgeAlpha(c.isDark)
@@ -171,13 +172,13 @@ internal fun ControlWell(icon: ImageVector, active: Boolean, compact: Boolean = 
     val c = Fuse.colors
     val motion = Fuse.motion
     val flourish = motion.flourishOn(Fuse.quality)
-    val fill by animateColorAsState(
+    val fill by fuselineColor(
         if (active) c.accent else c.text.copy(alpha = if (c.isDark) 0.09f else 0.07f),
         motion.tween(Durations.BASE),
         label = "well",
     )
-    val tint by animateColorAsState(if (active) c.onAccent else c.text, motion.tween(Durations.BASE), label = "well icon")
-    val pop = remember { Animatable(0f) }
+    val tint by fuselineColor(if (active) c.onAccent else c.text, motion.tween(Durations.BASE), label = "well icon")
+    val pop = remember { FuselineValue(0f) }
     val first = remember { booleanArrayOf(true) }
     LaunchedEffect(active) {
         // Only a change pops, never the first frame.
@@ -234,9 +235,9 @@ internal fun controlWellShape(): Shape = when (Fuse.geometry.family) {
  */
 @Stable
 internal class RowHighlight {
-    val top = Animatable(0f)
-    val bottom = Animatable(0f)
-    val alpha = Animatable(0f)
+    val top = FuselineValue(0f)
+    val bottom = FuselineValue(0f)
+    val alpha = FuselineValue(0f)
 
     /** Each row's top and bottom in the list, in pixels. */
     val bounds = mutableStateMapOf<Int, Pair<Float, Float>>()

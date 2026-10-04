@@ -1,6 +1,5 @@
 package io.github.matiyaaa.fuse.ui.shell.addons
 
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -32,6 +31,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.input.NavResult
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
+import io.github.matiyaaa.fuse.ui.fuseline.fuselineFloat
 import io.github.matiyaaa.fuse.ui.shell.app.AddonsPart
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.FocusZone
@@ -93,7 +93,7 @@ fun AddonsScreen(app: AppState) {
     val foldedTop = Size.hudHeight + COMPACT_TAB + Space.s * 2
     val tabs = remember(many) { SubTabsState(extraTop = if (many) openTop - foldedTop else 0.dp) }
     // Up into the tabs opens them again, wherever the page is.
-    val fold by animateFloatAsState(
+    val fold by fuselineFloat(
         if (many && tabs.collapsed && !inTabs) 1f else 0f,
         Fuse.motion.focusSpring(),
         label = "fold",

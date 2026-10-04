@@ -1,14 +1,5 @@
 package io.github.matiyaaa.fuse.ui.shell.settings
 
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -87,13 +78,24 @@ import io.github.matiyaaa.fuse.ui.designsystem.icons.HintButton
 import io.github.matiyaaa.fuse.ui.designsystem.input.InputLayer
 import io.github.matiyaaa.fuse.ui.designsystem.input.NavResult
 import io.github.matiyaaa.fuse.ui.designsystem.shape.squirclePath
-import io.github.matiyaaa.fuse.ui.designsystem.theme.Durations
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.FuseTheme
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
 import io.github.matiyaaa.fuse.ui.designsystem.theme.ThemePresets
 import io.github.matiyaaa.fuse.ui.designsystem.theme.toColor
+import io.github.matiyaaa.fuse.ui.fuseline.Appear
+import io.github.matiyaaa.fuse.ui.fuseline.Durations
+import io.github.matiyaaa.fuse.ui.fuseline.Motion
+import io.github.matiyaaa.fuse.ui.fuseline.Swap
+import io.github.matiyaaa.fuse.ui.fuseline.animate
+import io.github.matiyaaa.fuse.ui.fuseline.fadeIn
+import io.github.matiyaaa.fuse.ui.fuseline.fadeOut
+import io.github.matiyaaa.fuse.ui.fuseline.scaleIn
+import io.github.matiyaaa.fuse.ui.fuseline.slideInHorizontally
+import io.github.matiyaaa.fuse.ui.fuseline.slideOutHorizontally
+import io.github.matiyaaa.fuse.ui.fuseline.spring
+import io.github.matiyaaa.fuse.ui.fuseline.togetherWith
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec
 import io.github.matiyaaa.fuse.ui.shell.app.ConfirmSpec
@@ -519,7 +521,7 @@ private val STUDIO_WIDE = 496.dp
 @Composable
 private fun PaneSwitch(studio: StudioState?, modifier: Modifier, content: @Composable (StudioState?) -> Unit) {
     val motion = Fuse.motion
-    AnimatedContent(
+    Swap(
         targetState = studio,
         modifier = modifier,
         contentKey = { it != null },
@@ -540,7 +542,7 @@ private fun PaneSwitch(studio: StudioState?, modifier: Modifier, content: @Compo
 @Composable
 private fun FilterSwitch(filter: ThemeFilter, modifier: Modifier, content: @Composable (ThemeFilter) -> Unit) {
     val motion = Fuse.motion
-    AnimatedContent(
+    Swap(
         targetState = filter,
         modifier = modifier,
         transitionSpec = {
@@ -678,7 +680,7 @@ private fun ThemeCard(
             if (yours) {
                 IconBadge(FuseIcons.UserRound, Modifier.semantics { contentDescription = "Yours" }, tint = c.onArt, size = Size.badge)
             }
-            AnimatedVisibility(
+            Appear(
                 visible = inUse,
                 enter = fadeIn(motion.fade(Durations.FAST)) + scaleIn(if (motion.reduced) motion.fade(Durations.FAST) else spring(dampingRatio = 0.55f, stiffness = 520f), initialScale = if (motion.reduced) 1f else 0.4f),
                 exit = fadeOut(motion.exit(Durations.FAST)),

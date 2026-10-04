@@ -43,6 +43,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.input.NavResult
 import io.github.matiyaaa.fuse.ui.designsystem.sound.SoundCue
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
+import io.github.matiyaaa.fuse.ui.fuseline.fuselineScrollTo
 import kotlinx.coroutines.launch
 
 /** A button under a [TextPreviewSpec]: what it says, its icon, what it does. */
@@ -86,10 +87,10 @@ internal fun TextPreviewOverlay(app: AppState) {
         InputLayer(priority = LayerPriority.DIALOG + 1, modal = true) { e ->
             val step = 120
             when (e.action) {
-                NavAction.UP -> if (scroll.value > 0) { scope.launch { scroll.animateScrollTo(scroll.value - step) }; NavResult.MOVED } else NavResult.BLOCKED
-                NavAction.DOWN -> if (scroll.value < scroll.maxValue) { scope.launch { scroll.animateScrollTo(scroll.value + step) }; NavResult.MOVED } else NavResult.BLOCKED
-                NavAction.PAGE_UP -> { scope.launch { scroll.animateScrollTo(scroll.value - step * 4) }; NavResult.MOVED }
-                NavAction.PAGE_DOWN -> { scope.launch { scroll.animateScrollTo(scroll.value + step * 4) }; NavResult.MOVED }
+                NavAction.UP -> if (scroll.value > 0) { scope.launch { scroll.fuselineScrollTo(scroll.value - step) }; NavResult.MOVED } else NavResult.BLOCKED
+                NavAction.DOWN -> if (scroll.value < scroll.maxValue) { scope.launch { scroll.fuselineScrollTo(scroll.value + step) }; NavResult.MOVED } else NavResult.BLOCKED
+                NavAction.PAGE_UP -> { scope.launch { scroll.fuselineScrollTo(scroll.value - step * 4) }; NavResult.MOVED }
+                NavAction.PAGE_DOWN -> { scope.launch { scroll.fuselineScrollTo(scroll.value + step * 4) }; NavResult.MOVED }
                 NavAction.LEFT -> if (index > 0) { index--; NavResult.MOVED } else NavResult.BLOCKED
                 NavAction.RIGHT -> if (index < spec.actions.lastIndex) { index++; NavResult.MOVED } else NavResult.BLOCKED
                 NavAction.SELECT -> { spec.actions.getOrNull(index)?.run?.invoke(); NavResult.ACTIVATED }

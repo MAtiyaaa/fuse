@@ -1,7 +1,5 @@
 package io.github.matiyaaa.fuse.ui.designsystem.components
 
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.spring
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
@@ -21,6 +19,8 @@ import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
+import io.github.matiyaaa.fuse.ui.fuseline.FuselineValue
+import io.github.matiyaaa.fuse.ui.fuseline.spring
 
 /**
  * Text being edited on the on-screen keyboard: the text plus its selection (a caret when the
@@ -192,7 +192,7 @@ fun Modifier.editingCaret(
     color: Color = Fuse.colors.accent,
 ): Modifier {
     val reduced = Fuse.motion.reduced
-    val x = remember { Animatable(Float.NaN) }
+    val x = remember { FuselineValue(Float.NaN) }
     val l = layout()
     val target = l?.let { it.getCursorRect(offset.coerceIn(0, it.layoutInput.text.length)).left }
     LaunchedEffect(target) {

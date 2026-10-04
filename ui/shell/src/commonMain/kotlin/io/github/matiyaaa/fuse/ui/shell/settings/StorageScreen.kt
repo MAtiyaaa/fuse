@@ -1,6 +1,5 @@
 package io.github.matiyaaa.fuse.ui.shell.settings
 
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -60,13 +59,14 @@ import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
 import io.github.matiyaaa.fuse.ui.designsystem.theme.tabular
 import io.github.matiyaaa.fuse.ui.designsystem.theme.toColor
+import io.github.matiyaaa.fuse.ui.fuseline.fuselineFloat
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec
 import io.github.matiyaaa.fuse.ui.shell.app.ConfirmSpec
 import io.github.matiyaaa.fuse.ui.shell.app.FocusZone
+import io.github.matiyaaa.fuse.ui.shell.app.Route
 import io.github.matiyaaa.fuse.ui.shell.app.offerDriveSetup
 import io.github.matiyaaa.fuse.ui.shell.app.offersGames
-import io.github.matiyaaa.fuse.ui.shell.app.Route
 import io.github.matiyaaa.fuse.ui.shell.app.rememberRouteState
 import io.github.matiyaaa.fuse.ui.shell.home.bytesText
 import io.github.matiyaaa.fuse.ui.shell.platform.StorageState
@@ -655,7 +655,7 @@ private fun UsageBar(parts: List<Pair<Long, Color>>, total: Long, modifier: Modi
     val track = c.text.copy(alpha = if (c.isDark) 0.1f else 0.08f)
     val shares = parts.map { (b, _) -> (b.toFloat() / total.coerceAtLeast(1)).coerceIn(0f, 1f) }
     val eased = shares.mapIndexed { i, f ->
-        animateFloatAsState(f, Fuse.motion.value(), label = "usage$i")
+        fuselineFloat(f, Fuse.motion.value(), label = "usage$i")
     }
     val colors = parts.map { it.second }
     val height = Size.track * if (parts.size > 1) 2 else 1

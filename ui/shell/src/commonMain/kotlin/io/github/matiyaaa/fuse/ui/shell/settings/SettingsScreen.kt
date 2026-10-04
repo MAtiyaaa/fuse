@@ -1,15 +1,10 @@
 package io.github.matiyaaa.fuse.ui.shell.settings
 
-import androidx.compose.animation.core.animateFloatAsState
-import io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec
-import io.github.matiyaaa.fuse.ui.shell.app.TextInputSpec
-import androidx.compose.ui.draw.clip
-import androidx.compose.foundation.interaction.collectIsHoveredAsState
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.border
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -25,14 +20,15 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.CornerRadius
@@ -43,9 +39,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.addOutline
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
-import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.FirstBaseline
 import androidx.compose.ui.layout.onSizeChanged
@@ -74,13 +70,18 @@ import io.github.matiyaaa.fuse.ui.designsystem.icons.HintButton
 import io.github.matiyaaa.fuse.ui.designsystem.input.InputLayer
 import io.github.matiyaaa.fuse.ui.designsystem.input.NavResult
 import io.github.matiyaaa.fuse.ui.designsystem.shape.SquircleShape
-import io.github.matiyaaa.fuse.ui.designsystem.theme.Durations
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
+import io.github.matiyaaa.fuse.ui.fuseline.Durations
+import io.github.matiyaaa.fuse.ui.fuseline.fuselineColor
+import io.github.matiyaaa.fuse.ui.fuseline.fuselineFloat
+import io.github.matiyaaa.fuse.ui.fuseline.tween
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
+import io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec
 import io.github.matiyaaa.fuse.ui.shell.app.FocusZone
 import io.github.matiyaaa.fuse.ui.shell.app.Route
+import io.github.matiyaaa.fuse.ui.shell.app.TextInputSpec
 import io.github.matiyaaa.fuse.ui.shell.app.rememberPageState
 import io.github.matiyaaa.fuse.ui.shell.store.Severity
 import kotlin.math.ceil
@@ -250,7 +251,7 @@ fun SettingsScreen(app: AppState, initialSection: String?, initialRow: String? =
             capitalize = false,
             doneLabel = "Search",
         ) { query ->
-            val hits = SettingsIndex.search(query, sections, limit = SEARCH_LIMIT, cartridge = app.platform.features.cartridge)
+            val hits = SettingsIndex.search(query, sections, limit = SEARCH_LIMIT, cartridge = app.platform.features.cartridge, secondScreen = app.platform.features.secondScreen)
             when {
                 query.isBlank() -> Unit
                 hits.isEmpty() -> app.toasts.show("Nothing in Settings matches \"${query.trim()}\"", icon = FuseIcons.Search)
@@ -395,7 +396,7 @@ private fun SearchRow(selected: Boolean, compact: Boolean, onOpen: () -> Unit) {
     val shape = RoundedCornerShape(Fuse.geometry.control)
     val interaction = remember { MutableInteractionSource() }
     val hovered by interaction.collectIsHoveredAsState()
-    val edge by animateColorAsState(
+    val edge by fuselineColor(
         when {
             selected -> c.focus
             hovered -> c.text.copy(alpha = 0.22f)
@@ -404,12 +405,12 @@ private fun SearchRow(selected: Boolean, compact: Boolean, onOpen: () -> Unit) {
         motion.tween(Durations.FAST),
         label = "settingsSearchEdge",
     )
-    val fill by animateColorAsState(
+    val fill by fuselineColor(
         if (selected) c.surfaceRaised else c.text.copy(alpha = if (c.isDark) 0.06f else 0.05f),
         motion.tween(Durations.FAST),
         label = "settingsSearchFill",
     )
-    val tint by animateColorAsState(if (selected) c.text else c.textMuted, motion.tween(Durations.FAST), label = "settingsSearchTint")
+    val tint by fuselineColor(if (selected) c.text else c.textMuted, motion.tween(Durations.FAST), label = "settingsSearchTint")
     Row(
         Modifier
             .fillMaxWidth()

@@ -15,6 +15,8 @@ class SettingTopic(
     val group: String? = null,
     /** Only where Cartridge runs (Android). */
     val cartridge: Boolean = false,
+    /** Only on a device with a second screen. */
+    val secondScreen: Boolean = false,
 )
 
 /** A setting found by search, with where it is ("Settings, Appearance"). */
@@ -53,7 +55,7 @@ object SettingsIndex {
         SettingTopic("library", "Collections", "playlists groups"),
         SettingTopic("library", "Automatic series", "franchise series"),
         SettingTopic("store", null, "store addons obtainium emulators install apps download"),
-        SettingTopic("store", "Edition", "dual screen standard obtainium pack variant"),
+        SettingTopic("store", "Edition", "standard obtainium pack variant"),
         SettingTopic("store", "Catalogue", "refresh obtainium emulation pack apps"),
         SettingTopic("store", "Check installed apps for updates", "emulator updates automatic"),
         SettingTopic("store", "GitHub token", "rate limit api github"),
@@ -83,7 +85,7 @@ object SettingsIndex {
         SettingTopic("displays", "Menu music", "music background songs"),
         SettingTopic("displays", "Interface sounds", "clicks sound effects sfx"),
         SettingTopic("displays", "Window", "fullscreen full screen borderless"),
-        SettingTopic("displays", "Second screen", "dual screen thor ayn bottom screen", group = "displays.second"),
+        SettingTopic("displays", "Second screen", "dual screen thor ayn bottom screen", group = "displays.second", secondScreen = true),
         SettingTopic("displays", "Games open on", "which screen launch display"),
         SettingTopic("displays", "Performance profile", "speed battery fps"),
         SettingTopic("displays", "Low Power Mode", "battery saver"),
@@ -107,11 +109,11 @@ object SettingsIndex {
         SettingTopic("about", "Made with", "credits thanks", group = "about.credits"),
     )
 
-    fun search(query: String, sections: List<SettingsSection>, limit: Int = 8, cartridge: Boolean = true): List<SettingHit> {
+    fun search(query: String, sections: List<SettingsSection>, limit: Int = 8, cartridge: Boolean = true, secondScreen: Boolean = true): List<SettingHit> {
         val needle = TitleText.normalize(query)
         if (needle.length < 2) return emptyList()
         val byId = sections.associateBy { it.id }
-        val topics = sections.map { SettingTopic(it.id, null, it.summary) } + rows.filter { cartridge || !it.cartridge }
+        val topics = sections.map { SettingTopic(it.id, null, it.summary) } + rows.filter { (cartridge || !it.cartridge) && (secondScreen || !it.secondScreen) }
         return topics.mapNotNull { t ->
             val section = byId[t.section] ?: return@mapNotNull null
             val title = t.row ?: section.label

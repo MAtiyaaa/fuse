@@ -1,11 +1,5 @@
 package io.github.matiyaaa.fuse.desktop.ui
 
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -25,6 +19,11 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import io.github.matiyaaa.fuse.ui.fuseline.Curves
+import io.github.matiyaaa.fuse.ui.fuseline.RepeatMode
+import io.github.matiyaaa.fuse.ui.fuseline.infiniteRepeatable
+import io.github.matiyaaa.fuse.ui.fuseline.rememberLoopClock
+import io.github.matiyaaa.fuse.ui.fuseline.tween
 
 /**
  * The first frame: Fuse's mark on ink while the library opens. With [error], startup failed and the
@@ -35,8 +34,8 @@ fun Splash(error: String? = null, detail: String? = null) {
     Box(Modifier.fillMaxSize().background(FuseBrand.Ink), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(28.dp)) {
             val glow = if (error == null) {
-                val t = rememberInfiniteTransition(label = "splash")
-                val v by t.animateFloat(0.55f, 1f, infiniteRepeatable(tween(1100, easing = LinearEasing), RepeatMode.Reverse), label = "spark")
+                val t = rememberLoopClock(label = "splash")
+                val v by t.animateFloat(0.55f, 1f, infiniteRepeatable(tween(1100, easing = Curves.Linear), RepeatMode.Reverse), label = "spark")
                 v
             } else {
                 1f

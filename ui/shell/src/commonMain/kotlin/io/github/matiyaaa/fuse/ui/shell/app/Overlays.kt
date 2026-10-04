@@ -287,7 +287,7 @@ private fun TextInputOverlay(app: AppState) {
         InputLayer(
             priority = LayerPriority.DIALOG + 3,
             modal = true,
-            repeats = setOf(NavAction.CONTEXT, NavAction.PREVIOUS_SECTION, NavAction.NEXT_SECTION),
+            repeats = keyboard.repeats,
         ) { e ->
             when (e.action) {
                 NavAction.BACK -> { app.textInput = null; NavResult.CONSUMED }

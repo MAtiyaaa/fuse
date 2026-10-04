@@ -1,7 +1,5 @@
 package io.github.matiyaaa.fuse.ui.designsystem.components
 
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -28,11 +26,14 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
-import io.github.matiyaaa.fuse.ui.designsystem.theme.Durations
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.FuseColors
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
+import io.github.matiyaaa.fuse.ui.fuseline.Durations
+import io.github.matiyaaa.fuse.ui.fuseline.fuselineColor
+import io.github.matiyaaa.fuse.ui.fuseline.fuselineFloat
+import io.github.matiyaaa.fuse.ui.fuseline.tween
 
 enum class ButtonKind { PRIMARY, SECONDARY, GHOST, DANGER }
 
@@ -76,9 +77,9 @@ fun FuseButton(
     val interaction = remember { MutableInteractionSource() }
     val press = rememberAtomPress(interaction, enabled)
     val (bg, fg) = c.buttonColors(kind, selected)
-    val bgAnim by animateColorAsState(bg, motion.tween(Durations.FAST), label = "bg")
-    val fgAnim by animateColorAsState(fg, motion.tween(Durations.FAST), label = "fg")
-    val lift by animateFloatAsState(if (selected) 1f else 0f, motion.focusSpring(), label = "lift")
+    val bgAnim by fuselineColor(bg, motion.tween(Durations.FAST), label = "bg")
+    val fgAnim by fuselineColor(fg, motion.tween(Durations.FAST), label = "fg")
+    val lift by fuselineFloat(if (selected) 1f else 0f, motion.focusSpring(), label = "lift")
     val shape = controlShape()
     val ringShape = controlRingShape()
     val compact = height < 44.dp
@@ -172,13 +173,13 @@ fun IconButton(
     val motion = Fuse.motion
     val interaction = remember { MutableInteractionSource() }
     val press = rememberAtomPress(interaction, enabled)
-    val bg by animateColorAsState(
+    val bg by fuselineColor(
         if (selected) c.text else c.quietFill(),
         motion.tween(Durations.FAST),
         label = "ib",
     )
-    val fg by animateColorAsState(if (selected) selectedTint ?: c.ink else tint, motion.tween(Durations.FAST), label = "ibfg")
-    val lift by animateFloatAsState(if (selected) 1f else 0f, motion.focusSpring(), label = "iblift")
+    val fg by fuselineColor(if (selected) selectedTint ?: c.ink else tint, motion.tween(Durations.FAST), label = "ibfg")
+    val lift by fuselineFloat(if (selected) 1f else 0f, motion.focusSpring(), label = "iblift")
     val highContrast = Fuse.look.highContrastFocus
     val shape = controlShape()
     val hover = c.hoverOverlay()

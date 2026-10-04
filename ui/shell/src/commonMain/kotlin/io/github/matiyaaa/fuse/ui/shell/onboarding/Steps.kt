@@ -1,10 +1,10 @@
 package io.github.matiyaaa.fuse.ui.shell.onboarding
 
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -38,6 +38,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathMeasure
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import io.github.matiyaaa.fuse.model.BiosState
 import io.github.matiyaaa.fuse.model.DualScreenMode
@@ -57,16 +58,20 @@ import io.github.matiyaaa.fuse.ui.designsystem.components.Spinner
 import io.github.matiyaaa.fuse.ui.designsystem.components.StatusDot
 import io.github.matiyaaa.fuse.ui.designsystem.components.Trailing
 import io.github.matiyaaa.fuse.ui.designsystem.focus.LinearSelection
-import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.ui.graphics.graphicsLayer
-import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
+import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
 import io.github.matiyaaa.fuse.ui.designsystem.input.LocalInputRouter
 import io.github.matiyaaa.fuse.ui.designsystem.input.NavResult
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
+import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
 import io.github.matiyaaa.fuse.ui.designsystem.theme.ThemePresets
+import androidx.compose.ui.graphics.drawscope.withTransform
+import io.github.matiyaaa.fuse.ui.fuseline.Curves
+import io.github.matiyaaa.fuse.ui.shell.app.BrandArt
+import io.github.matiyaaa.fuse.ui.fuseline.FuselineValue
+import io.github.matiyaaa.fuse.ui.fuseline.animate
+import io.github.matiyaaa.fuse.ui.fuseline.tween
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.ConfirmSpec
 import io.github.matiyaaa.fuse.ui.shell.app.Route
@@ -410,7 +415,7 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
         ))
 
         // ------------------------------------------------------------------------- make it yours
-        if (platform.features.secondScreen || displays.size > 1) add(Step(
+        if (platform.features.secondScreen) add(Step(
             "displays", "Displays", "Two screens",
             "Choose what the second screen does. Games can also open on either screen when the device and emulator allow it.",
             icon = FuseIcons.DualScreen, chapter = Chapters.YOURS,
@@ -597,48 +602,52 @@ private fun SteamList(games: List<io.github.matiyaaa.fuse.library.steam.SteamGam
     }
 }
 
-/** The Fuse mark drawn in: the frame traces itself, the fuse line runs into it and the spark lights. */
+/**
+ * Fuse's own mark drawn in, from the brand art itself ([BrandArt]): the squircle frame traces itself,
+ * the fuse line runs into it and the spark lights with its glow, exactly as the logo is. [lit] shows
+ * it finished.
+ */
 @Composable
 private fun Ignition(lit: Boolean = false) {
     val c = Fuse.colors
-    val trace = remember { Animatable(if (lit) 1f else 0f) }
-    val spark = remember { Animatable(if (lit) 1f else 0f) }
+    val trace = remember { FuselineValue(if (lit) 1f else 0f) }
+    val spark = remember { FuselineValue(if (lit) 1f else 0f) }
     LaunchedEffect(Unit) {
-        trace.animateTo(1f, tween(1100))
-        spark.animateTo(1f, tween(420))
+        trace.animateTo(1f, tween(1100, easing = Curves.Standard))
+        spark.animateTo(1f, tween(420, easing = Curves.Enter))
     }
     Box(Modifier.size(260.dp), contentAlignment = Alignment.Center) {
         Canvas(Modifier.size(200.dp)) {
-            val w = size.width
-            val stroke = w * 0.06f
-            val frame = Path().apply {
-                addRoundRect(androidx.compose.ui.geometry.RoundRect(stroke, stroke, w - stroke, w - stroke, androidx.compose.ui.geometry.CornerRadius(w * 0.26f)))
-            }
-            val measure = PathMeasure().apply { setPath(frame, false) }
-            val traced = Path()
-            measure.getSegment(0f, measure.length * trace.value, traced, true)
-            drawPath(traced, c.text, style = Stroke(stroke, cap = StrokeCap.Round))
-            val fuse = Path().apply {
-                moveTo(w * 0.28f, w * 0.7f)
-                cubicTo(w * 0.42f, w * 0.7f, w * 0.44f, w * 0.34f, w * 0.64f, w * 0.34f)
-            }
-            val fm = PathMeasure().apply { setPath(fuse, false) }
-            val drawn = Path()
-            fm.getSegment(0f, fm.length * ((trace.value - 0.5f) * 2f).coerceIn(0f, 1f), drawn, true)
-            drawPath(drawn, c.text, style = Stroke(stroke, cap = StrokeCap.Round))
-            val s = spark.value
-            if (s > 0f) {
-                val center = Offset(w * 0.7f, w * 0.3f)
-                drawCircle(Brush.radialGradient(listOf(c.accent.copy(alpha = 0.9f * s), Color.Transparent), center = center, radius = w * 0.35f * s), radius = w * 0.35f * s, center = center)
-                drawCircle(Color.White.copy(alpha = s), radius = w * 0.045f, center = center)
+            val unit = size.width / BrandArt.MARK
+            withTransform({ scale(unit, unit, pivot = Offset.Zero) }) {
+                val t = trace.value
+                // The frame traces itself over the first two thirds, the fuse line over the last half.
+                val frame = PathMeasure().apply { setPath(BrandArt.frame, false) }
+                val drawnFrame = Path()
+                frame.getSegment(0f, frame.length * (t / 0.66f).coerceIn(0f, 1f), drawnFrame, true)
+                drawPath(drawnFrame, c.text, style = Stroke(BrandArt.MARK_STROKE))
+                val fuse = PathMeasure().apply { setPath(BrandArt.fuse, false) }
+                val drawnFuse = Path()
+                fuse.getSegment(0f, fuse.length * ((t - 0.5f) * 2f).coerceIn(0f, 1f), drawnFuse, true)
+                drawPath(drawnFuse, c.text, style = Stroke(BrandArt.MARK_STROKE, cap = StrokeCap.Round))
+                val s = spark.value
+                if (s > 0f) {
+                    // A flash a little larger than the glow, settling to the logo's own spark.
+                    val flash = (1f - s) * 0.8f
+                    drawCircle(BrandArt.glow(c.accent), radius = BrandArt.GLOW_R * (1f + flash), center = BrandArt.SPARK, alpha = s)
+                    drawCircle(BrandArt.core(c.accent), radius = BrandArt.CORE_R * s, center = BrandArt.SPARK)
+                }
             }
         }
     }
 }
 
 /**
- * Live view of what the controller sends, so users can confirm their layout. [nintendoKeys] places
- * the keycodes where a pad that sends Nintendo keycodes has them (A on the right).
+ * Live view of what the controller sends, so users can confirm their layout, drawn as a pad: the
+ * shoulder bumpers (LB and RB, L1 and R1, or L and R, as the pad style names them) sit on its top
+ * edge as bumpers do, the D-pad on the left and the face buttons in their diamond on the right.
+ * Each lights while it is held. [nintendoKeys] places the face buttons where a pad that sends
+ * Nintendo keycodes has them (A on the right).
  */
 @Composable
 internal fun ControllerTest(nintendoKeys: Boolean = false) {
@@ -652,27 +661,73 @@ internal fun ControllerTest(nintendoKeys: Boolean = false) {
         onDispose { router.rawListener = null }
     }
     val c = Fuse.colors
+    val style = Fuse.glyphs.style
+    val (left, right) = when (style) {
+        io.github.matiyaaa.fuse.model.GlyphStyle.PLAYSTATION -> "L1" to "R1"
+        io.github.matiyaaa.fuse.model.GlyphStyle.NINTENDO -> "L" to "R"
+        else -> "LB" to "RB"
+    }
     @Composable
-    fun Key(b: PadButton, label: String) {
+    fun Face(b: PadButton, label: String, modifier: Modifier) {
         val on = b in pressed
         Box(
-            Modifier.size(52.dp).clip(RoundedCornerShape(26.dp)).background(if (on) c.accent else c.text.copy(alpha = 0.08f))
-                .border(1.dp, c.text.copy(alpha = 0.2f), RoundedCornerShape(26.dp)),
+            modifier.size(36.dp).clip(CircleShape).background(if (on) c.accent else c.text.copy(alpha = 0.1f))
+                .border(1.dp, c.text.copy(alpha = if (on) 0f else 0.22f), CircleShape),
             contentAlignment = Alignment.Center,
-        ) { FText(label, Fuse.type.bodyStrong, color = if (on) c.onAccent else c.text) }
+        ) { FText(label, Fuse.type.label, color = if (on) c.onAccent else c.text, maxLines = 1) }
     }
-    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(Space.s)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(Space.xxl)) {
-            Key(PadButton.L1, "L"); Key(PadButton.R1, "R")
-        }
-        if (nintendoKeys) {
-            Key(PadButton.X, "X")
-            Row(horizontalArrangement = Arrangement.spacedBy(Space.x4)) { Key(PadButton.Y, "Y"); Key(PadButton.A, "A") }
-            Key(PadButton.B, "B")
-        } else {
-            Key(PadButton.Y, "Y")
-            Row(horizontalArrangement = Arrangement.spacedBy(Space.x4)) { Key(PadButton.X, "X"); Key(PadButton.B, "B") }
-            Key(PadButton.A, "A")
+    @Composable
+    fun Bumper(b: PadButton, label: String, modifier: Modifier) {
+        val on = b in pressed
+        // A bumper: wide and low, rounded where it wraps over the pad's top edge.
+        val shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 4.dp, bottomEnd = 4.dp)
+        Box(
+            modifier.size(width = 88.dp, height = 26.dp).clip(shape).background(if (on) c.accent else c.surfaceRaised)
+                .border(1.dp, c.text.copy(alpha = if (on) 0f else 0.25f), shape),
+            contentAlignment = Alignment.Center,
+        ) { FText(label, Fuse.type.label, color = if (on) c.onAccent else c.textMuted, maxLines = 1) }
+    }
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(Modifier.size(width = 340.dp, height = 196.dp)) {
+            // The bumpers stand on the pad's shoulders, a little behind its body.
+            Bumper(PadButton.L1, left, Modifier.align(Alignment.TopStart).offset(x = 34.dp, y = 0.dp))
+            Bumper(PadButton.R1, right, Modifier.align(Alignment.TopEnd).offset(x = (-34).dp, y = 0.dp))
+            val body = c.text.copy(alpha = 0.07f)
+            val edge = c.text.copy(alpha = 0.2f)
+            Canvas(Modifier.fillMaxWidth().height(172.dp).align(Alignment.BottomCenter)) {
+                val w = size.width
+                val h = size.height
+                // The body: a wide rounded top, the two grips below it.
+                val pad = Path().apply {
+                    addRoundRect(androidx.compose.ui.geometry.RoundRect(w * 0.06f, 0f, w * 0.94f, h * 0.66f, androidx.compose.ui.geometry.CornerRadius(h * 0.3f)))
+                    addOval(androidx.compose.ui.geometry.Rect(w * 0.04f, h * 0.28f, w * 0.36f, h))
+                    addOval(androidx.compose.ui.geometry.Rect(w * 0.64f, h * 0.28f, w * 0.96f, h))
+                }
+                drawPath(pad, body)
+                drawPath(pad, edge, style = Stroke(1.dp.toPx()))
+            }
+            // The D-pad, a cross on the left.
+            Box(Modifier.align(Alignment.BottomStart).offset(x = 54.dp, y = (-70).dp).size(70.dp)) {
+                val dirs = listOf(PadButton.DPAD_UP to Alignment.TopCenter, PadButton.DPAD_DOWN to Alignment.BottomCenter, PadButton.DPAD_LEFT to Alignment.CenterStart, PadButton.DPAD_RIGHT to Alignment.CenterEnd)
+                Box(Modifier.align(Alignment.Center).size(22.dp).background(c.text.copy(alpha = 0.1f)))
+                for ((b, at) in dirs) {
+                    Box(Modifier.align(at).size(23.dp).clip(RoundedCornerShape(5.dp)).background(if (b in pressed) c.accent else c.text.copy(alpha = 0.1f)))
+                }
+            }
+            // The face buttons in their diamond on the right.
+            Box(Modifier.align(Alignment.BottomEnd).offset(x = (-44).dp, y = (-62).dp).size(92.dp)) {
+                if (nintendoKeys) {
+                    Face(PadButton.X, "X", Modifier.align(Alignment.TopCenter))
+                    Face(PadButton.Y, "Y", Modifier.align(Alignment.CenterStart))
+                    Face(PadButton.A, "A", Modifier.align(Alignment.CenterEnd))
+                    Face(PadButton.B, "B", Modifier.align(Alignment.BottomCenter))
+                } else {
+                    Face(PadButton.Y, "Y", Modifier.align(Alignment.TopCenter))
+                    Face(PadButton.X, "X", Modifier.align(Alignment.CenterStart))
+                    Face(PadButton.B, "B", Modifier.align(Alignment.CenterEnd))
+                    Face(PadButton.A, "A", Modifier.align(Alignment.BottomCenter))
+                }
+            }
         }
         Spacer(Modifier.height(Space.m))
         FText(last?.let { "Last: ${it.name.replace('_', ' ').lowercase()}" } ?: "Press any button", Fuse.type.label, color = c.textMuted)
@@ -694,7 +749,7 @@ private fun MiniScreen(
     draw: androidx.compose.ui.graphics.drawscope.DrawScope.(lit: Float) -> Unit,
 ) {
     val c = Fuse.colors
-    val lit by androidx.compose.animation.core.animateFloatAsState(if (active) 1f else 0f, Fuse.motion.tween(io.github.matiyaaa.fuse.ui.designsystem.theme.Durations.BASE), label = "mini")
+    val lit by io.github.matiyaaa.fuse.ui.fuseline.fuselineFloat(if (active) 1f else 0f, Fuse.motion.tween(io.github.matiyaaa.fuse.ui.fuseline.Durations.BASE), label = "mini")
     val shape = RoundedCornerShape(Fuse.geometry.panel.coerceAtMost(18.dp))
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
         Box(
@@ -726,8 +781,8 @@ private fun MiniScreen(
 @Composable
 private fun loopClock(ms: Int, still: Float = 0.8f): Float {
     if (!Fuse.motion.ambient) return still
-    return androidx.compose.animation.core.rememberInfiniteTransition(label = "loop").animateFloat(
-        0f, 1f, androidx.compose.animation.core.infiniteRepeatable(tween(ms, easing = androidx.compose.animation.core.LinearEasing)), label = "t",
+    return io.github.matiyaaa.fuse.ui.fuseline.rememberLoopClock(label = "loop").animateFloat(
+        0f, 1f, io.github.matiyaaa.fuse.ui.fuseline.infiniteRepeatable(tween(ms, easing = io.github.matiyaaa.fuse.ui.fuseline.Curves.Linear)), label = "t",
     ).value
 }
 
@@ -840,25 +895,60 @@ private fun LaunchStylePreview(pagesFirst: Boolean) {
 @Composable
 private fun HomeStylePreview(mode: HomeMode) {
     val c = Fuse.colors
+    // Channels as Home really lays it out: the default board through the board's own layout.
+    val board = remember {
+        val widgets = io.github.matiyaaa.fuse.model.HomeLayoutConfig.DefaultBoard
+        io.github.matiyaaa.fuse.ui.shell.home.BoardGrid.layout(
+            widgets.map { io.github.matiyaaa.fuse.ui.shell.home.BoardGrid.Item(it.id, it.boardSize, null) }, 4,
+        )
+    }
     Row(Modifier.widthIn(max = 620.dp).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.l)) {
         for (m in HomeMode.entries) {
             MiniScreen(if (m == HomeMode.FLOW) "Flow" else "Channels", active = m == mode, modifier = Modifier.weight(1f)) { lit ->
-                val t = c.text.copy(alpha = 0.18f + 0.08f * lit)
+                val quiet = c.text.copy(alpha = 0.16f + 0.06f * lit)
+                val strong = c.text.copy(alpha = 0.55f + 0.3f * lit)
+                val accent = c.accent.copy(alpha = 0.55f + 0.4f * lit)
+                val w = size.width
+                val h = size.height
+                val r = androidx.compose.ui.geometry.CornerRadius(w * 0.018f)
+                fun box(x: Float, y: Float, bw: Float, bh: Float, color: Color) =
+                    drawRoundRect(color, Offset(x, y), androidx.compose.ui.geometry.Size(bw, bh), r)
                 if (m == HomeMode.FLOW) {
-                    drawRoundRect(c.text.copy(alpha = 0.5f), Offset(0f, 0f), androidx.compose.ui.geometry.Size(size.width * 0.45f, size.height * 0.1f), androidx.compose.ui.geometry.CornerRadius(size.height))
-                    for (row in 0..1) for (i in 0..4) {
-                        val w = size.width / 5.6f
-                        val first = row == 0 && i == 0
-                        drawRoundRect(if (first) c.accent.copy(alpha = 0.5f + 0.4f * lit) else t, Offset(i * (w + size.width * 0.03f), size.height * (0.24f + row * 0.38f)), androidx.compose.ui.geometry.Size(w, size.height * 0.3f), androidx.compose.ui.geometry.CornerRadius(6f))
+                    // The stage: the system's dot and name, the game's title large, its line of facts.
+                    drawCircle(accent, radius = h * 0.018f, center = Offset(w * 0.05f, h * 0.1f))
+                    box(w * 0.08f, h * 0.085f, w * 0.1f, h * 0.03f, quiet)
+                    box(w * 0.04f, h * 0.15f, w * 0.42f, h * 0.085f, strong)
+                    box(w * 0.04f, h * 0.27f, w * 0.18f, h * 0.035f, quiet)
+                    box(w * 0.24f, h * 0.265f, w * 0.1f, h * 0.045f, quiet)
+                    // Continue playing: wide cards, the first chosen with the spark bar under it.
+                    box(w * 0.04f, h * 0.37f, w * 0.2f, h * 0.025f, quiet)
+                    val cw = w * 0.24f
+                    for (i in 0 until 4) {
+                        val x = w * 0.04f + i * (cw + w * 0.025f)
+                        box(x, h * 0.42f, cw, h * 0.22f, if (i == 0) accent else quiet)
                     }
+                    box(w * 0.04f + cw * 0.38f, h * 0.665f, cw * 0.24f, h * 0.012f, accent)
+                    // Systems: a row of square tiles.
+                    box(w * 0.04f, h * 0.72f, w * 0.12f, h * 0.025f, quiet)
+                    val sw = w * 0.11f
+                    for (i in 0 until 8) box(w * 0.04f + i * (sw + w * 0.012f), h * 0.77f, sw, h * 0.2f, quiet)
                 } else {
-                    val gap = size.width * 0.025f
-                    val w = (size.width - gap * 3) / 4f
-                    val h = (size.height - gap * 2) / 3f
-                    for (row in 0..2) for (i in 0..3) {
-                        if (row == 0 && i == 1) continue
-                        val wide = row == 0 && i == 0
-                        drawRoundRect(if (wide) c.accent.copy(alpha = 0.5f + 0.4f * lit) else t, Offset(i * (w + gap), row * (h + gap)), androidx.compose.ui.geometry.Size(if (wide) w * 2 + gap else w, h), androidx.compose.ui.geometry.CornerRadius(8f))
+                    // Channels: the board, each widget its real size and place.
+                    val cols = board.columns
+                    val rows = board.rows.coerceAtLeast(1)
+                    val gap = w * 0.02f
+                    val left = w * 0.04f
+                    val top = h * 0.06f
+                    val cellW = (w - left * 2 - gap * (cols - 1)) / cols
+                    val cellH = ((h - top * 2 - gap * (rows - 1)) / rows).coerceAtMost(cellW * 0.62f)
+                    for ((id, rect) in board.rects) {
+                        val x = left + rect.column * (cellW + gap)
+                        val y = top + rect.row * (cellH + gap)
+                        val bw = cellW * rect.width + gap * (rect.width - 1)
+                        val bh = cellH * rect.height + gap * (rect.height - 1)
+                        box(x, y, bw, bh, if (id == board.ids.first()) accent else quiet)
+                        // A label line in each, as widgets carry their names.
+                        box(x + bw * 0.08f, y + bh - bh * 0.22f, bw * 0.4f, bh * 0.08f, strong.copy(alpha = strong.alpha * 0.5f))
                     }
                 }
             }

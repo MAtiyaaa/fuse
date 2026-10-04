@@ -1,7 +1,5 @@
 package io.github.matiyaaa.fuse.ui.shell.game
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -63,6 +61,8 @@ import io.github.matiyaaa.fuse.ui.designsystem.input.InputLayer
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
+import io.github.matiyaaa.fuse.ui.fuseline.Appear
+import io.github.matiyaaa.fuse.ui.fuseline.Crossfade
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec
 import io.github.matiyaaa.fuse.ui.shell.app.FilePurpose
@@ -70,11 +70,11 @@ import io.github.matiyaaa.fuse.ui.shell.app.FocusZone
 import io.github.matiyaaa.fuse.ui.shell.app.LicencePick
 import io.github.matiyaaa.fuse.ui.shell.app.Route
 import io.github.matiyaaa.fuse.ui.shell.app.TextInputSpec
+import io.github.matiyaaa.fuse.ui.shell.home.bytesText
 import io.github.matiyaaa.fuse.ui.shell.store.GameContentView
 import io.github.matiyaaa.fuse.ui.shell.store.InstallMode
 import io.github.matiyaaa.fuse.ui.shell.store.InstallProgress
 import io.github.matiyaaa.fuse.ui.shell.store.InstallReport
-import io.github.matiyaaa.fuse.ui.shell.home.bytesText
 import kotlinx.coroutines.launch
 
 /**
@@ -310,8 +310,8 @@ private fun StatusCard(v: GameContentView, progress: InstallProgress?, report: I
                     plan.states.forEach { s -> Chip(s.label, icon = stateIcon(s), color = stateColor(s)) }
                 }
             }
-            AnimatedVisibility(progress != null) {
-                val p = progress ?: return@AnimatedVisibility
+            Appear(progress != null) {
+                val p = progress ?: return@Appear
                 Column(verticalArrangement = Arrangement.spacedBy(Space.s)) {
                     FText(p.item.fileName, Fuse.type.label, maxLines = 2)
                     ProgressBar((p.step - 1).toFloat() / p.of.coerceAtLeast(1) + 0.5f / p.of.coerceAtLeast(1), Modifier.fillMaxWidth())

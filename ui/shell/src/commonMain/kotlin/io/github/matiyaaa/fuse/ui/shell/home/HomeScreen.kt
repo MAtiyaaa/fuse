@@ -1,21 +1,5 @@
 package io.github.matiyaaa.fuse.ui.shell.home
 
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.ui.unit.Dp
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.runtime.derivedStateOf
-import androidx.compose.ui.graphics.toArgb
-import io.github.matiyaaa.fuse.model.CartridgeStatus
-import io.github.matiyaaa.fuse.ui.designsystem.effects.elevated
-import io.github.matiyaaa.fuse.ui.designsystem.effects.rememberReveal
-import io.github.matiyaaa.fuse.ui.designsystem.effects.reveal
-import io.github.matiyaaa.fuse.ui.designsystem.theme.Elevation
-import io.github.matiyaaa.fuse.ui.shell.app.rememberClockText
-import io.github.matiyaaa.fuse.ui.shell.components.agoText
-import io.github.matiyaaa.fuse.ui.shell.store.HomeFeed
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Arrangement
@@ -28,16 +12,20 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -45,9 +33,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
+import io.github.matiyaaa.fuse.model.CartridgeStatus
 import io.github.matiyaaa.fuse.model.Destination
 import io.github.matiyaaa.fuse.model.HomeMode
 import io.github.matiyaaa.fuse.model.NavAction
@@ -57,6 +48,9 @@ import io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction
 import io.github.matiyaaa.fuse.ui.designsystem.components.SectionLabel
 import io.github.matiyaaa.fuse.ui.designsystem.components.Trailing
 import io.github.matiyaaa.fuse.ui.designsystem.components.fadingEdges
+import io.github.matiyaaa.fuse.ui.designsystem.effects.elevated
+import io.github.matiyaaa.fuse.ui.designsystem.effects.rememberReveal
+import io.github.matiyaaa.fuse.ui.designsystem.effects.reveal
 import io.github.matiyaaa.fuse.ui.designsystem.focus.DragReorderState
 import io.github.matiyaaa.fuse.ui.designsystem.focus.FollowSelection
 import io.github.matiyaaa.fuse.ui.designsystem.focus.ReorderDefaults
@@ -74,11 +68,14 @@ import io.github.matiyaaa.fuse.ui.designsystem.input.NavResult
 import io.github.matiyaaa.fuse.ui.designsystem.media.HeroSource
 import io.github.matiyaaa.fuse.ui.designsystem.media.PrefetchArt
 import io.github.matiyaaa.fuse.ui.designsystem.shape.SquircleShape
-import io.github.matiyaaa.fuse.ui.designsystem.theme.Durations
+import io.github.matiyaaa.fuse.ui.designsystem.theme.Elevation
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
 import io.github.matiyaaa.fuse.ui.designsystem.theme.toColor
+import io.github.matiyaaa.fuse.ui.fuseline.Durations
+import io.github.matiyaaa.fuse.ui.fuseline.fuselineColor
+import io.github.matiyaaa.fuse.ui.fuseline.fuselineFloat
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.ContextMenuSpec
 import io.github.matiyaaa.fuse.ui.shell.app.FocusZone
@@ -90,6 +87,7 @@ import io.github.matiyaaa.fuse.ui.shell.app.gameMenu
 import io.github.matiyaaa.fuse.ui.shell.app.offers
 import io.github.matiyaaa.fuse.ui.shell.app.openApp
 import io.github.matiyaaa.fuse.ui.shell.app.play
+import io.github.matiyaaa.fuse.ui.shell.app.rememberClockText
 import io.github.matiyaaa.fuse.ui.shell.app.rememberRouteState
 import io.github.matiyaaa.fuse.ui.shell.app.rememberSystems
 import io.github.matiyaaa.fuse.ui.shell.app.room
@@ -102,8 +100,10 @@ import io.github.matiyaaa.fuse.ui.shell.components.LocalTileMetrics
 import io.github.matiyaaa.fuse.ui.shell.components.Stage
 import io.github.matiyaaa.fuse.ui.shell.components.StageInfo
 import io.github.matiyaaa.fuse.ui.shell.components.SystemTile
+import io.github.matiyaaa.fuse.ui.shell.components.agoText
 import io.github.matiyaaa.fuse.ui.shell.components.stage
 import io.github.matiyaaa.fuse.ui.shell.library.CollectionTile
+import io.github.matiyaaa.fuse.ui.shell.store.HomeFeed
 import io.github.matiyaaa.fuse.ui.shell.systems.moveSystem
 import io.github.matiyaaa.fuse.ui.shell.systems.moveSystemBy
 import io.github.matiyaaa.fuse.ui.shell.systems.systemMenu
@@ -350,14 +350,14 @@ fun FlowHome(app: AppState) {
                 itemsIndexed(shown, key = { _, s -> s.key }) { shownAt, s ->
                     val index = shelves.indexOf(s)
                     val held = shelfDrag.heldKey == s.key
-                    val rowAlpha by animateFloatAsState(
+                    val rowAlpha by fuselineFloat(
                         // Shelves above the selection dim rather than vanish, so touch scrolling always shows them.
                         if (shownAt == selectedAt || held) 1f else if (shownAt < selectedAt) 0.55f else 0.72f,
                         Fuse.motion.fade(Durations.BASE),
                         label = "shelf",
                     )
                     // Where a shelf held by touch will land stays marked while it follows the finger.
-                    val well by animateFloatAsState(if (held) 1f else 0f, Fuse.motion.fade(Durations.FAST), label = "well")
+                    val well by fuselineFloat(if (held) 1f else 0f, Fuse.motion.fade(Durations.FAST), label = "well")
                     ShelfRow(
                         app = app,
                         shelf = s,
@@ -481,11 +481,11 @@ private fun ShelfRow(
     )
     // A shelf being moved sits on a panel at the overlay level, so it reads as one thing in your hand.
     val motion = Fuse.motion
-    val lift by animateFloatAsState(if (lifted) 1f else 0f, motion.focusSpring(), label = "shelf lift")
+    val lift by fuselineFloat(if (lifted) 1f else 0f, motion.focusSpring(), label = "shelf lift")
     val showPanel by remember { derivedStateOf { lift > 0.01f } }
     val panelShape = RoundedCornerShape(Fuse.geometry.panel)
     val lit = selectedColumn >= 0 || lifted
-    val titleColor by animateColorAsState(if (lit) c.text else c.textMuted, motion.fade(Durations.FAST), label = "shelf title")
+    val titleColor by fuselineColor(if (lit) c.text else c.textMuted, motion.fade(Durations.FAST), label = "shelf title")
     Box(modifier.fillMaxWidth()) {
         if (showPanel) {
             Box(
@@ -552,7 +552,7 @@ private fun ShelfRow(
             itemsIndexed(items, key = { _, i -> i.key }) { col, item ->
                 val selected = drag.heldKey?.let { it == item.key } ?: (col == selectedColumn)
                 val carried = movingItem && selected
-                val carry by animateFloatAsState(if (carried) 1f else 0f, Fuse.motion.focusSpring(), label = "carry")
+                val carry by fuselineFloat(if (carried) 1f else 0f, Fuse.motion.focusSpring(), label = "carry")
                 val tileShape = SquircleShape.fraction(Fuse.geometry.tileCornerFraction)
                 // Tiles slide to their new places; a carried one floats a little above the row.
                 Box(

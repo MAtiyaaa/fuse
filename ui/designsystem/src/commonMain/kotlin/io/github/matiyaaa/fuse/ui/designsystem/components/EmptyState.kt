@@ -1,6 +1,5 @@
 package io.github.matiyaaa.fuse.ui.designsystem.components
 
-import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -23,11 +22,14 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
-import io.github.matiyaaa.fuse.ui.designsystem.theme.Durations
-import io.github.matiyaaa.fuse.ui.designsystem.theme.Easings
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
+import io.github.matiyaaa.fuse.ui.fuseline.Curves
+import io.github.matiyaaa.fuse.ui.fuseline.Durations
+import io.github.matiyaaa.fuse.ui.fuseline.Enter
+import io.github.matiyaaa.fuse.ui.fuseline.FuselineValue
+import io.github.matiyaaa.fuse.ui.fuseline.tween
 
 /**
  * What a screen shows when it has nothing to show, or could not load: an [icon] in a soft lit
@@ -55,8 +57,8 @@ fun EmptyState(
     val motion = Fuse.motion
     // In Low Power Mode it is simply there; under Reduced motion it only fades.
     val animate = Fuse.quality.animatedBackground
-    val arrive = remember { Animatable(if (animate) 0f else 1f) }
-    LaunchedEffect(Unit) { if (arrive.value < 1f) arrive.animateTo(1f, motion.tween(Durations.SLOW, Easings.Enter)) }
+    val arrive = remember { FuselineValue(if (animate) 0f else 1f) }
+    LaunchedEffect(Unit) { if (arrive.value < 1f) arrive.animateTo(1f, motion.tween(Durations.SLOW, Curves.Enter)) }
     val rise = motion.revealRise.value
     val disc = if (compact) 64.dp else 88.dp
     val wash = tint.copy(alpha = if (c.isDark) 0.1f else 0.08f)

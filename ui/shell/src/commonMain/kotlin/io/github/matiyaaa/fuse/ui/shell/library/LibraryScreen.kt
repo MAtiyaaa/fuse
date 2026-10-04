@@ -1,11 +1,5 @@
 package io.github.matiyaaa.fuse.ui.shell.library
 
-import androidx.compose.runtime.derivedStateOf
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -40,13 +34,12 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -58,6 +51,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
@@ -105,12 +100,18 @@ import io.github.matiyaaa.fuse.ui.designsystem.media.heroDecodePx
 import io.github.matiyaaa.fuse.ui.designsystem.shape.PillShape
 import io.github.matiyaaa.fuse.ui.designsystem.shape.SquircleShape
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Aspect
-import io.github.matiyaaa.fuse.ui.designsystem.theme.Durations
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
 import io.github.matiyaaa.fuse.ui.designsystem.theme.TileMetrics
 import io.github.matiyaaa.fuse.ui.designsystem.theme.toColor
+import io.github.matiyaaa.fuse.ui.fuseline.Appear
+import io.github.matiyaaa.fuse.ui.fuseline.Durations
+import io.github.matiyaaa.fuse.ui.fuseline.FuselineValue
+import io.github.matiyaaa.fuse.ui.fuseline.fadeIn
+import io.github.matiyaaa.fuse.ui.fuseline.fadeOut
+import io.github.matiyaaa.fuse.ui.fuseline.fuselineFloat
+import io.github.matiyaaa.fuse.ui.fuseline.tween
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec
 import io.github.matiyaaa.fuse.ui.shell.app.ConfirmSpec
@@ -130,7 +131,6 @@ import io.github.matiyaaa.fuse.ui.shell.components.GameCoverTile
 import io.github.matiyaaa.fuse.ui.shell.components.GameIconTile
 import io.github.matiyaaa.fuse.ui.shell.components.GameMarksInline
 import io.github.matiyaaa.fuse.ui.shell.components.GameTileSkeleton
-import io.github.matiyaaa.fuse.ui.shell.components.baseForWidth
 import io.github.matiyaaa.fuse.ui.shell.components.LocalGameArt
 import io.github.matiyaaa.fuse.ui.shell.components.LocalTileMetrics
 import io.github.matiyaaa.fuse.ui.shell.components.LocalTileShowsFavourite
@@ -139,6 +139,7 @@ import io.github.matiyaaa.fuse.ui.shell.components.PlatformTag
 import io.github.matiyaaa.fuse.ui.shell.components.SquareGameArt
 import io.github.matiyaaa.fuse.ui.shell.components.Stage
 import io.github.matiyaaa.fuse.ui.shell.components.StageLine
+import io.github.matiyaaa.fuse.ui.shell.components.baseForWidth
 import io.github.matiyaaa.fuse.ui.shell.components.cornerFraction
 import io.github.matiyaaa.fuse.ui.shell.components.coverCornerFraction
 import io.github.matiyaaa.fuse.ui.shell.components.gamesText
@@ -523,10 +524,10 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
             layout == LibraryLayout.COMPACT_LIST -> state.grid.index >= 3
             else -> state.grid.index >= columns
         }
-        val collapse by animateFloatAsState(if (folded) 1f else 0f, Fuse.motion.followSpring(), label = "system fold")
+        val collapse by fuselineFloat(if (folded) 1f else 0f, Fuse.motion.followSpring(), label = "system fold")
         // Like the Systems screen: the art pack's panel on the right unless there is a background image.
         if (systemCard != null) {
-            AnimatedVisibility(
+            Appear(
                 visible = systemCard.art.hero == null && selectedCard?.art?.hero == null,
                 modifier = Modifier.align(Alignment.CenterEnd),
                 enter = fadeIn(Fuse.motion.fade(Durations.SLOW)),
@@ -591,15 +592,16 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
                         // The game's logo moves up and shrinks with the folding stage and makes room for more rows.
                         val logo = when {
                             !inSystem && compactHeader -> lerp(STAGE_LOGO_SHORT, Space.xxl, collapse)
-                            !inSystem -> lerp(STAGE_LOGO, Space.x3, collapse)
+                            !inSystem -> lerp(STAGE_LOGO, Space.xxl + Space.s, collapse)
                             compactHeader -> lerp(STAGE_LOGO_SHORT, Space.xxl, collapse)
                             else -> lerp(Space.x4, Space.xxl + Space.s, collapse)
                         }
                         // Folded, the stage keeps one line (a small logo or the title), and the tiles
-                        // shrink in place just enough for three whole rows to show between it and the hints.
+                        // shrink in place (a little at most) towards three whole rows between it and the hints.
                         val tileH = LocalGameArt.current.tileSize(base).height
                         val header = with(density) { headerPx.toDp() }
-                        val foldedStage = if (inSystem) logo + Space.xs else Space.x3 + Space.xs
+                        // Folded, the stage is one compact line, as on a system's page.
+                        val foldedStage = logo + Space.xs
                         // The chosen row keeps clear of the grid's fading top edge, so that room counts too.
                         val rowsRoom = maxH - Size.hudHeight - header - foldedStage - Space.s - Size.hintHeight - Space.s - Space.xl - Space.s
                         val fit = if (inSystem) 1f else (((rowsRoom / 3) - metrics.gap - Space.s) / tileH).coerceIn(MIN_FOLDED_TILE, 1f)
@@ -934,9 +936,9 @@ private fun GlidingList(
     val c = Fuse.colors
     val motion = Fuse.motion
     val target = selectedIndex.coerceIn(0, (list.size - 1).coerceAtLeast(0)).toFloat()
-    val top = remember { Animatable(target) }
-    val bottom = remember { Animatable(target) }
-    val shown by animateFloatAsState(if (focused) 1f else 0f, motion.tween(if (focused) Durations.FAST else Durations.INSTANT), label = "list highlight")
+    val top = remember { FuselineValue(target) }
+    val bottom = remember { FuselineValue(target) }
+    val shown by fuselineFloat(if (focused) 1f else 0f, motion.tween(if (focused) Durations.FAST else Durations.INSTANT), label = "list highlight")
     LaunchedEffect(target, list.size) {
         if (motion.reduced || shown < 0.05f) {
             top.snapTo(target)
@@ -1366,8 +1368,11 @@ private val SYSTEM_STAGE_MAX = 124.dp
 /** The selected game's logo on the stage, and on a short screen. */
 private val STAGE_LOGO = 84.dp
 
-/** The smallest a folded stage shrinks the Grid's tiles to, as a share of their size. */
-private const val MIN_FOLDED_TILE = 0.62f
+/**
+ * The smallest a folded stage shrinks the Grid's tiles to, as a share of their size: barely
+ * noticeable, since folding the stage away is what makes the room.
+ */
+private const val MIN_FOLDED_TILE = 0.92f
 private val STAGE_LOGO_SHORT = 56.dp
 
 /** Logos ahead of the selection are decoded at this size, ready for the stage. */

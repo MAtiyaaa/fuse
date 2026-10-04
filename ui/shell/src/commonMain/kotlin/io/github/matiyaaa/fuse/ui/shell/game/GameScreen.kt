@@ -1,14 +1,5 @@
 package io.github.matiyaaa.fuse.ui.shell.game
 
-import androidx.compose.ui.unit.dp
-import androidx.compose.foundation.layout.offset
-import androidx.compose.ui.draw.clip
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
-import androidx.compose.runtime.SideEffect
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.animation.Crossfade
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -27,6 +18,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -41,13 +33,19 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -63,6 +61,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import io.github.matiyaaa.fuse.model.ContentKind
 import io.github.matiyaaa.fuse.model.FolderInterpretation
 import io.github.matiyaaa.fuse.model.GameId
@@ -78,10 +77,10 @@ import io.github.matiyaaa.fuse.ui.designsystem.components.IconButton
 import io.github.matiyaaa.fuse.ui.designsystem.components.Panel
 import io.github.matiyaaa.fuse.ui.designsystem.components.ProgressRing
 import io.github.matiyaaa.fuse.ui.designsystem.components.SectionLabel
-import io.github.matiyaaa.fuse.ui.designsystem.components.fadingEdges
 import io.github.matiyaaa.fuse.ui.designsystem.components.Skeleton
 import io.github.matiyaaa.fuse.ui.designsystem.components.SkeletonText
 import io.github.matiyaaa.fuse.ui.designsystem.components.Tile
+import io.github.matiyaaa.fuse.ui.designsystem.components.fadingEdges
 import io.github.matiyaaa.fuse.ui.designsystem.effects.fuseClickable
 import io.github.matiyaaa.fuse.ui.designsystem.effects.rememberReveal
 import io.github.matiyaaa.fuse.ui.designsystem.effects.reveal
@@ -104,6 +103,10 @@ import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
 import io.github.matiyaaa.fuse.ui.designsystem.theme.tabular
 import io.github.matiyaaa.fuse.ui.designsystem.theme.toColor
+import io.github.matiyaaa.fuse.ui.fuseline.Crossfade
+import io.github.matiyaaa.fuse.ui.fuseline.fuselineFloat
+import io.github.matiyaaa.fuse.ui.fuseline.fuselineScrollTo
+import io.github.matiyaaa.fuse.ui.fuseline.tween
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.FocusZone
 import io.github.matiyaaa.fuse.ui.shell.app.GallerySpec
@@ -233,6 +236,8 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
     val rows = buildList {
         if (moreFacts) add("facts")
         add("actions")
+        // The time played is a stop of its own, so the stick brings it into view on any screen.
+        add("playtime")
         if (description != null) add("about")
         if (discs.size > 1) add("discs")
         if (badges.isNotEmpty()) add("achievements")
@@ -240,7 +245,7 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
         lines.indices.forEach { add("details:$it") }
     }
     fun sizeOf(key: String) = when (key) {
-        "facts", "about" -> 1
+        "facts", "about", "playtime" -> 1
         "actions" -> actions.size
         "discs" -> discs.size
         "achievements" -> badges.size
@@ -302,6 +307,7 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
     val confirm = when (row) {
         "facts" -> "See every detail"
         "about" -> "Read it all"
+        "playtime" -> "All play time"
         "shots" -> "View full screen"
         "actions" -> actions.getOrNull(col)?.name
         "discs" -> "Play this disc"
@@ -335,14 +341,19 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
     val inset = with(LocalDensity.current) { Space.l.roundToPx() }
     // Every line of detail cards scrolls to the Details section, so it stays in view as a whole.
     val section = if (row.startsWith("details:")) "details" else row
+    val timeRequester = remember { androidx.compose.foundation.relocation.BringIntoViewRequester() }
     LaunchedEffect(section, tops[section], scroll.maxValue) {
+        if (section == "playtime") {
+            timeRequester.bringIntoView()
+            return@LaunchedEffect
+        }
         val target = when {
             row == "facts" || row == "actions" -> 0
             // The last section shows the page's very end, so nothing is left below the stick's reach.
             sel.row == rows.lastIndex -> scroll.maxValue
             else -> ((tops[section] ?: 0) - inset).coerceIn(0, scroll.maxValue)
         }
-        scroll.animateScrollTo(target, motion.followSpring())
+        scroll.fuselineScrollTo(target, motion.followSpring())
     }
 
     InputLayer(enabled = focused && !app.overlayOpen && viewing == null) { e ->
@@ -362,6 +373,7 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
                 when (row) {
                     "facts" -> showFacts()
                     "about" -> readAbout()
+                    "playtime" -> app.go(Route.PlayTime)
                     "shots" -> viewing = col
                     "actions" -> actions.getOrNull(col)?.run?.invoke()
                     "discs" -> discs.getOrNull(col)?.let { disc -> app.play(card, discPath = disc.path) }
@@ -457,7 +469,12 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
                     }
                     LaunchNote(d, Modifier.reveal(reveal, 3), issues.firstOrNull()?.problem?.title)
                     Spacer(Modifier.height(Space.l))
-                    TimeTogether(d, Modifier.reveal(reveal, 3))
+                    TimeTogether(
+                        d,
+                        Modifier.reveal(reveal, 3).bringIntoViewRequester(timeRequester),
+                        selected = row == "playtime" && focused,
+                        onClick = { sel.row = rows.indexOf("playtime"); app.go(Route.PlayTime) },
+                    )
                 }
                 layout.cover?.let { cover ->
                     Spacer(Modifier.width(Space.xxl))
@@ -621,7 +638,8 @@ private data class GameLayout(
                 logoHeight = (height * 0.19f).coerceIn(Size.touch + Space.l, Size.touch * 3),
                 reading = Size.touch * 16,
                 cardsPerLine = when {
-                    content >= Size.touch * 18 -> 3
+                    // A 6 inch handheld (about 850dp) fits all three side by side.
+                    content >= Size.touch * 15 -> 3
                     content >= Size.touch * 10 -> 2
                     else -> 1
                 },
@@ -710,7 +728,7 @@ private fun FactChips(d: GameDetail, facts: List<GameFact>, modifier: Modifier, 
 @Composable
 private fun MoreChip(count: Int, selected: Boolean, onClick: () -> Unit) {
     val c = Fuse.colors
-    val fill by androidx.compose.animation.animateColorAsState(if (selected) c.text else c.surfaceDim.copy(alpha = if (c.isDark) 0.62f else 0.72f), Fuse.motion.tween(io.github.matiyaaa.fuse.ui.designsystem.theme.Durations.FAST), label = "moreChip")
+    val fill by io.github.matiyaaa.fuse.ui.fuseline.fuselineColor(if (selected) c.text else c.surfaceDim.copy(alpha = if (c.isDark) 0.62f else 0.72f), Fuse.motion.tween(io.github.matiyaaa.fuse.ui.fuseline.Durations.FAST), label = "moreChip")
     val tint = if (selected) c.ink else c.text
     Row(
         Modifier
@@ -736,7 +754,7 @@ private fun MoreChip(count: Int, selected: Boolean, onClick: () -> Unit) {
 private fun AboutBlock(text: String, selected: Boolean, reading: Dp, onClick: () -> Unit) {
     val c = Fuse.colors
     val shape = RoundedCornerShape(Fuse.geometry.panel)
-    val lit by animateFloatAsState(if (selected) 1f else 0f, Fuse.motion.tween(io.github.matiyaaa.fuse.ui.designsystem.theme.Durations.FAST), label = "about")
+    val lit by fuselineFloat(if (selected) 1f else 0f, Fuse.motion.tween(io.github.matiyaaa.fuse.ui.fuseline.Durations.FAST), label = "about")
     Column(
         Modifier
             .widthIn(max = reading + Space.l * 2)
@@ -762,18 +780,22 @@ private fun AboutBlock(text: String, selected: Boolean, reading: Dp, onClick: ()
  * last played. Before the first session it says so, simply.
  */
 @Composable
-private fun TimeTogether(d: GameDetail, modifier: Modifier) {
+private fun TimeTogether(d: GameDetail, modifier: Modifier, selected: Boolean, onClick: () -> Unit) {
     val c = Fuse.colors
     val play = d.game.play
     val shape = RoundedCornerShape(Fuse.geometry.panel)
+    val lit by fuselineFloat(if (selected) 1f else 0f, Fuse.motion.tween(io.github.matiyaaa.fuse.ui.fuseline.Durations.FAST), label = "timeTogether")
     val accent = d.platform.accent.toColor()
     val share = if (play.totalSeconds > 0) (d.secondsThisWeek.toFloat() / play.totalSeconds).coerceIn(0f, 1f) else 0f
-    val arc by animateFloatAsState(share, Fuse.motion.tween(io.github.matiyaaa.fuse.ui.designsystem.theme.Durations.DELIBERATE), label = "weekArc")
+    val arc by fuselineFloat(share, Fuse.motion.tween(io.github.matiyaaa.fuse.ui.fuseline.Durations.DELIBERATE), label = "weekArc")
     Row(
         modifier
             .clip(shape)
             .background(c.surfaceDim.copy(alpha = if (c.isDark) 0.55f else 0.7f))
+            .background(c.text.copy(alpha = 0.06f * lit))
             .border(Size.stroke, c.hairline, shape)
+            .border(Size.focusStroke, c.focus.copy(alpha = lit), shape)
+            .fuseClickable(shape = shape, scale = false, role = androidx.compose.ui.semantics.Role.Button, onClickLabel = "All play time", onClick = onClick)
             .padding(horizontal = Space.l, vertical = Space.m),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -1091,7 +1113,7 @@ private fun InfoPanel(
 ) {
     val c = Fuse.colors
     val motion = Fuse.motion
-    val f by animateFloatAsState(if (selected) 1f else 0f, motion.focusSpring(), label = "card")
+    val f by fuselineFloat(if (selected) 1f else 0f, motion.focusSpring(), label = "card")
     val corner = Fuse.geometry.panel
     val shape = RoundedCornerShape(corner)
     val focus = c.focus

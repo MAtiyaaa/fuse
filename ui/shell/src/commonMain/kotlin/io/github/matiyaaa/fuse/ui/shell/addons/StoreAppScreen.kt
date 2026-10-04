@@ -1,7 +1,6 @@
 package io.github.matiyaaa.fuse.ui.shell.addons
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -56,6 +55,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.input.NavResult
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
+import io.github.matiyaaa.fuse.ui.fuseline.fuselineScrollBy
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.ConfirmSpec
 import io.github.matiyaaa.fuse.ui.shell.app.FocusZone
@@ -137,8 +137,8 @@ private fun StorePage(app: AppState, state: StoreState, item: StoreApp) {
         when (e.action) {
             NavAction.LEFT -> if (chosen > 0) { chosen--; NavResult.MOVED } else NavResult.BLOCKED
             NavAction.RIGHT -> if (chosen < buttons.lastIndex) { chosen++; NavResult.MOVED } else NavResult.BLOCKED
-            NavAction.DOWN -> if (scroll.canScrollForward) { scope.launch { scroll.animateScrollBy(SCROLL_STEP) }; NavResult.MOVED } else NavResult.BLOCKED
-            NavAction.UP -> if (scroll.value > 0) { scope.launch { scroll.animateScrollBy(-SCROLL_STEP) }; NavResult.MOVED } else NavResult.IGNORED
+            NavAction.DOWN -> if (scroll.canScrollForward) { scope.launch { scroll.fuselineScrollBy(SCROLL_STEP) }; NavResult.MOVED } else NavResult.BLOCKED
+            NavAction.UP -> if (scroll.value > 0) { scope.launch { scroll.fuselineScrollBy(-SCROLL_STEP) }; NavResult.MOVED } else NavResult.IGNORED
             NavAction.SELECT -> { buttons.getOrNull(chosen)?.takeIf { !it.busy || it.label == "Cancel" }?.run?.invoke(); NavResult.ACTIVATED }
             else -> NavResult.IGNORED
         }

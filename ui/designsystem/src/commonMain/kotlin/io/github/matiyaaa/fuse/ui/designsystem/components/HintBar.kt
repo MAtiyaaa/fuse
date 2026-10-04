@@ -1,51 +1,51 @@
 package io.github.matiyaaa.fuse.ui.designsystem.components
 
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.SizeTransform
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.MutableTransitionState
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.expandHorizontally
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkHorizontally
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.draw.clip
-import io.github.matiyaaa.fuse.ui.designsystem.effects.fuseClickable
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp as lerpColor
+import io.github.matiyaaa.fuse.ui.designsystem.effects.fuseClickable
 import io.github.matiyaaa.fuse.ui.designsystem.icons.ButtonGlyph
 import io.github.matiyaaa.fuse.ui.designsystem.icons.ButtonGlyphDefaults
 import io.github.matiyaaa.fuse.ui.designsystem.icons.HintButton
-import io.github.matiyaaa.fuse.ui.designsystem.theme.Durations
-import io.github.matiyaaa.fuse.ui.designsystem.theme.Easings
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
+import io.github.matiyaaa.fuse.ui.fuseline.Appear
+import io.github.matiyaaa.fuse.ui.fuseline.AppearState
+import io.github.matiyaaa.fuse.ui.fuseline.Curves
+import io.github.matiyaaa.fuse.ui.fuseline.Durations
+import io.github.matiyaaa.fuse.ui.fuseline.FuselineValue
+import io.github.matiyaaa.fuse.ui.fuseline.SizeTransform
+import io.github.matiyaaa.fuse.ui.fuseline.Swap
+import io.github.matiyaaa.fuse.ui.fuseline.expandHorizontally
+import io.github.matiyaaa.fuse.ui.fuseline.fadeIn
+import io.github.matiyaaa.fuse.ui.fuseline.fadeOut
+import io.github.matiyaaa.fuse.ui.fuseline.shrinkHorizontally
+import io.github.matiyaaa.fuse.ui.fuseline.togetherWith
+import io.github.matiyaaa.fuse.ui.fuseline.tween
 import kotlinx.coroutines.flow.first
-import androidx.compose.ui.graphics.lerp as lerpColor
 
 @Immutable
 data class Hint(val button: HintButton, val label: String)
@@ -92,7 +92,7 @@ fun HintBar(hints: List<Hint>, modifier: Modifier = Modifier, flash: HintFlash? 
                 existing.visible.targetState = true
                 next.add(existing)
             } else {
-                next.add(HintEntry(h.button, nth, h.label, MutableTransitionState(false).apply { targetState = true }))
+                next.add(HintEntry(h.button, nth, h.label, AppearState(false).apply { targetState = true }))
             }
         }
         // Leaving hints keep roughly the place they had while they fold away.
@@ -120,7 +120,7 @@ fun HintBar(hints: List<Hint>, modifier: Modifier = Modifier, flash: HintFlash? 
 
 /** One hint on the line, with its own way in and out. */
 @Stable
-private class HintEntry(val button: HintButton, val nth: Int, label: String, val visible: MutableTransitionState<Boolean>) {
+private class HintEntry(val button: HintButton, val nth: Int, label: String, val visible: AppearState) {
     var label by mutableStateOf(label)
 }
 
@@ -132,15 +132,15 @@ private fun HintItem(entry: HintEntry, flash: HintFlash?, onGone: () -> Unit) {
         snapshotFlow { entry.visible.isIdle && !entry.visible.currentState && !entry.visible.targetState }.first { it }
         onGone()
     }
-    val pulse = remember { Animatable(0f) }
+    val pulse = remember { FuselineValue(0f) }
     val lit by remember { derivedStateOf { pulse.value > 0.5f } }
     val count = if (entry.nth == 0) flash?.pulses?.get(entry.button) ?: 0 else 0
     LaunchedEffect(count) {
         if (count == 0) return@LaunchedEffect
         pulse.snapTo(1f)
-        pulse.animateTo(0f, tween(if (motion.reduced) Durations.FAST else Durations.SLOW, easing = Easings.Standard))
+        pulse.animateTo(0f, tween(if (motion.reduced) Durations.FAST else Durations.SLOW, easing = Curves.Standard))
     }
-    AnimatedVisibility(
+    Appear(
         visibleState = entry.visible,
         // The room opens and closes without clipping: a clipped hint shows half a glyph while it
         // moves (a cut disc reads as a rendering fault). Unclipped, the hint is drawn whole beside
@@ -149,14 +149,14 @@ private fun HintItem(entry: HintEntry, flash: HintFlash?, onGone: () -> Unit) {
         enter = if (motion.reduced) {
             fadeIn(motion.fade(Durations.FAST))
         } else {
-            expandHorizontally(motion.tween(Durations.BASE, Easings.Standard), expandFrom = Alignment.End, clip = false) +
-                fadeIn(tween(motion.ms(Durations.FAST), delayMillis = motion.ms(ENTER_FADE_DELAY), easing = Easings.Fade))
+            expandHorizontally(motion.tween(Durations.BASE, Curves.Standard), expandFrom = Alignment.End, clip = false) +
+                fadeIn(tween(motion.ms(Durations.FAST), delayMillis = motion.ms(ENTER_FADE_DELAY), easing = Curves.Fade))
         },
         exit = if (motion.reduced) {
             fadeOut(motion.fade(Durations.INSTANT))
         } else {
-            shrinkHorizontally(motion.tween(Durations.BASE, Easings.Standard), shrinkTowards = Alignment.End, clip = false) +
-                fadeOut(motion.tween(Durations.INSTANT, Easings.Standard))
+            shrinkHorizontally(motion.tween(Durations.BASE, Curves.Standard), shrinkTowards = Alignment.End, clip = false) +
+                fadeOut(motion.tween(Durations.INSTANT, Curves.Standard))
         },
     ) {
         // A hint is also a button: tapping or clicking it does what pressing its button does.
@@ -200,11 +200,11 @@ private fun HintItem(entry: HintEntry, flash: HintFlash?, onGone: () -> Unit) {
                 )
             }
             Spacer(Modifier.width(Space.s))
-            AnimatedContent(
+            Swap(
                 targetState = entry.label,
                 transitionSpec = {
-                    (fadeIn(motion.tween(Durations.FAST, Easings.Fade)) togetherWith fadeOut(motion.tween(Durations.INSTANT, Easings.Fade)))
-                        .using(SizeTransform(clip = false) { _, _ -> motion.tween(Durations.BASE, Easings.Standard) })
+                    (fadeIn(motion.tween(Durations.FAST, Curves.Fade)) togetherWith fadeOut(motion.tween(Durations.INSTANT, Curves.Fade)))
+                        .using(SizeTransform(clip = false, animationSpec = motion.tween(Durations.BASE, Curves.Standard)))
                 },
                 contentAlignment = Alignment.CenterStart,
                 label = "hint label",

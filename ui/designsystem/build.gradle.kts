@@ -6,6 +6,7 @@ kotlin {
     sourceSets {
         commonMain.dependencies {
             api(projects.core.model)
+            api(projects.ui.fuseline)
             api(libs.coil.compose)
         }
     }

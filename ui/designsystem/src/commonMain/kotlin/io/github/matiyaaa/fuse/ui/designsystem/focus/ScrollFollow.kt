@@ -1,9 +1,5 @@
 package io.github.matiyaaa.fuse.ui.designsystem.focus
 
-import androidx.compose.animation.core.AnimationSpec
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
-import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.grid.LazyGridState
@@ -14,10 +10,14 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.unit.IntSize
-import io.github.matiyaaa.fuse.ui.designsystem.theme.Durations
-import io.github.matiyaaa.fuse.ui.designsystem.theme.Easings
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
-import io.github.matiyaaa.fuse.ui.designsystem.theme.FuseMotion
+import io.github.matiyaaa.fuse.ui.fuseline.Curves
+import io.github.matiyaaa.fuse.ui.fuseline.Durations
+import io.github.matiyaaa.fuse.ui.fuseline.Motion
+import io.github.matiyaaa.fuse.ui.fuseline.animate
+import io.github.matiyaaa.fuse.ui.fuseline.fuselineScrollBy
+import io.github.matiyaaa.fuse.ui.fuseline.spring
+import io.github.matiyaaa.fuse.ui.fuseline.tween
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.coroutineScope
@@ -25,16 +25,8 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
-private val followSpec: AnimationSpec<Float> = spring(dampingRatio = 1f, stiffness = 600f)
-
-/**
- * How a list glides to keep up with the selection: a critically damped spring, which restarts
- * smoothly from its current speed when the selection moves again (holding a direction glides
- * instead of stepping). Under Reduced motion a short tween, so the list still moves (the selection
- * must stay in view) without a long slide.
- */
-fun FuseMotion.followScroll(): AnimationSpec<Float> =
-    if (reduced) tween(ms(Durations.FAST), easing = Easings.Standard) else followSpec
+/** A list following its selection, without a motion profile to hand: the same spring as [FuselineMotion.followScroll]. */
+private val followSpec: Motion = spring(dampingRatio = 1f, stiffness = 600f)
 
 /**
  * Keeps [index] at a steady anchor inside a lazy row/column (anchor 0 = aligned with the content
@@ -44,7 +36,7 @@ fun FuseMotion.followScroll(): AnimationSpec<Float> =
  *
  * [anchor] is where the selected item's leading edge should sit, as a fraction of the viewport.
  */
-suspend fun LazyListState.follow(index: Int, anchor: Float = 0.12f, animate: Boolean = true, spec: AnimationSpec<Float> = followSpec) {
+suspend fun LazyListState.follow(index: Int, anchor: Float = 0.12f, animate: Boolean = true, spec: Motion = followSpec) {
     // Before the first layout the viewport is empty, so the anchor would come out as 0 and pin the
     // item to the top, hiding the rows above it (a list opened on its fifth row). Wait for it.
     if (layoutInfo.viewportSize == IntSize.Zero) snapshotFlow { layoutInfo.viewportSize }.first { it != IntSize.Zero }
@@ -60,7 +52,7 @@ suspend fun LazyListState.follow(index: Int, anchor: Float = 0.12f, animate: Boo
     }
     val delta = (item.offset - target).toFloat()
     if (delta == 0f) return
-    if (animate) animateScrollBy(delta, spec) else scrollBy(delta)
+    if (animate) fuselineScrollBy(delta, spec) else scrollBy(delta)
 }
 
 /**
@@ -69,7 +61,7 @@ suspend fun LazyListState.follow(index: Int, anchor: Float = 0.12f, animate: Boo
  * nothing, and the list steps along as the selection reaches its edge. An item that isn't laid out
  * yet is jumped to.
  */
-suspend fun LazyListState.keepInView(index: Int, marginPx: Int, animate: Boolean = true, spec: AnimationSpec<Float> = followSpec) {
+suspend fun LazyListState.keepInView(index: Int, marginPx: Int, animate: Boolean = true, spec: Motion = followSpec) {
     if (layoutInfo.viewportSize == IntSize.Zero) snapshotFlow { layoutInfo.viewportSize }.first { it != IntSize.Zero }
     val info = layoutInfo
     val start = info.viewportStartOffset
@@ -87,7 +79,7 @@ suspend fun LazyListState.keepInView(index: Int, marginPx: Int, animate: Boolean
         else -> 0f
     }
     if (delta == 0f) return
-    if (animate) animateScrollBy(delta, spec) else scrollBy(delta)
+    if (animate) fuselineScrollBy(delta, spec) else scrollBy(delta)
 }
 
 /** Grid version: keeps the selected row near [anchor] of the viewport height. */
@@ -95,7 +87,7 @@ suspend fun LazyGridState.follow(
     index: Int,
     anchor: Float = 0.2f,
     animate: Boolean = true,
-    spec: AnimationSpec<Float> = followSpec,
+    spec: Motion = followSpec,
     /** Pixels at the top that don't count as in view (a fading edge): the row is kept below them. */
     inset: Int = 0,
 ) {
@@ -113,7 +105,7 @@ suspend fun LazyGridState.follow(
     // Only scroll when the row is leaving the comfortable middle band, so moving sideways never scrolls.
     val band = viewport * 0.18f
     if (kotlin.math.abs(delta) < band && item.offset.y >= inset && item.offset.y + item.size.height <= viewport) return
-    if (animate) animateScrollBy(delta, spec) else scrollBy(delta)
+    if (animate) fuselineScrollBy(delta, spec) else scrollBy(delta)
 }
 
 /**

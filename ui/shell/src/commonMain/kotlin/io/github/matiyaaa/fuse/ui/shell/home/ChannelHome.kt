@@ -1,17 +1,5 @@
 package io.github.matiyaaa.fuse.ui.shell.home
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.Crossfade
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -34,6 +22,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -74,7 +63,6 @@ import io.github.matiyaaa.fuse.ui.designsystem.effects.rememberReveal
 import io.github.matiyaaa.fuse.ui.designsystem.effects.reveal
 import io.github.matiyaaa.fuse.ui.designsystem.focus.GridCell
 import io.github.matiyaaa.fuse.ui.designsystem.focus.SpatialSelection
-import io.github.matiyaaa.fuse.ui.designsystem.focus.followScroll
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
 import io.github.matiyaaa.fuse.ui.designsystem.icons.HintButton
 import io.github.matiyaaa.fuse.ui.designsystem.input.InputLayer
@@ -82,14 +70,29 @@ import io.github.matiyaaa.fuse.ui.designsystem.input.LocalInputRouter
 import io.github.matiyaaa.fuse.ui.designsystem.input.NavResult
 import io.github.matiyaaa.fuse.ui.designsystem.media.Artwork
 import io.github.matiyaaa.fuse.ui.designsystem.shape.SquircleShape
-import io.github.matiyaaa.fuse.ui.designsystem.theme.Durations
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Elevation
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
 import io.github.matiyaaa.fuse.ui.designsystem.theme.toColor
+import io.github.matiyaaa.fuse.ui.fuseline.Appear
+import io.github.matiyaaa.fuse.ui.fuseline.Crossfade
+import io.github.matiyaaa.fuse.ui.fuseline.Curves
+import io.github.matiyaaa.fuse.ui.fuseline.Durations
+import io.github.matiyaaa.fuse.ui.fuseline.FuselineValue
+import io.github.matiyaaa.fuse.ui.fuseline.animate
+import io.github.matiyaaa.fuse.ui.fuseline.fadeIn
+import io.github.matiyaaa.fuse.ui.fuseline.fadeOut
+import io.github.matiyaaa.fuse.ui.fuseline.fuselineDp
+import io.github.matiyaaa.fuse.ui.fuseline.fuselineFloat
+import io.github.matiyaaa.fuse.ui.fuseline.fuselineScrollTo
+import io.github.matiyaaa.fuse.ui.fuseline.slideInVertically
+import io.github.matiyaaa.fuse.ui.fuseline.slideOutVertically
+import io.github.matiyaaa.fuse.ui.fuseline.spring
+import io.github.matiyaaa.fuse.ui.fuseline.tween
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec
+import io.github.matiyaaa.fuse.ui.shell.app.ConfirmSpec
 import io.github.matiyaaa.fuse.ui.shell.app.ContextMenuSpec
 import io.github.matiyaaa.fuse.ui.shell.app.FocusZone
 import io.github.matiyaaa.fuse.ui.shell.app.offers
@@ -111,6 +114,9 @@ import kotlinx.coroutines.launch
 
 /** Columns of the board on a landscape screen, and on a narrow one (a phone held upright). */
 private const val BOARD_COLUMNS = 4
+
+/** The room Undo and Reset take above the board while it is arranged. */
+private val ARRANGE_TOOLS_ROOM = 64.dp
 private const val BOARD_COLUMNS_NARROW = 2
 
 /** Narrower than this, the board uses [BOARD_COLUMNS_NARROW] so widgets stay big enough to read. */
@@ -148,6 +154,10 @@ fun ChannelHome(app: AppState) {
 
     val widgets = prefs.home.boardWidgets().filter { onBoard(it, app, prefs, cartridge) }
     val editor = remember { BoardEditor() }
+    // Every change made while arranging can be taken back, newest first; the floating Undo and
+    // Reset at the top right ([ArrangeTools]) are reached by moving up past the board's top row.
+    val history = remember { mutableStateListOf<List<HomeWidget>?>() }
+    var onTools by remember { mutableStateOf<Int?>(null) }
     val arranging = editor.arranging
     val op = editor.op
     val sel = rememberRouteState(app.navigator, "home.board") { SpatialSelection() }
@@ -185,8 +195,9 @@ fun ChannelHome(app: AppState) {
         val game = current?.let { firstGame(it.kind, feed) }
         app.hero = game?.room(systems[game.platformId])
     }
-    LaunchedEffect(arranging, op is BoardOp.Carry, resizeLook) {
+    LaunchedEffect(arranging, op is BoardOp.Carry, resizeLook, onTools) {
         app.hints = when {
+            arranging && onTools != null -> listOf(Hint(HintButton.CONFIRM, if (onTools == 0) "Undo" else "Reset Home"), Hint(HintButton.BACK, "Done"))
             op is BoardOp.Carry -> listOf(Hint(HintButton.DPAD, "Move"), Hint(HintButton.CONFIRM, "Put down"), Hint(HintButton.BACK, "Cancel"))
             resizeLook -> listOf(Hint(HintButton.DPAD, "Resize"), Hint(HintButton.HOLD_OPTIONS, "Let go when done"))
             arranging -> listOf(Hint(HintButton.CONFIRM, "Pick up"), Hint(HintButton.HOLD_OPTIONS, "Resize"), Hint(HintButton.OPTIONS, "Edit"), Hint(HintButton.BACK, "Done"))
@@ -203,7 +214,28 @@ fun ChannelHome(app: AppState) {
      * one [resized], and the board's order in reading order, so a board of another width that was never
      * arranged follows this one. Widgets not shown keep their places, after the others.
      */
+    fun keepForUndo() {
+        if (editor.arranging) history.add(store.prefs.value.home.board)
+    }
+    fun undo() {
+        val before = history.removeLastOrNull() ?: return app.toasts.show("Nothing to undo")
+        store.updatePrefs { p -> p.copy(home = p.home.copy(board = before)) }
+        app.platform.sounds.play(io.github.matiyaaa.fuse.ui.designsystem.sound.SoundCue.BACK)
+    }
+    fun reset() {
+        app.confirm = ConfirmSpec(
+            title = "Put Home back as it came?",
+            message = "Every widget returns to its first place and size, and widgets you added go. Undo brings your board back.",
+            confirmLabel = "Reset Home",
+        ) {
+            keepForUndo()
+            store.updatePrefs { p -> p.copy(home = p.home.copy(board = io.github.matiyaaa.fuse.model.HomeLayoutConfig.DefaultBoard)) }
+            app.toasts.show("Home is back as it came")
+        }
+    }
+
     fun save(layout: BoardLayout, columns: Int, resized: String? = null) {
+        keepForUndo()
         val reading = layout.ids.withIndex().associate { it.value to it.index }
         store.updatePrefs { p ->
             val board = p.home.boardWidgets().map { w ->
@@ -215,6 +247,7 @@ fun ChannelHome(app: AppState) {
         }
     }
     fun saveBoard(change: (List<HomeWidget>) -> List<HomeWidget>) {
+        keepForUndo()
         store.updatePrefs { p -> p.copy(home = p.home.copy(board = change(p.home.boardWidgets()).mapIndexed { i, w -> w.copy(order = i) })) }
     }
     fun remove(w: HomeWidget) {
@@ -242,6 +275,8 @@ fun ChannelHome(app: AppState) {
     fun stopArranging() {
         editor.cancel()
         editor.arranging = false
+        history.clear()
+        onTools = null
         sel.clamp(widgets.size)
     }
 
@@ -277,7 +312,7 @@ fun ChannelHome(app: AppState) {
         val gutterPx = with(density) { gutter.toPx() }
         val motion = Fuse.motion
         // What covers the board's bottom: the hints, and while arranging the toolbar above them.
-        val bottomCover by animateDpAsState(
+        val bottomCover by fuselineDp(
             Size.hintHeight + Space.l + if (arranging) ARRANGE_BAR else 0.dp,
             motion.tween(Durations.BASE),
             label = "boardBottom",
@@ -305,6 +340,18 @@ fun ChannelHome(app: AppState) {
             val w = widgets.getOrNull(sel.index)
             val carried = editor.op as? BoardOp.Carry
             val direction = e.action == NavAction.LEFT || e.action == NavAction.RIGHT || e.action == NavAction.UP || e.action == NavAction.DOWN
+            val tools = onTools
+            if (arranging && tools != null && carried == null && e.modifier == null) {
+                return@InputLayer when (e.action) {
+                    NavAction.LEFT -> if (tools > 0) { onTools = tools - 1; NavResult.MOVED } else NavResult.BLOCKED
+                    NavAction.RIGHT -> if (tools < 1) { onTools = tools + 1; NavResult.MOVED } else NavResult.BLOCKED
+                    NavAction.DOWN -> { onTools = null; NavResult.MOVED }
+                    NavAction.UP -> NavResult.BLOCKED
+                    NavAction.SELECT -> { if (tools == 0) undo() else reset(); NavResult.ACTIVATED }
+                    NavAction.BACK -> { stopArranging(); NavResult.CONSUMED }
+                    else -> NavResult.CONSUMED
+                }
+            }
             when {
                 // Options held: the D-pad resizes the chosen widget, one cell a step, never faster
                 // than a step every [RESIZE_REPEAT_MS] however long a direction is held.
@@ -353,7 +400,10 @@ fun ChannelHome(app: AppState) {
                     else -> NavResult.CONSUMED
                 }
                 else -> when (e.action) {
-                    NavAction.UP, NavAction.DOWN, NavAction.LEFT, NavAction.RIGHT -> sel.move(e.action, cells)
+                    NavAction.UP, NavAction.DOWN, NavAction.LEFT, NavAction.RIGHT -> sel.move(e.action, cells).let { r ->
+                        // Past the top row while arranging: Undo and Reset.
+                        if (r != NavResult.MOVED && arranging && e.action == NavAction.UP) { onTools = 0; NavResult.MOVED } else r
+                    }
                     NavAction.SELECT -> when {
                         arranging && sel.index >= widgets.size -> { addPicker(); NavResult.ACTIVATED }
                         arranging && w != null -> {
@@ -386,18 +436,20 @@ fun ChannelHome(app: AppState) {
         // One shared beat for the arranging wobble, read only while drawing, and only running while
         // arranging: a beat left running would wake every frame for nothing.
         val wobbling = arranging && op == null && !motion.reduced
-        val beat = remember { Animatable(0f) }
+        val beat = remember { FuselineValue(0f) }
         LaunchedEffect(wobbling) {
             while (wobbling) {
                 beat.snapTo(0f)
-                beat.animateTo(1f, tween(WOBBLE_MS, easing = LinearEasing))
+                beat.animateTo(1f, tween(WOBBLE_MS, easing = Curves.Linear))
             }
         }
-        val wells by animateFloatAsState(if (arranging) 1f else 0f, motion.fade(Durations.BASE), label = "wells")
+        val wells by fuselineFloat(if (arranging) 1f else 0f, motion.fade(Durations.BASE), label = "wells")
         val cartridgeIcon = remember { if (app.store.apps.supported) io.github.matiyaaa.fuse.ui.shell.store.AppIconModel(io.github.matiyaaa.fuse.integrations.cartridge.CartridgeProtocol.PACKAGE_NAME) else null }
         CompositionLocalProvider(LocalHomeTime provides time, LocalCartridgeIcon provides cartridgeIcon.takeIf { cartridge.installed }) {
             Column(Modifier.fillMaxSize()) {
-                Spacer(Modifier.height(Size.hudHeight))
+                // While arranging the board moves down to make room for Undo and Reset above it.
+                val toolsRoom by fuselineDp(if (arranging) ARRANGE_TOOLS_ROOM else 0.dp, motion.tween(Durations.BASE), label = "toolsRoom")
+                Spacer(Modifier.height(Size.hudHeight + toolsRoom))
                 Box(
                     Modifier
                         .weight(1f)
@@ -538,9 +590,6 @@ fun ChannelHome(app: AppState) {
                                                 onPlaced = { edge, r -> if (r == null) controls.remove("r$edge:${w.id}") else controls["r$edge:${w.id}"] = r },
                                             )
                                         }
-                                        if (resizingHere != null) {
-                                            SizeChip(resizingHere.target.width, resizingHere.target.height, Modifier.align(Alignment.TopEnd).offset(x = Space.s, y = -Space.l))
-                                        }
                                         if (selected && resizeLook) ResizeFrame(rect, columns, shape)
                                         }
                                     },
@@ -555,15 +604,6 @@ fun ChannelHome(app: AppState) {
                                 onClick = { sel.index = widgets.size; addPicker() },
                             )
                         }
-                        // The size a held widget will land at, beside where it lands.
-                        (op as? BoardOp.Drag)?.let { o ->
-                            val r = geometry.rect(o.target)
-                            SizeChip(
-                                o.target.width, o.target.height,
-                                Modifier.offset(x = with(density) { r.left.toDp() } + Space.m, y = with(density) { r.top.toDp() } + Space.m),
-                                accent = false,
-                            )
-                        }
                     }
                 }
             }
@@ -571,7 +611,7 @@ fun ChannelHome(app: AppState) {
         // While arranging, a toolbar floats over the board's bottom edge (above the hints), so
         // starting to arrange never moves the widget under the finger. It steps aside while a widget
         // is moved or resized (the hints say how), so it never hides the widget being changed.
-        AnimatedVisibility(
+        Appear(
             arranging && op == null && !resizeLook,
             modifier = Modifier.align(Alignment.BottomStart).padding(start = gutter, end = gutter, bottom = Size.hintHeight + Space.s),
             enter = fadeIn(motion.enter(Durations.BASE)) + slideInVertically(motion.enter(Durations.BASE)) { it / 2 },
@@ -581,6 +621,20 @@ fun ChannelHome(app: AppState) {
                 compact = narrow,
                 onAdd = ::addPicker,
                 onDone = ::stopArranging,
+            )
+        }
+        // Undo and Reset float at the top right while arranging, out of the board's way.
+        Appear(
+            arranging && op == null && !resizeLook,
+            modifier = Modifier.align(Alignment.TopEnd).padding(top = Size.hudHeight, end = gutter),
+            enter = fadeIn(motion.enter(Durations.BASE)) + slideInVertically(motion.enter(Durations.BASE)) { -it / 2 },
+            exit = fadeOut(motion.exit(Durations.FAST)) + slideOutVertically(motion.exit(Durations.FAST)) { -it / 2 },
+        ) {
+            ArrangeTools(
+                focused = if (app.focusZone == FocusZone.CONTENT) onTools else null,
+                canUndo = history.isNotEmpty(),
+                onUndo = { onTools = 0; undo() },
+                onReset = { onTools = 1; reset() },
             )
         }
         // Controls of widgets that are gone, or of a board no longer arranged, catch no touches.
@@ -661,15 +715,15 @@ private fun BoardItem(
     chrome: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit,
 ) {
     val motion = Fuse.motion
-    val lift by animateFloatAsState(if (lifted) 1f else 0f, motion.focusSpring(), label = "lift")
+    val lift by fuselineFloat(if (lifted) 1f else 0f, motion.focusSpring(), label = "lift")
     val phase = remember(widget.id) { (widget.id.hashCode() and 0xFF) / 255f }
     // Wider widgets wobble less, so a large one doesn't swing its corners about.
     val swing = WOBBLE_DEGREES / size.width.coerceAtLeast(1)
-    val shake = remember { Animatable(0f) }
+    val shake = remember { FuselineValue(0f) }
     LaunchedEffect(bump?.nonce) {
         if (bump == null) return@LaunchedEffect
         shake.snapTo(0f)
-        shake.animateTo(1f, tween(SHAKE_MS, easing = LinearEasing))
+        shake.animateTo(1f, tween(SHAKE_MS, easing = Curves.Linear))
         shake.snapTo(0f)
     }
     val shadow = Fuse.colors.shadow
@@ -745,11 +799,11 @@ internal fun gamesText(count: Int): String = "$count ${if (count == 1) "game" el
  */
 @Composable
 private fun Modifier.boardPlace(rect: Rect, animate: Boolean): Modifier {
-    val x = remember { Animatable(rect.left) }
-    val y = remember { Animatable(rect.top) }
-    val w = remember { Animatable(rect.width) }
-    val h = remember { Animatable(rect.height) }
-    val spec = remember { spring<Float>(dampingRatio = 0.78f, stiffness = 420f) }
+    val x = remember { FuselineValue(rect.left) }
+    val y = remember { FuselineValue(rect.top) }
+    val w = remember { FuselineValue(rect.width) }
+    val h = remember { FuselineValue(rect.height) }
+    val spec = remember { spring(dampingRatio = 0.78f, stiffness = 420f) }
     LaunchedEffect(rect, animate) {
         if (!animate) {
             x.snapTo(rect.left)
@@ -788,7 +842,7 @@ private fun KeepCellInView(scroll: ScrollState, rect: () -> Rect?, enabled: Bool
                 r.bottom + below > bottom -> r.bottom + below - viewport
                 else -> return@collect
             }
-            scroll.animateScrollTo(target.roundToInt().coerceIn(0, scroll.maxValue), spec)
+            scroll.fuselineScrollTo(target.roundToInt().coerceIn(0, scroll.maxValue), spec)
         }
     }
 }

@@ -1,47 +1,7 @@
 package io.github.matiyaaa.fuse.ui.designsystem.components
 
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.EnterTransition
-import androidx.compose.animation.ExitTransition
-import androidx.compose.animation.core.AnimationVector1D
-import androidx.compose.animation.core.VectorConverter
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
-import androidx.compose.foundation.border
-import androidx.compose.foundation.hoverable
-import androidx.compose.foundation.interaction.collectIsHoveredAsState
-import androidx.compose.foundation.interaction.collectIsPressedAsState
-import androidx.compose.ui.draw.drawWithCache
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.geometry.RoundRect
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.ClipOp
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.drawscope.clipPath
-import androidx.compose.ui.graphics.drawscope.translate
-import androidx.compose.ui.graphics.lerp
-import androidx.compose.ui.layout.layout
-import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.unit.Constraints
-import io.github.matiyaaa.fuse.ui.designsystem.icons.ButtonGlyph
-import io.github.matiyaaa.fuse.ui.designsystem.icons.ButtonGlyphDefaults
-import io.github.matiyaaa.fuse.ui.designsystem.icons.HintButton
-import io.github.matiyaaa.fuse.ui.designsystem.theme.Easings
-import io.github.matiyaaa.fuse.ui.designsystem.theme.FuseMotion
-import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
-import kotlin.math.roundToInt
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -49,7 +9,10 @@ import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -82,27 +45,63 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.geometry.Size as GeometrySize
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.ClipOp
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import io.github.matiyaaa.fuse.model.NavAction
+import io.github.matiyaaa.fuse.ui.designsystem.icons.ButtonGlyph
+import io.github.matiyaaa.fuse.ui.designsystem.icons.ButtonGlyphDefaults
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
+import io.github.matiyaaa.fuse.ui.designsystem.icons.HintButton
 import io.github.matiyaaa.fuse.ui.designsystem.input.NavEvent
 import io.github.matiyaaa.fuse.ui.designsystem.input.NavResult
-import io.github.matiyaaa.fuse.ui.designsystem.theme.Durations
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
+import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
+import io.github.matiyaaa.fuse.ui.fuseline.Appear
+import io.github.matiyaaa.fuse.ui.fuseline.Curves
+import io.github.matiyaaa.fuse.ui.fuseline.Durations
+import io.github.matiyaaa.fuse.ui.fuseline.Enter
+import io.github.matiyaaa.fuse.ui.fuseline.Exit
+import io.github.matiyaaa.fuse.ui.fuseline.FuselineMotion
+import io.github.matiyaaa.fuse.ui.fuseline.FuselineValue
+import io.github.matiyaaa.fuse.ui.fuseline.Glide
+import io.github.matiyaaa.fuse.ui.fuseline.fadeIn
+import io.github.matiyaaa.fuse.ui.fuseline.fadeOut
+import io.github.matiyaaa.fuse.ui.fuseline.fuselineColor
+import io.github.matiyaaa.fuse.ui.fuseline.fuselineFloat
+import io.github.matiyaaa.fuse.ui.fuseline.scaleIn
+import io.github.matiyaaa.fuse.ui.fuseline.scaleOut
+import io.github.matiyaaa.fuse.ui.fuseline.spring
+import io.github.matiyaaa.fuse.ui.fuseline.tween
 import kotlin.math.abs
+import kotlin.math.roundToInt
 import kotlin.time.TimeSource
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -160,6 +159,9 @@ internal fun keyRows(page: KeyPage): List<List<Key>> = when (page) {
         listOf(page("ABC", KeyPage.LETTERS, 1.5f), pasteKey, space(5.3f), doneKey),
     )
 }
+
+/** Keys a keyboard screen always lets repeat while held: Delete (X) and the caret (LB and RB). */
+private val HELD_KEYS = setOf(NavAction.CONTEXT, NavAction.PREVIOUS_SECTION, NavAction.NEXT_SECTION)
 
 /** Holding Delete (or X) this many repeats in starts deleting whole words. */
 private const val WORD_DELETE_AFTER = 10
@@ -235,8 +237,16 @@ class KeyboardState(val autoCapitalize: Boolean = false) {
         if (rows[row][column].kind == KeyKind.GAP) column = columnAt(row, startOf(row, column) + 0.5f)
     }
 
+    /** True while the controller is on Delete, so the screen lets a held A repeat (see [handle]). */
+    val onDelete: Boolean get() = rows.getOrNull(row)?.getOrNull(column)?.kind == KeyKind.BACKSPACE
+
+    /** What a screen with this keyboard lets the controller repeat while held. */
+    val repeats: Set<NavAction>
+        get() = if (onDelete) HELD_KEYS + NavAction.SELECT else HELD_KEYS
+
     /**
-     * Controller keys: the D-pad moves between keys and A presses one; X deletes (held, it speeds
+     * Controller keys: the D-pad moves between keys and A presses one (held on Delete, it keeps
+     * deleting); X deletes (held, it speeds
      * up to whole words), Y types a space, LB and RB move the caret, LT and RT jump a word, and
      * Start finishes.
      */
@@ -261,8 +271,18 @@ class KeyboardState(val autoCapitalize: Boolean = false) {
                 return NavResult.MOVED
             }
             NavAction.SELECT -> {
+                val key = rows[row][column]
+                if (event.repeat > 0) {
+                    // Held: Delete keeps deleting, faster and then a word at a time; other keys
+                    // type once per press.
+                    if (key.kind != KeyKind.BACKSPACE) return NavResult.CONSUMED
+                    showPress(row, column)
+                    deleteHeld(field, event.repeat)
+                    edited(field)
+                    return NavResult.ACTIVATED
+                }
                 showPress(row, column)
-                press(rows[row][column], field, onDone, onPaste)
+                press(key, field, onDone, onPaste)
                 return NavResult.ACTIVATED
             }
             NavAction.CONTEXT -> {
@@ -474,7 +494,7 @@ private fun keyRect(rows: List<List<Key>>, r: Int, c: Int, width: Float, keyHeig
 }
 
 /** How far a focused key lifts, a little less than a tile: keys sit close together. */
-private fun FuseMotion.keyLift(): Float = 1f + (focusScale - 1f) * 0.7f
+private fun FuselineMotion.keyLift(): Float = 1f + (focusScale - 1f) * 0.7f
 
 /**
  * The focus: one lit cap under the keys that glides to the focused key, lifted, with a glow tinted
@@ -490,9 +510,9 @@ private fun BoxScope.KeyHighlight(state: KeyboardState, width: Int, keyHeight: D
     val r = state.row.coerceIn(0, rows.lastIndex)
     val col = state.column.coerceIn(0, rows[r].lastIndex)
     val target = with(localDensity) { keyRect(rows, r, col, width.toFloat(), keyHeight.toPx(), KeyGap.toPx(), rowGap.toPx()) }
-    val rect = remember { Animatable(target, Rect.VectorConverter) }
-    val shown by animateFloatAsState(if (visible) 1f else 0f, motion.fade(Durations.FAST), label = "keyFocusShown")
-    val lift by animateFloatAsState(if (visible) 1f else 0f, motion.focusSpring(), label = "keyFocusLift")
+    val rect = remember { FuselineValue(target) }
+    val shown by fuselineFloat(if (visible) 1f else 0f, motion.fade(Durations.FAST), label = "keyFocusShown")
+    val lift by fuselineFloat(if (visible) 1f else 0f, motion.focusSpring(), label = "keyFocusLift")
     LaunchedEffect(target, visible) {
         // Glide from key to key; appear where the focus is (never fly in from somewhere else).
         if (!visible || shown < 0.5f || motion.reduced) rect.snapTo(target)
@@ -581,14 +601,14 @@ private val FunctionKeys = setOf(KeyKind.SHIFT, KeyKind.BACKSPACE, KeyKind.PAGE,
  * controller pressed it (the keyboard's [KeyboardState.pulse]).
  */
 @Composable
-private fun rememberKeyDip(state: KeyboardState, at: KeyPosition, held: Boolean): Animatable<Float, AnimationVector1D> {
+private fun rememberKeyDip(state: KeyboardState, at: KeyPosition, held: Boolean): FuselineValue<Float> {
     val motion = Fuse.motion
-    val dip = remember { Animatable(0f) }
+    val dip = remember { FuselineValue(0f) }
     val pulse = state.pulse
     // The last press this key has shown, so a press is shown once (and none on first appearing).
     val seen = remember { intArrayOf(pulse?.serial ?: -1) }
     LaunchedEffect(pulse, held, at) {
-        val down = tween<Float>(motion.ms(Durations.INSTANT) / 2, easing = Easings.Standard)
+        val down = tween(motion.ms(Durations.INSTANT) / 2, easing = Curves.Standard)
         if (held) {
             dip.animateTo(1f, down)
             return@LaunchedEffect
@@ -635,7 +655,7 @@ private fun KeyCap(
         else -> c.text.copy(alpha = if (dark) 0.115f else 0.11f)
     }
     val flash = pressed && state.touchMode && enabled
-    val face by animateColorAsState(
+    val face by fuselineColor(
         when {
             // A finger on a key lights it like the focus cap, only for as long as it is down.
             flash -> c.text
@@ -647,7 +667,7 @@ private fun KeyCap(
         motion.tween(Durations.INSTANT),
         label = "keyFace",
     )
-    val fg by animateColorAsState(
+    val fg by fuselineColor(
         when {
             selected || flash -> c.ink
             !enabled -> c.textFaint
@@ -663,8 +683,8 @@ private fun KeyCap(
         solid -> lerp(c.accent, Color.Black, 0.32f)
         else -> Color.Black.copy(alpha = if (dark) 0.3f else 0.1f)
     }
-    val lift by animateFloatAsState(if (selected) 1f else 0f, motion.focusSpring(), label = "keyLift")
-    val dim by animateFloatAsState(if (state.trackpad && key.kind != KeyKind.SPACE) 0.35f else 1f, motion.fade(Durations.FAST), label = "keyDim")
+    val lift by fuselineFloat(if (selected) 1f else 0f, motion.focusSpring(), label = "keyLift")
+    val dim by fuselineFloat(if (state.trackpad && key.kind != KeyKind.SPACE) 0.35f else 1f, motion.fade(Durations.FAST), label = "keyDim")
     val dip = rememberKeyDip(state, position, held = pressed)
     val light = Color.White.copy(alpha = if (dark) 0.09f else 0.6f)
     val radius = Fuse.geometry.control
@@ -856,7 +876,7 @@ fun KeyboardField(
     val shown = if (secret) "•".repeat(value.text.length) else value.text
     var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
     val scroll = rememberScrollState()
-    val blink = remember { Animatable(1f) }
+    val blink = remember { FuselineValue(1f) }
     LaunchedEffect(value.text, value.selection, focused) {
         blink.snapTo(1f)
         if (!focused) return@LaunchedEffect
@@ -870,12 +890,12 @@ fun KeyboardField(
     }
     val shape = RoundedCornerShape(Fuse.geometry.control)
     // The edge firms up while typing goes here, so it is clear where the keys write.
-    val edge by animateColorAsState(
+    val edge by fuselineColor(
         if (focused) c.text.copy(alpha = if (c.isDark) 0.2f else 0.26f) else c.hairline,
         motion.tween(Durations.FAST),
         label = "fieldEdge",
     )
-    val icon by animateColorAsState(if (focused) c.text else c.textMuted, motion.tween(Durations.FAST), label = "fieldIcon")
+    val icon by fuselineColor(if (focused) c.text else c.textMuted, motion.tween(Durations.FAST), label = "fieldIcon")
     Row(
         modifier
             .clip(shape)
@@ -941,15 +961,15 @@ fun KeyboardField(
         }
         if (onClear != null) {
             // The clear button pops in with the first character and out with the last.
-            AnimatedVisibility(
+            Appear(
                 visible = value.text.isNotEmpty(),
-                enter = fadeIn(motion.fade(Durations.FAST)) + if (motion.reduced) EnterTransition.None else scaleIn(motion.tween(Durations.FAST, Easings.Enter), initialScale = 0.6f),
-                exit = fadeOut(motion.fade(Durations.INSTANT)) + if (motion.reduced) ExitTransition.None else scaleOut(motion.tween(Durations.INSTANT, Easings.Exit), targetScale = 0.6f),
+                enter = fadeIn(motion.fade(Durations.FAST)) + if (motion.reduced) Enter.None else scaleIn(motion.tween(Durations.FAST, Curves.Enter), initialScale = 0.6f),
+                exit = fadeOut(motion.fade(Durations.INSTANT)) + if (motion.reduced) Exit.None else scaleOut(motion.tween(Durations.INSTANT, Curves.Exit), targetScale = 0.6f),
             ) {
                 val interaction = remember { MutableInteractionSource() }
                 val hovered by interaction.collectIsHoveredAsState()
                 val pressed by interaction.collectIsPressedAsState()
-                val fill by animateColorAsState(
+                val fill by fuselineColor(
                     c.text.copy(alpha = if (pressed) 0.28f else if (hovered) 0.22f else 0.16f),
                     motion.tween(Durations.INSTANT),
                     label = "clearFill",

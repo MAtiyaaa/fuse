@@ -1,21 +1,5 @@
 package io.github.matiyaaa.fuse.ui.shell.onboarding
 
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.SizeTransform
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -50,6 +34,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
@@ -77,11 +63,28 @@ import io.github.matiyaaa.fuse.ui.designsystem.input.NavEvent
 import io.github.matiyaaa.fuse.ui.designsystem.input.NavResult
 import io.github.matiyaaa.fuse.ui.designsystem.shape.PillShape
 import io.github.matiyaaa.fuse.ui.designsystem.sound.SoundCue
-import io.github.matiyaaa.fuse.ui.designsystem.theme.Durations
-import io.github.matiyaaa.fuse.ui.designsystem.theme.Easings
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
+import io.github.matiyaaa.fuse.ui.fuseline.Curves
+import io.github.matiyaaa.fuse.ui.fuseline.Durations
+import io.github.matiyaaa.fuse.ui.fuseline.Enter
+import io.github.matiyaaa.fuse.ui.fuseline.Exit
+import io.github.matiyaaa.fuse.ui.fuseline.FuselineValue
+import io.github.matiyaaa.fuse.ui.fuseline.RepeatMode
+import io.github.matiyaaa.fuse.ui.fuseline.SizeTransform
+import io.github.matiyaaa.fuse.ui.fuseline.Swap
+import io.github.matiyaaa.fuse.ui.fuseline.fadeIn
+import io.github.matiyaaa.fuse.ui.fuseline.fadeOut
+import io.github.matiyaaa.fuse.ui.fuseline.fuselineColor
+import io.github.matiyaaa.fuse.ui.fuseline.fuselineFloat
+import io.github.matiyaaa.fuse.ui.fuseline.fuselineScrollTo
+import io.github.matiyaaa.fuse.ui.fuseline.infiniteRepeatable
+import io.github.matiyaaa.fuse.ui.fuseline.rememberLoopClock
+import io.github.matiyaaa.fuse.ui.fuseline.slideInHorizontally
+import io.github.matiyaaa.fuse.ui.fuseline.slideOutHorizontally
+import io.github.matiyaaa.fuse.ui.fuseline.togetherWith
+import io.github.matiyaaa.fuse.ui.fuseline.tween
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.FocusZone
 import io.github.matiyaaa.fuse.ui.shell.app.FuseMark
@@ -124,6 +127,24 @@ class OnboardingState {
     var forward by mutableStateOf(true)
     var button by mutableIntStateOf(0)
     var total by mutableIntStateOf(1)
+
+    /** Where each of the step's buttons sits (in the window), so Up and Down move between lines of them. */
+    internal val buttonBounds = mutableMapOf<Int, androidx.compose.ui.geometry.Rect>()
+
+    /**
+     * The button above ([up]) or below the selected one, when the buttons wrap onto more than one
+     * line: the nearest on the closest line in that direction. Null when there is no line there.
+     */
+    internal fun buttonToward(up: Boolean, count: Int): Int? {
+        val from = buttonBounds[button] ?: return null
+        val others = (0 until count).mapNotNull { i -> buttonBounds[i]?.let { i to it } }.filter { (i, r) ->
+            i != button && if (up) r.center.y < from.top else r.center.y > from.bottom
+        }
+        if (others.isEmpty()) return null
+        val lineY = if (up) others.maxOf { it.second.center.y } else others.minOf { it.second.center.y }
+        return others.filter { kotlin.math.abs(it.second.center.y - lineY) < from.height / 2 }
+            .minByOrNull { kotlin.math.abs(it.second.center.x - from.center.x) }?.first
+    }
 
     /** Moves to the next step (steps call this from their buttons). */
     fun next() {
@@ -204,7 +225,9 @@ fun OnboardingScreen(app: AppState) {
             }
             NavAction.QUICK_MENU -> if (step.optional || app.dev.skipRequired) { go(1); NavResult.ACTIVATED } else NavResult.BLOCKED
             // Tabs and sections stay out of the way during setup.
-            NavAction.UP, NavAction.DOWN, NavAction.NEXT_SECTION, NavAction.PREVIOUS_SECTION, NavAction.SEARCH, NavAction.CONTEXT -> NavResult.BLOCKED
+            // Buttons that wrap onto two lines: Up and Down move between the lines.
+            NavAction.UP, NavAction.DOWN -> state.buttonToward(e.action == NavAction.UP, buttons.size)?.let { state.button = it; NavResult.MOVED } ?: NavResult.BLOCKED
+            NavAction.NEXT_SECTION, NavAction.PREVIOUS_SECTION, NavAction.SEARCH, NavAction.CONTEXT -> NavResult.BLOCKED
             else -> NavResult.IGNORED
         }
     }
@@ -230,7 +253,7 @@ fun OnboardingScreen(app: AppState) {
                 )
                 Spacer(Modifier.width(layout.railGap))
             }
-            AnimatedContent(
+            Swap(
                 targetState = state.index,
                 // Its fade draws each step in a layer of the step's own size, so the step is given
                 // the ring's room on every side (and padded back) or a selected button's ring would
@@ -240,10 +263,10 @@ fun OnboardingScreen(app: AppState) {
                     val dir = if (state.forward) 1 else -1
                     val shift = if (motion.reduced) 0 else travel
                     (
-                        slideInHorizontally(motion.tween(Durations.SLOW, Easings.Enter)) { shift * dir } +
-                            fadeIn(tween(motion.ms(Durations.BASE), delayMillis = motion.ms(Durations.FAST) / 2, easing = Easings.Fade))
+                        slideInHorizontally(motion.tween(Durations.SLOW, Curves.Enter)) { shift * dir } +
+                            fadeIn(tween(motion.ms(Durations.BASE), delayMillis = motion.ms(Durations.FAST) / 2, easing = Curves.Fade))
                         ) togetherWith
-                        (slideOutHorizontally(motion.tween(Durations.FAST, Easings.Exit)) { -shift / 2 * dir } + fadeOut(motion.fade(Durations.FAST))) using
+                        (slideOutHorizontally(motion.tween(Durations.FAST, Curves.Exit)) { -shift / 2 * dir } + fadeOut(motion.fade(Durations.FAST))) using
                         // Never clipped: a selected button's ring reaches past the step's edge.
                         SizeTransform(clip = false)
                 },
@@ -331,6 +354,7 @@ private fun StepView(app: AppState, step: Step, state: OnboardingState, isCurren
                         onClick = { state.button = i; if (a.enabled || app.dev.skipRequired) a.run() },
                         kind = if (a.primary) ButtonKind.PRIMARY else ButtonKind.SECONDARY,
                         enabled = a.enabled || app.dev.skipRequired,
+                        modifier = if (isCurrent) Modifier.onGloballyPositioned { state.buttonBounds[i] = it.boundsInRoot() } else Modifier,
                     )
                 }
             }
@@ -363,7 +387,7 @@ private fun StepView(app: AppState, step: Step, state: OnboardingState, isCurren
     } else {
         val scroll = rememberScrollState()
         // On a short screen the buttons sit at the bottom of what may not all fit: they stay in view.
-        LaunchedEffect(isCurrent, state.button, scroll.maxValue) { if (isCurrent && scroll.maxValue > 0) scroll.animateScrollTo(scroll.maxValue) }
+        LaunchedEffect(isCurrent, state.button, scroll.maxValue) { if (isCurrent && scroll.maxValue > 0) scroll.fuselineScrollTo(scroll.maxValue) }
         Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
             // A short screen gives the words more of the width, so the buttons keep to one line.
             Box(Modifier.weight(if (layout.short) 1.15f else 0.92f).fillMaxHeight(), contentAlignment = Alignment.CenterStart) {
@@ -404,7 +428,7 @@ private fun Eyebrow(step: Step) {
 @Composable
 private fun Stage(modifier: Modifier, lit: Boolean, content: @Composable BoxScope.() -> Unit) {
     val c = Fuse.colors
-    val glow by animateFloatAsState(if (lit) 1f else 0.4f, Fuse.motion.tween(Durations.SLOW), label = "stageGlow")
+    val glow by fuselineFloat(if (lit) 1f else 0.4f, Fuse.motion.tween(Durations.SLOW), label = "stageGlow")
     Box(
         modifier.drawBehind {
             val center = Offset(size.width * 0.5f, size.height * 0.56f)
@@ -463,7 +487,7 @@ internal fun StepEmblem(icon: ImageVector) {
     val c = Fuse.colors
     val ambient = Fuse.motion.ambient
     val breath = if (ambient) {
-        rememberInfiniteTransition(label = "emblem").animateFloat(0f, 1f, infiniteRepeatable(tween(3_200, easing = LinearEasing), RepeatMode.Reverse), label = "breath").value
+        rememberLoopClock(label = "emblem").animateFloat(0f, 1f, infiniteRepeatable(tween(3_200, easing = Curves.Linear), RepeatMode.Reverse), label = "breath").value
     } else {
         0.5f
     }
@@ -543,7 +567,7 @@ private fun RailStep(step: Step, index: Int, current: Int, last: Boolean, onPick
     val c = Fuse.colors
     val done = index < current
     val here = index == current
-    val tint by animateColorAsState(
+    val tint by fuselineColor(
         when {
             here -> c.text
             done -> c.textMuted
@@ -551,7 +575,7 @@ private fun RailStep(step: Step, index: Int, current: Int, last: Boolean, onPick
         },
         Fuse.motion.tween(Durations.BASE), label = "railTint",
     )
-    val lit by animateFloatAsState(if (here) 1f else 0f, Fuse.motion.tween(Durations.BASE), label = "railLit")
+    val lit by fuselineFloat(if (here) 1f else 0f, Fuse.motion.tween(Durations.BASE), label = "railLit")
     Row(
         Modifier
             .fillMaxWidth()
@@ -602,7 +626,7 @@ private fun SetupBackdrop(modifier: Modifier) {
     val c = Fuse.colors
     val ambient = Fuse.motion.ambient
     val drift = if (ambient) {
-        rememberInfiniteTransition(label = "setupDrift").animateFloat(0f, 1f, infiniteRepeatable(tween(14_000, easing = LinearEasing), RepeatMode.Reverse), label = "drift").value
+        rememberLoopClock(label = "setupDrift").animateFloat(0f, 1f, infiniteRepeatable(tween(14_000, easing = Curves.Linear), RepeatMode.Reverse), label = "drift").value
     } else {
         0.5f
     }
@@ -623,8 +647,8 @@ private fun SetupBackdrop(modifier: Modifier) {
 @Composable
 fun FuseLine(progress: Float, label: String, modifier: Modifier = Modifier) {
     val c = Fuse.colors
-    val p by animateFloatAsState(progress.coerceIn(0f, 1f), Fuse.motion.tween(Durations.DELIBERATE), label = "fuse")
-    val flicker = remember { Animatable(0.8f) }
+    val p by fuselineFloat(progress.coerceIn(0f, 1f), Fuse.motion.tween(Durations.DELIBERATE), label = "fuse")
+    val flicker = remember { FuselineValue(0.8f) }
     val ambient = Fuse.motion.ambient
     LaunchedEffect(Unit) {
         if (!ambient) return@LaunchedEffect

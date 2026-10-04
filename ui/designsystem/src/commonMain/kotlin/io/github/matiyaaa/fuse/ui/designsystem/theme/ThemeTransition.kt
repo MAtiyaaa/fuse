@@ -1,7 +1,5 @@
 package io.github.matiyaaa.fuse.ui.designsystem.theme
 
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -19,6 +17,11 @@ import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.graphics.rememberGraphicsLayer
 import io.github.matiyaaa.fuse.model.GlassSettings
 import io.github.matiyaaa.fuse.model.ThemeSpec
+import io.github.matiyaaa.fuse.ui.fuseline.Curves
+import io.github.matiyaaa.fuse.ui.fuseline.Durations
+import io.github.matiyaaa.fuse.ui.fuseline.FuselineValue
+import io.github.matiyaaa.fuse.ui.fuseline.animate
+import io.github.matiyaaa.fuse.ui.fuseline.tween
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.withTimeoutOrNull
@@ -38,7 +41,7 @@ private class ThemeCrossfade {
     /** The old look, while it fades out. */
     var picture by mutableStateOf<ImageBitmap?>(null)
 
-    val fade = Animatable(1f)
+    val fade = FuselineValue(1f)
 
     var drawn: CompletableDeferred<Unit>? = null
 }
@@ -88,7 +91,7 @@ internal fun ThemeTransition(
         crossfade.picture = picture
         crossfade.fade.snapTo(1f)
         try {
-            crossfade.fade.animateTo(0f, tween(Durations.THEME, easing = Easings.Fade))
+            crossfade.fade.animateTo(0f, tween(Durations.THEME, easing = Curves.Fade))
         } finally {
             crossfade.picture = null
         }

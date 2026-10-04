@@ -1,6 +1,5 @@
 package io.github.matiyaaa.fuse.ui.shell.home
 
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -57,13 +56,14 @@ import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
 import io.github.matiyaaa.fuse.ui.designsystem.shape.PillShape
 import io.github.matiyaaa.fuse.ui.designsystem.shape.squirclePath
-import io.github.matiyaaa.fuse.ui.designsystem.theme.Durations
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Elevation
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Radius
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
 import io.github.matiyaaa.fuse.ui.designsystem.theme.tabular
+import io.github.matiyaaa.fuse.ui.fuseline.Durations
+import io.github.matiyaaa.fuse.ui.fuseline.fuselineFloat
 
 /**
  * The board's empty places while it is arranged: every cell a quiet, rounded well, so where a widget
@@ -86,7 +86,7 @@ internal fun GridWells(
     val well = if (c.isDark) c.text.copy(alpha = 0.045f) else c.text.copy(alpha = 0.05f)
     val edge = c.text.copy(alpha = if (c.isDark) 0.09f else 0.1f)
     val accent = c.accent
-    val litTarget by animateFloatAsState(if (target != null) 1f else 0f, Fuse.motion.fade(Durations.FAST), label = "target")
+    val litTarget by fuselineFloat(if (target != null) 1f else 0f, Fuse.motion.fade(Durations.FAST), label = "target")
     Canvas(modifier) {
         if (shown <= 0.01f) return@Canvas
         val corner = minOf(geometry.cellW, geometry.cellH) * cornerFraction
@@ -113,27 +113,6 @@ internal fun GridWells(
                 )
             }
         }
-    }
-}
-
-/** A widget's size in cells, as a small solid chip: "2 by 1". */
-@Composable
-internal fun SizeChip(width: Int, height: Int, modifier: Modifier = Modifier, accent: Boolean = true) {
-    val c = Fuse.colors
-    Row(
-        modifier
-            .graphicsLayer {
-                shape = PillShape
-                clip = true
-                shadowElevation = Elevation.raised.shadow.toPx()
-            }
-            .background(if (accent) c.accent else c.surfaceOverlay)
-            .padding(horizontal = Space.m, vertical = Space.xs),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        FuseIcon(FuseIcons.Scaling, size = Size.iconS, tint = if (accent) c.onAccent else c.text)
-        Spacer(Modifier.width(Space.xs + Space.xxs))
-        FText("$width by $height", Fuse.type.label.tabular(), color = if (accent) c.onAccent else c.text, maxLines = 1)
     }
 }
 
@@ -187,7 +166,7 @@ internal fun BoxScope.ResizeHandles(
 @Composable
 private fun Grip(edge: ResizeEdge, lit: Boolean, enabled: Boolean) {
     val c = Fuse.colors
-    val tone by animateFloatAsState(if (lit) 1f else 0f, Fuse.motion.fade(Durations.FAST), label = "grip")
+    val tone by fuselineFloat(if (lit) 1f else 0f, Fuse.motion.fade(Durations.FAST), label = "grip")
     val color = lerp(c.onArt, c.accent, tone)
     val shadow = c.shadow
     val alpha = if (enabled) 1f else 0.35f
@@ -241,7 +220,6 @@ internal fun BoxScope.ResizeFrame(rect: BoardRect, columns: Int, shape: Shape) {
     Arrow(FuseIcons.ChevronDown, growDown, Modifier.align(Alignment.BottomCenter).offset(y = ARROW_OUT))
     Arrow(FuseIcons.ChevronLeft, rect.width > 1, Modifier.align(Alignment.CenterStart).offset(x = -ARROW_OUT))
     Arrow(FuseIcons.ChevronUp, rect.height > 1, Modifier.align(Alignment.TopCenter).offset(y = -ARROW_OUT))
-    SizeChip(rect.width, rect.height, Modifier.align(Alignment.TopEnd).offset(x = Space.s, y = -Space.l))
 }
 
 /** A direction a resize can go: a small accent disc with a chevron, or a quiet one when it can't. */
@@ -369,6 +347,21 @@ internal fun ArrangeBar(compact: Boolean, onAdd: () -> Unit, onDone: () -> Unit)
                 FuseButton("Add widget", selected = false, onClick = onAdd, kind = ButtonKind.SECONDARY, icon = FuseIcons.Plus)
                 FuseButton("Done", selected = false, onClick = onDone, kind = ButtonKind.PRIMARY)
             }
+        }
+    }
+}
+
+/**
+ * Undo and Reset, floating at the top right while Home is arranged: Undo takes back the last change
+ * made while arranging, Reset puts the board back as it came (after asking). [focused] is the one
+ * the controller is on (0 Undo, 1 Reset), reached by moving up past the board's top row.
+ */
+@Composable
+internal fun ArrangeTools(focused: Int?, canUndo: Boolean, onUndo: () -> Unit, onReset: () -> Unit) {
+    Panel(raised = true, shape = RoundedCornerShape(Radius.pill)) {
+        Row(Modifier.padding(Space.s), horizontalArrangement = Arrangement.spacedBy(Space.s), verticalAlignment = Alignment.CenterVertically) {
+            FuseButton("Undo", selected = focused == 0, onClick = onUndo, kind = ButtonKind.SECONDARY, icon = FuseIcons.Undo, enabled = canUndo)
+            FuseButton("Reset", selected = focused == 1, onClick = onReset, kind = ButtonKind.SECONDARY, icon = FuseIcons.RotateCcw)
         }
     }
 }

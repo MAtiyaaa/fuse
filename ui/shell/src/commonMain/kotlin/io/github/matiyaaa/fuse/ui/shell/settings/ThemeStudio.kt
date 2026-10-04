@@ -1,21 +1,7 @@
 package io.github.matiyaaa.fuse.ui.shell.settings
 
-import io.github.matiyaaa.fuse.ui.designsystem.theme.tabular
-import androidx.compose.ui.unit.dp
-import kotlin.math.roundToInt
-import kotlin.math.abs
-import io.github.matiyaaa.fuse.ui.shell.app.TextInputSpec
-import io.github.matiyaaa.fuse.model.ThemePalette
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.foundation.border
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -51,11 +37,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import kotlinx.coroutines.launch
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -69,6 +55,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import io.github.matiyaaa.fuse.model.AmbientSpec
 import io.github.matiyaaa.fuse.model.BackgroundStyle
 import io.github.matiyaaa.fuse.model.Contrast
@@ -79,6 +66,7 @@ import io.github.matiyaaa.fuse.model.MotionProfile
 import io.github.matiyaaa.fuse.model.NavAction
 import io.github.matiyaaa.fuse.model.SoundProfile
 import io.github.matiyaaa.fuse.model.ThemeCodec
+import io.github.matiyaaa.fuse.model.ThemePalette
 import io.github.matiyaaa.fuse.model.ThemeSpec
 import io.github.matiyaaa.fuse.model.Wallpaper
 import io.github.matiyaaa.fuse.model.WallpaperAlign
@@ -89,7 +77,6 @@ import io.github.matiyaaa.fuse.ui.designsystem.components.Panel
 import io.github.matiyaaa.fuse.ui.designsystem.components.Toggle
 import io.github.matiyaaa.fuse.ui.designsystem.components.fadingEdges
 import io.github.matiyaaa.fuse.ui.designsystem.effects.fuseClickable
-import io.github.matiyaaa.fuse.ui.designsystem.effects.rememberGlide
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
 import io.github.matiyaaa.fuse.ui.designsystem.icons.HintButton
@@ -97,8 +84,6 @@ import io.github.matiyaaa.fuse.ui.designsystem.input.InputLayer
 import io.github.matiyaaa.fuse.ui.designsystem.input.NavResult
 import io.github.matiyaaa.fuse.ui.designsystem.shape.SquircleShape
 import io.github.matiyaaa.fuse.ui.designsystem.shape.squirclePath
-import io.github.matiyaaa.fuse.ui.designsystem.theme.Durations
-import io.github.matiyaaa.fuse.ui.designsystem.theme.Easings
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.FuseGeometry
 import io.github.matiyaaa.fuse.ui.designsystem.theme.FuseTheme
@@ -106,8 +91,28 @@ import io.github.matiyaaa.fuse.ui.designsystem.theme.Radius
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
 import io.github.matiyaaa.fuse.ui.designsystem.theme.ThemePresets
+import io.github.matiyaaa.fuse.ui.designsystem.theme.tabular
+import io.github.matiyaaa.fuse.ui.fuseline.Curves
+import io.github.matiyaaa.fuse.ui.fuseline.Durations
+import io.github.matiyaaa.fuse.ui.fuseline.Enter
+import io.github.matiyaaa.fuse.ui.fuseline.Motion
+import io.github.matiyaaa.fuse.ui.fuseline.Swap
+import io.github.matiyaaa.fuse.ui.fuseline.animate
+import io.github.matiyaaa.fuse.ui.fuseline.fadeIn
+import io.github.matiyaaa.fuse.ui.fuseline.fadeOut
+import io.github.matiyaaa.fuse.ui.fuseline.fuselineFloat
+import io.github.matiyaaa.fuse.ui.fuseline.fuselineScrollTo
+import io.github.matiyaaa.fuse.ui.fuseline.rememberGlide
+import io.github.matiyaaa.fuse.ui.fuseline.slideInHorizontally
+import io.github.matiyaaa.fuse.ui.fuseline.slideOutHorizontally
+import io.github.matiyaaa.fuse.ui.fuseline.togetherWith
+import io.github.matiyaaa.fuse.ui.fuseline.tween
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.FocusZone
+import io.github.matiyaaa.fuse.ui.shell.app.TextInputSpec
+import kotlin.math.abs
+import kotlin.math.roundToInt
+import kotlinx.coroutines.launch
 
 /** A colour the studio offers for the accent, and the name it goes by (colour is never the only cue). */
 @Immutable
@@ -925,7 +930,7 @@ internal fun StudioPanel(
             top + height + margin > scroll.value + view -> top + height + margin - view
             else -> return@LaunchedEffect
         }
-        scroll.animateScrollTo(target.toInt().coerceIn(0, scroll.maxValue))
+        scroll.fuselineScrollTo(target.toInt().coerceIn(0, scroll.maxValue))
     }
     val glide = key(at != null) {
         rememberGlide(
@@ -937,7 +942,7 @@ internal fun StudioPanel(
     val accent = c.accent
     val corner = Fuse.geometry.control
     val outline = if (Fuse.look.highContrastFocus) c.focus else null
-    val shown by animateFloatAsState(if (at != null) 1f else 0f, Fuse.motion.fade(Durations.FAST), label = "studioHighlight")
+    val shown by fuselineFloat(if (at != null) 1f else 0f, Fuse.motion.fade(Durations.FAST), label = "studioHighlight")
 
     Column(modifier) {
         Panel(Modifier.fillMaxWidth().weight(1f, fill = false)) {
@@ -945,12 +950,12 @@ internal fun StudioPanel(
                 StepHeader(studio, compact) { app.focusZone = FocusZone.CONTENT; studio.go(it) }
                 // A step's rows slide in from the side it was reached from.
                 val motion = Fuse.motion
-                AnimatedContent(
+                Swap(
                     targetState = studio.step to studio.openColor,
                     transitionSpec = {
                         val shift = if (motion.reduced) 0 else 1
                         val dir = studio.direction
-                        (fadeIn(motion.fade(Durations.FAST)) + slideInHorizontally(motion.tween(Durations.BASE, Easings.Enter)) { it / 8 * dir * shift }) togetherWith
+                        (fadeIn(motion.fade(Durations.FAST)) + slideInHorizontally(motion.tween(Durations.BASE, Curves.Enter)) { it / 8 * dir * shift }) togetherWith
                             fadeOut(motion.fade(Durations.INSTANT))
                     },
                     label = "studioStep",
@@ -1066,7 +1071,7 @@ private fun StepHeader(studio: StudioState, compact: Boolean, onGo: (StudioStep)
             Row(horizontalArrangement = Arrangement.spacedBy(Space.xs), verticalAlignment = Alignment.CenterVertically) {
                 for (s in StudioStep.entries) {
                     val on = s == step
-                    val w by animateFloatAsState(if (on) 1f else 0f, Fuse.motion.value(), label = "stepDot")
+                    val w by fuselineFloat(if (on) 1f else 0f, Fuse.motion.value(), label = "stepDot")
                     Box(
                         Modifier
                             .height(6.dp)
@@ -1319,7 +1324,7 @@ private fun StepperShell(selected: Boolean, narrow: Boolean, onStep: (Int) -> Un
 @Composable
 private fun Gauge(value: Float, colors: List<Color>, narrow: Boolean) {
     val c = Fuse.colors
-    val v by animateFloatAsState(value.coerceIn(0f, 1f), Fuse.motion.value(), label = "gauge")
+    val v by fuselineFloat(value.coerceIn(0f, 1f), Fuse.motion.value(), label = "gauge")
     Spacer(
         Modifier.size(width = if (narrow) Space.x5 - Space.l else Space.x5 + Space.l, height = Size.iconS).drawBehind {
             val h = 6.dp.toPx()
@@ -1372,11 +1377,11 @@ private fun <T> Stepper(
     Row(verticalAlignment = Alignment.CenterVertically) {
         StepArrow(FuseIcons.ChevronLeft, selected, narrow, "Previous") { onStep(-1) }
         Box(Modifier.widthIn(min = if (narrow) Space.x5 - Space.l else Space.x5 + Space.xl), contentAlignment = Alignment.Center) {
-            AnimatedContent(
+            Swap(
                 targetState = value,
                 transitionSpec = {
                     val shift = if (motion.reduced) 0 else 1
-                    (fadeIn(motion.fade(Durations.FAST)) + slideInHorizontally(motion.tween(Durations.BASE, Easings.Enter)) { it / 4 * direction * shift }) togetherWith
+                    (fadeIn(motion.fade(Durations.FAST)) + slideInHorizontally(motion.tween(Durations.BASE, Curves.Enter)) { it / 4 * direction * shift }) togetherWith
                         (fadeOut(motion.fade(Durations.INSTANT)) + slideOutHorizontally(motion.exit(Durations.FAST)) { -it / 4 * direction * shift })
                 },
                 contentAlignment = Alignment.Center,
@@ -1390,7 +1395,7 @@ private fun <T> Stepper(
 @Composable
 private fun StepArrow(icon: ImageVector, selected: Boolean, narrow: Boolean, label: String, onClick: () -> Unit) {
     val c = Fuse.colors
-    val a by animateFloatAsState(if (selected) 1f else 0.45f, Fuse.motion.fade(Durations.FAST), label = "stepArrow")
+    val a by fuselineFloat(if (selected) 1f else 0.45f, Fuse.motion.fade(Durations.FAST), label = "stepArrow")
     Box(
         Modifier
             .size(if (narrow) Size.thumb else Size.touch)
@@ -1429,7 +1434,7 @@ private fun SwatchDisc(argb: Long, chosen: Boolean, modifier: Modifier = Modifie
     val c = Fuse.colors
     val color = Color(argb)
     val mark = Color(Contrast.bestOn(argb))
-    val k by animateFloatAsState(if (chosen) 1f else 0f, Fuse.motion.value(), label = "swatch")
+    val k by fuselineFloat(if (chosen) 1f else 0f, Fuse.motion.value(), label = "swatch")
     val ring = c.text
     val hair = c.hairlineStrong
     Box(

@@ -38,6 +38,7 @@ import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import io.github.matiyaaa.fuse.model.StoreVariant
 import io.github.matiyaaa.fuse.model.NavAction
 import io.github.matiyaaa.fuse.ui.designsystem.components.ButtonKind
 import io.github.matiyaaa.fuse.ui.designsystem.components.EmptyState
@@ -118,6 +119,12 @@ internal fun StoreContent(app: AppState, active: Boolean, topPadding: Dp) {
     LaunchedEffect(state.variant) { ops.open() }
     val variant = state.variant
     if (variant == null) {
+        // The editions differ only for a second screen: without one, Standard is simply the Store.
+        if (!app.platform.features.secondScreen) {
+            LaunchedEffect(Unit) { ops.chooseVariant(StoreVariant.STANDARD) }
+            StoreWaiting(app, state, active, topPadding + subTabsRoom())
+            return
+        }
         StoreSetup(app, state.recommended, active, topPadding + subTabsRoom())
         return
     }

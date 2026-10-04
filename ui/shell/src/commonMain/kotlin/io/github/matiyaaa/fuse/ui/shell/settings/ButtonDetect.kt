@@ -1,9 +1,5 @@
 package io.github.matiyaaa.fuse.ui.shell.settings
 
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -47,6 +43,10 @@ import io.github.matiyaaa.fuse.ui.designsystem.input.LocalInputRouter
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
+import io.github.matiyaaa.fuse.ui.fuseline.Swap
+import io.github.matiyaaa.fuse.ui.fuseline.fadeIn
+import io.github.matiyaaa.fuse.ui.fuseline.fadeOut
+import io.github.matiyaaa.fuse.ui.fuseline.togetherWith
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import kotlinx.coroutines.delay
 
@@ -132,7 +132,7 @@ fun ButtonDetectOverlay(app: AppState) {
         // As wide as it may be, but never wider than the screen less its margins.
         Panel(Modifier.padding(horizontal = Space.gutterCompact).widthIn(max = PANEL_MAX)) {
             Column(Modifier.padding(Space.xl), horizontalAlignment = Alignment.CenterHorizontally) {
-                AnimatedContent(stage, transitionSpec = { fadeIn(motion.fade(180)) togetherWith fadeOut(motion.fade(120)) }, label = "detect") { s ->
+                Swap(stage, transitionSpec = { fadeIn(motion.fade(180)) togetherWith fadeOut(motion.fade(120)) }, label = "detect") { s ->
                     Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
                         SectionLabel(
                             when (s) {

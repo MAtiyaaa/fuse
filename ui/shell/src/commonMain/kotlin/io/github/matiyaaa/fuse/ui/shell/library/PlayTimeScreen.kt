@@ -1,6 +1,5 @@
 package io.github.matiyaaa.fuse.ui.shell.library
 
-import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -44,6 +43,8 @@ import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
 import io.github.matiyaaa.fuse.ui.designsystem.theme.tabular
+import io.github.matiyaaa.fuse.ui.fuseline.FuselineValue
+import io.github.matiyaaa.fuse.ui.fuseline.tween
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.FocusZone
 import io.github.matiyaaa.fuse.ui.shell.app.Route
@@ -191,7 +192,7 @@ private fun Figure(icon: ImageVector, label: String, seconds: Long, modifier: Mo
 private fun DayBars(days: List<Long>, modifier: Modifier) {
     val c = Fuse.colors
     val motion = Fuse.motion
-    val grow = remember { Animatable(if (motion.reduced) 1f else 0f) }
+    val grow = remember { FuselineValue(if (motion.reduced) 1f else 0f) }
     LaunchedEffect(days.isNotEmpty()) {
         if (days.isNotEmpty() && !motion.reduced) grow.animateTo(1f, motion.tween(600))
     }

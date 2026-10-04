@@ -1,20 +1,5 @@
 package io.github.matiyaaa.fuse.ui.shell.app
 
-import kotlin.time.TimeSource
-import androidx.compose.animation.ExitTransition
-import androidx.compose.animation.EnterTransition
-import kotlinx.coroutines.flow.collectLatest
-import androidx.compose.runtime.snapshotFlow
-import androidx.compose.runtime.produceState
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.SizeTransform
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -23,22 +8,24 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import io.github.matiyaaa.fuse.model.BackgroundStyle
 import io.github.matiyaaa.fuse.model.Destination
@@ -50,14 +37,11 @@ import io.github.matiyaaa.fuse.ui.designsystem.background.AmbientBackground
 import io.github.matiyaaa.fuse.ui.designsystem.background.CrtOverlay
 import io.github.matiyaaa.fuse.ui.designsystem.components.HintBar
 import io.github.matiyaaa.fuse.ui.designsystem.components.ToastHost
+import io.github.matiyaaa.fuse.ui.designsystem.components.ToastKind
 import io.github.matiyaaa.fuse.ui.designsystem.components.rememberHintFlash
 import io.github.matiyaaa.fuse.ui.designsystem.effects.RevealScope
-import io.github.matiyaaa.fuse.ui.designsystem.icons.HintButton
-import io.github.matiyaaa.fuse.ui.shell.capture.CaptureController
-import io.github.matiyaaa.fuse.ui.shell.capture.CaptureOverlay
-import io.github.matiyaaa.fuse.ui.shell.capture.rememberRecordingTime
-import io.github.matiyaaa.fuse.ui.designsystem.components.ToastKind
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
+import io.github.matiyaaa.fuse.ui.designsystem.icons.HintButton
 import io.github.matiyaaa.fuse.ui.designsystem.input.InputFeedback
 import io.github.matiyaaa.fuse.ui.designsystem.input.InputLayer
 import io.github.matiyaaa.fuse.ui.designsystem.input.InputRouter
@@ -69,20 +53,34 @@ import io.github.matiyaaa.fuse.ui.designsystem.input.TextInput
 import io.github.matiyaaa.fuse.ui.designsystem.media.HeroBackdrop
 import io.github.matiyaaa.fuse.ui.designsystem.sound.LocalUiSounds
 import io.github.matiyaaa.fuse.ui.designsystem.sound.SoundCue
-import io.github.matiyaaa.fuse.ui.designsystem.theme.Durations
-import io.github.matiyaaa.fuse.ui.designsystem.theme.Easings
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.FuseTheme
 import io.github.matiyaaa.fuse.ui.designsystem.theme.GlyphConfig
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
 import io.github.matiyaaa.fuse.ui.designsystem.theme.TileMetrics
+import io.github.matiyaaa.fuse.ui.fuseline.Appear
+import io.github.matiyaaa.fuse.ui.fuseline.Curves
+import io.github.matiyaaa.fuse.ui.fuseline.Durations
+import io.github.matiyaaa.fuse.ui.fuseline.Enter
+import io.github.matiyaaa.fuse.ui.fuseline.Exit
+import io.github.matiyaaa.fuse.ui.fuseline.SizeTransform
+import io.github.matiyaaa.fuse.ui.fuseline.Swap
+import io.github.matiyaaa.fuse.ui.fuseline.fadeIn
+import io.github.matiyaaa.fuse.ui.fuseline.fadeOut
+import io.github.matiyaaa.fuse.ui.fuseline.slideInHorizontally
+import io.github.matiyaaa.fuse.ui.fuseline.slideOutHorizontally
+import io.github.matiyaaa.fuse.ui.fuseline.togetherWith
+import io.github.matiyaaa.fuse.ui.fuseline.tween
 import io.github.matiyaaa.fuse.ui.shell.apps.AppsScreen
+import io.github.matiyaaa.fuse.ui.shell.capture.CaptureController
+import io.github.matiyaaa.fuse.ui.shell.capture.CaptureOverlay
+import io.github.matiyaaa.fuse.ui.shell.capture.rememberRecordingTime
 import io.github.matiyaaa.fuse.ui.shell.cartridge.CartridgeScreen
+import io.github.matiyaaa.fuse.ui.shell.components.FrameTimeOverlay
 import io.github.matiyaaa.fuse.ui.shell.components.LocalGameArt
 import io.github.matiyaaa.fuse.ui.shell.components.LocalTileBorders
 import io.github.matiyaaa.fuse.ui.shell.components.LocalTileMetrics
-import io.github.matiyaaa.fuse.ui.shell.components.FrameTimeOverlay
 import io.github.matiyaaa.fuse.ui.shell.components.PerformanceOverlay
 import io.github.matiyaaa.fuse.ui.shell.components.TileBorders
 import io.github.matiyaaa.fuse.ui.shell.game.FolderBrowserScreen
@@ -104,11 +102,13 @@ import io.github.matiyaaa.fuse.ui.shell.store.FuseStore
 import io.github.matiyaaa.fuse.ui.shell.store.PhoneLinkControl
 import io.github.matiyaaa.fuse.ui.shell.store.UpdateState
 import io.github.matiyaaa.fuse.ui.shell.systems.SystemsScreen
+import kotlin.time.TimeSource
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
@@ -409,7 +409,7 @@ private fun Room(
             overlay = {
                 val src = hero?.video
                 if (player != null && src != null && playVideo) {
-                    AnimatedVisibility(videoReady, enter = fadeIn(Fuse.motion.fade(Durations.DELIBERATE)), exit = fadeOut(Fuse.motion.fade(Durations.FAST))) {
+                    Appear(videoReady, enter = fadeIn(Fuse.motion.fade(Durations.DELIBERATE)), exit = fadeOut(Fuse.motion.fade(Durations.FAST))) {
                         Box(Modifier.fillMaxSize())
                     }
                     Box(Modifier.fillMaxSize().graphicsLayer { alpha = if (videoReady) 1f else 0f }) {
@@ -443,23 +443,23 @@ private fun Pages(app: AppState, tabs: List<Destination>) {
     // When the next page arrives while the last one is still sliding in (a shoulder button tapped
     // again and again), it switches at once: stacking half-composed pages is what made quick runs lag.
     val lastSwitch = remember { arrayOf<TimeSource.Monotonic.ValueTimeMark?>(null) }
-    AnimatedContent(
+    Swap(
         targetState = nav.current,
         transitionSpec = {
             val now = TimeSource.Monotonic.markNow()
             val quick = lastSwitch[0]?.let { (now - it).inWholeMilliseconds < QUICK_SWITCH_MS } == true
             lastSwitch[0] = now
-            if (quick) return@AnimatedContent (EnterTransition.None togetherWith ExitTransition.None).using(SizeTransform(clip = false))
+            if (quick) return@Swap (Enter.None togetherWith Exit.None).using(SizeTransform(clip = false))
             val dir = when (nav.direction) {
                 NavDirection.FORWARD -> 1
                 NavDirection.BACK -> -1
                 NavDirection.LATERAL -> if (place(targetState) >= place(initialState)) 1 else -1
             }
             val shift = motion.slideFraction
-            val enter = fadeIn(tween(motion.ms(Durations.BASE), delayMillis = motion.ms(Durations.INSTANT) / 2, easing = Easings.Fade)) +
-                slideInHorizontally(motion.tween(Durations.BASE, Easings.Enter)) { (it * shift * dir).toInt() }
-            val exit = fadeOut(motion.tween(Durations.FAST, Easings.Standard)) +
-                slideOutHorizontally(motion.tween(Durations.FAST, Easings.Standard)) { (-it * shift * 0.5f * dir).toInt() }
+            val enter = fadeIn(tween(motion.ms(Durations.BASE), delayMillis = motion.ms(Durations.INSTANT) / 2, easing = Curves.Fade)) +
+                slideInHorizontally(motion.tween(Durations.BASE, Curves.Enter)) { (it * shift * dir).toInt() }
+            val exit = fadeOut(motion.tween(Durations.FAST, Curves.Standard)) +
+                slideOutHorizontally(motion.tween(Durations.FAST, Curves.Standard)) { (-it * shift * 0.5f * dir).toInt() }
             (enter togetherWith exit).using(SizeTransform(clip = false))
         },
         contentKey = { it },
@@ -568,7 +568,13 @@ private fun ShellInput(app: AppState) {
         // from them as they look: left to the last tab, and from Search right on to Settings.
         val page = hudPage(app.navigator.stack)
         when (e.action) {
-            NavAction.UP -> if (app.navigator.stack.size == 1) { app.focusZone = FocusZone.TABS; NavResult.MOVED } else NavResult.BLOCKED
+            // Up past the top of any page reaches the top line, a pushed page (a system, Search)
+            // included: on Search or Settings their own button is the one chosen.
+            NavAction.UP -> {
+                app.focusZone = FocusZone.TABS
+                app.hudButton = page
+                NavResult.MOVED
+            }
             NavAction.PREVIOUS_SECTION -> when (page) {
                 null -> cycle(-1)
                 else -> tabs.lastOrNull()?.let { app.selectTab(it); NavResult.MOVED } ?: NavResult.BLOCKED
@@ -602,14 +608,14 @@ private fun AppState.runHudButton(button: HudButton) = when (button) {
 @Composable
 private fun LaunchVeilView(app: AppState) {
     val veil = app.launching
-    AnimatedVisibility(
+    Appear(
         visible = veil != null,
         enter = fadeIn(Fuse.motion.fade(Durations.BASE)),
         exit = fadeOut(Fuse.motion.fade(Durations.SLOW)),
     ) {
         var shown by remember { mutableStateOf(veil) }
         if (veil != null) shown = veil
-        val v = shown ?: return@AnimatedVisibility
+        val v = shown ?: return@Appear
         LaunchVeilContent(v)
     }
 }

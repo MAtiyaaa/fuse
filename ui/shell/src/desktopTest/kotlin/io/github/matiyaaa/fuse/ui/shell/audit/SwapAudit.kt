@@ -1,0 +1,116 @@
+package io.github.matiyaaa.fuse.ui.shell.audit
+
+import io.github.matiyaaa.fuse.model.Destination
+import io.github.matiyaaa.fuse.model.DualScreenMode
+import io.github.matiyaaa.fuse.model.HomeLayoutConfig
+import io.github.matiyaaa.fuse.model.HomeMode
+import io.github.matiyaaa.fuse.model.PadButton
+
+/**
+ * What 0.2.7 changed, one quick pass each: Undo and Reset while arranging Home, the Library's
+ * gentler fold, the game page's time played as a stop of its own, the top line reached from a
+ * pushed page and from Search, Settings without a second screen, and the second screen over the
+ * main screen's background.
+ */
+internal fun AuditDriver.swapScreens() {
+    scenario("swap", "arranging home") {
+        useLibrary { it.copy(home = HomeLayoutConfig(mode = HomeMode.CHANNELS)) }
+        waitFor("Continue playing")
+        tap(PadButton.DPAD_LEFT)
+        hold(PadButton.A)
+        waitFor("Put down")
+        tap(PadButton.A)
+        // A change to take back: the chosen widget made wider while X is held.
+        router.press(PadButton.X, io.github.matiyaaa.fuse.ui.designsystem.input.InputSource.GAMEPAD)
+        settle(400)
+        tap(PadButton.DPAD_RIGHT)
+        router.release(PadButton.X, io.github.matiyaaa.fuse.ui.designsystem.input.InputSource.GAMEPAD)
+        settle(600)
+        shoot("arranging, Undo and Reset at the top right")
+        tap(PadButton.DPAD_UP, 4)
+        settle(400)
+        shoot("up past the top row reaches Undo")
+        tap(PadButton.A)
+        settle(600)
+        shoot("the move taken back")
+        tap(PadButton.DPAD_RIGHT)
+        tap(PadButton.A)
+        waitFor("Put Home back as it came?")
+        shoot("Reset asks first")
+        tap(PadButton.B)
+        tap(PadButton.B)
+    }
+
+    scenario("swap", "library folded") {
+        useLibrary()
+        tab(Destination.LIBRARY)
+        waitFor("All")
+        settle(800)
+        shoot("the library at rest")
+        tap(PadButton.DPAD_DOWN, 3)
+        settle(1_200)
+        shoot("folded: the stage one line, the tiles nearly their size")
+    }
+
+    scenario("swap", "system page up to the tabs") {
+        useLibrary()
+        tab(Destination.SYSTEMS)
+        waitFor("System options")
+        tap(PadButton.A)
+        settle(1_200)
+        tap(PadButton.DPAD_UP, 4)
+        settle(600)
+        shoot("up from a system's games reaches the top line")
+    }
+
+    scenario("swap", "search up to the tabs") {
+        useLibrary()
+        home()
+        tap(PadButton.Y)
+        waitFor("Games, systems, apps")
+        tap(PadButton.DPAD_RIGHT, 12)
+        settle(400)
+        shoot("right at the keys' edge stays on the keys")
+        tap(PadButton.DPAD_UP, 8)
+        settle(600)
+        shoot("up from the keys reaches Search in the top line")
+    }
+
+    scenario("swap", "time played on the game page") {
+        useLibrary()
+        openGame("Emberline Saga")
+        tap(PadButton.DPAD_DOWN)
+        settle(900)
+        shoot("time played chosen")
+        tap(PadButton.DPAD_DOWN, 6)
+        settle(900)
+        shoot("the details, every card in view")
+    }
+
+    scenario("swap", "screen settings without a second screen") {
+        useLibrary()
+        openSettings()
+        focusText("Screen and sound")
+        tap(PadButton.DPAD_RIGHT)
+        settle(600)
+        repeat(30) { tap(PadButton.DPAD_DOWN) }
+        settle(600)
+        shoot("no second screen is mentioned")
+    }
+}
+
+/** The second screen over the main screen's background, at its own size. */
+internal fun AuditDriver.swapCompanion() {
+    scenario("swap", "second screen background") {
+        // A theme with a drawn scene, so the room behind is there to see.
+        useLibrary { it.copy(themeId = "starlight") }
+        view = AuditView.Companion(libraryStore, platform, DualScreenMode.LIBRARY_COMPANION)
+        settle(1_500)
+        shoot("the main screen's room behind the second screen", 1_500)
+        libraryStore.updatePrefs { it.copy(display = it.display.copy(companionFollowsBackground = false)) }
+        settle(800)
+        shoot("turned off: its own dark backdrop")
+        libraryStore.updatePrefs { it.copy(display = it.display.copy(companionFollowsBackground = true)) }
+        useLibrary()
+    }
+}

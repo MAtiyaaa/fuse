@@ -159,7 +159,7 @@ private fun EditionCard(variant: StoreVariant, recommended: Boolean, selected: B
     // Everything here follows the theme: the accent lights the screens, the ink is the text colour.
     val accent = c.accent
     val shape = remember { SquircleShape.fraction(0.08f) }
-    val lit by androidx.compose.animation.core.animateFloatAsState(if (selected) 1f else 0f, Fuse.motion.focusSpring(), label = "edition")
+    val lit by io.github.matiyaaa.fuse.ui.fuseline.fuselineFloat(if (selected) 1f else 0f, Fuse.motion.focusSpring(), label = "edition")
     Tile(selected = selected, modifier = modifier, shape = shape, cornerFraction = 0.08f, glow = accent, maxGrow = 8.dp, onClick = onClick) {
         Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(c.surfaceRaised, c.surface))))
         Column(Modifier.fillMaxSize().padding(if (compact) Space.m else Space.l)) {

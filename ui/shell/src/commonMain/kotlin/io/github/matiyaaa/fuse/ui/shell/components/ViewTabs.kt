@@ -1,12 +1,5 @@
 package io.github.matiyaaa.fuse.ui.shell.components
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.expandHorizontally
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -47,13 +40,21 @@ import io.github.matiyaaa.fuse.model.CornerFamily
 import io.github.matiyaaa.fuse.ui.designsystem.components.FText
 import io.github.matiyaaa.fuse.ui.designsystem.components.fadingEdgesHorizontal
 import io.github.matiyaaa.fuse.ui.designsystem.effects.fuseClickable
-import io.github.matiyaaa.fuse.ui.designsystem.effects.rememberGlide
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
 import io.github.matiyaaa.fuse.ui.designsystem.shape.PillShape
-import io.github.matiyaaa.fuse.ui.designsystem.theme.Durations
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
+import io.github.matiyaaa.fuse.ui.fuseline.Appear
+import io.github.matiyaaa.fuse.ui.fuseline.Durations
+import io.github.matiyaaa.fuse.ui.fuseline.expandHorizontally
+import io.github.matiyaaa.fuse.ui.fuseline.fadeIn
+import io.github.matiyaaa.fuse.ui.fuseline.fadeOut
+import io.github.matiyaaa.fuse.ui.fuseline.fuselineColor
+import io.github.matiyaaa.fuse.ui.fuseline.fuselineFloat
+import io.github.matiyaaa.fuse.ui.fuseline.rememberGlide
+import io.github.matiyaaa.fuse.ui.fuseline.shrinkHorizontally
+import io.github.matiyaaa.fuse.ui.fuseline.tween
 
 /** One tab of [ViewTabs]. [warn] tints it as a warning; [badge] is a small count shown after the label. */
 data class ViewTab(
@@ -98,8 +99,8 @@ fun ViewTabs(
     val name = names[active]
     val centre = if (tab != null && name != null) with(density) { (tab.first + name).toDp() } else null
     val half = Size.sparkWidth / 2
-    val glide = centre?.let { rememberGlide(it - half, it + half) }
-    val lineAlpha by animateFloatAsState(if (centre != null) 1f else 0f, motion.fade(Durations.FAST), label = "tab line")
+    val glide = centre?.let { rememberGlide(it - half, it + half, active) }
+    val lineAlpha by fuselineFloat(if (centre != null) 1f else 0f, motion.fade(Durations.FAST), label = "tab line")
     val edge = with(density) { EDGE_ROOM.toPx() }
     val shown = focused ?: active
     LaunchedEffect(shown, bounds[shown]) {
@@ -165,7 +166,7 @@ private fun TabLabel(
 ) {
     val c = Fuse.colors
     val motion = Fuse.motion
-    val tint by animateColorAsState(
+    val tint by fuselineColor(
         when {
             tab.warn -> c.warning.copy(alpha = if (active || focused) 1f else WARN_REST)
             active || focused -> c.text
@@ -174,7 +175,7 @@ private fun TabLabel(
         motion.tween(Durations.FAST),
         label = "tab tint",
     )
-    val focus by animateFloatAsState(if (focused) 1f else 0f, motion.tween(Durations.FAST), label = "tab focus")
+    val focus by fuselineFloat(if (focused) 1f else 0f, motion.tween(Durations.FAST), label = "tab focus")
     val shape = rememberLineShape()
     // The name is placed inside the tab's padding, which its own position leaves out.
     val pad = with(LocalDensity.current) { TAB_PAD.toPx() }
@@ -196,7 +197,7 @@ private fun TabLabel(
             }
             FText(tab.label, Fuse.type.titleSmall, color = tint, maxLines = 1)
         }
-        AnimatedVisibility(
+        Appear(
             visible = tab.badge != null,
             enter = expandHorizontally(motion.enter(Durations.BASE)) + fadeIn(motion.fade(Durations.BASE)),
             exit = shrinkHorizontally(motion.exit(Durations.FAST)) + fadeOut(motion.fade(Durations.INSTANT)),
@@ -220,8 +221,8 @@ private fun TabLabel(
 fun CountPill(text: String, modifier: Modifier = Modifier, emphasised: Boolean = true) {
     val c = Fuse.colors
     val motion = Fuse.motion
-    val fill by animateColorAsState(c.text.copy(alpha = if (emphasised) COUNT_FILL_ON else COUNT_FILL), motion.tween(Durations.FAST), label = "count fill")
-    val tint by animateColorAsState(if (emphasised) c.text else c.textMuted, motion.tween(Durations.FAST), label = "count tint")
+    val fill by fuselineColor(c.text.copy(alpha = if (emphasised) COUNT_FILL_ON else COUNT_FILL), motion.tween(Durations.FAST), label = "count fill")
+    val tint by fuselineColor(if (emphasised) c.text else c.textMuted, motion.tween(Durations.FAST), label = "count tint")
     Box(
         modifier
             .drawBehind { drawRoundRect(fill, cornerRadius = CornerRadius(size.height / 2)) }

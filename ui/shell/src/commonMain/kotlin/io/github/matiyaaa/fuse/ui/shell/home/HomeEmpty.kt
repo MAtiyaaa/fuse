@@ -1,11 +1,5 @@
 package io.github.matiyaaa.fuse.ui.shell.home
 
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.animateIntAsState
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -63,8 +57,8 @@ import io.github.matiyaaa.fuse.ui.designsystem.effects.rememberReveal
 import io.github.matiyaaa.fuse.ui.designsystem.effects.reveal
 import io.github.matiyaaa.fuse.ui.designsystem.effects.shimmer
 import io.github.matiyaaa.fuse.ui.designsystem.effects.skeleton
-import io.github.matiyaaa.fuse.ui.designsystem.focus.packBoard
 import io.github.matiyaaa.fuse.ui.designsystem.focus.LinearSelection
+import io.github.matiyaaa.fuse.ui.designsystem.focus.packBoard
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
 import io.github.matiyaaa.fuse.ui.designsystem.icons.HintButton
@@ -73,13 +67,18 @@ import io.github.matiyaaa.fuse.ui.designsystem.input.NavResult
 import io.github.matiyaaa.fuse.ui.designsystem.media.ArtSlot
 import io.github.matiyaaa.fuse.ui.designsystem.media.GeneratedArt
 import io.github.matiyaaa.fuse.ui.designsystem.shape.SquircleShape
-import io.github.matiyaaa.fuse.ui.designsystem.theme.Easings
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Elevation
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
 import io.github.matiyaaa.fuse.ui.designsystem.theme.ambientOn
 import io.github.matiyaaa.fuse.ui.designsystem.theme.tabular
+import io.github.matiyaaa.fuse.ui.fuseline.Curves
+import io.github.matiyaaa.fuse.ui.fuseline.RepeatMode
+import io.github.matiyaaa.fuse.ui.fuseline.fuselineInt
+import io.github.matiyaaa.fuse.ui.fuseline.infiniteRepeatable
+import io.github.matiyaaa.fuse.ui.fuseline.rememberLoopClock
+import io.github.matiyaaa.fuse.ui.fuseline.tween
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.FocusZone
 import io.github.matiyaaa.fuse.ui.shell.app.Route
@@ -304,7 +303,7 @@ private fun StepRow(number: Int, title: String, detail: String?, now: Boolean) {
 @Composable
 private fun ScanCount(found: Int, path: String?, modifier: Modifier = Modifier) {
     val c = Fuse.colors
-    val shown by animateIntAsState(found, Fuse.motion.value(), label = "found")
+    val shown by fuselineInt(found, Fuse.motion.value(), label = "found")
     Column(modifier.widthIn(max = SCAN_BAR_MAX)) {
         Row {
             FText("$shown", Fuse.type.display.tabular(), maxLines = 1, modifier = Modifier.alignByBaseline())
@@ -331,8 +330,8 @@ private fun ShelfArt(kind: EmptyKind, reveal: Reveal, modifier: Modifier) {
     val glow = c.accent.copy(alpha = if (c.isDark) 0.16f else 0.12f)
     val ambient = Fuse.motion.ambientOn(Fuse.quality)
     val float = if (ambient) {
-        rememberInfiniteTransition(label = "shelf art").animateFloat(
-            0f, 1f, infiniteRepeatable(tween(FLOAT_MS, easing = Easings.Fade), RepeatMode.Reverse), label = "float",
+        rememberLoopClock(label = "shelf art").animateFloat(
+            0f, 1f, infiniteRepeatable(tween(FLOAT_MS, easing = Curves.Fade), RepeatMode.Reverse), label = "float",
         )
     } else null
     BoxWithConstraints(

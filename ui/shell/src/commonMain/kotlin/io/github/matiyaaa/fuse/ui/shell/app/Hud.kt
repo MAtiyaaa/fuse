@@ -1,17 +1,5 @@
 package io.github.matiyaaa.fuse.ui.shell.app
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.expandHorizontally
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
@@ -83,16 +71,27 @@ import io.github.matiyaaa.fuse.model.SystemStatus
 import io.github.matiyaaa.fuse.ui.designsystem.components.FText
 import io.github.matiyaaa.fuse.ui.designsystem.components.StatusCluster
 import io.github.matiyaaa.fuse.ui.designsystem.effects.fuseClickable
-import io.github.matiyaaa.fuse.ui.designsystem.effects.rememberGlide
 import io.github.matiyaaa.fuse.ui.designsystem.icons.ButtonGlyph
 import io.github.matiyaaa.fuse.ui.designsystem.icons.ButtonGlyphDefaults
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
 import io.github.matiyaaa.fuse.ui.designsystem.icons.HintButton
-import io.github.matiyaaa.fuse.ui.designsystem.theme.Durations
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
+import io.github.matiyaaa.fuse.ui.fuseline.Appear
+import io.github.matiyaaa.fuse.ui.fuseline.Curves
+import io.github.matiyaaa.fuse.ui.fuseline.Durations
+import io.github.matiyaaa.fuse.ui.fuseline.expandHorizontally
+import io.github.matiyaaa.fuse.ui.fuseline.fadeIn
+import io.github.matiyaaa.fuse.ui.fuseline.fadeOut
+import io.github.matiyaaa.fuse.ui.fuseline.fuselineColor
+import io.github.matiyaaa.fuse.ui.fuseline.fuselineFloat
+import io.github.matiyaaa.fuse.ui.fuseline.infiniteRepeatable
+import io.github.matiyaaa.fuse.ui.fuseline.rememberGlide
+import io.github.matiyaaa.fuse.ui.fuseline.rememberLoopClock
+import io.github.matiyaaa.fuse.ui.fuseline.shrinkHorizontally
+import io.github.matiyaaa.fuse.ui.fuseline.tween
 import kotlin.time.Clock
 import kotlinx.coroutines.delay
 import kotlinx.datetime.TimeZone
@@ -156,7 +155,7 @@ fun Hud(
             maxWidth < COMPACT -> StatusRoom.CLOCK
             else -> StatusRoom.ALL
         }
-        val glyphs by animateFloatAsState(if (tabsFocused) 1f else 0f, Fuse.motion.tween(Durations.FAST), label = "tab glyphs")
+        val glyphs by fuselineFloat(if (tabsFocused) 1f else 0f, Fuse.motion.tween(Durations.FAST), label = "tab glyphs")
         Row(
             Modifier.fillMaxSize().padding(horizontal = gutter),
             verticalAlignment = Alignment.CenterVertically,
@@ -251,7 +250,7 @@ fun Hud(
                 Box(Modifier.width(Size.divider).height(Size.iconM).background(Fuse.colors.hairlineStrong))
                 Spacer(Modifier.width(Space.xs))
                 val shape = rememberHudShape(insetX = false)
-                val statusFocus by animateFloatAsState(if (tabsFocused && focusedButton == HudButton.STATUS) 1f else 0f, Fuse.motion.tween(Durations.FAST), label = "statusFocus")
+                val statusFocus by fuselineFloat(if (tabsFocused && focusedButton == HudButton.STATUS) 1f else 0f, Fuse.motion.tween(Durations.FAST), label = "statusFocus")
                 Box(
                     Modifier
                         .height(Size.touch)
@@ -304,14 +303,17 @@ private fun Modifier.anchor(anchors: HudAnchors, key: Any): Modifier = onGloball
 /**
  * The accent bar under the active place. It glides between tabs (and to Search or Settings): the
  * leading edge first, the trailing one following, so it stretches a little toward where it goes,
- * never more than three bars long however far it travels. It snaps under Reduced motion.
+ * never more than three bars long however far it travels. While the same tab moves it follows it
+ * frame for frame instead of chasing it. It snaps under Reduced motion.
  */
 @Composable
 private fun BoxScope.ActiveMarker(anchors: HudAnchors, key: Any) {
     val at = anchors.centres[key] ?: return
     val centre = with(LocalDensity.current) { (at - anchors.lineX).toDp() }
     val half = Size.sparkWidth / 2
-    val glide = rememberGlide(centre - half, centre + half)
+    // Keyed by the place it marks: it glides when the place changes, and when that tab only moves
+    // (the carousel scrolling, a label opening beside it) it stays exactly under it.
+    val glide = rememberGlide(centre - half, centre + half, key)
     val accent = Fuse.colors.accent
     Spacer(
         Modifier.matchParentSize().drawBehind {
@@ -348,11 +350,11 @@ data class HudActivity(
 @Composable
 private fun HudActivityChip(a: HudActivity) {
     val c = Fuse.colors
-    val sweep by animateFloatAsState((a.progress ?: 0f).coerceIn(0f, 1f), Fuse.motion.value(), label = "activity")
+    val sweep by fuselineFloat((a.progress ?: 0f).coerceIn(0f, 1f), Fuse.motion.value(), label = "activity")
     // An unknown amount turns; under Reduced motion and in Low Power Mode it rests as a quarter arc.
     val turning = a.progress == null && !a.attention && !a.steady && !Fuse.motion.reduced && Fuse.quality.animatedBackground
     val angle = if (turning) {
-        rememberInfiniteTransition(label = "spin").animateFloat(0f, 360f, infiniteRepeatable(tween(1100, easing = LinearEasing)), label = "angle")
+        rememberLoopClock(label = "spin").animateFloat(0f, 360f, infiniteRepeatable(tween(1100, easing = Curves.Linear)), label = "angle")
     } else {
         null
     }
@@ -445,8 +447,8 @@ private fun HudIconButton(icon: ImageVector, label: String, focused: Boolean, ac
     val c = Fuse.colors
     val motion = Fuse.motion
     val shape = rememberHudShape(insetX = true)
-    val focus by animateFloatAsState(if (focused) 1f else 0f, motion.tween(Durations.FAST), label = "hudbtn")
-    val tint by animateColorAsState(if (focused || active) c.text else c.textMuted, motion.tween(Durations.FAST), label = "hudbtnTint")
+    val focus by fuselineFloat(if (focused) 1f else 0f, motion.tween(Durations.FAST), label = "hudbtn")
+    val tint by fuselineColor(if (focused || active) c.text else c.textMuted, motion.tween(Durations.FAST), label = "hudbtnTint")
     val fill = c.text.copy(alpha = if (c.isDark) 0.12f else 0.08f)
     Box(
         modifier
@@ -468,8 +470,8 @@ private fun Tab(label: String, icon: ImageVector, selected: Boolean, focused: Bo
     val c = Fuse.colors
     val motion = Fuse.motion
     val shape = rememberHudShape(insetX = false)
-    val tint by animateColorAsState(if (selected || focused) c.text else c.textMuted, motion.tween(Durations.FAST), label = "tab")
-    val focus by animateFloatAsState(if (focused) 1f else 0f, motion.tween(Durations.FAST), label = "tabFocus")
+    val tint by fuselineColor(if (selected || focused) c.text else c.textMuted, motion.tween(Durations.FAST), label = "tab")
+    val focus by fuselineFloat(if (focused) 1f else 0f, motion.tween(Durations.FAST), label = "tabFocus")
     val fill = c.text.copy(alpha = if (c.isDark) 0.12f else 0.08f)
     Row(
         modifier
@@ -481,7 +483,7 @@ private fun Tab(label: String, icon: ImageVector, selected: Boolean, focused: Bo
         verticalAlignment = Alignment.CenterVertically,
     ) {
         FuseIcon(icon, size = Size.iconM, tint = tint)
-        AnimatedVisibility(
+        Appear(
             visible = showLabel,
             enter = expandHorizontally(motion.tween(Durations.BASE)) + fadeIn(motion.fade(Durations.BASE)),
             exit = shrinkHorizontally(motion.tween(Durations.FAST)) + fadeOut(motion.fade(Durations.INSTANT)),
@@ -506,7 +508,7 @@ fun HudScrim(art: Boolean, modifier: Modifier = Modifier) {
     val c = Fuse.colors
     // Bright themes put dark text over art that is often dark at the top, so they need more.
     val full = if (c.isDark) 0.62f else 0.9f
-    val strength by animateFloatAsState(if (art) full else full * 0.5f, Fuse.motion.fade(Durations.SLOW), label = "hudScrim")
+    val strength by fuselineFloat(if (art) full else full * 0.5f, Fuse.motion.fade(Durations.SLOW), label = "hudScrim")
     val ink = c.ink
     Spacer(
         modifier

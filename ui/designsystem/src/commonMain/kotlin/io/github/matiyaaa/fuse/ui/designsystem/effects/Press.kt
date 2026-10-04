@@ -1,6 +1,5 @@
 package io.github.matiyaaa.fuse.ui.designsystem.effects
 
-import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.IndicationNodeFactory
 import androidx.compose.foundation.combinedClickable
@@ -31,16 +30,19 @@ import androidx.compose.ui.node.currentValueOf
 import androidx.compose.ui.node.invalidateDraw
 import androidx.compose.ui.semantics.Role
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
-import io.github.matiyaaa.fuse.ui.designsystem.theme.FuseMotion
 import io.github.matiyaaa.fuse.ui.designsystem.theme.LocalFuseLook
-import io.github.matiyaaa.fuse.ui.designsystem.theme.LocalFuseMotion
+import io.github.matiyaaa.fuse.ui.fuseline.Enter
+import io.github.matiyaaa.fuse.ui.fuseline.Exit
+import io.github.matiyaaa.fuse.ui.fuseline.FuselineMotion
+import io.github.matiyaaa.fuse.ui.fuseline.FuselineValue
+import io.github.matiyaaa.fuse.ui.fuseline.LocalFuselineMotion
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
 /**
  * Fuse's touch and mouse feedback, as an indication for any clickable:
  *
- * - **Press**: the element shrinks to [FuseMotion.pressScale] (about 96.5%) quickly and springs
+ * - **Press**: the element shrinks to [FuselineMotion.pressScale] (about 96.5%) quickly and springs
  *   back with a hint of overshoot when let go, like a key. A tap shorter than the press-in still
  *   shows the whole press. Under Reduced motion nothing scales, so give such elements a [shape]:
  *   the pressed tint then answers on its own.
@@ -121,7 +123,7 @@ fun Modifier.fuseClickable(
  */
 @Composable
 fun rememberPressProgress(interactionSource: InteractionSource): State<Float> {
-    val progress = remember { Animatable(0f) }
+    val progress = remember { FuselineValue(0f) }
     val motion by rememberUpdatedState(Fuse.motion)
     LaunchedEffect(interactionSource) {
         var held = 0
@@ -152,8 +154,8 @@ private class PressNode(
     private val scaleOnPress: Boolean,
 ) : Modifier.Node(), DrawModifierNode, CompositionLocalConsumerModifierNode {
 
-    private val press = Animatable(0f)
-    private val hover = Animatable(0f)
+    private val press = FuselineValue(0f)
+    private val hover = FuselineValue(0f)
     private var pressJob: Job? = null
     private var pressCount = 0
     private var hoverCount = 0
@@ -166,7 +168,7 @@ private class PressNode(
     override fun onAttach() {
         coroutineScope.launch {
             source.interactions.collect { interaction ->
-                val motion = currentValueOf(LocalFuseMotion)
+                val motion = currentValueOf(LocalFuselineMotion)
                 when (interaction) {
                     is PressInteraction.Press -> {
                         pressCount++
@@ -189,7 +191,7 @@ private class PressNode(
         }
     }
 
-    private fun release(motion: FuseMotion) {
+    private fun release(motion: FuselineMotion) {
         val down = pressJob
         coroutineScope.launch {
             // A quick tap still shows the whole press before springing back.
@@ -207,7 +209,7 @@ private class PressNode(
     override fun ContentDrawScope.draw() {
         val p = press.value
         val h = hover.value
-        val motion = currentValueOf(LocalFuseMotion)
+        val motion = currentValueOf(LocalFuselineMotion)
         val s = if (scaleOnPress) 1f - (1f - motion.pressScale) * p else 1f
         if (s == 1f) {
             drawContent()
