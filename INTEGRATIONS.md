@@ -44,14 +44,15 @@ and redact credentials from every error message (`redact()`, see
 | GitHub Releases | Nothing | A request for the latest release of Fuse or Cartridge, your IP address and the User-Agent with Fuse's version | Update checks (automatic check can be turned off) and "Install Cartridge"; downloads only after you confirm |
 | Store (Android): Obtainium Emulation Pack, app sources | Optionally a GitHub token | Requests for the pack's newest release on github.com, each app's releases (GitHub's API, or the download page the pack names), and the APK you install; your IP address and the User-Agent (or the one the pack sets for a download page) | The catalogue when the Store opens and is older than 6 hours, or on "Check now"; an app's releases when its page or card is shown, for installed apps a little after start (at most twice a day, can be turned off); downloads only when you press Install or Update |
 | RPCS3 compatibility list (rpcs3.net) | Nothing | A PS3 game's title id (for example `BLUS30443`), your IP address and the User-Agent | Only when you choose How It Runs in RPCS3 in a PS3 game's options; the answer is kept a week |
-| Cartridge | Nothing | Nothing leaves the device through Fuse: Fuse reads Cartridge's local status and opens it with deep links. "Upload to RomM" hands Cartridge a game's file paths; Cartridge uploads the files to your own RomM server only after you confirm there | On resume and when Cartridge reports a change; uploads only when you start one and confirm it in Cartridge |
+| Cartridge | Nothing | Nothing leaves the device through Fuse: Fuse reads Cartridge's local status and opens it with deep links. "Upload to RomM" hands Cartridge a game's file paths; Cartridge uploads the files to your own RomM server only after you confirm there. On Android Cartridge can read your play sessions (below) and adds their time to its own play sessions on your RomM server | On resume and when Cartridge reports a change; uploads only when you start one and confirm it in Cartridge; play sessions when Cartridge starts or comes back to the front |
 
 The "When" column describes the store that drives these clients (`DefaultFuseStore`). The "Sent by Fuse" column is what the clients in `core:integrations` can send.
 
 Never sent anywhere by Fuse: ROM files, your folder paths, your play time, your collections, device
 identifiers, analytics or crash reports, backups, diagnostics reports, or licence keys (a Vita
 package's zRIF goes only to Vita3K on your device). Fuse contains no telemetry. The one way a game's files
-leave the device is an upload you start and confirm, which Cartridge sends to your own RomM server.
+leave the device is an upload you start and confirm, which Cartridge sends to your own RomM server. Your play time
+leaves Fuse only to Cartridge on the same device, which may send it on to your own RomM server.
 
 **Filling art by itself.** With "Find art by itself" on (Settings, Art and details; on by
 default), Fuse runs "Fill missing art" on its own a few seconds after a scan and after a key is
@@ -475,6 +476,21 @@ Cartridge shows the game, its files and the console on RomM, and uploads only af
 Upload there: the first file into the console's folder, then, once RomM has added the game, the
 other files into its folder (RomM 5.3 or newer). Fuse shows the uploads it reports on the Cartridge
 tab, as a ring in the top line while one runs, and in a message when one is on RomM or failed.
+
+### Play sessions for Cartridge (Android)
+
+Fuse shares its play sessions with Cartridge, so Cartridge's last played, Continue playing, This week
+and play time count games started from Fuse (`services/PlayShareProvider.kt`). The contract is
+Cartridge's `docs/FUSE_BRIDGE.md` ("Play sessions from Fuse").
+
+- Read-only provider `content://io.github.matiyaaa.fuse.play/sessions?since=<epoch ms>`: one row
+  per session (`session_id`, `rom_id`, `path`, `launch_path`, `title`, `title_original`, `platform`,
+  `started_at`, `ended_at`, `source`), newest first, at most 2000. Nothing else of the library is
+  shared.
+- Behind `io.github.matiyaaa.fuse.permission.READ_PLAY` (normal). Fuse also grants Cartridge's
+  package read access at every start, since Android only grants a normal permission when the app
+  defining it was installed first.
+- The database is opened read-only per query; the provider never writes.
 
 ## GitHub Releases
 
