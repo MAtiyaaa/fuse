@@ -24,6 +24,11 @@
 - **Undo and Reset while arranging Home.** A small bar at the top right, reached by moving up past
   the top row or by touch: Undo takes back the last change, as many times as you like, and Reset
   (after asking) puts Home back as it came.
+- **Cartridge counts the games you play from Fuse.** On Android, Cartridge's Start screen
+  (Continue playing, Recently played, This week and play time) now includes the games started from
+  Fuse. Fuse shares only its play sessions (which game, when, and for how long), read-only and only
+  with Cartridge on the same device; Cartridge may add them to the play sessions on your own RomM
+  server.
 - **The second screen follows the main background.** The theme's scene or your own picture now
   shows behind the second screen too, so both screens look like one device. Settings, Screen and
   sound, Same background as the main screen turns it off.
