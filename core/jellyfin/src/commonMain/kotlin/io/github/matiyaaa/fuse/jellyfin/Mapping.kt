@@ -89,6 +89,7 @@ internal fun ItemDto.toMedia(): MediaItem {
         unplayed = userData?.unplayedItemCount,
         childCount = childCount ?: recursiveItemCount,
         poster = poster,
+        seriesPoster = if (t == MediaType.EPISODE || t == MediaType.SEASON) seriesId?.let { s -> art(ArtKind.PRIMARY, seriesPrimaryImageTag, s) } else null,
         backdrop = backdrops.firstOrNull(),
         backdrops = backdrops,
         logo = logo,

@@ -143,7 +143,7 @@ private const val WIDGET_CORNER = 0.6f
 fun ChannelHome(app: AppState) {
     val store = app.store
     val prefs by store.prefs.collectAsState()
-    val feed by store.library.home.collectAsState()
+    val feed by store.homeFeed.collectAsState()
     val cartridge by store.cartridge.status.collectAsState()
 
     // Without a single game, system or app the board would be a wall of empty widgets: Home says

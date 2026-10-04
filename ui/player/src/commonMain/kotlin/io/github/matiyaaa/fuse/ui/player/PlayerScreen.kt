@@ -31,6 +31,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
@@ -76,7 +77,7 @@ import io.github.matiyaaa.fuse.ui.fuseline.fuselineFloat
 import kotlinx.coroutines.delay
 
 /** The player's sheets. */
-private enum class PlayerSheet { AUDIO, SUBTITLES, SETTINGS }
+private enum class PlayerSheet { AUDIO, SUBTITLES, SETTINGS, QUEUE }
 
 /**
  * Fuse Player, full screen: the picture with Fuse's subtitles over it, and controls that come and
@@ -124,7 +125,8 @@ fun PlayerScreen(
     val waiting = session.resolving || state.status == EngineStatus.LOADING || state.status == EngineStatus.BUFFERING
     // Controls fade once nothing has happened for a while, unless paused, waiting or a sheet is up.
     LaunchedEffect(visible, touched, playing, sheet, waiting) {
-        if (visible && playing && sheet == null && !waiting && session.error == null) {
+        // Music keeps its controls: there is no picture for them to cover.
+        if (visible && playing && sheet == null && !waiting && session.error == null && session.isVideo) {
             delay(settings.controlsTimeoutMs)
             visible = false
             row = BUTTONS
@@ -149,6 +151,15 @@ fun PlayerScreen(
     }
     val tools = buildList {
         val src = session.source
+        if (!session.isVideo) {
+            if (session.queue.size > 1) add(PlayerButton("queue", FuseIcons.ListMusic, "Queue") { sheet = PlayerSheet.QUEUE })
+            add(PlayerButton(
+                "repeat",
+                if (session.repeat == RepeatMode.ONE) FuseIcons.Repeat1 else FuseIcons.Repeat,
+                when (session.repeat) { RepeatMode.OFF -> "Repeat"; RepeatMode.ALL -> "Repeating all"; RepeatMode.ONE -> "Repeating this song" },
+                active = session.repeat != RepeatMode.OFF,
+            ) { session.repeat = RepeatMode.entries[(session.repeat.ordinal + 1) % RepeatMode.entries.size] })
+        }
         if ((src?.audioTracks?.size ?: 0) > 1) add(PlayerButton("audio", FuseIcons.AudioLines, "Audio") { sheet = PlayerSheet.AUDIO })
         if (src?.subtitleTracks?.isNotEmpty() == true) add(PlayerButton("subs", if (src.subtitle == null) FuseIcons.CaptionsOff else FuseIcons.Captions, "Subtitles") { sheet = PlayerSheet.SUBTITLES })
         add(PlayerButton("settings", FuseIcons.Settings2, "Settings") { sheet = PlayerSheet.SETTINGS })
@@ -263,7 +274,7 @@ fun PlayerScreen(
                 SubtitleLayer(engineCues, session.fileCues, { session.positionMs() }, settings.copy(subtitleLift = maxOf(settings.subtitleLift, above)))
             }
         } else {
-            NowPlayingArt(session)
+            NowPlaying(session, narrow, short, if (visible) CONTROLS_HEIGHT else 0.dp)
         }
 
         // Taps: one shows or hides the controls; two on either side skip.
@@ -326,7 +337,7 @@ fun PlayerScreen(
 private const val TIMELINE = 0
 private const val BUTTONS = 1
 
-private class PlayerButton(val id: String, val icon: ImageVector, val label: String, val big: Boolean = false, val badge: String? = null, val onClick: () -> Unit)
+private class PlayerButton(val id: String, val icon: ImageVector, val label: String, val big: Boolean = false, val badge: String? = null, val active: Boolean = false, val onClick: () -> Unit)
 
 private class Flash(val text: String, val forward: Boolean)
 
@@ -358,8 +369,10 @@ private fun Controls(
             RoundButton(FuseIcons.ArrowLeft, "Back", selected = false, size = 44.dp, onClick = onExit)
             Spacer(Modifier.width(Space.l))
             Column(Modifier.weight(1f)) {
-                FText(item?.title.orEmpty(), (if (narrow) Fuse.type.titleSmall else Fuse.type.title), color = Color.White, maxLines = 1)
-                val sub = item?.subtitle
+                // Music names the song below; the top says where it comes from.
+                val title = if (session.isVideo) item?.title.orEmpty() else item?.album ?: "Music"
+                FText(title, (if (narrow) Fuse.type.titleSmall else Fuse.type.title), color = Color.White, maxLines = 1)
+                val sub = if (session.isVideo) item?.subtitle else if (session.queue.size > 1) "Song ${session.queueIndex + 1} of ${session.queue.size}" else item?.artist
                 if (sub != null) FText(sub, Fuse.type.label, color = Color.White.copy(alpha = 0.72f), maxLines = 1)
             }
             if (!narrow) {
@@ -384,7 +397,7 @@ private fun Controls(
                     Spacer(Modifier.weight(1f))
                     Row(horizontalArrangement = Arrangement.spacedBy(Space.s)) {
                         for ((i, b) in tools.withIndex()) {
-                            RoundButton(b.icon, b.label, selected = row == BUTTONS && focus == buttons.size + i, size = 40.dp) {
+                            RoundButton(b.icon, b.label, selected = row == BUTTONS && focus == buttons.size + i, size = 40.dp, active = b.active) {
                                 onFocusButton(buttons.size + i)
                                 b.onClick()
                             }
@@ -418,7 +431,7 @@ private fun Controls(
                 if (!narrow) {
                     Row(Modifier.align(Alignment.CenterEnd), horizontalArrangement = Arrangement.spacedBy(Space.s)) {
                         for ((i, b) in tools.withIndex()) {
-                            RoundButton(b.icon, b.label, selected = row == BUTTONS && focus == buttons.size + i, size = 44.dp) {
+                            RoundButton(b.icon, b.label, selected = row == BUTTONS && focus == buttons.size + i, size = 44.dp, active = b.active) {
                                 onFocusButton(buttons.size + i)
                                 b.onClick()
                             }
@@ -450,10 +463,11 @@ private fun TimeText(ms: () -> Long) {
  * small number in the icon (the seconds a skip button skips).
  */
 @Composable
-private fun RoundButton(icon: ImageVector, label: String, selected: Boolean, size: Dp, badge: String? = null, filled: Boolean = false, onClick: () -> Unit) {
+private fun RoundButton(icon: ImageVector, label: String, selected: Boolean, size: Dp, badge: String? = null, filled: Boolean = false, active: Boolean = false, onClick: () -> Unit) {
     val lift by fuselineFloat(if (selected) 1f else 0f, Fuse.motion.focusSpring(), label = "pb")
     val solid = selected || filled
-    val bg = if (solid) Color.White else Color.White.copy(alpha = 0.12f)
+    // A switched-on tool (repeat) reads brighter than the rest without looking selected.
+    val bg = if (solid) Color.White else Color.White.copy(alpha = if (active) 0.32f else 0.12f)
     val fg = if (solid) Color(0xFF101114) else Color.White
     Box(
         Modifier
@@ -541,18 +555,61 @@ private fun UpNextCard(session: PlayerSession, controls: Boolean, modifier: Modi
 }
 
 /** Music: the cover, large, with the title under it, over a blur of itself. */
+/**
+ * Music: the album art large, with the song, the artist and album, and what plays next. Wide, the
+ * art sits beside the words; narrow, above them. The room behind is the art again, blurred.
+ */
 @Composable
-private fun NowPlayingArt(session: PlayerSession) {
+private fun NowPlaying(session: PlayerSession, narrow: Boolean, short: Boolean, controls: Dp) {
     val item = session.item ?: return
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Artwork(item.backdrop ?: item.artwork, Modifier.fillMaxSize().graphicsLayer { alpha = 0.25f })
-        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(Space.l)) {
-            Box(Modifier.size(280.dp).clip(RoundedCornerShape(16.dp)).background(Color.White.copy(alpha = 0.08f))) {
-                Artwork(item.artwork, Modifier.fillMaxSize())
+    val upcoming = session.queue.drop(session.queueIndex + 1).take(if (short) 2 else 4)
+    Box(Modifier.fillMaxSize()) {
+        Artwork(item.backdrop ?: item.artwork, Modifier.fillMaxSize().blur(56.dp).graphicsLayer { alpha = 0.32f })
+        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.35f), Color.Black.copy(alpha = 0.7f)))))
+        BoxWithConstraints(Modifier.fillMaxSize().padding(top = if (short) 72.dp else 104.dp, bottom = maxOf(controls, Space.xl)).padding(horizontal = if (narrow) Space.l else Space.xxl)) {
+            val side = !narrow && maxWidth > maxHeight * 1.2f
+            val art = if (side) minOf(maxHeight, maxWidth * 0.4f, 440.dp) else minOf(maxWidth * 0.7f, maxHeight * 0.55f, 320.dp)
+            val cover = @Composable {
+                Box(Modifier.size(art).clip(RoundedCornerShape(art * 0.04f)).background(Color.White.copy(alpha = 0.08f))) {
+                    Artwork(item.artwork, Modifier.fillMaxSize())
+                }
             }
-            FText(item.title, Fuse.type.title, color = Color.White, maxLines = 1)
-            listOfNotNull(item.artist, item.album).joinToString("  ·  ").takeIf { it.isNotEmpty() }?.let {
-                FText(it, Fuse.type.body, color = Color.White.copy(alpha = 0.7f), maxLines = 1)
+            val words = @Composable { align: Alignment.Horizontal ->
+                Column(horizontalAlignment = align, verticalArrangement = Arrangement.spacedBy(Space.xs)) {
+                    FText("Now playing", Fuse.type.caption, color = Color.White.copy(alpha = 0.6f), maxLines = 1)
+                    FText(item.title, if (side) Fuse.type.display else Fuse.type.title, color = Color.White, maxLines = 2, align = if (side) TextAlign.Start else TextAlign.Center)
+                    listOfNotNull(item.artist, item.album).joinToString("  ·  ").takeIf { it.isNotEmpty() }?.let {
+                        FText(it, Fuse.type.body, color = Color.White.copy(alpha = 0.72f), maxLines = 1)
+                    }
+                    if (side && upcoming.isNotEmpty()) {
+                        Spacer(Modifier.height(Space.l))
+                        FText("Up next", Fuse.type.caption, color = Color.White.copy(alpha = 0.6f), maxLines = 1)
+                        for ((i, q) in upcoming.withIndex()) {
+                            Row(Modifier.padding(top = Space.xs), verticalAlignment = Alignment.CenterVertically) {
+                                FText("${session.queueIndex + i + 2}", Fuse.type.label.tabular(), color = Color.White.copy(alpha = 0.45f), maxLines = 1, modifier = Modifier.width(28.dp))
+                                Column(Modifier.weight(1f, fill = false)) {
+                                    FText(q.title, Fuse.type.label, color = Color.White.copy(alpha = 0.9f), maxLines = 1)
+                                    q.artist?.takeIf { it != item.artist }?.let { FText(it, Fuse.type.caption, color = Color.White.copy(alpha = 0.55f), maxLines = 1) }
+                                }
+                                q.durationMs?.let {
+                                    Spacer(Modifier.width(Space.m))
+                                    FText(clock(it), Fuse.type.caption.tabular(), color = Color.White.copy(alpha = 0.45f), maxLines = 1)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            if (side) {
+                Row(Modifier.align(Alignment.Center), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.xxl)) {
+                    cover()
+                    Box(Modifier.widthIn(max = 520.dp)) { words(Alignment.Start) }
+                }
+            } else {
+                Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(Space.l)) {
+                    cover()
+                    words(Alignment.CenterHorizontally)
+                }
             }
         }
     }
@@ -611,7 +668,7 @@ private fun Finished(session: PlayerSession, onExit: () -> Unit, modifier: Modif
 /** Audio, subtitles or settings, as a side sheet over the picture. */
 @Composable
 private fun PlayerSheetPanel(sheet: PlayerSheet, session: PlayerSession, inputEnabled: Boolean, onSettings: (PlayerSettings) -> Unit, onClose: () -> Unit, modifier: Modifier) {
-    val sel = remember(sheet) { LinearSelection() }
+    val sel = remember(sheet) { LinearSelection(if (sheet == PlayerSheet.QUEUE) session.queueIndex else 0) }
     val src = session.source
     val s = session.settings
     val rows: List<MenuAction> = when (sheet) {
@@ -629,6 +686,11 @@ private fun PlayerSheetPanel(sheet: PlayerSheet, session: PlayerSession, inputEn
                 ).joinToString("  ·  ").ifEmpty { null }
                 MenuAction("s${t.id}", t.label, detail = note, trailing = Trailing.Check(src?.subtitle == t.id)) { session.chooseSubtitle(t) }
             }
+        PlayerSheet.QUEUE -> session.queue.mapIndexed { i, q ->
+            MenuAction("q$i.${q.id}", q.title, detail = listOfNotNull(q.artist, q.durationMs?.let { clock(it) }).joinToString("  ·  ").ifEmpty { null }, trailing = if (i == session.queueIndex) Trailing.Badge("Playing") else Trailing.None) {
+                if (i != session.queueIndex) session.playQueueIndex(i)
+            }
+        }
         PlayerSheet.SETTINGS -> buildList {
             add(MenuAction("speed", "Speed", FuseIcons.Gauge, trailing = Trailing.Value(speedText(session.speed))) {
                 session.changeSpeed(next(SPEEDS, session.speed))
@@ -668,6 +730,7 @@ private fun PlayerSheetPanel(sheet: PlayerSheet, session: PlayerSession, inputEn
         PlayerSheet.AUDIO -> "Audio"
         PlayerSheet.SUBTITLES -> "Subtitles"
         PlayerSheet.SETTINGS -> "Settings"
+        PlayerSheet.QUEUE -> "Queue"
     }
     Panel(modifier.fillMaxHeight().width(380.dp).padding(Space.l)) {
         Column(Modifier.padding(Space.l)) {
@@ -675,6 +738,7 @@ private fun PlayerSheetPanel(sheet: PlayerSheet, session: PlayerSession, inputEn
                 PlayerSheet.AUDIO -> FuseIcons.AudioLines
                 PlayerSheet.SUBTITLES -> FuseIcons.Captions
                 PlayerSheet.SETTINGS -> FuseIcons.Settings2
+                PlayerSheet.QUEUE -> FuseIcons.ListMusic
             })
             MenuList(rows, sel, modifier = Modifier.weight(1f, fill = false), fill = false)
         }

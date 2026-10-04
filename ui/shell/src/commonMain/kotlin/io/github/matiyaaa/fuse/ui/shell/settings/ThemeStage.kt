@@ -154,7 +154,7 @@ internal data class StageScene(
 @Composable
 internal fun rememberStageScene(app: AppState): StageScene {
     val prefs by app.store.prefs.collectAsState()
-    val feed by app.store.library.home.collectAsState()
+    val feed by app.store.homeFeed.collectAsState()
     val platforms by app.store.library.platforms.collectAsState()
     val status by app.platform.status.collectAsState()
     val cartridge by app.store.cartridge.status.collectAsState()

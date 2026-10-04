@@ -78,6 +78,9 @@ fun WidgetKind.title(): String = when (this) {
     WidgetKind.CARTRIDGE_DOWNLOADS -> "Cartridge"
     WidgetKind.STORAGE -> "Storage"
     WidgetKind.CLOCK -> "Clock"
+    WidgetKind.JELLYFIN_CONTINUE -> "Continue watching"
+    WidgetKind.JELLYFIN_NEXT_UP -> "Next up"
+    WidgetKind.JELLYFIN_RECENTLY_ADDED -> "New on Jellyfin"
 }
 
 /**
@@ -104,6 +107,9 @@ fun buildShelves(widgets: List<HomeWidget>, feed: HomeFeed, achievementsOn: Bool
             WidgetKind.COLLECTIONS -> feed.collections.takeIf { it.isNotEmpty() }?.let { list ->
                 Shelf(w.id, w.kind.title(), ShelfStyle.COLLECTION, list.map { ShelfItem.Collection(it) }, listOf(w))
             }
+            WidgetKind.JELLYFIN_CONTINUE, WidgetKind.JELLYFIN_NEXT_UP, WidgetKind.JELLYFIN_RECENTLY_ADDED -> if (mediaItems(w.kind, feed).isNotEmpty()) {
+                Shelf(w.id, w.kind.title(), ShelfStyle.WIDGETS, listOf(ShelfItem.Widget(w.kind, WidgetSpan.WIDE)), listOf(w))
+            } else null
             WidgetKind.RECENT_ACHIEVEMENTS -> if (achievementsOn && feed.achievements?.recent?.isNotEmpty() == true) {
                 Shelf(w.id, w.kind.title(), ShelfStyle.WIDGETS, listOf(ShelfItem.Widget(w.kind, WidgetSpan.WIDE)), listOf(w))
             } else null

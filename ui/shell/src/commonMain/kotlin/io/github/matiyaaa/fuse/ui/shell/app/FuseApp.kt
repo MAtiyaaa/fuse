@@ -193,7 +193,7 @@ private fun FuseAppContent(
         }
     }
     app.navigator.forgetsTabs = !prefs.rememberPlace
-    val homeFeed by store.library.home.collectAsState()
+    val homeFeed by store.homeFeed.collectAsState()
     StandbyWatch(app, router, prefs.standbyMinutes) {
         app.intro || app.launching != null || homeFeed.playtime.currentGame != null || app.navigator.current == Route.Onboarding
     }
@@ -402,6 +402,8 @@ private fun FuseAppContent(
                     if (app.setupOpening) SetupOpening(onDone = { app.setupOpening = false })
                 }
                 }
+                // Fuse Player takes the whole screen, outside the margins and the ultrawide frame.
+                io.github.matiyaaa.fuse.ui.shell.jellyfin.MediaPlayerHost(app)
                 if (prefs.crt.enabled && quality.crtShader) CrtOverlay(prefs.crt)
             }
         }
@@ -667,6 +669,10 @@ private fun PushedPages(app: AppState, current: Route, direction: NavDirection, 
             is Route.GameContent -> io.github.matiyaaa.fuse.ui.shell.game.GameContentScreen(app, route.game)
             is Route.PickFile -> io.github.matiyaaa.fuse.ui.shell.files.FilePickerScreen(app, route.purpose, route.locate, route.licence)
             is Route.StoreApp -> io.github.matiyaaa.fuse.ui.shell.addons.StoreAppScreen(app, route.key)
+            is Route.MediaPage -> io.github.matiyaaa.fuse.ui.shell.jellyfin.MediaItemScreen(app, route.id)
+            is Route.MediaLibrary -> io.github.matiyaaa.fuse.ui.shell.jellyfin.MediaLibraryScreen(app, route.id, route.name, route.kind)
+            Route.MediaSearch -> io.github.matiyaaa.fuse.ui.shell.jellyfin.MediaSearchScreen(app)
+            Route.JellyfinSettings -> io.github.matiyaaa.fuse.ui.shell.jellyfin.JellyfinSettingsScreen(app)
                     is Route.Root -> Unit
                 }
             }
@@ -682,7 +688,7 @@ internal fun hudPage(stack: List<Route>): HudButton? {
     for (route in stack.asReversed()) {
         when (route) {
             Route.Search -> return HudButton.SEARCH
-            is Route.Settings, is Route.PlatformSettings, Route.Controls, Route.Licenses, is Route.ReleaseNotes, Route.Themes, Route.Storage, Route.PhoneLink ->
+            is Route.Settings, is Route.PlatformSettings, Route.Controls, Route.Licenses, is Route.ReleaseNotes, Route.Themes, Route.Storage, Route.PhoneLink, Route.JellyfinSettings ->
                 return HudButton.SETTINGS
             else -> Unit
         }
@@ -819,7 +825,7 @@ private fun rememberTileBorders(store: FuseStore): TileBorders {
 private fun MenuMusic(app: AppState, player: MenuMusicPlayer?) {
     player ?: return
     val prefs by app.store.prefs.collectAsState()
-    val home by app.store.library.home.collectAsState()
+    val home by app.store.homeFeed.collectAsState()
     val music = prefs.music
     // Shuffle: the song it picked and the ones it played lately, so none comes back too soon. A song
     // that ends picks the next; the player reports it from its own thread.

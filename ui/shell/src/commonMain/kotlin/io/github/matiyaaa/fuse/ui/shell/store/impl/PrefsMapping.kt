@@ -35,6 +35,7 @@ internal fun AppSettings.toUiPrefs(scoped: GlobalScoped): UiPrefs {
     val custom = appearance.customThemes.mapNotNull { it.spec() }
     val theme = resolveTheme(appearance.themeId, custom)
     return UiPrefs(
+        jellyfin = jellyfin,
         onboardingDone = onboarding.completed,
         themeId = theme.id,
         customThemes = custom,
@@ -180,6 +181,7 @@ internal fun AppSettings.withUiPrefs(prefs: UiPrefs): AppSettings {
         capture = capture.copy(combo = prefs.captureCombo, sound = prefs.captureSound),
         // What Fuse installed is kept as it is: only the Store writes it.
         store = store.copy(variant = prefs.storeVariant, autoCheck = prefs.storeAutoCheck),
+        jellyfin = prefs.jellyfin,
     )
 }
 

@@ -19,6 +19,7 @@ import io.github.matiyaaa.fuse.playback.AudioTrack
 import io.github.matiyaaa.fuse.playback.Capabilities
 import io.github.matiyaaa.fuse.playback.Chapter
 import io.github.matiyaaa.fuse.playback.Cue
+import io.github.matiyaaa.fuse.playback.MediaKind
 import io.github.matiyaaa.fuse.playback.PlayItem
 import io.github.matiyaaa.fuse.playback.PlayMethod
 import io.github.matiyaaa.fuse.playback.PlayRequest
@@ -85,6 +86,11 @@ internal object StillResolver : PlaybackResolver {
     override suspend fun next(item: PlayItem) = PlayItem("e4", "The Long Way Round", "Season 1, Episode 4", season = 1, episode = 4)
 }
 
+internal object MusicResolver : PlaybackResolver {
+    override suspend fun resolve(item: PlayItem, request: PlayRequest) =
+        PlaySource(url = "song", method = PlayMethod.DIRECT_PLAY, durationMs = item.durationMs, description = "FLAC, Stereo")
+}
+
 /**
  * Renders the player for looking at: `-Pfuse.player.renders=<dir>` writes PNGs there; without it
  * nothing runs. Phone, handheld and TV sizes; controls, a sheet, paused.
@@ -130,6 +136,55 @@ class PlayerRenders {
                     ImageIO.write(onRoot().captureToImage().toAwtImage(), "png", out)
                 }
             }
+            // Music: the album large with what plays next, and the queue.
+            val cover = albumCover()
+            for (state in listOf("music", "queue")) {
+                runDesktopComposeUiTest(px.first, px.second) {
+                    mainClock.autoAdvance = false
+                    val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
+                    val router = InputRouter(scope)
+                    val session = PlayerSession(scope) { StillEngine() }
+                    val songs = listOf("Departure Board", "Harbour Wall", "Night Ferry", "Signal Lamp", "Undertow", "Port Light", "Last Crossing").mapIndexed { i, t ->
+                        PlayItem("t$i", t, "Marlowe Vane", kind = MediaKind.AUDIO, durationMs = 180_000L + i * 23_000L, artwork = cover.path, album = "Night Ferry", artist = "Marlowe Vane")
+                    }
+                    session.start(songs[2], MusicResolver, 0, songs)
+                    setContent {
+                        CompositionLocalProvider(LocalDensity provides Density(density), LocalInputRouter provides router) {
+                            FuseTheme { PlayerScreen(session, onExit = {}) }
+                        }
+                    }
+                    mainClock.advanceTimeBy(600)
+                    if (state == "queue") {
+                        // Right from play: next, the forward skip... to the queue button.
+                        repeat(3) { router.dispatch(NavAction.RIGHT, InputSource.GAMEPAD) }
+                        router.dispatch(NavAction.SELECT, InputSource.GAMEPAD)
+                    }
+                    mainClock.advanceTimeBy(900)
+                    val out = File(dir, "$name-$state.png").apply { parentFile.mkdirs() }
+                    ImageIO.write(onRoot().captureToImage().toAwtImage(), "png", out)
+                }
+            }
         }
+    }
+
+    /** A square album cover drawn for the render: a night sea under a moon. */
+    private fun albumCover(): File {
+        val f = File(dir, "cover.png")
+        if (f.exists()) return f
+        val img = java.awt.image.BufferedImage(600, 600, java.awt.image.BufferedImage.TYPE_INT_RGB)
+        val g = img.createGraphics()
+        g.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING, java.awt.RenderingHints.VALUE_ANTIALIAS_ON)
+        g.paint = java.awt.GradientPaint(0f, 0f, java.awt.Color(0x24, 0x33, 0x5C), 0f, 600f, java.awt.Color(0x0B, 0x10, 0x20))
+        g.fillRect(0, 0, 600, 600)
+        g.color = java.awt.Color(0xF2, 0xE3, 0xC0)
+        g.fillOval(380, 90, 110, 110)
+        g.color = java.awt.Color(0x13, 0x1B, 0x33)
+        g.fillRect(0, 400, 600, 200)
+        g.color = java.awt.Color(0xF2, 0xE3, 0xC0, 90)
+        for (i in 0 until 8) g.fillRect(400 + (i % 3) * 8, 410 + i * 18, 70 - i * 6, 3)
+        g.dispose()
+        f.parentFile.mkdirs()
+        ImageIO.write(img, "png", f)
+        return f
     }
 }

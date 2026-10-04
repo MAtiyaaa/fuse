@@ -11,6 +11,8 @@ kotlin {
             api(projects.core.launch)
             api(projects.core.integrations)
             api(projects.core.data)
+            api(projects.core.jellyfin)
+            api(projects.ui.player)
             implementation(libs.coil.compose)
             implementation(libs.coil.network.ktor)
             implementation(libs.coil.svg)

@@ -42,6 +42,12 @@ sealed interface Route {
     /** An app's page in the Store, by its key in the catalogue. */
     data class StoreApp(val key: String) : Route
 
+    /** Jellyfin: its settings, an item's page, a library's grid, and Jellyfin's own search. */
+    data object JellyfinSettings : Route
+    data class MediaPage(val id: String) : Route
+    data class MediaLibrary(val id: String, val name: String, val kind: String? = null) : Route
+    data object MediaSearch : Route
+
     /** Where play time went: today, this week, this month, per day, per game and per system. */
     data object PlayTime : Route
     data object Themes : Route

@@ -72,6 +72,12 @@ interface FuseStore {
     /** The Store, where Fuse can install apps (Android); [AppStoreOps.None] elsewhere. */
     val appStore: AppStoreOps get() = AppStoreOps.None
 
+    /** Jellyfin, an addon; idle until it is turned on in Settings, Addons, Jellyfin. */
+    val jellyfin: io.github.matiyaaa.fuse.jellyfin.JellyfinService? get() = null
+
+    /** What Home shows: the library's feed, with Jellyfin's widgets when there are any. */
+    val homeFeed: kotlinx.coroutines.flow.StateFlow<HomeFeed> get() = library.home
+
     /** Games, updates, DLC and licences installed into RPCS3 and Vita3K by Fuse itself. */
     val content: ContentOps get() = ContentOps.None
 

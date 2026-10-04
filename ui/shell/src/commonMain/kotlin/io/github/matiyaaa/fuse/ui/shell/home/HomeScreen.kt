@@ -151,7 +151,7 @@ fun AppState.homeStyleActions(): List<MenuAction> {
 fun FlowHome(app: AppState) {
     val store = app.store
     val prefs by store.prefs.collectAsState()
-    val feed by store.library.home.collectAsState()
+    val feed by store.homeFeed.collectAsState()
     val cartridge by store.cartridge.status.collectAsState()
     val achievementsOn by store.achievements.configured.collectAsState()
     val shelves = remember(prefs.home, feed, achievementsOn) {

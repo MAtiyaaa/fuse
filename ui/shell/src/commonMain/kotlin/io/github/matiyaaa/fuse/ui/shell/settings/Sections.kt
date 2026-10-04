@@ -378,6 +378,9 @@ private fun widgetIcon(k: WidgetKind) = when (k) {
     WidgetKind.CARTRIDGE_DOWNLOADS -> io.github.matiyaaa.fuse.ui.designsystem.icons.FuseMarks.Cartridge
     WidgetKind.STORAGE -> FuseIcons.HardDrive
     WidgetKind.CLOCK -> FuseIcons.Clock
+    WidgetKind.JELLYFIN_CONTINUE -> FuseIcons.MonitorPlay
+    WidgetKind.JELLYFIN_NEXT_UP -> FuseIcons.SkipForward
+    WidgetKind.JELLYFIN_RECENTLY_ADDED -> FuseIcons.Film
 }
 
 @Composable

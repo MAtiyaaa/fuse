@@ -101,7 +101,7 @@ fun ShowcaseApp(store: FuseStore, platform: PlatformUi) {
         glass = prefs.glass,
         highContrastFocus = prefs.highContrastFocus,
     ) {
-        val home by store.library.home.collectAsState()
+        val home by store.homeFeed.collectAsState()
         val status by platform.status.collectAsState()
         val focus by Spotlight.focused.collectAsState()
         val systems by store.library.platforms.collectAsState()

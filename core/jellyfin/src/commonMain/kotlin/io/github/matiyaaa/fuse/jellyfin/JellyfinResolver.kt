@@ -15,8 +15,19 @@ import io.github.matiyaaa.fuse.playback.SubtitleTrack
 import io.ktor.http.URLBuilder
 import io.ktor.http.appendPathSegments
 
-/** The quality wanted on each route: the most the connection should carry, null for no limit. */
-data class JellyfinQuality(val localMaxBitrate: Long? = null, val remoteMaxBitrate: Long? = 20_000_000)
+/**
+ * What the user wants from a stream: the most each route should carry (null for no limit), and the
+ * sound and subtitle languages to pick when a title starts (ISO 639 codes, null for the server's
+ * choice). [subtitleMode] is DEFAULT (the server's choice), ALWAYS, FOREIGN (only when the sound
+ * isn't in the subtitle language), FORCED (signs and songs only) or OFF.
+ */
+data class JellyfinQuality(
+    val localMaxBitrate: Long? = null,
+    val remoteMaxBitrate: Long? = 20_000_000,
+    val audioLanguage: String? = null,
+    val subtitleLanguage: String? = null,
+    val subtitleMode: String = "DEFAULT",
+)
 
 /**
  * Jellyfin behind Fuse Player: asks the server how to play an item for this player
@@ -59,7 +70,44 @@ class JellyfinResolver(
         )
         info.errorCode?.let { throw JellyfinException(errorText(it), JellyfinException.Kind.SERVER) }
         val ms = info.mediaSources.firstOrNull() ?: throw JellyfinException("The server has nothing to play for this.", JellyfinException.Kind.SERVER)
+        // Starting fresh: the user's languages, when they differ from what the server picked, are
+        // asked for again so the server can prepare them (a subtitle drawn into the picture too).
+        if (request.failed == null && request.audioStreamIndex == null && request.subtitleStreamIndex == null) {
+            val (audio, sub) = preferredTracks(ms, q)
+            val serverSub = ms.defaultSubtitleStreamIndex?.takeIf { it >= 0 } ?: -1
+            if ((audio != null && audio != ms.defaultAudioStreamIndex) || (sub != null && sub != serverSub)) {
+                return resolve(item, request.copy(audioStreamIndex = audio ?: ms.defaultAudioStreamIndex, subtitleStreamIndex = sub ?: serverSub))
+            }
+        }
         return toSource(base, account, item, ms, info.playSessionId, request, request.capabilities)
+    }
+
+    /**
+     * The sound and subtitle streams the user's languages choose in [ms], or null for each where
+     * the server's own choice stands. A subtitle of -1 means none.
+     */
+    internal fun preferredTracks(ms: MediaSourceDto, q: JellyfinQuality): Pair<Int?, Int?> {
+        val streams = ms.mediaStreams.sortedBy { it.index }
+        val audios = streams.filter { it.type == "Audio" && !it.isExternal }
+        val subs = streams.filter { it.type == "Subtitle" }
+        val audioLang = q.audioLanguage?.lowercase()?.takeIf { it.isNotBlank() }
+        val subLang = q.subtitleLanguage?.lowercase()?.takeIf { it.isNotBlank() }
+        val audio = audioLang?.let { l -> audios.filter { sameLanguage(it.language, l) }.let { m -> m.firstOrNull { it.isDefault } ?: m.firstOrNull() } }
+        val playing = audio ?: audios.firstOrNull { it.index == ms.defaultAudioStreamIndex } ?: audios.firstOrNull()
+        fun inLang(list: List<MediaStreamDto>) = if (subLang == null) list.firstOrNull() else list.firstOrNull { sameLanguage(it.language, subLang) }
+        val sub: Int? = when (q.subtitleMode) {
+            "OFF" -> -1
+            "ALWAYS" -> (inLang(subs.filter { !it.isForced }) ?: inLang(subs))?.index
+            "FORCED" -> subs.filter { it.isForced }.let { forced ->
+                forced.firstOrNull { it.language != null && sameLanguage(it.language, playing?.language) } ?: inLang(forced) ?: forced.firstOrNull()
+            }?.index ?: -1
+            "FOREIGN" -> {
+                val own = subLang ?: audioLang
+                if (own != null && playing?.language != null && !sameLanguage(playing.language, own)) (inLang(subs.filter { !it.isForced }) ?: inLang(subs))?.index else -1
+            }
+            else -> null
+        }
+        return audio?.index to sub
     }
 
     internal fun toSource(base: String, account: Account, item: PlayItem, ms: MediaSourceDto, session: String?, request: PlayRequest, caps: Capabilities): PlaySource {
@@ -234,6 +282,21 @@ class JellyfinResolver(
     }
 
     companion object {
+        /** The ISO 639-2 languages with two codes (bibliographic and terminology), either way round. */
+        private val SAME = listOf(
+            "fre" to "fra", "ger" to "deu", "chi" to "zho", "cze" to "ces", "dut" to "nld", "per" to "fas", "gre" to "ell",
+            "rum" to "ron", "slo" to "slk", "alb" to "sqi", "arm" to "hye", "bur" to "mya", "geo" to "kat", "ice" to "isl",
+            "mac" to "mkd", "may" to "msa", "baq" to "eus", "wel" to "cym", "tib" to "bod",
+        ).flatMap { (a, b) -> listOf(a to b, b to a) }.toMap()
+
+        /** Whether two language codes name the same language. */
+        internal fun sameLanguage(a: String?, b: String?): Boolean {
+            if (a == null || b == null) return false
+            val x = a.lowercase()
+            val y = b.lowercase()
+            return x == y || SAME[x] == y
+        }
+
         /** Reasons that only mean the file is repackaged, not converted. */
         private val CONTAINER_ONLY = setOf("ContainerNotSupported")
     }

@@ -64,6 +64,8 @@ data class MediaItem(
     val unplayed: Int? = null,
     val childCount: Int? = null,
     val poster: JellyfinArt? = null,
+    /** An episode's or season's show poster, tall where the episode's own picture is wide. */
+    val seriesPoster: JellyfinArt? = null,
     val backdrop: JellyfinArt? = null,
     val backdrops: List<JellyfinArt> = emptyList(),
     val logo: JellyfinArt? = null,
@@ -126,6 +128,13 @@ data class MediaPage(val items: List<MediaItem>, val total: Int, val start: Int)
 
 /** A row on the Jellyfin home. */
 data class Shelf(val id: String, val title: String, val kind: ShelfKind, val items: List<MediaItem>, val libraryId: String? = null)
+
+/** What Home's Jellyfin widgets show. */
+data class MediaFeed(
+    val continueWatching: List<MediaItem> = emptyList(),
+    val nextUp: List<MediaItem> = emptyList(),
+    val recentlyAdded: List<MediaItem> = emptyList(),
+)
 
 enum class ShelfKind { CONTINUE, NEXT_UP, LATEST, LIBRARY, FAVORITES, COLLECTIONS, MUSIC }
 

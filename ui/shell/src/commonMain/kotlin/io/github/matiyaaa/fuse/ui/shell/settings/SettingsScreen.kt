@@ -140,6 +140,7 @@ val settingsSections: List<SettingsSection> = listOf(
         available = { it.store.appStore.supported }, group = CONNECTIONS,
     ),
     SettingsSection("accounts", "Accounts", FuseIcons.CircleUser, "RetroAchievements, Cartridge, Phone Link", ::accountsRows, group = CONNECTIONS),
+    SettingsSection("addons", "Addons", FuseIcons.Blocks, "Jellyfin: your films, shows and music", ::addonsRows, group = CONNECTIONS, status = ::addonsStatus),
     SettingsSection("health", "System health", FuseIcons.HeartPulse, "What needs attention, and a bug report", ::healthRows, group = GENERAL, status = ::healthStatus),
     SettingsSection("storage", "Storage and backups", FuseIcons.HardDrive, "File access, drives, backup and restore", ::storageAndBackupRows, group = GENERAL),
     SettingsSection("about", "About", FuseIcons.Info, "Updates, privacy, licences, setup", ::aboutRows, group = GENERAL, status = ::aboutStatus),

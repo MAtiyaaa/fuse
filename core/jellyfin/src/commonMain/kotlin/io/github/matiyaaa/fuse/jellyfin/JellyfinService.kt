@@ -3,6 +3,8 @@ package io.github.matiyaaa.fuse.jellyfin
 import io.github.matiyaaa.fuse.data.settings.SecretStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -60,6 +62,11 @@ class JellyfinService(
 ) {
     private val stateFlow = MutableStateFlow(JellyfinState())
     val state: StateFlow<JellyfinState> = stateFlow
+
+    private val revisionFlow = MutableStateFlow(0)
+
+    /** Goes up whenever what the server would answer has changed (played, marked, signed in or out). */
+    val revision: StateFlow<Int> = revisionFlow
 
     private val cache = ResponseCache(disk, clock)
     private val lock = Mutex()
@@ -126,6 +133,7 @@ class JellyfinService(
                     saveAccount(account)
                     stateFlow.update { it.copy(account = account, route = route, base = base, offline = false, authRequired = false, serverName = info.name, serverVersion = info.version) }
                     cache.clear()
+                    revisionFlow.update { it + 1 }
                     return@runCatching account
                 } catch (e: JellyfinException) {
                     last = e
@@ -145,6 +153,7 @@ class JellyfinService(
         for (k in listOf(TOKEN, USER_ID, USER_NAME, SERVER_ID, SERVER_NAME)) secrets.remove(k)
         cache.clear()
         stateFlow.update { JellyfinState(enabled = it.enabled) }
+        revisionFlow.update { it + 1 }
     }
 
     /** The route to use now and the account, or an error the screens can show. */
@@ -253,12 +262,7 @@ class JellyfinService(
             runCatching { client.nextUp(base, a) }.getOrNull()?.takeIf { it.isNotEmpty() }?.let { add(Shelf("nextup", "Next up", ShelfKind.NEXT_UP, it)) }
             for (v in views) {
                 val kind = v.library
-                val title = when (kind) {
-                    LibraryKind.MOVIES -> "New in ${v.name}"
-                    LibraryKind.SHOWS -> "New in ${v.name}"
-                    LibraryKind.MUSIC -> "New in ${v.name}"
-                    else -> "New in ${v.name}"
-                }
+                val title = "New in ${v.name}"
                 if (kind == LibraryKind.COLLECTIONS) continue
                 val items = runCatching { client.latest(base, a, v.id, limit = 20) }.getOrNull().orEmpty()
                 if (items.isNotEmpty()) add(Shelf("latest.${v.id}", title, if (kind == LibraryKind.MUSIC) ShelfKind.MUSIC else ShelfKind.LATEST, items, v.id))
@@ -269,6 +273,16 @@ class JellyfinService(
                 runCatching { client.query(base, a, parentId = c.id, limit = 30) }.getOrNull()?.items?.takeIf { it.isNotEmpty() }
                     ?.let { add(Shelf("collections", "Collections", ShelfKind.COLLECTIONS, it, c.id)) }
             }
+        }
+    }
+
+    /** For Home's widgets: what to continue, what's next, and the newest films and episodes. */
+    suspend fun widgetFeed(): MediaFeed = call { b, a ->
+        coroutineScope {
+            val resume = async { runCatching { client.resume(b, a) }.getOrDefault(emptyList()) }
+            val next = async { runCatching { client.nextUp(b, a) }.getOrDefault(emptyList()) }
+            val latest = async { runCatching { client.latest(b, a, null, limit = 16, types = "Movie,Series,Episode") }.getOrDefault(emptyList()) }
+            MediaFeed(resume.await(), next.await(), latest.await())
         }
     }
 
@@ -303,18 +317,25 @@ class JellyfinService(
 
     /** Jellyfin-only search, grouped the way the search page shows it. */
     suspend fun search(term: String): Map<MediaType, List<MediaItem>> = call { b, a ->
-        client.query(b, a, types = "Movie,Series,Episode,BoxSet,MusicAlbum,MusicArtist,Audio,Person", search = term, limit = 60, sort = MediaSort.NAME)
-            .items.groupBy { it.type }
+        coroutineScope {
+            val items = async { client.query(b, a, types = "Movie,Series,Episode,BoxSet,MusicAlbum,Audio", search = term, limit = 80, sort = MediaSort.NAME).items }
+            // People and artists aren't items to the server: each has its own search.
+            val people = async { runCatching { client.persons(b, a, term) }.getOrDefault(emptyList()) }
+            val artists = async { runCatching { client.artists(b, a, null, limit = 30, search = term).items }.getOrDefault(emptyList()) }
+            (items.await() + artists.await() + people.await()).groupBy { it.type }
+        }
     }
 
     suspend fun setFavorite(id: String, favorite: Boolean) = call { b, a ->
         client.setFavorite(b, a, id, favorite)
         cache.invalidate { true }
+        revisionFlow.update { it + 1 }
     }
 
     suspend fun setPlayed(id: String, played: Boolean) = call { b, a ->
         client.setPlayed(b, a, id, played)
         cache.invalidate { true }
+        revisionFlow.update { it + 1 }
     }
 
     /** A picture's URL on the route in use (or the last one, offline: the image cache answers). */
@@ -324,7 +345,10 @@ class JellyfinService(
     }
 
     /** After playing: what was watched has changed, so pages ask again. */
-    suspend fun changed() = cache.invalidate { true }
+    suspend fun changed() {
+        cache.invalidate { true }
+        revisionFlow.update { it + 1 }
+    }
 
     companion object {
         const val TOKEN = "jellyfin.token"

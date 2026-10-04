@@ -90,7 +90,7 @@ private val WidePage = 600.dp
 @Composable
 internal fun StatusPage(store: FuseStore, platform: PlatformUi, status: SystemStatus) {
     val metrics by platform.performance.collectAsState()
-    val home by store.library.home.collectAsState()
+    val home by store.homeFeed.collectAsState()
     val gauges = remember(metrics, status, home.storage) { statusGauges(metrics, status, home.storage) }
     val batteryTemp = metrics.firstOrNull { it.key == "battery_temp" }?.value
     val playing = home.playtime.currentGame

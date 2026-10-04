@@ -47,11 +47,47 @@ data class AppSettings(
     val updates: UpdateSettings = UpdateSettings(),
     val capture: CaptureSettings = CaptureSettings(),
     val store: StoreSettings = StoreSettings(),
+    val jellyfin: JellyfinSettings = JellyfinSettings(),
 ) {
     companion object {
         const val CURRENT_VERSION = 2
     }
 }
+
+/**
+ * Jellyfin, an addon (Settings, Addons, Jellyfin): off until turned on. How Fuse reaches the
+ * server, what it prefers to hear and read, and how Fuse Player behaves. The sign-in itself is in
+ * the secret store, never here.
+ */
+@Serializable
+data class JellyfinSettings(
+    val enabled: Boolean = false,
+    /** "AUTO", "LOCAL" or "REMOTE". */
+    val mode: String = "AUTO",
+    val localAddress: String = "",
+    val remoteAddress: String = "",
+    /** ISO 639 codes ("eng", "jpn"); empty follows the server's defaults. */
+    val audioLanguage: String = "",
+    val subtitleLanguage: String = "",
+    /** "DEFAULT" (the server's choice), "ALWAYS", "FOREIGN" (when the sound isn't in your language), "FORCED" or "OFF". */
+    val subtitleMode: String = "DEFAULT",
+    val subtitleScale: Float = 1f,
+    val subtitleLift: Float = 0f,
+    val subtitleBackground: Boolean = false,
+    /** The most each route should carry, in bits per second; 0 for no limit. */
+    val localMaxBitrate: Long = 0,
+    val remoteMaxBitrate: Long = 20_000_000,
+    val hardwareDecoding: Boolean = true,
+    val autoplayNext: Boolean = true,
+    val seekSeconds: Int = 10,
+    val controlsTimeoutSeconds: Int = 4,
+    val rememberSpeed: Boolean = false,
+    val speed: Float = 1f,
+    /** The other screen while playing: "REMOTE" (controls and art) or "OFF". */
+    val playerCompanion: String = "REMOTE",
+    /** The other screen while browsing: "DETAILS", "MINIMAL" or "OFF". */
+    val browsingCompanion: String = "DETAILS",
+)
 
 /**
  * The Store (Android): which edition of the Obtainium Emulation Pack it follows (null until the

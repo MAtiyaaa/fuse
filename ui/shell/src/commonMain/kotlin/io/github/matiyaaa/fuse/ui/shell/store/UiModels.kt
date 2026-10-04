@@ -161,6 +161,8 @@ data class HomeFeed(
     val playtime: PlaytimeSummary = PlaytimeSummary(),
     val achievements: AchievementsFeed? = null,
     val storage: StorageSummary? = null,
+    /** Jellyfin's Home widgets, empty while Jellyfin is off or no widget of it is on Home. */
+    val media: io.github.matiyaaa.fuse.jellyfin.MediaFeed = io.github.matiyaaa.fuse.jellyfin.MediaFeed(),
 )
 
 @Immutable

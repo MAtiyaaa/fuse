@@ -159,6 +159,12 @@ class UiAudit {
 
     @Test fun phoneTypingV() = audit(AuditSize.V) { phoneTypingScreens() }
 
+    @Test fun jellyfinM() = audit(AuditSize.M) { jellyfinScreens() }
+
+    @Test fun jellyfinH() = audit(AuditSize.H) { jellyfinScreens() }
+
+    @Test fun jellyfinV() = audit(AuditSize.V) { jellyfinScreens() }
+
     @Test fun storageM() = audit(AuditSize.M) { storageScreens() }
 
     @Test fun storageH() = audit(AuditSize.H) { storageScreens() }

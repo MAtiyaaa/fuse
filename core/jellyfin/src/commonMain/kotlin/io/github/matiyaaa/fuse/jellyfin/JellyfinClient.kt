@@ -174,15 +174,20 @@ class JellyfinClient(private val http: HttpClient, val device: DeviceInfo) {
         return all.getOrNull(i - 1) to all.getOrNull(i + 1)
     }
 
-    suspend fun artists(base: String, a: Account, parentId: String?, start: Int = 0, limit: Int = 60): MediaPage =
-        items(base, a, "Artists/AlbumArtists", buildMap {
+    suspend fun artists(base: String, a: Account, parentId: String?, start: Int = 0, limit: Int = 60, search: String? = null): MediaPage =
+        items(base, a, if (search == null) "Artists/AlbumArtists" else "Artists", buildMap {
             put("userId", a.userId)
             parentId?.let { put("parentId", it) }
+            search?.let { put("searchTerm", it) }
             put("startIndex", "$start")
             put("limit", "$limit")
             put("sortBy", "SortName")
             put("fields", LIST_FIELDS)
         })
+
+    /** People (cast and crew) whose name matches [search]. */
+    suspend fun persons(base: String, a: Account, search: String, limit: Int = 30): List<MediaItem> =
+        items(base, a, "Persons", mapOf("userId" to a.userId, "searchTerm" to search, "limit" to "$limit", "fields" to LIST_FIELDS)).items
 
     suspend fun albumTracks(base: String, a: Account, albumId: String): List<MediaItem> =
         items(base, a, "Items", mapOf("userId" to a.userId, "parentId" to albumId, "sortBy" to "ParentIndexNumber,IndexNumber,SortName", "fields" to "$LIST_FIELDS,MediaSources")).items

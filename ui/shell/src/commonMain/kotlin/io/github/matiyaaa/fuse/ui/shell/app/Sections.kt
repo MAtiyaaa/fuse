@@ -13,14 +13,14 @@ import io.github.matiyaaa.fuse.ui.shell.store.UiPrefs
 
 /**
  * How Fuse's sections present themselves on this device. This is the one place that decides the
- * one difference between platforms: where Fuse has its Store (Android), the Cartridge section is
- * **Addons**, holding Cartridge and the Store; everywhere else it is **Cartridge**, as it always
- * was. The section keeps its saved identity ([Destination.CARTRIDGE]) either way, so a tab order or
+ * one difference between platforms: where Fuse has its Store (Android), or Jellyfin is turned on,
+ * the Cartridge section is **Addons**, holding Cartridge, the Store and Jellyfin; everywhere else it
+ * is **Cartridge**, as it always was. The section keeps its saved identity ([Destination.CARTRIDGE]) either way, so a tab order or
  * a hidden tab carries over unchanged.
  */
 @Immutable
 class Sections(
-    /** True where the Cartridge section is Addons (the Store exists here). */
+    /** True where the Cartridge section is Addons (the Store exists here, or Jellyfin is on). */
     val addons: Boolean,
 ) {
     fun label(d: Destination): String = when (d) {
@@ -57,7 +57,7 @@ class Sections(
 }
 
 /** How this device presents its sections (see [Sections]). */
-internal val AppState.sections: Sections get() = Sections(addons = store.appStore.supported)
+internal val AppState.sections: Sections get() = Sections(addons = store.appStore.supported || (store.jellyfin != null && store.prefs.value.jellyfin.enabled))
 
 /** The tabs shown in the top line: Home first, then the user's order, each offered and present here. */
 @Composable
@@ -69,7 +69,13 @@ internal fun rememberTabs(app: AppState, prefs: UiPrefs): List<Destination> {
 }
 
 /** Which part of Addons is showing. */
-enum class AddonsPart { CARTRIDGE, STORE }
+enum class AddonsPart { CARTRIDGE, STORE, JELLYFIN }
+
+/** Opens Jellyfin in Addons. */
+internal fun AppState.openJellyfin() {
+    addonsPart = AddonsPart.JELLYFIN
+    selectTab(Destination.CARTRIDGE)
+}
 
 /** Opens Cartridge: its own section, or the Cartridge part of Addons. */
 internal fun AppState.openCartridge() {

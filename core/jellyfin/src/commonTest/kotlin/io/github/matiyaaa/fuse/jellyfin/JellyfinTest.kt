@@ -221,6 +221,43 @@ class JellyfinTest {
     }
 
     @Test
+    fun languagesPickTracksAndAskTheServerAgainOnlyWhenTheyDiffer() = runTest {
+        val server = FakeServer()
+        val scope = CoroutineScope(SupervisorJob())
+        val s = service(server, MemorySecrets(), scope)
+        s.configure(true, JellyfinConnection(ConnectionMode.REMOTE, remoteAddress = "media.example.com"))
+        s.signIn("pat", "pw").getOrThrow()
+        val answer = """{"PlaySessionId":"ps1","MediaSources":[{"Id":"ms1","Container":"mkv","SupportsDirectPlay":true,
+          "DefaultAudioStreamIndex":1,"DefaultSubtitleStreamIndex":-1,"MediaStreams":[
+          {"Type":"Video","Index":0,"Codec":"h264"},
+          {"Type":"Audio","Index":1,"Codec":"aac","Language":"jpn","IsDefault":true},
+          {"Type":"Audio","Index":2,"Codec":"aac","Language":"eng"},
+          {"Type":"Subtitle","Index":3,"Codec":"srt","Language":"eng","IsForced":true,"IsTextSubtitleStream":true},
+          {"Type":"Subtitle","Index":4,"Codec":"srt","Language":"eng","IsTextSubtitleStream":true}]}]}"""
+        server.routes = { r -> if (r.url.encodedPath.endsWith("/PlaybackInfo")) 200 to answer else null }
+        val ms = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }.decodeFromString(PlaybackInfoDto.serializer(), answer).mediaSources.first()
+        fun pick(q: JellyfinQuality) = JellyfinResolver(s) { q }.preferredTracks(ms, q)
+        // Nothing set: the server's choice stands.
+        assertEquals(null to null, pick(JellyfinQuality()))
+        // English sound, and the full English subtitles only when the sound is foreign.
+        assertEquals(2 to -1, pick(JellyfinQuality(audioLanguage = "eng", subtitleMode = "FOREIGN")))
+        assertEquals(null to 4, pick(JellyfinQuality(subtitleLanguage = "eng", subtitleMode = "FOREIGN")))
+        assertEquals(null to 4, pick(JellyfinQuality(subtitleLanguage = "eng", subtitleMode = "ALWAYS")))
+        assertEquals(null to 3, pick(JellyfinQuality(subtitleMode = "FORCED")))
+        assertEquals(null to -1, pick(JellyfinQuality(subtitleMode = "OFF")))
+
+        val before = server.requests.count { it.url.encodedPath.endsWith("/PlaybackInfo") }
+        val src = JellyfinResolver(s) { JellyfinQuality(audioLanguage = "eng", subtitleLanguage = "eng", subtitleMode = "ALWAYS") }
+            .resolve(PlayItem("m1", "Spirited Away"), PlayRequest(capabilities = caps))
+        assertEquals(2, server.requests.count { it.url.encodedPath.endsWith("/PlaybackInfo") } - before)
+        val again = (server.requests.last { it.url.encodedPath.endsWith("/PlaybackInfo") }.body as TextContent).text
+        assertTrue("\"AudioStreamIndex\":2" in again && "\"SubtitleStreamIndex\":4" in again, again.take(400))
+        assertEquals("2", src.audio)
+        assertEquals("4", src.subtitle)
+        scope.cancel()
+    }
+
+    @Test
     fun typedAddressesBecomeUrls() {
         assertEquals(listOf("https://media.example.com", "http://media.example.com"), JellyfinClient.candidates("media.example.com/"))
         assertEquals(listOf("http://192.168.1.5:8096", "https://192.168.1.5"), JellyfinClient.candidates("192.168.1.5"))

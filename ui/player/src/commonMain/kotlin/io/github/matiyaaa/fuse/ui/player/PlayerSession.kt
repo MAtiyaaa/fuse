@@ -70,6 +70,9 @@ class PlayerSession(
     var upNext by mutableStateOf<PlayItem?>(null)
         private set
 
+    /** For music: play the queue once, round and round, or the one song again. */
+    var repeat by mutableStateOf(RepeatMode.OFF)
+
     /** A stream is being asked for: the player shows its spinner. */
     var resolving by mutableStateOf(false)
         private set
@@ -198,6 +201,15 @@ class PlayerSession(
         val src = source ?: return
         report(PlaybackEvent.Stopped(i, src, durationMs() ?: positionMs(), finished = true))
         reporter?.cancel()
+        if (i.kind == MediaKind.AUDIO && repeat == RepeatMode.ONE) {
+            open(i, 0)
+            return
+        }
+        if (i.kind == MediaKind.AUDIO && repeat == RepeatMode.ALL && queue.size > 1 && queueIndex == queue.lastIndex) {
+            queueIndex = 0
+            open(queue.first(), 0)
+            return
+        }
         val next = upNext
         if (next != null && (settings.autoplayNext || i.kind == MediaKind.AUDIO)) {
             if (queue.size > 1) queueIndex = (queueIndex + 1).coerceAtMost(queue.lastIndex)
@@ -431,3 +443,6 @@ object FusePlayer {
         }
     }
 }
+
+/** How music repeats: not at all, the whole queue, or the one song. */
+enum class RepeatMode { OFF, ALL, ONE }

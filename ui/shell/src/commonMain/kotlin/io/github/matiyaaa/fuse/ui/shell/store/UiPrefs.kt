@@ -22,6 +22,8 @@ import io.github.matiyaaa.fuse.ui.designsystem.theme.ThemePresets
  */
 @Immutable
 data class UiPrefs(
+    /** Jellyfin, an addon: off until turned on in Settings, Addons, Jellyfin. */
+    val jellyfin: io.github.matiyaaa.fuse.data.settings.JellyfinSettings = io.github.matiyaaa.fuse.data.settings.JellyfinSettings(),
     val onboardingDone: Boolean = false,
     val themeId: String = "fuse",
     val motion: MotionProfile? = null,

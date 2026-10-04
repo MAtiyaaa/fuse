@@ -117,6 +117,9 @@ class AppState(
     var textInput by mutableStateOf<TextInputSpec?>(null)
     var choice by mutableStateOf<ChoiceSpec?>(null)
 
+    /** Fuse Player is open over everything (Jellyfin). */
+    var playerOpen by mutableStateOf(false)
+
     /** The code for typing on a phone is showing (the keyboard's phone key). */
     var phoneTyping by mutableStateOf(false)
     var reorder by mutableStateOf<ReorderSpec?>(null)
