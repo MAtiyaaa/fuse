@@ -1,6 +1,6 @@
-# Fuseline
+# Fuseline by Fuse
 
-Fuseline is Fuse's animation engine. It is named after the line of a fuse, the wire in Fuse's
+Fuseline by Fuse is Fuse's animation engine. It is named after the line of a fuse, the wire in Fuse's
 logo that carries the spark. Every animation in Fuse runs on it, from a focus lift to the
 setup's opening sequence.
 
@@ -71,6 +71,42 @@ val play = rememberTimelinePlayer(intro, reduced = Fuse.motion.reduced)
 Canvas(Modifier.fillMaxSize()) { drawMark(trace = play["trace"], spark = play["spark"]) }
 ```
 
+## Speed
+
+Fuseline is measured against Compose's own animation engine under the same conditions: one
+thread, one manual frame clock, the same number of values and frames, both warmed up and each
+measured twice in turn. Time and memory are per frame, once every value is moving
+(`FuselineBenchmark`, `TransitionBenchmark`; run them with
+`./gradlew :ui:fuseline:desktopTest -Pfuse.bench=true`). Lower is better; the ratio is Fuseline's
+time over Compose's.
+
+| Case | Fuseline | Compose | Fuseline / Compose | Fuseline memory | Compose memory |
+|---|---|---|---|---|---|
+| 1 tweens | 1.6 us | 2.0 us | 0.81x | 488 B | 504 B |
+| 1 springs | 1.6 us | 2.0 us | 0.83x | 488 B | 504 B |
+| 100 tweens | 151.3 us | 198.6 us | 0.76x | 48800 B | 50400 B |
+| 100 springs | 157.0 us | 191.7 us | 0.82x | 48800 B | 50400 B |
+| 1000 tweens | 1718.3 us | 2299.1 us | 0.75x | 488000 B | 504024 B |
+| 1000 springs | 1759.3 us | 2320.0 us | 0.76x | 488000 B | 504000 B |
+| 100 springs retargeted every frame | 681.6 us | 1319.7 us | 0.52x | 239871 B | 565526 B |
+| 100 colour fades | 158.5 us | 201.2 us | 0.79x | 49600 B | 51200 B |
+
+Transitions (`Appear` and `Swap` against `AnimatedVisibility` and `AnimatedContent`, the whole run
+including composition and layout):
+
+| Case | Fuseline | Compose | Fuseline / Compose |
+|---|---|---|---|
+| 60 appearing and leaving, and a page of 120 tiles swapping (6 times) | 346.4 ms | 490.1 ms | 0.71x |
+
+What makes it quick:
+- Curves are solved from a table of samples and a few Newton steps, not a long search.
+- Springs are solved in closed form, without allocating. The end of a calm spring is found in
+  strides and then to the millisecond.
+- A value writes its frame straight from its own buffer, with no copy per frame.
+- A new move takes over from the one under way without waiting for it to unwind, and ends it
+  with an exception that carries no stack trace. A value following a finger or a scroll, given a
+  new target every frame, costs about half of Compose's and a fraction of its memory.
+
 ## Tests
 
 `ui/fuseline/src/desktopTest`:
@@ -82,3 +118,4 @@ Canvas(Modifier.fillMaxSize()) { drawMark(trace = play["trace"], spark = play["s
 - `Appear` and `Swap` lifecycles.
 - A keyed glide following a moving target.
 - The import guard (`OwnMotionTest`).
+- The benchmarks above, which also check that Fuseline is never slower than Compose.

@@ -35,10 +35,18 @@ class CubicCurve(val x1: Float, val y1: Float, val x2: Float, val y2: Float) : C
     private fun y(t: Float) = ((ay * t + by) * t + cy) * t
     private fun dx(t: Float) = (3f * ax * t + 2f * bx) * t + cx
 
+    // x(t) sampled at even steps of t, so a solve starts next to its answer.
+    private val samples = FloatArray(SAMPLES + 1) { x(it / SAMPLES.toFloat()) }
+
     /** The curve's parameter t at which x(t) = [x]. */
     internal fun solve(x: Float): Float {
-        // Newton's method: quick where the curve has slope.
-        var t = x
+        // The sample interval that holds x (x(t) only ever rises), then a guess inside it.
+        var i = 1
+        while (i < SAMPLES && samples[i] < x) i++
+        val x0 = samples[i - 1]
+        val span = samples[i] - x0
+        var t = (i - 1 + if (span > 0f) (x - x0) / span else 0f) / SAMPLES
+        // Newton's method from there: two or three steps where the curve has slope.
         repeat(NEWTON_STEPS) {
             val err = x(t) - x
             if (abs(err) < EPSILON) return t
@@ -46,10 +54,10 @@ class CubicCurve(val x1: Float, val y1: Float, val x2: Float, val y2: Float) : C
             if (abs(d) < 1e-6f) return@repeat
             t -= err / d
         }
-        // Bisection: always lands, even on a flat stretch.
-        var lo = 0f
-        var hi = 1f
-        t = x
+        // Bisection within the sample interval: always lands, even on a flat stretch.
+        var lo = (i - 1) / SAMPLES.toFloat()
+        var hi = i / SAMPLES.toFloat()
+        t = (lo + hi) / 2f
         repeat(BISECT_STEPS) {
             val v = x(t)
             if (abs(v - x) < EPSILON) return t
@@ -73,9 +81,12 @@ class CubicCurve(val x1: Float, val y1: Float, val x2: Float, val y2: Float) : C
     override fun toString(): String = "CubicCurve($x1, $y1, $x2, $y2)"
 
     private companion object {
-        const val NEWTON_STEPS = 8
-        const val BISECT_STEPS = 40
-        const val EPSILON = 1e-6f
+        const val SAMPLES = 32
+        const val NEWTON_STEPS = 4
+        const val BISECT_STEPS = 24
+
+        // A float holds about seven digits; a hundred-thousandth of the way is far below a pixel.
+        const val EPSILON = 1e-5f
     }
 }
 

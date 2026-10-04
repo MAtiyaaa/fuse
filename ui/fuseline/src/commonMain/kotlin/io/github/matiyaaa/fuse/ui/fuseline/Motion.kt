@@ -231,72 +231,76 @@ internal class SpringTrack(
         }
     }
 
-    /** Displacement and velocity at [seconds]. */
-    private fun state(seconds: Double): Pair<Double, Double> {
-        val t = seconds
-        return when {
-            zeta < 1.0 -> {
-                val decay = exp(-zeta * omega * t)
-                val b = (v0 + zeta * omega * x0) / omegaD
-                val cos = cos(omegaD * t)
-                val sin = sin(omegaD * t)
-                val x = decay * (x0 * cos + b * sin)
-                val v = decay * ((b * omegaD - zeta * omega * x0) * cos - (x0 * omegaD + zeta * omega * b) * sin)
-                x to v
-            }
-            zeta == 1.0 -> {
-                val decay = exp(-omega * t)
-                val b = v0 + omega * x0
-                val x = (x0 + b * t) * decay
-                val v = (b - omega * (x0 + b * t)) * decay
-                x to v
-            }
-            else -> {
-                val e1 = exp(r1 * t)
-                val e2 = exp(r2 * t)
-                (c1 * e1 + c2 * e2) to (c1 * r1 * e1 + c2 * r2 * e2)
-            }
+    // Under-damped: the weight of the sine term, fixed for the whole move.
+    private val bUnder = if (zeta < 1.0) (v0 + zeta * omega * x0) / omegaD else 0.0
+
+    // Critically damped: the weight of the linear term.
+    private val bCritical = v0 + omega * x0
+
+    /** Displacement at [t] seconds, without allocating (it runs every frame). */
+    private fun displacement(t: Double): Double = when {
+        zeta < 1.0 -> exp(-zeta * omega * t) * (x0 * cos(omegaD * t) + bUnder * sin(omegaD * t))
+        zeta == 1.0 -> (x0 + bCritical * t) * exp(-omega * t)
+        else -> c1 * exp(r1 * t) + c2 * exp(r2 * t)
+    }
+
+    /** Velocity at [t] seconds. */
+    private fun speed(t: Double): Double = when {
+        zeta < 1.0 -> {
+            val decay = exp(-zeta * omega * t)
+            val cos = cos(omegaD * t)
+            val sin = sin(omegaD * t)
+            decay * ((bUnder * omegaD - zeta * omega * x0) * cos - (x0 * omegaD + zeta * omega * bUnder) * sin)
         }
+        zeta == 1.0 -> (bCritical - omega * (x0 + bCritical * t)) * exp(-omega * t)
+        else -> c1 * r1 * exp(r1 * t) + c2 * r2 * exp(r2 * t)
+    }
+
+    private fun resting(ms: Long): Boolean {
+        val t = ms / 1_000.0
+        val x = displacement(t)
+        return abs(x) <= threshold && x * speed(t) <= 0.0
     }
 
     /**
      * When the spring is at rest: it never again strays more than [threshold] from the target. A
      * spring that swings past is bounded by its decaying envelope, so the moment that envelope is
      * within the threshold it is done (never in the middle of an overshoot). One that doesn't
-     * swing is done once within the threshold and heading home, found a millisecond at a time.
+     * swing is done once within the threshold and heading home: found in strides, then to the
+     * millisecond, so a spring retargeted every frame stays cheap.
      */
     override val durationNanos: Long by lazy(LazyThreadSafetyMode.NONE) {
         if (x0 == 0.0 && v0 == 0.0) return@lazy 0L
         if (zeta < 1.0) {
-            val b = (v0 + zeta * omega * x0) / omegaD
-            val amplitude = sqrt(x0 * x0 + b * b)
+            val amplitude = sqrt(x0 * x0 + bUnder * bUnder)
             if (amplitude <= threshold) return@lazy 0L
             val seconds = kotlin.math.ln(amplitude / threshold) / (zeta * omega)
             return@lazy (seconds * NANOS_PER_SECOND).toLong().coerceAtMost(MAX_SPRING_MS * NANOS_PER_MS)
         }
+        if (resting(0)) return@lazy 0L
         var ms = 0L
-        while (ms < MAX_SPRING_MS) {
-            val (x, v) = state(ms / 1_000.0)
-            if (abs(x) <= threshold && x * v <= 0.0) return@lazy ms * NANOS_PER_MS
-            ms++
-        }
-        MAX_SPRING_MS * NANOS_PER_MS
+        while (ms < MAX_SPRING_MS && !resting(ms + STRIDE_MS)) ms += STRIDE_MS
+        // The first resting millisecond within the last stride.
+        while (ms < MAX_SPRING_MS && !resting(ms)) ms++
+        ms.coerceAtMost(MAX_SPRING_MS) * NANOS_PER_MS
     }
 
     override fun valueAt(playNanos: Long): Float {
         if (playNanos >= durationNanos) return target
-        val (x, _) = state(playNanos / NANOS_PER_SECOND)
-        return (target + x).toFloat()
+        return (target + displacement(playNanos / NANOS_PER_SECOND)).toFloat()
     }
 
     override fun velocityAt(playNanos: Long): Float {
         if (playNanos >= durationNanos) return 0f
-        return state(playNanos / NANOS_PER_SECOND).second.toFloat()
+        return speed(playNanos / NANOS_PER_SECOND).toFloat()
     }
 
     private companion object {
         /** No spring runs longer than this, however soft. */
         const val MAX_SPRING_MS = 60_000L
+
+        /** How far the search for a calm spring's end steps before it narrows to the millisecond. */
+        const val STRIDE_MS = 8L
 
     }
 }

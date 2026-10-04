@@ -1440,7 +1440,7 @@ fun aboutRows(app: AppState): List<MenuAction> = buildList {
         add(MenuAction("licences", "Open-source licences", FuseIcons.FileText, detail = "Fuse, its libraries, fonts and icons", trailing = Trailing.Chevron, onSelect = { app.go(Route.Licenses) }))
         addAll(app.group("about.credits", "Credits and links", FuseIcons.Heart, detail = "Who Fuse is built on, and where it lives") {
             listOf(
-                infoRow("credits", "Made with", detail = "Kotlin, Compose Multiplatform, SQLDelight, Ktor, Coil. Icons: Lucide (ISC). Fonts: Sora and Manrope (SIL OFL). Emulator launch data: ES-DE (MIT) and Cartridge (MIT). Hashing rules: rcheevos (MIT)", icon = FuseIcons.Blocks),
+                infoRow("credits", "Made with", detail = "Kotlin, Compose Multiplatform, SQLDelight, Ktor, Coil. Animations: Fuseline by Fuse. Icons: Lucide (ISC). Fonts: Sora and Manrope (SIL OFL). Emulator launch data: ES-DE (MIT) and Cartridge (MIT). Hashing rules: rcheevos (MIT)", icon = FuseIcons.Blocks),
                 MenuAction(
                     "cartridge.credit", "Cartridge by abdu2304", FuseIcons.CloudDownload,
                     detail = "The RomM companion Fuse pairs with. github.com/abdu2304/cartridge",
