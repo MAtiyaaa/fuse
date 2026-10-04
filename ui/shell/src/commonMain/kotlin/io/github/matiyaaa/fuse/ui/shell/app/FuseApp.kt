@@ -942,7 +942,7 @@ internal fun WallpaperLayer(w: io.github.matiyaaa.fuse.model.Wallpaper, modifier
     }
     val ink = Fuse.colors.ink
     Box(modifier) {
-        io.github.matiyaaa.fuse.ui.designsystem.media.Artwork(w.path, Modifier.fillMaxSize(), focusX = fx, focusY = fy)
+        io.github.matiyaaa.fuse.ui.designsystem.media.Artwork(w.path, Modifier.fillMaxSize(), focusX = fx, focusY = fy, pin = true)
         Box(Modifier.fillMaxSize().background(ink.copy(alpha = w.dim.coerceIn(0f, 0.9f))))
     }
 }

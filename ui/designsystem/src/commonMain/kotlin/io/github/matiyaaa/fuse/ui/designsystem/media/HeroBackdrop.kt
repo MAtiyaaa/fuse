@@ -43,6 +43,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import coil3.PlatformContext
 import coil3.compose.AsyncImagePainter
+import io.github.matiyaaa.fuse.ui.designsystem.effects.drawGrain
 import coil3.compose.LocalPlatformContext
 import coil3.compose.rememberAsyncImagePainter
 import coil3.request.ImageRequest
@@ -279,6 +280,7 @@ private fun LitRoom(accent: Color, modifier: Modifier = Modifier) {
                 drawRect(night)
                 drawRect(key)
                 drawRect(bounce)
+                drawGrain()
             }
         },
     )
@@ -305,12 +307,18 @@ private fun HeroLayerView(layer: HeroLayer, brightness: Float, onReady: () -> Un
     val px = Fuse.quality.heroDecodePx
     val canBlur = Fuse.quality.blur
     val request = remember(source.model, context, px) { heroRequest(context, source.model, px) }
-    val painter = rememberAsyncImagePainter(request, contentScale = ContentScale.Crop)
-    val state by painter.state.collectAsStateCompat()
+    val loader = rememberAsyncImagePainter(request, contentScale = ContentScale.Crop)
+    val state by loader.state.collectAsStateCompat()
+    // A room shown before is drawn at once from the picture held for it ([ShownArt]), even when the
+    // system emptied the image cache while Fuse was in the background, so it never pops in.
+    val loaded = state as? AsyncImagePainter.State.Success
+    val held = if (loaded == null) ShownArt.pinned(source.model) else null
+    if (loaded != null) ShownArt.shown(source.model, loaded.painter)
+    val painter = held ?: loader
     val imageAlpha = remember { FuselineValue(0f) }
     var placeholder by remember { mutableStateOf(false) }
     LaunchedEffect(layer) {
-        val finished = { state is AsyncImagePainter.State.Success || state is AsyncImagePainter.State.Error }
+        val finished = { held != null || state is AsyncImagePainter.State.Success || state is AsyncImagePainter.State.Error }
         val quick = withTimeoutOrNull(PLACEHOLDER_MS) { snapshotFlow { finished() }.first { it } } != null
         if (quick) {
             imageAlpha.snapTo(1f)
@@ -394,7 +402,7 @@ private fun HeroLayerView(layer: HeroLayer, brightness: Float, onReady: () -> Un
             }
             if (source.blurred && canBlur) {
                 // Blurred once, small, then shown scaled up: the same picture for a single draw a frame.
-                FrozenBlur(painter, loaded = state is AsyncImagePainter.State.Success, alignment, Modifier.fillMaxSize().graphicsLayer { alpha = imageAlpha.value; compositingStrategy = CompositingStrategy.ModulateAlpha }.then(shade))
+                FrozenBlur(painter, loaded = held != null || state is AsyncImagePainter.State.Success, alignment, Modifier.fillMaxSize().graphicsLayer { alpha = imageAlpha.value; compositingStrategy = CompositingStrategy.ModulateAlpha }.then(shade))
             } else {
                 Box(
                     Modifier
