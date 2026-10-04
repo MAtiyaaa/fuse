@@ -65,7 +65,7 @@ internal fun AuditDriver.jellyfinScreens() {
             shoot("playback")
             tap(PadButton.DPAD_DOWN, 8)
             shoot("sound and subtitles")
-            tap(PadButton.A)
+            tapText("Subtitles")
             waitFor("Signs and songs only")
             shoot("a choice: subtitles")
             tap(PadButton.B)
@@ -98,8 +98,8 @@ internal fun AuditDriver.jellyfinScreens() {
             useJellyfin { it.copy(cartridgeEnabled = false) }
             tab(Destination.CARTRIDGE)
             waitFor("Continue watching")
-            tap(PadButton.DPAD_DOWN, 3)
-            focusHint("Open") { tap(PadButton.DPAD_DOWN) }
+            // Continue watching, Next up, then the libraries: Films first.
+            tap(PadButton.DPAD_DOWN, 2)
             tap(PadButton.A)
             waitFor("A to Z")
             settle(2_000)
@@ -117,9 +117,10 @@ internal fun AuditDriver.jellyfinScreens() {
         scenario("jellyfin", "film page") {
             useJellyfin { it.copy(cartridgeEnabled = false) }
             tab(Destination.CARTRIDGE)
-            waitFor("New in Films")
-            focusHint("Open") { tap(PadButton.DPAD_DOWN) }
-            tap(PadButton.DPAD_DOWN)
+            waitFor("Continue watching")
+            // Down past Next up and the libraries to what's new in Films.
+            tap(PadButton.DPAD_DOWN, 3)
+            settle(900)
             tap(PadButton.A)
             waitFor("Northlight Pictures", 20_000)
             settle(2_500)
@@ -131,8 +132,9 @@ internal fun AuditDriver.jellyfinScreens() {
         scenario("jellyfin", "show page") {
             useJellyfin { it.copy(cartridgeEnabled = false) }
             tab(Destination.CARTRIDGE)
-            waitFor("New in Shows")
-            focusText("Harbour Lights", substring = true) { tap(PadButton.DPAD_DOWN) }
+            waitFor("Continue watching")
+            tap(PadButton.DPAD_DOWN, 4)
+            settle(900)
             tap(PadButton.A)
             waitFor("Season 1", 20_000)
             settle(2_500)
@@ -179,13 +181,12 @@ internal fun AuditDriver.jellyfinScreens() {
 
         scenario("jellyfin", "widgets in flow") {
             useJellyfin {
-                it.copy(home = it.home.copy(mode = HomeMode.FLOW, widgets = it.home.widgets + HomeWidget("jfrow", WidgetKind.JELLYFIN_NEXT_UP, 1)))
+                it.copy(home = it.home.copy(mode = HomeMode.FLOW, widgets = listOf(HomeWidget("jfrow", WidgetKind.JELLYFIN_NEXT_UP, -1)) + it.home.widgets))
             }
             home()
             pumpUntil("the widgets to fill", 20_000) { libraryStore.homeFeed.value.media.nextUp.isNotEmpty() }
             settle(1_500)
-            focusText("Next up", substring = false) { tap(PadButton.DPAD_DOWN) }
-            shoot("next up as a row", 1_500)
+            shoot("next up as the first row", 1_500)
         }
     } finally {
         SingletonImageLoader.reset()

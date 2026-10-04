@@ -33,8 +33,12 @@ import io.github.matiyaaa.fuse.ui.designsystem.media.ArtSlot
 import io.github.matiyaaa.fuse.ui.designsystem.media.Artwork
 import io.github.matiyaaa.fuse.ui.designsystem.media.GeneratedArt
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
+import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
 import io.github.matiyaaa.fuse.ui.designsystem.theme.tabular
+
+/** Room between a card and its words for the focus bar the tile draws under itself, as it lifts. */
+private val TEXT_GAP = Size.sparkGap + Size.sparkHeight + Space.s
 
 /** A quiet colour for media without art, from its name, so placeholders differ but stay calm. */
 internal fun accentOf(name: String): Color {
@@ -49,7 +53,7 @@ internal fun accentOf(name: String): Color {
 @Composable
 internal fun PosterCard(item: MediaItem, selected: Boolean, width: Dp, onClick: () -> Unit, onLongClick: (() -> Unit)? = null) {
     val square = item.type == MediaType.ALBUM || item.type == MediaType.ARTIST || item.type == MediaType.SONG
-    Column(Modifier.width(width), verticalArrangement = Arrangement.spacedBy(Space.s)) {
+    Column(Modifier.width(width), verticalArrangement = Arrangement.spacedBy(TEXT_GAP)) {
         Tile(selected = selected, modifier = Modifier.fillMaxWidth().aspectRatio(if (square) 1f else 2f / 3f), glow = accentOf(item.name), onClick = onClick, onLongClick = onLongClick) {
             Artwork(item.poster.at(POSTER_WIDTH), Modifier.fillMaxSize(), fallback = { GeneratedArt(item.name, accentOf(item.name), Modifier.fillMaxSize(), slot = ArtSlot.BOX) })
             Badges(item, Modifier.align(Alignment.TopEnd).padding(Space.s))
@@ -66,7 +70,7 @@ internal fun PosterCard(item: MediaItem, selected: Boolean, width: Dp, onClick: 
 @Composable
 internal fun WideCard(item: MediaItem, selected: Boolean, width: Dp, onClick: () -> Unit, onLongClick: (() -> Unit)? = null) {
     val art = (if (item.type == MediaType.EPISODE) item.thumb else item.backdrop ?: item.thumb) ?: item.poster
-    Column(Modifier.width(width), verticalArrangement = Arrangement.spacedBy(Space.s)) {
+    Column(Modifier.width(width), verticalArrangement = Arrangement.spacedBy(TEXT_GAP)) {
         Tile(selected = selected, modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f), glow = accentOf(item.name), onClick = onClick, onLongClick = onLongClick) {
             Artwork(art.at(WIDE_WIDTH), Modifier.fillMaxSize(), fallback = { GeneratedArt(item.seriesName ?: item.name, accentOf(item.name), Modifier.fillMaxSize(), slot = ArtSlot.WIDE) })
             // A logo or the name over the lower part, for art without words in it.
@@ -101,7 +105,7 @@ internal fun LibraryCard(item: MediaItem, selected: Boolean, width: Dp, onClick:
 /** A person: a round photo, the name, and the part they play. */
 @Composable
 internal fun PersonCard(name: String, role: String?, photo: Any?, selected: Boolean, width: Dp, onClick: () -> Unit) {
-    Column(Modifier.width(width), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(Space.s)) {
+    Column(Modifier.width(width), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(TEXT_GAP)) {
         Tile(selected = selected, modifier = Modifier.size(width), shape = CircleShape, cornerFraction = 0.5f, glow = accentOf(name), onClick = onClick) {
             Artwork(photo, Modifier.fillMaxSize(), fallback = { GeneratedArt(name, accentOf(name), Modifier.fillMaxSize()) })
         }
