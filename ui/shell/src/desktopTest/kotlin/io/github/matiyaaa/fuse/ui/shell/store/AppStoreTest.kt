@@ -217,8 +217,8 @@ class AppStoreTest {
         assertEquals("v1.2".removePrefix("v"), s.installed[alpha]!!.record!!.version?.removePrefix("v"))
         assertEquals(Standing.CURRENT, s.standing(alpha))
         assertNull(s.jobs[alpha])
-        // The download is gone once Android has it.
-        assertTrue(bridge.installs.none { File(it).exists() })
+        // The download is gone once Android has it (deleted just after the install is reported).
+        eventually("download deleted") { Unit.takeIf { bridge.installs.none { File(it).exists() } } }
     }
 
     @Test
