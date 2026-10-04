@@ -144,7 +144,7 @@ internal fun AuditDriver.detailScreens() {
     }
 
     scenario("details", "store on a computer") {
-        show(windowsStore)
+        show(windowsStore, windowsPlatform)
         home()
         // Windows has no Apps tab, so the Store's tab is found by name rather than by place.
         repeat(6) { if (!hasText("Emulators for this computer")) tap(PadButton.R1) }

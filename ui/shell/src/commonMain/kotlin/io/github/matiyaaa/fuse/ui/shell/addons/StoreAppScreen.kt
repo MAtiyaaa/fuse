@@ -300,7 +300,13 @@ private fun details(state: StoreState, item: StoreApp): List<Pair<String, String
     }
     val catalogue = state.catalogue
     return listOfNotNull(
-        "Installed" to (installed?.let { it.versionName ?: "Version ${it.versionCode}" } ?: "Not installed"),
+        "Installed" to when {
+            installed == null -> "Not installed"
+            installed.versionName != null -> installed.versionName
+            installed.versionCode > 0 -> "Version ${installed.versionCode}"
+            // Found on this computer rather than put there by Fuse: no version to show.
+            else -> "Found on this computer"
+        },
         "Newest release" to newest,
         release?.publishedAt?.let { "Released" to dateText(it) },
         release?.file?.let { f -> "Download" to (f.name + (f.sizeBytes?.let { "  ·  ${bytesText(it)}" } ?: "")) },

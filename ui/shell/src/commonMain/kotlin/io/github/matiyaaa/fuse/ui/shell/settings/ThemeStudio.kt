@@ -957,7 +957,7 @@ internal fun StudioPanel(
                 ) { _ ->
                     Column(
                         Modifier
-                            .fadingEdges(scroll, top = Space.m, bottom = Space.xl)
+                            .fadingEdges(scroll, top = Space.xl, bottom = Space.xl)
                             .verticalScroll(scroll)
                             .padding(Space.xs)
                             .drawBehind {
@@ -1081,7 +1081,8 @@ private fun StepHeader(studio: StudioState, compact: Boolean, onGo: (StudioStep)
         }
         Spacer(Modifier.height(Space.xs))
         FText(studio.openColor?.label ?: step.title, if (compact) Fuse.type.titleSmall else Fuse.type.title, maxLines = 1)
-        if (!compact || studio.openColor == null) {
+        // On a short screen the rows need the room more: each row says what it does itself.
+        if (!compact) {
             Spacer(Modifier.height(Space.xxs))
             FText(studio.openColor?.note ?: step.guide, Fuse.type.caption, color = c.textMuted, maxLines = 2)
         }
