@@ -33,8 +33,9 @@
 - The line under the top tabs stays exactly under its tab while the tabs move, and glides only
   when you go to another one.
 - The setup logo is Fuse's real mark, drawn in from its own lines, and the controller test is a
-  pad: shoulder bumpers on its top edge named the way your pad names them (LB and RB, L1 and R1,
-  or L and R), a D-pad and the face buttons in their diamond.
+  whole controller drawn in your theme: its bumpers and triggers named the way your pad names them
+  (LB and LT, L1 and L2, L and ZL), two sticks, a D-pad, the face buttons (with PlayStation's shapes
+  on a PlayStation pad), and Fuse's mark as its guide button. Every button lights as you press it.
 - Setup's Flow and Channels pictures look like the real Homes: Flow's stage over a row of wide
   cards and a row of systems, and Channels as the board it starts with.
 - The Library shrinks far less as it scrolls: the stage folds to one line, as on a system's page,
