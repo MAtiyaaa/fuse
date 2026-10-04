@@ -1151,8 +1151,15 @@ fun displayRows(app: AppState): List<MenuAction> {
                 add(autostartRow(app, w))
             }
         }
-        // Every second-screen option, shown in full where there is one and folded where there isn't.
+        // Every second-screen option, for a device that has one.
         val second = buildList {
+            add(app.choiceRow(
+                "flipped", "Which way round", FuseIcons.Swap, d.flipped,
+                listOf(false to "Menus on top", true to "Menus below"),
+                optionDetail = {
+                    if (it) "Fuse on the touch screen, and the game you're on large on the main screen, like a 3DS" else "Fuse on the main screen, the second screen beside it"
+                },
+            ) { v -> app.store.updatePrefs { it.copy(display = it.display.copy(flipped = v)) } })
             add(app.choiceRow(
                 "mode", "Second screen", FuseIcons.DualScreen, d.mode,
                 // Playing on the second screen is now "Games open on"; the old choice stays listed only while it's set.
@@ -1204,7 +1211,7 @@ fun displayRows(app: AppState): List<MenuAction> {
             add(toggleRow("bg", "Same background as the main screen", FuseIcons.Image, d.companionFollowsBackground, "Its scene or picture behind what the second screen shows") { v -> app.store.updatePrefs { it.copy(display = it.display.copy(companionFollowsBackground = v)) } })
             add(toggleRow("perf", "Show performance on the second screen", FuseIcons.ChartLine, d.companionShowsPerformance, "Only values the system really reports; nothing is estimated") { v -> app.store.updatePrefs { it.copy(display = it.display.copy(companionShowsPerformance = v)) } })
             add(toggleRow("touch", "Touch controls on the second screen", FuseIcons.Hand, d.companionTouchControls) { v -> app.store.updatePrefs { it.copy(display = it.display.copy(companionTouchControls = v)) } })
-    }
+        }
         // Only a device with a second screen mentions one.
         if (app.platform.features.secondScreen) labelled("Second screen") { addAll(second) }
     }

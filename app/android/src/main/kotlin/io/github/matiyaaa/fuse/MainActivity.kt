@@ -52,6 +52,7 @@ import io.github.matiyaaa.fuse.model.PerformanceProfile
 import io.github.matiyaaa.fuse.ui.designsystem.input.InputRouter
 import io.github.matiyaaa.fuse.ui.designsystem.input.handleKeyEvent
 import io.github.matiyaaa.fuse.ui.shell.app.FuseApp
+import io.github.matiyaaa.fuse.ui.shell.app.ShowcaseApp
 import io.github.matiyaaa.fuse.ui.shell.store.FuseStore
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
@@ -69,6 +70,9 @@ class MainActivity : ComponentActivity(), ActivityRequests {
     private val gamepad: GamepadInput by lazy { GamepadInput(router) }
     private val companions: CompanionScreens get() = app.companions
     private var resumedOnce = false
+
+    /** This window's menus for the second screen in flipped mode (see [CompanionScreens.menus]). */
+    private val ownMenus: @Composable () -> Unit = { FlippedMenus() }
 
     private val folderSlot = ResultSlot<Uri?>(null)
     private val folderLauncher = registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { folderSlot.complete(it) }
@@ -138,7 +142,7 @@ class MainActivity : ComponentActivity(), ActivityRequests {
                         if (resumedOnce) store?.library?.onResume()
                         resumedOnce = true
                         // Back from a game or another app: the companion goes in front on its screen again.
-                        store?.let { companions.onMainResumed(this, it.prefs.value.display.mode) }
+                        store?.let { companions.onMainResumed(this, it.prefs.value.display.mode, it.prefs.value.display.flipped) }
                     }
                     Lifecycle.Event.ON_PAUSE -> {
                         gamepad.releaseAll()
@@ -167,7 +171,19 @@ class MainActivity : ComponentActivity(), ActivityRequests {
             repeatOnLifecycle(Lifecycle.State.STARTED) { followPrefs(store) }
         }
 
+        // Flipped mode: the second screen shows these menus, while this window keeps the controller.
+        companions.menus = ownMenus
         setContent { Content() }
+    }
+
+    /** Fuse's menus on the second screen (flipped mode), fed by this window's controller input. */
+    @Composable
+    private fun FlippedMenus() {
+        val startup by app.startup.collectAsState()
+        val s = startup as? Startup.Ready ?: return
+        Box(Modifier.fillMaxSize().background(Color(INK_ARGB))) {
+            FuseApp(s.store, app.platformUi, router, s.phoneLink, safeMode = s.safeMode, onSettled = app::settled, startupIntro = true, showcaseElsewhere = true)
+        }
     }
 
     private suspend fun followPrefs(store: FuseStore) {
@@ -186,9 +202,9 @@ class MainActivity : ComponentActivity(), ActivityRequests {
             }
             launch {
                 kotlinx.coroutines.flow.combine(
-                    store.prefs.map { it.display.mode }.distinctUntilChanged(),
+                    store.prefs.map { it.display.mode to it.display.flipped }.distinctUntilChanged(),
                     app.platformUi.displays,
-                ) { mode, _ -> mode }.collect { mode -> companions.update(this@MainActivity, mode) }
+                ) { wish, _ -> wish }.collect { (mode, flipped) -> companions.update(this@MainActivity, mode, flipped) }
             }
         }
     }
@@ -237,7 +253,13 @@ class MainActivity : ComponentActivity(), ActivityRequests {
                             .focusRequester(focus)
                             .focusable(),
                     ) {
-                        FuseApp(s.store, app.platformUi, router, s.phoneLink, safeMode = s.safeMode, onSettled = app::settled, startupIntro = true)
+                        // Flipped: the menus are on the second screen, and this one shows what they chose.
+                        val menusBelow by companions.flipped.collectAsState()
+                        if (menusBelow) {
+                            ShowcaseApp(s.store, app.platformUi)
+                        } else {
+                            FuseApp(s.store, app.platformUi, router, s.phoneLink, safeMode = s.safeMode, onSettled = app::settled, startupIntro = true)
+                        }
                     }
                     LaunchedEffect(Unit) { focus.requestFocus() }
                 }
@@ -329,6 +351,7 @@ class MainActivity : ComponentActivity(), ActivityRequests {
         permissionSlot.cancel()
         captureSlot.cancel()
         if (isFinishing) companions.stop() else companions.onMainDestroyed()
+        if (companions.menus === ownMenus) companions.menus = null
         super.onDestroy()
     }
 

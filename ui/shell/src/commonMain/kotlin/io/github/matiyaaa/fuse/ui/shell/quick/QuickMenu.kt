@@ -182,6 +182,13 @@ fun QuickMenu(app: AppState) {
                     },
                 )
             })
+            // Which screen holds the menus, swapped in one press.
+            val flipped = prefs.display.flipped
+            add(QuickTile("Swap screens", FuseIcons.Swap, active = flipped, toggle = true, detail = if (flipped) "Menus below" else "Menus on top") {
+                close()
+                app.store.updatePrefs { it.copy(display = it.display.copy(flipped = !flipped)) }
+                app.toasts.show(if (flipped) "Menus are on the main screen" else "Menus are on the touch screen")
+            })
         }
         add(QuickTile("Controller", FuseIcons.Gamepad) { close(); app.go(Route.Settings("inputs")) })
         add(QuickTile("Performance", FuseIcons.Gauge, detail = performanceLabel(prefs.performance)) {

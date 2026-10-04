@@ -285,7 +285,9 @@ fun FlowHome(app: AppState) {
         val widgetMax = maxWidth - Space.gutter * 2
         CompositionLocalProvider(LocalHomeTime provides time) {
         val compact = maxH < COMPACT_BELOW
-        val stageHeight = (maxH * 0.3f).coerceIn(150.dp, 280.dp)
+        // With the screen above showing the chosen game large, the shelves take the whole page.
+        val showcaseElsewhere = io.github.matiyaaa.fuse.ui.shell.app.LocalShowcaseElsewhere.current
+        val stageHeight = if (showcaseElsewhere) 0.dp else (maxH * 0.3f).coerceIn(150.dp, 280.dp)
         val rows = rememberLazyListState()
         // While a shelf is held the list stays under the finger.
         FollowSelection(rows, { sel.row }, anchor = 0f, enabled = { shelfDrag.heldKey == null })
@@ -294,7 +296,7 @@ fun FlowHome(app: AppState) {
         val selectedAt = shown.indexOfFirst { it.key == selectedKey }
         Column(Modifier.fillMaxSize()) {
             Spacer(Modifier.height(Size.hudHeight))
-            Box(
+            if (!showcaseElsewhere) Box(
                 Modifier.fillMaxWidth().height(stageHeight).padding(horizontal = Space.gutter).reveal(reveal, 0),
                 contentAlignment = Alignment.BottomStart,
             ) {

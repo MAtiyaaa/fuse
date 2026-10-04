@@ -130,6 +130,23 @@ fun FuseApp(
     onSettled: () -> Unit = {},
     /** Plays the startup animation on this start when it is on in Settings (the apps do; tests and renders don't). */
     startupIntro: Boolean = false,
+    /** The menus are on the lower screen and [ShowcaseApp] shows the chosen game on the one above. */
+    showcaseElsewhere: Boolean = false,
+) {
+    CompositionLocalProvider(LocalShowcaseElsewhere provides showcaseElsewhere) {
+        FuseAppContent(store, platform, router, phoneLink, safeMode, onSettled, startupIntro)
+    }
+}
+
+@Composable
+private fun FuseAppContent(
+    store: FuseStore,
+    platform: PlatformUi,
+    router: InputRouter,
+    phoneLink: PhoneLinkControl?,
+    safeMode: SafeMode?,
+    onSettled: () -> Unit,
+    startupIntro: Boolean,
 ) {
     val base = rememberCoroutineScope()
     val stored by store.prefs.collectAsState()

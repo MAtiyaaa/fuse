@@ -136,7 +136,11 @@ class UiAudit {
 
     @Test fun swapH() = audit(AuditSize.H) { swapScreens() }
 
-    @Test fun swapC() = audit(AuditSize.C) { swapCompanion() }
+    @Test fun swapC() = audit(AuditSize.C) { swapCompanion(); flippedMenus() }
+
+    @Test fun flippedH() = audit(AuditSize.H) { flippedShowcase() }
+
+    @Test fun flippedM() = audit(AuditSize.M) { flippedShowcase() }
 
     @Test fun openingM() = audit(AuditSize.M) { setupOpening() }
 

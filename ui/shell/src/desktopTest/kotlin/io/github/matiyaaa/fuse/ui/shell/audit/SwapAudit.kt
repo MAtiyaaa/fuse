@@ -105,6 +105,20 @@ internal fun AuditDriver.swapScreens() {
         tap(PadButton.B)
     }
 
+    scenario("swap", "screen settings with a second screen") {
+        useLibrary(twoScreens)
+        openSettings()
+        focusText("Screen and sound")
+        tap(PadButton.DPAD_RIGHT)
+        settle(600)
+        focusText("Which way round")
+        shoot("which way round, in the second screen's group")
+        tap(PadButton.A)
+        settle(800)
+        shoot("its two choices")
+        tap(PadButton.B)
+    }
+
     scenario("swap", "screen settings without a second screen") {
         useLibrary()
         openSettings()
@@ -167,5 +181,36 @@ internal fun AuditDriver.welcomeMark() {
         router.press(PadButton.L1, io.github.matiyaaa.fuse.ui.designsystem.input.InputSource.GAMEPAD)
         shoot("left bumper held", 800)
         router.release(PadButton.L1, io.github.matiyaaa.fuse.ui.designsystem.input.InputSource.GAMEPAD)
+    }
+}
+
+/** Flipped: the menus on the lower screen (its own size), the stage left to the screen above. */
+internal fun AuditDriver.flippedMenus() {
+    scenario("flipped", "menus below") {
+        useLibrary()
+        show(libraryStore, twoScreens, flipped = true)
+        waitFor("Continue playing")
+        shoot("Home on the lower screen", 1_500)
+        tab(io.github.matiyaaa.fuse.model.Destination.LIBRARY)
+        settle(1_200)
+        shoot("the Library, its stage one line")
+        tab(io.github.matiyaaa.fuse.model.Destination.SYSTEMS)
+        settle(1_200)
+        shoot("Systems")
+        show(libraryStore)
+    }
+}
+
+/** Flipped: the screen above, showing what the menus below have chosen. */
+internal fun AuditDriver.flippedShowcase() {
+    scenario("flipped", "the screen above") {
+        useLibrary()
+        openGame("Emberline Saga")
+        settle(800)
+        view = AuditView.Piece { io.github.matiyaaa.fuse.ui.shell.app.ShowcaseApp(libraryStore, platform) }
+        shoot("a game, large", 2_000)
+        io.github.matiyaaa.fuse.ui.shell.app.Spotlight.set(null)
+        shoot("nothing chosen: the time and the games played last", 1_500)
+        show(libraryStore)
     }
 }

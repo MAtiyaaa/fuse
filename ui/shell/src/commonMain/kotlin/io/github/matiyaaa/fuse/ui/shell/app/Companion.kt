@@ -317,7 +317,7 @@ private fun SpotlightPage(
 
 /** The backdrop for what the companion shows: the game's background art, or the system's. */
 @Composable
-private fun companionHero(store: FuseStore, systems: List<PlatformCard>, target: Any?): HeroSource? = when (target) {
+internal fun companionHero(store: FuseStore, systems: List<PlatformCard>, target: Any?): HeroSource? = when (target) {
     is GameCard -> target.room(systems.firstOrNull { it.platform.id == target.platformId })
     is GameId -> {
         val flow = remember(target) { store.library.game(target) }

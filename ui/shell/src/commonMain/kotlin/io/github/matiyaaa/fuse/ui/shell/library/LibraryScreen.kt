@@ -517,8 +517,11 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
         // Past the first row the stage folds away (a system's header with it), so more games fit: on
         // All, Favourites and Recently played the Grid's stage shrinks and its logo rises until at
         // least three rows show.
+        val showcaseElsewhere = io.github.matiyaaa.fuse.ui.shell.app.LocalShowcaseElsewhere.current
         val folded = when {
             list.isNullOrEmpty() || layout == LibraryLayout.CAPSULE -> false
+            // The screen above shows the chosen game large, so the stage here stays one line.
+            showcaseElsewhere && (systemCard != null || layout == LibraryLayout.ICON) -> true
             systemCard == null && layout != LibraryLayout.ICON -> false
             touchScroll -> if (layout == LibraryLayout.COMPACT_LIST) listScrolled else gridScrolled
             layout == LibraryLayout.COMPACT_LIST -> state.grid.index >= 3
