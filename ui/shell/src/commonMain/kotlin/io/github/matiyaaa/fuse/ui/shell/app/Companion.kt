@@ -40,6 +40,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -185,18 +186,23 @@ fun CompanionApp(store: FuseStore, platform: PlatformUi, mode: DualScreenMode, o
                     .graphicsLayer { alpha = (pager.currentPage + pager.currentPageOffsetFraction).coerceIn(0f, 1f) }
                     .background(Fuse.colors.ink.copy(alpha = 0.6f)),
             )
+            val showsNumbers = prefs.display.companionShowsPerformance && sheet == null
+            // The performance card sits at the top of the first page; what the page shows moves
+            // down by its height, so the card never covers the game's name.
+            var numbersHeight by remember { mutableStateOf(0) }
+            val numbersRoom = with(androidx.compose.ui.platform.LocalDensity.current) { if (showsNumbers) numbersHeight.toDp() + Space.s else 0.dp }
             HorizontalPager(state = pager, modifier = Modifier.fillMaxSize(), beyondViewportPageCount = 1, userScrollEnabled = sheet == null) { page ->
                 when (page) {
-                    0 -> SpotlightPage(store, content, home.playtime.currentSince, systems, time) { sheet = it }
+                    0 -> Box(Modifier.fillMaxSize().padding(top = numbersRoom)) { SpotlightPage(store, content, home.playtime.currentSince, systems, time) { sheet = it } }
                     1 -> StatusPage(store, platform, status)
                     else -> ControlsPage(store, platform, onHide)
                 }
             }
-            if (prefs.display.companionShowsPerformance && pager.currentPage == 0 && sheet == null) {
+            if (showsNumbers && pager.currentPage == 0) {
                 val metrics by platform.performance.collectAsState()
                 io.github.matiyaaa.fuse.ui.shell.components.PerformanceOverlay(
                     metrics,
-                    Modifier.align(Alignment.TopStart).padding(start = Space.l, top = CompanionTopBar),
+                    Modifier.align(Alignment.TopStart).padding(start = Space.l, top = CompanionTopBar).onSizeChanged { numbersHeight = it.height },
                 )
             }
             sheet?.let { AchievementsSheet(store, it) }
