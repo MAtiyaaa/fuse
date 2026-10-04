@@ -85,6 +85,12 @@ data class JellyfinSettings(
     val speed: Float = 1f,
     /** The other screen while playing: "REMOTE" (controls and art) or "OFF". */
     val playerCompanion: String = "REMOTE",
+    /**
+     * On a device with two screens, where the picture goes: "MAIN" (the main screen, the one above)
+     * or "SECOND" (the second screen, the touch screen below). The other screen is its remote, and
+     * the menus stay free to browse.
+     */
+    val playOn: String = "MAIN",
     /** The other screen while browsing: "DETAILS", "MINIMAL" or "OFF". */
     val browsingCompanion: String = "DETAILS",
 )

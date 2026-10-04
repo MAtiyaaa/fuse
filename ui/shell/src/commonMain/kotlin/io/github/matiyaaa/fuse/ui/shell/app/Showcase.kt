@@ -167,9 +167,16 @@ fun ShowcaseApp(store: FuseStore, platform: PlatformUi) {
                     }
                 }
             }
-            // Fuse Player's picture, while the menus and its remote are on the touch screen.
-            val player = io.github.matiyaaa.fuse.ui.player.FusePlayer.session
-            if (player.item != null) io.github.matiyaaa.fuse.ui.player.PlayerPicture(player, Modifier.fillMaxSize())
+            // Fuse Player: its picture here while the menus and its remote are on the touch screen;
+            // played on the touch screen instead, what is playing, large, with how far in it is.
+            val player = if (io.github.matiyaaa.fuse.ui.player.FusePlayer.available) io.github.matiyaaa.fuse.ui.player.FusePlayer.session else null
+            if (player?.item != null) {
+                if (!io.github.matiyaaa.fuse.ui.player.PlayerPlacement.withMenus) {
+                    io.github.matiyaaa.fuse.ui.player.PlayerPicture(player, Modifier.fillMaxSize())
+                } else {
+                    io.github.matiyaaa.fuse.ui.player.PlayerNowShowing(player, Modifier.fillMaxSize(), where = "Playing on the touch screen")
+                }
+            }
         }
     }
 }

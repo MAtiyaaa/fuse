@@ -189,9 +189,16 @@ suspend fun animate(
  * so, the way tests and screenshot tools expect of loops ([InfiniteAnimationPolicy]).
  */
 internal suspend fun runFrames(durationNanos: Long, onFrame: (playNanos: Long) -> Unit) {
-    val scale = currentCoroutineContext()[MotionDurationScale]?.scaleFactor ?: 1f
+    val context = currentCoroutineContext()
+    val scale = context[MotionDurationScale]?.scaleFactor ?: 1f
     if (durationNanos == 0L || scale == 0f) return
     val forever = durationNanos == Long.MAX_VALUE
+    // A move that ends shares its frames with every other on the same clock ([FrameDriver]).
+    val clock = context[androidx.compose.runtime.MonotonicFrameClock]
+    if (!forever && clock != null) {
+        FrameDriver.of(clock).run(context, durationNanos, scale, onFrame)
+        return
+    }
     var start = Long.MIN_VALUE
     while (true) {
         val done = frame(forever) { frameNanos ->

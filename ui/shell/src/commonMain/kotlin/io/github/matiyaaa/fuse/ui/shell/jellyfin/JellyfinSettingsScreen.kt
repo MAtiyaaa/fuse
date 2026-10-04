@@ -365,9 +365,17 @@ private fun jellyfinRows(
     // Second screen --------------------------------------------------------------------------------
     if (app.platform.features.secondScreen || app.hasTwoScreens) {
         val second = "Second screen"
+        add(app.choiceRow("c.where", "Films play on", FuseIcons.PanelTop, j.playOn,
+            listOf("MAIN" to "The main screen", "SECOND" to "The second screen"),
+            detail = "The other screen is its remote, and the menus stay free to browse. Swap them while it plays",
+            optionDetail = {
+                if (it == "SECOND") "The touch screen below: with the menus below, as on a phone; otherwise the main screen keeps browsing"
+                else "The big screen above, with the touch screen as its remote"
+            },
+        ) { v -> set { it.copy(playOn = v) } }.copy(section = second))
         add(app.choiceRow("c.player", "While playing", FuseIcons.DualScreen, j.playerCompanion,
             listOf("REMOTE" to "Controls and art", "OFF" to "Nothing"),
-            detail = "The other screen becomes a remote: art, time, and buttons to pause, skip and change tracks") { v -> set { it.copy(playerCompanion = v) } }.copy(section = second))
+            detail = "The screen without the picture becomes a remote: art, time, and buttons to pause, skip and change tracks") { v -> set { it.copy(playerCompanion = v) } }.copy(section = second))
         add(app.choiceRow("c.browse", "While browsing", FuseIcons.MonitorPlay, j.browsingCompanion,
             listOf("DETAILS" to "Art and details", "MINIMAL" to "Art only", "OFF" to "Nothing"),
             detail = "What the other screen shows about the film or show you're on") { v -> set { it.copy(browsingCompanion = v) } }.copy(section = second))

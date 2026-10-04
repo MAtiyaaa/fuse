@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -80,16 +81,90 @@ fun PlayerPicture(session: PlayerSession, modifier: Modifier = Modifier) {
     }
 }
 
+/**
+ * What plays on the other screen, large, for a screen that only shows it: the backdrop, the poster,
+ * what it is and how far in, the time left. Nothing on it needs a touch.
+ */
+@Composable
+fun PlayerNowShowing(session: PlayerSession, modifier: Modifier = Modifier, where: String? = null) {
+    val item = session.item ?: return
+    val video = session.isVideo
+    val coverArt = if (video) item.poster ?: item.artwork else item.artwork
+    val state = session.engine?.state?.collectAsState()?.value ?: EngineState()
+    Box(modifier.fillMaxSize().background(Color(0xFF07080B))) {
+        Artwork(item.backdrop ?: coverArt, Modifier.fillMaxSize().graphicsLayer { alpha = 0.55f })
+        Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(listOf(Color.Black.copy(alpha = 0.85f), Color.Black.copy(alpha = 0.35f), Color.Transparent))))
+        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.7f)))))
+        BoxWithConstraints(Modifier.fillMaxSize().padding(Space.xl)) {
+            val art = minOf(maxHeight * 0.62f / (if (video) 1.5f else 1f), maxWidth * 0.26f)
+            val logoHeight = minOf(96.dp, maxHeight * 0.18f)
+            Row(Modifier.align(Alignment.BottomStart).fillMaxWidth(), verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(Space.xl)) {
+                Box(
+                    Modifier.width(art).aspectRatio(if (video) 2f / 3f else 1f)
+                        .graphicsLayer { shadowElevation = 24.dp.toPx(); shape = RoundedCornerShape(16.dp); clip = true }
+                        .background(Color.White.copy(alpha = 0.08f)),
+                ) { Artwork(coverArt, Modifier.fillMaxSize()) }
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Space.s)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        FuseIcon(if (state.playing) FuseIcons.Play else FuseIcons.Pause, size = 14.dp, tint = Fuse.colors.accent)
+                        Spacer(Modifier.width(Space.xs))
+                        FText((where ?: "Now playing").uppercase(), Fuse.type.overline, color = Color.White.copy(alpha = 0.72f), maxLines = 1)
+                    }
+                    // The logo where there is one, set at the left like a title; else the name.
+                    if (item.logo != null) {
+                        Artwork(item.logo, Modifier.fillMaxWidth(0.7f).height(logoHeight), contentScale = androidx.compose.ui.layout.ContentScale.Fit, focusX = 0f, backdrop = false)
+                    } else {
+                        FText(item.title, Fuse.type.display, color = Color.White, maxLines = 2)
+                    }
+                    (item.subtitle ?: listOfNotNull(item.artist, item.album).joinToString("  ·  ").ifEmpty { null })?.let {
+                        FText(it, Fuse.type.body, color = Color.White.copy(alpha = 0.8f), maxLines = 1)
+                    }
+                    session.durationMs()?.takeIf { it > 0 }?.let { d ->
+                        Spacer(Modifier.height(Space.xs))
+                        Box(Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)).background(Color.White.copy(alpha = 0.18f))) {
+                            Box(
+                                Modifier.fillMaxHeight().fillMaxWidth().graphicsLayer {
+                                    val f = (session.positionMs().toFloat() / d).coerceIn(0f, 1f)
+                                    scaleX = f
+                                    transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0f, 0.5f)
+                                }.background(Fuse.colors.accent),
+                            )
+                        }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            TimeText({ session.positionMs() })
+                            Spacer(Modifier.weight(1f))
+                            TimeText({ -(d - session.positionMs()).coerceAtLeast(0) })
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 private enum class RemoteList { AUDIO, SUBTITLES }
 
 /**
- * A remote for what plays on the other screen: its art, what it is, the time and the timeline,
- * play and pause, skips, previous and next, and the sound and subtitle tracks. Made for touch;
- * with [inputEnabled] the controller drives it too (A plays or pauses, Left and Right skip, LB and
- * RB go to the previous and next, B leaves through [onExit]).
+ * A remote for what plays on the other screen: its poster, what it is, the time and the timeline,
+ * play and pause, skips, previous and next, the sound and subtitle tracks, and moving the picture
+ * to this screen. Made for touch; with [inputEnabled] the controller drives it too (A plays or
+ * pauses, Left and Right skip, LB and RB go to the previous and next, Y swaps the screens, X
+ * stops, B goes back to browsing through [onBrowse], or stops through [onExit] without it).
+ *
+ * The backdrop reaches every edge; [topInset] keeps the content clear of a status line drawn over
+ * it. [where] says where the picture is ("On the main screen").
  */
 @Composable
-fun PlayerRemote(session: PlayerSession, modifier: Modifier = Modifier, inputEnabled: Boolean = false, onExit: (() -> Unit)? = null) {
+fun PlayerRemote(
+    session: PlayerSession,
+    modifier: Modifier = Modifier,
+    inputEnabled: Boolean = false,
+    onExit: (() -> Unit)? = null,
+    onSwap: (() -> Unit)? = null,
+    onBrowse: (() -> Unit)? = null,
+    where: String? = null,
+    topInset: androidx.compose.ui.unit.Dp = 0.dp,
+) {
     val item = session.item ?: return
     val state = session.engine?.state?.collectAsState()?.value ?: EngineState()
     val settings = session.settings
@@ -107,33 +182,47 @@ fun PlayerRemote(session: PlayerSession, modifier: Modifier = Modifier, inputEna
                 NavAction.RIGHT -> { session.seekBy(step); NavResult.MOVED }
                 NavAction.PREVIOUS_SECTION -> { session.previous(); NavResult.ACTIVATED }
                 NavAction.NEXT_SECTION -> { session.next(); NavResult.ACTIVATED }
-                NavAction.BACK -> { if (list != null) list = null else onExit?.invoke(); NavResult.CONSUMED }
+                NavAction.SEARCH -> { onSwap?.invoke(); NavResult.ACTIVATED }
+                NavAction.CONTEXT -> { onExit?.invoke(); NavResult.ACTIVATED }
+                NavAction.BACK -> { if (list != null) list = null else (onBrowse ?: onExit)?.invoke(); NavResult.CONSUMED }
                 else -> NavResult.CONSUMED
             }
         }
     }
 
+    val video = session.isVideo
+    // A film or show is shown by its poster (an episode by its show's); music by its cover.
+    val coverArt = if (video) item.poster ?: item.artwork else item.artwork
     Box(modifier.fillMaxSize().background(Color(0xFF0B0C10))) {
-        Artwork(item.backdrop ?: item.artwork, Modifier.fillMaxSize().blur(56.dp).graphicsLayer { alpha = 0.3f })
-        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.25f), Color.Black.copy(alpha = 0.75f)))))
-        BoxWithConstraints(Modifier.fillMaxSize().padding(Space.l)) {
-            val wide = maxWidth > maxHeight * 1.25f
-            // The art's width, so its height (tall for a film, square for music) leaves room for the controls.
-            val tall = if (session.isVideo) 1.5f else 1f
-            val art = if (wide) minOf(maxHeight * 0.62f / tall, maxWidth * 0.32f) else minOf(maxWidth * 0.42f, maxHeight * 0.26f / tall)
+        Artwork(item.backdrop ?: coverArt, Modifier.fillMaxSize().blur(56.dp).graphicsLayer { alpha = 0.34f })
+        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.45f), Color.Black.copy(alpha = 0.2f), Color.Black.copy(alpha = 0.8f)))))
+        BoxWithConstraints(Modifier.fillMaxSize().padding(top = topInset).padding(horizontal = Space.l, vertical = Space.m)) {
+            val wide = maxWidth > maxHeight * 1.15f
+            // The cover's width, so its height (tall for a film, square for music) leaves room for the controls.
+            val tall = if (video) 1.5f else 1f
+            val art = if (wide) minOf(maxHeight * 0.78f / tall, maxWidth * 0.3f) else minOf(maxWidth * 0.42f, maxHeight * 0.3f / tall)
+            val compact = maxHeight < 360.dp || (!wide && maxHeight < 520.dp)
             val cover = @Composable {
-                Box(Modifier.width(art).aspectRatio(if (session.isVideo) 2f / 3f else 1f).clip(RoundedCornerShape(12.dp)).background(Color.White.copy(alpha = 0.08f))) {
-                    Artwork(item.artwork, Modifier.fillMaxSize())
+                Box(
+                    Modifier.width(art).aspectRatio(if (video) 2f / 3f else 1f)
+                        .graphicsLayer { shadowElevation = 18.dp.toPx(); shape = RoundedCornerShape(14.dp); clip = true }
+                        .background(Color.White.copy(alpha = 0.08f)),
+                ) {
+                    Artwork(coverArt, Modifier.fillMaxSize())
                 }
             }
             val controls = @Composable {
-                Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Space.s)) {
-                    FText(if (session.isVideo) "Playing on the other screen" else "Now playing", Fuse.type.caption, color = Color.White.copy(alpha = 0.6f), maxLines = 1)
-                    FText(item.title, Fuse.type.titleSmall, color = Color.White, maxLines = 2)
-                    (item.subtitle ?: listOfNotNull(item.artist, item.album).joinToString("  ·  ").ifEmpty { null })?.let {
-                        FText(it, Fuse.type.label, color = Color.White.copy(alpha = 0.72f), maxLines = 1)
+                Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(if (compact) Space.xs else Space.s)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        FuseIcon(if (video) FuseIcons.MonitorPlay else FuseIcons.Music, size = 14.dp, tint = Fuse.colors.accent)
+                        Spacer(Modifier.width(Space.xs))
+                        FText((where ?: if (video) "Playing on the other screen" else "Now playing").uppercase(), Fuse.type.overline, color = Color.White.copy(alpha = 0.7f), maxLines = 1)
                     }
-                    Spacer(Modifier.height(Space.xs))
+                    FText(item.title, if (compact) Fuse.type.titleSmall else Fuse.type.title, color = Color.White, maxLines = 2)
+                    (item.subtitle ?: listOfNotNull(item.artist, item.album).joinToString("  ·  ").ifEmpty { null })?.let {
+                        FText(it, Fuse.type.label, color = Color.White.copy(alpha = 0.75f), maxLines = 1)
+                    }
+                    Spacer(Modifier.height(Space.xxs))
                     PlayerTimeline(
                         position = { session.positionMs() },
                         durationMs = session.durationMs(),
@@ -147,16 +236,24 @@ fun PlayerRemote(session: PlayerSession, modifier: Modifier = Modifier, inputEna
                         Spacer(Modifier.weight(1f))
                         session.durationMs()?.let { d -> TimeText({ -(d - session.positionMs()).coerceAtLeast(0) }) }
                     }
+                    val small = if (compact) 44.dp else 48.dp
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.m, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically) {
-                        if (hasPrevious) RoundButton(FuseIcons.SkipBack, "Previous", selected = false, size = 48.dp) { session.previous() }
-                        RoundButton(FuseIcons.RotateCcw, "Back ${settings.seekSeconds} seconds", selected = false, size = 48.dp, badge = settings.seekSeconds.toString()) { session.seekBy(-step) }
-                        RoundButton(if (state.playing) FuseIcons.Pause else FuseIcons.Play, if (state.playing) "Pause" else "Play", selected = false, size = 64.dp, filled = true) { session.toggle() }
-                        RoundButton(FuseIcons.RotateCw, "Forward ${settings.seekSeconds} seconds", selected = false, size = 48.dp, badge = settings.seekSeconds.toString()) { session.seekBy(step) }
-                        if (hasNext) RoundButton(FuseIcons.SkipForward, "Next", selected = false, size = 48.dp) { session.next() }
+                        if (hasPrevious) RoundButton(FuseIcons.SkipBack, "Previous", selected = false, size = small) { session.previous() }
+                        RoundButton(FuseIcons.RotateCcw, "Back ${settings.seekSeconds} seconds", selected = false, size = small, badge = settings.seekSeconds.toString()) { session.seekBy(-step) }
+                        RoundButton(if (state.playing) FuseIcons.Pause else FuseIcons.Play, if (state.playing) "Pause" else "Play", selected = false, size = if (compact) 56.dp else 64.dp, filled = true) { session.toggle() }
+                        RoundButton(FuseIcons.RotateCw, "Forward ${settings.seekSeconds} seconds", selected = false, size = small, badge = settings.seekSeconds.toString()) { session.seekBy(step) }
+                        if (hasNext) RoundButton(FuseIcons.SkipForward, "Next", selected = false, size = small) { session.next() }
                     }
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.s, Alignment.CenterHorizontally)) {
+                    // Wraps onto a second line on a narrow screen rather than cutting a label short.
+                    @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+                    androidx.compose.foundation.layout.FlowRow(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(Space.s, Alignment.CenterHorizontally),
+                        verticalArrangement = Arrangement.spacedBy(Space.s),
+                    ) {
                         if ((src?.audioTracks?.size ?: 0) > 1) RemoteChip(FuseIcons.AudioLines, "Audio", list == RemoteList.AUDIO) { list = if (list == RemoteList.AUDIO) null else RemoteList.AUDIO }
                         if (src?.subtitleTracks?.isNotEmpty() == true) RemoteChip(if (src.subtitle == null) FuseIcons.CaptionsOff else FuseIcons.Captions, "Subtitles", list == RemoteList.SUBTITLES) { list = if (list == RemoteList.SUBTITLES) null else RemoteList.SUBTITLES }
+                        if (onSwap != null && video) RemoteChip(FuseIcons.Swap, "Play here", false, onClick = onSwap)
                         onExit?.let { RemoteChip(FuseIcons.Close, "Stop", false, onClick = it) }
                     }
                 }
@@ -164,7 +261,7 @@ fun PlayerRemote(session: PlayerSession, modifier: Modifier = Modifier, inputEna
             if (wide) {
                 Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.xl)) {
                     cover()
-                    Box(Modifier.weight(1f)) { controls() }
+                    Box(Modifier.weight(1f).widthIn(max = 640.dp)) { controls() }
                 }
             } else {
                 Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(Space.m, Alignment.CenterVertically)) {

@@ -226,11 +226,23 @@ fun CompanionApp(store: FuseStore, platform: PlatformUi, mode: DualScreenMode, o
                 )
             }
             sheet?.let { AchievementsSheet(store, it) }
-            // While Fuse Player plays on the main screen, this one is its remote.
-            val player = io.github.matiyaaa.fuse.ui.player.FusePlayer.session
-            val remote = player.item != null && prefs.jellyfin.playerCompanion == "REMOTE"
-            if (remote) {
-                io.github.matiyaaa.fuse.ui.player.PlayerRemote(player, Modifier.fillMaxSize().padding(top = CompanionTopBar), onExit = { player.stop() })
+            // While Fuse Player plays: the picture here when it was put on this screen; otherwise,
+            // while it plays on the main screen, this one is its remote. Both reach every edge, the
+            // status line drawn over them.
+            val player = if (io.github.matiyaaa.fuse.ui.player.FusePlayer.available) io.github.matiyaaa.fuse.ui.player.FusePlayer.session else null
+            val placement = io.github.matiyaaa.fuse.ui.player.PlayerPlacement
+            val pictureHere = player?.item != null && !placement.withMenus
+            val remote = player?.item != null && placement.withMenus && prefs.jellyfin.playerCompanion == "REMOTE"
+            if (pictureHere && player != null) {
+                CompanionPicture(player) { placement.swap() }
+            } else if (remote && player != null) {
+                io.github.matiyaaa.fuse.ui.player.PlayerRemote(
+                    player, Modifier.fillMaxSize(),
+                    onExit = { player.stop() },
+                    onSwap = if (placement.canSwap) ({ placement.swap() }) else null,
+                    where = "On the main screen",
+                    topInset = CompanionTopBar,
+                )
             }
             // The top line: the page's title (or a close button over the achievements) and the status.
             Row(
@@ -257,7 +269,7 @@ fun CompanionApp(store: FuseStore, platform: PlatformUi, mode: DualScreenMode, o
                 }
                 StatusCluster(status, time, showWifi = prefs.showWifi, showBluetooth = prefs.showBluetooth)
             }
-            if (sheet == null && !remote) {
+            if (sheet == null && !remote && !pictureHere) {
                 PageDots(
                     count = companionPages.size,
                     current = pager.currentPage,
@@ -266,6 +278,8 @@ fun CompanionApp(store: FuseStore, platform: PlatformUi, mode: DualScreenMode, o
                     modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = Space.s),
                 )
             }
+            // Put away (Settings, Display, or the quick menu): dark, until it is shown again.
+            if (prefs.display.secondScreenHidden && !prefs.display.flipped && !pictureHere) HiddenScreen(store)
             // Screen off: black until touched, saying so for a moment.
             if (CompanionControls.screenOff) {
                 Box(
@@ -284,6 +298,65 @@ fun CompanionApp(store: FuseStore, platform: PlatformUi, mode: DualScreenMode, o
                     }
                 }
             }
+        }
+    }
+}
+
+/**
+ * Fuse Player's picture on this screen, put here from either screen. A tap shows, for a few
+ * seconds, a button that puts it back on the main screen.
+ */
+@Composable
+private fun CompanionPicture(player: io.github.matiyaaa.fuse.ui.player.PlayerSession, onSwap: () -> Unit) {
+    var shown by remember { mutableStateOf(false) }
+    // Each tap starts the wait again.
+    var taps by remember { mutableLongStateOf(0L) }
+    LaunchedEffect(taps) {
+        if (taps == 0L) return@LaunchedEffect
+        delay(3_500)
+        shown = false
+    }
+    Box(Modifier.fillMaxSize().pointerInput(Unit) { detectTapGestures { shown = !shown; taps++ } }) {
+        io.github.matiyaaa.fuse.ui.player.PlayerPicture(player, Modifier.fillMaxSize())
+        Appear(shown, Modifier.align(Alignment.BottomCenter).padding(bottom = Space.l), enter = fadeIn(), exit = fadeOut()) {
+            Row(
+                Modifier.clip(PillShape).background(Color.Black.copy(alpha = 0.72f))
+                    .pointerInput(Unit) { detectTapGestures { shown = false; onSwap() } }
+                    .padding(horizontal = Space.l, vertical = Space.s),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon(FuseIcons.Swap, size = 18.dp, tint = Color.White)
+                Spacer(Modifier.width(Space.s))
+                FText("Play on the main screen", Fuse.type.label, color = Color.White, maxLines = 1)
+            }
+        }
+    }
+}
+
+/**
+ * The second screen put away: dark, as though it were off. A double tap says how to bring it
+ * back, and a second double tap does.
+ */
+@Composable
+private fun HiddenScreen(store: FuseStore) {
+    // Says how to bring it back for a moment as it goes dark, and again after a double tap.
+    var asked by remember { mutableStateOf(true) }
+    var first by remember { mutableStateOf(true) }
+    LaunchedEffect(asked) {
+        if (!asked) return@LaunchedEffect
+        delay(3_000)
+        asked = false
+        first = false
+    }
+    Box(
+        Modifier.fillMaxSize().background(Color.Black).pointerInput(Unit) {
+            detectTapGestures(onDoubleTap = {
+                if (asked && !first) store.updatePrefs { it.copy(display = it.display.copy(secondScreenHidden = false)) } else { first = false; asked = true }
+            })
+        },
+    ) {
+        Appear(asked, Modifier.align(Alignment.Center), enter = fadeIn(), exit = fadeOut(Fuse.motion.fade(Durations.DELIBERATE))) {
+            FText(if (first) "This screen is hidden. Double tap twice to show it" else "Double tap again to show this screen", Fuse.type.caption, color = Fuse.colors.textFaint, align = TextAlign.Center)
         }
     }
 }

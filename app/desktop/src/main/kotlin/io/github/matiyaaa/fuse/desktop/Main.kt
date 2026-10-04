@@ -138,7 +138,7 @@ private fun ApplicationScope.FuseWindow(session: DesktopSession) {
                                 add(SvgDecoder.Factory())
                             }
                         }
-                        FuseApp(s.store, session.platform, session.router, s.phoneLink, safeMode = s.safeMode, onSettled = session::settled, startupIntro = true)
+                        FuseApp(s.store, session.platform, session.router, s.phoneLink, safeMode = s.safeMode, onSettled = session::settled, startupIntro = true, keepPlace = true)
                     }
                 }
             }

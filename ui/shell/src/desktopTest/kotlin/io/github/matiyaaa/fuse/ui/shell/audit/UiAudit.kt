@@ -140,6 +140,8 @@ class UiAudit {
 
     @Test fun flippedH() = audit(AuditSize.H) { flippedShowcase() }
 
+    @Test fun lowerScreenL() = audit(AuditSize.L) { flippedMenus(); jellyfinDualScreens() }
+
     @Test fun flippedM() = audit(AuditSize.M) { flippedShowcase() }
 
     @Test fun openingM() = audit(AuditSize.M) { setupOpening() }

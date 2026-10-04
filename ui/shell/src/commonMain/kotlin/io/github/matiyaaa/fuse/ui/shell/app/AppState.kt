@@ -81,6 +81,23 @@ data class ReorderSpec(
 )
 
 /**
+ * Where Fuse's menus are: the pages open (and where each was left), the Addons view, the Settings
+ * groups unfolded. Kept apart from the window drawing them, so the menus moved to the other screen
+ * (flipping a two-screen handheld) open on the very page they were on.
+ */
+@androidx.compose.runtime.Stable
+class KeptPlace(start: Route) {
+    val navigator = Navigator(start)
+    val openGroups = androidx.compose.runtime.mutableStateMapOf<String, Boolean>()
+    var addonsPart by mutableStateOf<AddonsPart?>(null)
+}
+
+/** The place kept for the app's own windows while Fuse runs ([FuseApp]'s keepPlace). */
+object KeptPlaces {
+    var current: KeptPlace? = null
+}
+
+/**
  * The interface's live state: navigation, focus zone, overlays and what the backdrop shows. One
  * instance per window/screen; the second screen has its own.
  */
@@ -92,8 +109,10 @@ class AppState(
     start: Route,
     /** Phone Link's server, where this build has one. */
     val phoneLink: PhoneLinkControl? = null,
+    /** Where the menus are, kept when their window is made again (see [KeptPlace]). */
+    private val kept: KeptPlace = KeptPlace(start),
 ) {
-    val navigator = Navigator(start)
+    val navigator = kept.navigator
     val toasts = ToastState()
 
     /** Screenshots and recordings of Fuse's screen; null where the platform can't capture it. */
@@ -119,6 +138,12 @@ class AppState(
 
     /** Fuse Player is open over everything (Jellyfin). */
     var playerOpen by mutableStateOf(false)
+
+    /**
+     * These menus are on the second screen (flipped, a 3DS's way round): the main screen shows the
+     * showcase. Set by the window drawing them.
+     */
+    var menusOnSecondScreen = false
 
     /** The code for typing on a phone is showing (the keyboard's phone key). */
     var phoneTyping by mutableStateOf(false)
@@ -168,10 +193,12 @@ class AppState(
     var keyboardTarget by mutableStateOf<KeyboardTarget?>(null)
 
     /** Which part of Addons shows (Cartridge or the Store); null until one is chosen or opened. */
-    var addonsPart by mutableStateOf<AddonsPart?>(null)
+    var addonsPart: AddonsPart?
+        get() = kept.addonsPart
+        set(value) { kept.addonsPart = value }
 
     /** Settings groups that are open, by id. They stay open while Fuse runs. */
-    val openGroups = androidx.compose.runtime.mutableStateMapOf<String, Boolean>()
+    val openGroups = kept.openGroups
 
     /** What the room is lit by. Screens set it from their selection. */
     var hero by mutableStateOf<HeroSource?>(null)

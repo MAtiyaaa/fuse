@@ -122,8 +122,14 @@ private val ARRANGE_TOOLS_ROOM = 64.dp
 private class KeptBoard(val board: List<HomeWidget>?)
 private const val BOARD_COLUMNS_NARROW = 2
 
-/** Narrower than this, the board uses [BOARD_COLUMNS_NARROW] so widgets stay big enough to read. */
+/** Narrower than this (and held upright), the board uses [BOARD_COLUMNS_NARROW] so widgets stay big enough to read. */
 private val NARROW_BELOW = 600.dp
+
+/** Thinner than this, two columns whichever way the screen is held. */
+private val TINY_BELOW = 420.dp
+
+/** Shorter than this, the board tightens so three rows fit (a two-screen handheld's lower screen). */
+private val SMALL_BELOW = 520.dp
 
 /** Widget corners, as a share of the theme's tile corner: large widgets would look bloated with a tile's. */
 private const val WIDGET_CORNER = 0.6f
@@ -286,14 +292,21 @@ fun ChannelHome(app: AppState) {
     fun open(w: HomeWidget) = app.openWidget(w.kind, feed, firstGame(w.kind, feed))
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
-        val narrow = maxWidth < NARROW_BELOW
+        // Two columns only on a screen held upright (a phone) or a very thin one. A small screen
+        // that is wider than tall (a two-screen handheld's lower screen) keeps the full board, its
+        // cells sized so three rows fit between the top line and the hints.
+        val narrow = maxWidth < NARROW_BELOW && (maxWidth < maxHeight || maxWidth < TINY_BELOW)
+        val small = maxHeight < SMALL_BELOW || maxWidth < NARROW_BELOW
         val columns = if (narrow) BOARD_COLUMNS_NARROW else BOARD_COLUMNS
-        val gutter = if (narrow) Space.gutterCompact else Space.gutter
-        val gapX = if (narrow) Space.m else Space.l
+        val gutter = if (narrow || small) Space.gutterCompact else Space.gutter
+        val gapX = if (narrow || small) Space.m else Space.l
         // Rows stay clear of the spark under a focused widget.
         val gapY = Size.sparkClearance
         val cellW = (maxWidth - gutter * 2 - gapX * (columns - 1)) / columns
-        val cellH = (cellW * if (narrow) 0.86f else 0.6f).coerceIn(CELL_MIN, CELL_MAX)
+        val fitRows = (maxHeight - Size.hudHeight - Size.hintHeight - Space.m - gapY * 2) / 3
+        val cellH = (cellW * if (narrow) 0.86f else 0.6f)
+            .coerceIn(if (small) CELL_MIN_SMALL else CELL_MIN, CELL_MAX)
+            .let { if (small && !narrow) minOf(it, fitRows).coerceAtLeast(CELL_MIN_SMALL) else it }
         val density = LocalDensity.current
         val geometry = with(density) { BoardGeometry(columns, cellW.toPx(), cellH.toPx(), gapX.toPx(), gapY.toPx()) }
         val committed = remember(widgets, columns) {
@@ -621,7 +634,7 @@ fun ChannelHome(app: AppState) {
             exit = fadeOut(motion.exit(Durations.FAST)) + slideOutVertically(motion.exit(Durations.FAST)) { it / 2 },
         ) {
             ArrangeBar(
-                compact = narrow,
+                compact = narrow || small,
                 onAdd = ::addPicker,
                 onDone = ::stopArranging,
             )
@@ -891,6 +904,7 @@ private val BADGE_OUT = 17.dp
 
 /** The smallest and largest cell height, so widgets stay readable on a handheld and sane on a TV. */
 private val CELL_MIN = 96.dp
+private val CELL_MIN_SMALL = 72.dp
 private val CELL_MAX = 240.dp
 
 /** The wobble while arranging: one beat this long, at most this many degrees (for a one-cell widget). */

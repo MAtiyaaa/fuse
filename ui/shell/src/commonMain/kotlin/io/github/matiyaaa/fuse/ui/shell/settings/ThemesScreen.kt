@@ -87,6 +87,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.theme.toColor
 import io.github.matiyaaa.fuse.ui.fuseline.Appear
 import io.github.matiyaaa.fuse.ui.fuseline.Durations
 import io.github.matiyaaa.fuse.ui.fuseline.Motion
+import io.github.matiyaaa.fuse.ui.fuseline.SizeTransform
 import io.github.matiyaaa.fuse.ui.fuseline.Swap
 import io.github.matiyaaa.fuse.ui.fuseline.animate
 import io.github.matiyaaa.fuse.ui.fuseline.fadeIn
@@ -528,8 +529,9 @@ private fun PaneSwitch(studio: StudioState?, modifier: Modifier, content: @Compo
         transitionSpec = {
             val toStudio = targetState != null
             val shift = if (motion.reduced) 0 else 1
+            // Never clipped: the "All" tab's outline and a lifted card reach a little past the pane.
             (fadeIn(motion.enter(Durations.BASE)) + slideInHorizontally(motion.enter(Durations.SLOW)) { (if (toStudio) it / 12 else -it / 12) * shift }) togetherWith
-                fadeOut(motion.exit(Durations.FAST))
+                fadeOut(motion.exit(Durations.FAST)) using SizeTransform(clip = false)
         },
         label = "themesPane",
     ) { s -> content(s) }
@@ -549,7 +551,7 @@ private fun FilterSwitch(filter: ThemeFilter, modifier: Modifier, content: @Comp
             val dir = if (targetState.ordinal > initialState.ordinal) 1 else -1
             val shift = if (motion.reduced) 0 else dir
             (fadeIn(motion.enter(Durations.BASE)) + slideInHorizontally(motion.enter(Durations.SLOW)) { it / 16 * shift }) togetherWith
-                (fadeOut(motion.exit(Durations.FAST)) + slideOutHorizontally(motion.exit(Durations.FAST)) { -it / 16 * shift })
+                (fadeOut(motion.exit(Durations.FAST)) + slideOutHorizontally(motion.exit(Durations.FAST)) { -it / 16 * shift }) using SizeTransform(clip = false)
         },
         label = "themesFilter",
     ) { f -> content(f) }

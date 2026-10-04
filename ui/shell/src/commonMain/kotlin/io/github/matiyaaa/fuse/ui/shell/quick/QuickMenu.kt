@@ -182,6 +182,14 @@ fun QuickMenu(app: AppState) {
                     },
                 )
             })
+            // The second screen put away and back, in one press (not while the menus are on it).
+            val hidden = prefs.display.secondScreenHidden
+            if (!prefs.display.flipped) {
+                add(QuickTile("Hide second screen", FuseIcons.EyeOff, active = hidden, toggle = true, detail = if (hidden) "Hidden" else "Showing") {
+                    app.store.updatePrefs { it.copy(display = it.display.copy(secondScreenHidden = !hidden)) }
+                    app.toasts.show(if (hidden) "The second screen is back" else "The second screen is hidden")
+                })
+            }
             // Which screen holds the menus, swapped in one press.
             val flipped = prefs.display.flipped
             add(QuickTile("Swap screens", FuseIcons.Swap, active = flipped, toggle = true, detail = if (flipped) "Menus below" else "Menus on top") {

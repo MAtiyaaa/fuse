@@ -276,14 +276,37 @@ internal fun AuditDriver.jellyfinDualScreens() {
             shoot("a film in focus", 2_500)
             io.github.matiyaaa.fuse.ui.shell.app.Spotlight.set("jf:s1s1e3")
             shoot("an episode in focus", 2_500)
+            val placement = io.github.matiyaaa.fuse.ui.player.PlayerPlacement
+            placement.canSwap = true
+            placement.withMenus = true
             player.session.start(film.toPlayItem(), AuditStillResolver, 2_880_000)
             pumpUntil("the film to start", 10_000) { player.session.source != null }
             shoot("the remote while the film plays", 2_000)
+            // An episode: the remote shows its show's poster, not the episode's still.
+            player.session.start(episode.toPlayItem(), AuditStillResolver, 600_000)
+            pumpUntil("the episode to start", 10_000) { player.session.source != null }
+            shoot("the remote for an episode", 3_500)
+            // The picture put on this screen; a tap offers it back to the main screen.
+            placement.withMenus = false
+            shoot("the episode playing on this screen", 1_500)
+            placement.withMenus = true
+            // The main screen's own menus while the picture is on the second screen: its remote.
+            view = AuditView.Piece { io.github.matiyaaa.fuse.ui.player.PlayerRemote(player.session, androidx.compose.ui.Modifier, onExit = {}, onSwap = {}, onBrowse = {}, where = "On the second screen") }
+            shoot("the menus' remote while the picture is on the second screen", 1_500)
             view = AuditView.Piece { io.github.matiyaaa.fuse.ui.shell.app.ShowcaseApp(libraryStore, platform) }
+            placement.withMenus = false
             shoot("flipped: the film on the screen above", 1_500)
+            placement.withMenus = true
+            shoot("flipped: played on the touch screen, the screen above shows it", 2_000)
             player.session.stop()
+            placement.canSwap = false
             io.github.matiyaaa.fuse.ui.shell.app.Spotlight.set("jf:m1")
             shoot("flipped: a film in focus, large", 2_500)
+            // Hidden from Settings: dark, until two double taps.
+            libraryStore.updatePrefs { it.copy(display = it.display.copy(secondScreenHidden = true)) }
+            view = AuditView.Companion(libraryStore, platform, io.github.matiyaaa.fuse.model.DualScreenMode.LIBRARY_COMPANION)
+            shoot("hidden, saying how to show it again", 800)
+            libraryStore.updatePrefs { it.copy(display = it.display.copy(secondScreenHidden = false)) }
             show(libraryStore)
         }
     } finally {

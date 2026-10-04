@@ -7,6 +7,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import io.github.matiyaaa.fuse.ui.designsystem.components.Hint
+import io.github.matiyaaa.fuse.ui.designsystem.icons.HintButton
+import io.github.matiyaaa.fuse.ui.fuseline.PageEffect
 import io.github.matiyaaa.fuse.data.settings.JellyfinSettings
 import io.github.matiyaaa.fuse.jellyfin.JellyfinArt
 import io.github.matiyaaa.fuse.jellyfin.JellyfinQuality
@@ -90,6 +93,9 @@ internal fun AppState.play(item: MediaItem, fromStart: Boolean = false, queue: L
         val session = FusePlayer.session
         val j = store.prefs.value.jellyfin
         session.settings = j.toPlayerSettings()
+        // The picture goes to the screen asked for (Films play on), where there is another screen.
+        val placement = io.github.matiyaaa.fuse.ui.player.PlayerPlacement
+        placement.withMenus = !placement.canSwap || target.type == MediaType.SONG || menusOnSecondScreen == (j.playOn == "SECOND")
         val start = if (fromStart) 0 else target.resumeMs
         val list = (if (queue.isEmpty()) listOf(target) else queue).map { it.toPlayItem() }
         session.start(target.toPlayItem(), resolver, start, list)
@@ -117,9 +123,26 @@ internal fun MediaPlayerHost(app: AppState) {
     LaunchedEffect(Unit) {
         androidx.compose.runtime.snapshotFlow { session.item }.collect { if (it == null && !session.resolving) app.playerOpen = false }
     }
-    // Flipped (menus on the touch screen): the picture is on the main screen, and this one is its remote.
-    if (io.github.matiyaaa.fuse.ui.shell.app.LocalShowcaseElsewhere.current) {
-        io.github.matiyaaa.fuse.ui.player.PlayerRemote(session, Modifier.fillMaxSize(), inputEnabled = !app.overlayOpen, onExit = ::exit)
+    val placement = io.github.matiyaaa.fuse.ui.player.PlayerPlacement
+    // The picture is on the other screen: this one is its remote, and B goes back to browsing.
+    if (!placement.withMenus) {
+        val flippedMenus = io.github.matiyaaa.fuse.ui.shell.app.LocalShowcaseElsewhere.current
+        PageEffect(Unit) {
+            app.hints = listOf(
+                Hint(HintButton.CONFIRM, "Play or pause"),
+                Hint(HintButton.SEARCH, "Play here"),
+                Hint(HintButton.OPTIONS, "Stop"),
+                Hint(HintButton.BACK, "Keep browsing"),
+            )
+        }
+        io.github.matiyaaa.fuse.ui.player.PlayerRemote(
+            session, Modifier.fillMaxSize(),
+            inputEnabled = !app.overlayOpen,
+            onExit = ::exit,
+            onSwap = { placement.swap() },
+            onBrowse = { app.playerOpen = false },
+            where = if (flippedMenus) "On the screen above" else "On the second screen",
+        )
         return
     }
     PlayerScreen(
@@ -129,6 +152,7 @@ internal fun MediaPlayerHost(app: AppState) {
         inputEnabled = !app.overlayOpen,
         onSettings = { s -> app.store.updatePrefs { it.copy(jellyfin = it.jellyfin.with(s, session.speed)) } },
         fullscreen = app.platform.windowControls?.let { w -> { w.setMode(if (w.mode == io.github.matiyaaa.fuse.ui.shell.platform.WindowStyle.FULLSCREEN) io.github.matiyaaa.fuse.ui.shell.platform.WindowStyle.WINDOWED else io.github.matiyaaa.fuse.ui.shell.platform.WindowStyle.FULLSCREEN) } },
+        onSwap = if (placement.canSwap) ({ placement.swap() }) else null,
     )
     // The settings may have changed in Settings meanwhile.
     LaunchedEffect(prefs.jellyfin) { session.settings = prefs.jellyfin.toPlayerSettings().copy(maxBitrate = session.settings.maxBitrate) }

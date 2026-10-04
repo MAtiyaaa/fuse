@@ -1234,6 +1234,11 @@ fun displayRows(app: AppState): List<MenuAction> {
                     },
                 ))
             }
+            add(toggleRow(
+                "hide", "Hide the second screen", FuseIcons.EyeOff, d.secondScreenHidden,
+                if (d.flipped) "Not while the menus are on it" else "Dark, showing nothing, until you show it again here, in the quick menu, or with two double taps on it",
+                enabled = !d.flipped,
+            ) { v -> app.store.updatePrefs { it.copy(display = it.display.copy(secondScreenHidden = v)) } })
             add(toggleRow("bg", "Same background as the main screen", FuseIcons.Image, d.companionFollowsBackground, "Its scene or picture behind what the second screen shows") { v -> app.store.updatePrefs { it.copy(display = it.display.copy(companionFollowsBackground = v)) } })
             add(toggleRow("perf", "Show performance on the second screen", FuseIcons.ChartLine, d.companionShowsPerformance, "Only values the system really reports; nothing is estimated") { v -> app.store.updatePrefs { it.copy(display = it.display.copy(companionShowsPerformance = v)) } })
             add(toggleRow("touch", "Touch controls on the second screen", FuseIcons.Hand, d.companionTouchControls) { v -> app.store.updatePrefs { it.copy(display = it.display.copy(companionTouchControls = v)) } })

@@ -82,23 +82,29 @@ time over Compose's.
 
 | Case | Fuseline | Compose | Fuseline / Compose | Fuseline memory | Compose memory |
 |---|---|---|---|---|---|
-| 1 tweens | 1.6 us | 2.0 us | 0.81x | 488 B | 504 B |
-| 1 springs | 1.6 us | 2.0 us | 0.83x | 488 B | 504 B |
-| 100 tweens | 151.3 us | 198.6 us | 0.76x | 48800 B | 50400 B |
-| 100 springs | 157.0 us | 191.7 us | 0.82x | 48800 B | 50400 B |
-| 1000 tweens | 1718.3 us | 2299.1 us | 0.75x | 488000 B | 504024 B |
-| 1000 springs | 1759.3 us | 2320.0 us | 0.76x | 488000 B | 504000 B |
-| 100 springs retargeted every frame | 681.6 us | 1319.7 us | 0.52x | 239871 B | 565526 B |
-| 100 colour fades | 158.5 us | 201.2 us | 0.79x | 49600 B | 51200 B |
+| 1 tweens | 1.7 us | 2.4 us | 0.71x | 520 B | 528 B |
+| 1 springs | 1.9 us | 2.0 us | 0.94x | 520 B | 528 B |
+| 100 tweens | 14.9 us | 214.0 us | 0.07x | 4480 B | 50424 B |
+| 100 springs | 19.6 us | 206.3 us | 0.10x | 4480 B | 50424 B |
+| 1000 tweens | 145.1 us | 2848.0 us | 0.05x | 40480 B | 504024 B |
+| 1000 springs | 203.5 us | 2634.4 us | 0.08x | 40480 B | 504024 B |
+| 100 springs retargeted every frame | 588.3 us | 1409.4 us | 0.42x | 192697 B | 553538 B |
+| 100 colour fades | 19.9 us | 208.4 us | 0.10x | 5280 B | 51224 B |
 
 Transitions (`Appear` and `Swap` against `AnimatedVisibility` and `AnimatedContent`, the whole run
 including composition and layout):
 
 | Case | Fuseline | Compose | Fuseline / Compose |
 |---|---|---|---|
-| 60 appearing and leaving, and a page of 120 tiles swapping (6 times) | 346.4 ms | 490.1 ms | 0.71x |
+| 60 appearing and leaving, and a page of 120 tiles swapping (6 times) | 315.1 ms | 569.4 ms | 0.55x |
 
 What makes it quick:
+- Every move on a frame clock shares one frame callback ([FrameDriver]). A move hands the driver
+  its frame work and waits once, until it ends; the driver waits for each frame once and steps
+  them all. A hundred values moving cost one frame wait instead of a hundred, which makes a
+  screen full of motion (a page of tiles rising in, a grid shuffling) about ten times quicker per
+  frame than Compose, with a tenth of its memory. Endless loops keep their own frames, so tests
+  and screenshot tools still see them as endless.
 - Curves are solved from a table of samples and a few Newton steps, not a long search.
 - Springs are solved in closed form, without allocating. The end of a calm spring is found in
   strides and then to the millisecond.

@@ -129,6 +129,8 @@ data class DisplayProfile(
     val companionFollowsBackground: Boolean = true,
     /** Which way round Fuse turns on a device that rotates (Android). */
     val rotation: ScreenRotation = ScreenRotation.AUTO,
+    /** The second screen is put away: dark, showing nothing, until it is shown again. */
+    val secondScreenHidden: Boolean = false,
 )
 
 /**
