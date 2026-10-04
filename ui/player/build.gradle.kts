@@ -39,3 +39,9 @@ kotlin {
         }
     }
 }
+
+// Renders of the player for looking at (PlayerRenders): -Pfuse.player.renders=<dir>.
+tasks.withType<Test>().configureEach {
+    providers.gradleProperty("fuse.player.renders").orNull?.let { systemProperty("fuse.player.renders", it) }
+    outputs.upToDateWhen { false }
+}

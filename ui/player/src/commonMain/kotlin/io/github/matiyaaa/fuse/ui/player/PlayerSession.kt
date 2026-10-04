@@ -328,6 +328,13 @@ class PlayerSession(
         }
     }
 
+    /** After a failure: the same item again from where it stopped. */
+    fun retry() {
+        val i = item ?: return
+        recoveries = 0
+        open(i, lastPosition)
+    }
+
     fun next() {
         val i = item ?: return
         scope.launch {
