@@ -13,6 +13,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -26,6 +27,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.unit.dp
 import io.github.matiyaaa.fuse.model.BackgroundStyle
 import io.github.matiyaaa.fuse.model.Destination
@@ -64,6 +66,8 @@ import io.github.matiyaaa.fuse.ui.fuseline.Curves
 import io.github.matiyaaa.fuse.ui.fuseline.Durations
 import io.github.matiyaaa.fuse.ui.fuseline.Enter
 import io.github.matiyaaa.fuse.ui.fuseline.Exit
+import io.github.matiyaaa.fuse.ui.fuseline.FuselineValue
+import io.github.matiyaaa.fuse.ui.fuseline.LocalPageActive
 import io.github.matiyaaa.fuse.ui.fuseline.SizeTransform
 import io.github.matiyaaa.fuse.ui.fuseline.Swap
 import io.github.matiyaaa.fuse.ui.fuseline.fadeIn
@@ -113,6 +117,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 
 /**
  * The whole Fuse interface for one window. [router] is created by the host (Android activity or
@@ -461,67 +466,183 @@ private fun Room(
 private fun Pages(app: AppState, tabs: List<Destination>) {
     val motion = Fuse.motion
     val nav = app.navigator
+    val current = nav.current
     // Tabs follow the order the top line shows them in, which the user may have changed.
-    fun place(route: Route): Int {
-        val d = (route as? Route.Root)?.destination ?: return 0
-        return tabs.indexOf(d).takeIf { it >= 0 } ?: (tabs.size + d.ordinal)
+    fun place(d: Destination): Int = tabs.indexOf(d).takeIf { it >= 0 } ?: (tabs.size + d.ordinal)
+    Box(Modifier.fillMaxSize()) {
+        RootPages(app, current, nav.direction, ::place)
+        PushedPages(app, current, nav.direction, motion)
     }
-    // When the next page arrives while the last one is still sliding in (a shoulder button tapped
-    // again and again), it switches at once: stacking half-composed pages is what made quick runs lag.
+}
+
+/**
+ * The tabs' own pages, kept ready once visited (the [KEPT_PAGES] most recent), so going back to one
+ * is instant: it is shown again as it was left, with nothing to build. Only the page shown (and the
+ * one leaving, for the moment it takes) is laid out and drawn; the others hear no input, run no
+ * loops and keep their effects waiting ([LocalPageActive], [PageEffect]) until shown again.
+ */
+@Composable
+private fun RootPages(app: AppState, current: Route, direction: NavDirection, place: (Destination) -> Int) {
+    val motion = Fuse.motion
+    val root = (current as? Route.Root)?.destination
+    // Most recent last. Updated as composition runs: a new tab joins in the same frame it is chosen.
+    val kept = remember { ArrayList<Destination>() }
+    if (root != null && kept.lastOrNull() != root) {
+        kept.remove(root)
+        kept.add(root)
+        while (kept.size > KEPT_PAGES) kept.removeAt(0)
+    }
+    val shownRoot = kept.lastOrNull() ?: return
+    val onRoot = current is Route.Root
+    // The tab page coming in (and the one leaving) as a share of the way, and whether tab pages show
+    // at all (a pushed page covers them).
+    val incoming = remember { FuselineValue(1f) }
+    val outgoing = remember { FuselineValue(1f) }
+    val visible = remember { FuselineValue(if (onRoot) 1f else 0f) }
+    val dir = remember { intArrayOf(1) }
+    // The page leaving while another comes in, decided as composition runs so the very first frame
+    // of a switch already shows the old page, never the new one at full strength or nothing at all.
+    var leaving by remember { mutableStateOf<Destination?>(null) }
+    var starting by remember { mutableStateOf(false) }
+    val last = remember { arrayOf<Destination?>(shownRoot) }
     val lastSwitch = remember { arrayOf<TimeSource.Monotonic.ValueTimeMark?>(null) }
-    Swap(
-        targetState = nav.current,
-        transitionSpec = {
-            val now = TimeSource.Monotonic.markNow()
-            val quick = lastSwitch[0]?.let { (now - it).inWholeMilliseconds < QUICK_SWITCH_MS } == true
-            lastSwitch[0] = now
-            if (quick) return@Swap (Enter.None togetherWith Exit.None).using(SizeTransform(clip = false))
-            val dir = when (nav.direction) {
-                NavDirection.FORWARD -> 1
-                NavDirection.BACK -> -1
-                NavDirection.LATERAL -> if (place(targetState) >= place(initialState)) 1 else -1
+    if (last[0] != shownRoot) {
+        val before = last[0]
+        last[0] = shownRoot
+        val now = TimeSource.Monotonic.markNow()
+        // A run of quick switches (a shoulder button tapped again and again) changes at once.
+        val quick = lastSwitch[0]?.let { (now - it).inWholeMilliseconds < QUICK_SWITCH_MS } == true || motion.reduced
+        lastSwitch[0] = now
+        if (before != null && !quick) {
+            leaving = before
+            starting = true
+            dir[0] = if (place(shownRoot) >= place(before)) 1 else -1
+        } else {
+            leaving = null
+            starting = false
+        }
+    }
+    LaunchedEffect(shownRoot) {
+        if (!starting) return@LaunchedEffect
+        incoming.snapTo(0f)
+        outgoing.snapTo(0f)
+        starting = false
+        kotlinx.coroutines.coroutineScope {
+            launch { outgoing.animateTo(1f, motion.tween(Durations.FAST, Curves.Standard)) }
+            incoming.animateTo(1f, motion.tween(Durations.BASE, Curves.Enter))
+        }
+        leaving = null
+    }
+    LaunchedEffect(onRoot) {
+        dir[0] = if (direction == NavDirection.BACK) -1 else 1
+        if (motion.reduced) visible.snapTo(if (onRoot) 1f else 0f)
+        else visible.animateTo(if (onRoot) 1f else 0f, motion.tween(if (onRoot) Durations.BASE else Durations.FAST, if (onRoot) Curves.Enter else Curves.Standard))
+    }
+    val shift = motion.slideFraction
+    Layout(
+        modifier = Modifier.fillMaxSize(),
+        content = {
+            for (d in kept) key(d) {
+                val active = d == shownRoot && onRoot
+                CompositionLocalProvider(LocalPageActive provides active) {
+                    Box(
+                        Modifier.fillMaxSize().graphicsLayer {
+                            val w = size.width
+                            if (d == shownRoot) {
+                                // Coming in: fades in just after it starts sliding.
+                                val p = if (starting) 0f else incoming.value
+                                val fade = ((p - 0.08f) / 0.92f).coerceIn(0f, 1f)
+                                val v = visible.value
+                                alpha = fade * v
+                                translationX = (1f - p) * shift * w * dir[0] + (1f - v) * -shift * 0.5f * w * dir[0]
+                            } else {
+                                val p = if (starting) 0f else outgoing.value
+                                alpha = 1f - p
+                                translationX = -p * shift * 0.5f * w * dir[0]
+                            }
+                        },
+                    ) {
+                        RevealScope(Route.Root(d)) {
+                            Box(Modifier.fillMaxSize()) { RootPage(app, d) }
+                        }
+                    }
+                }
             }
+        },
+    ) { measurables, constraints ->
+        // Only what shows is measured: the page in front while tab pages show, and the one leaving.
+        // Every value is read up front, so any of them changing measures again.
+        val inFront = visible.value > 0f
+        val stillLeaving = leaving?.takeIf { starting || outgoing.value < 1f }
+        val drawn = kept.mapIndexedNotNull { i, d ->
+            val show = (d == shownRoot && inFront) || d == stillLeaving
+            if (show) measurables[i].measure(constraints) else null
+        }
+        layout(constraints.maxWidth, constraints.maxHeight) { drawn.forEach { it.place(0, 0) } }
+    }
+}
+
+@Composable
+private fun RootPage(app: AppState, d: Destination) {
+    when (d) {
+        Destination.HOME -> HomeScreen(app)
+        Destination.LIBRARY -> LibraryScreen(app, LibraryScope.All)
+        Destination.SYSTEMS -> SystemsScreen(app)
+        Destination.ACHIEVEMENTS -> io.github.matiyaaa.fuse.ui.shell.achievements.AchievementsScreen(app)
+        Destination.APPS -> AppsScreen(app)
+        Destination.CARTRIDGE -> if (app.sections.addons) io.github.matiyaaa.fuse.ui.shell.addons.AddonsScreen(app) else CartridgeScreen(app)
+    }
+}
+
+/** Pages opened on top of a tab (a game, Settings, Search...), sliding in and out over it. */
+@Composable
+private fun PushedPages(app: AppState, current: Route, direction: NavDirection, motion: io.github.matiyaaa.fuse.ui.fuseline.FuselineMotion) {
+    val target: Route? = current.takeIf { it !is Route.Root }
+    Swap(
+        targetState = target,
+        transitionSpec = {
+            val dir = if (direction == NavDirection.BACK) -1 else 1
             val shift = motion.slideFraction
             val enter = fadeIn(tween(motion.ms(Durations.BASE), delayMillis = motion.ms(Durations.INSTANT) / 2, easing = Curves.Fade)) +
                 slideInHorizontally(motion.tween(Durations.BASE, Curves.Enter)) { (it * shift * dir).toInt() }
             val exit = fadeOut(motion.tween(Durations.FAST, Curves.Standard)) +
                 slideOutHorizontally(motion.tween(Durations.FAST, Curves.Standard)) { (-it * shift * 0.5f * dir).toInt() }
-            (enter togetherWith exit).using(SizeTransform(clip = false))
+            when {
+                // Back to a tab: the page leaves, and the tab's page comes in under it (RootPages).
+                targetState == null -> (Enter.None togetherWith exit).using(SizeTransform(clip = false))
+                // Opened from a tab: only this page moves here.
+                initialState == null -> (enter togetherWith Exit.None).using(SizeTransform(clip = false))
+                else -> (enter togetherWith exit).using(SizeTransform(clip = false))
+            }
         },
         contentKey = { it },
         label = "pages",
     ) { route ->
+        if (route == null) return@Swap
         RevealScope(route) {
             Box(Modifier.fillMaxSize()) {
                 when (route) {
-                    is Route.Root -> when (route.destination) {
-                        Destination.HOME -> HomeScreen(app)
-                        Destination.LIBRARY -> LibraryScreen(app, LibraryScope.All)
-                        Destination.SYSTEMS -> SystemsScreen(app)
-                        Destination.ACHIEVEMENTS -> io.github.matiyaaa.fuse.ui.shell.achievements.AchievementsScreen(app)
-                        Destination.APPS -> AppsScreen(app)
-                        Destination.CARTRIDGE -> if (app.sections.addons) io.github.matiyaaa.fuse.ui.shell.addons.AddonsScreen(app) else CartridgeScreen(app)
-                    }
-                    is Route.PlatformGames -> LibraryScreen(app, LibraryScope.OfPlatform(route.platform))
-                    is Route.CollectionGames -> LibraryScreen(app, LibraryScope.OfCollection(route.collection, route.name))
-                    Route.Collections -> io.github.matiyaaa.fuse.ui.shell.collections.CollectionsScreen(app)
-                    Route.Storage -> io.github.matiyaaa.fuse.ui.shell.settings.StorageScreen(app)
-                    Route.PhoneLink -> io.github.matiyaaa.fuse.ui.shell.settings.PhoneLinkScreen(app)
-                    is Route.GameInfo -> GameScreen(app, route.game)
-                    is Route.Media -> MediaScreen(app, route.owner, route.title, route.identify)
-                    is Route.Settings -> SettingsScreen(app, route.section, route.row)
-                    is Route.PlatformSettings -> PlatformSettingsScreen(app, route.platform)
-                    Route.Search -> SearchScreen(app)
-                    Route.Controls -> io.github.matiyaaa.fuse.ui.shell.settings.ControlsScreen(app)
-                    Route.Licenses -> io.github.matiyaaa.fuse.ui.shell.settings.LicensesScreen(app)
-                    is Route.ReleaseNotes -> io.github.matiyaaa.fuse.ui.shell.notes.ReleaseNotesScreen(app, route)
-                    Route.PlayTime -> io.github.matiyaaa.fuse.ui.shell.library.PlayTimeScreen(app)
-                    Route.Themes -> io.github.matiyaaa.fuse.ui.shell.settings.ThemesScreen(app)
-                    Route.Onboarding -> OnboardingScreen(app)
-                    is Route.FolderBrowser -> FolderBrowserScreen(app, route.game)
-                    is Route.GameContent -> io.github.matiyaaa.fuse.ui.shell.game.GameContentScreen(app, route.game)
-                    is Route.PickFile -> io.github.matiyaaa.fuse.ui.shell.files.FilePickerScreen(app, route.purpose, route.locate, route.licence)
-                    is Route.StoreApp -> io.github.matiyaaa.fuse.ui.shell.addons.StoreAppScreen(app, route.key)
+            is Route.PlatformGames -> LibraryScreen(app, LibraryScope.OfPlatform(route.platform))
+            is Route.CollectionGames -> LibraryScreen(app, LibraryScope.OfCollection(route.collection, route.name))
+            Route.Collections -> io.github.matiyaaa.fuse.ui.shell.collections.CollectionsScreen(app)
+            Route.Storage -> io.github.matiyaaa.fuse.ui.shell.settings.StorageScreen(app)
+            Route.PhoneLink -> io.github.matiyaaa.fuse.ui.shell.settings.PhoneLinkScreen(app)
+            is Route.GameInfo -> GameScreen(app, route.game)
+            is Route.Media -> MediaScreen(app, route.owner, route.title, route.identify)
+            is Route.Settings -> SettingsScreen(app, route.section, route.row)
+            is Route.PlatformSettings -> PlatformSettingsScreen(app, route.platform)
+            Route.Search -> SearchScreen(app)
+            Route.Controls -> io.github.matiyaaa.fuse.ui.shell.settings.ControlsScreen(app)
+            Route.Licenses -> io.github.matiyaaa.fuse.ui.shell.settings.LicensesScreen(app)
+            is Route.ReleaseNotes -> io.github.matiyaaa.fuse.ui.shell.notes.ReleaseNotesScreen(app, route)
+            Route.PlayTime -> io.github.matiyaaa.fuse.ui.shell.library.PlayTimeScreen(app)
+            Route.Themes -> io.github.matiyaaa.fuse.ui.shell.settings.ThemesScreen(app)
+            Route.Onboarding -> OnboardingScreen(app)
+            is Route.FolderBrowser -> FolderBrowserScreen(app, route.game)
+            is Route.GameContent -> io.github.matiyaaa.fuse.ui.shell.game.GameContentScreen(app, route.game)
+            is Route.PickFile -> io.github.matiyaaa.fuse.ui.shell.files.FilePickerScreen(app, route.purpose, route.locate, route.licence)
+            is Route.StoreApp -> io.github.matiyaaa.fuse.ui.shell.addons.StoreAppScreen(app, route.key)
+                    is Route.Root -> Unit
                 }
             }
         }
@@ -799,6 +920,9 @@ private const val HERO_SETTLE_MS = 160L
 
 /** A page that arrives sooner than this after the last one switches without a transition. */
 private const val QUICK_SWITCH_MS = 300L
+
+/** How many tabs' pages are kept ready once visited. */
+private const val KEPT_PAGES = 4
 
 /** The widest the interface gets (width over height); wider screens centre it. A little over 21:9. */
 private const val MAX_ASPECT = 2.4f

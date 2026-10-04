@@ -321,7 +321,9 @@ private const val SHARE_THRESHOLD = 0.001f
 /** The room the content takes while its size part runs, with the content held to its alignment. */
 private fun Modifier.appearSize(part: SizePart?, parts: AppearParts): Modifier {
     if (part == null) return this
-    val sized = this.layout { measurable, constraints ->
+    // The clip goes outside the layout, so it trims to the room as it grows, not to the full content.
+    val room = if (part.clip) this.clipToBounds() else this
+    return room.layout { measurable, constraints ->
         val placeable = measurable.measure(constraints)
         val full = IntSize(placeable.width, placeable.height)
         val small = part.size(full)
@@ -331,5 +333,4 @@ private fun Modifier.appearSize(part: SizePart?, parts: AppearParts): Modifier {
         val at = part.alignment.align(full, IntSize(w, h), LayoutDirection.Ltr)
         layout(w, h) { placeable.place(at) }
     }
-    return if (part.clip) sized.clipToBounds() else sized
 }

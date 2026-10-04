@@ -29,6 +29,9 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import io.github.matiyaaa.fuse.ui.fuseline.fuselineScrollTo
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -88,10 +91,12 @@ import io.github.matiyaaa.fuse.ui.fuseline.fadeOut
 import io.github.matiyaaa.fuse.ui.fuseline.fuselineColor
 import io.github.matiyaaa.fuse.ui.fuseline.fuselineFloat
 import io.github.matiyaaa.fuse.ui.fuseline.infiniteRepeatable
-import io.github.matiyaaa.fuse.ui.fuseline.rememberGlide
+import io.github.matiyaaa.fuse.ui.fuseline.FuselineValue
 import io.github.matiyaaa.fuse.ui.fuseline.rememberLoopClock
 import io.github.matiyaaa.fuse.ui.fuseline.shrinkHorizontally
 import io.github.matiyaaa.fuse.ui.fuseline.tween
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 import kotlin.time.Clock
 import kotlinx.coroutines.delay
 import kotlinx.datetime.TimeZone
@@ -144,7 +149,7 @@ fun Hud(
         modifier
             .fillMaxWidth()
             .height(Size.hudHeight)
-            .onGloballyPositioned { anchors.lineX = it.positionInRoot().x },
+            .onGloballyPositioned { anchors.setLine(it.positionInRoot().x) },
     ) {
         // Room for every label: about 120dp per tab plus the mark, the LB/RB glyphs, buttons and status.
         val labels = maxWidth > 120.dp * destinations.size + 430.dp
@@ -178,6 +183,16 @@ fun Hud(
                 var viewport by remember { mutableIntStateOf(0) }
                 val edge = with(LocalDensity.current) { 56.dp.toPx() }
                 val activeWidth = remember { mutableIntStateOf(0) }
+                val activeX = remember { floatArrayOf(0f) }
+                // Scrolled by touch, then left alone: after a while the tabs glide back so the place
+                // you are on is centred again, as moving with the controller leaves them.
+                var touchedAt by remember { mutableStateOf(0L) }
+                LaunchedEffect(touchedAt) {
+                    if (touchedAt == 0L) return@LaunchedEffect
+                    delay(TABS_SETTLE_MS)
+                    val centred = (activeX[0] - (viewport - activeWidth.intValue) / 2f).toInt().coerceIn(0, scroll.maxValue)
+                    if (centred != scroll.value) scroll.fuselineScrollTo(centred)
+                }
                 // Again once its label has opened, and with room to spare so the fade never covers it.
                 LaunchedEffect(active, labels, activeWidth.intValue, destinations, viewport) {
                     val requester = active?.let { requesters[it] } ?: return@LaunchedEffect
@@ -187,6 +202,14 @@ fun Hud(
                     Modifier
                         .weight(1f, fill = false)
                         .onSizeChanged { viewport = it.width }
+                        .pointerInput(Unit) {
+                            awaitPointerEventScope {
+                                while (true) {
+                                    val e = awaitPointerEvent(PointerEventPass.Initial)
+                                    if (e.changes.any { it.pressed }) touchedAt = kotlin.time.Clock.System.now().toEpochMilliseconds()
+                                }
+                            }
+                        }
                         .fadeSides(fadeLeft = { scroll.value > 0 }, fadeRight = { scroll.value < scroll.maxValue })
                         .horizontalScroll(scroll),
                     horizontalArrangement = Arrangement.spacedBy(Space.xs),
@@ -204,7 +227,10 @@ fun Hud(
                                 .onPlaced {
                                     x = it.positionInParent().x
                                     w = it.size.width
-                                    if (d == active) activeWidth.intValue = it.size.width
+                                    if (d == active) {
+                                        activeWidth.intValue = it.size.width
+                                        activeX[0] = it.positionInParent().x
+                                    }
                                 }
                                 .anchor(anchors, d)
                                 .graphicsLayer {
@@ -274,6 +300,9 @@ fun Hud(
     }
 }
 
+/** How long tabs scrolled by touch stay put before gliding back to the place you are on. */
+private const val TABS_SETTLE_MS = 10_000L
+
 /** How much of the status cluster the line has room for. */
 private enum class StatusRoom { NONE, CLOCK, ALL }
 
@@ -283,15 +312,27 @@ private val COMPACT = 720.dp
 
 /**
  * Where each tab and button of the line sits (its centre, across the window), so the active marker
- * can travel between them. Updated by layout only when something actually moved.
+ * can travel between them. Layout writes it and drawing reads it, in the same frame: a plain map
+ * (no recomposition), with [version] read by the marker's drawing alone so a move redraws it.
  */
 @Stable
 private class HudAnchors {
-    val centres = mutableStateMapOf<Any, Float>()
-    var lineX by mutableFloatStateOf(0f)
+    val centres = HashMap<Any, Float>()
+    var lineX = 0f
+    var version by mutableIntStateOf(0)
+
+    fun setLine(x: Float) {
+        if (lineX != x) {
+            lineX = x
+            version++
+        }
+    }
 
     fun set(key: Any, x: Float) {
-        if (centres[key] != x) centres[key] = x
+        if (centres[key] != x) {
+            centres[key] = x
+            version++
+        }
     }
 }
 
@@ -301,29 +342,66 @@ private fun Modifier.anchor(anchors: HudAnchors, key: Any): Modifier = onGloball
 }
 
 /**
- * The accent bar under the active place. It glides between tabs (and to Search or Settings): the
- * leading edge first, the trailing one following, so it stretches a little toward where it goes,
- * never more than three bars long however far it travels. While the same tab moves it follows it
- * frame for frame instead of chasing it. It snaps under Reduced motion.
+ * The accent bar under the active place. When the place changes it glides there (to a tab, Search
+ * or Settings): the leading edge first, the trailing one following, so it stretches a little toward
+ * where it goes, never more than three bars long however far it travels.
+ *
+ * What moves is only how far along the way it is; both ends of the way are read from the line's
+ * layout as it is drawn. So the bar can never trail a tab that moves while it travels (the carousel
+ * scrolling the new tab into view, its label opening) and, once there, sits exactly under its tab
+ * in every frame, with no catching up. It snaps under Reduced motion.
  */
 @Composable
 private fun BoxScope.ActiveMarker(anchors: HudAnchors, key: Any) {
-    val at = anchors.centres[key] ?: return
-    val centre = with(LocalDensity.current) { (at - anchors.lineX).toDp() }
-    val half = Size.sparkWidth / 2
-    // Keyed by the place it marks: it glides when the place changes, and when that tab only moves
-    // (the carousel scrolling, a label opening beside it) it stays exactly under it.
-    val glide = rememberGlide(centre - half, centre + half, key)
+    val motion = Fuse.motion
     val accent = Fuse.colors.accent
+    // Where the way starts: the place it was under (followed live), or the point it had reached
+    // when a new place was chosen mid-way.
+    val from = remember { arrayOf<Any?>(key) }
+    val fromX = remember { floatArrayOf(Float.NaN) }
+    val shown = remember { arrayOf<Any?>(key) }
+    val lead = remember { FuselineValue(1f) }
+    val trail = remember { FuselineValue(1f) }
+    val drawn = remember { floatArrayOf(Float.NaN) }
+    LaunchedEffect(key) {
+        val before = shown[0]
+        shown[0] = key
+        if (before == key) return@LaunchedEffect
+        // Mid-way: start from the point reached, so nothing jumps.
+        val moving = lead.value < 1f || trail.value < 1f
+        from[0] = if (moving) null else before
+        fromX[0] = drawn[0]
+        lead.snapTo(0f)
+        trail.snapTo(0f)
+        coroutineScope {
+            launch { lead.animateTo(1f, motion.glide()) }
+            launch { trail.animateTo(1f, motion.glideTrail()) }
+        }
+    }
     Spacer(
         Modifier.matchParentSize().drawBehind {
-            var start = glide.start.toPx()
-            var end = glide.end.toPx()
-            val bar = Size.sparkWidth.toPx()
-            val longest = bar * 3
+            anchors.version // Redrawn whenever a place moves.
+            val target = anchors.centres[key]?.minus(anchors.lineX) ?: return@drawBehind
+            val start0 = from[0]?.let { anchors.centres[it]?.minus(anchors.lineX) } ?: fromX[0].takeIf { !it.isNaN() } ?: target
+            val l = lead.value
+            val t = trail.value
+            val atLead = start0 + (target - start0) * l
+            val atTrail = start0 + (target - start0) * t
+            drawn[0] = (atLead + atTrail) / 2
+            val half = Size.sparkWidth.toPx() / 2
+            var start: Float
+            var end: Float
+            if (target >= start0) {
+                start = atTrail - half
+                end = atLead + half
+            } else {
+                start = atLead - half
+                end = atTrail + half
+            }
+            val longest = Size.sparkWidth.toPx() * 3
             if (end - start > longest) {
                 // Led by the edge that is travelling.
-                if (centre.toPx() > (start + end) / 2) start = end - longest else end = start + longest
+                if (target >= start0) start = end - longest else end = start + longest
             }
             val h = Size.sparkHeight.toPx()
             val top = size.height / 2 + Size.iconM.toPx() / 2 + Space.xs.toPx()
@@ -485,8 +563,9 @@ private fun Tab(label: String, icon: ImageVector, selected: Boolean, focused: Bo
         FuseIcon(icon, size = Size.iconM, tint = tint)
         Appear(
             visible = showLabel,
-            enter = expandHorizontally(motion.tween(Durations.BASE)) + fadeIn(motion.fade(Durations.BASE)),
-            exit = shrinkHorizontally(motion.tween(Durations.FAST)) + fadeOut(motion.fade(Durations.INSTANT)),
+            // The label opens out of its icon, reading from its first letter.
+            enter = expandHorizontally(motion.tween(Durations.BASE), expandFrom = Alignment.Start) + fadeIn(motion.fade(Durations.BASE)),
+            exit = shrinkHorizontally(motion.tween(Durations.FAST), shrinkTowards = Alignment.Start) + fadeOut(motion.fade(Durations.INSTANT)),
         ) {
             Row {
                 Spacer(Modifier.width(Space.s))

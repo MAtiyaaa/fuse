@@ -19,7 +19,6 @@ import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -62,6 +61,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.shape.SquircleShape
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
+import io.github.matiyaaa.fuse.ui.fuseline.PageEffect
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.ContextMenuSpec
 import io.github.matiyaaa.fuse.ui.shell.app.FocusZone
@@ -112,7 +112,7 @@ class AppsViewState(initial: AppFilter) {
 fun AppsScreen(app: AppState) {
     val store = app.store
     if (!store.apps.supported) {
-        LaunchedEffect(Unit) { app.hints = emptyList() }
+        PageEffect(Unit) { app.hints = emptyList() }
         Box(Modifier.fillMaxSize().padding(horizontal = Space.gutter).padding(top = Size.hudHeight, bottom = Size.hintHeight), contentAlignment = Alignment.Center) {
             EmptyState(FuseIcons.AppWindow, "Apps aren't available on this system")
         }
@@ -132,10 +132,10 @@ fun AppsScreen(app: AppState) {
     if (loaded != null) sel.clamp(apps.size)
     var columns by remember { mutableIntStateOf(7) }
 
-    LaunchedEffect(Unit) { app.hero = null }
+    PageEffect(Unit) { app.hero = null }
     // Open and Options only while there is an app to open.
     val any = apps.isNotEmpty()
-    LaunchedEffect(any) {
+    PageEffect(any) {
         app.hints = if (any) listOf(Hint(HintButton.CONFIRM, "Open"), Hint(HintButton.OPTIONS, "Options")) else emptyList()
     }
 

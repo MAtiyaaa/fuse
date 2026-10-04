@@ -39,6 +39,9 @@ fun InputLayer(
     onAction: (NavEvent) -> NavResult,
 ) {
     val router = LocalInputRouter.current
+    // A page kept in the background hears nothing.
+    @Suppress("NAME_SHADOWING")
+    val enabled = enabled && io.github.matiyaaa.fuse.ui.fuseline.LocalPageActive.current
     val handler = rememberUpdatedState(onAction)
     val holder = remember { arrayOfNulls<InputRouter.Registration>(1) }
     DisposableEffect(router, priority) {

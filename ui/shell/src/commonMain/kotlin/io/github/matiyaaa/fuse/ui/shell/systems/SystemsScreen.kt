@@ -26,7 +26,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -96,6 +95,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.theme.tabular
 import io.github.matiyaaa.fuse.ui.designsystem.theme.toColor
 import io.github.matiyaaa.fuse.ui.fuseline.Crossfade
 import io.github.matiyaaa.fuse.ui.fuseline.Durations
+import io.github.matiyaaa.fuse.ui.fuseline.PageEffect
 import io.github.matiyaaa.fuse.ui.fuseline.Spring
 import io.github.matiyaaa.fuse.ui.fuseline.Swap
 import io.github.matiyaaa.fuse.ui.fuseline.fadeIn
@@ -138,13 +138,13 @@ fun SystemsScreen(app: AppState) {
     var moving by remember { mutableStateOf(false) }
     fun menu(card: PlatformCard, index: Int) = app.systemMenu(card) { sel.index = index; moving = true }
 
-    LaunchedEffect(current?.platform?.id) {
+    PageEffect(current?.platform?.id) {
         app.hero = current?.let { HeroSource(it.platform.id, it.art.hero, it.platform.accent.toColor()) }
     }
     // Logos and art panels of the neighbouring systems are decoded ahead, so the header never waits.
     PrefetchArt(remember(systems) { systems.map { it.art.logo } }, sel.index, size = 360.dp)
     PrefetchArt(remember(systems) { systems.map { it.art.boxart } }, sel.index, size = 480.dp)
-    LaunchedEffect(moving) {
+    PageEffect(moving) {
         app.hints = if (moving) {
             listOf(Hint(HintButton.DPAD, "Move"), Hint(HintButton.CONFIRM, "Done"))
         } else {

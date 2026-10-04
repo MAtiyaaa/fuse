@@ -22,7 +22,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -55,6 +54,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.input.NavResult
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
+import io.github.matiyaaa.fuse.ui.fuseline.PageEffect
 import io.github.matiyaaa.fuse.ui.fuseline.fuselineScrollBy
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.ConfirmSpec
@@ -85,12 +85,12 @@ fun StoreAppScreen(app: AppState, key: String) {
     val ops = app.store.appStore
     val state by ops.state.collectAsState()
     val item = state.app(key)
-    LaunchedEffect(key) { ops.check(key) }
+    PageEffect(key) { ops.check(key) }
     if (item == null) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             EmptyState(FuseIcons.Store, "This app isn't in the Store any more", message = "The Store's catalogue changed. Press Back to return to it.")
         }
-        LaunchedEffect(Unit) { app.hints = emptyList() }
+        PageEffect(Unit) { app.hints = emptyList() }
         return
     }
     StorePage(app, state, item)
@@ -131,7 +131,7 @@ private fun StorePage(app: AppState, state: StoreState, item: StoreApp) {
     if (chosen > buttons.lastIndex) chosen = buttons.lastIndex
     val focused = app.focusZone == FocusZone.CONTENT
 
-    LaunchedEffect(buttons.getOrNull(chosen)?.label, focused) {
+    PageEffect(buttons.getOrNull(chosen)?.label, focused) {
         app.hero = null
         app.hints = listOf(Hint(HintButton.CONFIRM, buttons.getOrNull(chosen)?.label ?: "Choose"), Hint(HintButton.BACK, "Store"))
     }

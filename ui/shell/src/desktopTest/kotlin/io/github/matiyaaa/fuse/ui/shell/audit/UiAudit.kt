@@ -145,4 +145,13 @@ class UiAudit {
     @Test fun openingM() = audit(AuditSize.M) { setupOpening() }
 
     @Test fun openingP() = audit(AuditSize.P) { setupOpening(); welcomeMark() }
+
+    /** What 0.2.8 changed, at 1080p, on a 6 inch handheld, on a phone held upright and on a second screen. */
+    @Test fun m17Media() = audit(AuditSize.M) { mediaScreens() }
+
+    @Test fun mediaH() = audit(AuditSize.H) { mediaScreens() }
+
+    @Test fun mediaV() = audit(AuditSize.V) { mediaScreens() }
+
+    @Test fun tabSwitchH() = audit(AuditSize.H) { tabSwitchCost(java.io.File(System.getProperty("fuse.audit.dir", "build/audit"), "tab-switch.txt")) }
 }

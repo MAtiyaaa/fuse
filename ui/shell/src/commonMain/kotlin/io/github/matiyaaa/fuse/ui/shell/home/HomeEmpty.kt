@@ -21,7 +21,6 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -74,6 +73,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
 import io.github.matiyaaa.fuse.ui.designsystem.theme.ambientOn
 import io.github.matiyaaa.fuse.ui.designsystem.theme.tabular
 import io.github.matiyaaa.fuse.ui.fuseline.Curves
+import io.github.matiyaaa.fuse.ui.fuseline.PageEffect
 import io.github.matiyaaa.fuse.ui.fuseline.RepeatMode
 import io.github.matiyaaa.fuse.ui.fuseline.fuselineInt
 import io.github.matiyaaa.fuse.ui.fuseline.infiniteRepeatable
@@ -131,7 +131,7 @@ fun HomeEmpty(app: AppState) {
         Triple("Run setup", FuseIcons.Sparkles) { app.go(Route.Onboarding) },
     )
 
-    LaunchedEffect(scanning) {
+    PageEffect(scanning) {
         app.hero = null
         // While a scan runs there is nothing to choose, so the hint line stays quiet.
         app.hints = if (scanning) emptyList() else listOf(Hint(HintButton.CONFIRM, "Choose"))
@@ -433,7 +433,7 @@ internal fun rememberHomeLoading(app: AppState, feed: HomeFeed, empty: Boolean):
     }
     val left = LOAD_GRACE_MS - load.since.elapsedNow().inWholeMilliseconds
     var waiting by remember { mutableStateOf(left > 0) }
-    LaunchedEffect(Unit) {
+    PageEffect(Unit) {
         if (left > 0) delay(left)
         waiting = false
     }
@@ -456,7 +456,7 @@ private const val LOAD_GRACE_MS = 900L
  */
 @Composable
 internal fun HomeSkeleton(app: AppState, channels: Boolean) {
-    LaunchedEffect(Unit) {
+    PageEffect(Unit) {
         app.hero = null
         app.hints = emptyList()
     }

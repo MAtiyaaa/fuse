@@ -53,8 +53,12 @@ class LoopClock internal constructor(val label: String) {
 @Composable
 fun rememberLoopClock(label: String = "LoopClock"): LoopClock {
     val clock = remember { LoopClock(label) }
-    LaunchedEffect(clock) {
-        runFrames(Long.MAX_VALUE) { play -> clock.playNanos = play }
+    // A page kept in the background doesn't animate; it carries on where it was when shown again.
+    val active = LocalPageActive.current
+    LaunchedEffect(clock, active) {
+        if (!active) return@LaunchedEffect
+        val from = clock.playNanos
+        runFrames(Long.MAX_VALUE) { play -> clock.playNanos = from + play }
     }
     return clock
 }

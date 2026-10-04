@@ -1,6 +1,5 @@
 package io.github.matiyaaa.fuse.ui.shell.addons
 
-import kotlinx.coroutines.launch
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -23,7 +22,6 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -38,8 +36,8 @@ import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import io.github.matiyaaa.fuse.model.StoreVariant
 import io.github.matiyaaa.fuse.model.NavAction
+import io.github.matiyaaa.fuse.model.StoreVariant
 import io.github.matiyaaa.fuse.ui.designsystem.components.ButtonKind
 import io.github.matiyaaa.fuse.ui.designsystem.components.EmptyState
 import io.github.matiyaaa.fuse.ui.designsystem.components.FText
@@ -64,6 +62,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
 import io.github.matiyaaa.fuse.ui.designsystem.theme.toColor
+import io.github.matiyaaa.fuse.ui.fuseline.PageEffect
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.ContextMenuSpec
 import io.github.matiyaaa.fuse.ui.shell.app.FocusZone
@@ -76,6 +75,7 @@ import io.github.matiyaaa.fuse.ui.shell.components.subTabsRoom
 import io.github.matiyaaa.fuse.ui.shell.store.Availability
 import io.github.matiyaaa.fuse.ui.shell.store.StoreApp
 import io.github.matiyaaa.fuse.ui.shell.store.StoreState
+import kotlinx.coroutines.launch
 
 /** Where the Store page is: its selection and the search being shown. */
 internal class StoreBrowseState {
@@ -116,12 +116,12 @@ private data class TopButton(val label: String, val icon: ImageVector, val prima
 internal fun StoreContent(app: AppState, active: Boolean, topPadding: Dp) {
     val ops = app.store.appStore
     val state by ops.state.collectAsState()
-    LaunchedEffect(state.variant) { ops.open() }
+    PageEffect(state.variant) { ops.open() }
     val variant = state.variant
     if (variant == null) {
         // The editions differ only for a second screen: without one, Standard is simply the Store.
         if (!app.platform.features.secondScreen) {
-            LaunchedEffect(Unit) { ops.chooseVariant(StoreVariant.STANDARD) }
+            PageEffect(Unit) { ops.chooseVariant(StoreVariant.STANDARD) }
             StoreWaiting(app, state, active, topPadding + subTabsRoom())
             return
         }
@@ -143,7 +143,7 @@ private fun StoreWaiting(app: AppState, state: StoreState, active: Boolean, topP
     InputLayer(enabled = focused && failed && !app.overlayOpen) { e ->
         if (e.action == NavAction.SELECT) { app.store.appStore.refresh(); NavResult.ACTIVATED } else NavResult.IGNORED
     }
-    LaunchedEffect(focused, failed) { if (focused) app.hints = if (failed) listOf(Hint(HintButton.CONFIRM, "Try again")) else emptyList() }
+    PageEffect(focused, failed) { if (focused) app.hints = if (failed) listOf(Hint(HintButton.CONFIRM, "Try again")) else emptyList() }
     if (failed) {
         Box(Modifier.fillMaxSize().padding(top = topPadding), contentAlignment = Alignment.Center) {
             EmptyState(
@@ -262,8 +262,8 @@ private fun StoreShelves(app: AppState, state: StoreState, active: Boolean, topP
         }
     }
 
-    LaunchedEffect(row.key, current?.key, focused) {
-        if (!focused) return@LaunchedEffect
+    PageEffect(row.key, current?.key, focused) {
+        if (!focused) return@PageEffect
         app.hero = null
         app.hints = if (current != null) listOf(Hint(HintButton.CONFIRM, "Details"), Hint(HintButton.OPTIONS, "Options")) else listOf(Hint(HintButton.CONFIRM, "Choose"))
         // An app in view has its newest release looked up, from the cache when it is fresh.

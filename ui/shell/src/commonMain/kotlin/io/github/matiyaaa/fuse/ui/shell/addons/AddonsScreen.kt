@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -31,6 +30,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.input.NavResult
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
+import io.github.matiyaaa.fuse.ui.fuseline.PageEffect
 import io.github.matiyaaa.fuse.ui.fuseline.fuselineFloat
 import io.github.matiyaaa.fuse.ui.shell.app.AddonsPart
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
@@ -68,7 +68,7 @@ fun AddonsScreen(app: AppState) {
         app.addonsPart = p
     }
 
-    LaunchedEffect(inTabs) { if (inTabs) app.hints = listOf(Hint(HintButton.CONFIRM, "Choose")) }
+    PageEffect(inTabs) { if (inTabs) app.hints = listOf(Hint(HintButton.CONFIRM, "Choose")) }
     // Registered before the content's own layers, so it hears what they leave: Up from their top.
     InputLayer(enabled = app.focusZone == FocusZone.CONTENT && !app.overlayOpen && parts.size > 1) { e ->
         if (inTabs) {

@@ -20,7 +20,6 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -64,6 +63,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
 import io.github.matiyaaa.fuse.ui.designsystem.theme.tabular
+import io.github.matiyaaa.fuse.ui.fuseline.PageEffect
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.FocusZone
 import io.github.matiyaaa.fuse.ui.shell.app.Route
@@ -86,7 +86,7 @@ fun AchievementsScreen(app: AppState) {
     val store = app.store
     val configured by store.achievements.configured.collectAsState()
     val feed by store.achievements.feed.collectAsState()
-    LaunchedEffect(Unit) {
+    PageEffect(Unit) {
         app.hero = null
         store.achievements.refresh()
     }
@@ -103,13 +103,13 @@ private fun NotConnected(app: AppState, configured: Boolean) {
     // Connected but nothing has arrived yet: the page holds its shape. If the profile still hasn't
     // come after a while, say so and offer to ask again rather than shimmer forever.
     var slow by remember(configured) { mutableStateOf(false) }
-    LaunchedEffect(configured) {
+    PageEffect(configured) {
         if (configured) {
             delay(SLOW_MS)
             slow = true
         }
     }
-    LaunchedEffect(configured, slow) {
+    PageEffect(configured, slow) {
         app.hints = when {
             !configured -> listOf(Hint(HintButton.CONFIRM, "Connect"))
             slow -> listOf(Hint(HintButton.CONFIRM, "Try again"))
@@ -239,7 +239,7 @@ private fun Connected(app: AppState, feed: AchievementsFeed) {
 
     // Open game only while there is something to open.
     val any = rows.isNotEmpty()
-    LaunchedEffect(any) {
+    PageEffect(any) {
         app.hints = listOfNotNull(Hint(HintButton.CONFIRM, "Open game").takeIf { any }, Hint(HintButton.OPTIONS, "Refresh"))
     }
     InputLayer(enabled = app.focusZone == FocusZone.CONTENT && !app.overlayOpen) { e ->
