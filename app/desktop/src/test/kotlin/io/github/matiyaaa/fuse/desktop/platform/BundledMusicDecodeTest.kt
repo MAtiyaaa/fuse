@@ -14,7 +14,7 @@ class BundledMusicDecodeTest {
     fun everyBundledSongDecodesAt44kStereo() {
         val dir = File("../../ui/designsystem/src/commonMain/composeResources/files/music")
         val songs = dir.listFiles { f -> f.name.endsWith(".mp3") }.orEmpty()
-        assertEquals(10, songs.size, "songs in ${dir.absolutePath}")
+        assertEquals(24, songs.size, "songs in ${dir.absolutePath}")
         for (song in songs) {
             song.inputStream().buffered().use { input ->
                 val bitstream = Bitstream(input)

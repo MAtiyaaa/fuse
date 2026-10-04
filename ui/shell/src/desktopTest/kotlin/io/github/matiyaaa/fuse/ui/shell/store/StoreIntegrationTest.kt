@@ -447,11 +447,12 @@ class StoreIntegrationTest {
             val series = withTimeout(20_000) {
                 store.collections.collections.first { list -> list.any { it.kind == CollectionKind.SERIES } }
             }.single { it.kind == CollectionKind.SERIES }
-            assertEquals("Super Mario", series.name)
+            // Named by everything its games share.
+            assertEquals("Super Mario Advance", series.name)
             assertEquals(3, series.gameCount)
 
             // Hidden: it goes away and isn't made again.
-            store.updatePrefs { it.copy(hiddenSeries = listOf("super mario")) }
+            store.updatePrefs { it.copy(hiddenSeries = listOf("super mario advance")) }
             withTimeout(10_000) { store.collections.collections.first { list -> list.none { it.kind == CollectionKind.SERIES } } }
 
             // Back again, then kept as the user's own: Fuse stops managing it.
@@ -459,7 +460,7 @@ class StoreIntegrationTest {
             val again = withTimeout(10_000) { store.collections.collections.first { list -> list.any { it.kind == CollectionKind.SERIES } } }
                 .single { it.kind == CollectionKind.SERIES }
             store.collections.keepSeries(again.id)
-            store.updatePrefs { it.copy(hiddenSeries = listOf("super mario")) }
+            store.updatePrefs { it.copy(hiddenSeries = listOf("super mario advance")) }
             val kept = withTimeout(10_000) { store.collections.collections.first { list -> list.any { it.id == again.id && it.kind == CollectionKind.MANUAL } } }
             assertEquals(3, kept.single { it.id == again.id }.gameCount)
         } finally {
