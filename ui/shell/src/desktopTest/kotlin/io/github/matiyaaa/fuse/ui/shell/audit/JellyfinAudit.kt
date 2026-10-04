@@ -193,3 +193,91 @@ internal fun AuditDriver.jellyfinScreens() {
         http.close()
     }
 }
+
+/** An engine that "plays" a painted dusk, for the remote and the picture without a stream. */
+private class AuditStillEngine : io.github.matiyaaa.fuse.ui.player.PlayerEngine {
+    override val state = kotlinx.coroutines.flow.MutableStateFlow(
+        io.github.matiyaaa.fuse.ui.player.EngineState(
+            io.github.matiyaaa.fuse.ui.player.EngineStatus.READY, playing = true, positionMs = 2_880_000, durationMs = 7_920_000,
+            bufferedMs = 3_000_000, videoWidth = 1920, videoHeight = 1080, decoder = "hevc", hardware = true,
+        ),
+    )
+    override val cues = kotlinx.coroutines.flow.MutableStateFlow<List<io.github.matiyaaa.fuse.playback.Cue>>(emptyList())
+    override fun load(source: io.github.matiyaaa.fuse.playback.PlaySource, startMs: Long, audioOrder: Int?, subtitleOrder: Int?, play: Boolean) {}
+    override fun play() { state.value = state.value.copy(playing = true) }
+    override fun pause() { state.value = state.value.copy(playing = false) }
+    override fun seekTo(ms: Long) {}
+    override fun setSpeed(speed: Float) {}
+    override fun setVolume(volume: Float) {}
+    override fun selectAudio(order: Int) {}
+    override fun selectSubtitle(order: Int?) {}
+    override fun positionMs(): Long = state.value.positionMs
+    override fun capabilities(hardwareDecoding: Boolean) = io.github.matiyaaa.fuse.playback.Capabilities(emptyList(), setOf("aac"), containers = setOf("mkv"))
+    override fun stop() {}
+    override fun release() {}
+
+    @androidx.compose.runtime.Composable
+    override fun Video(modifier: androidx.compose.ui.Modifier) {
+        androidx.compose.foundation.Canvas(modifier) {
+            drawRect(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(androidx.compose.ui.graphics.Color(0xFF1B2A4A), androidx.compose.ui.graphics.Color(0xFFB4566A), androidx.compose.ui.graphics.Color(0xFFF2A65A))))
+            drawCircle(androidx.compose.ui.graphics.Color(0xFFFFD58A), size.minDimension * 0.12f, androidx.compose.ui.geometry.Offset(size.width * 0.62f, size.height * 0.58f))
+        }
+    }
+}
+
+/** A stream with two sound tracks and subtitles, without asking the server. */
+private object AuditStillResolver : io.github.matiyaaa.fuse.playback.PlaybackResolver {
+    override suspend fun resolve(item: io.github.matiyaaa.fuse.playback.PlayItem, request: io.github.matiyaaa.fuse.playback.PlayRequest) = io.github.matiyaaa.fuse.playback.PlaySource(
+        url = "still", method = io.github.matiyaaa.fuse.playback.PlayMethod.DIRECT_PLAY, durationMs = 7_920_000,
+        audioTracks = listOf(
+            io.github.matiyaaa.fuse.playback.AudioTrack("1", 1, 0, "English  ·  5.1", "eng", "eac3", 6, true),
+            io.github.matiyaaa.fuse.playback.AudioTrack("2", 2, 1, "Commentary  ·  Stereo", "eng", "aac", 2),
+        ),
+        subtitleTracks = listOf(io.github.matiyaaa.fuse.playback.SubtitleTrack("3", 3, "English", "eng", "srt", delivery = io.github.matiyaaa.fuse.playback.SubtitleDelivery.Embedded(0))),
+        audio = "1",
+    )
+}
+
+/**
+ * Jellyfin on two screens: the companion with a film and an episode in focus, the companion as
+ * the remote while a film plays, and, flipped, the screen above with the film's picture and with
+ * a film in focus.
+ */
+@OptIn(DelicateCoilApi::class)
+internal fun AuditDriver.jellyfinDualScreens() {
+    val http = HttpClient(MockEngine { request -> AuditJellyfin.answer(this, request) ?: respondError(HttpStatusCode.NotFound) })
+    SingletonImageLoader.setUnsafe(fuseImageLoader(PlatformContext.INSTANCE, File(cache, "jellyfin-images").path, http, lowMemory = false))
+    val player = io.github.matiyaaa.fuse.ui.player.FusePlayer
+    player.engineFactory = { AuditStillEngine() }
+    try {
+        scenario("jellyfin", "second screen") {
+            useJellyfin()
+            val service = libraryStore.jellyfin!!
+            val film = runBlocking { service.item("m1") }
+            val episode = runBlocking { service.item("s1s1e3") }
+            io.github.matiyaaa.fuse.ui.shell.jellyfin.MediaFocus.put(film)
+            io.github.matiyaaa.fuse.ui.shell.jellyfin.MediaFocus.put(episode)
+            io.github.matiyaaa.fuse.ui.shell.app.Spotlight.set(null)
+            view = AuditView.Companion(libraryStore, platform, io.github.matiyaaa.fuse.model.DualScreenMode.LIBRARY_COMPANION)
+            settle(1_000)
+            io.github.matiyaaa.fuse.ui.shell.app.Spotlight.set("jf:m1")
+            shoot("a film in focus", 2_500)
+            io.github.matiyaaa.fuse.ui.shell.app.Spotlight.set("jf:s1s1e3")
+            shoot("an episode in focus", 2_500)
+            player.session.start(film.toPlayItem(), AuditStillResolver, 2_880_000)
+            pumpUntil("the film to start", 10_000) { player.session.source != null }
+            shoot("the remote while the film plays", 2_000)
+            view = AuditView.Piece { io.github.matiyaaa.fuse.ui.shell.app.ShowcaseApp(libraryStore, platform) }
+            shoot("flipped: the film on the screen above", 1_500)
+            player.session.stop()
+            io.github.matiyaaa.fuse.ui.shell.app.Spotlight.set("jf:m1")
+            shoot("flipped: a film in focus, large", 2_500)
+            show(libraryStore)
+        }
+    } finally {
+        player.session.stop()
+        player.engineFactory = null
+        SingletonImageLoader.reset()
+        http.close()
+    }
+}

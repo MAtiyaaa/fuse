@@ -165,6 +165,10 @@ class UiAudit {
 
     @Test fun jellyfinV() = audit(AuditSize.V) { jellyfinScreens() }
 
+    @Test fun jellyfinTwoScreensC() = audit(AuditSize.C) { jellyfinDualScreens() }
+
+    @Test fun jellyfinTwoScreensH() = audit(AuditSize.H) { jellyfinDualScreens() }
+
     @Test fun storageM() = audit(AuditSize.M) { storageScreens() }
 
     @Test fun storageH() = audit(AuditSize.H) { storageScreens() }

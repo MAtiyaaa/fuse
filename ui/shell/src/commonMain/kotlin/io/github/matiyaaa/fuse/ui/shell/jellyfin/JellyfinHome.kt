@@ -213,8 +213,18 @@ private fun Shelves(app: AppState, page: JellyfinHomeState, focused: Boolean, to
     val room = subTabsRoom()
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val compact = maxHeight < 600.dp
-        val poster = if (compact) 132.dp else 168.dp
-        val wide = if (compact) 248.dp else 320.dp
+        // A phone held upright gets smaller cards, so the next one always peeks in.
+        val narrow = maxWidth < 600.dp
+        val poster = when {
+            narrow -> 120.dp
+            compact -> 132.dp
+            else -> 168.dp
+        }
+        val wide = when {
+            narrow -> (maxWidth * 0.7f).coerceAtMost(248.dp)
+            compact -> 248.dp
+            else -> 320.dp
+        }
         LazyColumn(
             state = list,
             modifier = Modifier.fillMaxSize().padding(top = topPadding).fadingEdges(top = if (list.canScrollBackward) Space.xl else 0.dp),
@@ -232,7 +242,7 @@ private fun Shelves(app: AppState, page: JellyfinHomeState, focused: Boolean, to
                         activate(r, i)
                     }
                     when (r) {
-                        is HomeRow.Top -> TopButtons(r.buttons, chosen, ::tap)
+                        is HomeRow.Top -> TopButtons(r.buttons, chosen, narrow, ::tap)
                         is HomeRow.Libraries -> ShelfRow("Libraries", FuseIcons.LibraryBig, r.items.size, chosen >= 0, sel.column(r.key)) {
                             itemsIndexed(r.items, key = { _, it -> it.id }) { i, item -> LibraryCard(item, i == chosen, wide, onClick = { tap(i) }) }
                         }
@@ -296,11 +306,16 @@ internal fun ShelfRow(
 }
 
 @Composable
-private fun TopButtons(buttons: List<Pair<String, () -> Unit>>, chosen: Int, onClick: (Int) -> Unit) {
+private fun TopButtons(buttons: List<Pair<String, () -> Unit>>, chosen: Int, narrow: Boolean, onClick: (Int) -> Unit) {
     val icons = listOf(FuseIcons.Search, FuseIcons.Refresh, FuseIcons.Settings2)
     Row(Modifier.padding(horizontal = Space.gutter), horizontalArrangement = Arrangement.spacedBy(Space.s), verticalAlignment = Alignment.CenterVertically) {
         buttons.forEachIndexed { i, (label, _) ->
-            FuseButton(label, selected = i == chosen, onClick = { onClick(i) }, icon = icons.getOrNull(i), height = 40.dp)
+            // Narrow, only Search keeps its word; the others are their icons.
+            if (narrow && i > 0) {
+                io.github.matiyaaa.fuse.ui.designsystem.components.IconButton(icons[i], selected = i == chosen, onClick = { onClick(i) }, size = 40.dp, contentDescription = label)
+            } else {
+                FuseButton(label, selected = i == chosen, onClick = { onClick(i) }, icon = icons.getOrNull(i), height = 40.dp)
+            }
         }
     }
 }

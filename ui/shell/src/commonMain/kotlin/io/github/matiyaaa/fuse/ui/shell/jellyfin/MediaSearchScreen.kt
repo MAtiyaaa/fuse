@@ -111,7 +111,7 @@ internal fun MediaSearchScreen(app: AppState) {
         }
     }
     fun type() {
-        app.textInput = TextInputSpec("Search Jellyfin", page.query, "Films, shows, people, music", doneLabel = "Search") { run(it.trim()) }
+        app.textInput = TextInputSpec("Search Jellyfin", page.query, "Films, shows, people, music") { run(it.trim()) }
     }
     LaunchedEffect(Unit) {
         if (!page.asked && page.query.isEmpty()) {
@@ -152,8 +152,8 @@ internal fun MediaSearchScreen(app: AppState) {
         val wide = if (compact) 232.dp else 296.dp
         LazyColumn(
             state = list,
-            modifier = Modifier.fillMaxSize().fadingEdges(top = if (list.canScrollBackward) Space.xl else 0.dp),
-            contentPadding = PaddingValues(top = Size.hudHeight + if (compact) Space.s else Space.l, bottom = Size.hintHeight + Space.xl),
+            modifier = Modifier.fillMaxSize().padding(top = Size.hudHeight).fadingEdges(top = if (list.canScrollBackward) Space.xl else 0.dp),
+            contentPadding = PaddingValues(top = if (compact) Space.s else Space.l, bottom = Size.hintHeight + Space.xl),
             verticalArrangement = Arrangement.spacedBy(if (compact) Space.l else Space.xl),
         ) {
             item(key = "field") {

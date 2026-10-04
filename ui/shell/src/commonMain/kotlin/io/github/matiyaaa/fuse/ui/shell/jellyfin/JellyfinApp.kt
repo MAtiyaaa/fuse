@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import io.github.matiyaaa.fuse.data.settings.JellyfinSettings
@@ -107,13 +108,23 @@ internal fun MediaPlayerHost(app: AppState) {
     val session = FusePlayer.session
     val prefs by app.store.prefs.collectAsState()
     LaunchedEffect(Unit) { app.hints = emptyList() }
+    fun exit() {
+        session.stop()
+        app.playerOpen = false
+        app.scope.launch { app.jellyfin?.changed() }
+    }
+    // Stopped from the other screen's remote: the player closes here too.
+    LaunchedEffect(Unit) {
+        androidx.compose.runtime.snapshotFlow { session.item }.collect { if (it == null && !session.resolving) app.playerOpen = false }
+    }
+    // Flipped (menus on the touch screen): the picture is on the main screen, and this one is its remote.
+    if (io.github.matiyaaa.fuse.ui.shell.app.LocalShowcaseElsewhere.current) {
+        io.github.matiyaaa.fuse.ui.player.PlayerRemote(session, Modifier.fillMaxSize(), inputEnabled = !app.overlayOpen, onExit = ::exit)
+        return
+    }
     PlayerScreen(
         session = session,
-        onExit = {
-            session.stop()
-            app.playerOpen = false
-            app.scope.launch { app.jellyfin?.changed() }
-        },
+        onExit = ::exit,
         modifier = Modifier,
         inputEnabled = !app.overlayOpen,
         onSettings = { s -> app.store.updatePrefs { it.copy(jellyfin = it.jellyfin.with(s, session.speed)) } },
@@ -125,9 +136,14 @@ internal fun MediaPlayerHost(app: AppState) {
 
 /** An item's backdrop for the room behind the pages. */
 internal fun MediaItem.hero(): HeroSource? {
-    val art = backdrop ?: thumb ?: poster ?: return null
-    return HeroSource(id = "jf:$id", model = art.sized(BACKDROP_WIDTH), accent = Color(0xFF7B8CC4), blurred = backdrop == null)
+    // The second screen finds the item by its room's key.
+    MediaFocus.put(this)
+    val art = backdrop ?: thumb ?: poster ?: return HeroSource(id = MediaFocus.keyOf(this), model = null, accent = accentOf(name), blurred = true)
+    return HeroSource(id = MediaFocus.keyOf(this), model = art.sized(BACKDROP_WIDTH), accent = Color(0xFF7B8CC4), blurred = backdrop == null)
 }
+
+/** [MediaItem.hero], for code outside this package. */
+internal fun heroOf(item: MediaItem): HeroSource? = item.hero()
 
 /** Picture widths asked of the server: posters, wide cards and backdrops. */
 internal const val POSTER_WIDTH = 420

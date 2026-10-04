@@ -445,7 +445,7 @@ private fun Controls(
 
 /** A time that follows the clock: elapsed, or (negative) what is left. */
 @Composable
-private fun TimeText(ms: () -> Long) {
+internal fun TimeText(ms: () -> Long) {
     var text by remember { mutableStateOf("") }
     LaunchedEffect(Unit) {
         while (true) {
@@ -463,7 +463,7 @@ private fun TimeText(ms: () -> Long) {
  * small number in the icon (the seconds a skip button skips).
  */
 @Composable
-private fun RoundButton(icon: ImageVector, label: String, selected: Boolean, size: Dp, badge: String? = null, filled: Boolean = false, active: Boolean = false, onClick: () -> Unit) {
+internal fun RoundButton(icon: ImageVector, label: String, selected: Boolean, size: Dp, badge: String? = null, filled: Boolean = false, active: Boolean = false, onClick: () -> Unit) {
     val lift by fuselineFloat(if (selected) 1f else 0f, Fuse.motion.focusSpring(), label = "pb")
     val solid = selected || filled
     // A switched-on tool (repeat) reads brighter than the rest without looking selected.

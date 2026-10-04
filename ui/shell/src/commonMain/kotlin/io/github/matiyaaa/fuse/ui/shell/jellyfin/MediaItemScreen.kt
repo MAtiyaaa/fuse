@@ -277,8 +277,8 @@ internal fun MediaItemScreen(app: AppState, id: String) {
         val narrow = maxWidth < 700.dp
         LazyColumn(
             state = list,
-            modifier = Modifier.fillMaxSize().fadingEdges(top = if (list.canScrollBackward) Space.xl else 0.dp),
-            contentPadding = PaddingValues(top = Size.hudHeight + if (compact) Space.l else maxHeight * 0.16f, bottom = Size.hintHeight + Space.xl),
+            modifier = Modifier.fillMaxSize().padding(top = Size.hudHeight).fadingEdges(top = if (list.canScrollBackward) Space.xl else 0.dp),
+            contentPadding = PaddingValues(top = if (compact) Space.l else maxHeight * 0.16f, bottom = Size.hintHeight + Space.xl),
             verticalArrangement = Arrangement.spacedBy(if (compact) Space.l else Space.xl),
         ) {
             item(key = "head") { Header(item, compact, narrow, buttons, if (focused && sel.row == 0) col else -1) { i -> sel.row = 0; sel.setColumn("buttons", i); activate(rows[0], i) } }
@@ -324,7 +324,7 @@ private fun Header(item: MediaItem, compact: Boolean, narrow: Boolean, buttons: 
     Column(Modifier.padding(horizontal = Space.gutter).widthIn(max = 760.dp), verticalArrangement = Arrangement.spacedBy(if (compact) Space.s else Space.m)) {
         val logo = item.logo
         if (logo != null) {
-            Artwork(logo.at(800), Modifier.height(if (compact) 72.dp else 110.dp).widthIn(max = 420.dp).fillMaxWidth(), contentScale = ContentScale.Fit, backdrop = true, fallback = {
+            Artwork(logo.at(800), Modifier.height(if (compact) 72.dp else 110.dp).widthIn(max = 420.dp).fillMaxWidth(), contentScale = ContentScale.Fit, focusX = 0f, fallback = {
                 FText(item.name, Fuse.type.display, maxLines = 2)
             })
         } else {

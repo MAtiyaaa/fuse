@@ -29,7 +29,7 @@ Home screen.
 <a href="https://github.com/MAtiyaaa/fuse/releases/latest"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/brand/button-macos-dark.svg"><img src="docs/assets/brand/button-macos-light.svg" height="48" alt="Download for macOS"></picture></a>
 
 <sub>Android 9 or newer &nbsp;·&nbsp; 64-bit x86 Linux AppImage &nbsp;·&nbsp; Windows 10 and 11 &nbsp;·&nbsp; macOS on Apple silicon and Intel &nbsp;·&nbsp; <a href="#install">checksums and install notes</a></sub><br>
-<sub>0.2.7 is the Swap &amp; Clean Update: menus on a handheld's touch screen with the chosen game shown large above, Fuseline (Fuse's own animation engine), and a cleaner setup. 0.2.6 brought a Store to every computer. <a href="#where-fuse-stands">Here is where it stands.</a></sub><br>
+<sub>0.2.8 is the Media &amp; Connectivity Update: Jellyfin in Addons with Fuse Player, Fuse's own video and music player, your phone as a keyboard and a controller, and a redesigned Storage. 0.2.7 put the menus on a handheld's touch screen. <a href="#where-fuse-stands">Here is where it stands.</a></sub><br>
 <sub>Or download from <a href="https://matiyaaa.github.io/fuse/">Fuse's website</a>, which always offers the latest version for your system.</sub>
 
 <br>
@@ -393,11 +393,13 @@ Linux app, isn't offered on Windows and macOS.
 ## Where Fuse stands
 
 > [!IMPORTANT]
-> **Fuse 0.2.7 "The Swap & Clean Update" is still early.** It can put Fuse's menus on a dual-screen
-> handheld's touch screen and show the chosen game large on the main screen, like a 3DS, runs
-> every animation on Fuseline, Fuse's own animation engine, opens setup with an animation of its
-> own, and cleans up navigation and setup across Fuse (see
-> [the release notes](docs/releases/0.2.7.md)). 0.2.6 brought a Store to Linux, Windows and macOS,
+> **Fuse 0.2.8 "The Media & Connectivity Update" is still early.** It brings your Jellyfin server's
+> films, shows and music into Addons, played in Fuse Player, Fuse's own player (Media3 on Android,
+> FFmpeg on computers), with the second screen as a remote; lets a phone type into Fuse and play it
+> as a controller; redesigns Storage; and makes Fuseline by Fuse faster than Compose's own animation
+> engine (see [the release notes](docs/releases/0.2.8.md), [Jellyfin](docs/jellyfin.md) and
+> [Fuse Player](docs/player.md)). 0.2.7 put Fuse's menus on a dual-screen handheld's touch screen,
+> with the chosen game large on the main screen, like a 3DS. 0.2.6 brought a Store to Linux, Windows and macOS,
 > moved games to an SD card or another drive, showed Steam achievements and RPCS3 trophies, and
 > rebuilt setup. 0.2.5 started Fuse with its own logo burning in,
 > and opened games and apps cleanly on a dual-screen handheld's bottom screen. 0.2.4 brought installs of PS3, Vita and 3DS games,

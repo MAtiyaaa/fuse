@@ -33,6 +33,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -171,8 +172,12 @@ fun CompanionApp(store: FuseStore, platform: PlatformUi, mode: DualScreenMode, o
         }
         Box(Modifier.fillMaxSize().background(Fuse.colors.ink).veiledWhileOpening()) {
             // The game being played comes first in every mode (Fuse is in the background then).
+            // A Jellyfin item in focus shows as the browsing companion setting asks (or not at all).
+            val media = io.github.matiyaaa.fuse.ui.shell.jellyfin.MediaFocus.get(focus.key)
             val content = when {
                 playing != null -> CompanionContent(playing, 0)
+                mode == DualScreenMode.LIBRARY_COMPANION && media != null ->
+                    CompanionContent(media.takeIf { prefs.jellyfin.browsingCompanion != "OFF" }, focus.direction)
                 mode == DualScreenMode.LIBRARY_COMPANION -> CompanionContent(focus.key, focus.direction)
                 else -> CompanionContent(null, 0)
             }
@@ -221,6 +226,12 @@ fun CompanionApp(store: FuseStore, platform: PlatformUi, mode: DualScreenMode, o
                 )
             }
             sheet?.let { AchievementsSheet(store, it) }
+            // While Fuse Player plays on the main screen, this one is its remote.
+            val player = io.github.matiyaaa.fuse.ui.player.FusePlayer.session
+            val remote = player.item != null && prefs.jellyfin.playerCompanion == "REMOTE"
+            if (remote) {
+                io.github.matiyaaa.fuse.ui.player.PlayerRemote(player, Modifier.fillMaxSize().padding(top = CompanionTopBar), onExit = { player.stop() })
+            }
             // The top line: the page's title (or a close button over the achievements) and the status.
             Row(
                 Modifier.align(Alignment.TopCenter).fillMaxWidth().height(CompanionTopBar).padding(start = Space.l, end = Space.l),
@@ -246,7 +257,7 @@ fun CompanionApp(store: FuseStore, platform: PlatformUi, mode: DualScreenMode, o
                 }
                 StatusCluster(status, time, showWifi = prefs.showWifi, showBluetooth = prefs.showBluetooth)
             }
-            if (sheet == null) {
+            if (sheet == null && !remote) {
                 PageDots(
                     count = companionPages.size,
                     current = pager.currentPage,
@@ -302,7 +313,7 @@ private fun SpotlightPage(
                     (slideOutHorizontally(motion.tween(Durations.BASE, Curves.Exit)) { (-it * shift * dir).toInt() } + exit)
             }
         },
-        contentKey = { (it.target as? GameCard)?.id ?: it.target },
+        contentKey = { (it.target as? GameCard)?.id ?: (it.target as? io.github.matiyaaa.fuse.jellyfin.MediaItem)?.id ?: it.target },
         label = "companion",
     ) { c ->
         when (val target = c.target) {
@@ -310,6 +321,7 @@ private fun SpotlightPage(
             is GameId -> FocusedGame(store, target, onAchievements)
             is PlatformId -> FocusedPlatform(systems.firstOrNull { it.platform.id == target })
             is CollectionId -> FocusedCollection(store, target)
+            is io.github.matiyaaa.fuse.jellyfin.MediaItem -> FocusedMedia(target, minimal = store.prefs.collectAsState().value.jellyfin.browsingCompanion == "MINIMAL")
             else -> Idle(time, room = store.prefs.collectAsState().value.display.companionFollowsBackground)
         }
     }
@@ -325,6 +337,7 @@ internal fun companionHero(store: FuseStore, systems: List<PlatformCard>, target
         detail?.let { d -> gameRoom(target, d.art, d.platform.accent, systems.firstOrNull { it.platform.id == d.platform.id }) }
     }
     is PlatformId -> systems.firstOrNull { it.platform.id == target }?.let(::systemRoom)
+    is io.github.matiyaaa.fuse.jellyfin.MediaItem -> io.github.matiyaaa.fuse.ui.shell.jellyfin.heroOf(target)
     // A collection's room is its first game's.
     is CollectionId -> {
         val flow = remember(target) { store.library.games(GameQuery(collection = target)) }
@@ -359,6 +372,32 @@ private fun FocusedGame(store: FuseStore, id: GameId, onAchievements: (GameId) -
         d.achievements?.takeIf { it.total > 0 }?.let { a ->
             Spacer(Modifier.height(Space.xl))
             AchievementBar(a, onOpen = { onAchievements(id) })
+        }
+    }
+}
+
+/**
+ * A film, show or album from Jellyfin: its logo (or its name) over its backdrop, then, unless
+ * [minimal], its facts, how far in it is, and a few lines about it.
+ */
+@Composable
+private fun FocusedMedia(item: io.github.matiyaaa.fuse.jellyfin.MediaItem, minimal: Boolean) {
+    val logo = item.logo?.sized(640)
+    val title = if (item.type == io.github.matiyaaa.fuse.jellyfin.MediaType.EPISODE) item.seriesName ?: item.name else item.name
+    GameLogo(logo, title) {
+        if (!minimal) {
+            Spacer(Modifier.height(Space.l))
+            FText(io.github.matiyaaa.fuse.ui.shell.jellyfin.mediaFacts(item), Fuse.type.label, color = Fuse.colors.text.copy(alpha = 0.85f), maxLines = 1, align = TextAlign.Center)
+            item.progress?.let { p ->
+                Spacer(Modifier.height(Space.s))
+                Box(Modifier.width(160.dp).height(4.dp).clip(RoundedCornerShape(2.dp)).background(Color.White.copy(alpha = 0.2f))) {
+                    Box(Modifier.fillMaxWidth(p).height(4.dp).background(Fuse.colors.accent))
+                }
+            }
+            item.overview?.let {
+                Spacer(Modifier.height(Space.m))
+                FText(it, Fuse.type.body, color = Fuse.colors.textMuted, maxLines = 3, align = TextAlign.Center, modifier = Modifier.widthIn(max = 520.dp))
+            }
         }
     }
 }

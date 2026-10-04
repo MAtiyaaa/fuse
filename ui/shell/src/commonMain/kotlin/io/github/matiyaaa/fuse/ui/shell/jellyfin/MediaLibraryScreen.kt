@@ -193,8 +193,9 @@ internal fun MediaLibraryScreen(app: AppState, id: String, name: String, kind: S
         LazyVerticalGrid(
             columns = GridCells.Fixed(columns),
             state = grid,
-            modifier = Modifier.fillMaxSize().fadingEdges(top = if (grid.canScrollBackward) Space.xl else 0.dp),
-            contentPadding = PaddingValues(start = Space.gutter, end = Space.gutter, top = Size.hudHeight + Space.l, bottom = Size.hintHeight + Space.xl),
+            // Below the top line, so the grid never scrolls under it.
+            modifier = Modifier.fillMaxSize().padding(top = Size.hudHeight).fadingEdges(top = if (grid.canScrollBackward) Space.xl else 0.dp),
+            contentPadding = PaddingValues(start = Space.gutter, end = Space.gutter, top = Space.l, bottom = Size.hintHeight + Space.xl),
             horizontalArrangement = Arrangement.spacedBy(Space.l),
             verticalArrangement = Arrangement.spacedBy(Space.l),
         ) {
