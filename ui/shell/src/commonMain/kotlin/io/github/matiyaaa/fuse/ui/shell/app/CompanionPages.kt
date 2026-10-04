@@ -390,6 +390,7 @@ internal fun ControlsPage(store: FuseStore, platform: PlatformUi, onHide: (() ->
                     valueText = if (on) "${(value * 100).roundToInt()}%" else "Off",
                     modifier = Modifier.fillMaxWidth().height(60.dp),
                     enabled = on,
+                    dragText = { "${(it * 100).roundToInt()}%" },
                 )
             }
             val tiles = listOf<@Composable (Modifier) -> Unit>(

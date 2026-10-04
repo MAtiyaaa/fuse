@@ -47,6 +47,7 @@ internal object StatusReader {
             wifiStrength = net.wifiStrength,
             bluetooth = bluetooth(),
             network = net.network,
+            ethernet = net.ethernet,
         )
     }
 
@@ -108,7 +109,7 @@ internal object StatusReader {
     private const val MIN_CURRENT_UA = 30_000L
     private const val MAX_MINUTES = 2880
 
-    private class Net(val network: ConnectionState, val wifi: ConnectionState, val wifiStrength: Int?)
+    private class Net(val network: ConnectionState, val wifi: ConnectionState, val wifiStrength: Int?, val ethernet: Boolean = false)
 
     private fun network(): Net {
         val ifaces = File("/sys/class/net").listFiles()?.filter { it.name != "lo" } ?: return Net(ConnectionState.UNKNOWN, ConnectionState.UNKNOWN, null)
@@ -136,7 +137,9 @@ internal object StatusReader {
             physical.any(::up) -> ConnectionState.CONNECTED
             else -> ConnectionState.OFF
         }
-        return Net(network, wifi, strength)
+        // A wired interface (not wireless) with its link up.
+        val ethernet = physical.any { it !in wireless && up(it) }
+        return Net(network, wifi, strength, ethernet)
     }
 
     /** Link quality per interface from `/proc/net/wireless` (0..70 on most drivers). */
@@ -264,7 +267,7 @@ internal object OtherStatus {
 
     fun read(): SystemStatus {
         val b = batteryNow()
-        val (network, wifi) = network()
+        val (network, wifi, ethernet) = network()
         return SystemStatus(
             batteryPercent = b.percent,
             charging = b.charging,
@@ -272,6 +275,7 @@ internal object OtherStatus {
             batteryFull = b.full,
             wifi = wifi,
             network = network,
+            ethernet = ethernet,
             bluetooth = ConnectionState.UNKNOWN,
         )
     }
@@ -335,11 +339,11 @@ internal object OtherStatus {
         return BatteryReading(level, charging, minutes, full)
     }
 
-    private fun network(): Pair<ConnectionState, ConnectionState> {
+    private fun network(): Triple<ConnectionState, ConnectionState, Boolean> {
         val ifaces = try {
             java.net.NetworkInterface.networkInterfaces().toList()
         } catch (e: Exception) {
-            return ConnectionState.UNKNOWN to ConnectionState.UNKNOWN
+            return Triple(ConnectionState.UNKNOWN, ConnectionState.UNKNOWN, false)
         }
         fun connected(i: java.net.NetworkInterface): Boolean = try {
             i.isUp && !i.isLoopback && !i.isVirtual && i.inetAddresses().anyMatch { a -> !a.isLoopbackAddress && !a.isLinkLocalAddress }
@@ -361,7 +365,13 @@ internal object OtherStatus {
             wireless.any(::connected) -> ConnectionState.CONNECTED
             else -> ConnectionState.ON
         }
-        return network to wifi
+        // A cable: a connected interface that isn't wireless and says it is Ethernet (Windows) or is
+        // one of macOS's built-in or adapter ports.
+        val ethernet = physical.filter { it !in wireless && connected(it) }.any { i ->
+            val label = (i.displayName.orEmpty() + " " + i.name).lowercase(Locale.ROOT)
+            "ethernet" in label || (DesktopOs.isMac && i.name.startsWith("en"))
+        }
+        return Triple(network, wifi, ethernet)
     }
 
     /** The device behind macOS's "Wi-Fi" hardware port (usually en0). */

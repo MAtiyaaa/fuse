@@ -434,7 +434,8 @@ private fun NowPlaying(store: FuseStore, game: GameCard, since: Long?, onAchieve
     val flow = remember(game.id) { store.library.game(game.id) }
     val detail by flow.collectAsState(initial = null)
     GameLogo(game.art.logo, game.title) {
-        Spacer(Modifier.height(Space.l))
+        // Clear air between the logo and the session pill, so neither crowds the other.
+        Spacer(Modifier.height(Space.xxl))
         val session = since?.let { "  ·  ${playtimeText(((now - it) / 1000).coerceAtLeast(0))}" }.orEmpty()
         Row(
             Modifier.clip(PillShape).background(Fuse.colors.ink.copy(alpha = 0.55f)).padding(horizontal = Space.m, vertical = Space.xs + 2.dp),

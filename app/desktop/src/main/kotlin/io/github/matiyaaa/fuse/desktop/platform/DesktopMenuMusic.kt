@@ -52,6 +52,8 @@ class DesktopMenuMusic internal constructor(
     @Volatile private var song: String? = null
     @Volatile private var volume = 0.2f
     @Volatile private var wanted = true
+    @Volatile private var loop = true
+    @Volatile private var ended: ((String) -> Unit)? = null
     @Volatile private var closed = false
     private val lock = Object()
     private var thread: Thread? = null
@@ -59,6 +61,7 @@ class DesktopMenuMusic internal constructor(
     override fun apply(state: MusicState) {
         volume = state.volume.coerceIn(0f, 1f)
         wanted = state.playing
+        loop = state.loop
         synchronized(lock) {
             song = state.song?.takeIf { File(it).isFile }
             if (song != null && thread?.isAlive != true && !closed) {
@@ -69,6 +72,10 @@ class DesktopMenuMusic internal constructor(
             }
             lock.notifyAll()
         }
+    }
+
+    override fun onSongEnded(listener: ((String) -> Unit)?) {
+        ended = listener
     }
 
     override fun close() {
@@ -84,7 +91,9 @@ class DesktopMenuMusic internal constructor(
     internal val running: Boolean get() = synchronized(lock) { thread?.isAlive == true }
 
     /** One song being played: its looping stream and where it is in the crossfade. */
-    private class Voice(val path: String, val stream: LoopingStream, var mix: Float)
+    private class Voice(val path: String, val stream: LoopingStream, var mix: Float) {
+        var reported = false
+    }
 
     /**
      * Mixes until Fuse closes or nothing is left to play. A failing output is opened again after a
@@ -126,8 +135,8 @@ class DesktopMenuMusic internal constructor(
             while (!me.isInterrupted && !closed) {
                 val want = song
                 if (current?.path != want) {
-                    current?.let { old -> if (gate > 0f) leaving += old else old.stream.close() }
-                    current = want?.let { Voice(it, LoopingStream(it), mix = if (leaving.isNotEmpty()) 0f else 1f) }
+                    current?.let { old -> if (gate > 0f && !old.stream.ended) leaving += old else old.stream.close() }
+                    current = want?.let { Voice(it, LoopingStream(it) { loop }, mix = if (leaving.isNotEmpty()) 0f else 1f) }
                 }
                 val audible = wanted && current != null
                 if (!audible && gate <= 0f) {
@@ -172,6 +181,11 @@ class DesktopMenuMusic internal constructor(
                     val samples = v.stream.read(frames * channels) ?: continue
                     for (i in samples.indices) out[i] += samples[i] * v.mix
                 }
+                // A song played once (shuffle) says so, and silence plays until the next one arrives.
+                current?.takeIf { it.stream.ended && !it.reported }?.let { v ->
+                    v.reported = true
+                    ended?.invoke(v.path)
+                }
                 val seconds = frames.toFloat() / rate
                 gate = if (audible) (gate + seconds * 1000f / FADE_IN_MS).coerceAtMost(1f) else (gate - seconds * 1000f / FADE_OUT_MS).coerceAtLeast(0f)
                 current?.let { it.mix = (it.mix + seconds * 1000f / CROSSFADE_MS).coerceAtMost(1f) }
@@ -209,8 +223,11 @@ class DesktopMenuMusic internal constructor(
         }
     }
 
-    /** A song decoded to 16-bit samples, starting over at its end. */
-    private class LoopingStream(private val path: String) : AutoCloseable {
+    /** A song decoded to 16-bit samples, starting over at its end while [loop] says so. */
+    private class LoopingStream(private val path: String, private val loop: () -> Boolean) : AutoCloseable {
+        /** Reached its end with looping off. */
+        var ended = false
+            private set
         private var source: Source? = null
         private var pending = ShortArray(0)
         private var offset = 0
@@ -240,6 +257,10 @@ class DesktopMenuMusic internal constructor(
         /** Decodes the next chunk, reopening the file at its end; false when it has nothing to play. */
         private fun fill(): Boolean {
             if (empty) return false
+            if (ended) {
+                if (!loop()) return false
+                ended = false
+            }
             repeat(2) {
                 val s = source ?: open().also { source = it }
                 val chunk = s.next()
@@ -251,6 +272,10 @@ class DesktopMenuMusic internal constructor(
                 }
                 s.close()
                 source = null
+                if (format != null && !loop()) {
+                    ended = true
+                    return false
+                }
             }
             empty = true
             return false

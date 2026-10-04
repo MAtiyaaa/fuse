@@ -141,9 +141,23 @@ internal class ScreenRecorder(
                     return
                 }
                 val input: ByteBuffer = codec.getInputBuffer(index) ?: continue
-                val read = record.read(bytes, 0, minOf(bytes.size, input.capacity()))
+                // Android hands over no sound at all while nothing is playing (music at volume 0, a
+                // pause), so a count of what was read falls behind the clock and the video would play
+                // slowed against it. The gap is filled with silence, keeping sound and picture together.
+                val behind = (System.nanoTime() / 1_000 - startUs) * SAMPLE_RATE / 1_000_000L - frames
+                if (behind > SAMPLE_RATE / 2) {
+                    val silent = minOf(behind - SAMPLE_RATE / 4, (minOf(bytes.size, input.capacity()) / BYTES_PER_FRAME).toLong()).toInt()
+                    input.clear()
+                    input.put(ByteArray(silent * BYTES_PER_FRAME))
+                    codec.queueInputBuffer(index, 0, silent * BYTES_PER_FRAME, pts, 0)
+                    frames += silent
+                    continue
+                }
+                // Never blocks, so a silent stretch is noticed above instead of stalling here.
+                val read = record.read(bytes, 0, minOf(bytes.size, input.capacity()), AudioRecord.READ_NON_BLOCKING)
                 if (read <= 0) {
                     codec.queueInputBuffer(index, 0, 0, pts, 0)
+                    Thread.sleep(IDLE_MS)
                     continue
                 }
                 input.clear()
@@ -153,6 +167,8 @@ internal class ScreenRecorder(
             }
         } catch (e: IllegalStateException) {
             // The encoder was stopped under it; the recording ends here.
+        } catch (e: InterruptedException) {
+            // Fuse is stopping the recording.
         }
     }
 
@@ -202,6 +218,9 @@ internal class ScreenRecorder(
         private const val BYTES_PER_FRAME = 4
         private const val WAIT_US = 10_000L
         private const val JOIN_MS = 3_000L
+
+        /** How long the sound reader rests when nothing new was captured. */
+        private const val IDLE_MS = 10L
 
         /**
          * Fuse's own sound as Android lets it be captured: media and game audio (the menu music),

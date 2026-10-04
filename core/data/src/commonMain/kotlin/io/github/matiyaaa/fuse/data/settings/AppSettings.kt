@@ -276,6 +276,8 @@ data class MusicSettings(
      * were bundled: the user's own song if there is one, else the default bundled song.
      */
     val track: String? = null,
+    /** Plays Fuse's songs one after another in a random order instead of looping [track]. */
+    val shuffle: Boolean = false,
 )
 
 @Serializable

@@ -763,14 +763,15 @@ private fun ColumnScope.CartridgeFace(cartridge: CartridgeStatus, face: FaceSize
         } else {
             CartridgeEmblem(36.dp)
             Spacer(Modifier.height(Space.xs))
-            FText(if (cartridge.connected == true) "Connected" else "Idle", Fuse.type.bodyStrong, maxLines = 1)
+            FText(if (cartridge.connected == false) "Not connected" else "Cartridge", Fuse.type.bodyStrong, maxLines = 1)
             WidgetCaption(cartridge.recent.firstOrNull()?.title?.let { "Latest: $it" } ?: "No downloads")
         }
         return
     }
+    // Being connected is the normal state; only its absence is worth a line.
     val status = when (cartridge.connected) {
-        true -> "Connected to RomM"
-        false -> "Not connected"
+        true -> null
+        false -> "Not connected to RomM"
         null -> if (cartridge.bridge) "Open to connect" else "Update Cartridge for live status"
     }
     if (face == FaceSize.WIDE) {
@@ -787,7 +788,7 @@ private fun ColumnScope.CartridgeFace(cartridge: CartridgeStatus, face: FaceSize
                 Spacer(Modifier.width(Space.m))
                 Column {
                     FText(cartridge.recent.firstOrNull()?.let { "Latest: ${it.title}" } ?: "No downloads", Fuse.type.bodyStrong, maxLines = 1)
-                    WidgetCaption(status)
+                    status?.let { WidgetCaption(it) }
                 }
             }
         }
@@ -822,7 +823,7 @@ private fun ColumnScope.CartridgeFace(cartridge: CartridgeStatus, face: FaceSize
                     align = if (side) null else TextAlign.Center,
                     maxLines = 2,
                 )
-                WidgetCaption(if (downloading) (if (now.waiting > 0) "${now.waiting} more queued" else "Downloading from RomM") else status)
+                (if (downloading) (if (now.waiting > 0) "${now.waiting} more queued" else "Downloading from RomM") else status)?.let { WidgetCaption(it) }
                 if (shown.isNotEmpty()) {
                     Spacer(Modifier.height(Space.s))
                     Column(verticalArrangement = Arrangement.spacedBy(Space.xs)) {

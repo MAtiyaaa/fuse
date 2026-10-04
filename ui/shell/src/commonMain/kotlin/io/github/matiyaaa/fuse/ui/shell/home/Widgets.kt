@@ -673,13 +673,12 @@ private fun ColumnScope.CartridgeWidget(status: CartridgeStatus, room: WidgetRoo
         }
         else -> {
             FText(status.recent.firstOrNull()?.let { "Latest: ${it.title}" } ?: "No downloads", Fuse.type.bodyStrong, maxLines = 1)
-            WidgetCaption(
-                when (status.connected) {
-                    true -> "Connected to RomM"
-                    false -> "Not connected"
-                    null -> if (status.bridge) "Open to connect" else "Update Cartridge for live status"
-                },
-            )
+            // Being connected is the normal state; only its absence is worth a line.
+            when (status.connected) {
+                true -> Unit
+                false -> WidgetCaption("Not connected to RomM", c.warning)
+                null -> WidgetCaption(if (status.bridge) "Open to connect" else "Update Cartridge for live status")
+            }
         }
     }
 }

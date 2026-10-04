@@ -916,7 +916,8 @@ fun soundRows(app: AppState): List<MenuAction> {
                 add(toggleRow("music", "Menu music", FuseIcons.Music, music.enabled, "Plays in Fuse's menus and stops for games") { v -> setMusic { it.copy(enabled = v) } })
                 add(app.percentRow("musicvolume", "Music volume", FuseIcons.Volume, music.volume, "Low sits nicely under the interface") { v -> setMusic { it.copy(volume = v) } })
                 add(songRow(app, music, ::setMusic))
-                add(infoRow("credit", "Music by ${BundledMusic.ARTIST}", detail = "Fuse's songs are from the album ${BundledMusic.ALBUM}. First-time setup plays ${BundledMusic.byId(BundledMusic.ONBOARDING)?.title}", icon = FuseIcons.Heart))
+                add(toggleRow("shuffle", "Shuffle", FuseIcons.Shuffle, music.shuffle, if (music.shuffle) "A different song each time one ends, from both albums" else "Plays every song in a random order instead of repeating one") { v -> setMusic { it.copy(enabled = true, shuffle = v) } })
+                add(infoRow("credit", "Music by ${BundledMusic.ARTIST}", detail = "Fuse's songs are from the albums ${BundledMusic.ALBUM} and ${BundledMusic.ALBUM_TWO}. First-time setup plays ${BundledMusic.byId(BundledMusic.ONBOARDING)?.title}", icon = FuseIcons.Heart))
             }
         }
         labelled("Interface sounds") {
@@ -929,42 +930,61 @@ fun soundRows(app: AppState): List<MenuAction> {
 /** The menu song: one of the album's songs, or the user's own. Picking one plays it straight away. */
 private fun songRow(app: AppState, music: MusicPrefs, setMusic: ((MusicPrefs) -> MusicPrefs) -> Unit): MenuAction {
     val own = music.track == BundledMusic.OWN_SONG
-    val current = if (own) music.songName ?: "Your song" else BundledMusic.byId(music.track)?.title ?: "None"
+    val current = when {
+        music.shuffle -> "Shuffle"
+        own -> music.songName ?: "Your song"
+        else -> BundledMusic.byId(music.track)?.title ?: "None"
+    }
     fun pickFile() {
         app.choice = null
         app.scope.launch {
             val picked = app.platform.storage.pickAudio("Choose menu music") ?: return@launch
-            setMusic { it.copy(enabled = true, songPath = picked.path, songName = picked.name, track = BundledMusic.OWN_SONG) }
+            setMusic { it.copy(enabled = true, songPath = picked.path, songName = picked.name, track = BundledMusic.OWN_SONG, shuffle = false) }
             app.toasts.show("Menu music: ${picked.name}")
         }
     }
     return MenuAction(
         "song", "Song", FuseIcons.Disc,
-        detail = if (own) "Your own song. Fuse keeps its own copy" else "${BundledMusic.ARTIST}, ${BundledMusic.ALBUM}",
+        detail = when {
+            music.shuffle -> "Every song by ${BundledMusic.ARTIST}, in a random order"
+            own -> "Your own song. Fuse keeps its own copy"
+            else -> "${BundledMusic.ARTIST}, ${BundledMusic.byId(music.track)?.album ?: BundledMusic.ALBUM}"
+        },
         trailing = Trailing.Value(current),
         onSelect = {
             app.choice = ChoiceSpec(
                 title = "Menu music",
                 icon = FuseIcons.Music,
                 message = "${BundledMusic.CREDIT}, or a song of your own. The song you pick plays straight away.",
-                options = BundledMusic.tracks.map { t ->
+                options = listOf(
+                    MenuAction(
+                        "shuffle", "Shuffle", FuseIcons.Shuffle,
+                        detail = "Every song from both albums, a new one each time one ends",
+                        trailing = Trailing.Check(music.shuffle),
+                        onSelect = {
+                            app.choice = null
+                            setMusic { it.copy(enabled = true, shuffle = true) }
+                        },
+                    ),
+                ) + BundledMusic.tracks.map { t ->
                     MenuAction(
                         "t.${t.id}", t.title, FuseIcons.Music,
                         detail = if (t.id == BundledMusic.MENU_DEFAULT) "Fuse's default" else null,
-                        trailing = Trailing.Check(!own && music.track == t.id),
+                        trailing = Trailing.Check(!music.shuffle && !own && music.track == t.id),
+                        section = t.album,
                         onSelect = {
                             app.choice = null
-                            setMusic { it.copy(enabled = true, track = t.id) }
+                            setMusic { it.copy(enabled = true, track = t.id, shuffle = false) }
                         },
                     )
                 } + listOfNotNull(
                     music.songPath?.let { path ->
-                        MenuAction("own", music.songName ?: "Your song", FuseIcons.FolderOpen, detail = "Your own song", trailing = Trailing.Check(own), onSelect = {
+                        MenuAction("own", music.songName ?: "Your song", FuseIcons.FolderOpen, detail = "Your own song", trailing = Trailing.Check(!music.shuffle && own), section = "Your music", onSelect = {
                             app.choice = null
-                            setMusic { it.copy(enabled = true, track = BundledMusic.OWN_SONG, songPath = path) }
+                            setMusic { it.copy(enabled = true, track = BundledMusic.OWN_SONG, songPath = path, shuffle = false) }
                         })
                     },
-                    MenuAction("pick", if (music.songPath == null) "Choose your own song" else "Choose another song", FuseIcons.FileUp, detail = "An audio file on this device. MP3 works everywhere", onSelect = ::pickFile),
+                    MenuAction("pick", if (music.songPath == null) "Choose your own song" else "Choose another song", FuseIcons.FileUp, detail = "An audio file on this device. MP3 works everywhere", section = "Your music", onSelect = ::pickFile),
                 ),
             )
         },

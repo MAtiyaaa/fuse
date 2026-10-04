@@ -375,12 +375,21 @@ fun FillSlider(
     valueText: String,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    /**
+     * The text for a value while it is being dragged. A value the system rounds (the device volume
+     * moves in its own steps) then follows the finger smoothly and in single percents, and settles on
+     * what the system really set when the finger lifts.
+     */
+    dragText: ((Float) -> String)? = null,
 ) {
     val c = Fuse.colors
     val motion = Fuse.motion
     var dragging by remember { mutableStateOf(false) }
+    // Where the finger has taken the value, so the fill never jumps between the system's steps.
+    var finger by remember { mutableStateOf(value) }
     val eased by animateFloatAsState(value.coerceIn(0f, 1f), motion.focusSpring(), label = "fill")
-    val v = if (dragging) value.coerceIn(0f, 1f) else eased
+    val v = if (dragging) finger.coerceIn(0f, 1f) else eased
+    val shownText = if (dragging && dragText != null) dragText(finger.coerceIn(0f, 1f)) else valueText
     val grab by animateFloatAsState(if (dragging) 1f else 0f, motion.tween(Durations.FAST), label = "fillGrab")
     val current by rememberUpdatedState(value)
     val change by rememberUpdatedState(onChange)
@@ -396,7 +405,7 @@ fun FillSlider(
         ) {
             FuseIcon(icon, tint = tint, size = Size.iconM)
             FText(label, Fuse.type.bodyStrong, color = tint, maxLines = 1, modifier = Modifier.weight(1f))
-            FText(valueText, Fuse.type.numeric, color = tint, maxLines = 1)
+            FText(shownText, Fuse.type.numeric, color = tint, maxLines = 1)
         }
     }
     Box(
@@ -422,10 +431,12 @@ fun FillSlider(
                             start = current
                             startX = moved.position.x
                         } ?: return@awaitEachGesture
+                        finger = start
                         dragging = true
                         horizontalDrag(slop.id) { moved ->
                             moved.consume()
-                            change((start + (moved.position.x - startX) / width).coerceIn(0f, 1f))
+                            finger = (start + (moved.position.x - startX) / width).coerceIn(0f, 1f)
+                            change(finger)
                         }
                         dragging = false
                     }

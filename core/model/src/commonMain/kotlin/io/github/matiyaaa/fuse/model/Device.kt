@@ -135,6 +135,8 @@ data class SystemStatus(
     val wifiStrength: Int? = null,
     val bluetooth: ConnectionState = ConnectionState.UNKNOWN,
     val network: ConnectionState = ConnectionState.UNKNOWN,
+    /** A cable is plugged in and its network is up. Shown in Wi-Fi's place when Wi-Fi isn't connected. */
+    val ethernet: Boolean = false,
 )
 
 @Serializable

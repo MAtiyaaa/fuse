@@ -270,10 +270,12 @@ interface WindowControls {
 data class PickedFile(val path: String, val name: String)
 
 /**
- * Everything the menu music should be right now: the file to loop ([song], null for silence), how
- * loud (0..1) and whether it may be heard ([playing] false while a game starts or runs).
+ * Everything the menu music should be right now: the file to play ([song], null for silence), how
+ * loud (0..1) and whether it may be heard ([playing] false while a game starts or runs, or at volume
+ * 0). [loop] false plays the song once and then reports it through [MenuMusicPlayer.onSongEnded], so
+ * shuffle can pick the next one.
  */
-data class MusicState(val song: String?, val volume: Float, val playing: Boolean)
+data class MusicState(val song: String?, val volume: Float, val playing: Boolean, val loop: Boolean = true)
 
 /**
  * Loops one song under Fuse's menus. Fuse says what it wants as a whole ([apply]); the platform also
@@ -286,4 +288,10 @@ data class MusicState(val song: String?, val volume: Float, val playing: Boolean
  */
 interface MenuMusicPlayer {
     fun apply(state: MusicState)
+
+    /**
+     * Called with a song's path when it played to its end without looping ([MusicState.loop] false).
+     * May be called on any thread.
+     */
+    fun onSongEnded(listener: ((String) -> Unit)?) = Unit
 }

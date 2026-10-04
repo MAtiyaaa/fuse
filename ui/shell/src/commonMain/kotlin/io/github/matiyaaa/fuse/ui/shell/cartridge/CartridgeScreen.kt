@@ -495,9 +495,10 @@ private fun Header(status: CartridgeStatus, embedded: Boolean, compact: Boolean,
     }
 }
 
-/** Whether Cartridge reaches RomM, as a small pill with a light. */
+/** Whether Cartridge reaches RomM, as a small pill with a light; only when it doesn't, since that is what needs saying. */
 @Composable
 private fun ConnectionChip(s: CartridgeStatus) {
+    if (s.connected == true) return
     val c = Fuse.colors
     Row(
         Modifier.clip(PillShape).background(c.text.copy(alpha = 0.07f)).border(1.dp, c.text.copy(alpha = 0.06f), PillShape)
@@ -507,7 +508,7 @@ private fun ConnectionChip(s: CartridgeStatus) {
     ) {
         StatusDot(s.connected)
         FText(
-            when (s.connected) { true -> "Connected to RomM"; false -> "Not connected"; null -> if (s.bridge) "Status unknown" else "Status needs a newer Cartridge" },
+            when (s.connected) { true, false -> "Not connected to RomM"; null -> if (s.bridge) "Status unknown" else "Status needs a newer Cartridge" },
             Fuse.type.label, maxLines = 1,
         )
     }

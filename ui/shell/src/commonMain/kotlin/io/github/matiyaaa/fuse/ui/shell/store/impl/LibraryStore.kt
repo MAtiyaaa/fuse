@@ -506,6 +506,11 @@ internal class DefaultLibraryOps(
     }
 
     override fun onResume() {
+        // Back after a while away with no game in between (the screen was off, the device asleep):
+        // the interface welcomes the user back with the startup animation.
+        val pausedAt = awayFrom
+        awayFrom = null
+        if (pausedAt != null && active == null) io.github.matiyaaa.fuse.ui.shell.app.Away.returned(ctx.now() - pausedAt)
         ctx.scope.launch {
             val session = active
             if (session != null && session.endsOnResume) {
@@ -521,7 +526,12 @@ internal class DefaultLibraryOps(
         }
     }
 
-    override fun onPause() = Unit
+    /** When Fuse last went to the background, until it comes back. */
+    @kotlin.concurrent.Volatile private var awayFrom: Long? = null
+
+    override fun onPause() {
+        awayFrom = ctx.now()
+    }
 
     /** On start: closes a session left open when Fuse was stopped while a game ran. */
     suspend fun recoverSession() {

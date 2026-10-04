@@ -35,6 +35,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
@@ -98,7 +99,13 @@ import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 
 /** The buttons at the end of the tab line, reachable with the stick after the last tab. */
-enum class HudButton { SEARCH, SETTINGS }
+enum class HudButton {
+    SEARCH,
+    SETTINGS,
+
+    /** The status at the far right (Wi-Fi, battery, clock), which opens the quick menu. */
+    STATUS,
+}
 
 /**
  * The top line: Fuse's mark and the section tabs on the left, then Search and Settings, and status
@@ -173,7 +180,7 @@ fun Hud(
                 val edge = with(LocalDensity.current) { 56.dp.toPx() }
                 val activeWidth = remember { mutableIntStateOf(0) }
                 // Again once its label has opened, and with room to spare so the fade never covers it.
-                LaunchedEffect(active, labels, activeWidth.intValue) {
+                LaunchedEffect(active, labels, activeWidth.intValue, destinations, viewport) {
                     val requester = active?.let { requesters[it] } ?: return@LaunchedEffect
                     requester.bringIntoView(Rect(-edge, 0f, activeWidth.intValue + edge, 1f))
                 }
@@ -186,7 +193,9 @@ fun Hud(
                     horizontalArrangement = Arrangement.spacedBy(Space.xs),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    for (d in destinations) {
+                    // Keyed by section, so each tab keeps its own place when tabs come and go (Cartridge's
+                        // appears once it is installed, or after coming back from it).
+                    for (d in destinations) key(d) {
                         var x by remember { mutableFloatStateOf(0f) }
                         var w by remember { mutableIntStateOf(0) }
                         Tab(
@@ -200,7 +209,8 @@ fun Hud(
                                 }
                                 .anchor(anchors, d)
                                 .graphicsLayer {
-                                    if (viewport <= 0 || scroll.maxValue == 0) return@graphicsLayer
+                                    // The active tab always shows whole and at full strength.
+                                    if (viewport <= 0 || scroll.maxValue == 0 || d == active) return@graphicsLayer
                                     val center = x - scroll.value + w / 2f
                                     val nearest = minOf(center, viewport - center)
                                     val t = (nearest / edge).coerceIn(0f, 1f)
@@ -241,10 +251,12 @@ fun Hud(
                 Box(Modifier.width(Size.divider).height(Size.iconM).background(Fuse.colors.hairlineStrong))
                 Spacer(Modifier.width(Space.xs))
                 val shape = rememberHudShape(insetX = false)
+                val statusFocus by animateFloatAsState(if (tabsFocused && focusedButton == HudButton.STATUS) 1f else 0f, Fuse.motion.tween(Durations.FAST), label = "statusFocus")
                 Box(
                     Modifier
                         .height(Size.touch)
                         .fuseClickable(shape = shape, scale = false, role = Role.Button, onClickLabel = "Quick menu", onClick = onStatusClick)
+                        .hudFocus(shape, { statusFocus }, Fuse.colors.text.copy(alpha = if (Fuse.colors.isDark) 0.12f else 0.08f), Fuse.colors.focus)
                         .padding(horizontal = Space.m),
                     contentAlignment = Alignment.Center,
                 ) {

@@ -69,10 +69,11 @@ private val docs = listOf(
         "MIT License: Cartridge by abdu2304 (github.com/abdu2304/cartridge), the RomM companion Fuse pairs with, and the emulator family matching Fuse learned from it",
     ),
     LicenceDoc(
-        "music", "Music", "jam channel by ${BundledMusic.ARTIST}. The songs Fuse plays under its menus",
+        "music", "Music", "${BundledMusic.ALBUM} and ${BundledMusic.ALBUM_TWO} by ${BundledMusic.ARTIST}. The songs Fuse plays under its menus",
         inline = "${BundledMusic.CREDIT}.\n\n" +
             "Fuse plays these songs under its menus: puddleworld by default and alright apothecary during " +
-            "first-time setup. Pick another one, or a song of your own, in Settings, Screen and sound.\n\n" +
+            "first-time setup. Pick another one, shuffle them all, or play a song of your own, in Settings, " +
+            "Screen and sound.\n\n" +
             "The songs are the work of ${BundledMusic.ARTIST} and are not covered by Fuse's licence. They ship " +
             "with Fuse so it has music out of the box; all rights stay with the artist.",
     ),

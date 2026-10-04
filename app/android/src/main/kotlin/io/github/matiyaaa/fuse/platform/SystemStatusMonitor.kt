@@ -231,11 +231,12 @@ class SystemStatusMonitor(context: Context, private val scope: CoroutineScope) {
         val callback = object : ConnectivityManager.NetworkCallback() {
             override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) {
                 val online = caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
-                _status.update { it.copy(network = if (online) ConnectionState.CONNECTED else ConnectionState.ON) }
+                val cable = caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)
+                _status.update { it.copy(network = if (online) ConnectionState.CONNECTED else ConnectionState.ON, ethernet = cable) }
             }
 
             override fun onLost(network: Network) {
-                _status.update { it.copy(network = ConnectionState.OFF) }
+                _status.update { it.copy(network = ConnectionState.OFF, ethernet = false) }
             }
         }
         try {

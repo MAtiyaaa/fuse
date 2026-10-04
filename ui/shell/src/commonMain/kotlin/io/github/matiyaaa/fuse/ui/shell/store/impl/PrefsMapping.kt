@@ -62,6 +62,7 @@ internal fun AppSettings.toUiPrefs(scoped: GlobalScoped): UiPrefs {
         music = MusicPrefs(
             music.enabled, music.volume, music.songPath, music.songName,
             track = music.track ?: if (music.songPath != null) BundledMusic.OWN_SONG else BundledMusic.MENU_DEFAULT,
+            shuffle = music.shuffle,
         ),
         clock24h = statusArea.use24HourClock ?: false,
         showWifi = statusArea.showWifi,
@@ -155,6 +156,7 @@ internal fun AppSettings.withUiPrefs(prefs: UiPrefs): AppSettings {
             songPath = prefs.music.songPath,
             songName = prefs.music.songName,
             track = prefs.music.track,
+            shuffle = prefs.music.shuffle,
         ),
         statusArea = statusArea.copy(
             use24HourClock = prefs.clock24h,
