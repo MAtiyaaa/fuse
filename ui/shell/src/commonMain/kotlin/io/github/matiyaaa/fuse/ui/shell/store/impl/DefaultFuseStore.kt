@@ -30,6 +30,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
@@ -266,6 +267,11 @@ internal class DefaultFuseStore private constructor(
             }
         }
         engine.start()
+        // Steam games whose shortcuts went away come back from Steam once the first scan is done.
+        ctx.scope.launch {
+            engine.scan.first { it.phase == ScanPhase.DONE }
+            runCatching { engine.repairSteam() }
+        }
         health.start()
         appStoreOps?.start()
         desktopStoreOps?.start()

@@ -386,7 +386,9 @@ internal class DefaultLibraryOps(
                 return LaunchOutcome.Problem(LaunchProblems.unavailable(root, stored.displayTitle, root.lastSeenAt?.let(::describeWhen)))
             }
             if (discPath == null && stored.location.path.let(FsPath::isAbsolute) && !exists(stored.location.launchPath)) {
-                return LaunchOutcome.Problem(LaunchProblems.fileMissing(stored.displayTitle, stored.location.launchPath))
+                // A Steam game's shortcut is Fuse's own: written back from Steam, it starts through Steam.
+                val steamBack = stored.location.launchPath.endsWith(".steam", ignoreCase = true) && engine.repairSteam() && exists(stored.location.launchPath)
+                if (!steamBack) return LaunchOutcome.Problem(LaunchProblems.fileMissing(stored.displayTitle, stored.location.launchPath))
             }
         }
 

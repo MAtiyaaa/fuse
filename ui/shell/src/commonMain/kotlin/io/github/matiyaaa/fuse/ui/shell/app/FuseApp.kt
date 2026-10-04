@@ -398,6 +398,12 @@ private fun FuseAppContent(
                     if (app.standby) {
                         StandbyHost(app, prefs.clock24h, prefs.startupAnimation && startupIntro)
                     }
+                    // The other screen stays dark while an opening plays here.
+                    val opening = app.intro || app.setupOpening
+                    androidx.compose.runtime.DisposableEffect(opening) {
+                        if (opening) OpeningVeil.showing.value = true
+                        onDispose { if (opening) OpeningVeil.showing.value = false }
+                    }
                     if (app.intro) StartupIntroOverlay(onDone = { app.intro = false; StartupIntro.lastPlayedAt = kotlin.time.Clock.System.now().toEpochMilliseconds() })
                     if (app.setupOpening) SetupOpening(onDone = { app.setupOpening = false })
                 }

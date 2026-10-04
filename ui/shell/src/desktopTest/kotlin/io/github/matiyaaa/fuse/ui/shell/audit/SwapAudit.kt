@@ -108,7 +108,7 @@ internal fun AuditDriver.swapScreens() {
     scenario("swap", "screen settings with a second screen") {
         useLibrary(twoScreens)
         openSettings()
-        focusText("Screen and sound")
+        focusText("Display")
         tap(PadButton.DPAD_RIGHT)
         settle(600)
         focusText("Which way round")
@@ -122,7 +122,7 @@ internal fun AuditDriver.swapScreens() {
     scenario("swap", "screen settings without a second screen") {
         useLibrary()
         openSettings()
-        focusText("Screen and sound")
+        focusText("Display")
         tap(PadButton.DPAD_RIGHT)
         settle(600)
         repeat(30) { tap(PadButton.DPAD_DOWN) }

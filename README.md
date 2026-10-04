@@ -579,7 +579,7 @@ Third-party components keep their own licences; see [THIRD_PARTY_NOTICES.md](THI
   [RetroAchievements](https://retroachievements.org/).
 - **Music by boipurple.** Fuse's menu music is the album *jam channel* by boipurple: puddleworld
   plays under the menus and alright apothecary during setup, and every song on the album can be
-  picked in Settings, Screen and sound. The songs remain the artist's own and are not covered by Fuse's
+  picked in Settings, Sound. The songs remain the artist's own and are not covered by Fuse's
   licence.
 - [Lucide](https://lucide.dev/) icons (ISC), and the [Sora](https://github.com/sora-xor/sora-font) and
   [Manrope](https://github.com/googlefonts/manrope) typefaces (SIL Open Font License).

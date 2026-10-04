@@ -118,6 +118,8 @@ data class PlatformFeatures(
     val windowModes: Boolean = false,
     /** Cartridge runs here (Android, and Linux next to it); off on Windows and macOS. */
     val cartridge: Boolean = true,
+    /** The screen turns with the device, and Fuse can choose how (Android). */
+    val rotation: Boolean = false,
 )
 
 interface Haptics {

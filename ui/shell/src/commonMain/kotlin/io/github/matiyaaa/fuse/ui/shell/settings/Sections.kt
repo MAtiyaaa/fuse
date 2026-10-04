@@ -30,6 +30,7 @@ import io.github.matiyaaa.fuse.model.ScanScope
 import io.github.matiyaaa.fuse.model.ScopeRef
 import io.github.matiyaaa.fuse.model.ScopedSettings
 import io.github.matiyaaa.fuse.model.ScrapeProviderId
+import io.github.matiyaaa.fuse.model.ScreenRotation
 import io.github.matiyaaa.fuse.model.SoundProfile
 import io.github.matiyaaa.fuse.model.Support
 import io.github.matiyaaa.fuse.model.WidgetKind
@@ -1145,6 +1146,28 @@ fun displayRows(app: AppState): List<MenuAction> {
     val d = p.display
     return buildList {
         labelled("This screen") {
+            if (app.platform.features.rotation) {
+                add(app.choiceRow(
+                    "rotation", "Rotation", FuseIcons.RotateCw, d.rotation,
+                    listOf(
+                        ScreenRotation.AUTO to "Automatic",
+                        ScreenRotation.LANDSCAPE to "Landscape",
+                        ScreenRotation.PORTRAIT to "Portrait",
+                        ScreenRotation.ANY to "Any way",
+                        ScreenRotation.SYSTEM to "Like Android",
+                    ),
+                    detail = "Turned over by accident, Fuse turns back with the device, even with rotation locked",
+                    optionDetail = {
+                        when (it) {
+                            ScreenRotation.AUTO -> "Landscape either way up on a handheld or a device with two screens; like Android elsewhere"
+                            ScreenRotation.LANDSCAPE -> "Wide, either way up, by the sensor"
+                            ScreenRotation.PORTRAIT -> "Tall, either way up, by the sensor"
+                            ScreenRotation.ANY -> "Every way the device is held"
+                            ScreenRotation.SYSTEM -> "Follows Android's own rotation and its lock"
+                        }
+                    },
+                ) { v -> app.store.updatePrefs { it.copy(display = it.display.copy(rotation = v)) } })
+            }
             app.platform.windowControls?.let { w ->
                 add(app.choiceRow(
                     "window", "Window", FuseIcons.Monitor, w.mode,
@@ -1264,14 +1287,12 @@ fun performanceRows(app: AppState): List<MenuAction> {
     }
 }
 
-/** Sound, the screens Fuse is on and how hard it works, with what the device is folded at the end. */
+/** The screens Fuse is on, which way round it turns, and how hard it works, with what the device is at the end. */
 @Composable
-fun screenAndSoundRows(app: AppState): List<MenuAction> {
-    val sound = soundRows(app)
+fun displayAndPerformanceRows(app: AppState): List<MenuAction> {
     val screens = displayRows(app)
     val performance = performanceRows(app)
     return buildList {
-        under("Sound", "sound", sound)
         under("This screen", "screen", screens)
         under("Performance", "perf", performance)
     }

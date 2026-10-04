@@ -110,7 +110,7 @@ fun ShowcaseApp(store: FuseStore, platform: PlatformUi) {
         val target: Any? = playing ?: focus.key
         val direction = if (playing != null) 0 else focus.direction
         val hero = companionHero(store, systems, target)
-        Box(Modifier.fillMaxSize().background(Fuse.colors.ink)) {
+        Box(Modifier.fillMaxSize().background(Fuse.colors.ink).veiledWhileOpening()) {
             AmbientBackground(
                 if (spec.background == io.github.matiyaaa.fuse.model.BackgroundStyle.HERO) io.github.matiyaaa.fuse.model.BackgroundStyle.SOLID else spec.background,
                 hero?.accent ?: Fuse.colors.accent,

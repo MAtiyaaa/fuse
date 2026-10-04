@@ -27,7 +27,7 @@ class SettingsLayoutTest {
     @Test
     fun twelveSectionsUnderFiveHeadingsAndTheStoreWhereItRuns() {
         // Twelve everywhere, the Store's own section where Fuse has a Store, and Addons (Jellyfin).
-        assertEquals(14, settingsSections.size)
+        assertEquals(15, settingsSections.size)
         assertEquals("Connections", settingsSections.first { it.id == "store" }.group)
         assertEquals("Connections", settingsSections.first { it.id == "addons" }.group)
         assertEquals(listOf("Personalize", "Games", "This device", "Connections", "General"), settingsSections.mapNotNull { it.group }.distinct())

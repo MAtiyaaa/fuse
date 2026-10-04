@@ -169,7 +169,7 @@ fun CompanionApp(store: FuseStore, platform: PlatformUi, mode: DualScreenMode, o
                 if (store.prefs.value.display.companionPage != page) store.updatePrefs { it.copy(display = it.display.copy(companionPage = page)) }
             }
         }
-        Box(Modifier.fillMaxSize().background(Fuse.colors.ink)) {
+        Box(Modifier.fillMaxSize().background(Fuse.colors.ink).veiledWhileOpening()) {
             // The game being played comes first in every mode (Fuse is in the background then).
             val content = when {
                 playing != null -> CompanionContent(playing, 0)

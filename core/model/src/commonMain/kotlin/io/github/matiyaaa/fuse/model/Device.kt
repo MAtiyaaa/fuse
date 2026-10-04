@@ -127,7 +127,18 @@ data class DisplayProfile(
     val flipped: Boolean = false,
     /** The second screen shows the main screen's background (its scene or picture) behind what it shows. */
     val companionFollowsBackground: Boolean = true,
+    /** Which way round Fuse turns on a device that rotates (Android). */
+    val rotation: ScreenRotation = ScreenRotation.AUTO,
 )
+
+/**
+ * How Fuse follows the device's rotation. [AUTO] keeps a handheld (or any device whose screen is
+ * wide when upright, or that has two screens) landscape either way up by its sensor, even while
+ * Android's rotation lock is on, so turning it over and back never leaves Fuse stuck; elsewhere it
+ * follows Android.
+ */
+@Serializable
+enum class ScreenRotation { AUTO, SYSTEM, LANDSCAPE, PORTRAIT, ANY }
 
 /** Live system status for the status area. Fields are null when the platform doesn't report them. */
 @Serializable

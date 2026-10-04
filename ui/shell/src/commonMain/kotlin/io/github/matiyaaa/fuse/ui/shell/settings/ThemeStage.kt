@@ -668,7 +668,7 @@ internal fun MotionProfile.label(): String = when (this) {
     MotionProfile.ENHANCED -> "Enhanced"
 }
 
-/** The same names Settings, Screen and sound uses. */
+/** The same names Settings, Sound uses. */
 internal fun SoundProfile.label(): String = when (this) {
     SoundProfile.OFF -> "Off"
     SoundProfile.SOFT -> "Soft"

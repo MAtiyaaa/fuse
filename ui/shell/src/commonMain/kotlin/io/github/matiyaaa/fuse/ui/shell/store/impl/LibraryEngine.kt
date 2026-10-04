@@ -121,6 +121,28 @@ internal class LibraryEngine(private val ctx: StoreContext) : SourceOps {
         return written
     }
 
+    /**
+     * Steam's games are small shortcut files Fuse keeps, each holding the game's Steam id. If any
+     * went away (Fuse's folder moved, a cleaner removed them), Steam is asked again and those
+     * shortcuts are written back, so a game Steam has installed never shows as missing in Fuse and
+     * always starts through Steam. True when any came back.
+     */
+    suspend fun repairSteam(): Boolean {
+        val gone = data.games.observeMissing().first()
+            .filter { it.platformId.value == STEAM }
+            .mapNotNull { data.games.get(it.id)?.location?.launchPath }
+            .filter { it.endsWith(".steam", ignoreCase = true) }
+            .map { FsPath.name(it).lowercase() }
+            .toSet()
+        if (gone.isEmpty()) return false
+        val found = runCatching { findSteamGames(null) }.getOrDefault(emptyList())
+        val back = found.filter { g ->
+            val name = io.github.matiyaaa.fuse.library.steam.SteamLibraryReader.shortcutName(g)
+            name.lowercase() in gone || (name.removeSuffix(".steam") + " (${g.appId}).steam").lowercase() in gone
+        }
+        return addSteamGames(back) > 0
+    }
+
     override suspend fun remove(source: LibrarySource) {
         // Games from the source are marked missing (user edits survive a re-add). Files are untouched.
         data.sources.remove(source.id)
@@ -297,3 +319,6 @@ private const val RULES_KEY = "version"
 
 /** Moves when the scanner's idea of what a game is changes (2: a game's own folders are never games). */
 private const val SCAN_RULES = 2
+
+/** The Steam system's id. */
+private const val STEAM = "steam"
