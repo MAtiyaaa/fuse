@@ -177,10 +177,14 @@ internal fun AuditDriver.welcomeMark() {
         shoot("lit", 4_000)
     }
     scenario("swap", "controller pad") {
-        view = AuditView.Piece { androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.padding(40.dp)) { io.github.matiyaaa.fuse.ui.shell.onboarding.ControllerTest() } }
-        router.press(PadButton.L1, io.github.matiyaaa.fuse.ui.designsystem.input.InputSource.GAMEPAD)
-        shoot("left bumper held", 800)
-        router.release(PadButton.L1, io.github.matiyaaa.fuse.ui.designsystem.input.InputSource.GAMEPAD)
+        view = AuditView.Piece {
+            androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.padding(40.dp)) { io.github.matiyaaa.fuse.ui.shell.onboarding.ControllerTest() }
+        }
+        shoot("at rest", 800)
+        val held = listOf(PadButton.L1, PadButton.R2, PadButton.A, PadButton.DPAD_LEFT, PadButton.MODE)
+        for (b in held) router.press(b, io.github.matiyaaa.fuse.ui.designsystem.input.InputSource.GAMEPAD)
+        shoot("a bumper, a trigger, A, left and the guide button held", 800)
+        for (b in held) router.release(b, io.github.matiyaaa.fuse.ui.designsystem.input.InputSource.GAMEPAD)
     }
 }
 

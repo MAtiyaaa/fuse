@@ -657,11 +657,9 @@ internal fun Ignition(lit: Boolean = false) {
 }
 
 /**
- * Live view of what the controller sends, so users can confirm their layout, drawn as a pad: the
- * shoulder bumpers (LB and RB, L1 and R1, or L and R, as the pad style names them) sit on its top
- * edge as bumpers do, the D-pad on the left and the face buttons in their diamond on the right.
- * Each lights while it is held. [nintendoKeys] places the face buttons where a pad that sends
- * Nintendo keycodes has them (A on the right).
+ * Live view of what the controller sends, so users can confirm their layout, on a whole controller
+ * drawn in the theme ([PadArt]) whose every button lights while it is held. [nintendoKeys] places
+ * the face buttons where a pad that sends Nintendo keycodes has them (A on the right).
  */
 @Composable
 internal fun ControllerTest(nintendoKeys: Boolean = false) {
@@ -676,75 +674,8 @@ internal fun ControllerTest(nintendoKeys: Boolean = false) {
     }
     val c = Fuse.colors
     val style = Fuse.glyphs.style
-    val (left, right) = when (style) {
-        io.github.matiyaaa.fuse.model.GlyphStyle.PLAYSTATION -> "L1" to "R1"
-        io.github.matiyaaa.fuse.model.GlyphStyle.NINTENDO -> "L" to "R"
-        else -> "LB" to "RB"
-    }
-    @Composable
-    fun Face(b: PadButton, label: String, modifier: Modifier) {
-        val on = b in pressed
-        Box(
-            modifier.size(36.dp).clip(CircleShape).background(if (on) c.accent else c.text.copy(alpha = 0.1f))
-                .border(1.dp, c.text.copy(alpha = if (on) 0f else 0.22f), CircleShape),
-            contentAlignment = Alignment.Center,
-        ) { FText(label, Fuse.type.label, color = if (on) c.onAccent else c.text, maxLines = 1) }
-    }
-    @Composable
-    fun Bumper(b: PadButton, label: String, modifier: Modifier) {
-        val on = b in pressed
-        // A bumper: wide and low, rounded where it wraps over the pad's top edge.
-        val shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 4.dp, bottomEnd = 4.dp)
-        Box(
-            modifier.size(width = 88.dp, height = 26.dp).clip(shape).background(if (on) c.accent else c.surfaceRaised)
-                .border(1.dp, c.text.copy(alpha = if (on) 0f else 0.25f), shape),
-            contentAlignment = Alignment.Center,
-        ) { FText(label, Fuse.type.label, color = if (on) c.onAccent else c.textMuted, maxLines = 1) }
-    }
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Box(Modifier.size(width = 340.dp, height = 196.dp)) {
-            // The bumpers stand on the pad's shoulders, a little behind its body.
-            Bumper(PadButton.L1, left, Modifier.align(Alignment.TopStart).offset(x = 52.dp, y = 6.dp))
-            Bumper(PadButton.R1, right, Modifier.align(Alignment.TopEnd).offset(x = (-52).dp, y = 6.dp))
-            val body = c.text.copy(alpha = 0.07f)
-            val edge = c.text.copy(alpha = 0.2f)
-            Canvas(Modifier.fillMaxWidth().height(172.dp).align(Alignment.BottomCenter)) {
-                val w = size.width
-                val h = size.height
-                // The body: a wide rounded top, the two grips below it.
-                // One outline, the shapes joined, so nothing shows through where they meet.
-                val top = Path().apply { addRoundRect(androidx.compose.ui.geometry.RoundRect(w * 0.06f, 0f, w * 0.94f, h * 0.66f, androidx.compose.ui.geometry.CornerRadius(h * 0.3f))) }
-                val grips = Path().apply {
-                    addOval(androidx.compose.ui.geometry.Rect(w * 0.04f, h * 0.28f, w * 0.36f, h))
-                    addOval(androidx.compose.ui.geometry.Rect(w * 0.64f, h * 0.28f, w * 0.96f, h))
-                }
-                val pad = Path().apply { op(top, grips, androidx.compose.ui.graphics.PathOperation.Union) }
-                drawPath(pad, body)
-                drawPath(pad, edge, style = Stroke(1.dp.toPx()))
-            }
-            // The D-pad, a cross on the left.
-            Box(Modifier.align(Alignment.BottomStart).offset(x = 54.dp, y = (-70).dp).size(70.dp)) {
-                val dirs = listOf(PadButton.DPAD_UP to Alignment.TopCenter, PadButton.DPAD_DOWN to Alignment.BottomCenter, PadButton.DPAD_LEFT to Alignment.CenterStart, PadButton.DPAD_RIGHT to Alignment.CenterEnd)
-                Box(Modifier.align(Alignment.Center).size(22.dp).background(c.text.copy(alpha = 0.1f)))
-                for ((b, at) in dirs) {
-                    Box(Modifier.align(at).size(23.dp).clip(RoundedCornerShape(5.dp)).background(if (b in pressed) c.accent else c.text.copy(alpha = 0.1f)))
-                }
-            }
-            // The face buttons in their diamond on the right.
-            Box(Modifier.align(Alignment.BottomEnd).offset(x = (-44).dp, y = (-62).dp).size(92.dp)) {
-                if (nintendoKeys) {
-                    Face(PadButton.X, "X", Modifier.align(Alignment.TopCenter))
-                    Face(PadButton.Y, "Y", Modifier.align(Alignment.CenterStart))
-                    Face(PadButton.A, "A", Modifier.align(Alignment.CenterEnd))
-                    Face(PadButton.B, "B", Modifier.align(Alignment.BottomCenter))
-                } else {
-                    Face(PadButton.Y, "Y", Modifier.align(Alignment.TopCenter))
-                    Face(PadButton.X, "X", Modifier.align(Alignment.CenterStart))
-                    Face(PadButton.B, "B", Modifier.align(Alignment.CenterEnd))
-                    Face(PadButton.A, "A", Modifier.align(Alignment.BottomCenter))
-                }
-            }
-        }
+        PadArt(pressed.toSet(), style, nintendoKeys, Modifier.width(380.dp))
         Spacer(Modifier.height(Space.m))
         FText(last?.let { "Last: ${it.name.replace('_', ' ').lowercase()}" } ?: "Press any button", Fuse.type.label, color = c.textMuted)
         FText(if (nintendoKeys) "Laid out as a Nintendo pad" else "Laid out as an Xbox pad", Fuse.type.caption, color = c.textFaint)
