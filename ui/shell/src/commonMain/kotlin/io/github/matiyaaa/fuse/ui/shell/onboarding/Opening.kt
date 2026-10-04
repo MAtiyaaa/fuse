@@ -4,9 +4,9 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -22,7 +22,6 @@ import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-
 import androidx.compose.ui.unit.dp
 import io.github.matiyaaa.fuse.ui.designsystem.input.InputLayer
 import io.github.matiyaaa.fuse.ui.designsystem.input.LayerPriority

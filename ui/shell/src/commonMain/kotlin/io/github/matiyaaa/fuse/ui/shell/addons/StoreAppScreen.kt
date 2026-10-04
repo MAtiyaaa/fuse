@@ -56,12 +56,12 @@ import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
 import io.github.matiyaaa.fuse.ui.fuseline.fuselineScrollBy
-import io.github.matiyaaa.fuse.ui.shell.notes.NotesWell
-import io.github.matiyaaa.fuse.ui.shell.notes.noteLines
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.ConfirmSpec
 import io.github.matiyaaa.fuse.ui.shell.app.FocusZone
 import io.github.matiyaaa.fuse.ui.shell.home.bytesText
+import io.github.matiyaaa.fuse.ui.shell.notes.NotesWell
+import io.github.matiyaaa.fuse.ui.shell.notes.noteLines
 import io.github.matiyaaa.fuse.ui.shell.store.Availability
 import io.github.matiyaaa.fuse.ui.shell.store.ReleaseCheck
 import io.github.matiyaaa.fuse.ui.shell.store.SourceKind

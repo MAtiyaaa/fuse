@@ -2,7 +2,6 @@ package io.github.matiyaaa.fuse
 
 import android.annotation.SuppressLint
 import android.content.Intent
-import androidx.compose.foundation.clickable
 import android.graphics.Color as AndroidColor
 import android.net.Uri
 import android.os.Bundle
@@ -18,6 +17,7 @@ import androidx.activity.result.ActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
