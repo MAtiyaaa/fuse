@@ -198,6 +198,7 @@ fun PlatformSettingsScreen(app: AppState, platformId: PlatformId) {
         }))
         add(MenuAction("rescan", "Rescan ${p.shortName}", FuseIcons.Refresh, detail = "Looks through its folders again for new and moved games", section = tools, onSelect = { app.store.sources.rescan(ScanScope.PLATFORM, platformId); app.toasts.show("Rescanning") }))
     }
+    sel.keepOn(rows.map { it.id })
     sel.clamp(rows.size)
 
     LaunchedEffect(Unit) {

@@ -125,4 +125,9 @@ class UiAudit {
     @Test fun onboardingD() = audit(AuditSize.D) { onboardingScreens(exhaustive = true) }
 
     @Test fun onboardingH() = audit(AuditSize.H) { onboardingScreens(exhaustive = true) }
+
+    /** What 0.2.6 added, at 1080p and on a phone held sideways. */
+    @Test fun m15Details() = audit(AuditSize.M) { detailScreens() }
+
+    @Test fun detailsP() = audit(AuditSize.P) { detailScreens() }
 }

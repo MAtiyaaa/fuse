@@ -26,14 +26,15 @@ internal fun DriveWatch(app: AppState, busy: () -> Boolean) {
     val prefs by app.store.prefs.collectAsState()
     // Drives asked about while Fuse runs, closed without an answer: asked again next time only.
     val askedNow = remember { HashSet<String>() }
-    LaunchedEffect(volumes, statuses, prefs.drivesAsked, prefs.onboardingDone) {
+    // Only what decides the question: the drives that could be asked about and the ones that hold
+    // games. Statuses are re-reported often, and each restart would begin the wait again.
+    val holding = statuses.mapNotNull { it.volume?.id ?: it.source.volume?.id }.toSet()
+    val candidates = volumes.filter { it.offersGames() && it.id !in holding }
+    LaunchedEffect(candidates, prefs.drivesAsked, prefs.onboardingDone) {
         if (!prefs.onboardingDone) return@LaunchedEffect
         // A card that was just put in mounts in steps; look once it has settled.
         delay(SETTLE_MS)
-        val holding = statuses.mapNotNull { it.volume?.id ?: it.source.volume?.id }.toSet()
-        val drive = volumes.firstOrNull { v ->
-            v.offersGames() && v.id !in holding && v.id !in prefs.drivesAsked && v.id !in askedNow
-        } ?: return@LaunchedEffect
+        val drive = candidates.firstOrNull { v -> v.id !in prefs.drivesAsked && v.id !in askedNow } ?: return@LaunchedEffect
         while (busy() || app.overlayOpen) delay(WAIT_MS)
         askedNow += drive.id
         app.offerDriveSetup(drive.id, drive.label, firstTime = true)

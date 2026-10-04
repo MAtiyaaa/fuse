@@ -236,6 +236,9 @@ interface StorageOps {
     /** Connected drives games can be moved to, each with its games folder when it has one. */
     suspend fun moveTargets(): List<MoveTarget> = emptyList()
 
+    /** The drive [game]'s files are on (a [MoveTarget.volumeId]), or null when Fuse can't tell. */
+    suspend fun driveOf(game: GameId): String? = null
+
     /**
      * Makes a games folder ("ROMs") at the top of the drive [volumeId] and adds it to the library,
      * so games can be moved there. Its path, or null when the drive can't be written.

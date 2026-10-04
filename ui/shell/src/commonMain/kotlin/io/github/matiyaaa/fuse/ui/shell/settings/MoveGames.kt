@@ -37,7 +37,9 @@ internal fun AppState.moveGames(
         return
     }
     scope.launch {
-        val targets = store.storage.moveTargets().filter { it.volumeId !in from }
+        // The drive they are all on already isn't offered.
+        val on = from.ifEmpty { games.mapNotNull { store.storage.driveOf(it) }.toSet().takeIf { it.size == 1 }.orEmpty() }
+        val targets = store.storage.moveTargets().filter { it.volumeId !in on }
         if (targets.isEmpty()) {
             toasts.show("Connect an SD card or another drive to move games to", icon = FuseIcons.SdCard)
             return@launch

@@ -182,6 +182,7 @@ fun StorageScreen(app: AppState) {
     val filterRow = systemRows.indexOfFirst { it.id == filterKey }.coerceAtLeast(0)
 
     val shownRows = rows
+    sel.keepOn(shownRows.map { it.id })
     sel.clamp(shownRows.size)
     systemSel.clamp(systemRows.size)
     val inSystems = wideLayout && pane == StoragePane.SYSTEMS

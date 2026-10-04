@@ -196,6 +196,12 @@ internal class DefaultStorageOps(
         }
     }
 
+    override suspend fun driveOf(game: GameId): String? {
+        val g = ctx.data.games.get(game) ?: return null
+        val status = drives.status.value.firstOrNull { it.source.id == g.location.sourceId }
+        return status?.volume?.id ?: status?.source?.volume?.id ?: Volumes.locate(g.location.path, drives.volumes.value)?.first?.id
+    }
+
     override suspend fun makeGamesFolder(volumeId: String): String? {
         val v = drives.volumes.value.firstOrNull { it.id == volumeId } ?: return null
         val path = FsPath.join(v.mountPath, GAMES_FOLDER)
