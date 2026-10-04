@@ -128,7 +128,9 @@ class DesktopStoreTest {
         assertEquals(Availability.MANUAL, catalogue.apps.single { it.key == "dolphin" }.availability, "builds on its own site are only linked")
 
         ops.install("duckstation")
-        val installed = eventually("installed") { ops.state.value.installed["duckstation"] }
+        // DuckStation is already on this computer's PATH, so it can show as installed (found, with no
+        // record) before Fuse's own install lands: wait for the install Fuse made.
+        val installed = eventually("installed") { ops.state.value.installed["duckstation"]?.takeIf { it.record != null } }
         assertEquals("v2.0", installed.versionName)
         val placed = File(installer.apps, "DuckStation-x64.AppImage")
         assertTrue(placed.isFile)
@@ -137,7 +139,8 @@ class DesktopStoreTest {
         assertTrue(ops.launch("duckstation"))
 
         ops.uninstall("duckstation")
-        eventually("removed") { ops.state.value.installed["duckstation"]?.let { null } ?: true }
+        // Gone as Fuse's install; the copy on PATH may still be listed as found.
+        eventually("removed") { true.takeIf { ops.state.value.installed["duckstation"]?.record == null } }
         assertFalse(placed.exists())
     }
 
