@@ -20,7 +20,7 @@ import java.security.MessageDigest
  * Read-only [FuseFileSystem] over `java.io` and `stat`. With All files access every folder on shared
  * storage is readable; without it, or for other apps' `Android/data` on Android 11+, listing a
  * folder that exists throws [FsAccessException] so the scanner reports "unknown", never "empty".
- * Only [delete] writes, for games the user deletes in Settings, Storage.
+ * Only [delete], [copy] and [makeDirs] write, for games the user deletes or moves in Settings, Storage.
  */
 class AndroidFileSystem(
     private val volumes: () -> List<Volume>,
@@ -78,6 +78,64 @@ class AndroidFileSystem(
         }
         try {
             remove(path)
+        } catch (e: SecurityException) {
+            false
+        }
+    }
+
+    /**
+     * The other write: copying a game to another drive when the user moves it in Settings, Storage.
+     * Links are skipped, never followed. A copy that fails part way is removed again.
+     */
+    override suspend fun copy(from: String, to: String, onBytes: (Long) -> Unit): Boolean = withContext(io) {
+        if (isPrivateAppFolder(from) || isPrivateAppFolder(to)) return@withContext false
+        val target = File(to)
+        if (target.exists()) return@withContext false
+        val buffer = ByteArray(COPY_BUFFER)
+        fun copyOne(src: File, dst: File): Boolean {
+            val st = lstat(src.path) ?: return false
+            if (OsConstants.S_ISLNK(st.st_mode)) return true
+            if (OsConstants.S_ISDIR(st.st_mode)) {
+                if (!dst.mkdirs() && !dst.isDirectory) return false
+                val names = src.list() ?: return false
+                return names.all { copyOne(File(src, it), File(dst, it)) }
+            }
+            dst.parentFile?.let { if (!it.isDirectory && !it.mkdirs()) return false }
+            FileInputStream(src).use { input ->
+                java.io.FileOutputStream(dst).use { output ->
+                    while (true) {
+                        val n = input.read(buffer)
+                        if (n < 0) break
+                        output.write(buffer, 0, n)
+                        onBytes(n.toLong())
+                    }
+                    output.fd.sync()
+                }
+            }
+            return dst.length() == src.length()
+        }
+        val ok = try {
+            copyOne(File(from), target)
+        } catch (e: IOException) {
+            false
+        } catch (e: SecurityException) {
+            false
+        }
+        if (!ok) runCatching { target.deleteRecursively() }
+        ok
+    }
+
+    override suspend fun freeSpace(path: String): Long? = withContext(io) {
+        var f: File? = File(path)
+        while (f != null && !f.exists()) f = f.parentFile
+        f?.usableSpace?.takeIf { it > 0 }
+    }
+
+    override suspend fun makeDirs(path: String): Boolean = withContext(io) {
+        if (isPrivateAppFolder(path)) return@withContext false
+        val f = File(path)
+        try {
+            f.isDirectory || f.mkdirs()
         } catch (e: SecurityException) {
             false
         }
@@ -208,6 +266,7 @@ class AndroidFileSystem(
     }
 
     private companion object {
+        const val COPY_BUFFER = 1024 * 1024
         val OWN_FOLDERS = listOf("Android/data", "Android/obb", "Android/media")
     }
 }

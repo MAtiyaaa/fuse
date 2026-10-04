@@ -1,6 +1,14 @@
 package io.github.matiyaaa.fuse.ui.shell.settings
 
 import androidx.compose.animation.core.animateFloatAsState
+import io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec
+import io.github.matiyaaa.fuse.ui.shell.app.TextInputSpec
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.border
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -98,9 +106,18 @@ private class SettingsPlace(section: Int, rows: Boolean) {
     val rowSel = LinearSelection()
     var inRows by mutableStateOf(rows)
 
+    /** The search row above the sections has focus (only while not [inRows]). */
+    var onSearch by mutableStateOf(false)
+
+    /** A row search found, landed on once its section's rows are there. */
+    var pendingRow by mutableStateOf<String?>(null)
+
     /** The row asked for has been chosen; coming back keeps wherever the user went since. */
     var landed = false
 }
+
+/** The most places a settings search lists. */
+private const val SEARCH_LIMIT = 12
 
 private const val PERSONAL = "Personalize"
 private const val GAMES = "Games"
@@ -205,11 +222,61 @@ fun SettingsScreen(app: AppState, initialSection: String?, initialRow: String? =
         if (at >= 0) rowSel.index = at
         place.landed = true
     }
+    place.pendingRow?.let { wanted ->
+        val at = rows.indexOfFirst { it.label == wanted }
+        if (at >= 0) rowSel.index = at
+        place.pendingRow = null
+    }
+    var onSearch by place::onSearch
 
-    LaunchedEffect(inRows, section.id) {
+    /** Goes to what search found, in place: its section, its group unfolded, its row chosen. */
+    fun land(topic: SettingTopic) {
+        topic.group?.let { app.openGroups[it] = true }
+        val at = sections.indexOfFirst { it.id == topic.section }
+        if (at < 0) return
+        onSearch = false
+        sectionSel.index = at
+        rowSel.index = 0
+        place.pendingRow = topic.row
+        inRows = topic.row != null
+        app.focusZone = FocusZone.CONTENT
+    }
+
+    fun search() {
+        app.textInput = TextInputSpec(
+            title = "Search settings",
+            initial = "",
+            placeholder = "Text size, controller, Wi-Fi",
+            capitalize = false,
+            doneLabel = "Search",
+        ) { query ->
+            val hits = SettingsIndex.search(query, sections, limit = SEARCH_LIMIT, cartridge = app.platform.features.cartridge)
+            when {
+                query.isBlank() -> Unit
+                hits.isEmpty() -> app.toasts.show("Nothing in Settings matches \"${query.trim()}\"", icon = FuseIcons.Search)
+                hits.size == 1 -> land(hits.single().topic)
+                else -> app.choice = ChoiceSpec(
+                    title = "Settings for \"${query.trim()}\"",
+                    message = "${hits.size} places in Settings",
+                    icon = FuseIcons.Search,
+                    options = hits.mapIndexed { i, h ->
+                        MenuAction("hit.$i", h.title, h.section.icon, detail = h.path, onSelect = {
+                            app.choice = null
+                            land(h.topic)
+                        })
+                    },
+                )
+            }
+        }
+    }
+
+    LaunchedEffect(inRows, section.id, onSearch) {
         app.hero = null
-        app.hints = if (inRows) listOf(Hint(HintButton.CONFIRM, "Change"), Hint(HintButton.BACK, "Sections"))
-        else listOf(Hint(HintButton.CONFIRM, "Open"), Hint(HintButton.BACK, "Back"))
+        app.hints = when {
+            inRows -> listOf(Hint(HintButton.CONFIRM, "Change"), Hint(HintButton.BACK, "Sections"))
+            onSearch -> listOf(Hint(HintButton.CONFIRM, "Search"), Hint(HintButton.BACK, "Back"))
+            else -> listOf(Hint(HintButton.CONFIRM, "Open"), Hint(HintButton.BACK, "Back"))
+        }
     }
 
     InputLayer(enabled = app.focusZone == FocusZone.CONTENT && !app.overlayOpen) { e ->
@@ -218,6 +285,16 @@ fun SettingsScreen(app: AppState, initialSection: String?, initialRow: String? =
                 NavAction.LEFT, NavAction.BACK -> { inRows = false; NavResult.MOVED }
                 else -> handleMenuAction(e, rows, rowSel)
             }
+        } else if (onSearch) {
+            when (e.action) {
+                NavAction.DOWN, NavAction.PAGE_DOWN -> { onSearch = false; NavResult.MOVED }
+                NavAction.SELECT, NavAction.RIGHT -> { search(); NavResult.MOVED }
+                else -> NavResult.IGNORED
+            }
+        } else if (e.action == NavAction.UP && sectionSel.index == 0) {
+            // Above the first section is the search row.
+            onSearch = true
+            NavResult.MOVED
         } else {
             when (e.action) {
                 NavAction.UP, NavAction.DOWN, NavAction.PAGE_UP, NavAction.PAGE_DOWN -> {
@@ -258,8 +335,9 @@ fun SettingsScreen(app: AppState, initialSection: String?, initialRow: String? =
                     Spacer(Modifier.height(Space.l))
                     MenuList(
                         sectionRows, sectionSel,
-                        showSelection = focused,
+                        showSelection = focused && !onSearch,
                         modifier = Modifier.weight(1f).padding(bottom = Size.hintHeight).reveal(1),
+                        header = { SearchRow(focused && onSearch, compact = true) { onSearch = true; search() } },
                     )
                 } else {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -292,15 +370,61 @@ fun SettingsScreen(app: AppState, initialSection: String?, initialRow: String? =
                 Row(Modifier.weight(1f).padding(bottom = Size.hintHeight + Space.s)) {
                     MenuList(
                         sectionRows, sectionSel,
-                        showSelection = focused,
+                        showSelection = focused && !onSearch,
                         dimSelection = inRows,
                         modifier = Modifier.width(sidebar).fillMaxHeight().reveal(1),
+                        header = { SearchRow(focused && onSearch && !inRows, compact = short) { inRows = false; onSearch = true; search() } },
                     )
                     Spacer(Modifier.width(Space.xl))
                     SectionPanel(panelRows, rowSel, focused && inRows, openThemes, short, Modifier.weight(1f).fillMaxHeight().reveal(2))
                 }
             }
         }
+    }
+}
+
+/**
+ * The row above the sections that searches every setting: a well like the search field's, with its
+ * glass, that lifts into the focus colour when the controller is on it. Choosing it opens the
+ * keyboard; what is typed lands on the setting (or lists them when several match).
+ */
+@Composable
+private fun SearchRow(selected: Boolean, compact: Boolean, onOpen: () -> Unit) {
+    val c = Fuse.colors
+    val motion = Fuse.motion
+    val shape = RoundedCornerShape(Fuse.geometry.control)
+    val interaction = remember { MutableInteractionSource() }
+    val hovered by interaction.collectIsHoveredAsState()
+    val edge by animateColorAsState(
+        when {
+            selected -> c.focus
+            hovered -> c.text.copy(alpha = 0.22f)
+            else -> c.hairline
+        },
+        motion.tween(Durations.FAST),
+        label = "settingsSearchEdge",
+    )
+    val fill by animateColorAsState(
+        if (selected) c.surfaceRaised else c.text.copy(alpha = if (c.isDark) 0.06f else 0.05f),
+        motion.tween(Durations.FAST),
+        label = "settingsSearchFill",
+    )
+    val tint by animateColorAsState(if (selected) c.text else c.textMuted, motion.tween(Durations.FAST), label = "settingsSearchTint")
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(bottom = Space.s)
+            .height(if (compact) Size.touch - Space.xs else Size.touch)
+            .clip(shape)
+            .background(fill)
+            .border(if (selected) Size.focusStroke else Size.stroke, edge, shape)
+            .clickable(interactionSource = interaction, indication = null, onClick = onOpen)
+            .padding(horizontal = Space.m),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        FuseIcon(FuseIcons.Search, size = Size.iconS, tint = tint)
+        Spacer(Modifier.width(Space.m))
+        FText("Search settings", Fuse.type.body, color = tint, maxLines = 1, modifier = Modifier.weight(1f))
     }
 }
 

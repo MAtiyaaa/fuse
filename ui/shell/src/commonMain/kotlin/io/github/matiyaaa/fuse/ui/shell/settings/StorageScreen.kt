@@ -106,10 +106,14 @@ fun StorageScreen(app: AppState) {
     // The rows are built once per change of what they show, never while the selection moves: with
     // hundreds of games, building them on every step is what made the list stutter.
     var wideLayout by remember { mutableStateOf(true) }
-    val rows = remember(u, system, picked, canDelete, platforms, wideLayout) {
+    val sourceVolumes by store.sources.volumes.collectAsState()
+    val canMove = sourceVolumes.count { !it.readOnly } > 1
+    val moving by store.storage.moving.collectAsState()
+    val rows = remember(u, system, picked, canDelete, platforms, wideLayout, canMove) {
         storageRows(
-            app, u, system, picked, canDelete, wide = wideLayout, drives = volumes, drive = drive,
+            app, u, system, picked, canDelete, wide = wideLayout, drives = volumes, drive = drive, canMove = canMove,
             onPick = { id -> picked = if (id in picked) picked - id else picked + id },
+            onPickAll = { ids -> picked = if (ids.isNotEmpty() && picked.containsAll(ids)) picked - ids else picked + ids },
             onPicked = { picked = emptySet() },
             onFilter = { system = it; sel.index = 0 },
             onDrive = { drive = it; system = null; sel.index = 0 },
@@ -257,7 +261,7 @@ fun StorageScreen(app: AppState) {
                             header = {
                                 Column(Modifier.padding(top = Space.xs, bottom = Space.m), verticalArrangement = Arrangement.spacedBy(Space.m)) {
                                     // One drive, or the drive picked: its card. Several: each is a row below.
-                                    Volumes(all, drive, nested = true, bySystem = false)
+                                    Volumes(all, drive, nested = true, bySystem = false, compact = short)
                                     if (systems.isNotEmpty() && volumes.size <= 1) SectionLabel("Systems", count = systems.size.toString(), rule = true, modifier = Modifier.padding(horizontal = Space.s))
                                 }
                             },
@@ -266,20 +270,60 @@ fun StorageScreen(app: AppState) {
                         )
                     }
                     games(Modifier.weight(0.6f).fillMaxHeight().reveal(2), shownRows) {
-                        ShownHeader(u, systems.firstOrNull { it.id == system }, volumes.firstOrNull { it.id == drive }?.label)
+                        Column {
+                            moving?.let { MoveCard(app, it, platforms, compact = short) }
+                            ShownHeader(u, systems.firstOrNull { it.id == system }, volumes.firstOrNull { it.id == drive }?.label)
+                        }
                     }
                 }
             } else {
                 games(
                     Modifier.fillMaxSize().padding(bottom = Size.hintHeight + Space.s).reveal(1),
                     shownRows,
-                ) { Column(Modifier.padding(top = Space.s, bottom = Space.m), verticalArrangement = Arrangement.spacedBy(Space.m)) { Volumes(all, drive, nested = true, bySystem = true, every = true) } }
+                ) {
+                    Column(Modifier.padding(top = Space.s, bottom = Space.m), verticalArrangement = Arrangement.spacedBy(Space.m)) {
+                        moving?.let { MoveCard(app, it, platforms, compact = true) }
+                        Volumes(all, drive, nested = true, bySystem = true, every = true)
+                    }
+                }
             }
         }
     }
 }
 
 private enum class StoragePane { SYSTEMS, GAMES }
+
+/**
+ * Games on their way to another drive, drawn as Cartridge draws a download: the game being copied
+ * with its system's art, how far all of them are, and the time left. Selecting it offers to stop
+ * after the game being copied.
+ */
+@Composable
+private fun MoveCard(app: AppState, m: io.github.matiyaaa.fuse.ui.shell.store.MoveProgress, platforms: List<io.github.matiyaaa.fuse.ui.shell.store.PlatformCard>, compact: Boolean) {
+    val system = m.card?.let { c -> platforms.firstOrNull { it.platform.id == c.platformId } }
+    val left = io.github.matiyaaa.fuse.ui.shell.cartridge.rememberTimeLeft(m.doneBytes, m.totalBytes)
+    io.github.matiyaaa.fuse.ui.shell.cartridge.TransferCard(
+        label = "Moving to ${m.to}",
+        icon = FuseIcons.FolderSync,
+        title = m.title,
+        system = system,
+        systemName = system?.platform?.name ?: m.card?.platformShort.orEmpty(),
+        slug = null,
+        progress = if (m.totalBytes > 0) (m.doneBytes.toFloat() / m.totalBytes).coerceIn(0f, 1f) else null,
+        sizes = "${bytesText(m.doneBytes)} of ${bytesText(m.totalBytes)}",
+        timeLeft = left,
+        waiting = (m.count - m.index - 1).coerceAtLeast(0),
+        selected = false,
+        compact = compact,
+        modifier = Modifier.padding(start = Space.s, end = Space.s, top = Space.s, bottom = Space.m),
+    ) {
+        app.confirm = ConfirmSpec(
+            title = "Stop moving?",
+            message = "The game being copied finishes first. Games not moved yet stay where they are.",
+            confirmLabel = "Stop after this game",
+        ) { app.store.storage.cancelMove() }
+    }
+}
 
 /** One system's games on every drive together. */
 private data class SystemSize(val id: PlatformId, val name: String, val short: String, val accent: Long, val art: Any?, val bytes: Long, val games: Int)
@@ -329,7 +373,9 @@ private fun storageRows(
     wide: Boolean,
     drives: List<VolumeUsage>,
     drive: String?,
+    canMove: Boolean,
     onPick: (GameId) -> Unit,
+    onPickAll: (Set<GameId>) -> Unit,
     onPicked: () -> Unit,
     onFilter: (PlatformId?) -> Unit,
     onDrive: (String?) -> Unit,
@@ -361,6 +407,37 @@ private fun storageRows(
             },
             onSelect = { confirmDelete(app, chosen.map { it.card.id to it.card.title }, chosen.sumOf { it.files }, bytes, onPicked) },
         ))
+        // To an SD card or another drive: one game, a system's worth (select all), or everything shown.
+        if (canMove) {
+            add(MenuAction(
+                "move",
+                if (chosen.isEmpty()) "Move selected games" else "Move ${chosen.size} ${if (chosen.size == 1) "game" else "games"} (${bytesText(bytes)})",
+                FuseIcons.FolderSync,
+                detail = if (chosen.isEmpty()) null else "To an SD card or another drive, with their play time and art",
+                trailing = Trailing.Chevron,
+                unavailableReason = when {
+                    chosen.isEmpty() -> "Select games below, or select all shown, then move them here"
+                    !canDelete -> "Allow All files access first"
+                    else -> null
+                },
+                onSelect = {
+                    // The drive they are all on already isn't offered.
+                    val on = chosen.mapNotNull { it.volumeId }.toSet().takeIf { it.size == 1 }.orEmpty()
+                    app.moveGames(chosen.map { it.card.id }, chosen.map { it.card.title }, bytes, from = on, onDone = onPicked)
+                },
+            ))
+        }
+        val selectable = shown.filter { it.card.unavailable == null }.map { it.card.id }.toSet()
+        if (selectable.size > 1) {
+            val all = picked.containsAll(selectable)
+            add(MenuAction(
+                "pickall",
+                if (all) "Clear these ${selectable.size} games" else "Select all ${selectable.size} shown",
+                if (all) FuseIcons.Square else FuseIcons.ListChecks,
+                detail = if (all) null else "Every game in this list, to move or delete together",
+                onSelect = { onPickAll(selectable) },
+            ))
+        }
         if (!wide && drives.size > 1) {
             add(MenuAction(
                 "drive", "Drive", FuseIcons.HardDrive,
@@ -426,7 +503,7 @@ private fun summaryLine(u: StorageUsage?): String {
  * total; [every] (the narrow layout, which has no drive rows) shows each drive's card instead.
  */
 @Composable
-private fun Volumes(u: StorageUsage?, drive: String?, nested: Boolean, bySystem: Boolean, every: Boolean = false) {
+private fun Volumes(u: StorageUsage?, drive: String?, nested: Boolean, bySystem: Boolean, every: Boolean = false, compact: Boolean = false) {
     val volumes = u?.volumes.orEmpty()
     val shown = when {
         drive != null -> volumes.filter { it.id == drive }
@@ -444,7 +521,7 @@ private fun Volumes(u: StorageUsage?, drive: String?, nested: Boolean, bySystem:
                 )
             }
         }
-        else -> shown.forEach { if (it.online) VolumeCard(it, nested, bySystem) else OfflineVolumeCard(it, nested) }
+        else -> shown.forEach { if (it.online) VolumeCard(it, nested, bySystem, compact) else OfflineVolumeCard(it, nested) }
     }
 }
 
@@ -498,17 +575,18 @@ private fun OfflineVolumeCard(v: VolumeUsage, nested: Boolean) {
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun VolumeCard(v: VolumeUsage, nested: Boolean, bySystem: Boolean) {
+private fun VolumeCard(v: VolumeUsage, nested: Boolean, bySystem: Boolean, compact: Boolean = false) {
     val c = Fuse.colors
     val used = (v.totalBytes - v.freeBytes).coerceAtLeast(0)
     val other = (used - v.gamesBytes).coerceAtLeast(0)
     val games = c.accent
     val rest = c.text.copy(alpha = if (c.isDark) 0.34f else 0.3f)
     Panel(Modifier.fillMaxWidth(), raised = nested, shadow = !nested) {
-        Column(Modifier.fillMaxWidth().padding(Space.l), verticalArrangement = Arrangement.spacedBy(Space.s)) {
+        // On a short screen the card stays small, so the systems below it are in view.
+        Column(Modifier.fillMaxWidth().padding(if (compact) Space.m else Space.l), verticalArrangement = Arrangement.spacedBy(if (compact) Space.xs else Space.s)) {
             SectionLabel(v.label + if (v.readOnly) "  ·  Read only" else "", icon = v.icon())
             Row(verticalAlignment = Alignment.Bottom) {
-                FText(bytesText(v.freeBytes), Fuse.type.title.tabular(), maxLines = 1, modifier = Modifier.alignByBaseline())
+                FText(bytesText(v.freeBytes), (if (compact) Fuse.type.titleSmall else Fuse.type.title).tabular(), maxLines = 1, modifier = Modifier.alignByBaseline())
                 Spacer(Modifier.width(Space.s))
                 FText("free of ${bytesText(v.totalBytes)}", Fuse.type.label, color = c.textMuted, maxLines = 1, modifier = Modifier.alignByBaseline())
             }

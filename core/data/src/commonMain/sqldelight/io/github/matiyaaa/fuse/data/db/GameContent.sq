@@ -68,6 +68,14 @@ UPDATE game_content SET path = CASE WHEN path = :old THEN :new ELSE :new || subs
 WHERE substr(path, 1, length(:old) + 1) = :old || '/'
     AND game_id IN (SELECT id FROM game WHERE source_id = :sourceId);
 
+relocateContent:
+UPDATE game_content SET path = CASE WHEN path = :old THEN :new ELSE :new || substr(path, length(:old) + 1) END
+WHERE game_id = :id AND (path = :old OR substr(path, 1, length(:old) + 1) = :old || '/');
+
+relocateDiscs:
+UPDATE game_disc SET path = CASE WHEN path = :old THEN :new ELSE :new || substr(path, length(:old) + 1) END
+WHERE game_id = :id AND (path = :old OR substr(path, 1, length(:old) + 1) = :old || '/');
+
 relinkDiscs:
 UPDATE game_disc SET path = CASE WHEN path = :old THEN :new ELSE :new || substr(path, length(:old) + 1) END
 WHERE substr(path, 1, length(:old) + 1) = :old || '/'

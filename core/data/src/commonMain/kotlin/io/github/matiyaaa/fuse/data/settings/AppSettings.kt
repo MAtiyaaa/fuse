@@ -230,6 +230,8 @@ data class LibraryPreferences(
     val cleanedNamesRules: Int = 1,
     /** Systems in the user's order, by platform id. Systems not listed follow in catalog order. */
     val systemOrder: List<String> = emptyList(),
+    /** Systems whose firmware the user marked as set up although Fuse didn't find it all, by platform id. */
+    val biosConfirmed: List<String> = emptyList(),
     /** Fetch system logos and art from the system art pack when a system has none. */
     val systemArtAuto: Boolean = true,
     /** How the Library is sorted. */

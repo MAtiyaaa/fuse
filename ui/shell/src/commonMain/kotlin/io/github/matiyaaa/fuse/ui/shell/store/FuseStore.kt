@@ -232,7 +232,54 @@ interface StorageOps {
      * and forgets the games. Only paths inside the game's library folder are touched.
      */
     suspend fun delete(games: List<GameId>): DeleteReport
+
+    /** Connected drives games can be moved to, each with its games folder when it has one. */
+    suspend fun moveTargets(): List<MoveTarget> = emptyList()
+
+    /**
+     * Makes a games folder ("ROMs") at the top of the drive [volumeId] and adds it to the library,
+     * so games can be moved there. Its path, or null when the drive can't be written.
+     */
+    suspend fun makeGamesFolder(volumeId: String): String? = null
+
+    /**
+     * Moves the games' files (every disc, track and folder) into the games folder on [volumeId],
+     * each into its system's folder there, then removes them from where they were. Play time,
+     * edits and art stay with each game. A game is only removed from its old place once its copy
+     * is whole. Runs until done or [cancelMove]; [moving] follows it.
+     */
+    suspend fun move(games: List<GameId>, volumeId: String): MoveReport = MoveReport(0, 0, games.map { it.value.toString() })
+
+    /** The move under way, or null. */
+    val moving: StateFlow<MoveProgress?> get() = MutableStateFlow(null)
+
+    /** Stops a move after the game being copied (which is left where it was). */
+    fun cancelMove() = Unit
 }
+
+/** A drive games can be moved to: its space, and its games folder (null until one is made). */
+data class MoveTarget(
+    val volumeId: String,
+    val label: String,
+    val kind: io.github.matiyaaa.fuse.model.VolumeKind,
+    val freeBytes: Long,
+    val gamesFolder: String?,
+    val removable: Boolean,
+)
+
+/** A move under way: the game being copied ([index] of [count]) and the bytes so far of all of them. */
+data class MoveProgress(
+    val title: String,
+    val index: Int,
+    val count: Int,
+    val doneBytes: Long,
+    val totalBytes: Long,
+    val to: String,
+    val card: GameCard? = null,
+)
+
+/** How a move went: games moved, bytes moved, and the games that stayed where they were (with why, when one reason covers them). */
+data class MoveReport(val moved: Int, val bytes: Long, val failed: List<String>, val reason: String? = null)
 
 data class StorageUsage(
     val volumes: List<VolumeUsage>,

@@ -242,6 +242,14 @@ internal class JavaFileSystem : FuseFileSystem {
 
     override suspend fun delete(path: String): Boolean = File(path).let { !it.exists() || it.deleteRecursively() }
 
+    override suspend fun copy(from: String, to: String, onBytes: (Long) -> Unit): Boolean {
+        val dst = File(to)
+        if (dst.exists()) return false
+        return File(from).copyRecursively(dst).also { ok -> if (ok) dst.walkTopDown().filter { it.isFile }.forEach { onBytes(it.length()) } }
+    }
+
+    override suspend fun makeDirs(path: String): Boolean = File(path).let { it.isDirectory || it.mkdirs() }
+
     override suspend fun list(path: String): List<FsEntry> {
         beforeList?.invoke(path)
         val dir = File(path)

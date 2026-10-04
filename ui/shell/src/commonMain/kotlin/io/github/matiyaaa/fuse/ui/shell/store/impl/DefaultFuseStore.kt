@@ -62,7 +62,7 @@ internal class DefaultFuseStore private constructor(
     override val achievements = DefaultAchievementOps(ctx, credentials)
     override val cartridge = DefaultCartridgeOps(ctx, engine)
     override val updates = DefaultUpdateOps(ctx)
-    override val storage = DefaultStorageOps(ctx, engine.drives)
+    override val storage = DefaultStorageOps(ctx, engine.drives, engine)
     override val settings = DefaultScopedSettingsOps(ctx) { reloadPrefs() }
     private val appStoreOps = ctx.services.packages?.let { DefaultAppStoreOps(ctx, it, prefsState) { t -> updatePrefs(t) } }
     override val appStore: AppStoreOps = appStoreOps ?: AppStoreOps.None

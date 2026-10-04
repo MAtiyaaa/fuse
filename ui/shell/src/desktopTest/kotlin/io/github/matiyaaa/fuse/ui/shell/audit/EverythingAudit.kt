@@ -45,6 +45,24 @@ internal fun AuditDriver.everythingScreens() {
             settle(1_500)
             shoot("only the card's games, with its card")
 
+            // The device's games, all picked at once, on their way to the card.
+            focusText("Internal storage", step = { tap(PadButton.DPAD_UP) })
+            tap(PadButton.A)
+            settle(1_200)
+            tap(PadButton.DPAD_RIGHT)
+            tapText("Select all", substring = true)
+            settle(600)
+            shoot("every game on the device picked, ready to move")
+            tapText("Move ", step = PadButton.DPAD_UP, substring = true)
+            waitFor("games to")
+            settle(600)
+            shoot("move to: the card, its space and where they go")
+            tap(PadButton.B)
+            tap(PadButton.DPAD_LEFT)
+            focusText("Internal storage", step = { tap(PadButton.DPAD_UP) })
+            tap(PadButton.A)
+            settle(800)
+
             // The card comes out.
             controls.drives = listOf(internal)
             store.sources.refreshDrives()

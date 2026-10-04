@@ -26,7 +26,8 @@ import java.nio.ByteBuffer
  * Read-only [FuseFileSystem] over java.nio. Paths in and out use forward slashes on every system
  * (java.nio reads "C:/Games" on Windows as it is). Symlinks are reported, not walked: an entry that is a
  * link to a directory says so ([FsEntry.isDirectory] and [FsEntry.isSymlink]), and the scanner uses
- * [canonical] to skip directories it has already seen, so link loops end. Only [delete] writes.
+ * [canonical] to skip directories it has already seen, so link loops end. Only [delete], [copy]
+ * and [makeDirs] write, for games the user deletes or moves in Settings, Storage.
  */
 class NioFileSystem : FuseFileSystem {
 
@@ -37,6 +38,62 @@ class NioFileSystem : FuseFileSystem {
         try {
             // Files.walk doesn't follow links, so a link inside a game folder is removed, not what it points to.
             Files.walk(root).use { stream -> stream.sorted(Comparator.reverseOrder()).forEach { Files.deleteIfExists(it) } }
+            true
+        } catch (e: IOException) {
+            false
+        } catch (e: SecurityException) {
+            false
+        }
+    }
+
+    /**
+     * The other write: copying a game to another drive when the user moves it in Settings, Storage.
+     * Links are skipped, never followed. A copy that fails part way is removed again.
+     */
+    override suspend fun copy(from: String, to: String, onBytes: (Long) -> Unit): Boolean = withContext(Dispatchers.IO) {
+        val src = Paths.get(from)
+        val dst = Paths.get(to)
+        if (Files.exists(dst, LinkOption.NOFOLLOW_LINKS)) return@withContext false
+        val buffer = ByteArray(COPY_BUFFER)
+        fun copyOne(s: Path, d: Path): Boolean {
+            if (Files.isSymbolicLink(s)) return true
+            if (Files.isDirectory(s, LinkOption.NOFOLLOW_LINKS)) {
+                Files.createDirectories(d)
+                return Files.newDirectoryStream(s).use { children -> children.all { copyOne(it, d.resolve(it.fileName.toString())) } }
+            }
+            d.parent?.let { Files.createDirectories(it) }
+            Files.newInputStream(s).use { input ->
+                Files.newOutputStream(d, java.nio.file.StandardOpenOption.CREATE_NEW, java.nio.file.StandardOpenOption.WRITE).use { output ->
+                    while (true) {
+                        val n = input.read(buffer)
+                        if (n < 0) break
+                        output.write(buffer, 0, n)
+                        onBytes(n.toLong())
+                    }
+                }
+            }
+            return Files.size(d) == Files.size(s)
+        }
+        val ok = try {
+            copyOne(src, dst)
+        } catch (e: IOException) {
+            false
+        } catch (e: SecurityException) {
+            false
+        }
+        if (!ok) delete(to)
+        ok
+    }
+
+    override suspend fun freeSpace(path: String): Long? = withContext(Dispatchers.IO) {
+        var p: Path? = Paths.get(path)
+        while (p != null && !Files.exists(p)) p = p.parent
+        p?.let { runCatching { Files.getFileStore(it).usableSpace }.getOrNull() }?.takeIf { it > 0 }
+    }
+
+    override suspend fun makeDirs(path: String): Boolean = withContext(Dispatchers.IO) {
+        try {
+            Files.createDirectories(Paths.get(path))
             true
         } catch (e: IOException) {
             false
@@ -176,5 +233,9 @@ class NioFileSystem : FuseFileSystem {
             modifiedAt = (target ?: own).lastModifiedTime().toMillis(),
             isSymlink = true,
         )
+    }
+
+    private companion object {
+        const val COPY_BUFFER = 1024 * 1024
     }
 }

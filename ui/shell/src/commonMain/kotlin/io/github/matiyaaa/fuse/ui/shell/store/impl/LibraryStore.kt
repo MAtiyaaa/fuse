@@ -126,10 +126,22 @@ internal class DefaultLibraryOps(
     private val systemOrder: Flow<Pair<List<String>, Map<String, Long>>> =
         combine(ctx.systemOrder, data.settings.settings.map { it.library.systemColors }.distinctUntilChanged(), ::Pair).distinctUntilChanged()
 
+    /** The firmware check, with the systems the user marked as set up shown as ready. */
+    private val biosShown: Flow<Map<PlatformId, BiosStatus>> = combine(
+        engine.bios,
+        data.settings.settings.map { it.library.biosConfirmed.toSet() }.distinctUntilChanged(),
+    ) { checked, confirmed ->
+        val all = checked.keys + confirmed.map(::PlatformId)
+        all.associateWith { id ->
+            val status = checked[id] ?: if (ctx.platform(id)?.bios == null) BiosStatus.NotRequired else BiosStatus(io.github.matiyaaa.fuse.model.BiosState.UNKNOWN)
+            status.confirmedIf(id.value in confirmed)
+        }
+    }
+
     override val platforms: StateFlow<List<PlatformCard>> = combine(
         data.games.platformCounts(),
         ctx.installed,
-        combine(engine.bios, engine.platformFolders, ::Pair),
+        combine(biosShown, engine.platformFolders, ::Pair),
         platformChoices,
         combine(platformArt, systemOrder, ::Pair),
     ) { counts, installed, (bios, folders), choices, (art, orderAndColors) ->
