@@ -190,7 +190,7 @@ private fun BatteryHero(status: SystemStatus, temperature: String?, modifier: Mo
                 }
                 FText(time ?: stateWord, Fuse.type.titleSmall, color = if (lit) c.success else c.text, maxLines = 1)
                 val caption = listOfNotNull(
-                    if (time != null) stateWord else if (!status.charging) "Time left shows after a few minutes" else null,
+                    if (time != null) stateWord else if (!status.charging) "Time left shows soon" else null,
                     temperature,
                 ).joinToString("  ·  ")
                 if (caption.isNotEmpty()) FText(caption, Fuse.type.caption, color = c.textMuted, maxLines = 1)

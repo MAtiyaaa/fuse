@@ -93,11 +93,15 @@ fun BatteryGlyph(percent: Int, charging: Boolean, modifier: Modifier = Modifier)
     val plug = remember { Animatable(1f) }
     val was = remember { booleanArrayOf(charging) }
     LaunchedEffect(charging) {
-        if (charging && !was[0] && !reduced) {
+        val plugged = charging && !was[0] && !reduced
+        was[0] = charging
+        if (plugged) {
             plug.snapTo(0f)
             plug.animateTo(1f, tween(PLUG_MS, easing = LinearEasing))
+        } else {
+            // Unplugged mid-flourish: the flourish that was cut short must not stay on screen.
+            plug.snapTo(1f)
         }
-        was[0] = charging
     }
     val glow = c.success
     val fillColor by animateColorAsState(
