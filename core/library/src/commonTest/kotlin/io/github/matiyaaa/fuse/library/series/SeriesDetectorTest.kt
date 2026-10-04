@@ -53,7 +53,8 @@ class SeriesDetectorTest {
         )
         val metroid = found.named("Metroid")
         assertTrue(metroid.fromDetails)
-        assertEquals(setOf("Metroid Fusion", "Super Metroid"), metroid.members.toSet())
+        // Zero Mission has no details, but its title starts with the series' name.
+        assertEquals(setOf("Metroid Fusion", "Super Metroid", "Metroid Zero Mission"), metroid.members.toSet())
         // One game naming a series isn't enough, but three titles sharing its start are.
         val castlevania = found.named("Castlevania")
         assertTrue(!castlevania.fromDetails)
@@ -76,5 +77,20 @@ class SeriesDetectorTest {
     fun wordsIgnoreTagsPunctuationAndTheInFront() {
         assertEquals(listOf("legend", "of", "zelda", "a", "link", "to", "the", "past"), SeriesDetector.words("The Legend of Zelda: A Link to the Past (USA) [!]"))
         assertEquals(listOf("super", "mario", "bros", "3"), SeriesDetector.words("Super Mario Bros. 3"))
+    }
+
+    @Test
+    fun aPairSharingSeveralWordsIsASeriesNamedByAllTheyShare() {
+        val found = detect("Metal Gear Solid", "Metal Gear Solid 2 Sons of Liberty", "Grand Theft Auto III", "Grand Theft Auto: Vice City", "Tetris", "Tetris DX")
+        assertEquals(listOf("Grand Theft Auto", "Metal Gear Solid"), found.map { it.name })
+        assertEquals(2, found.named("Metal Gear Solid").members.size)
+        assertTrue(detect("Super Star Wars", "Super Star Soldier").isEmpty(), "two common words are not a series")
+    }
+
+    @Test
+    fun accentsDontSplitASeries() {
+        val found = detect("Pokémon Red", "Pokemon Blue", "Pokémon Yellow")
+        assertEquals(1, found.size)
+        assertEquals(3, found.single().members.size)
     }
 }
