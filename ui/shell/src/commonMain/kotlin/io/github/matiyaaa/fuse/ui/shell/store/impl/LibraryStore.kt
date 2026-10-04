@@ -378,7 +378,11 @@ internal class DefaultLibraryOps(
         }
 
     private suspend fun launchGame(id: GameId, emulator: EmulatorId?, discPath: String?, display: LaunchDisplay?): LaunchOutcome {
-        val stored = data.games.get(id) ?: return LaunchOutcome.Problem(LaunchProblems.gone())
+        var stored = data.games.get(id) ?: return LaunchOutcome.Problem(LaunchProblems.gone())
+        // A computer's Steam game still kept as a shortcut file that went away moves onto Steam's library.
+        if (stored.location.launchPath.endsWith(".steam", ignoreCase = true) && !exists(stored.location.launchPath) && engine.moveSteamShortcutsToLibraries()) {
+            stored = data.games.get(id) ?: stored
+        }
         val platform = ctx.platform(stored.platformId) ?: return LaunchOutcome.Problem(LaunchProblems.unknownSystem(stored.platformId))
         // A game on a drive that is out says which drive to connect, before anything is tried.
         if (stored.appId == null) {
@@ -386,9 +390,7 @@ internal class DefaultLibraryOps(
                 return LaunchOutcome.Problem(LaunchProblems.unavailable(root, stored.displayTitle, root.lastSeenAt?.let(::describeWhen)))
             }
             if (discPath == null && stored.location.path.let(FsPath::isAbsolute) && !exists(stored.location.launchPath)) {
-                // A Steam game's shortcut is Fuse's own: written back from Steam, it starts through Steam.
-                val steamBack = stored.location.launchPath.endsWith(".steam", ignoreCase = true) && engine.repairSteam() && exists(stored.location.launchPath)
-                if (!steamBack) return LaunchOutcome.Problem(LaunchProblems.fileMissing(stored.displayTitle, stored.location.launchPath))
+                return LaunchOutcome.Problem(LaunchProblems.fileMissing(stored.displayTitle, stored.location.launchPath))
             }
         }
 

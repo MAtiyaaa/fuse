@@ -637,9 +637,21 @@ the expected activity exists and is exported before using an entry.
 
 | Launcher | How |
 |---|---|
-| Steam | `steam -applaunch <appid>` from a `.steam` file (native or the `com.valvesoftware.Steam` Flatpak) |
+| Steam | `steam -applaunch <appid>` (native or the `com.valvesoftware.Steam` Flatpak): a game from a Steam library by the app id in its manifest, or a `.steam` file's id |
 | Steam (link) | `xdg-open steam://rungameid/<appid>` |
 | `.desktop` shortcuts (Steam, Heroic, Lutris, emulator shortcuts) | `gio launch <file>` when GLib's `gio` is installed, otherwise the file's `Exec=` line with field codes removed |
+
+### Steam's own games on a computer (Linux, Windows, macOS)
+
+Settings, Library, Find Steam games (or setup) adds each Steam library that holds your games as a library
+folder of its own. Its games come from Steam's own manifests (`steamapps/appmanifest_<appid>.acf`):
+only fully installed games, without Steam's tools (Proton, the runtimes, redistributables), each at
+its folder under `steamapps/common` and named as Steam names it. They start through Steam by app id
+(`steam -applaunch <appid>` on Linux and Windows, `open steam://rungameid/<appid>` on macOS). A game
+is missing only when Steam no longer lists it as installed; games installed later join by
+themselves, and games left unticked when adding are hidden. Fuse reads Steam's files and never
+changes them. Libraries added as shortcut files by 0.2.7 and earlier move onto Steam's libraries
+on the first start, keeping each game's play time, favourite, edits and art.
 
 **Leaves the device.** Nothing; these are local app launches.
 

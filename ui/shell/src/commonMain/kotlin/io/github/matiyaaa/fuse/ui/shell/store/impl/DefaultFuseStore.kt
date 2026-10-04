@@ -267,10 +267,10 @@ internal class DefaultFuseStore private constructor(
             }
         }
         engine.start()
-        // Steam games whose shortcuts went away come back from Steam once the first scan is done.
+        // A computer's Steam games kept as shortcut files move onto Steam's own libraries.
         ctx.scope.launch {
             engine.scan.first { it.phase == ScanPhase.DONE }
-            runCatching { engine.repairSteam() }
+            runCatching { engine.moveSteamShortcutsToLibraries() }
         }
         health.start()
         appStoreOps?.start()

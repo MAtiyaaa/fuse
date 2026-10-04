@@ -6,6 +6,7 @@ import io.github.matiyaaa.fuse.model.FolderInterpretation
 import io.github.matiyaaa.fuse.model.LibrarySource
 import io.github.matiyaaa.fuse.model.LibrarySourceId
 import io.github.matiyaaa.fuse.model.LibrarySourceKind
+import io.github.matiyaaa.fuse.model.LocationKind
 import io.github.matiyaaa.fuse.model.MediaKind
 import io.github.matiyaaa.fuse.model.PlatformFolderScan
 import io.github.matiyaaa.fuse.model.PlatformId
@@ -119,6 +120,27 @@ class LibraryScannerTest {
         assertEquals(setOf("Portal 2", "Hades"), report.of("steam").games.map { it.title }.toSet())
         assertEquals(setOf("Witcher 3", "Cyberpunk 2077", "Fortnite"), report.of("win").games.map { it.title }.toSet())
         assertTrue(report.scanned.all { it.folderPath == "/shortcuts" && it.complete })
+    }
+
+    @Test
+    fun aSteamLibraryListsWhatSteamHasInstalledAtItsFolders() = runTest {
+        fun manifest(id: Long, name: String, dir: String, flags: Int = 4) =
+            "\"AppState\"\n{\n\t\"appid\"\t\"$id\"\n\t\"name\"\t\"$name\"\n\t\"StateFlags\"\t\"$flags\"\n\t\"installdir\"\t\"$dir\"\n\t\"SizeOnDisk\"\t\"1000\"\n}\n"
+        fs.file("/Games/SteamLibrary/steamapps/appmanifest_504230.acf", content = manifest(504230, "Celeste", "Celeste"))
+        fs.file("/Games/SteamLibrary/steamapps/appmanifest_1145360.acf", content = manifest(1145360, "Hades", "Hades"))
+        // Still downloading, and one of Steam's own tools: neither is a game to play.
+        fs.file("/Games/SteamLibrary/steamapps/appmanifest_620.acf", content = manifest(620, "Portal 2", "Portal 2", flags = 1026))
+        fs.file("/Games/SteamLibrary/steamapps/appmanifest_1628350.acf", content = manifest(1628350, "Steam Linux Runtime 3.0 (sniper)", "SteamLinuxRuntime_sniper"))
+        fs.file("/Games/SteamLibrary/steamapps/common/Celeste/Celeste")
+        fs.file("/Games/SteamLibrary/steamapps/common/Hades/Hades")
+
+        val report = scan(source("/Games/SteamLibrary", LibrarySourceKind.STEAM_LIBRARY))
+        val games = report.of("steam").games.sortedBy { it.title }
+        assertEquals(listOf("Celeste", "Hades"), games.map { it.title })
+        assertEquals("/Games/SteamLibrary/steamapps/common/Celeste", games[0].path)
+        assertEquals(LocationKind.FOLDER, games[0].kind)
+        assertEquals("504230", games[0].tags.serial)
+        assertTrue(report.scanned.single().complete)
     }
 
     @Test

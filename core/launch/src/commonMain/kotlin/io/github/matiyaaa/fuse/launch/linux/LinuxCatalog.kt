@@ -369,18 +369,25 @@ object LinuxCatalog {
         LinuxEmulatorDef(
             id = "linux.steam", name = "Steam", platforms = platforms("steam", "win"),
             detection = detect(bin = listOf("steam"), flatpak = listOf("com.valvesoftware.Steam")),
-            modes = listOf(idFile("-applaunch", "{INJECT}", ext = setOf("steam"), pattern = STEAM_ID, label = "Steam id")),
+            modes = listOf(
+                idFile("-applaunch", "{INJECT}", ext = setOf("steam"), pattern = STEAM_ID, label = "Steam id"),
+                // A game from a Steam library: its app id, from Steam's manifest.
+                titleId("-applaunch", "{SERIAL}", pattern = STEAM_ID),
+            ),
             source = "ES-DE USERGUIDE (%EMULATOR_STEAM% -applaunch <appid>) and ${esde("STEAM rule")}; Flatpak id from Flathub",
             confidence = VERIFIED_ESDE, homepage = "https://store.steampowered.com/about/",
-            capabilities = caps(folders = FolderSupport.NONE),
+            capabilities = caps(folders = FolderSupport.NONE), titleIdMode = TitleIdMode.PREFERRED,
         ),
         LinuxEmulatorDef(
             id = "linux.steam-url", name = "Steam (link)", platforms = platforms("steam", "win"),
             detection = detect(bin = listOf("xdg-open")),
-            modes = listOf(idFile("steam://rungameid/{INJECT}", ext = setOf("steam"), pattern = STEAM_ID, label = "Steam id")),
+            modes = listOf(
+                idFile("steam://rungameid/{INJECT}", ext = setOf("steam"), pattern = STEAM_ID, label = "Steam id"),
+                titleId("steam://rungameid/{SERIAL}", pattern = STEAM_ID),
+            ),
             source = "Steam's own shortcuts open steam://rungameid/<id> (ES-DE INSTALL.md steam import rule execFilter); xdg-open(1)",
             confidence = VERIFIED_ESDE, homepage = "https://store.steampowered.com/about/",
-            capabilities = caps(folders = FolderSupport.NONE),
+            capabilities = caps(folders = FolderSupport.NONE), titleIdMode = TitleIdMode.PREFERRED,
             limitations = listOf("Opens the Steam link with the desktop's default handler."),
         ),
         LinuxEmulatorDef(

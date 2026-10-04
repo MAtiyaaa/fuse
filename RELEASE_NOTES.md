@@ -38,6 +38,11 @@
 - **Your phone as a controller.** Phone Link's Remote is a full controller: D-pad, face buttons,
   shoulders, triggers, Start, Select and Home, with your controller's glyphs, held either way.
   Turn it on in Settings, Accounts, Phone Link.
+- **Steam's own library, on a computer.** On Windows, macOS and Linux, Steam's games come straight
+  from Steam: each library is a library folder, its installed games are read from Steam's own
+  records at their folders in `steamapps/common`, they start through Steam, games you install later
+  join by themselves, and games you leave unticked are hidden. Games added by an earlier version
+  move over keeping their play time, favourites and edits. Android is unchanged.
 - **Rotation, chosen by Fuse.** Settings, Display, Rotation: Automatic keeps a handheld (or a device
   with two screens) landscape either way up by its sensor, even with Android's rotation lock on;
   Landscape, Portrait, Any way and Like Android are there too.
@@ -63,9 +68,9 @@
 - Tapping between the keys of the on-screen keyboard no longer closes it; every panel keeps its
   own taps.
 - Cartridge appears only where it runs (Android and Linux), never in Addons on Windows or macOS.
-- Steam games on macOS no longer show as missing: the Mac's disk stays online after a macOS
-  update, and a Steam game whose shortcut went away is written back from Steam, so it always starts
-  through Steam.
+- Steam games no longer show as missing. A folder of shortcuts is read once for Steam's games and
+  once for Windows', and the Windows pass marked every Steam game missing; and on a Mac the disk
+  went offline after a macOS update. Both are fixed.
 - Opening a handheld's lid shows the startup animation once, instead of the animation, Standby,
   then the animation again.
 - A Thor turned over by accident turns back with the device, instead of staying upside down even

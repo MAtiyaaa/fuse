@@ -26,6 +26,11 @@ enum class LibrarySourceKind {
     PLATFORM_FOLDER,
     /** A folder of Steam/PC frontend shortcuts. */
     SHORTCUTS,
+    /**
+     * A Steam library on a computer (the folder holding `steamapps`): the games Steam has
+     * installed there, read from Steam's own manifests, each at its `steamapps/common` folder.
+     */
+    STEAM_LIBRARY,
 }
 
 /** Presentation modes for game lists. Changing mode never touches library data. */

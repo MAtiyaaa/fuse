@@ -17,6 +17,8 @@ import io.ktor.client.engine.mock.respondError
 import io.ktor.http.HttpStatusCode
 import java.io.File
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.setMain
 
 /** Jellyfin on, pointed at the made-up server, with [more] on top. */
 private fun jellyfinOn(p: UiPrefs, more: (UiPrefs) -> UiPrefs = { it }) = more(
@@ -65,7 +67,7 @@ internal fun AuditDriver.jellyfinScreens() {
             shoot("playback")
             tap(PadButton.DPAD_DOWN, 8)
             shoot("sound and subtitles")
-            tapText("Subtitles")
+            tapText("Subtitles", step = PadButton.DPAD_UP)
             waitFor("Signs and songs only")
             shoot("a choice: subtitles")
             tap(PadButton.B)
@@ -247,6 +249,8 @@ private object AuditStillResolver : io.github.matiyaaa.fuse.playback.PlaybackRes
 internal fun AuditDriver.jellyfinDualScreens() {
     val http = HttpClient(MockEngine { request -> AuditJellyfin.answer(this, request) ?: respondError(HttpStatusCode.NotFound) })
     SingletonImageLoader.setUnsafe(fuseImageLoader(PlatformContext.INSTANCE, File(cache, "jellyfin-images").path, http, lowMemory = false))
+    // The player's session runs on the main dispatcher, which a test window doesn't have.
+    setMainDispatcher()
     val player = io.github.matiyaaa.fuse.ui.player.FusePlayer
     player.engineFactory = { AuditStillEngine() }
     try {
@@ -277,7 +281,20 @@ internal fun AuditDriver.jellyfinDualScreens() {
     } finally {
         player.session.stop()
         player.engineFactory = null
+        resetMainSafely()
         SingletonImageLoader.reset()
         http.close()
     }
+}
+
+/** A main dispatcher for the player while the audit runs, unless the platform has one already. */
+@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+private fun setMainDispatcher() {
+    val hasMain = runCatching { kotlinx.coroutines.Dispatchers.Main.isDispatchNeeded(kotlin.coroutines.EmptyCoroutineContext) }.isSuccess
+    if (!hasMain) kotlinx.coroutines.Dispatchers.setMain(kotlinx.coroutines.Dispatchers.Unconfined)
+}
+
+@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+private fun resetMainSafely() {
+    runCatching { kotlinx.coroutines.Dispatchers.resetMain() }
 }

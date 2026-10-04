@@ -102,8 +102,76 @@ internal class LibraryEngine(private val ctx: StoreContext) : SourceOps {
         return reader.games(libraries)
     }
 
+    /**
+     * Steam's games for the library. On a computer each of their Steam libraries becomes a library
+     * folder of its own: its installed games come from Steam's manifests, each at its folder under
+     * `steamapps/common`, starting through Steam by its app id, and games installed later join by
+     * themselves. Games of those libraries the user left unticked are hidden (shown again from the
+     * Library's hidden games). On Android, where Steam isn't, its games stay shortcut files.
+     */
     override suspend fun addSteamGames(games: List<io.github.matiyaaa.fuse.library.steam.SteamGame>): Int {
         if (games.isEmpty()) return 0
+        if (ctx.services.host == io.github.matiyaaa.fuse.model.Host.ANDROID) return addSteamShortcuts(games)
+        val libraries = games.map { FsPath.normalize(it.library) }.distinct()
+        val existing = data.sources.all().map { FsPath.normalize(it.path) }.toSet()
+        for (lib in libraries) if (lib !in existing) data.sources.add(lib, steamLabel(lib), LibrarySourceKind.STEAM_LIBRARY)
+        val picked = games.map { FsPath.normalize(it.folder) }.toSet()
+        val everything = runCatching { io.github.matiyaaa.fuse.library.steam.SteamLibraryReader(ctx.services.fs).games(libraries) }.getOrDefault(games)
+        synchronized(hideAfterScan) { hideAfterScan += everything.map { FsPath.normalize(it.folder) }.filter { it !in picked } }
+        rescan(ScanScope.QUICK)
+        return games.size
+    }
+
+    /** "Steam", or "Steam on <drive>" for a library on another drive. */
+    private fun steamLabel(library: String): String {
+        val name = FsPath.name(library)
+        return if (name.equals("Steam", ignoreCase = true) || name.equals("steam", ignoreCase = true)) "Steam" else "Steam ($name)"
+    }
+
+    /** Steam game folders the user left out when adding them, hidden once the next scan has them. */
+    private val hideAfterScan = HashSet<String>()
+
+    /**
+     * A computer that kept Steam games as Fuse's own shortcut files (0.2.7 and before) moves them
+     * onto Steam's libraries: each game is pointed at its folder under `steamapps/common`, so its
+     * play time, favourite, edits and art stay with it, and the shortcuts' folder is no longer read.
+     * Shortcuts for games Steam no longer has stay as they were (missing).
+     */
+    suspend fun moveSteamShortcutsToLibraries(): Boolean {
+        if (ctx.services.host == io.github.matiyaaa.fuse.model.Host.ANDROID) return false
+        val shortcuts = data.sources.all().filter { it.kind == LibrarySourceKind.SHORTCUTS && it.label == "Steam" }
+        if (shortcuts.isEmpty()) return false
+        val found = runCatching { findSteamGames(null) }.getOrDefault(emptyList())
+        if (found.isEmpty()) return false
+        val byId = found.associateBy { it.appId }
+        val byName = found.associateBy { io.github.matiyaaa.fuse.library.steam.SteamLibraryReader.shortcutName(it).lowercase() }
+        val sources = HashMap<String, io.github.matiyaaa.fuse.model.LibrarySourceId>()
+        suspend fun sourceFor(library: String): io.github.matiyaaa.fuse.model.LibrarySourceId {
+            val lib = FsPath.normalize(library)
+            return sources.getOrPut(lib) {
+                data.sources.all().firstOrNull { FsPath.normalize(it.path) == lib }?.id
+                    ?: data.sources.add(lib, steamLabel(lib), LibrarySourceKind.STEAM_LIBRARY)
+            }
+        }
+        for (src in shortcuts) {
+            val dir = FsPath.normalize(src.path)
+            for ((id, path) in data.games.paths()) {
+                val p = FsPath.normalize(path)
+                if (!p.endsWith(".steam", ignoreCase = true) || FsPath.parent(p) != dir) continue
+                val name = FsPath.name(p)
+                val appId = ctx.services.fs.readText(p, 64)?.trim()?.toLongOrNull()
+                    ?: Regex("""\((\d+)\)\.steam$""").find(name)?.groupValues?.get(1)?.toLongOrNull()
+                val game = appId?.let(byId::get) ?: byName[name.lowercase()] ?: continue
+                data.games.relocate(id, sourceFor(game.library), FsPath.normalize(game.library), p, FsPath.normalize(game.folder), ctx.now())
+            }
+            if (sources.isNotEmpty()) data.sources.remove(src.id)
+        }
+        if (sources.isNotEmpty()) rescan(ScanScope.QUICK)
+        return sources.isNotEmpty()
+    }
+
+    /** Android: Steam games as shortcut files Fuse keeps, each holding the game's Steam id. */
+    private suspend fun addSteamShortcuts(games: List<io.github.matiyaaa.fuse.library.steam.SteamGame>): Int {
         var folder: String? = null
         val names = HashSet<String>()
         var written = 0
@@ -119,28 +187,6 @@ internal class LibraryEngine(private val ctx: StoreContext) : SourceOps {
         if (data.sources.all().none { FsPath.normalize(it.path) == dir }) data.sources.add(dir, "Steam", LibrarySourceKind.SHORTCUTS)
         rescan(ScanScope.QUICK)
         return written
-    }
-
-    /**
-     * Steam's games are small shortcut files Fuse keeps, each holding the game's Steam id. If any
-     * went away (Fuse's folder moved, a cleaner removed them), Steam is asked again and those
-     * shortcuts are written back, so a game Steam has installed never shows as missing in Fuse and
-     * always starts through Steam. True when any came back.
-     */
-    suspend fun repairSteam(): Boolean {
-        val gone = data.games.observeMissing().first()
-            .filter { it.platformId.value == STEAM }
-            .mapNotNull { data.games.get(it.id)?.location?.launchPath }
-            .filter { it.endsWith(".steam", ignoreCase = true) }
-            .map { FsPath.name(it).lowercase() }
-            .toSet()
-        if (gone.isEmpty()) return false
-        val found = runCatching { findSteamGames(null) }.getOrDefault(emptyList())
-        val back = found.filter { g ->
-            val name = io.github.matiyaaa.fuse.library.steam.SteamLibraryReader.shortcutName(g)
-            name.lowercase() in gone || (name.removeSuffix(".steam") + " (${g.appId}).steam").lowercase() in gone
-        }
-        return addSteamGames(back) > 0
     }
 
     override suspend fun remove(source: LibrarySource) {
@@ -267,6 +313,19 @@ internal class LibraryEngine(private val ctx: StoreContext) : SourceOps {
             changed = delta.updated + delta.restored,
         )
         if (delta.addedIds.isNotEmpty()) added.tryEmit(delta.addedIds)
+        // Steam games left unticked when their library was added: hidden now that they are in.
+        val hide = synchronized(hideAfterScan) { hideAfterScan.toSet() }
+        if (hide.isNotEmpty()) {
+            val done = HashSet<String>()
+            for ((id, path) in data.games.paths()) {
+                val p = FsPath.normalize(path)
+                if (p in hide) {
+                    data.games.setHidden(id, true)
+                    done += p
+                }
+            }
+            synchronized(hideAfterScan) { hideAfterScan -= done }
+        }
         refreshBios()
     }
 
@@ -320,5 +379,3 @@ private const val RULES_KEY = "version"
 /** Moves when the scanner's idea of what a game is changes (2: a game's own folders are never games). */
 private const val SCAN_RULES = 2
 
-/** The Steam system's id. */
-private const val STEAM = "steam"

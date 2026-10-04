@@ -96,7 +96,7 @@ object StoragePaths {
             val root = source.path.trimEnd('/')
             val segments = clean.removePrefix(root).trim('/').split('/').filter { it.isNotEmpty() }
             return when (source.kind) {
-                LibrarySourceKind.PLATFORM_FOLDER, LibrarySourceKind.SHORTCUTS -> root
+                LibrarySourceKind.PLATFORM_FOLDER, LibrarySourceKind.SHORTCUTS, LibrarySourceKind.STEAM_LIBRARY -> root
                 LibrarySourceKind.ROMS_ROOT -> if (segments.size >= 2) "$root/${segments[0]}" else root
                 LibrarySourceKind.ROMM_LIBRARY -> when {
                     segments.size >= 3 && segments[0].equals("roms", ignoreCase = true) -> "$root/${segments[0]}/${segments[1]}"
