@@ -1462,7 +1462,14 @@ fun aboutRows(app: AppState): List<MenuAction> = buildList {
                 onSelect = {
                     app.dev.rehearsalPrefs = app.store.prefs.value
                     app.go(Route.Onboarding)
+                    // From the beginning, opening and all.
+                    app.setupOpening = true
                 },
+            ))
+            add(MenuAction(
+                "dev.opening", "Play setup opening", FuseIcons.Flame,
+                detail = "The longer animation setup opens with on the first start",
+                onSelect = { app.setupOpening = true },
             ))
             add(MenuAction(
                 "dev.intro", "Play startup animation", FuseIcons.Sparkles,

@@ -171,7 +171,10 @@ internal class DesktopVolumes(private val os: DesktopOs = DesktopOs.current) : V
         macInfo.keys.retainAll(mounts.map { it.path }.toSet())
         return mounts.mapNotNull { dir ->
             val info = macInfo.getOrPut(dir.path) {
-                Processes.run(listOf("/usr/sbin/diskutil", "info", "-plist", dir.path), timeoutMs = 4_000)
+                // "/" is the sealed system volume, whose id changes with every macOS update; the
+                // user's files are on the Data volume, whose id stays. That one names the Mac's disk.
+                val asked = if (dir.path == "/" && File(MAC_DATA).isDirectory) MAC_DATA else dir.path
+                Processes.run(listOf("/usr/sbin/diskutil", "info", "-plist", asked), timeoutMs = 4_000)
                     ?.takeIf { it.exitCode == 0 }?.stdout?.let(Plist::dict).orEmpty()
             }
             val internal = info["Internal"] == "true"
@@ -200,6 +203,9 @@ internal class DesktopVolumes(private val os: DesktopOs = DesktopOs.current) : V
 
     private companion object {
         const val MOUNTINFO = "/proc/self/mountinfo"
+
+        /** Where macOS mounts the volume that holds the user's files (Catalina and later). */
+        const val MAC_DATA = "/System/Volumes/Data"
         const val POLL_SECONDS = 3L
     }
 }

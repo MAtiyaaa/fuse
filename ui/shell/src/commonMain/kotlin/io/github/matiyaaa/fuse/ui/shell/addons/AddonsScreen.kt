@@ -58,7 +58,8 @@ fun AddonsScreen(app: AppState) {
     val prefs by app.store.prefs.collectAsState()
     val cartridge by app.store.cartridge.status.collectAsState()
     val store by app.store.appStore.state.collectAsState()
-    val parts = if (prefs.cartridgeEnabled) AddonsPart.entries else listOf(AddonsPart.STORE)
+    // Cartridge only where it runs (Android and Linux) and is turned on.
+    val parts = if (prefs.cartridgeEnabled && app.platform.features.cartridge) AddonsPart.entries else listOf(AddonsPart.STORE)
     val part = (app.addonsPart ?: if (cartridge.installed) AddonsPart.CARTRIDGE else AddonsPart.STORE).takeIf { it in parts } ?: AddonsPart.STORE
     var tabsFocused by remember { mutableStateOf(false) }
     val inTabs = tabsFocused && parts.size > 1 && app.focusZone == FocusZone.CONTENT

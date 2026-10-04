@@ -47,10 +47,16 @@ internal fun StandbyWatch(app: AppState, router: io.github.matiyaaa.fuse.ui.desi
     LaunchedEffect(minutes) {
         if (minutes <= 0) return@LaunchedEffect
         val limit = minutes * 60_000L
+        var lastCheck = kotlin.time.Clock.System.now().toEpochMilliseconds()
         while (true) {
             delay(CHECK_MS)
-            val idle = kotlin.time.Clock.System.now().toEpochMilliseconds() - router.lastActivityAt
-            if (idle >= limit && !app.standby && !busy()) app.standby = true
+            val now = kotlin.time.Clock.System.now().toEpochMilliseconds()
+            when (StandbyClock.check(now, lastCheck, router.lastActivityAt, Away.lastReturnAt, limit)) {
+                StandbyClock.Verdict.SLEPT -> router.touched()
+                StandbyClock.Verdict.DUE -> if (!app.standby && !busy()) app.standby = true
+                StandbyClock.Verdict.WAIT -> Unit
+            }
+            lastCheck = now
         }
     }
 }
@@ -130,7 +136,26 @@ internal fun StandbyScreen(clock24h: Boolean, onWake: () -> Unit) {
     }
 }
 
-private const val CHECK_MS = 10_000L
+private const val CHECK_MS = StandbyClock.CHECK_MS
+
+/** When Standby is due, as plain arithmetic so it can be tested without waiting. */
+internal object StandbyClock {
+    const val CHECK_MS = 10_000L
+
+    enum class Verdict { WAIT, DUE, SLEPT }
+
+    /**
+     * [now] against the last check ([lastCheck]), the last input ([lastActivity]) and Fuse's last
+     * return to the screen ([lastReturn]). A check far later than asked for means Fuse was asleep (a
+     * lid closed, the screen off): that time was not spent idle in front of Fuse, so the wait starts
+     * again ([Verdict.SLEPT]). Otherwise Standby is due once idle for [limit].
+     */
+    fun check(now: Long, lastCheck: Long, lastActivity: Long, lastReturn: Long, limit: Long): Verdict = when {
+        now - lastCheck > CHECK_MS * 3 -> Verdict.SLEPT
+        now - maxOf(lastActivity, lastReturn) >= limit -> Verdict.DUE
+        else -> Verdict.WAIT
+    }
+}
 private const val FADE_MS = 1_400
 private const val DRIFT_MS = 24_000L
 private const val SHIFT_MS = 900

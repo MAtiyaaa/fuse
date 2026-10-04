@@ -179,6 +179,10 @@ private fun FuseAppContent(
     // though Fuse had just been switched on. Only where this start would have played it.
     LaunchedEffect(Unit) {
         Away.returns.collect { away ->
+            // Coming back is activity: Standby starts counting again, and never waits under the
+            // animation (opening a lid used to show the animation, then Standby, then the animation).
+            router.touched()
+            app.standby = false
             val p = app.store.prefs.value
             if (startupIntro && away >= Away.AWAY_INTRO_MS && app.safeMode == null && p.startupAnimation && p.onboardingDone && app.launching == null) app.intro = true
         }
@@ -364,7 +368,7 @@ private fun FuseAppContent(
                     if (app.standby) {
                         StandbyHost(app, prefs.clock24h, prefs.startupAnimation && startupIntro)
                     }
-                    if (app.intro) StartupIntroOverlay(onDone = { app.intro = false })
+                    if (app.intro) StartupIntroOverlay(onDone = { app.intro = false; StartupIntro.lastPlayedAt = kotlin.time.Clock.System.now().toEpochMilliseconds() })
                     if (app.setupOpening) SetupOpening(onDone = { app.setupOpening = false })
                 }
                 }
@@ -824,6 +828,11 @@ internal fun WallpaperLayer(w: io.github.matiyaaa.fuse.model.Wallpaper, modifier
 private fun StandbyHost(app: AppState, clock24h: Boolean, intro: Boolean) {
     StandbyScreen(clock24h) {
         app.standby = false
-        if (intro) app.intro = true
+        // Not again if it has only just played (Fuse came back from sleep a moment ago).
+        val recent = kotlin.time.Clock.System.now().toEpochMilliseconds() - StartupIntro.lastPlayedAt < INTRO_AGAIN_AFTER_MS
+        if (intro && !recent) app.intro = true
     }
 }
+
+/** Waking from Standby within this long of the animation playing doesn't play it again. */
+private const val INTRO_AGAIN_AFTER_MS = 5 * 60_000L

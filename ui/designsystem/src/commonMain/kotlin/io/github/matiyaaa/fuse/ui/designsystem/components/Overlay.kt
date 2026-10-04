@@ -11,6 +11,8 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -94,7 +96,9 @@ fun Overlay(
             exit = overlayExit(edge, motion),
         ) {
             CompositionLocalProvider(LocalOverlaySurface provides true) {
-                Box(content = content)
+                // The panel takes every touch on it, keys and the gaps between them alike, so only
+                // a touch outside it (on the scrim) closes it.
+                Box(Modifier.absorbTouches(), content = content)
             }
         }
     }
@@ -132,5 +136,18 @@ private fun overlayExit(edge: OverlayEdge, motion: FuselineMotion): Exit {
             slideOutVertically(move) { it / 12 } + scaleOut(shrink, targetScale = 0.99f, transformOrigin = TransformOrigin(0.5f, 1f)) + fade
         OverlayEdge.CENTER ->
             scaleOut(shrink, targetScale = 0.97f) + fade
+    }
+}
+
+/**
+ * Takes every touch that lands here and lets nothing behind have it. The touch still reaches what
+ * is inside (buttons, keys), which see it first.
+ */
+fun Modifier.absorbTouches(): Modifier = pointerInput(Unit) {
+    awaitPointerEventScope {
+        while (true) {
+            val event = awaitPointerEvent(PointerEventPass.Final)
+            event.changes.forEach { it.consume() }
+        }
     }
 }
