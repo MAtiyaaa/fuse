@@ -91,6 +91,9 @@ internal fun AppSettings.toUiPrefs(scoped: GlobalScoped): UiPrefs {
         captureSound = capture.sound,
         heroDim = appearance.heroDim,
         startupAnimation = appearance.startupAnimation,
+        recentColors = appearance.recentColors,
+        rememberPlace = appearance.rememberPlace,
+        standbyMinutes = appearance.standbyMinutes,
         appsFilter = library.appsFilter,
         storeVariant = store.variant,
         storeAutoCheck = store.autoCheck,
@@ -119,6 +122,9 @@ internal fun AppSettings.withUiPrefs(prefs: UiPrefs): AppSettings {
             textScale = prefs.textScale,
             screenMargin = prefs.screenMargin,
             startupAnimation = prefs.startupAnimation,
+            recentColors = prefs.recentColors.distinct().take(RECENT_COLORS),
+            rememberPlace = prefs.rememberPlace,
+            standbyMinutes = prefs.standbyMinutes.coerceIn(0, 120),
         ),
         performance = performance.copy(profile = prefs.performance, lowPowerMode = prefs.lowPower, overlay = prefs.performanceOverlay),
         input = prefs.input,
@@ -170,3 +176,6 @@ internal fun AppSettings.withUiPrefs(prefs: UiPrefs): AppSettings {
         store = store.copy(variant = prefs.storeVariant, autoCheck = prefs.storeAutoCheck),
     )
 }
+
+/** How many recent colours the theme studio keeps. */
+internal const val RECENT_COLORS = 10

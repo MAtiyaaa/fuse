@@ -90,6 +90,12 @@ data class UiPrefs(
     val heroDim: Float = 0.3f,
     /** Fuse's mark lights up when Fuse starts ([io.github.matiyaaa.fuse.ui.shell.app.StartupIntroOverlay]). */
     val startupAnimation: Boolean = true,
+    /** Colours picked last in the theme studio, newest first. */
+    val recentColors: List<Long> = emptyList(),
+    /** Tabs keep where you were in them; off, each tab opens at its start. */
+    val rememberPlace: Boolean = true,
+    /** Minutes idle before the standby screen; 0 never. */
+    val standbyMinutes: Int = 5,
     /** Which of its lists the Apps tab opens on: Pinned, Emulators or All apps. */
     val appsFilter: io.github.matiyaaa.fuse.model.AppFilter = io.github.matiyaaa.fuse.model.AppFilter.ALL,
     /** Themes added from a link, a file or pasted text, ready to use. */

@@ -146,6 +146,15 @@ data class AppearanceSettings(
     val customThemes: List<StoredTheme> = emptyList(),
     /** Fuse's mark lights up when Fuse starts. */
     val startupAnimation: Boolean = true,
+    /** Colours picked last in the theme studio, newest first (ARGB), to pick again in one move. */
+    val recentColors: List<Long> = emptyList(),
+    /** Each tab keeps the game or row you were on when you come back to it. */
+    val rememberPlace: Boolean = true,
+    /**
+     * Minutes without a touch, a button or the stick before Fuse dims to its standby screen (which
+     * keeps an OLED screen from wearing in); 0 never.
+     */
+    val standbyMinutes: Int = 5,
 )
 
 /**

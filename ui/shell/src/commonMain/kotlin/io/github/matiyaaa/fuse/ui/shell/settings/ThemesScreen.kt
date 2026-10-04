@@ -318,7 +318,7 @@ fun ThemesScreen(app: AppState) {
     val scene = rememberStageScene(app)
     val reveal = rememberReveal(view)
 
-    val stage: @Composable (Modifier) -> Unit = { m -> ThemeStage(stageSpec, scene, m, flourish = view.flourish) }
+    val stage: @Composable (Modifier) -> Unit = { m -> ThemeStage(stageSpec, scene, m, flourish = view.flourish, spotlight = studio?.let { spotlightOf(it) }) }
     val facts: @Composable (Modifier, Boolean) -> Unit = { m, compact ->
         val f = when {
             look != null -> factsOf(look.spec, key = "studio")

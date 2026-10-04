@@ -78,6 +78,15 @@ class InputRouter(
             releaseAll()
         }
 
+    /** When a button, key or touch last reached Fuse (epoch millis), for standby. */
+    @kotlin.concurrent.Volatile var lastActivityAt: Long = kotlin.time.Clock.System.now().toEpochMilliseconds()
+        private set
+
+    /** Notes input that reached Fuse some other way (a touch, a mouse move). */
+    fun touched() {
+        lastActivityAt = kotlin.time.Clock.System.now().toEpochMilliseconds()
+    }
+
     private val _lastSource = MutableStateFlow(InputSource.KEYBOARD)
 
     /** Last input kind used; the UI can adapt (for example hint glyphs) without hiding focus. */
@@ -139,6 +148,7 @@ class InputRouter(
 
     /** Sends an action through the layer stack. Returns what the handling layer did. */
     fun dispatch(action: NavAction, source: InputSource, repeat: Int = 0): NavResult {
+        touched()
         _lastSource.value = source
         val modifier = _heldModifier.value?.takeIf { action.isDirection }
         if (modifier != null) modifierUsed = true
@@ -224,6 +234,7 @@ class InputRouter(
 
     /** A physical button went down. Platform key repeats must not be forwarded. */
     fun press(button: PadButton, source: InputSource) {
+        touched()
         rawListener?.invoke(button, true)
         exclusive?.let {
             _lastSource.value = source
@@ -468,6 +479,9 @@ interface TextInput {
     fun type(text: String)
     fun backspace()
     fun submit()
+
+    /** Deletes the word before the caret (Backspace held a while, as a phone does). */
+    fun deleteWordBack() = backspace()
 
     /** Inserts the clipboard's text (Ctrl+V). */
     fun paste() {}

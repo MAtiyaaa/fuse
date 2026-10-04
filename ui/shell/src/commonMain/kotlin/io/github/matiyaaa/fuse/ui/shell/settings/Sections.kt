@@ -199,6 +199,15 @@ fun homeRows(app: AppState): List<MenuAction> {
             add(app.choiceRow("mode", "Home style", FuseIcons.Dashboard, p.home.mode, listOf(HomeMode.FLOW to "Flow", HomeMode.CHANNELS to "Channels"), optionDetail = {
                 if (it == HomeMode.FLOW) "A continuous dashboard of shelves" else "A board of tiles you arrange yourself"
             }) { v -> set { it.copy(home = it.home.copy(mode = v)) } })
+            add(toggleRow(
+                "rememberplace", "Remember where you were", FuseIcons.Bookmark, p.rememberPlace,
+                if (p.rememberPlace) "Each tab opens on the game or row you left it on" else "Each tab opens at its start",
+            ) { v -> set { it.copy(rememberPlace = v) } })
+            add(app.choiceRow(
+                "standby", "Standby", FuseIcons.MoonStar, p.standbyMinutes,
+                listOf(0 to "Never", 2 to "After 2 minutes", 5 to "After 5 minutes", 10 to "After 10 minutes", 30 to "After 30 minutes"),
+                detail = "When nothing is pressed for a while, Fuse dims to a calm screen that moves, so an OLED screen never wears in. Any button or touch wakes it",
+            ) { v -> set { it.copy(standbyMinutes = v) } })
         }
         labelled("Top bar") {
             val sections = app.sections

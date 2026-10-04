@@ -101,6 +101,14 @@ class MainActivity : ComponentActivity(), ActivityRequests {
         )
         super.onCreate(savedInstanceState)
         io.github.matiyaaa.fuse.services.UpdateRelaunch.clearReopenNotice(this)
+        androidx.core.content.ContextCompat.registerReceiver(
+            this, dreamWatch,
+            android.content.IntentFilter().apply {
+                addAction(Intent.ACTION_DREAMING_STARTED)
+                addAction(Intent.ACTION_DREAMING_STOPPED)
+            },
+            androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED,
+        )
         app.beginInterface(askedSafe = intent?.getStringExtra(EXTRA_SAFE_MODE) == "true" || intent?.getBooleanExtra(EXTRA_SAFE_MODE, false) == true)
         enterImmersive()
         preferRefreshRate(RefreshPreference.of(PerformanceProfile.AUTOMATIC, app.platformUi.device.tier, lowPower = false))
@@ -260,8 +268,22 @@ class MainActivity : ComponentActivity(), ActivityRequests {
         lostFocus = false
     }
 
+    /**
+     * A screensaver (Android's dream, which handhelds like the AYN Thor use to spare their OLED
+     * screens) is showing. Controller input then belongs to waking it, never to Fuse underneath.
+     */
+    @Volatile private var dreaming = false
+
+    private val dreamWatch = object : android.content.BroadcastReceiver() {
+        override fun onReceive(context: android.content.Context, intent: Intent) {
+            dreaming = intent.action == Intent.ACTION_DREAMING_STARTED
+            if (dreaming) gamepad.releaseAll()
+        }
+    }
+
     @SuppressLint("RestrictedApi") // Lint false positive: Activity.dispatchKeyEvent is public API.
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (dreaming && (event.isFromSource(InputDevice.SOURCE_GAMEPAD) || event.isFromSource(InputDevice.SOURCE_JOYSTICK))) return true
         // The second screen's own Back key (its navigation bar) reaches this window too; it is not Fuse's.
         val controller = event.isFromSource(InputDevice.SOURCE_GAMEPAD) || event.isFromSource(InputDevice.SOURCE_JOYSTICK)
         if (event.keyCode == KeyEvent.KEYCODE_BACK && !controller && SecondScreenTouch.justTouched()) return true
@@ -269,7 +291,7 @@ class MainActivity : ComponentActivity(), ActivityRequests {
     }
 
     override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean =
-        gamepad.onMotion(event) || super.dispatchGenericMotionEvent(event)
+        if (dreaming) true else gamepad.onMotion(event) || super.dispatchGenericMotionEvent(event)
 
     /** Controller input that reached the companion screen by mistake is handled as if it came here. */
     fun forwardKey(event: KeyEvent): Boolean = gamepad.onKey(event)
@@ -299,6 +321,7 @@ class MainActivity : ComponentActivity(), ActivityRequests {
     }
 
     override fun onDestroy() {
+        runCatching { unregisterReceiver(dreamWatch) }
         folderSlot.cancel()
         imageSlot.cancel()
         audioSlot.cancel()

@@ -27,6 +27,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -372,7 +373,10 @@ fun CartridgeContent(app: AppState, embedded: Boolean, active: Boolean, topPaddi
                 }
                 if ("uploads" in items) {
                     item(key = "uploads") {
-                        UploadsPanel(status.uploads, Modifier.padding(horizontal = Space.gutter).widthIn(max = 720.dp), maxOthers = if (compact) 1 else 3)
+                        UploadsPanel(
+                            status.uploads, Modifier.padding(horizontal = Space.gutter).widthIn(max = 960.dp), maxOthers = if (compact) 1 else 3,
+                            platforms = platforms, compact = compact,
+                        )
                     }
                 }
                 if (DOWNLOADING in rows) {
@@ -571,8 +575,9 @@ private fun ActionCard(action: CartAction, selected: Boolean, unavailable: Boole
 }
 
 /**
- * The download in progress, as a card of its own: its system's art and logo, the game's name, how
- * far along it is and what waits behind it, over a bar in the system's colour. Opens the downloads.
+ * The download in progress, as a card of its own: art on the left (its system's, or one drawn for
+ * the game when Fuse doesn't have its system yet), what it is and what waits behind it, a bar in the
+ * system's colour, and on the right how far along it is and how long is left. Opens the downloads.
  */
 @Composable
 private fun NowDownloading(
@@ -584,58 +589,139 @@ private fun NowDownloading(
     modifier: Modifier,
     onClick: () -> Unit,
 ) {
-    val c = Fuse.colors
     val slug = current?.platformSlug ?: status.currentPlatform
     val system = slug?.let { s -> platforms.firstOrNull { it.platform.id.value == s } }
-    val tint = system?.platform?.accent?.toColor() ?: c.accent
-    val progress = current?.progress ?: status.progress
+    val title = current?.title ?: status.currentTitle ?: "Preparing"
     val others = (status.queue.size - 1).coerceAtLeast(0).takeIf { status.queue.isNotEmpty() } ?: status.queuedDownloads
-    val sizes = current?.let { q -> q.total?.let { "${bytesText(q.received)} of ${bytesText(it)}" } }
+    val eta = rememberTimeLeft(current?.received, current?.total)
+    TransferCard(
+        label = "NOW DOWNLOADING",
+        icon = FuseIcons.Download,
+        title = title,
+        system = system,
+        systemName = system?.platform?.name ?: slug?.uppercase().orEmpty(),
+        slug = slug,
+        progress = current?.progress ?: status.progress,
+        sizes = current?.let { q -> q.total?.let { "${bytesText(q.received)} of ${bytesText(it)}" } },
+        timeLeft = eta,
+        waiting = others,
+        selected = selected,
+        compact = compact,
+        modifier = modifier,
+        onClick = onClick,
+    )
+}
+
+/**
+ * A transfer in progress (a download from RomM, or an upload to it), drawn the same either way:
+ * art on the left, what it is in the middle over a bar in its system's colour, and how far along
+ * it is, large, with the time left under it, on the right. The card is as tall as what it says.
+ */
+@Composable
+internal fun TransferCard(
+    label: String,
+    icon: ImageVector,
+    title: String,
+    system: PlatformCard?,
+    systemName: String,
+    slug: String?,
+    progress: Float?,
+    sizes: String?,
+    timeLeft: String?,
+    waiting: Int,
+    selected: Boolean,
+    compact: Boolean,
+    modifier: Modifier,
+    note: String? = null,
+    onClick: () -> Unit,
+) {
+    val c = Fuse.colors
+    val tint = system?.platform?.accent?.toColor() ?: c.accent
     val shape = remember { SquircleShape.fraction(0.1f) }
-    // A card this wide lifts by a few dp, like Home's widgets, not by its share of its width.
-    // The card is as tall as what it says (never less than before), so no line is ever cut. The
-    // system's art keeps the width it has at that height and fills whatever height the card takes.
-    val minHeight = if (compact) 104.dp else 128.dp
+    val minHeight = if (compact) 104.dp else 132.dp
     val artWidth = minHeight * Aspect.SYSTEM_CARD
     Tile(selected = selected, modifier = modifier.fillMaxWidth().heightIn(min = minHeight), shape = shape, cornerFraction = 0.1f, glow = tint, maxGrow = 6.dp, onClick = onClick) {
         Box(Modifier.matchParentSize().background(Brush.horizontalGradient(listOf(lerp(tint, Color.Black, 0.55f), lerp(tint, Color.Black, 0.82f)))))
-        if (system != null) {
-            Box(Modifier.matchParentSize()) {
-                Box(Modifier.width(artWidth).fillMaxHeight()) { SystemCardArt(system) }
+        // The art, fading into the card on its right edge.
+        Box(Modifier.matchParentSize()) {
+            Box(
+                Modifier.width(artWidth).fillMaxHeight().drawWithContent {
+                    drawContent()
+                    drawRect(Brush.horizontalGradient(listOf(Color.Transparent, lerp(tint, Color.Black, 0.6f)), startX = size.width * 0.55f, endX = size.width))
+                },
+            ) {
+                if (system != null) SystemCardArt(system) else GeneratedArt(title, tint, slot = ArtSlot.ICON, label = slug?.uppercase())
             }
         }
-        Row(Modifier.fillMaxWidth().heightIn(min = minHeight)) {
-            if (system != null) Spacer(Modifier.width(artWidth))
+        Row(Modifier.fillMaxWidth().heightIn(min = minHeight), verticalAlignment = Alignment.CenterVertically) {
+            Spacer(Modifier.width(artWidth))
             Column(
-                Modifier.weight(1f).heightIn(min = minHeight).padding(horizontal = Space.l, vertical = Space.m),
+                Modifier.weight(1f).heightIn(min = minHeight).padding(start = Space.l, end = Space.m, top = Space.m, bottom = Space.m),
                 verticalArrangement = Arrangement.Center,
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    FuseIcon(FuseIcons.Download, size = Size.iconS, tint = c.onArtMuted)
+                    FuseIcon(icon, size = Size.iconS, tint = c.onArtMuted)
                     Spacer(Modifier.width(Space.s))
-                    FText("NOW DOWNLOADING", Fuse.type.overline, color = c.onArtMuted, maxLines = 1, modifier = Modifier.weight(1f, fill = false))
-                    if (others > 0) {
+                    FText(label, Fuse.type.overline, color = c.onArtMuted, maxLines = 1, modifier = Modifier.weight(1f, fill = false))
+                    if (waiting > 0) {
                         Spacer(Modifier.width(Space.s))
-                        FText("+$others waiting", Fuse.type.caption, color = c.onArtMuted, maxLines = 1)
+                        FText("+$waiting waiting", Fuse.type.caption, color = c.onArtMuted, maxLines = 1)
                     }
-                    Spacer(Modifier.weight(1f))
-                    progress?.let { FText("${(it * 100).toInt()}%", Fuse.type.titleSmall.tabular(), color = c.onArt, maxLines = 1) }
                 }
                 Spacer(Modifier.height(Space.xs))
-                FText(current?.title ?: status.currentTitle ?: "Preparing", Fuse.type.title, color = c.onArt, maxLines = 1)
+                FText(title, Fuse.type.title, color = c.onArt, maxLines = 1)
                 Spacer(Modifier.height(Space.s))
                 ProgressBar(progress, Modifier.fillMaxWidth(), color = lerp(tint, Color.White, 0.25f), height = 4.dp)
                 Spacer(Modifier.height(Space.xs + Space.xxs))
                 // The system gives way (it ellipsizes); the sizes never do.
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    FText(system?.platform?.name ?: slug?.uppercase().orEmpty(), Fuse.type.caption, color = c.onArtMuted, maxLines = 1, modifier = Modifier.weight(1f))
+                    FText(note ?: systemName, Fuse.type.caption, color = c.onArtMuted, maxLines = 1, modifier = Modifier.weight(1f))
                     if (sizes != null) {
                         Spacer(Modifier.width(Space.m))
                         FText(sizes, Fuse.type.caption.tabular(), color = c.onArt, maxLines = 1)
                     }
                 }
             }
+            // How far along, large, and how long is left.
+            Column(
+                Modifier.padding(end = Space.l).widthIn(min = if (compact) 64.dp else 88.dp),
+                horizontalAlignment = Alignment.End,
+            ) {
+                FText(progress?.let { "${(it * 100).toInt()}%" } ?: "…", Fuse.type.numericLarge, color = c.onArt, maxLines = 1)
+                if (timeLeft != null) FText(timeLeft, Fuse.type.caption.tabular(), color = c.onArtMuted, maxLines = 1)
+            }
         }
+    }
+}
+
+/**
+ * How long a transfer has left, worked out from how fast [done] has been growing toward [total]
+ * (a smoothed rate, so it doesn't jump with every reading). Null until there is a rate to go by.
+ */
+@Composable
+internal fun rememberTimeLeft(done: Long?, total: Long?): String? {
+    val clock = remember { longArrayOf(0L, 0L) }
+    var rate by remember { androidx.compose.runtime.mutableDoubleStateOf(0.0) }
+    LaunchedEffect(done) {
+        val now = kotlin.time.Clock.System.now().toEpochMilliseconds()
+        val bytes = done ?: return@LaunchedEffect
+        val (lastAt, lastBytes) = clock[0] to clock[1]
+        if (lastAt > 0 && bytes > lastBytes && now > lastAt) {
+            val r = (bytes - lastBytes) * 1000.0 / (now - lastAt)
+            rate = if (rate <= 0.0) r else rate + 0.3 * (r - rate)
+        } else if (bytes < lastBytes) {
+            rate = 0.0
+        }
+        clock[0] = now
+        clock[1] = bytes
+    }
+    val left = (total ?: return null) - (done ?: return null)
+    if (rate <= 0.0 || left <= 0) return null
+    val seconds = (left / rate).toLong()
+    return when {
+        seconds < 60 -> "Under a minute left"
+        seconds < 3_600 -> "${(seconds + 59) / 60} min left"
+        else -> "${seconds / 3_600} h ${(seconds % 3_600) / 60} min left"
     }
 }
 

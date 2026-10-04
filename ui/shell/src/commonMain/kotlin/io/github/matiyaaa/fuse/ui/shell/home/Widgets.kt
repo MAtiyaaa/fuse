@@ -768,8 +768,13 @@ fun bytesText(bytes: Long): String {
 internal fun AppState.openWidget(kind: WidgetKind, feed: HomeFeed, firstGame: GameCard? = null) {
     when (kind) {
         WidgetKind.CONTINUE_PLAYING, WidgetKind.RECENTLY_PLAYED, WidgetKind.PINNED_GAMES, WidgetKind.CURRENT_GAME,
-        WidgetKind.MOST_PLAYED, WidgetKind.FAVORITES, WidgetKind.RECENTLY_ADDED,
+        WidgetKind.MOST_PLAYED, WidgetKind.RECENTLY_ADDED,
         -> firstGame?.let { activateGame(it) } ?: selectTab(Destination.LIBRARY)
+        // Favourites opens the Library on them, every favourite in one place.
+        WidgetKind.FAVORITES -> {
+            librarySegment = io.github.matiyaaa.fuse.ui.shell.library.LibrarySegment.FAVORITES
+            selectTab(Destination.LIBRARY)
+        }
         WidgetKind.SYSTEMS -> selectTab(Destination.SYSTEMS)
         WidgetKind.PINNED_APPS -> selectTab(Destination.APPS)
         WidgetKind.COLLECTIONS -> feed.collections.firstOrNull()?.let { go(Route.CollectionGames(it.id, it.name)) } ?: go(Route.Collections)

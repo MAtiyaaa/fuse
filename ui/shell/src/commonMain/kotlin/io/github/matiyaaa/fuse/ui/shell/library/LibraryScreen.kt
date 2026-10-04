@@ -331,6 +331,15 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
             state.selectedId = null
         }
     }
+    // Another part of Fuse asked for a view (the Favourites widget): it opens on it.
+    if (scope == LibraryScope.All) {
+        LaunchedEffect(app.librarySegment) {
+            val asked = app.librarySegment ?: return@LaunchedEffect
+            app.librarySegment = null
+            choose(asked)
+            state.inHeader = false
+        }
+    }
 
     // An empty view offers the one thing most likely to help.
     val emptyAction: EmptyAction? = when {
@@ -586,12 +595,14 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
                             compactHeader -> lerp(STAGE_LOGO_SHORT, Space.xxl, collapse)
                             else -> lerp(Space.x4, Space.xxl + Space.s, collapse)
                         }
-                        // Folded, the stage leaves the grid three whole rows (its tiles, their gaps and
-                        // the grid's own padding), never less than a one-line title.
-                        val row = LocalGameArt.current.tileSize(base).height + metrics.gap
+                        // Folded, the stage keeps one line (a small logo or the title), and the tiles
+                        // shrink in place just enough for three whole rows to show between it and the hints.
+                        val tileH = LocalGameArt.current.tileSize(base).height
                         val header = with(density) { headerPx.toDp() }
-                        val threeRows = maxH - Size.hudHeight - header - Space.s - Size.hintHeight - Space.xxl - row * 3
-                        val foldedStage = if (inSystem) logo + Space.xs else threeRows.coerceIn(Space.x3 + Space.xs, stageHeight * 0.66f)
+                        val foldedStage = if (inSystem) logo + Space.xs else Space.x3 + Space.xs
+                        val rowsRoom = maxH - Size.hudHeight - header - foldedStage - Space.s - Size.hintHeight - Space.s - Space.l
+                        val fit = if (inSystem) 1f else (((rowsRoom / 3) - metrics.gap - Space.s) / tileH).coerceIn(MIN_FOLDED_TILE, 1f)
+                        val tileBase = base * (1f - (1f - fit) * collapse)
                         Box(
                             Modifier
                                 .fillMaxWidth()
@@ -610,7 +621,7 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
                         }
                         Spacer(Modifier.height(if (inSystem) lerp(Space.m, Space.s, collapse) else lerp(Space.l, Space.s, collapse)))
                         columns = cols
-                        IconGrid(list, state, gridState, cols, base, metrics.gap, reveal, onTap = { i -> tapAt(i, list) }, onLong = { i -> state.pick(i, list); options(list[i]) }, focused = gridFocused)
+                        IconGrid(list, state, gridState, cols, tileBase, metrics.gap, reveal, onTap = { i -> tapAt(i, list) }, onLong = { i -> state.pick(i, list); options(list[i]) }, focused = gridFocused)
                     }
                     LibraryLayout.CAPSULE -> {
                         Box(Modifier.fillMaxWidth().weight(1f).padding(horizontal = Space.gutter).reveal(reveal, 1), contentAlignment = Alignment.BottomStart) {
@@ -796,14 +807,17 @@ private fun IconGrid(
         verticalArrangement = Arrangement.spacedBy(gap + Space.s),
     ) {
         itemsIndexed(list, key = { _, g -> g.id.value }) { i, card ->
-            GameIconTile(
-                card,
-                selected = focused && i == state.grid.index,
-                size = size,
-                modifier = Modifier.reveal(reveal, 2 + i / columns),
-                onClick = { onTap(i) },
-                onLongClick = { onLong(i) },
-            )
+            // Centred in its column, so tiles shrunk by a folded stage keep the grid's rhythm.
+            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
+                GameIconTile(
+                    card,
+                    selected = focused && i == state.grid.index,
+                    size = size,
+                    modifier = Modifier.reveal(reveal, 2 + i / columns),
+                    onClick = { onTap(i) },
+                    onLongClick = { onLong(i) },
+                )
+            }
         }
     }
 }
@@ -1348,6 +1362,9 @@ private val SYSTEM_STAGE_MAX = 124.dp
 
 /** The selected game's logo on the stage, and on a short screen. */
 private val STAGE_LOGO = 84.dp
+
+/** The smallest a folded stage shrinks the Grid's tiles to, as a share of their size. */
+private const val MIN_FOLDED_TILE = 0.62f
 private val STAGE_LOGO_SHORT = 56.dp
 
 /** Logos ahead of the selection are decoded at this size, ready for the stage. */

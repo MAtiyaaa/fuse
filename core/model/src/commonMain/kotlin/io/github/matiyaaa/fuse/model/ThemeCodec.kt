@@ -135,6 +135,17 @@ object ThemeCodec {
             else -> start.crt
         }
 
+        // A picture of the user's own: a file on this device, so it only travels with Fuse's backups.
+        val wallpaper = (root["wallpaper"] as? JsonObject)?.let { w ->
+            w.string("path")?.takeIf { it.isNotBlank() }?.let { path ->
+                Wallpaper(
+                    path = path,
+                    dim = w.float("dim", 0.35f, 0f, 0.9f, notes),
+                    align = enumOf(w.string("align"), WallpaperAlign.CENTER, "wallpaper align", notes),
+                )
+            }
+        } ?: start.wallpaper
+
         val id = CUSTOM_PREFIX + slug(root.string("id")?.removePrefix(CUSTOM_PREFIX) ?: name).ifEmpty { "theme" }
         val spec = start.copy(
             id = id,
@@ -150,6 +161,7 @@ object ThemeCodec {
             sound = enumOf(root.string("sound"), start.sound, "sound", notes),
             glass = glass,
             crt = crt,
+            wallpaper = wallpaper,
         )
         return Imported(spec, notes.distinct())
     }
@@ -194,6 +206,13 @@ object ThemeCodec {
                 put("blur", spec.glass.blur)
                 put("opacity", spec.glass.surfaceOpacity)
             })
+            spec.wallpaper?.let { w ->
+                put("wallpaper", buildJsonObject {
+                    put("path", w.path)
+                    put("dim", w.dim)
+                    put("align", w.align.name.lowercase())
+                })
+            }
             put("crt", buildJsonObject {
                 put("enabled", spec.crt.enabled)
                 put("scanlines", spec.crt.scanlines)

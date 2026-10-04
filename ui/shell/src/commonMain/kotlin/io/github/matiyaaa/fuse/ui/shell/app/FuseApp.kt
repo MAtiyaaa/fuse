@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -161,6 +162,11 @@ fun FuseApp(
             if (startupIntro && away >= Away.AWAY_INTRO_MS && app.safeMode == null && p.startupAnimation && p.onboardingDone && app.launching == null) app.intro = true
         }
     }
+    app.navigator.forgetsTabs = !prefs.rememberPlace
+    val homeFeed by store.library.home.collectAsState()
+    StandbyWatch(app, router, prefs.standbyMinutes) {
+        app.intro || app.launching != null || homeFeed.playtime.currentGame != null || app.navigator.current == Route.Onboarding
+    }
     val spec = prefs.theme
     val quality = RenderQuality.of(prefs.performance, platform.device, prefs.lowPower)
     val lastSource by router.lastSource.collectAsState()
@@ -185,6 +191,7 @@ fun FuseApp(
             object : TextInput {
                 override fun type(text: String) = target.field.insert(text)
                 override fun backspace() = target.field.backspace()
+                override fun deleteWordBack() = target.field.deleteWordBack()
                 override fun submit() = target.submit()
                 override fun paste() = app.pasteInto(target.field)
                 override fun deleteForward() = target.field.deleteForward()
@@ -253,9 +260,22 @@ fun FuseApp(
         textScale = prefs.textScale,
     ) {
         CompositionLocalProvider(LocalInputRouter provides router, LocalUiSounds provides platform.sounds) {
-            BoxWithConstraints(Modifier.fillMaxSize().background(Fuse.colors.ink)) {
+            BoxWithConstraints(
+                Modifier
+                    .fillMaxSize()
+                    .background(Fuse.colors.ink)
+                    // A touch or the pointer counts as being here, for standby.
+                    .pointerInput(Unit) {
+                        awaitPointerEventScope {
+                            while (true) {
+                                awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial)
+                                router.touched()
+                            }
+                        }
+                    },
+            ) {
                 // The room fills the whole screen; everything on it keeps clear of edges a TV cuts off.
-                Room(app, prefs.showHero, spec.background, prefs.heroDim, prefs.glass, prefs.videoPreview, prefs.videoDelaySeconds, spec.ambient)
+                Room(app, prefs.showHero, spec.background, prefs.heroDim, prefs.glass, prefs.videoPreview, prefs.videoDelaySeconds, spec.ambient, spec.wallpaper)
                 val margin = prefs.screenMargin.coerceIn(0, 10) / 100f
                 // On an ultrawide screen (wider than about 21:9) the interface keeps a 21:9-like frame
                 // in the middle, so the top line, the pages and the hints stay together; the room
@@ -316,6 +336,9 @@ fun FuseApp(
                     ToastHost(app.toasts)
                     app.capture?.let { CaptureOverlay(it) }
                     LaunchVeilView(app)
+                    if (app.standby) {
+                        StandbyHost(app, prefs.clock24h, prefs.startupAnimation && startupIntro)
+                    }
                     if (app.intro) StartupIntroOverlay(onDone = { app.intro = false })
                 }
                 }
@@ -342,6 +365,7 @@ private fun Room(
     videoOn: Boolean,
     videoDelay: Int,
     ambient: io.github.matiyaaa.fuse.model.AmbientSpec,
+    wallpaper: io.github.matiyaaa.fuse.model.Wallpaper? = null,
 ) {
     val quality = Fuse.quality
     // While the selection runs (a held direction, a quick run of presses), the room waits for it to
@@ -354,6 +378,8 @@ private fun Room(
     }
     // The theme's own room is always underneath, so art fading in or out never shows a bare screen.
     AmbientBackground(if (style == BackgroundStyle.HERO) BackgroundStyle.SOLID else style, hero?.accent ?: Fuse.colors.accent, Modifier.fillMaxSize(), ambient = ambient)
+    // The theme's own picture, when it has one, over the drawn room and under any game's art.
+    wallpaper?.let { WallpaperLayer(it, Modifier.fillMaxSize()) }
     if (showHero) {
         var videoReady by remember(hero?.id) { mutableStateOf(false) }
         var playVideo by remember(hero?.id) { mutableStateOf(false) }
@@ -631,7 +657,7 @@ private fun MenuMusic(app: AppState, player: MenuMusicPlayer?) {
     LaunchedEffect(Unit) { for (path in ended) if (app.store.prefs.value.music.shuffle) shuffleOn() }
     val track = MenuMusicPlan.track(music, safeMode = app.safeMode != null, onboarding = app.navigator.current == Route.Onboarding, shuffled = shuffled)
     // The startup animation has its own sound; the music waits until it has opened out.
-    val quiet = app.launching != null || home.playtime.currentGame != null || app.intro
+    val quiet = app.launching != null || home.playtime.currentGame != null || app.intro || app.standby
     // The previous song keeps playing until the next one is ready, so the player can crossfade. The
     // file is looked up again whenever music comes back from a game: a bundled song's unpacked copy
     // lives in the cache, which the system may have cleared meanwhile.
@@ -702,7 +728,8 @@ private fun hudActivities(app: AppState): List<HudActivity> {
                 progress = f.fraction.takeIf { f.total > 0 },
             ) { app.go(Route.Settings("media")) })
         }
-        cartridge.uploads.firstOrNull { it.active }?.let { u ->
+        // Only while bytes are going: once RomM is adding the game, the upload is done for the user.
+        cartridge.uploads.firstOrNull { it.state == io.github.matiyaaa.fuse.model.UploadState.UPLOADING || it.state == io.github.matiyaaa.fuse.model.UploadState.WAITING }?.let { u ->
             add(HudActivity(
                 "upload", FuseIcons.Upload, "Uploading ${u.title} to RomM",
                 progress = u.progress.takeIf { u.state == io.github.matiyaaa.fuse.model.UploadState.UPLOADING },
@@ -738,3 +765,32 @@ private const val QUICK_SWITCH_MS = 300L
 
 /** The widest the interface gets (width over height); wider screens centre it. A little over 21:9. */
 private const val MAX_ASPECT = 2.4f
+
+/**
+ * A theme's picture: cropped to fill the screen around the part it keeps in view, then darkened (or,
+ * in a bright theme, washed out toward the room's colour) by its dim, so text always reads over it.
+ */
+@Composable
+internal fun WallpaperLayer(w: io.github.matiyaaa.fuse.model.Wallpaper, modifier: Modifier = Modifier) {
+    val (fx, fy) = when (w.align) {
+        io.github.matiyaaa.fuse.model.WallpaperAlign.CENTER -> 0.5f to 0.5f
+        io.github.matiyaaa.fuse.model.WallpaperAlign.TOP -> 0.5f to 0f
+        io.github.matiyaaa.fuse.model.WallpaperAlign.BOTTOM -> 0.5f to 1f
+        io.github.matiyaaa.fuse.model.WallpaperAlign.LEFT -> 0f to 0.5f
+        io.github.matiyaaa.fuse.model.WallpaperAlign.RIGHT -> 1f to 0.5f
+    }
+    val ink = Fuse.colors.ink
+    Box(modifier) {
+        io.github.matiyaaa.fuse.ui.designsystem.media.Artwork(w.path, Modifier.fillMaxSize(), focusX = fx, focusY = fy)
+        Box(Modifier.fillMaxSize().background(ink.copy(alpha = w.dim.coerceIn(0f, 0.9f))))
+    }
+}
+
+/** The standby screen; waking it plays the startup animation when that is on. */
+@Composable
+private fun StandbyHost(app: AppState, clock24h: Boolean, intro: Boolean) {
+    StandbyScreen(app, clock24h) {
+        app.standby = false
+        if (intro) app.intro = true
+    }
+}

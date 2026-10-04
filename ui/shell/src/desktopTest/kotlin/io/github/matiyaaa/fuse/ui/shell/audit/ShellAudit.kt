@@ -952,6 +952,9 @@ internal fun AuditDriver.themeScreens() {
         waitFor("Background")
         tap(PadButton.DPAD_RIGHT, 7)
         shoot("the studio, a new colour, background, corners and focus", 3_000)
+        // Y takes the last change back.
+        tap(PadButton.Y)
+        shoot("Y took the background back", 2_000)
         tap(PadButton.R1, 3)
         focusText("Save as your theme")
         tap(PadButton.A)

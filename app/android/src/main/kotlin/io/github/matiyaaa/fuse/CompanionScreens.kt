@@ -79,6 +79,41 @@ class CompanionScreens(private val app: FuseApplication) : DualScreenHandoff {
 
     private val monitor get() = app.platformUi.displayMonitor
 
+    /**
+     * The main screen turned off while the companion holds the second one on: a lid closed (the
+     * AYN Thor), or the power button. The companion lets go of keeping the screen on, so the device
+     * sleeps as it would without Fuse instead of draining the battery with its lid shut.
+     */
+    @Volatile private var mainOff = false
+
+    private val mainScreenWatch = object : android.hardware.display.DisplayManager.DisplayListener {
+        override fun onDisplayAdded(displayId: Int) = Unit
+        override fun onDisplayRemoved(displayId: Int) = Unit
+        override fun onDisplayChanged(displayId: Int) {
+            if (displayId != android.view.Display.DEFAULT_DISPLAY) return
+            val dm = app.getSystemService(android.hardware.display.DisplayManager::class.java) ?: return
+            val state = dm.getDisplay(android.view.Display.DEFAULT_DISPLAY)?.state ?: return
+            val off = state == android.view.Display.STATE_OFF || state == android.view.Display.STATE_DOZE || state == android.view.Display.STATE_DOZE_SUSPEND
+            if (off == mainOff) return
+            mainOff = off
+            if (off) {
+                presentation?.setAway(true)
+                SecondScreenLog.add("Main screen off (lid closed or power): the second screen may sleep")
+            } else if (!_away.value) {
+                presentation?.setAway(false)
+            }
+        }
+    }
+
+    init {
+        try {
+            app.getSystemService(android.hardware.display.DisplayManager::class.java)
+                ?.registerDisplayListener(mainScreenWatch, android.os.Handler(android.os.Looper.getMainLooper()))
+        } catch (e: RuntimeException) {
+            // No display service: nothing to watch.
+        }
+    }
+
     /** Follows [mode] and the current displays. Called on the main thread while [from] is started. */
     fun update(from: Activity, mode: DualScreenMode) {
         this.mode = mode
@@ -94,7 +129,7 @@ class CompanionScreens(private val app: FuseApplication) : DualScreenHandoff {
         // Fuse is in front: the Presentation takes over from a companion activity left by a game.
         app.activities.companion?.let { finish(it, "Fuse is in front again") }
         showPresentation(main)
-        presentation?.setAway(false)
+        presentation?.setAway(mainOff)
     }
 
     /** Fuse's main screen resumed: games are over, and the companion comes back. */
