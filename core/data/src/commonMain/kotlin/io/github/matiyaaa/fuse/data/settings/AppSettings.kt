@@ -232,6 +232,8 @@ data class LibraryPreferences(
     val systemOrder: List<String> = emptyList(),
     /** Systems whose firmware the user marked as set up although Fuse didn't find it all, by platform id. */
     val biosConfirmed: List<String> = emptyList(),
+    /** Drives Fuse asked about setting up for games (yes or no), by drive id, so it asks once. */
+    val drivesAsked: List<String> = emptyList(),
     /** Fetch system logos and art from the system art pack when a system has none. */
     val systemArtAuto: Boolean = true,
     /** How the Library is sorted. */

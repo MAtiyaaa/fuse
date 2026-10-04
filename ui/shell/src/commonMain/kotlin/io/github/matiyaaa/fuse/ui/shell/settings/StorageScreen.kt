@@ -64,6 +64,8 @@ import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec
 import io.github.matiyaaa.fuse.ui.shell.app.ConfirmSpec
 import io.github.matiyaaa.fuse.ui.shell.app.FocusZone
+import io.github.matiyaaa.fuse.ui.shell.app.offerDriveSetup
+import io.github.matiyaaa.fuse.ui.shell.app.offersGames
 import io.github.matiyaaa.fuse.ui.shell.app.Route
 import io.github.matiyaaa.fuse.ui.shell.app.rememberRouteState
 import io.github.matiyaaa.fuse.ui.shell.home.bytesText
@@ -108,10 +110,16 @@ fun StorageScreen(app: AppState) {
     var wideLayout by remember { mutableStateOf(true) }
     val sourceVolumes by store.sources.volumes.collectAsState()
     val canMove = sourceVolumes.count { !it.readOnly } > 1
+    val sourceStatus by store.sources.status.collectAsState()
+    // Drives connected without a games folder, which Storage can set up.
+    val bare = remember(sourceVolumes, sourceStatus) {
+        val holding = sourceStatus.mapNotNull { it.volume?.id ?: it.source.volume?.id }.toSet()
+        sourceVolumes.filter { it.offersGames() && it.id !in holding }
+    }
     val moving by store.storage.moving.collectAsState()
-    val rows = remember(u, system, picked, canDelete, platforms, wideLayout, canMove) {
+    val rows = remember(u, system, picked, canDelete, platforms, wideLayout, canMove, bare) {
         storageRows(
-            app, u, system, picked, canDelete, wide = wideLayout, drives = volumes, drive = drive, canMove = canMove,
+            app, u, system, picked, canDelete, wide = wideLayout, drives = volumes, drive = drive, canMove = canMove, bare = bare,
             onPick = { id -> picked = if (id in picked) picked - id else picked + id },
             onPickAll = { ids -> picked = if (ids.isNotEmpty() && picked.containsAll(ids)) picked - ids else picked + ids },
             onPicked = { picked = emptySet() },
@@ -374,6 +382,7 @@ private fun storageRows(
     drives: List<VolumeUsage>,
     drive: String?,
     canMove: Boolean,
+    bare: List<io.github.matiyaaa.fuse.model.StorageVolume>,
     onPick: (GameId) -> Unit,
     onPickAll: (Set<GameId>) -> Unit,
     onPicked: () -> Unit,
@@ -391,6 +400,15 @@ private fun storageRows(
                 detail = "Fuse can show sizes, but deleting files needs permission. Select to allow",
                 trailing = Trailing.Chevron,
                 onSelect = { app.platform.storage.request() },
+            ))
+        }
+        // A card or drive put in without games folders: set up here, whether or not Fuse asked when it came.
+        bare.forEach { v ->
+            add(MenuAction(
+                "setup.${v.id}", "Set up ${v.label} for games", if (v.kind == io.github.matiyaaa.fuse.model.VolumeKind.SD_CARD) FuseIcons.SdCard else FuseIcons.Usb,
+                detail = "An Emulation folder with a folder for each system, in your library",
+                trailing = Trailing.Chevron,
+                onSelect = { app.offerDriveSetup(v.id, v.label, firstTime = false) },
             ))
         }
         val bytes = chosen.sumOf { it.bytes }

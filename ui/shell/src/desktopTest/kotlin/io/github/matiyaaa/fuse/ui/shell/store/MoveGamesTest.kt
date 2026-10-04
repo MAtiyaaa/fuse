@@ -94,4 +94,21 @@ class MoveGamesTest {
         assertTrue(after.single { it.id == wars.id }.favorite)
         assertNull(store.storage.moving.value)
     }
+
+    @Test
+    fun aNewCardIsSetUpWithAFolderForEachSystem(): Unit = runBlocking {
+        val inside = File(base, "internal").apply { mkdirs() }
+        val card = File(base, "card").apply { mkdirs() }
+        val services = FakeServices(FuseData(DesktopDatabase.open(File(cache, "fuse2.db").absolutePath)), cache)
+        services.drives = listOf(drive("uuid:INT", "Internal storage", inside, VolumeKind.INTERNAL), drive("uuid:CARD", "SD card", card, VolumeKind.SD_CARD))
+        val store = createFuseStore(services, scope)
+        val setup = assertNotNull(store.storage.setUpDrive("uuid:CARD"))
+        assertEquals(File(card, "Emulation/ROMs").absolutePath, setup.romsFolder)
+        assertTrue(File(card, "Emulation/ROMs/gba").isDirectory)
+        assertTrue(File(card, "Emulation/ROMs/psx").isDirectory)
+        assertTrue(File(card, "Emulation/bios/psx").isDirectory, "firmware goes beside the ROMs, where Fuse looks for it")
+        assertFalse(File(card, "Emulation/ROMs/android").exists())
+        assertTrue(setup.systems >= 15)
+        assertEquals(setup.romsFolder, store.sources.sources.value.single().path)
+    }
 }

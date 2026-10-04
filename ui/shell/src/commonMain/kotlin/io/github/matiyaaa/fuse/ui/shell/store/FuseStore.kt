@@ -243,6 +243,13 @@ interface StorageOps {
     suspend fun makeGamesFolder(volumeId: String): String? = null
 
     /**
+     * Sets a drive up for games: an Emulation folder at [at] (the drive's top when null) with a
+     * ROMs folder holding one folder per system, and a BIOS folder for the systems that need
+     * firmware; the ROMs folder joins the library. Null when the drive can't be written.
+     */
+    suspend fun setUpDrive(volumeId: String, at: String? = null): DriveSetup? = null
+
+    /**
      * Moves the games' files (every disc, track and folder) into the games folder on [volumeId],
      * each into its system's folder there, then removes them from where they were. Play time,
      * edits and art stay with each game. A game is only removed from its old place once its copy
@@ -256,6 +263,9 @@ interface StorageOps {
     /** Stops a move after the game being copied (which is left where it was). */
     fun cancelMove() = Unit
 }
+
+/** A drive set up for games: its ROMs folder (now in the library) and how many system folders it got. */
+data class DriveSetup(val romsFolder: String, val systems: Int)
 
 /** A drive games can be moved to: its space, and its games folder (null until one is made). */
 data class MoveTarget(

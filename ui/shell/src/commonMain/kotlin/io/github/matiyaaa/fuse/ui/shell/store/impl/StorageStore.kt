@@ -203,6 +203,32 @@ internal class DefaultStorageOps(
         return sources?.add(path, LibrarySourceKind.ROMS_ROOT)?.path ?: path
     }
 
+    override suspend fun setUpDrive(volumeId: String, at: String?): io.github.matiyaaa.fuse.ui.shell.store.DriveSetup? {
+        drives.refresh()
+        val v = drives.volumes.value.firstOrNull { it.id == volumeId } ?: return null
+        val base = FsPath.join(at?.let(FsPath::normalize) ?: v.mountPath, SETUP_FOLDER)
+        val roms = FsPath.join(base, "ROMs")
+        // Lower case, as Fuse's firmware check looks for it beside a ROMs folder.
+        val bios = FsPath.join(base, "bios")
+        val fs = ctx.services.fs
+        if (!fs.makeDirs(roms) || !fs.makeDirs(bios)) return null
+        // The systems already in the library, then the ones most people play.
+        val inLibrary = runCatching { ctx.data.games.platformCounts().first().keys }.getOrDefault(emptySet())
+        val systems = (inLibrary.map { it.value } + SETUP_SYSTEMS).distinct().mapNotNull { id -> ctx.platform(io.github.matiyaaa.fuse.model.PlatformId(id)) }
+            .filter { !it.isAppPlatform() }
+        var made = 0
+        for (p in systems) {
+            if (fs.makeDirs(FsPath.join(roms, p.id.value))) made++
+            // Fuse looks for firmware in bios/<system> beside a ROMs folder.
+            if (p.bios != null) fs.makeDirs(FsPath.join(bios, p.id.value))
+        }
+        val source = sources?.add(roms, LibrarySourceKind.ROMS_ROOT)
+        return io.github.matiyaaa.fuse.ui.shell.store.DriveSetup(source?.path ?: roms, made)
+    }
+
+    /** Android apps and PC shortcuts live elsewhere; they get no ROM folder. */
+    private fun io.github.matiyaaa.fuse.model.Platform.isAppPlatform(): Boolean = id.value in setOf("android", "steam", "windows", "pc", "linux", "macos")
+
     override suspend fun move(games: List<GameId>, volumeId: String): MoveReport {
         val target = moveTargets().firstOrNull { it.volumeId == volumeId }
         val root = target?.gamesFolder ?: return MoveReport(0, 0, games.mapNotNull { ctx.data.games.get(it)?.displayTitle }, "There is no games folder on that drive yet")
@@ -307,6 +333,15 @@ internal class DefaultStorageOps(
     private companion object {
         /** The folder made at the top of a drive for games moved there. */
         const val GAMES_FOLDER = "ROMs"
+
+        /** The folder a drive set up for games gets, with ROMs and BIOS inside. */
+        const val SETUP_FOLDER = "Emulation"
+
+        /** Systems a freshly set up drive gets folders for, besides those already in the library. */
+        val SETUP_SYSTEMS = listOf(
+            "nes", "snes", "n64", "gb", "gbc", "gba", "nds", "3ds", "gc", "wii", "switch",
+            "psx", "ps2", "psp", "psvita", "genesis", "mastersystem", "saturn", "dreamcast", "arcade",
+        )
 
         /** Space left free on the drive after a move, so it never fills to the last byte. */
         const val MOVE_HEADROOM = 256L * 1024 * 1024

@@ -167,6 +167,9 @@ fun FuseApp(
     StandbyWatch(app, router, prefs.standbyMinutes) {
         app.intro || app.launching != null || homeFeed.playtime.currentGame != null || app.navigator.current == Route.Onboarding
     }
+    DriveWatch(app) {
+        app.intro || app.standby || app.launching != null || homeFeed.playtime.currentGame != null || app.navigator.current == Route.Onboarding
+    }
     val spec = prefs.theme
     val quality = RenderQuality.of(prefs.performance, platform.device, prefs.lowPower)
     val lastSource by router.lastSource.collectAsState()
