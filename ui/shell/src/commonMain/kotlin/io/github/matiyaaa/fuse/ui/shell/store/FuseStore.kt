@@ -412,6 +412,18 @@ interface SourceOps {
      * folder can't be read there.
      */
     suspend fun adoptDrive(source: io.github.matiyaaa.fuse.model.LibrarySourceId): Boolean = false
+
+    /**
+     * The games Steam has installed on this computer, on every drive, plus those in [extra] (a
+     * Steam library folder the user picked). Reads only; empty where there is no Steam.
+     */
+    suspend fun findSteamGames(extra: String? = null): List<io.github.matiyaaa.fuse.library.steam.SteamGame> = emptyList()
+
+    /**
+     * Puts [games] in the library under Steam: Fuse keeps a small shortcut for each in its own
+     * folder (Steam's files are never touched) and plays them through Steam. Returns how many it added.
+     */
+    suspend fun addSteamGames(games: List<io.github.matiyaaa.fuse.library.steam.SteamGame>): Int = 0
 }
 
 data class SuggestedSource(val path: String, val label: String, val kind: LibrarySourceKind, val platformsFound: Int)

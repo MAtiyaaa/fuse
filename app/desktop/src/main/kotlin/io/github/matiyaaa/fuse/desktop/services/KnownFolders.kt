@@ -221,6 +221,53 @@ internal class KnownFolders(private val home: String, private val os: DesktopOs 
     }
 
     /** Mounted removable drives: `/run/media/<user>/<label>`, `/run/media/<label>` (Steam Deck), `/media/<user>/<label>`. */
+    /**
+     * Steam's installs: its usual folders on each system (native, Flatpak and Snap on Linux; the
+     * registry's SteamPath and Program Files on Windows), and the drives to search for more libraries.
+     */
+    fun steamPlaces(): Pair<List<String>, List<String>> {
+        val roots = LinkedHashSet<String>()
+        fun add(path: String?) {
+            path?.let(::dir)?.let(roots::add)
+        }
+        val drives = ArrayList<String>()
+        when (os) {
+            DesktopOs.WINDOWS -> {
+                add(windowsSteamPath())
+                for (d in drives()) {
+                    add("${d}Program Files (x86)/Steam")
+                    add("${d}Program Files/Steam")
+                    drives += d.trimEnd('/')
+                }
+            }
+            DesktopOs.MACOS -> {
+                add("$home/Library/Application Support/Steam")
+                File("/Volumes").listFiles()?.filter { it.isDirectory && !it.isHidden }?.forEach { drives += it.fusePath }
+            }
+            DesktopOs.LINUX -> {
+                add("$home/.local/share/Steam")
+                add("$home/.steam/steam")
+                add("$home/.steam/root")
+                add("$home/.var/app/com.valvesoftware.Steam/.local/share/Steam")
+                add("$home/snap/steam/common/.local/share/Steam")
+                drives += removableMounts()
+                File("/mnt").listFiles()?.filter { it.isDirectory }?.forEach { drives += it.path }
+                drives += home
+            }
+        }
+        return roots.toList() to drives.distinct()
+    }
+
+    /** Where Steam's registry entry says it is installed, on Windows. */
+    private fun windowsSteamPath(): String? = try {
+        val out = io.github.matiyaaa.fuse.desktop.system.Processes.run(
+            listOf("reg", "query", "HKCU\\Software\\Valve\\Steam", "/v", "SteamPath"), timeoutMs = 3_000,
+        )?.takeIf { it.exitCode == 0 }?.stdout
+        out?.lineSequence()?.firstOrNull { "SteamPath" in it }?.substringAfter("REG_SZ", "")?.trim()?.ifEmpty { null }
+    } catch (e: Exception) {
+        null
+    }
+
     private fun removableMounts(): List<String> {
         val out = ArrayList<String>()
         for (root in listOf("/run/media", "/media")) {

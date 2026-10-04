@@ -293,7 +293,16 @@ interface DeviceLocations {
 
     /** Where Fuse's file picker starts: internal storage and SD cards, or the home folder and drives. */
     suspend fun storageRoots(): List<LocationHint> = emptyList()
+
+    /**
+     * Where Steam is installed on this computer (each folder holding `steamapps`), and the drive
+     * roots to look on for more Steam libraries. Empty where Steam doesn't run (Android).
+     */
+    suspend fun steamRoots(): SteamPlaces = SteamPlaces()
 }
+
+/** Steam's installs ([roots]) and the drives that may hold more of its libraries ([drives]). */
+data class SteamPlaces(val roots: List<String> = emptyList(), val drives: List<String> = emptyList())
 
 /**
  * Emulator settings files. Reads anything; writes only inside a data folder this returned, atomically,

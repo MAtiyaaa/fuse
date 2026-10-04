@@ -92,6 +92,35 @@ internal class LibraryEngine(private val ctx: StoreContext) : SourceOps {
         return data.sources.get(id)
     }
 
+    override suspend fun findSteamGames(extra: String?): List<io.github.matiyaaa.fuse.library.steam.SteamGame> {
+        val reader = io.github.matiyaaa.fuse.library.steam.SteamLibraryReader(ctx.services.fs)
+        val places = runCatching { ctx.services.locations.steamRoots() }.getOrDefault(io.github.matiyaaa.fuse.ui.shell.store.SteamPlaces())
+        // A picked folder may be the library, its steamapps folder, or a Steam install.
+        val picked = extra?.let { FsPath.normalize(it) }?.let { if (FsPath.name(it).equals("steamapps", ignoreCase = true)) FsPath.parent(it) ?: it else it }
+        val mounted = runCatching { ctx.services.volumes.volumes() }.getOrDefault(emptyList()).flatMap { it.mountPaths }
+        val libraries = reader.libraries(places.roots + listOfNotNull(picked), (places.drives + mounted).distinct())
+        return reader.games(libraries)
+    }
+
+    override suspend fun addSteamGames(games: List<io.github.matiyaaa.fuse.library.steam.SteamGame>): Int {
+        if (games.isEmpty()) return 0
+        var folder: String? = null
+        val names = HashSet<String>()
+        var written = 0
+        for (g in games) {
+            // Two games with the same name each keep their own shortcut.
+            var name = io.github.matiyaaa.fuse.library.steam.SteamLibraryReader.shortcutName(g)
+            if (!names.add(name.lowercase())) name = name.removeSuffix(".steam") + " (${g.appId}).steam"
+            val path = ctx.services.keepFile("steam/$name", g.appId.toString().encodeToByteArray()) ?: continue
+            folder = FsPath.parent(FsPath.normalize(path))
+            written++
+        }
+        val dir = folder ?: return 0
+        if (data.sources.all().none { FsPath.normalize(it.path) == dir }) data.sources.add(dir, "Steam", LibrarySourceKind.SHORTCUTS)
+        rescan(ScanScope.QUICK)
+        return written
+    }
+
     override suspend fun remove(source: LibrarySource) {
         // Games from the source are marked missing (user edits survive a re-add). Files are untouched.
         data.sources.remove(source.id)

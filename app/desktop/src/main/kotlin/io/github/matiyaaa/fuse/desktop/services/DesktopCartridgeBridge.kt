@@ -52,6 +52,22 @@ internal class DesktopCartridgeBridge(private val dirs: FuseDirs) : CartridgeBri
     /** The games from the last status file read (the file holds them; no second read needed). */
     override suspend fun games(): List<CartridgeGame>? = lastGames
 
+    /** Cartridge's program: an AppImage in the usual folders, else `cartridge` on PATH. */
+    private fun executable(): String? {
+        for (dir in appImageDirs()) {
+            val found = File(dir).listFiles()?.firstOrNull { f ->
+                f.isFile && f.canExecute() && f.name.lowercase(Locale.ROOT).let { n -> n.startsWith("cartridge") && n.endsWith(".appimage") }
+            }
+            if (found != null) return found.absolutePath
+        }
+        return Processes.which("cartridge")
+    }
+
+    private fun appImageDirs(): List<String> = listOfNotNull(
+        "${dirs.home}/Applications", "${dirs.home}/.local/bin", "${dirs.home}/Downloads", "${dirs.home}/AppImages",
+        System.getenv("APPIMAGE")?.let { File(it).parent },
+    )
+
     /** Status file, an AppImage in the usual folders, `cartridge` on PATH, or a desktop entry. */
     private fun isInstalled(): Boolean {
         if (statusFile != null && File(statusFile).isFile) return true
@@ -109,6 +125,10 @@ internal class DesktopCartridgeBridge(private val dirs: FuseDirs) : CartridgeBri
 
     private fun openLink(link: String): Boolean {
         if (!link.startsWith("${CartridgeProtocol.SCHEME}://")) return false
+        // In Game Mode Cartridge must be Fuse's own child for gamescope to show its window.
+        if (io.github.matiyaaa.fuse.desktop.system.GameMode.active) {
+            executable()?.let { exe -> if (Processes.spawn(listOf(exe, link)) != null) return true }
+        }
         val xdgOpen = Processes.which("xdg-open") ?: return false
         if (hasRegisteredHandler()) return Processes.spawn(listOf(xdgOpen, link)) != null
         val process = Processes.spawn(listOf(xdgOpen, link)) ?: return false

@@ -399,6 +399,7 @@ fun libraryRows(app: AppState): List<MenuAction> {
                 onSelect = { app.addGame() },
             ))
         }
+        app.platform.steam?.let { steam -> labelled("Steam") { addAll(steamRows(app, steam)) } }
         labelled("Scanning") {
             add(MenuAction("scan", "Scan for changes", FuseIcons.Refresh, detail = "Only folders that changed. Also runs whenever you return to Fuse", trailing = Trailing.Value(scan.phase.name.lowercase().replaceFirstChar { it.uppercase() }), onSelect = {
                 app.store.sources.rescan(ScanScope.QUICK); app.toasts.show("Scanning")
@@ -900,6 +901,58 @@ fun cartridgeRows(app: AppState): List<MenuAction> {
             },
         ))
     }
+}
+
+/**
+ * Steam on a computer: its installed games in the library (found on every drive, or in a folder the
+ * user picks), and Fuse in Steam's library for Game Mode.
+ */
+private fun steamRows(app: AppState, steam: io.github.matiyaaa.fuse.ui.shell.platform.SteamIntegration): List<MenuAction> {
+    fun addFound(games: List<io.github.matiyaaa.fuse.library.steam.SteamGame>) {
+        if (games.isEmpty()) {
+            app.toasts.show("No Steam games found there")
+            return
+        }
+        app.confirm = ConfirmSpec(
+            "Add ${games.size} Steam ${if (games.size == 1) "game" else "games"}?",
+            games.take(6).joinToString("\n") { it.name } + if (games.size > 6) "\nand ${games.size - 6} more" else "",
+            "Add them",
+        ) {
+            app.scope.launch {
+                val n = app.store.sources.addSteamGames(games)
+                app.toasts.show(if (n == 1) "1 Steam game added" else "$n Steam games added")
+            }
+        }
+    }
+    return listOf(
+        MenuAction(
+            "steam.find", "Find Steam games", FuseIcons.FolderSearch,
+            detail = "Every game Steam has installed, on any drive. They start through Steam",
+            onSelect = { app.scope.launch { addFound(app.store.sources.findSteamGames()) } },
+        ),
+        MenuAction(
+            "steam.folder", "Add a Steam library folder", FuseIcons.FolderPlus,
+            detail = "A drive or folder Steam keeps games in that Fuse didn't find",
+            onSelect = {
+                app.scope.launch {
+                    val path = app.platform.storage.pickFolder("Choose a Steam library folder") ?: return@launch
+                    addFound(app.store.sources.findSteamGames(path))
+                }
+            },
+        ),
+        MenuAction(
+            "steam.add", if (steam.gameMode) "Fuse in Game Mode" else "Add Fuse to Steam", FuseIcons.Gamepad,
+            detail = if (steam.gameMode) "Fuse is running in Game Mode now. Cartridge opens inside it, over Fuse" else "So SteamOS's Game Mode can start Fuse, full screen. Close Steam first",
+            enabled = !steam.gameMode,
+            onSelect = {
+                app.scope.launch {
+                    steam.addFuse()
+                        .onSuccess { app.toasts.show(it) }
+                        .onFailure { app.toasts.show(it.message ?: "Couldn't add Fuse to Steam", io.github.matiyaaa.fuse.ui.designsystem.components.ToastKind.ERROR) }
+                }
+            },
+        ),
+    )
 }
 
 /** Menu music and interface sounds, each with its own volume. */

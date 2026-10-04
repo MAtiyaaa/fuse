@@ -62,7 +62,7 @@ class DesktopSession(
         private set
 
     /** Base mode (borderless or windowed) and whether fullscreen is on top of it. */
-    var baseMode: WindowMode by mutableStateOf(WindowMode.BORDERLESS)
+    var baseMode: WindowMode by mutableStateOf(WindowMode.WINDOWED)
         private set
     var fullscreen: Boolean by mutableStateOf(true)
         private set
@@ -87,8 +87,10 @@ class DesktopSession(
     init {
         val saved = prefs.load()
         val flag = WindowMode.fromArgs(args)
-        baseMode = saved?.base ?: WindowMode.BORDERLESS
-        val start = flag ?: saved?.mode ?: WindowMode.FULLSCREEN
+        baseMode = saved?.base ?: WindowMode.WINDOWED
+        // A first start opens as an ordinary window, like any other program on a computer, except
+        // under SteamOS's Game Mode (or another gamescope session), where the screen is Fuse's.
+        val start = flag ?: saved?.mode ?: if (io.github.matiyaaa.fuse.desktop.system.GameMode.active) WindowMode.FULLSCREEN else WindowMode.WINDOWED
         if (start != WindowMode.FULLSCREEN) baseMode = start
         fullscreen = start == WindowMode.FULLSCREEN
         pointerHidden = fullscreen

@@ -41,6 +41,9 @@ interface PlatformUi {
     /** Screenshots and recordings of Fuse's own screen; null where Fuse can't capture it (desktop for now). */
     val capture: ScreenCapture? get() = null
 
+    /** Steam on a computer: Fuse in Steam's library, for Game Mode. Null where there is no Steam (Android). */
+    val steam: SteamIntegration? get() = null
+
     /**
      * Recent second-screen events (companion started or closed and why, refused displays, display
      * changes), oldest first, for a status row in Settings. Empty where there is no companion screen.
@@ -77,6 +80,22 @@ interface PlatformUi {
 
     /** Forgets the recorded crash, after the user has seen or shared it. */
     fun clearCrashReport() {}
+}
+
+/**
+ * Fuse and Steam on a computer. On a Steam Deck (or any SteamOS or gamescope setup) Game Mode only
+ * starts what is in Steam's library, so Fuse can put itself there as a non-Steam game, set to open
+ * full screen. Steam reads its list when it starts, so it must be closed while Fuse writes it.
+ */
+interface SteamIntegration {
+    /** Fuse runs inside SteamOS's Game Mode (or another gamescope session) right now. */
+    val gameMode: Boolean
+
+    /** Whether a Steam user here has Fuse in their library already. */
+    suspend fun added(): Boolean
+
+    /** Adds Fuse (or brings its entry up to date) for every Steam user here; what happened, in words. */
+    suspend fun addFuse(): Result<String>
 }
 
 /** A file the user picked to open: its name and its bytes. */

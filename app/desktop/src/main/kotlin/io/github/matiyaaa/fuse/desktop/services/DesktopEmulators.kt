@@ -180,4 +180,9 @@ internal class DesktopLocations(private val folders: KnownFolders) : DeviceLocat
     override suspend fun storageRoots(): List<LocationHint> = withContext(Dispatchers.IO) {
         folders.storageRoots().map { LocationHint(it.path, it.label) }
     }
+
+    override suspend fun steamRoots(): io.github.matiyaaa.fuse.ui.shell.store.SteamPlaces = withContext(Dispatchers.IO) {
+        val (roots, drives) = folders.steamPlaces()
+        io.github.matiyaaa.fuse.ui.shell.store.SteamPlaces(roots, drives)
+    }
 }
