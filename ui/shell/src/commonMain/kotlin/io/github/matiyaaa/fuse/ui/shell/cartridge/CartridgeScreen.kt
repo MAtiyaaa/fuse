@@ -743,7 +743,8 @@ private fun RecentTile(r: RecentDownload, selected: Boolean, size: Dp, onClick: 
                 )
             }
         }
-        Spacer(Modifier.height(Space.s))
+        // Room for the chosen tile's lift and its spark bar, so the bar stays under the art, not over the name.
+        Spacer(Modifier.height(Size.sparkClearance))
         FText(game?.title ?: r.download.title, Fuse.type.label, color = if (selected) c.text else c.text.copy(alpha = 0.85f), maxLines = 1)
         Row(verticalAlignment = Alignment.CenterVertically) {
             FuseIcon(if (game != null) FuseIcons.CircleCheck else FuseIcons.Clock, size = 12.dp, tint = if (game != null) c.success else c.textFaint)

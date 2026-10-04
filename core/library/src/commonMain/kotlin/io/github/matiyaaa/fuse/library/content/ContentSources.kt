@@ -119,11 +119,17 @@ class ContentSourceReader(private val fs: FuseFileSystem, private val maxDepth: 
         } catch (e: Exception) {
             null
         } ?: return null
-        // The game's own param.sfo: sce_sys/param.sfo at the root, or one folder down (a zipped title folder).
-        val entry = entries.filter { it.name.replace('\\', '/').lowercase().let { n -> n == "sce_sys/param.sfo" || SFO_ONE_DOWN.matches(n) } }
-            .minByOrNull { it.name.length } ?: return null
-        val sfo = zip.read(f.path, entry, MAX_SFO)?.let(ParamSfo::strings) ?: return null
-        val id = sfo["TITLE_ID"]?.trim()?.takeIf { PsPackages.TITLE_ID.matches(it) } ?: return null
+        // The game's own param.sfo: sce_sys/param.sfo at the root, or in a title folder a few levels
+        // down (a zipped title folder, "app/PCSA00029/", "ux0/app/PCSA00029/"). The game's own wins
+        // over an update's or DLC's packed beside it, then the shallowest.
+        val sfos = entries.filter { SFO_ANYWHERE.matches(it.name.replace('\\', '/').lowercase()) }
+        val entry = sfos.minWithOrNull(compareBy({ sfoRank(it.name) }, { it.name.count { c -> c == '/' || c == '\\' } })) ?: return null
+        val sfo = zip.read(f.path, entry, MAX_SFO)?.let(ParamSfo::strings)
+        // A param.sfo packed in a way Fuse can't unpack still says where the title is: its folder is named with its id.
+        val id = sfo?.get("TITLE_ID")?.trim()?.takeIf { PsPackages.TITLE_ID.matches(it) }
+            ?: entry.name.replace('\\', '/').split('/').firstOrNull { PsPackages.TITLE_ID.matches(it.uppercase()) }?.uppercase()
+            ?: return null
+        if (sfo == null) return VitaArchive(f.path, id, null, categoryFromPath(entry.name), null, f.sizeBytes)
         return VitaArchive(f.path, id, sfo["APP_VER"]?.trim(), sfo["CATEGORY"]?.trim()?.lowercase(), sfo["TITLE"]?.trim()?.replace('\n', ' '), f.sizeBytes)
     }
 
@@ -138,6 +144,24 @@ class ContentSourceReader(private val fs: FuseFileSystem, private val maxDepth: 
     private companion object {
         const val MAX_KEY_TEXT = 4L * 1024 * 1024
         const val MAX_SFO = 64 * 1024
-        val SFO_ONE_DOWN = Regex("^[^/]+/sce_sys/param\\.sfo$")
+        /** sce_sys/param.sfo at the root or up to three folders down. */
+        val SFO_ANYWHERE = Regex("^(?:[^/]+/){0,3}sce_sys/param\\.sfo$")
+
+        /** Where a param.sfo sits: a game's own folder first, then an update's, then DLC's. */
+        fun sfoRank(name: String): Int {
+            val n = name.replace('\\', '/').lowercase()
+            return when {
+                n.contains("addcont/") -> 2
+                n.contains("patch/") -> 1
+                else -> 0
+            }
+        }
+
+        /** "gp" for a title under patch/, "ac" under addcont/, else a game. */
+        fun categoryFromPath(name: String): String? = when (sfoRank(name)) {
+            2 -> "ac"
+            1 -> "gp"
+            else -> null
+        }
     }
 }

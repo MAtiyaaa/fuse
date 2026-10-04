@@ -140,7 +140,13 @@ fun AppState.gameMenu(card: GameCard, fromDetail: Boolean = false, extra: List<M
         add(MenuAction("rename", "Rename Display Title", FuseIcons.TextCursor, detail = "The file keeps its name", onSelect = {
             closeOverlays()
             textInput = TextInputSpec("Display title", card.title) { title ->
-                scope.launch { lib.rename(card.id, title.ifBlank { null }) }
+                scope.launch {
+                    lib.rename(card.id, title.ifBlank { null })
+                    // A corrected name brings the right game's details, not the old match's.
+                    if (title.isNotBlank() && title.trim() != card.title && store.media.followRename(card.id, card.title)) {
+                        toasts.show("Looking for details for ${title.trim()}")
+                    }
+                }
             }
         }))
         if (!card.isApp) {

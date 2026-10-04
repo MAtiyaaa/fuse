@@ -540,7 +540,9 @@ class FolderInterpreter(
                 }
                 "vpk", "zip" -> contentReader.vitaArchive(f)?.let { a ->
                     PackageInfo(a.titleId, if (a.category == "gp") ContentKind.UPDATE else if (a.category == "ac") ContentKind.DLC else null, a.title)
-                } ?: PackageInfo(null, null, null, notAGame = f.extension == "zip")
+                    // A zip Fuse can't look inside (packed with a method it doesn't unpack, or laid out
+                    // its own way) is still a game when it is game-sized; small ones are notes and photos.
+                } ?: PackageInfo(null, null, null, notAGame = f.extension == "zip" && f.sizeBytes < MIN_VITA_ZIP)
                 else -> null
             })?.also { walk.packages[f.path] = it }
             info?.notAGame != true
@@ -626,6 +628,9 @@ class FolderInterpreter(
         // ES-DE's %INJECT% reads at most 4096 bytes, so real title-id files are never larger.
         const val TITLE_ID_FILE_MAX = 4096L
         val TITLE_ID_FILES = setOf("ps3", "psvita")
+
+        /** The smallest .zip in a Vita folder taken as a game without reading a title from it. */
+        const val MIN_VITA_ZIP = 24L * 1024 * 1024
 
         /**
          * Folders emulators keep beside their games when their storage is copied into a library:

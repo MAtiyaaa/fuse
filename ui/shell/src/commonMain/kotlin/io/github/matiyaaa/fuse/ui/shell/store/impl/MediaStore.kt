@@ -1,5 +1,7 @@
 package io.github.matiyaaa.fuse.ui.shell.store.impl
 
+import io.github.matiyaaa.fuse.integrations.cartridge.RommGuard
+import io.github.matiyaaa.fuse.integrations.match.TitleMatcher
 import io.github.matiyaaa.fuse.data.settings.SecretKeys
 import io.github.matiyaaa.fuse.integrations.KeyCheck
 import io.github.matiyaaa.fuse.integrations.igdb.IgdbClient
@@ -615,6 +617,25 @@ internal class DefaultMediaOps(
         ctx.data.cache.remove("cartridge.romm", "g${game.value}")
         ctx.data.cache.remove("cartridge.romm.before", "g${game.value}")
         ctx.data.cache.remove(FILL_TRIED, game.value.toString())
+        return true
+    }
+
+    override suspend fun followRename(game: GameId, previous: String): Boolean {
+        val g = ctx.data.games.get(game) ?: return false
+        val name = g.titles.custom ?: return false
+        val theirs = g.titles.metadata
+        val hasDetails = theirs != null || g.metadata != GameMetadata()
+        val fits = { a: String, b: String -> TitleMatcher.titleSimilarity(a, b).score >= RommGuard.MIN_TITLE }
+        val stale = when {
+            !hasDetails -> false
+            // Details carry the name they were found under: they stay while it reads like the new one.
+            theirs != null -> !fits(name, theirs)
+            // Without one, a new name that isn't the old one says they were another game's.
+            else -> !fits(name, previous)
+        }
+        if (stale) resetDetails(game) else if (hasDetails) return false
+        ctx.data.cache.remove(FILL_TRIED, game.value.toString())
+        fill(MediaFillMode.FILL_MISSING, MediaKind.Fillable, game = game)
         return true
     }
 

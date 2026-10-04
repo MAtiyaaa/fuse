@@ -502,6 +502,12 @@ interface MediaOps {
      * For a game a source mixed up with another. False when the game is gone.
      */
     suspend fun resetDetails(game: GameId): Boolean
+    /**
+     * After the user renamed [game] (it went by [previous]): when the details it has were found
+     * under a name that isn't this game's, they are forgotten and looked for again under the new
+     * name, so a corrected game doesn't keep another game's description. True when it looked again.
+     */
+    suspend fun followRename(game: GameId, previous: String): Boolean = false
     val providers: StateFlow<List<ProviderStatus>>
     /** The last key check per provider; empty until a check ran. Checks run after a key is saved. */
     val keyChecks: StateFlow<Map<ScrapeProviderId, io.github.matiyaaa.fuse.integrations.KeyCheck?>>
