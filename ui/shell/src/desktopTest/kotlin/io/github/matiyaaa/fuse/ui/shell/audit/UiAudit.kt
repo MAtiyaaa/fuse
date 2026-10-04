@@ -118,4 +118,11 @@ class UiAudit {
     @Test fun keyScreensT() = audit(AuditSize.T) { keyScreens() }
 
     @Test fun keyScreensU() = audit(AuditSize.U) { keyScreens() }
+
+    /** Every setup step at the sizes where it is tightest: a phone held sideways, the Deck and a 6 inch handheld. */
+    @Test fun onboardingP() = audit(AuditSize.P) { onboardingScreens(exhaustive = true) }
+
+    @Test fun onboardingD() = audit(AuditSize.D) { onboardingScreens(exhaustive = true) }
+
+    @Test fun onboardingH() = audit(AuditSize.H) { onboardingScreens(exhaustive = true) }
 }

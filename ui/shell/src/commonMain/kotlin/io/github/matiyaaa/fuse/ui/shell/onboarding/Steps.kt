@@ -222,7 +222,7 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
                             MenuRow(
                                 MenuAction(
                                     s.path, s.label, FuseIcons.Folder,
-                                    detail = "${s.path}${if (s.platformsFound > 0) "  ·  ${s.platformsFound} systems" else ""}",
+                                    detail = "${s.path}${if (s.platformsFound > 0) "  ·  ${s.platformsFound} ${if (s.platformsFound == 1) "system" else "systems"}" else ""}",
                                     trailing = Trailing.Check(s.path in chosen),
                                 ),
                                 selected = i == suggestionSel.index,
@@ -534,7 +534,7 @@ private fun StatusList(rows: List<Triple<Boolean?, String, String>>) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.m)) {
                     StatusDot(ok)
                     FText(name, Fuse.type.bodyStrong, maxLines = 1, modifier = Modifier.width(88.dp))
-                    FText(word, Fuse.type.body, color = Fuse.colors.textMuted, maxLines = 1)
+                    FText(word, Fuse.type.body, color = Fuse.colors.textMuted, maxLines = 2)
                 }
             }
         }
@@ -714,7 +714,8 @@ private fun MiniScreen(
             Canvas(Modifier.matchParentSize().padding(Space.m)) { draw(lit) }
         }
         Spacer(Modifier.height(Space.m))
-        FText(label, Fuse.type.bodyStrong, color = if (active) c.text else c.textMuted, maxLines = 1)
+        // Two lines where the stage is narrow (a phone held sideways), centred under its picture.
+        FText(label, Fuse.type.bodyStrong, color = if (active) c.text else c.textMuted, maxLines = 2, align = androidx.compose.ui.text.style.TextAlign.Center)
     }
 }
 

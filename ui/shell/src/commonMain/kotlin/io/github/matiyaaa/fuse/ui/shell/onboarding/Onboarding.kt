@@ -232,7 +232,10 @@ fun OnboardingScreen(app: AppState) {
             }
             AnimatedContent(
                 targetState = state.index,
-                modifier = Modifier.weight(1f).fillMaxHeight(),
+                // Its fade draws each step in a layer of the step's own size, so the step is given
+                // the ring's room on every side (and padded back) or a selected button's ring would
+                // be cut at its edge while the step fades in.
+                modifier = Modifier.weight(1f).fillMaxHeight().ringRoom(),
                 transitionSpec = {
                     val dir = if (state.forward) 1 else -1
                     val shift = if (motion.reduced) 0 else travel
@@ -247,7 +250,9 @@ fun OnboardingScreen(app: AppState) {
                 label = "onboarding",
             ) { index ->
                 val s = steps[index.coerceIn(0, steps.lastIndex)]
-                StepView(app, s, state, isCurrent = index == state.index, layout = layout)
+                Box(Modifier.fillMaxSize().padding(RING_ROOM)) {
+                    StepView(app, s, state, isCurrent = index == state.index, layout = layout)
+                }
             }
         }
         FuseLine(
@@ -356,12 +361,16 @@ private fun StepView(app: AppState, step: Step, state: OnboardingState, isCurren
             Spacer(Modifier.height(Space.l))
         }
     } else {
+        val scroll = rememberScrollState()
+        // On a short screen the buttons sit at the bottom of what may not all fit: they stay in view.
+        LaunchedEffect(isCurrent, state.button, scroll.maxValue) { if (isCurrent && scroll.maxValue > 0) scroll.animateScrollTo(scroll.maxValue) }
         Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.weight(0.92f).fillMaxHeight(), contentAlignment = Alignment.CenterStart) {
-                words(Modifier.ringRoom().verticalScroll(rememberScrollState()).padding(RING_ROOM))
+            // A short screen gives the words more of the width, so the buttons keep to one line.
+            Box(Modifier.weight(if (layout.short) 1.15f else 0.92f).fillMaxHeight(), contentAlignment = Alignment.CenterStart) {
+                words(Modifier.ringRoom().verticalScroll(scroll).padding(RING_ROOM))
             }
-            Spacer(Modifier.width(if (layout.rail) Space.x3 else Space.xxl))
-            stage(Modifier.weight(1.08f).fillMaxHeight())
+            Spacer(Modifier.width(if (layout.rail) Space.x3 else if (layout.short) Space.xl else Space.xxl))
+            stage(Modifier.weight(if (layout.short) 0.85f else 1.08f).fillMaxHeight())
         }
     }
 }
@@ -418,8 +427,34 @@ private fun Stage(modifier: Modifier, lit: Boolean, content: @Composable BoxScop
             )
         },
         contentAlignment = Alignment.Center,
-        content = content,
-    )
+    ) {
+        ScaleToFit(Modifier.matchParentSize(), content)
+    }
+}
+
+/**
+ * Lays [content] out at its own size and, when that is more than there is room for (a phone held
+ * sideways), shrinks it evenly until it fits, so a picture is never cut at the stage's edge.
+ */
+@Composable
+private fun ScaleToFit(modifier: Modifier, content: @Composable BoxScope.() -> Unit) {
+    androidx.compose.ui.layout.Layout(
+        content = { Box(contentAlignment = Alignment.Center) { content() } },
+        modifier = modifier,
+    ) { measurables, constraints ->
+        val placeable = measurables.first().measure(constraints.copy(minWidth = 0, minHeight = 0, maxHeight = androidx.compose.ui.unit.Constraints.Infinity))
+        val w = constraints.maxWidth
+        val h = constraints.maxHeight
+        val scale = minOf(1f, h.toFloat() / placeable.height.coerceAtLeast(1), w.toFloat() / placeable.width.coerceAtLeast(1))
+        layout(w, h) {
+            val x = (w - placeable.width) / 2
+            val y = (h - placeable.height) / 2
+            placeable.placeWithLayer(x, y) {
+                scaleX = scale
+                scaleY = scale
+            }
+        }
+    }
 }
 
 /** A step without a picture of its own: its icon, large, in rings of light that breathe. */
