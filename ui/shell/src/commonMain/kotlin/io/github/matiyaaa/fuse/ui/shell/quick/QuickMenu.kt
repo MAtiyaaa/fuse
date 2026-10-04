@@ -142,7 +142,7 @@ fun QuickMenu(app: AppState) {
         // Both open the system's panel, so they are never lit like a switch Fuse flips; they say how
         // things stand where the platform reports it.
         if (features.wifiSettings) {
-            add(QuickTile("Wi-Fi", if (status.wifi == ConnectionState.OFF) FuseIcons.WifiOff else FuseIcons.Wifi, detail = connectionText(status.wifi)) {
+            add(QuickTile("Wi-Fi", if (status.wifi == ConnectionState.OFF) FuseIcons.WifiOff else FuseIcons.Wifi, detail = if (status.ethernet && status.wifi != ConnectionState.CONNECTED) "On a cable" else connectionText(status.wifi)) {
                 platform.quick.openWifi()
             })
         }

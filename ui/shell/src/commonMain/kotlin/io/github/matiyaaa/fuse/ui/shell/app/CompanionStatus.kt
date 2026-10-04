@@ -96,7 +96,11 @@ internal fun statusGauges(metrics: List<PerformanceMetric>, status: SystemStatus
                 ConnectionState.OFF -> "Off"
                 ConnectionState.UNKNOWN -> "Unknown"
             },
-            detail = strength?.let(::signalWords) ?: if (status.network == ConnectionState.CONNECTED) "Online" else "Offline",
+            detail = strength?.let(::signalWords) ?: when {
+                status.ethernet -> "Online by cable"
+                status.network == ConnectionState.CONNECTED -> "Online"
+                else -> "Offline"
+            },
             fraction = if (status.wifi == ConnectionState.CONNECTED) (strength ?: 3) / 4f else 0f,
             centre = null,
         ),

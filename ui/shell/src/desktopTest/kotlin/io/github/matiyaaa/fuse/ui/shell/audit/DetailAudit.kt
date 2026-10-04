@@ -131,6 +131,15 @@ internal fun AuditDriver.detailScreens() {
             shoot("Ethernet and the battery just plugged in", 500)
             settle(2_500)
             shoot("the battery settled on charging")
+            // Up to the tabs, then right past Search and Settings: the status area.
+            tap(PadButton.DPAD_UP, 2)
+            tap(PadButton.DPAD_RIGHT, 12)
+            settle(500)
+            shoot("the status area reached from Settings")
+            tap(PadButton.A)
+            settle(900)
+            shoot("the quick menu it opens")
+            tap(PadButton.B)
         } finally {
             audit.statusFlow.value = before
         }
