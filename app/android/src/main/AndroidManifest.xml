@@ -40,6 +40,16 @@
     <!-- Cartridge's read-only status provider. -->
     <uses-permission android:name="io.github.abdu2304.cartridge.permission.READ_STATUS" />
 
+    <!--
+      Fuse's play sessions for Cartridge (PlayShareProvider), so Cartridge's Start screen counts games played
+      from Fuse. Normal: any app that asks gets it; Fuse also grants Cartridge access itself at start.
+    -->
+    <permission
+        android:name="io.github.matiyaaa.fuse.permission.READ_PLAY"
+        android:label="@string/play_permission_label"
+        android:description="@string/play_permission_description"
+        android:protectionLevel="normal" />
+
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
     <uses-feature android:name="android.hardware.gamepad" android:required="false" />
     <uses-feature android:name="android.hardware.bluetooth" android:required="false" />
@@ -316,6 +326,13 @@
             android:exported="false"
             android:foregroundServiceType="mediaProjection" />
 
+        <!-- Read-only play sessions for Cartridge (see PlayShareProvider and READ_PLAY above). -->
+        <provider
+            android:name=".services.PlayShareProvider"
+            android:authorities="${applicationId}.play"
+            android:exported="true"
+            android:grantUriPermissions="true"
+            android:readPermission="io.github.matiyaaa.fuse.permission.READ_PLAY" />
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.files"

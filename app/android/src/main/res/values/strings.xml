@@ -4,4 +4,7 @@
     <string name="shortcut_safe_mode_short">Safe mode</string>
     <string name="shortcut_safe_mode_long">Start in safe mode</string>
     <string name="shortcut_safe_mode_disabled">Fuse is already running</string>
+    <!-- The permission that lets Cartridge read Fuse's play sessions (PlayShareProvider). -->
+    <string name="play_permission_label">Read Fuse play sessions</string>
+    <string name="play_permission_description">See which games you played from Fuse and when, so another app such as Cartridge can show your last played games.</string>
 </resources>
