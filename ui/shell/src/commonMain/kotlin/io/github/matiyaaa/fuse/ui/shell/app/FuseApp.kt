@@ -323,6 +323,7 @@ fun FuseApp(
                     if (app.dev.frameGraph) {
                         FrameTimeOverlay(Modifier.align(Alignment.TopStart).padding(start = Space.gutter, top = Size.hudHeight + Space.xs))
                     }
+                    app.gallery?.let { g -> io.github.matiyaaa.fuse.ui.shell.game.PictureViewer(g.pictures, g.start, g.onIndex, g.onClose) }
                     // Content fades out under the hint line, so hints never sit on top of tiles.
                     if (app.hints.isNotEmpty()) {
                         Box(

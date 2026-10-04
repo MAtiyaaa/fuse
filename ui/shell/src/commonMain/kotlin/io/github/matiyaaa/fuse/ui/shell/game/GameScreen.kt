@@ -39,6 +39,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -105,6 +106,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.theme.tabular
 import io.github.matiyaaa.fuse.ui.designsystem.theme.toColor
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.FocusZone
+import io.github.matiyaaa.fuse.ui.shell.app.GallerySpec
 import io.github.matiyaaa.fuse.ui.shell.app.Route
 import io.github.matiyaaa.fuse.ui.shell.app.collectionPicker
 import io.github.matiyaaa.fuse.ui.shell.app.emulatorPicker
@@ -260,7 +262,9 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
             title = game.displayTitle,
             icon = FuseIcons.Tags,
             message = "Everything Fuse knows about this game",
-            options = facts.mapIndexed { i, f ->
+            // Each group together, in the order the groups first come (collections sit between the
+            // first facts and the rest, so "About" would otherwise show twice).
+            options = facts.withIndex().sortedBy { (_, f) -> facts.indexOfFirst { it.group == f.group } }.map { (i, f) ->
                 io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction("fact.$i", f.text, f.icon ?: FuseIcons.Tag, detail = f.label, section = f.group, onSelect = { app.choice = null })
             },
         )
@@ -310,12 +314,20 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
     }
     // On the More button, confirming already opens the options, so the line says it once.
     val onMore = row == "actions" && actions.getOrNull(col)?.id == "more"
-    LaunchedEffect(row, confirm, onMore) {
-        app.hints = listOfNotNull(
-            confirm?.let { Hint(HintButton.CONFIRM, it) },
-            if (onMore) null else Hint(HintButton.OPTIONS, "Options"),
-            Hint(HintButton.BACK, "Back"),
-        )
+    LaunchedEffect(row, confirm, onMore, viewing != null) {
+        app.hints = if (viewing != null) {
+            // The screenshot viewer: only moving between them and closing.
+            listOfNotNull(
+                if (shots.size > 1) Hint(HintButton.DPAD, "Previous or next") else null,
+                Hint(HintButton.BACK, "Close"),
+            )
+        } else {
+            listOfNotNull(
+                confirm?.let { Hint(HintButton.CONFIRM, it) },
+                if (onMore) null else Hint(HintButton.OPTIONS, "Options"),
+                Hint(HintButton.BACK, "Back"),
+            )
+        }
     }
 
     // Where each section starts in the page, so moving down brings the whole section into view.
@@ -576,9 +588,11 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
             }
             Spacer(Modifier.height(Size.hintHeight + Space.x4))
         }
-        viewing?.let { start ->
-            ScreenshotViewer(shots.map { it.model }, start, onIndex = { sel.setColumn("shots", it) }, onClose = { viewing = null })
+        // The viewer covers the whole app, top bar included, so the app hosts it.
+        LaunchedEffect(viewing) {
+            app.gallery = viewing?.let { start -> GallerySpec(shots.map { it.model }, start, onIndex = { sel.setColumn("shots", it) }, onClose = { viewing = null }) }
         }
+        DisposableEffect(game.id) { onDispose { app.gallery = null } }
     }
 }
 
@@ -809,7 +823,7 @@ private fun TimeTogether(d: GameDetail, modifier: Modifier) {
  * tap on the dark edge closes. Where it is shows under it, "3 of 8".
  */
 @Composable
-private fun ScreenshotViewer(shots: List<Any?>, start: Int, onIndex: (Int) -> Unit, onClose: () -> Unit) {
+internal fun PictureViewer(shots: List<Any?>, start: Int, onIndex: (Int) -> Unit, onClose: () -> Unit) {
     val c = Fuse.colors
     val pager = androidx.compose.foundation.pager.rememberPagerState(initialPage = start.coerceIn(0, (shots.size - 1).coerceAtLeast(0))) { shots.size }
     val scope = androidx.compose.runtime.rememberCoroutineScope()
@@ -825,12 +839,12 @@ private fun ScreenshotViewer(shots: List<Any?>, start: Int, onIndex: (Int) -> Un
     Box(
         Modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.92f))
+            .background(Color.Black.copy(alpha = 0.96f))
             .fuseClickable(scale = false, onClickLabel = "Close", onClick = onClose),
         contentAlignment = Alignment.Center,
     ) {
         androidx.compose.foundation.pager.HorizontalPager(pager, Modifier.fillMaxSize(), pageSpacing = Space.l) { i ->
-            Box(Modifier.fillMaxSize().padding(horizontal = Space.gutter, vertical = Size.hudHeight), contentAlignment = Alignment.Center) {
+            Box(Modifier.fillMaxSize().padding(start = Space.gutter, end = Space.gutter, top = Space.xl, bottom = Size.hudHeight), contentAlignment = Alignment.Center) {
                 Artwork(shots[i], Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
             }
         }

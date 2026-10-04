@@ -5,6 +5,8 @@ import io.github.matiyaaa.fuse.model.PadButton
 import io.github.matiyaaa.fuse.model.StorageVolume
 import io.github.matiyaaa.fuse.model.VolumeKind
 import java.io.File
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
 
 private const val GB = 1_000_000_000L
 
@@ -158,5 +160,50 @@ internal fun AuditDriver.detailScreens() {
         settle(1_500)
         shoot("a program's page")
         tap(PadButton.B)
+    }
+
+    scenario("details", "a game with many facts") {
+        useLibrary()
+        val card = runBlocking { libraryStore.library.games(io.github.matiyaaa.fuse.ui.shell.store.GameQuery()).first().first { it.title == "Emberline Saga" } }
+        val owner = io.github.matiyaaa.fuse.model.MediaOwner.OfGame(card.id)
+        val shot = File(cache, "detail-screenshot.png").also { AuditSystemArt.panel(it, 0xFF3A5A8CL) }
+        runBlocking {
+            libraryData.games.replaceMetadata(
+                card.id,
+                io.github.matiyaaa.fuse.model.GameMetadata(
+                    description = "A long journey across a burning coast.",
+                    releaseYear = 1997, developer = "Lantern Works", publisher = "Northlight", players = "1",
+                    genres = listOf("Role-playing", "Adventure", "Fantasy"), franchise = "Emberline", rating = 86,
+                ),
+                null,
+            )
+            libraryStore.media.setFromFile(owner, io.github.matiyaaa.fuse.model.MediaKind.SCREENSHOT, shot.absolutePath)
+        }
+        try {
+            openGame("Emberline Saga")
+            settle(900)
+            shoot("the first facts and a + for the rest")
+            tap(PadButton.DPAD_UP)
+            settle(400)
+            shoot("the + chip selected")
+            tap(PadButton.A)
+            settle(900)
+            shoot("every fact")
+            tap(PadButton.B)
+            settle(400)
+            // From the + chip: the buttons, the description, then the screenshots.
+            tap(PadButton.DPAD_DOWN, 3)
+            settle(600)
+            shoot("the screenshots row")
+            tap(PadButton.A)
+            settle(1_200)
+            shoot("a screenshot full screen")
+            tap(PadButton.B)
+        } finally {
+            runBlocking {
+                libraryData.games.replaceMetadata(card.id, null, null)
+                libraryStore.media.reset(owner, io.github.matiyaaa.fuse.model.MediaKind.SCREENSHOT)
+            }
+        }
     }
 }
