@@ -127,6 +127,9 @@ interface EmulatorDetector {
     /** Firmware folders of installed emulators that Fuse can read (RetroArch `system/`, Dolphin `Sys/`). */
     fun biosFolders(installed: List<InstalledEmulator>): List<String> = emptyList()
 
+    /** RPCS3's dev_hdd0 folders on this device, where its trophies are kept. */
+    fun rpcs3DevHdd0(installed: List<InstalledEmulator>): List<String> = emptyList()
+
     /**
      * Paths Fuse can never read on this device (Android 11+ `Android/data` of other apps). Firmware
      * that could only be there is reported as Unknown, never as Missing.

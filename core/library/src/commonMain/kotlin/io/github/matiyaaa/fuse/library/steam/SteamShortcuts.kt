@@ -9,6 +9,8 @@ object BinaryVdf {
     sealed interface Value
     data class Str(val value: String) : Value
     data class Int32(val value: Int) : Value
+    data class Float32(val value: Float) : Value
+    data class Int64(val value: Long) : Value
     data class Block(val entries: MutableList<Pair<String, Value>> = mutableListOf()) : Value {
         operator fun get(key: String): Value? = entries.firstOrNull { it.first.equals(key, ignoreCase = true) }?.second
         operator fun set(key: String, value: Value) {
@@ -20,7 +22,12 @@ object BinaryVdf {
     private const val BLOCK: Byte = 0
     private const val STRING: Byte = 1
     private const val INT: Byte = 2
+    private const val FLOAT: Byte = 3
+    private const val POINTER: Byte = 4
+    private const val COLOR: Byte = 6
+    private const val UINT64: Byte = 7
     private const val END: Byte = 8
+    private const val INT64: Byte = 10
 
     /** The document, or null when it isn't binary KeyValues. An empty input is an empty document. */
     fun parse(bytes: ByteArray): Block? {
@@ -32,6 +39,13 @@ object BinaryVdf {
             i++
             return s
         }
+        fun int32(): Int {
+            if (i + 4 > bytes.size) throw IllegalArgumentException("truncated")
+            val v = (bytes[i].toInt() and 0xFF) or ((bytes[i + 1].toInt() and 0xFF) shl 8) or
+                ((bytes[i + 2].toInt() and 0xFF) shl 16) or ((bytes[i + 3].toInt() and 0xFF) shl 24)
+            i += 4
+            return v
+        }
         fun block(): Block {
             val out = Block()
             while (i < bytes.size) {
@@ -41,12 +55,12 @@ object BinaryVdf {
                 when (type) {
                     BLOCK -> out.entries += key to block()
                     STRING -> out.entries += key to Str(cstring())
-                    INT -> {
-                        if (i + 4 > bytes.size) throw IllegalArgumentException("truncated")
-                        val v = (bytes[i].toInt() and 0xFF) or ((bytes[i + 1].toInt() and 0xFF) shl 8) or
-                            ((bytes[i + 2].toInt() and 0xFF) shl 16) or ((bytes[i + 3].toInt() and 0xFF) shl 24)
-                        i += 4
-                        out.entries += key to Int32(v)
+                    INT, POINTER, COLOR -> out.entries += key to Int32(int32())
+                    FLOAT -> out.entries += key to Float32(Float.fromBits(int32()))
+                    UINT64, INT64 -> {
+                        val low = int32().toLong() and 0xFFFFFFFFL
+                        val high = int32().toLong()
+                        out.entries += key to Int64(low or (high shl 32))
                     }
                     else -> throw IllegalArgumentException("type $type")
                 }
@@ -66,20 +80,20 @@ object BinaryVdf {
             out.addAll(s.encodeToByteArray().toList())
             out += 0
         }
+        fun int32(v: Int) {
+            out += (v and 0xFF).toByte()
+            out += (v shr 8 and 0xFF).toByte()
+            out += (v shr 16 and 0xFF).toByte()
+            out += (v shr 24 and 0xFF).toByte()
+        }
         fun block(b: Block) {
             for ((key, value) in b.entries) {
                 when (value) {
                     is Block -> { out += BLOCK; cstring(key); block(value); out += END }
                     is Str -> { out += STRING; cstring(key); cstring(value.value) }
-                    is Int32 -> {
-                        out += INT
-                        cstring(key)
-                        val v = value.value
-                        out += (v and 0xFF).toByte()
-                        out += (v shr 8 and 0xFF).toByte()
-                        out += (v shr 16 and 0xFF).toByte()
-                        out += (v shr 24 and 0xFF).toByte()
-                    }
+                    is Int32 -> { out += INT; cstring(key); int32(value.value) }
+                    is Float32 -> { out += FLOAT; cstring(key); int32(value.value.toRawBits()) }
+                    is Int64 -> { out += UINT64; cstring(key); int32(value.value.toInt()); int32((value.value ushr 32).toInt()) }
                 }
             }
         }

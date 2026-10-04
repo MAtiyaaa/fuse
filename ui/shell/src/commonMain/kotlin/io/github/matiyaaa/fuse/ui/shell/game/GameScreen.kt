@@ -490,8 +490,8 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
                 }
             }
             d.achievements?.let { a ->
-                Section("Achievements", Modifier.section("achievements", 6)) {
-                    AchievementSummary(a.progress, a.earned, a.total, a.pointsEarned, a.points, a.mastered, a.matchedByName)
+                Section(a.source.noun, Modifier.section("achievements", 6), count = a.source.label.takeIf { a.source != io.github.matiyaaa.fuse.model.AchievementSource.RETRO_ACHIEVEMENTS }) {
+                    AchievementSummary(a.progress, a.earned, a.total, a.pointsEarned, a.points.takeIf { a.source.hasPoints } ?: 0, a.mastered, a.matchedByName)
                     if (badges.isNotEmpty()) {
                         Spacer(Modifier.height(Space.l))
                         val list = rememberLazyListState()
@@ -519,7 +519,7 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
                         }
                         badges.getOrNull(col.takeIf { row == "achievements" } ?: -1)?.let { b ->
                             Spacer(Modifier.height(Space.s))
-                            FText("${b.title}: ${b.description} (${b.points} points)", Fuse.type.body, color = c.textMuted, maxLines = 2, modifier = Modifier.widthIn(max = layout.reading))
+                            FText("${b.title}: ${b.description}" + (if (b.points > 0) " (${b.points} points)" else ""), Fuse.type.body, color = c.textMuted, maxLines = 2, modifier = Modifier.widthIn(max = layout.reading))
                         }
                     }
                 }
@@ -935,7 +935,7 @@ private fun AchievementSummary(progress: Float, earned: Int, total: Int, pointsE
                 if (mastered) FuseIcon(FuseIcons.Crown, size = Size.iconS, tint = c.warning)
                 FText(if (mastered) "Mastered, $earned of $total" else "$earned of $total unlocked", Fuse.type.titleSmall.tabular(), maxLines = 1)
             }
-            FText("$pointsEarned of $points points", Fuse.type.caption.tabular(), color = c.textMuted, maxLines = 1)
+            if (points > 0) FText("$pointsEarned of $points points", Fuse.type.caption.tabular(), color = c.textMuted, maxLines = 1)
             // Found by name: the set is right, but only the version RetroAchievements knows unlocks it.
             if (matchedByName) FText("Matched by name. Unlocks need a supported ROM version", Fuse.type.caption, color = c.textMuted, maxLines = 2)
         }

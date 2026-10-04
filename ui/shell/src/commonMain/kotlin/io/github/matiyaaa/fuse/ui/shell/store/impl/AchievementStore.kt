@@ -106,8 +106,74 @@ internal class DefaultAchievementOps(
     /** Cached progress for [game] first, then fresh progress when an account is connected. */
     fun gameState(game: Game): Flow<AchievementState?> = flow {
         val raId = game.links.retroAchievementsGameId
-        emit(raId?.let { cachedAny("$KEY_GAME$it", AchievementState.serializer()) })
-        if (configuredState.value) emit(forGame(game))
+        val cached = raId?.let { cachedAny("$KEY_GAME$it", AchievementState.serializer()) }
+        emit(cached)
+        val fresh = if (configuredState.value) forGame(game) else null
+        if (fresh != null) emit(fresh)
+        // Without RetroAchievements for it, what its own platform keeps here: Steam's achievements, RPCS3's trophies.
+        else if (cached == null) emit(runCatching { kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { local(game) } }.getOrNull())
+    }
+
+    private val localReader by lazy { io.github.matiyaaa.fuse.library.achievements.LocalAchievements(ctx.services.fs) }
+
+    /** [game]'s achievements from what this device keeps for it, without an account; null when there are none. */
+    private suspend fun local(game: Game): AchievementState? {
+        val set = when {
+            game.platformId.value == "ps3" -> {
+                val folders = listOfNotNull(game.location.path, io.github.matiyaaa.fuse.library.FsPath.parent(game.location.path))
+                localReader.ps3Trophies(ctx.services.emulators.rpcs3DevHdd0(ctx.installed.value), folders, game.tags.serial, game.displayTitle)
+            }
+            else -> steamAppId(game)?.let { appId ->
+                val roots = runCatching { ctx.services.locations.steamRoots().roots }.getOrDefault(emptyList())
+                localReader.steam(roots, appId)
+            }
+        } ?: return null
+        val items = set.items
+        val earned = items.count { it.unlockedAt != null }
+        val points = items.sumOf { it.points }
+        val source = when (set.source) {
+            io.github.matiyaaa.fuse.library.achievements.LocalAchievementSource.STEAM -> io.github.matiyaaa.fuse.model.AchievementSource.STEAM
+            io.github.matiyaaa.fuse.library.achievements.LocalAchievementSource.PS3_TROPHIES -> io.github.matiyaaa.fuse.model.AchievementSource.TROPHIES
+        }
+        return AchievementState(
+            raGameId = 0,
+            title = set.title ?: game.displayTitle,
+            consoleName = ctx.platformName(game.platformId),
+            iconUrl = set.icon,
+            total = items.size,
+            earned = earned,
+            earnedHardcore = 0,
+            points = points,
+            pointsEarned = items.filter { it.unlockedAt != null }.sumOf { it.points },
+            highestAward = if (earned == items.size && items.isNotEmpty()) "mastered" else null,
+            achievements = items.mapIndexed { i, a ->
+                // A hidden one stays a mystery until it is unlocked, as on its own platform.
+                val secret = a.hidden && a.unlockedAt == null
+                io.github.matiyaaa.fuse.model.Achievement(
+                    id = i.toLong(),
+                    gameId = 0,
+                    title = if (secret) "Hidden ${if (source == io.github.matiyaaa.fuse.model.AchievementSource.TROPHIES) "trophy" else "achievement"}" else a.name,
+                    description = if (secret) "Keep playing to find out." else a.description,
+                    points = a.points,
+                    badgeUrl = a.icon.orEmpty(),
+                    badgeLockedUrl = (a.iconLocked ?: a.icon).orEmpty(),
+                    earnedAt = a.unlockedAt,
+                    earnedHardcoreAt = null,
+                    type = a.grade,
+                    displayOrder = i,
+                )
+            },
+            fetchedAt = ctx.now(),
+            source = source,
+        )
+    }
+
+    /** The Steam app [game] is: its link, else the app id in its .steam shortcut (Fuse's own, or ES-DE's). */
+    private suspend fun steamAppId(game: Game): Long? {
+        game.links.steamAppId?.let { return it }
+        if (!game.location.path.endsWith(".steam", ignoreCase = true) && game.platformId.value != "steam") return null
+        val text = runCatching { ctx.services.fs.readText(game.location.path, 4096) }.getOrNull() ?: return null
+        return STEAM_ID.find(text)?.groupValues?.get(1)?.toLongOrNull()
     }
 
     override suspend fun forGame(game: GameId): AchievementState? {
@@ -245,6 +311,7 @@ internal class DefaultAchievementOps(
     )
 
     private companion object {
+        private val STEAM_ID = Regex("(?:rungameid/|^\\s*)(\\d{1,10})")
         const val NS = "retroachievements"
         const val KEY_USER = "user"
         const val KEY_RECENT = "recent"

@@ -253,7 +253,7 @@ internal val catalogPlatforms: List<Platform> = listOf(
     ),
     platform(
         "neogeoaes", "Neo Geo", "Neo Geo", CONSOLE, SNK, "SNK", 1990,
-        CART_ARCHIVES, "neogeo", 0xFFC9A04A, bios = KnownBios.neoGeo,
+        CART_ARCHIVES, "neogeo", 0xFFC9A04A, bios = KnownBios.neoGeo, ra = 27,
     ),
     platform(
         "neo-geo-cd", "Neo Geo CD", "NGCD", CONSOLE, SNK, "SNK", 1994,
@@ -281,11 +281,11 @@ internal val catalogPlatforms: List<Platform> = listOf(
     ),
     platform(
         "supergrafx", "PC Engine SuperGrafx", "SGX", CONSOLE, NEC, "NEC", 1989,
-        "sgx pce $CD_IMAGES $CART_ARCHIVES", "sgfx", 0xFF9E6A7E,
+        "sgx pce $CD_IMAGES $CART_ARCHIVES", "sgfx", 0xFF9E6A7E, ra = 8,
     ),
     platform(
         "pc-fx", "PC-FX", "PC-FX", CONSOLE, NEC, "NEC", 1994,
-        "cue chd ccd toc m3u", "pcfx", 0xFF8B7FA3, aspect = JEWEL_CASE,
+        "cue chd ccd toc m3u", "pcfx", 0xFF8B7FA3, aspect = JEWEL_CASE, ra = 49,
     ),
 
     // Atari
@@ -376,7 +376,7 @@ internal val catalogPlatforms: List<Platform> = listOf(
     ),
     platform(
         "msx2", "MSX2", "MSX2", COMPUTER, OTHER, "ASCII", 1985,
-        "rom mx2 dsk cas $CART_ARCHIVES", "", 0xFF7B6FA3,
+        "rom mx2 dsk cas $CART_ARCHIVES", "", 0xFF7B6FA3, ra = 29,
     ),
     platform(
         "c64", "Commodore 64", "C64", COMPUTER, OTHER, "Commodore", 1982,
@@ -389,11 +389,11 @@ internal val catalogPlatforms: List<Platform> = listOf(
     ),
     platform(
         "zxs", "ZX Spectrum", "ZX", COMPUTER, OTHER, "Sinclair", 1982,
-        "tzx tap z80 sna dsk scl trd $CART_ARCHIVES", "zxspectrum spectrum", 0xFF6E6E80,
+        "tzx tap z80 sna dsk scl trd $CART_ARCHIVES", "zxspectrum spectrum", 0xFF6E6E80, ra = 59,
     ),
     platform(
         "acpc", "Amstrad CPC", "CPC", COMPUTER, OTHER, "Amstrad", 1984,
-        "dsk sna cdt m3u $CART_ARCHIVES", "amstradcpc", 0xFF5E8A7A,
+        "dsk sna cdt m3u $CART_ARCHIVES", "amstradcpc", 0xFF5E8A7A, ra = 37,
     ),
 
     // Other consoles
