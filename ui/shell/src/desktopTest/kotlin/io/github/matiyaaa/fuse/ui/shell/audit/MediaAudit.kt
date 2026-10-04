@@ -67,3 +67,45 @@ internal fun AuditDriver.storageScreens() {
         tap(PadButton.B)
     }
 }
+
+/** The keyboard's phone key, the code it shows, a phone joining, and Phone Link off. */
+internal fun AuditDriver.phoneTypingScreens() {
+    scenario("phone", "typing") {
+        phoneLink.state.value = io.github.matiyaaa.fuse.ui.shell.store.PhoneLinkState(
+            running = true,
+            addresses = listOf("http://192.168.1.20:47300/"),
+            username = "player",
+        )
+        useLibrary { it.copy(phoneLinkEnabled = true) }
+        openSettings()
+        tap(PadButton.DPAD_DOWN, sectionIndex("phonelink"))
+        tap(PadButton.DPAD_RIGHT)
+        tapText("Sign-in")
+        waitFor("Phone Link username")
+        // Down to the bottom row, then right onto the phone key.
+        tap(PadButton.DPAD_DOWN, 3)
+        tap(PadButton.DPAD_RIGHT)
+        settle(500)
+        shoot("the keyboard's phone key")
+        tap(PadButton.A)
+        waitFor("Type on your phone")
+        settle(900)
+        shoot("the code for a phone")
+        io.github.matiyaaa.fuse.ui.shell.app.RemoteInput.phoneAttached()
+        settle(450)
+        shoot("a phone joined")
+        // It closes by itself a moment later in the app; the audit's clock doesn't run that wait.
+        tap(PadButton.B)
+        settle(600)
+        shoot("typing with a phone following")
+        io.github.matiyaaa.fuse.ui.shell.app.RemoteInput.phoneDetached()
+        useLibrary { it.copy(phoneLinkEnabled = false) }
+        tap(PadButton.A)
+        waitFor("Phone Link is off")
+        settle(700)
+        shoot("phone link off")
+        tap(PadButton.B)
+        tap(PadButton.B)
+        phoneLink.state.value = io.github.matiyaaa.fuse.ui.shell.store.PhoneLinkState()
+    }
+}

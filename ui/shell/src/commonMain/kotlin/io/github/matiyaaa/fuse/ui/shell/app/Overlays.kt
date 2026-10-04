@@ -1,5 +1,6 @@
 package io.github.matiyaaa.fuse.ui.shell.app
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -14,8 +15,10 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -23,6 +26,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import io.github.matiyaaa.fuse.model.NavAction
 import io.github.matiyaaa.fuse.ui.designsystem.components.ButtonKind
@@ -42,6 +46,8 @@ import io.github.matiyaaa.fuse.ui.designsystem.components.ReorderListState
 import io.github.matiyaaa.fuse.ui.designsystem.components.handleMenuAction
 import io.github.matiyaaa.fuse.ui.designsystem.focus.LinearSelection
 import io.github.matiyaaa.fuse.ui.designsystem.focus.ReorderDefaults
+import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
+import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
 import io.github.matiyaaa.fuse.ui.designsystem.input.InputLayer
 import io.github.matiyaaa.fuse.ui.designsystem.input.LayerPriority
 import io.github.matiyaaa.fuse.ui.designsystem.input.NavResult
@@ -50,6 +56,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.media.Artwork
 import io.github.matiyaaa.fuse.ui.designsystem.media.GeneratedArt
 import io.github.matiyaaa.fuse.ui.designsystem.sound.SoundCue
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
+import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
 import io.github.matiyaaa.fuse.ui.designsystem.theme.toColor
 
@@ -69,6 +76,7 @@ fun OverlayHost(app: AppState) {
     ScreenPromptOverlay(app)
     ConfirmOverlay(app)
     TextInputOverlay(app)
+    PhoneTypingOverlay(app)
     io.github.matiyaaa.fuse.ui.shell.settings.ButtonDetectOverlay(app)
 }
 
@@ -269,7 +277,10 @@ private fun TextInputOverlay(app: AppState) {
         if (spec != null) {
             field.replaceAll(spec.initial)
             keyboard.prepare(field)
-            app.keyboardTarget = KeyboardTarget(field) {
+            app.keyboardTarget = KeyboardTarget(
+                field, title = spec.title, secret = spec.secret, placeholder = spec.placeholder, doneLabel = spec.doneLabel,
+                cancel = { app.textInput = null },
+            ) {
                 app.textInput = null
                 spec.onDone(field.text)
             }
@@ -283,6 +294,9 @@ private fun TextInputOverlay(app: AppState) {
         s.onDone(field.text)
     }
     val paste = { app.pasteInto(field) }
+    // The phone key: a code that opens this field's keyboard on a phone (where Phone Link exists).
+    val phone: (() -> Unit)? = if (app.phoneLink != null) ({ app.phoneTyping = true }) else null
+    val phones by RemoteInput.phones.collectAsState()
     if (spec != null) {
         InputLayer(
             priority = LayerPriority.DIALOG + 3,
@@ -291,7 +305,7 @@ private fun TextInputOverlay(app: AppState) {
         ) { e ->
             when (e.action) {
                 NavAction.BACK -> { app.textInput = null; NavResult.CONSUMED }
-                else -> keyboard.handle(e, field, ::done, onPaste = paste)
+                else -> keyboard.handle(e, field, ::done, onPaste = paste, onPhone = phone)
             }
         }
     }
@@ -302,7 +316,11 @@ private fun TextInputOverlay(app: AppState) {
             val keyHeight = if (maxHeight < COMPACT_HEIGHT) 38.dp else 46.dp
             Panel(Modifier.widthIn(max = 880.dp).padding(Space.l)) {
                 Column(Modifier.padding(Space.l)) {
-                    FText(s.title, Fuse.type.titleSmall)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        FText(s.title, Fuse.type.titleSmall, maxLines = 1, modifier = Modifier.weight(1f))
+                        // A phone following along already has this field open on it.
+                        if (phones > 0) PhoneOpenPill()
+                    }
                     Spacer(Modifier.height(Space.m))
                     KeyboardField(
                         field,
@@ -318,6 +336,7 @@ private fun TextInputOverlay(app: AppState) {
                         doneLabel = s.doneLabel,
                         onPaste = paste,
                         onKey = { app.platform.haptics.tick() },
+                        onPhone = phone,
                     )
                     Spacer(Modifier.height(Space.m))
                     // Names the finishing key the way the key itself does (Save, Connect, Done).
@@ -325,6 +344,20 @@ private fun TextInputOverlay(app: AppState) {
                 }
             }
         }
+    }
+}
+
+/** Says the field is open on a phone too: a phone icon and a few words in a quiet pill. */
+@Composable
+private fun PhoneOpenPill() {
+    val c = Fuse.colors
+    Row(
+        Modifier.height(Size.chipCompact).clip(RoundedCornerShape(Size.chipCompact / 2)).background(c.accentSoft).padding(horizontal = Space.m),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        FuseIcon(FuseIcons.Smartphone, size = Size.iconS, tint = c.accent)
+        Spacer(Modifier.width(Space.xs + Space.xxs))
+        FText("Open on your phone too", Fuse.type.caption, color = c.text, maxLines = 1)
     }
 }
 

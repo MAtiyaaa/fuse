@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' https: data:; connect-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'">
 <meta name="referrer" content="no-referrer">
 <meta name="color-scheme" content="dark light">
@@ -79,6 +79,10 @@
 <symbol id="i-play" viewBox="0 0 24 24"><path d="M5 5a2 2 0 0 1 3.008-1.728l11.997 6.998a2 2 0 0 1 .003 3.458l-12 7A2 2 0 0 1 5 19z"/></symbol>
 <symbol id="i-square-check-big" viewBox="0 0 24 24"><path d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h12.344"/><path d="m9 11 3 3L22 4"/></symbol>
 <symbol id="i-pause" viewBox="0 0 24 24"><path d="M15 3h3a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1h-3a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z"/><path d="M6 3h3a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z"/></symbol>
+<symbol id="i-joystick" viewBox="0 0 24 24"><path d="M21 17a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v2a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-2Z"/><path d="M6 15v-2"/><path d="M12 15V9"/><path d="M9 6a3 3 0 1 0 6 0a3 3 0 1 0 -6 0Z"/></symbol>
+<symbol id="i-keyboard" viewBox="0 0 24 24"><path d="M10 8h.01"/><path d="M12 12h.01"/><path d="M14 8h.01"/><path d="M16 12h.01"/><path d="M18 8h.01"/><path d="M6 8h.01"/><path d="M7 16h10"/><path d="M8 12h.01"/><path d="M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1 -2 2h-16a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2Z"/></symbol>
+<symbol id="i-clipboard-paste" viewBox="0 0 24 24"><path d="M11 14h10"/><path d="M16 4h2a2 2 0 0 1 2 2v1.344"/><path d="m17 18 4-4-4-4"/><path d="M8 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 1.793-1.113"/><path d="M9 2h6a1 1 0 0 1 1 1v2a1 1 0 0 1 -1 1h-6a1 1 0 0 1 -1 -1v-2a1 1 0 0 1 1 -1Z"/></symbol>
+<symbol id="i-send" viewBox="0 0 24 24"><path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"/><path d="m21.854 2.147-10.94 10.939"/></symbol>
 </svg>
 
 <div id="boot" class="boot" role="status" aria-live="polite">
@@ -169,6 +173,56 @@
       <div id="lib-sentinel" class="lib-sentinel" aria-hidden="true"></div>
     </section>
 
+    <section id="tab-remote" class="tab" data-tab="remote" aria-labelledby="h-remote" hidden>
+      <header class="topbar">
+        <h1 id="h-remote" class="page-title">Remote</h1>
+        <div class="conn" data-conn data-state="connecting"><span class="conn-dot" aria-hidden="true"></span><span class="conn-label"></span></div>
+      </header>
+      <div id="remote-body" class="tab-body remote">
+        <button id="remote-type" class="card type-card" type="button" aria-haspopup="dialog">
+          <span class="card-icon"><svg class="i" aria-hidden="true"><use href="#i-keyboard"/></svg></span>
+          <span class="type-card-main">
+            <span id="remote-type-title" class="card-title">Nothing to type into</span>
+            <span id="remote-type-text" class="card-text">When a text field opens on Fuse, your keyboard opens here.</span>
+          </span>
+          <svg class="i type-card-go" aria-hidden="true"><use href="#i-chevron-right"/></svg>
+        </button>
+        <div id="pad" class="pad" role="group" aria-label="Controller">
+          <div class="pad-shoulders">
+            <div class="pad-side">
+              <button class="pad-btn pad-trigger" type="button" data-btn="L2"></button>
+              <button class="pad-btn pad-bumper" type="button" data-btn="L1"></button>
+            </div>
+            <div class="pad-side">
+              <button class="pad-btn pad-bumper" type="button" data-btn="R1"></button>
+              <button class="pad-btn pad-trigger" type="button" data-btn="R2"></button>
+            </div>
+          </div>
+          <div class="pad-main">
+            <div class="dpad" role="group" aria-label="D-pad">
+              <button class="pad-btn dpad-up" type="button" data-btn="DPAD_UP" aria-label="Up"><svg class="i" aria-hidden="true"><use href="#i-chevron-left"/></svg></button>
+              <button class="pad-btn dpad-left" type="button" data-btn="DPAD_LEFT" aria-label="Left"><svg class="i" aria-hidden="true"><use href="#i-chevron-left"/></svg></button>
+              <span class="dpad-hub" aria-hidden="true"></span>
+              <button class="pad-btn dpad-right" type="button" data-btn="DPAD_RIGHT" aria-label="Right"><svg class="i" aria-hidden="true"><use href="#i-chevron-left"/></svg></button>
+              <button class="pad-btn dpad-down" type="button" data-btn="DPAD_DOWN" aria-label="Down"><svg class="i" aria-hidden="true"><use href="#i-chevron-left"/></svg></button>
+            </div>
+            <div class="pad-middle">
+              <button class="pad-btn pad-pill" type="button" data-btn="SELECT"></button>
+              <button class="pad-btn pad-home" type="button" data-btn="MODE" aria-label="Fuse menu"><svg aria-hidden="true"><use href="#fuse-mark"/></svg></button>
+              <button class="pad-btn pad-pill" type="button" data-btn="START"></button>
+            </div>
+            <div class="face" role="group" aria-label="Face buttons">
+              <button class="pad-btn face-top" type="button" data-btn="Y"></button>
+              <button class="pad-btn face-left" type="button" data-btn="X"></button>
+              <button class="pad-btn face-right" type="button" data-btn="B"></button>
+              <button class="pad-btn face-bottom" type="button" data-btn="A"></button>
+            </div>
+          </div>
+          <p id="pad-note" class="pad-note" hidden></p>
+        </div>
+      </div>
+    </section>
+
     <section id="tab-captures" class="tab" data-tab="captures" aria-labelledby="h-captures" hidden>
       <header class="topbar">
         <h1 id="h-captures" class="page-title">Captures</h1>
@@ -212,6 +266,7 @@
       <svg class="tabbar-mark" aria-hidden="true"><use href="#fuse-mark"/></svg>
       <button class="tab-btn" type="button" data-tab="now" aria-current="page"><svg class="i" aria-hidden="true"><use href="#i-gamepad-2"/></svg><span>Now</span></button>
       <button class="tab-btn" type="button" data-tab="library"><svg class="i" aria-hidden="true"><use href="#i-library"/></svg><span>Library</span></button>
+      <button class="tab-btn" type="button" data-tab="remote"><svg class="i" aria-hidden="true"><use href="#i-joystick"/></svg><span>Remote</span></button>
       <button class="tab-btn" type="button" data-tab="captures" hidden><svg class="i" aria-hidden="true"><use href="#i-images"/></svg><span>Captures</span></button>
       <button class="tab-btn" type="button" data-tab="tools"><svg class="i" aria-hidden="true"><use href="#i-wrench"/></svg><span>Tools</span></button>
       <span class="tab-glide" aria-hidden="true"></span>

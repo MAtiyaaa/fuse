@@ -65,6 +65,8 @@ data class UiPrefs(
     val openGamePage: Boolean = false,
     /** Phone Link: a phone on the same network can see and fix the library (see docs/PHONE_LINK.md). */
     val phoneLinkEnabled: Boolean = false,
+    /** Phone Link: a signed-in phone can be used as a controller, and type into fields. */
+    val phoneLinkController: Boolean = true,
     /** Collections as a whole; off hides every collection feature. */
     val collectionsEnabled: Boolean = true,
     /** Automatic series collections. */

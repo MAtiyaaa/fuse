@@ -19,6 +19,10 @@ internal sealed interface LoginResult {
  * sign-in for a minute (for every phone, so guessing from several at once doesn't help). A session
  * is a random token in the phone's cookie; only its SHA-256 is stored, and a password change or
  * "Sign out all phones" ends every session.
+ *
+ * A pairing code (the QR code beside the on-screen keyboard) signs a phone in without the password:
+ * whoever can see the screen may type on it. Codes are random, work once and only for two minutes,
+ * and are kept only as their SHA-256, in memory.
  */
 internal class LinkAuth(
     private val secrets: SecretStore,
@@ -28,6 +32,7 @@ internal class LinkAuth(
     private var sessions: MutableSet<String>? = null
     private var failures = 0
     private var lockedUntil = 0L
+    private val pairings = LinkedHashMap<String, Long>()
 
     suspend fun username(): String? = secrets.get(USER)?.takeIf { it.isNotBlank() }
 
@@ -70,14 +75,39 @@ internal class LinkAuth(
             return LoginResult.Wrong
         }
         failures = 0
-        val token = base64(secureRandom(32)).replace('+', '-').replace('/', '_').trimEnd('=')
+        LoginResult.Ok(newSession())
+    }
+
+    /** A new single-use pairing code, good for [PAIR_MS]. */
+    suspend fun issuePairing(): String = lock.withLock {
+        val now = clock()
+        pairings.entries.removeAll { it.value < now }
+        while (pairings.size >= MAX_PAIRINGS) pairings.remove(pairings.keys.first())
+        val code = randomToken()
+        pairings[digest(code)] = now + PAIR_MS
+        code
+    }
+
+    /** Signs a phone in with a pairing code: a session token, or null when the code is unknown, used or expired. */
+    suspend fun redeemPairing(code: String?): String? = lock.withLock {
+        if (code.isNullOrBlank() || code.length > 200) return@withLock null
+        val until = pairings.remove(digest(code)) ?: return@withLock null
+        if (until < clock()) return@withLock null
+        newSession()
+    }
+
+    /** A session for a phone that just proved itself; the caller holds [lock]. */
+    private suspend fun newSession(): String {
+        val token = randomToken()
         val all = loadSessions()
         all += digest(token)
         // A bounded list: the oldest sessions give way first.
         while (all.size > MAX_SESSIONS) all.remove(all.first())
         saveSessions(all)
-        LoginResult.Ok(token)
+        return token
     }
+
+    private fun randomToken(): String = base64(secureRandom(32)).replace('+', '-').replace('/', '_').trimEnd('=')
 
     suspend fun isSignedIn(token: String?): Boolean {
         if (token.isNullOrBlank() || token.length > 200) return false
@@ -124,5 +154,8 @@ internal class LinkAuth(
         const val LOCK_MS = 60_000L
         const val ITERATIONS = 120_000
         const val MAX_SESSIONS = 20
+        /** How long a pairing code works, and how many can be waiting at once. */
+        const val PAIR_MS = 120_000L
+        const val MAX_PAIRINGS = 8
     }
 }

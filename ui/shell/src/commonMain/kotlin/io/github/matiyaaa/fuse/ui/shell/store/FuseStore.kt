@@ -767,6 +767,13 @@ interface PhoneLinkControl {
     suspend fun signOutAll()
     /** The QR code for [text] as rows of dark modules. */
     fun qr(text: String): List<BooleanArray>?
+
+    /**
+     * A link that signs a phone in without the password and opens its keyboard, for the code beside
+     * the on-screen keyboard: single use, for two minutes. [address] is one of [PhoneLinkState.addresses]
+     * (the first when null). Null while Phone Link isn't running or there is no network.
+     */
+    suspend fun pairingLink(address: String? = null): String? = null
 }
 
 data class PhoneLinkState(

@@ -256,7 +256,7 @@ fun SearchScreen(app: AppState) {
     val settledQuery = results.query
 
     DisposableEffect(Unit) {
-        app.keyboardTarget = KeyboardTarget(field) { if (hits.isNotEmpty()) inResults = true }
+        app.keyboardTarget = KeyboardTarget(field, title = "Search", placeholder = "Games, systems, people", doneLabel = "Results") { if (hits.isNotEmpty()) inResults = true }
         onDispose { app.keyboardTarget = null }
     }
     val current = hits.getOrNull(sel.index)
@@ -309,7 +309,10 @@ fun SearchScreen(app: AppState) {
                 else -> NavResult.IGNORED
             }
         } else {
-            val r = keyboard.handle(e, field, { if (hits.isNotEmpty()) inResults = true }, onPaste = { app.pasteInto(field) })
+            val r = keyboard.handle(
+                e, field, { if (hits.isNotEmpty()) inResults = true }, onPaste = { app.pasteInto(field) },
+                onPhone = if (app.phoneLink != null) ({ app.phoneTyping = true }) else null,
+            )
             // The stick stays on the keys: Right at their edge goes nowhere (Menu or a tap opens the
             // results), and Up past the top row reaches the top line.
             if (r == NavResult.BLOCKED && e.action == NavAction.UP) NavResult.IGNORED else r
@@ -350,6 +353,7 @@ fun SearchScreen(app: AppState) {
                 },
                 showFocus = !inResults && app.focusZone == FocusZone.CONTENT,
                 onPaste = { app.pasteInto(field) },
+                onPhone = if (app.phoneLink != null) ({ app.phoneTyping = true }) else null,
                 onKey = { app.platform.haptics.tick() },
             )
         }

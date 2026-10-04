@@ -153,6 +153,12 @@ class UiAudit {
 
     @Test fun mediaV() = audit(AuditSize.V) { mediaScreens() }
 
+    @Test fun phoneTypingM() = audit(AuditSize.M) { phoneTypingScreens() }
+
+    @Test fun phoneTypingH() = audit(AuditSize.H) { phoneTypingScreens() }
+
+    @Test fun phoneTypingV() = audit(AuditSize.V) { phoneTypingScreens() }
+
     @Test fun storageM() = audit(AuditSize.M) { storageScreens() }
 
     @Test fun storageH() = audit(AuditSize.H) { storageScreens() }

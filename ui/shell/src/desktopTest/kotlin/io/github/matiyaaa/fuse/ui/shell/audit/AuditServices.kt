@@ -362,6 +362,9 @@ internal class AuditPhoneLink : io.github.matiyaaa.fuse.ui.shell.store.PhoneLink
         state.value = state.value.copy(sessions = 0)
     }
 
+    override suspend fun pairingLink(address: String?): String? =
+        if (!state.value.running) null else (address ?: state.value.addresses.firstOrNull())?.trimEnd('/')?.plus("/pair/audit")
+
     /** A version 3 sized grid with the three finder squares and a fixed scatter, like a real code. */
     override fun qr(text: String): List<BooleanArray> {
         val n = 29

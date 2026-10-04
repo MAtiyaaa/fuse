@@ -255,6 +255,8 @@ data class LibraryPreferences(
     val selectOpensGamePage: Boolean = false,
     /** Phone Link's server runs while this is on (Settings, Accounts, Phone Link). */
     val phoneLinkEnabled: Boolean = false,
+    /** A signed-in phone may be used as a controller (Phone Link's Remote). */
+    val phoneLinkController: Boolean = true,
     /** Collections as a whole; off hides them everywhere (they are kept). */
     val collectionsEnabled: Boolean = true,
     /** Fuse makes a collection for each series it finds and keeps it up to date. */

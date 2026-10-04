@@ -234,6 +234,31 @@ private fun FuseAppContent(
         }
         onDispose { router.textInput = null }
     }
+    // Phone Link: a phone types into whichever field is open, and its text follows the field here.
+    LaunchedEffect(keyboardTarget) {
+        val target = keyboardTarget ?: return@LaunchedEffect
+        val id = RemoteInput.opened(target.title, target.field.text, target.secret, target.placeholder, target.doneLabel, target.cancel != null)
+        try {
+            snapshotFlow { target.field.text }.collect { RemoteInput.changed(id, it) }
+        } finally {
+            RemoteInput.closed(id)
+        }
+    }
+    // What phones ask for: text for the field open, and buttons pressed on a phone used as a controller.
+    LaunchedEffect(router) {
+        RemoteInput.commands.collect { c ->
+            val target = app.keyboardTarget
+            val current = RemoteInput.field.value?.id
+            when (c) {
+                is RemoteCommand.SetText -> if (target != null && c.id == current) target.field.replaceAll(c.text)
+                is RemoteCommand.Submit -> if (target != null && c.id == current) target.submit()
+                is RemoteCommand.Cancel -> if (target != null && c.id == current) target.cancel?.invoke()
+                is RemoteCommand.Pad -> if (store.prefs.value.phoneLinkController) {
+                    if (c.down) router.press(c.button, InputSource.REMOTE) else router.release(c.button, InputSource.REMOTE)
+                }
+            }
+        }
+    }
     // The companion screen (second display) follows what the main screen has in focus.
     LaunchedEffect(app.hero?.id) { Spotlight.set(app.hero?.id) }
     LaunchedEffect(prefs.sound, prefs.soundVolume) {

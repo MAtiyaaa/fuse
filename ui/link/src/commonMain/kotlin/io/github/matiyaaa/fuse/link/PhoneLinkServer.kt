@@ -1,6 +1,7 @@
 package io.github.matiyaaa.fuse.link
 
 import io.github.matiyaaa.fuse.data.settings.SecretStore
+import io.github.matiyaaa.fuse.ui.shell.app.RemoteInput
 import io.github.matiyaaa.fuse.ui.shell.store.FuseStore
 import io.github.matiyaaa.fuse.ui.shell.store.PhoneLinkControl
 import io.github.matiyaaa.fuse.ui.shell.store.PhoneLinkState
@@ -124,6 +125,12 @@ class PhoneLinkServer(
 
     override fun qr(text: String): List<BooleanArray>? = qrModules(text)
 
+    override suspend fun pairingLink(address: String?): String? {
+        if (server == null) return null
+        val base = address ?: stateFlow.value.addresses.firstOrNull() ?: return null
+        return base.trimEnd('/') + "/pair/" + auth.issuePairing()
+    }
+
     /** The port the server listens on while running. */
     fun boundPort(): Int? = port
 
@@ -207,6 +214,16 @@ class PhoneLinkServer(
             get("/") { call.serveAsset("/index.html") }
 
             get("/api/session") { call.json(api.session(call.token())) }
+            // The code beside the on-screen keyboard: signs the phone in and opens its Remote.
+            get("/pair/{code}") {
+                val token = auth.redeemPairing(call.parameters["code"])
+                if (token != null) {
+                    call.response.header(HttpHeaders.SetCookie, "$COOKIE=$token; Path=/; HttpOnly; SameSite=Lax; Max-Age=${60 * 60 * 24 * 180}")
+                    scope.launch { refreshState() }
+                }
+                call.response.header(HttpHeaders.Location, if (token != null) "/#remote" else "/?pair=expired")
+                call.respondText("", ContentType.Text.Plain, HttpStatusCode.SeeOther)
+            }
             post("/api/login") {
                 val result = api.login(call.body())
                 when (result) {
@@ -258,6 +275,13 @@ class PhoneLinkServer(
                 }
             }
             get("/api/events") { call.signedIn { call.events() } }
+
+            // Typing from the phone into the field open on the device, and the phone as a controller.
+            get("/api/input") { call.signedIn { call.json(RemoteApi.field(RemoteInput.field.value)) } }
+            put("/api/input/text") { call.signedIn { call.reply(RemoteApi.setText(call.body())) } }
+            post("/api/input/done") { call.signedIn { call.reply(RemoteApi.submit(call.body())) } }
+            post("/api/input/cancel") { call.signedIn { call.reply(RemoteApi.cancel(call.body())) } }
+            post("/api/pad") { call.signedIn { call.reply(RemoteApi.pad(call.body(), store.prefs.value.phoneLinkController)) } }
 
             // Screenshots and recordings: look and download, never change or delete.
             get("/api/captures") {
@@ -439,10 +463,23 @@ class PhoneLinkServer(
 
     private suspend fun ApplicationCall.reply(result: LinkApi.Reply) = json(result.body, result.status)
 
-    /** Server-sent events: "now" and "fill" when they change, "library" when games change, a ping every 20 s. */
+    /**
+     * Server-sent events: "now" and "fill" when they change, "library" when games change, "keyboard"
+     * when a text field opens or closes on the device (and once on connecting), a ping every 20 s.
+     * While a stream is open the phone counts as following the device.
+     */
     private suspend fun ApplicationCall.events() {
         response.header(HttpHeaders.CacheControl, "no-cache")
         response.header("X-Accel-Buffering", "no")
+        RemoteInput.phoneAttached()
+        try {
+            streamEvents()
+        } finally {
+            RemoteInput.phoneDetached()
+        }
+    }
+
+    private suspend fun ApplicationCall.streamEvents() {
         respondBytesWriter(contentType = ContentType.Text.EventStream) {
             val lock = Mutex()
             suspend fun send(event: String?, data: String) = lock.withLock {
@@ -453,6 +490,10 @@ class PhoneLinkServer(
                 launch { api.nowUpdates().collect { send("now", LinkJson.encodeToString(JsonObject.serializer(), it)) } }
                 launch { api.fillUpdates().collect { send("fill", it?.let { f -> LinkJson.encodeToString(JsonObject.serializer(), f) } ?: "null") } }
                 launch { api.libraryUpdates().collect { send("library", "{}") } }
+                // The field open on the device: a phone following along opens its keyboard for it.
+                launch {
+                    RemoteInput.field.collect { send("keyboard", LinkJson.encodeToString(JsonElement.serializer(), RemoteApi.field(it))) }
+                }
                 share?.let { s -> launch { s.changes.collect { send("captures", "{}") } } }
                 launch {
                     while (true) {
