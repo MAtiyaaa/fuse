@@ -109,6 +109,8 @@ class MoveGamesTest {
         assertTrue(File(card, "Emulation/bios/psx").isDirectory, "firmware goes beside the ROMs, where Fuse looks for it")
         assertFalse(File(card, "Emulation/ROMs/android").exists())
         assertTrue(setup.systems >= 15)
-        assertEquals(setup.romsFolder, store.sources.sources.value.single().path)
+        // The sources list follows the database, a moment after the folder is added.
+        val sources = withTimeout(5_000) { store.sources.sources.first { it.isNotEmpty() } }
+        assertEquals(setup.romsFolder, sources.single().path)
     }
 }

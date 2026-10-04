@@ -48,6 +48,17 @@ class AndroidFuseServices(
     override val fs: FuseFileSystem = AndroidFileSystem(storageVolumes::mounted, appContext.packageName, storageVolumes::hasFullAccess)
     override val secrets: SecretStore = KeystoreSecretStore(appContext)
     override val cacheDir: String = appContext.cacheDir.absolutePath
+    override val deviceName: String =
+        android.provider.Settings.Global.getString(appContext.contentResolver, android.provider.Settings.Global.DEVICE_NAME)?.takeIf { it.isNotBlank() } ?: android.os.Build.MODEL
+
+    /** Broadcast replies only reach an app holding a multicast lock while it listens. */
+    override val jellyfinDiscovery = io.github.matiyaaa.fuse.jellyfin.UdpDiscovery {
+        val wifi = appContext.applicationContext.getSystemService(android.content.Context.WIFI_SERVICE) as? android.net.wifi.WifiManager
+        wifi?.createMulticastLock("fuse-jellyfin")?.apply {
+            setReferenceCounted(false)
+            acquire()
+        }?.let { lock -> AutoCloseable { lock.release() } }
+    }
 
     override val emulators: EmulatorDetector = AndroidEmulatorDetector(appContext, storageVolumes)
     override val launcher: GameLauncher = AndroidGameLauncher(

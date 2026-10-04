@@ -1,5 +1,8 @@
 package io.github.matiyaaa.fuse.ui.shell.settings
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -15,6 +18,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
@@ -25,18 +31,24 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import io.github.matiyaaa.fuse.model.GameId
 import io.github.matiyaaa.fuse.model.NavAction
 import io.github.matiyaaa.fuse.model.PlatformId
+import io.github.matiyaaa.fuse.ui.designsystem.components.ButtonKind
 import io.github.matiyaaa.fuse.ui.designsystem.components.EmptyState
 import io.github.matiyaaa.fuse.ui.designsystem.components.FText
+import io.github.matiyaaa.fuse.ui.designsystem.components.FuseButton
 import io.github.matiyaaa.fuse.ui.designsystem.components.Hint
+import io.github.matiyaaa.fuse.ui.designsystem.components.IconButton
 import io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction
 import io.github.matiyaaa.fuse.ui.designsystem.components.MenuArt
 import io.github.matiyaaa.fuse.ui.designsystem.components.MenuList
@@ -59,7 +71,12 @@ import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
 import io.github.matiyaaa.fuse.ui.designsystem.theme.tabular
 import io.github.matiyaaa.fuse.ui.designsystem.theme.toColor
+import io.github.matiyaaa.fuse.ui.fuseline.Appear
+import io.github.matiyaaa.fuse.ui.fuseline.expandIn
+import io.github.matiyaaa.fuse.ui.fuseline.fadeIn
+import io.github.matiyaaa.fuse.ui.fuseline.fadeOut
 import io.github.matiyaaa.fuse.ui.fuseline.fuselineFloat
+import io.github.matiyaaa.fuse.ui.fuseline.shrinkOut
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec
 import io.github.matiyaaa.fuse.ui.shell.app.ConfirmSpec
@@ -75,9 +92,10 @@ import io.github.matiyaaa.fuse.ui.shell.store.VolumeUsage
 import kotlinx.coroutines.launch
 
 /**
- * Storage: each drive the library is on (games by system, other files, free space) and every game
- * by what it takes, largest first. Games can be picked and their files deleted, after a
- * confirmation naming what goes. Only here, on the device; Phone Link can't delete anything.
+ * Storage: how full the drive is (a ring of games, everything else and free space), what each
+ * system's games take, and every game by size, largest first. Games can be picked, then moved to
+ * another drive or deleted from the bar that comes up, after a confirmation naming what goes. Only
+ * here, on the device; Phone Link can't delete anything.
  */
 @Composable
 fun StorageScreen(app: AppState) {
@@ -117,24 +135,32 @@ fun StorageScreen(app: AppState) {
         sourceVolumes.filter { it.offersGames() && it.id !in holding }
     }
     val moving by store.storage.moving.collectAsState()
-    val rows = remember(u, system, picked, canDelete, platforms, wideLayout, canMove, bare) {
+    // What is picked, on every drive: changing the drive shown never drops a game from the selection.
+    val chosen = remember(all, picked) { all?.games.orEmpty().filter { it.card.id in picked } }
+    val chosenBytes = chosen.sumOf { it.bytes }
+    val clear = { picked = emptySet() }
+    val move = {
+        // The drive they are all on already isn't offered.
+        val on = chosen.mapNotNull { it.volumeId }.toSet().takeIf { it.size == 1 }.orEmpty()
+        app.moveGames(chosen.map { it.card.id }, chosen.map { it.card.title }, chosenBytes, from = on, onDone = clear)
+    }
+    val delete = { confirmDelete(app, chosen.map { it.card.id to it.card.title }, chosen.sumOf { it.files }, chosenBytes, clear) }
+    val chooseSystem = { id: PlatformId? ->
+        // A second press on the system shown goes back to all of them.
+        system = if (id == null || id == system) null else id
+        sel.index = 0
+    }
+    val rows = remember(u, system, picked, canDelete, platforms, wideLayout, bare, drive, volumes) {
         storageRows(
-            app, u, system, picked, canDelete, wide = wideLayout, drives = volumes, drive = drive, canMove = canMove, bare = bare,
+            app, u, system, picked, canDelete, wide = wideLayout, drives = volumes, drive = drive, bare = bare,
             onPick = { id -> picked = if (id in picked) picked - id else picked + id },
             onPickAll = { ids -> picked = if (ids.isNotEmpty() && picked.containsAll(ids)) picked - ids else picked + ids },
-            onPicked = { picked = emptySet() },
             onFilter = { system = it; sel.index = 0 },
             onDrive = { drive = it; system = null; sel.index = 0 },
         )
     }
     val systemRows = remember(systems, u, system, volumes, drive) {
         val total = u?.games.orEmpty().sumOf { it.bytes }
-        val largest = systems.maxOfOrNull { it.bytes }?.coerceAtLeast(1) ?: 1
-        fun choose(id: PlatformId?) {
-            // A second press on the system shown goes back to all of them.
-            system = if (id == null || id == system) null else id
-            sel.index = 0
-        }
         fun chooseDrive(id: String?) {
             drive = if (id == null || id == drive) null else id
             system = null
@@ -153,26 +179,25 @@ fun StorageScreen(app: AppState) {
                     add(MenuAction(
                         "d.${v.id}", v.label, v.icon(), section = "Drives",
                         detail = driveLine(v),
-                        trailing = if (!v.online) Trailing.Value("Not connected")
-                        else Trailing.Level(v.usedFraction(), "${(v.usedFraction() * 100).toInt()}%"),
+                        trailing = Trailing.Value(if (v.online) "${percent(v.usedFraction())} full" else "Not connected"),
                         onSelect = { chooseDrive(v.id) },
                     ))
                 }
             }
-            val systemsSection = if (volumes.size > 1) "Systems" else null
             add(MenuAction(
-                "all", "All systems", FuseIcons.Layers, section = systemsSection,
+                "all", "All systems", FuseIcons.Layers, section = "Systems",
                 detail = gamesCount(u?.games?.size ?: 0),
                 trailing = Trailing.Value(bytesText(total)),
-                onSelect = { choose(null) },
+                onSelect = { chooseSystem(null) },
             ))
             systems.forEach { sz ->
                 add(MenuAction(
-                    "s.${sz.id.value}", sz.name, section = systemsSection,
-                    detail = gamesCount(sz.games),
-                    trailing = Trailing.Level(sz.bytes.toFloat() / largest, bytesText(sz.bytes)),
+                    "s.${sz.id.value}", sz.name, section = "Systems",
+                    // The share sits in the second line, so a long name never has to wrap beside it.
+                    detail = "${gamesCount(sz.games)}  ·  ${percent(sz.bytes.toFloat() / total.coerceAtLeast(1))}",
+                    trailing = Trailing.Value(bytesText(sz.bytes)),
                     art = MenuArt(sz.art, square = true, fallbackTitle = sz.short, accent = sz.accent, wide = false),
-                    onSelect = { choose(sz.id) },
+                    onSelect = { chooseSystem(sz.id) },
                 ))
             }
         }
@@ -181,39 +206,67 @@ fun StorageScreen(app: AppState) {
     val filterKey = system?.let { "s.${it.value}" } ?: drive?.let { "d.$it" } ?: systemRows.firstOrNull()?.id
     val filterRow = systemRows.indexOfFirst { it.id == filterKey }.coerceAtLeast(0)
 
-    val shownRows = rows
-    sel.keepOn(shownRows.map { it.id })
-    sel.clamp(shownRows.size)
+    sel.keepOn(rows.map { it.id })
+    sel.clamp(rows.size)
     systemSel.clamp(systemRows.size)
     val inSystems = wideLayout && pane == StoragePane.SYSTEMS
+    val anyPicked = chosen.isNotEmpty()
 
-    LaunchedEffect(inSystems, picked.isEmpty()) {
+    // Y on a selection: everything that can be done with it, in one sheet.
+    val selectionSheet = {
+        val n = chosen.size
+        val access = if (!canDelete) "Allow All files access first" else null
+        app.choice = ChoiceSpec(
+            title = "${n} ${if (n == 1) "game" else "games"} selected",
+            message = "${bytesText(chosenBytes)} in all",
+            icon = FuseIcons.ListChecks,
+            options = listOfNotNull(
+                if (canMove) MenuAction(
+                    "move", "Move to another drive", FuseIcons.FolderSync,
+                    detail = "To an SD card or another drive, with their play time and art",
+                    unavailableReason = access,
+                    onSelect = { app.choice = null; move() },
+                ) else null,
+                MenuAction(
+                    "delete", "Delete their files", FuseIcons.Trash, destructive = true,
+                    detail = "You'll be asked first",
+                    unavailableReason = access,
+                    onSelect = { app.choice = null; delete() },
+                ),
+                MenuAction("clear", "Clear the selection", FuseIcons.Close, onSelect = { app.choice = null; clear() }),
+            ),
+        )
+    }
+
+    LaunchedEffect(inSystems, anyPicked, wideLayout) {
+        val selection = if (anyPicked) listOf(Hint(HintButton.SEARCH, if (canMove) "Move or delete" else "Delete")) else emptyList()
         app.hints = if (inSystems) {
-            listOf(Hint(HintButton.CONFIRM, "Show these games"), Hint(HintButton.DPAD, "Games"), Hint(HintButton.BACK, "Back"))
+            listOf(Hint(HintButton.CONFIRM, "Show these games"), Hint(HintButton.DPAD, "Games")) + selection + Hint(HintButton.BACK, "Back")
         } else {
-            listOf(Hint(HintButton.CONFIRM, "Select"), Hint(HintButton.OPTIONS, if (picked.isEmpty()) "Game page" else "Game page or clear"), Hint(HintButton.BACK, "Back"))
+            // A phone held upright has room for three hints: X still opens the game page.
+            val page = if (wideLayout) listOf(Hint(HintButton.OPTIONS, "Game page")) else emptyList()
+            listOf(Hint(HintButton.CONFIRM, "Select")) + page + selection + Hint(HintButton.BACK, "Back")
         }
     }
 
     InputLayer(enabled = app.focusZone == FocusZone.CONTENT && !app.overlayOpen) { e ->
-        if (inSystems) {
-            when (e.action) {
+        when {
+            e.action == NavAction.SEARCH -> if (anyPicked) { selectionSheet(); NavResult.ACTIVATED } else NavResult.IGNORED
+            inSystems -> when (e.action) {
                 NavAction.RIGHT -> { pane = StoragePane.GAMES; systemSel.index = filterRow; NavResult.MOVED }
                 NavAction.LEFT -> NavResult.BLOCKED
                 NavAction.CONTEXT -> NavResult.BLOCKED
                 else -> handleMenuAction(e, systemRows, systemSel)
             }
-        } else {
-            when (e.action) {
+            else -> when (e.action) {
                 // Left goes over to the systems, starting on the one shown.
                 NavAction.LEFT -> if (wideLayout) { pane = StoragePane.SYSTEMS; systemSel.index = filterRow; NavResult.MOVED } else NavResult.IGNORED
                 NavAction.CONTEXT -> {
-                    // X on a game opens its page; anywhere else it clears the selection.
-                    val id = shownRows.getOrNull(sel.index)?.id?.takeIf { it.startsWith("g") }?.removePrefix("g")?.toLongOrNull()
-                    if (id != null) app.go(Route.GameInfo(GameId(id))) else picked = emptySet()
-                    NavResult.ACTIVATED
+                    // X on a game opens its page.
+                    val id = rows.getOrNull(sel.index)?.id?.takeIf { it.startsWith("g") }?.removePrefix("g")?.toLongOrNull()
+                    if (id != null) { app.go(Route.GameInfo(GameId(id))); NavResult.ACTIVATED } else NavResult.BLOCKED
                 }
-                else -> handleMenuAction(e, shownRows, sel)
+                else -> handleMenuAction(e, rows, sel)
             }
         }
     }
@@ -224,7 +277,13 @@ fun StorageScreen(app: AppState) {
         val wide = maxWidth > WIDE_FROM
         SideEffect { wideLayout = wide }
         val short = maxHeight < SHORT_BELOW
-        Column(Modifier.fillMaxSize().padding(horizontal = if (wide) Space.gutter else Space.gutterCompact)) {
+        val gutter = if (wide) Space.gutter else Space.gutterCompact
+        val inner = minOf(maxWidth, PAGE_MAX) - gutter * 2
+        // On a very wide screen the page keeps a readable width, centred.
+        Column(
+            Modifier.fillMaxHeight().widthIn(max = PAGE_MAX).align(Alignment.TopCenter)
+                .padding(horizontal = gutter),
+        ) {
             Spacer(Modifier.height(Size.hudHeight + if (short) Space.s else Space.l))
             SettingsPageHeading("Storage", summaryLine(all), short, Modifier.reveal(0)) {
                 if (all != null && !all.finished) {
@@ -232,53 +291,60 @@ fun StorageScreen(app: AppState) {
                 }
             }
             Spacer(Modifier.height(if (short) Space.m else Space.l))
-            val games: @Composable (Modifier, List<MenuAction>, (@Composable () -> Unit)?) -> Unit = { m, list, header ->
+            val games: @Composable (Modifier, (@Composable () -> Unit)?) -> Unit = { m, header ->
                 Panel(m) {
                     Column(Modifier.fillMaxSize()) {
-                        MenuList(
-                            list, sel,
-                            showSelection = focused && !inSystems,
-                            header = header,
-                            fill = !(u == null || empty),
-                            modifier = Modifier.padding(Space.s),
-                            fadeEdges = true,
-                        )
-                        when {
-                            // Rows shaped like the games still being measured.
-                            u == null -> Column(Modifier.padding(horizontal = Space.s)) { repeat(SKELETON_ROWS) { SkeletonRow() } }
-                            empty -> Box(Modifier.fillMaxSize().padding(Space.l), contentAlignment = Alignment.Center) {
-                                EmptyState(
-                                    FuseIcons.HardDrive, "No games to measure",
-                                    message = "Games show here, largest first, once Fuse finds them in your folders.",
-                                    compact = true,
-                                )
+                        Column(Modifier.weight(1f)) {
+                            MenuList(
+                                rows, sel,
+                                showSelection = focused && !inSystems,
+                                header = header,
+                                fill = !(u == null || empty),
+                                modifier = Modifier.padding(Space.s),
+                                fadeEdges = true,
+                            )
+                            when {
+                                // Rows shaped like the games still being measured.
+                                u == null -> Column(Modifier.padding(horizontal = Space.s)) { repeat(SKELETON_ROWS) { SkeletonRow() } }
+                                empty -> Box(Modifier.fillMaxSize().padding(Space.l), contentAlignment = Alignment.Center) {
+                                    EmptyState(
+                                        FuseIcons.HardDrive, "No games to measure",
+                                        message = "Games show here, largest first, once Fuse finds them in your folders.",
+                                        compact = true,
+                                    )
+                                }
                             }
+                        }
+                        // What is picked stays in view at the foot of the list, wherever the list is scrolled.
+                        Appear(anyPicked, enter = fadeIn() + expandIn(expandFrom = Alignment.BottomCenter), exit = shrinkOut(shrinkTowards = Alignment.BottomCenter) + fadeOut()) {
+                            SelectionBar(
+                                count = chosen.size, bytes = chosenBytes, canMove = canMove, canDelete = canDelete,
+                                onMove = move, onDelete = delete, onClear = clear,
+                            )
                         }
                     }
                 }
             }
+            val bottom = Modifier.padding(bottom = Size.hintHeight + Space.s)
             if (wide) {
-                // Two panes that scroll on their own: the drives and systems on the left, which filter
-                // the games on the right. Left and Right move between them.
-                Row(Modifier.fillMaxSize().padding(bottom = Size.hintHeight + Space.s), horizontalArrangement = Arrangement.spacedBy(Space.l)) {
-                    Panel(Modifier.weight(0.4f).fillMaxHeight().reveal(1)) {
+                // Two panes that scroll on their own: the drive and its systems on the left, which
+                // filter the games on the right. Left and Right move between them.
+                val left = (inner * LEFT_SHARE).coerceIn(LEFT_MIN, LEFT_MAX)
+                Row(Modifier.fillMaxSize().then(bottom), horizontalArrangement = Arrangement.spacedBy(if (short) Space.m else Space.l)) {
+                    Panel(Modifier.width(left).fillMaxHeight().reveal(1)) {
                         MenuList(
                             systemRows, systemSel,
                             showSelection = focused,
                             // Away from this pane, a quiet marker stays on the system shown.
                             dimSelection = !inSystems,
                             header = {
-                                Column(Modifier.padding(top = Space.xs, bottom = Space.m), verticalArrangement = Arrangement.spacedBy(Space.m)) {
-                                    // One drive, or the drive picked: its card. Several: each is a row below.
-                                    Volumes(all, drive, nested = true, bySystem = false, compact = short)
-                                    if (systems.isNotEmpty() && volumes.size <= 1) SectionLabel("Systems", count = systems.size.toString(), rule = true, modifier = Modifier.padding(horizontal = Space.s))
-                                }
+                                Overview(all, drive, systems, compact = short, chips = false, shown = system, modifier = Modifier.padding(top = Space.xs, bottom = Space.s))
                             },
                             modifier = Modifier.padding(Space.s),
                             fadeEdges = true,
                         )
                     }
-                    games(Modifier.weight(0.6f).fillMaxHeight().reveal(2), shownRows) {
+                    games(Modifier.weight(1f).fillMaxHeight().reveal(2)) {
                         Column {
                             moving?.let { MoveCard(app, it, platforms, compact = short) }
                             ShownHeader(u, systems.firstOrNull { it.id == system }, volumes.firstOrNull { it.id == drive }?.label)
@@ -286,13 +352,10 @@ fun StorageScreen(app: AppState) {
                     }
                 }
             } else {
-                games(
-                    Modifier.fillMaxSize().padding(bottom = Size.hintHeight + Space.s).reveal(1),
-                    shownRows,
-                ) {
-                    Column(Modifier.padding(top = Space.s, bottom = Space.m), verticalArrangement = Arrangement.spacedBy(Space.m)) {
+                games(Modifier.fillMaxSize().then(bottom).reveal(1)) {
+                    Column(Modifier.padding(top = Space.xs, bottom = Space.s), verticalArrangement = Arrangement.spacedBy(Space.m)) {
                         moving?.let { MoveCard(app, it, platforms, compact = true) }
-                        Volumes(all, drive, nested = true, bySystem = true, every = true)
+                        Overview(all, drive, systems, compact = short, chips = true, shown = system, onSystem = chooseSystem)
                     }
                 }
             }
@@ -369,9 +432,10 @@ private fun ShownHeader(u: StorageUsage?, shown: SystemSize?, drive: String? = n
 }
 
 /**
- * The games pane's rows: allowing access when deleting needs it, deleting what is picked, on a
- * narrow screen the system filter (the wide layout has the systems pane), then the games shown,
- * largest first.
+ * The games pane's rows: allowing access when deleting needs it, setting up a drive with no games
+ * folders, selecting every game shown, on a narrow screen the drive and system filters (the wide
+ * layout has its own pane for them), then the games shown, largest first. Moving and deleting are
+ * on the selection bar, which stays in view however far the list scrolls.
  */
 private fun storageRows(
     app: AppState,
@@ -382,23 +446,20 @@ private fun storageRows(
     wide: Boolean,
     drives: List<VolumeUsage>,
     drive: String?,
-    canMove: Boolean,
     bare: List<io.github.matiyaaa.fuse.model.StorageVolume>,
     onPick: (GameId) -> Unit,
     onPickAll: (Set<GameId>) -> Unit,
-    onPicked: () -> Unit,
     onFilter: (PlatformId?) -> Unit,
     onDrive: (String?) -> Unit,
 ): List<MenuAction> {
     val store = app.store
     val shown = u?.games.orEmpty().filter { system == null || it.card.platformId == system }
-    val chosen = u?.games.orEmpty().filter { it.card.id in picked }
     // The rows above the games never come and go while you pick, so the focus stays on its game.
     return buildList {
         if (!canDelete) {
             add(MenuAction(
                 "access", "Deleting needs All files access", FuseIcons.Lock,
-                detail = "Fuse can show sizes, but deleting files needs permission. Select to allow",
+                detail = "Fuse can show sizes, but moving or deleting files needs permission. Select to allow",
                 trailing = Trailing.Chevron,
                 onSelect = { app.platform.storage.request() },
             ))
@@ -412,40 +473,6 @@ private fun storageRows(
                 onSelect = { app.offerDriveSetup(v.id, v.label, firstTime = false) },
             ))
         }
-        val bytes = chosen.sumOf { it.bytes }
-        add(MenuAction(
-            "delete",
-            if (chosen.isEmpty()) "Delete selected games" else "Delete ${chosen.size} ${if (chosen.size == 1) "game" else "games"} (${bytesText(bytes)})",
-            FuseIcons.Trash,
-            destructive = chosen.isNotEmpty(),
-            detail = if (chosen.isEmpty()) null else "Their files go from your storage. You'll be asked first. X clears the selection",
-            unavailableReason = when {
-                chosen.isEmpty() -> "Select games below, then delete their files here"
-                !canDelete -> "Allow All files access first"
-                else -> null
-            },
-            onSelect = { confirmDelete(app, chosen.map { it.card.id to it.card.title }, chosen.sumOf { it.files }, bytes, onPicked) },
-        ))
-        // To an SD card or another drive: one game, a system's worth (select all), or everything shown.
-        if (canMove) {
-            add(MenuAction(
-                "move",
-                if (chosen.isEmpty()) "Move selected games" else "Move ${chosen.size} ${if (chosen.size == 1) "game" else "games"} (${bytesText(bytes)})",
-                FuseIcons.FolderSync,
-                detail = if (chosen.isEmpty()) null else "To an SD card or another drive, with their play time and art",
-                trailing = Trailing.Chevron,
-                unavailableReason = when {
-                    chosen.isEmpty() -> "Select games below, or select all shown, then move them here"
-                    !canDelete -> "Allow All files access first"
-                    else -> null
-                },
-                onSelect = {
-                    // The drive they are all on already isn't offered.
-                    val on = chosen.mapNotNull { it.volumeId }.toSet().takeIf { it.size == 1 }.orEmpty()
-                    app.moveGames(chosen.map { it.card.id }, chosen.map { it.card.title }, bytes, from = on, onDone = onPicked)
-                },
-            ))
-        }
         val selectable = shown.filter { it.card.unavailable == null }.map { it.card.id }.toSet()
         if (selectable.size > 1) {
             val all = picked.containsAll(selectable)
@@ -453,7 +480,7 @@ private fun storageRows(
                 "pickall",
                 if (all) "Clear these ${selectable.size} games" else "Select all ${selectable.size} shown",
                 if (all) FuseIcons.Square else FuseIcons.ListChecks,
-                detail = if (all) null else "Every game in this list, to move or delete together",
+                detail = if (all) null else "To move or delete them together",
                 onSelect = { onPickAll(selectable) },
             ))
         }
@@ -517,31 +544,223 @@ private fun summaryLine(u: StorageUsage?): String {
 }
 
 /**
- * The drive cards: the one drive, or the drive picked. With several drives and none picked, the
- * drives are rows in the list (each with its own bar), so no card adds them up into one meaningless
- * total; [every] (the narrow layout, which has no drive rows) shows each drive's card instead.
+ * The drive at a glance: the drive picked, the one drive, or every drive together. A ring of what
+ * fills it (games, everything else, free space), how much is free, then the games by system as one
+ * bar in each system's colour; with [chips] (the narrow layout, which has no systems pane) each
+ * system is a chip that shows only its games when tapped.
  */
 @Composable
-private fun Volumes(u: StorageUsage?, drive: String?, nested: Boolean, bySystem: Boolean, every: Boolean = false, compact: Boolean = false) {
+private fun Overview(
+    u: StorageUsage?,
+    drive: String?,
+    systems: List<SystemSize>,
+    compact: Boolean,
+    chips: Boolean,
+    shown: PlatformId?,
+    modifier: Modifier = Modifier,
+    onSystem: ((PlatformId?) -> Unit)? = null,
+) {
     val volumes = u?.volumes.orEmpty()
-    val shown = when {
-        drive != null -> volumes.filter { it.id == drive }
-        volumes.size == 1 || every -> volumes
-        else -> emptyList()
+    val on = if (drive != null) volumes.filter { it.id == drive } else volumes
+    val online = on.filter { it.online }
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(Space.m)) {
+        when {
+            u == null -> VolumeSkeleton()
+            volumes.isEmpty() -> Panel(Modifier.fillMaxWidth(), raised = true, shadow = false) {
+                Box(Modifier.fillMaxWidth().padding(Space.l), contentAlignment = Alignment.Center) {
+                    EmptyState(
+                        FuseIcons.HardDrive, "Drive space unknown",
+                        message = "This system doesn't say how big these drives are. Each game's size is still below.",
+                        compact = true,
+                    )
+                }
+            }
+            online.isEmpty() -> on.forEach { OfflineVolumeCard(it) }
+            else -> DriveCard(online, away = on.size - online.size, systems = systems, compact = compact, chips = chips, shown = shown, onSystem = onSystem)
+        }
     }
-    when {
-        u == null -> VolumeSkeleton(nested)
-        volumes.isEmpty() -> Panel(Modifier.fillMaxWidth(), raised = nested, shadow = !nested) {
-            Box(Modifier.fillMaxWidth().padding(Space.l), contentAlignment = Alignment.Center) {
-                EmptyState(
-                    FuseIcons.HardDrive, "Drive space unknown",
-                    message = "This system doesn't say how big these drives are. Each game's size is still below.",
-                    compact = true,
-                )
+}
+
+/** The ring card for [drives] (one, or several added up), with the games by system under it. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun DriveCard(
+    drives: List<VolumeUsage>,
+    away: Int,
+    systems: List<SystemSize>,
+    compact: Boolean,
+    chips: Boolean,
+    shown: PlatformId?,
+    onSystem: ((PlatformId?) -> Unit)?,
+) {
+    val c = Fuse.colors
+    val one = drives.singleOrNull()
+    val total = drives.sumOf { it.totalBytes }
+    val free = drives.sumOf { it.freeBytes }
+    val used = (total - free).coerceAtLeast(0)
+    val gamesBytes = drives.sumOf { it.gamesBytes }
+    val other = (used - gamesBytes).coerceAtLeast(0)
+    val gamesColor = c.accent
+    val rest = c.text.copy(alpha = if (c.isDark) 0.34f else 0.3f)
+    Panel(Modifier.fillMaxWidth(), raised = true, shadow = false) {
+        Column(Modifier.fillMaxWidth().padding(if (compact) Space.m else Space.l), verticalArrangement = Arrangement.spacedBy(if (compact) Space.m else Space.l)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                UsageRing(
+                    listOf(gamesBytes to gamesColor, other to rest), total,
+                    diameter = if (compact) RING_COMPACT else RING, stroke = if (compact) RING_STROKE_COMPACT else RING_STROKE,
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        FText(percent(if (total > 0) used.toFloat() / total else 0f), (if (compact) Fuse.type.bodyStrong else Fuse.type.titleSmall).tabular(), maxLines = 1)
+                        FText("full", Fuse.type.caption, color = c.textMuted, maxLines = 1)
+                    }
+                }
+                Spacer(Modifier.width(if (compact) Space.m else Space.l))
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Space.xxs)) {
+                    val title = one?.let { it.label + if (it.readOnly) "  ·  Read only" else "" } ?: "${drives.size} drives"
+                    SectionLabel(title, icon = one?.icon() ?: FuseIcons.Layers2)
+                    Spacer(Modifier.height(Space.xxs))
+                    Row(verticalAlignment = Alignment.Bottom) {
+                        FText(bytesText(free), (if (compact) Fuse.type.titleSmall else Fuse.type.title).tabular(), maxLines = 1, modifier = Modifier.alignByBaseline())
+                        Spacer(Modifier.width(Space.xs + Space.xxs))
+                        FText("free", Fuse.type.label, color = c.textMuted, maxLines = 1, modifier = Modifier.alignByBaseline())
+                    }
+                    FText(
+                        "of ${bytesText(total)}" + if (away > 0) "  ·  $away not connected" else "",
+                        Fuse.type.caption, color = c.textMuted, maxLines = 1,
+                    )
+                    Spacer(Modifier.height(Space.xs))
+                    Key(gamesColor, "Games", gamesBytes)
+                    Key(rest, "Everything else", other)
+                }
+            }
+            if (systems.isNotEmpty()) SystemsBreakdown(systems, chips, shown, onSystem)
+        }
+    }
+}
+
+/**
+ * What the games take by system: one bar with each system's share in its colour (the largest
+ * first, the smallest together as one), and with [chips] a chip for each, which filters the games.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun SystemsBreakdown(systems: List<SystemSize>, chips: Boolean, shown: PlatformId?, onSystem: ((PlatformId?) -> Unit)?) {
+    val c = Fuse.colors
+    val rest = c.text.copy(alpha = if (c.isDark) 0.34f else 0.3f)
+    val total = systems.sumOf { it.bytes }
+    val named = systems.take(SYSTEMS_SHOWN)
+    val others = systems.drop(SYSTEMS_SHOWN).sumOf { it.bytes }
+    Column(verticalArrangement = Arrangement.spacedBy(Space.s)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            FText("Games by system", Fuse.type.label, color = c.textMuted, maxLines = 1, modifier = Modifier.weight(1f))
+            FText(bytesText(total), Fuse.type.numericSmall, color = c.text, maxLines = 1)
+        }
+        UsageBar(named.map { it.bytes to it.accent.toColor() } + listOfNotNull(if (others > 0) others to rest else null), total, Modifier.fillMaxWidth(), height = Size.track * 2)
+        if (chips) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(Space.xs), verticalArrangement = Arrangement.spacedBy(Space.xs)) {
+                named.forEach { sz ->
+                    SystemChip(sz.accent.toColor(), sz.short, sz.bytes, on = sz.id == shown, onClick = onSystem?.let { f -> { f(sz.id) } })
+                }
+                if (others > 0) SystemChip(rest, "${systems.size - named.size} more", others, on = false, onClick = null)
             }
         }
-        else -> shown.forEach { if (it.online) VolumeCard(it, nested, bySystem, compact) else OfflineVolumeCard(it, nested) }
     }
+}
+
+/** A system in the breakdown: its colour, short name and size; the one shown is outlined. */
+@Composable
+private fun SystemChip(color: Color, name: String, bytes: Long, on: Boolean, onClick: (() -> Unit)?) {
+    val c = Fuse.colors
+    val shape = RoundedCornerShape(Size.chipCompact / 2)
+    Row(
+        Modifier
+            .height(Size.chipCompact)
+            .clip(shape)
+            .background(if (on) color.copy(alpha = 0.22f) else c.text.copy(alpha = if (c.isDark) 0.06f else 0.05f))
+            .then(if (on) Modifier.border(Size.stroke, color.copy(alpha = 0.8f), shape) else Modifier)
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+            .padding(horizontal = Space.s + Space.xxs),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Spacer(Modifier.size(Size.dot).drawBehind { drawCircle(color) })
+        Spacer(Modifier.width(Space.xs + Space.xxs))
+        FText(name, Fuse.type.caption, color = c.text, maxLines = 1)
+        Spacer(Modifier.width(Space.xs))
+        FText(bytesText(bytes), Fuse.type.numericSmall, color = c.textMuted, maxLines = 1)
+    }
+}
+
+/**
+ * The bar at the foot of the games while any are picked: how many and how much, and Move, Delete
+ * and clear by touch (Y offers the same with a controller). Narrow, its buttons go on a row of their
+ * own so neither the count nor a label is cut.
+ */
+@Composable
+private fun SelectionBar(count: Int, bytes: Long, canMove: Boolean, canDelete: Boolean, onMove: () -> Unit, onDelete: () -> Unit, onClear: () -> Unit) {
+    val c = Fuse.colors
+    Panel(Modifier.fillMaxWidth().padding(start = Space.s, end = Space.s, bottom = Space.s), raised = true) {
+        BoxWithConstraints(Modifier.fillMaxWidth()) {
+            // With Move as well as Delete the row needs more room before it can keep them beside the count.
+            val stacked = maxWidth < if (canMove) SELECTION_STACK_BELOW else SELECTION_STACK_BELOW_ONE
+            val buttons: @Composable (Modifier) -> Unit = { m ->
+                if (canMove) FuseButton("Move", selected = false, onClick = onMove, icon = FuseIcons.FolderSync, height = BAR_BUTTON, enabled = canDelete, modifier = m)
+                FuseButton("Delete", selected = false, onClick = onDelete, icon = FuseIcons.Trash, kind = ButtonKind.DANGER, height = BAR_BUTTON, enabled = canDelete, modifier = m)
+            }
+            Column(Modifier.fillMaxWidth().padding(Space.m), verticalArrangement = Arrangement.spacedBy(Space.m)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(BAR_BADGE).clip(CircleShape).background(c.accent), contentAlignment = Alignment.Center) {
+                        FText(count.toString(), Fuse.type.label.tabular(), color = c.onAccent, maxLines = 1)
+                    }
+                    Spacer(Modifier.width(Space.m))
+                    Column(Modifier.weight(1f)) {
+                        FText(if (count == 1) "1 game selected" else "$count games selected", Fuse.type.bodyStrong, maxLines = 1)
+                        FText(bytesText(bytes), Fuse.type.caption.tabular(), color = c.textMuted, maxLines = 1)
+                    }
+                    if (!stacked) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(Space.s), verticalAlignment = Alignment.CenterVertically) { buttons(Modifier) }
+                        Spacer(Modifier.width(Space.s))
+                    }
+                    IconButton(FuseIcons.Close, selected = false, onClick = onClear, size = BAR_BUTTON, contentDescription = "Clear the selection")
+                }
+                if (stacked) Row(horizontalArrangement = Arrangement.spacedBy(Space.s)) { buttons(Modifier.weight(1f)) }
+            }
+        }
+    }
+}
+
+/**
+ * A ring with [parts] laid around it clockwise from the top, each [bytes] of [total], over a faint
+ * track. Every part shows at least as a dot, and the parts ease to new sizes. [center] sits inside.
+ */
+@Composable
+private fun UsageRing(parts: List<Pair<Long, Color>>, total: Long, diameter: Dp, stroke: Dp, center: @Composable () -> Unit) {
+    val c = Fuse.colors
+    val track = c.text.copy(alpha = if (c.isDark) 0.1f else 0.08f)
+    val shares = parts.map { (b, _) -> (b.toFloat() / total.coerceAtLeast(1)).coerceIn(0f, 1f) }
+    val eased = shares.mapIndexed { i, f -> fuselineFloat(f, Fuse.motion.value(), label = "ring$i") }
+    val colors = parts.map { it.second }
+    Box(
+        Modifier.size(diameter).drawBehind {
+            val w = stroke.toPx()
+            val box = androidx.compose.ui.geometry.Size(size.width - w, size.height - w)
+            val at = Offset(w / 2, w / 2)
+            drawArc(track, 0f, 360f, useCenter = false, topLeft = at, size = box, style = Stroke(w))
+            // A round cap reaches half the stroke past each end; the gap keeps neighbours apart.
+            val radius = (size.minDimension - w) / 2
+            val cap = (w / 2 / radius) * (180f / kotlin.math.PI.toFloat())
+            val gap = cap * 2 + RING_GAP_DEGREES
+            var start = -90f
+            eased.forEachIndexed { i, f ->
+                if (shares[i] <= 0f) return@forEachIndexed
+                val sweep = 360f * f.value
+                // A sliver still shows, as a dot the stroke's width.
+                val drawn = (sweep - gap).coerceAtLeast(MIN_SWEEP_DEGREES)
+                drawArc(colors[i], start + gap / 2, drawn, useCenter = false, topLeft = at, size = box, style = Stroke(w, cap = StrokeCap.Round))
+                start += maxOf(sweep, gap)
+            }
+        },
+        contentAlignment = Alignment.Center,
+    ) { center() }
 }
 
 /** The games, drives and systems of [this] narrowed to the drive [id]; everything when null. */
@@ -573,9 +792,9 @@ private fun driveLine(v: VolumeUsage): String =
  * error; nothing needs doing until the drive is connected again.
  */
 @Composable
-private fun OfflineVolumeCard(v: VolumeUsage, nested: Boolean) {
+private fun OfflineVolumeCard(v: VolumeUsage) {
     val c = Fuse.colors
-    Panel(Modifier.fillMaxWidth(), raised = nested, shadow = !nested) {
+    Panel(Modifier.fillMaxWidth(), raised = true, shadow = false) {
         Column(Modifier.fillMaxWidth().padding(Space.l), verticalArrangement = Arrangement.spacedBy(Space.s)) {
             SectionLabel(v.label, icon = v.icon())
             FText("Not connected", Fuse.type.title, maxLines = 1)
@@ -589,68 +808,12 @@ private fun OfflineVolumeCard(v: VolumeUsage, nested: Boolean) {
 }
 
 /**
- * A drive: how much is free, a bar of what fills it (games, everything else, free space), then the
- * games on it by system, each with a bar against the largest, in the system's own colour.
- */
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun VolumeCard(v: VolumeUsage, nested: Boolean, bySystem: Boolean, compact: Boolean = false) {
-    val c = Fuse.colors
-    val used = (v.totalBytes - v.freeBytes).coerceAtLeast(0)
-    val other = (used - v.gamesBytes).coerceAtLeast(0)
-    val games = c.accent
-    val rest = c.text.copy(alpha = if (c.isDark) 0.34f else 0.3f)
-    Panel(Modifier.fillMaxWidth(), raised = nested, shadow = !nested) {
-        // On a short screen the card stays small, so the systems below it are in view.
-        Column(Modifier.fillMaxWidth().padding(if (compact) Space.m else Space.l), verticalArrangement = Arrangement.spacedBy(if (compact) Space.xs else Space.s)) {
-            SectionLabel(v.label + if (v.readOnly) "  ·  Read only" else "", icon = v.icon())
-            Row(verticalAlignment = Alignment.Bottom) {
-                FText(bytesText(v.freeBytes), (if (compact) Fuse.type.titleSmall else Fuse.type.title).tabular(), maxLines = 1, modifier = Modifier.alignByBaseline())
-                Spacer(Modifier.width(Space.s))
-                FText("free of ${bytesText(v.totalBytes)}", Fuse.type.label, color = c.textMuted, maxLines = 1, modifier = Modifier.alignByBaseline())
-            }
-            UsageBar(listOf(v.gamesBytes to games, other to rest), v.totalBytes, Modifier.fillMaxWidth().padding(vertical = Space.xxs))
-            // The legend wraps on a narrow screen rather than losing its last entry.
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(Space.l), verticalArrangement = Arrangement.spacedBy(Space.xs)) {
-                Key(games, "Games", v.gamesBytes)
-                Key(rest, "Everything else", other)
-                Key(null, "Free", v.freeBytes)
-            }
-            // Beside the systems pane the drive leaves its systems to it.
-            if (bySystem && v.systems.isNotEmpty()) {
-                Spacer(Modifier.height(Space.s))
-                SectionLabel("Games by system", count = v.systems.size.toString(), rule = true)
-                Spacer(Modifier.height(Space.xxs))
-                val shown = v.systems.take(SYSTEMS_SHOWN)
-                val others = v.systems.drop(SYSTEMS_SHOWN).sumOf { it.bytes }
-                val largest = (shown.maxOfOrNull { it.bytes } ?: 0L).coerceAtLeast(others).coerceAtLeast(1)
-                shown.forEach { SystemBar(it.accent.toColor(), it.name, it.bytes, largest) }
-                if (others > 0) SystemBar(rest, "Other systems", others, largest)
-            }
-        }
-    }
-}
-
-/** One system's share of the games on a drive: its name and size over a bar in its colour. */
-@Composable
-private fun SystemBar(color: Color, name: String, bytes: Long, largest: Long) {
-    Column(Modifier.fillMaxWidth().padding(vertical = Space.xxs), verticalArrangement = Arrangement.spacedBy(Space.xs)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            FText(name, Fuse.type.label, color = Fuse.colors.text, maxLines = 1, modifier = Modifier.weight(1f))
-            Spacer(Modifier.width(Space.s))
-            FText(bytesText(bytes), Fuse.type.numericSmall, color = Fuse.colors.textMuted, maxLines = 1)
-        }
-        UsageBar(listOf(bytes to color), largest, Modifier.fillMaxWidth())
-    }
-}
-
-/**
  * A rounded track with [parts] laid along it in order, each [bytes] of [total]. Every part shows at
  * least as a dot, so a few kilobytes of games on a large drive still read as something. The parts
  * ease to new sizes.
  */
 @Composable
-private fun UsageBar(parts: List<Pair<Long, Color>>, total: Long, modifier: Modifier) {
+private fun UsageBar(parts: List<Pair<Long, Color>>, total: Long, modifier: Modifier, height: Dp = Size.track) {
     val c = Fuse.colors
     val track = c.text.copy(alpha = if (c.isDark) 0.1f else 0.08f)
     val shares = parts.map { (b, _) -> (b.toFloat() / total.coerceAtLeast(1)).coerceIn(0f, 1f) }
@@ -658,7 +821,6 @@ private fun UsageBar(parts: List<Pair<Long, Color>>, total: Long, modifier: Modi
         fuselineFloat(f, Fuse.motion.value(), label = "usage$i")
     }
     val colors = parts.map { it.second }
-    val height = Size.track * if (parts.size > 1) 2 else 1
     Spacer(
         modifier.height(height).drawBehind {
             val h = size.height
@@ -698,13 +860,16 @@ private fun Key(color: Color?, label: String, bytes: Long) {
 
 /** A drive card's shape while Fuse looks at the drives. */
 @Composable
-private fun VolumeSkeleton(nested: Boolean) {
-    Panel(Modifier.fillMaxWidth(), raised = nested, shadow = !nested) {
-        Column(Modifier.fillMaxWidth().padding(Space.l), verticalArrangement = Arrangement.spacedBy(Space.m)) {
-            Skeleton(Modifier.fillMaxWidth(0.4f).height(Space.m))
-            Skeleton(Modifier.fillMaxWidth(0.6f).height(Space.xl))
-            Skeleton(Modifier.fillMaxWidth().height(Size.track * 2))
-            SkeletonText(lines = 3, style = Fuse.type.label, lastLineFraction = 0.5f)
+private fun VolumeSkeleton() {
+    Panel(Modifier.fillMaxWidth(), raised = true, shadow = false) {
+        Row(Modifier.fillMaxWidth().padding(Space.l), verticalAlignment = Alignment.CenterVertically) {
+            Skeleton(Modifier.size(RING_COMPACT).clip(CircleShape))
+            Spacer(Modifier.width(Space.l))
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Space.s)) {
+                Skeleton(Modifier.fillMaxWidth(0.5f).height(Space.m))
+                Skeleton(Modifier.fillMaxWidth(0.7f).height(Space.xl))
+                SkeletonText(lines = 2, style = Fuse.type.label, lastLineFraction = 0.6f)
+            }
         }
     }
 }
@@ -739,5 +904,32 @@ private val SHORT_BELOW = 560.dp
 private val MEASURE_BAR = 140.dp
 private const val SKELETON_ROWS = 6
 
-/** Systems listed by name on each drive; the rest share one bar. */
+/** The page's widest; the drive pane's share of it, within its least and most. */
+private val PAGE_MAX = 1600.dp
+private const val LEFT_SHARE = 0.38f
+private val LEFT_MIN = 300.dp
+private val LEFT_MAX = 460.dp
+
+/** The ring, and its stroke, at full size and on a short screen; the gap between its parts. */
+private val RING = 112.dp
+private val RING_STROKE = 12.dp
+private val RING_COMPACT = 84.dp
+private val RING_STROKE_COMPACT = 9.dp
+private const val RING_GAP_DEGREES = 4f
+private const val MIN_SWEEP_DEGREES = 0.5f
+
+/** The selection bar: its count badge, its buttons' height, and where its buttons take a row of their own. */
+private val BAR_BADGE = 36.dp
+private val BAR_BUTTON = 40.dp
+private val SELECTION_STACK_BELOW = 480.dp
+private val SELECTION_STACK_BELOW_ONE = 360.dp
+
+/** Systems named in the breakdown; the rest share one part. */
 private const val SYSTEMS_SHOWN = 6
+
+/** A share as a whole percentage, with a sliver shown as under one. */
+private fun percent(f: Float): String = when {
+    f <= 0f -> "0%"
+    f < 0.01f -> "<1%"
+    else -> "${(f * 100).toInt().coerceAtMost(100)}%"
+}

@@ -445,7 +445,7 @@ the folded group a row sits in, so opening it unfolds that group first.
 
 Settings has twelve sections under five headings (Personalize, Games, This device, Connections,
 General), listed in `settingsSections` (`ui:shell/settings/SettingsScreen.kt`). Each section's rows
-come from functions in `settings/Sections.kt`; a section made of several (Screen and sound, Accounts,
+come from functions in `settings/Sections.kt`; a section made of several (Display, Accounts,
 Storage and backups, About) brings them in with `under`, which keeps each function the single owner
 of its rows and gives their ids a prefix so none repeat. Rarely changed settings fold into groups
 (`AppState.group`) whose header always says how they stand ("Default", "3 changed", "1 key

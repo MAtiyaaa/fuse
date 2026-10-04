@@ -49,6 +49,21 @@ class LaunchResolverTest {
     }
 
     @Test
+    fun aGameFromASteamLibraryStartsThroughSteamByItsAppId() {
+        // Its folder under steamapps/common, its app id from Steam's manifest.
+        val g = game("steam", "/home/u/.steam/steam/steamapps/common/Celeste", kind = LocationKind.FOLDER, serial = "504230", title = "Celeste")
+        val linux = resolver.resolve(g, null, listOf(linuxEmu("linux.steam", "/usr/bin/steam")), Host.LINUX)
+        assertEquals(LaunchTarget.TitleId("504230"), linux.target)
+        assertEquals(listOf("/usr/bin/steam", "-applaunch", "504230"), assertIs<LaunchPlan.Command>(linux.plan).argv)
+        val link = resolver.resolve(g, EmulatorId("linux.steam-url"), listOf(linuxEmu("linux.steam-url", "/usr/bin/xdg-open")), Host.LINUX)
+        assertEquals(listOf("/usr/bin/xdg-open", "steam://rungameid/504230"), assertIs<LaunchPlan.Command>(link.plan).argv)
+        // A shortcut file still starts by the id written in it.
+        val file = game("steam", "/g/Celeste.steam")
+        val old = resolver.resolve(file, null, listOf(linuxEmu("linux.steam", "/usr/bin/steam")), Host.LINUX, ScopedLaunchChoice(injectedText = "504230"))
+        assertEquals(listOf("/usr/bin/steam", "-applaunch", "504230"), assertIs<LaunchPlan.Command>(old.plan).argv)
+    }
+
+    @Test
     fun platformSettingBeatsPriority() {
         val r = resolver.resolve(ff7, EmulatorId("epsxe"), psxInstalled, Host.ANDROID)
         assertEquals(EmulatorId("epsxe"), r.adapter?.id)

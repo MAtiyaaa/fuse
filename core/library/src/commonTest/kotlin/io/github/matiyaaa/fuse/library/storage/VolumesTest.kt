@@ -138,4 +138,16 @@ class VolumesTest {
         val groups = Volumes.duplicateRoots(mapOf(a to "/run/media/me/GAMES/ROMs", b to "/run/media/me/GAMES/ROMs", c to "/home/me/other"))
         assertEquals(listOf(listOf(a, b)), groups)
     }
+
+    @Test
+    fun aMacWhoseSystemDiskChangedIdKeepsItsFoldersOnline() = runTest {
+        // Fuse's Steam shortcuts live on the Mac's own disk; after a macOS update that disk reports
+        // a new id. The folder is still there, so its games stay where they are, never "missing".
+        val before = StorageVolume("uuid:SEALED-1", "Macintosh HD", listOf("/"), VolumeKind.INTERNAL)
+        val steam = source("/Users/me/Library/Application Support/Fuse/steam", refOn(before, "Users/me/Library/Application Support/Fuse/steam"))
+        val after = before.copy(id = "uuid:SEALED-2")
+        assertEquals(SourceState.ONLINE, eval(steam, listOf(after), setOf(steam.path)).state)
+        // Without the folder it is missing, as anywhere else.
+        assertEquals(SourceState.OFFLINE, eval(steam, listOf(after, sd), emptySet()).state)
+    }
 }

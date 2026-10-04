@@ -106,7 +106,8 @@ class FuselineValue<T>(
                         now[i] = tracks[i].valueAt(play)
                         speed[i] = tracks[i].velocityAt(play)
                     }
-                    value = converter.read(now.copyOf())
+                    // Converters only read the array, so no copy is made per frame.
+                    value = converter.read(now)
                     block?.invoke(this)
                 }
                 // Lands exactly, whatever the last frame's rounding.
@@ -115,17 +116,23 @@ class FuselineValue<T>(
                 value = targetValue
                 block?.invoke(this)
             } finally {
-                isRunning = false
+                // A move that was taken over leaves the running flag to the one in charge now.
+                if (owner === currentCoroutineContext().job) isRunning = false
             }
         }
     }
 
-    /** Runs [block] as the one move in charge, ending the one before it first. */
-    private suspend fun takeOver(block: suspend () -> Unit) = coroutineScope {
-        val me = coroutineContext.job
+    /**
+     * Runs [block] as the one move in charge, cancelling the one before it. Moves run on the main
+     * thread and only between frames, so the old one has stopped writing the moment it is
+     * cancelled: it waits on a frame it will never get. Nothing waits for it to unwind, which keeps
+     * a value retargeted every frame (following a finger or a scroll) as cheap as one that isn't.
+     */
+    private suspend inline fun takeOver(block: () -> Unit) {
+        val me = currentCoroutineContext().job
         val before = owner
         owner = me
-        if (before != null && before !== me) before.cancelAndJoin()
+        if (before != null && before !== me) before.cancel(TakenOver())
         try {
             block()
         } finally {
@@ -205,3 +212,13 @@ internal suspend fun <R> frame(infinite: Boolean, onFrame: (Long) -> R): R {
 
 /** The frame time in milliseconds, through the policy for endless animation: for loops that keep their own time. */
 suspend fun <R> withInfiniteFrameMillis(onFrame: (Long) -> R): R = frame(true) { onFrame(it / NANOS_PER_MS) }
+
+/**
+ * How a move ends when another takes over. It carries no stack trace and is never copied, so
+ * ending a move costs next to nothing even with coroutine debugging on (as tests run), which
+ * keeps a value retargeted every frame cheap.
+ */
+internal class TakenOver : CancellationException("Another move took over"), kotlinx.coroutines.CopyableThrowable<TakenOver> {
+    override fun createCopy(): TakenOver? = null
+    override fun fillInStackTrace(): Throwable = this
+}

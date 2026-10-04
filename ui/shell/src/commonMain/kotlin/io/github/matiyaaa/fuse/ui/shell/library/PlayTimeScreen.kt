@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -44,6 +43,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
 import io.github.matiyaaa.fuse.ui.designsystem.theme.tabular
 import io.github.matiyaaa.fuse.ui.fuseline.FuselineValue
+import io.github.matiyaaa.fuse.ui.fuseline.PageEffect
 import io.github.matiyaaa.fuse.ui.fuseline.tween
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.FocusZone
@@ -62,7 +62,7 @@ import io.github.matiyaaa.fuse.ui.shell.store.PlayTimeReport
 fun PlayTimeScreen(app: AppState) {
     val report by remember { app.store.library.playTime() }.collectAsState(PlayTimeReport())
     val sel = remember { LinearSelection() }
-    LaunchedEffect(Unit) {
+    PageEffect(Unit) {
         app.hero = null
         app.hints = listOf(Hint(HintButton.CONFIRM, "Open"), Hint(HintButton.BACK, "Back"))
     }
@@ -193,7 +193,7 @@ private fun DayBars(days: List<Long>, modifier: Modifier) {
     val c = Fuse.colors
     val motion = Fuse.motion
     val grow = remember { FuselineValue(if (motion.reduced) 1f else 0f) }
-    LaunchedEffect(days.isNotEmpty()) {
+    PageEffect(days.isNotEmpty()) {
         if (days.isNotEmpty() && !motion.reduced) grow.animateTo(1f, motion.tween(600))
     }
     val track = c.text.copy(alpha = if (c.isDark) 0.06f else 0.05f)

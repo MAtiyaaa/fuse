@@ -98,6 +98,9 @@ object Volumes {
         // Its drive isn't among the mounted ones.
         val weak = ref.isWeakId || here?.first?.isWeakId == true
         if (here != null && weak && exists(path)) return atPath(here.first)
+        // A fixed disk that now reports another id (macOS gives its system disk a new one with each
+        // update) with the folder still there is the same disk: never offline for that.
+        if (here != null && !here.first.removable && !ref.removable && exists(path)) return atPath(here.first)
         if (here != null && !here.first.isWeakId && exists(path) && here.first.removable && ref.removable) {
             // Another removable drive now sits where this one was, with the same folder on it.
             return SourceStatus(source, SourceState.OTHER_DRIVE, here.first)

@@ -28,6 +28,7 @@ and redact credentials from every error message (`redact()`, see
 - [The Store: Obtainium Emulation Pack](#the-store-obtainium-emulation-pack)
 - [Steam and Windows launchers](#steam-and-windows-launchers)
 - [RPCS3 compatibility list](#rpcs3-compatibility-list)
+- [Jellyfin](#jellyfin)
 - [Emulators' own files](#emulators-own-files)
 
 ## Summary: what leaves the device
@@ -45,6 +46,7 @@ and redact credentials from every error message (`redact()`, see
 | Store (Android): Obtainium Emulation Pack, app sources | Optionally a GitHub token | Requests for the pack's newest release on github.com, each app's releases (GitHub's API, or the download page the pack names), and the APK you install; your IP address and the User-Agent (or the one the pack sets for a download page) | The catalogue when the Store opens and is older than 6 hours, or on "Check now"; an app's releases when its page or card is shown, for installed apps a little after start (at most twice a day, can be turned off); downloads only when you press Install or Update |
 | RPCS3 compatibility list (rpcs3.net) | Nothing | A PS3 game's title id (for example `BLUS30443`), your IP address and the User-Agent | Only when you choose How It Runs in RPCS3 in a PS3 game's options; the answer is kept a week |
 | Cartridge | Nothing | Nothing leaves the device through Fuse: Fuse reads Cartridge's local status and opens it with deep links. "Upload to RomM" hands Cartridge a game's file paths; Cartridge uploads the files to your own RomM server only after you confirm there. On Android Cartridge can read your play sessions (below) and adds their time to its own play sessions on your RomM server | On resume and when Cartridge reports a change; uploads only when you start one and confirm it in Cartridge; play sessions when Cartridge starts or comes back to the front |
+| Jellyfin (off until you turn it on) | Your server's addresses, your Jellyfin user name and password | To your own server only: the password once at sign-in (never stored), then the access token, this device's name and a random device id, what you browse and search, a device profile of what this device can play, and where you are in what you play (start, progress every ten seconds, stop), plus favourites and watched marks you change. A UDP broadcast on the local network asks which Jellyfin servers are there when you look for one | While Jellyfin is on: a check that the server answers every 30 seconds, pages as you open them, and Home's Jellyfin widgets every 5 minutes while one is on Home |
 
 The "When" column describes the store that drives these clients (`DefaultFuseStore`). The "Sent by Fuse" column is what the clients in `core:integrations` can send.
 
@@ -635,11 +637,43 @@ the expected activity exists and is exported before using an entry.
 
 | Launcher | How |
 |---|---|
-| Steam | `steam -applaunch <appid>` from a `.steam` file (native or the `com.valvesoftware.Steam` Flatpak) |
+| Steam | `steam -applaunch <appid>` (native or the `com.valvesoftware.Steam` Flatpak): a game from a Steam library by the app id in its manifest, or a `.steam` file's id |
 | Steam (link) | `xdg-open steam://rungameid/<appid>` |
 | `.desktop` shortcuts (Steam, Heroic, Lutris, emulator shortcuts) | `gio launch <file>` when GLib's `gio` is installed, otherwise the file's `Exec=` line with field codes removed |
 
+### Steam's own games on a computer (Linux, Windows, macOS)
+
+Settings, Library, Find Steam games (or setup) adds each Steam library that holds your games as a library
+folder of its own. Its games come from Steam's own manifests (`steamapps/appmanifest_<appid>.acf`):
+only fully installed games, without Steam's tools (Proton, the runtimes, redistributables), each at
+its folder under `steamapps/common` and named as Steam names it. They start through Steam by app id
+(`steam -applaunch <appid>` on Linux and Windows, `open steam://rungameid/<appid>` on macOS). A game
+is missing only when Steam no longer lists it as installed; games installed later join by
+themselves, and games left unticked when adding are hidden. Fuse reads Steam's files and never
+changes them. Libraries added as shortcut files by 0.2.7 and earlier move onto Steam's libraries
+on the first start, keeping each game's play time, favourite, edits and art.
+
 **Leaves the device.** Nothing; these are local app launches.
+
+## Jellyfin
+
+An addon, off by default (Settings, Addons, Jellyfin). Fuse speaks to your own Jellyfin server
+over its REST API with its own client (`core:jellyfin`), never to any other service. See
+[docs/jellyfin.md](docs/jellyfin.md) for what it shows and how it plays.
+
+- **Sign-in:** `Users/AuthenticateByName` with your user name and password, once. Fuse keeps the
+  access token, the user id and the server's id and name in its secret store; the password is never
+  kept, logged or backed up. Requests carry `Authorization: MediaBrowser Client="Fuse", Device,
+  DeviceId, Version, Token`; pictures are fetched without the token.
+- **Reaching the server:** `System/Info/Public` checks each address (home first in Automatic, with
+  a short timeout), every 30 seconds while Jellyfin is on. Discovery sends "who is JellyfinServer?"
+  on UDP 7359 for two seconds when you ask Fuse to look.
+- **Playing:** `Items/{id}/PlaybackInfo` with a device profile built from what the player measured
+  and the quality limit for the route in use; then the stream itself; then `Sessions/Playing`,
+  `Sessions/Playing/Progress` and `Sessions/Playing/Stopped` so resume points and watched marks
+  follow you.
+- **Kept on the device:** answers for pages, per user, so they open offline; pictures, cached by
+  the picture itself. Signing out clears the kept answers.
 
 ## RPCS3 compatibility list
 

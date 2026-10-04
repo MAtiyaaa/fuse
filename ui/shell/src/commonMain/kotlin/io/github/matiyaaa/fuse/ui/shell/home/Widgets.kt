@@ -68,11 +68,14 @@ import io.github.matiyaaa.fuse.ui.fuseline.FuselineValue
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.Route
 import io.github.matiyaaa.fuse.ui.shell.app.activateGame
+import io.github.matiyaaa.fuse.ui.shell.app.openJellyfin
 import io.github.matiyaaa.fuse.ui.shell.app.rememberClockText
 import io.github.matiyaaa.fuse.ui.shell.components.LocalTileMetrics
 import io.github.matiyaaa.fuse.ui.shell.components.SquareGameArt
 import io.github.matiyaaa.fuse.ui.shell.components.StageInfo
 import io.github.matiyaaa.fuse.ui.shell.components.agoText
+import io.github.matiyaaa.fuse.ui.shell.jellyfin.openMedia
+import io.github.matiyaaa.fuse.ui.shell.jellyfin.play
 import io.github.matiyaaa.fuse.ui.shell.components.playtimeText
 import io.github.matiyaaa.fuse.ui.shell.store.GameCard
 import io.github.matiyaaa.fuse.ui.shell.store.HomeFeed
@@ -121,6 +124,10 @@ fun WidgetCard(
  */
 @Composable
 fun WidgetContent(kind: WidgetKind, feed: HomeFeed, cartridge: CartridgeStatus, clock24h: Boolean) {
+    if (kind in MediaKinds) {
+        MediaFace(kind, mediaItems(kind, feed), FaceSize.WIDE)
+        return
+    }
     val c = Fuse.colors
     val tint = widgetTint(kind, feed, cartridge)
     BoxWithConstraints(Modifier.fillMaxSize().widgetSurface(c.surfaceRaised, tint.copy(alpha = if (c.isDark) WASH_DARK else WASH_LIGHT))) {
@@ -268,7 +275,31 @@ internal fun widgetIcon(kind: WidgetKind): ImageVector = when (kind) {
     WidgetKind.PINNED_APPS -> FuseIcons.AppWindow
     WidgetKind.COLLECTIONS -> FuseIcons.Bookmark
     WidgetKind.SYSTEMS -> FuseIcons.Chip
+    WidgetKind.JELLYFIN_CONTINUE -> FuseIcons.MonitorPlay
+    WidgetKind.JELLYFIN_NEXT_UP -> FuseIcons.SkipForward
+    WidgetKind.JELLYFIN_RECENTLY_ADDED -> FuseIcons.Film
 }
+
+/** Jellyfin's widgets, which show films and episodes rather than games. */
+internal val MediaKinds = setOf(WidgetKind.JELLYFIN_CONTINUE, WidgetKind.JELLYFIN_NEXT_UP, WidgetKind.JELLYFIN_RECENTLY_ADDED)
+
+/** What a Jellyfin widget shows, first first. */
+internal fun mediaItems(kind: WidgetKind, feed: HomeFeed): List<io.github.matiyaaa.fuse.jellyfin.MediaItem> = when (kind) {
+    WidgetKind.JELLYFIN_CONTINUE -> feed.media.continueWatching
+    WidgetKind.JELLYFIN_NEXT_UP -> feed.media.nextUp
+    WidgetKind.JELLYFIN_RECENTLY_ADDED -> feed.media.recentlyAdded
+    else -> emptyList()
+}
+
+/** A film's name, or an episode's show. */
+internal fun mediaTitle(m: io.github.matiyaaa.fuse.jellyfin.MediaItem): String =
+    if (m.type == io.github.matiyaaa.fuse.jellyfin.MediaType.EPISODE) m.seriesName ?: m.name else m.name
+
+/** Under it: the episode, and how long is left when it was started. */
+internal fun mediaCaption(m: io.github.matiyaaa.fuse.jellyfin.MediaItem): String? = listOfNotNull(
+    if (m.type == io.github.matiyaaa.fuse.jellyfin.MediaType.EPISODE) listOfNotNull(m.episodeLabel, m.name.takeIf { it != m.seriesName }).joinToString(" ") else m.year?.toString(),
+    m.leftMs?.takeIf { m.progress != null }?.let { "${io.github.matiyaaa.fuse.ui.shell.jellyfin.minutes(it)} left" },
+).filter { it.isNotBlank() }.joinToString("  ·  ").ifEmpty { null }
 
 /**
  * A widget's own colour: the light in its corner and its glow when focused. Playtime and downloads
@@ -284,6 +315,8 @@ internal fun widgetTint(kind: WidgetKind, feed: HomeFeed, cartridge: CartridgeSt
         WidgetKind.RECENT_ACHIEVEMENT, WidgetKind.RECENT_ACHIEVEMENTS, WidgetKind.ACHIEVEMENT_PROGRESS, WidgetKind.RECENTLY_MASTERED -> c.warning
         WidgetKind.CURRENT_GAME -> feed.playtime.currentGame?.accent?.toColor() ?: c.accent
         WidgetKind.STORAGE -> if (storageLow(feed)) c.warning else c.text
+        WidgetKind.JELLYFIN_CONTINUE, WidgetKind.JELLYFIN_NEXT_UP, WidgetKind.JELLYFIN_RECENTLY_ADDED ->
+            mediaItems(kind, feed).firstOrNull()?.let { io.github.matiyaaa.fuse.ui.shell.jellyfin.accentOf(it.name) } ?: c.accent
         else -> c.text
     }
 }
@@ -741,6 +774,9 @@ internal fun widgetStage(kind: WidgetKind, key: Any, feed: HomeFeed, cartridge: 
             val (day, date) = todayParts()
             info(time, "Today", "$day $date")
         }
+        WidgetKind.JELLYFIN_CONTINUE, WidgetKind.JELLYFIN_NEXT_UP, WidgetKind.JELLYFIN_RECENTLY_ADDED -> mediaItems(kind, feed).firstOrNull()?.let {
+            info(mediaTitle(it), kind.title(), mediaCaption(it), "Jellyfin")
+        } ?: info(kind.title(), "Jellyfin", "Nothing here yet")
         else -> feed.achievements?.recent?.firstOrNull()?.let {
             info(it.achievement.title, kind.title(), it.gameTitle, "${it.achievement.points} points")
         } ?: info(kind.title(), "Achievements", "Connect RetroAchievements in Settings")
@@ -785,5 +821,10 @@ internal fun AppState.openWidget(kind: WidgetKind, feed: HomeFeed, firstGame: Ga
         WidgetKind.CARTRIDGE_DOWNLOADS -> selectTab(Destination.CARTRIDGE)
         WidgetKind.STORAGE -> go(Route.Storage)
         WidgetKind.CLOCK -> quickMenuOpen = true
+        // Something you were watching plays on; something new opens its page.
+        WidgetKind.JELLYFIN_CONTINUE, WidgetKind.JELLYFIN_NEXT_UP -> mediaItems(kind, feed).firstOrNull()
+            ?.let { play(it) } ?: openJellyfin()
+        WidgetKind.JELLYFIN_RECENTLY_ADDED -> mediaItems(kind, feed).firstOrNull()
+            ?.let { openMedia(it) } ?: openJellyfin()
     }
 }

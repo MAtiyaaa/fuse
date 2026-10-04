@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -31,6 +30,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.input.NavResult
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
+import io.github.matiyaaa.fuse.ui.fuseline.PageEffect
 import io.github.matiyaaa.fuse.ui.fuseline.fuselineFloat
 import io.github.matiyaaa.fuse.ui.shell.app.AddonsPart
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
@@ -48,18 +48,28 @@ import io.github.matiyaaa.fuse.ui.shell.components.ViewTabs
 private val TABS = 56.dp
 
 /**
- * Addons, where Fuse has its Store (Android): Cartridge and the Store, as two views of one section.
- * Up from the top of either reaches the tabs, Left and Right switch them, Down returns. It opens on
- * Cartridge when Cartridge is installed and on the Store otherwise, and remembers which was shown.
- * With Cartridge turned off in Settings, Addons is just the Store, without tabs.
+ * Addons: Cartridge (where it runs and is turned on), the Store (Android) and Jellyfin (once turned
+ * on in Settings), as views of one section. Up from the top of any reaches the tabs, Left and Right
+ * switch them, Down returns. It opens on Cartridge when Cartridge is installed, else on the Store,
+ * else on Jellyfin, and remembers which was shown. With one part, Addons is just that part, without
+ * tabs.
  */
 @Composable
 fun AddonsScreen(app: AppState) {
     val prefs by app.store.prefs.collectAsState()
     val cartridge by app.store.cartridge.status.collectAsState()
     val store by app.store.appStore.state.collectAsState()
-    val parts = if (prefs.cartridgeEnabled) AddonsPart.entries else listOf(AddonsPart.STORE)
-    val part = (app.addonsPart ?: if (cartridge.installed) AddonsPart.CARTRIDGE else AddonsPart.STORE).takeIf { it in parts } ?: AddonsPart.STORE
+    // Cartridge only where it runs (Android and Linux) and is turned on; Jellyfin only once turned on.
+    val parts = buildList {
+        if (prefs.cartridgeEnabled && app.platform.features.cartridge) add(AddonsPart.CARTRIDGE)
+        if (app.store.appStore.supported) add(AddonsPart.STORE)
+        if (prefs.jellyfin.enabled && app.store.jellyfin != null) add(AddonsPart.JELLYFIN)
+        if (isEmpty()) add(AddonsPart.CARTRIDGE)
+    }
+    val part = app.addonsPart?.takeIf { it in parts }
+        ?: AddonsPart.CARTRIDGE.takeIf { cartridge.installed && it in parts }
+        ?: AddonsPart.STORE.takeIf { it in parts }
+        ?: parts.first()
     var tabsFocused by remember { mutableStateOf(false) }
     val inTabs = tabsFocused && parts.size > 1 && app.focusZone == FocusZone.CONTENT
     fun show(p: AddonsPart) {
@@ -67,7 +77,7 @@ fun AddonsScreen(app: AppState) {
         app.addonsPart = p
     }
 
-    LaunchedEffect(inTabs) { if (inTabs) app.hints = listOf(Hint(HintButton.CONFIRM, "Choose")) }
+    PageEffect(inTabs) { if (inTabs) app.hints = listOf(Hint(HintButton.CONFIRM, "Choose")) }
     // Registered before the content's own layers, so it hears what they leave: Up from their top.
     InputLayer(enabled = app.focusZone == FocusZone.CONTENT && !app.overlayOpen && parts.size > 1) { e ->
         if (inTabs) {
@@ -105,6 +115,7 @@ fun AddonsScreen(app: AppState) {
                 when (part) {
                     AddonsPart.CARTRIDGE -> CartridgeContent(app, embedded = true, active = !inTabs, topPadding = top)
                     AddonsPart.STORE -> StoreContent(app, active = !inTabs, topPadding = top)
+                    AddonsPart.JELLYFIN -> io.github.matiyaaa.fuse.ui.shell.jellyfin.JellyfinContent(app, active = !inTabs, topPadding = top)
                 }
             }
         }
@@ -113,6 +124,7 @@ fun AddonsScreen(app: AppState) {
                 when (p) {
                     AddonsPart.CARTRIDGE -> ViewTab("Cartridge", icon = FuseMarks.Cartridge, badge = (cartridge.activeDownloads + cartridge.queuedDownloads).takeIf { it > 0 }?.toString())
                     AddonsPart.STORE -> ViewTab("Store", icon = FuseIcons.Store, badge = store.updates.size.takeIf { it > 0 }?.toString())
+                    AddonsPart.JELLYFIN -> ViewTab("Jellyfin", icon = FuseIcons.Clapperboard)
                 }
             }
             // Open: the named tabs, which lift away and shrink toward the top left as the page scrolls.

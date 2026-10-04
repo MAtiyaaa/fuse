@@ -31,7 +31,6 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
@@ -108,6 +107,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.theme.toColor
 import io.github.matiyaaa.fuse.ui.fuseline.Appear
 import io.github.matiyaaa.fuse.ui.fuseline.Durations
 import io.github.matiyaaa.fuse.ui.fuseline.FuselineValue
+import io.github.matiyaaa.fuse.ui.fuseline.PageEffect
 import io.github.matiyaaa.fuse.ui.fuseline.fadeIn
 import io.github.matiyaaa.fuse.ui.fuseline.fadeOut
 import io.github.matiyaaa.fuse.ui.fuseline.fuselineFloat
@@ -297,8 +297,8 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
     // Recently played only lists games that were played.
     val list = games?.let { g -> if (scope == LibraryScope.All && segment == LibrarySegment.RECENT) g.filter { it.lastPlayedAt != null } else g }
     // Keep the same game selected when the list changes (new downloads, sorting, layout switches).
-    LaunchedEffect(list) {
-        if (list == null) return@LaunchedEffect
+    PageEffect(list) {
+        if (list == null) return@PageEffect
         val idx = state.selectedId?.let { id -> list.indexOfFirst { it.id == id } } ?: -1
         if (idx >= 0) state.grid.index = idx else state.grid.clamp(list.size)
     }
@@ -334,8 +334,8 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
     }
     // Another part of Fuse asked for a view (the Favourites widget): it opens on it.
     if (scope == LibraryScope.All) {
-        LaunchedEffect(app.librarySegment) {
-            val asked = app.librarySegment ?: return@LaunchedEffect
+        PageEffect(app.librarySegment) {
+            val asked = app.librarySegment ?: return@PageEffect
             app.librarySegment = null
             choose(asked)
             state.inHeader = false
@@ -362,7 +362,7 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
         else -> null
     }
 
-    LaunchedEffect(selectedCard?.id, selectedCard?.art, special, systemCard?.art, gameSystem?.art, emptyAction?.label) {
+    PageEffect(selectedCard?.id, selectedCard?.art, special, systemCard?.art, gameSystem?.art, emptyAction?.label) {
         app.hero = when {
             selectedCard != null -> selectedCard.room(gameSystem)
             systemCard != null -> HeroSource(systemCard.platform.id, systemCard.art.hero, systemCard.platform.accent.toColor())
@@ -410,7 +410,7 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
     val dragged by gridState.interactionSource.collectIsDraggedAsState()
     val listDragged by listState.interactionSource.collectIsDraggedAsState()
     var touchScroll by remember { mutableStateOf(false) }
-    LaunchedEffect(dragged, listDragged) { if (dragged || listDragged) touchScroll = true }
+    PageEffect(dragged, listDragged) { if (dragged || listDragged) touchScroll = true }
 
     InputLayer(enabled = app.focusZone == FocusZone.CONTENT && !app.overlayOpen) { e ->
         touchScroll = false
@@ -942,11 +942,11 @@ private fun GlidingList(
     val top = remember { FuselineValue(target) }
     val bottom = remember { FuselineValue(target) }
     val shown by fuselineFloat(if (focused) 1f else 0f, motion.tween(if (focused) Durations.FAST else Durations.INSTANT), label = "list highlight")
-    LaunchedEffect(target, list.size) {
+    PageEffect(target, list.size) {
         if (motion.reduced || shown < 0.05f) {
             top.snapTo(target)
             bottom.snapTo(target)
-            return@LaunchedEffect
+            return@PageEffect
         }
         if (abs(target - top.value) > 1.5f || abs(target - bottom.value) > 1.5f) {
             val from = if (target > top.value) target - 1f else target + 1f

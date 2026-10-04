@@ -85,6 +85,8 @@ class FuseApplication : Application(), SingletonImageLoader.Factory {
     val startup: StateFlow<Startup> = _startup.asStateFlow()
 
     override fun onCreate() {
+        // Fuse Player plays on Media3 here.
+        io.github.matiyaaa.fuse.ui.player.FusePlayer.engineFactory = { io.github.matiyaaa.fuse.ui.player.Media3Engine(applicationContext) }
         super.onCreate()
         crashLog.install()
         activities = ActivityHolder(this)

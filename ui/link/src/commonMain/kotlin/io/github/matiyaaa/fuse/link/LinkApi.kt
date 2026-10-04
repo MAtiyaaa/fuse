@@ -76,6 +76,10 @@ internal class LinkApi(
         put("device", deviceName)
         put("version", version)
         put("captures", capturesAvailable)
+        // Whether the Remote's controller works (it can be turned off on the device).
+        put("controller", store.prefs.value.phoneLinkController)
+        // How the Remote names its buttons: the way this device's controller is labelled.
+        put("glyphs", store.prefs.value.input.glyphs.name)
     }
 
     suspend fun login(body: JsonElement?): Login {

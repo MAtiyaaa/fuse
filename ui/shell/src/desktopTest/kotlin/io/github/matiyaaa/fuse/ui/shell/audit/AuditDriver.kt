@@ -374,6 +374,20 @@ internal class AuditDriver(
     }
 
     /** Holds a button (long press: arranging Home, picking up a channel). */
+    /**
+     * The time the frames right after [action] took to make (composition, layout and drawing), the
+     * slowest first: what a tab switch costs.
+     */
+    fun frameCost(frames: Int = 12, action: () -> Unit): List<Long> {
+        action()
+        return List(frames) {
+            val t0 = System.nanoTime()
+            ui.mainClock.advanceTimeByFrame()
+            ui.waitForIdle()
+            (System.nanoTime() - t0) / 1_000
+        }.sortedDescending()
+    }
+
     fun hold(button: PadButton, ms: Long = 900) {
         router.press(button, InputSource.GAMEPAD)
         settle(ms)

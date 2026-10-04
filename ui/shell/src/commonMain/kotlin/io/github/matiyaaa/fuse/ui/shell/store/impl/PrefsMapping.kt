@@ -35,6 +35,7 @@ internal fun AppSettings.toUiPrefs(scoped: GlobalScoped): UiPrefs {
     val custom = appearance.customThemes.mapNotNull { it.spec() }
     val theme = resolveTheme(appearance.themeId, custom)
     return UiPrefs(
+        jellyfin = jellyfin,
         onboardingDone = onboarding.completed,
         themeId = theme.id,
         customThemes = custom,
@@ -76,6 +77,7 @@ internal fun AppSettings.toUiPrefs(scoped: GlobalScoped): UiPrefs {
         openGamePage = library.selectOpensGamePage,
         collectionsEnabled = library.collectionsEnabled,
         phoneLinkEnabled = library.phoneLinkEnabled,
+        phoneLinkController = library.phoneLinkController,
         autoSeries = library.autoSeries,
         hiddenSeries = library.hiddenSeries,
         biosConfirmed = library.biosConfirmed,
@@ -148,6 +150,7 @@ internal fun AppSettings.withUiPrefs(prefs: UiPrefs): AppSettings {
             selectOpensGamePage = prefs.openGamePage,
             collectionsEnabled = prefs.collectionsEnabled,
             phoneLinkEnabled = prefs.phoneLinkEnabled,
+            phoneLinkController = prefs.phoneLinkController,
             autoSeries = prefs.autoSeries,
             hiddenSeries = prefs.hiddenSeries,
             biosConfirmed = prefs.biosConfirmed,
@@ -178,6 +181,7 @@ internal fun AppSettings.withUiPrefs(prefs: UiPrefs): AppSettings {
         capture = capture.copy(combo = prefs.captureCombo, sound = prefs.captureSound),
         // What Fuse installed is kept as it is: only the Store writes it.
         store = store.copy(variant = prefs.storeVariant, autoCheck = prefs.storeAutoCheck),
+        jellyfin = prefs.jellyfin,
     )
 }
 

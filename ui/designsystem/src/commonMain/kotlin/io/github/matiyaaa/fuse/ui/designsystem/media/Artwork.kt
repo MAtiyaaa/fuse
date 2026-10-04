@@ -75,6 +75,12 @@ fun Artwork(
     backdropBlur: Dp = 0.dp,
     /** Show loading (skeleton, then shimmer over the fallback) for cropped art. */
     loading: Boolean = true,
+    /**
+     * Keeps this art ready in memory once shown ([ShownArt]): for backgrounds and wallpapers, which
+     * must never fade in from nothing when Fuse comes back from a game (the system empties image
+     * caches while Fuse is in the background).
+     */
+    pin: Boolean = false,
     fallback: @Composable () -> Unit = {},
 ) {
     if (model == null) {
@@ -89,20 +95,25 @@ fun Artwork(
             .apply { if (fit) size(sizer).scale(Scale.FIT) }
             .build()
     }
-    val painter = rememberAsyncImagePainter(request, contentScale = if (backdrop) ContentScale.Fit else contentScale)
-    val state by painter.state.collectAsStateCompat()
+    val loader = rememberAsyncImagePainter(request, contentScale = if (backdrop) ContentScale.Fit else contentScale)
+    val state by loader.state.collectAsStateCompat()
     val success = state as? AsyncImagePainter.State.Success
     val failed = state is AsyncImagePainter.State.Error
-    val fromMemory = success?.result?.dataSource == DataSource.MEMORY_CACHE
+    // Art already shown this session is never faded in again; pinned art is drawn at once while the
+    // loader fetches it again.
+    val held = if (success == null) ShownArt.pinned(model) else null
+    val painter = held ?: loader
+    if (success != null) ShownArt.shown(model, if (pin) success.painter else null)
+    val fromMemory = success?.result?.dataSource == DataSource.MEMORY_CACHE || held != null || ShownArt.wasShown(model)
     val alpha = remember(model) { FuselineValue(0f) }
     val fade = Fuse.motion.fade(Durations.BASE)
     // Read through a derived state so the fade itself never recomposes this.
     val shown by remember(alpha) { derivedStateOf { alpha.value >= 1f } }
     // Only art that fills its slot gets a placeholder: never logos, tinted marks or overlays.
     val placeholder = loading && fadeIn && contentScale == ContentScale.Crop && !backdrop && tint == null
-    LaunchedEffect(success != null, fromMemory) {
+    LaunchedEffect(success != null || held != null, fromMemory) {
         when {
-            success == null -> alpha.snapTo(0f)
+            success == null && held == null -> alpha.snapTo(0f)
             !fadeIn || fromMemory -> alpha.snapTo(1f)
             else -> alpha.animateTo(1f, fade)
         }
@@ -162,3 +173,27 @@ private const val BACKDROP_DIM_SHARP = 0.55f
 
 /** Alignment helper for callers positioning cropped art. */
 fun focusAlignment(x: Float, y: Float): Alignment = BiasAlignment(x * 2 - 1, y * 2 - 1)
+
+/**
+ * Art Fuse has shown this session: which (so it never fades in twice) and, for a few backgrounds
+ * and wallpapers, the picture itself, held so it is there at once when Fuse comes back.
+ */
+object ShownArt {
+    private const val PINNED = 8
+    private const val SEEN = 1024
+    private val pinned = object : LinkedHashMap<Any, androidx.compose.ui.graphics.painter.Painter>(16, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Any, androidx.compose.ui.graphics.painter.Painter>?) = size > PINNED
+    }
+    private val seen = object : LinkedHashMap<Any, Unit>(64, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Any, Unit>?) = size > SEEN
+    }
+
+    internal fun shown(model: Any, painter: androidx.compose.ui.graphics.painter.Painter?) {
+        seen[model] = Unit
+        if (painter != null) pinned[model] = painter
+    }
+
+    internal fun wasShown(model: Any): Boolean = seen.containsKey(model)
+
+    internal fun pinned(model: Any): androidx.compose.ui.graphics.painter.Painter? = pinned[model]
+}

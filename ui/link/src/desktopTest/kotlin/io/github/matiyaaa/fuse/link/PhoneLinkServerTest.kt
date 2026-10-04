@@ -3,6 +3,8 @@ package io.github.matiyaaa.fuse.link
 import io.github.matiyaaa.fuse.data.FuseData
 import io.github.matiyaaa.fuse.data.db.DesktopDatabase
 import io.github.matiyaaa.fuse.model.LibrarySourceKind
+import io.github.matiyaaa.fuse.ui.shell.app.RemoteCommand
+import io.github.matiyaaa.fuse.ui.shell.app.RemoteInput
 import io.github.matiyaaa.fuse.ui.shell.store.GameQuery
 import io.github.matiyaaa.fuse.ui.shell.store.createFuseStore
 import kotlinx.coroutines.CoroutineScope
@@ -10,6 +12,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import java.io.File
@@ -134,6 +137,76 @@ class PhoneLinkServerTest {
         // Signing everyone out ends the session.
         link.signOutAll()
         assertEquals(401, http(port, "GET", "/api/now", cookie = cookie).status)
+
+        store.updatePrefs { it.copy(phoneLinkEnabled = false) }
+        withTimeout(10_000) { link.state.first { !it.running } }
+    }
+
+    @Test
+    fun aPairingCodeSignsInOnceAndThePhoneTypesAndPressesButtons(): Unit = runBlocking {
+        val services = FakeServices(FuseData(DesktopDatabase.open(File(cache, "fuse.db").absolutePath)), cache)
+        val store = createFuseStore(services, scope)
+        var now = 1_000_000L
+        val link = PhoneLinkServer(store, services.secrets, scope, "Test Device", "0.2.8", clock = { now })
+        link.start()
+        store.updatePrefs { it.copy(phoneLinkEnabled = true) }
+        assertTrue(withTimeout(20_000) { link.state.first { it.running || it.error != null } }.running)
+        val port = link.boundPort()!!
+
+        // The input routes need a sign-in like everything else.
+        assertEquals(401, http(port, "GET", "/api/input").status)
+        assertEquals(401, http(port, "POST", "/api/pad", """{"button":"A","down":true}""").status)
+
+        // A code from the device's keyboard signs the phone in once; a second use and a made-up one don't.
+        val code = link.pairingLink("http://127.0.0.1:$port/")!!.substringAfterLast("/pair/")
+        val paired = http(port, "GET", "/pair/$code")
+        assertEquals(303, paired.status)
+        assertEquals("/#remote", paired.headers["location"])
+        val cookie = paired.headers["set-cookie"]!!.substringBefore(';')
+        assertTrue("\"signedIn\":true" in http(port, "GET", "/api/session", cookie = cookie).body)
+        val again = http(port, "GET", "/pair/$code")
+        assertEquals("/?pair=expired", again.headers["location"])
+        assertTrue(again.headers["set-cookie"] == null)
+        assertEquals("/?pair=expired", http(port, "GET", "/pair/not-a-real-code").headers["location"])
+
+        // A code left for more than two minutes no longer works.
+        val late = link.pairingLink("http://127.0.0.1:$port/")!!.substringAfterLast("/pair/")
+        now += LinkAuth.PAIR_MS + 1
+        assertEquals("/?pair=expired", http(port, "GET", "/pair/$late").headers["location"])
+
+        // No field open: nothing to type into.
+        assertEquals("null", http(port, "GET", "/api/input", cookie = cookie).body.trim())
+        assertEquals(409, http(port, "PUT", "/api/input/text", """{"id":1,"text":"x"}""", cookie = cookie).status)
+
+        // A field opens on the device: the phone sees it and its text reaches the device.
+        val typed = mutableListOf<RemoteCommand>()
+        val collecting = scope.launch { RemoteInput.commands.collect { typed += it } }
+        val id = RemoteInput.opened("Search", "zel", secret = false, placeholder = "", doneLabel = "Results", cancellable = false)
+        val field = http(port, "GET", "/api/input", cookie = cookie).body
+        assertTrue("\"title\":\"Search\"" in field && "\"text\":\"zel\"" in field, field)
+        assertEquals(200, http(port, "PUT", "/api/input/text", """{"id":$id,"text":"zelda"}""", cookie = cookie).status)
+        assertEquals(409, http(port, "PUT", "/api/input/text", """{"id":${id + 1},"text":"other"}""", cookie = cookie).status)
+        assertEquals(409, http(port, "POST", "/api/input/cancel", """{"id":$id}""", cookie = cookie).status)
+        assertEquals(200, http(port, "POST", "/api/input/done", """{"id":$id}""", cookie = cookie).status)
+        RemoteInput.closed(id)
+
+        // A password field's text never goes to the phone.
+        val secret = RemoteInput.opened("Password", "hunter22", secret = true, placeholder = "", doneLabel = "Save", cancellable = true)
+        val hidden = http(port, "GET", "/api/input", cookie = cookie).body
+        assertFalse("hunter22" in hidden, hidden)
+        assertTrue("\"length\":8" in hidden, hidden)
+        RemoteInput.closed(secret)
+
+        // The phone as a controller: known buttons only, and only while the device allows it.
+        assertEquals(200, http(port, "POST", "/api/pad", """{"button":"DPAD_DOWN","down":true}""", cookie = cookie).status)
+        assertEquals(400, http(port, "POST", "/api/pad", """{"button":"POWER","down":true}""", cookie = cookie).status)
+        store.updatePrefs { it.copy(phoneLinkController = false) }
+        assertEquals(403, http(port, "POST", "/api/pad", """{"button":"A","down":true}""", cookie = cookie).status)
+        withTimeout(5_000) { while (typed.size < 3) kotlinx.coroutines.delay(20) }
+        collecting.cancel()
+        assertEquals(RemoteCommand.SetText(id, "zelda"), typed[0])
+        assertEquals(RemoteCommand.Submit(id), typed[1])
+        assertEquals(RemoteCommand.Pad(io.github.matiyaaa.fuse.model.PadButton.DPAD_DOWN, true), typed[2])
 
         store.updatePrefs { it.copy(phoneLinkEnabled = false) }
         withTimeout(10_000) { link.state.first { !it.running } }

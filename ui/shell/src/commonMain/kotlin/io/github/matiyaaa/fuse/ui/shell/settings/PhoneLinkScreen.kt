@@ -71,7 +71,8 @@ fun phoneLinkRows(app: AppState): List<MenuAction> {
         infoRow("none", "Phone Link isn't part of this build", icon = FuseIcons.Smartphone),
     )
     val state by link.state.collectAsState()
-    val on = app.store.prefs.collectAsState().value.phoneLinkEnabled
+    val prefs = app.store.prefs.collectAsState().value
+    val on = prefs.phoneLinkEnabled
     return buildList {
         add(phoneLinkSwitch(app, on))
         add(MenuAction(
@@ -85,9 +86,16 @@ fun phoneLinkRows(app: AppState): List<MenuAction> {
             onSelect = { app.go(Route.PhoneLink) },
         ))
         addAll(phoneLinkAccountRows(app, link, state))
+        add(phoneControllerSwitch(app, prefs.phoneLinkController))
         labelled("") { addAll(phoneLinkInfoRows()) }
     }
 }
+
+/** Whether a signed-in phone's Remote may press this device's buttons. */
+private fun phoneControllerSwitch(app: AppState, on: Boolean) = toggleRow(
+    "controller", "Phone as a controller", FuseIcons.Gamepad, on,
+    detail = "A signed-in phone's Remote moves around Fuse like a controller. Typing from a phone works either way",
+) { v -> app.store.updatePrefs { it.copy(phoneLinkController = v) } }
 
 private fun phoneLinkSwitch(app: AppState, on: Boolean) = toggleRow(
     "enabled", "Phone Link", FuseIcons.Smartphone, on,
@@ -127,12 +135,12 @@ private fun phoneLinkAccountRows(app: AppState, link: PhoneLinkControl, state: P
 private fun phoneLinkInfoRows(): List<MenuAction> = listOf(
     infoRow(
         "can", "What a phone can do",
-        detail = "See what's playing and downloading, browse and search your library, fix names, details and art, fill art, and download your screenshots and recordings",
+        detail = "See what's playing and downloading, browse and search your library, fix names, details and art, fill art, download your screenshots and recordings, type into the field on screen, and move around Fuse as a controller",
         icon = FuseIcons.MonitorSmartphone,
     ),
     infoRow(
         "cannot", "What stays on this device",
-        detail = "Phones can't delete games or captures, see keys or passwords, or change settings. Only phones on your network can connect",
+        detail = "Phone Link's own pages can't delete games or captures, see keys or passwords, or change settings. As a controller a phone can do what any controller can, so turn that off if you'd rather it couldn't. Only phones on your network can connect",
         icon = FuseIcons.ShieldCheck,
     ),
 )
@@ -198,6 +206,7 @@ fun PhoneLinkScreen(app: AppState) {
         add(phoneLinkSwitch(app, on))
         if (link != null) {
             addAll(phoneLinkAccountRows(app, link, state))
+            add(phoneControllerSwitch(app, app.store.prefs.value.phoneLinkController))
             if (state.addresses.size > 1) {
                 add(MenuAction(
                     "address", "Address in the code", FuseIcons.Network,
@@ -363,7 +372,7 @@ private fun Step(n: Int, text: String, attention: Boolean = false) {
  * stay crisp for scanning.
  */
 @Composable
-private fun QrCode(modules: List<BooleanArray>, size: Dp) {
+internal fun QrCode(modules: List<BooleanArray>, size: Dp) {
     val shape = RoundedCornerShape(Radius.m)
     Box(
         Modifier

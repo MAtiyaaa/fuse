@@ -16,7 +16,7 @@ import kotlinx.coroutines.launch
  */
 internal fun AppState.offers(d: Destination): Boolean = when (d) {
     Destination.APPS -> store.apps.supported
-    Destination.CARTRIDGE -> platform.features.cartridge || store.appStore.supported
+    Destination.CARTRIDGE -> platform.features.cartridge || store.appStore.supported || (store.jellyfin != null && store.prefs.value.jellyfin.enabled)
     else -> true
 }
 
@@ -24,6 +24,9 @@ internal fun AppState.offers(d: Destination): Boolean = when (d) {
 internal fun AppState.offers(kind: WidgetKind): Boolean = when (kind) {
     WidgetKind.PINNED_APPS -> store.apps.supported
     WidgetKind.CARTRIDGE_DOWNLOADS -> platform.features.cartridge
+    // Jellyfin's only while it is turned on; never added by themselves.
+    WidgetKind.JELLYFIN_CONTINUE, WidgetKind.JELLYFIN_NEXT_UP, WidgetKind.JELLYFIN_RECENTLY_ADDED ->
+        store.jellyfin != null && store.prefs.value.jellyfin.enabled
     else -> true
 }
 

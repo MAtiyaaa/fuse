@@ -7,7 +7,9 @@ import io.github.matiyaaa.fuse.library.FuseFileSystem
 import io.github.matiyaaa.fuse.library.PlatformCatalog
 import io.github.matiyaaa.fuse.library.PlatformLookup
 import io.github.matiyaaa.fuse.library.parse.FilenameParser
+import io.github.matiyaaa.fuse.library.steam.SteamLibraryReader
 import io.github.matiyaaa.fuse.model.DiscoveredFolder
+import io.github.matiyaaa.fuse.model.FilenameTags
 import io.github.matiyaaa.fuse.model.FolderInterpretation
 import io.github.matiyaaa.fuse.model.FolderStateStore
 import io.github.matiyaaa.fuse.model.LibrarySource
@@ -62,6 +64,7 @@ sealed interface ScanEvent {
  * @property systemName The folder name that identified the platform (`psx` for RomM Structure B's
  *   `psx/roms`), used to find ES-DE media.
  * @property shortcuts True for a [LibrarySourceKind.SHORTCUTS] folder (steam and win games at once).
+ * @property steamLibrary True for a [LibrarySourceKind.STEAM_LIBRARY]: Steam's installed games there.
  */
 data class PlatformFolder(
     val sourceId: LibrarySourceId,
@@ -69,6 +72,7 @@ data class PlatformFolder(
     val entry: FsEntry,
     val systemName: String = entry.name,
     val shortcuts: Boolean = false,
+    val steamLibrary: Boolean = false,
 ) {
     val path: String get() = entry.path
 }
@@ -92,6 +96,9 @@ data class SourceDiscovery(
  *   next to `roms/`.
  * - [LibrarySourceKind.PLATFORM_FOLDER]: the folder is one platform, from
  *   [ScanRequest.sourcePlatforms] or its name (`psx/roms` resolves from `psx`).
+ * - [LibrarySourceKind.STEAM_LIBRARY]: Steam's installed games in that library, from its
+ *   `appmanifest_*.acf` files; each game is its `steamapps/common/<installdir>` folder, with its
+ *   Steam app id as its title id, so it starts through Steam.
  * - [LibrarySourceKind.SHORTCUTS]: `.steam` files and `.desktop` files that open `steam://` are
  *   Steam games; `.desktop`, `.gog`, `.epic`, `.amazon`, `.pcgame`, `.lnk`, `.exe` and `.bat` files
  *   are Windows games. Both platforms are reported for the folder.
@@ -154,14 +161,17 @@ class LibraryScanner(
                 continue
             }
 
-            if (request.scope == ScanScope.QUICK && isUnchanged(folder.entry, children)) {
+            // Steam's manifests are few and cheap to read, and change without touching the folder times.
+            if (request.scope == ScanScope.QUICK && !folder.steamLibrary && isUnchanged(folder.entry, children)) {
                 for (platform in platformsOf(folder)) {
                     unchanged += DiscoveredFolder(folder.path, folder.entry.name, platform.id, folder.entry.modifiedAt)
                 }
                 continue
             }
 
-            val results = if (folder.shortcuts) {
+            val results = if (folder.steamLibrary) {
+                listOf(folder.platform to scanSteamLibrary(folder))
+            } else if (folder.shortcuts) {
                 scanShortcuts(folder, children) { path ->
                     visited++
                     progress(ScanPhase.SCANNING, path)
@@ -228,6 +238,14 @@ class LibraryScanner(
                     SourceDiscovery(errors = listOf("Steam platform missing from the catalog"))
                 } else {
                     SourceDiscovery(listOf(PlatformFolder(source.id, steam, root, shortcuts = true)))
+                }
+            }
+            LibrarySourceKind.STEAM_LIBRARY -> {
+                val steam = platforms.byId(PlatformId("steam"))
+                if (steam == null) {
+                    SourceDiscovery(errors = listOf("Steam platform missing from the catalog"))
+                } else {
+                    SourceDiscovery(listOf(PlatformFolder(source.id, steam, root, steamLibrary = true)))
                 }
             }
             LibrarySourceKind.ROMS_ROOT, LibrarySourceKind.ROMM_LIBRARY -> discoverRoot(source, root)
@@ -371,6 +389,38 @@ class LibraryScanner(
         return listOf(
             steam to FolderScanResult(steamGames, complete, errors),
             win to FolderScanResult(winGames, complete, emptyList()),
+        )
+    }
+
+    /**
+     * A Steam library's installed games, as Steam's own manifests list them: each one its folder
+     * under `steamapps/common`, named as Steam names it, with its app id as its title id. A game
+     * Steam uninstalls loses its manifest, so it goes missing; nothing else does.
+     */
+    private suspend fun scanSteamLibrary(folder: PlatformFolder): FolderScanResult {
+        val games = try {
+            SteamLibraryReader(fs).games(listOf(folder.path))
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            return FolderScanResult(emptyList(), complete = false, errors = listOf("Cannot read ${folder.path}: ${e.message ?: e::class.simpleName}"))
+        }
+        return FolderScanResult(
+            games.map { g ->
+                ScannedGame(
+                    platformId = folder.platform.id,
+                    sourceId = folder.sourceId,
+                    path = FsPath.normalize(g.folder),
+                    kind = LocationKind.FOLDER,
+                    launchPath = FsPath.normalize(g.folder),
+                    title = g.name,
+                    tags = FilenameTags(serial = g.appId.toString()),
+                    sizeBytes = g.sizeBytes,
+                    interpretation = FolderInterpretation.FOLDER_IS_GAME,
+                )
+            },
+            complete = true,
+            errors = emptyList(),
         )
     }
 

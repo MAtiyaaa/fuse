@@ -2,6 +2,7 @@ package io.github.matiyaaa.fuse
 
 import android.annotation.SuppressLint
 import android.content.Intent
+import android.content.pm.ActivityInfo
 import android.graphics.Color as AndroidColor
 import android.net.Uri
 import android.os.Bundle
@@ -113,6 +114,8 @@ class MainActivity : ComponentActivity(), ActivityRequests {
             },
             androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED,
         )
+        // Which way round, before anything shows: a handheld stays landscape by its sensor.
+        followRotation(io.github.matiyaaa.fuse.model.ScreenRotation.AUTO)
         app.beginInterface(askedSafe = intent?.getStringExtra(EXTRA_SAFE_MODE) == "true" || intent?.getBooleanExtra(EXTRA_SAFE_MODE, false) == true)
         enterImmersive()
         preferRefreshRate(RefreshPreference.of(PerformanceProfile.AUTOMATIC, app.platformUi.device.tier, lowPower = false))
@@ -201,12 +204,43 @@ class MainActivity : ComponentActivity(), ActivityRequests {
                     .collect { preferRefreshRate(it) }
             }
             launch {
+                store.prefs.map { it.display.rotation }.distinctUntilChanged().collect { followRotation(it) }
+            }
+            launch {
                 kotlinx.coroutines.flow.combine(
                     store.prefs.map { it.display.mode to it.display.flipped }.distinctUntilChanged(),
                     app.platformUi.displays,
                 ) { wish, _ -> wish }.collect { (mode, flipped) -> companions.update(this@MainActivity, mode, flipped) }
             }
         }
+    }
+
+    /**
+     * Turns with the device as [rotation] asks. The sensor orientations are used even while
+     * Android's rotation lock is on, so a handheld turned over by accident comes back the right
+     * way when it is turned back, instead of staying where the lock caught it.
+     */
+    private fun followRotation(rotation: io.github.matiyaaa.fuse.model.ScreenRotation) {
+        val wanted = when (rotation) {
+            io.github.matiyaaa.fuse.model.ScreenRotation.SYSTEM -> ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+            io.github.matiyaaa.fuse.model.ScreenRotation.LANDSCAPE -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+            io.github.matiyaaa.fuse.model.ScreenRotation.PORTRAIT -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
+            io.github.matiyaaa.fuse.model.ScreenRotation.ANY -> ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR
+            io.github.matiyaaa.fuse.model.ScreenRotation.AUTO ->
+                if (naturallyLandscape() || app.platformUi.features.secondScreen) ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                else ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        }
+        if (requestedOrientation != wanted) requestedOrientation = wanted
+    }
+
+    /** True when the built-in screen is wider than tall held the way it was made (a handheld, a TV). */
+    private fun naturallyLandscape(): Boolean {
+        val turned = when (displayRotationCompat()) {
+            android.view.Surface.ROTATION_90, android.view.Surface.ROTATION_270 -> true
+            else -> false
+        }
+        val wide = resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+        return wide != turned
     }
 
     @Composable

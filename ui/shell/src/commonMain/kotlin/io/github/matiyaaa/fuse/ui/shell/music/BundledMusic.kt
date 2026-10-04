@@ -6,7 +6,7 @@ data class MusicTrack(val id: String, val title: String, val album: String)
 /**
  * The music Fuse ships: two albums by boipurple, "jam channel" and "creature interchange".
  * puddleworld plays under the menus by default and alright apothecary during first-time setup; any
- * of them, the user's own song, or all of them shuffled can be picked in Settings, Screen and sound.
+ * of them, the user's own song, or all of them shuffled can be picked in Settings, Sound.
  */
 object BundledMusic {
     const val ARTIST = "boipurple"
@@ -61,6 +61,6 @@ object BundledMusic {
     /** Where the unpacked copy lives in Fuse's cache; the version changes if the files ever do. */
     fun cachePath(id: String): String = "music/bundled-v1/$id.mp3"
 
-    /** The credit shown in Settings, Screen and sound and in the licences. */
+    /** The credit shown in Settings, Sound and in the licences. */
     const val CREDIT = "Music by $ARTIST, from the albums $ALBUM and $ALBUM_TWO"
 }

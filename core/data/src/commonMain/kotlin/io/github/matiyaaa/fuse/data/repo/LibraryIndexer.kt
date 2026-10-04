@@ -64,18 +64,28 @@ class LibraryIndexer(
         now: Long,
         cleaner: (String) -> String,
         useCleanedForNew: Boolean = false,
-    ): IndexDelta = report.scanned.fold(IndexDelta()) { acc, scan ->
-        acc + applyFolder(scan, now, cleaner, useCleanedForNew)
+    ): IndexDelta {
+        // One folder can hold games of two systems (a shortcuts folder: Steam's and Windows'),
+        // scanned once for each: what one found is never missing from the other.
+        val byFolder = report.scanned.groupBy { it.folderPath }
+        return report.scanned.fold(IndexDelta()) { acc, scan ->
+            val elsewhere = byFolder[scan.folderPath].orEmpty().filter { it !== scan }.flatMap { s -> s.games.map { it.path } }.toSet()
+            acc + applyFolder(scan, now, cleaner, useCleanedForNew, elsewhere)
+        }
     }
 
-    /** Applies one platform folder in a single transaction. */
+    /**
+     * Applies one platform folder in a single transaction. [foundElsewhere] are games the same
+     * folder's scan for another system found, which are not missing.
+     */
     suspend fun applyFolder(
         scan: PlatformFolderScan,
         now: Long,
         cleaner: (String) -> String,
         useCleanedForNew: Boolean = false,
+        foundElsewhere: Set<String> = emptySet(),
     ): IndexDelta = withContext(dispatcher) {
-        db.transactionWithResult { reconcile(scan, now, cleaner, useCleanedForNew) }
+        db.transactionWithResult { reconcile(scan, now, cleaner, useCleanedForNew, foundElsewhere) }
     }
 
     private fun reconcile(
@@ -83,6 +93,7 @@ class LibraryIndexer(
         now: Long,
         cleaner: (String) -> String,
         useCleanedForNew: Boolean,
+        foundElsewhere: Set<String>,
     ): IndexDelta {
         val gq = db.gameQueries
         val known = gq.selectIndexStateByFolder(scan.folderPath, ::IndexState).executeAsList().associateBy { it.path }
@@ -171,7 +182,7 @@ class LibraryIndexer(
         var forgotten = 0
         if (scan.complete) {
             for (state in known.values) {
-                if (state.id in seen || state.missing) continue
+                if (state.id in seen || state.missing || state.path in foundElsewhere) continue
                 // A folder that is still there but isn't a game (a game's own data folder, which
                 // older versions listed as games): forgotten, unless the user did something with it.
                 if (!state.removed && scan.isNotAGame(state.path) && gq.deleteUntouchedFolder(state.id).value > 0) {

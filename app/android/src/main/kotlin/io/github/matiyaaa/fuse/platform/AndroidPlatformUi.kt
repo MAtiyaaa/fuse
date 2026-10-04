@@ -83,6 +83,7 @@ class AndroidPlatformUi(
                 bluetoothSettings = hasBluetooth,
                 canExit = !homeRole.isHome.value,
                 windowModes = false,
+                rotation = true,
             )
         }
 

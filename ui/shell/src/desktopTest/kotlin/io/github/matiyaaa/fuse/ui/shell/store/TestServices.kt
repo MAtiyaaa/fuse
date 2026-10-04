@@ -137,7 +137,11 @@ internal class FakeServices(
     /** Where the fake's file picker starts. */
     var storageRoots: List<LocationHint> = emptyList()
 
+    /** Where Steam is installed, for finding its libraries. */
+    var steamPlaces = SteamPlaces()
+
     override val locations = object : DeviceLocations {
+        override suspend fun steamRoots() = this@FakeServices.steamPlaces
         override suspend fun libraryCandidates() = emptyList<LocationHint>()
         override suspend fun biosRoots() = emptyList<String>()
         override suspend fun storageRoots() = this@FakeServices.storageRoots

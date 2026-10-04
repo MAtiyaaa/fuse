@@ -105,6 +105,7 @@ internal fun BoardFace(kind: WidgetKind, size: BoardSize, feed: HomeFeed, cartri
         WidgetKind.SYSTEMS -> SystemsFace(feed, face)
         WidgetKind.PINNED_APPS -> AppsFace(feed)
         WidgetKind.COLLECTIONS -> CollectionsFace(feed, face)
+        WidgetKind.JELLYFIN_CONTINUE, WidgetKind.JELLYFIN_NEXT_UP, WidgetKind.JELLYFIN_RECENTLY_ADDED -> MediaFace(kind, mediaItems(kind, feed), face)
         else -> Framed(kind, feed, cartridge) {
             when (kind) {
                 WidgetKind.PLAYTIME_WEEK -> WeekFace(feed, face)
@@ -219,6 +220,103 @@ private fun GamesFace(kind: WidgetKind, games: List<GameCard>, face: FaceSize, c
             }
         }
     }
+}
+
+/**
+ * Jellyfin's widgets, built like the game lists: the first item's picture filling the face, its
+ * title and where it's up to over a scrim, how far in it is, and the next ones' posters beside it
+ * (wide) or under it.
+ */
+@Composable
+internal fun MediaFace(kind: WidgetKind, items: List<io.github.matiyaaa.fuse.jellyfin.MediaItem>, face: FaceSize) {
+    val c = Fuse.colors
+    val first = items.firstOrNull()
+    if (first == null) {
+        Framed(kind, null, null) { EmptyFace(widgetIcon(kind), kind.title(), emptyMediaNote(kind)) }
+        return
+    }
+    val corner = Fuse.geometry.tileCornerFraction * COVER_CORNER
+    val shape = remember(corner) { SquircleShape.fraction(corner) }
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val wide = maxWidth >= maxHeight * WIDE_COVERS
+        val pad = if (maxHeight < 140.dp) Space.m else Space.l
+        val rest = if (face == FaceSize.SMALL) emptyList() else items.drop(1)
+        val coverHeight = when {
+            rest.isEmpty() -> 0.dp
+            wide -> (maxHeight - pad * 2).coerceAtMost(COVER_MAX)
+            else -> (maxHeight * 0.3f).coerceIn(56.dp, COVER_MAX)
+        }
+        val coverWidth = coverHeight * (2f / 3f)
+        val room = if (wide) maxWidth * 0.48f else maxWidth - pad * 2
+        val fit = if (coverWidth <= 0.dp) 0 else ((room + Space.s) / (coverWidth + Space.s)).toInt().coerceIn(0, minOf(rest.size, MAX_COVERS))
+        val withCaption = maxHeight >= 120.dp
+        val titleStyle = when {
+            maxHeight >= 420.dp && maxWidth >= 560.dp -> Fuse.type.display
+            maxHeight >= 300.dp && maxWidth >= 360.dp -> Fuse.type.title
+            maxHeight >= 160.dp -> Fuse.type.titleSmall
+            else -> Fuse.type.bodyStrong
+        }
+        val accent = io.github.matiyaaa.fuse.ui.shell.jellyfin.accentOf(first.name)
+        val art = (if (first.type == io.github.matiyaaa.fuse.jellyfin.MediaType.EPISODE) first.thumb ?: first.backdrop else first.backdrop ?: first.thumb) ?: first.poster
+        Artwork(art?.sized(io.github.matiyaaa.fuse.ui.shell.jellyfin.WIDE_WIDTH), Modifier.fillMaxSize(), fallback = { GeneratedArt(first.seriesName ?: first.name, accent, slot = ArtSlot.WIDE, showText = false) })
+        val scrim = c.artScrim
+        Box(
+            Modifier.fillMaxSize().background(
+                if (wide) {
+                    Brush.horizontalGradient(0f to scrim, 0.62f to scrim.copy(alpha = scrim.alpha * 0.25f), 1f to scrim.copy(alpha = scrim.alpha * 0.5f))
+                } else {
+                    Brush.verticalGradient(0f to Color.Transparent, 0.4f to scrim.copy(alpha = scrim.alpha * 0.2f), 1f to scrim)
+                },
+            ),
+        )
+        Column(Modifier.fillMaxSize().padding(pad)) {
+            ArtLabel(kind)
+            Spacer(Modifier.weight(1f))
+            Row(verticalAlignment = Alignment.Bottom) {
+                Column(Modifier.weight(1f)) {
+                    FText(mediaTitle(first), titleStyle, color = c.onArt, maxLines = 2)
+                    if (withCaption) {
+                        mediaCaption(first)?.let {
+                            Spacer(Modifier.height(Space.xxs))
+                            FText(it, Fuse.type.caption, color = c.onArtMuted, maxLines = 1)
+                        }
+                    }
+                    first.progress?.let { p ->
+                        Spacer(Modifier.height(Space.s))
+                        ProgressBar(p, Modifier.fillMaxWidth(0.6f))
+                    }
+                }
+                if (wide && fit > 0) {
+                    Spacer(Modifier.width(Space.l))
+                    MediaCovers(rest.take(fit), coverHeight, shape)
+                }
+            }
+            if (!wide && fit > 0) {
+                Spacer(Modifier.height(Space.m))
+                MediaCovers(rest.take(fit), coverHeight, shape)
+            }
+        }
+    }
+}
+
+@Composable
+private fun MediaCovers(items: List<io.github.matiyaaa.fuse.jellyfin.MediaItem>, height: Dp, shape: androidx.compose.ui.graphics.Shape) {
+    Row(horizontalArrangement = Arrangement.spacedBy(Space.s), verticalAlignment = Alignment.Bottom) {
+        for (m in items) {
+            val poster = if (m.type == io.github.matiyaaa.fuse.jellyfin.MediaType.EPISODE) m.seriesPoster ?: m.poster else m.poster
+            Box(Modifier.height(height).aspectRatio(2f / 3f).lifted(shape)) {
+                Artwork(poster?.sized(io.github.matiyaaa.fuse.ui.shell.jellyfin.POSTER_WIDTH), Modifier.fillMaxSize(), fallback = {
+                    GeneratedArt(m.seriesName ?: m.name, io.github.matiyaaa.fuse.ui.shell.jellyfin.accentOf(m.name), slot = ArtSlot.BOX, showText = false)
+                })
+            }
+        }
+    }
+}
+
+private fun emptyMediaNote(kind: WidgetKind): String = when (kind) {
+    WidgetKind.JELLYFIN_CONTINUE -> "Films and episodes you stop part way show here"
+    WidgetKind.JELLYFIN_NEXT_UP -> "The next episode of shows you watch shows here"
+    else -> "What's new on your Jellyfin server shows here"
 }
 
 /** Covers standing in a row, each a small lit object over a contact shadow. */

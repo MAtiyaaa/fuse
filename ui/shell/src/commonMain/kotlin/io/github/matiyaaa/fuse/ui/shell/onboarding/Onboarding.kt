@@ -57,6 +57,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.components.Hint
 import io.github.matiyaaa.fuse.ui.designsystem.effects.fuseClickable
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
+import io.github.matiyaaa.fuse.ui.designsystem.effects.drawGrain
 import io.github.matiyaaa.fuse.ui.designsystem.icons.HintButton
 import io.github.matiyaaa.fuse.ui.designsystem.input.InputLayer
 import io.github.matiyaaa.fuse.ui.designsystem.input.NavEvent
@@ -625,18 +626,22 @@ private fun RailStep(step: Step, index: Int, current: Int, last: Boolean, onPick
 private fun SetupBackdrop(modifier: Modifier) {
     val c = Fuse.colors
     val ambient = Fuse.motion.ambient
-    val drift = if (ambient) {
-        rememberLoopClock(label = "setupDrift").animateFloat(0f, 1f, infiniteRepeatable(tween(14_000, easing = Curves.Linear), RepeatMode.Reverse), label = "drift").value
+    // Read while drawing, not while composing: the glow drifts without rebuilding anything.
+    val driftState = if (ambient) {
+        rememberLoopClock(label = "setupDrift").animateFloat(0f, 1f, infiniteRepeatable(tween(14_000, easing = Curves.Linear), RepeatMode.Reverse), label = "drift")
     } else {
-        0.5f
+        null
     }
     Canvas(modifier.graphicsLayer { alpha = if (c.isDark) 1f else 0.7f }) {
+        val drift = driftState?.value ?: 0.5f
         val w = size.width
         val h = size.height
         val a = Offset(w * (0.08f + 0.06f * drift), h * (0.92f - 0.05f * drift))
         drawCircle(Brush.radialGradient(listOf(c.accent.copy(alpha = 0.16f), Color.Transparent), center = a, radius = maxOf(w, h) * 0.55f), radius = maxOf(w, h) * 0.55f, center = a)
         val b = Offset(w * (0.92f - 0.05f * drift), h * (0.1f + 0.06f * drift))
         drawCircle(Brush.radialGradient(listOf(c.accent.copy(alpha = 0.09f), Color.Transparent), center = b, radius = maxOf(w, h) * 0.45f), radius = maxOf(w, h) * 0.45f, center = b)
+        // Soft accent light on a dark room bands on 8-bit screens; grain smooths it.
+        drawGrain()
     }
 }
 

@@ -22,6 +22,8 @@ import io.github.matiyaaa.fuse.ui.designsystem.theme.ThemePresets
  */
 @Immutable
 data class UiPrefs(
+    /** Jellyfin, an addon: off until turned on in Settings, Addons, Jellyfin. */
+    val jellyfin: io.github.matiyaaa.fuse.data.settings.JellyfinSettings = io.github.matiyaaa.fuse.data.settings.JellyfinSettings(),
     val onboardingDone: Boolean = false,
     val themeId: String = "fuse",
     val motion: MotionProfile? = null,
@@ -65,6 +67,8 @@ data class UiPrefs(
     val openGamePage: Boolean = false,
     /** Phone Link: a phone on the same network can see and fix the library (see docs/PHONE_LINK.md). */
     val phoneLinkEnabled: Boolean = false,
+    /** Phone Link: a signed-in phone can be used as a controller, and type into fields. */
+    val phoneLinkController: Boolean = true,
     /** Collections as a whole; off hides every collection feature. */
     val collectionsEnabled: Boolean = true,
     /** Automatic series collections. */

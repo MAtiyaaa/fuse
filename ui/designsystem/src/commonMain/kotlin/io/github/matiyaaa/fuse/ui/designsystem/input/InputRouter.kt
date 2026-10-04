@@ -31,7 +31,8 @@ enum class NavResult {
     IGNORED,
 }
 
-enum class InputSource { GAMEPAD, KEYBOARD, TOUCH, POINTER }
+/** Where an action came from; [REMOTE] is a phone used as a controller through Phone Link. */
+enum class InputSource { GAMEPAD, KEYBOARD, TOUCH, POINTER, REMOTE }
 
 /**
  * One action for the layers. [modifier] is set when it came while a hold modifier was held down
@@ -241,7 +242,8 @@ class InputRouter(
             it(button, true)
             return
         }
-        capture?.let {
+        // Learning a button for a mapping listens to the device's own controllers only.
+        capture?.takeIf { source != InputSource.REMOTE }?.let {
             _lastSource.value = source
             it(button)
             return

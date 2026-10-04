@@ -47,6 +47,9 @@ fun fuseImageLoader(
     }
     .components {
         add(KtorNetworkFetcherFactory(httpClient = { http }))
+        // Jellyfin's pictures: fetched on the route in use, cached by the picture (JellyfinImages).
+        add(JellyfinImages.Key())
+        add(JellyfinImages.Fetch(http))
         // System logos from the system art pack are SVG.
         add(SvgDecoder.Factory(density = { svgDensity }))
         components()

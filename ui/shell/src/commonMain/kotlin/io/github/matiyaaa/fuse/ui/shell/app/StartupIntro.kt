@@ -46,6 +46,9 @@ import kotlinx.coroutines.launch
 internal object StartupIntro {
     var played = false
 
+    /** When the startup animation last played (epoch ms), so waking from Standby right after doesn't play it again. */
+    var lastPlayedAt = 0L
+
     /** The whole intro, in milliseconds; the reduced-motion version is a short fade. */
     const val LENGTH_MS = 3_200
     const val REDUCED_MS = 1_000
@@ -389,7 +392,12 @@ internal object Away {
     private val _returns = kotlinx.coroutines.flow.MutableSharedFlow<Long>(extraBufferCapacity = 1)
     val returns: kotlinx.coroutines.flow.SharedFlow<Long> = _returns
 
+    /** When Fuse last came back to the screen (epoch ms); Standby counts idle time from then at the earliest. */
+    @kotlin.concurrent.Volatile var lastReturnAt: Long = 0L
+        private set
+
     fun returned(awayMs: Long) {
+        lastReturnAt = kotlin.time.Clock.System.now().toEpochMilliseconds()
         _returns.tryEmit(awayMs)
     }
 

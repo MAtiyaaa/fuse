@@ -134,12 +134,14 @@ val settingsSections: List<SettingsSection> = listOf(
     SettingsSection("systems", "Systems and emulators", FuseIcons.Chip, "Each system, and the emulators found", ::systemsRows, group = GAMES),
     SettingsSection("media", "Art and details", FuseIcons.Images, "Filling art, previews, sources and keys", ::mediaRows, group = GAMES, status = ::mediaStatus),
     SettingsSection("inputs", "Controls", FuseIcons.Gamepad, "Buttons, mapping, repeat and sticks", ::inputRows, group = DEVICE),
-    SettingsSection("displays", "Screen and sound", FuseIcons.Monitor, "Music, sounds, screens, performance", ::screenAndSoundRows, group = DEVICE),
+    SettingsSection("displays", "Display", FuseIcons.Monitor, "Screens, rotation, performance", ::displayAndPerformanceRows, group = DEVICE),
+    SettingsSection("sound", "Sound", FuseIcons.Volume, "Menu music and interface sounds", ::soundRows, group = DEVICE),
     SettingsSection(
         "store", "Store", FuseIcons.Store, "Catalogue, added apps, update checks", ::storeRows,
         available = { it.store.appStore.supported }, group = CONNECTIONS,
     ),
     SettingsSection("accounts", "Accounts", FuseIcons.CircleUser, "RetroAchievements, Cartridge, Phone Link", ::accountsRows, group = CONNECTIONS),
+    SettingsSection("addons", "Addons", FuseIcons.Blocks, "Jellyfin: your films, shows and music", ::addonsRows, group = CONNECTIONS, status = ::addonsStatus),
     SettingsSection("health", "System health", FuseIcons.HeartPulse, "What needs attention, and a bug report", ::healthRows, group = GENERAL, status = ::healthStatus),
     SettingsSection("storage", "Storage and backups", FuseIcons.HardDrive, "File access, drives, backup and restore", ::storageAndBackupRows, group = GENERAL),
     SettingsSection("about", "About", FuseIcons.Info, "Updates, privacy, licences, setup", ::aboutRows, group = GENERAL, status = ::aboutStatus),
@@ -151,7 +153,6 @@ val settingsSections: List<SettingsSection> = listOf(
  */
 val settingsAliases: Map<String, String> = mapOf(
     "emulators" to "systems",
-    "sound" to "displays",
     "performance" to "displays",
     "achievements" to "accounts",
     "cartridge" to "accounts",

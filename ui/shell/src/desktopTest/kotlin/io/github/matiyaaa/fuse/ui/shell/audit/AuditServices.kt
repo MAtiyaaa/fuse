@@ -105,14 +105,13 @@ internal class AuditServices(
     override val desktopApps: io.github.matiyaaa.fuse.ui.shell.store.DesktopInstaller? =
         if (desktop) AuditDesktopInstaller(host, File(base.cacheDir, "store-desktop")) else null
 
+    /** The made-up Jellyfin server everywhere; the Store's catalogue where there is a Store. */
     override val http: io.ktor.client.HttpClient =
-        if (host == Host.ANDROID || desktop) {
-            io.ktor.client.HttpClient(io.ktor.client.engine.mock.MockEngine { request ->
-                AuditStore.answer(this, request) ?: respondError(io.ktor.http.HttpStatusCode.NotFound)
-            })
-        } else {
-            base.http
-        }
+        io.ktor.client.HttpClient(io.ktor.client.engine.mock.MockEngine { request ->
+            AuditJellyfin.answer(this, request)
+                ?: (if (host == Host.ANDROID || desktop) AuditStore.answer(this, request) else null)
+                ?: respondError(io.ktor.http.HttpStatusCode.NotFound)
+        }) { install(io.ktor.client.plugins.HttpTimeout) }
 
     override val fs: FuseFileSystem = object : FuseFileSystem by base.fs {
         override suspend fun list(path: String): List<FsEntry> {
@@ -361,6 +360,9 @@ internal class AuditPhoneLink : io.github.matiyaaa.fuse.ui.shell.store.PhoneLink
     override suspend fun signOutAll() {
         state.value = state.value.copy(sessions = 0)
     }
+
+    override suspend fun pairingLink(address: String?): String? =
+        if (!state.value.running) null else (address ?: state.value.addresses.firstOrNull())?.trimEnd('/')?.plus("/pair/audit")
 
     /** A version 3 sized grid with the three finder squares and a fixed scatter, like a real code. */
     override fun qr(text: String): List<BooleanArray> {

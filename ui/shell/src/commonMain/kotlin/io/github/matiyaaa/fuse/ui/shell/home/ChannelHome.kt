@@ -17,12 +17,11 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
-import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -80,6 +79,7 @@ import io.github.matiyaaa.fuse.ui.fuseline.Crossfade
 import io.github.matiyaaa.fuse.ui.fuseline.Curves
 import io.github.matiyaaa.fuse.ui.fuseline.Durations
 import io.github.matiyaaa.fuse.ui.fuseline.FuselineValue
+import io.github.matiyaaa.fuse.ui.fuseline.PageEffect
 import io.github.matiyaaa.fuse.ui.fuseline.animate
 import io.github.matiyaaa.fuse.ui.fuseline.fadeIn
 import io.github.matiyaaa.fuse.ui.fuseline.fadeOut
@@ -143,7 +143,7 @@ private const val WIDGET_CORNER = 0.6f
 fun ChannelHome(app: AppState) {
     val store = app.store
     val prefs by store.prefs.collectAsState()
-    val feed by store.library.home.collectAsState()
+    val feed by store.homeFeed.collectAsState()
     val cartridge by store.cartridge.status.collectAsState()
 
     // Without a single game, system or app the board would be a wall of empty widgets: Home says
@@ -184,7 +184,7 @@ fun ChannelHome(app: AppState) {
     // a quick press for the menu doesn't flash it.
     val holding = arranging && held == NavAction.CONTEXT && op == null
     var resizeLook by remember { mutableStateOf(false) }
-    LaunchedEffect(holding) {
+    PageEffect(holding) {
         if (holding) {
             delay(RESIZE_LOOK_MS)
             resizeLook = true
@@ -194,11 +194,11 @@ fun ChannelHome(app: AppState) {
     }
 
     val systems = rememberSystems(app)
-    LaunchedEffect(current?.id, systems) {
+    PageEffect(current?.id, systems) {
         val game = current?.let { firstGame(it.kind, feed) }
         app.hero = game?.room(systems[game.platformId])
     }
-    LaunchedEffect(arranging, op is BoardOp.Carry, resizeLook, onTools) {
+    PageEffect(arranging, op is BoardOp.Carry, resizeLook, onTools) {
         app.hints = when {
             arranging && onTools != null -> listOf(Hint(HintButton.CONFIRM, if (onTools == 0) "Undo" else "Reset Home"), Hint(HintButton.BACK, "Done"))
             op is BoardOp.Carry -> listOf(Hint(HintButton.DPAD, "Move"), Hint(HintButton.CONFIRM, "Put down"), Hint(HintButton.BACK, "Cancel"))
@@ -208,7 +208,7 @@ fun ChannelHome(app: AppState) {
         }
     }
     // Leaving the board puts everything down where it was.
-    LaunchedEffect(app.focusZone) {
+    PageEffect(app.focusZone) {
         if (app.focusZone != FocusZone.CONTENT) editor.cancel()
     }
 
@@ -440,7 +440,7 @@ fun ChannelHome(app: AppState) {
         // arranging: a beat left running would wake every frame for nothing.
         val wobbling = arranging && op == null && !motion.reduced
         val beat = remember { FuselineValue(0f) }
-        LaunchedEffect(wobbling) {
+        PageEffect(wobbling) {
             while (wobbling) {
                 beat.snapTo(0f)
                 beat.animateTo(1f, tween(WOBBLE_MS, easing = Curves.Linear))
@@ -641,7 +641,7 @@ fun ChannelHome(app: AppState) {
             )
         }
         // Controls of widgets that are gone, or of a board no longer arranged, catch no touches.
-        LaunchedEffect(arranging, widgets.map { it.id }, sel.index) {
+        PageEffect(arranging, widgets.map { it.id }, sel.index) {
             if (!arranging) controls.clear()
             val live = widgets.map { it.id }.toSet()
             controls.keys.retainAll { k -> k.substringAfter(':') in live }
@@ -723,8 +723,8 @@ private fun BoardItem(
     // Wider widgets wobble less, so a large one doesn't swing its corners about.
     val swing = WOBBLE_DEGREES / size.width.coerceAtLeast(1)
     val shake = remember { FuselineValue(0f) }
-    LaunchedEffect(bump?.nonce) {
-        if (bump == null) return@LaunchedEffect
+    PageEffect(bump?.nonce) {
+        if (bump == null) return@PageEffect
         shake.snapTo(0f)
         shake.animateTo(1f, tween(SHAKE_MS, easing = Curves.Linear))
         shake.snapTo(0f)
@@ -807,13 +807,13 @@ private fun Modifier.boardPlace(rect: Rect, animate: Boolean): Modifier {
     val w = remember { FuselineValue(rect.width) }
     val h = remember { FuselineValue(rect.height) }
     val spec = remember { spring(dampingRatio = 0.78f, stiffness = 420f) }
-    LaunchedEffect(rect, animate) {
+    PageEffect(rect, animate) {
         if (!animate) {
             x.snapTo(rect.left)
             y.snapTo(rect.top)
             w.snapTo(rect.width)
             h.snapTo(rect.height)
-            return@LaunchedEffect
+            return@PageEffect
         }
         launch { x.animateTo(rect.left, spec) }
         launch { y.animateTo(rect.top, spec) }
@@ -835,7 +835,7 @@ private fun KeepCellInView(scroll: ScrollState, rect: () -> Rect?, enabled: Bool
     val on by rememberUpdatedState(enabled)
     val below by rememberUpdatedState(bottomMargin)
     val spec = Fuse.motion.followScroll()
-    LaunchedEffect(scroll) {
+    PageEffect(scroll) {
         snapshotFlow { current() to scroll.viewportSize }.collect { (r, viewport) ->
             if (r == null || !on || viewport <= 0) return@collect
             val top = scroll.value.toFloat()

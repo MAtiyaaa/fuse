@@ -101,16 +101,17 @@ fun ShowcaseApp(store: FuseStore, platform: PlatformUi) {
         glass = prefs.glass,
         highContrastFocus = prefs.highContrastFocus,
     ) {
-        val home by store.library.home.collectAsState()
+        val home by store.homeFeed.collectAsState()
         val status by platform.status.collectAsState()
         val focus by Spotlight.focused.collectAsState()
         val systems by store.library.platforms.collectAsState()
         val time = rememberClockText(prefs.clock24h)
         val playing = home.playtime.currentGame
-        val target: Any? = playing ?: focus.key
+        val media = io.github.matiyaaa.fuse.ui.shell.jellyfin.MediaFocus.get(focus.key)
+        val target: Any? = playing ?: media?.takeIf { prefs.jellyfin.browsingCompanion != "OFF" } ?: focus.key.takeIf { media == null }
         val direction = if (playing != null) 0 else focus.direction
         val hero = companionHero(store, systems, target)
-        Box(Modifier.fillMaxSize().background(Fuse.colors.ink)) {
+        Box(Modifier.fillMaxSize().background(Fuse.colors.ink).veiledWhileOpening()) {
             AmbientBackground(
                 if (spec.background == io.github.matiyaaa.fuse.model.BackgroundStyle.HERO) io.github.matiyaaa.fuse.model.BackgroundStyle.SOLID else spec.background,
                 hero?.accent ?: Fuse.colors.accent,
@@ -153,7 +154,7 @@ fun ShowcaseApp(store: FuseStore, platform: PlatformUi) {
                                 (slideOutHorizontally(motion.tween(Durations.BASE, Curves.Exit)) { (-it * 0.04f * dir).toInt() } + exit)
                         }
                     },
-                    contentKey = { (it.target as? GameCard)?.id ?: it.target },
+                    contentKey = { (it.target as? GameCard)?.id ?: (it.target as? io.github.matiyaaa.fuse.jellyfin.MediaItem)?.id ?: it.target },
                     label = "showcase",
                 ) { content ->
                     when (val t = content.target) {
@@ -161,15 +162,49 @@ fun ShowcaseApp(store: FuseStore, platform: PlatformUi) {
                         is GameId -> ShowcaseGame(store, t, playingSince = null, compact = compact)
                         is PlatformId -> systems.firstOrNull { it.platform.id == t }?.let { ShowcaseSystem(it, compact) }
                         is CollectionId -> ShowcaseCollection(store, t, compact)
+                        is io.github.matiyaaa.fuse.jellyfin.MediaItem -> ShowcaseMedia(t, compact, minimal = prefs.jellyfin.browsingCompanion == "MINIMAL")
                         else -> ShowcaseIdle(time, home.recentlyPlayed.ifEmpty { home.continuePlaying }, compact)
                     }
                 }
             }
+            // Fuse Player's picture, while the menus and its remote are on the touch screen.
+            val player = io.github.matiyaaa.fuse.ui.player.FusePlayer.session
+            if (player.item != null) io.github.matiyaaa.fuse.ui.player.PlayerPicture(player, Modifier.fillMaxSize())
         }
     }
 }
 
 private data class ShowcaseContent(val target: Any?, val direction: Int)
+
+/**
+ * A film, show or album from Jellyfin, cinematic: its logo (or name), the facts, how far in it is
+ * and a few lines about it, low on the left over its backdrop.
+ */
+@Composable
+private fun ShowcaseMedia(item: io.github.matiyaaa.fuse.jellyfin.MediaItem, compact: Boolean, minimal: Boolean) {
+    val c = Fuse.colors
+    val title = if (item.type == io.github.matiyaaa.fuse.jellyfin.MediaType.EPISODE) item.seriesName ?: item.name else item.name
+    Column(Modifier.fillMaxSize().padding(bottom = Space.s), verticalArrangement = Arrangement.spacedBy(Space.m, Alignment.Bottom)) {
+        val name: @Composable () -> Unit = { FText(title, if (compact) Fuse.type.display else Fuse.type.hero, maxLines = 2) }
+        val logo = item.logo?.sized(800)
+        if (logo != null) {
+            Artwork(logo, Modifier.widthIn(max = 560.dp).fillMaxWidth(0.5f).height(if (compact) 90.dp else 150.dp), contentScale = ContentScale.Fit, focusX = 0f, fallback = name)
+        } else {
+            name()
+        }
+        if (minimal) return@Column
+        if (item.type == io.github.matiyaaa.fuse.jellyfin.MediaType.EPISODE) {
+            FText(listOfNotNull(item.episodeLabel, item.name).joinToString("  ·  "), Fuse.type.bodyStrong, maxLines = 1)
+        }
+        Fact(io.github.matiyaaa.fuse.ui.shell.jellyfin.mediaFacts(item))
+        item.progress?.let { p ->
+            Box(Modifier.width(220.dp).height(4.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(2.dp)).background(Color.White.copy(alpha = 0.2f))) {
+                Box(Modifier.fillMaxWidth(p).height(4.dp).background(c.accent))
+            }
+        }
+        item.overview?.let { FText(it, Fuse.type.body, color = c.textMuted, maxLines = if (compact) 2 else 4, modifier = Modifier.widthIn(max = 640.dp)) }
+    }
+}
 
 /** A game, large: logo, facts, a few lines about it, then its numbers, with its cover at the right. */
 @Composable

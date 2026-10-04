@@ -44,6 +44,12 @@ interface FuseServices {
      */
     val cacheDir: String
 
+    /** This device's name, as servers list it (Jellyfin's dashboard). */
+    val deviceName: String get() = "Fuse"
+
+    /** Finds Jellyfin servers on the network; null where there is no way to. */
+    val jellyfinDiscovery: io.github.matiyaaa.fuse.jellyfin.ServerDiscovery? get() = null
+
     val emulators: EmulatorDetector
     val launcher: GameLauncher
     val cartridge: CartridgeBridge

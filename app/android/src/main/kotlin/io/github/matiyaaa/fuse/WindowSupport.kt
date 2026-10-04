@@ -36,6 +36,15 @@ internal fun Activity.displayIdCompat(): Int =
         windowManager.defaultDisplay.displayId
     }
 
+/** How the display this activity is on is turned now (a [android.view.Surface] rotation). */
+internal fun Activity.displayRotationCompat(): Int =
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+        display?.rotation ?: android.view.Surface.ROTATION_0
+    } else {
+        @Suppress("DEPRECATION")
+        windowManager.defaultDisplay.rotation
+    }
+
 /** The refresh rate Fuse's window asks for, from the performance profile. */
 internal enum class RefreshPreference {
     /** The display's fastest mode. */

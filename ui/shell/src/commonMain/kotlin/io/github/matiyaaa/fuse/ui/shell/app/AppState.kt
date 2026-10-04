@@ -116,6 +116,12 @@ class AppState(
     var confirm by mutableStateOf<ConfirmSpec?>(null)
     var textInput by mutableStateOf<TextInputSpec?>(null)
     var choice by mutableStateOf<ChoiceSpec?>(null)
+
+    /** Fuse Player is open over everything (Jellyfin). */
+    var playerOpen by mutableStateOf(false)
+
+    /** The code for typing on a phone is showing (the keyboard's phone key). */
+    var phoneTyping by mutableStateOf(false)
     var reorder by mutableStateOf<ReorderSpec?>(null)
 
     /** Fuse's startup animation is playing ([StartupIntroOverlay]). */
@@ -180,7 +186,7 @@ class AppState(
     var launching by mutableStateOf<LaunchVeil?>(null)
 
     val overlayOpen: Boolean
-        get() = quickMenuOpen || contextMenu != null || confirm != null || textInput != null || choice != null || reorder != null || screenPrompt != null || buttonDetect || problem != null || textPreview != null
+        get() = quickMenuOpen || contextMenu != null || confirm != null || textInput != null || choice != null || reorder != null || screenPrompt != null || buttonDetect || problem != null || textPreview != null || phoneTyping
 
     fun openContextMenu(spec: ContextMenuSpec) {
         contextMenu = spec
@@ -191,6 +197,7 @@ class AppState(
         contextMenu = null
         confirm = null
         textInput = null
+        phoneTyping = false
         choice = null
         screenPrompt = null
         problem = null
@@ -210,8 +217,20 @@ class AppState(
     }
 }
 
-/** A text field that accepts hardware keyboard input. */
-class KeyboardTarget(val field: io.github.matiyaaa.fuse.ui.designsystem.components.EditableText, val submit: () -> Unit)
+/**
+ * A text field open for typing: hardware keyboards type into it, and through Phone Link a phone can
+ * too, which shows it as [title] with its [doneLabel] key. [cancel] closes it without finishing
+ * (null where it can't be closed, like Search's own field).
+ */
+class KeyboardTarget(
+    val field: io.github.matiyaaa.fuse.ui.designsystem.components.EditableText,
+    val title: String = "Search",
+    val secret: Boolean = false,
+    val placeholder: String = "",
+    val doneLabel: String = "Done",
+    val cancel: (() -> Unit)? = null,
+    val submit: () -> Unit,
+)
 
 /**
  * Shown for the moment between pressing Play and the emulator taking over: the game's [title] over

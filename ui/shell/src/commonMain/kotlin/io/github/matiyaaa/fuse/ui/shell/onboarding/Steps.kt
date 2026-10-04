@@ -422,7 +422,7 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
         // Only where there is a second screen: which of the two holds the menus.
         if (platform.features.secondScreen) add(Step(
             "displays", "Two screens", "Which way round?",
-            "Menus on top keeps Fuse on the main screen, with the chosen game shown below. Menus below puts Fuse on the touch screen, like a 3DS, and gives the main screen to the game you are on. Settings, Screen and sound can change it later.",
+            "Menus on top keeps Fuse on the main screen, with the chosen game shown below. Menus below puts Fuse on the touch screen, like a 3DS, and gives the main screen to the game you are on. Settings, Display can change it later.",
             icon = FuseIcons.DualScreen, chapter = Chapters.YOURS,
             actions = listOf(
                 StepAction("Menus on top", primary = !prefs.display.flipped && prefs.display.mode != DualScreenMode.OFF) {

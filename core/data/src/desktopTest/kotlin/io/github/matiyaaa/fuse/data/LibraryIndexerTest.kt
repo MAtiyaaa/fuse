@@ -72,6 +72,28 @@ class LibraryIndexerTest {
         }
     }
 
+    // A shortcuts folder holds Steam and Windows games and is scanned once for each: the Windows
+    // pass, which finds no Steam game, must not mark the Steam games missing (0.2.7 did, so Steam
+    // games read as missing after every scan).
+    @Test
+    fun aFolderScannedForTwoSystemsKeepsBothSystemsGames() = runBlocking {
+        TestDb().use { t ->
+            val d = t.data
+            val celeste = scanned("/kept/steam/Celeste.steam", platform = "steam")
+            val witcher = scanned("/kept/steam/Witcher 3.desktop", platform = "win")
+            repeat(2) { round ->
+                val delta = d.indexer.apply(
+                    report(folder("/kept/steam", listOf(celeste), platform = "steam"), folder("/kept/steam", listOf(witcher), platform = "win")),
+                    now = 1_000L + round,
+                    cleaner = testCleaner,
+                )
+                assertEquals(0, delta.missing)
+            }
+            val missing = d.games.observeMissing().first()
+            assertTrue(missing.isEmpty(), "nothing is missing: $missing")
+        }
+    }
+
     @Test
     fun rescansNeverLoseUserData() = runBlocking {
         TestDb().use { t ->

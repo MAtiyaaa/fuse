@@ -108,7 +108,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /** What a key does. GAP keys only take up space (the half-key indents). */
-internal enum class KeyKind { CHAR, SHIFT, SPACE, PASTE, BACKSPACE, DONE, PAGE, GAP }
+internal enum class KeyKind { CHAR, SHIFT, SPACE, PASTE, PHONE, BACKSPACE, DONE, PAGE, GAP }
 
 /** The keyboard's pages: letters, then numbers and punctuation, then more symbols. */
 enum class KeyPage { LETTERS, NUMBERS, SYMBOLS }
@@ -134,31 +134,48 @@ private fun gap(weight: Float) = Key("", weight, KeyKind.GAP)
 private val shiftKey = Key("Shift", 1.25f, KeyKind.SHIFT, FuseIcons.Shift)
 private val deleteKey = Key("Delete", 1.25f, KeyKind.BACKSPACE, FuseIcons.Backspace)
 private val pasteKey = Key("Paste", 1.2f, KeyKind.PASTE, FuseIcons.ClipboardPaste)
+private val phoneKey = Key("Type on your phone", 1.1f, KeyKind.PHONE, FuseIcons.Smartphone)
 private val doneKey = Key("Done", 2f, KeyKind.DONE)
 private fun space(weight: Float) = Key("space", weight, KeyKind.SPACE)
 private fun page(label: String, to: KeyPage, weight: Float) = Key(label, weight, KeyKind.PAGE, page = to)
 
-/** Every row adds up to ten letter keys, so the rows line up like a phone keyboard. */
-internal fun keyRows(page: KeyPage): List<List<Key>> = when (page) {
+/**
+ * Every row adds up to ten letter keys, so the rows line up like a phone keyboard. With [phone] the
+ * bottom row has the key that types from a phone instead; the letters give up their hyphen for it
+ * (it is on the 123 page) and Space a little of its width.
+ */
+internal fun keyRows(page: KeyPage, phone: Boolean = false): List<List<Key>> = when (page) {
     KeyPage.LETTERS -> listOf(
         chars("qwertyuiop"),
         listOf(gap(0.5f)) + chars("asdfghjkl") + gap(0.5f),
         listOf(shiftKey, gap(0.25f)) + chars("zxcvbnm") + listOf(gap(0.25f), deleteKey),
-        listOf(page("123", KeyPage.NUMBERS, 1.5f), pasteKey, Key("-"), space(3.3f), Key("'"), doneKey),
+        if (phone) {
+            listOf(page("123", KeyPage.NUMBERS, 1.5f), phoneKey, pasteKey, space(3.2f), Key("'"), doneKey)
+        } else {
+            listOf(page("123", KeyPage.NUMBERS, 1.5f), pasteKey, Key("-"), space(3.3f), Key("'"), doneKey)
+        },
     )
     KeyPage.NUMBERS -> listOf(
         chars("1234567890"),
         chars("-/:;()$&@\""),
         listOf(page("#+=", KeyPage.SYMBOLS, 1.25f), gap(0.25f)) + chars(".,?!'", 1.4f) + listOf(gap(0.25f), deleteKey),
-        listOf(page("ABC", KeyPage.LETTERS, 1.5f), pasteKey, space(5.3f), doneKey),
+        bottomRow(phone),
     )
     KeyPage.SYMBOLS -> listOf(
         chars("[]{}#%^*+="),
         chars("_\\|~<>€£¥•"),
         listOf(page("123", KeyPage.NUMBERS, 1.25f), gap(0.25f)) + chars(".,?!'", 1.4f) + listOf(gap(0.25f), deleteKey),
-        listOf(page("ABC", KeyPage.LETTERS, 1.5f), pasteKey, space(5.3f), doneKey),
+        bottomRow(phone),
     )
 }
+
+/** The 123 and #+= pages' bottom row. */
+private fun bottomRow(phone: Boolean): List<Key> =
+    if (phone) {
+        listOf(page("ABC", KeyPage.LETTERS, 1.5f), phoneKey, pasteKey, space(4.2f), doneKey)
+    } else {
+        listOf(page("ABC", KeyPage.LETTERS, 1.5f), pasteKey, space(5.3f), doneKey)
+    }
 
 /** Keys a keyboard screen always lets repeat while held: Delete (X) and the caret (LB and RB). */
 private val HELD_KEYS = setOf(NavAction.CONTEXT, NavAction.PREVIOUS_SECTION, NavAction.NEXT_SECTION)
@@ -203,7 +220,10 @@ class KeyboardState(val autoCapitalize: Boolean = false) {
     private var lastShiftTap: TimeSource.Monotonic.ValueTimeMark? = null
     private var lastSpace: TimeSource.Monotonic.ValueTimeMark? = null
 
-    internal val rows: List<List<Key>> get() = keyRows(page)
+    /** True while the keyboard offers typing from a phone (see [OnScreenKeyboard]'s `onPhone`). */
+    var phone by mutableStateOf(false)
+
+    internal val rows: List<List<Key>> get() = keyRows(page, phone)
 
     /** Sets Shift for the text as it is (a capital at the start when [autoCapitalize]). */
     fun prepare(field: EditableText) {
@@ -250,7 +270,7 @@ class KeyboardState(val autoCapitalize: Boolean = false) {
      * up to whole words), Y types a space, LB and RB move the caret, LT and RT jump a word, and
      * Start finishes.
      */
-    fun handle(event: NavEvent, field: EditableText, onDone: () -> Unit, onPaste: (() -> Unit)? = null): NavResult {
+    fun handle(event: NavEvent, field: EditableText, onDone: () -> Unit, onPaste: (() -> Unit)? = null, onPhone: (() -> Unit)? = null): NavResult {
         clampFocus()
         touchMode = false
         when (event.action) {
@@ -282,7 +302,7 @@ class KeyboardState(val autoCapitalize: Boolean = false) {
                     return NavResult.ACTIVATED
                 }
                 showPress(row, column)
-                press(key, field, onDone, onPaste)
+                press(key, field, onDone, onPaste, onPhone)
                 return NavResult.ACTIVATED
             }
             NavAction.CONTEXT -> {
@@ -312,7 +332,7 @@ class KeyboardState(val autoCapitalize: Boolean = false) {
         }
     }
 
-    internal fun press(key: Key, field: EditableText, onDone: () -> Unit, onPaste: (() -> Unit)? = null) {
+    internal fun press(key: Key, field: EditableText, onDone: () -> Unit, onPaste: (() -> Unit)? = null, onPhone: (() -> Unit)? = null) {
         when (key.kind) {
             KeyKind.CHAR -> {
                 field.insert(if (shift != ShiftState.OFF) key.label.uppercase() else key.label)
@@ -330,6 +350,7 @@ class KeyboardState(val autoCapitalize: Boolean = false) {
             }
             KeyKind.SPACE -> typeSpace(field)
             KeyKind.PASTE -> onPaste?.invoke()
+            KeyKind.PHONE -> onPhone?.invoke()
             KeyKind.BACKSPACE -> { field.backspace(); edited(field) }
             KeyKind.DONE -> onDone()
             KeyKind.PAGE -> {
@@ -405,7 +426,11 @@ fun OnScreenKeyboard(
     showFocus: Boolean = true,
     onPaste: (() -> Unit)? = null,
     onKey: () -> Unit = {},
+    /** Offers typing from a phone: a key in the bottom row that calls this. Null leaves the key out. */
+    onPhone: (() -> Unit)? = null,
 ) {
+    // Set before the rows are read, so the first frame already has the right bottom row.
+    if (state.phone != (onPhone != null)) state.phone = onPhone != null
     val rows = state.rows
     var width by remember { mutableIntStateOf(0) }
     val rowGap = rowGapFor(keyHeight)
@@ -431,7 +456,7 @@ fun OnScreenKeyboard(
                                     enabled = key.kind != KeyKind.PASTE || onPaste != null,
                                     height = keyHeight,
                                     onFocus = { state.row = r; state.column = col },
-                                    onPress = { onKey(); state.press(key, field, onDone, onPaste) },
+                                    onPress = { onKey(); state.press(key, field, onDone, onPaste, onPhone) },
                                     onKey = onKey,
                                 )
                             }
@@ -594,7 +619,7 @@ private fun BoxScope.KeyHighlight(state: KeyboardState, width: Int, keyHeight: D
 private val KeyLip = 2.dp
 
 /** Keys that do something rather than type: a quieter face, so the letters lead. */
-private val FunctionKeys = setOf(KeyKind.SHIFT, KeyKind.BACKSPACE, KeyKind.PAGE, KeyKind.PASTE, KeyKind.SPACE)
+private val FunctionKeys = setOf(KeyKind.SHIFT, KeyKind.BACKSPACE, KeyKind.PAGE, KeyKind.PASTE, KeyKind.PHONE, KeyKind.SPACE)
 
 /**
  * How far down a key is pressed, 0 to 1: held by a finger ([held]), or a quick dip when the

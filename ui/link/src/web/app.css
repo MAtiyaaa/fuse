@@ -1967,3 +1967,138 @@ a.btn { text-decoration: none; }
   body.is-selecting .shell { padding-bottom: 120px; }
   body.is-selecting .toasts { bottom: 100px; }
 }
+
+/* ---- Remote: typing into Fuse, and the phone as a controller. The pad is drawn like Fuse's own
+   setup controller: a dark body, caps with a lit top edge and a lip, the pressed one sinking and
+   taking the accent. Everything on it ignores text selection, long-press menus and double-tap zoom. */
+
+.remote { display: flex; flex-direction: column; gap: var(--s-l); padding-bottom: var(--s-xl); }
+
+.type-card { display: flex; align-items: center; gap: var(--s-m); width: 100%; text-align: left; color: inherit; transition: box-shadow var(--d-base) var(--e-standard), transform var(--d-fast) var(--e-press-out); }
+.type-card:active { transform: scale(var(--press)); transition-duration: var(--d-instant); }
+.type-card .card-icon { background: var(--raised); color: var(--muted); box-shadow: inset 0 0 0 1px var(--hairline); transition: background-color var(--d-base) var(--e-standard), color var(--d-base) var(--e-standard); }
+.type-card-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.type-card-go { flex: none; width: 20px; height: 20px; color: var(--faint); }
+.type-card.is-live { box-shadow: 0 0 0 1px var(--accent-line), var(--sh-panel); }
+.type-card.is-live .card-icon { background: var(--accent-soft); color: var(--accent); box-shadow: none; }
+.type-card.is-live .type-card-go { color: var(--accent); }
+
+.pad {
+  --cap: linear-gradient(180deg, rgba(255, 255, 255, .07), rgba(255, 255, 255, 0) 55%), var(--raised);
+  --cap-edge: inset 0 1px 0 rgba(255, 255, 255, .12), inset 0 -2px 0 rgba(0, 0, 0, .35), 0 2px 6px rgba(var(--shadow), .35);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-l);
+  padding: var(--s-l) var(--s-l) var(--s-xl);
+  border-radius: 32px;
+  background: radial-gradient(120% 90% at 50% 0%, rgba(255, 255, 255, .05), transparent 60%), var(--surface);
+  box-shadow: 0 0 0 1px var(--hairline), var(--sh-raised);
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  touch-action: none;
+}
+.pad.is-off .pad-shoulders, .pad.is-off .pad-main { opacity: .35; pointer-events: none; }
+.pad-note { font: 500 14px/20px var(--sans); color: var(--muted); text-align: center; text-wrap: pretty; }
+
+.pad-btn {
+  position: relative;
+  display: grid;
+  place-items: center;
+  background: var(--cap);
+  color: var(--text);
+  box-shadow: var(--cap-edge);
+  font: 700 15px/1 var(--display);
+  letter-spacing: .01em;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform var(--d-fast) var(--e-press-out), background-color var(--d-fast) var(--e-standard), color var(--d-fast) var(--e-standard), box-shadow var(--d-fast) var(--e-standard);
+}
+.pad-btn.is-down {
+  transform: translateY(1px) scale(.94);
+  background: var(--accent-soft);
+  color: var(--accent);
+  box-shadow: inset 0 0 0 1.5px var(--accent-line), inset 0 2px 4px rgba(0, 0, 0, .3);
+  transition-duration: var(--d-instant);
+  transition-timing-function: var(--e-standard);
+}
+.pad-label { pointer-events: none; }
+
+.pad-shoulders { display: flex; justify-content: space-between; gap: var(--s-l); }
+.pad-side { display: flex; gap: var(--s-s); }
+.pad-shoulders .pad-side:last-child { flex-direction: row; }
+.pad-bumper { height: 44px; min-width: 76px; padding: 0 var(--s-l); border-radius: 14px 14px 10px 10px; font-size: 14px; }
+.pad-trigger { height: 44px; min-width: 60px; padding: 0 var(--s-m); border-radius: 18px 18px 10px 10px; font-size: 14px; color: var(--muted); }
+
+.pad-main {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-areas: "dpad face" "mid mid";
+  align-items: center;
+  justify-items: center;
+  gap: var(--s-xl) var(--s-m);
+}
+
+.dpad {
+  grid-area: dpad;
+  --arm: clamp(48px, 13vw, 60px);
+  display: grid;
+  grid-template-columns: repeat(3, var(--arm));
+  grid-template-rows: repeat(3, var(--arm));
+}
+.dpad .pad-btn { border-radius: 12px; }
+.dpad .pad-btn .i { width: 26px; height: 26px; stroke-width: 2.4; pointer-events: none; }
+.dpad-up { grid-area: 1 / 2; border-radius: 14px 14px 6px 6px !important; }
+.dpad-left { grid-area: 2 / 1; border-radius: 14px 6px 6px 14px !important; }
+.dpad-right { grid-area: 2 / 3; border-radius: 6px 14px 14px 6px !important; }
+.dpad-down { grid-area: 3 / 2; border-radius: 6px 6px 14px 14px !important; }
+.dpad-up .i { transform: rotate(90deg); }
+.dpad-right .i { transform: rotate(180deg); }
+.dpad-down .i { transform: rotate(-90deg); }
+/* The hub joins the four arms into one cross, a shade darker so the arms still read as keys. */
+.dpad-hub { grid-area: 2 / 2; background: var(--raised); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .04); filter: brightness(.86); }
+
+.face {
+  grid-area: face;
+  --key: clamp(50px, 14vw, 62px);
+  display: grid;
+  grid-template-columns: repeat(3, var(--key));
+  grid-template-rows: repeat(3, var(--key));
+}
+.face .pad-btn { border-radius: 50%; font-size: 18px; }
+.face-top { grid-area: 1 / 2; }
+.face-left { grid-area: 2 / 1; }
+.face-right { grid-area: 2 / 3; }
+.face-bottom { grid-area: 3 / 2; }
+/* The confirm button (A on the device's layout) carries the accent, as in Fuse's hint line. */
+.face-bottom:not(.is-down) { color: var(--accent); }
+.ps-shape { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
+
+.pad-middle { grid-area: mid; display: flex; align-items: center; gap: var(--s-l); }
+.pad-pill { height: 34px; min-width: 76px; padding: 0 var(--s-m); border-radius: 17px; font: 600 13px/1 var(--sans); color: var(--muted); }
+.pad-home { width: 56px; height: 56px; border-radius: 50%; color: var(--accent); }
+.pad-home svg { width: 26px; height: 26px; pointer-events: none; }
+
+/* Held sideways, the pad spreads out like a controller: D-pad, middle buttons, face buttons. */
+@media (orientation: landscape) and (max-height: 560px) {
+  #tab-remote > .topbar { display: none; }
+  .remote { gap: var(--s-s); padding-top: var(--s-s); padding-bottom: var(--s-s); }
+  .type-card { padding-top: var(--s-s); padding-bottom: var(--s-s); }
+  .type-card .card-text { display: none; }
+  .pad { gap: var(--s-xs); padding: var(--s-s) var(--s-xl) var(--s-m); border-radius: 26px; }
+  .pad-bumper, .pad-trigger { height: 36px; }
+  .pad-main { grid-template-columns: 1fr auto 1fr; grid-template-areas: "dpad mid face"; gap: var(--s-l); }
+  .dpad { --arm: clamp(38px, 11vh, 48px); }
+  .face { --key: clamp(40px, 11.5vh, 50px); }
+  .pad-middle { flex-direction: column; gap: var(--s-s); margin-top: var(--s-xl); }
+  .pad-pill { height: 30px; }
+  .pad-home { width: 48px; height: 48px; }
+}
+
+/* The keyboard sheet: one large field, then Done. */
+.type-body { display: flex; flex-direction: column; gap: var(--s-m); }
+.type-box { height: 56px; }
+.type-box > .i { margin-left: 14px; color: var(--muted); flex: none; }
+.type-input { flex: 1; min-width: 0; height: 100%; padding: 0 var(--s-s) 0 var(--s-m); background: none; border: 0; outline: none; font: 500 17px/24px var(--sans); color: var(--text); }
+.type-note { font: 500 13px/18px var(--sans); color: var(--muted); margin: 0 var(--s-xxs); text-wrap: pretty; }

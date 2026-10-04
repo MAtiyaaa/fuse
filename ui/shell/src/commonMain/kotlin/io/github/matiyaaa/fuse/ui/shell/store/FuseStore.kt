@@ -72,6 +72,12 @@ interface FuseStore {
     /** The Store, where Fuse can install apps (Android); [AppStoreOps.None] elsewhere. */
     val appStore: AppStoreOps get() = AppStoreOps.None
 
+    /** Jellyfin, an addon; idle until it is turned on in Settings, Addons, Jellyfin. */
+    val jellyfin: io.github.matiyaaa.fuse.jellyfin.JellyfinService? get() = null
+
+    /** What Home shows: the library's feed, with Jellyfin's widgets when there are any. */
+    val homeFeed: kotlinx.coroutines.flow.StateFlow<HomeFeed> get() = library.home
+
     /** Games, updates, DLC and licences installed into RPCS3 and Vita3K by Fuse itself. */
     val content: ContentOps get() = ContentOps.None
 
@@ -767,6 +773,13 @@ interface PhoneLinkControl {
     suspend fun signOutAll()
     /** The QR code for [text] as rows of dark modules. */
     fun qr(text: String): List<BooleanArray>?
+
+    /**
+     * A link that signs a phone in without the password and opens its keyboard, for the code beside
+     * the on-screen keyboard: single use, for two minutes. [address] is one of [PhoneLinkState.addresses]
+     * (the first when null). Null while Phone Link isn't running or there is no network.
+     */
+    suspend fun pairingLink(address: String? = null): String? = null
 }
 
 data class PhoneLinkState(

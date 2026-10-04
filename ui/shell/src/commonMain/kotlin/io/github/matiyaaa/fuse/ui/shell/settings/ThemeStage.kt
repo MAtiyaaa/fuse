@@ -154,7 +154,7 @@ internal data class StageScene(
 @Composable
 internal fun rememberStageScene(app: AppState): StageScene {
     val prefs by app.store.prefs.collectAsState()
-    val feed by app.store.library.home.collectAsState()
+    val feed by app.store.homeFeed.collectAsState()
     val platforms by app.store.library.platforms.collectAsState()
     val status by app.platform.status.collectAsState()
     val cartridge by app.store.cartridge.status.collectAsState()
@@ -668,7 +668,7 @@ internal fun MotionProfile.label(): String = when (this) {
     MotionProfile.ENHANCED -> "Enhanced"
 }
 
-/** The same names Settings, Screen and sound uses. */
+/** The same names Settings, Sound uses. */
 internal fun SoundProfile.label(): String = when (this) {
     SoundProfile.OFF -> "Off"
     SoundProfile.SOFT -> "Soft"

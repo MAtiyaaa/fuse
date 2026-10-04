@@ -20,7 +20,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -53,6 +52,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
 import io.github.matiyaaa.fuse.ui.designsystem.theme.toColor
+import io.github.matiyaaa.fuse.ui.fuseline.PageEffect
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.FocusZone
 import kotlinx.coroutines.launch
@@ -82,7 +82,7 @@ internal fun StoreSetup(app: AppState, recommended: StoreVariant, active: Boolea
     fun choose(v: StoreVariant) {
         app.scope.launch { app.store.appStore.chooseVariant(v) }
     }
-    LaunchedEffect(focused) {
+    PageEffect(focused) {
         if (focused) app.hints = listOf(Hint(HintButton.CONFIRM, "Choose"))
     }
     InputLayer(enabled = focused && !app.overlayOpen) { e ->

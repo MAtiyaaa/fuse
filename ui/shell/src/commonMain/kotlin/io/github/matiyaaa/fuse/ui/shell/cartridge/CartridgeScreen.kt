@@ -4,7 +4,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -15,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -26,8 +26,6 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -36,6 +34,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
@@ -81,6 +80,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
 import io.github.matiyaaa.fuse.ui.designsystem.theme.tabular
 import io.github.matiyaaa.fuse.ui.designsystem.theme.toColor
+import io.github.matiyaaa.fuse.ui.fuseline.PageEffect
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.ConfirmSpec
 import io.github.matiyaaa.fuse.ui.shell.app.ContextMenuSpec
@@ -150,7 +150,7 @@ fun CartridgeContent(app: AppState, embedded: Boolean, active: Boolean, topPaddi
     var installing by remember { mutableStateOf(false) }
     val sel = rememberRouteState(app.navigator, "cartridge") { ShelfSelection() }
 
-    LaunchedEffect(status.installed) {
+    PageEffect(status.installed) {
         store.cartridge.refresh()
         if (!status.installed) {
             release = store.cartridge.latestRelease()
@@ -297,8 +297,8 @@ fun CartridgeContent(app: AppState, embedded: Boolean, active: Boolean, topPaddi
 
     // The background follows a chosen system or game.
     val col = sel.column(row)
-    LaunchedEffect(row, col, systems, shownRecent, active) {
-        if (!active) return@LaunchedEffect
+    PageEffect(row, col, systems, shownRecent, active) {
+        if (!active) return@PageEffect
         app.hero = when (row) {
             SYSTEMS -> systems.getOrNull(col)?.let(::systemRoom)
             RECENT -> shownRecent.getOrNull(col)?.game?.let { g -> g.room(platforms.firstOrNull { it.platform.id == g.platformId }) }
@@ -702,9 +702,9 @@ internal fun TransferCard(
 internal fun rememberTimeLeft(done: Long?, total: Long?): String? {
     val clock = remember { longArrayOf(0L, 0L) }
     var rate by remember { androidx.compose.runtime.mutableDoubleStateOf(0.0) }
-    LaunchedEffect(done) {
+    PageEffect(done) {
         val now = kotlin.time.Clock.System.now().toEpochMilliseconds()
-        val bytes = done ?: return@LaunchedEffect
+        val bytes = done ?: return@PageEffect
         val (lastAt, lastBytes) = clock[0] to clock[1]
         if (lastAt > 0 && bytes > lastBytes && now > lastAt) {
             val r = (bytes - lastBytes) * 1000.0 / (now - lastAt)

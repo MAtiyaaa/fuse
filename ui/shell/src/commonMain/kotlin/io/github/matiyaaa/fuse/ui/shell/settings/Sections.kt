@@ -30,6 +30,7 @@ import io.github.matiyaaa.fuse.model.ScanScope
 import io.github.matiyaaa.fuse.model.ScopeRef
 import io.github.matiyaaa.fuse.model.ScopedSettings
 import io.github.matiyaaa.fuse.model.ScrapeProviderId
+import io.github.matiyaaa.fuse.model.ScreenRotation
 import io.github.matiyaaa.fuse.model.SoundProfile
 import io.github.matiyaaa.fuse.model.Support
 import io.github.matiyaaa.fuse.model.WidgetKind
@@ -378,6 +379,9 @@ private fun widgetIcon(k: WidgetKind) = when (k) {
     WidgetKind.CARTRIDGE_DOWNLOADS -> io.github.matiyaaa.fuse.ui.designsystem.icons.FuseMarks.Cartridge
     WidgetKind.STORAGE -> FuseIcons.HardDrive
     WidgetKind.CLOCK -> FuseIcons.Clock
+    WidgetKind.JELLYFIN_CONTINUE -> FuseIcons.MonitorPlay
+    WidgetKind.JELLYFIN_NEXT_UP -> FuseIcons.SkipForward
+    WidgetKind.JELLYFIN_RECENTLY_ADDED -> FuseIcons.Film
 }
 
 @Composable
@@ -1142,6 +1146,28 @@ fun displayRows(app: AppState): List<MenuAction> {
     val d = p.display
     return buildList {
         labelled("This screen") {
+            if (app.platform.features.rotation) {
+                add(app.choiceRow(
+                    "rotation", "Rotation", FuseIcons.RotateCw, d.rotation,
+                    listOf(
+                        ScreenRotation.AUTO to "Automatic",
+                        ScreenRotation.LANDSCAPE to "Landscape",
+                        ScreenRotation.PORTRAIT to "Portrait",
+                        ScreenRotation.ANY to "Any way",
+                        ScreenRotation.SYSTEM to "Like Android",
+                    ),
+                    detail = "Turned over by accident, Fuse turns back with the device, even with rotation locked",
+                    optionDetail = {
+                        when (it) {
+                            ScreenRotation.AUTO -> "Landscape either way up on a handheld or a device with two screens; like Android elsewhere"
+                            ScreenRotation.LANDSCAPE -> "Wide, either way up, by the sensor"
+                            ScreenRotation.PORTRAIT -> "Tall, either way up, by the sensor"
+                            ScreenRotation.ANY -> "Every way the device is held"
+                            ScreenRotation.SYSTEM -> "Follows Android's own rotation and its lock"
+                        }
+                    },
+                ) { v -> app.store.updatePrefs { it.copy(display = it.display.copy(rotation = v)) } })
+            }
             app.platform.windowControls?.let { w ->
                 add(app.choiceRow(
                     "window", "Window", FuseIcons.Monitor, w.mode,
@@ -1261,14 +1287,12 @@ fun performanceRows(app: AppState): List<MenuAction> {
     }
 }
 
-/** Sound, the screens Fuse is on and how hard it works, with what the device is folded at the end. */
+/** The screens Fuse is on, which way round it turns, and how hard it works, with what the device is at the end. */
 @Composable
-fun screenAndSoundRows(app: AppState): List<MenuAction> {
-    val sound = soundRows(app)
+fun displayAndPerformanceRows(app: AppState): List<MenuAction> {
     val screens = displayRows(app)
     val performance = performanceRows(app)
     return buildList {
-        under("Sound", "sound", sound)
         under("This screen", "screen", screens)
         under("Performance", "perf", performance)
     }
@@ -1440,7 +1464,7 @@ fun aboutRows(app: AppState): List<MenuAction> = buildList {
         add(MenuAction("licences", "Open-source licences", FuseIcons.FileText, detail = "Fuse, its libraries, fonts and icons", trailing = Trailing.Chevron, onSelect = { app.go(Route.Licenses) }))
         addAll(app.group("about.credits", "Credits and links", FuseIcons.Heart, detail = "Who Fuse is built on, and where it lives") {
             listOf(
-                infoRow("credits", "Made with", detail = "Kotlin, Compose Multiplatform, SQLDelight, Ktor, Coil. Icons: Lucide (ISC). Fonts: Sora and Manrope (SIL OFL). Emulator launch data: ES-DE (MIT) and Cartridge (MIT). Hashing rules: rcheevos (MIT)", icon = FuseIcons.Blocks),
+                infoRow("credits", "Made with", detail = "Kotlin, Compose Multiplatform, SQLDelight, Ktor, Coil. Animations: Fuseline by Fuse. Icons: Lucide (ISC). Fonts: Sora and Manrope (SIL OFL). Emulator launch data: ES-DE (MIT) and Cartridge (MIT). Hashing rules: rcheevos (MIT)", icon = FuseIcons.Blocks),
                 MenuAction(
                     "cartridge.credit", "Cartridge by abdu2304", FuseIcons.CloudDownload,
                     detail = "The RomM companion Fuse pairs with. github.com/abdu2304/cartridge",
@@ -1462,7 +1486,14 @@ fun aboutRows(app: AppState): List<MenuAction> = buildList {
                 onSelect = {
                     app.dev.rehearsalPrefs = app.store.prefs.value
                     app.go(Route.Onboarding)
+                    // From the beginning, opening and all.
+                    app.setupOpening = true
                 },
+            ))
+            add(MenuAction(
+                "dev.opening", "Play setup opening", FuseIcons.Flame,
+                detail = "The longer animation setup opens with on the first start",
+                onSelect = { app.setupOpening = true },
             ))
             add(MenuAction(
                 "dev.intro", "Play startup animation", FuseIcons.Sparkles,

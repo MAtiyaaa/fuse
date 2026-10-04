@@ -17,6 +17,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.graphicsLayer
+import io.github.matiyaaa.fuse.ui.designsystem.effects.drawGrain
 import io.github.matiyaaa.fuse.model.AmbientSpec
 import io.github.matiyaaa.fuse.model.BackgroundStyle
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
@@ -69,6 +70,8 @@ fun AmbientBackground(
     Canvas(modifier.fillMaxSize().graphicsLayer()) {
         drawRect(colors.ink)
         scene.draw(this, time)
+        // Scenes are mostly soft light on a dark room: grain keeps them from banding.
+        drawGrain()
     }
 }
 

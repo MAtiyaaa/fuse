@@ -39,6 +39,11 @@ enum class WidgetKind(val defaultSpan: WidgetSpan) {
     CARTRIDGE_DOWNLOADS(WidgetSpan.MEDIUM),
     STORAGE(WidgetSpan.SMALL),
     CLOCK(WidgetSpan.SMALL),
+
+    /** Jellyfin, offered only while it is turned on: what you were watching, what's next, what's new. */
+    JELLYFIN_CONTINUE(WidgetSpan.WIDE),
+    JELLYFIN_NEXT_UP(WidgetSpan.WIDE),
+    JELLYFIN_RECENTLY_ADDED(WidgetSpan.WIDE),
 }
 
 @Serializable
@@ -52,6 +57,7 @@ private val RowKinds = setOf(
     WidgetKind.CONTINUE_PLAYING, WidgetKind.RECENTLY_PLAYED, WidgetKind.FAVORITES, WidgetKind.RECENTLY_ADDED,
     WidgetKind.PINNED_GAMES, WidgetKind.MOST_PLAYED, WidgetKind.PINNED_APPS, WidgetKind.COLLECTIONS,
     WidgetKind.SYSTEMS, WidgetKind.RECENT_ACHIEVEMENTS,
+    WidgetKind.JELLYFIN_CONTINUE, WidgetKind.JELLYFIN_NEXT_UP, WidgetKind.JELLYFIN_RECENTLY_ADDED,
 )
 
 /**

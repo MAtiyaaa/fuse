@@ -11,7 +11,7 @@
 // ---- Constants
 
 const PAGE = 60;
-const TABS = ['now', 'library', 'captures', 'tools'];
+const TABS = ['now', 'library', 'remote', 'captures', 'tools'];
 const SORTS = [
   { id: 'title', label: 'Title', sub: 'A to Z' },
   { id: 'recent', label: 'Recently played', sub: 'Last played first' },
@@ -961,6 +961,291 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
+// ---- Remote: typing into the field open on Fuse with this phone's own keyboard, and the phone as a
+// controller. Edits name the field they are for, so text never lands in a field opened since.
+
+const R = {
+  field: null,
+  sheet: null,
+  sheetId: 0,
+  input: null,
+  dismissed: 0,
+  lastEdit: 0,
+  timer: 0,
+  chain: Promise.resolve(),
+  pad: Promise.resolve(),
+  held: new Map(),
+};
+
+/** How each pad style names the buttons that differ (Fuse's glyph setting on the device). */
+const PAD_NAMES = {
+  XBOX: { L1: 'LB', R1: 'RB', L2: 'LT', R2: 'RT', SELECT: 'View', START: 'Menu', A: 'A', B: 'B', X: 'X', Y: 'Y' },
+  // Lettered the way Fuse letters a pad's buttons (ButtonGlyph.kt, padGlyph): by position, A at the bottom.
+  NINTENDO: { L1: 'L', R1: 'R', L2: 'ZL', R2: 'ZR', SELECT: 'Minus', START: 'Plus', A: 'A', B: 'B', X: 'X', Y: 'Y' },
+  PLAYSTATION: { L1: 'L1', R1: 'R1', L2: 'L2', R2: 'R2', SELECT: 'Create', START: 'Options', A: 'cross', B: 'circle', X: 'square', Y: 'triangle' },
+};
+
+/** PlayStation's face buttons are shapes, drawn here as plain geometry. */
+function psShape(kind) {
+  const svg = svgEl('svg', { viewBox: '0 0 24 24', class: 'ps-shape', 'aria-hidden': 'true' });
+  if (kind === 'cross') svg.append(svgEl('path', { d: 'M6 6l12 12M18 6L6 18' }));
+  else if (kind === 'circle') svg.append(svgEl('circle', { cx: 12, cy: 12, r: 6.5 }));
+  else if (kind === 'square') svg.append(svgEl('rect', { x: 6, y: 6, width: 12, height: 12, rx: 1 }));
+  else svg.append(svgEl('path', { d: 'M12 5.5L19 18H5Z' }));
+  return svg;
+}
+
+function padStyle() {
+  const g = S.session && S.session.glyphs;
+  return PAD_NAMES[g] ? g : 'XBOX';
+}
+
+function labelPad() {
+  const style = padStyle();
+  const names = PAD_NAMES[style];
+  for (const b of $$('.pad-btn[data-btn]', E.pad)) {
+    const id = b.dataset.btn;
+    const name = names[id];
+    if (!name) continue;
+    if (style === 'PLAYSTATION' && ['A', 'B', 'X', 'Y'].includes(id)) {
+      b.replaceChildren(psShape(name));
+      b.setAttribute('aria-label', name.charAt(0).toUpperCase() + name.slice(1));
+    } else {
+      b.replaceChildren(h('span.pad-label', name));
+      b.setAttribute('aria-label', name);
+    }
+  }
+  E.pad.dataset.style = style.toLowerCase();
+  const on = S.session.controller !== false;
+  E.pad.classList.toggle('is-off', !on);
+  E.padNote.hidden = on;
+  E.padNote.textContent = on ? '' : 'Using a phone as a controller is turned off on the device, in Settings, Phone Link.';
+}
+
+/** Presses and releases go out in order, one after another, so a quick tap never arrives backwards. */
+function sendPad(button, down) {
+  R.pad = R.pad.then(() => api('/api/pad', { method: 'POST', body: { button, down } })).catch((e) => {
+    if (e && e.status === 403) {
+      S.session.controller = false;
+      labelPad();
+    }
+  });
+}
+
+function padDown(b, e) {
+  if (S.session.controller === false) return;
+  e.preventDefault();
+  if (R.held.has(e.pointerId)) return;
+  quiet(() => b.setPointerCapture(e.pointerId));
+  R.held.set(e.pointerId, b);
+  b.classList.add('is-down');
+  if (navigator.vibrate) quiet(() => navigator.vibrate(8));
+  sendPad(b.dataset.btn, true);
+}
+
+function padUp(e) {
+  const b = R.held.get(e.pointerId);
+  if (!b) return;
+  R.held.delete(e.pointerId);
+  b.classList.remove('is-down');
+  sendPad(b.dataset.btn, false);
+}
+
+function setupPad() {
+  for (const b of $$('.pad-btn[data-btn]', E.pad)) {
+    b.addEventListener('pointerdown', (e) => padDown(b, e));
+    b.addEventListener('contextmenu', (e) => e.preventDefault());
+  }
+  for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) E.pad.addEventListener(type, padUp);
+  // A page that goes to the background lets go of everything still held.
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) for (const id of Array.from(R.held.keys())) padUp({ pointerId: id });
+  });
+  E.typeCard.addEventListener('click', () => {
+    if (R.field) {
+      R.dismissed = 0;
+      openKeyboard();
+    } else {
+      toast('Open a text field on Fuse, like Search, and your keyboard opens here.', 'info');
+    }
+  });
+}
+
+function updateTypeCard() {
+  const f = R.field;
+  E.typeCard.classList.toggle('is-live', !!f);
+  E.typeTitle.textContent = f ? `Type into ${f.title}` : 'Nothing to type into';
+  E.typeText.textContent = f
+    ? 'Your keyboard, paste included, types straight into Fuse.'
+    : 'When a text field opens on Fuse, your keyboard opens here.';
+}
+
+function setField(f) {
+  R.field = f && typeof f === 'object' && typeof f.id === 'number' ? f : null;
+  if (E.typeCard) updateTypeCard();
+  if (!R.field) {
+    if (R.sheet) closeLayer(R.sheet);
+    return;
+  }
+  if (R.sheet && R.sheetId === R.field.id) {
+    syncSheet();
+    return;
+  }
+  if (R.sheet) closeLayer(R.sheet);
+  if (R.dismissed !== R.field.id && S.signedIn) {
+    // Opens over whatever is showing, once its own layer has gone.
+    setTimeout(() => { if (R.field && !R.sheet && R.dismissed !== R.field.id) openKeyboard(); }, R.sheet ? 360 : 0);
+  }
+}
+
+/** Fuse's text when it changed there (its own keyboard), unless this phone is typing right now. */
+function syncSheet() {
+  const f = R.field;
+  const input = R.input;
+  if (!f || !input || f.secret) return;
+  if (document.activeElement === input && Date.now() - R.lastEdit < 900) return;
+  if (input.value !== f.text) input.value = f.text;
+}
+
+function queueText() {
+  clearTimeout(R.timer);
+  R.timer = setTimeout(flushText, 60);
+}
+
+function flushText() {
+  clearTimeout(R.timer);
+  const f = R.field;
+  const input = R.input;
+  if (!f || !input || R.sheetId !== f.id) return R.chain;
+  const text = input.value;
+  R.chain = R.chain.then(() => api('/api/input/text', { method: 'PUT', body: { id: f.id, text } })).catch(fieldError);
+  return R.chain;
+}
+
+function fieldError(e) {
+  if (e && e.status === 409) {
+    toast('That field closed on Fuse.', 'info');
+    if (R.sheet) closeLayer(R.sheet);
+  } else if (e && e.status !== 401) {
+    toast(e.message || NET_ERROR, 'error');
+  }
+}
+
+async function finishField(kind) {
+  const f = R.field;
+  if (!f) return;
+  if (kind === 'done') await flushText();
+  R.dismissed = f.id;
+  try {
+    await api(kind === 'done' ? '/api/input/done' : '/api/input/cancel', { method: 'POST', body: { id: f.id } });
+  } catch (e) {
+    fieldError(e);
+  }
+  if (R.sheet) closeLayer(R.sheet);
+}
+
+function openKeyboard() {
+  const f = R.field;
+  if (!f || R.sheet) return;
+  const input = h('input', {
+    class: 'type-input',
+    type: f.secret ? 'password' : 'text',
+    placeholder: f.placeholder || 'Type here',
+    autocomplete: 'off',
+    autocapitalize: f.secret ? 'none' : 'sentences',
+    autocorrect: f.secret ? 'off' : 'on',
+    spellcheck: f.secret ? 'false' : 'true',
+    enterkeyhint: 'done',
+    'aria-label': f.title,
+  });
+  input.value = f.secret ? '' : f.text;
+  const canPaste = !!(navigator.clipboard && navigator.clipboard.readText);
+  const paste = canPaste ? h('button.input-btn', { type: 'button', 'aria-label': 'Paste' }, icon('clipboard-paste')) : null;
+  const clear = h('button.input-btn', { type: 'button', 'aria-label': 'Clear' }, icon('x'));
+  const box = h('div.input.type-box', icon('keyboard'), input, clear, paste);
+  const note = h('p.type-note',
+    f.secret
+      ? 'For your privacy, what is already in this field stays on Fuse. Typing here replaces it.'
+      : 'Autocorrect, dictation and paste all work. Fuse shows the text as you type.');
+  const id = f.id;
+  const cancel = f.cancellable
+    ? btn('Cancel', { kind: 'secondary', onClick: () => finishField('cancel') })
+    : btn('Hide', { kind: 'secondary', onClick: () => { R.dismissed = id; closeLayer(R.sheet); } });
+  const done = btn(f.done || 'Done', { kind: 'primary', icon: 'send', onClick: () => finishField('done') });
+  const layer = openModal({
+    title: f.title,
+    subtitle: `Typing on ${deviceName()}`,
+    body: h('div.type-body', box, note),
+    footer: h('div.dialog-actions', cancel, done),
+    onDismiss: () => {
+      clearTimeout(R.timer);
+      if (R.sheet === layer) {
+        R.sheet = null;
+        R.input = null;
+        R.sheetId = 0;
+      }
+      if (R.field && R.field.id === id) R.dismissed = id;
+    },
+  });
+  layer.el.classList.add('is-typing');
+  layer.focus = input;
+  R.sheet = layer;
+  R.sheetId = id;
+  R.input = input;
+  input.addEventListener('input', () => {
+    R.lastEdit = Date.now();
+    queueText();
+  });
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.isComposing) {
+      e.preventDefault();
+      finishField('done');
+    }
+  });
+  clear.addEventListener('click', () => {
+    input.value = '';
+    R.lastEdit = Date.now();
+    queueText();
+    input.focus();
+  });
+  if (paste) {
+    paste.addEventListener('click', async () => {
+      try {
+        const t = await navigator.clipboard.readText();
+        if (!t) return;
+        const start = input.selectionStart ?? input.value.length;
+        const end = input.selectionEnd ?? input.value.length;
+        input.setRangeText(t, start, end, 'end');
+        R.lastEdit = Date.now();
+        queueText();
+        input.focus();
+      } catch (_) {
+        toast('This browser kept the clipboard to itself. Long-press the field and choose Paste.', 'info');
+      }
+    });
+  }
+}
+
+async function refreshField() {
+  if (!S.signedIn) return;
+  try {
+    setField(await api('/api/input'));
+  } catch (_) {
+    // The next poll tries again.
+  }
+}
+
+function resetRemote() {
+  clearTimeout(R.timer);
+  R.field = null;
+  R.sheet = null;
+  R.sheetId = 0;
+  R.input = null;
+  R.dismissed = 0;
+  R.held.clear();
+  if (E.typeCard) updateTypeCard();
+}
+
 // ---- Toasts
 
 function toast(message, type = 'info', ms = 3400) {
@@ -991,7 +1276,10 @@ async function checkSession() {
     S.session = s && typeof s === 'object' ? s : {};
     applySessionInfo();
     if (S.session.signedIn) enterApp();
-    else showSignin();
+    // A pairing code that was used already or ran out brings the phone here.
+    else showSignin(new URLSearchParams(location.search).get('pair') === 'expired'
+      ? 'That code was used or has run out. On Fuse, press the phone key on the keyboard for a new one.'
+      : undefined);
   } catch (e) {
     E.boot.classList.add('is-error');
     // The title already says Fuse can't be reached: the line under it says what to check.
@@ -1014,6 +1302,7 @@ function applySessionInfo() {
   E.signinFoot.textContent = S.session.version ? `Fuse ${S.session.version}` : '';
   // Captures exist where the device takes them (Android); elsewhere the tab isn't there.
   E.capTabBtn.hidden = !capturesOn();
+  if (E.pad) labelPad();
   if (!capturesOn() && S.tab === 'captures' && S.signedIn) selectTab('now');
   document.title = typeof dev === 'string' && dev.trim() ? `Fuse on ${dev.trim()}` : 'Fuse Phone Link';
   setConn(S.conn);
@@ -1282,6 +1571,7 @@ function resetData() {
   E.libCount.textContent = '';
   E.libSortLabel.textContent = SORTS[0].label;
   resetCaptures();
+  resetRemote();
 }
 
 async function signOut(b) {
@@ -1442,6 +1732,10 @@ function startLive() {
   });
   es.addEventListener('library', onLibraryChanged);
   es.addEventListener('captures', onCapturesChanged);
+  es.addEventListener('keyboard', (e) => {
+    const d = parseJSON(e.data);
+    if (d !== undefined) setField(d);
+  });
   es.addEventListener('error', () => {
     if (live.es !== es) return;
     es.close();
@@ -1488,6 +1782,8 @@ async function refreshNow() {
     const d = await api('/api/now');
     if (!S.signedIn) return;
     applyNow(d || {});
+    // Without the live stream the field open on Fuse comes with each poll.
+    if (!live.es || live.es.readyState !== 1) refreshField();
     const wasOffline = S.conn === 'offline';
     if (!live.es || live.es.readyState !== 1) setConn('polling');
     else setConn('live');
@@ -3412,6 +3708,13 @@ function init() {
   E.capAll = $('#cap-all');
   E.capDownload = $('#cap-download');
   E.tabGlide = $('.tab-glide');
+  E.pad = $('#pad');
+  E.padNote = $('#pad-note');
+  E.typeCard = $('#remote-type');
+  E.typeTitle = $('#remote-type-title');
+  E.typeText = $('#remote-type-text');
+  setupPad();
+  labelPad();
 
   E.countdown.setAttribute('aria-live', 'off');
 
