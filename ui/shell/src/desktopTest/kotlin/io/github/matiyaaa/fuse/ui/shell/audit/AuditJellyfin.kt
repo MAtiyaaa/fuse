@@ -253,7 +253,7 @@ internal object AuditJellyfin {
         if (f.type == "Movie" || f.type == "Series") put("PrimaryImageAspectRatio", 2.0 / 3.0)
         if (detail) {
             f.overview?.let { put("Overview", it) }
-            if (f.type == "Movie") put("Taglines", buildJsonArray { add(JsonPrimitive("Some lines are only walked once.")) })
+            if (f.type == "Movie") put("Taglines", buildJsonArray { add(JsonPrimitive("Some lines are only walked once")) })
             if (f.type == "Movie" || f.type == "Series" || f.type == "Episode") {
                 put("People", JsonArray(people.mapIndexed { i, pp ->
                     buildJsonObject {

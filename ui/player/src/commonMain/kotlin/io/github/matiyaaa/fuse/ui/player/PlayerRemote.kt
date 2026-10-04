@@ -18,6 +18,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
@@ -116,7 +118,9 @@ fun PlayerRemote(session: PlayerSession, modifier: Modifier = Modifier, inputEna
         Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.25f), Color.Black.copy(alpha = 0.75f)))))
         BoxWithConstraints(Modifier.fillMaxSize().padding(Space.l)) {
             val wide = maxWidth > maxHeight * 1.25f
-            val art = if (wide) minOf(maxHeight * 0.62f, maxWidth * 0.32f) else minOf(maxWidth * 0.42f, maxHeight * 0.3f)
+            // The art's width, so its height (tall for a film, square for music) leaves room for the controls.
+            val tall = if (session.isVideo) 1.5f else 1f
+            val art = if (wide) minOf(maxHeight * 0.62f / tall, maxWidth * 0.32f) else minOf(maxWidth * 0.42f, maxHeight * 0.26f / tall)
             val cover = @Composable {
                 Box(Modifier.width(art).aspectRatio(if (session.isVideo) 2f / 3f else 1f).clip(RoundedCornerShape(12.dp)).background(Color.White.copy(alpha = 0.08f))) {
                     Artwork(item.artwork, Modifier.fillMaxSize())
@@ -163,7 +167,7 @@ fun PlayerRemote(session: PlayerSession, modifier: Modifier = Modifier, inputEna
                     Box(Modifier.weight(1f)) { controls() }
                 }
             } else {
-                Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(Space.l, Alignment.CenterVertically)) {
+                Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(Space.m, Alignment.CenterVertically)) {
                     cover()
                     Box(Modifier.widthIn(max = 520.dp)) { controls() }
                 }

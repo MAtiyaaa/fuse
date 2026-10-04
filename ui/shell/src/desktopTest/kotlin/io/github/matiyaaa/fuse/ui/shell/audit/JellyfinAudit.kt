@@ -59,7 +59,12 @@ internal fun AuditDriver.jellyfinScreens() {
             shoot("the page before an address")
             libraryStore.updatePrefs { jellyfinOn(it) }
             val service = libraryStore.jellyfin!!
-            runBlocking { service.signIn("pat", "audit").getOrThrow() }
+            // The address reaches the service a moment after the setting is saved.
+            settle(800)
+            runBlocking {
+                var tries = 0
+                while (service.signIn("pat", "audit").isFailure && ++tries < 10) kotlinx.coroutines.delay(300)
+            }
             waitFor("Signed in as")
             settle(1_500)
             shoot("signed in, connected from outside")
@@ -109,7 +114,7 @@ internal fun AuditDriver.jellyfinScreens() {
             tap(PadButton.DPAD_RIGHT, 2)
             tap(PadButton.DPAD_DOWN, 2)
             shoot("further down the grid", 1_200)
-            tap(PadButton.DPAD_UP, 4)
+            focusHint("Choose") { tap(PadButton.DPAD_UP) }
             tap(PadButton.A)
             waitFor("Sort by")
             shoot("sorting")
@@ -124,7 +129,7 @@ internal fun AuditDriver.jellyfinScreens() {
             tap(PadButton.DPAD_DOWN, 3)
             settle(900)
             tap(PadButton.A)
-            waitFor("Northlight Pictures", 20_000)
+            waitFor("Some lines are only walked once", 20_000)
             settle(2_500)
             shoot("a film's page", 1_500)
             tap(PadButton.DPAD_DOWN, 2)
