@@ -117,6 +117,9 @@ private const val BOARD_COLUMNS = 4
 
 /** The room Undo and Reset take above the board while it is arranged. */
 private val ARRANGE_TOOLS_ROOM = 64.dp
+
+/** A board as it was before a change, for Undo (no board saved yet is the board Home came with). */
+private class KeptBoard(val board: List<HomeWidget>?)
 private const val BOARD_COLUMNS_NARROW = 2
 
 /** Narrower than this, the board uses [BOARD_COLUMNS_NARROW] so widgets stay big enough to read. */
@@ -156,7 +159,7 @@ fun ChannelHome(app: AppState) {
     val editor = remember { BoardEditor() }
     // Every change made while arranging can be taken back, newest first; the floating Undo and
     // Reset at the top right ([ArrangeTools]) are reached by moving up past the board's top row.
-    val history = remember { mutableStateListOf<List<HomeWidget>?>() }
+    val history = remember { mutableStateListOf<KeptBoard>() }
     var onTools by remember { mutableStateOf<Int?>(null) }
     val arranging = editor.arranging
     val op = editor.op
@@ -209,17 +212,12 @@ fun ChannelHome(app: AppState) {
         if (app.focusZone != FocusZone.CONTENT) editor.cancel()
     }
 
-    /**
-     * Keeps [layout] (a board [columns] wide): each widget's place on this board, the new size of the
-     * one [resized], and the board's order in reading order, so a board of another width that was never
-     * arranged follows this one. Widgets not shown keep their places, after the others.
-     */
     fun keepForUndo() {
-        if (editor.arranging) history.add(store.prefs.value.home.board)
+        if (editor.arranging) history.add(KeptBoard(store.prefs.value.home.board))
     }
     fun undo() {
         val before = history.removeLastOrNull() ?: return app.toasts.show("Nothing to undo")
-        store.updatePrefs { p -> p.copy(home = p.home.copy(board = before)) }
+        store.updatePrefs { p -> p.copy(home = p.home.copy(board = before.board)) }
         app.platform.sounds.play(io.github.matiyaaa.fuse.ui.designsystem.sound.SoundCue.BACK)
     }
     fun reset() {
@@ -234,6 +232,11 @@ fun ChannelHome(app: AppState) {
         }
     }
 
+    /**
+     * Keeps [layout] (a board [columns] wide): each widget's place on this board, the new size of the
+     * one [resized], and the board's order in reading order, so a board of another width that was never
+     * arranged follows this one. Widgets not shown keep their places, after the others.
+     */
     fun save(layout: BoardLayout, columns: Int, resized: String? = null) {
         keepForUndo()
         val reading = layout.ids.withIndex().associate { it.value to it.index }

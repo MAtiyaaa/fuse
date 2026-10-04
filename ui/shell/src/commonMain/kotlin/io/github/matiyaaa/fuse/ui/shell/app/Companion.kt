@@ -310,7 +310,7 @@ private fun SpotlightPage(
             is GameId -> FocusedGame(store, target, onAchievements)
             is PlatformId -> FocusedPlatform(systems.firstOrNull { it.platform.id == target })
             is CollectionId -> FocusedCollection(store, target)
-            else -> Idle(time)
+            else -> Idle(time, room = store.prefs.collectAsState().value.display.companionFollowsBackground)
         }
     }
 }
@@ -335,9 +335,10 @@ private fun companionHero(store: FuseStore, systems: List<PlatformCard>, target:
 }
 
 @Composable
-private fun Idle(time: String) {
-    // Opaque, so the last game's art never lingers behind the clock.
-    Column(Modifier.fillMaxSize().background(Fuse.colors.ink), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
+private fun Idle(time: String, room: Boolean) {
+    // Opaque, so the last game's art never lingers behind the clock; over the main screen's room
+    // only a shade, so the room shows through.
+    Column(Modifier.fillMaxSize().background(Fuse.colors.ink.copy(alpha = if (room) 0.3f else 1f)), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
         FuseMark(Modifier.size(56.dp))
         Spacer(Modifier.height(Space.l))
         FText(time, Fuse.type.numericLarge)

@@ -22,10 +22,10 @@ internal fun AuditDriver.swapScreens() {
         hold(PadButton.A)
         waitFor("Put down")
         tap(PadButton.A)
-        // A change to take back: the chosen widget made wider while X is held.
+        // A change to take back: the chosen widget made taller while X is held.
         router.press(PadButton.X, io.github.matiyaaa.fuse.ui.designsystem.input.InputSource.GAMEPAD)
         settle(400)
-        tap(PadButton.DPAD_RIGHT)
+        tap(PadButton.DPAD_DOWN)
         router.release(PadButton.X, io.github.matiyaaa.fuse.ui.designsystem.input.InputSource.GAMEPAD)
         settle(600)
         shoot("arranging, Undo and Reset at the top right")
