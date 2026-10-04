@@ -18,6 +18,7 @@ import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -104,6 +105,24 @@ internal fun MediaLibraryScreen(app: AppState, id: String, name: String, kind: S
         }
     }
     LaunchedEffect(id, page.sort, page.filter) { if (!page.loaded || page.items.isEmpty()) loadMore(reset = true) }
+    // Played or marked since: what is loaded is asked again (ticks, how far in), keeping the place.
+    val revision by service.revision.collectAsState()
+    var seenRevision by remember { mutableStateOf(revision) }
+    LaunchedEffect(revision) {
+        if (revision == seenRevision || !page.loaded) return@LaunchedEffect
+        seenRevision = revision
+        val keep = page.items.size
+        runCatching {
+            var fresh = emptyList<MediaItem>()
+            while (fresh.size < keep) {
+                val p = service.page(id, types, page.sort, page.filter, fresh.size)
+                if (p.items.isEmpty()) break
+                fresh = fresh + p.items
+                page.total = p.total
+            }
+            page.items = fresh
+        }
+    }
 
     val buttons = listOf(
         Triple("Sort: ${page.sort.label}", FuseIcons.Sort) {
