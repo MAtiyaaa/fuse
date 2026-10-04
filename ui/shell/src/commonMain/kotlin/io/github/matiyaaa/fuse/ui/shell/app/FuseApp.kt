@@ -555,6 +555,9 @@ private fun RootPages(app: AppState, current: Route, direction: NavDirection, pl
             starting = false
         }
     }
+    // Remember where you were, off: a tab left behind is let go once it has slid away, so it opens
+    // at its start next time instead of as it was left.
+    if (app.navigator.forgetsTabs) kept.retainAll { it == shownRoot || it == leaving }
     LaunchedEffect(shownRoot) {
         if (!starting) return@LaunchedEffect
         incoming.snapTo(0f)

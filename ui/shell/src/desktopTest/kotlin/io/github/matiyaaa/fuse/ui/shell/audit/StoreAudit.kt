@@ -91,8 +91,11 @@ internal fun AuditDriver.addonsScreens() {
     scenario("addons", "store settings") {
         show(store)
         openSettings()
-        tap(PadButton.DPAD_DOWN, sectionIndex("store", withStore = true))
+        tap(PadButton.DPAD_DOWN, sectionIndex("addons"))
         tap(PadButton.DPAD_RIGHT)
+        waitFor("Apps and emulators, their updates and where the catalogue comes from")
+        shoot("Addons: Jellyfin, the Store and Cartridge")
+        tapText("Store")
         waitFor("GitHub token")
         tap(PadButton.DPAD_RIGHT)
         shoot("the Store's settings")

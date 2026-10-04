@@ -259,7 +259,7 @@ private fun jellyfinRows(
         section = server,
         onSelect = {
             app.textInput = TextInputSpec("Outside address", j.remoteAddress, "https://jellyfin.example.com", capitalize = false) { v ->
-                set { it.copy(remoteAddress = v.trim()) }
+                saveAndTest(app, service, page, "test.remote", v) { a -> set { it.copy(remoteAddress = a) } }
             }
         },
     ))
@@ -392,7 +392,9 @@ private fun chooseHomeAddress(app: AppState, service: JellyfinService, page: Jel
                 })
             } + MenuAction("type", "Type an address", FuseIcons.Keyboard, onSelect = {
                 app.choice = null
-                app.textInput = TextInputSpec("Home address", j.localAddress, "192.168.1.20:8096", capitalize = false) { v -> set { it.copy(localAddress = v.trim()) } }
+                app.textInput = TextInputSpec("Home address", j.localAddress, "192.168.1.20:8096", capitalize = false) { v ->
+                    saveAndTest(app, service, page, "test.local", v) { a -> set { it.copy(localAddress = a) } }
+                }
             }) + listOfNotNull(
                 MenuAction("clear", "Clear the home address", FuseIcons.Eraser, onSelect = {
                     app.choice = null
@@ -400,6 +402,29 @@ private fun chooseHomeAddress(app: AppState, service: JellyfinService, page: Jel
                 }).takeIf { j.localAddress.isNotBlank() },
             ),
         )
+    }
+}
+
+/**
+ * Keeps a typed address and tests it straight away. When one way of reading it answers, that exact
+ * address (scheme, port and path) is what's kept, so connecting later doesn't guess again.
+ */
+private fun saveAndTest(app: AppState, service: JellyfinService, page: JellyfinSettingsState, key: String, typed: String, keep: (String) -> Unit) {
+    val address = typed.trim()
+    keep(address)
+    if (address.isEmpty()) {
+        page.tests.remove(key)
+        return
+    }
+    page.tests[key] = AddressTest(running = true, text = "Asking $address")
+    app.scope.launch {
+        val r = service.test(address)
+        r.onSuccess { (base, _) -> if (base != address) keep(base) }
+        page.tests[key] = r.fold(
+            onSuccess = { (base, info) -> AddressTest(false, true, listOfNotNull(info.name, info.version?.let { "Jellyfin $it" }, base).joinToString("  ·  ")) },
+            onFailure = { AddressTest(false, false, it.message ?: "No answer") },
+        )
+        r.onFailure { app.toasts.show("Nothing answered at $address. ${it.message ?: ""}".trim()) }
     }
 }
 

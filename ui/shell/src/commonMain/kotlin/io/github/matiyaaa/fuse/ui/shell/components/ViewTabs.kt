@@ -2,6 +2,19 @@ package io.github.matiyaaa.fuse.ui.shell.components
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
+import io.github.matiyaaa.fuse.ui.fuseline.FuselineValue
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -65,6 +78,19 @@ data class ViewTab(
 )
 
 /**
+ * Lets [ViewTabs] be put in another order. A tab held by touch or the mouse lifts and follows the
+ * pointer, its neighbours sliding aside as it passes them; the controller lifts one too ([lifted],
+ * the index it holds) and moves it with Left and Right. [onMove] swaps two neighbours, [onLift] and
+ * [onDrop] start and end a move.
+ */
+class TabReorder(
+    val lifted: Int? = null,
+    val onLift: (Int) -> Unit = {},
+    val onMove: (from: Int, to: Int) -> Unit,
+    val onDrop: () -> Unit = {},
+)
+
+/**
  * Views of one list (All, Favourites; Pinned, All apps) as text tabs, marked the way the top line
  * marks its sections: the active tab's name in full colour with the short accent bar under it. The
  * bar glides from tab to tab (its leading edge first, the other following, never stretching longer
@@ -85,11 +111,19 @@ fun ViewTabs(
     onSelect: (Int) -> Unit,
     modifier: Modifier = Modifier,
     gutter: Dp = Space.gutter,
+    reorder: TabReorder? = null,
 ) {
     val c = Fuse.colors
     val motion = Fuse.motion
     val density = LocalDensity.current
     val scroll = rememberScrollState()
+    val scope = rememberCoroutineScope()
+    // The tab held by a finger or the mouse (by its label, which survives a move), and how far it has
+    // been dragged from its place in the row. Read while drawing, so dragging never recomposes.
+    var dragged by remember { mutableStateOf<String?>(null) }
+    val dragOffset = remember { mutableFloatStateOf(0f) }
+    val latest by rememberUpdatedState(items)
+    val latestReorder by rememberUpdatedState(reorder)
     // Where each tab sits in the row (x and width in pixels), for scrolling, and the centre of its
     // name (icon and label, not its count), for the bar.
     val bounds = remember { mutableStateMapOf<Int, Pair<Float, Float>>() }
@@ -140,17 +174,92 @@ fun ViewTabs(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         items.forEachIndexed { i, item ->
-            val requester = requesters.getOrPut(i) { BringIntoViewRequester() }
-            TabLabel(
-                item,
-                active = i == active,
-                focused = i == focused,
-                modifier = Modifier
-                    .bringIntoViewRequester(requester)
-                    .onPlaced { bounds[i] = it.positionInParent().x to it.size.width.toFloat() },
-                onName = { names[i] = it },
-                onClick = { onSelect(i) },
-            )
+            key(item.label) {
+                val requester = requesters.getOrPut(i) { BringIntoViewRequester() }
+                val label = item.label
+                val held = reorder != null && (dragged == label || (dragged == null && reorder.lifted == i))
+                val lift by fuselineFloat(if (held) 1f else 0f, motion.focusSpring(), label = "tab lift")
+                // A tab that changes place slides there from where it was, so a move reads as the
+                // others making room, never as a jump.
+                val slide = remember { FuselineValue(0f) }
+                val lastX = remember { floatArrayOf(Float.NaN) }
+                TabLabel(
+                    item,
+                    active = i == active,
+                    focused = i == focused || held,
+                    modifier = Modifier
+                        .bringIntoViewRequester(requester)
+                        .onPlaced {
+                            val x = it.positionInParent().x
+                            bounds[i] = x to it.size.width.toFloat()
+                            val before = lastX[0]
+                            lastX[0] = x
+                            if (!before.isNaN() && before != x) {
+                                if (dragged == label) {
+                                    // Its place moved under the finger: the finger stays where it is.
+                                    dragOffset.floatValue -= x - before
+                                } else {
+                                    scope.launch {
+                                        slide.snapTo(slide.value + (before - x))
+                                        slide.animateTo(0f, motion.focusSpring())
+                                    }
+                                }
+                            }
+                        }
+                        .graphicsLayer {
+                            translationX = slide.value + if (dragged == label) dragOffset.floatValue else 0f
+                            val sc = 1f + LIFT_SCALE * lift
+                            scaleX = sc
+                            scaleY = sc
+                            shadowElevation = LIFT_SHADOW.toPx() * lift
+                            shape = PillShape
+                            clip = false
+                        }
+                        .zIndex(if (held) 1f else 0f)
+                        .then(
+                            if (reorder == null) Modifier else Modifier.pointerInput(label) {
+                                detectDragGesturesAfterLongPress(
+                                    onDragStart = {
+                                        val at = latest.indexOfFirst { t -> t.label == label }
+                                        if (at < 0) return@detectDragGesturesAfterLongPress
+                                        dragOffset.floatValue = 0f
+                                        dragged = label
+                                        latestReorder?.onLift?.invoke(at)
+                                    },
+                                    onDrag = { change, amount ->
+                                        change.consume()
+                                        dragOffset.floatValue += amount.x
+                                        val at = latest.indexOfFirst { t -> t.label == label }
+                                        val me = bounds[at] ?: return@detectDragGesturesAfterLongPress
+                                        val centre = me.first + me.second / 2 + dragOffset.floatValue
+                                        val next = bounds[at + 1]
+                                        val prev = bounds[at - 1]
+                                        when {
+                                            next != null && at + 1 < latest.size && centre > next.first + next.second / 2 -> latestReorder?.onMove?.invoke(at, at + 1)
+                                            prev != null && at > 0 && centre < prev.first + prev.second / 2 -> latestReorder?.onMove?.invoke(at, at - 1)
+                                        }
+                                    },
+                                    onDragEnd = { settleDrag(scope, dragOffset, motion) { dragged = null; latestReorder?.onDrop?.invoke() } },
+                                    onDragCancel = { settleDrag(scope, dragOffset, motion) { dragged = null; latestReorder?.onDrop?.invoke() } },
+                                )
+                            },
+                        ),
+                    onName = { names[i] = it },
+                    onClick = { onSelect(i) },
+                )
+            }
+        }
+    }
+}
+
+/** A dragged tab let go: it glides from under the finger into its place, then the move ends. */
+private fun settleDrag(scope: kotlinx.coroutines.CoroutineScope, offset: androidx.compose.runtime.MutableFloatState, motion: io.github.matiyaaa.fuse.ui.fuseline.FuselineMotion, done: () -> Unit) {
+    scope.launch {
+        try {
+            io.github.matiyaaa.fuse.ui.fuseline.animate(offset.floatValue, 0f, animationSpec = motion.focusSpring()) { v, _ -> offset.floatValue = v }
+        } finally {
+            offset.floatValue = 0f
+            done()
         }
     }
 }
@@ -276,6 +385,10 @@ internal fun Modifier.lineFocus(shape: Shape, focus: () -> Float, fill: Color, r
         )
     }
 }
+
+/** How much a lifted tab grows, and the shadow it casts while it is held. */
+private const val LIFT_SCALE = 0.06f
+private val LIFT_SHADOW = 10.dp
 
 /** Room either side of a tab's name, inside its focus outline. */
 private val TAB_PAD = Space.m

@@ -68,8 +68,8 @@ private fun AuditDriver.storageForPicker() {
     controls.storageRoots = listOf(LocationHint(folder.absolutePath, "Internal storage"), LocationHint(root.absolutePath, "SD card 4E21-9A0C"))
 }
 
-/** Where section [id] is in Settings' list; the Store's section is only listed where there is a Store ([withStore]). */
-internal fun sectionIndex(id: String, withStore: Boolean = false) = settingsSections.filter { withStore || it.id != "store" }
+/** Where section [id] (or an old id for it) is in Settings' list. */
+internal fun sectionIndex(id: String) = settingsSections
     .indexOfFirst { it.id == settingsSectionId(id) }.also { check(it >= 0) { "No settings section $id" } }
 
 // ----------------------------------------------------------------------------------- overlays
@@ -222,8 +222,7 @@ internal fun AuditDriver.settingsScreens(exhaustive: Boolean) {
             shoot("section list focused (Appearance)")
         }
     }
-    // The library device has no Store; its section is audited with Addons.
-    val sections = if (exhaustive) settingsSections.filter { it.id != "store" } else settingsSections.filter { it.id == "appearance" }
+    val sections = if (exhaustive) settingsSections else settingsSections.filter { it.id == "appearance" }
     for (s in sections) {
         scenario("settings", "section ${s.label}") {
             useLibrary()

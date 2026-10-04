@@ -39,7 +39,10 @@ class UdpDiscovery(private val hold: () -> AutoCloseable? = { null }) : ServerDi
                     }
                     val text = String(packet.data, 0, packet.length, Charsets.UTF_8)
                     val reply = runCatching { json.decodeFromString(DiscoveryReplyDto.serializer(), text) }.getOrNull() ?: continue
-                    val address = reply.address?.trimEnd('/') ?: continue
+                    val reported = reply.address?.trimEnd('/') ?: continue
+                    // A server in Docker reports its container's address (172.18.0.3), which nothing
+                    // else can reach: the address the answer came from is the one that works.
+                    val address = reachable(reported, packet.address)
                     found[reply.id ?: address] = DiscoveredServer(reply.name ?: "Jellyfin", address, reply.id)
                 }
                 found.values.toList()
@@ -65,5 +68,13 @@ class UdpDiscovery(private val hold: () -> AutoCloseable? = { null }) : ServerDi
 
     companion object {
         const val PORT = 7359
+
+        /** [reported], with its host swapped for [sender]'s when they differ (scheme, port and path kept). */
+        internal fun reachable(reported: String, sender: InetAddress?): String {
+            val host = sender?.hostAddress?.substringBefore('%') ?: return reported
+            val shown = if (':' in host) "[$host]" else host
+            val m = Regex("""^(https?://)(\[[^\]]+\]|[^:/]+)(.*)$""", RegexOption.IGNORE_CASE).find(reported) ?: return "http://$shown:8096"
+            return m.groupValues[1] + shown + m.groupValues[3]
+        }
     }
 }

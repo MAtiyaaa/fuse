@@ -126,6 +126,14 @@ class Navigator(start: Route) {
         stack.add(route)
     }
 
+    /**
+     * A view inside a tab was switched (Addons' Store and Jellyfin): with Remember where you were
+     * off, it opens at its start too.
+     */
+    fun switchedView() {
+        if (forgetsTabs) memory.clear()
+    }
+
     /** Drops what was remembered for [key], so the route starts fresh next time. */
     fun forget(key: String) {
         memory.remove(key)

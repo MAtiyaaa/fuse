@@ -25,6 +25,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import io.github.matiyaaa.fuse.jellyfin.LibraryKind
 import io.github.matiyaaa.fuse.jellyfin.MediaFilter
@@ -42,6 +43,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.components.fadingEdges
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
 import io.github.matiyaaa.fuse.ui.designsystem.icons.HintButton
+import io.github.matiyaaa.fuse.ui.designsystem.focus.FollowSelection
 import io.github.matiyaaa.fuse.ui.designsystem.input.InputLayer
 import io.github.matiyaaa.fuse.ui.designsystem.input.NavResult
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
@@ -200,15 +202,9 @@ internal fun MediaLibraryScreen(app: AppState, id: String, name: String, kind: S
         }
 
         val grid = rememberLazyGridState()
-        LaunchedEffect(page.index, page.top) {
-            if (!page.top) {
-                val target = page.index + 1 // the header is item 0
-                val visible = grid.layoutInfo.visibleItemsInfo
-                if (visible.none { it.index == target } || visible.lastOrNull()?.index == target) grid.animateScrollToItem(target, -grid.layoutInfo.viewportSize.height / 4)
-            } else {
-                grid.animateScrollToItem(0)
-            }
-        }
+        // The chosen row glides to a steady place as you move (held or pushed once), like the Library.
+        val fade = with(LocalDensity.current) { Space.xl.roundToPx() }
+        FollowSelection(grid, { if (page.top) 0 else page.index + 1 }, anchor = 0.12f, insetPx = fade, relayout = columns)
         LazyVerticalGrid(
             columns = GridCells.Fixed(columns),
             state = grid,

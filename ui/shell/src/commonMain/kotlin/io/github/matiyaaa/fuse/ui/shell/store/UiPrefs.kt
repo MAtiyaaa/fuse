@@ -59,6 +59,8 @@ data class UiPrefs(
     val systemOrder: List<String> = emptyList(),
     /** Games taken off Continue Playing (game id to when), until they are played again. */
     val continueDismissed: Map<String, Long> = emptyMap(),
+    /** Addons' tabs in the user's order (part names); parts not listed follow in their usual order. */
+    val addonsOrder: List<String> = emptyList(),
     val systemArtAuto: Boolean = true,
     /** How the Library is sorted. */
     val librarySort: io.github.matiyaaa.fuse.model.SortOrder = io.github.matiyaaa.fuse.model.SortOrder.TITLE,

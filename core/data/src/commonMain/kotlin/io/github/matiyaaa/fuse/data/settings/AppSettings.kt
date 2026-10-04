@@ -160,6 +160,8 @@ data class HomeSettings(
      * again after that time.
      */
     val continueDismissed: Map<String, Long> = emptyMap(),
+    /** Addons' tabs (cartridge, store, jellyfin) in the order the user dragged them into; the rest follow. */
+    val addonsOrder: List<String> = emptyList(),
 ) {
     /**
      * Visible destinations in order. Destinations missing from the stored list (added in a newer
