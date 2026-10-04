@@ -1,6 +1,5 @@
 package io.github.matiyaaa.fuse.ui.designsystem.components
 
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -27,9 +26,11 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import io.github.matiyaaa.fuse.ui.designsystem.shape.PillShape
-import io.github.matiyaaa.fuse.ui.designsystem.theme.Durations
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
+import io.github.matiyaaa.fuse.ui.fuseline.Durations
+import io.github.matiyaaa.fuse.ui.fuseline.fuselineFloat
+import io.github.matiyaaa.fuse.ui.fuseline.tween
 
 /**
  * Which of [count] pages shows: small dots, with the current page as a short accent pill that
@@ -67,7 +68,7 @@ fun PageDots(count: Int, current: Int, onSelect: (Int) -> Unit, modifier: Modifi
             val on = i == current
             val interaction = remember { MutableInteractionSource() }
             val hovered by interaction.collectIsHoveredAsState()
-            val grow by animateFloatAsState(if (hovered && !on) 1f else 0f, Fuse.motion.tween(Durations.FAST), label = "dot hover")
+            val grow by fuselineFloat(if (hovered && !on) 1f else 0f, Fuse.motion.tween(Durations.FAST), label = "dot hover")
             val dot = c.text.copy(alpha = 0.4f)
             Box(
                 Modifier

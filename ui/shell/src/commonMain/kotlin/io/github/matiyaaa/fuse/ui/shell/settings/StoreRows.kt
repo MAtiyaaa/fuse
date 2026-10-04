@@ -33,8 +33,12 @@ fun storeRows(app: AppState): List<MenuAction> {
             return@buildList
         }
         add(app.choiceRow(
-            "variant", "Edition", FuseIcons.DualScreen, p.storeVariant,
-            listOf<Pair<StoreVariant?, String>>(StoreVariant.STANDARD to StoreVariant.STANDARD.title(), StoreVariant.DUAL_SCREEN to StoreVariant.DUAL_SCREEN.title()),
+            "variant", "Edition", if (app.platform.features.secondScreen) FuseIcons.DualScreen else FuseIcons.Store, p.storeVariant,
+            // Dual-Screen is only offered where there is a second screen (or it is already chosen).
+            listOfNotNull<Pair<StoreVariant?, String>>(
+                StoreVariant.STANDARD to StoreVariant.STANDARD.title(),
+                (StoreVariant.DUAL_SCREEN to StoreVariant.DUAL_SCREEN.title()).takeIf { app.platform.features.secondScreen || s.variant == StoreVariant.DUAL_SCREEN },
+            ),
             detail = "Which edition of the Obtainium Emulation Pack the Store follows" + if (s.recommended == StoreVariant.DUAL_SCREEN) ". Dual-Screen suits this device" else "",
             optionDetail = { it?.detail() },
         ) { v -> if (v != null) app.scope.launch { ops.chooseVariant(v) } })

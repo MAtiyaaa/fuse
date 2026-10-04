@@ -11,12 +11,12 @@ import io.github.matiyaaa.fuse.integrations.systemart.SystemArtPack
 import io.github.matiyaaa.fuse.integrations.systemart.SystemArtStyle
 import io.github.matiyaaa.fuse.model.AppFilter
 import io.github.matiyaaa.fuse.model.CartridgeRoute
+import io.github.matiyaaa.fuse.model.CrtSettings
 import io.github.matiyaaa.fuse.model.Destination
 import io.github.matiyaaa.fuse.model.DualScreenMode
 import io.github.matiyaaa.fuse.model.GameArtStyle
-import io.github.matiyaaa.fuse.model.GlyphStyle
 import io.github.matiyaaa.fuse.model.GlassSettings
-import io.github.matiyaaa.fuse.model.CrtSettings
+import io.github.matiyaaa.fuse.model.GlyphStyle
 import io.github.matiyaaa.fuse.model.HomeMode
 import io.github.matiyaaa.fuse.model.LaunchDisplay
 import io.github.matiyaaa.fuse.model.LibraryLayout
@@ -40,23 +40,24 @@ import io.github.matiyaaa.fuse.ui.designsystem.components.ToastKind
 import io.github.matiyaaa.fuse.ui.designsystem.components.Trailing
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
-import io.github.matiyaaa.fuse.ui.shell.app.showEmulator
 import io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec
-import io.github.matiyaaa.fuse.ui.shell.app.ReorderSpec
 import io.github.matiyaaa.fuse.ui.shell.app.ConfirmSpec
+import io.github.matiyaaa.fuse.ui.shell.app.ReorderSpec
 import io.github.matiyaaa.fuse.ui.shell.app.Route
 import io.github.matiyaaa.fuse.ui.shell.app.addGame
 import io.github.matiyaaa.fuse.ui.shell.app.applyUpdate
 import io.github.matiyaaa.fuse.ui.shell.app.emulatorFoldersPicker
 import io.github.matiyaaa.fuse.ui.shell.app.hasTwoScreens
-import io.github.matiyaaa.fuse.ui.shell.app.openStore
-import io.github.matiyaaa.fuse.ui.shell.app.sections
 import io.github.matiyaaa.fuse.ui.shell.app.locatePicker
 import io.github.matiyaaa.fuse.ui.shell.app.offers
+import io.github.matiyaaa.fuse.ui.shell.app.openStore
 import io.github.matiyaaa.fuse.ui.shell.app.screenName
+import io.github.matiyaaa.fuse.ui.shell.app.sections
+import io.github.matiyaaa.fuse.ui.shell.app.showEmulator
 import io.github.matiyaaa.fuse.ui.shell.home.bytesText
 import io.github.matiyaaa.fuse.ui.shell.home.title
 import io.github.matiyaaa.fuse.ui.shell.music.BundledMusic
+import io.github.matiyaaa.fuse.ui.shell.notes.openInstalledNotes
 import io.github.matiyaaa.fuse.ui.shell.platform.StorageState
 import io.github.matiyaaa.fuse.ui.shell.platform.WindowControls
 import io.github.matiyaaa.fuse.ui.shell.platform.WindowStyle
@@ -1150,8 +1151,15 @@ fun displayRows(app: AppState): List<MenuAction> {
                 add(autostartRow(app, w))
             }
         }
-        // Every second-screen option, shown in full where there is one and folded where there isn't.
+        // Every second-screen option, for a device that has one.
         val second = buildList {
+            add(app.choiceRow(
+                "flipped", "Which way round", FuseIcons.Swap, d.flipped,
+                listOf(false to "Menus on top", true to "Menus below"),
+                optionDetail = {
+                    if (it) "Fuse on the touch screen, and the game you're on large on the main screen, like a 3DS" else "Fuse on the main screen, the second screen beside it"
+                },
+            ) { v -> app.store.updatePrefs { it.copy(display = it.display.copy(flipped = v)) } })
             add(app.choiceRow(
                 "mode", "Second screen", FuseIcons.DualScreen, d.mode,
                 // Playing on the second screen is now "Games open on"; the old choice stays listed only while it's set.
@@ -1200,25 +1208,12 @@ fun displayRows(app: AppState): List<MenuAction> {
                     },
                 ))
             }
+            add(toggleRow("bg", "Same background as the main screen", FuseIcons.Image, d.companionFollowsBackground, "Its scene or picture behind what the second screen shows") { v -> app.store.updatePrefs { it.copy(display = it.display.copy(companionFollowsBackground = v)) } })
             add(toggleRow("perf", "Show performance on the second screen", FuseIcons.ChartLine, d.companionShowsPerformance, "Only values the system really reports; nothing is estimated") { v -> app.store.updatePrefs { it.copy(display = it.display.copy(companionShowsPerformance = v)) } })
             add(toggleRow("touch", "Touch controls on the second screen", FuseIcons.Hand, d.companionTouchControls) { v -> app.store.updatePrefs { it.copy(display = it.display.copy(companionTouchControls = v)) } })
-    }
-        labelled("Second screen") {
-            if (app.platform.features.secondScreen) {
-                addAll(second)
-            } else {
-                addAll(app.group(
-                    "displays.second", "When a second screen is connected", FuseIcons.DualScreen,
-                    summary = when (d.mode) {
-                        DualScreenMode.OFF -> "Off"
-                        DualScreenMode.LIBRARY_COMPANION -> "Selected game"
-                        DualScreenMode.GAME_COMPANION -> "Companion"
-                        DualScreenMode.REVERSE -> "Games play there"
-                    },
-                    detail = "There's one screen now. These apply once a second display is connected",
-                ) { second })
-            }
         }
+        // Only a device with a second screen mentions one.
+        if (app.platform.features.secondScreen) labelled("Second screen") { addAll(second) }
     }
 }
 
@@ -1395,11 +1390,16 @@ fun updateRows(app: AppState): List<MenuAction> {
                 ))
             }
             if (r.notes.isNotBlank()) add(MenuAction("notes", "What's new in ${r.name}", FuseIcons.Sparkles, trailing = Trailing.Chevron, onSelect = {
-                app.choice = ChoiceSpec(r.name, r.notes.lines().filterNot { it.startsWith("# ") }.joinToString("\n").trim().take(1600), listOf(
-                    MenuAction("ok", "Close", FuseIcons.Check, onSelect = { app.choice = null }),
-                ), icon = FuseIcons.Sparkles)
+                val name = io.github.matiyaaa.fuse.ui.shell.notes.releaseNameOf(r.notes) ?: r.name.substringAfter(" - ", "").ifBlank { null }
+                app.go(Route.ReleaseNotes(r.tag.removePrefix("v"), name, r.notes, installed = false))
             }))
         }
+        add(MenuAction(
+            "installed-notes", "What's new in this version", FuseIcons.Sparkles,
+            detail = "Fuse ${app.store.updates.currentVersion}: what it brought, on a page of its own",
+            trailing = Trailing.Chevron,
+            onSelect = { app.openInstalledNotes() },
+        ))
         add(MenuAction("check", "Check for updates", FuseIcons.Refresh, onSelect = {
             app.scope.launch { app.toasts.show(if (app.store.updates.check() != null) "An update is available" else "Fuse is up to date") }
         }))

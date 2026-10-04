@@ -94,6 +94,7 @@ class FuseApplication : Application(), SingletonImageLoader.Factory {
         val data = FuseData(AndroidDatabase.open(this))
         http = FuseHttp.client(OkHttp.create(), FuseHttpConfig(appVersion = BuildConfig.VERSION_NAME))
         services = AndroidFuseServices(this, data, http, appScope, activities, companions) { platformUi.displayMonitor.secondary()?.id }
+        io.github.matiyaaa.fuse.services.PlayShareProvider.grantToCartridge(this)
 
     }
 

@@ -50,7 +50,7 @@ import kotlinx.coroutines.runBlocking
 /** What the test window shows: the whole app for one store, or the companion screen. */
 internal sealed interface AuditView {
     data object Blank : AuditView
-    data class App(val store: FuseStore, val platform: PlatformUi, val generation: Int, val safeMode: io.github.matiyaaa.fuse.ui.shell.app.SafeMode? = null) : AuditView
+    data class App(val store: FuseStore, val platform: PlatformUi, val generation: Int, val safeMode: io.github.matiyaaa.fuse.ui.shell.app.SafeMode? = null, val flipped: Boolean = false) : AuditView
     data class Companion(val store: FuseStore, val platform: PlatformUi, val mode: DualScreenMode, val onHide: (() -> Unit)? = null) : AuditView
     /** One piece of the interface on its own (the standby screen, which waits minutes to appear). */
     class Piece(val content: @Composable () -> Unit) : AuditView
@@ -152,9 +152,9 @@ internal class AuditDriver(
     }
 
     /** Shows [store] in a freshly started app. */
-    fun show(store: FuseStore, platform: PlatformUi = this.platform, safeMode: io.github.matiyaaa.fuse.ui.shell.app.SafeMode? = null) {
+    fun show(store: FuseStore, platform: PlatformUi = this.platform, safeMode: io.github.matiyaaa.fuse.ui.shell.app.SafeMode? = null, flipped: Boolean = false) {
         val generation = ((view as? AuditView.App)?.generation ?: 0) + 1
-        view = AuditView.App(store, platform, generation, safeMode)
+        view = AuditView.App(store, platform, generation, safeMode, flipped)
         settle(1_600)
     }
 
@@ -171,7 +171,7 @@ internal class AuditDriver(
             when (val v = view) {
                 AuditView.Blank -> Unit
                 is AuditView.App -> key(v.generation) {
-                    FuseApp(v.store, v.platform, router, phoneLink, safeMode = v.safeMode)
+                    FuseApp(v.store, v.platform, router, phoneLink, safeMode = v.safeMode, showcaseElsewhere = v.flipped)
                     ExtraToasts(v.store, v.platform)
                 }
                 is AuditView.Companion -> key(v.mode, v.store) { CompanionApp(v.store, v.platform, v.mode, v.onHide) }

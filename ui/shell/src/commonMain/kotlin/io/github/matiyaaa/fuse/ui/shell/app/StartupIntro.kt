@@ -1,8 +1,5 @@
 package io.github.matiyaaa.fuse.ui.shell.app
 
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
@@ -35,12 +32,15 @@ import io.github.matiyaaa.fuse.ui.designsystem.input.LayerPriority
 import io.github.matiyaaa.fuse.ui.designsystem.input.NavResult
 import io.github.matiyaaa.fuse.ui.designsystem.sound.SoundCue
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
-import kotlinx.coroutines.launch
+import io.github.matiyaaa.fuse.ui.fuseline.Curves
+import io.github.matiyaaa.fuse.ui.fuseline.FuselineValue
+import io.github.matiyaaa.fuse.ui.fuseline.tween
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.min
 import kotlin.math.sin
 import kotlin.random.Random
+import kotlinx.coroutines.launch
 
 /** Whether the intro already ran in this process (a window made again doesn't play it twice). */
 internal object StartupIntro {
@@ -72,12 +72,12 @@ internal fun StartupIntroOverlay(onDone: () -> Unit) {
     val sounds = io.github.matiyaaa.fuse.ui.designsystem.sound.LocalUiSounds.current
     val reduced = motion.reduced
     val length = if (reduced) StartupIntro.REDUCED_MS else StartupIntro.LENGTH_MS
-    val clock = remember { Animatable(0f) }
+    val clock = remember { FuselineValue(0f) }
     val scope = rememberCoroutineScope()
     var burstPlayed by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
-        clock.animateTo(length.toFloat(), tween(length, easing = LinearEasing))
+        clock.animateTo(length.toFloat(), tween(length, easing = Curves.Linear))
         onDone()
     }
     // The spark reaches the frame: the launch sound, once.
@@ -95,7 +95,7 @@ internal fun StartupIntroOverlay(onDone: () -> Unit) {
         if (clock.value < exit) {
             scope.launch {
                 clock.snapTo(exit)
-                clock.animateTo(length.toFloat(), tween((length - exit).toInt(), easing = LinearEasing))
+                clock.animateTo(length.toFloat(), tween((length - exit).toInt(), easing = Curves.Linear))
                 onDone()
             }
         }

@@ -1,6 +1,5 @@
 package io.github.matiyaaa.fuse.ui.shell.library
 
-import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -30,14 +29,16 @@ import androidx.compose.ui.unit.IntOffset
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Aspect
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
+import io.github.matiyaaa.fuse.ui.fuseline.FuselineValue
+import io.github.matiyaaa.fuse.ui.fuseline.spring
 import io.github.matiyaaa.fuse.ui.shell.components.GameCoverTile
 import io.github.matiyaaa.fuse.ui.shell.components.GameTileSkeleton
 import io.github.matiyaaa.fuse.ui.shell.components.coverCornerFraction
 import io.github.matiyaaa.fuse.ui.shell.store.GameCard
-import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.math.roundToInt
+import kotlinx.coroutines.launch
 
 /**
  * Capsule Mode's strip of covers. The selected cover always sits at the same spot ([anchor] of the
@@ -66,7 +67,7 @@ fun CoverCarousel(
     start: Dp? = null,
 ) {
     val motion = Fuse.motion
-    val position = remember { Animatable(selected.toFloat()) }
+    val position = remember { FuselineValue(selected.toFloat()) }
     val scope = rememberCoroutineScope()
     LaunchedEffect(selected) { position.animateTo(selected.toFloat(), motion.followSpring()) }
     val latestSettle by rememberUpdatedState(onSettle)

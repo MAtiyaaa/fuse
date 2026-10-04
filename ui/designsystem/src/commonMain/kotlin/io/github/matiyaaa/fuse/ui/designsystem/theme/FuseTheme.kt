@@ -16,9 +16,11 @@ import io.github.matiyaaa.fuse.model.FocusStyle
 import io.github.matiyaaa.fuse.model.GlassSettings
 import io.github.matiyaaa.fuse.model.GlyphStyle
 import io.github.matiyaaa.fuse.model.MotionProfile
-import io.github.matiyaaa.fuse.model.RenderQuality
 import io.github.matiyaaa.fuse.model.PerformanceProfile
+import io.github.matiyaaa.fuse.model.RenderQuality
 import io.github.matiyaaa.fuse.model.ThemeSpec
+import io.github.matiyaaa.fuse.ui.fuseline.FuselineMotion
+import io.github.matiyaaa.fuse.ui.fuseline.LocalFuselineMotion
 
 /** Corner geometry for the active theme. */
 @Immutable
@@ -57,7 +59,6 @@ data class FuseLook(
 
 val LocalFuseLook = staticCompositionLocalOf<FuseLook> { error("FuseTheme missing") }
 val LocalFuseType = staticCompositionLocalOf<FuseTypography> { error("FuseTheme missing") }
-val LocalFuseMotion = staticCompositionLocalOf { FuseMotion(MotionProfile.STANDARD) }
 val LocalRenderQuality = staticCompositionLocalOf {
     RenderQuality.of(PerformanceProfile.BALANCED, null, lowPower = false)
 }
@@ -68,7 +69,7 @@ object Fuse {
     val look: FuseLook @Composable @ReadOnlyComposable get() = LocalFuseLook.current
     val colors: FuseColors @Composable @ReadOnlyComposable get() = LocalFuseLook.current.colors
     val type: FuseTypography @Composable @ReadOnlyComposable get() = LocalFuseType.current
-    val motion: FuseMotion @Composable @ReadOnlyComposable get() = LocalFuseMotion.current
+    val motion: FuselineMotion @Composable @ReadOnlyComposable get() = LocalFuselineMotion.current
     val quality: RenderQuality @Composable @ReadOnlyComposable get() = LocalRenderQuality.current
     val geometry: FuseGeometry @Composable @ReadOnlyComposable get() = LocalFuseLook.current.geometry
     val glyphs: GlyphConfig @Composable @ReadOnlyComposable get() = LocalGlyphs.current
@@ -131,12 +132,12 @@ private fun FuseThemeLocals(
         )
     }
     val type = rememberFuseTypography(textScale)
-    val motionSpec = remember(motion, spec.motion) { FuseMotion(motion ?: spec.motion) }
+    val motionSpec = remember(motion, spec.motion) { FuselineMotion((motion ?: spec.motion).level) }
     val selection = remember(colors) { TextSelectionColors(colors.accent, colors.accent.copy(alpha = 0.3f)) }
     CompositionLocalProvider(
         LocalFuseLook provides look,
         LocalFuseType provides type,
-        LocalFuseMotion provides motionSpec,
+        LocalFuselineMotion provides motionSpec,
         LocalRenderQuality provides quality,
         LocalGlyphs provides glyphs,
         LocalTextSelectionColors provides selection,

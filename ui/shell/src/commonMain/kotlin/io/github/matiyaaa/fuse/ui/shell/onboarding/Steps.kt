@@ -1,7 +1,5 @@
 package io.github.matiyaaa.fuse.ui.shell.onboarding
 
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -14,10 +12,12 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -37,7 +37,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathMeasure
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import io.github.matiyaaa.fuse.model.BiosState
 import io.github.matiyaaa.fuse.model.DualScreenMode
@@ -57,17 +61,22 @@ import io.github.matiyaaa.fuse.ui.designsystem.components.Spinner
 import io.github.matiyaaa.fuse.ui.designsystem.components.StatusDot
 import io.github.matiyaaa.fuse.ui.designsystem.components.Trailing
 import io.github.matiyaaa.fuse.ui.designsystem.focus.LinearSelection
-import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.ui.graphics.graphicsLayer
-import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
+import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
 import io.github.matiyaaa.fuse.ui.designsystem.input.LocalInputRouter
 import io.github.matiyaaa.fuse.ui.designsystem.input.NavResult
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
+import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
 import io.github.matiyaaa.fuse.ui.designsystem.theme.ThemePresets
+import io.github.matiyaaa.fuse.ui.fuseline.Curves
+import io.github.matiyaaa.fuse.ui.fuseline.Durations
+import io.github.matiyaaa.fuse.ui.fuseline.FuselineValue
+import io.github.matiyaaa.fuse.ui.fuseline.animate
+import io.github.matiyaaa.fuse.ui.fuseline.fuselineFloat
+import io.github.matiyaaa.fuse.ui.fuseline.tween
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
+import io.github.matiyaaa.fuse.ui.shell.app.BrandArt
 import io.github.matiyaaa.fuse.ui.shell.app.ConfirmSpec
 import io.github.matiyaaa.fuse.ui.shell.app.Route
 import io.github.matiyaaa.fuse.ui.shell.app.TextInputSpec
@@ -410,16 +419,26 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
         ))
 
         // ------------------------------------------------------------------------- make it yours
-        if (platform.features.secondScreen || displays.size > 1) add(Step(
-            "displays", "Displays", "Two screens",
-            "Choose what the second screen does. Games can also open on either screen when the device and emulator allow it.",
+        // Only where there is a second screen: which of the two holds the menus.
+        if (platform.features.secondScreen) add(Step(
+            "displays", "Two screens", "Which way round?",
+            "Menus on top keeps Fuse on the main screen, with the chosen game shown below. Menus below puts Fuse on the touch screen, like a 3DS, and gives the main screen to the game you are on. Settings, Screen and sound can change it later.",
             icon = FuseIcons.DualScreen, chapter = Chapters.YOURS,
             actions = listOf(
-                StepAction("Show the selected game", primary = prefs.display.mode == DualScreenMode.LIBRARY_COMPANION) { store.updatePrefs { it.copy(display = it.display.copy(mode = DualScreenMode.LIBRARY_COMPANION)) }; next() },
-                StepAction("Companion while playing", primary = prefs.display.mode == DualScreenMode.GAME_COMPANION) { store.updatePrefs { it.copy(display = it.display.copy(mode = DualScreenMode.GAME_COMPANION)) }; next() },
-                StepAction("Off", primary = prefs.display.mode == DualScreenMode.OFF) { store.updatePrefs { it.copy(display = it.display.copy(mode = DualScreenMode.OFF)) }; next() },
+                StepAction("Menus on top", primary = !prefs.display.flipped && prefs.display.mode != DualScreenMode.OFF) {
+                    store.updatePrefs { it.copy(display = it.display.copy(flipped = false, mode = if (it.display.mode == DualScreenMode.OFF) DualScreenMode.LIBRARY_COMPANION else it.display.mode)) }
+                    next()
+                },
+                StepAction("Menus below", primary = prefs.display.flipped) {
+                    store.updatePrefs { it.copy(display = it.display.copy(flipped = true, mode = if (it.display.mode == DualScreenMode.OFF) DualScreenMode.LIBRARY_COMPANION else it.display.mode)) }
+                    next()
+                },
+                StepAction("One screen", primary = !prefs.display.flipped && prefs.display.mode == DualScreenMode.OFF) {
+                    store.updatePrefs { it.copy(display = it.display.copy(flipped = false, mode = DualScreenMode.OFF)) }
+                    next()
+                },
             ),
-            content = { DualScreenPreview(state.button) },
+            content = { WhichWayPreview(state.button) },
         ))
         add(Step(
             "controller", "Controller", "Which button confirms?",
@@ -597,48 +616,50 @@ private fun SteamList(games: List<io.github.matiyaaa.fuse.library.steam.SteamGam
     }
 }
 
-/** The Fuse mark drawn in: the frame traces itself, the fuse line runs into it and the spark lights. */
+/**
+ * Fuse's own mark drawn in, from the brand art itself ([BrandArt]): the squircle frame traces itself,
+ * the fuse line runs into it and the spark lights with its glow, exactly as the logo is. [lit] shows
+ * it finished.
+ */
 @Composable
-private fun Ignition(lit: Boolean = false) {
+internal fun Ignition(lit: Boolean = false) {
     val c = Fuse.colors
-    val trace = remember { Animatable(if (lit) 1f else 0f) }
-    val spark = remember { Animatable(if (lit) 1f else 0f) }
+    val trace = remember { FuselineValue(if (lit) 1f else 0f) }
+    val spark = remember { FuselineValue(if (lit) 1f else 0f) }
     LaunchedEffect(Unit) {
-        trace.animateTo(1f, tween(1100))
-        spark.animateTo(1f, tween(420))
+        trace.animateTo(1f, tween(1100, easing = Curves.Standard))
+        spark.animateTo(1f, tween(420, easing = Curves.Enter))
     }
     Box(Modifier.size(260.dp), contentAlignment = Alignment.Center) {
         Canvas(Modifier.size(200.dp)) {
-            val w = size.width
-            val stroke = w * 0.06f
-            val frame = Path().apply {
-                addRoundRect(androidx.compose.ui.geometry.RoundRect(stroke, stroke, w - stroke, w - stroke, androidx.compose.ui.geometry.CornerRadius(w * 0.26f)))
-            }
-            val measure = PathMeasure().apply { setPath(frame, false) }
-            val traced = Path()
-            measure.getSegment(0f, measure.length * trace.value, traced, true)
-            drawPath(traced, c.text, style = Stroke(stroke, cap = StrokeCap.Round))
-            val fuse = Path().apply {
-                moveTo(w * 0.28f, w * 0.7f)
-                cubicTo(w * 0.42f, w * 0.7f, w * 0.44f, w * 0.34f, w * 0.64f, w * 0.34f)
-            }
-            val fm = PathMeasure().apply { setPath(fuse, false) }
-            val drawn = Path()
-            fm.getSegment(0f, fm.length * ((trace.value - 0.5f) * 2f).coerceIn(0f, 1f), drawn, true)
-            drawPath(drawn, c.text, style = Stroke(stroke, cap = StrokeCap.Round))
-            val s = spark.value
-            if (s > 0f) {
-                val center = Offset(w * 0.7f, w * 0.3f)
-                drawCircle(Brush.radialGradient(listOf(c.accent.copy(alpha = 0.9f * s), Color.Transparent), center = center, radius = w * 0.35f * s), radius = w * 0.35f * s, center = center)
-                drawCircle(Color.White.copy(alpha = s), radius = w * 0.045f, center = center)
+            val unit = size.width / BrandArt.MARK
+            withTransform({ scale(unit, unit, pivot = Offset.Zero) }) {
+                val t = trace.value
+                // The frame traces itself over the first two thirds, the fuse line over the last half.
+                val frame = PathMeasure().apply { setPath(BrandArt.frame, false) }
+                val drawnFrame = Path()
+                frame.getSegment(0f, frame.length * (t / 0.66f).coerceIn(0f, 1f), drawnFrame, true)
+                drawPath(drawnFrame, c.text, style = Stroke(BrandArt.MARK_STROKE))
+                val fuse = PathMeasure().apply { setPath(BrandArt.fuse, false) }
+                val drawnFuse = Path()
+                fuse.getSegment(0f, fuse.length * ((t - 0.5f) * 2f).coerceIn(0f, 1f), drawnFuse, true)
+                drawPath(drawnFuse, c.text, style = Stroke(BrandArt.MARK_STROKE, cap = StrokeCap.Round))
+                val s = spark.value
+                if (s > 0f) {
+                    // A flash a little larger than the glow, settling to the logo's own spark.
+                    val flash = (1f - s) * 0.8f
+                    drawCircle(BrandArt.glow(c.accent), radius = BrandArt.GLOW_R * (1f + flash), center = BrandArt.SPARK, alpha = s)
+                    drawCircle(BrandArt.core(c.accent), radius = BrandArt.CORE_R * s, center = BrandArt.SPARK)
+                }
             }
         }
     }
 }
 
 /**
- * Live view of what the controller sends, so users can confirm their layout. [nintendoKeys] places
- * the keycodes where a pad that sends Nintendo keycodes has them (A on the right).
+ * Live view of what the controller sends, so users can confirm their layout, on a whole controller
+ * drawn in the theme ([PadArt]) whose every button lights while it is held. [nintendoKeys] places
+ * the face buttons where a pad that sends Nintendo keycodes has them (A on the right).
  */
 @Composable
 internal fun ControllerTest(nintendoKeys: Boolean = false) {
@@ -652,28 +673,9 @@ internal fun ControllerTest(nintendoKeys: Boolean = false) {
         onDispose { router.rawListener = null }
     }
     val c = Fuse.colors
-    @Composable
-    fun Key(b: PadButton, label: String) {
-        val on = b in pressed
-        Box(
-            Modifier.size(52.dp).clip(RoundedCornerShape(26.dp)).background(if (on) c.accent else c.text.copy(alpha = 0.08f))
-                .border(1.dp, c.text.copy(alpha = 0.2f), RoundedCornerShape(26.dp)),
-            contentAlignment = Alignment.Center,
-        ) { FText(label, Fuse.type.bodyStrong, color = if (on) c.onAccent else c.text) }
-    }
-    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(Space.s)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(Space.xxl)) {
-            Key(PadButton.L1, "L"); Key(PadButton.R1, "R")
-        }
-        if (nintendoKeys) {
-            Key(PadButton.X, "X")
-            Row(horizontalArrangement = Arrangement.spacedBy(Space.x4)) { Key(PadButton.Y, "Y"); Key(PadButton.A, "A") }
-            Key(PadButton.B, "B")
-        } else {
-            Key(PadButton.Y, "Y")
-            Row(horizontalArrangement = Arrangement.spacedBy(Space.x4)) { Key(PadButton.X, "X"); Key(PadButton.B, "B") }
-            Key(PadButton.A, "A")
-        }
+    val style = Fuse.glyphs.style
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        PadArt(pressed.toSet(), style, nintendoKeys, Modifier.width(380.dp))
         Spacer(Modifier.height(Space.m))
         FText(last?.let { "Last: ${it.name.replace('_', ' ').lowercase()}" } ?: "Press any button", Fuse.type.label, color = c.textMuted)
         FText(if (nintendoKeys) "Laid out as a Nintendo pad" else "Laid out as an Xbox pad", Fuse.type.caption, color = c.textFaint)
@@ -694,7 +696,7 @@ private fun MiniScreen(
     draw: androidx.compose.ui.graphics.drawscope.DrawScope.(lit: Float) -> Unit,
 ) {
     val c = Fuse.colors
-    val lit by androidx.compose.animation.core.animateFloatAsState(if (active) 1f else 0f, Fuse.motion.tween(io.github.matiyaaa.fuse.ui.designsystem.theme.Durations.BASE), label = "mini")
+    val lit by io.github.matiyaaa.fuse.ui.fuseline.fuselineFloat(if (active) 1f else 0f, Fuse.motion.tween(io.github.matiyaaa.fuse.ui.fuseline.Durations.BASE), label = "mini")
     val shape = RoundedCornerShape(Fuse.geometry.panel.coerceAtMost(18.dp))
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
         Box(
@@ -726,8 +728,8 @@ private fun MiniScreen(
 @Composable
 private fun loopClock(ms: Int, still: Float = 0.8f): Float {
     if (!Fuse.motion.ambient) return still
-    return androidx.compose.animation.core.rememberInfiniteTransition(label = "loop").animateFloat(
-        0f, 1f, androidx.compose.animation.core.infiniteRepeatable(tween(ms, easing = androidx.compose.animation.core.LinearEasing)), label = "t",
+    return io.github.matiyaaa.fuse.ui.fuseline.rememberLoopClock(label = "loop").animateFloat(
+        0f, 1f, io.github.matiyaaa.fuse.ui.fuseline.infiniteRepeatable(tween(ms, easing = io.github.matiyaaa.fuse.ui.fuseline.Curves.Linear)), label = "t",
     ).value
 }
 
@@ -840,25 +842,60 @@ private fun LaunchStylePreview(pagesFirst: Boolean) {
 @Composable
 private fun HomeStylePreview(mode: HomeMode) {
     val c = Fuse.colors
+    // Channels as Home really lays it out: the default board through the board's own layout.
+    val board = remember {
+        val widgets = io.github.matiyaaa.fuse.model.HomeLayoutConfig.DefaultBoard
+        io.github.matiyaaa.fuse.ui.shell.home.BoardGrid.layout(
+            widgets.map { io.github.matiyaaa.fuse.ui.shell.home.BoardGrid.Item(it.id, it.boardSize, null) }, 4,
+        )
+    }
     Row(Modifier.widthIn(max = 620.dp).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.l)) {
         for (m in HomeMode.entries) {
             MiniScreen(if (m == HomeMode.FLOW) "Flow" else "Channels", active = m == mode, modifier = Modifier.weight(1f)) { lit ->
-                val t = c.text.copy(alpha = 0.18f + 0.08f * lit)
+                val quiet = c.text.copy(alpha = 0.16f + 0.06f * lit)
+                val strong = c.text.copy(alpha = 0.55f + 0.3f * lit)
+                val accent = c.accent.copy(alpha = 0.55f + 0.4f * lit)
+                val w = size.width
+                val h = size.height
+                val r = androidx.compose.ui.geometry.CornerRadius(w * 0.018f)
+                fun box(x: Float, y: Float, bw: Float, bh: Float, color: Color) =
+                    drawRoundRect(color, Offset(x, y), androidx.compose.ui.geometry.Size(bw, bh), r)
                 if (m == HomeMode.FLOW) {
-                    drawRoundRect(c.text.copy(alpha = 0.5f), Offset(0f, 0f), androidx.compose.ui.geometry.Size(size.width * 0.45f, size.height * 0.1f), androidx.compose.ui.geometry.CornerRadius(size.height))
-                    for (row in 0..1) for (i in 0..4) {
-                        val w = size.width / 5.6f
-                        val first = row == 0 && i == 0
-                        drawRoundRect(if (first) c.accent.copy(alpha = 0.5f + 0.4f * lit) else t, Offset(i * (w + size.width * 0.03f), size.height * (0.24f + row * 0.38f)), androidx.compose.ui.geometry.Size(w, size.height * 0.3f), androidx.compose.ui.geometry.CornerRadius(6f))
+                    // The stage: the system's dot and name, the game's title large, its line of facts.
+                    drawCircle(accent, radius = h * 0.018f, center = Offset(w * 0.05f, h * 0.1f))
+                    box(w * 0.08f, h * 0.085f, w * 0.1f, h * 0.03f, quiet)
+                    box(w * 0.04f, h * 0.15f, w * 0.42f, h * 0.085f, strong)
+                    box(w * 0.04f, h * 0.27f, w * 0.18f, h * 0.035f, quiet)
+                    box(w * 0.24f, h * 0.265f, w * 0.1f, h * 0.045f, quiet)
+                    // Continue playing: wide cards, the first chosen with the spark bar under it.
+                    box(w * 0.04f, h * 0.37f, w * 0.2f, h * 0.025f, quiet)
+                    val cw = w * 0.24f
+                    for (i in 0 until 4) {
+                        val x = w * 0.04f + i * (cw + w * 0.025f)
+                        box(x, h * 0.42f, cw, h * 0.22f, if (i == 0) accent else quiet)
                     }
+                    box(w * 0.04f + cw * 0.38f, h * 0.665f, cw * 0.24f, h * 0.012f, accent)
+                    // Systems: a row of square tiles.
+                    box(w * 0.04f, h * 0.72f, w * 0.12f, h * 0.025f, quiet)
+                    val sw = w * 0.11f
+                    for (i in 0 until 8) box(w * 0.04f + i * (sw + w * 0.012f), h * 0.77f, sw, h * 0.2f, quiet)
                 } else {
-                    val gap = size.width * 0.025f
-                    val w = (size.width - gap * 3) / 4f
-                    val h = (size.height - gap * 2) / 3f
-                    for (row in 0..2) for (i in 0..3) {
-                        if (row == 0 && i == 1) continue
-                        val wide = row == 0 && i == 0
-                        drawRoundRect(if (wide) c.accent.copy(alpha = 0.5f + 0.4f * lit) else t, Offset(i * (w + gap), row * (h + gap)), androidx.compose.ui.geometry.Size(if (wide) w * 2 + gap else w, h), androidx.compose.ui.geometry.CornerRadius(8f))
+                    // Channels: the board, each widget its real size and place.
+                    val cols = board.columns
+                    val rows = board.rows.coerceAtLeast(1)
+                    val gap = w * 0.02f
+                    val left = w * 0.04f
+                    val top = h * 0.06f
+                    val cellW = (w - left * 2 - gap * (cols - 1)) / cols
+                    val cellH = ((h - top * 2 - gap * (rows - 1)) / rows).coerceAtMost(cellW * 0.62f)
+                    for ((id, rect) in board.rects) {
+                        val x = left + rect.column * (cellW + gap)
+                        val y = top + rect.row * (cellH + gap)
+                        val bw = cellW * rect.width + gap * (rect.width - 1)
+                        val bh = cellH * rect.height + gap * (rect.height - 1)
+                        box(x, y, bw, bh, if (id == board.ids.first()) accent else quiet)
+                        // A label line in each, as widgets carry their names.
+                        box(x + bw * 0.08f, y + bh - bh * 0.22f, bw * 0.4f, bh * 0.08f, strong.copy(alpha = strong.alpha * 0.5f))
                     }
                 }
             }
@@ -867,60 +904,114 @@ private fun HomeStylePreview(mode: HomeMode) {
 }
 
 /**
- * A dual-screen handheld drawn simply, its bottom screen showing what the highlighted choice puts
- * there: the selected game, the game's companion (achievements, time) while playing, or nothing.
+ * A dual-screen handheld, drawn plainly, with what each screen holds for the highlighted choice:
+ * Fuse's menus (a top line and a row of tiles) and the showcase of the game they are on (its art,
+ * name and facts). Choosing the other way round slides the two past each other through the hinge,
+ * and One screen leaves the lower screen dark.
  */
 @Composable
-private fun DualScreenPreview(button: Int) {
+private fun WhichWayPreview(button: Int) {
     val c = Fuse.colors
-    val mode = button.coerceIn(0, 2)
-    val labels = listOf("The selected game", "A companion while you play", "Nothing: the screen stays off")
+    val motion = Fuse.motion
+    val choice = button.coerceIn(0, 2)
+    val swap by fuselineFloat(if (choice == 1) 1f else 0f, motion.tween(Durations.SLOW, Curves.Standard), label = "whichWay")
+    val lit by fuselineFloat(if (choice == 2) 0f else 1f, motion.fade(Durations.BASE), label = "secondLit")
+    val labels = listOf("Menus on top, the game below", "Menus below, the game on top", "Only the main screen")
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Canvas(Modifier.width(260.dp).aspectRatio(0.82f)) {
+        Canvas(Modifier.width(280.dp).aspectRatio(0.8f)) {
             val w = size.width
             val h = size.height
-            val r = androidx.compose.ui.geometry.CornerRadius(w * 0.06f)
-            // The two halves of the device.
-            drawRoundRect(c.text.copy(alpha = 0.1f), Offset(0f, 0f), androidx.compose.ui.geometry.Size(w, h * 0.49f), r)
-            drawRoundRect(c.text.copy(alpha = 0.1f), Offset(0f, h * 0.51f), androidx.compose.ui.geometry.Size(w, h * 0.49f), r)
+            val body = c.text.copy(alpha = 0.1f)
+            val corner = androidx.compose.ui.geometry.CornerRadius(w * 0.06f)
+            val hinge = h * 0.02f
+            // The two halves: a wide main screen on top, the smaller touch screen below.
+            drawRoundRect(body, Offset.Zero, androidx.compose.ui.geometry.Size(w, h * 0.5f - hinge), corner)
+            drawRoundRect(body, Offset(w * 0.04f, h * 0.5f + hinge), androidx.compose.ui.geometry.Size(w * 0.92f, h * 0.5f - hinge), corner)
+            drawRoundRect(c.text.copy(alpha = 0.16f), Offset(w * 0.08f, h * 0.5f - hinge), androidx.compose.ui.geometry.Size(w * 0.84f, hinge * 2), androidx.compose.ui.geometry.CornerRadius(hinge))
             val pad = w * 0.06f
-            val top = androidx.compose.ui.geometry.Rect(pad, pad, w - pad, h * 0.49f - pad)
-            val bottom = androidx.compose.ui.geometry.Rect(pad, h * 0.51f + pad, w - pad, h - pad)
-            // The top screen: Fuse, with a row of tiles, the second chosen.
-            drawRoundRect(c.ink, top.topLeft, top.size, androidx.compose.ui.geometry.CornerRadius(w * 0.03f))
-            val tw = top.width / 6.2f
-            for (i in 0 until 5) {
-                drawRoundRect(
-                    if (i == 1) c.accent else c.text.copy(alpha = 0.22f),
-                    Offset(top.left + top.width * 0.06f + i * tw * 1.15f, top.top + top.height * (if (i == 1) 0.42f else 0.46f)),
-                    androidx.compose.ui.geometry.Size(tw, tw * 1.25f), androidx.compose.ui.geometry.CornerRadius(tw * 0.15f),
-                )
-            }
-            // The bottom screen.
-            drawRoundRect(if (mode == 2) Color.Black else c.ink, bottom.topLeft, bottom.size, androidx.compose.ui.geometry.CornerRadius(w * 0.03f))
-            when (mode) {
-                0 -> {
-                    drawRoundRect(c.accent.copy(alpha = 0.85f), Offset(bottom.left + bottom.width * 0.08f, bottom.top + bottom.height * 0.14f), androidx.compose.ui.geometry.Size(bottom.width * 0.3f, bottom.height * 0.72f), androidx.compose.ui.geometry.CornerRadius(6.dp.toPx()))
-                    val x = bottom.left + bottom.width * 0.45f
-                    drawRoundRect(c.text.copy(alpha = 0.85f), Offset(x, bottom.top + bottom.height * 0.22f), androidx.compose.ui.geometry.Size(bottom.width * 0.42f, bottom.height * 0.1f), androidx.compose.ui.geometry.CornerRadius(h))
-                    for (i in 0 until 3) drawRoundRect(c.text.copy(alpha = 0.25f), Offset(x, bottom.top + bottom.height * (0.42f + 0.12f * i)), androidx.compose.ui.geometry.Size(bottom.width * (0.38f - 0.06f * i), bottom.height * 0.05f), androidx.compose.ui.geometry.CornerRadius(h))
+            val top = androidx.compose.ui.geometry.Rect(pad, pad, w - pad, h * 0.5f - hinge - pad)
+            val bottomW = top.height * 1.2f
+            val bottomTop = h * 0.5f + hinge + pad
+            val bottom = androidx.compose.ui.geometry.Rect(w / 2 - bottomW / 2, bottomTop, w / 2 + bottomW / 2, h - pad)
+            val screenCorner = androidx.compose.ui.geometry.CornerRadius(w * 0.025f)
+            drawRoundRect(c.ink, top.topLeft, top.size, screenCorner)
+            drawRoundRect(c.ink, bottom.topLeft, bottom.size, screenCorner)
+            // Where each picture is now: the menus from the top screen to the bottom one as the
+            // choice turns, the showcase the other way.
+            val menus = lerpRect(top, bottom, swap)
+            val show = lerpRect(bottom, top, swap)
+            for (screen in listOf(top, bottom)) {
+                clipRect(screen.left, screen.top, screen.right, screen.bottom) {
+                    val showAlpha = if (screen == bottom) lit else 1f
+                    drawShowcase(show, c, showAlpha)
+                    drawMenus(menus, c)
                 }
-                1 -> {
-                    // A session pill, and achievement badges with a progress bar.
-                    drawRoundRect(c.text.copy(alpha = 0.18f), Offset(bottom.left + bottom.width * 0.3f, bottom.top + bottom.height * 0.12f), androidx.compose.ui.geometry.Size(bottom.width * 0.4f, bottom.height * 0.12f), androidx.compose.ui.geometry.CornerRadius(h))
-                    drawCircle(c.accent, radius = bottom.height * 0.03f, center = Offset(bottom.left + bottom.width * 0.35f, bottom.top + bottom.height * 0.18f))
-                    for (i in 0 until 4) {
-                        drawRoundRect(if (i < 2) c.accent.copy(alpha = 0.8f) else c.text.copy(alpha = 0.2f), Offset(bottom.left + bottom.width * (0.14f + 0.19f * i), bottom.top + bottom.height * 0.38f), androidx.compose.ui.geometry.Size(bottom.width * 0.14f, bottom.width * 0.14f), androidx.compose.ui.geometry.CornerRadius(6.dp.toPx()))
-                    }
-                    drawRoundRect(c.text.copy(alpha = 0.15f), Offset(bottom.left + bottom.width * 0.14f, bottom.top + bottom.height * 0.78f), androidx.compose.ui.geometry.Size(bottom.width * 0.72f, bottom.height * 0.05f), androidx.compose.ui.geometry.CornerRadius(h))
-                    drawRoundRect(c.accent, Offset(bottom.left + bottom.width * 0.14f, bottom.top + bottom.height * 0.78f), androidx.compose.ui.geometry.Size(bottom.width * 0.36f, bottom.height * 0.05f), androidx.compose.ui.geometry.CornerRadius(h))
-                }
-                else -> Unit
             }
+            // One screen: the lower screen is off.
+            if (lit < 1f) drawRoundRect(Color.Black.copy(alpha = (1f - lit) * 0.92f), bottom.topLeft, bottom.size, screenCorner)
         }
         Spacer(Modifier.height(Space.m))
-        FText(labels[mode], Fuse.type.bodyStrong, maxLines = 1)
+        FText(labels[choice], Fuse.type.bodyStrong, maxLines = 1)
     }
+}
+
+private fun lerpRect(a: androidx.compose.ui.geometry.Rect, b: androidx.compose.ui.geometry.Rect, t: Float) = androidx.compose.ui.geometry.Rect(
+    a.left + (b.left - a.left) * t,
+    a.top + (b.top - a.top) * t,
+    a.right + (b.right - a.right) * t,
+    a.bottom + (b.bottom - a.bottom) * t,
+)
+
+/** Fuse's menus in miniature: the top line, a row of tiles with one chosen, and a shelf under it. */
+private fun DrawScope.drawMenus(r: androidx.compose.ui.geometry.Rect, c: io.github.matiyaaa.fuse.ui.designsystem.theme.FuseColors) {
+    val round = androidx.compose.ui.geometry.CornerRadius(r.height)
+    val u = r.width / 20f
+    for (i in 0 until 4) {
+        drawRoundRect(
+            if (i == 0) c.text.copy(alpha = 0.8f) else c.text.copy(alpha = 0.25f),
+            Offset(r.left + u * (1.2f + i * 2.6f), r.top + r.height * 0.1f),
+            androidx.compose.ui.geometry.Size(u * 2f, r.height * 0.05f),
+            round,
+        )
+    }
+    drawRoundRect(c.accent, Offset(r.left + u * 1.2f, r.top + r.height * 0.18f), androidx.compose.ui.geometry.Size(u * 2f, r.height * 0.015f), round)
+    val tile = (r.width - u * 2.4f) / 5.6f
+    for (i in 0 until 5) {
+        val chosen = i == 1
+        val lift = if (chosen) tile * 0.08f else 0f
+        drawRoundRect(
+            if (chosen) c.accent else c.text.copy(alpha = 0.2f),
+            Offset(r.left + u * 1.2f + i * tile * 1.12f, r.top + r.height * 0.32f - lift),
+            androidx.compose.ui.geometry.Size(tile, tile * 1.3f),
+            androidx.compose.ui.geometry.CornerRadius(tile * 0.14f),
+        )
+    }
+    for (i in 0 until 7) {
+        drawRoundRect(
+            c.text.copy(alpha = 0.12f),
+            Offset(r.left + u * 1.2f + i * tile * 0.8f, r.top + r.height * 0.32f + tile * 1.45f),
+            androidx.compose.ui.geometry.Size(tile * 0.7f, tile * 0.7f),
+            androidx.compose.ui.geometry.CornerRadius(tile * 0.12f),
+        )
+    }
+}
+
+/** The chosen game shown large: its art, its name, its facts and the time played. */
+private fun DrawScope.drawShowcase(r: androidx.compose.ui.geometry.Rect, c: io.github.matiyaaa.fuse.ui.designsystem.theme.FuseColors, alpha: Float) {
+    if (alpha <= 0f) return
+    drawRect(
+        Brush.linearGradient(listOf(c.accent.copy(alpha = 0.75f * alpha), c.accent.copy(alpha = 0.18f * alpha)), start = r.topLeft, end = r.bottomRight),
+        r.topLeft, r.size,
+    )
+    drawRect(Brush.verticalGradient(listOf(Color.Transparent, c.ink.copy(alpha = 0.85f * alpha)), startY = r.top + r.height * 0.3f, endY = r.bottom), r.topLeft, r.size)
+    val round = androidx.compose.ui.geometry.CornerRadius(r.height)
+    val x = r.left + r.width * 0.07f
+    drawRoundRect(c.text.copy(alpha = 0.95f * alpha), Offset(x, r.top + r.height * 0.52f), androidx.compose.ui.geometry.Size(r.width * 0.46f, r.height * 0.1f), round)
+    for (i in 0 until 3) {
+        drawRoundRect(c.text.copy(alpha = 0.3f * alpha), Offset(x + i * r.width * 0.15f, r.top + r.height * 0.69f), androidx.compose.ui.geometry.Size(r.width * 0.12f, r.height * 0.06f), round)
+    }
+    drawRoundRect(c.text.copy(alpha = 0.16f * alpha), Offset(x, r.top + r.height * 0.83f), androidx.compose.ui.geometry.Size(r.width * 0.86f, r.height * 0.035f), round)
+    drawRoundRect(c.accent.copy(alpha = alpha), Offset(x, r.top + r.height * 0.83f), androidx.compose.ui.geometry.Size(r.width * 0.5f, r.height * 0.035f), round)
 }
 
 /**

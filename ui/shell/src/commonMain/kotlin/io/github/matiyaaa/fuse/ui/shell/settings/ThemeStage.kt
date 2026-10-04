@@ -1,13 +1,5 @@
 package io.github.matiyaaa.fuse.ui.shell.settings
 
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.SizeTransform
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.snap
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -24,6 +16,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
@@ -53,8 +46,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.layout
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -83,12 +74,10 @@ import io.github.matiyaaa.fuse.ui.designsystem.components.Tile
 import io.github.matiyaaa.fuse.ui.designsystem.effects.elevated
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
-import io.github.matiyaaa.fuse.ui.designsystem.shape.PillShape
 import io.github.matiyaaa.fuse.ui.designsystem.icons.HintButton
 import io.github.matiyaaa.fuse.ui.designsystem.media.ArtSlot
 import io.github.matiyaaa.fuse.ui.designsystem.media.GeneratedArt
-import io.github.matiyaaa.fuse.ui.designsystem.theme.Durations
-import io.github.matiyaaa.fuse.ui.designsystem.theme.Easings
+import io.github.matiyaaa.fuse.ui.designsystem.shape.PillShape
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Elevation
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.FuseTheme
@@ -97,6 +86,17 @@ import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
 import io.github.matiyaaa.fuse.ui.designsystem.theme.TileMetrics
 import io.github.matiyaaa.fuse.ui.designsystem.theme.flourishOn
 import io.github.matiyaaa.fuse.ui.designsystem.theme.toColor
+import io.github.matiyaaa.fuse.ui.fuseline.Curves
+import io.github.matiyaaa.fuse.ui.fuseline.Durations
+import io.github.matiyaaa.fuse.ui.fuseline.FuselineValue
+import io.github.matiyaaa.fuse.ui.fuseline.Motion
+import io.github.matiyaaa.fuse.ui.fuseline.SizeTransform
+import io.github.matiyaaa.fuse.ui.fuseline.Swap
+import io.github.matiyaaa.fuse.ui.fuseline.fadeIn
+import io.github.matiyaaa.fuse.ui.fuseline.fadeOut
+import io.github.matiyaaa.fuse.ui.fuseline.snap
+import io.github.matiyaaa.fuse.ui.fuseline.togetherWith
+import io.github.matiyaaa.fuse.ui.fuseline.tween
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.Hud
 import io.github.matiyaaa.fuse.ui.shell.app.HudScrim
@@ -214,11 +214,11 @@ internal fun ThemeStage(
         if (spec.id != shown.id) delay(STAGE_REST_MS)
         shown = spec
     }
-    val sweep = remember { Animatable(1f) }
+    val sweep = remember { FuselineValue(1f) }
     LaunchedEffect(flourish) {
         if (flourish > 0 && motion.flourishOn(quality)) {
             sweep.snapTo(0f)
-            sweep.animateTo(1f, tween(Durations.SWEEP + Durations.BASE, easing = Easings.Sweep))
+            sweep.animateTo(1f, tween(Durations.SWEEP + Durations.BASE, easing = Curves.Sweep))
         }
     }
     Box(
@@ -248,7 +248,7 @@ internal fun ThemeStage(
                 }
             },
     ) {
-        AnimatedContent(
+        Swap(
             targetState = shown,
             contentKey = { it.id },
             transitionSpec = {
@@ -473,7 +473,7 @@ internal fun factsOf(spec: ThemeSpec, key: Any = spec.id, title: String = spec.n
 @Composable
 internal fun ThemeFacts(facts: Facts, modifier: Modifier = Modifier, compact: Boolean = false) {
     val motion = Fuse.motion
-    AnimatedContent(
+    Swap(
         targetState = facts,
         modifier = modifier,
         contentKey = { it.key },
@@ -752,14 +752,14 @@ private fun MiniSheet(targets: SpotTargets, modifier: Modifier) {
 private fun SpotOverlay(targets: SpotTargets, spotlight: Spotlight?) {
     val c = Fuse.colors
     val motion = Fuse.motion
-    val shown by androidx.compose.animation.core.animateFloatAsState(if (spotlight != null) 1f else 0f, motion.fade(io.github.matiyaaa.fuse.ui.designsystem.theme.Durations.BASE), label = "spot")
+    val shown by io.github.matiyaaa.fuse.ui.fuseline.fuselineFloat(if (spotlight != null) 1f else 0f, motion.fade(io.github.matiyaaa.fuse.ui.fuseline.Durations.BASE), label = "spot")
     var last by remember { mutableStateOf(spotlight) }
     if (spotlight != null) last = spotlight
     val s = last ?: return
     if (shown <= 0.01f) return
     val pulse = if (motion.ambient) {
-        androidx.compose.animation.core.rememberInfiniteTransition(label = "spotPulse").animateFloat(
-            0f, 1f, androidx.compose.animation.core.infiniteRepeatable(tween(1_400), androidx.compose.animation.core.RepeatMode.Reverse), label = "p",
+        io.github.matiyaaa.fuse.ui.fuseline.rememberLoopClock(label = "spotPulse").animateFloat(
+            0f, 1f, io.github.matiyaaa.fuse.ui.fuseline.infiniteRepeatable(tween(1_400), io.github.matiyaaa.fuse.ui.fuseline.RepeatMode.Reverse), label = "p",
         ).value
     } else {
         1f

@@ -25,6 +25,7 @@ include(
     ":core:launch",
     ":core:integrations",
     ":core:data",
+    ":ui:fuseline",
     ":ui:designsystem",
     ":ui:shell",
     ":ui:link",

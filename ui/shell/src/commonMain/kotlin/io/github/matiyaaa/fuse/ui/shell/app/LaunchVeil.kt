@@ -1,7 +1,5 @@
 package io.github.matiyaaa.fuse.ui.shell.app
 
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -42,14 +40,17 @@ import io.github.matiyaaa.fuse.ui.designsystem.media.ArtSlot
 import io.github.matiyaaa.fuse.ui.designsystem.media.Artwork
 import io.github.matiyaaa.fuse.ui.designsystem.media.GeneratedArt
 import io.github.matiyaaa.fuse.ui.designsystem.shape.SquircleShape
-import io.github.matiyaaa.fuse.ui.designsystem.theme.Durations
-import io.github.matiyaaa.fuse.ui.designsystem.theme.Easings
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Elevation
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
 import io.github.matiyaaa.fuse.ui.designsystem.theme.flourishOn
 import io.github.matiyaaa.fuse.ui.designsystem.theme.toColor
+import io.github.matiyaaa.fuse.ui.fuseline.Curves
+import io.github.matiyaaa.fuse.ui.fuseline.Durations
+import io.github.matiyaaa.fuse.ui.fuseline.Enter
+import io.github.matiyaaa.fuse.ui.fuseline.FuselineValue
+import io.github.matiyaaa.fuse.ui.fuseline.tween
 import io.github.matiyaaa.fuse.ui.shell.components.LocalTileMetrics
 
 /**
@@ -68,9 +69,9 @@ fun LaunchVeilContent(veil: LaunchVeil) {
     val motion = Fuse.motion
     val quality = Fuse.quality
     val flourish = motion.flourishOn(quality)
-    val settle = remember { Animatable(if (flourish) 1.06f else 1f) }
+    val settle = remember { FuselineValue(if (flourish) 1.06f else 1f) }
     LaunchedEffect(veil) {
-        if (flourish) settle.animateTo(1f, tween(motion.ms(Durations.DELIBERATE * 3), easing = Easings.Enter))
+        if (flourish) settle.animateTo(1f, tween(motion.ms(Durations.DELIBERATE * 3), easing = Curves.Enter))
     }
     InputLayer(priority = LayerPriority.SYSTEM, modal = true) { NavResult.CONSUMED }
     val accent = veil.accent.toColor()

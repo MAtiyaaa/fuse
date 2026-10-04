@@ -1,12 +1,5 @@
 package io.github.matiyaaa.fuse.ui.shell.library
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.expandHorizontally
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -38,10 +31,18 @@ import io.github.matiyaaa.fuse.ui.designsystem.components.FText
 import io.github.matiyaaa.fuse.ui.designsystem.effects.fuseClickable
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
-import io.github.matiyaaa.fuse.ui.designsystem.theme.Durations
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
+import io.github.matiyaaa.fuse.ui.fuseline.Appear
+import io.github.matiyaaa.fuse.ui.fuseline.Durations
+import io.github.matiyaaa.fuse.ui.fuseline.expandHorizontally
+import io.github.matiyaaa.fuse.ui.fuseline.fadeIn
+import io.github.matiyaaa.fuse.ui.fuseline.fadeOut
+import io.github.matiyaaa.fuse.ui.fuseline.fuselineColor
+import io.github.matiyaaa.fuse.ui.fuseline.fuselineFloat
+import io.github.matiyaaa.fuse.ui.fuseline.shrinkHorizontally
+import io.github.matiyaaa.fuse.ui.fuseline.tween
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.FocusZone
 import io.github.matiyaaa.fuse.ui.shell.components.CountPill
@@ -277,12 +278,12 @@ private fun ToolButton(label: String, icon: ImageVector, focused: Boolean, tone:
         ToolTone.ON -> c.accent
         ToolTone.WARNING -> c.warning
     }
-    val wash by animateColorAsState(
+    val wash by fuselineColor(
         if (tone != ToolTone.PLAIN) toneColor.copy(alpha = TONE_FILL) else Color.Transparent,
         motion.tween(Durations.FAST),
         label = "tool wash",
     )
-    val tint by animateColorAsState(
+    val tint by fuselineColor(
         when {
             tone != ToolTone.PLAIN -> toneColor
             focused -> c.text
@@ -291,7 +292,7 @@ private fun ToolButton(label: String, icon: ImageVector, focused: Boolean, tone:
         motion.tween(Durations.FAST),
         label = "tool tint",
     )
-    val focus by animateFloatAsState(if (focused) 1f else 0f, motion.tween(Durations.FAST), label = "tool focus")
+    val focus by fuselineFloat(if (focused) 1f else 0f, motion.tween(Durations.FAST), label = "tool focus")
     val shape = rememberLineShape()
     Row(
         Modifier
@@ -307,7 +308,7 @@ private fun ToolButton(label: String, icon: ImageVector, focused: Boolean, tone:
         verticalAlignment = Alignment.CenterVertically,
     ) {
         FuseIcon(icon, size = Size.iconS, tint = tint)
-        AnimatedVisibility(
+        Appear(
             visible = showLabel,
             enter = expandHorizontally(motion.enter(Durations.BASE)) + fadeIn(motion.fade(Durations.BASE)),
             exit = shrinkHorizontally(motion.exit(Durations.FAST)) + fadeOut(motion.fade(Durations.INSTANT)),

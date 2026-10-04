@@ -1,6 +1,5 @@
 package io.github.matiyaaa.fuse.ui.designsystem.components
 
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.gestures.ScrollableState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -15,8 +14,10 @@ import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import io.github.matiyaaa.fuse.ui.designsystem.theme.Durations
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
+import io.github.matiyaaa.fuse.ui.fuseline.Durations
+import io.github.matiyaaa.fuse.ui.fuseline.fuselineFloat
+import io.github.matiyaaa.fuse.ui.fuseline.tween
 
 /**
  * Softens the top and bottom edges of a vertically scrolling area, so rows slide out of view under
@@ -32,8 +33,8 @@ fun Modifier.fadingEdges(top: Dp = 24.dp, bottom: Dp = 40.dp): Modifier = fading
 @Composable
 fun Modifier.fadingEdges(state: ScrollableState, top: Dp = 24.dp, bottom: Dp = 40.dp): Modifier {
     val motion = Fuse.motion
-    val t by animateFloatAsState(if (state.canScrollBackward) 1f else 0f, motion.tween(Durations.FAST), label = "fadeTop")
-    val b by animateFloatAsState(if (state.canScrollForward) 1f else 0f, motion.tween(Durations.FAST), label = "fadeBottom")
+    val t by fuselineFloat(if (state.canScrollBackward) 1f else 0f, motion.tween(Durations.FAST), label = "fadeTop")
+    val b by fuselineFloat(if (state.canScrollForward) 1f else 0f, motion.tween(Durations.FAST), label = "fadeBottom")
     return fadingEdges(top, bottom, { t }, { b })
 }
 

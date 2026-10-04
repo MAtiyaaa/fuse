@@ -1,16 +1,5 @@
 package io.github.matiyaaa.fuse.ui.designsystem.components
 
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.snap
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -68,11 +57,20 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
 import io.github.matiyaaa.fuse.ui.designsystem.shape.PillShape
-import io.github.matiyaaa.fuse.ui.designsystem.theme.Durations
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Radius
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
+import io.github.matiyaaa.fuse.ui.fuseline.Curves
+import io.github.matiyaaa.fuse.ui.fuseline.Durations
+import io.github.matiyaaa.fuse.ui.fuseline.RepeatMode
+import io.github.matiyaaa.fuse.ui.fuseline.fuselineColor
+import io.github.matiyaaa.fuse.ui.fuseline.fuselineFloat
+import io.github.matiyaaa.fuse.ui.fuseline.infiniteRepeatable
+import io.github.matiyaaa.fuse.ui.fuseline.rememberLoopClock
+import io.github.matiyaaa.fuse.ui.fuseline.snap
+import io.github.matiyaaa.fuse.ui.fuseline.spring
+import io.github.matiyaaa.fuse.ui.fuseline.tween
 import kotlin.math.floor
 
 // ------------------------------------------------------------------------------------- switches
@@ -86,7 +84,7 @@ import kotlin.math.floor
 fun Toggle(on: Boolean, modifier: Modifier = Modifier, enabled: Boolean = true) {
     val c = Fuse.colors
     val motion = Fuse.motion
-    val t by animateFloatAsState(
+    val t by fuselineFloat(
         if (on) 1f else 0f,
         if (motion.reduced) snap() else spring(dampingRatio = 0.7f, stiffness = 650f),
         label = "toggle",
@@ -149,7 +147,7 @@ fun ProgressBar(value: Float?, modifier: Modifier = Modifier, color: Color = Fus
     val motion = Fuse.motion
     if (value != null) {
         // An interruptible spring, so a value that keeps changing (a download) flows instead of stepping.
-        val v by animateFloatAsState(value.coerceIn(0f, 1f), motion.value(), label = "progress")
+        val v by fuselineFloat(value.coerceIn(0f, 1f), motion.value(), label = "progress")
         Spacer(
             modifier.height(height).drawBehind {
                 val r = CornerRadius(size.height / 2)
@@ -161,8 +159,8 @@ fun ProgressBar(value: Float?, modifier: Modifier = Modifier, color: Color = Fus
         val phase = if (motion.reduced) {
             null
         } else {
-            rememberInfiniteTransition(label = "indeterminate").animateFloat(
-                0f, 1f, infiniteRepeatable(tween(INDETERMINATE_MS, easing = LinearEasing), RepeatMode.Restart), label = "phase",
+            rememberLoopClock(label = "indeterminate").animateFloat(
+                0f, 1f, infiniteRepeatable(tween(INDETERMINATE_MS, easing = Curves.Linear), RepeatMode.Restart), label = "phase",
             )
         }
         Spacer(
@@ -175,8 +173,8 @@ fun ProgressBar(value: Float?, modifier: Modifier = Modifier, color: Color = Fus
                 } else {
                     // The front leads on an easing curve; the back follows the same curve later.
                     val p = phase.value
-                    val head = FastOutSlowInEasing.transform((p / 0.75f).coerceIn(0f, 1f))
-                    val tail = FastOutSlowInEasing.transform(((p - 0.25f) / 0.75f).coerceIn(0f, 1f))
+                    val head = Curves.Fade.transform((p / 0.75f).coerceIn(0f, 1f))
+                    val tail = Curves.Fade.transform(((p - 0.25f) / 0.75f).coerceIn(0f, 1f))
                     (-0.1f + 1.2f * tail) * w to (-0.1f + 1.2f * head) * w
                 }
                 val left = from.coerceAtLeast(0f)
@@ -204,7 +202,7 @@ fun ProgressRing(
     trackColor: Color = Fuse.colors.text.copy(alpha = 0.12f),
     content: (@Composable () -> Unit)? = null,
 ) {
-    val v by animateFloatAsState(value.coerceIn(0f, 1f), Fuse.motion.value(), label = "ring")
+    val v by fuselineFloat(value.coerceIn(0f, 1f), Fuse.motion.value(), label = "ring")
     Box(
         modifier.size(size).drawWithCache {
             val s = stroke.toPx()
@@ -231,12 +229,12 @@ fun ProgressRing(
 @Composable
 fun Spinner(modifier: Modifier = Modifier, size: Dp = 28.dp, color: Color = Fuse.colors.text) {
     val reduced = Fuse.motion.reduced
-    val t = rememberInfiniteTransition(label = "spin")
+    val t = rememberLoopClock(label = "spin")
     val turn = t.animateFloat(
-        0f, 360f, infiniteRepeatable(tween(if (reduced) 2400 else 1600, easing = LinearEasing)), label = "turn",
+        0f, 360f, infiniteRepeatable(tween(if (reduced) 2400 else 1600, easing = Curves.Linear)), label = "turn",
     )
     // Four grow-and-catch-up cycles, each ending 270 degrees further on, before it repeats exactly.
-    val cycle = t.animateFloat(0f, 4f, infiniteRepeatable(tween(SPIN_CYCLE_MS * 4, easing = LinearEasing)), label = "cycle")
+    val cycle = t.animateFloat(0f, 4f, infiniteRepeatable(tween(SPIN_CYCLE_MS * 4, easing = Curves.Linear)), label = "cycle")
     Spacer(
         modifier.size(size).drawWithCache {
             val s = (this.size.minDimension * 0.09f).coerceIn(2.dp.toPx(), 3.5.dp.toPx())
@@ -252,8 +250,8 @@ fun Spinner(modifier: Modifier = Modifier, size: Dp = 28.dp, color: Color = Fuse
                     val k = cycle.value
                     val n = floor(k)
                     val f = k - n
-                    val head = FastOutSlowInEasing.transform((f / 0.5f).coerceIn(0f, 1f)) * 250f
-                    val tail = FastOutSlowInEasing.transform(((f - 0.5f) / 0.5f).coerceIn(0f, 1f)) * 250f
+                    val head = Curves.Fade.transform((f / 0.5f).coerceIn(0f, 1f)) * 250f
+                    val tail = Curves.Fade.transform(((f - 0.5f) / 0.5f).coerceIn(0f, 1f)) * 250f
                     val start = turn.value + n * 270f + tail
                     drawArc(color, start, (head - tail).coerceAtLeast(12f), false, at, box, style = arcStroke)
                 }
@@ -285,9 +283,9 @@ fun SliderBar(
     val motion = Fuse.motion
     var dragging by remember { mutableStateOf(false) }
     // Under a finger the knob follows exactly; otherwise it eases to the new value.
-    val eased by animateFloatAsState(value.coerceIn(0f, 1f), motion.focusSpring(), label = "slider")
-    val sel by animateFloatAsState(if (selected) 1f else 0f, motion.focusSpring(), label = "sliderFocus")
-    val grab by animateFloatAsState(if (dragging) 1f else 0f, motion.tween(Durations.FAST), label = "grab")
+    val eased by fuselineFloat(value.coerceIn(0f, 1f), motion.focusSpring(), label = "slider")
+    val sel by fuselineFloat(if (selected) 1f else 0f, motion.focusSpring(), label = "sliderFocus")
+    val grab by fuselineFloat(if (dragging) 1f else 0f, motion.tween(Durations.FAST), label = "grab")
     val change by rememberUpdatedState(onChange)
     val current by rememberUpdatedState(value)
     val trackColor = c.text.copy(alpha = 0.14f)
@@ -387,10 +385,10 @@ fun FillSlider(
     var dragging by remember { mutableStateOf(false) }
     // Where the finger has taken the value, so the fill never jumps between the system's steps.
     var finger by remember { mutableStateOf(value) }
-    val eased by animateFloatAsState(value.coerceIn(0f, 1f), motion.focusSpring(), label = "fill")
+    val eased by fuselineFloat(value.coerceIn(0f, 1f), motion.focusSpring(), label = "fill")
     val v = if (dragging) finger.coerceIn(0f, 1f) else eased
     val shownText = if (dragging && dragText != null) dragText(finger.coerceIn(0f, 1f)) else valueText
-    val grab by animateFloatAsState(if (dragging) 1f else 0f, motion.tween(Durations.FAST), label = "fillGrab")
+    val grab by fuselineFloat(if (dragging) 1f else 0f, motion.tween(Durations.FAST), label = "fillGrab")
     val current by rememberUpdatedState(value)
     val change by rememberUpdatedState(onChange)
     // Soft corners, but never rounder than the theme's panels (sharp themes keep their edges).
@@ -496,7 +494,7 @@ fun SegmentedControl(
     val motion = Fuse.motion
     val count = options.size.coerceAtLeast(1)
     val glide = rememberStretchGlide(selectedIndex.coerceIn(0, count - 1).toFloat())
-    val f by animateFloatAsState(if (focused) 1f else 0f, motion.focusSpring(), label = "segFocus")
+    val f by fuselineFloat(if (focused) 1f else 0f, motion.focusSpring(), label = "segFocus")
     val shape = controlShape()
     val thumbRest = if (c.isDark) c.text.copy(alpha = 0.16f) else c.surface
     val thumbFocus = c.text
@@ -538,7 +536,7 @@ fun SegmentedControl(
     ) {
         options.forEachIndexed { i, label ->
             val on = i == selectedIndex
-            val tint by animateColorAsState(
+            val tint by fuselineColor(
                 when {
                     on && focused -> c.ink
                     on -> c.text
@@ -585,11 +583,11 @@ fun Chip(
 ) {
     val c = Fuse.colors
     val motion = Fuse.motion
-    val ring by animateFloatAsState(if (focused) 1f else 0f, motion.focusSpring(), label = "chipFocus")
+    val ring by fuselineFloat(if (focused) 1f else 0f, motion.focusSpring(), label = "chipFocus")
     val interaction = remember { MutableInteractionSource() }
     val press = rememberAtomPress(interaction, onClick != null)
-    val fill by animateColorAsState(if (selected) c.text else background, motion.tween(Durations.FAST), label = "chipFill")
-    val tint by animateColorAsState(if (selected) c.ink else color, motion.tween(Durations.FAST), label = "chipTint")
+    val fill by fuselineColor(if (selected) c.text else background, motion.tween(Durations.FAST), label = "chipFill")
+    val tint by fuselineColor(if (selected) c.ink else color, motion.tween(Durations.FAST), label = "chipTint")
     val hover = c.hoverOverlay()
     // Chips are pills like the buttons, and keep the theme's corners in sharp themes.
     val shape = controlShape()
@@ -689,7 +687,7 @@ fun IconBadge(
 @Composable
 fun StatusDot(ok: Boolean?, modifier: Modifier = Modifier) {
     val c = Fuse.colors
-    val color by animateColorAsState(
+    val color by fuselineColor(
         when (ok) { true -> c.success; false -> c.danger; null -> c.textFaint },
         Fuse.motion.tween(Durations.BASE),
         label = "statusDot",

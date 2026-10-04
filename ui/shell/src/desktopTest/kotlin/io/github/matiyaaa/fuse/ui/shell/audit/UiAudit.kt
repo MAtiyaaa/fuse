@@ -130,4 +130,19 @@ class UiAudit {
     @Test fun m15Details() = audit(AuditSize.M) { detailScreens() }
 
     @Test fun detailsP() = audit(AuditSize.P) { detailScreens() }
+
+    /** What 0.2.7 changed, at 1080p, on a 6 inch handheld, and on a second screen. */
+    @Test fun m16Swap() = audit(AuditSize.M) { swapScreens() }
+
+    @Test fun swapH() = audit(AuditSize.H) { swapScreens() }
+
+    @Test fun swapC() = audit(AuditSize.C) { swapCompanion(); flippedMenus() }
+
+    @Test fun flippedH() = audit(AuditSize.H) { flippedShowcase() }
+
+    @Test fun flippedM() = audit(AuditSize.M) { flippedShowcase() }
+
+    @Test fun openingM() = audit(AuditSize.M) { setupOpening() }
+
+    @Test fun openingP() = audit(AuditSize.P) { setupOpening(); welcomeMark() }
 }

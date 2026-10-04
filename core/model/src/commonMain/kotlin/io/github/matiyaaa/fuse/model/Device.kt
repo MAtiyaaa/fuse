@@ -120,6 +120,13 @@ data class DisplayProfile(
     val appScreens: Map<String, LaunchDisplay> = emptyMap(),
     /** The second screen's page: 0 what the main screen shows, 1 status, 2 controls. */
     val companionPage: Int = 0,
+    /**
+     * Flipped, the way a 3DS has it: Fuse's menus on the second screen (the one you touch), and the
+     * main screen a showcase of what is chosen. Only on a device with a second screen.
+     */
+    val flipped: Boolean = false,
+    /** The second screen shows the main screen's background (its scene or picture) behind what it shows. */
+    val companionFollowsBackground: Boolean = true,
 )
 
 /** Live system status for the status area. Fields are null when the platform doesn't report them. */

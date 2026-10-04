@@ -1,16 +1,5 @@
 package io.github.matiyaaa.fuse.ui.designsystem.components
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.EnterTransition
-import androidx.compose.animation.ExitTransition
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -26,10 +15,22 @@ import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
-import io.github.matiyaaa.fuse.ui.designsystem.theme.Durations
-import io.github.matiyaaa.fuse.ui.designsystem.theme.Easings
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
-import io.github.matiyaaa.fuse.ui.designsystem.theme.FuseMotion
+import io.github.matiyaaa.fuse.ui.fuseline.Appear
+import io.github.matiyaaa.fuse.ui.fuseline.Curves
+import io.github.matiyaaa.fuse.ui.fuseline.Durations
+import io.github.matiyaaa.fuse.ui.fuseline.Enter
+import io.github.matiyaaa.fuse.ui.fuseline.Exit
+import io.github.matiyaaa.fuse.ui.fuseline.FuselineMotion
+import io.github.matiyaaa.fuse.ui.fuseline.fadeIn
+import io.github.matiyaaa.fuse.ui.fuseline.fadeOut
+import io.github.matiyaaa.fuse.ui.fuseline.scaleIn
+import io.github.matiyaaa.fuse.ui.fuseline.scaleOut
+import io.github.matiyaaa.fuse.ui.fuseline.slideInHorizontally
+import io.github.matiyaaa.fuse.ui.fuseline.slideInVertically
+import io.github.matiyaaa.fuse.ui.fuseline.slideOutHorizontally
+import io.github.matiyaaa.fuse.ui.fuseline.slideOutVertically
+import io.github.matiyaaa.fuse.ui.fuseline.tween
 
 enum class OverlayEdge { END, BOTTOM, CENTER }
 
@@ -54,10 +55,10 @@ fun Overlay(
     val motion = Fuse.motion
     val c = Fuse.colors
     Box(modifier.fillMaxSize()) {
-        AnimatedVisibility(
+        Appear(
             visible = visible,
-            enter = fadeIn(motion.tween(Durations.BASE, Easings.Fade)),
-            exit = fadeOut(motion.tween(Durations.FAST, Easings.Standard)),
+            enter = fadeIn(motion.tween(Durations.BASE, Curves.Fade)),
+            exit = fadeOut(motion.tween(Durations.FAST, Curves.Standard)),
         ) {
             val scrim = c.scrim
             val shade = c.ink.copy(alpha = if (c.isDark) 0.4f else 0.18f)
@@ -86,7 +87,7 @@ fun Overlay(
             OverlayEdge.BOTTOM -> Alignment.BottomCenter
             OverlayEdge.CENTER -> Alignment.Center
         }
-        AnimatedVisibility(
+        Appear(
             visible = visible,
             modifier = Modifier.align(align),
             enter = overlayEnter(edge, motion),
@@ -100,18 +101,18 @@ fun Overlay(
 }
 
 /** Arrival: a short travel from the edge (or growth from the centre), on the entering curve. */
-private fun overlayEnter(edge: OverlayEdge, motion: FuseMotion): EnterTransition {
-    val fade = fadeIn(motion.tween(Durations.FAST, Easings.Fade))
+private fun overlayEnter(edge: OverlayEdge, motion: FuselineMotion): Enter {
+    val fade = fadeIn(motion.tween(Durations.FAST, Curves.Fade))
     if (motion.reduced) return fade
-    val move = motion.tween<androidx.compose.ui.unit.IntOffset>(Durations.BASE, Easings.Enter)
-    val grow = motion.tween<Float>(Durations.BASE, Easings.Enter)
+    val move = motion.tween(Durations.BASE, Curves.Enter)
+    val grow = motion.tween(Durations.BASE, Curves.Enter)
     return when (edge) {
         OverlayEdge.END ->
             slideInHorizontally(move) { it / 10 } + scaleIn(grow, initialScale = 0.98f, transformOrigin = TransformOrigin(1f, 0.5f)) + fade
         OverlayEdge.BOTTOM ->
             slideInVertically(move) { it / 8 } + scaleIn(grow, initialScale = 0.98f, transformOrigin = TransformOrigin(0.5f, 1f)) + fade
         OverlayEdge.CENTER ->
-            scaleIn(motion.tween(Durations.BASE, Easings.Enter), initialScale = motion.overlayScale) + fade
+            scaleIn(motion.tween(Durations.BASE, Curves.Enter), initialScale = motion.overlayScale) + fade
     }
 }
 
@@ -119,11 +120,11 @@ private fun overlayEnter(edge: OverlayEdge, motion: FuseMotion): EnterTransition
  * Departure: quicker than arrival and travelling less than it came. It moves on the leaving curve
  * (accelerating away) but fades from the first frame, so a closed menu never seems to hang.
  */
-private fun overlayExit(edge: OverlayEdge, motion: FuseMotion): ExitTransition {
-    val fade = fadeOut(motion.tween(Durations.FAST, Easings.Standard))
+private fun overlayExit(edge: OverlayEdge, motion: FuselineMotion): Exit {
+    val fade = fadeOut(motion.tween(Durations.FAST, Curves.Standard))
     if (motion.reduced) return fade
-    val move = motion.tween<androidx.compose.ui.unit.IntOffset>(Durations.FAST, Easings.Exit)
-    val shrink = motion.tween<Float>(Durations.FAST, Easings.Exit)
+    val move = motion.tween(Durations.FAST, Curves.Exit)
+    val shrink = motion.tween(Durations.FAST, Curves.Exit)
     return when (edge) {
         OverlayEdge.END ->
             slideOutHorizontally(move) { it / 16 } + scaleOut(shrink, targetScale = 0.99f, transformOrigin = TransformOrigin(1f, 0.5f)) + fade

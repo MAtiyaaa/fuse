@@ -1,8 +1,5 @@
 package io.github.matiyaaa.fuse.ui.shell.app
 
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -22,9 +19,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.layout.layout
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
@@ -35,8 +32,11 @@ import io.github.matiyaaa.fuse.ui.designsystem.input.LocalInputRouter
 import io.github.matiyaaa.fuse.ui.designsystem.input.NavResult
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
-import kotlinx.coroutines.delay
+import io.github.matiyaaa.fuse.ui.fuseline.Curves
+import io.github.matiyaaa.fuse.ui.fuseline.FuselineValue
+import io.github.matiyaaa.fuse.ui.fuseline.tween
 import kotlin.random.Random
+import kotlinx.coroutines.delay
 
 /**
  * Watches for Fuse being left alone and puts up [StandbyScreen] after the user's Standby time, but
@@ -64,8 +64,8 @@ internal fun StandbyWatch(app: AppState, router: io.github.matiyaaa.fuse.ui.desi
 @Composable
 internal fun StandbyScreen(clock24h: Boolean, onWake: () -> Unit) {
     val router = LocalInputRouter.current
-    val fade = remember { Animatable(0f) }
-    LaunchedEffect(Unit) { fade.animateTo(1f, tween(FADE_MS, easing = LinearEasing)) }
+    val fade = remember { FuselineValue(0f) }
+    LaunchedEffect(Unit) { fade.animateTo(1f, tween(FADE_MS, easing = Curves.Linear)) }
     fun wake() {
         router.touched()
         onWake()
@@ -76,7 +76,7 @@ internal fun StandbyScreen(clock24h: Boolean, onWake: () -> Unit) {
     }
     // Where the clock sits now, as a share of the free room; it moves on a timer.
     var spot by remember { mutableStateOf(0.5f to 0.45f) }
-    val move = remember { Animatable(1f) }
+    val move = remember { FuselineValue(1f) }
     LaunchedEffect(Unit) {
         val random = Random(kotlin.time.Clock.System.now().toEpochMilliseconds())
         while (true) {

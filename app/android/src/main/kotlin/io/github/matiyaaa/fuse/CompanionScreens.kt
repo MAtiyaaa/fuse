@@ -8,8 +8,12 @@ import android.hardware.display.DisplayManager
 import android.os.Build
 import android.os.SystemClock
 import androidx.activity.ComponentActivity
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Modifier
 import androidx.lifecycle.Lifecycle
 import io.github.matiyaaa.fuse.model.DisplayInfo
 import io.github.matiyaaa.fuse.model.DualScreenMode
@@ -56,6 +60,10 @@ object SecondScreenLog {
  *   activities). A display that refused it, or that put it on the main screen, is not tried again
  *   this session.
  * - A [CompanionHomeActivity] (Fuse as the second screen's Home) is never closed from here.
+ * - Flipped ("Menus below"): the same Presentation carries Fuse's own menus ([menus], made by the
+ *   main activity, which keeps the controller), and the main screen shows the showcase instead
+ *   ([flipped]). While Fuse is away the companion is drawn over the menus, which wait underneath.
+ *   Where no second screen takes the Presentation, the menus stay on the main screen.
  */
 class CompanionScreens(private val app: FuseApplication) : DualScreenHandoff {
     private val refusedDisplays = mutableSetOf<Int>()
@@ -63,6 +71,19 @@ class CompanionScreens(private val app: FuseApplication) : DualScreenHandoff {
     private val closedBySystem = mutableMapOf<Int, MutableList<Long>>()
     private var presentation: CompanionPresentation? = null
     private var mode: DualScreenMode = DualScreenMode.OFF
+
+    /** The person chose "Menus below". */
+    private var flippedWanted = false
+
+    /** The menus are on the second screen now: the main screen shows the showcase. */
+    private val _flipped = MutableStateFlow(false)
+    val flipped: StateFlow<Boolean> = _flipped.asStateFlow()
+
+    /** Fuse's menus for the second screen, from the main activity (which owns the controller input). */
+    var menus: (@Composable () -> Unit)? = null
+
+    /** Said once a session: "Menus below" was chosen but no second screen took them. */
+    private var flippedRefusedLogged = false
 
     /** True from the launch of a dual-screen game until Fuse's main screen resumes. */
     @Volatile private var suppressed = false
@@ -115,8 +136,9 @@ class CompanionScreens(private val app: FuseApplication) : DualScreenHandoff {
     }
 
     /** Follows [mode] and the current displays. Called on the main thread while [from] is started. */
-    fun update(from: Activity, mode: DualScreenMode) {
+    fun update(from: Activity, mode: DualScreenMode, flipped: Boolean = flippedWanted) {
         this.mode = mode
+        this.flippedWanted = flipped
         if (!wants(mode)) {
             val reason = if (suppressed) "a game uses both screens" else "the second screen setting is off"
             hidePresentation(reason)
@@ -130,17 +152,26 @@ class CompanionScreens(private val app: FuseApplication) : DualScreenHandoff {
         app.activities.companion?.let { finish(it, "Fuse is in front again") }
         showPresentation(main)
         presentation?.setAway(mainOff)
+        val menusBelow = flippedWanted && presentation != null && menus != null
+        if (flippedWanted && !menusBelow && !flippedRefusedLogged) {
+            flippedRefusedLogged = true
+            SecondScreenLog.add("Menus below was chosen, but no second screen took them: they stay on the main screen")
+        }
+        if (_flipped.value != menusBelow) {
+            _flipped.value = menusBelow
+            SecondScreenLog.add(if (menusBelow) "Menus moved to the second screen" else "Menus back on the main screen")
+        }
     }
 
     /** Fuse's main screen resumed: games are over, and the companion comes back. */
-    fun onMainResumed(from: Activity, mode: DualScreenMode) {
+    fun onMainResumed(from: Activity, mode: DualScreenMode, flipped: Boolean = flippedWanted) {
         if (suppressed || hiddenUntilBack) SecondScreenLog.add("Fuse resumed, companion allowed again")
         suppressed = false
         hiddenUntilBack = false
         // Back from the background: another app may have put its own second screen over Fuse's
         // meanwhile, so Fuse's is shown again, on top.
         if (_away.value && presentation != null) hidePresentation("Fuse is in front again, shown on top")
-        update(from, mode)
+        update(from, mode, flipped)
     }
 
     /**
@@ -219,7 +250,7 @@ class CompanionScreens(private val app: FuseApplication) : DualScreenHandoff {
     }
 
     private fun wants(mode: DualScreenMode): Boolean =
-        !suppressed && !hiddenUntilBack && (mode == DualScreenMode.LIBRARY_COMPANION || mode == DualScreenMode.GAME_COMPANION)
+        !suppressed && !hiddenUntilBack && (flippedWanted || mode == DualScreenMode.LIBRARY_COMPANION || mode == DualScreenMode.GAME_COMPANION)
 
     private fun showPresentation(main: ComponentActivity) {
         presentation?.let { current ->
@@ -247,13 +278,24 @@ class CompanionScreens(private val app: FuseApplication) : DualScreenHandoff {
             },
         ) {
             val fuseAway by away.collectAsState()
-            CompanionContent(app, onHide = if (fuseAway) ::hideUntilBack else null)
+            val menusHere by flipped.collectAsState()
+            val ownMenus = menus
+            if (menusHere && ownMenus != null) {
+                // Flipped: Fuse's menus here; while a game is in front, its companion over them.
+                Box(Modifier.fillMaxSize()) {
+                    ownMenus()
+                    if (fuseAway) CompanionContent(app, onHide = ::hideUntilBack)
+                }
+            } else {
+                CompanionContent(app, onHide = if (fuseAway) ::hideUntilBack else null)
+            }
         }
         made = shown
         shown.setOnDismissListener {
             // Closed by Android (display removed or changed), not by hidePresentation.
             if (presentation === shown) {
                 presentation = null
+                _flipped.value = false
                 closedBySystem(target.id)
             }
         }
@@ -271,6 +313,10 @@ class CompanionScreens(private val app: FuseApplication) : DualScreenHandoff {
     private fun hidePresentation(reason: String) {
         val current = presentation ?: return
         presentation = null
+        if (_flipped.value) {
+            _flipped.value = false
+            SecondScreenLog.add("Menus back on the main screen")
+        }
         SecondScreenLog.add("Companion closed on display ${current.display.displayId}: $reason")
         try {
             current.dismiss()

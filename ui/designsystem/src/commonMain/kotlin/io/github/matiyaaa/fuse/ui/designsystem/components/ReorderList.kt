@@ -1,7 +1,5 @@
 package io.github.matiyaaa.fuse.ui.designsystem.components
 
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -57,11 +55,14 @@ import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
 import io.github.matiyaaa.fuse.ui.designsystem.input.NavEvent
 import io.github.matiyaaa.fuse.ui.designsystem.input.NavResult
-import io.github.matiyaaa.fuse.ui.designsystem.theme.Durations
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
 import io.github.matiyaaa.fuse.ui.designsystem.theme.tabular
+import io.github.matiyaaa.fuse.ui.fuseline.Durations
+import io.github.matiyaaa.fuse.ui.fuseline.fuselineColor
+import io.github.matiyaaa.fuse.ui.fuseline.fuselineFloat
+import io.github.matiyaaa.fuse.ui.fuseline.tween
 
 /** One row of a [ReorderList]. A [locked] row keeps its place (Home stays first). */
 @Immutable
@@ -320,11 +321,11 @@ private fun ReorderRow(
     val t = Fuse.type
     val motion = Fuse.motion
     val shape = RoundedCornerShape(Fuse.geometry.control)
-    val sel by animateFloatAsState(if (selected) 1f else 0f, motion.tween(Durations.FAST), label = "reorderSel")
-    val lift by animateFloatAsState(if (carried) 1f else 0f, motion.focusSpring(), label = "reorderCarry")
+    val sel by fuselineFloat(if (selected) 1f else 0f, motion.tween(Durations.FAST), label = "reorderSel")
+    val lift by fuselineFloat(if (carried) 1f else 0f, motion.focusSpring(), label = "reorderCarry")
     // A row in hand stands on its own surface, so its shadow reads over the rows underneath.
     val panel = LocalPanelFill.current ?: c.surfaceRaised
-    val bg by animateColorAsState(
+    val bg by fuselineColor(
         when {
             lifted -> c.surfaceOverlay
             selected -> c.text.copy(alpha = if (c.isDark) 0.1f else 0.07f)

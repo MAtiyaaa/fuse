@@ -33,6 +33,12 @@ sealed interface Route {
     data object Controls : Route
     data object Licenses : Route
 
+    /**
+     * Release notes as a page: Fuse [version] ([name], its codename) over the parts of its notes.
+     * [installed] is the version running now; otherwise it is an update on offer.
+     */
+    data class ReleaseNotes(val version: String, val name: String?, val markdown: String, val installed: Boolean) : Route
+
     /** An app's page in the Store, by its key in the catalogue. */
     data class StoreApp(val key: String) : Route
 

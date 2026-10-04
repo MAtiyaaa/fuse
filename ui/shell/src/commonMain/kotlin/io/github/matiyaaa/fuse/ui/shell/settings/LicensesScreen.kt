@@ -27,13 +27,13 @@ import io.github.matiyaaa.fuse.model.NavAction
 import io.github.matiyaaa.fuse.ui.designsystem.components.FText
 import io.github.matiyaaa.fuse.ui.designsystem.components.Hint
 import io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction
+import io.github.matiyaaa.fuse.ui.designsystem.components.MenuHeader
 import io.github.matiyaaa.fuse.ui.designsystem.components.MenuList
 import io.github.matiyaaa.fuse.ui.designsystem.components.Panel
-import io.github.matiyaaa.fuse.ui.designsystem.components.MenuHeader
 import io.github.matiyaaa.fuse.ui.designsystem.components.SkeletonText
 import io.github.matiyaaa.fuse.ui.designsystem.components.fadingEdges
-import io.github.matiyaaa.fuse.ui.designsystem.effects.reveal
 import io.github.matiyaaa.fuse.ui.designsystem.components.handleMenuAction
+import io.github.matiyaaa.fuse.ui.designsystem.effects.reveal
 import io.github.matiyaaa.fuse.ui.designsystem.focus.LinearSelection
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
 import io.github.matiyaaa.fuse.ui.designsystem.icons.HintButton
@@ -43,6 +43,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.res.Res
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
+import io.github.matiyaaa.fuse.ui.fuseline.fuselineScrollTo
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.FocusZone
 import io.github.matiyaaa.fuse.ui.shell.music.BundledMusic
@@ -111,11 +112,11 @@ fun LicensesScreen(app: AppState) {
     InputLayer(enabled = app.focusZone == FocusZone.CONTENT && !app.overlayOpen) { e ->
         when (e.action) {
             NavAction.PAGE_DOWN -> {
-                scope.launch { scroll.animateScrollTo(scroll.value + (scroll.viewportSize * 0.85f).toInt()) }
+                scope.launch { scroll.fuselineScrollTo(scroll.value + (scroll.viewportSize * 0.85f).toInt()) }
                 NavResult.CONSUMED
             }
             NavAction.PAGE_UP -> {
-                scope.launch { scroll.animateScrollTo(scroll.value - (scroll.viewportSize * 0.85f).toInt()) }
+                scope.launch { scroll.fuselineScrollTo(scroll.value - (scroll.viewportSize * 0.85f).toInt()) }
                 NavResult.CONSUMED
             }
             else -> handleMenuAction(e, actions, sel)

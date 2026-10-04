@@ -1,7 +1,5 @@
 package io.github.matiyaaa.fuse.ui.designsystem.effects
 
-import androidx.compose.animation.core.animate
-import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Stable
@@ -21,10 +19,13 @@ import androidx.compose.ui.node.currentValueOf
 import androidx.compose.ui.platform.InspectorInfo
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Constraints
-import io.github.matiyaaa.fuse.ui.designsystem.theme.Durations
-import io.github.matiyaaa.fuse.ui.designsystem.theme.Easings
-import io.github.matiyaaa.fuse.ui.designsystem.theme.LocalFuseMotion
 import io.github.matiyaaa.fuse.ui.designsystem.theme.LocalRenderQuality
+import io.github.matiyaaa.fuse.ui.fuseline.Curves
+import io.github.matiyaaa.fuse.ui.fuseline.Durations
+import io.github.matiyaaa.fuse.ui.fuseline.Enter
+import io.github.matiyaaa.fuse.ui.fuseline.LocalFuselineMotion
+import io.github.matiyaaa.fuse.ui.fuseline.animate
+import io.github.matiyaaa.fuse.ui.fuseline.tween
 import kotlin.time.TimeMark
 import kotlin.time.TimeSource
 import kotlinx.coroutines.launch
@@ -70,8 +71,8 @@ fun RevealScope(vararg keys: Any?, content: @Composable () -> Unit) {
 }
 
 /**
- * Reveals this element as its screen opens: it fades in while rising [io.github.matiyaaa.fuse.ui.designsystem.theme.FuseMotion.revealRise]
- * (about 10 dp) with [Easings.Enter], starting [io.github.matiyaaa.fuse.ui.designsystem.theme.FuseMotion.stagger]
+ * Reveals this element as its screen opens: it fades in while rising [io.github.matiyaaa.fuse.ui.fuseline.FuselineMotion.revealRise]
+ * (about 10 dp) with [Curves.Enter], starting [io.github.matiyaaa.fuse.ui.fuseline.FuselineMotion.stagger]
  * after the first item (about 25 ms per [index], at most eight items deep).
  *
  * Use it on the few large pieces of a screen in reading order (title, then sections, then the
@@ -115,7 +116,7 @@ private class RevealNode(var reveal: Reveal?, var index: Int) :
 
     override fun onAttach() {
         val entry = reveal ?: currentValueOf(LocalReveal)
-        val motion = currentValueOf(LocalFuseMotion)
+        val motion = currentValueOf(LocalFuselineMotion)
         val quality = currentValueOf(LocalRenderQuality)
         progress = 1f
         if (entry == null || !quality.animatedBackground) return
@@ -131,7 +132,7 @@ private class RevealNode(var reveal: Reveal?, var index: Int) :
             try {
                 val delay = (motion.stagger(index) - start.elapsedNow().inWholeMilliseconds).toInt().coerceAtLeast(0)
                 val duration = if (fadeOnly) motion.ms(Durations.FAST) else motion.ms(Durations.SLOW + 60)
-                animate(0f, 1f, animationSpec = tween(duration, delay, Easings.Enter)) { v, _ -> progress = v }
+                animate(0f, 1f, animationSpec = tween(duration, delay, Curves.Enter)) { v, _ -> progress = v }
             } finally {
                 // Cancelled (the element left mid-reveal) or done: never leave it hidden.
                 progress = 1f

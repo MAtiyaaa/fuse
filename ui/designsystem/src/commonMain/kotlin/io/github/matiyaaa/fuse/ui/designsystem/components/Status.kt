@@ -1,14 +1,5 @@
 package io.github.matiyaaa.fuse.ui.designsystem.components
 
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -35,9 +26,17 @@ import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.unit.dp
 import io.github.matiyaaa.fuse.model.ConnectionState
 import io.github.matiyaaa.fuse.model.SystemStatus
-import io.github.matiyaaa.fuse.ui.designsystem.theme.Durations
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
+import io.github.matiyaaa.fuse.ui.fuseline.Curves
+import io.github.matiyaaa.fuse.ui.fuseline.Durations
+import io.github.matiyaaa.fuse.ui.fuseline.FuselineValue
+import io.github.matiyaaa.fuse.ui.fuseline.RepeatMode
+import io.github.matiyaaa.fuse.ui.fuseline.fuselineColor
+import io.github.matiyaaa.fuse.ui.fuseline.fuselineFloat
+import io.github.matiyaaa.fuse.ui.fuseline.infiniteRepeatable
+import io.github.matiyaaa.fuse.ui.fuseline.rememberLoopClock
+import io.github.matiyaaa.fuse.ui.fuseline.tween
 
 /**
  * The status cluster at the top right: connectivity, battery and time on one baseline, drawn in
@@ -90,21 +89,21 @@ fun BatteryGlyph(percent: Int, charging: Boolean, modifier: Modifier = Modifier)
     val c = Fuse.colors
     val low = percent <= 15 && !charging
     val reduced = Fuse.motion.reduced
-    val plug = remember { Animatable(1f) }
+    val plug = remember { FuselineValue(1f) }
     val was = remember { booleanArrayOf(charging) }
     LaunchedEffect(charging) {
         val plugged = charging && !was[0] && !reduced
         was[0] = charging
         if (plugged) {
             plug.snapTo(0f)
-            plug.animateTo(1f, tween(PLUG_MS, easing = LinearEasing))
+            plug.animateTo(1f, tween(PLUG_MS, easing = Curves.Linear))
         } else {
             // Unplugged mid-flourish: the flourish that was cut short must not stay on screen.
             plug.snapTo(1f)
         }
     }
     val glow = c.success
-    val fillColor by animateColorAsState(
+    val fillColor by fuselineColor(
         when {
             charging -> c.success
             low -> c.danger
@@ -113,7 +112,7 @@ fun BatteryGlyph(percent: Int, charging: Boolean, modifier: Modifier = Modifier)
         Fuse.motion.tween(Durations.BASE),
         label = "batteryColor",
     )
-    val level by animateFloatAsState(percent.coerceIn(0, 100) / 100f, Fuse.motion.tween(Durations.DELIBERATE), label = "batteryLevel")
+    val level by fuselineFloat(percent.coerceIn(0, 100) / 100f, Fuse.motion.tween(Durations.DELIBERATE), label = "batteryLevel")
     val outline = c.text.copy(alpha = 0.55f)
     val boltColor = c.ink
     Spacer(
@@ -179,10 +178,10 @@ fun BatteryCapsule(percent: Int, charging: Boolean, modifier: Modifier = Modifie
         low -> c.danger
         else -> c.text.copy(alpha = 0.92f)
     }
-    val level by animateFloatAsState(percent.coerceIn(0, 100) / 100f, Fuse.motion.tween(Durations.DELIBERATE), label = "battery")
+    val level by fuselineFloat(percent.coerceIn(0, 100) / 100f, Fuse.motion.tween(Durations.DELIBERATE), label = "battery")
     val sweep = if (charging && !full && !Fuse.motion.reduced && Fuse.quality.animatedBackground) {
-        rememberInfiniteTransition(label = "charge").animateFloat(
-            0f, 1f, infiniteRepeatable(tween(1800, easing = LinearEasing), RepeatMode.Restart), label = "sweep",
+        rememberLoopClock(label = "charge").animateFloat(
+            0f, 1f, infiniteRepeatable(tween(1800, easing = Curves.Linear), RepeatMode.Restart), label = "sweep",
         )
     } else {
         null

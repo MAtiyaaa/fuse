@@ -121,6 +121,9 @@ class AppState(
     /** Fuse's startup animation is playing ([StartupIntroOverlay]). */
     var intro by mutableStateOf(false)
 
+    /** Setup's own opening is playing (the first start of Fuse, in place of [intro]). */
+    var setupOpening by mutableStateOf(false)
+
     /**
      * Licence files picked and zRIFs pasted for installs, by "gameId|contentId". Kept in memory for
      * this run of Fuse only, never written down, so a key goes no further than the emulator.

@@ -1,6 +1,5 @@
 package io.github.matiyaaa.fuse.ui.shell.home
 
-import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -20,8 +19,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
@@ -44,6 +43,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import io.github.matiyaaa.fuse.model.CartridgeStatus
+import io.github.matiyaaa.fuse.model.Destination
 import io.github.matiyaaa.fuse.model.QueueState
 import io.github.matiyaaa.fuse.model.WidgetKind
 import io.github.matiyaaa.fuse.model.WidgetSpan
@@ -64,21 +64,21 @@ import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
 import io.github.matiyaaa.fuse.ui.designsystem.theme.flourishOn
 import io.github.matiyaaa.fuse.ui.designsystem.theme.tabular
 import io.github.matiyaaa.fuse.ui.designsystem.theme.toColor
+import io.github.matiyaaa.fuse.ui.fuseline.FuselineValue
+import io.github.matiyaaa.fuse.ui.shell.app.AppState
+import io.github.matiyaaa.fuse.ui.shell.app.Route
+import io.github.matiyaaa.fuse.ui.shell.app.activateGame
 import io.github.matiyaaa.fuse.ui.shell.app.rememberClockText
 import io.github.matiyaaa.fuse.ui.shell.components.LocalTileMetrics
 import io.github.matiyaaa.fuse.ui.shell.components.SquareGameArt
 import io.github.matiyaaa.fuse.ui.shell.components.StageInfo
 import io.github.matiyaaa.fuse.ui.shell.components.agoText
 import io.github.matiyaaa.fuse.ui.shell.components.playtimeText
+import io.github.matiyaaa.fuse.ui.shell.store.GameCard
 import io.github.matiyaaa.fuse.ui.shell.store.HomeFeed
 import kotlin.time.Clock
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
-import io.github.matiyaaa.fuse.model.Destination
-import io.github.matiyaaa.fuse.ui.shell.app.AppState
-import io.github.matiyaaa.fuse.ui.shell.app.Route
-import io.github.matiyaaa.fuse.ui.shell.app.activateGame
-import io.github.matiyaaa.fuse.ui.shell.store.GameCard
 
 /** Width of a widget card for its span, in tile units, so widgets line up with game tiles. */
 @Composable
@@ -450,7 +450,7 @@ internal fun WeekBars(days: List<Long>, modifier: Modifier, letters: Boolean) {
     val c = Fuse.colors
     val motion = Fuse.motion
     val flourish = motion.flourishOn(Fuse.quality)
-    val grow = remember { Animatable(if (flourish) 0f else 1f) }
+    val grow = remember { FuselineValue(if (flourish) 0f else 1f) }
     LaunchedEffect(Unit) { grow.animateTo(1f, motion.value()) }
     val max = (days.maxOrNull() ?: 0L).coerceAtLeast(1L)
     val rest = c.text.copy(alpha = if (c.isDark) 0.2f else 0.14f)

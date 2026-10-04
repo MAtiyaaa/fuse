@@ -1,19 +1,5 @@
 package io.github.matiyaaa.fuse.ui.designsystem.components
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.MutableTransitionState
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
-import androidx.compose.animation.shrinkVertically
-import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -51,12 +37,26 @@ import androidx.compose.ui.unit.dp
 import io.github.matiyaaa.fuse.model.CornerFamily
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
-import io.github.matiyaaa.fuse.ui.designsystem.theme.Durations
-import io.github.matiyaaa.fuse.ui.designsystem.theme.Easings
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Radius
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
+import io.github.matiyaaa.fuse.ui.fuseline.Appear
+import io.github.matiyaaa.fuse.ui.fuseline.AppearState
+import io.github.matiyaaa.fuse.ui.fuseline.Curves
+import io.github.matiyaaa.fuse.ui.fuseline.Durations
+import io.github.matiyaaa.fuse.ui.fuseline.Exit
+import io.github.matiyaaa.fuse.ui.fuseline.FuselineValue
+import io.github.matiyaaa.fuse.ui.fuseline.expandVertically
+import io.github.matiyaaa.fuse.ui.fuseline.fadeIn
+import io.github.matiyaaa.fuse.ui.fuseline.fadeOut
+import io.github.matiyaaa.fuse.ui.fuseline.fuselineFloat
+import io.github.matiyaaa.fuse.ui.fuseline.scaleIn
+import io.github.matiyaaa.fuse.ui.fuseline.scaleOut
+import io.github.matiyaaa.fuse.ui.fuseline.shrinkVertically
+import io.github.matiyaaa.fuse.ui.fuseline.slideInVertically
+import io.github.matiyaaa.fuse.ui.fuseline.spring
+import io.github.matiyaaa.fuse.ui.fuseline.tween
 import kotlinx.coroutines.flow.first
 
 enum class ToastKind { INFO, SUCCESS, WARNING, ERROR }
@@ -97,12 +97,12 @@ class ToastState {
 fun ToastHost(state: ToastState, modifier: Modifier = Modifier) {
     // What is on screen: the queue plus toasts still playing their way out.
     val shown = remember { mutableStateListOf<Toast>() }
-    val visibility = remember { HashMap<Long, MutableTransitionState<Boolean>>() }
+    val visibility = remember { HashMap<Long, AppearState>() }
     val queue = state.items.toList()
     LaunchedEffect(queue) {
         for (t in queue) {
             if (shown.none { it.id == t.id }) {
-                visibility[t.id] = MutableTransitionState(false).apply { targetState = true }
+                visibility[t.id] = AppearState(false).apply { targetState = true }
                 shown.add(t)
             }
         }
@@ -138,7 +138,7 @@ fun ToastHost(state: ToastState, modifier: Modifier = Modifier) {
  * arrive ([depth], null while it leaves) and calls [onGone] once it has played its way out.
  */
 @Composable
-private fun ToastSlot(toast: Toast, vis: MutableTransitionState<Boolean>, depth: Int?, onGone: () -> Unit, onDismiss: () -> Unit) {
+private fun ToastSlot(toast: Toast, vis: AppearState, depth: Int?, onGone: () -> Unit, onDismiss: () -> Unit) {
     val motion = Fuse.motion
     LaunchedEffect(vis) {
         snapshotFlow { vis.isIdle && !vis.currentState && !vis.targetState }.first { it }
@@ -147,8 +147,8 @@ private fun ToastSlot(toast: Toast, vis: MutableTransitionState<Boolean>, depth:
     // A leaving toast keeps the place it had.
     val last = remember { IntArray(1) }
     if (depth != null) last[0] = depth
-    val stepBack by animateFloatAsState(last[0].toFloat(), motion.tween(Durations.BASE), label = "toast depth")
-    AnimatedVisibility(
+    val stepBack by fuselineFloat(last[0].toFloat(), motion.tween(Durations.BASE), label = "toast depth")
+    Appear(
         visibleState = vis,
         enter = if (motion.reduced) {
             fadeIn(motion.fade(Durations.FAST))
@@ -156,14 +156,14 @@ private fun ToastSlot(toast: Toast, vis: MutableTransitionState<Boolean>, depth:
             expandVertically(spring(dampingRatio = 1f, stiffness = 700f), expandFrom = Alignment.Top) +
                 slideInVertically(spring(dampingRatio = 0.72f, stiffness = 420f)) { it * 2 } +
                 scaleIn(spring(dampingRatio = 0.72f, stiffness = 420f), initialScale = 0.9f, transformOrigin = TransformOrigin(0.5f, 1f)) +
-                fadeIn(motion.tween(Durations.FAST, Easings.Fade))
+                fadeIn(motion.tween(Durations.FAST, Curves.Fade))
         },
         exit = if (motion.reduced) {
             fadeOut(motion.fade(Durations.INSTANT))
         } else {
-            fadeOut(motion.tween(Durations.FAST, Easings.Standard)) +
-                scaleOut(motion.tween(Durations.FAST, Easings.Exit), targetScale = 0.94f) +
-                shrinkVertically(motion.tween(Durations.BASE, Easings.Standard), shrinkTowards = Alignment.Top)
+            fadeOut(motion.tween(Durations.FAST, Curves.Standard)) +
+                scaleOut(motion.tween(Durations.FAST, Curves.Exit), targetScale = 0.94f) +
+                shrinkVertically(motion.tween(Durations.BASE, Curves.Standard), shrinkTowards = Alignment.Top)
         },
     ) {
         Box(
@@ -195,11 +195,11 @@ private fun ToastCard(toast: Toast, onDismiss: () -> Unit) {
     val interaction = remember { MutableInteractionSource() }
     val hovered by interaction.collectIsHoveredAsState()
     // The time left, 1 to 0. It waits while the pointer rests on the toast, so it can be read.
-    val left = remember(toast.id) { Animatable(1f) }
+    val left = remember(toast.id) { FuselineValue(1f) }
     LaunchedEffect(toast.id, hovered) {
         if (hovered) return@LaunchedEffect
         val remaining = (toast.durationMs * left.value).toInt()
-        left.animateTo(0f, tween(remaining, easing = LinearEasing))
+        left.animateTo(0f, tween(remaining, easing = Curves.Linear))
         onDismiss()
     }
     val shape = RoundedCornerShape(if (Fuse.geometry.family == CornerFamily.SHARP) Fuse.geometry.panel else Radius.l)

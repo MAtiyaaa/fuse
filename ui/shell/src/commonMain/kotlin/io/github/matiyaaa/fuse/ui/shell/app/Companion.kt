@@ -1,13 +1,5 @@
 package io.github.matiyaaa.fuse.ui.shell.app
 
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -40,13 +32,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import io.github.matiyaaa.fuse.model.CollectionId
@@ -60,15 +52,27 @@ import io.github.matiyaaa.fuse.ui.designsystem.components.SectionLabel
 import io.github.matiyaaa.fuse.ui.designsystem.components.StatusCluster
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
 import io.github.matiyaaa.fuse.ui.designsystem.media.Artwork
+import io.github.matiyaaa.fuse.ui.designsystem.background.AmbientBackground
 import io.github.matiyaaa.fuse.ui.designsystem.media.HeroBackdrop
 import io.github.matiyaaa.fuse.ui.designsystem.media.HeroSource
 import io.github.matiyaaa.fuse.ui.designsystem.shape.PillShape
 import io.github.matiyaaa.fuse.ui.designsystem.shape.SquircleShape
-import io.github.matiyaaa.fuse.ui.designsystem.theme.Durations
-import io.github.matiyaaa.fuse.ui.designsystem.theme.Easings
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.FuseTheme
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
+import io.github.matiyaaa.fuse.ui.fuseline.Appear
+import io.github.matiyaaa.fuse.ui.fuseline.Curves
+import io.github.matiyaaa.fuse.ui.fuseline.Durations
+import io.github.matiyaaa.fuse.ui.fuseline.Enter
+import io.github.matiyaaa.fuse.ui.fuseline.Exit
+import io.github.matiyaaa.fuse.ui.fuseline.Swap
+import io.github.matiyaaa.fuse.ui.fuseline.fadeIn
+import io.github.matiyaaa.fuse.ui.fuseline.fadeOut
+import io.github.matiyaaa.fuse.ui.fuseline.scaleIn
+import io.github.matiyaaa.fuse.ui.fuseline.slideInHorizontally
+import io.github.matiyaaa.fuse.ui.fuseline.slideOutHorizontally
+import io.github.matiyaaa.fuse.ui.fuseline.togetherWith
+import io.github.matiyaaa.fuse.ui.fuseline.tween
 import io.github.matiyaaa.fuse.ui.shell.components.CoverCollage
 import io.github.matiyaaa.fuse.ui.shell.components.playtimeText
 import io.github.matiyaaa.fuse.ui.shell.platform.PlatformUi
@@ -178,6 +182,17 @@ fun CompanionApp(store: FuseStore, platform: PlatformUi, mode: DualScreenMode, o
             LaunchedEffect(targetKey) { sheet = null }
             LaunchedEffect(pager) { snapshotFlow { pager.currentPage }.collect { if (it != 0) sheet = null } }
             val hero = companionHero(store, systems, content.target)
+            // The main screen's own room (its scene, or the picture the theme uses) under everything,
+            // so both screens read as one device; art for what is shown fades in over it.
+            if (prefs.display.companionFollowsBackground) {
+                AmbientBackground(
+                    if (spec.background == io.github.matiyaaa.fuse.model.BackgroundStyle.HERO) io.github.matiyaaa.fuse.model.BackgroundStyle.SOLID else spec.background,
+                    hero?.accent ?: Fuse.colors.accent,
+                    Modifier.fillMaxSize(),
+                    ambient = spec.ambient,
+                )
+                spec.wallpaper?.let { WallpaperLayer(it, Modifier.fillMaxSize()) }
+            }
             HeroBackdrop(hero, Modifier.fillMaxSize(), dim = 0.25f, gradient = 0.75f, settleMs = 60)
             // Status and controls sit on a deeper shade, so their cards read over any art.
             Box(
@@ -253,7 +268,7 @@ fun CompanionApp(store: FuseStore, platform: PlatformUi, mode: DualScreenMode, o
                         delay(2_500)
                         hint = false
                     }
-                    AnimatedVisibility(hint, Modifier.align(Alignment.Center), enter = fadeIn(), exit = fadeOut(Fuse.motion.fade(Durations.DELIBERATE))) {
+                    Appear(hint, Modifier.align(Alignment.Center), enter = fadeIn(), exit = fadeOut(Fuse.motion.fade(Durations.DELIBERATE))) {
                         FText("Tap to wake", Fuse.type.caption, color = Fuse.colors.textFaint)
                     }
                 }
@@ -273,18 +288,18 @@ private fun SpotlightPage(
     onAchievements: (GameId) -> Unit,
 ) {
     val motion = Fuse.motion
-    AnimatedContent(
+    Swap(
         targetState = content,
         transitionSpec = {
             val dir = targetState.direction
-            val enter = fadeIn(motion.fade(Durations.SLOW)) + scaleIn(motion.tween(Durations.SLOW, Easings.Enter), initialScale = if (motion.reduced) 1f else 0.97f)
+            val enter = fadeIn(motion.fade(Durations.SLOW)) + scaleIn(motion.tween(Durations.SLOW, Curves.Enter), initialScale = if (motion.reduced) 1f else 0.97f)
             val exit = fadeOut(motion.fade(Durations.FAST))
             if (dir == 0 || motion.reduced) {
                 enter togetherWith exit
             } else {
                 val shift = (motion.slideFraction * 2.5f).coerceAtMost(0.2f)
-                (slideInHorizontally(motion.tween(Durations.SLOW, Easings.Enter)) { (it * shift * dir).toInt() } + enter) togetherWith
-                    (slideOutHorizontally(motion.tween(Durations.BASE, Easings.Exit)) { (-it * shift * dir).toInt() } + exit)
+                (slideInHorizontally(motion.tween(Durations.SLOW, Curves.Enter)) { (it * shift * dir).toInt() } + enter) togetherWith
+                    (slideOutHorizontally(motion.tween(Durations.BASE, Curves.Exit)) { (-it * shift * dir).toInt() } + exit)
             }
         },
         contentKey = { (it.target as? GameCard)?.id ?: it.target },
@@ -295,14 +310,14 @@ private fun SpotlightPage(
             is GameId -> FocusedGame(store, target, onAchievements)
             is PlatformId -> FocusedPlatform(systems.firstOrNull { it.platform.id == target })
             is CollectionId -> FocusedCollection(store, target)
-            else -> Idle(time)
+            else -> Idle(time, room = store.prefs.collectAsState().value.display.companionFollowsBackground)
         }
     }
 }
 
 /** The backdrop for what the companion shows: the game's background art, or the system's. */
 @Composable
-private fun companionHero(store: FuseStore, systems: List<PlatformCard>, target: Any?): HeroSource? = when (target) {
+internal fun companionHero(store: FuseStore, systems: List<PlatformCard>, target: Any?): HeroSource? = when (target) {
     is GameCard -> target.room(systems.firstOrNull { it.platform.id == target.platformId })
     is GameId -> {
         val flow = remember(target) { store.library.game(target) }
@@ -320,9 +335,10 @@ private fun companionHero(store: FuseStore, systems: List<PlatformCard>, target:
 }
 
 @Composable
-private fun Idle(time: String) {
-    // Opaque, so the last game's art never lingers behind the clock.
-    Column(Modifier.fillMaxSize().background(Fuse.colors.ink), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
+private fun Idle(time: String, room: Boolean) {
+    // Opaque, so the last game's art never lingers behind the clock; over the main screen's room
+    // only a shade, so the room shows through.
+    Column(Modifier.fillMaxSize().background(Fuse.colors.ink.copy(alpha = if (room) 0.3f else 1f)), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
         FuseMark(Modifier.size(56.dp))
         Spacer(Modifier.height(Space.l))
         FText(time, Fuse.type.numericLarge)

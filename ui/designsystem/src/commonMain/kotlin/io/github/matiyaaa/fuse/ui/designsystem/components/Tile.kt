@@ -1,8 +1,5 @@
 package io.github.matiyaaa.fuse.ui.designsystem.components
 
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -18,6 +15,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size as PxSize
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
@@ -34,13 +32,16 @@ import io.github.matiyaaa.fuse.model.FocusStyle
 import io.github.matiyaaa.fuse.ui.designsystem.effects.rememberPressProgress
 import io.github.matiyaaa.fuse.ui.designsystem.shape.SquircleShape
 import io.github.matiyaaa.fuse.ui.designsystem.shape.squirclePath
-import io.github.matiyaaa.fuse.ui.designsystem.theme.Durations
-import io.github.matiyaaa.fuse.ui.designsystem.theme.Easings
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Elevation
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
+import io.github.matiyaaa.fuse.ui.fuseline.Curves
+import io.github.matiyaaa.fuse.ui.fuseline.Durations
+import io.github.matiyaaa.fuse.ui.fuseline.FuselineValue
+import io.github.matiyaaa.fuse.ui.fuseline.fuselineFloat
+import io.github.matiyaaa.fuse.ui.fuseline.spring
+import io.github.matiyaaa.fuse.ui.fuseline.tween
 import kotlinx.coroutines.delay
-import androidx.compose.ui.geometry.Size as PxSize
 
 /**
  * The building block of every browsable surface: a piece of art that lifts toward you when selected.
@@ -97,28 +98,28 @@ fun Tile(
     val interactive = onClick != null || onLongClick != null
     val hovered by interaction.collectIsHoveredAsState()
 
-    val lift by animateFloatAsState(
+    val lift by fuselineFloat(
         targetValue = if (selected) 1f else 0f,
         animationSpec = motion.focusSpring(),
         label = "lift",
     )
     val hoverOn = interactive && hovered && !selected
-    val hover by animateFloatAsState(if (hoverOn) 1f else 0f, motion.hover(hoverOn), label = "hover")
+    val hover by fuselineFloat(if (hoverOn) 1f else 0f, motion.hover(hoverOn), label = "hover")
     val press by rememberPressProgress(interaction)
 
-    val sweep = remember { Animatable(1f) }
+    val sweep = remember { FuselineValue(1f) }
     val sweepOn = motion.sweep && quality.animatedBackground
     LaunchedEffect(selected, sweepOn) {
         if (selected && sweepOn) {
             sweep.snapTo(0f)
             // Let the lift get under way first, so the light crosses a tile that is already rising.
             delay(SWEEP_DELAY_MS)
-            sweep.animateTo(1f, tween(Durations.SWEEP, easing = Easings.Sweep))
+            sweep.animateTo(1f, tween(Durations.SWEEP, easing = Curves.Sweep))
         } else {
             sweep.snapTo(1f)
         }
     }
-    val bar = remember { Animatable(if (selected) 1f else 0f) }
+    val bar = remember { FuselineValue(if (selected) 1f else 0f) }
     LaunchedEffect(selected) {
         if (selected) bar.animateTo(1f, motion.barSpring()) else bar.animateTo(0f, motion.exit(Durations.FAST))
     }

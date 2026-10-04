@@ -1,6 +1,5 @@
 package io.github.matiyaaa.fuse.ui.shell.app
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -53,6 +52,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.sound.SoundCue
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
+import io.github.matiyaaa.fuse.ui.fuseline.Appear
 import io.github.matiyaaa.fuse.ui.shell.settings.openSettings
 import io.github.matiyaaa.fuse.ui.shell.store.GameCard
 import io.github.matiyaaa.fuse.ui.shell.store.Problem
@@ -254,7 +254,7 @@ internal fun ProblemOverlay(app: AppState) {
                             FText(line, Fuse.type.caption, color = c.text, maxLines = 3)
                         }
                     }
-                    AnimatedVisibility(details && p.details != null) {
+                    Appear(details && p.details != null) {
                         Column {
                             Spacer(Modifier.height(Space.m))
                             Box(

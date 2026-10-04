@@ -2,6 +2,7 @@ package io.github.matiyaaa.fuse
 
 import io.github.matiyaaa.fuse.integrations.cartridge.CartridgeProtocol
 import io.github.matiyaaa.fuse.launch.android.AndroidEmulatorCatalog
+import io.github.matiyaaa.fuse.services.PlayShareProvider
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -64,7 +65,19 @@ class ManifestQueriesTest {
             .flatMap { app.children(it) }
             .filter { it.getAttributeNS(androidNs, "exported") == "true" }
             .map { it.getAttributeNS(androidNs, "name") }
-        assertEquals(listOf(".MainActivity", ".CompanionHomeActivity", ".HomeAlias"), exported)
+        assertEquals(listOf(".MainActivity", ".CompanionHomeActivity", ".HomeAlias", ".services.PlayShareProvider"), exported)
+    }
+
+    @Test
+    fun playShareIsReadOnlyBehindItsPermission() {
+        // The one exported provider: Cartridge reads play sessions, nobody writes, nothing without READ_PLAY.
+        val play = manifest().children("application").single().children("provider")
+            .single { it.getAttributeNS(androidNs, "name") == ".services.PlayShareProvider" }
+        assertEquals(PlayShareProvider.READ_PLAY, play.getAttributeNS(androidNs, "readPermission"))
+        assertEquals("", play.getAttributeNS(androidNs, "permission"))
+        assertEquals("", play.getAttributeNS(androidNs, "writePermission"))
+        val defined = manifest().children("permission").single { it.getAttributeNS(androidNs, "name") == PlayShareProvider.READ_PLAY }
+        assertEquals("normal", defined.getAttributeNS(androidNs, "protectionLevel"))
     }
 
     @Test

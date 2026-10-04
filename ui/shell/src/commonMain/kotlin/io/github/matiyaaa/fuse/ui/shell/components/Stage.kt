@@ -1,10 +1,5 @@
 package io.github.matiyaaa.fuse.ui.shell.components
 
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -39,12 +34,19 @@ import io.github.matiyaaa.fuse.ui.designsystem.components.FText
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
 import io.github.matiyaaa.fuse.ui.designsystem.media.Artwork
 import io.github.matiyaaa.fuse.ui.designsystem.shape.PillShape
-import io.github.matiyaaa.fuse.ui.designsystem.theme.Durations
-import io.github.matiyaaa.fuse.ui.designsystem.theme.Easings
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
 import io.github.matiyaaa.fuse.ui.designsystem.theme.toColor
+import io.github.matiyaaa.fuse.ui.fuseline.Curves
+import io.github.matiyaaa.fuse.ui.fuseline.Durations
+import io.github.matiyaaa.fuse.ui.fuseline.Enter
+import io.github.matiyaaa.fuse.ui.fuseline.Swap
+import io.github.matiyaaa.fuse.ui.fuseline.fadeIn
+import io.github.matiyaaa.fuse.ui.fuseline.fadeOut
+import io.github.matiyaaa.fuse.ui.fuseline.slideInVertically
+import io.github.matiyaaa.fuse.ui.fuseline.togetherWith
+import io.github.matiyaaa.fuse.ui.fuseline.tween
 import io.github.matiyaaa.fuse.ui.shell.store.GameCard
 import io.github.matiyaaa.fuse.ui.shell.store.PlatformCard
 
@@ -117,12 +119,12 @@ fun Stage(
 ) {
     val motion = Fuse.motion
     val c = Fuse.colors
-    AnimatedContent(
+    Swap(
         targetState = info,
         modifier = modifier,
         contentKey = { it?.key },
         transitionSpec = {
-            (fadeIn(motion.fade(Durations.BASE)) + slideInVertically(motion.tween(Durations.SLOW, Easings.Enter)) { if (motion.reduced) 0 else it / 10 }) togetherWith
+            (fadeIn(motion.fade(Durations.BASE)) + slideInVertically(motion.tween(Durations.SLOW, Curves.Enter)) { if (motion.reduced) 0 else it / 10 }) togetherWith
                 fadeOut(motion.fade(Durations.INSTANT))
         },
         contentAlignment = Alignment.BottomStart,
@@ -130,7 +132,7 @@ fun Stage(
     ) { s ->
         if (s == null) {
             Spacer(Modifier.height(logoHeight))
-            return@AnimatedContent
+            return@Swap
         }
         Column {
             if (s.eyebrow != null && !inlineEyebrow) {
@@ -173,7 +175,7 @@ fun StageLine(info: StageInfo?, modifier: Modifier = Modifier) {
     val c = Fuse.colors
     BoxWithConstraints(modifier) {
         val stacked = maxWidth < STACKED_LINE
-        AnimatedContent(
+        Swap(
             targetState = info,
             contentKey = { it?.key },
             transitionSpec = { fadeIn(motion.fade(Durations.FAST)) togetherWith fadeOut(motion.fade(Durations.INSTANT)) },
@@ -182,7 +184,7 @@ fun StageLine(info: StageInfo?, modifier: Modifier = Modifier) {
         ) { s ->
             if (s == null) {
                 Spacer(Modifier.height(Size.badge))
-                return@AnimatedContent
+                return@Swap
             }
             val meta = s.copy(meta = listOfNotNull(s.eyebrow) + s.meta)
             val hasMeta = meta.meta.isNotEmpty() || meta.tags.isNotEmpty()
@@ -191,7 +193,7 @@ fun StageLine(info: StageInfo?, modifier: Modifier = Modifier) {
                     FText(s.title, Fuse.type.title, color = c.text, maxLines = 1)
                     if (hasMeta) MetaLine(meta, Fuse.type.label, Modifier, wrap = true)
                 }
-                return@AnimatedContent
+                return@Swap
             }
             Row(Modifier.heightIn(min = Size.badge), verticalAlignment = Alignment.CenterVertically) {
                 FText(s.title, Fuse.type.title, color = c.text, maxLines = 1, modifier = Modifier.weight(1f, fill = false))

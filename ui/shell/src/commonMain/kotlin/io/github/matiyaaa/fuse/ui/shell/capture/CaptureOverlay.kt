@@ -1,17 +1,5 @@
 package io.github.matiyaaa.fuse.ui.shell.capture
 
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -50,14 +38,25 @@ import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
 import io.github.matiyaaa.fuse.ui.designsystem.shape.PillShape
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Aspect
-import io.github.matiyaaa.fuse.ui.designsystem.theme.Durations
-import io.github.matiyaaa.fuse.ui.designsystem.theme.Easings
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Elevation
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Radius
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
 import io.github.matiyaaa.fuse.ui.designsystem.theme.tabular
+import io.github.matiyaaa.fuse.ui.fuseline.Appear
+import io.github.matiyaaa.fuse.ui.fuseline.Curves
+import io.github.matiyaaa.fuse.ui.fuseline.Durations
+import io.github.matiyaaa.fuse.ui.fuseline.FuselineValue
+import io.github.matiyaaa.fuse.ui.fuseline.Swap
+import io.github.matiyaaa.fuse.ui.fuseline.fadeIn
+import io.github.matiyaaa.fuse.ui.fuseline.fadeOut
+import io.github.matiyaaa.fuse.ui.fuseline.scaleIn
+import io.github.matiyaaa.fuse.ui.fuseline.scaleOut
+import io.github.matiyaaa.fuse.ui.fuseline.slideInVertically
+import io.github.matiyaaa.fuse.ui.fuseline.slideOutVertically
+import io.github.matiyaaa.fuse.ui.fuseline.togetherWith
+import io.github.matiyaaa.fuse.ui.fuseline.tween
 import io.github.matiyaaa.fuse.ui.shell.platform.CaptureResult
 import kotlin.time.Clock
 import kotlinx.coroutines.delay
@@ -93,7 +92,7 @@ private fun Countdown(countdown: CaptureController.State.Countdown?, modifier: M
             contentAlignment = Alignment.Center,
         ) {
             SecondRing(countdown.secondsLeft)
-            AnimatedContent(
+            Swap(
                 targetState = countdown.secondsLeft,
                 transitionSpec = {
                     if (motion.reduced) {
@@ -128,8 +127,8 @@ private fun Countdown(countdown: CaptureController.State.Countdown?, modifier: M
 @Composable
 private fun SecondRing(second: Int) {
     val c = Fuse.colors
-    val sweep = remember(second) { Animatable(1f) }
-    LaunchedEffect(second) { sweep.animateTo(0f, tween(1_000, easing = LinearEasing)) }
+    val sweep = remember(second) { FuselineValue(1f) }
+    LaunchedEffect(second) { sweep.animateTo(0f, tween(1_000, easing = Curves.Linear)) }
     val track = c.text.copy(alpha = 0.1f)
     val accent = c.accent
     Spacer(
@@ -152,11 +151,11 @@ private fun SecondRing(second: Int) {
 private fun Flash(shots: Int, hidden: Boolean) {
     if (Fuse.motion.reduced) return
     val flash = Fuse.colors.onArt
-    val alpha = remember { Animatable(0f) }
+    val alpha = remember { FuselineValue(0f) }
     LaunchedEffect(shots) {
         if (shots == 0) return@LaunchedEffect
         alpha.snapTo(0.32f)
-        alpha.animateTo(0f, tween(340, easing = Easings.Standard))
+        alpha.animateTo(0f, tween(340, easing = Curves.Standard))
     }
     if (alpha.value > 0f && !hidden) Box(Modifier.fillMaxSize().graphicsLayer { this.alpha = alpha.value }.background(flash))
 }
@@ -174,14 +173,14 @@ private fun SavedCard(saved: CaptureResult?, hidden: Boolean, modifier: Modifier
     // Keeps the last card on screen while it leaves.
     val shown = remember { arrayOfNulls<CaptureResult>(1) }
     if (saved != null) shown[0] = saved
-    AnimatedVisibility(
+    Appear(
         visible = saved != null,
         modifier = modifier,
         enter = fadeIn(motion.enter(Durations.FAST)) + slideInVertically(motion.enter(Durations.SLOW)) { it * rise / 3 },
         exit = fadeOut(motion.exit(Durations.FAST)) + slideOutVertically(motion.exit(Durations.BASE)) { it * rise / 4 },
     ) {
-        val card = shown[0] ?: return@AnimatedVisibility
-        if (hidden) return@AnimatedVisibility
+        val card = shown[0] ?: return@Appear
+        if (hidden) return@Appear
         val shape = RoundedCornerShape(Fuse.geometry.panel)
         Row(
             Modifier

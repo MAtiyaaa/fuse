@@ -1,7 +1,5 @@
 package io.github.matiyaaa.fuse.ui.designsystem.media
 
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.withInfiniteAnimationFrameMillis
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxSize
@@ -51,10 +49,14 @@ import coil3.request.ImageRequest
 import coil3.size.Precision
 import coil3.size.Scale
 import io.github.matiyaaa.fuse.model.RenderQuality
-import io.github.matiyaaa.fuse.ui.designsystem.theme.Durations
-import io.github.matiyaaa.fuse.ui.designsystem.theme.Easings
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.ambientOn
+import io.github.matiyaaa.fuse.ui.fuseline.Curves
+import io.github.matiyaaa.fuse.ui.fuseline.Durations
+import io.github.matiyaaa.fuse.ui.fuseline.Enter
+import io.github.matiyaaa.fuse.ui.fuseline.FuselineValue
+import io.github.matiyaaa.fuse.ui.fuseline.tween
+import io.github.matiyaaa.fuse.ui.fuseline.withInfiniteFrameMillis
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.max
@@ -105,7 +107,7 @@ private const val DRIFT_PAN = 0.012f
 private const val DRIFT_FRAME_MS = 33L
 
 private class HeroLayer(val source: HeroSource) {
-    val alpha = Animatable(0f)
+    val alpha = FuselineValue(0f)
     var ready = false
     /** Fading out because the screen has no background. */
     var leaving = false
@@ -160,7 +162,7 @@ fun HeroBackdrop(
                     val fading = layers.filterNot { it.leaving }
                     fading.forEach { it.leaving = true }
                     launch {
-                        coroutineScope { fading.forEach { l -> launch { l.alpha.animateTo(0f, motion.tween(Durations.BASE, Easings.Fade)) } } }
+                        coroutineScope { fading.forEach { l -> launch { l.alpha.animateTo(0f, motion.tween(Durations.BASE, Curves.Fade)) } } }
                         layers.removeAll(fading)
                     }
                     return@collect
@@ -288,11 +290,11 @@ private fun HeroLayerView(layer: HeroLayer, brightness: Float, onReady: () -> Un
     val veil = Fuse.colors.let { if (it.isDark) Color.Black else it.ink }
     val motion = Fuse.motion
     val source = layer.source
-    val settle = remember { Animatable(1.04f) }
+    val settle = remember { FuselineValue(1.04f) }
     if (source.model == null) {
         LaunchedEffect(layer) {
             onReady()
-            layer.alpha.animateTo(1f, motion.tween(Durations.HERO, Easings.Fade))
+            layer.alpha.animateTo(1f, motion.tween(Durations.HERO, Curves.Fade))
             onShown()
         }
         LitRoom(source.accent, Modifier.graphicsLayer { alpha = layer.alpha.value; compositingStrategy = CompositingStrategy.ModulateAlpha })
@@ -305,7 +307,7 @@ private fun HeroLayerView(layer: HeroLayer, brightness: Float, onReady: () -> Un
     val request = remember(source.model, context, px) { heroRequest(context, source.model, px) }
     val painter = rememberAsyncImagePainter(request, contentScale = ContentScale.Crop)
     val state by painter.state.collectAsStateCompat()
-    val imageAlpha = remember { Animatable(0f) }
+    val imageAlpha = remember { FuselineValue(0f) }
     var placeholder by remember { mutableStateOf(false) }
     LaunchedEffect(layer) {
         val finished = { state is AsyncImagePainter.State.Success || state is AsyncImagePainter.State.Error }
@@ -315,11 +317,11 @@ private fun HeroLayerView(layer: HeroLayer, brightness: Float, onReady: () -> Un
             onReady()
             if (!motion.reduced) {
                 coroutineScope {
-                    launch { settle.animateTo(1f, motion.tween(Durations.DELIBERATE + 300, Easings.Enter)) }
-                    layer.alpha.animateTo(1f, motion.tween(Durations.HERO + 80, Easings.Fade))
+                    launch { settle.animateTo(1f, motion.tween(Durations.DELIBERATE + 300, Curves.Enter)) }
+                    layer.alpha.animateTo(1f, motion.tween(Durations.HERO + 80, Curves.Fade))
                 }
             } else {
-                layer.alpha.animateTo(1f, motion.tween(Durations.FAST, Easings.Fade))
+                layer.alpha.animateTo(1f, motion.tween(Durations.FAST, Curves.Fade))
             }
             onShown()
         } else {
@@ -327,10 +329,10 @@ private fun HeroLayerView(layer: HeroLayer, brightness: Float, onReady: () -> Un
             placeholder = true
             settle.snapTo(1f)
             onReady()
-            layer.alpha.animateTo(1f, motion.tween(Durations.BASE, Easings.Fade))
+            layer.alpha.animateTo(1f, motion.tween(Durations.BASE, Curves.Fade))
             onShown()
             snapshotFlow { finished() }.first { it }
-            imageAlpha.animateTo(1f, motion.tween(Durations.HERO, Easings.Fade))
+            imageAlpha.animateTo(1f, motion.tween(Durations.HERO, Curves.Fade))
         }
     }
     val failed = state is AsyncImagePainter.State.Error
@@ -340,10 +342,10 @@ private fun HeroLayerView(layer: HeroLayer, brightness: Float, onReady: () -> Un
     if (drifting) {
         LaunchedEffect(layer) {
             snapshotFlow { layer.alpha.value >= 1f }.first { it }
-            val start = withInfiniteAnimationFrameMillis { it }
+            val start = withInfiniteFrameMillis { it }
             var last = start
             while (true) {
-                val now = withInfiniteAnimationFrameMillis { it }
+                val now = withInfiniteFrameMillis { it }
                 if (now - last < DRIFT_FRAME_MS) continue
                 last = now
                 // 0 to 1 and back, eased at both ends, one leg per Durations.DRIFT.

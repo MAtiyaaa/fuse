@@ -1,7 +1,5 @@
 package io.github.matiyaaa.fuse.ui.shell.app
 
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -55,11 +53,14 @@ import io.github.matiyaaa.fuse.ui.designsystem.input.NavResult
 import io.github.matiyaaa.fuse.ui.designsystem.media.Artwork
 import io.github.matiyaaa.fuse.ui.designsystem.shape.SquircleShape
 import io.github.matiyaaa.fuse.ui.designsystem.sound.SoundCue
-import io.github.matiyaaa.fuse.ui.designsystem.theme.Durations
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Radius
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
+import io.github.matiyaaa.fuse.ui.fuseline.Durations
+import io.github.matiyaaa.fuse.ui.fuseline.fuselineColor
+import io.github.matiyaaa.fuse.ui.fuseline.fuselineFloat
+import io.github.matiyaaa.fuse.ui.fuseline.tween
 
 /**
  * The question asked when something starts on a device with two screens: the top screen on the
@@ -241,8 +242,8 @@ private fun ScreenCard(
 ) {
     val c = Fuse.colors
     val motion = Fuse.motion
-    val lift by animateFloatAsState(if (focused) 1f else 0f, motion.focusSpring(), label = "screenCard")
-    val ring by animateColorAsState(
+    val lift by fuselineFloat(if (focused) 1f else 0f, motion.focusSpring(), label = "screenCard")
+    val ring by fuselineColor(
         when {
             focused -> c.focus
             marked -> c.accent.copy(alpha = 0.6f)
@@ -251,7 +252,7 @@ private fun ScreenCard(
         motion.tween(Durations.FAST),
         label = "screenCardEdge",
     )
-    val fill by animateColorAsState(if (focused) c.surfaceRaised else c.text.copy(alpha = if (c.isDark) 0.04f else 0.03f), motion.tween(Durations.FAST), label = "screenCardFill")
+    val fill by fuselineColor(if (focused) c.surfaceRaised else c.text.copy(alpha = if (c.isDark) 0.04f else 0.03f), motion.tween(Durations.FAST), label = "screenCardFill")
     val shape = RoundedCornerShape(Fuse.geometry.control)
     Column(
         modifier
@@ -374,8 +375,8 @@ private fun Tick(label: String, checked: Boolean, focused: Boolean, modifier: Mo
     val c = Fuse.colors
     val motion = Fuse.motion
     val shape = RoundedCornerShape(Fuse.geometry.control)
-    val ring by animateColorAsState(if (focused) c.focus else c.hairline, motion.tween(Durations.FAST), label = "tickEdge")
-    val box by animateColorAsState(if (checked) c.accent else Color.Transparent, motion.tween(Durations.FAST), label = "tickBox")
+    val ring by fuselineColor(if (focused) c.focus else c.hairline, motion.tween(Durations.FAST), label = "tickEdge")
+    val box by fuselineColor(if (checked) c.accent else Color.Transparent, motion.tween(Durations.FAST), label = "tickBox")
     Row(
         modifier
             .heightIn(min = Size.touch)

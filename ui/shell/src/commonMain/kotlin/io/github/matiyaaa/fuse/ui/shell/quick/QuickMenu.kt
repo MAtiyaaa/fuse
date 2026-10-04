@@ -1,6 +1,5 @@
 package io.github.matiyaaa.fuse.ui.shell.quick
 
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -66,10 +65,14 @@ import io.github.matiyaaa.fuse.ui.designsystem.input.InputLayer
 import io.github.matiyaaa.fuse.ui.designsystem.input.LayerPriority
 import io.github.matiyaaa.fuse.ui.designsystem.input.NavResult
 import io.github.matiyaaa.fuse.ui.designsystem.sound.SoundCue
-import io.github.matiyaaa.fuse.ui.designsystem.theme.Durations
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
+import io.github.matiyaaa.fuse.ui.fuseline.Durations
+import io.github.matiyaaa.fuse.ui.fuseline.Exit
+import io.github.matiyaaa.fuse.ui.fuseline.fuselineColor
+import io.github.matiyaaa.fuse.ui.fuseline.fuselineScrollTo
+import io.github.matiyaaa.fuse.ui.fuseline.tween
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.ConfirmSpec
 import io.github.matiyaaa.fuse.ui.shell.app.Route
@@ -81,9 +84,9 @@ import io.github.matiyaaa.fuse.ui.shell.app.sections
 import io.github.matiyaaa.fuse.ui.shell.capture.rememberRecordingTime
 import io.github.matiyaaa.fuse.ui.shell.components.ControlTile
 import io.github.matiyaaa.fuse.ui.shell.components.ROW_CONTENT_START
-import io.github.matiyaaa.fuse.ui.shell.components.rememberRowHighlight
 import io.github.matiyaaa.fuse.ui.shell.components.batteryTimeText
 import io.github.matiyaaa.fuse.ui.shell.components.controlWellShape
+import io.github.matiyaaa.fuse.ui.shell.components.rememberRowHighlight
 import io.github.matiyaaa.fuse.ui.shell.home.switchHomeStyle
 import io.github.matiyaaa.fuse.ui.shell.settings.next
 import io.github.matiyaaa.fuse.ui.shell.settings.performanceLabel
@@ -126,7 +129,7 @@ fun QuickMenu(app: AppState) {
     val isHome = platform.homeRole?.isHome?.collectAsState()?.value ?: false
     val displays by platform.displays.collectAsState()
     // Only with a second screen there: Off, On (the selected game) or Companion (beside the game).
-    val twoScreens = features.secondScreen || displays.count { it.isOn } > 1
+    val twoScreens = features.secondScreen
     var row by remember { mutableIntStateOf(0) }
     var col by remember { mutableIntStateOf(0) }
 
@@ -178,6 +181,13 @@ fun QuickMenu(app: AppState) {
                         else -> "Second screen is your companion while you play"
                     },
                 )
+            })
+            // Which screen holds the menus, swapped in one press.
+            val flipped = prefs.display.flipped
+            add(QuickTile("Swap screens", FuseIcons.Swap, active = flipped, toggle = true, detail = if (flipped) "Menus below" else "Menus on top") {
+                close()
+                app.store.updatePrefs { it.copy(display = it.display.copy(flipped = !flipped)) }
+                app.toasts.show(if (flipped) "Menus are on the main screen" else "Menus are on the touch screen")
             })
         }
         add(QuickTile("Controller", FuseIcons.Gamepad) { close(); app.go(Route.Settings("inputs")) })
@@ -278,8 +288,8 @@ fun QuickMenu(app: AppState) {
         // The ends scroll all the way, so the first and last rows never sit under a faded edge;
         // others come into view with a little room around them.
         when (row) {
-            0 -> scroll.animateScrollTo(0)
-            rows.lastIndex -> scroll.animateScrollTo(scroll.maxValue)
+            0 -> scroll.fuselineScrollTo(0)
+            rows.lastIndex -> scroll.fuselineScrollTo(scroll.maxValue)
             else -> {
                 val h = highlight.bounds[row]?.let { it.second - it.first } ?: 0f
                 requesters.getOrNull(row)?.bringIntoView(Rect(0f, -margin, 1f, h + margin))
@@ -465,7 +475,7 @@ private fun SliderRow(r: QuickRow.Slider, selected: Boolean, modifier: Modifier,
 @Composable
 private fun RowWell(icon: ImageVector, selected: Boolean) {
     val c = Fuse.colors
-    val fill by animateColorAsState(
+    val fill by fuselineColor(
         c.text.copy(alpha = if (selected) (if (c.isDark) 0.13f else 0.1f) else (if (c.isDark) 0.07f else 0.055f)),
         Fuse.motion.tween(Durations.FAST),
         label = "well",

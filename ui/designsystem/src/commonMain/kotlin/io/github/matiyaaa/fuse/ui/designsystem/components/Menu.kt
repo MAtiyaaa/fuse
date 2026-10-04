@@ -1,11 +1,5 @@
 package io.github.matiyaaa.fuse.ui.designsystem.components
 
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -33,8 +27,11 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -42,6 +39,7 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shape
@@ -53,12 +51,14 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import io.github.matiyaaa.fuse.model.CornerFamily
 import io.github.matiyaaa.fuse.model.NavAction
+import io.github.matiyaaa.fuse.ui.designsystem.focus.KeepSelectionInView
 import io.github.matiyaaa.fuse.ui.designsystem.focus.LinearSelection
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
@@ -68,23 +68,23 @@ import io.github.matiyaaa.fuse.ui.designsystem.media.ArtSlot
 import io.github.matiyaaa.fuse.ui.designsystem.media.Artwork
 import io.github.matiyaaa.fuse.ui.designsystem.media.GeneratedArt
 import io.github.matiyaaa.fuse.ui.designsystem.shape.SquircleShape
-import io.github.matiyaaa.fuse.ui.designsystem.theme.Durations
-import io.github.matiyaaa.fuse.ui.designsystem.theme.Easings
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.FuseColors
-import io.github.matiyaaa.fuse.ui.designsystem.theme.FuseMotion
-import io.github.matiyaaa.fuse.ui.designsystem.theme.flourishOn
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
-import kotlinx.coroutines.launch
+import io.github.matiyaaa.fuse.ui.designsystem.theme.flourishOn
+import io.github.matiyaaa.fuse.ui.fuseline.Curves
+import io.github.matiyaaa.fuse.ui.fuseline.Durations
+import io.github.matiyaaa.fuse.ui.fuseline.Enter
+import io.github.matiyaaa.fuse.ui.fuseline.FuselineMotion
+import io.github.matiyaaa.fuse.ui.fuseline.FuselineValue
+import io.github.matiyaaa.fuse.ui.fuseline.fuselineColor
+import io.github.matiyaaa.fuse.ui.fuseline.fuselineFloat
+import io.github.matiyaaa.fuse.ui.fuseline.spring
+import io.github.matiyaaa.fuse.ui.fuseline.tween
 import kotlin.math.abs
 import kotlin.math.sqrt
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.graphics.Brush
-import io.github.matiyaaa.fuse.ui.designsystem.focus.KeepSelectionInView
+import kotlinx.coroutines.launch
 
 /** What the right side of a menu row shows. */
 sealed interface Trailing {
@@ -177,8 +177,8 @@ fun MenuRow(
     val available = action.enabled && action.unavailableReason == null
     val interaction = remember { MutableInteractionSource() }
     val press = rememberAtomPress(interaction, available)
-    val sel by animateFloatAsState(if (selected) 1f else 0f, motion.tween(Durations.FAST), label = "row")
-    val bg by animateColorAsState(
+    val sel by fuselineFloat(if (selected) 1f else 0f, motion.tween(Durations.FAST), label = "row")
+    val bg by fuselineColor(
         when {
             !highlight -> Color.Transparent
             selected -> c.rowHighlight(action.destructive)
@@ -272,7 +272,7 @@ fun MenuRow(
 @Composable
 private fun IconWell(icon: ImageVector, tint: Color, selected: Boolean, destructive: Boolean, available: Boolean) {
     val c = Fuse.colors
-    val fill by animateColorAsState(
+    val fill by fuselineColor(
         when {
             destructive -> c.danger.copy(alpha = if (selected) 0.2f else 0.12f)
             selected -> c.text.copy(alpha = if (c.isDark) 0.13f else 0.1f)
@@ -326,7 +326,7 @@ private fun RowTrailing(trailing: Trailing, selected: Boolean, available: Boolea
             ProgressBar(trailing.fraction, Modifier.fillMaxWidth())
         }
         is Trailing.Disclosure -> Row(verticalAlignment = Alignment.CenterVertically) {
-            val turn by animateFloatAsState(if (trailing.open) 180f else 0f, motion.focusSpring(), label = "disclosure")
+            val turn by fuselineFloat(if (trailing.open) 180f else 0f, motion.focusSpring(), label = "disclosure")
             if (trailing.summary != null) {
                 FText(trailing.summary, t.label, color = c.textMuted, maxLines = 1)
                 Spacer(Modifier.width(Space.s))
@@ -353,7 +353,7 @@ private fun RowTrailing(trailing: Trailing, selected: Boolean, available: Boolea
 private fun CheckMark(on: Boolean) {
     val c = Fuse.colors
     val motion = Fuse.motion
-    val k by animateFloatAsState(
+    val k by fuselineFloat(
         if (on) 1f else 0f,
         if (motion.reduced) motion.tween(Durations.INSTANT) else spring(dampingRatio = 0.6f, stiffness = 700f),
         label = "check",
@@ -388,7 +388,7 @@ private fun CheckMark(on: Boolean) {
 @Composable
 private fun LevelMeter(fraction: Float, selected: Boolean) {
     val c = Fuse.colors
-    val v by animateFloatAsState(fraction.coerceIn(0f, 1f), Fuse.motion.value(), label = "level")
+    val v by fuselineFloat(fraction.coerceIn(0f, 1f), Fuse.motion.value(), label = "level")
     val track = c.text.copy(alpha = 0.12f)
     val fill = if (selected) c.accent else c.text.copy(alpha = 0.55f)
     Spacer(
@@ -524,12 +524,12 @@ fun MenuList(
     // along a long list (Storage has hundreds of rows) doesn't recompose the list itself.
     val currentActions by rememberUpdatedState(actions)
     val start = remember { selection.index.coerceIn(0, (actions.size - 1).coerceAtLeast(0)).toFloat() }
-    val top = remember { Animatable(start) }
-    val bottom = remember { Animatable(start) }
+    val top = remember { FuselineValue(start) }
+    val bottom = remember { FuselineValue(start) }
     val visible = showSelection && actions.isNotEmpty()
-    val shown by animateFloatAsState(if (visible) 1f else 0f, motion.tween(if (visible) Durations.FAST else Durations.INSTANT), label = "hl")
-    val quiet by animateFloatAsState(if (dimSelection) 1f else 0f, motion.tween(Durations.BASE), label = "hlQuiet")
-    val dangerMix = remember { Animatable(0f) }
+    val shown by fuselineFloat(if (visible) 1f else 0f, motion.tween(if (visible) Durations.FAST else Durations.INSTANT), label = "hl")
+    val quiet by fuselineFloat(if (dimSelection) 1f else 0f, motion.tween(Durations.BASE), label = "hlQuiet")
+    val dangerMix = remember { FuselineValue(0f) }
     val ids = layout.ids
     val lastIds = remember { arrayOfNulls<List<String>>(1) }
     LaunchedEffect(ids) {
@@ -557,8 +557,8 @@ fun MenuList(
                 bottom.snapTo(from)
             }
             val down = target >= bottom.value
-            val lead = spring<Float>(dampingRatio = 0.9f, stiffness = 1400f)
-            val trail = spring<Float>(dampingRatio = 0.95f, stiffness = 700f)
+            val lead = spring(dampingRatio = 0.9f, stiffness = 1400f)
+            val trail = spring(dampingRatio = 0.95f, stiffness = 700f)
             launch { top.animateTo(target, if (down) trail else lead) }
             launch { bottom.animateTo(target, if (down) lead else trail) }
         }
@@ -577,9 +577,9 @@ fun MenuList(
     val riseMs = motion.ms(REVEAL_RISE_MS)
     val staggerMs = motion.staggerMs
     val revealMs = riseMs + staggerMs * (REVEAL_ROWS - 1)
-    val reveal = remember { Animatable(if (revealOn) 0f else 1f) }
+    val reveal = remember { FuselineValue(if (revealOn) 0f else 1f) }
     LaunchedEffect(Unit) {
-        if (reveal.value < 1f) reveal.animateTo(1f, tween(revealMs, easing = LinearEasing))
+        if (reveal.value < 1f) reveal.animateTo(1f, tween(revealMs, easing = Curves.Linear))
     }
     val revealAt: (Int) -> Float = { i ->
         if (reveal.value >= 1f) {
@@ -587,14 +587,14 @@ fun MenuList(
         } else {
             val elapsed = reveal.value * revealMs
             val t = ((elapsed - staggerMs * i.coerceAtMost(REVEAL_ROWS - 1)) / riseMs).coerceIn(0f, 1f)
-            Easings.Enter.transform(t)
+            Curves.Enter.transform(t)
         }
     }
     val rise = motion.revealRise
 
     val panelFill = if (fadeEdges) LocalPanelFill.current else null
-    val edgeTop = remember { Animatable(0f) }
-    val edgeBottom = remember { Animatable(0f) }
+    val edgeTop = remember { FuselineValue(0f) }
+    val edgeBottom = remember { FuselineValue(0f) }
     if (panelFill != null) {
         LaunchedEffect(state) {
             snapshotFlow { state.canScrollBackward to state.canScrollForward }.collect { (up, down) ->
@@ -791,7 +791,7 @@ private fun FuseColors.rowHighlight(destructive: Boolean): Color =
 private fun FuseColors.rowMarked(): Color = text.copy(alpha = if (isDark) 0.05f else 0.04f)
 
 private const val REVEAL_RISE_MS = Durations.BASE
-private const val REVEAL_ROWS = FuseMotion.STAGGER_MAX
+private const val REVEAL_ROWS = FuselineMotion.STAGGER_MAX
 
 private val MENU_ART_WIDTH = 104.dp
 private val MENU_ART_HEIGHT = 44.dp

@@ -1,6 +1,5 @@
 package io.github.matiyaaa.fuse.ui.shell.components
 
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -33,9 +32,11 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
 import io.github.matiyaaa.fuse.ui.designsystem.shape.PillShape
-import io.github.matiyaaa.fuse.ui.designsystem.theme.Durations
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
+import io.github.matiyaaa.fuse.ui.fuseline.Durations
+import io.github.matiyaaa.fuse.ui.fuseline.fuselineColor
+import io.github.matiyaaa.fuse.ui.fuseline.tween
 import kotlinx.coroutines.flow.distinctUntilChanged
 
 /**
@@ -92,8 +93,8 @@ fun CompactTabs(items: List<CompactTab>, active: Int, onSelect: (Int) -> Unit, m
     ) {
         items.forEachIndexed { i, tab ->
             val on = i == active
-            val fill by animateColorAsState(if (on) c.accent else c.text.copy(alpha = 0f), Fuse.motion.tween(Durations.FAST), label = "tab")
-            val tint by animateColorAsState(if (on) c.onAccent else c.textMuted, Fuse.motion.tween(Durations.FAST), label = "tabTint")
+            val fill by fuselineColor(if (on) c.accent else c.text.copy(alpha = 0f), Fuse.motion.tween(Durations.FAST), label = "tab")
+            val tint by fuselineColor(if (on) c.onAccent else c.textMuted, Fuse.motion.tween(Durations.FAST), label = "tabTint")
             Box(
                 Modifier
                     .size(COMPACT_TAB)

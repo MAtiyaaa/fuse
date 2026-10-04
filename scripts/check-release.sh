@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Checks that a release is consistent before it is merged: gradle.properties names the version, its
-# notes exist with the title and the New, Changed and Fixed sections, RELEASE_NOTES.md is a copy of
-# them, CHANGELOG.md lists the version, and the README's "Where Fuse stands" names it (the website
+# notes exist with the title and the New, Changed and Fixed sections, RELEASE_NOTES.md and the copy
+# bundled into the app are copies of them, CHANGELOG.md lists the version, and the README's "Where Fuse stands" names it (the website
 # reads the version from the release itself, but the README is written by hand and goes stale). The
 # release workflow publishes exactly these files.
 set -euo pipefail
@@ -28,6 +28,8 @@ else
     grep -qx "$section" "$notes" || fail "$notes has no '$section' section"
   done
   cmp -s "$notes" RELEASE_NOTES.md || fail "RELEASE_NOTES.md differs from $notes"
+  # The notes Fuse shows offline in Settings, About, "What's new in this version".
+  cmp -s "$notes" ui/designsystem/src/commonMain/composeResources/files/release-notes.md || fail "ui/designsystem/src/commonMain/composeResources/files/release-notes.md differs from $notes"
 fi
 grep -q "^| $version | $name | \[docs/releases/$version.md\]" CHANGELOG.md || fail "CHANGELOG.md has no row for $version ($name)"
 

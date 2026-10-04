@@ -5,6 +5,8 @@ import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.luminance
 import io.github.matiyaaa.fuse.model.MotionProfile
 import io.github.matiyaaa.fuse.ui.designsystem.media.initialsOf
+import io.github.matiyaaa.fuse.ui.fuseline.Durations
+import io.github.matiyaaa.fuse.ui.fuseline.FuselineMotion
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -52,7 +54,7 @@ class FoundationTest {
 
     @Test
     fun reducedMotionKeepsOnlyFades() {
-        val m = FuseMotion(MotionProfile.REDUCED)
+        val m = FuselineMotion(MotionProfile.REDUCED)
         assertEquals(0f, m.revealRise.value)
         assertEquals(0, m.stagger(5))
         assertEquals(1f, m.pressScale)
@@ -63,11 +65,11 @@ class FoundationTest {
 
     @Test
     fun staggerIsCappedSoLongListsNeverQueue() {
-        val m = FuseMotion(MotionProfile.STANDARD)
+        val m = FuselineMotion(MotionProfile.STANDARD)
         assertEquals(0, m.stagger(0))
         assertEquals(Durations.STAGGER * 3, m.stagger(3))
-        assertEquals(m.stagger(FuseMotion.STAGGER_MAX), m.stagger(40))
-        assertTrue(FuseMotion(MotionProfile.ENHANCED).drift)
+        assertEquals(m.stagger(FuselineMotion.STAGGER_MAX), m.stagger(40))
+        assertTrue(FuselineMotion(MotionProfile.ENHANCED).drift)
         assertFalse(m.drift)
     }
 

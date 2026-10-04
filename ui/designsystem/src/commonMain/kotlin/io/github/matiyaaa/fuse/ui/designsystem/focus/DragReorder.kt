@@ -1,10 +1,5 @@
 package io.github.matiyaaa.fuse.ui.designsystem.focus
 
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.FiniteAnimationSpec
-import androidx.compose.animation.core.VectorConverter
-import androidx.compose.animation.core.VisibilityThreshold
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.runtime.Composable
@@ -36,6 +31,10 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.toSize
+import io.github.matiyaaa.fuse.ui.fuseline.FuselineBridge
+import io.github.matiyaaa.fuse.ui.fuseline.FuselineValue
+import io.github.matiyaaa.fuse.ui.fuseline.Motion
+import io.github.matiyaaa.fuse.ui.fuseline.spring
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
@@ -104,10 +103,10 @@ object ReorderMath {
 /** How a touch reorder moves and feels, shared by every list that can be rearranged. */
 object ReorderDefaults {
     /** Neighbours sliding out of the way: quick, settling with almost no overshoot. */
-    val Placement: FiniteAnimationSpec<IntOffset> = spring(dampingRatio = 0.86f, stiffness = 420f, visibilityThreshold = IntOffset.VisibilityThreshold)
+    val Placement = FuselineBridge.placement(spring(dampingRatio = 0.86f, stiffness = 420f, visibilityThreshold = 1f))
 
     /** A dropped item gliding into its place. */
-    val Settle: FiniteAnimationSpec<Offset> = spring(dampingRatio = 0.78f, stiffness = 520f, visibilityThreshold = Offset.VisibilityThreshold)
+    val Settle: Motion = spring(dampingRatio = 0.78f, stiffness = 520f, visibilityThreshold = 0.5f)
 
     /** How much a held item grows, and how high its shadow lifts it. */
     const val LIFT_SCALE = 1.08f
@@ -456,8 +455,8 @@ private suspend fun PointerInputScope.dragGestures(
 @Composable
 fun Modifier.reorderItem(state: DragReorderState, key: Any, liftScale: Float = ReorderDefaults.LIFT_SCALE, shape: Shape? = null): Modifier {
     val held = state.heldKey == key
-    val settle = remember { Animatable(Offset.Zero, Offset.VectorConverter) }
-    val lift = remember { Animatable(0f) }
+    val settle = remember { FuselineValue(Offset.Zero) }
+    val lift = remember { FuselineValue(0f) }
     val currentKey by rememberUpdatedState(key)
     LaunchedEffect(held) {
         if (held) {

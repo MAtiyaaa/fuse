@@ -1,6 +1,5 @@
 package io.github.matiyaaa.fuse.ui.designsystem.effects
 
-import androidx.compose.animation.core.withInfiniteAnimationFrameMillis
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -25,13 +24,14 @@ import androidx.compose.ui.node.ModifierNodeElement
 import androidx.compose.ui.node.currentValueOf
 import androidx.compose.ui.node.invalidateDraw
 import androidx.compose.ui.platform.InspectorInfo
-import io.github.matiyaaa.fuse.ui.designsystem.theme.Durations
-import io.github.matiyaaa.fuse.ui.designsystem.theme.Easings
+import androidx.compose.ui.unit.dp
 import io.github.matiyaaa.fuse.ui.designsystem.theme.LocalFuseLook
-import io.github.matiyaaa.fuse.ui.designsystem.theme.LocalFuseMotion
 import io.github.matiyaaa.fuse.ui.designsystem.theme.LocalRenderQuality
 import io.github.matiyaaa.fuse.ui.designsystem.theme.ambientOn
-import androidx.compose.ui.unit.dp
+import io.github.matiyaaa.fuse.ui.fuseline.Curves
+import io.github.matiyaaa.fuse.ui.fuseline.Durations
+import io.github.matiyaaa.fuse.ui.fuseline.LocalFuselineMotion
+import io.github.matiyaaa.fuse.ui.fuseline.withInfiniteFrameMillis
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -115,19 +115,19 @@ private class ShimmerNode(
 
     private fun start() {
         if (!active || running || !isAttached) return
-        val motion = currentValueOf(LocalFuseMotion)
+        val motion = currentValueOf(LocalFuselineMotion)
         if (!motion.ambientOn(currentValueOf(LocalRenderQuality))) return
         running = true
         coroutineScope.launch {
             try {
                 var last = 0L
                 while (isActive && active) {
-                    val now = withInfiniteAnimationFrameMillis { it }
+                    val now = withInfiniteFrameMillis { it }
                     // About 30 frames per second is plenty for a soft band of light.
                     if (now - last < FRAME_MS) continue
                     last = now
                     val t = (now % Durations.SHIMMER).toFloat() / Durations.SHIMMER
-                    val next = if (t < PASS) Easings.Fade.transform(t / PASS) else -1f
+                    val next = if (t < PASS) Curves.Fade.transform(t / PASS) else -1f
                     if (next != phase) {
                         phase = next
                         invalidateDraw()

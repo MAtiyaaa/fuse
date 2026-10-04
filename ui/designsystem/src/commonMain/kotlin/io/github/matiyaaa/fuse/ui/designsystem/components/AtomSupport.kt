@@ -1,10 +1,5 @@
 package io.github.matiyaaa.fuse.ui.designsystem.components
 
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.snap
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.interaction.InteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -12,8 +7,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.ReadOnlyComposable
-import androidx.compose.runtime.State
 import androidx.compose.runtime.Stable
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
@@ -34,9 +29,14 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import io.github.matiyaaa.fuse.model.CornerFamily
 import io.github.matiyaaa.fuse.ui.designsystem.shape.PillShape
-import io.github.matiyaaa.fuse.ui.designsystem.theme.Durations
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.FuseColors
+import io.github.matiyaaa.fuse.ui.fuseline.Durations
+import io.github.matiyaaa.fuse.ui.fuseline.FuselineValue
+import io.github.matiyaaa.fuse.ui.fuseline.fuselineFloat
+import io.github.matiyaaa.fuse.ui.fuseline.snap
+import io.github.matiyaaa.fuse.ui.fuseline.spring
+import io.github.matiyaaa.fuse.ui.fuseline.tween
 import kotlinx.coroutines.launch
 
 /*
@@ -61,12 +61,12 @@ internal fun rememberAtomPress(interaction: InteractionSource, enabled: Boolean 
     val motion = Fuse.motion
     val isHovered by interaction.collectIsHoveredAsState()
     val isPressed by interaction.collectIsPressedAsState()
-    val hover = animateFloatAsState(
+    val hover = fuselineFloat(
         if (isHovered && enabled) 1f else 0f,
         motion.tween(Durations.FAST),
         label = "hover",
     )
-    val press = animateFloatAsState(
+    val press = fuselineFloat(
         if (isPressed && enabled) 1f else 0f,
         when {
             motion.reduced -> snap()
@@ -193,8 +193,8 @@ internal class StretchGlide(private val startState: State<Float>, private val en
 @Composable
 internal fun rememberStretchGlide(target: Float, span: Float = 1f): StretchGlide {
     val motion = Fuse.motion
-    val start = remember { Animatable(target) }
-    val end = remember { Animatable(target + span) }
+    val start = remember { FuselineValue(target) }
+    val end = remember { FuselineValue(target + span) }
     LaunchedEffect(target, span, motion.reduced) {
         if (motion.reduced) {
             start.snapTo(target)
@@ -202,8 +202,8 @@ internal fun rememberStretchGlide(target: Float, span: Float = 1f): StretchGlide
             return@LaunchedEffect
         }
         val forward = target + span >= end.value
-        val lead = spring<Float>(dampingRatio = 0.86f, stiffness = 1400f)
-        val trail = spring<Float>(dampingRatio = 0.9f, stiffness = 650f)
+        val lead = spring(dampingRatio = 0.86f, stiffness = 1400f)
+        val trail = spring(dampingRatio = 0.9f, stiffness = 650f)
         launch { start.animateTo(target, if (forward) trail else lead) }
         launch { end.animateTo(target + span, if (forward) lead else trail) }
     }

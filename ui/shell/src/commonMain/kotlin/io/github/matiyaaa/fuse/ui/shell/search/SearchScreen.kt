@@ -1,7 +1,5 @@
 package io.github.matiyaaa.fuse.ui.shell.search
 
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -83,12 +81,15 @@ import io.github.matiyaaa.fuse.ui.designsystem.media.ArtSlot
 import io.github.matiyaaa.fuse.ui.designsystem.media.Artwork
 import io.github.matiyaaa.fuse.ui.designsystem.media.GeneratedArt
 import io.github.matiyaaa.fuse.ui.designsystem.shape.SquircleShape
-import io.github.matiyaaa.fuse.ui.designsystem.theme.Durations
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Radius
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
 import io.github.matiyaaa.fuse.ui.designsystem.theme.toColor
+import io.github.matiyaaa.fuse.ui.fuseline.Durations
+import io.github.matiyaaa.fuse.ui.fuseline.FuselineValue
+import io.github.matiyaaa.fuse.ui.fuseline.fuselineFloat
+import io.github.matiyaaa.fuse.ui.fuseline.tween
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.FocusZone
 import io.github.matiyaaa.fuse.ui.shell.app.KeyboardTarget
@@ -99,16 +100,16 @@ import io.github.matiyaaa.fuse.ui.shell.app.openApp
 import io.github.matiyaaa.fuse.ui.shell.app.pasteInto
 import io.github.matiyaaa.fuse.ui.shell.components.SquareGameArt
 import io.github.matiyaaa.fuse.ui.shell.components.agoText
+import io.github.matiyaaa.fuse.ui.shell.settings.SettingHit
+import io.github.matiyaaa.fuse.ui.shell.settings.SettingsIndex
+import io.github.matiyaaa.fuse.ui.shell.settings.openSettings
+import io.github.matiyaaa.fuse.ui.shell.settings.settingsSections
 import io.github.matiyaaa.fuse.ui.shell.store.AppCard
 import io.github.matiyaaa.fuse.ui.shell.store.GameCard
 import io.github.matiyaaa.fuse.ui.shell.store.PlatformCard
 import io.github.matiyaaa.fuse.ui.shell.store.SearchChip
 import io.github.matiyaaa.fuse.ui.shell.store.SearchResults
 import io.github.matiyaaa.fuse.ui.shell.store.SearchSuggestion
-import io.github.matiyaaa.fuse.ui.shell.settings.SettingHit
-import io.github.matiyaaa.fuse.ui.shell.settings.SettingsIndex
-import io.github.matiyaaa.fuse.ui.shell.settings.openSettings
-import io.github.matiyaaa.fuse.ui.shell.settings.settingsSections
 import io.github.matiyaaa.fuse.ui.shell.systems.SystemMark
 import io.github.matiyaaa.fuse.ui.shell.systems.gamesText
 import kotlin.math.abs
@@ -239,7 +240,7 @@ fun SearchScreen(app: AppState) {
     val sections = remember { settingsSections.filter { it.available(app) } }
     val hits = remember(results) {
         // Settings are found by name alone, never with filters.
-        val settings = if (results.chips.isEmpty()) SettingsIndex.search(results.query, sections, cartridge = app.platform.features.cartridge).map { Hit.Setting(it) } else emptyList()
+        val settings = if (results.chips.isEmpty()) SettingsIndex.search(results.query, sections, cartridge = app.platform.features.cartridge, secondScreen = app.platform.features.secondScreen).map { Hit.Setting(it) } else emptyList()
         val choosing = SearchSyntax.parse(results.query).pending != null
         results.suggestions.map { Hit.Suggestion(it, choosing) } +
             results.games.map { Hit.Game(it) } + results.platforms.map { Hit.System(it) } +
@@ -294,7 +295,7 @@ fun SearchScreen(app: AppState) {
 
     InputLayer(
         enabled = app.focusZone == FocusZone.CONTENT && !app.overlayOpen,
-        repeats = if (inResults) emptySet() else setOf(NavAction.CONTEXT, NavAction.PREVIOUS_SECTION, NavAction.NEXT_SECTION),
+        repeats = if (inResults) emptySet() else keyboard.repeats,
     ) { e ->
         if (inResults) {
             when (e.action) {
@@ -309,7 +310,9 @@ fun SearchScreen(app: AppState) {
             }
         } else {
             val r = keyboard.handle(e, field, { if (hits.isNotEmpty()) inResults = true }, onPaste = { app.pasteInto(field) })
-            if (r == NavResult.BLOCKED && e.action == NavAction.RIGHT && hits.isNotEmpty()) { inResults = true; NavResult.MOVED } else r
+            // The stick stays on the keys: Right at their edge goes nowhere (Menu or a tap opens the
+            // results), and Up past the top row reaches the top line.
+            if (r == NavResult.BLOCKED && e.action == NavAction.UP) NavResult.IGNORED else r
         }
     }
 
@@ -459,9 +462,9 @@ private fun ResultList(
 
     // One highlight glides from row to row (in result space), stretching a little on the way.
     val target = sel.index.coerceIn(0, (hits.size - 1).coerceAtLeast(0)).toFloat()
-    val top = remember { Animatable(target) }
-    val bottom = remember { Animatable(target) }
-    val shown by animateFloatAsState(if (showSelection && hits.isNotEmpty()) 1f else 0f, motion.tween(if (showSelection) Durations.FAST else Durations.INSTANT), label = "hl")
+    val top = remember { FuselineValue(target) }
+    val bottom = remember { FuselineValue(target) }
+    val shown by fuselineFloat(if (showSelection && hits.isNotEmpty()) 1f else 0f, motion.tween(if (showSelection) Durations.FAST else Durations.INSTANT), label = "hl")
     val lastKeys = remember { arrayOfNulls<List<String>>(1) }
     LaunchedEffect(target, layout.keys) {
         val fresh = lastKeys[0] != layout.keys
