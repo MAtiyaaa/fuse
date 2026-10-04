@@ -65,7 +65,7 @@ internal fun AuditDriver.jellyfinScreens() {
                 var tries = 0
                 while (service.signIn("pat", "audit").isFailure && ++tries < 10) kotlinx.coroutines.delay(300)
             }
-            waitFor("Signed in as")
+            waitFor("Connected from outside")
             settle(1_500)
             shoot("signed in, connected from outside")
             tap(PadButton.DPAD_DOWN, 9)
