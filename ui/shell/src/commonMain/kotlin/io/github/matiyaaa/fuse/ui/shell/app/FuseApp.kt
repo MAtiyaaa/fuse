@@ -493,6 +493,7 @@ private fun Pages(app: AppState, tabs: List<Destination>) {
                     Route.Search -> SearchScreen(app)
                     Route.Controls -> io.github.matiyaaa.fuse.ui.shell.settings.ControlsScreen(app)
                     Route.Licenses -> io.github.matiyaaa.fuse.ui.shell.settings.LicensesScreen(app)
+                    is Route.ReleaseNotes -> io.github.matiyaaa.fuse.ui.shell.notes.ReleaseNotesScreen(app, route)
                     Route.PlayTime -> io.github.matiyaaa.fuse.ui.shell.library.PlayTimeScreen(app)
                     Route.Themes -> io.github.matiyaaa.fuse.ui.shell.settings.ThemesScreen(app)
                     Route.Onboarding -> OnboardingScreen(app)
@@ -514,7 +515,7 @@ internal fun hudPage(stack: List<Route>): HudButton? {
     for (route in stack.asReversed()) {
         when (route) {
             Route.Search -> return HudButton.SEARCH
-            is Route.Settings, is Route.PlatformSettings, Route.Controls, Route.Licenses, Route.Themes, Route.Storage, Route.PhoneLink ->
+            is Route.Settings, is Route.PlatformSettings, Route.Controls, Route.Licenses, is Route.ReleaseNotes, Route.Themes, Route.Storage, Route.PhoneLink ->
                 return HudButton.SETTINGS
             else -> Unit
         }

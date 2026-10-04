@@ -45,6 +45,7 @@ import io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec
 import io.github.matiyaaa.fuse.ui.shell.app.ReorderSpec
 import io.github.matiyaaa.fuse.ui.shell.app.ConfirmSpec
 import io.github.matiyaaa.fuse.ui.shell.app.Route
+import io.github.matiyaaa.fuse.ui.shell.notes.openInstalledNotes
 import io.github.matiyaaa.fuse.ui.shell.app.addGame
 import io.github.matiyaaa.fuse.ui.shell.app.applyUpdate
 import io.github.matiyaaa.fuse.ui.shell.app.emulatorFoldersPicker
@@ -1382,11 +1383,16 @@ fun updateRows(app: AppState): List<MenuAction> {
                 ))
             }
             if (r.notes.isNotBlank()) add(MenuAction("notes", "What's new in ${r.name}", FuseIcons.Sparkles, trailing = Trailing.Chevron, onSelect = {
-                app.choice = ChoiceSpec(r.name, r.notes.lines().filterNot { it.startsWith("# ") }.joinToString("\n").trim().take(1600), listOf(
-                    MenuAction("ok", "Close", FuseIcons.Check, onSelect = { app.choice = null }),
-                ), icon = FuseIcons.Sparkles)
+                val name = io.github.matiyaaa.fuse.ui.shell.notes.releaseNameOf(r.notes) ?: r.name.substringAfter(" - ", "").ifBlank { null }
+                app.go(Route.ReleaseNotes(r.tag.removePrefix("v"), name, r.notes, installed = false))
             }))
         }
+        add(MenuAction(
+            "installed-notes", "What's new in this version", FuseIcons.Sparkles,
+            detail = "Fuse ${app.store.updates.currentVersion}: what it brought, on a page of its own",
+            trailing = Trailing.Chevron,
+            onSelect = { app.openInstalledNotes() },
+        ))
         add(MenuAction("check", "Check for updates", FuseIcons.Refresh, onSelect = {
             app.scope.launch { app.toasts.show(if (app.store.updates.check() != null) "An update is available" else "Fuse is up to date") }
         }))

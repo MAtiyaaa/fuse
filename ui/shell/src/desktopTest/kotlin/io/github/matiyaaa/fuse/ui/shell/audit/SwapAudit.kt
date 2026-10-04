@@ -89,6 +89,22 @@ internal fun AuditDriver.swapScreens() {
         shoot("the details, every card in view")
     }
 
+    scenario("swap", "release notes") {
+        useLibrary()
+        openSettings()
+        focusText("About")
+        tap(PadButton.DPAD_RIGHT)
+        focusText("What's new in this version")
+        tap(PadButton.A)
+        waitFor("WHAT'S NEW")
+        shoot("the notes of the version running", 1_200)
+        tap(PadButton.DPAD_DOWN, 3)
+        shoot("read through, card by card", 900)
+        tap(PadButton.DPAD_DOWN, 6)
+        shoot("further down", 900)
+        tap(PadButton.B)
+    }
+
     scenario("swap", "screen settings without a second screen") {
         useLibrary()
         openSettings()

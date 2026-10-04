@@ -56,6 +56,8 @@ import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
 import io.github.matiyaaa.fuse.ui.fuseline.fuselineScrollBy
+import io.github.matiyaaa.fuse.ui.shell.notes.NotesWell
+import io.github.matiyaaa.fuse.ui.shell.notes.noteLines
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.ConfirmSpec
 import io.github.matiyaaa.fuse.ui.shell.app.FocusZone
@@ -224,11 +226,11 @@ private fun StorePage(app: AppState, state: StoreState, item: StoreApp) {
                 DetailList(details, Modifier.fillMaxWidth())
             }
 
-            val notes = release?.notes?.let(::noteLines).orEmpty()
+            val notes = release?.notes?.let { noteLines(it, max = 28) }.orEmpty()
             if (notes.isNotEmpty()) {
                 Spacer(Modifier.height(Space.xl))
                 SectionLabel("What's new" + (release?.version?.let { " in ${it.removePrefix("v")}" } ?: ""), Modifier.padding(bottom = Space.s))
-                ReleaseNotes(notes, Modifier.widthIn(max = 1180.dp))
+                NotesWell(notes, Modifier.widthIn(max = 1180.dp))
             }
         }
     }
@@ -347,55 +349,6 @@ internal fun dateText(iso: String): String {
     val month = listOf("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
         .getOrNull((m.groupValues[2].toIntOrNull() ?: 0) - 1) ?: return iso
     return "${m.groupValues[3].trimStart('0')} $month ${m.groupValues[1]}"
-}
-
-/** A line of release notes: a heading, a list item or plain text. */
-internal data class NoteLine(val text: String, val kind: Kind) {
-    enum class Kind { HEADING, ITEM, TEXT }
-}
-
-/**
- * Release notes (Markdown, as GitHub keeps them) as plain lines: headings and list items kept as
- * such, links as their text, pictures and markup left out. At most [max] lines.
- */
-internal fun noteLines(markdown: String, max: Int = 28): List<NoteLine> {
-    val link = Regex("""!?\[([^\]]*)\]\([^)]*\)""")
-    val marks = Regex("""(\*\*|__|`|~~)""")
-    val tag = Regex("""<[^>]+>""")
-    return markdown.lineSequence()
-        .map { it.trimEnd() }
-        .mapNotNull { raw ->
-            val line = raw.replace(tag, "").replace(Regex("""!\[[^\]]*\]\([^)]*\)"""), "").replace(link) { it.groupValues[1] }.replace(marks, "").trim()
-            when {
-                line.isEmpty() || line.all { it == '-' || it == '=' || it == '*' || it == '_' } -> null
-                line.startsWith("#") -> NoteLine(line.trimStart('#').trim(), NoteLine.Kind.HEADING)
-                line.startsWith("- ") || line.startsWith("* ") || line.startsWith("+ ") -> NoteLine(line.drop(2).trim(), NoteLine.Kind.ITEM)
-                Regex("^\\d+[.)] ").containsMatchIn(line) -> NoteLine(line.substringAfter(' ').trim(), NoteLine.Kind.ITEM)
-                else -> NoteLine(line, NoteLine.Kind.TEXT)
-            }
-        }
-        .filter { it.text.isNotBlank() }
-        .take(max)
-        .toList()
-}
-
-@Composable
-private fun ReleaseNotes(lines: List<NoteLine>, modifier: Modifier) {
-    val c = Fuse.colors
-    val shape = RoundedCornerShape(Fuse.geometry.control)
-    Column(
-        modifier.fillMaxWidth().clip(shape).background(c.text.copy(alpha = if (c.isDark) 0.04f else 0.03f)).padding(Space.l),
-        verticalArrangement = Arrangement.spacedBy(Space.xs),
-    ) {
-        for (l in lines) when (l.kind) {
-            NoteLine.Kind.HEADING -> FText(l.text, Fuse.type.bodyStrong, maxLines = 2, modifier = Modifier.padding(top = Space.s))
-            NoteLine.Kind.ITEM -> Row(verticalAlignment = Alignment.Top) {
-                Box(Modifier.padding(top = 9.dp, end = Space.s).size(5.dp).clip(CircleShape).background(c.textMuted))
-                FText(l.text, Fuse.type.body, color = c.text.copy(alpha = 0.86f), maxLines = 4)
-            }
-            NoteLine.Kind.TEXT -> FText(l.text, Fuse.type.body, color = c.text.copy(alpha = 0.86f), maxLines = 6)
-        }
-    }
 }
 
 /** What Fuse does with an app once it is installed, for its page; null when Fuse doesn't use it. */
