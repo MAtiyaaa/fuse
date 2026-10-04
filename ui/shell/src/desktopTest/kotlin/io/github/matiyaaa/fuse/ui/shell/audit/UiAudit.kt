@@ -153,5 +153,15 @@ class UiAudit {
 
     @Test fun mediaV() = audit(AuditSize.V) { mediaScreens() }
 
+    @Test fun storageM() = audit(AuditSize.M) { storageScreens() }
+
+    @Test fun storageH() = audit(AuditSize.H) { storageScreens() }
+
+    @Test fun storageV() = audit(AuditSize.V) { storageScreens() }
+
+    @Test fun storageD() = audit(AuditSize.D) { storageScreens() }
+
+    @Test fun storageT() = audit(AuditSize.T) { storageScreens() }
+
     @Test fun tabSwitchH() = audit(AuditSize.H) { tabSwitchCost(java.io.File(System.getProperty("fuse.audit.dir", "build/audit"), "tab-switch.txt")) }
 }

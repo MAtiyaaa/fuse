@@ -42,3 +42,28 @@ internal fun AuditDriver.mediaScreens() {
         shoot("back to Home", 1_000)
     }
 }
+
+/** Storage, redesigned for 0.2.8: the overview, the drives, the systems and the games, at every size. */
+internal fun AuditDriver.storageScreens() {
+    scenario("storage", "overview") {
+        useLibrary()
+        openSettings()
+        focusText("Storage and backups")
+        tap(PadButton.DPAD_RIGHT)
+        tapText("Games and space")
+        waitFor("All systems")
+        settle(2_500)
+        shoot("the device at a glance")
+        tap(PadButton.DPAD_DOWN)
+        tap(PadButton.A)
+        tap(PadButton.DPAD_DOWN)
+        tap(PadButton.A)
+        settle(700)
+        shoot("two games picked")
+        tap(PadButton.DPAD_DOWN, 10)
+        settle(900)
+        shoot("further down the games")
+        tap(PadButton.B)
+        tap(PadButton.B)
+    }
+}
