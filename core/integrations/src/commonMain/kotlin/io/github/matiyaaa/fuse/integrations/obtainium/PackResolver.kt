@@ -26,6 +26,17 @@ data class UpstreamRelease(
     val choice: ApkChoice?,
 )
 
+/** A desktop program's newest release and its file for this computer (null when it has none). */
+data class DesktopRelease(
+    val version: String?,
+    val title: String?,
+    val publishedAt: String?,
+    val notes: String?,
+    val pageUrl: String,
+    val file: ReleaseAsset?,
+    val kind: DesktopAssetKind?,
+)
+
 /**
  * Finds the newest release of an app of the pack by the pack's own rules: GitHub's releases for
  * GitHub sources, the download pages for HTML sources. Every address it follows or returns is
@@ -94,6 +105,45 @@ class PackResolver(
                     notes = target.body?.takeIf { it.isNotBlank() },
                     pageUrl = target.htmlUrl.takeIf { HtmlLinks.isHttps(it) } ?: "https://github.com/$owner/$name/releases",
                     choice = if (rules.trackOnly) null else ApkPicker.choose(files, rules, app.preferredApkIndex, abis),
+                ),
+            )
+        }
+    }
+
+    /**
+     * The newest release of the GitHub repository at [repoUrl] (named [name] in messages) with its
+     * file for this computer ([DesktopAssets.pick]): the newest release that has one, else the
+     * newest release with no file (shown, not installed). Pre-releases count only when [prereleases]
+     * says so, or when a project publishes nothing else (rolling "continuous" builds).
+     */
+    suspend fun desktop(
+        repoUrl: String,
+        name: String,
+        host: io.github.matiyaaa.fuse.model.Host,
+        arch: String,
+        pattern: Regex? = null,
+        prereleases: Boolean = false,
+    ): ApiResult<DesktopRelease> {
+        val repo = REPO.find(repoUrl) ?: return ApiResult.NotConfigured("$name's address isn't a GitHub repository.")
+        val owner = repo.groupValues[1]
+        val project = repo.groupValues[2].removeSuffix(".git")
+        return releases("$apiUrl/repos/$owner/$project/releases?per_page=$PER_PAGE", single = false).flatMap { list ->
+            val published = list.filter { !it.draft }.sortedByDescending { it.publishedAt.orEmpty() }
+            val stable = published.filter { prereleases || !it.prerelease }.ifEmpty { published }
+            if (stable.isEmpty()) return@flatMap ApiResult.HttpError(404, "$name has no release yet.")
+            fun assets(r: GhRelease) = r.assets.map { ReleaseAsset(it.name, it.browserDownloadUrl, it.size.takeIf { s -> s > 0 }, it.digest) }.filter { HtmlLinks.isHttps(it.url) }
+            val withFile = stable.firstNotNullOfOrNull { r -> DesktopAssets.pick(assets(r), host, arch, pattern)?.let { r to it } }
+            // A newer release without a build for this computer doesn't hide the one before it that has one.
+            val (target, file) = withFile ?: (stable.first() to null)
+            ApiResult.Success(
+                DesktopRelease(
+                    version = target.tagName.ifEmpty { target.name.orEmpty() }.ifEmpty { null },
+                    title = target.name?.takeIf { it.isNotBlank() },
+                    publishedAt = target.publishedAt,
+                    notes = target.body?.takeIf { it.isNotBlank() },
+                    pageUrl = target.htmlUrl.takeIf { HtmlLinks.isHttps(it) } ?: "https://github.com/$owner/$project/releases",
+                    file = file,
+                    kind = file?.let { DesktopAssets.kindOf(it.name, host) },
                 ),
             )
         }

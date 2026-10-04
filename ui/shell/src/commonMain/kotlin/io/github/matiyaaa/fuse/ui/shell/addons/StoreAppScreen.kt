@@ -116,7 +116,8 @@ private fun StorePage(app: AppState, state: StoreState, item: StoreApp) {
             add(PageButton("Uninstall", FuseIcons.Trash, ButtonKind.SECONDARY) {
                 app.confirm = ConfirmSpec(
                     title = "Uninstall ${item.name}?",
-                    message = "Android asks you to confirm, and removes the app with its own data. Games and files in your folders stay where they are.",
+                    message = if (state.desktop) "Fuse removes the program it put in ${state.folder ?: "place"}. Its own settings and saves, and your games, stay where they are."
+                    else "Android asks you to confirm, and removes the app with its own data. Games and files in your folders stay where they are.",
                     confirmLabel = "Uninstall",
                     onConfirm = { ops.uninstall(key) },
                 )
@@ -191,7 +192,7 @@ private fun StorePage(app: AppState, state: StoreState, item: StoreApp) {
                     }
                     if (job != null) {
                         Spacer(Modifier.height(Space.m))
-                        JobStrip(job, item, tint)
+                        JobStrip(job, item, tint, state.desktop)
                     }
                 }
             }
@@ -254,7 +255,7 @@ private fun HeroChips(state: StoreState, item: StoreApp) {
 }
 
 @Composable
-private fun JobStrip(job: StoreJob, item: StoreApp, tint: Color) {
+private fun JobStrip(job: StoreJob, item: StoreApp, tint: Color, desktop: Boolean) {
     val c = Fuse.colors
     if (job is StoreJob.Failed) {
         Note(FuseIcons.Alert, job.message, Modifier.fillMaxWidth(), color = c.danger, onArt = true)
@@ -308,10 +309,15 @@ private fun details(state: StoreState, item: StoreApp): List<Pair<String, String
             SourceKind.WEB -> "Website  ·  ${item.sourceHost}"
             SourceKind.OTHER -> item.sourceHost
         },
-        "Package" to (item.packageName ?: "Learnt when it is first installed"),
+        ("Package" to (item.packageName ?: "Learnt when it is first installed")).takeIf { !state.desktop },
+        installed?.packageName?.takeIf { state.desktop }?.let { "Installed at" to it },
         systemNames(item.systems, 12).takeIf { it.isNotEmpty() }?.let { "Plays" to it.joinToString(", ") },
         inFuseText(item.inFuse)?.let { "In Fuse" to it },
-        catalogue?.let { "Listed in" to "Obtainium Emulation Pack, ${it.variant.title()} edition" + (it.packVersion?.let { v -> " ($v)" } ?: "") },
+        when {
+            item.custom -> "Listed" to "Added by you"
+            state.desktop -> "Listed in" to "Fuse's list of desktop emulators"
+            else -> catalogue?.let { "Listed in" to (state.packRepo?.substringAfter("github.com/") ?: "Obtainium Emulation Pack") + ", ${it.variant.title()} edition" + (it.packVersion?.let { v -> " ($v)" } ?: "") }
+        },
     )
 }
 

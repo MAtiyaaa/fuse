@@ -64,7 +64,18 @@ data class StoreSettings(
     val autoCheck: Boolean = true,
     /** Apps Fuse installed or updated, by their key in the catalogue. */
     val installs: Map<String, StoreInstall> = emptyMap(),
+    /** Apps the user added to the Store by their GitHub address, shown under their category. */
+    val custom: List<CustomStoreApp> = emptyList(),
+    /**
+     * The GitHub repository the catalogue comes from, for a fork of the Obtainium Emulation Pack
+     * that publishes its files the same way; null for the pack itself.
+     */
+    val packRepo: String? = null,
 )
+
+/** An app the user added to the Store: its GitHub repository, its name and the category it goes under. */
+@Serializable
+data class CustomStoreApp(val url: String, val name: String, val category: String = "Other")
 
 /**
  * One app Fuse installed from the Store: the package Android installed it as (the first install

@@ -135,7 +135,7 @@ val settingsSections: List<SettingsSection> = listOf(
     SettingsSection("inputs", "Controls", FuseIcons.Gamepad, "Buttons, mapping, repeat and sticks", ::inputRows, group = DEVICE),
     SettingsSection("displays", "Screen and sound", FuseIcons.Monitor, "Music, sounds, screens, performance", ::screenAndSoundRows, group = DEVICE),
     SettingsSection(
-        "store", "Store", FuseIcons.Store, "Edition, catalogue, update checks", ::storeRows,
+        "store", "Store", FuseIcons.Store, "Catalogue, added apps, update checks", ::storeRows,
         available = { it.store.appStore.supported }, group = CONNECTIONS,
     ),
     SettingsSection("accounts", "Accounts", FuseIcons.CircleUser, "RetroAchievements, Cartridge, Phone Link", ::accountsRows, group = CONNECTIONS),

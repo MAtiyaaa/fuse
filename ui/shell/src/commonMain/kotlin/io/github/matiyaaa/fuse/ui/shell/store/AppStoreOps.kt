@@ -64,6 +64,27 @@ interface AppStoreOps {
     /** Sets (or with null, removes) the GitHub token used for update checks. */
     suspend fun setGitHubToken(token: String?)
 
+    /**
+     * Adds the app whose releases are at the GitHub address [url] to the Store, under [category]
+     * ("Other" unless the user picks one). It must be an app this device can install: a release
+     * with an APK on Android, with this computer's build elsewhere. Null when it was added, else why not.
+     */
+    suspend fun addCustom(url: String, category: String = OTHER): String? = "The Store can't add apps here."
+
+    /** Takes an app the user added out of the Store again (an installed copy stays installed). */
+    suspend fun removeCustom(key: String) = Unit
+
+    /**
+     * Follows the catalogue of another GitHub repository that publishes the pack's files the same
+     * way (a fork), or the Obtainium Emulation Pack again with null. Null when it worked, else why not.
+     */
+    suspend fun setPackRepo(url: String?): String? = "The catalogue can't be changed here."
+
+    companion object {
+        /** Where added apps go unless the user picks another category. */
+        const val OTHER = "Other"
+    }
+
     object None : AppStoreOps {
         override val supported: Boolean = false
         override val state: StateFlow<StoreState> = MutableStateFlow(StoreState())
@@ -109,6 +130,12 @@ data class StoreState(
     val hasGitHubToken: Boolean = false,
     /** Icons the apps publish themselves (see AppIconFinder), by key, for apps not installed yet. */
     val icons: Map<String, String> = emptyMap(),
+    /** The Store of a computer: programs from their projects' releases, not Android apps. */
+    val desktop: Boolean = false,
+    /** Where a computer's Store puts programs. */
+    val folder: String? = null,
+    /** The repository the catalogue follows when it isn't the Obtainium Emulation Pack. */
+    val packRepo: String? = null,
 ) {
     fun app(key: String): StoreApp? = catalogue?.apps?.firstOrNull { it.key == key }
 
@@ -187,6 +214,8 @@ data class StoreApp(
     val color: Long?,
     /** What Fuse does with it once it is installed. */
     val inFuse: InFuse = InFuse.NOTHING,
+    /** The user added it by its address; it can be taken out again. */
+    val custom: Boolean = false,
 )
 
 /** What Fuse does with a Store app once it is installed. */

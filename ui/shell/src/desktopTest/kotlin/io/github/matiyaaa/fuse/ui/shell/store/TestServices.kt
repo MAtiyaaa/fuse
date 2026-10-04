@@ -59,6 +59,9 @@ internal class FakeServices(
     /** The Store's view of the system, when a test gives it one (Android has one; desktop doesn't). */
     override var packages: PackageBridge? = null
 
+    @Volatile var desktop: DesktopInstaller? = null
+    override val desktopApps: DesktopInstaller? get() = desktop
+
     override val http = HttpClient(MockEngine { request ->
         requestHosts += request.url.host
         val answer = web?.invoke(this, request)

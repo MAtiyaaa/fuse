@@ -127,7 +127,13 @@ internal fun jobShort(job: StoreJob): String = when (job) {
 }
 
 /** A job as a sentence, for the app's page. */
-internal fun jobLine(job: StoreJob, name: String): String = when (job) {
+internal fun jobLine(job: StoreJob, name: String, desktop: Boolean = false): String = when (job) {
+    is StoreJob.Installing -> if (desktop) "Putting $name in place." else if (job.waitingTurn) "Waiting for the install before it to finish." else "Confirm in Android's installer."
+    StoreJob.Uninstalling -> if (desktop) "Removing $name." else "Confirm in Android to remove $name."
+    else -> jobLineCommon(job, name)
+}
+
+private fun jobLineCommon(job: StoreJob, name: String): String = when (job) {
     StoreJob.Waiting -> "Queued. Two downloads run at a time."
     StoreJob.Resolving -> "Finding the newest release."
     is StoreJob.Downloading -> listOfNotNull(

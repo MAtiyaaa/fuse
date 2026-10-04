@@ -65,7 +65,9 @@ internal class DefaultFuseStore private constructor(
     override val storage = DefaultStorageOps(ctx, engine.drives, engine)
     override val settings = DefaultScopedSettingsOps(ctx) { reloadPrefs() }
     private val appStoreOps = ctx.services.packages?.let { DefaultAppStoreOps(ctx, it, prefsState) { t -> updatePrefs(t) } }
-    override val appStore: AppStoreOps = appStoreOps ?: AppStoreOps.None
+    /** A computer's Store, where Fuse can put programs in place. */
+    private val desktopStoreOps = if (appStoreOps == null) ctx.services.desktopApps?.let { DesktopAppStoreOps(ctx, it) { emulators.refresh() } } else null
+    override val appStore: AppStoreOps = appStoreOps ?: desktopStoreOps ?: AppStoreOps.None
     override val content = DefaultContentOps(ctx, emulators) { engine.drives.volumes.value }
     override val backup = DefaultBackupOps(ctx) { restore ->
         writeLock.withLock { restore().also { reloadLocked() } }
@@ -215,6 +217,7 @@ internal class DefaultFuseStore private constructor(
         engine.start()
         health.start()
         appStoreOps?.start()
+        desktopStoreOps?.start()
         ctx.scope.launch {
             for (next in writes) {
                 // A failed write must not stop later ones; retry once, then keep the in-memory value.
@@ -274,6 +277,7 @@ internal class DefaultFuseStore private constructor(
         achievements.load()
         cartridge.start()
         appStoreOps?.startAutomatic()
+        desktopStoreOps?.startAutomatic()
         if (data.sources.all().isNotEmpty()) engine.rescan(ScanScope.QUICK)
         achievements.refresh(force = false)
         data.cache.purgeExpired(ctx.now())

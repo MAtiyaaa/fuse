@@ -1,5 +1,6 @@
 package io.github.matiyaaa.fuse.ui.shell.addons
 
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -181,6 +182,7 @@ private fun StoreShelves(app: AppState, state: StoreState, active: Boolean, topP
                             ops.refresh()
                             ops.checkInstalled(force = true)
                         },
+                        TopButton("Add an app", FuseIcons.Plus) { app.addStoreApp() },
                     ),
                 ),
             )
@@ -234,6 +236,10 @@ private fun StoreShelves(app: AppState, state: StoreState, active: Boolean, topP
                     MenuAction("uninstall", "Uninstall", FuseIcons.Trash, destructive = true, onSelect = { app.closeOverlays(); ops.uninstall(a.key) })
                         .takeIf { a.key in state.installed && state.jobs[a.key]?.active != true },
                     MenuAction("source", "View source", FuseIcons.External, detail = a.sourceHost, onSelect = { app.closeOverlays(); app.platform.openUrl(a.sourceUrl) }),
+                    MenuAction("remove", "Take Out of the Store", FuseIcons.Minus, detail = "You added it; an installed copy stays", onSelect = {
+                        app.closeOverlays()
+                        app.scope.launch { ops.removeCustom(a.key) }
+                    }).takeIf { a.custom },
                 ),
             ),
         )
@@ -307,7 +313,11 @@ private fun StoreShelves(app: AppState, state: StoreState, active: Boolean, topP
             }
             item(key = "credit") {
                 FText(
-                    "Apps and their sources come from the Obtainium Emulation Pack (github.com/RJNY/Obtainium-Emulation-Pack). Fuse installs what each app's own developers publish.",
+                    when {
+                        state.desktop -> "Fuse fetches each program from its own project's releases, as its developers publish it, and puts it in ${state.folder ?: "your Applications folder"}. Nothing is repackaged."
+                        state.packRepo != null -> "Apps and their sources come from ${state.packRepo.removePrefix("https://")}, a catalogue in the Obtainium Emulation Pack's format. Fuse installs what each app's own developers publish."
+                        else -> "Apps and their sources come from the Obtainium Emulation Pack (github.com/RJNY/Obtainium-Emulation-Pack). Fuse installs what each app's own developers publish."
+                    },
                     Fuse.type.caption, color = c.textFaint, maxLines = 2,
                     modifier = Modifier.padding(horizontal = Space.gutter).widthIn(max = 880.dp),
                 )
@@ -340,6 +350,7 @@ internal fun searchApps(apps: List<StoreApp>, query: String): List<StoreApp> {
  * The Store's top: the pack it follows (edition and release), how fresh the catalogue is or why
  * it couldn't be refreshed, and the page's buttons.
  */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 private fun StoreHeader(state: StoreState, buttons: List<TopButton>, chosen: Int, compact: Boolean, onClick: (Int) -> Unit) {
     val c = Fuse.colors
@@ -347,21 +358,32 @@ private fun StoreHeader(state: StoreState, buttons: List<TopButton>, chosen: Int
     Column(Modifier.padding(horizontal = Space.gutter)) {
         // Where the catalogue comes from, in the theme's accent, then what it is.
         Row(verticalAlignment = Alignment.CenterVertically) {
-            FText("OBTAINIUM EMULATION PACK", Fuse.type.overline, color = c.accent, maxLines = 1)
+            FText(
+                when {
+                    state.desktop -> "FROM EACH PROJECT'S RELEASES"
+                    state.packRepo != null -> state.packRepo.substringAfter("github.com/").uppercase()
+                    else -> "OBTAINIUM EMULATION PACK"
+                },
+                Fuse.type.overline, color = c.accent, maxLines = 1,
+            )
             catalogue.packVersion?.let {
                 Spacer(Modifier.width(Space.s))
                 FText(it, Fuse.type.overline, color = c.textFaint, maxLines = 1)
             }
         }
         Spacer(Modifier.height(Space.xxs))
-        FText("Emulators and gaming apps", if (compact) Fuse.type.titleSmall else Fuse.type.title, maxLines = 1)
+        FText(if (state.desktop) "Emulators for this computer" else "Emulators and gaming apps", if (compact) Fuse.type.titleSmall else Fuse.type.title, maxLines = 1)
         Spacer(Modifier.height(if (compact) Space.s else Space.m))
         val offline = state.refreshProblem != null && !state.refreshing
-        Row(horizontalArrangement = Arrangement.spacedBy(Space.s), verticalAlignment = Alignment.CenterVertically) {
-            HeaderChip(
-                if (catalogue.variant == io.github.matiyaaa.fuse.model.StoreVariant.DUAL_SCREEN) FuseIcons.DualScreen else FuseIcons.Smartphone,
-                "${catalogue.variant.title()} edition",
-            )
+        androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(Space.s), verticalArrangement = Arrangement.spacedBy(Space.xs)) {
+            if (state.desktop) {
+                HeaderChip(FuseIcons.Monitor, "Builds for this computer")
+            } else {
+                HeaderChip(
+                    if (catalogue.variant == io.github.matiyaaa.fuse.model.StoreVariant.DUAL_SCREEN) FuseIcons.DualScreen else FuseIcons.Smartphone,
+                    "${catalogue.variant.title()} edition",
+                )
+            }
             HeaderChip(FuseIcons.Package, if (catalogue.apps.size == 1) "1 app" else "${catalogue.apps.size} apps")
             HeaderChip(
                 when {
@@ -378,7 +400,8 @@ private fun StoreHeader(state: StoreState, buttons: List<TopButton>, chosen: Int
             )
         }
         Spacer(Modifier.height(Space.m))
-        Row(horizontalArrangement = Arrangement.spacedBy(Space.s)) {
+        // The buttons wrap onto a second line rather than run off a narrow screen.
+        androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(Space.s), verticalArrangement = Arrangement.spacedBy(Space.s)) {
             buttons.forEachIndexed { i, b ->
                 FuseButton(
                     b.label, selected = chosen == i, onClick = { onClick(i) }, icon = b.icon,
