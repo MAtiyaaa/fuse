@@ -192,6 +192,8 @@ internal class FfmpegPlayback(
         av_dict_set(options, "reconnect_streamed", "1", 0)
         av_dict_set(options, "reconnect_delay_max", "4", 0)
         av_dict_set(options, "rw_timeout", "20000000", 0)
+        // The system's proxy, as browsers use it (FFmpeg honours no_proxy itself).
+        systemProxy()?.let { av_dict_set(options, "http_proxy", it, 0) }
         val opened = avformat_open_input(fmt, source.url, null, options)
         av_dict_free(options)
         if (opened < 0) {
@@ -631,6 +633,10 @@ internal class FfmpegPlayback(
             avsubtitle_free(sub)
         }
     }
+
+    private fun systemProxy(): String? =
+        listOf("https_proxy", "HTTPS_PROXY", "http_proxy", "HTTP_PROXY")
+            .firstNotNullOfOrNull { System.getenv(it)?.takeIf { v -> v.startsWith("http://") } }
 
     private fun thread(name: String, body: () -> Unit): Thread = Thread(body, name).apply {
         isDaemon = true

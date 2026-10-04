@@ -36,11 +36,15 @@ kotlin {
         getByName("desktopTest").dependencies {
             implementation(libs.compose.ui.test)
             implementation(compose.desktop.currentOs)
+            // The live Jellyfin check (LiveJellyfinCheck): only when its environment is set.
+            implementation(projects.core.jellyfin)
+            implementation(libs.ktor.client.cio)
         }
     }
 }
 
 // Renders of the player for looking at (PlayerRenders): -Pfuse.player.renders=<dir>.
+// The live Jellyfin check reads FUSE_JF_URL, FUSE_JF_USER and FUSE_JF_PASS from the environment.
 tasks.withType<Test>().configureEach {
     providers.gradleProperty("fuse.player.renders").orNull?.let { systemProperty("fuse.player.renders", it) }
     outputs.upToDateWhen { false }

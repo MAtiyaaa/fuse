@@ -26,6 +26,7 @@ include(
     ":core:integrations",
     ":core:data",
     ":core:playback",
+    ":core:jellyfin",
     ":ui:fuseline",
     ":ui:designsystem",
     ":ui:player",
