@@ -101,8 +101,12 @@ internal class AuditServices(
     override val packages: io.github.matiyaaa.fuse.ui.shell.store.PackageBridge? =
         if (host == Host.ANDROID) AuditPackages(File(base.cacheDir, "store")) else null
 
+    /** On a computer, the Store fetches programs; this one only pretends to put them in place. */
+    override val desktopApps: io.github.matiyaaa.fuse.ui.shell.store.DesktopInstaller? =
+        if (desktop) AuditDesktopInstaller(host, File(base.cacheDir, "store-desktop")) else null
+
     override val http: io.ktor.client.HttpClient =
-        if (host == Host.ANDROID) {
+        if (host == Host.ANDROID || desktop) {
             io.ktor.client.HttpClient(io.ktor.client.engine.mock.MockEngine { request ->
                 AuditStore.answer(this, request) ?: respondError(io.ktor.http.HttpStatusCode.NotFound)
             })
@@ -376,4 +380,43 @@ internal class AuditPhoneLink : io.github.matiyaaa.fuse.ui.shell.store.PhoneLink
             }
         }
     }
+}
+
+/** A computer's Store installer that writes nothing outside the audit's cache. */
+internal class AuditDesktopInstaller(override val host: Host, private val dir: File) : io.github.matiyaaa.fuse.ui.shell.store.DesktopInstaller {
+    override val arch: String = "x86_64"
+    override val folder: String = if (host == Host.WINDOWS) "C:/Users/you/Emulators" else "~/Applications"
+
+    override suspend fun newDownload(fileName: String): io.github.matiyaaa.fuse.ui.shell.store.DownloadSink? {
+        dir.mkdirs()
+        val file = File(dir, fileName)
+        val out = file.outputStream()
+        val digest = java.security.MessageDigest.getInstance("SHA-256")
+        return object : io.github.matiyaaa.fuse.ui.shell.store.DownloadSink {
+            override val path: String = file.absolutePath
+            override suspend fun write(bytes: ByteArray, count: Int) {
+                out.write(bytes, 0, count)
+                digest.update(bytes, 0, count)
+            }
+            override suspend fun finish(): String {
+                out.close()
+                return digest.digest().joinToString("") { "%02x".format(it) }
+            }
+            override suspend fun discard() {
+                out.close()
+                file.delete()
+            }
+        }
+    }
+
+    override fun freeBytes(): Long = 412L * 1_000_000_000
+
+    override suspend fun install(name: String, file: String, fileName: String, kind: io.github.matiyaaa.fuse.integrations.obtainium.DesktopAssetKind, previous: String?): String =
+        "$folder/$name"
+
+    override suspend fun remove(path: String): Boolean = true
+
+    override suspend fun exists(path: String): Boolean = false
+
+    override fun launch(path: String): Boolean = true
 }

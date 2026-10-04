@@ -142,4 +142,21 @@ internal fun AuditDriver.detailScreens() {
         shoot("standby, the clock dim")
         useLibrary()
     }
+
+    scenario("details", "store on a computer") {
+        show(windowsStore)
+        home()
+        // Windows has no Apps tab, so the Store's tab is found by name rather than by place.
+        repeat(6) { if (!hasText("Emulators for this computer")) tap(PadButton.R1) }
+        waitFor("Emulators for this computer")
+        settle(1_500)
+        shoot("the Store on Windows", 1_200)
+        tap(PadButton.DPAD_DOWN)
+        settle(900)
+        shoot("a shelf focused")
+        tap(PadButton.A)
+        settle(1_500)
+        shoot("a program's page")
+        tap(PadButton.B)
+    }
 }
