@@ -305,7 +305,7 @@ internal fun AuditDriver.jellyfinDualScreens() {
             // Hidden from Settings: dark, until two double taps.
             libraryStore.updatePrefs { it.copy(display = it.display.copy(secondScreenHidden = true)) }
             view = AuditView.Companion(libraryStore, platform, io.github.matiyaaa.fuse.model.DualScreenMode.LIBRARY_COMPANION)
-            shoot("hidden, saying how to show it again", 800)
+            waitFor("This screen is hidden. Double tap twice to show it")
             libraryStore.updatePrefs { it.copy(display = it.display.copy(secondScreenHidden = false)) }
             show(libraryStore)
         }

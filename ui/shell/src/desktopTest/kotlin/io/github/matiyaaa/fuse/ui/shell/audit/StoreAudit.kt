@@ -86,6 +86,18 @@ internal fun AuditDriver.addonsScreens() {
         tap(PadButton.DPAD_LEFT)
         waitFor("Your RomM library, on this device")
         shoot("Cartridge inside Addons, not installed")
+        // Held A lifts the tab; Right carries it past the Store, and the order is kept.
+        tap(PadButton.DPAD_UP)
+        hold(PadButton.A)
+        waitFor("Done")
+        shoot("a tab lifted to move")
+        tap(PadButton.DPAD_RIGHT)
+        settle(600)
+        shoot("the tab carried past the Store")
+        tap(PadButton.A)
+        settle(400)
+        check(store.prefs.value.addonsOrder.firstOrNull() == "STORE") { "The order wasn't kept: ${store.prefs.value.addonsOrder}" }
+        store.updatePrefs { it.copy(addonsOrder = emptyList()) }
     }
 
     scenario("addons", "store settings") {
