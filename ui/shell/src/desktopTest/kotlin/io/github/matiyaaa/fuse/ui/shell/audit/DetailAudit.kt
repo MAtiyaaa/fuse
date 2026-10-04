@@ -116,4 +116,30 @@ internal fun AuditDriver.detailScreens() {
         shoot("the shelf it goes on")
         tap(PadButton.B)
     }
+
+    scenario("details", "status on a cable") {
+        useLibrary()
+        val audit = platform as AuditPlatform
+        val before = audit.statusFlow.value
+        try {
+            home()
+            audit.statusFlow.value = before.copy(wifi = io.github.matiyaaa.fuse.model.ConnectionState.OFF, ethernet = true, charging = false, batteryPercent = 52)
+            settle(600)
+            audit.statusFlow.value = audit.statusFlow.value.copy(charging = true)
+            shoot("Ethernet and the battery just plugged in", 500)
+            settle(2_500)
+            shoot("the battery settled on charging")
+        } finally {
+            audit.statusFlow.value = before
+        }
+    }
+
+    scenario("details", "standby") {
+        view = AuditView.Piece { io.github.matiyaaa.fuse.ui.shell.app.StandbyScreen(clock24h = false) {} }
+        settle(400)
+        shoot("fading in")
+        settle(2_000)
+        shoot("standby, the clock dim")
+        useLibrary()
+    }
 }

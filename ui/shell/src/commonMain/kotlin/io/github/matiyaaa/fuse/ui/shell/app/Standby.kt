@@ -6,12 +6,10 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
@@ -24,6 +22,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.contentDescription
@@ -63,7 +62,7 @@ internal fun StandbyWatch(app: AppState, router: io.github.matiyaaa.fuse.ui.desi
  * Waking plays the startup animation when it is on, as though Fuse had just been switched on.
  */
 @Composable
-internal fun StandbyScreen(app: AppState, clock24h: Boolean, onWake: () -> Unit) {
+internal fun StandbyScreen(clock24h: Boolean, onWake: () -> Unit) {
     val router = LocalInputRouter.current
     val fade = remember { Animatable(0f) }
     LaunchedEffect(Unit) { fade.animateTo(1f, tween(FADE_MS, easing = LinearEasing)) }
@@ -88,7 +87,7 @@ internal fun StandbyScreen(app: AppState, clock24h: Boolean, onWake: () -> Unit)
         }
     }
     val time = rememberClockText(clock24h)
-    BoxWithConstraints(
+    Box(
         Modifier
             .fillMaxSize()
             .graphicsLayer { alpha = fade.value }
@@ -104,12 +103,20 @@ internal fun StandbyScreen(app: AppState, clock24h: Boolean, onWake: () -> Unit)
                 }
             },
     ) {
-        val blockW = 260.dp
-        val blockH = 120.dp
-        val x = (maxWidth - blockW) * spot.first
-        val y = (maxHeight - blockH) * spot.second
+        // The block takes the size its text needs (a 12-hour clock in a large size is wide on a
+        // phone) and sits at [spot] within whatever room is left around it.
         Column(
-            Modifier.offset(x, y).width(blockW).graphicsLayer { alpha = 0.55f * move.value },
+            Modifier
+                .layout { measurable, constraints ->
+                    val placeable = measurable.measure(constraints.copy(minWidth = 0, minHeight = 0))
+                    layout(constraints.maxWidth, constraints.maxHeight) {
+                        placeable.place(
+                            ((constraints.maxWidth - placeable.width).coerceAtLeast(0) * spot.first).toInt(),
+                            ((constraints.maxHeight - placeable.height).coerceAtLeast(0) * spot.second).toInt(),
+                        )
+                    }
+                }
+                .graphicsLayer { alpha = 0.55f * move.value },
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(Space.s),
         ) {

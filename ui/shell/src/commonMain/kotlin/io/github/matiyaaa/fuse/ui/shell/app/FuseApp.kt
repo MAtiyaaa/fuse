@@ -792,7 +792,7 @@ internal fun WallpaperLayer(w: io.github.matiyaaa.fuse.model.Wallpaper, modifier
 /** The standby screen; waking it plays the startup animation when that is on. */
 @Composable
 private fun StandbyHost(app: AppState, clock24h: Boolean, intro: Boolean) {
-    StandbyScreen(app, clock24h) {
+    StandbyScreen(clock24h) {
         app.standby = false
         if (intro) app.intro = true
     }

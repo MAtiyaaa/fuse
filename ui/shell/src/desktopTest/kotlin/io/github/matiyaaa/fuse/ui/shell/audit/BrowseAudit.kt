@@ -953,9 +953,7 @@ internal fun AuditDriver.cartridgeScreens(exhaustive: Boolean) {
         tap(PadButton.DPAD_RIGHT, 6)
         shoot("last action focused, the row scrolled")
         if (!exhaustive) return@scenario
-        // Sync, Consoles, Downloads, then Upload
-        tap(PadButton.DPAD_LEFT, 3)
-        tap(PadButton.A)
+        tapText("Upload", step = PadButton.DPAD_LEFT)
         waitFor("Upload a game to RomM")
         shoot("pick a system to upload from")
         tapText("Game Boy Advance")
