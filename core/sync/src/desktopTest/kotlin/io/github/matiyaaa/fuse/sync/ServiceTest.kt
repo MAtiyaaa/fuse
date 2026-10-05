@@ -32,10 +32,14 @@ class ServiceTest {
     }
 
     /** A device's library as Fuse Sync sees it: records by game, plus settings. */
-    private class Library(val games: MutableMap<String, GameRecord> = HashMap(), val settings: MutableMap<String, JsonPrimitive> = HashMap()) : ProfileDataPort {
+    private class Library(
+        val games: MutableMap<String, GameRecord> = HashMap(),
+        val settings: MutableMap<String, JsonPrimitive> = HashMap(),
+        val collections: MutableMap<String, CollectionRecord> = HashMap(),
+    ) : ProfileDataPort {
         var writes = 0
         override suspend fun read(device: String, clock: HlcClock): ProfileMeta = synchronized(this) {
-            ProfileMeta(games = games.toMap(), settings = settings.mapValues { Lww(it.value as kotlinx.serialization.json.JsonElement, Hlc.ZERO) })
+            ProfileMeta(games = games.toMap(), collections = collections.toMap(), settings = settings.mapValues { Lww(it.value as kotlinx.serialization.json.JsonElement, Hlc.ZERO) })
         }
 
         /** The games as they are now (the service writes them from its own thread). */
@@ -50,6 +54,8 @@ class ServiceTest {
             }
             settings.clear()
             meta.settings.forEach { (k, v) -> settings[k] = v.value as JsonPrimitive }
+            collections.clear()
+            meta.collections.filterValues { it.deleted?.value != true }.forEach { (k, c) -> collections[k] = c }
         }
         override suspend fun keyOf(gameId: Long): GameKey? = null
 
@@ -360,6 +366,30 @@ class ServiceTest {
         assertEquals("sunset", photos.readText())
         assertEquals("keep", notes.readText())
         assertTrue(!File(elsewhere, "host.json").exists())
+        pc.stop()
+    }
+
+    @Test
+    fun recordsTurnedOffOnOneDeviceNeverDeleteTheProfilesCollections(): Unit = runBlocking {
+        val pcLib = Library()
+        val deckLib = Library(collections = hashMapOf("c1" to CollectionRecord("c1", Lww("RPGs", Hlc.ZERO), members = mapOf(ct.id to Lww(true, Hlc.ZERO)))))
+        val (pc, _) = service("Gaming PC", pcLib)
+        val (deck, deckSettings) = service("Steam Deck", deckLib)
+        val code = assertNotNull(pc.hostHere("Gaming PC", installService = false).getOrThrow().pairingCode)
+        deck.connect("127.0.0.1:$port", code).getOrThrow()
+        val mo = pc.createProfile("Mo", "fox", null).getOrThrow()
+        // The Deck's collection becomes Mo's, and reaches the PC.
+        deck.switchTo(mo.id).getOrThrow()
+        pc.switchTo(mo.id).getOrThrow()
+        assertEquals("RPGs", pcLib.collections["c1"]?.name?.value)
+        // On the Deck, records stop syncing: its library then reports no collections at all.
+        deckSettings.update { it.copy(sync = it.sync.copy(records = false)) }
+        kotlinx.coroutines.delay(500)
+        synchronized(deckLib) { deckLib.collections.clear() }
+        deck.syncNow().getOrThrow()
+        pc.syncNow().getOrThrow()
+        // Nothing of that reached the profile: the collection is still everyone's.
+        assertEquals("RPGs", pcLib.collections["c1"]?.name?.value)
         pc.stop()
     }
 

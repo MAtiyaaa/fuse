@@ -85,6 +85,8 @@ class JvmSyncService(
 
     init {
         scope.launch(Dispatchers.IO) { runCatching { start() } }
+        // What syncs (saves, states, records, settings, the folders chosen) follows Settings as it changes.
+        scope.launch(Dispatchers.IO) { runCatching { settings.settings.collect { cached = it.sync } } }
     }
 
     private suspend fun config(): SyncSettings = settings.current().sync.also { cached = it }
@@ -323,7 +325,16 @@ class JvmSyncService(
     private suspend fun captureChanges(profile: String) {
         val d = device ?: return
         val local = data.read(d.deviceId, hlc)
-        val changes = ProfileDiff.changes(d.meta(profile), local, d.deviceId, hlc)
+        val c = cached
+        // Only what this device syncs: with records off it reads none, which must never read as
+        // every collection deleted (or settings, with settings off).
+        val changes = ProfileDiff.changes(d.meta(profile), local, d.deviceId, hlc).let { all ->
+            all.copy(
+                games = if (c.records) all.games else emptyMap(),
+                collections = if (c.records) all.collections else emptyMap(),
+                settings = if (c.settings) all.settings else emptyMap(),
+            )
+        }
         if (!ProfileDiff.isEmpty(changes)) d.changeMeta(profile) { pending, _ -> pending.merge(changes) }
     }
 
