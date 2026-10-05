@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  A Jellyfin server at home is almost always plain http on its own address (192.168.1.20:8096),
+  and so are other things people run on their own network. Android refuses unencrypted traffic
+  unless the app allows it, which made every home address fail. Fuse allows it, like Jellyfin's
+  own app does; addresses on the internet are still tried over https first.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+            <!-- A home server's own certificate, installed by its owner on the device. -->
+            <certificates src="user" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

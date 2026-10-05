@@ -111,6 +111,7 @@ data class MediaItem(
         artwork = if (type == MediaType.EPISODE) thumb ?: poster else poster,
         backdrop = backdrop,
         logo = logo,
+        poster = if (type == MediaType.EPISODE || type == MediaType.SEASON) seriesPoster ?: poster else poster,
         resumeMs = resumeMs,
         seriesId = seriesId,
         seasonId = seasonId,

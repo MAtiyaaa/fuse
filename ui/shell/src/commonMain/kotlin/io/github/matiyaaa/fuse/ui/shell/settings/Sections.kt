@@ -1234,6 +1234,11 @@ fun displayRows(app: AppState): List<MenuAction> {
                     },
                 ))
             }
+            add(toggleRow(
+                "hide", "Hide the second screen", FuseIcons.EyeOff, d.secondScreenHidden,
+                if (d.flipped) "Not while the menus are on it" else "Dark, showing nothing, until you show it again here, in the quick menu, or with two double taps on it",
+                enabled = !d.flipped,
+            ) { v -> app.store.updatePrefs { it.copy(display = it.display.copy(secondScreenHidden = v)) } })
             add(toggleRow("bg", "Same background as the main screen", FuseIcons.Image, d.companionFollowsBackground, "Its scene or picture behind what the second screen shows") { v -> app.store.updatePrefs { it.copy(display = it.display.copy(companionFollowsBackground = v)) } })
             add(toggleRow("perf", "Show performance on the second screen", FuseIcons.ChartLine, d.companionShowsPerformance, "Only values the system really reports; nothing is estimated") { v -> app.store.updatePrefs { it.copy(display = it.display.copy(companionShowsPerformance = v)) } })
             add(toggleRow("touch", "Touch controls on the second screen", FuseIcons.Hand, d.companionTouchControls) { v -> app.store.updatePrefs { it.copy(display = it.display.copy(companionTouchControls = v)) } })
@@ -1304,15 +1309,13 @@ fun networkRows(app: AppState): List<MenuAction> = buildList {
     add(infoRow("where", "What Fuse connects to", detail = "Only services you set up: RetroAchievements, SteamGridDB, IGDB, TheGamesDB, ScreenScraper, libretro thumbnails, GitHub to check for updates, and rpcs3.net when you ask how a PS3 game runs. Your library works fully offline", icon = FuseIcons.Globe))
 }
 
-/** The services Fuse signs in to or pairs with: RetroAchievements, Cartridge where it runs, and phones. */
+/** The services Fuse signs in to or pairs with: RetroAchievements and phones. Cartridge is in Addons. */
 @Composable
 fun accountsRows(app: AppState): List<MenuAction> {
     val achievements = achievementRows(app)
-    val cartridge = if (app.platform.features.cartridge) cartridgeRows(app) else emptyList()
     val phone = phoneLinkRows(app)
     return buildList {
         under("RetroAchievements", "ra", achievements)
-        under("Cartridge", "cartridge", cartridge)
         under("Phone Link", "phone", phone)
     }
 }
@@ -1440,7 +1443,6 @@ fun aboutRows(app: AppState): List<MenuAction> = buildList {
     val updates = updateRows(app).filter { it.id != "version" }
     val privacy = privacyRows(app)
     val network = networkRows(app)
-    app.platform.lastCrashReport()?.let { report -> add(crashRow(app, report)) }
     add(MenuAction(
         "fuse", "Fuse ${app.store.updates.currentVersion}", FuseIcons.Info,
         detail = "A console-style home for your games. Free and open source (GPL-3.0-or-later)",
@@ -1521,6 +1523,8 @@ fun aboutRows(app: AppState): List<MenuAction> = buildList {
             }))
         }
     }
+    // The last crash, if there was one, at the very end: worth finding, never in the way.
+    app.platform.lastCrashReport()?.let { report -> labelled("Last crash") { add(crashRow(app, report)) } }
 }
 
 @Composable

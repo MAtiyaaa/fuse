@@ -203,6 +203,13 @@ internal fun AuditDriver.flippedMenus() {
         shoot("Systems")
         show(libraryStore)
     }
+    scenario("flipped", "channels below") {
+        useLibrary { it.copy(home = HomeLayoutConfig(mode = HomeMode.CHANNELS)) }
+        show(libraryStore, twoScreens, flipped = true)
+        settle(2_000)
+        shoot("Channels on the lower screen, sized to it", 1_500)
+        show(libraryStore)
+    }
 }
 
 /** Flipped: the screen above, showing what the menus below have chosen. */

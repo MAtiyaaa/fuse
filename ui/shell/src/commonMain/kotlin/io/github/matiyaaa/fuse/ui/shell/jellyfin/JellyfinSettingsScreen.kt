@@ -259,7 +259,7 @@ private fun jellyfinRows(
         section = server,
         onSelect = {
             app.textInput = TextInputSpec("Outside address", j.remoteAddress, "https://jellyfin.example.com", capitalize = false) { v ->
-                set { it.copy(remoteAddress = v.trim()) }
+                saveAndTest(app, service, page, "test.remote", v) { a -> set { it.copy(remoteAddress = a) } }
             }
         },
     ))
@@ -365,9 +365,17 @@ private fun jellyfinRows(
     // Second screen --------------------------------------------------------------------------------
     if (app.platform.features.secondScreen || app.hasTwoScreens) {
         val second = "Second screen"
+        add(app.choiceRow("c.where", "Films play on", FuseIcons.PanelTop, j.playOn,
+            listOf("MAIN" to "The main screen", "SECOND" to "The second screen"),
+            detail = "The other screen is its remote, and the menus stay free to browse. Swap them while it plays",
+            optionDetail = {
+                if (it == "SECOND") "The touch screen below: with the menus below, as on a phone; otherwise the main screen keeps browsing"
+                else "The big screen above, with the touch screen as its remote"
+            },
+        ) { v -> set { it.copy(playOn = v) } }.copy(section = second))
         add(app.choiceRow("c.player", "While playing", FuseIcons.DualScreen, j.playerCompanion,
             listOf("REMOTE" to "Controls and art", "OFF" to "Nothing"),
-            detail = "The other screen becomes a remote: art, time, and buttons to pause, skip and change tracks") { v -> set { it.copy(playerCompanion = v) } }.copy(section = second))
+            detail = "The screen without the picture becomes a remote: art, time, and buttons to pause, skip and change tracks") { v -> set { it.copy(playerCompanion = v) } }.copy(section = second))
         add(app.choiceRow("c.browse", "While browsing", FuseIcons.MonitorPlay, j.browsingCompanion,
             listOf("DETAILS" to "Art and details", "MINIMAL" to "Art only", "OFF" to "Nothing"),
             detail = "What the other screen shows about the film or show you're on") { v -> set { it.copy(browsingCompanion = v) } }.copy(section = second))
@@ -392,7 +400,9 @@ private fun chooseHomeAddress(app: AppState, service: JellyfinService, page: Jel
                 })
             } + MenuAction("type", "Type an address", FuseIcons.Keyboard, onSelect = {
                 app.choice = null
-                app.textInput = TextInputSpec("Home address", j.localAddress, "192.168.1.20:8096", capitalize = false) { v -> set { it.copy(localAddress = v.trim()) } }
+                app.textInput = TextInputSpec("Home address", j.localAddress, "192.168.1.20:8096", capitalize = false) { v ->
+                    saveAndTest(app, service, page, "test.local", v) { a -> set { it.copy(localAddress = a) } }
+                }
             }) + listOfNotNull(
                 MenuAction("clear", "Clear the home address", FuseIcons.Eraser, onSelect = {
                     app.choice = null
@@ -400,6 +410,29 @@ private fun chooseHomeAddress(app: AppState, service: JellyfinService, page: Jel
                 }).takeIf { j.localAddress.isNotBlank() },
             ),
         )
+    }
+}
+
+/**
+ * Keeps a typed address and tests it straight away. When one way of reading it answers, that exact
+ * address (scheme, port and path) is what's kept, so connecting later doesn't guess again.
+ */
+private fun saveAndTest(app: AppState, service: JellyfinService, page: JellyfinSettingsState, key: String, typed: String, keep: (String) -> Unit) {
+    val address = typed.trim()
+    keep(address)
+    if (address.isEmpty()) {
+        page.tests.remove(key)
+        return
+    }
+    page.tests[key] = AddressTest(running = true, text = "Asking $address")
+    app.scope.launch {
+        val r = service.test(address)
+        r.onSuccess { (base, _) -> if (base != address) keep(base) }
+        page.tests[key] = r.fold(
+            onSuccess = { (base, info) -> AddressTest(false, true, listOfNotNull(info.name, info.version?.let { "Jellyfin $it" }, base).joinToString("  ·  ")) },
+            onFailure = { AddressTest(false, false, it.message ?: "No answer") },
+        )
+        r.onFailure { app.toasts.show("Nothing answered at $address. ${it.message ?: ""}".trim()) }
     }
 }
 

@@ -309,6 +309,8 @@ class JellyfinClient(private val http: HttpClient, val device: DeviceInfo) {
             "certificate" in m || "ssl" in m || "tls" in m || "handshake" in m -> "The server's certificate isn't trusted. Try the address with http:// on your own network."
             "unknownhost" in m || "unresolved" in m || "nodename" in m || "no address" in m -> "That address can't be found."
             "refused" in m -> "Nothing answers at that address. Check the port."
+            "cleartext" in m -> "This device wouldn't connect without encryption. Update Fuse, or use the https address."
+            "unreachable" in m || "no route" in m -> "That address isn't on this network."
             else -> "The server can't be reached."
         }
     }
@@ -321,18 +323,73 @@ class JellyfinClient(private val http: HttpClient, val device: DeviceInfo) {
         internal const val IMAGE_TYPES = "Primary,Backdrop,Logo,Thumb"
 
         /**
-         * What a typed address means: a scheme added where missing (https first; a local name or
-         * address gets http and the usual port), the trailing slash dropped, a base path kept.
+         * Every way a typed address could mean a server, most likely first. People type addresses
+         * every which way, so this forgives: spaces, a phone's comma for a dot, full-width
+         * characters, a missing or half-typed scheme (`http//`, `http:/`), the browser's own
+         * `/web/index.html#...` tail, a trailing slash. A base path is kept. A name or address on
+         * the home network is tried over http first, on Jellyfin's usual port (8096) when none is
+         * given, then https (8920); anything else is tried over https first.
          */
         fun candidates(input: String): List<String> {
-            val t = input.trim().trimEnd('/')
+            var t = buildString {
+                for (c in input.trim()) append(if (c in '\uFF01'..'\uFF5E') (c - 0xFEE0) else c)
+            }.replace('\u3002', '.').replace('\\', '/').filterNot { it.isWhitespace() }
             if (t.isEmpty()) return emptyList()
-            if (t.startsWith("http://", ignoreCase = true) || t.startsWith("https://", ignoreCase = true)) return listOf(t)
-            val host = t.substringBefore('/').substringBefore(':')
-            val hasPort = t.substringBefore('/').contains(':')
-            val local = host.endsWith(".local") || host.matches(Regex("""\d+\.\d+\.\d+\.\d+""")) || !host.contains('.')
-            val withPort = if (hasPort || !local) t else t.replaceFirst(host, "$host:8096")
-            return if (local) listOf("http://$withPort", "https://$t") else listOf("https://$t", "http://$t")
+            // The scheme, however it was typed.
+            val scheme = Regex("""^(https?)[:/]+""", RegexOption.IGNORE_CASE).find(t)?.let { m ->
+                t = t.substring(m.range.last + 1)
+                m.groupValues[1].lowercase()
+            }
+            // What a browser shows after the server: its web app, a page in it, a query.
+            t = t.substringBefore('#').substringBefore('?')
+            t = t.replace(Regex("""/web(/.*)?$""", RegexOption.IGNORE_CASE), "").trimEnd('/')
+            val authority = t.substringBefore('/')
+            val path = t.removePrefix(authority).trimEnd('/')
+            // "192,168,1,5" from a phone keyboard, and "192.168.1.5." with a stray dot.
+            val hostPort = if (Regex("""^[\d,.]+(:\d+)?$""").matches(authority)) authority.replace(',', '.') else authority
+            val bracketed = hostPort.startsWith("[")
+            val host = (if (bracketed) hostPort.substringBefore(']') + "]" else hostPort.substringBefore(':')).removeSuffix(".")
+            if (host.isEmpty() || host == "[]") return emptyList()
+            val port = (if (bracketed) hostPort.substringAfter("]", "").removePrefix(":") else hostPort.substringAfter(':', ""))
+                .takeIf { it.isNotEmpty() && it.all(Char::isDigit) }
+            val home = isHomeHost(host)
+            val out = LinkedHashSet<String>()
+            fun add(s: String, p: String?) = out.add("$s://$host${p?.let { ":$it" } ?: ""}$path")
+            when {
+                port != null -> {
+                    val first = scheme ?: if (port == "8920" || port == "443") "https" else if (home || port == "8096" || port == "80") "http" else "https"
+                    add(first, port)
+                    if (scheme == null) add(if (first == "https") "http" else "https", port)
+                }
+                scheme != null -> {
+                    add(scheme, null)
+                    if (home) add(scheme, if (scheme == "http") "8096" else "8920")
+                }
+                home -> {
+                    add("http", "8096")
+                    add("https", "8920")
+                    add("http", null)
+                    add("https", null)
+                }
+                else -> {
+                    add("https", null)
+                    add("http", null)
+                    add("http", "8096")
+                }
+            }
+            return out.toList()
+        }
+
+        /** A name or address only the home network knows: private ranges, `.local`, a bare name. */
+        internal fun isHomeHost(host: String): Boolean {
+            val h = host.lowercase().removeSurrounding("[", "]")
+            val ip = h.split('.').takeIf { it.size == 4 }?.map { it.toIntOrNull() ?: return false }
+            if (ip != null) {
+                val (a, b) = ip
+                return a == 10 || a == 127 || (a == 192 && b == 168) || (a == 172 && b in 16..31) || (a == 169 && b == 254) || (a == 100 && b in 64..127)
+            }
+            if (':' in h) return h.startsWith("fe80") || h.startsWith("fd") || h.startsWith("fc") || h == "::1"
+            return '.' !in h || h.endsWith(".local") || h.endsWith(".lan") || h.endsWith(".home") || h.endsWith(".internal") || h.endsWith(".home.arpa") || h == "localhost"
         }
     }
 }

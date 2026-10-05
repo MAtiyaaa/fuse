@@ -31,6 +31,8 @@ data class PlayItem(
     val artwork: Any? = null,
     val backdrop: Any? = null,
     val logo: Any? = null,
+    /** A tall poster: the film's, or for an episode its show's (where [artwork] is the episode's still). */
+    val poster: Any? = null,
     /** Where it was left last time, to offer resuming. */
     val resumeMs: Long = 0,
     /** For an episode: its series and season, so the queue can follow the show. */

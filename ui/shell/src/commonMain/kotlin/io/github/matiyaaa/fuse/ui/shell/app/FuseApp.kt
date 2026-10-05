@@ -137,9 +137,14 @@ fun FuseApp(
     startupIntro: Boolean = false,
     /** The menus are on the lower screen and [ShowcaseApp] shows the chosen game on the one above. */
     showcaseElsewhere: Boolean = false,
+    /**
+     * Keeps where the menus are ([KeptPlace]) while Fuse runs, so a window made again (the menus
+     * moved to the other screen, the device turned) opens on the page it was on. The apps do.
+     */
+    keepPlace: Boolean = false,
 ) {
     CompositionLocalProvider(LocalShowcaseElsewhere provides showcaseElsewhere) {
-        FuseAppContent(store, platform, router, phoneLink, safeMode, onSettled, startupIntro)
+        FuseAppContent(store, platform, router, phoneLink, safeMode, onSettled, startupIntro, keepPlace)
     }
 }
 
@@ -152,6 +157,7 @@ private fun FuseAppContent(
     safeMode: SafeMode?,
     onSettled: () -> Unit,
     startupIntro: Boolean,
+    keepPlace: Boolean,
 ) {
     val base = rememberCoroutineScope()
     val stored by store.prefs.collectAsState()
@@ -163,12 +169,16 @@ private fun FuseAppContent(
                 state.toasts.show("Something went wrong (${t::class.simpleName ?: "error"}). Fuse kept running.", ToastKind.ERROR)
             },
         )
-        state = AppState(store, platform, scope, if (stored.onboardingDone) Route.Root(Destination.HOME) else Route.Onboarding, phoneLink)
+        val start = if (stored.onboardingDone) Route.Root(Destination.HOME) else Route.Onboarding
+        val kept = if (keepPlace) KeptPlaces.current ?: KeptPlace(start).also { KeptPlaces.current = it } else KeptPlace(start)
+        state = AppState(store, platform, scope, start, phoneLink, kept)
         state.safeMode = safeMode
         state
     }
     // Safe mode draws with Fuse's own look and no effects; what is saved never changes.
     val prefs = if (app.safeMode != null) stored.inSafeMode() else stored
+    app.menusOnSecondScreen = LocalShowcaseElsewhere.current
+    PlayerScreens(app, prefs)
     LaunchedEffect(Unit) {
         // The startup animation, once per start of Fuse (a window made again doesn't replay it).
         // The very first start opens setup with its own, longer opening instead.
@@ -555,6 +565,9 @@ private fun RootPages(app: AppState, current: Route, direction: NavDirection, pl
             starting = false
         }
     }
+    // Remember where you were, off: a tab left behind is let go once it has slid away, so it opens
+    // at its start next time instead of as it was left.
+    if (app.navigator.forgetsTabs) kept.retainAll { it == shownRoot || it == leaving }
     LaunchedEffect(shownRoot) {
         if (!starting) return@LaunchedEffect
         incoming.snapTo(0f)
@@ -821,7 +834,8 @@ private fun rememberTileBorders(store: FuseStore): TileBorders {
 }
 
 /**
- * The menu music follows its settings and steps aside while a game starts or runs. First-time setup
+ * The menu music follows its settings and steps aside while a game starts or runs, and while
+ * Fuse Player plays. First-time setup
  * plays its own song and crossfades into the menu song when it finishes.
  *
  * Everything is handed to the player as one [MusicState] ([MenuMusicPlan]), and handed again whenever
@@ -852,7 +866,9 @@ private fun MenuMusic(app: AppState, player: MenuMusicPlayer?) {
     LaunchedEffect(Unit) { for (path in ended) if (app.store.prefs.value.music.shuffle) shuffleOn() }
     val track = MenuMusicPlan.track(music, safeMode = app.safeMode != null, onboarding = app.navigator.current == Route.Onboarding, shuffled = shuffled)
     // The startup animation has its own sound; the music waits until it has opened out.
-    val quiet = app.launching != null || home.playtime.currentGame != null || app.intro || app.standby
+    // Fuse Player playing a film or a song (on either screen) has the sound to itself.
+    val quiet = app.launching != null || home.playtime.currentGame != null || app.intro || app.standby ||
+        app.playerOpen || mediaPlaying()
     // The previous song keeps playing until the next one is ready, so the player can crossfade. The
     // file is looked up again whenever music comes back from a game: a bundled song's unpacked copy
     // lives in the cache, which the system may have cleared meanwhile.
@@ -867,6 +883,33 @@ private fun MenuMusic(app: AppState, player: MenuMusicPlayer?) {
     }
     val state = MenuMusicPlan.state(song, music, quiet)
     LaunchedEffect(state) { player.apply(state) }
+}
+
+/** Fuse Player has something playing, on either screen. */
+internal fun mediaPlaying(): Boolean =
+    io.github.matiyaaa.fuse.ui.player.FusePlayer.available && io.github.matiyaaa.fuse.ui.player.FusePlayer.session.item != null
+
+/**
+ * Keeps track of where Fuse Player's picture can go: another screen is there when the menus are on
+ * the second screen (the showcase is above) or a companion shows on it. Without one, the picture
+ * stays with the menus; and when the picture comes back to the menus' screen, the player opens.
+ */
+@Composable
+private fun PlayerScreens(app: AppState, prefs: io.github.matiyaaa.fuse.ui.shell.store.UiPrefs) {
+    if (!io.github.matiyaaa.fuse.ui.player.FusePlayer.available) return
+    val d = prefs.display
+    val companion = app.platform.features.secondScreen && !d.secondScreenHidden &&
+        (d.mode == io.github.matiyaaa.fuse.model.DualScreenMode.LIBRARY_COMPANION || d.mode == io.github.matiyaaa.fuse.model.DualScreenMode.GAME_COMPANION)
+    val other = app.menusOnSecondScreen || companion
+    val placement = io.github.matiyaaa.fuse.ui.player.PlayerPlacement
+    LaunchedEffect(other) {
+        placement.canSwap = other
+        if (!other) placement.withMenus = true
+    }
+    LaunchedEffect(app) {
+        androidx.compose.runtime.snapshotFlow { placement.withMenus && io.github.matiyaaa.fuse.ui.player.FusePlayer.session.item != null }
+            .collect { if (it) app.playerOpen = true }
+    }
 }
 
 /** Says once when a fill that ran for more than one game finishes, unless its Settings page is open. */
@@ -901,7 +944,12 @@ private fun hudActivities(app: AppState): List<HudActivity> {
     val fill by app.store.media.fillProgress.collectAsState()
     val shop by app.store.appStore.state.collectAsState()
     val recordingTime = rememberRecordingTime(app.capture)
+    val playing = if (io.github.matiyaaa.fuse.ui.player.FusePlayer.available) io.github.matiyaaa.fuse.ui.player.FusePlayer.session.item else null
     return buildList {
+        // A film playing on the other screen while these menus browse: a press brings its remote back.
+        if (playing != null && !app.playerOpen) {
+            add(HudActivity("playing", FuseIcons.MonitorPlay, "Playing ${playing.title}. Select for its controls", steady = true) { app.playerOpen = true })
+        }
         // Safe mode stays in view, calmly, with its way out a press away.
         if (app.safeMode != null) add(HudActivity("safe", FuseIcons.LifeBuoy, "Safe mode. Select for what it means and how to leave it", steady = true) { app.showSafeMode() })
         // Only something that keeps Fuse from working claims a place in the top line.

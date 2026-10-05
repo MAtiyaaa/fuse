@@ -7,12 +7,18 @@ Settings, Addons, Jellyfin.
 
 ## Setting up
 
-Settings, Addons, Jellyfin, then Server and playback:
+Settings, Addons, Jellyfin (a group beside the Store and Cartridge), then Server and playback:
 
 1. **Connection:** Automatic (home when it answers, outside otherwise, and back home when it can,
    never in the middle of something playing), Home only, or Outside only.
 2. **Home address:** Fuse looks for servers on the network (Jellyfin's discovery on UDP 7359) and
-   offers what answers; or type one, like `192.168.1.20:8096`.
+   offers what answers, at the address the answer came from (a server in Docker reports its
+   container's address, which nothing else reaches); or type one, like `192.168.1.20:8096`.
+   However it is typed, Fuse tries what it could mean: spaces and a phone's comma for a dot are
+   forgiven, a missing or half-typed `http://` is added, the browser's `/web/index.html#...`
+   is dropped, and a home address without a port tries Jellyfin's own (8096 over http, 8920 over
+   https). It is tested straight away, and the address that answered is what is kept. Android
+   allows plain http for this (a network security config), as home servers rarely have https.
 3. **Outside address:** the server's web address, with its path if it has one
    (`https://media.example.com/jellyfin`).
 4. **Test** each address: the server's name and version, or why it didn't answer.
@@ -50,6 +56,11 @@ the route in use. The server answers with the best it can do: Direct Play, Direc
   again only when that differs from its own choice, so a subtitle it must draw in is prepared.
 - **Next episode** plays after a countdown when turned on.
 - Resume points and watched marks are reported back as you play.
+- **Two screens:** Films play on the main screen or the second screen (Settings, Jellyfin). The
+  screen without the picture is its remote; the menus stay free to browse, and Play here swaps the
+  picture between screens while it plays. With the menus below, the second screen is the touch
+  screen, and the screen above shows what is playing. See [Fuse Player](player.md).
+- Fuse's menu music stops while anything plays.
 
 ## Offline
 

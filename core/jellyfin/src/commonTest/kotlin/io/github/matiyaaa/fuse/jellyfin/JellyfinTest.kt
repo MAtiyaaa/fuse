@@ -259,10 +259,30 @@ class JellyfinTest {
 
     @Test
     fun typedAddressesBecomeUrls() {
-        assertEquals(listOf("https://media.example.com", "http://media.example.com"), JellyfinClient.candidates("media.example.com/"))
-        assertEquals(listOf("http://192.168.1.5:8096", "https://192.168.1.5"), JellyfinClient.candidates("192.168.1.5"))
+        assertEquals(listOf("https://media.example.com", "http://media.example.com", "http://media.example.com:8096"), JellyfinClient.candidates("media.example.com/"))
+        assertEquals("http://192.168.1.5:8096", JellyfinClient.candidates("192.168.1.5").first())
         assertEquals(listOf("http://nas:8920/jf"), JellyfinClient.candidates("http://nas:8920/jf/"))
         assertNotNull(JellyfinClient.candidates("nas.local").firstOrNull { it == "http://nas.local:8096" })
+    }
+
+    @Test
+    fun aHomeAddressIsFoundHoweverItIsTyped() {
+        val home = "http://192.168.1.5:8096"
+        for (typed in listOf(
+            "192.168.1.5", "192.168.1.5:8096", " 192.168.1.5 : 8096 ", "http://192.168.1.5:8096/",
+            "HTTP://192.168.1.5:8096", "http//192.168.1.5:8096", "http:/192.168.1.5:8096", "192,168,1,5:8096",
+            "http://192.168.1.5:8096/web/index.html#!/home.html", "192.168.1.5:8096/web/", "http://192.168.1.5",
+            "\uFF11\uFF19\uFF12.168.1.5", "192.168.1.5.",
+        )) {
+            assertTrue(home in JellyfinClient.candidates(typed), "$typed gave ${JellyfinClient.candidates(typed)}")
+        }
+        assertEquals("http://192.168.1.5:8096", JellyfinClient.candidates("192.168.1.5:8096").first())
+        assertEquals("https://192.168.1.5:8920", JellyfinClient.candidates("192.168.1.5:8920").first())
+        assertEquals("http://jellyfin.lan:8096", JellyfinClient.candidates("jellyfin.lan").first())
+        assertEquals("http://10.0.0.4:8096/jellyfin", JellyfinClient.candidates("10.0.0.4/jellyfin/web/").first())
+        assertEquals("http://[fd00::5]:8096", JellyfinClient.candidates("[fd00::5]:8096").first())
+        assertEquals("https://httpserver.example.com", JellyfinClient.candidates("httpserver.example.com").first())
+        assertTrue(JellyfinClient.candidates("   ").isEmpty())
     }
 
     @Test

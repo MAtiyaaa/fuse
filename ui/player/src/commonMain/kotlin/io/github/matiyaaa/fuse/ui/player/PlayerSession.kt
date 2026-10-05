@@ -444,5 +444,23 @@ object FusePlayer {
     }
 }
 
+/**
+ * Which screen shows the picture on a device with two: the one with Fuse's menus ([withMenus]),
+ * or the other one, while the menus' screen is the remote and stays free to browse. Chosen when
+ * playback starts (Settings, Jellyfin, Films play on) and swapped from either screen while it plays.
+ */
+object PlayerPlacement {
+    /** The picture is on the screen with the menus (as on a device with one screen). */
+    var withMenus by androidx.compose.runtime.mutableStateOf(true)
+
+    /** There is another screen the picture can go to. */
+    var canSwap by androidx.compose.runtime.mutableStateOf(false)
+
+    /** Puts the picture on the other screen. */
+    fun swap() {
+        if (canSwap || !withMenus) withMenus = !withMenus
+    }
+}
+
 /** How music repeats: not at all, the whole queue, or the one song. */
 enum class RepeatMode { OFF, ALL, ONE }

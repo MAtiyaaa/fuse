@@ -111,7 +111,9 @@ fun Artwork(
     val shown by remember(alpha) { derivedStateOf { alpha.value >= 1f } }
     // Only art that fills its slot gets a placeholder: never logos, tinted marks or overlays.
     val placeholder = loading && fadeIn && contentScale == ContentScale.Crop && !backdrop && tint == null
-    LaunchedEffect(success != null || held != null, fromMemory) {
+    // Keyed on [alpha] too: a new picture ready at once (from memory) must still be shown, though
+    // nothing else about the load changed.
+    LaunchedEffect(alpha, success != null || held != null, fromMemory) {
         when {
             success == null && held == null -> alpha.snapTo(0f)
             !fadeIn || fromMemory -> alpha.snapTo(1f)

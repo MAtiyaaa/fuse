@@ -136,12 +136,8 @@ val settingsSections: List<SettingsSection> = listOf(
     SettingsSection("inputs", "Controls", FuseIcons.Gamepad, "Buttons, mapping, repeat and sticks", ::inputRows, group = DEVICE),
     SettingsSection("displays", "Display", FuseIcons.Monitor, "Screens, rotation, performance", ::displayAndPerformanceRows, group = DEVICE),
     SettingsSection("sound", "Sound", FuseIcons.Volume, "Menu music and interface sounds", ::soundRows, group = DEVICE),
-    SettingsSection(
-        "store", "Store", FuseIcons.Store, "Catalogue, added apps, update checks", ::storeRows,
-        available = { it.store.appStore.supported }, group = CONNECTIONS,
-    ),
-    SettingsSection("accounts", "Accounts", FuseIcons.CircleUser, "RetroAchievements, Cartridge, Phone Link", ::accountsRows, group = CONNECTIONS),
-    SettingsSection("addons", "Addons", FuseIcons.Blocks, "Jellyfin: your films, shows and music", ::addonsRows, group = CONNECTIONS, status = ::addonsStatus),
+    SettingsSection("accounts", "Accounts", FuseIcons.CircleUser, "RetroAchievements and Phone Link", ::accountsRows, group = CONNECTIONS),
+    SettingsSection("addons", "Addons", FuseIcons.Blocks, "Jellyfin, the Store and Cartridge", ::addonsRows, group = CONNECTIONS, status = ::addonsStatus),
     SettingsSection("health", "System health", FuseIcons.HeartPulse, "What needs attention, and a bug report", ::healthRows, group = GENERAL, status = ::healthStatus),
     SettingsSection("storage", "Storage and backups", FuseIcons.HardDrive, "File access, drives, backup and restore", ::storageAndBackupRows, group = GENERAL),
     SettingsSection("about", "About", FuseIcons.Info, "Updates, privacy, licences, setup", ::aboutRows, group = GENERAL, status = ::aboutStatus),
@@ -155,7 +151,8 @@ val settingsAliases: Map<String, String> = mapOf(
     "emulators" to "systems",
     "performance" to "displays",
     "achievements" to "accounts",
-    "cartridge" to "accounts",
+    "cartridge" to "addons",
+    "store" to "addons",
     "phonelink" to "accounts",
     "backup" to "storage",
     "updates" to "about",
@@ -166,9 +163,13 @@ val settingsAliases: Map<String, String> = mapOf(
 /** The section [id] names now, following [settingsAliases]. */
 fun settingsSectionId(id: String?): String? = id?.let { settingsAliases[it] ?: it }
 
+/** The group a folded-in section's settings now open in (the Store's and Cartridge's, in Addons). */
+val settingsAliasGroups: Map<String, String> = mapOf("store" to ADDONS_STORE, "cartridge" to ADDONS_CARTRIDGE)
+
 /** Opens Settings on [section] (an old id works too), with [group] unfolded so [row] can be landed on. */
 fun AppState.openSettings(section: String, row: String? = null, group: String? = null) {
     if (group != null) openGroups[group] = true
+    settingsAliasGroups[section]?.let { openGroups[it] = true }
     go(Route.Settings(settingsSectionId(section), row))
 }
 

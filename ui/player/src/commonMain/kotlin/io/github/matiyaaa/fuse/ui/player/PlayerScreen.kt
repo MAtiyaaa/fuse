@@ -88,7 +88,8 @@ private enum class PlayerSheet { AUDIO, SUBTITLES, SETTINGS, QUEUE }
  * them, a double tap on either side skips, the timeline drags. A mouse shows them as it moves.
  *
  * [onSettings] hears changes made here (speed, subtitle size), so the app can keep them.
- * [fullscreen] toggles the window where there is one.
+ * [fullscreen] toggles the window where there is one. [onSwap] moves the picture to the other
+ * screen on a device with two, leaving this one as its remote.
  */
 @Composable
 fun PlayerScreen(
@@ -98,6 +99,7 @@ fun PlayerScreen(
     inputEnabled: Boolean = true,
     onSettings: (PlayerSettings) -> Unit = {},
     fullscreen: (() -> Unit)? = null,
+    onSwap: (() -> Unit)? = null,
 ) {
     val engine = session.engine
     val state = engine?.state?.collectAsState()?.value ?: EngineState()
@@ -163,6 +165,7 @@ fun PlayerScreen(
         if ((src?.audioTracks?.size ?: 0) > 1) add(PlayerButton("audio", FuseIcons.AudioLines, "Audio") { sheet = PlayerSheet.AUDIO })
         if (src?.subtitleTracks?.isNotEmpty() == true) add(PlayerButton("subs", if (src.subtitle == null) FuseIcons.CaptionsOff else FuseIcons.Captions, "Subtitles") { sheet = PlayerSheet.SUBTITLES })
         add(PlayerButton("settings", FuseIcons.Settings2, "Settings") { sheet = PlayerSheet.SETTINGS })
+        if (session.isVideo) onSwap?.let { f -> add(PlayerButton("swap", FuseIcons.Swap, "Play on the other screen") { f() }) }
         fullscreen?.let { f -> add(PlayerButton("full", FuseIcons.Maximize, "Full screen") { f() }) }
     }
     val all = buttons + tools

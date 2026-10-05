@@ -171,7 +171,11 @@ fun Hud(
             // glyphs keep their place while hidden, so nothing moves when the stick reaches the tabs;
             // a phone held upright gives that room to the tabs instead.
             val shoulders = statusRoom != StatusRoom.NONE
-            Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+            // The room the tabs have: too little for the open tab's name (a small second screen with
+            // the menus on it), and every tab is its icon, never a name cut short.
+            var room by remember { mutableIntStateOf(Int.MAX_VALUE) }
+            val nameFits = with(LocalDensity.current) { room.toDp() } >= ACTIVE_NAME_ROOM
+            Row(Modifier.weight(1f).onSizeChanged { room = it.width }, verticalAlignment = Alignment.CenterVertically) {
                 if (shoulders) {
                     Box(Modifier.alpha(glyphs)) { ButtonGlyph(HintButton.PREV, size = ButtonGlyphDefaults.SmallSize, color = Fuse.colors.textFaint) }
                     Spacer(Modifier.width(Space.xs))
@@ -221,7 +225,7 @@ fun Hud(
                         var x by remember { mutableFloatStateOf(0f) }
                         var w by remember { mutableIntStateOf(0) }
                         Tab(
-                            sections.label(d), sections.icon(d), selected = d == active, focused = tabsFocused && focusedButton == null && d == active, showLabel = labels || d == active,
+                            sections.label(d), sections.icon(d), selected = d == active, focused = tabsFocused && focusedButton == null && d == active, showLabel = labels || (d == active && nameFits),
                             modifier = Modifier
                                 .bringIntoViewRequester(requesters.getValue(d))
                                 .onPlaced {
@@ -671,3 +675,6 @@ private fun Modifier.fadeSides(fadeLeft: () -> Boolean, fadeRight: () -> Boolean
             blendMode = BlendMode.DstIn,
         )
     }
+
+/** The least room the tabs need to show the open tab's name beside the others' icons. */
+private val ACTIVE_NAME_ROOM = 200.dp

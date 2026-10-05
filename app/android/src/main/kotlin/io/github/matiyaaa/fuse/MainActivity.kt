@@ -185,7 +185,7 @@ class MainActivity : ComponentActivity(), ActivityRequests {
         val startup by app.startup.collectAsState()
         val s = startup as? Startup.Ready ?: return
         Box(Modifier.fillMaxSize().background(Color(INK_ARGB))) {
-            FuseApp(s.store, app.platformUi, router, s.phoneLink, safeMode = s.safeMode, onSettled = app::settled, startupIntro = true, showcaseElsewhere = true)
+            FuseApp(s.store, app.platformUi, router, s.phoneLink, safeMode = s.safeMode, onSettled = app::settled, startupIntro = true, showcaseElsewhere = true, keepPlace = true)
         }
     }
 
@@ -292,7 +292,7 @@ class MainActivity : ComponentActivity(), ActivityRequests {
                         if (menusBelow) {
                             ShowcaseApp(s.store, app.platformUi)
                         } else {
-                            FuseApp(s.store, app.platformUi, router, s.phoneLink, safeMode = s.safeMode, onSettled = app::settled, startupIntro = true)
+                            FuseApp(s.store, app.platformUi, router, s.phoneLink, safeMode = s.safeMode, onSettled = app::settled, startupIntro = true, keepPlace = true)
                         }
                     }
                     LaunchedEffect(Unit) { focus.requestFocus() }

@@ -35,6 +35,24 @@ build; see `THIRD_PARTY_NOTICES.md`.
 Controls fade after the timeout set in Settings, unless paused, buffering or a sheet is open. Music
 keeps its controls on screen.
 
+## Two screens
+
+On a device with two screens, `PlayerPlacement` says where the picture is: with Fuse's menus, or
+on the other screen. It starts where Settings, Jellyfin, Films play on asks (the main screen or
+the second screen) and is swapped while playing by Play here, from either screen. The screen
+without the picture shows `PlayerRemote` (the poster, the time, the timeline, play and pause,
+skips, tracks, Play here and Stop):
+
+- **Menus on top:** the picture on the main screen and the remote on the second, or the picture on
+  the second screen (`PlayerPicture`, a tap offers it back) while the main screen's remote lets the
+  menus browse (B), with a Playing entry in the top line to bring the remote back.
+- **Menus below (flipped):** the picture above with the touch screen as the remote, or the picture
+  on the touch screen with the menus, while the screen above shows what is playing
+  (`PlayerNowShowing`).
+
+The remote takes the controller where it is the menus' screen: A plays or pauses, Left and Right
+skip, LB and RB go to the previous and next, Y swaps the screens, X stops, B goes back to browsing.
+
 ## Sheets
 
 - **Audio:** the stream's sound tracks, with codec and channels.

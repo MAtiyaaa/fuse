@@ -20,6 +20,9 @@ internal enum class AuditSize(val widthPx: Int, val heightPx: Int, val density: 
 
     /** The second screen of a dual-screen handheld, for the companion. */
     C(1080, 1240, 2.5f, "second screen of a dual-screen handheld"),
+
+    /** The lower screen of an AYN Thor, wider than tall: the companion, and the menus when flipped. */
+    L(1240, 1080, 2.5f, "lower screen of a two-screen handheld, wider than tall (AYN Thor)"),
     ;
 
     val widthDp: Int get() = (widthPx / density).roundToInt()
