@@ -58,7 +58,7 @@ internal class PixelSprite(vararg rows: String) {
     }
 }
 
-/** Fusi's colours: her own whatever the theme (she is a white Maltese with a pink bow). */
+/** Fusi's colours: her own whatever the theme (she is a little white dog with a pink bow). */
 internal object FusiPalette {
     private const val KEYS = "owsSenmtcbBrRdkyh"
 

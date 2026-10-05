@@ -1078,6 +1078,7 @@ fun inputRows(app: AppState): List<MenuAction> {
                 detail = "The letters printed on your buttons. Hints use them",
             ) { v -> setInput { it.copy(glyphs = v) } })
             add(toggleRow("swap", "Swap confirm and back", FuseIcons.Swap, i.swapConfirmBack, if (i.confirmOnRight) "Now: confirm is the right button" else "Now: confirm is the bottom button") { v -> setInput { it.copy(swapConfirmBack = v) } })
+            add(toggleRow("shoulders", "Swap bumpers and triggers", FuseIcons.Swap, i.swapShoulders, if (i.swapShoulders) "Now: L2 and R2 switch tabs, L1 and R1 turn widgets" else "Now: L1 and R1 switch tabs, L2 and R2 turn widgets") { v -> setInput { it.copy(swapShoulders = v) } })
             add(toggleRow("keyhints", "Keyboard hints when typing", FuseIcons.Keyboard, i.autoGlyphs, "Show keyboard keys in hints after a keyboard key is used") { v -> setInput { it.copy(autoGlyphs = v) } })
         }
         labelled("Mapping") {

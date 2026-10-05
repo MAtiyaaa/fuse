@@ -415,13 +415,13 @@ object ThemePresets {
 
     /**
      * Fusi's room, pink and cute like a cartoon from the early 2000s: polka dots drifting over a
-     * pink sky, puffy clouds, sparkles, and Fusi the white pixel Maltese playing on a mint hill.
+     * pink sky, puffy clouds, sparkles, and Fusi the white pixel dog playing on a mint hill.
      * Plum text and a berry accent keep every word clear on the pink (11:1 and 5:1 at least).
      */
     val Fusi = ThemeSpec(
         id = "fusi",
         name = "Fusi",
-        tagline = "Pink, cute, and Fusi the Maltese at play",
+        tagline = "Pink, cute, and Fusi the dog at play",
         palette = ThemePalette(
             dark = false,
             background = 0xFFFFE4F1, surface = 0xFFFFF6FA, surfaceRaised = 0xFFFFFFFF,

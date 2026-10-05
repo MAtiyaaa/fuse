@@ -109,7 +109,7 @@ enum class BackgroundStyle {
     CONTOURS,
     /** Warm dunes under a high sun, each crest casting a thin shadow. */
     DUNES,
-    /** Fusi's room: a pink cartoon sky over a mint hill, where Fusi the pixel Maltese plays. */
+    /** Fusi's room: a pink cartoon sky over a mint hill, where Fusi the pixel dog plays. */
     FUSI;
 
     /** False for the backgrounds that never move (flat colour, and the room behind game art). */

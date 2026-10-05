@@ -4,7 +4,7 @@
 
 - **Fusi, a new theme.** Pink and cute like a cartoon from the early 2000s: polka dots drifting
   over a pink sky, puffy clouds and sparkles, and a mint hill with pixel flowers, a pink doghouse
-  and a bowl. Fusi lives there: a white pixel Maltese with a pink bow who wanders, runs about, sits
+  and a bowl. Fusi lives there: a little white pixel dog with a pink bow who wanders, runs about, sits
   and wags, sniffs the flowers, naps by her house, chases her ball and hops for joy, always in
   front of any game art. On a two-screen device like the AYN Thor she now and then jumps down to the
   screen below, or leaps up to the one above. On a dark palette her room turns to night. The theme
@@ -31,6 +31,8 @@
   Sync or Syncthing, whichever is in use, never both.
 - **Turning off a sync that works asks twice.** While Fuse Sync is in touch with its host, or
   Syncthing is connected, turning it off (or switching to the other) asks, then asks once more.
+- **Swap bumpers and triggers.** Settings, Controls has a switch to swap them: L2 and R2 switch
+  tabs and L1 and R1 turn Home's widgets, or the other way round as it comes. The hints follow.
 - **Setup asks how to stay in step.** The Every device step shows Fuse Sync and Syncthing side by
   side, Fuse Sync recommended, with Use Fuse Sync (this device the host, or connect to one), Use
   Syncthing, or Skip.

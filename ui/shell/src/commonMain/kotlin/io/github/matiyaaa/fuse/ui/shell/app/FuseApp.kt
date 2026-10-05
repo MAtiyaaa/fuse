@@ -330,7 +330,7 @@ private fun FuseAppContent(
         spec = spec,
         motion = prefs.motion,
         quality = quality,
-        glyphs = GlyphConfig(glyphStyle, prefs.input.confirmOnRight),
+        glyphs = GlyphConfig(glyphStyle, prefs.input.confirmOnRight, prefs.input.swapShoulders),
         glass = prefs.glass,
         highContrastFocus = prefs.highContrastFocus,
         animateChanges = true,

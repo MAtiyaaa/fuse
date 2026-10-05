@@ -45,7 +45,7 @@ internal object FusiGround {
 }
 
 /**
- * Fusi, the Maltese in the Fusi theme, and everything she does: she wanders, runs about, sits and
+ * Fusi, the dog in the Fusi theme, and everything she does: she wanders, runs about, sits and
  * wags, sniffs the flowers, naps by her house, chases her ball and hops for joy. On a two-screen
  * device (both screens drawing a Fusi room) she sometimes jumps down to the screen below, or leaps
  * up to the one above.

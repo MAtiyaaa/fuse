@@ -85,6 +85,8 @@ data class InputProfile(
      * than by label; "Detect my buttons" sets it from the button the user presses to confirm.
      */
     val swapConfirmBack: Boolean = false,
+    /** L2 and R2 switch tabs and L1 and R1 turn Home's widgets, instead of the other way round. */
+    val swapShoulders: Boolean = false,
     val autoGlyphs: Boolean = true,
     /** Delay before a held direction starts repeating. */
     val repeatDelayMs: Int = 280,
