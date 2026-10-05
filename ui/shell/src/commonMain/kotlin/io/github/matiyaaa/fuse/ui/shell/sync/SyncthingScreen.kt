@@ -309,6 +309,7 @@ private fun syncthingRows(
                                 live == null -> "Not shared"
                                 live.error != null -> "Problem"
                                 live.paused -> "Paused"
+                                others.none { it.id in live.devices } -> "Only here"
                                 live.needBytes > 0 -> "${bytesText(live.needBytes)} to go"
                                 live.state == "scanning" -> "Looking"
                                 live.state == "syncing" -> "Syncing"

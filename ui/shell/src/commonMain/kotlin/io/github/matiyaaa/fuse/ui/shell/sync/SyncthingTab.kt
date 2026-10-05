@@ -239,6 +239,8 @@ private fun folderRow(app: AppState, f: SyncthingFolder, others: List<SyncthingD
             when {
                 f.error != null -> "Problem"
                 f.paused -> "Paused"
+                // Nothing to be up to date with yet: it only lives on this device.
+                with.isEmpty() -> "Only here"
                 f.needBytes > 0 -> "${bytesText(f.needBytes)} to go"
                 f.state == "scanning" -> "Looking"
                 f.state == "syncing" -> "Syncing"
