@@ -245,12 +245,22 @@ internal fun ChannelBoard(app: AppState, page: Int, pageKey: String, active: Boo
         val first = page == 0
         app.confirm = ConfirmSpec(
             title = if (first) "Put Home back as it came?" else "Clear this page?",
-            message = if (first) "Every widget returns to its first place and size, and widgets you added go. Undo brings your board back." else "Its widgets come off. The page stays, and Undo brings them back.",
+            message = if (first) {
+                "On this device, every widget returns to its first place and size, and widgets you added go" +
+                    (if (store.sync.inUse) ". Your Home on your other devices stays as it is." else ".") + " Undo brings your board back."
+            } else {
+                "Its widgets come off. The page stays, and Undo brings them back."
+            },
             confirmLabel = if (first) "Reset Home" else "Clear page",
         ) {
             keepForUndo()
-            store.updatePrefs { p -> p.copy(home = p.home.withBoard(page, if (first) io.github.matiyaaa.fuse.model.HomeLayoutConfig.DefaultBoard else emptyList())) }
-            app.toasts.show(if (first) "Home is back as it came" else "This page is clear")
+            if (first) {
+                // This device's alone, and kept for Undo Home Reset in Settings and Fuse Sync too.
+                store.resetHome { it.withBoard(page, io.github.matiyaaa.fuse.model.HomeLayoutConfig.DefaultBoard) }
+            } else {
+                store.updatePrefs { p -> p.copy(home = p.home.withBoard(page, emptyList())) }
+            }
+            app.toasts.show(if (first) "Home is back as it came on this device" else "This page is clear")
         }
     }
 

@@ -75,6 +75,7 @@ internal fun AppSettings.toUiPrefs(scoped: GlobalScoped): UiPrefs {
         continueDismissed = home.continueDismissed,
         addonsOrder = home.addonsOrder,
         quickMenu = home.quickMenu,
+        canUndoHomeReset = home.beforeReset != null,
         systemArtAuto = library.systemArtAuto,
         librarySort = library.sort,
         systemArtStyle = library.systemArtStyle,

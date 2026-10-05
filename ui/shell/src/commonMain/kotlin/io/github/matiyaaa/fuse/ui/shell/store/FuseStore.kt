@@ -49,6 +49,16 @@ interface FuseStore {
     val prefs: StateFlow<UiPrefs>
     fun updatePrefs(transform: (UiPrefs) -> UiPrefs)
 
+    /**
+     * Resets Home on this device only ([reset] makes the new Home from the current one). With Fuse
+     * Sync, a Home the profile shares becomes this device's own, so the person's Home on their other
+     * devices stays as it is. The Home before is kept for [undoHomeReset].
+     */
+    fun resetHome(reset: (io.github.matiyaaa.fuse.model.HomeLayoutConfig) -> io.github.matiyaaa.fuse.model.HomeLayoutConfig) {}
+
+    /** Puts Home back as it was before the last reset here (rejoining the profile's, if the reset left it). */
+    fun undoHomeReset() {}
+
     val library: LibraryOps
     val sources: SourceOps
     val emulators: EmulatorOps

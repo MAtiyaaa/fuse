@@ -218,6 +218,35 @@ internal class DefaultFuseStore private constructor(
         return ctx.services.cacheFile(BundledMusic.cachePath(id)) { Res.readBytes(BundledMusic.resource(id)) }
     }
 
+    override fun resetHome(reset: (io.github.matiyaaa.fuse.model.HomeLayoutConfig) -> io.github.matiyaaa.fuse.model.HomeLayoutConfig) {
+        ctx.scope.launch {
+            val shared = sync.inUse
+            writeSettings { s ->
+                val leaves = shared && s.sync.homeScope == LibraryProfileData.HOME_PROFILE
+                s.copy(
+                    home = s.home.copy(layout = reset(s.home.layout), beforeReset = s.home.layout, resetLeftProfile = leaves),
+                    sync = if (leaves) s.sync.copy(homeScope = LibraryProfileData.HOME_DEVICE) else s.sync,
+                )
+            }
+            sync.service?.changed()
+        }
+    }
+
+    override fun undoHomeReset() {
+        ctx.scope.launch {
+            writeSettings { s ->
+                val before = s.home.beforeReset ?: return@writeSettings s
+                val rejoin = s.home.resetLeftProfile && s.sync.homeScope == LibraryProfileData.HOME_DEVICE
+                s.copy(
+                    home = s.home.copy(layout = before, beforeReset = null, resetLeftProfile = false),
+                    // The profile's Home comes back as it is now (changed elsewhere since, it stays changed).
+                    sync = if (rejoin) s.sync.copy(homeScope = LibraryProfileData.HOME_REJOIN, deviceHome = null) else s.sync,
+                )
+            }
+            sync.service?.changed()
+        }
+    }
+
     override fun updatePrefs(transform: (UiPrefs) -> UiPrefs) {
         val before = prefsState.value
         // Fuse Sync's settings change only through the sync store.

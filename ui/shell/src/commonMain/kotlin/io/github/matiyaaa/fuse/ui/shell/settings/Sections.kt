@@ -343,16 +343,24 @@ fun homeRows(app: AppState): List<MenuAction> {
                         )
                     }))
                 }
-                add(MenuAction("b.reset", "Reset the board", FuseIcons.RotateCcw, detail = "Back to the widgets and sizes Home comes with", onSelect = {
+                add(MenuAction("b.reset", "Reset the board", FuseIcons.RotateCcw, detail = "Back to the widgets and sizes Home comes with, on this device", onSelect = {
                     app.confirm = ConfirmSpec(
                         title = "Reset the board?",
-                        message = "Home goes back to the widgets, sizes and order it came with. Flow's rows stay as they are.",
+                        message = "Home on this device goes back to the widgets, sizes and order it came with. Flow's rows stay as they are" +
+                            (if (app.store.sync.inUse) ", and your Home on your other devices stays as it is." else ".") +
+                            " Undo Home Reset brings this one back.",
                         confirmLabel = "Reset",
                     ) {
-                        set { s -> s.copy(home = s.home.copy(board = io.github.matiyaaa.fuse.model.HomeLayoutConfig.DefaultBoard)) }
-                        app.toasts.show("Board reset")
+                        app.store.resetHome { it.copy(board = io.github.matiyaaa.fuse.model.HomeLayoutConfig.DefaultBoard) }
+                        app.toasts.show("Board reset on this device")
                     }
                 }))
+                if (p.canUndoHomeReset) {
+                    add(MenuAction("b.undo", "Undo Home Reset", FuseIcons.Undo, detail = "Home goes back as it was before the reset", onSelect = {
+                        app.store.undoHomeReset()
+                        app.toasts.show("Home is back as it was", icon = FuseIcons.Undo)
+                    }))
+                }
             }
         }
     }

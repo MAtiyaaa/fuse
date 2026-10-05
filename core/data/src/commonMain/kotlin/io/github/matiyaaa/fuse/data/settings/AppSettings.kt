@@ -243,6 +243,10 @@ data class HomeSettings(
     val addonsOrder: List<String> = emptyList(),
     /** The quick menu's items and widths ("WIFI:1"), in the user's order; empty is Fuse's own. */
     val quickMenu: List<String> = emptyList(),
+    /** Home as it was before it was last reset here, for Undo Home Reset (this device's alone). */
+    val beforeReset: HomeLayoutConfig? = null,
+    /** That reset gave this device its own Home (the profile's stayed as it was on every other device). */
+    val resetLeftProfile: Boolean = false,
 ) {
     /**
      * Visible destinations in order. Destinations missing from the stored list (added in a newer

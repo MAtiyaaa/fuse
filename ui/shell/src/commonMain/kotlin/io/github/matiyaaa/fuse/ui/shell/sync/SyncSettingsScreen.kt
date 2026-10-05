@@ -291,6 +291,17 @@ private fun syncRows(
             },
         ) { v -> app.scope.launch { app.store.sync.setOwnHome(v == "DEVICE") } }.copy(section = what))
     }
+    // Home was reset on this device: it can go back, and rejoin the profile's if the reset left it.
+    if (app.store.prefs.value.canUndoHomeReset) {
+        add(MenuAction(
+            "home.undo", "Undo Home Reset", FuseIcons.Undo,
+            detail = "Home on this device goes back as it was before the reset", section = what,
+            onSelect = {
+                app.store.undoHomeReset()
+                app.toasts.show("Home is back as it was", icon = FuseIcons.Undo)
+            },
+        ))
+    }
 
     // Connection -----------------------------------------------------------------------------------
     val connection = "Connection"
