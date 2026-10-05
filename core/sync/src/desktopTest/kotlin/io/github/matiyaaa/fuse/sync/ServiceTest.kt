@@ -77,8 +77,9 @@ class ServiceTest {
         )
         val (pc, _) = service("Gaming PC", pcLib)
         val (deck, deckSettings) = service("Steam Deck", deckLib)
-        pc.hostHere("Gaming PC", installService = false).getOrThrow()
-        val code = pc.newPairingCode()!!
+        // The code "Fuse Sync is ready" shows is the one another device types: it has to work.
+        val ready = pc.hostHere("Gaming PC", installService = false).getOrThrow()
+        val code = assertNotNull(ready.pairingCode)
         assertEquals("Gaming PC", deck.connect("127.0.0.1:$port", code).getOrThrow())
         val mo = pc.createProfile("Mo", "fox", null).getOrThrow()
         // The Deck becomes Mo: what it already had joins Mo's profile (nothing is lost).

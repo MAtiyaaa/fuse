@@ -53,6 +53,10 @@
   out, and a device tries each address the host has and uses the one that answers. When none
   does, it says what to check (the same Wi-Fi, the host's firewall) under the code, instead of
   the network's own error over the Connect button.
+- The code "Fuse Sync is ready" showed for adding devices had already been used by the host
+  itself while setting up, so a device typing it heard "No device is being added on the host
+  right now". The host now shows a fresh code, never one that was used or ran out, and renews it
+  while it is on screen.
 - The pairing code's boxes cut wide letters such as Q and W short on a small screen. They are set
   a little smaller to fit now.
 
