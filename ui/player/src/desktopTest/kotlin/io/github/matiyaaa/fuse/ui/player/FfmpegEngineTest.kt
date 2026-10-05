@@ -30,20 +30,23 @@ class FfmpegEngineTest {
         dir.deleteRecursively()
     }
 
+    private var watched: FfmpegEngine? = null
+
     private fun waitUntil(what: String, ms: Long = 10_000, condition: () -> Boolean) {
         val end = System.currentTimeMillis() + ms
         while (System.currentTimeMillis() < end) {
             if (condition()) return
             Thread.sleep(20)
         }
-        throw AssertionError("Timed out waiting for $what")
+        val e = watched
+        throw AssertionError("Timed out waiting for $what" + if (e == null) "" else ", state ${e.state.value}, at ${e.positionMs()} ms")
     }
 
     @Test
     fun aClipPlaysWithItsPicturesSubtitlesSeekAndEnd() {
         val file = File(dir, "clip.mkv")
         SampleMedia.write(file, seconds = 3, cues = listOf(SampleMedia.Cue(500, 1_500, "Hello <i>Fuse</i>"), SampleMedia.Cue(2_000, 2_600, "Second")), audioTracks = 2)
-        val engine = FfmpegEngine()
+        val engine = FfmpegEngine().also { watched = it }
         val caps = engine.capabilities(hardwareDecoding = false)
         assertTrue(caps.audioCodecs.contains("aac"), caps.audioCodecs.toString())
         assertTrue("subrip" in caps.embeddedSubtitles)
@@ -111,6 +114,32 @@ class FfmpegEngineTest {
             val s = engine.state.value
             assertEquals(320, s.videoWidth, "load $n")
             assertTrue((s.durationMs ?: 0) > 0, "load $n has no length")
+        }
+        engine.release()
+    }
+
+    @Test
+    fun seekingBackFromTheEndPlaysOnAgain() {
+        // The stream applies a seek on its own thread; until it has, its end is the old one's, and
+        // a press of play in that moment must not be lost to it.
+        val file = File(dir, "short.mkv")
+        SampleMedia.write(file, seconds = 2, cues = emptyList(), audioTracks = 1)
+        val engine = FfmpegEngine().also { watched = it }
+        engine.capabilities(hardwareDecoding = false)
+        engine.load(PlaySource(url = file.absolutePath, method = PlayMethod.DIRECT_PLAY), startMs = 0, audioOrder = 0, subtitleOrder = null, play = true)
+        // Longer than the clock's tick, so the clock surely looks while the seek is still pending.
+        engine.slowSeeksForTest(400)
+        repeat(3) { n ->
+            waitUntil("end $n", 8_000) {
+                engine.takeFrameForTest()
+                engine.state.value.status == EngineStatus.ENDED
+            }
+            engine.seekTo(1_000)
+            engine.play()
+            waitUntil("playing again after seek $n", 8_000) {
+                engine.takeFrameForTest()
+                engine.state.value.status == EngineStatus.ENDED && engine.positionMs() >= 1_800
+            }
         }
         engine.release()
     }

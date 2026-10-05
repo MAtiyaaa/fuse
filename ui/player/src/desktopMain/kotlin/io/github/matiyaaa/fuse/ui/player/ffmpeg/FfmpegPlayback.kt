@@ -140,6 +140,9 @@ internal class FfmpegPlayback(
 
     val currentSerial: Int get() = serial.get()
 
+    /** For tests: how long the reader waits before acting on a seek. */
+    @Volatile internal var seekDelayForTestMs = 0L
+
     fun seek(ms: Long) {
         seekRequest = ms.coerceAtLeast(0)
     }
@@ -261,14 +264,17 @@ internal class FfmpegPlayback(
             try {
                 while (!closing) {
                     seekRequest?.let { target ->
+                        seekDelayForTestMs.takeIf { it > 0 }?.let { Thread.sleep(it) }
                         seekRequest = null
                         val ts = (target + startOffsetMs) * 1000
                         avformat_seek_file(fmt, -1, Long.MIN_VALUE, ts, ts, 0)
                         seekTarget = target
-                        val s = serial.incrementAndGet()
+                        // The end flags are the old position's: cleared before the new position is
+                        // announced, so nothing reads the old end as the new one's.
                         eof = false
                         videoDone = vCtx == null
                         audioDone = !hasAudio
+                        val s = serial.incrementAndGet()
                         drop(videoPackets)
                         drop(audioPackets)
                         videoPackets.offer(Queued(null, s, flush = true))

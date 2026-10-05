@@ -51,6 +51,9 @@ class FfmpegEngine : PlayerEngine {
     /** Counts loads, so a stream's late news is told from the current one's. */
     @Volatile private var loads = 0
 
+    /** The stream's position count once the last seek is done; it can't have ended before. */
+    @Volatile private var seekSerial = 0
+
     init {
         Thread({
             while (!released) {
@@ -74,6 +77,7 @@ class FfmpegEngine : PlayerEngine {
         cueFlow.value = emptyList()
         // A stream still winding down after a quick switch must never speak for the new one.
         val load = ++loads
+        seekSerial = 0
         val listener = object : PlaybackListener {
             override fun opened(durationMs: Long?, width: Int, height: Int, pixelRatio: Float, hardware: Boolean, decoder: String?) {
                 if (load != loads) return
@@ -123,6 +127,8 @@ class FfmpegEngine : PlayerEngine {
     override fun seekTo(ms: Long) {
         val p = playback ?: return
         val target = ms.coerceAtLeast(0)
+        // The stream moves on its own thread; until it has, its end is the old position's.
+        seekSerial = p.currentSerial + 1
         p.seek(target)
         audio.reset(target)
         stateFlow.update { it.copy(positionMs = target, status = if (it.status == EngineStatus.ENDED) EngineStatus.BUFFERING else it.status) }
@@ -194,7 +200,7 @@ class FfmpegEngine : PlayerEngine {
         val first = stateFlow.value.status
         if (first == EngineStatus.ERROR || first == EngineStatus.IDLE) return
         val now = positionMs()
-        val ended = p.eof && p.videoDone && p.audioDone && audio.drained() && p.ready.isEmpty()
+        val ended = p.currentSerial >= seekSerial && p.eof && p.videoDone && p.audioDone && audio.drained() && p.ready.isEmpty()
         val starving = playing && !p.eof && (if (p.hasAudio) audio.starving() else p.ready.isEmpty())
         var endedNow = false
         // One atomic change: the stream's own threads update the state too (opened, its first
@@ -258,6 +264,11 @@ class FfmpegEngine : PlayerEngine {
         val copy = VideoFrame(f.width, f.height, ByteArray(0), f.ptsMs, f.serial)
         playback?.recycle(f)
         return copy
+    }
+
+    /** For tests: the stream takes [ms] longer to act on each seek, as on a slow machine. */
+    internal fun slowSeeksForTest(ms: Long) {
+        playback?.seekDelayForTestMs = ms
     }
 
     @Composable

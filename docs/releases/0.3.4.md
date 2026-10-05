@@ -67,6 +67,8 @@ a menu or say the wrong thing, and fixed what it found.
 - A tab switched to quickly while the one before was still sliding in could stay faded part way.
 - On the computer, a video could lose its size and length as it opened, and switching quickly
   between videos could show the one before's error on the new one.
+- On the computer, seeking back in a video and pressing play straight away could leave it paused
+  where you sought to, because the old end of the video still counted for a moment.
 - On Windows, a program's own name was read wrongly from a path with backslashes.
 - A failed export left a half-written file next to your files.
 - Setting up a host used a switch that looked unlike every other switch in Fuse.
