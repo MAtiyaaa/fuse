@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.Stable
@@ -29,6 +30,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.CornerRadius
@@ -43,6 +45,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import io.github.matiyaaa.fuse.model.WidgetKind
 import io.github.matiyaaa.fuse.ui.designsystem.components.FText
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
@@ -289,7 +292,9 @@ internal fun Carousel(
                 }
             }
         }
-        Box(Modifier.width(cardWidth)) {
+        // The header shades the top of the card in front, so it is cut to that card's shape: a plain
+        // box would poke out square past the card's rounded top corner.
+        Box(Modifier.size(cardWidth, faceHeight).clip(cardShape ?: androidx.compose.ui.graphics.RectangleShape)) {
             header { if (count > 1 && dotsFit) CarouselDots(count, ::shown) }
         }
     }
@@ -362,11 +367,21 @@ internal fun BoxScope.CarouselHeader(icon: ImageVector, label: String, dots: @Co
         Modifier.fillMaxWidth().height(if (compact) 44.dp else 64.dp)
             .background(Brush.verticalGradient(0f to Color.Black.copy(alpha = 0.34f), 1f to Color.Transparent)),
     )
-    Row(Modifier.padding(if (compact) Space.m else Space.l), verticalAlignment = Alignment.CenterVertically) {
+    // The name on the left, always whole (set smaller when the card is narrow, never cut short), the
+    // dots pinned to the right, so neither runs into the other or off the card on a small screen.
+    Row(Modifier.fillMaxWidth().padding(if (compact) Space.m else Space.l), verticalAlignment = Alignment.CenterVertically) {
         FuseIcon(icon, size = Size.iconXS, tint = c.onArtMuted)
         Spacer(Modifier.width(Space.s - Space.xxs))
-        FText(label.uppercase(), Fuse.type.overline, color = c.onArtMuted, maxLines = 1)
-        Spacer(Modifier.width(Space.s))
+        val style = Fuse.type.overline
+        androidx.compose.foundation.text.BasicText(
+            label.uppercase(),
+            Modifier.weight(1f, fill = false),
+            style = style.copy(color = c.onArtMuted),
+            maxLines = 1,
+            softWrap = false,
+            autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(minFontSize = style.fontSize * 0.55f, maxFontSize = style.fontSize, stepSize = 0.5.sp),
+        )
+        Spacer(Modifier.weight(1f).widthIn(min = Space.s))
         dots()
     }
 }

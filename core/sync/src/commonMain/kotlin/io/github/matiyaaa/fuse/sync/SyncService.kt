@@ -196,6 +196,22 @@ interface SyncService {
     /** Everything the host keeps for the profile in use (play time, every save and version), for the Hub; null offline. */
     suspend fun report(): ProfileReport? = null
 
+    /** Games played as one save by everyone on the host (their saves aren't anyone's own). */
+    val sharedGames: StateFlow<Set<String>> get() = NO_SHARED_GAMES
+
+    /**
+     * Makes [game] one save everyone plays together, or each person's own again. Made shared with
+     * [fromMine], the person playing's newest save of it becomes the shared one; otherwise everyone
+     * starts it together. Each person's own saves stay in their history either way.
+     */
+    suspend fun setShared(game: GameKey, shared: Boolean, fromMine: Boolean): Result<Unit> = Result.failure(UnsupportedOperationException("Fuse Sync isn't set up."))
+
+    /**
+     * Where each emulator in [samples] keeps its saves on this device, with the folders the person
+     * chose (Settings, Save folders). The same for Fuse Sync and Syncthing, and works while off.
+     */
+    suspend fun saveFolders(samples: List<SaveQuery>): List<EmulatorSaves> = emptyList()
+
     suspend fun versions(query: SaveQuery, kind: SaveKind): List<SaveVersion>
     suspend fun restore(query: SaveQuery, kind: SaveKind, version: String): Result<Unit>
     suspend fun keepVersion(version: String, keep: Boolean): Result<Unit>
@@ -232,3 +248,6 @@ class NoHostLifetime(private val why: String) : HostLifetime {
     override fun install(): Result<ServiceState> = Result.failure(UnsupportedOperationException(why))
     override fun remove(): Result<ServiceState> = Result.success(state())
 }
+
+private val NO_SHARED_GAMES: StateFlow<Set<String>> = kotlinx.coroutines.flow.MutableStateFlow(emptySet())
+

@@ -289,11 +289,13 @@ class MainActivity : ComponentActivity(), ActivityRequests {
                     ) {
                         // Flipped: the menus are on the second screen, and this one shows what they chose.
                         val menusBelow by companions.flipped.collectAsState()
-                        if (menusBelow) {
-                            ShowcaseApp(s.store, app.platformUi)
-                        } else {
-                            FuseApp(s.store, app.platformUi, router, s.phoneLink, safeMode = s.safeMode, onSettled = app::settled, startupIntro = true, keepPlace = true)
-                        }
+                        // The menus travel down to the screen below and back up, never blinking across.
+                        io.github.matiyaaa.fuse.ui.shell.app.ScreenFlip(
+                            menusHere = !menusBelow,
+                            below = false,
+                            menus = { FuseApp(s.store, app.platformUi, router, s.phoneLink, safeMode = s.safeMode, onSettled = app::settled, startupIntro = true, keepPlace = true) },
+                            other = { ShowcaseApp(s.store, app.platformUi) },
+                        )
                     }
                     LaunchedEffect(Unit) { focus.requestFocus() }
                 }

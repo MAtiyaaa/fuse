@@ -55,6 +55,8 @@ import io.github.matiyaaa.fuse.ui.designsystem.components.HintBar
 import io.github.matiyaaa.fuse.ui.designsystem.components.ProfileAvatar
 import io.github.matiyaaa.fuse.ui.designsystem.components.Spinner
 import io.github.matiyaaa.fuse.ui.designsystem.components.ToastKind
+import io.github.matiyaaa.fuse.ui.designsystem.effects.rememberReveal
+import io.github.matiyaaa.fuse.ui.designsystem.effects.reveal
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
 import io.github.matiyaaa.fuse.ui.designsystem.icons.HintButton
@@ -68,9 +70,14 @@ import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
 import io.github.matiyaaa.fuse.ui.fuseline.Appear
+import io.github.matiyaaa.fuse.ui.fuseline.Curves
 import io.github.matiyaaa.fuse.ui.fuseline.Durations
+import io.github.matiyaaa.fuse.ui.fuseline.fadeIn
+import io.github.matiyaaa.fuse.ui.fuseline.fadeOut
 import io.github.matiyaaa.fuse.ui.fuseline.fuselineColor
 import io.github.matiyaaa.fuse.ui.fuseline.fuselineFloat
+import io.github.matiyaaa.fuse.ui.fuseline.scaleIn
+import io.github.matiyaaa.fuse.ui.fuseline.scaleOut
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.TextInputSpec
 import kotlinx.coroutines.launch
@@ -97,7 +104,13 @@ internal fun WhoAreYouOverlay(app: AppState) {
     var shown by remember { mutableStateOf(mode) }
     if (mode != null) shown = mode
     val svc = app.store.sync.service
-    Appear(mode != null && svc != null) {
+    // The room settles into place from a touch larger, as if the screen leaned in to ask.
+    val motion = Fuse.motion
+    Appear(
+        mode != null && svc != null,
+        enter = fadeIn(motion.tween(Durations.SLOW)) + scaleIn(motion.tween(Durations.DELIBERATE, Curves.Enter), initialScale = 1.06f),
+        exit = fadeOut(motion.tween(Durations.BASE)) + scaleOut(motion.tween(Durations.BASE), targetScale = 0.97f),
+    ) {
         val m = shown ?: return@Appear
         if (svc == null) return@Appear
         WhoAreYou(app, m)
@@ -137,8 +150,9 @@ private fun WhoAreYou(app: AppState, mode: WhoMode) {
             val r = svc.switchTo(p.id, pin)
             busy = null
             r.onSuccess {
+                // The person arrives: their avatar blooms over everything, then settles in the corner.
+                app.profileArrival = p
                 app.whoAreYou = null
-                app.toasts.show("Playing as ${p.name}", ToastKind.SUCCESS, icon = FuseIcons.UserRound)
             }.onFailure { e ->
                 val code = (e as? SyncException)?.code
                 if (code == "wrong-pin" || code == "wait") onWrongPin(e.message ?: "That PIN isn't right.")
@@ -246,15 +260,19 @@ private fun People(
             }
         } else {
             val rows = (0 until count).chunked(perRow)
+            // Each card rises into place a beat after the one before it.
+            val cards = rememberReveal(count)
             Column(verticalArrangement = Arrangement.spacedBy(Space.l), horizontalAlignment = Alignment.CenterHorizontally) {
                 for (row in rows) {
                     Row(horizontalArrangement = Arrangement.spacedBy(Space.l)) {
                         for (i in row) {
                             val p = profiles.getOrNull(i)
-                            if (p != null) {
-                                PersonCard(p, selected = i == sel, here = p.id == active?.id, working = busy == p.id, size = card) { onIndex(i); onChoose(i) }
-                            } else {
-                                AddCard(selected = i == sel, size = card) { onIndex(i); onChoose(i) }
+                            Box(Modifier.reveal(cards, i)) {
+                                if (p != null) {
+                                    PersonCard(p, selected = i == sel, here = p.id == active?.id, working = busy == p.id, size = card) { onIndex(i); onChoose(i) }
+                                } else {
+                                    AddCard(selected = i == sel, size = card) { onIndex(i); onChoose(i) }
+                                }
                             }
                         }
                     }

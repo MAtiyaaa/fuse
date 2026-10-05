@@ -295,15 +295,19 @@ class CompanionScreens(private val app: FuseApplication) : DualScreenHandoff {
             val fuseAway by away.collectAsState()
             val menusHere by flipped.collectAsState()
             val ownMenus = menus
-            if (menusHere && ownMenus != null) {
-                // Flipped: Fuse's menus here; while a game is in front, its companion over them.
-                Box(Modifier.fillMaxSize()) {
-                    ownMenus()
-                    if (fuseAway) CompanionContent(app, onHide = ::hideUntilBack)
-                }
-            } else {
-                CompanionContent(app, onHide = if (fuseAway) ::hideUntilBack else null)
-            }
+            // Flipped: Fuse's menus arrive here from the screen above (and leave back up to it);
+            // while a game is in front, its companion is over them.
+            io.github.matiyaaa.fuse.ui.shell.app.ScreenFlip(
+                menusHere = menusHere && ownMenus != null,
+                below = true,
+                menus = {
+                    Box(Modifier.fillMaxSize()) {
+                        ownMenus?.invoke()
+                        if (fuseAway) CompanionContent(app, onHide = ::hideUntilBack)
+                    }
+                },
+                other = { CompanionContent(app, onHide = if (fuseAway) ::hideUntilBack else null) },
+            )
         }
         made = shown
         shown.setOnDismissListener {

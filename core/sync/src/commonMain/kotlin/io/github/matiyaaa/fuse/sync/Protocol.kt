@@ -27,6 +27,8 @@ data class HostHello(
     val version: Int = SyncApi.VERSION,
     val port: Int = SyncApi.DEFAULT_PORT,
     val fuseVersion: String = "",
+    /** Where it can be reached on the home network, best first (in discovery answers). */
+    val addresses: List<String> = emptyList(),
 )
 
 /** A device asking to join: the code shown on the host, and who the device is. */
@@ -207,4 +209,18 @@ data class VersionReport(
 /** A file of a save: its name in the save, its size, and where the host keeps it (relative to [ProfileReport.storePath]). */
 @Serializable
 data class FileReport(val path: String, val bytes: Long, val stored: String)
+
+/**
+ * The games a household plays as one save (everyone on the host shares it). Their saves are kept
+ * under [SHARED_SAVES] rather than under each person; play time stays each person's own.
+ */
+@Serializable
+data class SharedGames(val games: List<String> = emptyList())
+
+/** Makes [game] one save for everyone (starting from [from]'s, when given) or each person's own again. */
+@Serializable
+data class SharedChange(val game: String, val shared: Boolean, val from: String? = null)
+
+/** Where the saves of games played as one save are kept on the host, beside the people's own. */
+const val SHARED_SAVES = "@shared"
 

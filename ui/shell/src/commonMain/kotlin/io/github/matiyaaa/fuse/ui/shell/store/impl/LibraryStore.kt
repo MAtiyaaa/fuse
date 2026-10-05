@@ -58,6 +58,8 @@ import io.ktor.http.isSuccess
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -545,14 +547,19 @@ internal class DefaultLibraryOps(
     internal suspend fun saveSamples(): List<io.github.matiyaaa.fuse.sync.SaveQuery> {
         if (ctx.installed.value.isEmpty()) emulators.detectNow()
         val settings = data.scopedSettings
-        return data.games.platformCounts().first().keys.mapNotNull { pid ->
-            val summary = data.games.observeByPlatform(pid).first().firstOrNull() ?: return@mapNotNull null
-            val game = data.games.get(summary.id) ?: return@mapNotNull null
-            val platformEmulator = settings.resolve(ScopedSettings.Emulator, game.platformId, null).value.takeIf { it.isNotBlank() }?.let(::EmulatorId)
-            val core = settings.resolve(ScopedSettings.RetroArchCore, game.platformId, game.id).value.takeIf { it.isNotBlank() }
-            val resolved = ctx.resolver.resolve(game, platformEmulator, ctx.installed.value, ctx.host, ScopedLaunchChoice(core = core, homeDir = ctx.services.emulators.homeDir))
-            val installed = resolved.installed ?: return@mapNotNull null
-            plainSaveQuery(game, installed, core ?: RetroArchCores.defaultCore(ctx.host, game.platformId))
+        // Every system at once: each is a lookup and a launch plan, and a big library has many.
+        return kotlinx.coroutines.coroutineScope {
+            data.games.platformCounts().first().keys.map { pid ->
+                async {
+                    val summary = data.games.observeByPlatform(pid).first().firstOrNull() ?: return@async null
+                    val game = data.games.get(summary.id) ?: return@async null
+                    val platformEmulator = settings.resolve(ScopedSettings.Emulator, game.platformId, null).value.takeIf { it.isNotBlank() }?.let(::EmulatorId)
+                    val core = settings.resolve(ScopedSettings.RetroArchCore, game.platformId, game.id).value.takeIf { it.isNotBlank() }
+                    val resolved = ctx.resolver.resolve(game, platformEmulator, ctx.installed.value, ctx.host, ScopedLaunchChoice(core = core, homeDir = ctx.services.emulators.homeDir))
+                    val installed = resolved.installed ?: return@async null
+                    plainSaveQuery(game, installed, core ?: RetroArchCores.defaultCore(ctx.host, game.platformId))
+                }
+            }.awaitAll().filterNotNull()
         }
     }
 
@@ -567,6 +574,8 @@ internal class DefaultLibraryOps(
             emulatorId = emulator.id.value,
             emulatorPath = emulator.appId,
             core = core,
+            // Emulators that keep saves by a game's id (RPCS3, PPSSPP, the 3DS and Switch) need it.
+            serial = game.tags.serial,
             title = game.displayTitle,
         )
     }

@@ -446,7 +446,7 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
                     syncOn -> "Your saves, play time, favourites and settings stay the same on every device, kept by ${prefs.sync.hostName.ifBlank { "your host" }}."
                     syncthingOn -> "Fuse shares your emulators' save folders through Syncthing, brings in the newest save before a game, and asks when two devices both played."
                     syncthing == null -> "Fuse Sync by Fuse keeps your saves, play time, favourites and settings the same on every device you play on, from a computer of your own at home. Stop on the PC, carry on on the handheld. One device? Skip this; it waits in Settings, Addons."
-                    else -> "Stop on the PC, carry on on the handheld. Fuse Sync is Fuse's own, and the one we recommend: it knows each game, adds up play time and keeps a profile for each person. Already run Syncthing? Fuse can use it for your save folders instead. One device? Skip; both wait in Settings, Addons."
+                    else -> "Stop on the PC, carry on on the handheld. Fuse Sync is Fuse's own, and the one we recommend: it knows each game, adds up play time and gives each person their own saves. Already run Syncthing? Fuse can use it for your save folders instead, with one save per game for everyone. One device? Skip; both wait in Settings, Addons."
                 },
                 optional = true, icon = FuseIcons.RefreshCcw, chapter = Chapters.CONNECT,
                 actions = if (syncOn || syncthingOn) {

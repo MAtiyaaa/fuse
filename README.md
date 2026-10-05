@@ -29,7 +29,7 @@ Home screen.
 <a href="https://github.com/MAtiyaaa/fuse/releases/latest"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/brand/button-macos-dark.svg"><img src="docs/assets/brand/button-macos-light.svg" height="48" alt="Download for macOS"></picture></a>
 
 <sub>Android 9 or newer &nbsp;·&nbsp; 64-bit x86 Linux AppImage &nbsp;·&nbsp; Windows 10 and 11 &nbsp;·&nbsp; macOS on Apple silicon and Intel &nbsp;·&nbsp; <a href="#install">checksums and install notes</a></sub><br>
-<sub>0.3.1 is the <b>Glide Update</b>: Home widgets that turn like a catalogue, Jellyfin that answers quickly, Syncthing beside Fuse Sync by Fuse, the AYN Thor's two screens with the controller, and the clock, storage and play time widgets redrawn. <a href="#where-fuse-stands">Here is where it stands.</a></sub><br>
+<sub>0.3.2 is the <b>Corner Update</b>: each person's own saves, saves in 3DS, Switch and Wii U emulators, and fixes to 0.3.1, the Glide Update, which brought Home widgets that turn like a catalogue, Jellyfin that answers quickly, Syncthing beside Fuse Sync by Fuse, the Fusi theme, and the AYN Thor's two screens with the controller. <a href="#where-fuse-stands">Here is where it stands.</a></sub><br>
 <sub>Or download from <a href="https://matiyaaa.github.io/fuse/">Fuse's website</a>, which always offers the latest version for your system.</sub>
 
 <br>
@@ -129,14 +129,17 @@ They behave the same on every device, answer to one design, and get better with 
       else's server, and nothing is ever silently lost.
       <ul>
         <li><b>Saves where you play.</b> The newest save is put in place before a game starts and kept
-        after it closes, matched by the game, not the path: RetroArch, DuckStation, PCSX2, PPSSPP,
-        Dolphin, melonDS, mGBA, RPCS3, Vita3K, shadPS4, Flycast and more.</li>
+        after it closes, matched by the game, not the path, in over 60 emulators: RetroArch,
+        DuckStation, PCSX2, PPSSPP, Dolphin, melonDS, DraStic, Mupen64Plus, RPCS3, Vita3K, shadPS4,
+        Flycast, Azahar for 3DS, Eden and Ryujinx for Switch, Cemu for Wii U, Xenia and more. Save
+        Folders shows where each one keeps them, and takes a folder you chose.</li>
         <li><b>Play time that adds up.</b> 30 minutes on one device and 20 offline on another is 50,
         never 30 and never 80. Everything works offline and catches up later.</li>
         <li><b>Asks, never guesses.</b> When two devices both played, you choose which save to use;
         the other is kept. Every save keeps its versions, from every device, to go back to.</li>
         <li><b>A profile for each person</b>, with one of Fuse's own avatars and a PIN if they like:
-        their own library, favourites, collections, Home and theme, switched in place, no restart.</li>
+        their own saves (even on a device everyone shares), library, favourites, collections, Home
+        and theme, switched in place, no restart. A game can be one save for everyone too.</li>
         <li><b>One click to host</b> on Linux, Windows or macOS, kept running when Fuse is closed and
         after a restart; devices find it on the network and join with a code. Signed requests,
         revocable devices, and an outside address for away from home.</li>
@@ -542,7 +545,11 @@ Linux app, isn't offered on Windows and macOS.
 ## Where Fuse stands
 
 > [!IMPORTANT]
-> **Fuse 0.3.1 "The Glide Update" is still early, and smoother than ever.** Home's widgets turn
+> **Fuse 0.3.2 "The Corner Update" is still early, and smoother than ever.** The menus now travel
+> between a two-screen device's screens, switching profile says hello, Jellyfin's widgets fill in
+> on every Home page, and a corner left square in 0.3.1, "The Glide Update", is round. Fuse Sync
+> keeps each person's saves apart on a device several people share (or one save for everyone, per
+> game), and finds saves in over 60 emulators, now including 3DS, Switch, Wii U and Xbox 360 ones. Home's widgets turn
 > like a catalogue, one item at a time with L2 and R2 or a swipe, and the clock, storage and play
 > time widgets were redrawn. Jellyfin asks every way to the server at once and shows kept pages
 > straight away, so pages and widgets fill in quickly. For people who already run Syncthing, Fuse
@@ -558,6 +565,7 @@ Linux app, isn't offered on Windows and macOS.
 
 | Version | Name | What it brought |
 |---|---|---|
+| [0.3.2](docs/releases/0.3.2.md) | The Corner Update | Menus that travel between screens, a hello when switching profile, each person's own saves, saves in 3DS, Switch, Wii U and Xbox 360 emulators, Jellyfin widgets on every page, round corners |
 | [0.3.1](docs/releases/0.3.1.md) | The Glide Update | Home widgets that turn like a catalogue, Jellyfin that answers quickly, Syncthing beside Fuse Sync, the Thor's two screens with the controller |
 | [0.3.0](docs/releases/0.3.0.md) | The Sync & Clean Update | Fuse Sync by Fuse, profiles, a quick menu you arrange, 157 systems, Jellyfin in setup, swipe-back on touch screens, the second screen's pages redesigned |
 | [0.2.9](docs/releases/0.2.9.md) | The Organized Update | Films on the screen you choose with a live swap, Addons in your order and in Settings, Jellyfin at home |

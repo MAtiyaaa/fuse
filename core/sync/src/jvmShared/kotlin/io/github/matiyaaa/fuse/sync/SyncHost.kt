@@ -263,6 +263,15 @@ class SyncHost(
                 }
             }
             get("/devices") { device() ?: return@get; call.json(ListSerializer(DeviceInfo.serializer()), store.devices()) }
+            get("/shared-games") { device() ?: return@get; call.json(SharedGames.serializer(), store.sharedGames()) }
+            post("/shared-games") {
+                val d = device() ?: return@post
+                val req = signedBody(d, SharedChange.serializer()) ?: return@post
+                // Starting from someone's save needs that person's say-so on this device (their PIN, if they have one).
+                if (req.from != null && !store.mayUse(d.id, req.from)) return@post call.fail(HttpStatusCode.Forbidden, "Open that profile on this device first.", "locked")
+                val result = runCatching { store.setShared(req.game, req.shared, req.from, d.id) }.getOrElse { return@post call.fail(HttpStatusCode.BadRequest, it.message ?: "Bad request", "bad-request") }
+                call.json(SharedGames.serializer(), result)
+            }
             patch("/devices/{id}") {
                 val d = device() ?: return@patch
                 val req = signedBody(d, DeviceChange.serializer()) ?: return@patch

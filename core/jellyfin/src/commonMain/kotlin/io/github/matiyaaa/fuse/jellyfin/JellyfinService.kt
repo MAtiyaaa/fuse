@@ -361,15 +361,21 @@ class JellyfinService(
 
     /** For Home's widgets: what to continue, what's next, and the newest films and episodes. */
     suspend fun widgetFeed(): MediaFeed = call { b, a ->
+        // One shelf failing leaves it empty, but the server not answering at all is thrown, so the
+        // call reconnects (the other address) and asks again instead of showing empty widgets.
+        suspend fun <T> shelf(get: suspend () -> List<T>): List<T> = try {
+            get()
+        } catch (e: JellyfinException) {
+            if (e.kind == JellyfinException.Kind.NETWORK || e.kind == JellyfinException.Kind.AUTH) throw e
+            emptyList()
+        }
         coroutineScope {
-            val resume = async { runCatching { client.resume(b, a) }.getOrDefault(emptyList()) }
-            val next = async { runCatching { client.nextUp(b, a) }.getOrDefault(emptyList()) }
-            val latest = async { runCatching { client.latest(b, a, null, limit = 16, types = "Movie,Series,Episode") }.getOrDefault(emptyList()) }
-            val favorites = async {
-                runCatching { client.query(b, a, types = "Movie,Series", filter = MediaFilter.FAVORITES, sort = MediaSort.NAME, limit = 16).items }.getOrDefault(emptyList())
-            }
-            val movies = async { runCatching { client.latest(b, a, null, limit = 16, types = "Movie") }.getOrDefault(emptyList()) }
-            val music = async { runCatching { client.latest(b, a, null, limit = 16, types = "MusicAlbum") }.getOrDefault(emptyList()) }
+            val resume = async { shelf { client.resume(b, a) } }
+            val next = async { shelf { client.nextUp(b, a) } }
+            val latest = async { shelf { client.latest(b, a, null, limit = 16, types = "Movie,Series,Episode") } }
+            val favorites = async { shelf { client.query(b, a, types = "Movie,Series", filter = MediaFilter.FAVORITES, sort = MediaSort.NAME, limit = 16).items } }
+            val movies = async { shelf { client.latest(b, a, null, limit = 16, types = "Movie") } }
+            val music = async { shelf { client.latest(b, a, null, limit = 16, types = "MusicAlbum") } }
             MediaFeed(resume.await(), next.await(), latest.await(), favorites.await(), movies.await(), music.await())
         }
     }

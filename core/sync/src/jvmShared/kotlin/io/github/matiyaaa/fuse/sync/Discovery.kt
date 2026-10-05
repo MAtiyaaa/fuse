@@ -11,8 +11,15 @@ import java.net.InetSocketAddress
 import java.net.NetworkInterface
 import java.net.SocketTimeoutException
 
-/** A host found on the network: who it is and the address it answered from. */
-data class FoundHost(val hello: HostHello, val address: String)
+/**
+ * A host found on the network: who it is, the address it answered from, and every address it
+ * says it has (the one it answered from first). A computer with Docker or virtual machines can
+ * answer from an address no other device reaches, so a device tries them in turn.
+ */
+data class FoundHost(val hello: HostHello, val address: String) {
+    val candidates: List<String>
+        get() = (listOf(address) + hello.addresses.map { "$it:${hello.port}" }).distinct()
+}
 
 /**
  * Finding a Fuse Sync Host at home without typing an address, the way Jellyfin and Steam find
@@ -92,7 +99,7 @@ object Discovery {
                         if (s.isClosed) break else continue
                     }
                     if (String(packet.data, 0, packet.length).trim() != QUESTION) continue
-                    val answer = json.encodeToString(HostHello.serializer(), hello()).toByteArray()
+                    val answer = json.encodeToString(HostHello.serializer(), hello().copy(addresses = LanAddresses.list())).toByteArray()
                     runCatching { s.send(DatagramPacket(answer, answer.size, packet.socketAddress)) }
                 }
             }, "fuse-sync-discovery").apply {

@@ -186,6 +186,9 @@ class AppState(
     /** How many profiles the Fuse Sync host has (0 while it is off): the top line shows who is playing only with two or more. */
     var syncProfileCount by mutableStateOf(0)
 
+    /** Someone just became the one playing: their arrival plays over everything, then clears. */
+    var profileArrival by mutableStateOf<io.github.matiyaaa.fuse.sync.ProfileInfo?>(null)
+
     /** Fuse is using Syncthing here (its state isn't Off): Addons shows its tab. */
     var syncthingActive by mutableStateOf(false)
 

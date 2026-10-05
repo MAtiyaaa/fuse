@@ -51,6 +51,9 @@ sealed interface Route {
     /** Fuse Sync by Fuse: its settings, setting it up ([host]: this computer as the host, else connecting), and a game's saves through time. */
     data object SyncSettings : Route
     data object SyncthingSettings : Route
+
+    /** Where each emulator keeps its saves here, and a folder to choose where Fuse can't find them (Fuse Sync and Syncthing). */
+    data object SaveFolders : Route
     data class SyncSetup(val host: Boolean) : Route
     data class SaveHistory(val game: GameId, val title: String) : Route
 

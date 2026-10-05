@@ -7,6 +7,8 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -20,8 +22,6 @@ import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 import java.io.File
-import java.net.Inet4Address
-import java.net.NetworkInterface
 
 /**
  * Fuse Sync on a JVM device (a computer, or Android): its settings in Fuse's own, its secret in the
@@ -41,7 +41,7 @@ class JvmSyncService(
     private val fuseVersion: String,
     private val lifetime: HostLifetime,
     private val scope: CoroutineScope,
-    private val saveEnv: SaveEnvironment = FileSaveEnvironment(platform),
+    files: SaveEnvironment = FileSaveEnvironment(platform),
     private val clock: () -> Long = System::currentTimeMillis,
     /** Held while looking for hosts (Android only hears broadcast replies under a multicast lock). */
     private val discoveryLock: () -> AutoCloseable? = { null },
@@ -77,6 +77,9 @@ class JvmSyncService(
     private val work = Mutex()
     private val hlc by lazy { HlcClock(deviceId(), clock) }
     @Volatile private var cached: SyncSettings = SyncSettings()
+
+    /** The device's files, with the save folders the person chose on top. */
+    private val saveEnv: SaveEnvironment = WithSaveFolders(files) { cached.saveFolders }
 
     init {
         scope.launch(Dispatchers.IO) { runCatching { start() } }
@@ -166,7 +169,9 @@ class JvmSyncService(
             running = server != null || hostAdmin != null,
             port = c.hostPort,
             addresses = lanAddresses().map { "$it:${c.hostPort}" },
-            pairingCode = server?.pairingCode() ?: lastCode,
+            // A code this process serves is shown only while it still works (one that was used,
+            // or ran out, is never shown); the background service's is the last one it gave.
+            pairingCode = if (server != null) server.pairingCode() else lastCode,
             status = runCatching { server?.store?.status(c.hostPort, fuseVersion) }.getOrNull() ?: adminStatus,
             service = lifetime.state(),
         )
@@ -238,6 +243,10 @@ class JvmSyncService(
         if (_profiles.value.isEmpty()) refreshLists()
         val active = cached.activeProfile
         if (active.isNotEmpty()) captureChanges(active)
+        runCatching { c.sharedGames().games }.onSuccess { games ->
+            if (games.toSet() != cached.sharedGames.toSet()) saveConfig { it.copy(sharedGames = games) }
+            _sharedGames.value = games.toSet()
+        }
         val sent = d.flush(c)
         if (active.isNotEmpty()) {
             d.pullMeta(c, active)
@@ -317,9 +326,30 @@ class JvmSyncService(
     override suspend fun discover(): List<NearbyHost> = withContext(Dispatchers.IO) {
         val lock = runCatching { discoveryLock() }.getOrNull()
         try {
-            Discovery.find().map { NearbyHost(it.hello.name, it.hello.hostId, it.address) }
+            Discovery.find().map { NearbyHost(it.hello.name, it.hello.hostId, reachable(it)) }
         } finally {
             runCatching { lock?.close() }
+        }
+    }
+
+    /**
+     * The first of [host]'s addresses that answers as that host, tried all at once (a computer
+     * running Docker or virtual machines may answer discovery from one no other device reaches).
+     */
+    private suspend fun reachable(host: FoundHost): String {
+        val candidates = host.candidates
+        if (candidates.size == 1) return candidates.first()
+        val quick = io.ktor.client.HttpClient(io.ktor.client.engine.cio.CIO) {
+            install(io.ktor.client.plugins.HttpTimeout) { connectTimeoutMillis = 1_500; requestTimeoutMillis = 2_500 }
+            expectSuccess = false
+        }
+        return try {
+            kotlinx.coroutines.coroutineScope {
+                val answers = candidates.map { a -> async { a to (SyncClient.hello(a, quick)?.hostId == host.hello.hostId) } }
+                answers.awaitAll().firstOrNull { it.second }?.first ?: candidates.first()
+            }
+        } finally {
+            quick.close()
         }
     }
 
@@ -328,7 +358,16 @@ class JvmSyncService(
             val id = ensureDeviceId()
             val c = config()
             val name = c.deviceName.ifBlank { defaultDeviceName }
-            val link = SyncClient.pair(address, code, id, name, platform).let { if (remoteAddress != null) it.copy(remoteAddress = remoteAddress) else it }
+            val link = try {
+                SyncClient.pair(address, code, id, name, platform)
+            } catch (e: SyncException) {
+                throw e
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // Nothing answered there: say what usually causes it, never the network's own words.
+                throw SyncException(unreachableWords(address), "offline", 0)
+            }.let { if (remoteAddress != null) it.copy(remoteAddress = remoteAddress) else it }
             secrets.put(LINK_KEY, json.encodeToString(HostLink.serializer(), link))
             saveConfig {
                 it.copy(
@@ -354,7 +393,10 @@ class JvmSyncService(
             // This device connects to its own host, like any other.
             val code = newPairingCode() ?: error("The host couldn't start: port ${c.hostPort} is in use by something else.")
             connect("127.0.0.1:${c.hostPort}", code).getOrThrow()
+            // That code was this computer's own, and is used up: the one shown for other devices is new.
+            lastCode = null
             if (installService && lifetime.supported) handOver()
+            newPairingCode()
             refreshHostView()
             log("$name is a Fuse Sync Host")
             _host.value!!
@@ -512,15 +554,50 @@ class JvmSyncService(
             }
     }
 
+    private val _sharedGames = MutableStateFlow(cached.sharedGames.toSet())
+    override val sharedGames: StateFlow<Set<String>> = _sharedGames.asStateFlow()
+
+    /**
+     * Whose save [slot] is: the household's, for a game played as one save (a memory card holds
+     * other games too, so it always stays the person's), else the person playing's.
+     */
+    private fun ownerOf(query: SaveQuery, slot: LocalSlot, profile: String): String =
+        if (slot.kind != SaveKind.MEMORY_CARD && query.game.id in cached.sharedGames) SHARED_SAVES else profile
+
+    override suspend fun saveFolders(samples: List<SaveQuery>): List<EmulatorSaves> = withContext(Dispatchers.IO) {
+        config()
+        SaveAdapters.survey(samples, saveEnv)
+    }
+
+    override suspend fun setShared(game: GameKey, shared: Boolean, fromMine: Boolean): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatching {
+            val c = client ?: error("Fuse Sync isn't connected. Sharing a game needs the host.")
+            val from = cached.activeProfile.takeIf { fromMine && shared && it.isNotEmpty() }
+            val result = c.setShared(game.id, shared, from)
+            saveConfig { it.copy(sharedGames = result.games) }
+            _sharedGames.value = result.games.toSet()
+            log(if (shared) "A game is now one save for everyone" else "A game is each person's own save again", game.id, "save")
+        }
+    }
+
     override suspend fun beforeLaunch(query: SaveQuery): LaunchGate = withContext(Dispatchers.IO) {
         val c = client
         val d = device
         val profile = cached.activeProfile
-        if (c == null || d == null || profile.isEmpty() || !cached.enabled) return@withContext LaunchGate.Go()
+        if (d == null || profile.isEmpty() || !cached.enabled) return@withContext LaunchGate.Go()
         var note: String? = null
         for (slot in slots(query)) {
+            // On a device more than one person plays, the folder must hold this person's save
+            // first (whoever played last keeps theirs); this needs no host, so it happens offline too.
+            val owner = ownerOf(query, slot, profile)
+            runCatching { d.handover(owner, slot) { who -> if (who == SHARED_SAVES) 0L else d.meta(who).game(query.game).totalSeconds } }
+                .onFailure { log("${query.title}: couldn't swap in this person's save (${it.message})", query.game.id, "save") }
+            if (c == null) {
+                note = note ?: "Fuse Sync is offline: playing with this device's save"
+                continue
+            }
             // A launch never waits long on a host that isn't there.
-            val result = withTimeoutOrNull(LAUNCH_WAIT_MS) { runCatching { d.prepare(c, profile, slot) }.getOrElse { PrepareResult.Offline } } ?: PrepareResult.Offline
+            val result = withTimeoutOrNull(LAUNCH_WAIT_MS) { runCatching { d.prepare(c, owner, slot) }.getOrElse { PrepareResult.Offline } } ?: PrepareResult.Offline
             when (result) {
                 is PrepareResult.Conflict -> return@withContext LaunchGate.Conflict(
                     SaveConflict(
@@ -548,11 +625,12 @@ class JvmSyncService(
             val c = client ?: error("Fuse Sync isn't connected.")
             val d = device ?: error("Fuse Sync isn't set up.")
             val slot = slots(conflict.query).firstOrNull { it.kind == conflict.kind } ?: error("That save isn't here any more.")
+            val owner = ownerOf(conflict.query, slot, cached.activeProfile)
             if (keepHere) {
-                d.keepLocal(c, cached.activeProfile, slot, conflict.remote, conflict.here.playSeconds)
+                d.keepLocal(c, owner, slot, conflict.remote, conflict.here.playSeconds)
                 log("${conflict.title}: kept this device's save; the other is in its history", conflict.game.id, "conflict")
             } else {
-                d.takeRemote(c, cached.activeProfile, slot, conflict.remote)
+                d.takeRemote(c, owner, slot, conflict.remote)
                 runCatching { d.flush(c) }
                 log("${conflict.title}: took the save from ${conflict.host.device}; this one is in its history", conflict.game.id, "conflict")
             }
@@ -570,7 +648,7 @@ class JvmSyncService(
             if (cached.records) d.played(profile, query.game, session)
             val total = d.meta(profile).game(query.game).totalSeconds
             for (slot in slots(query)) {
-                runCatching { d.capture(profile, slot, total, title = query.title) }.getOrNull()?.let { log("${query.title}: saved ${it.kind.label.lowercase()}", query.game.id, "save") }
+                runCatching { d.capture(ownerOf(query, slot, profile), slot, total, title = query.title) }.getOrNull()?.let { log("${query.title}: saved ${it.kind.label.lowercase()}", query.game.id, "save") }
             }
             client?.let { c -> runCatching { d.flush(c) }.onFailure { if (it is SyncException) handle(it) } }
         }
@@ -585,8 +663,10 @@ class JvmSyncService(
     override suspend fun versions(query: SaveQuery, kind: SaveKind): List<SaveVersion> = withContext(Dispatchers.IO) {
         val c = client ?: return@withContext emptyList()
         val profile = cached.activeProfile.ifEmpty { return@withContext emptyList() }
-        val key = slots(query).firstOrNull { it.kind == kind }?.game ?: query.game
-        val list = runCatching { c.revisions(profile, key.id, kind) }.getOrDefault(emptyList())
+        val slot = slots(query).firstOrNull { it.kind == kind }
+        val key = slot?.game ?: query.game
+        val owner = slot?.let { ownerOf(query, it, profile) } ?: profile
+        val list = runCatching { c.revisions(owner, key.id, kind) }.getOrDefault(emptyList())
         val head = list.firstOrNull { it.reason != RevisionReason.CONFLICT_COPY }?.id
         list.map { SaveVersion(it.id, it.deviceName, it.at.millis, it.playSeconds, it.size, it.reason, it.id == head) }
     }
@@ -596,16 +676,21 @@ class JvmSyncService(
             val c = client ?: error("Fuse Sync isn't connected.")
             val d = device ?: error("Fuse Sync isn't set up.")
             val slot = slots(query).firstOrNull { it.kind == kind } ?: error("That save isn't here.")
-            val rev = c.revisions(cached.activeProfile, slot.game.id, kind).firstOrNull { it.id == version } ?: error("That version is gone.")
+            val owner = ownerOf(query, slot, cached.activeProfile)
+            val rev = c.revisions(owner, slot.game.id, kind).firstOrNull { it.id == version } ?: error("That version is gone.")
             // What is here now is kept in the history first, then the old one becomes the newest.
             d.place(c, slot, rev)
-            d.capture(cached.activeProfile, slot, rev.playSeconds, Priority.LAUNCH, title = query.title)
+            d.capture(owner, slot, rev.playSeconds, Priority.LAUNCH, title = query.title)
             d.flush(c)
             log("${query.title}: restored the save from ${rev.deviceName}", query.game.id, "restore")
         }
     }
 
-    override suspend fun keepVersion(version: String, keep: Boolean): Result<Unit> = withClient { c -> c.pin(cached.activeProfile, version, keep); Unit }
+    // A version is the person's own, or (for a game played as one save) everyone's.
+    override suspend fun keepVersion(version: String, keep: Boolean): Result<Unit> = withClient { c ->
+        runCatching { c.pin(cached.activeProfile, version, keep) }.recoverCatching { c.pin(SHARED_SAVES, version, keep) }.getOrThrow()
+        Unit
+    }
 
     // ---------------------------------------------------------------- leaving
 
@@ -649,15 +734,15 @@ class JvmSyncService(
         }
     }
 
-    private fun lanAddresses(): List<String> = runCatching {
-        NetworkInterface.getNetworkInterfaces().toList()
-            .filter { it.isUp && !it.isLoopback }
-            .flatMap { it.inetAddresses.toList() }
-            .filterIsInstance<Inet4Address>()
-            .map { it.hostAddress }
-    }.getOrDefault(emptyList())
+    private fun lanAddresses(): List<String> = LanAddresses.list()
 
     companion object {
+        /** Why a host at [address] might not answer, and what to check. */
+        internal fun unreachableWords(address: String): String {
+            val shown = address.removePrefix("http://").removePrefix("https://")
+            return "The host didn't answer at $shown. Check that both are on the same Wi-Fi, and that the host's firewall lets Fuse in (port ${shown.substringAfterLast(':', SyncApi.DEFAULT_PORT.toString())})."
+        }
+
         const val LINK_KEY = "sync.link"
         private const val PROFILES_FILE = "profiles.json"
 

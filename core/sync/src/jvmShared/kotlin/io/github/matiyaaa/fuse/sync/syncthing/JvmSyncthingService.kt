@@ -8,6 +8,7 @@ import io.github.matiyaaa.fuse.sync.SaveEnvironment
 import io.github.matiyaaa.fuse.sync.SaveKind
 import io.github.matiyaaa.fuse.sync.SaveQuery
 import io.github.matiyaaa.fuse.sync.SaveSpot
+import io.github.matiyaaa.fuse.sync.WithSaveFolders
 import io.ktor.client.HttpClient
 import java.io.File
 import kotlinx.coroutines.CoroutineScope
@@ -44,7 +45,7 @@ class JvmSyncthingService(
     private val settings: SettingsStore,
     private val secrets: SecretStore,
     private val scope: CoroutineScope,
-    private val env: SaveEnvironment = FileSaveEnvironment(platform.host),
+    files: SaveEnvironment = FileSaveEnvironment(platform.host),
     /** Games to plan folders from (one per emulator and system in the library), for folders another device offers. */
     var samples: suspend () -> List<SaveQuery> = { emptyList() },
     private val clock: () -> Long = System::currentTimeMillis,
@@ -64,6 +65,14 @@ class JvmSyncthingService(
     private var http: HttpClient? = null
     private var watcher: Job? = null
     private var myId: String? = null
+
+    /** The save folders the person chose (Settings, Save folders), as last read. */
+    @Volatile private var saveFolders: Map<String, String> = emptyMap()
+    private val env: SaveEnvironment = WithSaveFolders(files) { saveFolders }
+
+    private suspend fun readSaveFolders() {
+        saveFolders = runCatching { settings.current().sync.saveFolders }.getOrDefault(saveFolders)
+    }
 
     init {
         scope.launch {
@@ -158,6 +167,7 @@ class JvmSyncthingService(
     // Folders ---------------------------------------------------------------------------------------
 
     override suspend fun plan(samples: List<SaveQuery>): List<SyncthingPlanFolder> = withContext(Dispatchers.IO) {
+        readSaveFolders()
         data class Found(val emulator: String, val kind: SaveKind, val dir: String?, val blocked: String?)
         val found = mutableListOf<Found>()
         for (q in samples) {
@@ -239,6 +249,7 @@ class JvmSyncthingService(
     override suspend fun beforeLaunch(query: SaveQuery): SyncthingGate = withContext(Dispatchers.IO) {
         val s = settings.current().syncthing
         if (!s.enabled) return@withContext SyncthingGate.Go()
+        readSaveFolders()
         val spots = spotsOf(query)
         if (spots.isEmpty()) return@withContext SyncthingGate.Go()
         val a = api

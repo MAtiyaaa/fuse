@@ -54,6 +54,7 @@ class HostStore(val dir: File, private val clock: () -> Long = System::currentTi
     private val identityFile = File(dir, "host.json")
     private val devicesFile = File(dir, "devices.json")
     private val profilesFile = File(dir, "profiles.json")
+    private val sharedFile = File(dir, "shared-games.json")
     private val journalFile = File(dir, "journal.jsonl")
 
     /**
@@ -78,6 +79,7 @@ class HostStore(val dir: File, private val clock: () -> Long = System::currentTi
     private val profiles = LinkedHashMap<String, ProfileRecord>()
     private val metas = HashMap<String, ProfileMeta>()
     private val revisions = HashMap<String, MutableList<SaveRevision>>()
+    private val shared = LinkedHashSet<String>()
     private val journal = ArrayList<JournalEvent>()
     private var seq = 0L
     val startedAt: Long = clock()
@@ -100,6 +102,11 @@ class HostStore(val dir: File, private val clock: () -> Long = System::currentTi
                 revisions[p.id] = revFile.readLines().mapNotNull { line -> runCatching { json.decodeFromString(SaveRevision.serializer(), line) }.getOrNull() }.toMutableList()
             }
         }
+        // The saves everyone plays together, and which games they are.
+        File(profileDir(SHARED_SAVES), "revisions.jsonl").takeIf { it.isFile }?.let { f ->
+            revisions[SHARED_SAVES] = f.readLines().mapNotNull { line -> runCatching { json.decodeFromString(SaveRevision.serializer(), line) }.getOrNull() }.toMutableList()
+        }
+        if (sharedFile.isFile) runCatching { json.decodeFromString(SharedGames.serializer(), sharedFile.readText()).games }.getOrNull()?.let(shared::addAll)
         if (journalFile.isFile) {
             journalFile.readLines().mapNotNullTo(journal) { line -> runCatching { json.decodeFromString(JournalEvent.serializer(), line) }.getOrNull() }
             seq = journal.lastOrNull()?.seq ?: 0
@@ -274,6 +281,8 @@ class HostStore(val dir: File, private val clock: () -> Long = System::currentTi
 
     /** Whether [device] may use [profile] now. */
     internal fun mayUse(device: String, profile: String): Boolean = synchronized(lock) {
+        // Saves everyone plays together belong to the household: any device it trusts may use them.
+        if (profile == SHARED_SAVES) return@synchronized devices[device]?.revoked == false
         val p = profiles[profile]?.takeIf { !it.deleted } ?: return@synchronized false
         val d = devices[device]?.takeIf { !it.revoked } ?: return@synchronized false
         if (p.pinHash == null) return@synchronized true
@@ -406,6 +415,41 @@ class HostStore(val dir: File, private val clock: () -> Long = System::currentTi
         append(File(profileDir(profile), "revisions.jsonl"), json.encodeToString(SaveRevision.serializer(), kept))
         event(JournalEvent.REVISION, profile, revision.game, revision.kind, kept.id, device)
         if (fits) RevisionResult(accepted = true, head = kept) else RevisionResult(accepted = false, head = head, conflict = true)
+    }
+
+    /** The games played as one save for everyone. */
+    fun sharedGames(): SharedGames = synchronized(lock) { SharedGames(shared.toList()) }
+
+    /**
+     * Makes [game] one save for everyone, or each person's own again. Made shared from [from], that
+     * person's newest saves of it become the shared ones (each kind's head, copied, so theirs stays
+     * in their own history too); without [from] everyone starts it together from nothing.
+     * Each person's own saves are never touched either way.
+     */
+    fun setShared(game: String, isShared: Boolean, from: String?, device: String): SharedGames = synchronized(lock) {
+        require(GameKey.parse(game) != null) { "Bad game key" }
+        if (isShared) {
+            if (from != null) {
+                val heads = revisions[from].orEmpty().filter { it.game == game && it.reason != RevisionReason.CONFLICT_COPY }
+                    .groupBy { it.kind }.mapNotNull { (_, list) -> list.maxByOrNull { it.at } }
+                val list = revisions.getOrPut(SHARED_SAVES) { ArrayList() }
+                for (h in heads) {
+                    val parent = head(SHARED_SAVES, game, h.kind)
+                    val copy = h.copy(
+                        id = SyncCrypto.token(12), profile = SHARED_SAVES, parent = parent?.id,
+                        at = Hlc(maxOf(clock(), (parent?.at?.millis ?: 0) + 1), 0, device), reason = RevisionReason.PLAYED,
+                    )
+                    list += copy
+                    append(File(profileDir(SHARED_SAVES), "revisions.jsonl"), json.encodeToString(SaveRevision.serializer(), copy))
+                    event(JournalEvent.REVISION, SHARED_SAVES, game, h.kind, copy.id, device)
+                }
+            }
+            shared += game
+        } else {
+            shared -= game
+        }
+        writeAtomically(sharedFile, json.encodeToString(SharedGames.serializer(), SharedGames(shared.toList())).toByteArray())
+        SharedGames(shared.toList())
     }
 
     /** Marks a revision as one to keep for good (or not). */

@@ -152,7 +152,7 @@ internal fun SyncChoiceStage(fuseSync: Boolean, syncthing: Boolean, hasFuseSync:
             if (hasFuseSync) {
                 ChoiceCard(
                     name = "Fuse Sync", tag = if (fuseSync) "On" else "Recommended", tint = c.accent, mark = FuseIcons.RefreshCcw,
-                    lines = listOf(FuseIcons.Save to "Saves, by game", FuseIcons.Clock to "Play time", FuseIcons.Users to "A profile each"),
+                    lines = listOf(FuseIcons.Save to "Saves, by game", FuseIcons.Clock to "Play time", FuseIcons.Users to "Saves per person"),
                     on = fuseSync, filled = true,
                     modifier = Modifier.offset((-76).dp, 0.dp).zIndex(lead).graphicsLayer {
                         val s = 0.86f + 0.14f * lead
@@ -167,7 +167,7 @@ internal fun SyncChoiceStage(fuseSync: Boolean, syncthing: Boolean, hasFuseSync:
             }
             ChoiceCard(
                 name = "Syncthing", tag = if (syncthing) "On" else "Bring your own", tint = teal, mark = FuseIcons.FolderSync,
-                lines = listOf(FuseIcons.FolderOpen to "Save folders", FuseIcons.Link2 to "Your Syncthing"),
+                lines = listOf(FuseIcons.FolderOpen to "Save folders", FuseIcons.Users to "One save for all", FuseIcons.Link2 to "Your Syncthing"),
                 on = syncthing, filled = false,
                 modifier = Modifier.offset(if (hasFuseSync) 92.dp else 0.dp, 8.dp).zIndex(1f - lead).graphicsLayer {
                     val s = 0.86f + 0.14f * (1f - lead)

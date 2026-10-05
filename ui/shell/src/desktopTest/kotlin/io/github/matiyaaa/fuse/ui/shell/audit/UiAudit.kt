@@ -183,6 +183,10 @@ class UiAudit {
 
     @Test fun syncthingM() = audit(AuditSize.M) { syncthingScreens() }
 
+    @Test fun saveFoldersM() = audit(AuditSize.M) { saveFolderScreens() }
+
+    @Test fun saveFoldersH() = audit(AuditSize.H) { saveFolderScreens() }
+
     @Test fun syncthingH() = audit(AuditSize.H) { syncthingScreens() }
 
     @Test fun syncH() = audit(AuditSize.H) { syncScreens() }

@@ -25,7 +25,10 @@ class HostTest {
                 val buf = ByteArray(1024)
                 val p = DatagramPacket(buf, buf.size)
                 s.receive(p)
-                assertEquals(hello, Json.decodeFromString(HostHello.serializer(), String(p.data, 0, p.length)))
+                val answer = Json.decodeFromString(HostHello.serializer(), String(p.data, 0, p.length))
+                assertEquals(hello, answer.copy(addresses = emptyList()))
+                // It says every address it has on the home network, so a device can find one that answers.
+                assertEquals(LanAddresses.list(), answer.addresses)
                 // Anything else gets no answer.
                 val other = "hello?".toByteArray()
                 s.send(DatagramPacket(other, other.size, InetAddress.getLoopbackAddress(), port))
@@ -35,6 +38,18 @@ class HostTest {
         } finally {
             responder.stop()
         }
+    }
+
+    @Test
+    fun aDeviceTriesEveryAddressAHostHasHomeNetworksFirst() {
+        // Answered from a Docker bridge: the address it answered from first, then the ones it listed.
+        val found = FoundHost(HostHello("h1", "Media Server", port = 47311, addresses = listOf("192.168.1.20", "172.19.0.1")), "172.19.0.1:47311")
+        assertEquals(listOf("172.19.0.1:47311", "192.168.1.20:47311"), found.candidates)
+        assertTrue(LanAddresses.rank("192.168.1.20") < LanAddresses.rank("10.0.0.5"))
+        assertTrue(LanAddresses.rank("10.0.0.5") < LanAddresses.rank("172.19.0.1"))
+        assertTrue(LanAddresses.list().none { it.startsWith("127.") || it.startsWith("169.254.") })
+        assertTrue("firewall" in JvmSyncService.unreachableWords("http://172.19.0.1:47311"))
+        assertTrue("172.19.0.1:47311" in JvmSyncService.unreachableWords("http://172.19.0.1:47311"))
     }
 
     @Test

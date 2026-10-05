@@ -80,7 +80,11 @@ class SaveAdapterTest {
     fun emulatorsWithoutAnAdapterSayWhy() {
         assertNull(SaveAdapters.forEmulator("linux.xemu"))
         assertTrue("disk image" in SaveAdapters.whyNot("linux.xemu"))
-        assertTrue("Switch" in SaveAdapters.whyNot("windows.eden"))
+        assertTrue("private Android folder" in SaveAdapters.whyNot("xendroid"))
+        // Switch, 3DS and Wii U emulators have their own now.
+        assertNotNull(SaveAdapters.forEmulator("windows.eden"))
+        assertNotNull(SaveAdapters.forEmulator("azahar"))
+        assertNotNull(SaveAdapters.forEmulator("linux.cemu"))
         assertEquals("retroarch", SaveAdapters.baseId("linux.retroarch-steam").removeSuffix("-steam"))
     }
 
@@ -104,7 +108,7 @@ class SaveAdapterTest {
             val pcRoms = File(root, "pc/roms").apply { mkdirs() }
             File(deckRoms, "Chrono Trigger (USA).srm").writeText("deck progress")
             val q = { rom: File -> SaveQuery(ct, "snes", rom.path.replace('\\', '/'), "mgba") }
-            val env = FileSaveEnvironment("LINUX", root.path)
+            val env = FileSaveEnvironment("LINUX", root.path, variables = { null })
             val deckSpot = SaveAdapters.forEmulator("mgba")!!.locate(q(File(deckRoms, "Chrono Trigger (USA).sfc")), env).single()
             // mGBA keeps .sav beside the game; write it there.
             File(deckSpot.pathFor("save.srm")!!).writeText("deck progress")

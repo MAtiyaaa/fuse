@@ -285,6 +285,22 @@ private val AuditDriver.syncthing: AuditSyncthing
         return controls.syncthing ?: throw NotCovered("This store has no Syncthing")
     }
 
+/** Save Folders, from Fuse Sync's page: each emulator, and choosing a folder for one Fuse can't reach. */
+internal fun AuditDriver.saveFolderScreens() {
+    scenario("sync", "save folders") {
+        useSync(asHost = false)
+        openSyncPage()
+        focusText("Save Folders")
+        tap(PadButton.A)
+        waitFor("Lemuroid")
+        shoot("Save Folders: what needs a folder first, then what was found", 1_000)
+        tap(PadButton.DPAD_DOWN)
+        tap(PadButton.A)
+        waitFor("Choose Its Folder")
+        shoot("choosing DraStic's folder")
+    }
+}
+
 /** Settings, Addons, Syncthing's page (through Addons, as a person gets there). */
 private fun AuditDriver.openSyncthingPage() {
     openSettings()

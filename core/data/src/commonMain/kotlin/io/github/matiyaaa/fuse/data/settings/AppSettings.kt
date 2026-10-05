@@ -110,6 +110,13 @@ data class SyncSettings(
     val startupProfile: String = "",
     /** The profile in use on this device. */
     val activeProfile: String = "",
+    /** Games the household plays as one save, as the host last said (kept here so it holds offline). */
+    val sharedGames: List<String> = emptyList(),
+    /**
+     * Save folders the person chose, by emulator id ("drastic" to its folder), for emulators that
+     * save where you tell them or that Fuse can't find alone. Used by Fuse Sync and Syncthing alike.
+     */
+    val saveFolders: Map<String, String> = emptyMap(),
     /** Home on this device: "PROFILE" (the profile's, as on every device) or "DEVICE" (this device's own). */
     val homeScope: String = "PROFILE",
     /** This device's own Home, while [homeScope] is DEVICE; the profile's stays as it was. */

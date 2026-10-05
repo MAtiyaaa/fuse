@@ -37,11 +37,32 @@ fun FText(
     align: TextAlign? = null,
     overflow: TextOverflow = TextOverflow.Ellipsis,
     minLines: Int = 1,
+    /** Set smaller (down to [fitMin] of its size) rather than cut short, so the whole phrase shows. */
+    fit: Boolean = false,
+    fitMin: Float = 0.55f,
 ) {
+    val styled = if (align != null) style.copy(color = color, textAlign = align) else style.copy(color = color)
+    if (fit && style.fontSize.isSp) {
+        BasicText(
+            text = text,
+            modifier = modifier,
+            style = styled,
+            maxLines = maxLines,
+            minLines = minLines.coerceAtMost(maxLines),
+            overflow = overflow,
+            softWrap = maxLines > 1,
+            autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(
+                minFontSize = style.fontSize * fitMin,
+                maxFontSize = style.fontSize,
+                stepSize = androidx.compose.ui.unit.TextUnit(0.5f, androidx.compose.ui.unit.TextUnitType.Sp),
+            ),
+        )
+        return
+    }
     BasicText(
         text = text,
         modifier = modifier,
-        style = if (align != null) style.copy(color = color, textAlign = align) else style.copy(color = color),
+        style = styled,
         maxLines = maxLines,
         minLines = minLines.coerceAtMost(maxLines),
         overflow = overflow,

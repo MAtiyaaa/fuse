@@ -41,6 +41,20 @@ internal class AuditSync(private val settings: SettingsStore) : SyncService {
     override val defaultName = "Gaming PC"
     override fun lifetimeState() = ServiceState(installed = false, running = false, description = "Starts with this computer, before anyone signs in")
 
+    /** Where a handheld's emulators keep their saves: found, chosen, private, and not supported. */
+    override suspend fun saveFolders(samples: List<io.github.matiyaaa.fuse.sync.SaveQuery>) = listOf(
+        io.github.matiyaaa.fuse.sync.EmulatorSaves("lemuroid", "lemuroid", listOf("snes", "gba"), io.github.matiyaaa.fuse.sync.EmulatorSaves.State.NOT_FOUND,
+            note = "Lemuroid keeps its saves in its own private Android folder, which no other app can open. RetroArch, with its saves in your storage, syncs fully."),
+        io.github.matiyaaa.fuse.sync.EmulatorSaves("drastic", "drastic", listOf("nds"), io.github.matiyaaa.fuse.sync.EmulatorSaves.State.NOT_FOUND,
+            note = "In DraStic, Change Options, General, System Directory, choose Scoped Storage Folder and a folder named DraStic in your storage; Fuse finds it there."),
+        io.github.matiyaaa.fuse.sync.EmulatorSaves("retroarch", "retroarch", listOf("snes", "nes", "genesis"), io.github.matiyaaa.fuse.sync.EmulatorSaves.State.FOUND, where = "/storage/emulated/0/RetroArch/saves", canChoose = false),
+        io.github.matiyaaa.fuse.sync.EmulatorSaves("azahar", "azahar", listOf("3ds"), io.github.matiyaaa.fuse.sync.EmulatorSaves.State.FOUND, where = "/storage/emulated/0/Azahar/sdmc/Nintendo 3DS", chosen = "/storage/emulated/0/Azahar"),
+        io.github.matiyaaa.fuse.sync.EmulatorSaves("eden", "eden", listOf("switch"), io.github.matiyaaa.fuse.sync.EmulatorSaves.State.FOUND, where = "/storage/emulated/0/Eden/nand/user/save"),
+        io.github.matiyaaa.fuse.sync.EmulatorSaves("melonds", "melonds", listOf("nds"), io.github.matiyaaa.fuse.sync.EmulatorSaves.State.FOUND, where = "Beside each game"),
+        io.github.matiyaaa.fuse.sync.EmulatorSaves("winlator", "winlator", listOf("windows"), io.github.matiyaaa.fuse.sync.EmulatorSaves.State.UNSUPPORTED,
+            note = "Windows games keep their own saves inside this app's Windows drive, a different place for every game.", canChoose = false),
+    )
+
     /** The next game launched meets a save conflict. */
     @Volatile var conflictNext: SaveConflict? = null
 

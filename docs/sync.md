@@ -34,6 +34,13 @@ battery, so it couldn't promise to be there for your other devices.
 
 Onboarding offers the same two buttons, and both can be skipped.
 
+**If a device can't reach the host.** A computer with Docker, WSL, Hyper-V or virtual machines has
+networks of its own (`172.17.0.1` to `172.31.x.x` are typical) that no other device can reach. The
+host leaves those out and lists its home network address first, and a device tries every address
+the host has and uses the one that answers. If none does, the host's firewall is usually what
+stops it: allow Fuse (or TCP port 47311 and UDP port 47310) on private networks. On Windows, that
+is the "Allow access" prompt the first time Fuse hosts, or Windows Security, Firewall, Allow an app.
+
 ## Profiles
 
 Every person has a profile on the host, with one of Fuse's own avatars and, if they want, a PIN.
@@ -48,6 +55,22 @@ the same time.
 The first time a device joins a profile, what it already had joins that profile: a new profile
 takes it as it is; a profile already in use keeps what it has and only gains what it was missing,
 plus this device's play time. Nothing on the device is replaced without asking.
+
+## People and saves
+
+Each person has their own saves, even on a device several people share. Fuse remembers whose save
+is in each emulator's folder; when someone else starts that game, the one who played last keeps
+theirs (anything they changed is kept for them first, and their save is set aside on the device
+by content), then the new player's own save comes in: the newest from the host, or, offline,
+the one set aside for them here. Someone who never played that game starts it fresh, with nothing
+of anyone else's. Memory cards shared by every game on them (PlayStation 2, GameCube, Dreamcast)
+work the same way, per person. A save conflict is only ever between one person's own versions.
+
+**Play One Save Together.** A game can instead be one save for everyone (a game a family plays
+together). Turn it on in the game's Save History; Fuse asks whether to start from your save or
+fresh. Every device then puts the same save in place for whoever plays, and it shows as "shared by
+everyone". Play time stays each person's own, and each person's earlier saves stay in their
+history, so turning it off later goes back to them.
 
 ## What syncs, and what stays
 
@@ -78,24 +101,45 @@ version tags), never by where its file is. "Pokemon Ruby (USA).gba" on the PC an
 "pokemon ruby (Europe).gba" on a card in the handheld are the same game, and its save lands where
 each device's emulator reads it.
 
-Saves are found by per-emulator adapters:
+Saves are found by per-emulator adapters. Fuse Sync and Syncthing use the same ones.
 
-| Emulator | Saves | Save states |
+| Emulators | Where their saves are | Save states |
 | --- | --- | --- |
-| RetroArch (and Lemuroid) | Per core, beside the content or in its saves folder | Per core |
-| DuckStation | Memory cards | Yes |
-| PCSX2, NetherSX2, ARMSX2 | Memory cards (shared by every game on them, synced as cards) | |
-| PPSSPP | SAVEDATA folders by game id | |
-| Dolphin | GameCube memory cards, Wii saves | |
-| melonDS, mGBA, Mednafen, SkyEmu | Saves beside the game | |
-| RPCS3 | dev_hdd0 savedata by serial | |
+| RetroArch | Per core, where its config says (beside the content, or its saves folder) | Per core |
+| Lemuroid | Its saves folder, when moved out of Android's private storage | |
+| DuckStation, ePSXe, FPse | Memory cards | DuckStation |
+| PCSX2, NetherSX2, AetherSX2, ARMSX2, Play! | Memory cards (shared by every game on them, synced as cards) | |
+| PPSSPP | SAVEDATA folders by game id, on the memory stick you chose | |
+| Dolphin (and MMJR) | GameCube memory cards, Wii saves | |
+| melonDS, mGBA, Mednafen, SkyEmu, My Boy!, My OldBoy!, Pizza Boy, NooDS and others | Saves beside the game, or their save folder | |
+| DraStic | `backup/<game>.dsv`, converted to and from a plain DS save | |
+| Mupen64Plus, M64Plus FZ | The game's EEPROM, SRAM, FlashRAM and paks, converted to and from RetroArch's one file | |
+| Flycast, Redream | VMUs | |
+| Yaba Sanshiro, Saturn emulators | Backup RAM | |
+| MAME | NVRAM by set | |
+| ScummVM | Its saves by game | |
+| RPCS3 (and on Android) | dev_hdd0 savedata by serial | |
 | Vita3K | ux0 savedata by title id | |
 | shadPS4 | User savedata by serial | |
-| Flycast | VMUs | |
+| Azahar, Citra, Lime3DS, Mandarine | The emulated SD card, by the cartridge's title id | |
+| Eden, Citron, Sudachi, yuzu and forks | The emulated NAND, by title id | |
+| Ryujinx | Its numbered save folders, matched by title id | |
+| Cemu | `mlc01/usr/save`, by the title id in the game's `meta.xml` | |
+| Xenia | `content`, by the title id in the game's name | |
 
-A save is only put where the same format is read: a state from one core never lands in another.
-Switch, 3DS and Xbox emulators keep saves inside their own storage, which Fuse Sync doesn't move
-yet; it says so rather than guessing.
+Title ids come from the game itself where they can: a 3DS cartridge's header, a Switch game's
+`[0100…]` tag or the ticket inside its NSP, a Wii U game's `meta.xml`. A save is only put where the
+same format is read (a state from one core never lands in another), except where Fuse can convert:
+DraStic's `.dsv` and a plain DS save, and Mupen64Plus's separate N64 save files and RetroArch's one
+`.srm`.
+
+**Save Folders** (Settings, Addons, Fuse Sync or Syncthing) lists each emulator in the library and
+where its saves are on this device. Emulators that save where you tell them (Azahar, PPSSPP's
+memory stick, DraStic, M64Plus FZ, Vita3K and others) can be pointed at that folder; the choice
+is this device's own and is used by Fuse Sync and Syncthing alike. Android 11 and later keep each
+app's `Android/data` folder private, so an emulator that only saves there says so, with how to move
+its data out. Still out of reach: xemu (its saves are inside a hard disk image), Windows games in
+Winlator and similar (each keeps its own), and PC games (Steam has its own cloud).
 
 ## Around a game
 
@@ -222,7 +266,9 @@ so the new save goes out.
 
 **What it can't do.** Syncthing moves files as they are named, so a save only matches where the
 game's file has the same name on every device, and there is no play time, no profiles and no
-library or settings sync. That is why Fuse Sync is the one Fuse recommends.
+library or settings sync. It also keeps one save per game for everyone who plays on these devices,
+where Fuse Sync gives each person their own. That is why Fuse Sync is the one Fuse recommends.
+Its folders come from the same adapters and Save Folders as Fuse Sync.
 
 **Leaving.** Turning Syncthing off in Fuse, or Disconnect Syncthing, stops Fuse using it (and
 Disconnect forgets the key). Syncthing keeps running and keeps syncing whatever it shares, and

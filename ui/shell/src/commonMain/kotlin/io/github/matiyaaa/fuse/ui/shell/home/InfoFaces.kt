@@ -80,9 +80,9 @@ internal fun ColumnScope.ClockFaceNew(clock24h: Boolean, face: FaceSize) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 FuseIcon(FuseIcons.Clock3, size = Size.iconXS, tint = Fuse.colors.textMuted)
                 Spacer(Modifier.width(Space.s - Space.xxs))
-                FText(now.weekday.take(3).uppercase(), Fuse.type.overline, color = Fuse.colors.textMuted, maxLines = 1)
+                FText(now.weekday.take(3).uppercase(), Fuse.type.overline, color = Fuse.colors.textMuted, maxLines = 1, fit = true)
                 Spacer(Modifier.weight(1f))
-                FText(now.date, Fuse.type.caption, color = Fuse.colors.textMuted, maxLines = 1)
+                FText(now.date, Fuse.type.caption, color = Fuse.colors.textMuted, maxLines = 1, fit = true)
             }
             Spacer(Modifier.weight(1f))
             WidgetValue(time)
@@ -115,8 +115,8 @@ internal fun ColumnScope.ClockFaceNew(clock24h: Boolean, face: FaceSize) {
                         CalendarLeaf(now, if (big) 52.dp else 40.dp)
                         Spacer(Modifier.width(Space.m))
                         Column {
-                            FText(now.weekday, if (big) Fuse.type.bodyStrong else Fuse.type.label, maxLines = 1)
-                            FText(now.date, Fuse.type.caption, color = Fuse.colors.textMuted, maxLines = 1)
+                            FText(now.weekday, if (big) Fuse.type.bodyStrong else Fuse.type.label, maxLines = 1, fit = true)
+                            FText(now.date, Fuse.type.caption, color = Fuse.colors.textMuted, maxLines = 1, fit = true)
                         }
                     }
                 }
@@ -264,7 +264,7 @@ internal fun ColumnScope.StorageFaceNew(feed: HomeFeed, face: FaceSize) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 val ring = if (room.small) 40.dp else 48.dp
                 CapacityRing(used, tone, ring, stroke = 5.dp) {
-                    FText(percent, Fuse.type.caption.tabular(), maxLines = 1)
+                    FText(percent, Fuse.type.caption.tabular(), maxLines = 1, fit = true)
                 }
                 Spacer(Modifier.width(Space.m))
                 Column(Modifier.weight(1f)) {
@@ -279,7 +279,7 @@ internal fun ColumnScope.StorageFaceNew(feed: HomeFeed, face: FaceSize) {
             Row(verticalAlignment = Alignment.Bottom) {
                 WidgetValue("${bytesText(s.freeBytes)} free", Modifier.weight(1f))
                 Spacer(Modifier.width(Space.m))
-                FText("$percent used", Fuse.type.numericSmall, color = if (low) c.warning else c.textMuted, maxLines = 1)
+                FText("$percent used", Fuse.type.numericSmall, color = if (low) c.warning else c.textMuted, maxLines = 1, fit = true)
             }
             Spacer(Modifier.height(Space.s))
             CapacityBar(used, tone, Modifier.fillMaxWidth())
@@ -298,7 +298,7 @@ internal fun ColumnScope.StorageFaceNew(feed: HomeFeed, face: FaceSize) {
                     CapacityRing(used, tone, ring, stroke = if (big) 16.dp else 11.dp) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             FText(bytesText(s.freeBytes), (if (big) Fuse.type.display else Fuse.type.title).tabular(), maxLines = 1)
-                            FText("free", if (big) Fuse.type.label else Fuse.type.caption, color = c.textMuted, maxLines = 1)
+                            FText("free", if (big) Fuse.type.label else Fuse.type.caption, color = c.textMuted, maxLines = 1, fit = true)
                         }
                     }
                 }
@@ -378,7 +378,7 @@ private fun LegendRow(color: Color?, label: String, value: String, big: Boolean)
         )
         Spacer(Modifier.width(Space.s))
         Column {
-            FText(label, Fuse.type.caption, color = c.textMuted, maxLines = 1)
+            FText(label, Fuse.type.caption, color = c.textMuted, maxLines = 1, fit = true)
             FText(value, (if (big) Fuse.type.bodyStrong else Fuse.type.label).tabular(), maxLines = 1)
         }
     }
