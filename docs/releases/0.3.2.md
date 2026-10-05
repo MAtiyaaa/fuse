@@ -47,6 +47,15 @@
 
 ## Fixed
 
+- Connecting a device to a Fuse Sync host could time out when the host's computer also runs
+  Docker, WSL or virtual machines: the host offered an address on one of their networks, which no
+  other device can reach. The host now lists its home network address first and leaves those
+  out, and a device tries each address the host has and uses the one that answers. When none
+  does, it says what to check (the same Wi-Fi, the host's firewall) under the code, instead of
+  the network's own error over the Connect button.
+- The pairing code's boxes cut wide letters such as Q and W short on a small screen. They are set
+  a little smaller to fit now.
+
 - On a device several people share, someone starting a game they had never played picked up the
   last player's save, and it could then be kept as their own. Each person now starts with their
   own save, or none.

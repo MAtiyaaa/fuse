@@ -27,6 +27,8 @@ data class HostHello(
     val version: Int = SyncApi.VERSION,
     val port: Int = SyncApi.DEFAULT_PORT,
     val fuseVersion: String = "",
+    /** Where it can be reached on the home network, best first (in discovery answers). */
+    val addresses: List<String> = emptyList(),
 )
 
 /** A device asking to join: the code shown on the host, and who the device is. */

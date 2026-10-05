@@ -120,6 +120,8 @@ internal fun SyncSetupScreen(app: AppState, host: Boolean) {
     var step by remember(host) { mutableStateOf<SetupStep>(if (host) SetupStep.HostIntro else SetupStep.Find) }
     var index by remember { mutableIntStateOf(0) }
     var working by remember { mutableStateOf(false) }
+    // Why the last try to connect didn't, shown under the code rather than over the button.
+    var connectError by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(Unit) {
         app.hero = null
         app.hints = listOf(Hint(HintButton.CONFIRM, "Choose"), Hint(HintButton.BACK, "Back"))
@@ -152,12 +154,13 @@ internal fun SyncSetupScreen(app: AppState, host: Boolean) {
                             }
                             SetupStep.HostReady -> HostReady(app, compact, keys.at(s == step))
                             SetupStep.Find -> Find(app, compact, keys.at(s == step)) { step = SetupStep.Code(it) }
-                            is SetupStep.Code -> CodeEntry(app, s.host, compact, keys.at(s == step), working) { code, remote ->
+                            is SetupStep.Code -> CodeEntry(app, s.host, compact, keys.at(s == step), working, connectError) { code, remote ->
                                 working = true
+                                connectError = null
                                 app.scope.launch {
                                     svc.connect(s.host.address, code, remote)
                                         .onSuccess { name -> step = SetupStep.Connected(name); app.platform.sounds.play(SoundCue.SELECT) }
-                                        .onFailure { app.toasts.show(it.message ?: "Couldn't connect", ToastKind.ERROR) }
+                                        .onFailure { connectError = it.message ?: "Couldn't connect"; app.platform.sounds.play(SoundCue.ERROR) }
                                     working = false
                                 }
                             }
@@ -382,7 +385,7 @@ internal fun PairingCard(app: AppState, code: String?, addresses: List<String>, 
             letters.forEachIndexed { i, ch ->
                 if (i == 4) Spacer(Modifier.width(if (compact) Space.s else Space.m))
                 Box(
-                    Modifier.size(if (compact) 34.dp else 44.dp, if (compact) 44.dp else 56.dp).clip(RoundedCornerShape(10.dp)).background(c.surfaceRaised),
+                    Modifier.size(if (compact) 38.dp else 46.dp, if (compact) 46.dp else 56.dp).clip(RoundedCornerShape(10.dp)).background(c.surfaceRaised),
                     contentAlignment = Alignment.Center,
                 ) {
                     if (current == null) Spinner(size = 14.dp, color = c.textFaint) else FText(ch.toString(), Fuse.type.numericLarge, maxLines = 1)
@@ -463,7 +466,7 @@ private fun Find(app: AppState, compact: Boolean, keys: ActiveKeys, onPick: (Nea
 
 /** The host's code: eight boxes that fill as it is typed (on a keyboard, or with the on-screen one). */
 @Composable
-private fun CodeEntry(app: AppState, host: NearbyHost, compact: Boolean, keys: ActiveKeys, working: Boolean, onConnect: (String, String?) -> Unit) {
+private fun CodeEntry(app: AppState, host: NearbyHost, compact: Boolean, keys: ActiveKeys, working: Boolean, error: String?, onConnect: (String, String?) -> Unit) {
     val actions = mutableListOf<SetupAction>()
     val index = keys.index
     val c = Fuse.colors
@@ -513,7 +516,8 @@ private fun CodeEntry(app: AppState, host: NearbyHost, compact: Boolean, keys: A
                     .border(if (next) 2.dp else 1.dp, if (next) c.focus else c.hairline, RoundedCornerShape(10.dp)),
                 contentAlignment = Alignment.Center,
             ) {
-                FText(ch?.toString() ?: "", Fuse.type.numericLarge, maxLines = 1)
+                // Wide letters (W, M, Q) are set a little smaller rather than cut off.
+                FText(ch?.toString() ?: "", Fuse.type.numericLarge, maxLines = 1, fit = true, fitMin = 0.6f)
             }
         }
     }
@@ -524,9 +528,23 @@ private fun CodeEntry(app: AppState, host: NearbyHost, compact: Boolean, keys: A
         "For away from home (optional)", remote ?: "Add an Outside Address", FuseIcons.Globe, selected = index == 1,
         detail = "Fuse uses the home address when it answers and this one otherwise, by itself",
     ) { app.textInput = TextInputSpec("Outside address (optional)", remote.orEmpty(), "https://sync.example.com", capitalize = false) { v -> remote = v.trim().ifEmpty { null } } }
+    Swap(error, label = "connectError") { e ->
+        if (e != null) {
+            Row(
+                Modifier.padding(top = Space.m).fillMaxWidth().clip(RoundedCornerShape(Fuse.geometry.control))
+                    .background(c.danger.copy(alpha = 0.12f)).border(1.dp, c.danger.copy(alpha = 0.35f), RoundedCornerShape(Fuse.geometry.control))
+                    .padding(horizontal = Space.m, vertical = Space.s),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                FuseIcon(FuseIcons.Unplug, size = Size.iconM, tint = c.danger)
+                Spacer(Modifier.width(Space.m))
+                FText(e, Fuse.type.caption, color = c.text, maxLines = 4)
+            }
+        }
+    }
     Spacer(Modifier.height(Space.xl))
     FuseButton(
-        "Connect", selected = index == 2, onClick = { if (code.length == 8 && !working) onConnect(code, remote) else typeCode() },
+        if (error != null) "Try Again" else "Connect", selected = index == 2, onClick = { if (code.length == 8 && !working) onConnect(code, remote) else typeCode() },
         icon = FuseIcons.Link, kind = ButtonKind.PRIMARY, loading = working, enabled = code.length == 8 || index == 2,
     )
     StepInput(app, keys, actions)

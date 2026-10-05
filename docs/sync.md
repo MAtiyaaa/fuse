@@ -34,6 +34,13 @@ battery, so it couldn't promise to be there for your other devices.
 
 Onboarding offers the same two buttons, and both can be skipped.
 
+**If a device can't reach the host.** A computer with Docker, WSL, Hyper-V or virtual machines has
+networks of its own (`172.17.0.1` to `172.31.x.x` are typical) that no other device can reach. The
+host leaves those out and lists its home network address first, and a device tries every address
+the host has and uses the one that answers. If none does, the host's firewall is usually what
+stops it: allow Fuse (or TCP port 47311 and UDP port 47310) on private networks. On Windows, that
+is the "Allow access" prompt the first time Fuse hosts, or Windows Security, Firewall, Allow an app.
+
 ## Profiles
 
 Every person has a profile on the host, with one of Fuse's own avatars and, if they want, a PIN.

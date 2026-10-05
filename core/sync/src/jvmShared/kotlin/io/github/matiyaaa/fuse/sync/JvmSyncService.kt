@@ -7,6 +7,8 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -20,8 +22,6 @@ import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 import java.io.File
-import java.net.Inet4Address
-import java.net.NetworkInterface
 
 /**
  * Fuse Sync on a JVM device (a computer, or Android): its settings in Fuse's own, its secret in the
@@ -324,9 +324,30 @@ class JvmSyncService(
     override suspend fun discover(): List<NearbyHost> = withContext(Dispatchers.IO) {
         val lock = runCatching { discoveryLock() }.getOrNull()
         try {
-            Discovery.find().map { NearbyHost(it.hello.name, it.hello.hostId, it.address) }
+            Discovery.find().map { NearbyHost(it.hello.name, it.hello.hostId, reachable(it)) }
         } finally {
             runCatching { lock?.close() }
+        }
+    }
+
+    /**
+     * The first of [host]'s addresses that answers as that host, tried all at once (a computer
+     * running Docker or virtual machines may answer discovery from one no other device reaches).
+     */
+    private suspend fun reachable(host: FoundHost): String {
+        val candidates = host.candidates
+        if (candidates.size == 1) return candidates.first()
+        val quick = io.ktor.client.HttpClient(io.ktor.client.engine.cio.CIO) {
+            install(io.ktor.client.plugins.HttpTimeout) { connectTimeoutMillis = 1_500; requestTimeoutMillis = 2_500 }
+            expectSuccess = false
+        }
+        return try {
+            kotlinx.coroutines.coroutineScope {
+                val answers = candidates.map { a -> async { a to (SyncClient.hello(a, quick)?.hostId == host.hello.hostId) } }
+                answers.awaitAll().firstOrNull { it.second }?.first ?: candidates.first()
+            }
+        } finally {
+            quick.close()
         }
     }
 
@@ -335,7 +356,16 @@ class JvmSyncService(
             val id = ensureDeviceId()
             val c = config()
             val name = c.deviceName.ifBlank { defaultDeviceName }
-            val link = SyncClient.pair(address, code, id, name, platform).let { if (remoteAddress != null) it.copy(remoteAddress = remoteAddress) else it }
+            val link = try {
+                SyncClient.pair(address, code, id, name, platform)
+            } catch (e: SyncException) {
+                throw e
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // Nothing answered there: say what usually causes it, never the network's own words.
+                throw SyncException(unreachableWords(address), "offline", 0)
+            }.let { if (remoteAddress != null) it.copy(remoteAddress = remoteAddress) else it }
             secrets.put(LINK_KEY, json.encodeToString(HostLink.serializer(), link))
             saveConfig {
                 it.copy(
@@ -699,15 +729,15 @@ class JvmSyncService(
         }
     }
 
-    private fun lanAddresses(): List<String> = runCatching {
-        NetworkInterface.getNetworkInterfaces().toList()
-            .filter { it.isUp && !it.isLoopback }
-            .flatMap { it.inetAddresses.toList() }
-            .filterIsInstance<Inet4Address>()
-            .map { it.hostAddress }
-    }.getOrDefault(emptyList())
+    private fun lanAddresses(): List<String> = LanAddresses.list()
 
     companion object {
+        /** Why a host at [address] might not answer, and what to check. */
+        internal fun unreachableWords(address: String): String {
+            val shown = address.removePrefix("http://").removePrefix("https://")
+            return "The host didn't answer at $shown. Check that both are on the same Wi-Fi, and that the host's firewall lets Fuse in (port ${shown.substringAfterLast(':', SyncApi.DEFAULT_PORT.toString())})."
+        }
+
         const val LINK_KEY = "sync.link"
         private const val PROFILES_FILE = "profiles.json"
 
