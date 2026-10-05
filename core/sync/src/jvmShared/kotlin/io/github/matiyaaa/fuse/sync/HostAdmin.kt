@@ -43,6 +43,10 @@ class HostAdmin(private val port: Int, private val token: String, private val ht
     suspend fun status(): HostStatus = json.decodeFromString(HostStatus.serializer(), call(HttpMethod.Get, "/status"))
     suspend fun rename(id: String, name: String) { call(HttpMethod.Patch, "/devices/$id", json.encodeToString(DeviceChange.serializer(), DeviceChange(name = name))) }
     suspend fun revoke(id: String) { call(HttpMethod.Delete, "/devices/$id") }
+    suspend fun setAccount(username: String, password: String?) { call(HttpMethod.Post, "/account", json.encodeToString(HostAccountChange.serializer(), HostAccountChange(username, password))) }
+    suspend fun clearAccount() { call(HttpMethod.Delete, "/account") }
+    suspend fun setOutside(address: String) { call(HttpMethod.Post, "/outside", json.encodeToString(OutsideChange.serializer(), OutsideChange(address))) }
+    suspend fun adoptOwner(id: String): ProfileInfo = json.decodeFromString(ProfileInfo.serializer(), call(HttpMethod.Post, "/owner/$id"))
 
     companion object {
         /** The admin for a host already serving [port] from [hostDir], or null when nothing does. */

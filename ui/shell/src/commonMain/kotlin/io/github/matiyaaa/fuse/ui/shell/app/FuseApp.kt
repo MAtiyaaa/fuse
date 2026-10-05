@@ -211,7 +211,14 @@ private fun FuseAppContent(
         app.intro || app.standby || app.launching != null || homeFeed.playtime.currentGame != null || app.navigator.current == Route.Onboarding
     }
     val spec = prefs.theme
-    val quality = RenderQuality.of(prefs.performance, platform.device, prefs.lowPower)
+    // Drawn without the graphics card, every moving frame is costly: lighter effects and calmer
+    // motion (short fades, no sliding pages) keep it smooth instead of stuttering.
+    val drawing by platform.drawing.collectAsState()
+    val cpuDrawing = drawing?.gpu == false
+    val quality = RenderQuality.of(prefs.performance, platform.device, prefs.lowPower || cpuDrawing)
+    val motionProfile = (prefs.motion ?: spec.motion).let { m ->
+        if (cpuDrawing && m.ordinal > io.github.matiyaaa.fuse.model.MotionProfile.MINIMAL.ordinal) io.github.matiyaaa.fuse.model.MotionProfile.MINIMAL else prefs.motion
+    }
     val lastSource by router.lastSource.collectAsState()
     val padFamily by router.padFamily.collectAsState()
     // A phone used as a controller is labelled like the controller in hand.
@@ -328,7 +335,7 @@ private fun FuseAppContent(
 
     FuseTheme(
         spec = spec,
-        motion = prefs.motion,
+        motion = motionProfile,
         quality = quality,
         glyphs = GlyphConfig(glyphStyle, prefs.input.confirmOnRight, prefs.input.swapShoulders),
         glass = prefs.glass,
@@ -336,7 +343,7 @@ private fun FuseAppContent(
         animateChanges = true,
         textScale = prefs.textScale,
     ) {
-        CompositionLocalProvider(LocalInputRouter provides router, LocalUiSounds provides platform.sounds) {
+        CompositionLocalProvider(LocalInputRouter provides router, io.github.matiyaaa.fuse.ui.designsystem.input.LocalPointerRouter provides router, LocalUiSounds provides platform.sounds) {
             BoxWithConstraints(
                 Modifier
                     .fillMaxSize()
@@ -345,8 +352,16 @@ private fun FuseAppContent(
                     .pointerInput(Unit) {
                         awaitPointerEventScope {
                             while (true) {
-                                awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial)
+                                val e = awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial)
                                 router.touched()
+                                // Whether it is a mouse, and whether it really moved, for hovering and clicking.
+                                e.changes.firstOrNull()?.let { ch ->
+                                    router.pointer(
+                                        mouse = ch.type == androidx.compose.ui.input.pointer.PointerType.Mouse,
+                                        x = ch.position.x, y = ch.position.y,
+                                        pressed = e.type == androidx.compose.ui.input.pointer.PointerEventType.Press,
+                                    )
+                                }
                             }
                         }
                     }
@@ -554,6 +569,8 @@ private fun Pages(app: AppState, tabs: List<Destination>) {
 @Composable
 private fun RootPages(app: AppState, current: Route, direction: NavDirection, place: (Destination) -> Int) {
     val motion = Fuse.motion
+    // Drawn without the graphics card: tabs change at once, as a sliding page would stutter.
+    val cpuDrawing = app.platform.drawing.collectAsState().value?.gpu == false
     val root = (current as? Route.Root)?.destination
     // Most recent last. Updated as composition runs: a new tab joins in the same frame it is chosen.
     val kept = remember { ArrayList<Destination>() }
@@ -581,7 +598,7 @@ private fun RootPages(app: AppState, current: Route, direction: NavDirection, pl
         last[0] = shownRoot
         val now = TimeSource.Monotonic.markNow()
         // A run of quick switches (a shoulder button tapped again and again) changes at once.
-        val quick = lastSwitch[0]?.let { (now - it).inWholeMilliseconds < QUICK_SWITCH_MS } == true || motion.reduced
+        val quick = lastSwitch[0]?.let { (now - it).inWholeMilliseconds < QUICK_SWITCH_MS } == true || motion.reduced || cpuDrawing
         lastSwitch[0] = now
         if (before != null && !quick) {
             leaving = before
@@ -608,7 +625,7 @@ private fun RootPages(app: AppState, current: Route, direction: NavDirection, pl
     }
     LaunchedEffect(onRoot) {
         dir[0] = if (direction == NavDirection.BACK) -1 else 1
-        if (motion.reduced) visible.snapTo(if (onRoot) 1f else 0f)
+        if (motion.reduced || cpuDrawing) visible.snapTo(if (onRoot) 1f else 0f)
         else visible.animateTo(if (onRoot) 1f else 0f, motion.tween(if (onRoot) Durations.BASE else Durations.FAST, if (onRoot) Curves.Enter else Curves.Standard))
     }
     val shift = motion.slideFraction
@@ -671,9 +688,12 @@ private fun RootPage(app: AppState, d: Destination) {
 @Composable
 private fun PushedPages(app: AppState, current: Route, direction: NavDirection, motion: io.github.matiyaaa.fuse.ui.fuseline.FuselineMotion) {
     val target: Route? = current.takeIf { it !is Route.Root }
+    // Drawn without the graphics card: pages change at once, as a sliding page would stutter.
+    val instant = app.platform.drawing.collectAsState().value?.gpu == false
     Swap(
         targetState = target,
         transitionSpec = {
+            if (instant) return@Swap (Enter.None togetherWith Exit.None).using(SizeTransform(clip = false))
             val dir = if (direction == NavDirection.BACK) -1 else 1
             val shift = motion.slideFraction
             val enter = fadeIn(tween(motion.ms(Durations.BASE), delayMillis = motion.ms(Durations.INSTANT) / 2, easing = Curves.Fade)) +

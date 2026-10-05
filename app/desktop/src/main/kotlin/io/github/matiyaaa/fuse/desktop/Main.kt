@@ -57,6 +57,7 @@ fun main(args: Array<String>) {
     // Fuse Player plays on FFmpeg here.
     io.github.matiyaaa.fuse.ui.player.FusePlayer.engineFactory = { io.github.matiyaaa.fuse.ui.player.ffmpeg.FfmpegEngine() }
     val dirs = FuseDirs.fromEnvironment()
+    dirs.eraseIfAsked()
     dirs.ensure()
     CrashLog(java.io.File(dirs.data, "crash")).install()
     Log.info("Fuse ${BuildInfo.VERSION} starting")
@@ -107,6 +108,8 @@ private fun ApplicationScope.FuseWindow(session: DesktopSession) {
         ) {
             DisposableEffect(window) {
                 session.window = window
+                // How the window is drawn: on the processor, Fuse keeps motion light.
+                runCatching { session.platform.noteRenderer(window.renderApi.name) }
                 val listener = object : WindowFocusListener {
                     override fun windowGainedFocus(e: WindowEvent?) = session.onFocusChanged(true)
                     override fun windowLostFocus(e: WindowEvent?) = session.onFocusChanged(false)

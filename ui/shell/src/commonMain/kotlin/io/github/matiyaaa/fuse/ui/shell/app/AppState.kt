@@ -303,6 +303,8 @@ data class LaunchVeil(
     val artFocusY: Float = 0.35f,
     /** [art] is a cover, not a background: drawn blurred into a colour field behind everything. */
     val artBlurred: Boolean = false,
+    /** What is happening now, under the title ("Installing 1 of 3"); null is "Starting". */
+    val status: String? = null,
 )
 
 /**

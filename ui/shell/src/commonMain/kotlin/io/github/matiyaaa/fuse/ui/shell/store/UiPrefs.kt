@@ -70,6 +70,8 @@ data class UiPrefs(
     val addonsOrder: List<String> = emptyList(),
     /** The quick menu's items and widths, as [io.github.matiyaaa.fuse.ui.shell.quick.QuickLayout] stores them; empty is Fuse's own. */
     val quickMenu: List<String> = emptyList(),
+    /** Home was reset here and can go back as it was (Undo Home Reset). */
+    val canUndoHomeReset: Boolean = false,
     val systemArtAuto: Boolean = true,
     /** How the Library is sorted. */
     val librarySort: io.github.matiyaaa.fuse.model.SortOrder = io.github.matiyaaa.fuse.model.SortOrder.TITLE,

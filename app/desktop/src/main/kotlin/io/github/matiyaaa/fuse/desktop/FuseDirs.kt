@@ -79,6 +79,22 @@ class FuseDirs(
         }
     }
 
+    /**
+     * Erase Fuse, when it was asked for last time: Fuse's own folders go (its database, settings,
+     * art, caches and Fuse Sync), never anything outside them. Game files are never in them.
+     */
+    fun eraseIfAsked() {
+        val marker = File(home, io.github.matiyaaa.fuse.desktop.platform.ERASE_MARKER)
+        if (!marker.isFile) return
+        for (path in listOf(data, cache, config).distinct()) {
+            val dir = File(path)
+            // Only Fuse's own folder: never a home or system folder by mistake.
+            if (dir.name.equals("fuse", ignoreCase = true) || dir.parentFile?.name.equals("fuse", ignoreCase = true) || portable) dir.deleteRecursively()
+        }
+        marker.delete()
+        Log.info("Fuse was erased; starting as new")
+    }
+
     /** Creates Fuse's own folders (never anything outside them). */
     fun ensure() {
         listOf(cache, data, config).forEach { File(it).mkdirs() }

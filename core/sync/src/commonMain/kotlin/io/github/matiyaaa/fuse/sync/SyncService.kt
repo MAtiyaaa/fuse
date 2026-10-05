@@ -24,6 +24,9 @@ sealed interface SyncStatus {
 }
 
 /** A host on this network, found by asking. */
+/** A request to join on its way: the host asked, and the number this device shows. */
+data class JoinWaiting(val hostName: String, val match: String, val account: Boolean = false)
+
 data class NearbyHost(val name: String, val hostId: String, val address: String)
 
 /** One thing Fuse Sync did, for the Sync tab's recent activity. */
@@ -39,6 +42,10 @@ data class HostView(
     val status: HostStatus?,
     /** Whether it starts with the computer, without Fuse open (see [HostLifetime]). */
     val service: ServiceState,
+    /** Its address from outside home, shared with every device ("" when none). */
+    val outside: String = "",
+    /** The username of its account, for joining and the Hub from away; null when it has none. */
+    val accountName: String? = null,
 )
 
 /** How a host keeps running when Fuse is closed, and after a restart. */
@@ -59,6 +66,22 @@ sealed interface LaunchGate {
 
     /** Both played since they last agreed: ask the person, with what each side has. */
     data class Conflict(val conflict: SaveConflict) : LaunchGate
+
+    /**
+     * Another device is playing this game, or just stopped and is still sending its save: the
+     * person can wait for it or play here with the newest save the host has ([lastSave], when it
+     * came from that device).
+     */
+    data class Busy(val device: String, val title: String, val playing: Boolean, val at: Long, val lastSave: Long?) : LaunchGate
+}
+
+/** Something Fuse Sync did that the person would want to know, shown as a quiet toast. */
+sealed interface SyncNotice {
+    /** A save went up to the host ([live] while still playing). */
+    data class Sent(val title: String, val kind: SaveKind, val live: Boolean) : SyncNotice
+
+    /** The newest save could not be used here (another emulator's, or another format), and stays on the host. */
+    data class CantUse(val title: String, val kind: SaveKind, val from: String, val why: String) : SyncNotice
 }
 
 /** A save conflict, as the person sees it. */
@@ -114,6 +137,12 @@ interface ProfileDataPort {
 
     /** The game a launch is for, as Fuse Sync knows games. */
     suspend fun keyOf(gameId: Long): GameKey?
+
+    /** Every id each game here may be known by on any device (its serial, its title), most trusted first. */
+    suspend fun candidates(): List<List<GameKey>> = emptyList()
+
+    /** The one id the household knows each game by, from any of its ids: records are read and written by it. */
+    fun useAliases(aliases: Map<String, String>) {}
 }
 
 /**
@@ -169,6 +198,35 @@ interface SyncService {
     /** A code to add a device (on the host only). */
     suspend fun newPairingCode(): String?
 
+    /**
+     * Asks the host at [address] (else [remoteAddress]) to let this device in without a code.
+     * The answer is the number this device shows; someone lets it in on the host, or on any
+     * device already connected, after checking theirs shows the same.
+     */
+    suspend fun askToJoin(address: String, remoteAddress: String? = null): Result<JoinWaiting> = Result.failure(UnsupportedOperationException("Fuse Sync isn't part of this build."))
+
+    /** Waits for the request [askToJoin] made: the host's name once let in, a failure when turned away or out of time. */
+    suspend fun awaitJoin(): Result<String> = Result.failure(UnsupportedOperationException("Fuse Sync isn't part of this build."))
+
+    /** Gives up on a request to join. */
+    fun cancelJoin() {}
+
+    /** Joins the host asked with [askToJoin] using its account, when nobody is at a screen. The host's name. */
+    suspend fun joinWithAccount(username: String, password: String): Result<String> = Result.failure(UnsupportedOperationException("Fuse Sync isn't part of this build."))
+
+    /** On the host: its account for joining and the Hub from away ([password] null keeps the one it has). */
+    suspend fun setHostAccount(username: String, password: String?): Result<Unit> = Result.failure(UnsupportedOperationException("This device isn't a host."))
+
+    suspend fun clearHostAccount(): Result<Unit> = Result.failure(UnsupportedOperationException("This device isn't a host."))
+
+    /** On the host: its address from outside home, shared with every device (empty clears it). */
+    suspend fun setOutsideAddress(address: String): Result<Unit> = Result.failure(UnsupportedOperationException("This device isn't a host."))
+
+    /** Devices asking to join right now, for this device to let in (on the host, and every device already connected). */
+    val joinRequests: StateFlow<List<JoinAsk>> get() = NO_JOIN_REQUESTS
+
+    suspend fun answerJoin(id: String, allow: Boolean): Result<Unit> = Result.failure(UnsupportedOperationException("Fuse Sync isn't set up."))
+
     suspend fun createProfile(name: String, avatar: String, pin: String?): Result<ProfileInfo>
     suspend fun changeProfile(id: String, change: ProfileChange): Result<ProfileInfo>
     suspend fun deleteProfile(id: String): Result<Unit>
@@ -184,8 +242,33 @@ interface SyncService {
 
     suspend fun syncNow(): Result<Unit>
 
-    /** Before a game starts: its save brought up to date, or a conflict to ask about. */
-    suspend fun beforeLaunch(query: SaveQuery): LaunchGate
+    /**
+     * Before a game starts: its save brought up to date, or a conflict to ask about. With
+     * [waitForOthers], another device still playing or sending it is asked about ([LaunchGate.Busy]).
+     */
+    suspend fun beforeLaunch(query: SaveQuery, waitForOthers: Boolean = true): LaunchGate
+
+    /**
+     * The game started: its save is watched while it runs and sent as soon as the game writes it
+     * (so closing a handheld mid-game, or playing on and on, never leaves the newest save behind),
+     * and other devices learn it is being played.
+     */
+    suspend fun playing(query: SaveQuery, startedAt: Long) {}
+
+    /** Another device on [query]'s game (playing it, or still sending its save); null when none is, or the host can't say. */
+    suspend fun busyWith(query: SaveQuery): LaunchGate.Busy? = null
+
+    /** Look at the playing game's save now and send it if it changed (the screen is going off). */
+    suspend fun sendWhilePlaying() {}
+
+    /**
+     * The game whose save is being kept in step right now (from just before it starts until its
+     * save is sent after it stops), or null. Android keeps Fuse awake enough for it meanwhile.
+     */
+    val nowPlaying: StateFlow<String?> get() = NO_PLAYING
+
+    /** Quiet news for the interface: a save sent, one that can't be used here. */
+    val notices: kotlinx.coroutines.flow.SharedFlow<SyncNotice> get() = NO_NOTICES
 
     /** The person settled [conflict]: [keepHere] keeps this device's, else the host's comes down. */
     suspend fun settle(conflict: SaveConflict, keepHere: Boolean): Result<Unit>
@@ -222,6 +305,16 @@ interface SyncService {
     /** Leaves the host: everything here stays exactly as it is; this device just stops syncing. */
     suspend fun unlink(): Result<Unit>
 
+    /**
+     * On the host: deletes it (everyone's saves and profiles kept on this computer, and the
+     * background service). This device keeps its own library, settings and Home as plain Fuse; other
+     * devices keep everything they have and see the host gone.
+     */
+    suspend fun deleteHost(): Result<Unit> = Result.failure(UnsupportedOperationException("This device isn't a host."))
+
+    /** On the host: moves everyone's saves and profiles to [to] (an empty folder), copied and checked first. The new path. */
+    suspend fun moveHostData(to: String): Result<String> = Result.failure(UnsupportedOperationException("This device isn't a host."))
+
     /** Renames another device (host only) or unlinks it. */
     suspend fun renameDevice(id: String, name: String): Result<Unit>
     suspend fun revokeDevice(id: String): Result<Unit>
@@ -248,6 +341,12 @@ class NoHostLifetime(private val why: String) : HostLifetime {
     override fun install(): Result<ServiceState> = Result.failure(UnsupportedOperationException(why))
     override fun remove(): Result<ServiceState> = Result.success(state())
 }
+
+private val NO_PLAYING: StateFlow<String?> = kotlinx.coroutines.flow.MutableStateFlow(null)
+
+private val NO_NOTICES: kotlinx.coroutines.flow.SharedFlow<SyncNotice> = kotlinx.coroutines.flow.MutableSharedFlow()
+
+private val NO_JOIN_REQUESTS: StateFlow<List<JoinAsk>> = kotlinx.coroutines.flow.MutableStateFlow(emptyList())
 
 private val NO_SHARED_GAMES: StateFlow<Set<String>> = kotlinx.coroutines.flow.MutableStateFlow(emptySet())
 

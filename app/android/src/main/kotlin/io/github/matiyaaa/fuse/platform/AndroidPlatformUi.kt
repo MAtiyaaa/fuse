@@ -154,6 +154,12 @@ class AndroidPlatformUi(
     }
 
     /** Starts Fuse again in a fresh process (after a restore or a setting that needs it). */
+    // Android erases an app's own data (never shared storage, where games live) and closes it.
+    override fun eraseAndRestart(): Boolean {
+        val am = appContext.getSystemService(android.app.ActivityManager::class.java) ?: return false
+        return runCatching { am.clearApplicationUserData() }.getOrDefault(false)
+    }
+
     override fun restart() {
         val launch = appContext.packageManager.getLaunchIntentForPackage(appContext.packageName) ?: return
         val component = launch.component ?: return

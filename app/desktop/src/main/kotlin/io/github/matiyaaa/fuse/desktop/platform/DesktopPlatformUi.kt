@@ -88,6 +88,24 @@ class DesktopPlatformUi(
 
     override val device: CapabilityProfile = measureDevice()
 
+    private val _drawing = kotlinx.coroutines.flow.MutableStateFlow<io.github.matiyaaa.fuse.ui.shell.platform.DrawingInfo?>(null)
+    override val drawing: kotlinx.coroutines.flow.StateFlow<io.github.matiyaaa.fuse.ui.shell.platform.DrawingInfo?> = _drawing
+
+    /** The window says how it is drawn once it is up (Skia on OpenGL, Metal or Direct3D, or on the processor). */
+    fun noteRenderer(api: String) {
+        val cpu = api.startsWith("SOFTWARE", ignoreCase = true)
+        val name = when {
+            cpu -> "The processor (no graphics card)"
+            api.equals("OPENGL", ignoreCase = true) -> "The graphics card (OpenGL)"
+            api.equals("METAL", ignoreCase = true) -> "The graphics card (Metal)"
+            api.equals("DIRECT3D", ignoreCase = true) -> "The graphics card (Direct3D)"
+            api.equals("VULKAN", ignoreCase = true) -> "The graphics card (Vulkan)"
+            else -> api
+        }
+        if (_drawing.value?.name != name) Log.info("Drawing with $api")
+        _drawing.value = io.github.matiyaaa.fuse.ui.shell.platform.DrawingInfo(name, gpu = !cpu)
+    }
+
     private val _status = MutableStateFlow(SystemStatus())
     override val status: StateFlow<SystemStatus> = _status.asStateFlow()
 
@@ -163,6 +181,19 @@ class DesktopPlatformUi(
      * Starts a new Fuse and leaves this one. Prefers an AppImage this session just installed, then
      * the AppImage Fuse runs from, the packaged launcher, and finally the same java command line.
      */
+    override fun eraseAndRestart(): Boolean {
+        // Erased as the next start begins, before anything opens the database.
+        val marker = java.io.File(dirs.home.ifBlank { System.getProperty("java.io.tmpdir") }, ERASE_MARKER)
+        if (runCatching { marker.writeText(BuildInfo.VERSION) }.isFailure) return false
+        if (restartCommand() == null) {
+            // Can't start itself again here: closes, and erases when opened next.
+            window.exitApplication()
+            return true
+        }
+        restart()
+        return true
+    }
+
     override fun restart() {
         val command = restartCommand()
         if (command == null) {
@@ -311,3 +342,6 @@ class DesktopPlatformUi(
         const val MAIN_CLASS = "io.github.matiyaaa.fuse.desktop.MainKt"
     }
 }
+
+/** Left in the home folder by Erase Fuse; the next start erases Fuse's folders, then removes it. */
+internal const val ERASE_MARKER = ".fuse-erase"

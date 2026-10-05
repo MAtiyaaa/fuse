@@ -115,6 +115,22 @@ internal class AuditSync(private val settings: SettingsStore) : SyncService {
         return listOf(NearbyHost("Gaming PC", "h1", "192.168.1.20:47311"))
     }
 
+    /** Devices asking to join, for the card that lets them in. */
+    override val joinRequests = MutableStateFlow<List<io.github.matiyaaa.fuse.sync.JoinAsk>>(emptyList())
+
+    override suspend fun askToJoin(address: String, remoteAddress: String?): Result<io.github.matiyaaa.fuse.sync.JoinWaiting> {
+        delay(200)
+        return Result.success(io.github.matiyaaa.fuse.sync.JoinWaiting("Gaming PC", "482 913"))
+    }
+
+    /** Waits as long as the audit looks: nobody lets it in here. */
+    override suspend fun awaitJoin(): Result<String> = kotlinx.coroutines.awaitCancellation()
+
+    override suspend fun answerJoin(id: String, allow: Boolean): Result<Unit> {
+        joinRequests.value = joinRequests.value.filterNot { it.id == id }
+        return Result.success(Unit)
+    }
+
     override suspend fun connect(address: String, code: String, remoteAddress: String?): Result<String> {
         delay(300)
         household(asHost = false, playing = null)
@@ -157,7 +173,7 @@ internal class AuditSync(private val settings: SettingsStore) : SyncService {
 
     override suspend fun syncNow(): Result<Unit> = Result.success(Unit)
 
-    override suspend fun beforeLaunch(query: SaveQuery): LaunchGate = conflictNext?.let { conflictNext = null; LaunchGate.Conflict(it) } ?: LaunchGate.Go()
+    override suspend fun beforeLaunch(query: SaveQuery, waitForOthers: Boolean): LaunchGate = conflictNext?.let { conflictNext = null; LaunchGate.Conflict(it) } ?: LaunchGate.Go()
 
     override suspend fun settle(conflict: SaveConflict, keepHere: Boolean): Result<Unit> = Result.success(Unit)
     override suspend fun afterExit(query: SaveQuery, startedAt: Long, endedAt: Long) = Unit

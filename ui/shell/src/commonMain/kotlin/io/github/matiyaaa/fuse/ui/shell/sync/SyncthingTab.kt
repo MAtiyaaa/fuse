@@ -126,8 +126,8 @@ internal fun SyncthingTab(app: AppState, active: Boolean, topPadding: Dp) {
             }
         } else {
             when (e.action) {
-                NavAction.LEFT -> if (index > 0) { index--; app.platform.sounds.play(SoundCue.MOVE); NavResult.MOVED } else NavResult.BLOCKED
-                NavAction.RIGHT -> if (index < actions.size - 1) { index++; app.platform.sounds.play(SoundCue.MOVE); NavResult.MOVED } else NavResult.BLOCKED
+                NavAction.LEFT -> if (index > 0) { index--; NavResult.MOVED } else NavResult.BLOCKED
+                NavAction.RIGHT -> if (index < actions.size - 1) { index++; NavResult.MOVED } else NavResult.BLOCKED
                 NavAction.SELECT -> { actions.getOrNull(index)?.third?.invoke(); NavResult.ACTIVATED }
                 NavAction.DOWN -> if (rows.isNotEmpty()) { inList = true; NavResult.MOVED } else NavResult.BLOCKED
                 else -> NavResult.IGNORED
@@ -136,26 +136,32 @@ internal fun SyncthingTab(app: AppState, active: Boolean, topPadding: Dp) {
     }
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
-        val wide = maxWidth >= 1000.dp
+        // The devices and this device's code sit beside the folders wherever there is room for both.
+        val side = maxWidth >= 820.dp
+        val roomy = maxWidth >= 1200.dp
         val compact = maxHeight < 560.dp
         Column(
             Modifier.fillMaxSize().padding(horizontal = Space.gutter)
                 .padding(top = topPadding + subTabsRoom() + Space.m, bottom = Size.hintHeight + Space.s),
             verticalArrangement = Arrangement.spacedBy(if (compact) Space.s else Space.m),
         ) {
-            Row(Modifier.reveal(reveal, 0), verticalAlignment = Alignment.CenterVertically) {
-                SyncthingMark(if (compact) Size.thumb else Size.thumbL)
-                Spacer(Modifier.width(Space.l))
-                Column(Modifier.weight(1f)) {
-                    FText("Syncthing", if (compact) Fuse.type.title else Fuse.type.display, maxLines = 1)
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        StatusDot(words.first)
-                        Spacer(Modifier.width(Space.s))
-                        FText(words.second, Fuse.type.bodyStrong, maxLines = 1)
-                        FText("  ·  ${words.third}", Fuse.type.body, color = Fuse.colors.textMuted, maxLines = 1)
-                    }
-                }
-            }
+            val need = shared.sumOf { it.needBytes }
+            AddonHero(
+                mark = { SyncthingMark(it) },
+                title = "Syncthing",
+                tag = connected?.let { "On this device" },
+                tagIcon = FuseIcons.MonitorSmartphone,
+                tint = SYNCTHING_TINT,
+                ok = words.first, status = words.second, detail = words.third,
+                facts = if (connected == null) emptyList() else listOfNotNull(
+                    HeroFact(FuseIcons.MonitorSmartphone, "${others.count { it.connected }}/${others.size}", "devices online"),
+                    HeroFact(FuseIcons.FolderSync, "${shared.size}", if (shared.size == 1) "save folder" else "save folders"),
+                    HeroFact(FuseIcons.Download, if (need > 0) bytesText(need) else "Nothing", "still coming in"),
+                    HeroFact(FuseIcons.History, if (prefs.syncthing.keepVersions) "A month" else "None", "of older versions"),
+                ),
+                compact = compact,
+                modifier = Modifier.reveal(reveal, 0),
+            )
             Row(Modifier.reveal(reveal, 1), horizontalArrangement = Arrangement.spacedBy(Space.s)) {
                 actions.forEachIndexed { i, (label, icon, run) ->
                     FuseButton(
@@ -166,41 +172,29 @@ internal fun SyncthingTab(app: AppState, active: Boolean, topPadding: Dp) {
                     )
                 }
             }
-            if (connected != null && !compact) {
-                Row(Modifier.fillMaxWidth().reveal(reveal, 2), horizontalArrangement = Arrangement.spacedBy(Space.m)) {
-                    StatTile("Devices online", "${others.count { it.connected }} of ${others.size}", FuseIcons.MonitorSmartphone, Modifier.weight(1f))
-                    StatTile("Save folders", "${shared.size} shared", FuseIcons.FolderSync, Modifier.weight(1f))
-                    val need = shared.sumOf { it.needBytes }
-                    StatTile("Still coming in", if (need > 0) bytesText(need) else "Nothing", FuseIcons.Download, Modifier.weight(1f))
-                    StatTile("Older versions", if (prefs.syncthing.keepVersions) "Kept a month" else "Not kept", FuseIcons.History, Modifier.weight(1f))
-                }
-            }
-            Row(Modifier.weight(1f).reveal(reveal, 3), horizontalArrangement = Arrangement.spacedBy(Space.l)) {
+            Row(Modifier.weight(1f).reveal(reveal, 2), horizontalArrangement = Arrangement.spacedBy(Space.l)) {
                 Panel(Modifier.weight(1f).fillMaxHeight()) {
                     Column {
-                        Row(Modifier.padding(start = Space.l, end = Space.l, top = Space.m), verticalAlignment = Alignment.CenterVertically) {
-                            FuseIcon(FuseIcons.FolderSync, size = Size.iconS, tint = Fuse.colors.textMuted)
-                            Spacer(Modifier.width(Space.s))
-                            FText("SAVE FOLDERS", Fuse.type.overline, color = Fuse.colors.textMuted, maxLines = 1, modifier = Modifier.weight(1f))
-                            if (shared.isNotEmpty()) FText(count(shared.size, "folder"), Fuse.type.caption, color = Fuse.colors.textMuted, maxLines = 1)
-                        }
+                        SectionTitle(
+                            "Save folders it shares", FuseIcons.FolderSync,
+                            trailing = shared.takeIf { it.isNotEmpty() }?.let { count(it.size, "folder") },
+                            modifier = Modifier.padding(start = Space.l, end = Space.l, top = Space.m, bottom = Space.xs),
+                            tint = SYNCTHING_TINT,
+                        )
                         when {
-                            connected == null -> FText(
+                            connected == null -> Quiet(
+                                FuseIcons.Unplug,
                                 if (state is SyncthingState.NeedsKey || state is SyncthingState.NotFound) "Finish setting Syncthing up, and your save folders show here." else "Syncthing isn't answering. Its folders show here once it does.",
-                                Fuse.type.body, color = Fuse.colors.textMuted, modifier = Modifier.padding(Space.l),
                             )
-                            rows.isEmpty() -> FText(
-                                "No save folders shared yet. Open Settings to share your emulators' save folders.",
-                                Fuse.type.body, color = Fuse.colors.textMuted, modifier = Modifier.padding(Space.l),
-                            )
+                            rows.isEmpty() -> Quiet(FuseIcons.FolderSync, "No save folders shared yet. Open Settings to share your emulators' save folders.")
                             else -> MenuList(rows, sel, modifier = Modifier.padding(Space.s), showSelection = focused && inList)
                         }
                     }
                 }
-                if (wide) {
-                    Column(Modifier.width(340.dp).fillMaxHeight().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(Space.m)) {
-                        if (connected != null) ThisDeviceCard(app, connected)
+                if (side) {
+                    Column(Modifier.width(if (roomy) 380.dp else if (compact) 290.dp else 320.dp).fillMaxHeight().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(Space.m)) {
                         DevicesCard(others, pending)
+                        if (connected != null) ThisDeviceCard(app, connected)
                     }
                 }
             }
@@ -219,7 +213,7 @@ private fun folderRow(app: AppState, f: SyncthingFolder, others: List<SyncthingD
         },
     ).joinToString("  ·  ")
     return MenuAction(
-        "folder.${f.id}", f.label.ifBlank { f.id }, FuseIcons.FolderSync,
+        "folder.${f.id}", f.label.ifBlank { f.id }, folderIcon(f),
         detail = f.error ?: detail,
         trailing = Trailing.Value(
             when {
@@ -233,6 +227,18 @@ private fun folderRow(app: AppState, f: SyncthingFolder, others: List<SyncthingD
         ),
         onSelect = { app.go(Route.SyncthingSettings) },
     )
+}
+
+/** What a folder holds, at a glance: states, memory cards, or saves. */
+private fun folderIcon(f: SyncthingFolder): ImageVector {
+    val name = (f.label + " " + f.path).lowercase()
+    return when {
+        f.error != null -> FuseIcons.Warning
+        "state" in name -> FuseIcons.Layers
+        "card" in name || "memcard" in name -> FuseIcons.Chip
+        "save" in name -> FuseIcons.Save
+        else -> FuseIcons.FolderSync
+    }
 }
 
 @Composable
@@ -282,12 +288,15 @@ private fun DevicesCard(others: List<SyncthingDevice>, pending: List<SyncthingPe
         }
         for (d in others.sortedByDescending { it.connected }) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(8.dp).clip(CircleShape).background(if (d.connected) c.success else c.textFaint))
+                Box(Modifier.size(36.dp).clip(RoundedCornerShape(10.dp)).background(c.text.copy(alpha = 0.06f)), contentAlignment = Alignment.Center) {
+                    FuseIcon(FuseIcons.MonitorSmartphone, size = Size.iconS, tint = c.text)
+                }
                 Spacer(Modifier.width(Space.m))
                 Column(Modifier.weight(1f)) {
-                    FText(d.name, Fuse.type.label, maxLines = 1)
+                    FText(d.name, Fuse.type.bodyStrong, maxLines = 1)
                     FText(if (d.paused) "Paused" else if (d.connected) "Online" else "Offline", Fuse.type.caption, color = c.textMuted, maxLines = 1)
                 }
+                Box(Modifier.size(8.dp).clip(CircleShape).background(if (d.connected) c.success else c.textFaint))
             }
         }
         for (p in pending) {

@@ -1,5 +1,7 @@
 package io.github.matiyaaa.fuse.ui.designsystem.components
 
+import io.github.matiyaaa.fuse.ui.designsystem.input.mouseHover
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -676,7 +678,8 @@ fun MenuList(
             item(key = a.id) {
                 MenuRow(
                     a,
-                    modifier = arrive,
+                    // Pointing with the mouse moves the highlight here, as the D-pad would.
+                    modifier = arrive.mouseHover(showSelection) { selection.select(i, actions.size) },
                     selected = showSelection && !dimSelection && i == selection.index,
                     marked = showSelection && dimSelection && i == selection.index,
                     highlight = false,

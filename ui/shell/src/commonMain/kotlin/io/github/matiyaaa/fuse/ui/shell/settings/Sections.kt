@@ -343,16 +343,24 @@ fun homeRows(app: AppState): List<MenuAction> {
                         )
                     }))
                 }
-                add(MenuAction("b.reset", "Reset the board", FuseIcons.RotateCcw, detail = "Back to the widgets and sizes Home comes with", onSelect = {
+                add(MenuAction("b.reset", "Reset the board", FuseIcons.RotateCcw, detail = "Back to the widgets and sizes Home comes with, on this device", onSelect = {
                     app.confirm = ConfirmSpec(
                         title = "Reset the board?",
-                        message = "Home goes back to the widgets, sizes and order it came with. Flow's rows stay as they are.",
+                        message = "Home on this device goes back to the widgets, sizes and order it came with. Flow's rows stay as they are" +
+                            (if (app.store.sync.inUse) ", and your Home on your other devices stays as it is." else ".") +
+                            " Undo Home Reset brings this one back.",
                         confirmLabel = "Reset",
                     ) {
-                        set { s -> s.copy(home = s.home.copy(board = io.github.matiyaaa.fuse.model.HomeLayoutConfig.DefaultBoard)) }
-                        app.toasts.show("Board reset")
+                        app.store.resetHome { it.copy(board = io.github.matiyaaa.fuse.model.HomeLayoutConfig.DefaultBoard) }
+                        app.toasts.show("Board reset on this device")
                     }
                 }))
+                if (p.canUndoHomeReset) {
+                    add(MenuAction("b.undo", "Undo Home Reset", FuseIcons.Undo, detail = "Home goes back as it was before the reset", onSelect = {
+                        app.store.undoHomeReset()
+                        app.toasts.show("Home is back as it was", icon = FuseIcons.Undo)
+                    }))
+                }
             }
         }
     }
@@ -1257,6 +1265,7 @@ fun displayRows(app: AppState): List<MenuAction> {
 
 @Composable
 fun performanceRows(app: AppState): List<MenuAction> {
+    val drawing = app.platform.drawing.value
     val p by app.store.prefs.collectAsState()
     val displays by app.platform.displays.collectAsState()
     val cap = app.platform.device
@@ -1281,6 +1290,12 @@ fun performanceRows(app: AppState): List<MenuAction> {
                     add(infoRow("cpu", "Processor", "${cap.cpuCores} cores", icon = FuseIcons.Chip))
                     add(infoRow("ram", "Memory", "${(cap.totalRamMb / 1024.0 * 10).toInt() / 10.0} GB", icon = FuseIcons.Memory))
                     add(infoRow("screen", "Screen", "${cap.screenWidthPx}x${cap.screenHeightPx}, up to ${cap.maxRefreshRate.toInt()} Hz", icon = FuseIcons.Monitor))
+                    if (drawing != null) {
+                        add(infoRow(
+                            "drawing", "Drawn with", drawing.name, icon = FuseIcons.Gauge,
+                            detail = if (drawing.gpu) null else "Fuse couldn't use the graphics card here, so it keeps motion light and effects simple. Updating the graphics driver usually fixes this",
+                        ))
+                    }
                     for (disp in displays) {
                         add(infoRow(
                             "disp.${disp.id}", disp.name + if (disp.isPrimary) " (main)" else "",
@@ -1536,7 +1551,44 @@ fun aboutRows(app: AppState): List<MenuAction> = buildList {
     }
     // The last crash, if there was one, at the very end: worth finding, never in the way.
     app.platform.lastCrashReport()?.let { report -> labelled("Last crash") { add(crashRow(app, report)) } }
+    labelled("Start over") { add(eraseRow(app)) }
 }
+
+/**
+ * Erase Fuse, the last row of About: asks twice, says plainly what goes and what stays, lets go of
+ * Fuse Sync first (a host is deleted, a device forgets its host), then Fuse starts again as new.
+ */
+private fun eraseRow(app: AppState): MenuAction = MenuAction(
+    "erase", "Erase Fuse", FuseIcons.Trash, destructive = true,
+    detail = "Start over as new. Your games, emulators and their saves stay",
+    onSelect = {
+        val host = app.store.prefs.value.sync.role == "HOST"
+        app.confirm = ConfirmSpec(
+            "Erase Fuse?",
+            "Fuse's library, settings, themes, Home, profiles, play time, art and caches are erased" +
+                (if (host) ", and the Fuse Sync host on this computer with everyone's saves and profiles." else if (app.store.sync.inUse) ", and this device leaves Fuse Sync." else ".") +
+                " Game files, emulators and the saves in the emulators' folders stay exactly where they are.",
+            "Continue", destructive = true,
+        ) {
+            app.confirm = ConfirmSpec(
+                "Erase everything for good?",
+                "This can't be undone. Fuse closes and opens again as if it were new.",
+                "Erase Fuse", destructive = true,
+            ) {
+                app.scope.launch {
+                    val sync = app.store.sync.service
+                    if (sync != null) {
+                        if (host) runCatching { sync.deleteHost() }
+                        runCatching { sync.setEnabled(false) }
+                    }
+                    // Saved keys too, wherever the system keeps them.
+                    for (k in app.store.credentials.stored.value) runCatching { app.store.credentials.remove(k) }
+                    if (!app.platform.eraseAndRestart()) app.toasts.show("Fuse can't erase itself here", ToastKind.ERROR)
+                }
+            }
+        }
+    },
+)
 
 @Composable
 private fun autostartRow(app: AppState, w: WindowControls): MenuAction {

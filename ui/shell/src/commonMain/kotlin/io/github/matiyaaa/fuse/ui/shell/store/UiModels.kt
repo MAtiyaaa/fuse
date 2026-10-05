@@ -257,6 +257,9 @@ sealed interface LaunchOutcome {
      */
     data class SaveConflict(val conflict: io.github.matiyaaa.fuse.sync.SaveConflict) : LaunchOutcome
 
+    /** Not started yet: another device is playing this game or still sending its save. Wait for it, or play here. */
+    data class SyncBusy(val busy: io.github.matiyaaa.fuse.sync.LaunchGate.Busy) : LaunchOutcome
+
     /** Syncthing kept two versions of this game's save: ask which to keep, then play. */
     data class SyncthingConflict(val conflicts: List<io.github.matiyaaa.fuse.sync.syncthing.SyncthingConflict>) : LaunchOutcome
 }

@@ -63,6 +63,8 @@ import io.github.matiyaaa.fuse.ui.designsystem.focus.reorderItem
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
 import io.github.matiyaaa.fuse.ui.designsystem.icons.HintButton
 import io.github.matiyaaa.fuse.ui.designsystem.input.InputLayer
+import io.github.matiyaaa.fuse.ui.designsystem.input.LocalInputRouter
+import io.github.matiyaaa.fuse.ui.designsystem.input.mouseHover
 import io.github.matiyaaa.fuse.ui.designsystem.input.NavResult
 import io.github.matiyaaa.fuse.ui.designsystem.media.HeroSource
 import io.github.matiyaaa.fuse.ui.designsystem.media.PrefetchArt
@@ -150,6 +152,7 @@ fun AppState.homeStyleActions(): List<MenuAction> {
 @Composable
 fun FlowHome(app: AppState) {
     val store = app.store
+    val router = LocalInputRouter.current
     val prefs by store.prefs.collectAsState()
     val feed by store.homeFeed.collectAsState()
     val cartridge by store.cartridge.status.collectAsState()
@@ -394,9 +397,17 @@ fun FlowHome(app: AppState) {
                             sel.setColumn(s.key, col)
                             app.focusZone = FocusZone.CONTENT
                             // Systems, apps, collections and widgets open on the first tap. A game is
-                            // shown first and played on the second, so browsing never starts one.
+                            // shown first and played on the second tap, so browsing by touch never
+                            // starts one; a mouse click plays it at once.
                             val item = s.items.getOrNull(col)
-                            if (item != null && (wasSelected || item !is ShelfItem.Game)) activate(item)
+                            if (item != null && (wasSelected || item !is ShelfItem.Game || router.mouse)) activate(item)
+                        },
+                        onHover = { col ->
+                            if (!arranging) {
+                                sel.row = index
+                                sel.setColumn(s.key, col)
+                                app.focusZone = FocusZone.CONTENT
+                            }
                         },
                         onLongPress = { col ->
                             sel.row = index
@@ -442,6 +453,7 @@ private fun ShelfRow(
     onLongPress: (Int) -> Unit,
     onMoveSystem: ((from: Int, to: Int) -> Unit)? = null,
     onLift: (Int) -> Unit = {},
+    onHover: (Int) -> Unit = {},
 ) {
     val c = Fuse.colors
     val metrics = LocalTileMetrics.current
@@ -564,7 +576,9 @@ private fun ShelfRow(
                         // Widgets have no options of their own: holding one picks up its shelf.
                         .then(if (item is ShelfItem.Widget) Modifier.reorderHandle(shelfDrag, shelf.key) else Modifier)
                         .zIndex(if (carried) 1f else 0f)
-                        .carried({ carry }, tileShape),
+                        .carried({ carry }, tileShape)
+                        // Pointing with the mouse highlights it, as the D-pad would.
+                        .mouseHover(drag.heldKey == null) { onHover(col) },
                 ) {
                 when (item) {
                     is ShelfItem.Game -> if (shelf.style == ShelfStyle.WIDE) {

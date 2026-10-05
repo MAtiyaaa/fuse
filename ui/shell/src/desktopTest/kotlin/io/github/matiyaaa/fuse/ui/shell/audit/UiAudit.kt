@@ -102,6 +102,8 @@ class UiAudit {
     /** Every widget at every size, at the Deck's size: the same layout in dp for far fewer pixels. */
     @Test fun widgetGallery() = audit(AuditSize.D) { widgetGallery() }
 
+    @Test fun widgetGalleryM() = audit(AuditSize.M) { widgetGallery() }
+
     @Test fun companionSecondScreen() = audit(AuditSize.C) { companionScreens() }
 
     @Test fun keyScreensH() = audit(AuditSize.H) { keyScreens() }
@@ -184,6 +186,10 @@ class UiAudit {
     @Test fun syncthingM() = audit(AuditSize.M) { syncthingScreens() }
 
     @Test fun saveFoldersM() = audit(AuditSize.M) { saveFolderScreens() }
+
+    @Test fun joinM() = audit(AuditSize.M) { joinScreens() }
+
+    @Test fun joinH() = audit(AuditSize.H) { joinScreens() }
 
     @Test fun saveFoldersH() = audit(AuditSize.H) { saveFolderScreens() }
 

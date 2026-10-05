@@ -43,7 +43,7 @@ class HostTest {
     @Test
     fun aDeviceTriesEveryAddressAHostHasHomeNetworksFirst() {
         // Answered from a Docker bridge: the address it answered from first, then the ones it listed.
-        val found = FoundHost(HostHello("h1", "Media Server", port = 47311, addresses = listOf("192.168.1.20", "172.19.0.1")), "172.19.0.1:47311")
+        val found = FoundHost(HostHello("h1", "Living Room PC", port = 47311, addresses = listOf("192.168.1.20", "172.19.0.1")), "172.19.0.1:47311")
         assertEquals(listOf("172.19.0.1:47311", "192.168.1.20:47311"), found.candidates)
         assertTrue(LanAddresses.rank("192.168.1.20") < LanAddresses.rank("10.0.0.5"))
         assertTrue(LanAddresses.rank("10.0.0.5") < LanAddresses.rank("172.19.0.1"))

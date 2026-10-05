@@ -291,6 +291,17 @@ private fun syncRows(
             },
         ) { v -> app.scope.launch { app.store.sync.setOwnHome(v == "DEVICE") } }.copy(section = what))
     }
+    // Home was reset on this device: it can go back, and rejoin the profile's if the reset left it.
+    if (app.store.prefs.value.canUndoHomeReset) {
+        add(MenuAction(
+            "home.undo", "Undo Home Reset", FuseIcons.Undo,
+            detail = "Home on this device goes back as it was before the reset", section = what,
+            onSelect = {
+                app.store.undoHomeReset()
+                app.toasts.show("Home is back as it was", icon = FuseIcons.Undo)
+            },
+        ))
+    }
 
     // Connection -----------------------------------------------------------------------------------
     val connection = "Connection"
@@ -307,6 +318,12 @@ private fun syncRows(
     ))
     if (c.role != "HOST") {
         add(MenuAction(
+            "pair", "Add a Device", FuseIcons.Plus,
+            detail = "A code for another device to type. Or ask to join from it, and say yes here",
+            trailing = Trailing.Chevron, section = connection,
+            onSelect = { app.pairing = true },
+        ))
+        add(MenuAction(
             "local", "Home Address", FuseIcons.Home,
             detail = "Used on the same network. Found by itself when you connected",
             trailing = Trailing.Value(c.localAddress.ifBlank { "Not set" }), section = connection,
@@ -322,7 +339,7 @@ private fun syncRows(
             trailing = Trailing.Value(c.remoteAddress.ifBlank { "Not set" }), section = connection,
             onSelect = {
                 app.textInput = TextInputSpec("Outside address", c.remoteAddress, "https://sync.example.com", capitalize = false) { v ->
-                    app.scope.launch { app.store.sync.configure { it.copy(remoteAddress = v.trim()) }; svc.setEnabled(true) }
+                    app.scope.launch { app.store.sync.configure { it.copy(remoteAddress = v.trim(), remoteFromHost = false) }; svc.setEnabled(true) }
                 }
             },
         ))
@@ -359,6 +376,27 @@ private fun syncRows(
             trailing = Trailing.Value(count(linked.size, "device")), section = hostSection,
             onSelect = { manageDevices(app, svc, linked, c.deviceId) },
         ))
+        val outside = host?.outside.orEmpty()
+        add(MenuAction(
+            "outside", "Address From Outside", FuseIcons.Globe,
+            detail = "Every device uses it away from home, and the Hub opens there after signing in. Found by itself when a device connects through a tunnel",
+            trailing = Trailing.Value(outside.removePrefix("https://").removePrefix("http://").ifBlank { "Not set" }), section = hostSection,
+            onSelect = {
+                app.textInput = TextInputSpec("Address from outside", outside, "https://sync.example.com", capitalize = false) { v ->
+                    app.scope.launch {
+                        svc.setOutsideAddress(v).onSuccess { app.toasts.show(if (v.isBlank()) "No address from outside" else "Every device will use it away from home", ToastKind.SUCCESS) }
+                            .onFailure { app.toasts.show(it.message ?: "Couldn't set it", ToastKind.ERROR) }
+                    }
+                }
+            },
+        ))
+        val account = host?.accountName
+        add(MenuAction(
+            "account", "Host Account", FuseIcons.UserRound,
+            detail = "A username and password, for letting a device in and opening the Hub when you're away from this computer",
+            trailing = Trailing.Value(account?.ifBlank { "Set" } ?: "Not set"), section = hostSection,
+            onSelect = { hostAccount(app, svc, account) },
+        ))
         val service = host?.service
         if (service != null) {
             add(toggleRow(
@@ -382,13 +420,20 @@ private fun syncRows(
             ).copy(section = hostSection))
         }
         add(infoRow(
-            "hub", "The Hub in a Browser", value = "127.0.0.1:${c.hostPort}/hub",
-            detail = "Profiles, devices and storage at a glance, on this computer, with Fuse closed too",
+            "hub", "The Hub in a Browser", value = if (outside.isNotBlank()) "${outside.removePrefix("https://")}/hub" else "127.0.0.1:${c.hostPort}/hub",
+            detail = "Profiles, devices and storage at a glance, with Fuse closed too: here at 127.0.0.1:${c.hostPort}/hub" +
+                if (outside.isNotBlank()) ", and from away after signing in with the host account" else "",
             icon = FuseIcons.Globe,
         ).copy(section = hostSection))
         host?.addresses?.takeIf { it.isNotEmpty() }?.let { a ->
             add(infoRow("addresses", "Its Addresses", value = a.first(), detail = "Other devices on this network find it by themselves" + if (a.size > 1) ". Also ${a.drop(1).joinToString(", ")}" else "", icon = FuseIcons.Network).copy(section = hostSection))
         }
+        add(MenuAction(
+            "hostdata", "Where Saves Are Kept", FuseIcons.HardDrive,
+            detail = c.hostDataDir.ifBlank { "Fuse's own folder" } + ". Choose another folder to move them there",
+            trailing = Trailing.Chevron, section = hostSection,
+            onSelect = { moveHostData(app, svc) },
+        ))
     }
 
     // Leaving --------------------------------------------------------------------------------------
@@ -411,6 +456,29 @@ private fun syncRows(
                 }
             },
         ))
+        add(MenuAction(
+            "delete", "Delete This Host", FuseIcons.Trash, destructive = true,
+            detail = "Every profile, save and device link kept here. This computer keeps its own games, settings and Home",
+            section = leave,
+            onSelect = {
+                app.confirm = ConfirmSpec(
+                    "Delete this host?",
+                    "Every profile, every save and its history, and every device's link are deleted from this computer. This computer keeps its own games, library, settings and Home as they are now. Your other devices keep everything they have, and see the host gone.",
+                    "Continue", destructive = true,
+                ) {
+                    app.confirm = ConfirmSpec(
+                        "Delete it for good?",
+                        "This can't be undone. Saves only the host had (from devices that are gone) go with it.",
+                        "Delete This Host", destructive = true,
+                    ) {
+                        app.scope.launch {
+                            svc.deleteHost().onSuccess { app.toasts.show("The host is deleted. Everything of this computer's own stays", icon = FuseIcons.Trash) }
+                                .onFailure { app.toasts.show(it.message ?: "Couldn't delete the host", ToastKind.ERROR) }
+                        }
+                    }
+                }
+            },
+        ))
     } else {
         add(MenuAction(
             "unlink", "Unlink This Device", FuseIcons.Unplug, destructive = true,
@@ -429,6 +497,74 @@ private fun syncRows(
                 }
             },
         ))
+    }
+}
+
+/**
+ * The host's account: made with a username and a password typed twice; once made, its password or
+ * username can change, or it can go (then devices join only with someone at a screen, and the Hub
+ * opens on this computer only).
+ */
+private fun hostAccount(app: AppState, svc: SyncService, current: String?) {
+    fun askPassword(user: String) {
+        app.textInput = TextInputSpec("A password for $user", "", "At least 8 characters", secret = true, capitalize = false, doneLabel = "Next") { first ->
+            if (first.length < 8) return@TextInputSpec app.toasts.show("Choose a password of at least 8 characters", ToastKind.WARNING)
+            app.textInput = TextInputSpec("The same password again", "", "", secret = true, capitalize = false, doneLabel = "Save") { again ->
+                if (again != first) return@TextInputSpec app.toasts.show("The two passwords weren't the same. Nothing changed", ToastKind.WARNING)
+                app.scope.launch {
+                    svc.setHostAccount(user, first).onSuccess { app.toasts.show("The host account is ready", ToastKind.SUCCESS, icon = FuseIcons.UserRound) }
+                        .onFailure { app.toasts.show(it.message ?: "Couldn't save the account", ToastKind.ERROR) }
+                }
+            }
+        }
+    }
+    fun askName(then: (String) -> Unit) {
+        app.textInput = TextInputSpec("Username", current.orEmpty(), "Up to 40 characters", capitalize = false, doneLabel = "Next") { v ->
+            v.trim().take(40).takeIf { it.isNotEmpty() }?.let(then)
+        }
+    }
+    if (current == null) return askName { askPassword(it) }
+    app.choice = ChoiceSpec(
+        title = "Host Account",
+        icon = FuseIcons.UserRound,
+        message = if (current.isNotBlank()) "Signed in as $current from away" else null,
+        options = listOf(
+            MenuAction("pw", "Change the Password", FuseIcons.Lock, onSelect = {
+                app.choice = null
+                // The background service's host doesn't say its username: ask for it with the new password.
+                if (current.isBlank()) askName { askPassword(it) } else askPassword(current)
+            }),
+            MenuAction("name", "Change the Username", FuseIcons.Pencil, onSelect = {
+                app.choice = null
+                askName { name -> app.scope.launch { svc.setHostAccount(name, null).onFailure { app.toasts.show(it.message ?: "Couldn't change it", ToastKind.ERROR) } } }
+            }),
+            MenuAction("remove", "Remove the Account", FuseIcons.Trash, destructive = true, onSelect = {
+                app.choice = null
+                app.confirm = ConfirmSpec(
+                    "Remove the host account?",
+                    "Devices then join only with someone at a screen to let them in, and the Hub opens on this computer only. Devices already in stay in.",
+                    "Remove", destructive = true,
+                ) { app.scope.launch { svc.clearHostAccount() } }
+            }),
+        ),
+    )
+}
+
+/** Moves everyone's saves to a folder picked here, after saying what happens. */
+private fun moveHostData(app: AppState, svc: SyncService) {
+    app.scope.launch {
+        val to = app.platform.storage.pickFolder("Move everyone's saves to") ?: return@launch
+        app.confirm = ConfirmSpec(
+            "Move the saves here?",
+            "$to\n\nThe host stops for a moment while every save, version and profile is copied and checked. Then the old folder is cleared. The folder must be empty.",
+            "Move",
+        ) {
+            app.scope.launch {
+                app.toasts.show("Moving the saves", icon = FuseIcons.HardDrive)
+                svc.moveHostData(to).onSuccess { app.toasts.show("The saves are in their new folder", ToastKind.SUCCESS) }
+                    .onFailure { app.toasts.show(it.message ?: "Couldn't move the saves. Nothing changed", ToastKind.ERROR) }
+            }
+        }
     }
 }
 

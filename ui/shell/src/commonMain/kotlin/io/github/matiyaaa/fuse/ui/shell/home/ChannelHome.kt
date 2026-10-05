@@ -67,6 +67,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
 import io.github.matiyaaa.fuse.ui.designsystem.icons.HintButton
 import io.github.matiyaaa.fuse.ui.designsystem.input.InputLayer
 import io.github.matiyaaa.fuse.ui.designsystem.input.LocalInputRouter
+import io.github.matiyaaa.fuse.ui.designsystem.input.mouseHover
 import io.github.matiyaaa.fuse.ui.designsystem.input.NavResult
 import io.github.matiyaaa.fuse.ui.designsystem.media.Artwork
 import io.github.matiyaaa.fuse.ui.designsystem.shape.SquircleShape
@@ -245,12 +246,22 @@ internal fun ChannelBoard(app: AppState, page: Int, pageKey: String, active: Boo
         val first = page == 0
         app.confirm = ConfirmSpec(
             title = if (first) "Put Home back as it came?" else "Clear this page?",
-            message = if (first) "Every widget returns to its first place and size, and widgets you added go. Undo brings your board back." else "Its widgets come off. The page stays, and Undo brings them back.",
+            message = if (first) {
+                "On this device, every widget returns to its first place and size, and widgets you added go" +
+                    (if (store.sync.inUse) ". Your Home on your other devices stays as it is." else ".") + " Undo brings your board back."
+            } else {
+                "Its widgets come off. The page stays, and Undo brings them back."
+            },
             confirmLabel = if (first) "Reset Home" else "Clear page",
         ) {
             keepForUndo()
-            store.updatePrefs { p -> p.copy(home = p.home.withBoard(page, if (first) io.github.matiyaaa.fuse.model.HomeLayoutConfig.DefaultBoard else emptyList())) }
-            app.toasts.show(if (first) "Home is back as it came" else "This page is clear")
+            if (first) {
+                // This device's alone, and kept for Undo Home Reset in Settings and Fuse Sync too.
+                store.resetHome { it.withBoard(page, io.github.matiyaaa.fuse.model.HomeLayoutConfig.DefaultBoard) }
+            } else {
+                store.updatePrefs { p -> p.copy(home = p.home.withBoard(page, emptyList())) }
+            }
+            app.toasts.show(if (first) "Home is back as it came on this device" else "This page is clear")
         }
     }
 
@@ -476,14 +487,9 @@ internal fun ChannelBoard(app: AppState, page: Int, pageKey: String, active: Boo
                     // The triggers (L2, R2) turn the focused widget's carousel; the bumpers stay on the tabs.
                     NavAction.PAGE_UP, NavAction.PAGE_DOWN -> {
                         val turn = w?.let { carouselOf(it) }?.takeIf { it.count > 1 && !arranging } ?: return@InputLayer NavResult.IGNORED
-                        if (turn.step(if (e.action == NavAction.PAGE_DOWN) 1 else -1)) {
-                            app.platform.sounds.play(io.github.matiyaaa.fuse.ui.designsystem.sound.SoundCue.MOVE)
-                            haptics.tick()
-                            NavResult.MOVED
-                        } else {
-                            app.platform.sounds.play(io.github.matiyaaa.fuse.ui.designsystem.sound.SoundCue.BUMP)
-                            NavResult.BLOCKED
-                        }
+                        // The app's feedback gives the sound and the tick, once. Held at an end, the
+                        // repeats change nothing: one bump on the first press, then quiet.
+                        if (turn.step(if (e.action == NavAction.PAGE_DOWN) 1 else -1, nudge = !e.isRepeat)) NavResult.MOVED else NavResult.BLOCKED
                     }
                     NavAction.CONTEXT -> { app.openContextMenu(boardMenu(app, editor, w, ::addPicker, ::stopArranging, ::remove, committed, page, paging)); NavResult.ACTIVATED }
                     NavAction.BACK -> if (arranging) { stopArranging(); NavResult.CONSUMED } else NavResult.IGNORED
@@ -609,9 +615,16 @@ internal fun ChannelBoard(app: AppState, page: Int, pageKey: String, active: Boo
                                         app.focusZone = FocusZone.CONTENT
                                         when {
                                             arranging -> sel.index = i
-                                            // Widgets that play a game show it first; the rest open at once.
-                                            sel.index == i || w.kind !in playWidgets -> { sel.index = i; open(w) }
+                                            // A tap on a widget that plays a game shows it first; the rest open
+                                            // at once, and so does anything clicked with a mouse.
+                                            sel.index == i || w.kind !in playWidgets || router.mouse -> { sel.index = i; open(w) }
                                             else -> sel.index = i
+                                        }
+                                    },
+                                    onHover = {
+                                        if (!arranging && dragged == null) {
+                                            sel.index = i
+                                            app.focusZone = FocusZone.CONTENT
                                         }
                                     },
                                     chrome = {
@@ -792,6 +805,7 @@ private fun BoardItem(
     shape: Shape,
     cornerFraction: Float,
     onClick: () -> Unit,
+    onHover: () -> Unit,
     chrome: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit,
 ) {
     val motion = Fuse.motion
@@ -810,6 +824,8 @@ private fun BoardItem(
     Box(
         reveal(Modifier.boardPlace(rect, animate = !following))
             .zIndex(if (lifted) 2f else 0f)
+            // Pointing at it with the mouse highlights it, as the D-pad would; one click then opens it.
+            .mouseHover(!arranging) { onHover() }
             .graphicsLayer {
                 val t = wobble()
                 if (t != null && !lifted) rotationZ = sin((t + phase) * 2f * PI.toFloat()) * swing
@@ -840,6 +856,8 @@ private fun BoardItem(
             shape = shape,
             glow = widgetGlow(widget.kind, feed, cartridge, carousel?.index ?: 0),
             maxGrow = FOCUS_GROW,
+            // A carousel draws its own cards (the next one peeking): no box around the empty parts.
+            surface = carousel == null,
             onClick = onClick,
         ) {
             // A new shape gets its own face, crossfading from the old one.

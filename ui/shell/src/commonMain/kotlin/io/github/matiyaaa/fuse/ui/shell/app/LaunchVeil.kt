@@ -182,7 +182,7 @@ fun LaunchVeilContent(veil: LaunchVeil) {
                 ) {
                     Spinner(size = Size.iconS, color = c.onArt)
                     Spacer(Modifier.width(Space.s))
-                    FText("Starting", Fuse.type.label, color = c.onArtMuted, maxLines = 1)
+                    FText(veil.status ?: "Starting", Fuse.type.label, color = c.onArtMuted, maxLines = 1)
                 }
             }
         }

@@ -45,7 +45,7 @@ fun AppState.play(card: GameCard, emulator: io.github.matiyaaa.fuse.model.Emulat
     playOnChosenScreen(card) { display -> launch(card, emulator, discPath, display) }
 }
 
-private fun AppState.launch(card: GameCard, emulator: io.github.matiyaaa.fuse.model.EmulatorId?, discPath: String?, display: io.github.matiyaaa.fuse.model.LaunchDisplay?, skipSaveCheck: Boolean = false) {
+private fun AppState.launch(card: GameCard, emulator: io.github.matiyaaa.fuse.model.EmulatorId?, discPath: String?, display: io.github.matiyaaa.fuse.model.LaunchDisplay?, skipSaveCheck: Boolean = false, playAnyway: Boolean = false) {
     if (launching != null) return
     // The veil shows the room the game was lit by, with its own cover beside the title.
     val system = store.library.platforms.value.firstOrNull { it.platform.id == card.platformId }
@@ -63,7 +63,7 @@ private fun AppState.launch(card: GameCard, emulator: io.github.matiyaaa.fuse.mo
     )
     platform.sounds.play(SoundCue.LAUNCH)
     scope.launch {
-        when (val outcome = store.library.launch(card.id, emulator, discPath, display, skipSaveCheck)) {
+        when (val outcome = store.library.launch(card.id, emulator, discPath, display, skipSaveCheck, playAnyway)) {
             LaunchOutcome.Started, is LaunchOutcome.Synced -> {
                 if (outcome is LaunchOutcome.Synced) toasts.show(outcome.note, ToastKind.INFO, icon = FuseIcons.CloudCheck)
                 // On the other screen the game opens beside Fuse, which stays in front here: the
@@ -78,6 +78,11 @@ private fun AppState.launch(card: GameCard, emulator: io.github.matiyaaa.fuse.mo
                 toasts.show("${outcome.appName}: ${outcome.reason}", ToastKind.INFO, durationMs = 6000)
             }
             is LaunchOutcome.Problem -> {
+                // A package that isn't installed yet installs now, then plays: no detour through its page.
+                if (!skipSaveCheck && outcome.problem.actions.any { it is io.github.matiyaaa.fuse.ui.shell.store.ProblemAction.InstallContent }) {
+                    installThenPlay(card) { launching = null; launch(card, emulator, discPath, display) }
+                    return@launch
+                }
                 launching = null
                 showProblem(outcome.problem, card, retry = { launch(card, emulator, discPath, display) })
             }
@@ -85,6 +90,11 @@ private fun AppState.launch(card: GameCard, emulator: io.github.matiyaaa.fuse.mo
             is LaunchOutcome.SaveConflict -> {
                 launching = null
                 saveConflict = io.github.matiyaaa.fuse.ui.shell.sync.SaveConflictSpec(outcome.conflict) { launch(card, emulator, discPath, display, skipSaveCheck = true) }
+            }
+            // Another device is on this game, or still sending its save: wait for it, or play here.
+            is LaunchOutcome.SyncBusy -> {
+                launching = null
+                syncBusy(card, outcome.busy, play = { launch(card, emulator, discPath, display, playAnyway = true) }, retry = { launch(card, emulator, discPath, display) })
             }
             // Syncthing kept two versions of the save: which one to play with, then the game starts.
             is LaunchOutcome.SyncthingConflict -> {
@@ -94,6 +104,91 @@ private fun AppState.launch(card: GameCard, emulator: io.github.matiyaaa.fuse.mo
         }
     }
 }
+
+/**
+ * Installs [card]'s package (with its updates and DLC) behind the launch veil, which says which step
+ * it is on, then [play]s it. If it can't install by itself (a licence key to paste, an installer that
+ * failed), its page opens with what it needs, and nothing is started.
+ */
+private suspend fun AppState.installThenPlay(card: GameCard, play: () -> Unit) {
+    val content = store.content
+    launching = launching?.copy(status = "Installing")
+    val watching = scope.launch {
+        content.progress.collect { p ->
+            if (p != null && p.gameId == card.id) launching = launching?.copy(status = if (p.of > 1) "Installing ${p.step} of ${p.of}" else "Installing")
+        }
+    }
+    val report = runCatching { content.install(card.id) }.getOrNull()
+    watching.cancel()
+    val ready = report != null && report.failed == null && !report.cancelled && content.view(card.id)?.plan?.gameInstalled == true
+    if (ready) {
+        toasts.show("${card.title} is installed", ToastKind.SUCCESS, icon = FuseIcons.CircleCheck)
+        play()
+    } else {
+        launching = null
+        if (report?.cancelled != true) toasts.show(report?.message ?: "${card.title} needs a hand to install", ToastKind.WARNING)
+        go(Route.GameContent(card.id))
+    }
+}
+
+/**
+ * Another device has [card] going, or just stopped and is still sending its save. Three cases, told
+ * plainly: still playing right now (play here anyway, or not now), gone quiet mid-game (asleep or
+ * switched off: play with the newest save the host has), or sending (wait a moment for it).
+ */
+private fun AppState.syncBusy(card: GameCard, busy: io.github.matiyaaa.fuse.sync.LaunchGate.Busy, play: () -> Unit, retry: () -> Unit) {
+    val now = kotlin.time.Clock.System.now().toEpochMilliseconds()
+    val quiet = busy.playing && now - busy.at > BUSY_QUIET_MS
+    val last = busy.lastSave?.let { "Its newest save reached the host ${io.github.matiyaaa.fuse.ui.shell.components.agoText(it, now)}." }
+        ?: "None of its saves for this game have reached the host yet."
+    fun waitForIt() {
+        choice = null
+        toasts.show("Waiting for ${busy.device} to send its save", ToastKind.INFO, icon = FuseIcons.Hourglass)
+        scope.launch {
+            // Looks again every few seconds; the game starts by itself once the save is in, or after a while regardless.
+            val svc = store.sync.service
+            repeat(BUSY_WAIT_TRIES) {
+                delay(BUSY_WAIT_STEP_MS)
+                val q = store.sync.saveQuery(card.id) ?: return@launch play()
+                if (svc == null || svc.busyWith(q) == null) return@launch retry()
+            }
+            toasts.show("${busy.device} hasn't sent it yet. Playing with the newest save here.", ToastKind.WARNING)
+            play()
+        }
+    }
+    val options = when {
+        busy.playing && !quiet -> listOf(
+            MenuAction("here", "Play Here Anyway", FuseIcons.Play, detail = "Both will have a save; you'll pick one later", onSelect = { choice = null; play() }),
+            MenuAction("not", "Not Now", FuseIcons.Close, onSelect = { choice = null }),
+        )
+        busy.playing -> listOf(
+            MenuAction("here", "Play With the Newest Save", FuseIcons.Play, detail = last, onSelect = { choice = null; play() }),
+            MenuAction("wait", "Wait for ${busy.device}", FuseIcons.Hourglass, detail = "Wake it and go back to Fuse there; its save comes over", onSelect = { waitForIt() }),
+        )
+        else -> listOf(
+            MenuAction("wait", "Wait for It", FuseIcons.Hourglass, detail = "Starts by itself once the save is in", onSelect = { waitForIt() }),
+            MenuAction("here", "Play Without It", FuseIcons.Play, detail = last, onSelect = { choice = null; play() }),
+        )
+    }
+    choice = ChoiceSpec(
+        title = when {
+            busy.playing && !quiet -> "${busy.device} is playing ${card.title}"
+            busy.playing -> "${busy.device} was playing ${card.title}"
+            else -> "${busy.device} is sending its save"
+        },
+        icon = FuseIcons.CloudUpload,
+        message = when {
+            busy.playing && !quiet -> "It's being played there right now. $last"
+            busy.playing -> "It went quiet ${io.github.matiyaaa.fuse.ui.shell.components.agoText(busy.at, now)} (asleep or switched off) before it stopped the game. $last"
+            else -> "${card.title} just stopped there. Its save will be here in a moment."
+        },
+        options = options,
+    )
+}
+
+private const val BUSY_QUIET_MS = 2 * 60_000L
+private const val BUSY_WAIT_STEP_MS = 4_000L
+private const val BUSY_WAIT_TRIES = 30
 
 /**
  * Two versions of [card]'s save, kept by Syncthing when this device and another both changed it:

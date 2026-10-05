@@ -68,6 +68,17 @@ object SyncCrypto {
         return MessageDigest.isEqual(expected, actual)
     }
 
+    /** The parts of what [hashSecret] made: salt, iterations and the stretched key; null for anything else. */
+    fun secretParts(stored: String): Triple<String, Int, ByteArray>? {
+        val parts = stored.split('$')
+        if (parts.size != 4 || parts[0] != "pbkdf2-sha256") return null
+        val iterations = parts[1].toIntOrNull() ?: return null
+        return Triple(parts[2], iterations, runCatching { decode(parts[3]) }.getOrNull() ?: return null)
+    }
+
+    /** [secret] stretched as [hashSecret] does with [salt]: the key a device proves it knows. */
+    fun stretch(secret: String, salt: String, iterations: Int): ByteArray = pbkdf2(secret, decode(salt), iterations, 32)
+
     private fun pbkdf2(secret: String, salt: ByteArray, iterations: Int, bytes: Int): ByteArray {
         val spec = PBEKeySpec(secret.toCharArray(), salt, iterations, bytes * 8)
         return SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256").generateSecret(spec).encoded
@@ -93,6 +104,37 @@ object SyncCrypto {
         cipher.init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(128, all.copyOfRange(0, 12)))
         cipher.doFinal(all.copyOfRange(12, all.size))
     }.getOrNull()
+
+    // ---------------------------------------------------------------- joining without a code
+
+    /** A fresh EC P-256 key pair for one request to join. */
+    fun joinKeys(): java.security.KeyPair =
+        java.security.KeyPairGenerator.getInstance("EC").apply { initialize(java.security.spec.ECGenParameterSpec("secp256r1"), random) }.generateKeyPair()
+
+    fun publicKeyText(keys: java.security.KeyPair): String = encode(keys.public.encoded)
+
+    /**
+     * The key both sides of a request to join arrive at from their own private key and the other's
+     * public one (ECDH), as text for [seal]; null when [otherPublic] isn't a P-256 key.
+     */
+    fun joinSecret(mine: java.security.KeyPair, otherPublic: String): String? = runCatching {
+        val other = java.security.KeyFactory.getInstance("EC").generatePublic(java.security.spec.X509EncodedKeySpec(decode(otherPublic)))
+        val agreement = javax.crypto.KeyAgreement.getInstance("ECDH")
+        agreement.init(mine.private)
+        agreement.doPhase(other, true)
+        sha256(agreement.generateSecret())
+    }.getOrNull()
+
+    /**
+     * The six digits both screens show for a request to join ("482 913"), from both public keys:
+     * someone in the middle would have keys of their own, and the numbers wouldn't match.
+     */
+    fun joinMatch(devicePublic: String, hostPublic: String): String {
+        val d = MessageDigest.getInstance("SHA-256").digest(decode(devicePublic) + decode(hostPublic))
+        val n = ((d[0].toLong() and 0xFF) shl 24 or ((d[1].toLong() and 0xFF) shl 16) or ((d[2].toLong() and 0xFF) shl 8) or (d[3].toLong() and 0xFF)) % 1_000_000
+        val s = n.toString().padStart(6, '0')
+        return s.take(3) + " " + s.drop(3)
+    }
 
     fun constantEquals(a: String, b: String): Boolean = MessageDigest.isEqual(a.toByteArray(), b.toByteArray())
 

@@ -43,6 +43,26 @@ data class HostLink(
 )
 
 /** A host's answer that wasn't a success: what it said, its code, and the HTTP status. */
+/**
+ * How Fuse Sync makes its HTTP clients. CIO by default; Android sets one over OkHttp, so the host
+ * is reached with the system's own TLS (an https tunnel such as Cloudflare's) as the rest of Fuse is.
+ */
+object SyncHttp {
+    @Volatile var factory: (io.ktor.client.HttpClientConfig<*>.() -> Unit) -> HttpClient = { block -> HttpClient(CIO, block) }
+
+    fun client(block: io.ktor.client.HttpClientConfig<*>.() -> Unit = {}): HttpClient = factory(block)
+}
+
+/** A request to join on its way: where it went, and what both sides need to finish it. */
+class JoinSession internal constructor(
+    internal val base: String,
+    internal val deviceId: String,
+    val ticket: JoinTicket,
+    internal val secret: String,
+    /** The six digits this device shows, and whoever lets it in sees. */
+    val match: String,
+)
+
 class SyncException(message: String, val code: String, val status: Int) : IOException(message)
 
 /**
@@ -158,6 +178,14 @@ class SyncClient(
         send(HttpMethod.Post, "/profiles/$profile/revisions/$revision/pin", pinned, Boolean.serializer(), kotlinx.serialization.json.JsonObject.serializer())
     suspend fun events(since: Long, waitSeconds: Int = 0): JournalPage = get("/events?since=$since&wait=$waitSeconds", JournalPage.serializer())
     suspend fun devices(): List<DeviceInfo> = get("/devices", ListSerializer(DeviceInfo.serializer()))
+    suspend fun resolveGames(games: List<List<String>>): List<String> =
+        send(HttpMethod.Post, "/games/resolve", GameClaims(games), GameClaims.serializer(), ResolvedGames.serializer()).ids
+    suspend fun presence(): List<Presence> = get("/presence", ListSerializer(Presence.serializer()))
+    suspend fun notePresence(note: PresenceNote) = send(HttpMethod.Post, "/presence", note, PresenceNote.serializer(), kotlinx.serialization.json.JsonObject.serializer())
+    suspend fun joins(): List<JoinAsk> = get("/joins", ListSerializer(JoinAsk.serializer()))
+    suspend fun answerJoin(id: String, allow: Boolean) = send(HttpMethod.Post, "/joins/$id", JoinAnswer(allow), JoinAnswer.serializer(), kotlinx.serialization.json.JsonObject.serializer())
+    /** A code for adding another device, from this one (any device already in may make one). */
+    suspend fun pairingCode(): String = call(HttpMethod.Post, "/pairing", ByteArray(0), String.serializer())
     suspend fun sharedGames(): SharedGames = get("/shared-games", SharedGames.serializer())
     suspend fun setShared(game: String, shared: Boolean, from: String?): SharedGames =
         send(HttpMethod.Post, "/shared-games", SharedChange(game, shared, from), SharedChange.serializer(), SharedGames.serializer())
@@ -210,7 +238,7 @@ class SyncClient(
     }
 
     companion object {
-        fun defaultClient(): HttpClient = HttpClient(CIO) {
+        fun defaultClient(): HttpClient = SyncHttp.client {
             install(HttpTimeout) {
                 connectTimeoutMillis = 4_000
                 requestTimeoutMillis = 10 * 60_000
@@ -219,10 +247,18 @@ class SyncClient(
             expectSuccess = false
         }
 
-        /** `host:port` or a URL, as a base URL without a trailing slash; plain addresses get `http://`. */
+        /**
+         * `host:port` or a URL, as a base URL without a trailing slash. A plain address at home
+         * (an IP, a `.local` or `.lan` name, a name without dots) gets `http://`; a name on the
+         * internet (`sync.example.com`, as a tunnel gives) gets `https://`.
+         */
         fun normalise(address: String): String {
             val a = address.trim().trimEnd('/')
-            return if (a.startsWith("http://") || a.startsWith("https://")) a else "http://$a"
+            if (a.startsWith("http://") || a.startsWith("https://")) return a
+            val host = a.substringBefore('/').substringBeforeLast(':').removePrefix("[").removeSuffix("]").lowercase()
+            val home = host.all { it.isDigit() || it == '.' } || ':' in host || '.' !in host ||
+                listOf(".local", ".lan", ".home", ".internal", ".localdomain").any { host.endsWith(it) }
+            return if (home) "http://$a" else "https://$a"
         }
 
         /**
@@ -254,6 +290,83 @@ class SyncClient(
             val secret = SyncCrypto.open(r.sealedSecret, code.trim().uppercase(), r.salt) ?: throw SyncException("The host's answer couldn't be opened with that code.", "seal", 0)
             val home = !base.startsWith("https://")
             return HostLink(r.hostId, r.hostName, deviceId, secret.decodeToString(), localAddress = if (home) base else null, remoteAddress = if (home) null else base)
+        }
+
+        /**
+         * Asks the host at [address] to let this device in without a code: sends this device's
+         * half of a key exchange and returns the request, with the number both screens show.
+         */
+        suspend fun askToJoin(address: String, deviceId: String, deviceName: String, platform: String, http: HttpClient = defaultClient()): JoinSession {
+            val json = Json { ignoreUnknownKeys = true }
+            val base = normalise(address)
+            val keys = SyncCrypto.joinKeys()
+            val mine = SyncCrypto.publicKeyText(keys)
+            val resp = http.request {
+                method = HttpMethod.Post
+                url(base + SyncApi.BASE + "/join")
+                contentType(ContentType.Application.Json)
+                setBody(json.encodeToString(JoinRequest.serializer(), JoinRequest(deviceId, deviceName, platform, mine)))
+            }
+            val text = resp.bodyAsText()
+            if (!resp.status.isSuccess()) {
+                val err = runCatching { json.decodeFromString(ApiError.serializer(), text) }.getOrNull()
+                throw SyncException(err?.error ?: "The host didn't take the request (${resp.status.value}).", err?.code ?: "", resp.status.value)
+            }
+            val ticket = json.decodeFromString(JoinTicket.serializer(), text)
+            val secret = SyncCrypto.joinSecret(keys, ticket.publicKey) ?: throw SyncException("The host's answer wasn't a key.", "bad-key", 0)
+            return JoinSession(base, deviceId, ticket, secret, SyncCrypto.joinMatch(mine, ticket.publicKey))
+        }
+
+        /**
+         * Where [session] stands: null while it waits, the link once someone let this device in.
+         * Throws when it was turned away or ran out.
+         */
+        suspend fun joinResult(session: JoinSession, http: HttpClient = defaultClient()): HostLink? {
+            val json = Json { ignoreUnknownKeys = true }
+            val resp = http.request {
+                method = HttpMethod.Get
+                url(session.base + SyncApi.BASE + "/join/" + session.ticket.id)
+            }
+            if (!resp.status.isSuccess()) throw SyncException("The host stopped answering (${resp.status.value}).", "offline", resp.status.value)
+            val state = json.decodeFromString(JoinState.serializer(), resp.bodyAsText())
+            return linkFrom(session, state)
+        }
+
+        private fun linkFrom(session: JoinSession, state: JoinState): HostLink? = when (state.state) {
+            JoinState.WAITING -> null
+            JoinState.DENIED -> throw SyncException("${session.ticket.hostName} didn't let this device in.", "denied", 403)
+            JoinState.ALLOWED -> {
+                val secret = SyncCrypto.open(state.sealedSecret.orEmpty(), session.secret, state.salt.orEmpty())
+                    ?: throw SyncException("The host's answer couldn't be opened.", "seal", 0)
+                val home = !session.base.startsWith("https://")
+                HostLink(session.ticket.hostId, session.ticket.hostName, session.deviceId, secret.decodeToString(),
+                    localAddress = if (home) session.base else null, remoteAddress = if (home) null else session.base)
+            }
+            else -> throw SyncException("Nobody let this device in in time. Ask again.", "gone", 410)
+        }
+
+        /**
+         * Joins with the host's account, for when nobody is at a screen to let this device in. The
+         * password is stretched here and proves itself over the secret only this request shares
+         * with the host: it never travels.
+         */
+        suspend fun joinWithAccount(session: JoinSession, username: String, password: String, http: HttpClient = defaultClient()): HostLink {
+            val json = Json { ignoreUnknownKeys = true }
+            val salt = session.ticket.accountSalt ?: throw SyncException("${session.ticket.hostName} has no account. Ask someone there to let this device in.", "no-account", 403)
+            val key = SyncCrypto.stretch(password, salt, session.ticket.accountIterations)
+            val proof = SyncCrypto.hmac(key, session.secret)
+            val resp = http.request {
+                method = HttpMethod.Post
+                url(session.base + SyncApi.BASE + "/join/" + session.ticket.id + "/account")
+                contentType(ContentType.Application.Json)
+                setBody(json.encodeToString(JoinWithAccount.serializer(), JoinWithAccount(username.trim(), proof)))
+            }
+            val text = resp.bodyAsText()
+            if (!resp.status.isSuccess()) {
+                val err = runCatching { json.decodeFromString(ApiError.serializer(), text) }.getOrNull()
+                throw SyncException(err?.error ?: "The host didn't take it (${resp.status.value}).", err?.code ?: "", resp.status.value)
+            }
+            return linkFrom(session, json.decodeFromString(JoinState.serializer(), text)) ?: throw SyncException("The host didn't let this device in.", "denied", 403)
         }
 
         /** Says hello to the host at [address] without signing: who it is, or null when nothing answers. */

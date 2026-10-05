@@ -208,14 +208,19 @@ class SyncDevice(
         val (manifest, hashed) = fingerprintOf(slot)
         if (manifest.files.isEmpty()) return@withLock null
         val slotState = state.slots[keyOf(profile, slot)] ?: SlotState()
-        if (manifest.fingerprint == slotState.fingerprint) return@withLock null
+        // Saved again while the last one still waits to go (played on, offline or mid-session): the
+        // newer one takes its place, made from the same base, so the host sees one step, not a fork.
+        val waiting = state.outbox.lastOrNull { o -> o.revision?.let { it.profile == profile && it.game == slot.game.id && it.kind == slot.kind } == true }
+        if (manifest.fingerprint == (waiting?.revision?.manifest?.fingerprint ?: slotState.fingerprint)) return@withLock null
+        val replaces = waiting?.takeIf { it.revision?.reason == RevisionReason.PLAYED && it.priority == priority.rank }
         for ((lf, h) in hashed) if (!store.has(h)) lf.file.inputStream().use { store.put(it, expected = h) }
         val revision = SaveRevision(
-            id = SyncCrypto.token(12), profile = profile, game = slot.game.id, kind = slot.kind, parent = slotState.base,
+            id = SyncCrypto.token(12), profile = profile, game = slot.game.id, kind = slot.kind,
+            parent = if (replaces != null) replaces.revision?.parent else waiting?.revision?.id ?: slotState.base,
             device = deviceId, deviceName = deviceName, at = hlc.now(), manifest = manifest, playSeconds = playSeconds, title = title,
         )
         state = state.copy(
-            outbox = state.outbox + Outgoing(revision.id, priority.rank, profile, revision),
+            outbox = state.outbox.filterNot { it.id == replaces?.id } + Outgoing(revision.id, priority.rank, profile, revision),
             holders = state.holders + (slot.key to profile),
         )
         persist()
@@ -434,6 +439,13 @@ class SyncDevice(
                 val key = "${rev.profile}|${rev.game}|${rev.kind.name}"
                 if (result?.accepted == true && rev.reason != RevisionReason.BEFORE_RESTORE) {
                     state = state.copy(slots = state.slots + (key to SlotState(rev.id, rev.manifest.fingerprint)))
+                }
+                // One saved while this was on its way was made from the same base: it now follows this one.
+                if (result?.accepted == true) {
+                    state = state.copy(outbox = state.outbox.map { o ->
+                        val r = o.revision
+                        if (r != null && r.profile == rev.profile && r.game == rev.game && r.kind == rev.kind && r.parent == rev.parent) o.copy(revision = r.copy(parent = rev.id)) else o
+                    })
                 }
                 persist()
             }

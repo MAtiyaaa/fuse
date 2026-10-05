@@ -100,6 +100,9 @@ internal fun AuditDriver.syncScreens() {
         waitFor("Fuse Sync found")
         shoot("Fuse Sync found on this network", 1_000)
         tap(PadButton.A)
+        waitFor("Join Gaming PC")
+        tap(PadButton.DPAD_DOWN)
+        tap(PadButton.A)
         waitFor("Enter the code from Gaming PC")
         shoot("the host's code, before typing")
         type("K7Q2")
@@ -298,6 +301,33 @@ internal fun AuditDriver.saveFolderScreens() {
         tap(PadButton.A)
         waitFor("Choose Its Folder")
         shoot("choosing DraStic's folder")
+    }
+}
+
+/** Joining without a code: asking the host, waiting with the number, and the card that lets a device in. */
+internal fun AuditDriver.joinScreens() {
+    scenario("sync", "asking to join") {
+        syncOff()
+        runBlocking { sync.setEnabled(true) }
+        useLibrary()
+        openSyncPage()
+        tapText("Connect to a Host")
+        waitFor("Fuse Sync found")
+        tap(PadButton.A)
+        waitFor("Join Gaming PC")
+        shoot("join the host: ask, a code, or an outside address", 1_000)
+        tap(PadButton.A)
+        waitFor("Waiting for Gaming PC")
+        shoot("waiting to be let in, with the number to check", 1_200)
+    }
+
+    scenario("sync", "a device asks to join") {
+        useSync(asHost = true)
+        sync.joinRequests.value = listOf(io.github.matiyaaa.fuse.sync.JoinAsk("j1", "AYN Thor", "ANDROID", "482 913", System.currentTimeMillis()))
+        settle(800)
+        waitFor("AYN Thor wants to join")
+        shoot("a device asks: the number, let it in or turn it away", 1_000)
+        sync.joinRequests.value = emptyList()
     }
 }
 

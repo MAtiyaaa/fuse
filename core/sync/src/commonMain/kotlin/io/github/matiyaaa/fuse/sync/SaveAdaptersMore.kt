@@ -195,8 +195,16 @@ internal object ThreeDs : SaveAdapter {
         val n3ds = "$base/sdmc/Nintendo 3DS"
         val id0 = env.list(n3ds).firstOrNull { HEX32.matches(it) } ?: ZERO
         val id1 = env.list("$n3ds/$id0").firstOrNull { HEX32.matches(it) } ?: ZERO
-        return listOf(SaveSpot(SaveKind.SAVE, "3ds.savedata", root = "$n3ds/$id0/$id1/title/${id.take(8).lowercase()}/${id.drop(8).lowercase()}/data"))
+        val save = SaveSpot(SaveKind.SAVE, "3ds.savedata", root = "$n3ds/$id0/$id1/title/${id.take(8).lowercase()}/${id.drop(8).lowercase()}/data")
+        // Save states: `states/<TITLE ID>.<slot>.cst` in the same user folder, slots 0 to 10.
+        val states = SaveSpot(SaveKind.STATE, "3ds.state", (0..STATE_SLOTS).map { n ->
+            val slot = n.toString().padStart(2, '0')
+            SpotFile("state$slot", "$base/states/$id.$slot.cst")
+        })
+        return listOf(save, states)
     }
+
+    private const val STATE_SLOTS = 10
 
     private const val ZERO = "00000000000000000000000000000000"
 }

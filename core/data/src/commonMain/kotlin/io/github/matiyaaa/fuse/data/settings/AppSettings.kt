@@ -92,6 +92,8 @@ data class SyncSettings(
     val hostId: String = "",
     val localAddress: String = "",
     val remoteAddress: String = "",
+    /** [remoteAddress] came from the host (it is updated when the host's changes); false when typed here. */
+    val remoteFromHost: Boolean = false,
     /** Prefer home, fall back to outside, and back again by itself. */
     val autoRoute: Boolean = true,
     val wifiOnly: Boolean = false,
@@ -123,6 +125,8 @@ data class SyncSettings(
     val deviceHome: io.github.matiyaaa.fuse.model.HomeLayoutConfig? = null,
     /** The port a host serves on. */
     val hostPort: Int = 47311,
+    /** Where the host keeps everyone's saves and profiles; empty is Fuse's own data folder. */
+    val hostDataDir: String = "",
 )
 
 /**
@@ -243,6 +247,10 @@ data class HomeSettings(
     val addonsOrder: List<String> = emptyList(),
     /** The quick menu's items and widths ("WIFI:1"), in the user's order; empty is Fuse's own. */
     val quickMenu: List<String> = emptyList(),
+    /** Home as it was before it was last reset here, for Undo Home Reset (this device's alone). */
+    val beforeReset: HomeLayoutConfig? = null,
+    /** That reset gave this device its own Home (the profile's stayed as it was on every other device). */
+    val resetLeftProfile: Boolean = false,
 ) {
     /**
      * Visible destinations in order. Destinations missing from the stored list (added in a newer
