@@ -27,6 +27,7 @@ import java.util.TimeZone
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /** The Android implementation of everything the shared store needs from the system. */
@@ -75,7 +76,7 @@ class AndroidFuseServices(
     override fun syncService(data: io.github.matiyaaa.fuse.sync.ProfileDataPort, scope: CoroutineScope): io.github.matiyaaa.fuse.sync.SyncService {
         // The host is reached with Android's own TLS, as Jellyfin is, so an https tunnel answers the same way.
         io.github.matiyaaa.fuse.sync.SyncHttp.factory = { block -> io.ktor.client.HttpClient(io.ktor.client.engine.okhttp.OkHttp, block) }
-        return io.github.matiyaaa.fuse.sync.JvmSyncService(
+        val service = io.github.matiyaaa.fuse.sync.JvmSyncService(
             dir = java.io.File(appContext.filesDir, "sync"),
             settings = this.data.settings,
             secrets = secrets,
@@ -93,6 +94,17 @@ class AndroidFuseServices(
                 }?.let { lock -> AutoCloseable { lock.release() } }
             },
         )
+        // While a game it follows is played, Fuse keeps running to send the save as soon as it is written.
+        io.github.matiyaaa.fuse.sync.PlaySyncService.onScreenOff = { done ->
+            scope.launch { try { service.sendWhilePlaying() } finally { done() } }
+        }
+        scope.launch {
+            service.nowPlaying.collect { title ->
+                if (title != null) io.github.matiyaaa.fuse.sync.PlaySyncService.start(appContext, title)
+                else io.github.matiyaaa.fuse.sync.PlaySyncService.stop(appContext)
+            }
+        }
+        return service
     }
 
     override val emulators: EmulatorDetector = AndroidEmulatorDetector(appContext, storageVolumes)

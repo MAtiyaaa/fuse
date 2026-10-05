@@ -180,6 +180,8 @@ class SyncClient(
     suspend fun devices(): List<DeviceInfo> = get("/devices", ListSerializer(DeviceInfo.serializer()))
     suspend fun resolveGames(games: List<List<String>>): List<String> =
         send(HttpMethod.Post, "/games/resolve", GameClaims(games), GameClaims.serializer(), ResolvedGames.serializer()).ids
+    suspend fun presence(): List<Presence> = get("/presence", ListSerializer(Presence.serializer()))
+    suspend fun notePresence(note: PresenceNote) = send(HttpMethod.Post, "/presence", note, PresenceNote.serializer(), kotlinx.serialization.json.JsonObject.serializer())
     suspend fun joins(): List<JoinAsk> = get("/joins", ListSerializer(JoinAsk.serializer()))
     suspend fun answerJoin(id: String, allow: Boolean) = send(HttpMethod.Post, "/joins/$id", JoinAnswer(allow), JoinAnswer.serializer(), kotlinx.serialization.json.JsonObject.serializer())
     /** A code for adding another device, from this one (any device already in may make one). */

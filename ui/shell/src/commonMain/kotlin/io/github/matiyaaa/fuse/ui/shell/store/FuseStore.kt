@@ -378,9 +378,10 @@ interface LibraryOps {
     /** [display] overrides the screen settings for this launch (the user just picked one). */
     /**
      * Starts [id]. With Fuse Sync, its newest save is put in place first; [skipSaveCheck] starts it
-     * as it is here (after the person settled a conflict).
+     * as it is here (after the person settled a conflict). [playAnyway] doesn't wait for another
+     * device still playing it or sending its save.
      */
-    suspend fun launch(id: GameId, emulator: EmulatorId? = null, discPath: String? = null, display: LaunchDisplay? = null, skipSaveCheck: Boolean = false): LaunchOutcome
+    suspend fun launch(id: GameId, emulator: EmulatorId? = null, discPath: String? = null, display: LaunchDisplay? = null, skipSaveCheck: Boolean = false, playAnyway: Boolean = false): LaunchOutcome
 
     /** Called when Fuse comes back to the foreground: closes the running session, checks for changes. */
     fun onResume()

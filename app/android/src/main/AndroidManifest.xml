@@ -34,6 +34,9 @@
     -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+    <!-- Fuse Sync keeps a playing game's save in step (PlaySyncService), awake a few seconds when the screen goes off. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission
@@ -328,6 +331,12 @@
             android:name=".capture.CaptureService"
             android:exported="false"
             android:foregroundServiceType="mediaProjection" />
+
+        <!-- Runs only while a game Fuse Sync follows is played (see PlaySyncService). -->
+        <service
+            android:name=".sync.PlaySyncService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
 
         <!-- Read-only play sessions for Cartridge (see PlayShareProvider and READ_PLAY above). -->
         <provider

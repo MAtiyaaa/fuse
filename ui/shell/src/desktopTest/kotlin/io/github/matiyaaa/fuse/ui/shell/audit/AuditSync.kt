@@ -173,7 +173,7 @@ internal class AuditSync(private val settings: SettingsStore) : SyncService {
 
     override suspend fun syncNow(): Result<Unit> = Result.success(Unit)
 
-    override suspend fun beforeLaunch(query: SaveQuery): LaunchGate = conflictNext?.let { conflictNext = null; LaunchGate.Conflict(it) } ?: LaunchGate.Go()
+    override suspend fun beforeLaunch(query: SaveQuery, waitForOthers: Boolean): LaunchGate = conflictNext?.let { conflictNext = null; LaunchGate.Conflict(it) } ?: LaunchGate.Go()
 
     override suspend fun settle(conflict: SaveConflict, keepHere: Boolean): Result<Unit> = Result.success(Unit)
     override suspend fun afterExit(query: SaveQuery, startedAt: Long, endedAt: Long) = Unit

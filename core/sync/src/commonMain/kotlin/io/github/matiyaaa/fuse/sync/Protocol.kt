@@ -186,6 +186,33 @@ data class GameClaims(val games: List<List<String>>)
 @Serializable
 data class ResolvedGames(val ids: List<String>)
 
+/**
+ * A device playing a game, or done with it and still sending its save: so another device about to
+ * start the same game knows to wait a moment, or that its newest save may not have reached the host.
+ */
+@Serializable
+data class Presence(
+    val deviceId: String,
+    val deviceName: String,
+    val profile: String,
+    val game: String,
+    val title: String = "",
+    val state: String,
+    /** When the device last said so (it repeats it while playing). */
+    val at: Long,
+    /** When it started playing. */
+    val since: Long,
+) {
+    companion object {
+        const val PLAYING = "playing"
+        const val SENDING = "sending"
+    }
+}
+
+/** What a device says about itself: [state] null when it is done (nothing playing, nothing waiting). */
+@Serializable
+data class PresenceNote(val profile: String, val game: String, val title: String = "", val state: String? = null, val since: Long = 0)
+
 @Serializable
 data class JournalPage(val events: List<JournalEvent>, val seq: Long)
 

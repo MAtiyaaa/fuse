@@ -84,6 +84,28 @@ class SyncHost(
         pairing = null
     }
 
+    // ---------------------------------------------------------------- who is playing what
+
+    private val presence = ConcurrentHashMap<String, Presence>()
+
+    /** What each device last said it was doing, without what has long gone quiet. */
+    fun presence(): List<Presence> {
+        val now = clock()
+        presence.values.removeIf { now - it.at > PRESENCE_TTL_MS }
+        return presence.values.sortedByDescending { it.at }
+    }
+
+    private fun notePresence(d: DeviceRecord, note: PresenceNote) {
+        val state = note.state
+        if (state == null) {
+            presence.remove(d.id)
+            return
+        }
+        val now = clock()
+        val was = presence[d.id]?.takeIf { it.game == note.game }
+        presence[d.id] = Presence(d.id, d.name, note.profile, note.game.take(200), note.title.take(200), state, now, was?.since ?: note.since.takeIf { it in 1..now } ?: now)
+    }
+
     // ---------------------------------------------------------------- joining without a code
 
     private class Join(val id: String, val request: JoinRequest, val keys: java.security.KeyPair, val secret: String, val match: String, val at: Long) {
@@ -344,6 +366,13 @@ class SyncHost(
                 }
             }
             get("/devices") { device() ?: return@get; call.json(ListSerializer(DeviceInfo.serializer()), store.devices()) }
+            get("/presence") { device() ?: return@get; call.json(ListSerializer(Presence.serializer()), presence()) }
+            post("/presence") {
+                val d = device() ?: return@post
+                val req = signedBody(d, PresenceNote.serializer()) ?: return@post
+                notePresence(d, req)
+                call.respondText("{}", ContentType.Application.Json)
+            }
             post("/games/resolve") {
                 val d = device() ?: return@post
                 val req = signedBody(d, GameClaims.serializer()) ?: return@post
@@ -536,6 +565,9 @@ class SyncHost(
 
         /** How long a request to join waits for someone to let the device in. */
         const val JOIN_TTL_MS = 5 * 60_000L
+
+        /** A device quiet this long is forgotten as playing anything. */
+        const val PRESENCE_TTL_MS = 12 * 60 * 60_000L
         private const val MAX_JOINS = 8
 
         /** Headers a tunnel or reverse proxy adds for the caller it carries. */

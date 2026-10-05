@@ -82,6 +82,7 @@ fun OverlayHost(app: AppState) {
     io.github.matiyaaa.fuse.ui.shell.sync.ProfileArrival(app)
     io.github.matiyaaa.fuse.ui.shell.sync.PairingOverlay(app)
     io.github.matiyaaa.fuse.ui.shell.sync.JoinRequestOverlay(app)
+    io.github.matiyaaa.fuse.ui.shell.sync.SyncNotices(app)
     ConfirmOverlay(app)
     TextInputOverlay(app)
     PhoneTypingOverlay(app)

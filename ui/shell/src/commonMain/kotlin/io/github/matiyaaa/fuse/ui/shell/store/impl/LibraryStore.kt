@@ -392,12 +392,12 @@ internal class DefaultLibraryOps(
 
     // Launching -------------------------------------------------------------------------------------
 
-    override suspend fun launch(id: GameId, emulator: EmulatorId?, discPath: String?, display: LaunchDisplay?, skipSaveCheck: Boolean): LaunchOutcome =
-        launchGame(id, emulator, discPath, display, skipSaveCheck).also { outcome ->
+    override suspend fun launch(id: GameId, emulator: EmulatorId?, discPath: String?, display: LaunchDisplay?, skipSaveCheck: Boolean, playAnyway: Boolean): LaunchOutcome =
+        launchGame(id, emulator, discPath, display, skipSaveCheck, playAnyway).also { outcome ->
             if (outcome is LaunchOutcome.Problem) ctx.recordProblem(outcome.problem)
         }
 
-    private suspend fun launchGame(id: GameId, emulator: EmulatorId?, discPath: String?, display: LaunchDisplay?, skipSaveCheck: Boolean): LaunchOutcome {
+    private suspend fun launchGame(id: GameId, emulator: EmulatorId?, discPath: String?, display: LaunchDisplay?, skipSaveCheck: Boolean, playAnyway: Boolean = false): LaunchOutcome {
         var stored = data.games.get(id) ?: return LaunchOutcome.Problem(LaunchProblems.gone())
         // A computer's Steam game still kept as a shortcut file that went away moves onto Steam's library.
         if (stored.location.launchPath.endsWith(".steam", ignoreCase = true) && !exists(stored.location.launchPath) && engine.moveSteamShortcutsToLibraries()) {
@@ -486,8 +486,9 @@ internal class DefaultLibraryOps(
                 var note: String? = null
                 val link = sync
                 if (save != null && link != null && !skipSaveCheck) {
-                    when (val gate = link.service.beforeLaunch(save)) {
+                    when (val gate = link.service.beforeLaunch(save, waitForOthers = !playAnyway)) {
                         is io.github.matiyaaa.fuse.sync.LaunchGate.Conflict -> return LaunchOutcome.SaveConflict(gate.conflict)
+                        is io.github.matiyaaa.fuse.sync.LaunchGate.Busy -> return LaunchOutcome.SyncBusy(gate)
                         is io.github.matiyaaa.fuse.sync.LaunchGate.Go -> note = gate.note
                     }
                 }
@@ -602,8 +603,12 @@ internal class DefaultLibraryOps(
      * comes back to the front (Android). Nothing is estimated.
      */
     private suspend fun startSession(game: GameId, emulator: EmulatorId, awaitExit: (suspend () -> Unit)?, save: io.github.matiyaaa.fuse.sync.SaveQuery? = null, plainSave: io.github.matiyaaa.fuse.sync.SaveQuery? = null) {
-        val sessionId = data.playSessions.start(game, emulator, ctx.now())
+        val startedAt = ctx.now()
+        val sessionId = data.playSessions.start(game, emulator, startedAt)
         active = ActiveSession(sessionId, game, endsOnResume = awaitExit == null, save = save, plainSave = plainSave)
+        // Fuse Sync keeps the save moving while the game runs, and tells the other devices it is being played.
+        val link = sync
+        if (save != null && link != null) ctx.scope.launch { runCatching { link.service.playing(save, startedAt) } }
         if (awaitExit != null) {
             ctx.scope.launch {
                 try {

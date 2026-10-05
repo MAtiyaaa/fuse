@@ -62,6 +62,22 @@ sealed interface LaunchGate {
 
     /** Both played since they last agreed: ask the person, with what each side has. */
     data class Conflict(val conflict: SaveConflict) : LaunchGate
+
+    /**
+     * Another device is playing this game, or just stopped and is still sending its save: the
+     * person can wait for it or play here with the newest save the host has ([lastSave], when it
+     * came from that device).
+     */
+    data class Busy(val device: String, val title: String, val playing: Boolean, val at: Long, val lastSave: Long?) : LaunchGate
+}
+
+/** Something Fuse Sync did that the person would want to know, shown as a quiet toast. */
+sealed interface SyncNotice {
+    /** A save went up to the host ([live] while still playing). */
+    data class Sent(val title: String, val kind: SaveKind, val live: Boolean) : SyncNotice
+
+    /** The newest save could not be used here (another emulator's, or another format), and stays on the host. */
+    data class CantUse(val title: String, val kind: SaveKind, val from: String, val why: String) : SyncNotice
 }
 
 /** A save conflict, as the person sees it. */
@@ -211,8 +227,33 @@ interface SyncService {
 
     suspend fun syncNow(): Result<Unit>
 
-    /** Before a game starts: its save brought up to date, or a conflict to ask about. */
-    suspend fun beforeLaunch(query: SaveQuery): LaunchGate
+    /**
+     * Before a game starts: its save brought up to date, or a conflict to ask about. With
+     * [waitForOthers], another device still playing or sending it is asked about ([LaunchGate.Busy]).
+     */
+    suspend fun beforeLaunch(query: SaveQuery, waitForOthers: Boolean = true): LaunchGate
+
+    /**
+     * The game started: its save is watched while it runs and sent as soon as the game writes it
+     * (so closing a handheld mid-game, or playing on and on, never leaves the newest save behind),
+     * and other devices learn it is being played.
+     */
+    suspend fun playing(query: SaveQuery, startedAt: Long) {}
+
+    /** Another device on [query]'s game (playing it, or still sending its save); null when none is, or the host can't say. */
+    suspend fun busyWith(query: SaveQuery): LaunchGate.Busy? = null
+
+    /** Look at the playing game's save now and send it if it changed (the screen is going off). */
+    suspend fun sendWhilePlaying() {}
+
+    /**
+     * The game whose save is being kept in step right now (from just before it starts until its
+     * save is sent after it stops), or null. Android keeps Fuse awake enough for it meanwhile.
+     */
+    val nowPlaying: StateFlow<String?> get() = NO_PLAYING
+
+    /** Quiet news for the interface: a save sent, one that can't be used here. */
+    val notices: kotlinx.coroutines.flow.SharedFlow<SyncNotice> get() = NO_NOTICES
 
     /** The person settled [conflict]: [keepHere] keeps this device's, else the host's comes down. */
     suspend fun settle(conflict: SaveConflict, keepHere: Boolean): Result<Unit>
@@ -275,6 +316,10 @@ class NoHostLifetime(private val why: String) : HostLifetime {
     override fun install(): Result<ServiceState> = Result.failure(UnsupportedOperationException(why))
     override fun remove(): Result<ServiceState> = Result.success(state())
 }
+
+private val NO_PLAYING: StateFlow<String?> = kotlinx.coroutines.flow.MutableStateFlow(null)
+
+private val NO_NOTICES: kotlinx.coroutines.flow.SharedFlow<SyncNotice> = kotlinx.coroutines.flow.MutableSharedFlow()
 
 private val NO_JOIN_REQUESTS: StateFlow<List<JoinAsk>> = kotlinx.coroutines.flow.MutableStateFlow(emptyList())
 

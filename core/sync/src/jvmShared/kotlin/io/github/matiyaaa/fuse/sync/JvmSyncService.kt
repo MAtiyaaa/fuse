@@ -45,6 +45,8 @@ class JvmSyncService(
     private val clock: () -> Long = System::currentTimeMillis,
     /** Held while looking for hosts (Android only hears broadcast replies under a multicast lock). */
     private val discoveryLock: () -> AutoCloseable? = { null },
+    /** How often a running game's save is looked at. */
+    private val liveLookMs: Long = LIVE_LOOK_MS,
 ) : SyncService {
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
     private val _status = MutableStateFlow<SyncStatus>(SyncStatus.Off)
@@ -719,7 +721,7 @@ class JvmSyncService(
         }
     }
 
-    override suspend fun beforeLaunch(asked: SaveQuery): LaunchGate = withContext(Dispatchers.IO) {
+    override suspend fun beforeLaunch(asked: SaveQuery, waitForOthers: Boolean): LaunchGate = withContext(Dispatchers.IO) {
         // The game by the household's one id for it (another device may know it by another name).
         client?.let { cl -> withTimeoutOrNull(RESOLVE_WAIT_MS) { runCatching { resolveGames(cl) } } }
         val query = canonical(asked)
@@ -727,6 +729,10 @@ class JvmSyncService(
         val d = device
         val profile = cached.activeProfile
         if (d == null || profile.isEmpty() || !cached.enabled) return@withContext LaunchGate.Go()
+        // Another device playing it, or still sending what it just saved: the person decides whether to wait.
+        if (waitForOthers && c != null) othersOn(c, d, query, profile)?.let { return@withContext it }
+        // From here until its save is sent after it stops (Android keeps Fuse going meanwhile).
+        getReady(query.title)
         var note: String? = null
         for (slot in slots(query)) {
             // On a device more than one person plays, the folder must hold this person's save
@@ -749,10 +755,13 @@ class JvmSyncService(
                     ),
                 )
                 is PrepareResult.Updated -> {
-                    note = "Your save from ${result.revision.deviceName} is in place"
+                    note = "Your ${result.revision.kind.label.lowercase()} from ${result.revision.deviceName}, ${ago(result.revision.at.millis)}"
                     log("${query.title}: brought the save from ${result.revision.deviceName}", query.game.id, "save")
                 }
-                is PrepareResult.Incompatible -> log("${query.title}: the newest ${result.revision.kind.label.lowercase()} is for another emulator, so it stays on the host", query.game.id, "save")
+                is PrepareResult.Incompatible -> {
+                    log("${query.title}: the newest ${result.revision.kind.label.lowercase()} is for another emulator, so it stays on the host", query.game.id, "save")
+                    _notices.tryEmit(SyncNotice.CantUse(query.title, result.revision.kind, result.revision.deviceName, incompatibleWhy(result.revision)))
+                }
                 PrepareResult.Offline -> note = note ?: "Fuse Sync is offline: playing with this device's save"
                 else -> Unit
             }
@@ -781,21 +790,165 @@ class JvmSyncService(
 
     override suspend fun afterExit(asked: SaveQuery, startedAt: Long, endedAt: Long) {
         val query = canonical(asked)
-        val d = device ?: return
-        val profile = cached.activeProfile.ifEmpty { return }
+        stopWatching(query)
+        val d = device ?: return run { _nowPlaying.value = null }
+        val profile = cached.activeProfile.ifEmpty { return run { _nowPlaying.value = null } }
         withContext(Dispatchers.IO) {
+            client?.let { c -> runCatching { c.notePresence(PresenceNote(profile, query.game.id, query.title, Presence.SENDING, startedAt)) } }
             // Emulators finish writing a moment after they close.
             delay(SETTLE_MS)
             // The same id the library's own record of this session gets, so it is counted once whichever arrives first.
             val session = SessionEntry(SessionEntry.idOf(startedAt, endedAt), d.deviceId, startedAt, endedAt, query.emulatorId)
             if (cached.records) d.played(profile, query.game, session)
             val total = d.meta(profile).game(query.game).totalSeconds
-            for (slot in slots(query)) {
-                runCatching { d.capture(ownerOf(query, slot, profile), slot, total, title = query.title) }.getOrNull()?.let { log("${query.title}: saved ${it.kind.label.lowercase()}", query.game.id, "save") }
-            }
-            client?.let { c -> runCatching { d.flush(c) }.onFailure { if (it is SyncException) handle(it) } }
+            val c = liveLock.withLock {
+                val captured = slots(query).mapNotNull { slot ->
+                    runCatching { d.capture(ownerOf(query, slot, profile), slot, total, title = query.title) }.getOrNull()
+                        ?.also { log("${query.title}: saved ${it.kind.label.lowercase()}", query.game.id, "save") }
+                }
+                val c = client ?: return@withLock null
+                runCatching { d.flush(c) }
+                    .onSuccess { captured.firstOrNull { it.kind != SaveKind.STATE }?.let { r -> _notices.tryEmit(SyncNotice.Sent(query.title, r.kind, live = false)) } }
+                    .onFailure { if (it is SyncException) handle(it) }
+                c
+            } ?: return@withContext
+            // Done: nothing playing, nothing left to send (what is still queued says so by itself next time).
+            runCatching { c.notePresence(PresenceNote(profile, query.game.id, query.title, if (d.pendingProfiles().isEmpty()) null else Presence.SENDING, startedAt)) }
+        }
+        if (watch == null) _nowPlaying.value = null
+    }
+
+    // ---------------------------------------------------------------- while a game runs
+
+    private val _notices = kotlinx.coroutines.flow.MutableSharedFlow<SyncNotice>(extraBufferCapacity = 8)
+    override val notices: kotlinx.coroutines.flow.SharedFlow<SyncNotice> = _notices
+
+    private class Watch(val query: SaveQuery, val profile: String, val startedAt: Long, val job: Job)
+
+    /** One send at a time while playing (the watch, and the screen going off). */
+    private val liveLock = Mutex()
+
+    @Volatile private var watch: Watch? = null
+
+    private val _nowPlaying = MutableStateFlow<String?>(null)
+    override val nowPlaying: StateFlow<String?> = _nowPlaying.asStateFlow()
+    @Volatile private var readying: Job? = null
+
+    /** About to start [title]: in step from now; if it never starts, that ends by itself. */
+    private fun getReady(title: String) {
+        if (watch == null) _nowPlaying.value = title
+        readying?.cancel()
+        readying = scope.launch {
+            delay(READY_MS)
+            if (watch == null) _nowPlaying.value = null
         }
     }
+
+    override suspend fun playing(asked: SaveQuery, startedAt: Long) {
+        val query = canonical(asked)
+        val profile = cached.activeProfile.ifEmpty { return }
+        if (device == null || !cached.enabled) return
+        watch?.job?.cancel()
+        // How the save looks as the game starts (what came down before it), taken now, before the game can write.
+        val first = withContext(Dispatchers.IO) { looks(query) }
+        val job = scope.launch(Dispatchers.IO) { watchWhilePlaying(query, profile, startedAt, first) }
+        watch = Watch(query, profile, startedAt, job)
+        readying?.cancel()
+        _nowPlaying.value = query.title
+    }
+
+    override suspend fun busyWith(query: SaveQuery): LaunchGate.Busy? = withContext(Dispatchers.IO) {
+        val c = client ?: return@withContext null
+        val d = device ?: return@withContext null
+        othersOn(c, d, canonical(query), cached.activeProfile.ifEmpty { return@withContext null })
+    }
+
+    override suspend fun sendWhilePlaying() {
+        val w = watch ?: return
+        withContext(Dispatchers.IO) { liveLock.withLock { sendLive(w.query, w.profile, w.startedAt) } }
+    }
+
+    private fun stopWatching(query: SaveQuery) {
+        val w = watch ?: return
+        if (w.query.game == query.game) {
+            w.job.cancel()
+            watch = null
+        }
+    }
+
+    /** What a slot's files look like now, cheaply (sizes and times; the content is only read once they settle). */
+    private fun looks(query: SaveQuery): List<String> = slots(query).flatMap { slot ->
+        slot.files.map { f -> "${f.path}:${if (f.file.isFile) "${f.file.length()}@${f.file.lastModified()}" else "-"}" }
+    }
+
+    /**
+     * Every [LIVE_LOOK_MS] while the game runs: says it is still playing, and when the game has
+     * written its save and left it alone since the last look, keeps it and sends it.
+     */
+    private suspend fun watchWhilePlaying(query: SaveQuery, profile: String, startedAt: Long, first: List<String>) {
+        suspend fun say() = client?.let { c -> runCatching { c.notePresence(PresenceNote(profile, query.game.id, query.title, Presence.PLAYING, startedAt)) } }
+        say()
+        var seen = first
+        var moving = false
+        while (true) {
+            delay(liveLookMs)
+            val now = looks(query)
+            val changed = now != seen
+            seen = now
+            if (changed) {
+                // Written just now: wait one more look so a save the game is still writing isn't sent half done.
+                moving = true
+            } else if (moving) {
+                moving = false
+                liveLock.withLock { sendLive(query, profile, startedAt) }
+            }
+            say()
+        }
+    }
+
+    private suspend fun sendLive(query: SaveQuery, profile: String, startedAt: Long) {
+        val d = device ?: return
+        val played = ((clock() - startedAt) / 1000).coerceAtLeast(0)
+        val total = d.meta(profile).game(query.game).totalSeconds + played
+        val captured = slots(query).mapNotNull { slot -> runCatching { d.capture(ownerOf(query, slot, profile), slot, total, title = query.title) }.getOrNull() }
+        if (captured.isEmpty()) return
+        log("${query.title}: saved ${captured.first().kind.label.lowercase()} while playing", query.game.id, "save")
+        val c = client ?: return
+        runCatching { d.flush(c) }
+            .onSuccess { captured.firstOrNull { it.kind != SaveKind.STATE }?.let { r -> _notices.tryEmit(SyncNotice.Sent(query.title, r.kind, live = true)) } }
+            .onFailure { if (it is SyncException) handle(it) }
+    }
+
+    /**
+     * Another device on this game for the same person (or anyone, for a game played as one save):
+     * playing it lately, or done and still sending. Null when nobody is, or the host can't say.
+     */
+    private suspend fun othersOn(c: SyncClient, d: SyncDevice, query: SaveQuery, profile: String): LaunchGate.Busy? {
+        val list = withTimeoutOrNull(PRESENCE_WAIT_MS) { runCatching { c.presence() }.getOrNull() } ?: return null
+        val now = clock()
+        val shared = query.game.id in cached.sharedGames
+        val other = list.firstOrNull { p ->
+            p.deviceId != d.deviceId && p.game == query.game.id && (shared || p.profile == profile) &&
+                ((p.state == Presence.PLAYING && now - p.at <= PLAYING_ASK_MS) || (p.state == Presence.SENDING && now - p.at <= SENDING_ASK_MS))
+        } ?: return null
+        val slot = slots(query).firstOrNull { it.kind != SaveKind.STATE }
+        val last = slot?.let { s -> runCatching { c.revisions(ownerOf(query, s, profile), s.game.id, s.kind) }.getOrNull() }
+            ?.firstOrNull { it.device == other.deviceId && it.reason != RevisionReason.CONFLICT_COPY }?.at?.millis
+        return LaunchGate.Busy(other.deviceName, query.title, other.state == Presence.PLAYING, other.at, last)
+    }
+
+    private fun ago(at: Long): String {
+        val m = ((clock() - at) / 60_000).coerceAtLeast(0)
+        return when {
+            m < 1 -> "just now"
+            m < 60 -> "$m min ago"
+            m < 24 * 60 -> "${m / 60} h ago"
+            else -> "${m / (24 * 60)} days ago"
+        }
+    }
+
+    private fun incompatibleWhy(r: SaveRevision): String =
+        "It was saved by another emulator on ${r.deviceName}, so it stays on the host. Play it there, or use the same emulator here."
 
     override suspend fun report(): ProfileReport? = withContext(Dispatchers.IO) {
         val c = client ?: return@withContext null
@@ -900,6 +1053,19 @@ class JvmSyncService(
 
         /** The longest a launch waits on the host before playing with what is here. */
         const val LAUNCH_WAIT_MS = 8_000L
+
+        /** How often a running game's save is looked at. */
+        const val LIVE_LOOK_MS = 15_000L
+
+        /** How long after the save check a game has to start before Fuse stops keeping in step for it. */
+        const val READY_MS = 45_000L
+        const val PRESENCE_WAIT_MS = 3_000L
+
+        /** Another device heard from this lately while playing (it may have gone to sleep mid-game). */
+        const val PLAYING_ASK_MS = 30 * 60_000L
+
+        /** Another device done with it and sending, heard from this lately. */
+        const val SENDING_ASK_MS = 3 * 60_000L
 
         /** How long after an emulator closes its saves are read (it may still be writing them). */
         const val SETTLE_MS = 1_500L
