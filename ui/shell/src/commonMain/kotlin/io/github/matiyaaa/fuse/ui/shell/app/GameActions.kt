@@ -78,6 +78,11 @@ private fun AppState.launch(card: GameCard, emulator: io.github.matiyaaa.fuse.mo
                 toasts.show("${outcome.appName}: ${outcome.reason}", ToastKind.INFO, durationMs = 6000)
             }
             is LaunchOutcome.Problem -> {
+                // A package that isn't installed yet installs now, then plays: no detour through its page.
+                if (!skipSaveCheck && outcome.problem.actions.any { it is io.github.matiyaaa.fuse.ui.shell.store.ProblemAction.InstallContent }) {
+                    installThenPlay(card) { launching = null; launch(card, emulator, discPath, display) }
+                    return@launch
+                }
                 launching = null
                 showProblem(outcome.problem, card, retry = { launch(card, emulator, discPath, display) })
             }
@@ -97,6 +102,32 @@ private fun AppState.launch(card: GameCard, emulator: io.github.matiyaaa.fuse.mo
                 syncthingConflict(card, outcome.conflicts) { launch(card, emulator, discPath, display, skipSaveCheck = true) }
             }
         }
+    }
+}
+
+/**
+ * Installs [card]'s package (with its updates and DLC) behind the launch veil, which says which step
+ * it is on, then [play]s it. If it can't install by itself (a licence key to paste, an installer that
+ * failed), its page opens with what it needs, and nothing is started.
+ */
+private suspend fun AppState.installThenPlay(card: GameCard, play: () -> Unit) {
+    val content = store.content
+    launching = launching?.copy(status = "Installing")
+    val watching = scope.launch {
+        content.progress.collect { p ->
+            if (p != null && p.gameId == card.id) launching = launching?.copy(status = if (p.of > 1) "Installing ${p.step} of ${p.of}" else "Installing")
+        }
+    }
+    val report = runCatching { content.install(card.id) }.getOrNull()
+    watching.cancel()
+    val ready = report != null && report.failed == null && !report.cancelled && content.view(card.id)?.plan?.gameInstalled == true
+    if (ready) {
+        toasts.show("${card.title} is installed", ToastKind.SUCCESS, icon = FuseIcons.CircleCheck)
+        play()
+    } else {
+        launching = null
+        if (report?.cancelled != true) toasts.show(report?.message ?: "${card.title} needs a hand to install", ToastKind.WARNING)
+        go(Route.GameContent(card.id))
     }
 }
 
