@@ -24,12 +24,17 @@ object Platforms {
         "palm-os", "pc-8800-series", "pc-9800-series", "philips-cd-i", "quake", "rpg-maker", "satellaview",
         "sharp-x68000", "spectravideo", "stv", "sufami-turbo", "supervision", "thomson-mo5", "tic-80", "uzebox",
         "vic-20", "videopac-g7400", "vircon32", "wasm-4", "win3x", "win9x", "x1", "z-machine", "zx81",
-    ).map(::PlatformId)
+    ).map(::PlatformId) + desktopOnly
+
+    /** Systems no Android emulator runs yet (PlayStation 5: SharpEmu and KytyPS5 are x86 desktop programs). */
+    val desktopOnly: List<PlatformId> get() = DESKTOP_ONLY
 
     private val known = all.toSet()
 
     fun isKnown(id: PlatformId): Boolean = id in known
 }
+
+private val DESKTOP_ONLY = listOf(PlatformId("ps5"))
 
 /** Shorthand for sets of platform ids in catalogs. */
 internal fun platforms(vararg ids: String): Set<PlatformId> = ids.map(::PlatformId).toSet()

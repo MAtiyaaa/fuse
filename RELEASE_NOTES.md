@@ -1,4 +1,4 @@
-# Fuse 0.3.0 - The Clean Update
+# Fuse 0.3.0 - The Sync & Clean Update
 
 ## New
 
@@ -24,6 +24,12 @@
   back, as on a phone: an arrow follows your finger and lights when letting go will go back.
 - **Pages above, too.** With the menus below (Flipped), the screen above has the same three pages
   as the screen below: what's chosen, Status and Controls.
+- **PlayStation 5, and a better PlayStation 4.** PS5 games start in SharpEmu (Windows, Linux and
+  macOS) or KytyPS5 (Windows), from a dumped game folder. PS4 and PS5 games show their own art
+  (the console's square tile and full-screen backdrop from sce_sys) before anything is scraped, an
+  update folder beside its game (CUSA00900-UPDATE, shadPS4's layout) is that game's update rather
+  than a second game, and shadPS4 is found as a Flatpak and under its newer AppImage names. PS5
+  emulation is young, so Fuse says so on the emulator's page.
 - **Fuse Player by Fuse rides out weak Wi-Fi.** It starts on a short buffer and keeps a deep one,
   retries a flaky connection, and when the connection can't keep up it lowers the quality by itself
   and carries on from the same second, saying so in a small note.

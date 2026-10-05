@@ -29,7 +29,7 @@ Home screen.
 <a href="https://github.com/MAtiyaaa/fuse/releases/latest"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/brand/button-macos-dark.svg"><img src="docs/assets/brand/button-macos-light.svg" height="48" alt="Download for macOS"></picture></a>
 
 <sub>Android 9 or newer &nbsp;·&nbsp; 64-bit x86 Linux AppImage &nbsp;·&nbsp; Windows 10 and 11 &nbsp;·&nbsp; macOS on Apple silicon and Intel &nbsp;·&nbsp; <a href="#install">checksums and install notes</a></sub><br>
-<sub>0.3.0 is the <b>Clean Update</b>: a quick menu you arrange, 86 more systems, Jellyfin in setup, swipe-back on touch screens, and Fuse Player by Fuse riding out weak Wi-Fi. <a href="#where-fuse-stands">Here is where it stands.</a></sub><br>
+<sub>0.3.0 is the <b>Sync &amp; Clean Update</b>: a quick menu you arrange, 86 more systems, Jellyfin in setup, swipe-back on touch screens, and Fuse Player by Fuse riding out weak Wi-Fi. <a href="#where-fuse-stands">Here is where it stands.</a></sub><br>
 <sub>Or download from <a href="https://matiyaaa.github.io/fuse/">Fuse's website</a>, which always offers the latest version for your system.</sub>
 
 <br>
@@ -511,7 +511,7 @@ Linux app, isn't offered on Windows and macOS.
 ## Where Fuse stands
 
 > [!IMPORTANT]
-> **Fuse 0.3.0 "The Clean Update" is still early, and cleaner than ever.** The quick menu became
+> **Fuse 0.3.0 "The Sync & Clean Update" is still early, and cleaner than ever.** The quick menu became
 > yours to arrange, with widgets for what's playing (skip a song with a flick), brightness, volume
 > and the second screen's three ways (Off, Fuse and Flipped). Fuse now reads every game system ES-DE
 > knows, 86 more than before, and finds renamed emulator AppImages. Setup explains Jellyfin and
@@ -525,7 +525,7 @@ Linux app, isn't offered on Windows and macOS.
 
 | Version | Name | What it brought |
 |---|---|---|
-| [0.3.0](docs/releases/0.3.0.md) | The Clean Update | A quick menu you arrange, 157 systems, Jellyfin in setup, swipe-back on touch screens, the second screen's pages redesigned |
+| [0.3.0](docs/releases/0.3.0.md) | The Sync & Clean Update | A quick menu you arrange, 157 systems, Jellyfin in setup, swipe-back on touch screens, the second screen's pages redesigned |
 | [0.2.9](docs/releases/0.2.9.md) | The Organized Update | Films on the screen you choose with a live swap, Addons in your order and in Settings, Jellyfin at home |
 | [0.2.8](docs/releases/0.2.8.md) | The Media & Connectivity Update | Jellyfin and Fuse Player by Fuse, a phone as keyboard and controller, Storage redesigned |
 | [0.2.7](docs/releases/0.2.7.md) | The Swap & Clean Update | Fuse's menus on a dual-screen handheld's touch screen, like a 3DS, and Fuseline by Fuse |

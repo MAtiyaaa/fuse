@@ -80,6 +80,20 @@ object WindowsCatalog {
         port("xemu", "xemu.exe", fromItsFolder = true),
         port("xenia", "xenia.exe", "xenia_canary.exe"),
         port("shadps4", "shadPS4.exe", fromItsFolder = true),
+        port("sharpemu", "SharpEmu.exe", fromItsFolder = true) { it.copy(source = LinuxCatalog.SHARPEMU_SOURCE) },
+        DesktopEmulatorDef(
+            LinuxEmulatorDef(
+                id = "$PREFIX.kytyps5", name = "KytyPS5", platforms = platforms("ps5"),
+                detection = LinuxDetection(),
+                modes = listOf(
+                    LaunchMode("Game", TargetKind.FILE, LinuxCommandSpec(listOf("--game", "{ROM}"), workingDir = "{EMUDIR}")),
+                ),
+                source = "KytyPS5's README: kyty_emulator.exe --game <game folder or eboot.bin>", confidence = Confidence.COMMUNITY,
+                homepage = "https://kytyps5.github.io/",
+                limitations = listOf("PlayStation 5 emulation is young: a few games play, many stop at a menu or loading screen."),
+            ),
+            DesktopFind(listOf("kyty_emulator.exe", "kyty_launcher.exe"), folders = listOf("kyty*")),
+        ),
         port("mednafen", "mednafen.exe"),
         port("mame", "mame.exe", fromItsFolder = true),
         port("scummvm", "scummvm.exe"),

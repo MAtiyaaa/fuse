@@ -103,6 +103,7 @@ object EmulatorPriority {
         listOf("ps2") to ids("linux.pcsx2", LRA, "linux.play", LRAS),
         listOf("ps3") to ids("linux.rpcs3"),
         listOf("ps4") to ids("linux.shadps4"),
+        listOf("ps5") to ids("linux.sharpemu"),
         listOf("psp") to ids("linux.ppsspp", LRA, LRAS),
         listOf("psvita") to ids("linux.vita3k"),
         listOf("n64") to ids(LRA, "linux.mupen64plus", LRAS),
@@ -159,6 +160,7 @@ object EmulatorPriority {
             expand(
                 listOf("win") to ids("windows.shortcut", "windows.steam"),
                 listOf("steam") to ids("windows.steam", "windows.shortcut"),
+                listOf("ps5") to ids("windows.sharpemu", "windows.kytyps5"),
             ),
         )
     }
