@@ -289,19 +289,6 @@ private fun ChoiceRow(label: String, value: String, icon: ImageVector, selected:
 }
 
 @Composable
-private fun Switch(on: Boolean, selected: Boolean) {
-    val c = Fuse.colors
-    val t by fuselineFloat(if (on) 1f else 0f, Fuse.motion.focusSpring(), label = "sw")
-    val track = if (on) c.accent else if (selected) c.ink.copy(alpha = 0.25f) else c.text.copy(alpha = 0.18f)
-    Box(Modifier.width(44.dp).height(26.dp).clip(RoundedCornerShape(50)).background(track)) {
-        Box(
-            Modifier.padding(3.dp).size(20.dp).graphicsLayer { translationX = t * 18.dp.toPx() }
-                .clip(RoundedCornerShape(50)).background(if (on) c.onAccent else if (selected) c.ink else c.text),
-        )
-    }
-}
-
-@Composable
 private fun HostIntro(app: AppState, compact: Boolean, keys: ActiveKeys, working: Boolean, onGo: (String, Boolean, String) -> Unit) {
     val actions = mutableListOf<SetupAction>()
     val index = keys.index
@@ -338,7 +325,7 @@ private fun HostIntro(app: AppState, compact: Boolean, keys: ActiveKeys, working
         ChoiceRow(
             "Keep running when Fuse is closed", if (keep) "On" else "Off", FuseIcons.ServerCog, selected = index == 1,
             detail = listOfNotNull(lifetime.description, lifetime.caveat).joinToString(". "),
-            trailing = { Switch(keep, index == 1) },
+            trailing = { io.github.matiyaaa.fuse.ui.designsystem.components.Toggle(keep) },
         ) { keep = !keep }
     }
     Spacer(Modifier.height(Space.s))

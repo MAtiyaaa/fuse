@@ -84,7 +84,8 @@ internal fun AuditDriver.syncScreens() {
         tapText("Make This the Host")
         waitFor("Make this computer the host")
         shoot("what being the host means, its name, and keeping it running", 1_200)
-        tap(PadButton.DPAD_DOWN, 2)
+        // Name, keeping it running, where saves are kept, then the button.
+        tap(PadButton.DPAD_DOWN, 3)
         shoot("Make This the Host chosen")
         tap(PadButton.A)
         waitFor("Fuse Sync is ready")

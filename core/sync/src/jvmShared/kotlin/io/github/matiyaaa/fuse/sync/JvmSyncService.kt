@@ -1069,7 +1069,7 @@ class JvmSyncService(
             val c = liveLock.withLock {
                 val captured = slots(query).mapNotNull { slot ->
                     runCatching { d.capture(ownerOf(query, slot, profile), slot, total, title = query.title) }.getOrNull()
-                        ?.also { log("${query.title}: saved ${it.kind.label.lowercase()}", query.game.id, "save") }
+                        ?.also { log("${query.title}: new ${it.kind.label.lowercase()} kept", query.game.id, "save") }
                 }
                 val c = client ?: return@withLock null
                 runCatching { d.flush(c) }
@@ -1177,7 +1177,7 @@ class JvmSyncService(
         val total = canonical(d.meta(profile)).game(query.game).totalSeconds + played
         val captured = slots(query).mapNotNull { slot -> runCatching { d.capture(ownerOf(query, slot, profile), slot, total, title = query.title) }.getOrNull() }
         if (captured.isEmpty()) return
-        log("${query.title}: saved ${captured.first().kind.label.lowercase()} while playing", query.game.id, "save")
+        log("${query.title}: new ${captured.first().kind.label.lowercase()} kept while playing", query.game.id, "save")
         val c = client ?: return
         runCatching { d.flush(c) }
             .onSuccess { captured.firstOrNull { it.kind != SaveKind.STATE }?.let { r -> _notices.tryEmit(SyncNotice.Sent(query.title, r.kind, live = true)) } }

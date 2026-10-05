@@ -9,6 +9,8 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.v2.runComposeUiTest
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.printToString
+import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.graphics.toAwtImage
 import io.github.matiyaaa.fuse.data.FuseData
 import io.github.matiyaaa.fuse.data.db.DesktopDatabase
 import io.github.matiyaaa.fuse.model.CapabilityProfile
@@ -155,6 +157,42 @@ class UiFlowTest {
             if (services.launched.isEmpty()) runCatching { pumpUntil(1_500) { services.launched.isNotEmpty() } }
         }
         assertEquals(1, clicks, "Clicks it took to play a game")
+    }
+
+    @Test
+    fun tabsSwitchedQuicklyMidSlideStillShowThePage() = runComposeUiTest {
+        val services = newServices()
+        val store: FuseStore = runBlocking {
+            createFuseStore(services, scope).also { s ->
+                s.updatePrefs { it.copy(onboardingDone = true) }
+                s.sources.add(root.absolutePath, LibrarySourceKind.ROMS_ROOT)
+                withTimeout(20_000) { s.library.home.first { feed -> feed.recentlyAdded.isNotEmpty() } }
+            }
+        }
+        val router = InputRouter(scope)
+        mainClock.autoAdvance = false
+        setContent { FuseApp(store, TestPlatform, router) }
+        pumpUntil { onAllNodesWithText("NEW IN YOUR LIBRARY").fetchSemanticsNodes().isNotEmpty() }
+        repeat(20) { mainClock.advanceTimeBy(64) }
+        // R1 starts Systems sliding in; R1 again while it is part way is a quick switch to the Library.
+        router.tap(PadButton.R1)
+        mainClock.advanceTimeBy(64)
+        router.tap(PadButton.R1)
+        repeat(30) { mainClock.advanceTimeBy(64); Thread.sleep(4) }
+        pumpUntil { onAllNodesWithText("Advance Wars", substring = true).fetchSemanticsNodes().isNotEmpty() }
+        repeat(20) { mainClock.advanceTimeBy(64) }
+        // The Library is really there: its game's name is drawn bright, not left faded mid-slide.
+        val image = onRoot().captureToImage().toAwtImage()
+        val node = onAllNodesWithText("Advance Wars", substring = true).fetchSemanticsNodes().first()
+        val r = node.boundsInRoot
+        var brightest = 0
+        for (y in r.top.toInt().coerceAtLeast(0) until r.bottom.toInt().coerceAtMost(image.height)) {
+            for (x in r.left.toInt().coerceAtLeast(0) until r.right.toInt().coerceAtMost(image.width)) {
+                val rgb = image.getRGB(x, y)
+                brightest = maxOf(brightest, ((rgb shr 16 and 0xFF) + (rgb shr 8 and 0xFF) + (rgb and 0xFF)) / 3)
+            }
+        }
+        assertTrue(brightest > 150, "The Library's text is drawn at brightness $brightest")
     }
 
     @Test
