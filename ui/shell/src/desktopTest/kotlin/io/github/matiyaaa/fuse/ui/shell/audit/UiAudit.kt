@@ -178,6 +178,10 @@ class UiAudit {
 
     @Test fun edgeBackM() = audit(AuditSize.M) { edgeBackScreens() }
 
+    @Test fun homePagesM() = audit(AuditSize.M) { homePages() }
+
+    @Test fun homePagesH() = audit(AuditSize.H) { homePages() }
+
     @Test fun flippedM() = audit(AuditSize.M) { flippedShowcase() }
 
     @Test fun openingM() = audit(AuditSize.M) { setupOpening() }

@@ -17,6 +17,9 @@ enum class NavAction {
     NEXT_SECTION,
     PREVIOUS_SECTION,
     /** Page jump (triggers). */
+    /** Home's pages: the right stick, [ and ], or a swipe. */
+    PAGE_PREVIOUS,
+    PAGE_NEXT,
     PAGE_UP,
     PAGE_DOWN,
     HOME,
@@ -31,6 +34,10 @@ enum class PadButton {
     DPAD_UP, DPAD_DOWN, DPAD_LEFT, DPAD_RIGHT,
     KEY_ENTER, KEY_ESCAPE, KEY_BACKSPACE, KEY_TAB, KEY_SPACE, KEY_SLASH, KEY_F, KEY_Q, KEY_E, KEY_M, KEY_HOME,
     KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT, KEY_PAGE_UP, KEY_PAGE_DOWN,
+    /** The right stick pushed to a side, as a press (a flick turns Home's pages). */
+    RSTICK_LEFT, RSTICK_RIGHT, RSTICK_UP, RSTICK_DOWN,
+    /** [ and ]: Home's pages on a keyboard. */
+    KEY_BRACKET_LEFT, KEY_BRACKET_RIGHT,
 }
 
 /** Which face-button family's glyphs to show in hints. */

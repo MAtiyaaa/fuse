@@ -192,6 +192,9 @@ private fun padGlyph(button: PadButton, glyphStyle: GlyphStyle): Glyph {
         PadButton.KEY_HOME -> Glyph(Body.KEYCAP, "Home")
         PadButton.KEY_PAGE_UP -> Glyph(Body.KEYCAP, "PgUp")
         PadButton.KEY_PAGE_DOWN -> Glyph(Body.KEYCAP, "PgDn")
+        PadButton.RSTICK_LEFT, PadButton.RSTICK_RIGHT, PadButton.RSTICK_UP, PadButton.RSTICK_DOWN -> Glyph(Body.STICK, "R", left = false)
+        PadButton.KEY_BRACKET_LEFT -> Glyph(Body.KEYCAP, "[")
+        PadButton.KEY_BRACKET_RIGHT -> Glyph(Body.KEYCAP, "]")
     }
 }
 

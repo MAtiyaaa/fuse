@@ -108,6 +108,9 @@ class LinuxGamepads(private val sink: GamepadSink) : AutoCloseable {
         private var hatY: PadButton? = null
         private var stickX = 0f
         private var stickY = 0f
+        private var rightX = 0f
+        private var rightY = 0f
+        private var rightHeld: PadButton? = null
         private val triggerRest = HashMap<Int, Int>()
         private val triggerDown = HashMap<PadButton, Float>()
         private var thread: Thread? = null
@@ -179,6 +182,14 @@ class LinuxGamepads(private val sink: GamepadSink) : AutoCloseable {
                     stickY = normalize(value)
                     sink.stick(stickX, stickY)
                 }
+                AxisRole.RIGHT_X -> if (!initial) {
+                    rightX = normalize(value)
+                    right()
+                }
+                AxisRole.RIGHT_Y -> if (!initial) {
+                    rightY = normalize(value)
+                    right()
+                }
                 AxisRole.LEFT_TRIGGER -> trigger(number, PadButton.L2, value, initial)
                 AxisRole.RIGHT_TRIGGER -> trigger(number, PadButton.R2, value, initial)
                 AxisRole.HAT_X -> if (!initial) {
@@ -206,6 +217,17 @@ class LinuxGamepads(private val sink: GamepadSink) : AutoCloseable {
             sink.trigger(button, fraction)
         }
 
+        /** The right stick, pushed well over, as a press of that side; let go back near the centre. */
+        private fun right() {
+            val next = when {
+                abs(rightX) >= abs(rightY) && abs(rightX) >= RIGHT_PRESS -> if (rightX < 0) PadButton.RSTICK_LEFT else PadButton.RSTICK_RIGHT
+                abs(rightY) > abs(rightX) && abs(rightY) >= RIGHT_PRESS -> if (rightY < 0) PadButton.RSTICK_UP else PadButton.RSTICK_DOWN
+                rightHeld != null && (abs(rightX) >= RIGHT_PRESS * 0.6f || abs(rightY) >= RIGHT_PRESS * 0.6f) -> rightHeld
+                else -> null
+            }
+            rightHeld = hat(rightHeld, next)
+        }
+
         private fun hat(previous: PadButton?, next: PadButton?): PadButton? {
             if (previous == next) return previous
             previous?.let { sink.release(it) }
@@ -224,8 +246,10 @@ class LinuxGamepads(private val sink: GamepadSink) : AutoCloseable {
             held.clear()
             hatX?.let { sink.release(it) }
             hatY?.let { sink.release(it) }
+            rightHeld?.let { sink.release(it) }
             hatX = null
             hatY = null
+            rightHeld = null
             if (stickX != 0f || stickY != 0f) sink.stick(0f, 0f)
             stickX = 0f
             stickY = 0f
@@ -242,5 +266,8 @@ class LinuxGamepads(private val sink: GamepadSink) : AutoCloseable {
         const val JS_EVENT_INIT = 0x80
         const val AXIS_MAX = 32767
         const val HAT_THRESHOLD = 16384
+
+        /** How far the right stick goes over before it counts as pushed (a flick, not a drift). */
+        const val RIGHT_PRESS = 0.6f
     }
 }

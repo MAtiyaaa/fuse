@@ -71,6 +71,8 @@ fun padButtonFor(key: Key): PadButton? = when (key) {
     Key.F -> PadButton.KEY_F
     Key.Q -> PadButton.KEY_Q
     Key.E -> PadButton.KEY_E
+    Key.LeftBracket -> PadButton.KEY_BRACKET_LEFT
+    Key.RightBracket -> PadButton.KEY_BRACKET_RIGHT
     Key.M -> PadButton.KEY_M
     Key.PageUp -> PadButton.KEY_PAGE_UP
     Key.PageDown -> PadButton.KEY_PAGE_DOWN

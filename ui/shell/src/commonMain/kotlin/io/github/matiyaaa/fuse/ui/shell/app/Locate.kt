@@ -3,6 +3,7 @@ package io.github.matiyaaa.fuse.ui.shell.app
 import io.github.matiyaaa.fuse.library.FsPath
 import io.github.matiyaaa.fuse.model.Destination
 import io.github.matiyaaa.fuse.model.WidgetKind
+import io.github.matiyaaa.fuse.model.isAchievements
 import io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction
 import io.github.matiyaaa.fuse.ui.designsystem.components.ToastKind
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
@@ -28,6 +29,22 @@ internal fun AppState.offers(kind: WidgetKind): Boolean = when (kind) {
     WidgetKind.JELLYFIN_CONTINUE, WidgetKind.JELLYFIN_NEXT_UP, WidgetKind.JELLYFIN_RECENTLY_ADDED ->
         store.jellyfin != null && store.prefs.value.jellyfin.enabled
     else -> true
+}
+
+/**
+ * Whether Add widget offers [kind]: it can show something here, and what it shows is turned on
+ * (Cartridge on and installed, collections on, RetroAchievements connected, Jellyfin on). Nothing
+ * for a feature someone doesn't use is ever offered.
+ */
+internal fun AppState.offersToAdd(kind: WidgetKind): Boolean {
+    if (!offers(kind)) return false
+    val p = store.prefs.value
+    return when {
+        kind == WidgetKind.CARTRIDGE_DOWNLOADS -> p.cartridgeEnabled && store.cartridge.status.value.installed
+        kind == WidgetKind.COLLECTIONS -> p.collectionsEnabled
+        kind.isAchievements -> store.achievements.configured.value
+        else -> true
+    }
 }
 
 /** Opens Fuse's picker to show where an emulator is. */

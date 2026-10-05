@@ -44,6 +44,12 @@ class GamepadInput(private val router: InputRouter) {
         if (!fromPad || event.actionMasked != MotionEvent.ACTION_MOVE) return false
         val device = event.device
         router.stick(centered(event, device, MotionEvent.AXIS_X), centered(event, device, MotionEvent.AXIS_Y), InputSource.GAMEPAD)
+        // The right stick: Z and RZ on Android's standard gamepad layout, RX and RY on some pads.
+        if (device?.getMotionRange(MotionEvent.AXIS_Z, event.source) != null) {
+            router.rightStick(centered(event, device, MotionEvent.AXIS_Z), centered(event, device, MotionEvent.AXIS_RZ), InputSource.GAMEPAD)
+        } else if (device?.getMotionRange(MotionEvent.AXIS_RX, event.source) != null) {
+            router.rightStick(centered(event, device, MotionEvent.AXIS_RX), centered(event, device, MotionEvent.AXIS_RY), InputSource.GAMEPAD)
+        }
         if (device?.getMotionRange(MotionEvent.AXIS_HAT_X, event.source) != null) {
             hatX = hat(event.getAxisValue(MotionEvent.AXIS_HAT_X), hatX, PadButton.DPAD_LEFT, PadButton.DPAD_RIGHT)
         }

@@ -357,11 +357,19 @@ internal fun ArrangeBar(compact: Boolean, onAdd: () -> Unit, onDone: () -> Unit)
  * the controller is on (0 Undo, 1 Reset), reached by moving up past the board's top row.
  */
 @Composable
-internal fun ArrangeTools(focused: Int?, canUndo: Boolean, onUndo: () -> Unit, onReset: () -> Unit) {
+internal fun ArrangeTools(
+    focused: Int?,
+    canUndo: Boolean,
+    resetLabel: String = "Reset",
+    onUndo: () -> Unit,
+    onReset: () -> Unit,
+    onNewPage: () -> Unit,
+) {
     Panel(raised = true, shape = RoundedCornerShape(Radius.pill)) {
         Row(Modifier.padding(Space.s), horizontalArrangement = Arrangement.spacedBy(Space.s), verticalAlignment = Alignment.CenterVertically) {
             FuseButton("Undo", selected = focused == 0, onClick = onUndo, kind = ButtonKind.SECONDARY, icon = FuseIcons.Undo, enabled = canUndo)
-            FuseButton("Reset", selected = focused == 1, onClick = onReset, kind = ButtonKind.SECONDARY, icon = FuseIcons.RotateCcw)
+            FuseButton(resetLabel, selected = focused == 1, onClick = onReset, kind = ButtonKind.SECONDARY, icon = FuseIcons.RotateCcw)
+            FuseButton("New page", selected = focused == 2, onClick = onNewPage, kind = ButtonKind.SECONDARY, icon = FuseIcons.CopyPlus)
         }
     }
 }

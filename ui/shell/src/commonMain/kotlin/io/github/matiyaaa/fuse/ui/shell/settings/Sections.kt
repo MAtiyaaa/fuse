@@ -51,6 +51,7 @@ import io.github.matiyaaa.fuse.ui.shell.app.emulatorFoldersPicker
 import io.github.matiyaaa.fuse.ui.shell.app.hasTwoScreens
 import io.github.matiyaaa.fuse.ui.shell.app.locatePicker
 import io.github.matiyaaa.fuse.ui.shell.app.offers
+import io.github.matiyaaa.fuse.ui.shell.app.offersToAdd
 import io.github.matiyaaa.fuse.ui.shell.app.openStore
 import io.github.matiyaaa.fuse.ui.shell.app.screenName
 import io.github.matiyaaa.fuse.ui.shell.app.sections
@@ -279,7 +280,7 @@ fun homeRows(app: AppState): List<MenuAction> {
                         )
                     }))
                 }
-                val missing = WidgetKind.entries.filter { k -> k.isRow && app.offers(k) && p.home.widgets.none { it.kind == k } }
+                val missing = WidgetKind.entries.filter { k -> k.isRow && app.offersToAdd(k) && p.home.widgets.none { it.kind == k } }
                 if (missing.isNotEmpty()) {
                     add(MenuAction("w.add", "Add a row", FuseIcons.CirclePlus, trailing = Trailing.Chevron, onSelect = {
                         app.choice = ChoiceSpec(
@@ -327,7 +328,7 @@ fun homeRows(app: AppState): List<MenuAction> {
                         },
                     ))
                 }
-                val missing = WidgetKind.entries.filter { k -> app.offers(k) && board.none { it.kind == k } }
+                val missing = WidgetKind.entries.filter { k -> app.offersToAdd(k) && board.none { it.kind == k } }
                 if (missing.isNotEmpty()) {
                     add(MenuAction("b.add", "Add a widget", FuseIcons.CirclePlus, detail = "It goes at the end of the board", trailing = Trailing.Chevron, onSelect = {
                         app.choice = ChoiceSpec(

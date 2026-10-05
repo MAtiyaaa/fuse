@@ -34,6 +34,16 @@
   retries a flaky connection, and when the connection can't keep up it lowers the quality by itself
   and carries on from the same second, saying so in a small note.
 
+- **Home has pages.** In Channels, Home can be several boards side by side, like a phone's home
+  screens, each arranged on its own. The right stick (or [ and ] on a keyboard), a swipe, or the
+  D-pad run off a board's side turns the page, and dots under the board say which one shows.
+  Arranging, New page adds one; an empty page says how to fill it, and a page can be removed.
+- **The right stick works.** Fuse reads it on Linux, Windows, macOS and Android; for now it turns
+  Home's pages.
+- **A remote that feels like one.** The remote on the second screen (and on the touch screen in
+  Flipped mode) is redesigned: the film's backdrop, its logo, a live dot while it plays, a glass
+  deck with the timeline and the transport, Play in a ring that fills as the film goes on, soft
+  presses under a finger, and Sound, Subtitles, Play here and Stop in one bar.
 - **Your phone is the controller you're holding.** Fuse now knows a DualSense from an Xbox pad or a
   Pro Controller (by its name, or on Android by who made it). Hints show PlayStation shapes or
   Xbox letters for the pad in your hand, and a phone used as a controller through Phone Link
@@ -62,6 +72,9 @@
 - Typing on a hardware keyboard, or using the mouse, Fuse's on-screen keys step aside: the field
   takes what you type, Enter finishes, Esc closes, and Show keys brings them back. A controller
   press or a touch brings them back too.
+- Add widget only offers what you use: RetroAchievements' widgets once it is connected, Cartridge's
+  while it is on and installed, collections while they are on, Jellyfin's while it is on.
+  Achievement widgets wait off Home until RetroAchievements is connected.
 - Addons opens on its first tab, in the order you dragged them into.
 - The second screen's page name sits in the middle of the screen, above and below.
 - A film's or show's logo and backdrop on the second screen are fetched before you reach it, for

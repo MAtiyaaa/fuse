@@ -39,6 +39,9 @@ internal data class PadSnapshot(
     companion object {
         val EMPTY = PadSnapshot()
 
+        /** How far the right stick goes over before it counts as pushed. */
+        private const val RIGHT_PRESS = 0.6f
+
         /** Below this a stick counts as centred, like the Linux reader. */
         private const val DEAD = 0.02f
 
@@ -86,6 +89,17 @@ internal data class PadSnapshot(
             on(state.dpadDown, PadButton.DPAD_DOWN)
             on(state.dpadLeft, PadButton.DPAD_LEFT)
             on(state.dpadRight, PadButton.DPAD_RIGHT)
+            // The right stick, pushed well over, as a press of that side (it turns Home's pages).
+            val rx = state.rightStickX
+            val ry = state.rightStickY
+            if (abs(rx) >= RIGHT_PRESS || abs(ry) >= RIGHT_PRESS) {
+                held += if (abs(rx) >= abs(ry)) {
+                    if (rx < 0) PadButton.RSTICK_LEFT else PadButton.RSTICK_RIGHT
+                } else {
+                    // Read the way the left stick is read (y down).
+                    if (ry < 0) PadButton.RSTICK_UP else PadButton.RSTICK_DOWN
+                }
+            }
             return PadSnapshot(
                 buttons = held,
                 stickX = axis(state.leftStickX),

@@ -6,7 +6,7 @@ import java.math.BigInteger
 import java.util.Locale
 
 /** What one joydev axis means for Fuse. */
-internal enum class AxisRole { LEFT_X, LEFT_Y, LEFT_TRIGGER, RIGHT_TRIGGER, HAT_X, HAT_Y, OTHER }
+internal enum class AxisRole { LEFT_X, LEFT_Y, RIGHT_X, RIGHT_Y, LEFT_TRIGGER, RIGHT_TRIGGER, HAT_X, HAT_Y, OTHER }
 
 /**
  * How a joydev device's button and axis numbers map to Fuse's pad buttons.
@@ -51,6 +51,7 @@ internal class JoystickMapping(
         private const val ABS_Y = 0x01
         private const val ABS_Z = 0x02
         private const val ABS_RX = 0x03
+        private const val ABS_RY = 0x04
         private const val ABS_RZ = 0x05
         private const val ABS_GAS = 0x09
         private const val ABS_BRAKE = 0x0a
@@ -125,8 +126,10 @@ internal class JoystickMapping(
                 axes[number] = when (code) {
                     ABS_X -> AxisRole.LEFT_X
                     ABS_Y -> AxisRole.LEFT_Y
-                    ABS_Z -> if (zIsTrigger) AxisRole.LEFT_TRIGGER else AxisRole.OTHER
-                    ABS_RZ -> if (zIsTrigger) AxisRole.RIGHT_TRIGGER else AxisRole.OTHER
+                    ABS_Z -> if (zIsTrigger) AxisRole.LEFT_TRIGGER else AxisRole.RIGHT_X
+                    ABS_RZ -> if (zIsTrigger) AxisRole.RIGHT_TRIGGER else AxisRole.RIGHT_Y
+                    ABS_RX -> AxisRole.RIGHT_X
+                    ABS_RY -> AxisRole.RIGHT_Y
                     ABS_BRAKE -> AxisRole.LEFT_TRIGGER
                     ABS_GAS -> AxisRole.RIGHT_TRIGGER
                     ABS_HAT0X -> AxisRole.HAT_X

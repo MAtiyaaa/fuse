@@ -311,6 +311,7 @@ object FuseIcons {
     val TextSize: ImageVector by lazy { lineIcon("TextSize", "m15 16 2.536-7.328a1.02 1.02 1 0 1 1.928 0L22 16", "M15.697 14h5.606", "m2 16 4.039-9.69a.5.5 0 0 1 .923 0L11 16", "M3.304 13h6.392") }
     val Thermometer: ImageVector by lazy { lineIcon("Thermometer", "M14 4v10.54a4 4 0 1 1-4 0V4a2 2 0 0 1 4 0Z") }
     val Timer: ImageVector by lazy { lineIcon("Timer", "M10 2L14 2", "M12 14L15 11", "M4 14a8 8 0 1 0 16 0a8 8 0 1 0 -16 0Z") }
+    val CopyPlus: ImageVector by lazy { lineIcon("CopyPlus", "M15 12v6", "M12 15h6", "M10 8h10a2 2 0 0 1 2 2v10a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-10a2 2 0 0 1 2 -2Z", "M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2") }
     val Trash: ImageVector by lazy { lineIcon("Trash", "M10 11v6", "M14 11v6", "M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6", "M3 6h18", "M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2") }
     val Trees: ImageVector by lazy { lineIcon("Trees", "M10 10v.2A3 3 0 0 1 8.9 16H5a3 3 0 0 1-1-5.8V10a3 3 0 0 1 6 0Z", "M7 16v6", "M13 19v3", "M12 19h8.3a1 1 0 0 0 .7-1.7L18 14h.3a1 1 0 0 0 .7-1.7L16 9h.2a1 1 0 0 0 .8-1.7L13 3l-1.4 1.5") }
     val TrendingUp: ImageVector by lazy { lineIcon("TrendingUp", "M16 7h6v6", "m22 7-8.5 8.5-5-5L2 17") }
