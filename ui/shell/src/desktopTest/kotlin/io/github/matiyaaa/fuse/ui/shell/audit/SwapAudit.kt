@@ -222,6 +222,11 @@ internal fun AuditDriver.flippedShowcase() {
         shoot("a game, large", 2_000)
         io.github.matiyaaa.fuse.ui.shell.app.Spotlight.set(null)
         shoot("nothing chosen: the time and the games played last", 1_500)
+        io.github.matiyaaa.fuse.ui.shell.app.ShowcasePage.current.value = 1
+        shoot("page 2, status", 5_000)
+        io.github.matiyaaa.fuse.ui.shell.app.ShowcasePage.current.value = 2
+        shoot("page 3, controls", 10_000)
+        io.github.matiyaaa.fuse.ui.shell.app.ShowcasePage.current.value = 0
         show(libraryStore)
     }
 }

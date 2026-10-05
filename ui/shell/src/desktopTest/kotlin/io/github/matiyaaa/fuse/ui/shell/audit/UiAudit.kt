@@ -142,6 +142,8 @@ class UiAudit {
 
     @Test fun lowerScreenL() = audit(AuditSize.L) { flippedMenus(); jellyfinDualScreens() }
 
+    @Test fun companionL() = audit(AuditSize.L) { companionScreens() }
+
     @Test fun flippedM() = audit(AuditSize.M) { flippedShowcase() }
 
     @Test fun openingM() = audit(AuditSize.M) { setupOpening() }

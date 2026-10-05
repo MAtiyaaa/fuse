@@ -778,9 +778,9 @@ internal fun AuditDriver.companionScreens() {
         Spotlight.set(collection.id)
         shoot("page 1, a collection focused", 2_000)
         CompanionPage.current.value = 1
-        shoot("page 2, status", 1_500)
+        shoot("page 2, status", 2_500)
         CompanionPage.current.value = 2
-        shoot("page 3, controls", 1_500)
+        shoot("page 3, controls", 5_000)
         CompanionPage.current.value = 0
         Spotlight.set(null)
     }

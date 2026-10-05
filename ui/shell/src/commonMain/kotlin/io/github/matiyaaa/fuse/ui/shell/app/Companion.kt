@@ -211,14 +211,35 @@ fun CompanionApp(store: FuseStore, platform: PlatformUi, mode: DualScreenMode, o
             // down by its height, so the card never covers the game's name.
             var numbersHeight by remember { mutableStateOf(0) }
             val numbersRoom = with(androidx.compose.ui.platform.LocalDensity.current) { if (showsNumbers) numbersHeight.toDp() + Space.s else 0.dp }
+            // While Fuse Player plays, the first page is its picture (when it was put on this screen)
+            // or its remote (while it plays on the main screen); Status and Controls stay a swipe
+            // away. Both reach every edge, the status line drawn over them.
+            val player = if (io.github.matiyaaa.fuse.ui.player.FusePlayer.available) io.github.matiyaaa.fuse.ui.player.FusePlayer.session else null
+            val placement = io.github.matiyaaa.fuse.ui.player.PlayerPlacement
+            val pictureHere = player?.item != null && !placement.withMenus
+            val remote = player?.item != null && placement.withMenus && prefs.jellyfin.playerCompanion == "REMOTE"
+            // Something starting to play brings the first page round, so its remote is in view.
+            val playingId = player?.item?.id
+            LaunchedEffect(playingId) { if (playingId != null && pager.currentPage != 0) pager.animateScrollToPage(0) }
             HorizontalPager(state = pager, modifier = Modifier.fillMaxSize(), beyondViewportPageCount = 1, userScrollEnabled = sheet == null) { page ->
                 when (page) {
-                    0 -> Box(Modifier.fillMaxSize().padding(top = numbersRoom)) { SpotlightPage(store, content, home.playtime.currentSince, systems, time) { sheet = it } }
+                    0 -> when {
+                        pictureHere && player != null -> CompanionPicture(player) { placement.swap() }
+                        remote && player != null -> io.github.matiyaaa.fuse.ui.player.PlayerRemote(
+                            player, Modifier.fillMaxSize(),
+                            onExit = { player.stop() },
+                            onSwap = if (placement.canSwap) ({ placement.swap() }) else null,
+                            where = "On the main screen",
+                            topInset = CompanionTopBar,
+                            bottomInset = CompanionDotsBar,
+                        )
+                        else -> Box(Modifier.fillMaxSize().padding(top = numbersRoom)) { SpotlightPage(store, content, home.playtime.currentSince, systems, time) { sheet = it } }
+                    }
                     1 -> StatusPage(store, platform, status)
                     else -> ControlsPage(store, platform, onHide)
                 }
             }
-            if (showsNumbers && pager.currentPage == 0) {
+            if (showsNumbers && pager.currentPage == 0 && !remote && !pictureHere) {
                 val metrics by platform.performance.collectAsState()
                 io.github.matiyaaa.fuse.ui.shell.components.PerformanceOverlay(
                     metrics,
@@ -226,24 +247,6 @@ fun CompanionApp(store: FuseStore, platform: PlatformUi, mode: DualScreenMode, o
                 )
             }
             sheet?.let { AchievementsSheet(store, it) }
-            // While Fuse Player plays: the picture here when it was put on this screen; otherwise,
-            // while it plays on the main screen, this one is its remote. Both reach every edge, the
-            // status line drawn over them.
-            val player = if (io.github.matiyaaa.fuse.ui.player.FusePlayer.available) io.github.matiyaaa.fuse.ui.player.FusePlayer.session else null
-            val placement = io.github.matiyaaa.fuse.ui.player.PlayerPlacement
-            val pictureHere = player?.item != null && !placement.withMenus
-            val remote = player?.item != null && placement.withMenus && prefs.jellyfin.playerCompanion == "REMOTE"
-            if (pictureHere && player != null) {
-                CompanionPicture(player) { placement.swap() }
-            } else if (remote && player != null) {
-                io.github.matiyaaa.fuse.ui.player.PlayerRemote(
-                    player, Modifier.fillMaxSize(),
-                    onExit = { player.stop() },
-                    onSwap = if (placement.canSwap) ({ placement.swap() }) else null,
-                    where = "On the main screen",
-                    topInset = CompanionTopBar,
-                )
-            }
             // The top line: the page's title (or a close button over the achievements) and the status.
             Row(
                 Modifier.align(Alignment.TopCenter).fillMaxWidth().height(CompanionTopBar).padding(start = Space.l, end = Space.l),
@@ -269,7 +272,7 @@ fun CompanionApp(store: FuseStore, platform: PlatformUi, mode: DualScreenMode, o
                 }
                 StatusCluster(status, time, showWifi = prefs.showWifi, showBluetooth = prefs.showBluetooth)
             }
-            if (sheet == null && !remote && !pictureHere) {
+            if (sheet == null) {
                 PageDots(
                     count = companionPages.size,
                     current = pager.currentPage,

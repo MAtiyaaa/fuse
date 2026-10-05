@@ -21,6 +21,12 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import kotlinx.coroutines.launch
+import io.github.matiyaaa.fuse.ui.designsystem.components.PageDots
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.compositionLocalOf
@@ -130,56 +136,95 @@ fun ShowcaseApp(store: FuseStore, platform: PlatformUi) {
                     ),
                 ),
             )
-            BoxWithConstraints(Modifier.fillMaxSize().padding(horizontal = Space.gutter, vertical = Space.l)) {
-                val compact = maxHeight < 380.dp
-                Row(Modifier.fillMaxWidth().height(Size.hudHeight - Space.l), verticalAlignment = Alignment.CenterVertically) {
+            // Three pages, as on the lower screen: what is chosen (or playing), the device's
+            // status, and its controls. A swipe or the dots turn them.
+            val pager = rememberPagerState(initialPage = 0) { 3 }
+            val pageScope = rememberCoroutineScope()
+            LaunchedEffect(pager) { ShowcasePage.current.collect { p -> if (p != null && p != pager.settledPage) pager.animateScrollToPage(p) } }
+            // A shade deepens behind Status and Controls so their cards read over any art.
+            Box(Modifier.fillMaxSize().graphicsLayer { alpha = (pager.currentPage + pager.currentPageOffsetFraction).coerceIn(0f, 1f) }.background(Fuse.colors.ink.copy(alpha = 0.6f)))
+            val player = if (io.github.matiyaaa.fuse.ui.player.FusePlayer.available) io.github.matiyaaa.fuse.ui.player.FusePlayer.session else null
+            val playingId = player?.item?.id
+            LaunchedEffect(playingId) { if (playingId != null && pager.currentPage != 0) pager.animateScrollToPage(0) }
+            HorizontalPager(state = pager, modifier = Modifier.fillMaxSize(), beyondViewportPageCount = 1) { page ->
+                when (page) {
+                    0 -> Box(Modifier.fillMaxSize()) {
+                        BoxWithConstraints(Modifier.fillMaxSize().padding(horizontal = Space.gutter, vertical = Space.l)) {
+                            val compact = maxHeight < 380.dp
+                            val motion = Fuse.motion
+                            Swap(
+                                targetState = ShowcaseContent(target, direction),
+                                modifier = Modifier.fillMaxSize().padding(top = Size.hudHeight, bottom = SHOWCASE_DOTS),
+                                transitionSpec = {
+                                    val dir = targetState.direction
+                                    val enter = fadeIn(motion.fade(Durations.SLOW))
+                                    val exit = fadeOut(motion.fade(Durations.FAST))
+                                    if (dir == 0 || motion.reduced) {
+                                        enter togetherWith exit
+                                    } else {
+                                        (slideInHorizontally(motion.tween(Durations.SLOW, Curves.Enter)) { (it * 0.06f * dir).toInt() } + enter) togetherWith
+                                            (slideOutHorizontally(motion.tween(Durations.BASE, Curves.Exit)) { (-it * 0.04f * dir).toInt() } + exit)
+                                    }
+                                },
+                                contentKey = { (it.target as? GameCard)?.id ?: (it.target as? io.github.matiyaaa.fuse.jellyfin.MediaItem)?.id ?: it.target },
+                                label = "showcase",
+                            ) { content ->
+                                when (val t = content.target) {
+                                    is GameCard -> ShowcaseGame(store, t.id, playingSince = home.playtime.currentSince, compact = compact)
+                                    is GameId -> ShowcaseGame(store, t, playingSince = null, compact = compact)
+                                    is PlatformId -> systems.firstOrNull { it.platform.id == t }?.let { ShowcaseSystem(it, compact) }
+                                    is CollectionId -> ShowcaseCollection(store, t, compact)
+                                    is io.github.matiyaaa.fuse.jellyfin.MediaItem -> ShowcaseMedia(t, compact, minimal = prefs.jellyfin.browsingCompanion == "MINIMAL")
+                                    else -> ShowcaseIdle(time, home.recentlyPlayed.ifEmpty { home.continuePlaying }, compact)
+                                }
+                            }
+                        }
+                        // Fuse Player: its picture here while the menus and its remote are on the touch
+                        // screen; played on the touch screen instead, what is playing, large.
+                        if (player?.item != null) {
+                            if (!io.github.matiyaaa.fuse.ui.player.PlayerPlacement.withMenus) {
+                                io.github.matiyaaa.fuse.ui.player.PlayerPicture(player, Modifier.fillMaxSize())
+                            } else {
+                                io.github.matiyaaa.fuse.ui.player.PlayerNowShowing(player, Modifier.fillMaxSize(), where = "Playing on the touch screen")
+                            }
+                        }
+                    }
+                    1 -> Box(Modifier.fillMaxSize().padding(top = Size.hudHeight - CompanionTopBar + Space.s)) { StatusPage(store, platform, status) }
+                    else -> Box(Modifier.fillMaxSize().padding(top = Size.hudHeight - CompanionTopBar + Space.s)) { ControlsPage(store, platform) }
+                }
+            }
+            // The top line over every page (but not over a film filling the screen).
+            val filmHere = player?.item != null && !io.github.matiyaaa.fuse.ui.player.PlayerPlacement.withMenus && pager.currentPage == 0
+            if (!filmHere) {
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = Space.gutter, vertical = Space.l).height(Size.hudHeight - Space.l),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
                     FuseMark(Modifier.size(28.dp))
                     Spacer(Modifier.width(Space.s))
-                    FText("Fuse", Fuse.type.titleSmall, maxLines = 1)
+                    FText(listOf("Fuse", "Status", "Controls")[pager.currentPage.coerceIn(0, 2)], Fuse.type.titleSmall, maxLines = 1)
                     Spacer(Modifier.weight(1f))
                     StatusCluster(status, time, showWifi = prefs.showWifi, showBluetooth = prefs.showBluetooth)
                 }
-                val motion = Fuse.motion
-                Swap(
-                    targetState = ShowcaseContent(target, direction),
-                    modifier = Modifier.fillMaxSize().padding(top = Size.hudHeight),
-                    transitionSpec = {
-                        val dir = targetState.direction
-                        val enter = fadeIn(motion.fade(Durations.SLOW))
-                        val exit = fadeOut(motion.fade(Durations.FAST))
-                        if (dir == 0 || motion.reduced) {
-                            enter togetherWith exit
-                        } else {
-                            (slideInHorizontally(motion.tween(Durations.SLOW, Curves.Enter)) { (it * 0.06f * dir).toInt() } + enter) togetherWith
-                                (slideOutHorizontally(motion.tween(Durations.BASE, Curves.Exit)) { (-it * 0.04f * dir).toInt() } + exit)
-                        }
-                    },
-                    contentKey = { (it.target as? GameCard)?.id ?: (it.target as? io.github.matiyaaa.fuse.jellyfin.MediaItem)?.id ?: it.target },
-                    label = "showcase",
-                ) { content ->
-                    when (val t = content.target) {
-                        is GameCard -> ShowcaseGame(store, t.id, playingSince = home.playtime.currentSince, compact = compact)
-                        is GameId -> ShowcaseGame(store, t, playingSince = null, compact = compact)
-                        is PlatformId -> systems.firstOrNull { it.platform.id == t }?.let { ShowcaseSystem(it, compact) }
-                        is CollectionId -> ShowcaseCollection(store, t, compact)
-                        is io.github.matiyaaa.fuse.jellyfin.MediaItem -> ShowcaseMedia(t, compact, minimal = prefs.jellyfin.browsingCompanion == "MINIMAL")
-                        else -> ShowcaseIdle(time, home.recentlyPlayed.ifEmpty { home.continuePlaying }, compact)
-                    }
-                }
-            }
-            // Fuse Player: its picture here while the menus and its remote are on the touch screen;
-            // played on the touch screen instead, what is playing, large, with how far in it is.
-            val player = if (io.github.matiyaaa.fuse.ui.player.FusePlayer.available) io.github.matiyaaa.fuse.ui.player.FusePlayer.session else null
-            if (player?.item != null) {
-                if (!io.github.matiyaaa.fuse.ui.player.PlayerPlacement.withMenus) {
-                    io.github.matiyaaa.fuse.ui.player.PlayerPicture(player, Modifier.fillMaxSize())
-                } else {
-                    io.github.matiyaaa.fuse.ui.player.PlayerNowShowing(player, Modifier.fillMaxSize(), where = "Playing on the touch screen")
-                }
+                PageDots(
+                    count = 3,
+                    current = pager.currentPage,
+                    onSelect = { pageScope.launch { pager.animateScrollToPage(it) } },
+                    labels = listOf("Now", "Status", "Controls"),
+                    modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = Space.s),
+                )
             }
         }
     }
 }
+
+/** Asks the screen above to turn to a page (for tests and screenshots); null leaves it alone. */
+internal object ShowcasePage {
+    val current = kotlinx.coroutines.flow.MutableStateFlow<Int?>(null)
+}
+
+/** Room kept at the bottom of the first page for the page dots. */
+private val SHOWCASE_DOTS = 28.dp
 
 private data class ShowcaseContent(val target: Any?, val direction: Int)
 

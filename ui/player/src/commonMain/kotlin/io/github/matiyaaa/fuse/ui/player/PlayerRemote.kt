@@ -164,6 +164,8 @@ fun PlayerRemote(
     onBrowse: (() -> Unit)? = null,
     where: String? = null,
     topInset: androidx.compose.ui.unit.Dp = 0.dp,
+    /** Kept clear at the bottom for what is drawn over it (a pager's dots). */
+    bottomInset: androidx.compose.ui.unit.Dp = 0.dp,
 ) {
     val item = session.item ?: return
     val state = session.engine?.state?.collectAsState()?.value ?: EngineState()
@@ -196,7 +198,7 @@ fun PlayerRemote(
     Box(modifier.fillMaxSize().background(Color(0xFF0B0C10))) {
         Artwork(item.backdrop ?: coverArt, Modifier.fillMaxSize().blur(56.dp).graphicsLayer { alpha = 0.34f })
         Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.45f), Color.Black.copy(alpha = 0.2f), Color.Black.copy(alpha = 0.8f)))))
-        BoxWithConstraints(Modifier.fillMaxSize().padding(top = topInset).padding(horizontal = Space.l, vertical = Space.m)) {
+        BoxWithConstraints(Modifier.fillMaxSize().padding(top = topInset, bottom = bottomInset).padding(horizontal = Space.l, vertical = Space.m)) {
             val wide = maxWidth > maxHeight * 1.15f
             // The cover's width, so its height (tall for a film, square for music) leaves room for the controls.
             val tall = if (video) 1.5f else 1f
