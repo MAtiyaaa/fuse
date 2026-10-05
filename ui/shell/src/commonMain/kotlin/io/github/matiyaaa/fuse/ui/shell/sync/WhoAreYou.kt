@@ -1,5 +1,10 @@
 package io.github.matiyaaa.fuse.ui.shell.sync
 
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -173,9 +178,19 @@ private fun WhoAreYou(app: AppState, mode: WhoMode) {
     ) {
         BoxWithConstraints(Modifier.fillMaxSize().padding(horizontal = Space.gutter), contentAlignment = Alignment.Center) {
             val compact = maxHeight < 560.dp || maxWidth < 640.dp
+            // Short and wide (a 4:3 handheld, a phone on its side): the PIN pad sits beside the person.
+            val short = maxHeight < 440.dp && maxWidth > maxHeight
+            // Centred when it fits; scrolled, with the selection kept in view, when it doesn't (a
+            // small 4:3 handheld): nothing is ever out of reach below the screen.
+            val scroll = rememberScrollState()
+            val room = maxHeight
+            val wide = maxWidth
+            LaunchedEffect(step) { scroll.scrollTo(0) }
+            Box(Modifier.fillMaxSize().verticalScroll(scroll)) {
+            Box(Modifier.fillMaxWidth().heightIn(min = room).padding(vertical = Space.m), contentAlignment = Alignment.Center) {
             when (val s = step) {
                 WhoStep.People -> People(
-                    app, profiles, active, status, index, busy, compact, maxWidth,
+                    app, profiles, active, status, index, busy, compact, short, wide,
                     onIndex = { index = it },
                     onChoose = { i ->
                         val p = profiles.getOrNull(i)
@@ -192,12 +207,12 @@ private fun WhoAreYou(app: AppState, mode: WhoMode) {
                     closable = closable,
                 )
                 is WhoStep.Pin -> PinPad(
-                    app, s.profile, busy == s.profile.id, compact,
+                    app, s.profile, busy == s.profile.id, compact, short,
                     onSubmit = { pin, wrong -> switchTo(s.profile, pin, wrong) },
                     onBack = { step = WhoStep.People },
                 )
                 WhoStep.Create -> CreateProfile(
-                    app, compact,
+                    app, compact, short,
                     onCreated = { p, pin ->
                         index = profiles.size
                         step = WhoStep.People
@@ -205,6 +220,8 @@ private fun WhoAreYou(app: AppState, mode: WhoMode) {
                     },
                     onBack = { if (mode == WhoMode.ADD) close() else step = WhoStep.People },
                 )
+            }
+            }
             }
         }
     }
@@ -219,6 +236,7 @@ private fun People(
     index: Int,
     busy: String?,
     compact: Boolean,
+    short: Boolean,
     width: Dp,
     onIndex: (Int) -> Unit,
     onChoose: (Int) -> Unit,
@@ -229,7 +247,11 @@ private fun People(
     val c = Fuse.colors
     val offline = status is SyncStatus.Offline || status is SyncStatus.Connecting
     val count = profiles.size + if (offline) 0 else 1
-    val card = if (compact) 120.dp else 168.dp
+    val card = when {
+        short -> 88.dp
+        compact -> 120.dp
+        else -> 168.dp
+    }
     val perRow = ((width + Space.l) / (card + Space.l)).toInt().coerceIn(1, maxOf(1, count))
     val sel = index.coerceIn(0, maxOf(0, count - 1))
     InputLayer(priority = LayerPriority.DIALOG + 2, modal = true) { e ->
@@ -246,15 +268,20 @@ private fun People(
         }
     }
     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
-        SyncMark(if (compact) 40.dp else 52.dp)
-        Spacer(Modifier.height(if (compact) Space.m else Space.l))
+        if (!short) {
+            SyncMark(if (compact) 40.dp else 52.dp)
+            Spacer(Modifier.height(if (compact) Space.m else Space.l))
+        }
         FText("Who's playing?", if (compact) Fuse.type.title else Fuse.type.hero, align = TextAlign.Center, maxLines = 1, modifier = Modifier.semantics { heading() })
-        Spacer(Modifier.height(Space.xs))
-        FText(
-            if (offline) "The host isn't answering. Profiles without a PIN switch now and catch up when it's back." else "Your games, saves, play time and settings follow you to every device.",
-            Fuse.type.body, color = c.textMuted, align = TextAlign.Center, maxLines = 2, modifier = Modifier.widthIn(max = 560.dp),
-        )
-        Spacer(Modifier.height(if (compact) Space.l else Space.xxl))
+        // Offline, what that means always shows; otherwise the line goes where there is no room for it.
+        if (!short || offline) {
+            Spacer(Modifier.height(Space.xs))
+            FText(
+                if (offline) "The host isn't answering. Profiles without a PIN switch now and catch up when it's back." else "Your games, saves, play time and settings follow you to every device.",
+                Fuse.type.body, color = c.textMuted, align = TextAlign.Center, maxLines = 2, modifier = Modifier.widthIn(max = 560.dp),
+            )
+        }
+        Spacer(Modifier.height(if (short) Space.m else if (compact) Space.l else Space.xxl))
         if (profiles.isEmpty() && offline) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Spinner(size = 20.dp, color = c.textMuted)
@@ -265,12 +292,14 @@ private fun People(
             val rows = (0 until count).chunked(perRow)
             // Each card rises into place a beat after the one before it.
             val cards = rememberReveal(count)
+            val requesters = remember(count) { List(count) { BringIntoViewRequester() } }
+            LaunchedEffect(sel, count) { requesters.getOrNull(sel)?.bringIntoView() }
             Column(verticalArrangement = Arrangement.spacedBy(Space.l), horizontalAlignment = Alignment.CenterHorizontally) {
                 for (row in rows) {
                     Row(horizontalArrangement = Arrangement.spacedBy(Space.l)) {
                         for (i in row) {
                             val p = profiles.getOrNull(i)
-                            Box(Modifier.reveal(cards, i)) {
+                            Box(Modifier.reveal(cards, i).bringIntoViewRequester(requesters[i])) {
                                 if (p != null) {
                                     PersonCard(p, selected = i == sel, here = p.id == active?.id, working = busy == p.id, size = card) { onIndex(i); onChoose(i) }
                                 } else {
@@ -368,7 +397,7 @@ private val KEYS = listOf("1", "2", "3", "4", "5", "6", "7", "8", "9", "erase", 
  * to wait a moment.
  */
 @Composable
-private fun PinPad(app: AppState, p: ProfileInfo, working: Boolean, compact: Boolean, onSubmit: (String, (String) -> Unit) -> Unit, onBack: () -> Unit) {
+private fun PinPad(app: AppState, p: ProfileInfo, working: Boolean, compact: Boolean, short: Boolean, onSubmit: (String, (String) -> Unit) -> Unit, onBack: () -> Unit) {
     val c = Fuse.colors
     var pin by remember(p.id) { mutableStateOf("") }
     var error by remember(p.id) { mutableStateOf<String?>(null) }
@@ -415,32 +444,40 @@ private fun PinPad(app: AppState, p: ProfileInfo, working: Boolean, compact: Boo
             kotlinx.coroutines.delay(45)
         }
     }
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        ProfileAvatar(p.avatar, if (compact) 64.dp else 88.dp)
-        Spacer(Modifier.height(Space.m))
-        FText(p.name, Fuse.type.title, maxLines = 1)
-        FText("Enter your PIN", Fuse.type.body, color = c.textMuted, maxLines = 1)
-        Spacer(Modifier.height(Space.l))
-        Row(
-            Modifier.graphicsLayer { translationX = kick * density },
-            horizontalArrangement = Arrangement.spacedBy(Space.m),
-        ) {
-            val shown = maxOf(4, pin.length)
-            for (i in 0 until shown) {
-                val filled = i < pin.length
-                Box(
-                    Modifier.size(14.dp).clip(CircleShape)
-                        .background(if (filled) c.text else c.text.copy(alpha = 0.14f)),
-                )
+    // Who it is, the dots filled so far and what went wrong; then the keys.
+    val person: @Composable () -> Unit = {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            ProfileAvatar(p.avatar, if (compact) 64.dp else 88.dp)
+            Spacer(Modifier.height(Space.m))
+            FText(p.name, Fuse.type.title, maxLines = 1)
+            FText("Enter your PIN", Fuse.type.body, color = c.textMuted, maxLines = 1)
+            Spacer(Modifier.height(if (short) Space.m else Space.l))
+            Row(
+                Modifier.graphicsLayer { translationX = kick * density },
+                horizontalArrangement = Arrangement.spacedBy(Space.m),
+            ) {
+                val shown = maxOf(4, pin.length)
+                for (i in 0 until shown) {
+                    val filled = i < pin.length
+                    Box(
+                        Modifier.size(14.dp).clip(CircleShape)
+                            .background(if (filled) c.text else c.text.copy(alpha = 0.14f)),
+                    )
+                }
             }
+            Spacer(Modifier.height(Space.s))
+            FText(error ?: " ", Fuse.type.caption, color = c.danger, maxLines = 2, align = TextAlign.Center)
         }
-        Spacer(Modifier.height(Space.s))
-        FText(error ?: " ", Fuse.type.caption, color = c.danger, maxLines = 1)
-        Spacer(Modifier.height(if (compact) Space.s else Space.l))
-        val k = if (compact) 52.dp else 64.dp
-        Column(verticalArrangement = Arrangement.spacedBy(Space.m)) {
+    }
+    val keys: @Composable () -> Unit = {
+        val k = when {
+            short -> 44.dp
+            compact -> 52.dp
+            else -> 64.dp
+        }
+        Column(verticalArrangement = Arrangement.spacedBy(if (short) Space.s else Space.m)) {
             for (r in 0 until 4) {
-                Row(horizontalArrangement = Arrangement.spacedBy(Space.l)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(if (short) Space.m else Space.l)) {
                     for (col in 0 until 3) {
                         val i = r * 3 + col
                         PadKey(KEYS[i], selected = i == key, size = k, enabled = KEYS[i] != "done" || pin.length >= 4, working = working && KEYS[i] == "done") {
@@ -451,8 +488,25 @@ private fun PinPad(app: AppState, p: ProfileInfo, working: Boolean, compact: Boo
                 }
             }
         }
-        Spacer(Modifier.height(Space.l))
-        HintBar(listOf(Hint(HintButton.CONFIRM, "Press"), Hint(HintButton.OPTIONS, "Erase"), Hint(HintButton.BACK, "Back")))
+    }
+    val hints = listOf(Hint(HintButton.CONFIRM, "Press"), Hint(HintButton.OPTIONS, "Erase"), Hint(HintButton.BACK, "Back"))
+    if (short) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.xxl)) {
+                Box(Modifier.widthIn(max = 220.dp)) { person() }
+                keys()
+            }
+            Spacer(Modifier.height(Space.m))
+            HintBar(hints)
+        }
+    } else {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            person()
+            Spacer(Modifier.height(if (compact) Space.s else Space.l))
+            keys()
+            Spacer(Modifier.height(Space.l))
+            HintBar(hints)
+        }
     }
 }
 
@@ -504,7 +558,7 @@ private enum class CreatePart { NAME, AVATARS, PIN, CREATE }
  * want one. Created on the host, then this device switches to it.
  */
 @Composable
-private fun CreateProfile(app: AppState, compact: Boolean, onCreated: (ProfileInfo, String?) -> Unit, onBack: () -> Unit) {
+private fun CreateProfile(app: AppState, compact: Boolean, short: Boolean, onCreated: (ProfileInfo, String?) -> Unit, onBack: () -> Unit) {
     val svc = app.store.sync.service ?: return
     val c = Fuse.colors
     val avatars = FuseAvatars.all
@@ -573,13 +627,26 @@ private fun CreateProfile(app: AppState, compact: Boolean, onCreated: (ProfileIn
     }
     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.widthIn(max = 720.dp)) {
         FText("New Profile", if (compact) Fuse.type.title else Fuse.type.display, maxLines = 1, modifier = Modifier.semantics { heading() })
-        Spacer(Modifier.height(Space.xs))
-        FText("Everyone gets their own saves, play time, favourites, Home and theme.", Fuse.type.body, color = c.textMuted, maxLines = 2, align = TextAlign.Center)
+        if (!short) {
+            Spacer(Modifier.height(Space.xs))
+            FText("Everyone gets their own saves, play time, favourites, Home and theme.", Fuse.type.body, color = c.textMuted, maxLines = 2, align = TextAlign.Center)
+        }
         Spacer(Modifier.height(if (compact) Space.m else Space.xl))
+        // The part in use is kept in view where the page is taller than the screen.
+        val partInView = remember { CreatePart.entries.associateWith { BringIntoViewRequester() } }
+        val avatarInView = remember(avatars.size) { List(avatars.size) { BringIntoViewRequester() } }
+        LaunchedEffect(part, avatar) {
+            when (part) {
+                CreatePart.AVATARS -> avatarInView.getOrNull(avatar)?.bringIntoView()
+                // The name and PIN rows sit together.
+                CreatePart.PIN -> partInView[CreatePart.NAME]?.bringIntoView()
+                else -> partInView[part]?.bringIntoView()
+            }
+        }
         Row(verticalAlignment = Alignment.CenterVertically) {
             ProfileAvatar(avatars[avatar].id, if (compact) 72.dp else 104.dp)
             Spacer(Modifier.width(Space.l))
-            Column(Modifier.width(if (compact) 240.dp else 320.dp)) {
+            Column(Modifier.width(if (compact) 240.dp else 320.dp).bringIntoViewRequester(partInView.getValue(CreatePart.NAME))) {
                 FieldRow(
                     label = "Name", value = name.ifBlank { "Tap to type a name" }, filled = name.isNotBlank(),
                     icon = FuseIcons.Pencil, selected = part == CreatePart.NAME,
@@ -599,7 +666,7 @@ private fun CreateProfile(app: AppState, compact: Boolean, onCreated: (ProfileIn
                     for (i in row) {
                         val chosen = i == avatar
                         Box(
-                            Modifier.clip(CircleShape).clickable(remember { MutableInteractionSource() }, indication = null) {
+                            Modifier.bringIntoViewRequester(avatarInView[i]).clip(CircleShape).clickable(remember { MutableInteractionSource() }, indication = null) {
                                 avatar = i
                                 part = CreatePart.AVATARS
                             },
@@ -615,7 +682,7 @@ private fun CreateProfile(app: AppState, compact: Boolean, onCreated: (ProfileIn
             }
         }
         Spacer(Modifier.height(if (compact) Space.m else Space.xl))
-        Row(horizontalArrangement = Arrangement.spacedBy(Space.m)) {
+        Row(Modifier.bringIntoViewRequester(partInView.getValue(CreatePart.CREATE)), horizontalArrangement = Arrangement.spacedBy(Space.m)) {
             FuseButton("Back", selected = false, onClick = onBack, icon = FuseIcons.ArrowLeft, kind = ButtonKind.GHOST)
             FuseButton(
                 "Create Profile", selected = part == CreatePart.CREATE, onClick = { part = CreatePart.CREATE; create() },

@@ -201,6 +201,8 @@ class UiAudit {
 
     @Test fun syncS() = audit(AuditSize.S) { syncScreens() }
 
+    @Test fun syncthingS() = audit(AuditSize.S) { syncthingScreens() }
+
     @Test fun homePagesM() = audit(AuditSize.M) { homePages() }
 
     @Test fun homePagesH() = audit(AuditSize.H) { homePages() }
