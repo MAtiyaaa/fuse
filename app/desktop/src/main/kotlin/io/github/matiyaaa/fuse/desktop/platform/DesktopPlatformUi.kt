@@ -163,6 +163,19 @@ class DesktopPlatformUi(
      * Starts a new Fuse and leaves this one. Prefers an AppImage this session just installed, then
      * the AppImage Fuse runs from, the packaged launcher, and finally the same java command line.
      */
+    override fun eraseAndRestart(): Boolean {
+        // Erased as the next start begins, before anything opens the database.
+        val marker = java.io.File(dirs.home.ifBlank { System.getProperty("java.io.tmpdir") }, ERASE_MARKER)
+        if (runCatching { marker.writeText(BuildInfo.VERSION) }.isFailure) return false
+        if (restartCommand() == null) {
+            // Can't start itself again here: closes, and erases when opened next.
+            window.exitApplication()
+            return true
+        }
+        restart()
+        return true
+    }
+
     override fun restart() {
         val command = restartCommand()
         if (command == null) {
@@ -311,3 +324,6 @@ class DesktopPlatformUi(
         const val MAIN_CLASS = "io.github.matiyaaa.fuse.desktop.MainKt"
     }
 }
+
+/** Left in the home folder by Erase Fuse; the next start erases Fuse's folders, then removes it. */
+internal const val ERASE_MARKER = ".fuse-erase"

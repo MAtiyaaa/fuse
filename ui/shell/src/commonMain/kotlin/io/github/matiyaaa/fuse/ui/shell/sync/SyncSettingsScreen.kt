@@ -406,6 +406,12 @@ private fun syncRows(
         host?.addresses?.takeIf { it.isNotEmpty() }?.let { a ->
             add(infoRow("addresses", "Its Addresses", value = a.first(), detail = "Other devices on this network find it by themselves" + if (a.size > 1) ". Also ${a.drop(1).joinToString(", ")}" else "", icon = FuseIcons.Network).copy(section = hostSection))
         }
+        add(MenuAction(
+            "hostdata", "Where Saves Are Kept", FuseIcons.HardDrive,
+            detail = c.hostDataDir.ifBlank { "Fuse's own folder" } + ". Choose another folder to move them there",
+            trailing = Trailing.Chevron, section = hostSection,
+            onSelect = { moveHostData(app, svc) },
+        ))
     }
 
     // Leaving --------------------------------------------------------------------------------------
@@ -428,6 +434,29 @@ private fun syncRows(
                 }
             },
         ))
+        add(MenuAction(
+            "delete", "Delete This Host", FuseIcons.Trash, destructive = true,
+            detail = "Every profile, save and device link kept here. This computer keeps its own games, settings and Home",
+            section = leave,
+            onSelect = {
+                app.confirm = ConfirmSpec(
+                    "Delete this host?",
+                    "Every profile, every save and its history, and every device's link are deleted from this computer. This computer keeps its own games, library, settings and Home as they are now. Your other devices keep everything they have, and see the host gone.",
+                    "Continue", destructive = true,
+                ) {
+                    app.confirm = ConfirmSpec(
+                        "Delete it for good?",
+                        "This can't be undone. Saves only the host had (from devices that are gone) go with it.",
+                        "Delete This Host", destructive = true,
+                    ) {
+                        app.scope.launch {
+                            svc.deleteHost().onSuccess { app.toasts.show("The host is deleted. Everything of this computer's own stays", icon = FuseIcons.Trash) }
+                                .onFailure { app.toasts.show(it.message ?: "Couldn't delete the host", ToastKind.ERROR) }
+                        }
+                    }
+                }
+            },
+        ))
     } else {
         add(MenuAction(
             "unlink", "Unlink This Device", FuseIcons.Unplug, destructive = true,
@@ -446,6 +475,24 @@ private fun syncRows(
                 }
             },
         ))
+    }
+}
+
+/** Moves everyone's saves to a folder picked here, after saying what happens. */
+private fun moveHostData(app: AppState, svc: SyncService) {
+    app.scope.launch {
+        val to = app.platform.storage.pickFolder("Move everyone's saves to") ?: return@launch
+        app.confirm = ConfirmSpec(
+            "Move the saves here?",
+            "$to\n\nThe host stops for a moment while every save, version and profile is copied and checked. Then the old folder is cleared. The folder must be empty.",
+            "Move",
+        ) {
+            app.scope.launch {
+                app.toasts.show("Moving the saves", icon = FuseIcons.HardDrive)
+                svc.moveHostData(to).onSuccess { app.toasts.show("The saves are in their new folder", ToastKind.SUCCESS) }
+                    .onFailure { app.toasts.show(it.message ?: "Couldn't move the saves. Nothing changed", ToastKind.ERROR) }
+            }
+        }
     }
 }
 

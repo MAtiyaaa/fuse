@@ -154,9 +154,10 @@ internal fun SyncSetupScreen(app: AppState, host: Boolean) {
                 Swap(step, label = "setup") { s ->
                     Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(if (compact) Space.l else Space.xxl)) {
                         when (s) {
-                            SetupStep.HostIntro -> HostIntro(app, compact, keys.at(s == step), working) { name, keep ->
+                            SetupStep.HostIntro -> HostIntro(app, compact, keys.at(s == step), working) { name, keep, folder ->
                                 working = true
                                 app.scope.launch {
+                                    app.store.sync.configure { it.copy(hostDataDir = folder) }
                                     svc.hostHere(name, installService = keep)
                                         .onSuccess { step = SetupStep.HostReady; app.platform.sounds.play(SoundCue.SELECT) }
                                         .onFailure { app.toasts.show(it.message ?: "Couldn't start the host", ToastKind.ERROR) }
@@ -301,19 +302,25 @@ private fun Switch(on: Boolean, selected: Boolean) {
 }
 
 @Composable
-private fun HostIntro(app: AppState, compact: Boolean, keys: ActiveKeys, working: Boolean, onGo: (String, Boolean) -> Unit) {
+private fun HostIntro(app: AppState, compact: Boolean, keys: ActiveKeys, working: Boolean, onGo: (String, Boolean, String) -> Unit) {
     val actions = mutableListOf<SetupAction>()
     val index = keys.index
     val svc = app.store.sync.service ?: return
     var name by remember { mutableStateOf(app.store.prefs.value.sync.deviceName.ifBlank { svc.defaultName }) }
     val lifetime: ServiceState = remember { svc.lifetimeState() }
     var keep by remember { mutableStateOf(lifetime.supported) }
+    // Where everyone's saves live: Fuse's own folder, or one picked here (a big drive).
+    var folder by remember { mutableStateOf(app.store.prefs.value.sync.hostDataDir) }
     fun askName() {
         app.textInput = TextInputSpec("The host's name", name, "Gaming PC") { v -> v.trim().take(32).takeIf { it.isNotEmpty() }?.let { name = it } }
     }
+    fun askFolder() {
+        app.scope.launch { app.platform.storage.pickFolder("Where should the host keep everyone's saves?")?.let { folder = it } }
+    }
     actions += SetupAction("name") { askName() }
     if (lifetime.supported) actions += SetupAction("keep") { keep = !keep }
-    actions += SetupAction("go") { if (!working) onGo(name, keep && lifetime.supported) }
+    actions += SetupAction("folder") { askFolder() }
+    actions += SetupAction("go") { if (!working) onGo(name, keep && lifetime.supported, folder) }
 
     Heading(
         "Make this computer the host",
@@ -334,9 +341,15 @@ private fun HostIntro(app: AppState, compact: Boolean, keys: ActiveKeys, working
             trailing = { Switch(keep, index == 1) },
         ) { keep = !keep }
     }
+    Spacer(Modifier.height(Space.s))
+    ChoiceRow(
+        "Where saves are kept", folder.ifBlank { "Fuse's own folder" }.substringAfterLast('/').ifBlank { folder }, FuseIcons.HardDrive,
+        selected = index == actions.size - 2,
+        detail = if (folder.isBlank()) "Every save and its earlier versions. Choose a folder on a bigger drive if you like" else folder,
+    ) { askFolder() }
     Spacer(Modifier.height(Space.xl))
     FuseButton(
-        "Make This the Host", selected = index == actions.size - 1, onClick = { if (!working) onGo(name, keep && lifetime.supported) },
+        "Make This the Host", selected = index == actions.size - 1, onClick = { if (!working) onGo(name, keep && lifetime.supported, folder) },
         icon = FuseIcons.Server, kind = ButtonKind.PRIMARY, loading = working,
     )
     StepInput(app, keys, actions)

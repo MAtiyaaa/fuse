@@ -79,18 +79,30 @@ internal fun confirmTurnOff(app: AppState, name: String, working: Boolean, first
     }
 }
 
-/** Fuse Sync off, asking twice while it is in touch with its host. */
+/**
+ * Fuse Sync off: this device forgets its host and its profiles, and keeps its games, saves,
+ * library, settings and Home as they are now. Asks twice while it is in touch with its host, once
+ * while it is set up but not, and not at all when there is nothing to forget.
+ */
 internal fun turnOffFuseSync(app: AppState, then: suspend () -> Unit = {}) {
-    val working = app.store.sync.service?.status?.value is SyncStatus.Online
-    confirmTurnOff(
-        app, SYNC_NAME, working,
-        first = "It's connected and keeping your saves, play time and settings in step. Turned off, this device stops syncing; everything here stays as it is.",
-        second = "Saves you make here won't reach your other devices, and theirs won't reach this one, until you turn it on again.",
-    ) {
+    val status = app.store.sync.service?.status?.value
+    val working = status is SyncStatus.Online
+    val host = app.store.prefs.value.sync.role == "HOST"
+    val first = "This device forgets its host and its profiles. Its games, saves, library, settings and Home stay exactly as they are now." +
+        if (host) " This computer stops hosting; everyone's saves stay on it until you delete them." else ""
+    val second = "Turning it on again starts fresh: find the host, join, then pick or make a profile. " +
+        if (host) "Your other devices stop syncing until there is a host again." else "Saves made here won't reach your other devices until then."
+    fun off() {
         app.scope.launch {
             app.store.sync.setEnabled(false)
             then()
         }
+    }
+    when {
+        working -> confirmTurnOff(app, SYNC_NAME, working = true, first = first, second = second) { off() }
+        status != null && status !is SyncStatus.Off && status !is SyncStatus.NotSetUp ->
+            app.confirm = io.github.matiyaaa.fuse.ui.shell.app.ConfirmSpec("Turn off $SYNC_NAME?", "$first $second", "Turn Off", destructive = true) { off() }
+        else -> off()
     }
 }
 

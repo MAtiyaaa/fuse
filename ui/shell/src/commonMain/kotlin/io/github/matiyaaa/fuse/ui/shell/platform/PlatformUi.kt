@@ -53,6 +53,13 @@ interface PlatformUi {
     fun openUrl(url: String)
     fun restart()
 
+    /**
+     * Erase Fuse: everything Fuse keeps (its library, settings, profiles, art, caches and Fuse Sync)
+     * goes, and Fuse starts again as new. Game files, emulators and the saves in the emulators'
+     * folders are never touched. False where it can't be done.
+     */
+    fun eraseAndRestart(): Boolean = false
+
     /** Leaves Fuse. Not offered while Fuse is the Home app (Home has nowhere to exit to). */
     fun exit()
 

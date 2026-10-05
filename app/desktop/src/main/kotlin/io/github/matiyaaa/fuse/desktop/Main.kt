@@ -57,6 +57,7 @@ fun main(args: Array<String>) {
     // Fuse Player plays on FFmpeg here.
     io.github.matiyaaa.fuse.ui.player.FusePlayer.engineFactory = { io.github.matiyaaa.fuse.ui.player.ffmpeg.FfmpegEngine() }
     val dirs = FuseDirs.fromEnvironment()
+    dirs.eraseIfAsked()
     dirs.ensure()
     CrashLog(java.io.File(dirs.data, "crash")).install()
     Log.info("Fuse ${BuildInfo.VERSION} starting")

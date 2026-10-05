@@ -251,6 +251,71 @@ class ServiceTest {
     }
 
     @Test
+    fun turnedOffADeviceForgetsItsHostButKeepsItsOwn(): Unit = runBlocking {
+        val (pc, _) = service("Gaming PC", Library())
+        val deckLib = Library(
+            games = hashMapOf(ct.id to GameRecord(ct, playSeconds = mapOf("x" to 60), lastPlayed = 1_000)),
+            settings = hashMapOf("appearance.themeId" to JsonPrimitive("midnight")),
+        )
+        val (deck, deckSettings) = service("Steam Deck", deckLib)
+        val code = assertNotNull(pc.hostHere("Gaming PC", installService = false).getOrThrow().pairingCode)
+        deck.connect("127.0.0.1:$port", code).getOrThrow()
+        val mo = pc.createProfile("Mo", "fox", null).getOrThrow()
+        deck.switchTo(mo.id).getOrThrow()
+        val before = deckLib.gamesNow()
+        deck.setEnabled(false)
+        // Forgotten: no host, no profiles, no profile in use.
+        val s = deckSettings.current().sync
+        assertEquals("", s.role)
+        assertEquals("", s.activeProfile)
+        assertEquals("", s.hostName)
+        assertTrue(deck.profiles.value.isEmpty())
+        assertIs<SyncStatus.Off>(deck.status.value)
+        // Its own stays exactly as it was.
+        assertEquals(before, deckLib.gamesNow())
+        assertEquals(JsonPrimitive("midnight"), deckLib.settings["appearance.themeId"])
+        // On again: a fresh start, set up from nothing.
+        deck.setEnabled(true)
+        assertIs<SyncStatus.NotSetUp>(deck.status.value)
+        pc.stop()
+    }
+
+    @Test
+    fun theHostsSavesMoveToAnotherFolderAndCanBeDeleted(): Unit = runBlocking {
+        val (pc, pcSettings) = service("Gaming PC", Library())
+        val (deck, _) = service("Steam Deck", Library())
+        val code = assertNotNull(pc.hostHere("Gaming PC", installService = false).getOrThrow().pairingCode)
+        deck.connect("127.0.0.1:$port", code).getOrThrow()
+        val mo = pc.createProfile("Mo", "fox", null).getOrThrow()
+        deck.switchTo(mo.id).getOrThrow()
+        pc.switchTo(mo.id).getOrThrow()
+        val roms = File(root, "deck-roms").apply { mkdirs() }
+        val q = SaveQuery(ct, "gba", File(roms, "ruby.gba").path.replace('\\', '/'), "mgba", title = "Pokemon Ruby")
+        File(roms, "ruby.sav").writeText("before the move")
+        deck.afterExit(q, 0, 60_000)
+        // To a bigger drive: copied, checked, and the host carries on from there.
+        val drive = File(root, "big-drive/fuse-saves")
+        assertEquals(drive.path, pc.moveHostData(drive.path).getOrThrow())
+        assertEquals(drive.path.replace('\\', '/'), pcSettings.current().sync.hostDataDir)
+        assertTrue(File(drive, "profiles").exists() || drive.listFiles().orEmpty().isNotEmpty())
+        assertTrue(!File(root, "Gaming PC/host").exists())
+        // Not into a folder that already has things in it.
+        val busy = File(root, "busy").apply { mkdirs(); File(this, "x").writeText("x") }
+        assertTrue(pc.moveHostData(busy.path).isFailure)
+        // The Deck's save is still there, from the new folder.
+        val pcRoms = File(root, "pc-roms").apply { mkdirs() }
+        assertIs<LaunchGate.Go>(pc.beforeLaunch(q.copy(romPath = File(pcRoms, "ruby.gba").path.replace('\\', '/')), waitForOthers = false))
+        assertEquals("before the move", File(pcRoms, "ruby.sav").readText())
+        // Deleted: everyone's saves on this computer go; the Deck keeps its own.
+        pc.deleteHost().getOrThrow()
+        assertTrue(!drive.exists())
+        assertEquals("", pcSettings.current().sync.role)
+        assertEquals("before the move", File(roms, "ruby.sav").readText())
+        assertTrue(deck.syncNow().isFailure)
+        pc.stop()
+    }
+
+    @Test
     fun withFuseSyncOffNothingHappens(): Unit = runBlocking {
         val settings = SettingsStore(DesktopDatabase.open(null))
         val lib = Library()

@@ -156,7 +156,7 @@ class JvmSyncService(
      */
     private suspend fun startHostServer(c: SyncSettings) {
         if (hostServer != null) return
-        val hostDir = File(dir, "host")
+        val hostDir = hostDir(c)
         // The service already runs the host: never open its files from a second process.
         HostAdmin.of(hostDir, c.hostPort)?.let { admin ->
             hostAdmin = admin
@@ -305,16 +305,125 @@ class JvmSyncService(
     }
 
     override suspend fun setEnabled(enabled: Boolean): Unit = withContext(Dispatchers.IO) {
-        saveConfig { it.copy(enabled = enabled) }
+        if (!enabled) {
+            // Off forgets the host: what this device sends next time starts from nothing. Its own
+            // library, settings and Home stay exactly as they are, as plain Fuse.
+            forgetHost()
+            saveConfig { it.copy(enabled = false) }
+            _status.value = SyncStatus.Off
+            return@withContext
+        }
+        saveConfig { it.copy(enabled = true) }
         stop()
         client = null
-        if (enabled) {
-            runCatching { start() }
-        } else {
-            _status.value = SyncStatus.Off
-            _active.value = null
-            _profiles.value = emptyList()
-            _host.value = null
+        runCatching { start() }
+    }
+
+    /** Where this computer keeps its host's saves and profiles. */
+    private fun hostDir(c: SyncSettings): File = c.hostDataDir.ifBlank { null }?.let(::File) ?: File(dir, "host")
+
+    /**
+     * Forgets the host and everything kept for it here: the link, the profiles, which profile was
+     * in use, saves waiting to go and other people's saves parked here. The game files, the saves in
+     * the emulators' folders, the library and the settings and Home in use stay. A host's own data
+     * stays on disk ([deleteHost] removes it).
+     */
+    private suspend fun forgetHost() {
+        watch?.job?.cancel()
+        watch = null
+        _nowPlaying.value = null
+        cancelJoin()
+        val c = client
+        if (c != null) {
+            runCatching { withTimeoutOrNull(FORGET_WAIT_MS) { device?.flush(c) } }
+            runCatching { withTimeoutOrNull(FORGET_WAIT_MS) { c.unlinkSelf() } }
+        }
+        stop()
+        if (cached.role == "HOST" && lifetime.state().installed) runCatching { lifetime.remove() }
+        hostAdmin = null
+        adminStatus = null
+        client = null
+        device = null
+        runCatching { secrets.remove(LINK_KEY) }
+        val keep = hostDir(cached).canonicalFile
+        dir.listFiles()?.filter { it.canonicalFile != keep }?.forEach { it.deleteRecursively() }
+        gameAliases = emptyMap()
+        data.useAliases(emptyMap())
+        saveConfig {
+            it.copy(
+                role = "", hostName = "", hostId = "", activeProfile = "", localAddress = "", remoteAddress = "", sharedGames = emptyList(),
+                // This device's Home is simply its Home now.
+                homeScope = "PROFILE", deviceHome = null,
+            )
+        }
+        _active.value = null
+        _profiles.value = emptyList()
+        _devices.value = emptyList()
+        _joins.value = emptyList()
+        _sharedGames.value = emptySet()
+        _host.value = null
+        log("Fuse Sync forgot its host")
+    }
+
+    override suspend fun deleteHost(): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatching {
+            val c = config()
+            require(c.role == "HOST") { "This device isn't the host." }
+            val folder = hostDir(c)
+            forgetHost()
+            // The background service needs a moment to let go of its files.
+            delay(HOST_RELEASE_MS)
+            folder.deleteRecursively()
+            saveConfig { it.copy(hostDataDir = "") }
+            _status.value = SyncStatus.NotSetUp
+        }
+    }
+
+    override suspend fun moveHostData(to: String): Result<String> = withContext(Dispatchers.IO) {
+        runCatching {
+            val c = config()
+            val from = hostDir(c).canonicalFile
+            val target = File(to.trim()).absoluteFile
+            require(to.isNotBlank()) { "Choose a folder." }
+            require(target.canonicalFile != from) { "That's where the saves are already." }
+            require(!target.canonicalPath.startsWith(from.canonicalPath + File.separator)) { "Choose a folder outside the one in use." }
+            require(!target.exists() || target.listFiles().isNullOrEmpty()) { "Choose an empty folder, or a new one." }
+            target.mkdirs()
+            require(target.canWrite()) { "Fuse can't write to that folder." }
+            val hosting = c.role == "HOST" && (hostServer != null || hostAdmin != null)
+            val service = hosting && lifetime.state().installed
+            if (hosting) {
+                // The host stops for the move, so nothing changes while it is copied.
+                hostServer?.stop()
+                responder?.stop()
+                hostServer = null
+                responder = null
+                if (service) lifetime.remove()
+                hostAdmin = null
+                delay(HOST_RELEASE_MS)
+            }
+            try {
+                if (from.isDirectory) {
+                    from.copyRecursively(target, overwrite = false)
+                    // Every file arrived whole before the old folder goes.
+                    from.walkTopDown().filter { it.isFile }.forEach { f ->
+                        val copy = File(target, f.relativeTo(from).path)
+                        check(copy.isFile && copy.length() == f.length()) { "A file didn't copy: ${f.name}. Nothing was moved." }
+                    }
+                }
+                saveConfig { it.copy(hostDataDir = target.path.replace('\\', '/')) }
+                if (from.isDirectory) from.deleteRecursively()
+            } catch (e: Exception) {
+                if (target.canonicalFile != from) target.listFiles()?.forEach { it.deleteRecursively() }
+                throw e
+            } finally {
+                if (hosting) {
+                    if (service) handOver() else startHostServer(config())
+                }
+            }
+            refreshHostView()
+            log("The host's saves moved to ${target.path}")
+            target.path
         }
     }
 
@@ -562,7 +671,7 @@ class JvmSyncService(
             val admin = withTimeoutOrNull(SERVICE_WAIT_MS) {
                 var found: HostAdmin? = null
                 while (found == null) {
-                    found = HostAdmin.of(File(dir, "host"), c.hostPort)
+                    found = HostAdmin.of(hostDir(c), c.hostPort)
                     if (found == null) delay(250)
                 }
                 found
@@ -1056,6 +1165,8 @@ class JvmSyncService(
 
         /** How often a running game's save is looked at. */
         const val LIVE_LOOK_MS = 15_000L
+        const val FORGET_WAIT_MS = 5_000L
+        const val HOST_RELEASE_MS = 1_500L
 
         /** How long after the save check a game has to start before Fuse stops keeping in step for it. */
         const val READY_MS = 45_000L

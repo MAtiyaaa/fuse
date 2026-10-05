@@ -1544,7 +1544,44 @@ fun aboutRows(app: AppState): List<MenuAction> = buildList {
     }
     // The last crash, if there was one, at the very end: worth finding, never in the way.
     app.platform.lastCrashReport()?.let { report -> labelled("Last crash") { add(crashRow(app, report)) } }
+    labelled("Start over") { add(eraseRow(app)) }
 }
+
+/**
+ * Erase Fuse, the last row of About: asks twice, says plainly what goes and what stays, lets go of
+ * Fuse Sync first (a host is deleted, a device forgets its host), then Fuse starts again as new.
+ */
+private fun eraseRow(app: AppState): MenuAction = MenuAction(
+    "erase", "Erase Fuse", FuseIcons.Trash, destructive = true,
+    detail = "Start over as new. Your games, emulators and their saves stay",
+    onSelect = {
+        val host = app.store.prefs.value.sync.role == "HOST"
+        app.confirm = ConfirmSpec(
+            "Erase Fuse?",
+            "Fuse's library, settings, themes, Home, profiles, play time, art and caches are erased" +
+                (if (host) ", and the Fuse Sync host on this computer with everyone's saves and profiles." else if (app.store.sync.inUse) ", and this device leaves Fuse Sync." else ".") +
+                " Game files, emulators and the saves in the emulators' folders stay exactly where they are.",
+            "Continue", destructive = true,
+        ) {
+            app.confirm = ConfirmSpec(
+                "Erase everything for good?",
+                "This can't be undone. Fuse closes and opens again as if it were new.",
+                "Erase Fuse", destructive = true,
+            ) {
+                app.scope.launch {
+                    val sync = app.store.sync.service
+                    if (sync != null) {
+                        if (host) runCatching { sync.deleteHost() }
+                        runCatching { sync.setEnabled(false) }
+                    }
+                    // Saved keys too, wherever the system keeps them.
+                    for (k in app.store.credentials.stored.value) runCatching { app.store.credentials.remove(k) }
+                    if (!app.platform.eraseAndRestart()) app.toasts.show("Fuse can't erase itself here", ToastKind.ERROR)
+                }
+            }
+        }
+    },
+)
 
 @Composable
 private fun autostartRow(app: AppState, w: WindowControls): MenuAction {

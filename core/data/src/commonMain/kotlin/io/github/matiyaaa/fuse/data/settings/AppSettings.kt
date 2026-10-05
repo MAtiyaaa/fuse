@@ -123,6 +123,8 @@ data class SyncSettings(
     val deviceHome: io.github.matiyaaa.fuse.model.HomeLayoutConfig? = null,
     /** The port a host serves on. */
     val hostPort: Int = 47311,
+    /** Where the host keeps everyone's saves and profiles; empty is Fuse's own data folder. */
+    val hostDataDir: String = "",
 )
 
 /**

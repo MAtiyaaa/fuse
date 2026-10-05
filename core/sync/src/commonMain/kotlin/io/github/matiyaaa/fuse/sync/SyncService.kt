@@ -290,6 +290,16 @@ interface SyncService {
     /** Leaves the host: everything here stays exactly as it is; this device just stops syncing. */
     suspend fun unlink(): Result<Unit>
 
+    /**
+     * On the host: deletes it (everyone's saves and profiles kept on this computer, and the
+     * background service). This device keeps its own library, settings and Home as plain Fuse; other
+     * devices keep everything they have and see the host gone.
+     */
+    suspend fun deleteHost(): Result<Unit> = Result.failure(UnsupportedOperationException("This device isn't a host."))
+
+    /** On the host: moves everyone's saves and profiles to [to] (an empty folder), copied and checked first. The new path. */
+    suspend fun moveHostData(to: String): Result<String> = Result.failure(UnsupportedOperationException("This device isn't a host."))
+
     /** Renames another device (host only) or unlinks it. */
     suspend fun renameDevice(id: String, name: String): Result<Unit>
     suspend fun revokeDevice(id: String): Result<Unit>
