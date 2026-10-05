@@ -496,28 +496,48 @@ internal fun WeekBars(days: List<Long>, modifier: Modifier, letters: Boolean) {
     val grow = remember { FuselineValue(if (flourish) 0f else 1f) }
     LaunchedEffect(Unit) { grow.animateTo(1f, motion.value()) }
     val max = (days.maxOrNull() ?: 0L).coerceAtLeast(1L)
-    val rest = c.text.copy(alpha = if (c.isDark) 0.2f else 0.14f)
+    val played = days.filter { it > 0 }
+    val average = if (played.isEmpty()) 0f else played.average().toFloat() / max
+    val restTop = c.text.copy(alpha = if (c.isDark) 0.3f else 0.2f)
+    val restBottom = c.text.copy(alpha = if (c.isDark) 0.1f else 0.07f)
+    val todayTop = androidx.compose.ui.graphics.lerp(c.accent, Color.White, 0.18f)
     val today = c.accent
-    val baseline = c.hairline
+    val guide = c.text.copy(alpha = 0.22f)
     Column(modifier) {
         Canvas(Modifier.fillMaxWidth().weight(1f)) {
             val gap = Space.s.toPx().coerceAtMost(size.width / days.size * 0.3f)
             val w = (size.width - gap * (days.size - 1)) / days.size
-            val corner = CornerRadius(minOf(w / 2, Space.xs.toPx()))
-            val stub = Space.xxs.toPx()
+            val corner = CornerRadius(minOf(w / 2, Space.s.toPx()))
+            val stub = Space.xs.toPx()
             val g = grow.value
+            // The week's daily average, as a faint dashed line behind the bars.
+            if (average > 0f && played.size > 1) {
+                val y = size.height * (1f - average * g)
+                drawLine(
+                    guide, Offset(0f, y), Offset(size.width, y), strokeWidth = Size.divider.toPx(),
+                    pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 4.dp.toPx())),
+                )
+            }
             days.forEachIndexed { i, v ->
                 // Each bar starts a beat after the one before it, so the week fills from the left.
                 val p = ((g - i * 0.05f) / 0.7f).coerceIn(0f, 1f)
                 val h = (size.height * (v.toFloat() / max) * p).coerceAtLeast(stub)
+                val x = i * (w + gap)
+                val isToday = i == days.lastIndex
+                if (isToday && v > 0) {
+                    // Today glows a little, so the eye finds it first.
+                    drawRoundRect(today.copy(alpha = 0.18f), topLeft = Offset(x - 2.dp.toPx(), size.height - h - 2.dp.toPx()), size = androidx.compose.ui.geometry.Size(w + 4.dp.toPx(), h + 2.dp.toPx()), cornerRadius = CornerRadius(corner.x + 2.dp.toPx()))
+                }
                 drawRoundRect(
-                    color = if (i == days.lastIndex) today else rest,
-                    topLeft = Offset(i * (w + gap), size.height - h),
+                    brush = Brush.verticalGradient(
+                        if (isToday) listOf(todayTop, today) else listOf(restTop, restBottom),
+                        startY = size.height - h, endY = size.height,
+                    ),
+                    topLeft = Offset(x, size.height - h),
                     size = androidx.compose.ui.geometry.Size(w, h),
                     cornerRadius = corner,
                 )
             }
-            drawRect(baseline, topLeft = Offset(0f, size.height - Size.divider.toPx() / 2), size = androidx.compose.ui.geometry.Size(size.width, Size.divider.toPx()))
         }
         if (letters) {
             Spacer(Modifier.height(Space.xs))
@@ -525,7 +545,7 @@ internal fun WeekBars(days: List<Long>, modifier: Modifier, letters: Boolean) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.s)) {
                 initials.forEachIndexed { i, d ->
                     FText(
-                        d, Fuse.type.overline, color = if (i == initials.lastIndex) c.text else c.textFaint,
+                        d, Fuse.type.overline, color = if (i == initials.lastIndex) c.accent else c.textFaint,
                         align = TextAlign.Center, maxLines = 1, modifier = Modifier.weight(1f),
                     )
                 }

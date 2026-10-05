@@ -162,6 +162,9 @@ class BrandedFacesAudit {
             Triple(WidgetKind.SYNC_STATUS, "online", HomeFeed()),
             Triple(WidgetKind.SYNC_DEVICES, "three devices", HomeFeed()),
             Triple(WidgetKind.CLOCK, "today", HomeFeed()),
+            Triple(WidgetKind.PLAYTIME_WEEK, "a busy week", HomeFeed(playtime = io.github.matiyaaa.fuse.ui.shell.store.PlaytimeSummary(totalSeconds = 412_000, weekSeconds = 46_800, lastSevenDays = listOf(3_600L, 0L, 7_200L, 10_800L, 1_800L, 14_400L, 9_000L)))),
+            Triple(WidgetKind.PLAYTIME_TOTAL, "all time", HomeFeed(playtime = io.github.matiyaaa.fuse.ui.shell.store.PlaytimeSummary(totalSeconds = 412_000, weekSeconds = 46_800, lastSevenDays = listOf(3_600L, 0L, 7_200L, 10_800L, 1_800L, 14_400L, 9_000L)))),
+            Triple(WidgetKind.MOST_PLAYED, "a few games", HomeFeed(mostPlayed = favourites, systems = systemsArt)),
             Triple(WidgetKind.STORAGE, "a drive", HomeFeed(storage = io.github.matiyaaa.fuse.ui.shell.store.StorageSummary("Games", freeBytes = 182_000_000_000, totalBytes = 512_000_000_000))),
         )
         // Fuse Sync's widgets read a household: three people, three devices, a little history.
