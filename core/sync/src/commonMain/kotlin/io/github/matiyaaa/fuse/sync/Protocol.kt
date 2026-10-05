@@ -16,6 +16,9 @@ object SyncApi {
     const val DEFAULT_PORT = 47311
 }
 
+/** Which way a device reaches its host: at home, or from outside. */
+enum class Route { LOCAL, REMOTE }
+
 /** What anyone on the network may learn about a host: enough to find it and pair with it. */
 @Serializable
 data class HostHello(

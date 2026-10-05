@@ -231,6 +231,24 @@ class SyncHost(
                 // Events carry only ids: what changed is fetched through the calls that check access.
                 call.json(JournalPage.serializer(), store.events(since))
             }
+            // Management from this computer only, with the token in the host's own folder.
+            route("/admin") {
+                post("/pairing") { if (!admin()) return@post; call.json(String.serializer(), newPairingCode()) }
+                get("/status") { if (!admin()) return@get; call.json(HostStatus.serializer(), store.status(port, fuseVersion)) }
+                patch("/devices/{id}") {
+                    if (!admin()) return@patch
+                    val req = body(DeviceChange.serializer()) ?: return@patch
+                    val info = store.changeDevice(call.parameters["id"].orEmpty(), req) ?: return@patch call.fail(HttpStatusCode.NotFound, "No such device.", "no-device")
+                    bump()
+                    call.json(DeviceInfo.serializer(), info)
+                }
+                delete("/devices/{id}") {
+                    if (!admin()) return@delete
+                    store.revokeDevice(call.parameters["id"].orEmpty())
+                    bump()
+                    call.respondText("{}", ContentType.Application.Json)
+                }
+            }
             get("/devices") { device() ?: return@get; call.json(ListSerializer(DeviceInfo.serializer()), store.devices()) }
             patch("/devices/{id}") {
                 val d = device() ?: return@patch
@@ -337,6 +355,17 @@ class SyncHost(
             return null
         }
         return d to p
+    }
+
+    /** True for a management call from this computer with the host's token; else answered and false. */
+    private suspend fun RoutingContext.admin(): Boolean {
+        val local = call.request.origin.remoteHost.let { it == "127.0.0.1" || it == "::1" || it == "0:0:0:0:0:0:0:1" || it == "localhost" }
+        val token = call.request.headers["X-Fuse-Admin"]
+        if (!local || token == null || !SyncCrypto.constantEquals(token, store.adminToken)) {
+            call.fail(HttpStatusCode.Forbidden, "Only Fuse on the host can do that.", "not-admin")
+            return false
+        }
+        return true
     }
 
     private fun RoutingContext.route(): String = call.request.headers["X-Fuse-Route"]?.takeIf { it == "LOCAL" || it == "REMOTE" } ?: ""

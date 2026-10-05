@@ -137,9 +137,24 @@ class SyncDevice(
         persist()
     }
 
-    /** Records [session] for [game]: this device's own counter grows, wherever it is. */
-    suspend fun played(profile: String, game: GameKey, session: SessionEntry) = changeMeta(profile) { m, _ ->
-        m.withGame(m.game(game).played(session))
+    /**
+     * Records [session] for [game]: this device's own counter grows by its length, counted from
+     * everything this device knows its counter to be (its counter only ever goes up, so it is
+     * the whole count, never a part).
+     */
+    suspend fun played(profile: String, game: GameKey, session: SessionEntry) = mutex.withLock {
+        val full = meta(profile).game(game)
+        if (session.id in full.sessions) return@withLock
+        val mine = (full.playSeconds[session.device] ?: 0) + session.seconds
+        val pending = state.pendingMeta[profile] ?: ProfileMeta()
+        val record = pending.game(game)
+        val next = record.copy(
+            playSeconds = record.playSeconds + (session.device to mine),
+            sessions = record.sessions + (session.id to session),
+            lastPlayed = maxOf(record.lastPlayed ?: 0, full.lastPlayed ?: 0, session.endedAt),
+        )
+        state = state.copy(pendingMeta = state.pendingMeta + (profile to pending.withGame(next)))
+        persist()
     }
 
     fun now(): Hlc = hlc.now()

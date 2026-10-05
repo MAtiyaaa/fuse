@@ -12,6 +12,8 @@ plugins {
 kotlin {
     sourceSets {
         commonMain.dependencies {
+            // Its settings (which host, which profile, what syncs) are part of Fuse's own.
+            api(projects.core.data)
             implementation(libs.kotlinx.serialization.json)
         }
         val jvmShared by creating {

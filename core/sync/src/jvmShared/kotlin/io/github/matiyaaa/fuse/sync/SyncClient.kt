@@ -42,9 +42,6 @@ data class HostLink(
     val remoteAddress: String? = null,
 )
 
-/** Which way a call reached the host. */
-enum class Route { LOCAL, REMOTE }
-
 /** A host's answer that wasn't a success: what it said, its code, and the HTTP status. */
 class SyncException(message: String, val code: String, val status: Int) : IOException(message)
 

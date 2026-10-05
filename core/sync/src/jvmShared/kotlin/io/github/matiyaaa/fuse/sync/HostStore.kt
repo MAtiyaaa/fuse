@@ -56,6 +56,23 @@ class HostStore(val dir: File, private val clock: () -> Long = System::currentTi
     private val profilesFile = File(dir, "profiles.json")
     private val journalFile = File(dir, "journal.jsonl")
 
+    /**
+     * The token for this host's own management calls (codes for new devices, renaming and
+     * unlinking devices), from this computer only: a file only this user can read, so Fuse can run
+     * the host it started as a background service.
+     */
+    val adminToken: String by lazy {
+        val f = File(dir, "admin.token")
+        if (!f.isFile) {
+            writeAtomically(f, SyncCrypto.token(32).toByteArray())
+            runCatching {
+                f.setReadable(false, false); f.setReadable(true, true)
+                f.setWritable(false, false); f.setWritable(true, true)
+            }
+        }
+        f.readText().trim()
+    }
+
     internal val identity: HostIdentity
     private val devices = LinkedHashMap<String, DeviceRecord>()
     private val profiles = LinkedHashMap<String, ProfileRecord>()
