@@ -54,6 +54,13 @@ interface PlatformUi {
     fun restart()
 
     /**
+     * How Fuse is being drawn ("OpenGL", "Metal", "Without the graphics card"), or null where it
+     * isn't known. Drawing without the graphics card (a computer whose driver Fuse can't use) makes
+     * every moving frame costly, so Fuse keeps its motion light there.
+     */
+    val drawing: kotlinx.coroutines.flow.StateFlow<DrawingInfo?> get() = NoDrawingInfo
+
+    /**
      * Erase Fuse: everything Fuse keeps (its library, settings, profiles, art, caches and Fuse Sync)
      * goes, and Fuse starts again as new. Game files, emulators and the saves in the emulators'
      * folders are never touched. False where it can't be done.
@@ -323,3 +330,8 @@ interface MenuMusicPlayer {
      */
     fun onSongEnded(listener: ((String) -> Unit)?) = Unit
 }
+
+/** How the window is drawn: [name] for people, and whether the graphics card does it. */
+data class DrawingInfo(val name: String, val gpu: Boolean)
+
+private val NoDrawingInfo: kotlinx.coroutines.flow.StateFlow<DrawingInfo?> = kotlinx.coroutines.flow.MutableStateFlow(null)

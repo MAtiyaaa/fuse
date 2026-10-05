@@ -183,7 +183,8 @@ class PerfHarness {
         }
         val services = AuditServices.create(cache, driver.controls)
         val store = createFuseStore(services, scope)
-        store.updatePrefs { it.copy(onboardingDone = true) }
+        // -Dfuse.perf.lowPower=true measures with Low Power Mode (no blur, still backgrounds), to compare.
+        store.updatePrefs { it.copy(onboardingDone = true, lowPower = System.getProperty("fuse.perf.lowPower") == "true") }
         store.sources.add(root.absolutePath, LibrarySourceKind.ROMS_ROOT)
         val total = AuditSamples.games.size + EXTRA_GAMES
         withTimeout(180_000) { store.sources.scan.first { it.phase == ScanPhase.DONE } }

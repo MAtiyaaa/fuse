@@ -108,6 +108,8 @@ private fun ApplicationScope.FuseWindow(session: DesktopSession) {
         ) {
             DisposableEffect(window) {
                 session.window = window
+                // How the window is drawn: on the processor, Fuse keeps motion light.
+                runCatching { session.platform.noteRenderer(window.renderApi.name) }
                 val listener = object : WindowFocusListener {
                     override fun windowGainedFocus(e: WindowEvent?) = session.onFocusChanged(true)
                     override fun windowLostFocus(e: WindowEvent?) = session.onFocusChanged(false)

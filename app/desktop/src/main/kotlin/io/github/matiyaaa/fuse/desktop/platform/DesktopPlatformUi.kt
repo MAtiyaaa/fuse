@@ -88,6 +88,24 @@ class DesktopPlatformUi(
 
     override val device: CapabilityProfile = measureDevice()
 
+    private val _drawing = kotlinx.coroutines.flow.MutableStateFlow<io.github.matiyaaa.fuse.ui.shell.platform.DrawingInfo?>(null)
+    override val drawing: kotlinx.coroutines.flow.StateFlow<io.github.matiyaaa.fuse.ui.shell.platform.DrawingInfo?> = _drawing
+
+    /** The window says how it is drawn once it is up (Skia on OpenGL, Metal or Direct3D, or on the processor). */
+    fun noteRenderer(api: String) {
+        val cpu = api.startsWith("SOFTWARE", ignoreCase = true)
+        val name = when {
+            cpu -> "The processor (no graphics card)"
+            api.equals("OPENGL", ignoreCase = true) -> "The graphics card (OpenGL)"
+            api.equals("METAL", ignoreCase = true) -> "The graphics card (Metal)"
+            api.equals("DIRECT3D", ignoreCase = true) -> "The graphics card (Direct3D)"
+            api.equals("VULKAN", ignoreCase = true) -> "The graphics card (Vulkan)"
+            else -> api
+        }
+        if (_drawing.value?.name != name) Log.info("Drawing with $api")
+        _drawing.value = io.github.matiyaaa.fuse.ui.shell.platform.DrawingInfo(name, gpu = !cpu)
+    }
+
     private val _status = MutableStateFlow(SystemStatus())
     override val status: StateFlow<SystemStatus> = _status.asStateFlow()
 
