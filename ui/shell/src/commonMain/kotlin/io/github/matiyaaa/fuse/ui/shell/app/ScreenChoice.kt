@@ -41,9 +41,11 @@ fun AppState.askScreen(
     fitArt: Boolean = false,
     /** A game's art, for its box art in the header. */
     cover: io.github.matiyaaa.fuse.ui.shell.store.Art? = null,
+    footnote: String? = null,
     onPick: (LaunchDisplay, ScreenMemory) -> Unit,
 ) {
-    screenPrompt = ScreenPromptSpec(verb, subject, art, accent, itemLabel, groupLabel, onPick, fitArt, cover)
+    val spec = ScreenPromptSpec(verb, subject, art, accent, itemLabel, groupLabel, onPick, fitArt, cover)
+    screenPrompt = if (footnote != null) spec.copy(footnote = footnote) else spec
 }
 
 /**

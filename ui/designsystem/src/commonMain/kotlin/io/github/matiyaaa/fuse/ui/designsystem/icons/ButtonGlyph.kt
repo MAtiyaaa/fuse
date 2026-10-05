@@ -136,11 +136,13 @@ private fun hintGlyph(button: HintButton, glyphs: GlyphConfig): Glyph {
         }
     }
     val nintendo = style == GlyphStyle.NINTENDO
+    // With the shoulders swapped, tabs are on the triggers and pages on the bumpers, and the hints say so.
+    val tabsOnTriggers = glyphs.swapShoulders
     return when (button) {
         HintButton.PREV, HintButton.NEXT ->
-            Glyph(Body.BUMPER, shoulderLabel(button == HintButton.PREV, trigger = false, style), left = button == HintButton.PREV)
+            Glyph(if (tabsOnTriggers) Body.TRIGGER else Body.BUMPER, shoulderLabel(button == HintButton.PREV, trigger = tabsOnTriggers, style), left = button == HintButton.PREV)
         HintButton.PAGE_PREV, HintButton.PAGE_NEXT ->
-            Glyph(Body.TRIGGER, shoulderLabel(button == HintButton.PAGE_PREV, trigger = true, style), left = button == HintButton.PAGE_PREV)
+            Glyph(if (tabsOnTriggers) Body.BUMPER else Body.TRIGGER, shoulderLabel(button == HintButton.PAGE_PREV, trigger = !tabsOnTriggers, style), left = button == HintButton.PAGE_PREV)
         HintButton.MENU -> Glyph(Body.CAPSULE, mark = if (nintendo) Mark.PLUS else Mark.LINES)
         HintButton.VIEW -> Glyph(Body.CAPSULE, mark = if (nintendo) Mark.MINUS else Mark.PANES)
         HintButton.DPAD -> Glyph(Body.DPAD)

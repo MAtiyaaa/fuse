@@ -41,6 +41,8 @@ import io.github.matiyaaa.fuse.ui.shell.store.Art
 import io.github.matiyaaa.fuse.ui.shell.store.GameCard
 import io.github.matiyaaa.fuse.ui.shell.store.HomeFeed
 import io.github.matiyaaa.fuse.ui.shell.store.PlatformCard
+import kotlin.test.Test
+import org.junit.Assume.assumeTrue
 import java.awt.BasicStroke
 import java.awt.Color
 import java.awt.GradientPaint
@@ -50,8 +52,6 @@ import java.awt.image.BufferedImage
 import java.io.File
 import java.nio.file.Files
 import javax.imageio.ImageIO
-import kotlin.test.Test
-import org.junit.Assume.assumeTrue
 
 /**
  * The widgets redesigned in 0.3.0 (Continue playing, Systems, Favourites, Collections, Cartridge)
@@ -158,7 +158,21 @@ class BrandedFacesAudit {
             Triple(WidgetKind.FAVORITES, "with covers", HomeFeed(favorites = favourites)),
             Triple(WidgetKind.COLLECTIONS, "with collections", HomeFeed(collections = collections)),
             Triple(WidgetKind.CARTRIDGE_DOWNLOADS, "installed and idle", HomeFeed()),
+            Triple(WidgetKind.RECENTLY_ADDED, "as a catalogue", HomeFeed(recentlyAdded = favourites, systems = systemsArt)),
+            Triple(WidgetKind.SYNC_STATUS, "online", HomeFeed()),
+            Triple(WidgetKind.SYNC_DEVICES, "three devices", HomeFeed()),
+            Triple(WidgetKind.CLOCK, "today", HomeFeed()),
+            Triple(WidgetKind.PLAYTIME_WEEK, "a busy week", HomeFeed(playtime = io.github.matiyaaa.fuse.ui.shell.store.PlaytimeSummary(totalSeconds = 412_000, weekSeconds = 46_800, lastSevenDays = listOf(3_600L, 0L, 7_200L, 10_800L, 1_800L, 14_400L, 9_000L)))),
+            Triple(WidgetKind.PLAYTIME_TOTAL, "all time", HomeFeed(playtime = io.github.matiyaaa.fuse.ui.shell.store.PlaytimeSummary(totalSeconds = 412_000, weekSeconds = 46_800, lastSevenDays = listOf(3_600L, 0L, 7_200L, 10_800L, 1_800L, 14_400L, 9_000L)))),
+            Triple(WidgetKind.MOST_PLAYED, "a few games", HomeFeed(mostPlayed = favourites, systems = systemsArt)),
+            Triple(WidgetKind.STORAGE, "a drive", HomeFeed(storage = io.github.matiyaaa.fuse.ui.shell.store.StorageSummary("Games", freeBytes = 182_000_000_000, totalBytes = 512_000_000_000))),
         )
+        // Fuse Sync's widgets read a household: three people, three devices, a little history.
+        val sync = run {
+            val db = File(art, "sync-${System.nanoTime()}.db")
+            val data = io.github.matiyaaa.fuse.data.FuseData(io.github.matiyaaa.fuse.data.db.DesktopDatabase.open(db.absolutePath))
+            AuditSync(data.settings).also { it.household(asHost = true) }
+        }
         for ((kind, label, feed) in cases) {
             if (!Audit.wants("widgets", "${kind.title()} $label")) continue
             val cartridge = CartridgeStatus(installed = true, connected = true, bridge = true)
@@ -167,6 +181,7 @@ class BrandedFacesAudit {
                     setContent {
                         CompositionLocalProvider(LocalDensity provides Density(AuditSize.D.density)) {
                             FuseTheme {
+                              CompositionLocalProvider(io.github.matiyaaa.fuse.ui.shell.home.LocalSyncService provides sync) {
                                 val cells = packBoard(sizes, 4)
                                 Box(Modifier.fillMaxSize().background(Fuse.colors.ink).padding(start = 40.dp, top = 80.dp)) {
                                     val shape = SquircleShape.fraction(Fuse.geometry.tileCornerFraction * 0.6f)
@@ -181,6 +196,7 @@ class BrandedFacesAudit {
                                         }
                                     }
                                 }
+                              }
                             }
                         }
                     }
@@ -198,4 +214,83 @@ class BrandedFacesAudit {
             }
         }
     }
+
+    /** Setup's sync step stage: the choice, then each way chosen. */
+    @Test
+    fun syncChoiceStage() {
+        val dir = Audit.dir
+        assumeTrue("Only under desktopAudit", dir != null)
+        assumeTrue(Audit.sizeEnabled(AuditSize.D))
+        for ((label, state) in listOf("choice" to (false to false), "fuse sync on" to (true to false), "syncthing on" to (false to true))) {
+            if (!Audit.wants("widgets", "sync stage $label")) continue
+            runDesktopComposeUiTest(AuditSize.D.widthPx, AuditSize.D.heightPx) {
+                setContent {
+                    CompositionLocalProvider(LocalDensity provides Density(AuditSize.D.density)) {
+                        FuseTheme {
+                            Box(Modifier.fillMaxSize().background(Fuse.colors.ink), contentAlignment = androidx.compose.ui.Alignment.Center) {
+                                io.github.matiyaaa.fuse.ui.shell.onboarding.SyncChoiceStage(fuseSync = state.first, syncthing = state.second, hasFuseSync = true)
+                            }
+                        }
+                    }
+                }
+                mainClock.advanceTimeBy(3_000)
+                waitForIdle()
+                mainClock.advanceTimeBy(1_000)
+                val frame = onRoot().captureToImage().toAwtImage()
+                val rgb = BufferedImage(frame.width, frame.height, BufferedImage.TYPE_INT_RGB)
+                rgb.createGraphics().apply { drawImage(frame, 0, 0, null); dispose() }
+                val file = File(dir, "D/widgets/${Audit.slug("sync stage $label")}.png")
+                file.parentFile.mkdirs()
+                ImageIO.write(rgb, "png", file)
+                println("Audit shot: ${file.absolutePath}")
+            }
+        }
+    }
+
+    /** Fusi's room on a screen, a handheld and a theme card, by day and by night, as she moves about. */
+    @Test
+    fun fusiRoom() {
+        val dir = Audit.dir
+        assumeTrue("Only under desktopAudit", dir != null)
+        assumeTrue(Audit.sizeEnabled(AuditSize.D))
+        val night = io.github.matiyaaa.fuse.ui.designsystem.theme.ThemePresets.Fusi.copy(
+            palette = io.github.matiyaaa.fuse.ui.designsystem.theme.ThemePresets.Starlight.palette,
+        )
+        for ((label, spec, w, h) in listOf(
+            Quad("day", io.github.matiyaaa.fuse.ui.designsystem.theme.ThemePresets.Fusi, AuditSize.D.widthPx, AuditSize.D.heightPx),
+            Quad("night", night, AuditSize.D.widthPx, AuditSize.D.heightPx),
+            Quad("card", io.github.matiyaaa.fuse.ui.designsystem.theme.ThemePresets.Fusi, 520, 300),
+        )) {
+            if (!Audit.wants("widgets", "fusi $label")) continue
+            runDesktopComposeUiTest(w, h) {
+                // The room never stops moving, so the clock only moves when told to.
+                mainClock.autoAdvance = false
+                setContent {
+                    CompositionLocalProvider(LocalDensity provides Density(if (label == "card") 1f else AuditSize.D.density)) {
+                        FuseTheme(spec) {
+                            io.github.matiyaaa.fuse.ui.designsystem.background.AmbientBackground(
+                                io.github.matiyaaa.fuse.model.BackgroundStyle.FUSI, Fuse.colors.accent, Modifier.fillMaxSize(), ambient = spec.ambient,
+                            )
+                        }
+                    }
+                }
+                // She lives on real time: a few looks a moment apart, as she wanders.
+                repeat(if (label == "day") 6 else 2) { n ->
+                    repeat(30) {
+                        mainClock.advanceTimeBy(100)
+                        Thread.sleep(60)
+                    }
+                    val frame = onRoot().captureToImage().toAwtImage()
+                    val rgb = BufferedImage(frame.width, frame.height, BufferedImage.TYPE_INT_RGB)
+                    rgb.createGraphics().apply { drawImage(frame, 0, 0, null); dispose() }
+                    val file = File(dir, "D/widgets/${Audit.slug("fusi $label $n")}.png")
+                    file.parentFile.mkdirs()
+                    ImageIO.write(rgb, "png", file)
+                    println("Audit shot: ${file.absolutePath}")
+                }
+            }
+        }
+    }
+
+    private data class Quad(val label: String, val spec: io.github.matiyaaa.fuse.model.ThemeSpec, val w: Int, val h: Int)
 }

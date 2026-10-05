@@ -187,3 +187,43 @@ Fuse's own Backup (Settings, Backup) also keeps the person's records and setting
 **Stop Hosting** stops the host and its service and keeps all of its data on the computer, so
 hosting again carries on where it was. Deleting a profile is the only thing that removes data from
 the host, and it asks first.
+
+## Syncthing instead
+
+For people who already run [Syncthing](https://syncthing.net), Fuse can use it in place of Fuse
+Sync (Settings, Addons, Syncthing, or the Every device step in setup). The two never run together:
+turning one on turns the other off on this device, because both would move the same saves.
+
+**Connecting.** On Linux, Windows and macOS, Fuse finds Syncthing at `127.0.0.1:8384` and reads its
+API key from Syncthing's own `config.xml` (`~/.local/state/syncthing` or `~/.config/syncthing` on
+Linux, `~/Library/Application Support/Syncthing` on macOS, `%LOCALAPPDATA%\Syncthing` on Windows).
+On Android it looks for Syncthing-Fork, can start it, and asks once for the API key from its Web
+GUI (Actions, Settings, General). Another address can be typed with its key. The key is kept in
+Fuse's secret store and only ever sent to that address; Syncthing-Fork's own certificate is
+accepted on this device's loopback address and nowhere else.
+
+**What it shares.** One folder for each emulator's saves, save states and memory cards that the
+library uses, with an id every device agrees on (`fuse-<emulator>-<kind>`), so the same folder on
+another device joins it. Folders Fuse shares keep older versions with Syncthing's staggered
+versioning (a month, thinned as it ages), unless that is turned off. A folder that sits beside the
+games themselves, or in another app's private storage, is listed as one that can't be shared:
+games are never shared. Devices are added by their Syncthing device ID (shown as a code to scan on
+wider screens), and devices that ask to join can be added with one press; Fuse's folders are
+offered to every device added, and folders another device offers under Fuse's ids are accepted
+into the matching folder here.
+
+**Around a game.** Before a game starts, its folders are looked over and, while another device is
+connected, Fuse waits briefly for Syncthing to bring in the newest save (Bring In the Newest Save
+First). Then it checks for Syncthing's conflict copies
+(`name.sync-conflict-YYYYMMDD-HHMMSS-DEVICE.ext`) of that game's saves; if there are any, it asks
+whether to keep this device's or the other device's, and the one not chosen is moved into the
+folder's `.stversions`, never deleted. After the game closes, its folders are looked over at once
+so the new save goes out.
+
+**What it can't do.** Syncthing moves files as they are named, so a save only matches where the
+game's file has the same name on every device, and there is no play time, no profiles and no
+library or settings sync. That is why Fuse Sync is the one Fuse recommends.
+
+**Leaving.** Turning Syncthing off in Fuse, or Disconnect Syncthing, stops Fuse using it (and
+Disconnect forgets the key). Syncthing keeps running and keeps syncing whatever it shares, and
+every file stays where it is.

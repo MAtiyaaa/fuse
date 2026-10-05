@@ -49,9 +49,10 @@ data class AppSettings(
     val store: StoreSettings = StoreSettings(),
     val jellyfin: JellyfinSettings = JellyfinSettings(),
     val sync: SyncSettings = SyncSettings(),
+    val syncthing: SyncthingSettings = SyncthingSettings(),
 ) {
     companion object {
-        const val CURRENT_VERSION = 2
+        const val CURRENT_VERSION = 3
     }
 }
 
@@ -61,6 +62,22 @@ data class AppSettings(
  * with, and this device's own Home when it keeps one. The device's secret is in the secret store,
  * never here.
  */
+/**
+ * Syncthing, for people who already run it (Fuse Sync is the one Fuse recommends): whether Fuse
+ * uses it, where it answers, and how Fuse keeps saves in step with it. Its API key is kept in the
+ * secret store, never here.
+ */
+@Serializable
+data class SyncthingSettings(
+    val enabled: Boolean = false,
+    /** Where Syncthing's API answers ("127.0.0.1:8384", or with https:// on Android). */
+    val address: String = "",
+    /** Before a game starts, wait a moment for Syncthing to bring in the newest save. */
+    val waitBeforePlaying: Boolean = true,
+    /** Folders Fuse shares keep older versions of each save (Syncthing's staggered versioning). */
+    val keepVersions: Boolean = true,
+)
+
 @Serializable
 data class SyncSettings(
     val enabled: Boolean = false,
@@ -133,11 +150,11 @@ data class JellyfinSettings(
     /** The other screen while playing: "REMOTE" (controls and art) or "OFF". */
     val playerCompanion: String = "REMOTE",
     /**
-     * On a device with two screens, where the picture goes: "MAIN" (the main screen, the one above)
-     * or "SECOND" (the second screen, the touch screen below). The other screen is its remote, and
-     * the menus stay free to browse.
+     * On a device with two screens, where the picture goes: "ASK" (each time, the default), "MAIN"
+     * (the main screen, the one above) or "SECOND" (the second screen, the touch screen below). The
+     * other screen is its remote, and the menus stay free to browse.
      */
-    val playOn: String = "MAIN",
+    val playOn: String = "ASK",
     /** The other screen while browsing: "DETAILS", "MINIMAL" or "OFF". */
     val browsingCompanion: String = "DETAILS",
 )
@@ -397,8 +414,8 @@ data class MusicSettings(
      * were bundled: the user's own song if there is one, else the default bundled song.
      */
     val track: String? = null,
-    /** Plays Fuse's songs one after another in a random order instead of looping [track]. */
-    val shuffle: Boolean = false,
+    /** Plays Fuse's songs one after another in a random order instead of looping [track] (the default). */
+    val shuffle: Boolean = true,
 )
 
 @Serializable

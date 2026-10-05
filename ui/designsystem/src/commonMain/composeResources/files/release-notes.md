@@ -1,115 +1,75 @@
-# Fuse 0.3.0 - The Sync & Clean Update
+# Fuse 0.3.1 - The Glide Update
 
 ## New
 
-- **Fuse Sync by Fuse.** Your saves, save states, play time, library and settings, the same on every
-  device you play on, from a computer of your own at home. Make one computer the host in one step
-  (it keeps running when Fuse is closed and after a restart, if you like); every other device finds
-  it on the network and joins with its code. A game's newest save is in place before it starts and
-  kept after it closes, matched by the game rather than its path, so a ROM named differently on a
-  card still gets its save. Play time adds up across devices, offline too. When two devices both
-  played, Fuse asks which save to use and keeps the other, and every save keeps its versions, from
-  every device, to go back to. Off, it does nothing at all.
-- **Profiles.** Everyone on a host has a profile, with one of Fuse's own avatars and a PIN if they
-  want one: their own library (favourites, names, collections, play time), Home, theme and quick
-  menu. Who's playing? opens from the avatar at the top right; switching changes everything at
-  once, without a restart. Fuse can start as the last profile, ask, or always start as one.
-- **Home on this device, or everywhere.** Arranging Home, a switch beside Add widget and Done keeps
-  this Home to this device or makes it the profile's on every device. Settings has the same choice.
-- **Addons, Sync.** Fuse Sync at a glance: where it stands, who's playing, every device on the host
-  and what happened lately, with Sync Now, Switch Profile and Add a Device.
-- **A game's save history.** In a game's options, every version of its saves from every device:
-  put one back (what is here is kept first) or keep one for good.
-- **A quick menu that's yours.** Press X in the quick menu (or the pencil, or Edit quick menu) to
-  arrange it: A picks a tile up and the D-pad carries it, X changes its size, Y takes it out, and
-  Add puts things back, or everything as it came. By touch or the mouse, drag a tile where it
-  should go, with corner buttons for size and removal. The others glide out of the way.
-- **Widgets in the quick menu.** Now playing shows the menu music or what Fuse Player by Fuse is
-  playing, with skip back, play or pause and skip forward: the song slides out the way you skipped
-  and its art turns over. Brightness and volume are bars across the menu or tall tiles. New items
-  to add: Surprise me (a random game), Search, Themes, Phone Link, Play time, Standby, Frame times
-  and Full screen.
-- **The second screen in three words.** The quick menu's Second screen is Off, Fuse (your games on
-  the screen below) or Flipped (your games on the screen above), side by side.
-- **Every system ES-DE knows.** 86 more systems, from the Apple II, VIC-20, PC-98 and X68000 to
-  the CD-i, Game & Watch, Sega Model 2, Model 3 and ST-V, TIC-80, WASM-4, Doom and Quake, under
-  RomM's names, each with ES-DE's folder names and file types, RetroArch's cores where it runs
-  them, RetroAchievements where it covers them, and libretro thumbnails. 157 systems in all.
-- **Jellyfin in setup.** A new step says what Jellyfin is for anyone who hasn't met it (a free
-  media server at home that keeps your films, shows and music in one library) and connects it
-  right there: servers found on your network, or a typed address, then your name and password.
-- **Swipe back on touch screens.** On Linux, Windows and macOS, swipe in from either edge to go
-  back, as on a phone: an arrow follows your finger and lights when letting go will go back.
-- **Pages above, too.** With the menus below (Flipped), the screen above has the same three pages
-  as the screen below: what's chosen, Status and Controls.
-- **PlayStation 5, and a better PlayStation 4.** PS5 games start in SharpEmu (Windows, Linux and
-  macOS) or KytyPS5 (Windows), from a dumped game folder. PS4 and PS5 games show their own art
-  (the console's square tile and full-screen backdrop from sce_sys) before anything is scraped, an
-  update folder beside its game (CUSA00900-UPDATE, shadPS4's layout) is that game's update rather
-  than a second game, and shadPS4 is found as a Flatpak and under its newer AppImage names. PS5
-  emulation is young, so Fuse says so on the emulator's page.
-- **Fuse Player by Fuse rides out weak Wi-Fi.** It starts on a short buffer and keeps a deep one,
-  retries a flaky connection, and when the connection can't keep up it lowers the quality by itself
-  and carries on from the same second, saying so in a small note.
-
-- **Home has pages.** In Channels, Home can be several boards side by side, like a phone's home
-  screens, each arranged on its own. The right stick (or [ and ] on a keyboard), a swipe, or the
-  D-pad run off a board's side turns the page, and dots under the board say which one shows.
-  Arranging, New page adds one; an empty page says how to fill it, and a page can be removed.
-- **The right stick works.** Fuse reads it on Linux, Windows, macOS and Android; for now it turns
-  Home's pages.
-- **A remote that feels like one.** The remote on the second screen (and on the touch screen in
-  Flipped mode) is redesigned: the film's backdrop, its logo, a live dot while it plays, a glass
-  deck with the timeline and the transport, Play in a ring that fills as the film goes on, soft
-  presses under a finger, and Sound, Subtitles, Play here and Stop in one bar.
-- **Your phone is the controller you're holding.** Fuse now knows a DualSense from an Xbox pad or a
-  Pro Controller (by its name, or on Android by who made it). Hints show PlayStation shapes or
-  Xbox letters for the pad in your hand, and a phone used as a controller through Phone Link
-  relabels its buttons to match, live, when you pick up another one.
-- **Touch controls for a film on the other screen.** Playing a film on the screen above in Flipped
-  mode (or on a second screen), the controller stays with the menus, so the picture answers to
-  touch: a tap shows Stop, skip back, play or pause, skip forward and a timeline to drag, and they
-  fade again while it plays. A double tap on either side skips.
+- **Fusi, a new theme.** Pink and cute like a cartoon from the early 2000s: polka dots drifting
+  over a pink sky, puffy clouds and sparkles, and a mint hill with pixel flowers, a pink doghouse
+  and a bowl. Fusi lives there: a little white pixel dog with a pink bow who wanders, runs about, sits
+  and wags, sniffs the flowers, naps by her house, chases her ball and hops for joy, always in
+  front of any game art. On a two-screen device like the AYN Thor she now and then jumps down to the
+  screen below, or leaps up to the one above. On a dark palette her room turns to night. The theme
+  maker offers her room as a background for any theme, and every word stays clear on the pink
+  (plum text at 11:1, a berry accent with white text at 5:1).
+- **Syncthing, for people who already run it.** Settings, Addons, Syncthing finds the Syncthing
+  on this device (its own key on a computer; Syncthing-Fork on Android), or takes an address and
+  API key. It shares your emulators' save folders with the devices you add (a code to scan from
+  Syncthing on a phone, or the ID to type), accepts devices that ask to join, and keeps a month
+  of older versions of each save. Before a game starts, the newest save is brought in; after it
+  closes, it goes straight out; and when two devices both played, Fuse asks which save to keep and
+  keeps the other as an old version. Games themselves are never shared. Fuse Sync by Fuse is still
+  the one Fuse recommends: it knows each game whatever its file is called, adds up play time and
+  keeps a profile for each person. The two never run together; turning one on turns the other off.
+- **Who's playing, at the end of the top line.** With Fuse Sync on and more than one profile,
+  the clock, battery and Wi-Fi draw tighter, and the profile's avatar sits at the far right: the
+  stick reaches it after the status, and a press or a tap opens Who's playing. With one profile it
+  stays out of the way.
+- **New profiles, closer to hand.** Y makes one straight from Who's playing, and New Profile is in
+  Addons, Sync, in Settings, Addons, Fuse Sync, and as a Profiles tile you can add to the quick menu.
+- **Addons, Syncthing.** With Syncthing in use, Addons has a Syncthing tab in place of Sync: how
+  many devices are online, the folders shared and what is still coming in, every save folder and
+  how far along it is, this device's code to scan, and Look Over Now and Add a Device. Addons shows
+  Sync or Syncthing, whichever is in use, never both.
+- **Turning off a sync that works asks twice.** While Fuse Sync is in touch with its host, or
+  Syncthing is connected, turning it off (or switching to the other) asks, then asks once more.
+- **Swap bumpers and triggers.** Settings, Controls has a switch to swap them: L2 and R2 switch
+  tabs and L1 and R1 turn Home's widgets, or the other way round as it comes. The hints follow.
+- **Setup asks how to stay in step.** The Every device step shows Fuse Sync and Syncthing side by
+  side, Fuse Sync recommended, with Use Fuse Sync (this device the host, or connect to one), Use
+  Syncthing, or Skip.
+- **Home widgets that turn like a catalogue.** Continue Playing, Systems, New in Library, Recently
+  Played, Favourites, Pinned, Collections and Jellyfin's widgets show one item at a time, turned
+  with L2 and R2 (L1 and R1 stay with the tabs) or a swipe, with dots and a gentle parallax; the
+  next item peeks in, except in Continue Playing, which turns page by page, newest first.
+- **New widgets.** Jellyfin favourites, new films and new music; Fuse Sync's status and its devices.
+- **Thor's two screens and the controller.** On the AYN Thor, Fuse follows the Focus Mode you
+  choose: Auto (the screen you last touched), top locked or bottom locked. The second screen takes
+  the controller when the Thor sends it there and passes it to Fuse's menus, never while a game is
+  in front. With the bottom screen off (the chin button), the menus come up to the top screen; with
+  only the bottom one on, they go down to it.
+- **Films ask which screen.** On two screens, a film asks where to play each time (the new default),
+  with one tick to keep the answer. Fuse Player's top bar has Watch on the Other Screen, and Y does
+  it too.
 
 ## Changed
 
-- **The second screen's Status and Controls pages, redesigned.** Status leads with the battery
-  large in a ring, then a grid of measures (processor, memory, storage, Wi-Fi), each with its own
-  meter. Controls has full-width sliders with what they set beside them, and control-centre tiles.
-- **The second screen keeps its pages while a film plays.** The remote is its first page, and
-  Status and Controls are a swipe away.
-- **Fuse finds renamed emulator AppImages on Linux** by the release they update from, read from
-  inside the AppImage without running it.
-- **Existing systems read more file types**: archives for disc systems, MSU-1 and MSU-MD sets, more
-  C64, MSX, ZX Spectrum and Atari images, and ES-DE's other folder names for them.
-- PS5 game folders (sce_sys/param.json) are one game each, like PS4 and Vita folders.
-- Right from Settings or Search in the top line goes into the page instead of opening Search, and
-  moving left from Search goes to the last tab.
-- Addons goes away when Jellyfin, the Store and Cartridge are all off. The Store has its own
-  switch in Settings, Addons.
-- Typing on a hardware keyboard, or using the mouse, Fuse's on-screen keys step aside: the field
-  takes what you type, Enter finishes, Esc closes, and Show keys brings them back. A controller
-  press or a touch brings them back too.
-- Add widget only offers what you use: RetroAchievements' widgets once it is connected, Cartridge's
-  while it is on and installed, collections while they are on, Jellyfin's while it is on.
-  Achievement widgets wait off Home until RetroAchievements is connected.
-- Addons opens on its first tab, in the order you dragged them into.
-- The second screen's page name sits in the middle of the screen, above and below.
-- A film's or show's logo and backdrop on the second screen are fetched before you reach it, for
-  what is in focus and its neighbours on either side, so they show at once.
-- About's credits lead with Fuse Sync by Fuse, Fuse Player by Fuse and Fuseline by Fuse.
-- On a small 4:3 handheld, the Capsule layout keeps its game title to one line instead of running
-  under the toolbar.
-- The README, rewritten.
-- Every screen is rendered and checked at 23 sizes, from a 3.5 inch 4:3 handheld to a 32:9 monitor
-  and a 4K screen at 100%.
+- **Jellyfin answers quickly.** Every way to the server is asked at once (home wins when it
+  answers), a call that can't get through tries the other way before anything says the server
+  can't be reached, kept pages show at once while fresh answers follow, the home page asks for its
+  shelves together, and Android lets 16 requests run per server instead of 5. Pages open far
+  faster, and Jellyfin's widgets fill in.
+- **The clock, storage and play time widgets, redrawn.** The clock is large with a calendar leaf
+  and a track of the day, and on bigger faces a dial. Storage is a capacity ring (a bar on a strip)
+  with free space large. This week's bars are lit with today glowing and the daily average dashed;
+  All time counts toward the next round mark; Most played shows the leader's art.
+- **Each profile has its own Home and quick menu.** A new profile starts with Fuse's own Home,
+  quick menu and theme, never the last person's.
+- **Menu music shuffles by default** (once for existing settings, unless you chose your own song).
 
 ## Fixed
 
-- A film's or show's page on the second screen could be hard to read with a light theme: it is
-  now always shown as a cinema shows it, light text on a darkened backdrop.
-- Fuse Player's Back button couldn't be reached with the controller: Up from the timeline goes to it.
-- Jellyfin opened scrolled past Search, Refresh and Settings.
-- Fuse Player's settings, audio and subtitle sheets couldn't be closed by touching outside them.
-- Moving left from Search in the top line went to Achievements rather than the last tab (Addons).
-- The second screen's Controls page cut off the target chips and its tiles on a wide lower screen.
+- A game's play time came only partly into view with the stick; it now scrolls fully into view,
+  as does every line of the detail cards (On this device on a small screen).
+- The cover on a game's page sat lower than its title; it stands level with it now.
+- The second screen's On this device page couldn't be reached with the controller.
+- How to put a film on the other screen wasn't clear; the player says so in its top bar.
+- Jellyfin said it couldn't reach the server while its outside address worked.

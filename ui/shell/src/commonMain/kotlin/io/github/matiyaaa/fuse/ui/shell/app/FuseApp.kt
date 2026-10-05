@@ -232,6 +232,10 @@ private fun FuseAppContent(
     }
     // Fuse Sync: who is playing here, and at startup, who should be.
     io.github.matiyaaa.fuse.ui.shell.sync.SyncProfiles(app)
+    app.store.syncthing?.let { st ->
+        val state by st.state.collectAsState()
+        LaunchedEffect(state) { app.syncthingActive = state !is io.github.matiyaaa.fuse.sync.syncthing.SyncthingState.Off }
+    }
     // A hardware keyboard types into whichever text field is open.
     val keyboardTarget = app.keyboardTarget
     DisposableEffect(router, keyboardTarget) {
@@ -326,7 +330,7 @@ private fun FuseAppContent(
         spec = spec,
         motion = prefs.motion,
         quality = quality,
-        glyphs = GlyphConfig(glyphStyle, prefs.input.confirmOnRight),
+        glyphs = GlyphConfig(glyphStyle, prefs.input.confirmOnRight, prefs.input.swapShoulders),
         glass = prefs.glass,
         highContrastFocus = prefs.highContrastFocus,
         animateChanges = true,
@@ -473,7 +477,10 @@ private fun Room(
         }
     }
     // The theme's own room is always underneath, so art fading in or out never shows a bare screen.
-    AmbientBackground(if (style == BackgroundStyle.HERO) BackgroundStyle.SOLID else style, hero?.accent ?: Fuse.colors.accent, Modifier.fillMaxSize(), ambient = ambient)
+    // Fusi's room is the main screen's half of the room she shares with a screen below.
+    androidx.compose.runtime.CompositionLocalProvider(io.github.matiyaaa.fuse.ui.designsystem.background.LocalFusiScreen provides io.github.matiyaaa.fuse.ui.designsystem.background.FusiScreen.TOP) {
+        AmbientBackground(if (style == BackgroundStyle.HERO) BackgroundStyle.SOLID else style, hero?.accent ?: Fuse.colors.accent, Modifier.fillMaxSize(), ambient = ambient)
+    }
     // The theme's own picture, when it has one, over the drawn room and under any game's art.
     wallpaper?.let { WallpaperLayer(it, Modifier.fillMaxSize()) }
     if (showHero) {
@@ -511,6 +518,8 @@ private fun Room(
             },
         )
     }
+    // Fusi plays in front of any art, so she is always in view.
+    if (style == BackgroundStyle.FUSI) io.github.matiyaaa.fuse.ui.designsystem.background.FusiPet(io.github.matiyaaa.fuse.ui.designsystem.background.FusiScreen.TOP)
 }
 
 /**
@@ -711,6 +720,7 @@ private fun PushedPages(app: AppState, current: Route, direction: NavDirection, 
             Route.MediaSearch -> io.github.matiyaaa.fuse.ui.shell.jellyfin.MediaSearchScreen(app)
             Route.JellyfinSettings -> io.github.matiyaaa.fuse.ui.shell.jellyfin.JellyfinSettingsScreen(app)
             Route.SyncSettings -> io.github.matiyaaa.fuse.ui.shell.sync.SyncSettingsScreen(app)
+            Route.SyncthingSettings -> io.github.matiyaaa.fuse.ui.shell.sync.SyncthingScreen(app)
             is Route.SyncSetup -> io.github.matiyaaa.fuse.ui.shell.sync.SyncSetupScreen(app, route.host)
             is Route.SaveHistory -> io.github.matiyaaa.fuse.ui.shell.sync.SaveHistoryScreen(app, route.game, route.title)
             is Route.SyncGame -> io.github.matiyaaa.fuse.ui.shell.sync.SyncGameScreen(app, route.game, route.name)
@@ -729,7 +739,7 @@ internal fun hudPage(stack: List<Route>): HudButton? {
     for (route in stack.asReversed()) {
         when (route) {
             Route.Search -> return HudButton.SEARCH
-            is Route.Settings, is Route.PlatformSettings, Route.Controls, Route.Licenses, is Route.ReleaseNotes, Route.Themes, Route.Storage, Route.PhoneLink, Route.JellyfinSettings, Route.SyncSettings, is Route.SyncSetup ->
+            is Route.Settings, is Route.PlatformSettings, Route.Controls, Route.Licenses, is Route.ReleaseNotes, Route.Themes, Route.Storage, Route.PhoneLink, Route.JellyfinSettings, Route.SyncSettings, Route.SyncthingSettings, is Route.SyncSetup ->
                 return HudButton.SETTINGS
             else -> Unit
         }
@@ -761,8 +771,8 @@ private fun ShellInput(app: AppState) {
             return@InputLayer when (e.action) {
                 // After the last tab the stick moves on to Search and Settings.
                 NavAction.LEFT -> when (button) {
-                    HudButton.STATUS -> { app.hudButton = if (app.hudHasProfile) HudButton.PROFILE else HudButton.SETTINGS; NavResult.MOVED }
-                    HudButton.PROFILE -> { app.hudButton = HudButton.SETTINGS; NavResult.MOVED }
+                    HudButton.PROFILE -> { app.hudButton = HudButton.STATUS; NavResult.MOVED }
+                    HudButton.STATUS -> { app.hudButton = HudButton.SETTINGS; NavResult.MOVED }
                     HudButton.SETTINGS -> { app.hudButton = HudButton.SEARCH; NavResult.MOVED }
                     // Left of Search is the last tab, as the line shows it, whichever tab Search
                     // or Settings was opened from.
@@ -776,10 +786,11 @@ private fun ShellInput(app: AppState) {
                 }
                 NavAction.RIGHT -> when (button) {
                     HudButton.SEARCH -> { app.hudButton = HudButton.SETTINGS; NavResult.MOVED }
-                    // Past Settings: Wi-Fi, battery and the clock, which open the quick menu.
-                    HudButton.SETTINGS -> { app.hudButton = if (app.hudHasProfile) HudButton.PROFILE else HudButton.STATUS; NavResult.MOVED }
-                    HudButton.PROFILE -> { app.hudButton = HudButton.STATUS; NavResult.MOVED }
-                    HudButton.STATUS -> NavResult.BLOCKED
+                    // Past Settings: Wi-Fi, battery and the clock, which open the quick menu, then
+                    // at the far end who is playing.
+                    HudButton.SETTINGS -> { app.hudButton = HudButton.STATUS; NavResult.MOVED }
+                    HudButton.STATUS -> if (app.hudHasProfile) { app.hudButton = HudButton.PROFILE; NavResult.MOVED } else NavResult.BLOCKED
+                    HudButton.PROFILE -> NavResult.BLOCKED
                     null -> if (tabs.lastOrNull() == active) { app.hudButton = HudButton.SEARCH; NavResult.MOVED } else cycle(1)
                 }
                 NavAction.SELECT -> if (button != null) { leave(); app.runHudButton(button); NavResult.ACTIVATED } else leave()
@@ -834,12 +845,15 @@ private fun AppState.runHudButton(button: HudButton) = when (button) {
     HudButton.STATUS -> quickMenuOpen = true
 }
 
-/** Whether the top line shows who is playing (Fuse Sync in use, with a profile chosen). */
-private val AppState.hudHasProfile: Boolean get() = syncProfile != null
+/**
+ * Whether the top line shows who is playing: Fuse Sync in use, a profile chosen, and someone else
+ * to switch to (with one profile there is no one to pick, so the line keeps its room).
+ */
+private val AppState.hudHasProfile: Boolean get() = syncProfile != null && syncProfileCount > 1
 
 /** Who is playing here, for the top line. */
 @Composable
-private fun hudProfile(app: AppState): HudProfile? = app.syncProfile?.let { HudProfile(it.name, it.avatar) }
+private fun hudProfile(app: AppState): HudProfile? = app.syncProfile?.takeIf { app.hudHasProfile }?.let { HudProfile(it.name, it.avatar) }
 
 /** A short, calm handoff while the emulator starts: the game's art fills the screen and dims away. */
 @Composable

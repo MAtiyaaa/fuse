@@ -44,6 +44,7 @@ internal enum class QuickId(val title: String, val kind: QuickKind, val spans: L
     FRAME_TIMES("Frame times", QuickKind.TILE, listOf(1, 2, 3), 1, "Shows how smoothly Fuse draws"),
     FULLSCREEN("Full screen", QuickKind.TILE, listOf(1, 2, 3), 1, "Full screen or a window"),
     SURPRISE("Surprise me", QuickKind.TILE, listOf(1, 2, 3), 1, "A random game from your library"),
+    PROFILES("Profiles", QuickKind.TILE, listOf(1, 2, 3), 1, "Who's playing, or someone new (Fuse Sync)"),
     ;
 
     /** The next width, after the widest the smallest. */

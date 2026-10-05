@@ -213,12 +213,11 @@ internal fun AuditDriver.syncScreens() {
     scenario("sync", "top line") {
         useSync(asHost = false)
         waitFor("Continue playing")
-        shoot("who's playing, beside the status", 1_200)
+        shoot("who's playing, at the far end of the top line", 1_200)
         tap(PadButton.DPAD_UP)
         tap(PadButton.R1, 8)
-        // Past the last tab: Search, Settings, the profile, then the status at the end; one back is the profile.
+        // Past the last tab: Search, Settings, the status, then at the far end who is playing.
         tap(PadButton.DPAD_RIGHT, 6)
-        tap(PadButton.DPAD_LEFT)
         settle(400)
         shoot("the stick reaches the profile")
         tap(PadButton.A)
@@ -276,5 +275,100 @@ internal fun AuditDriver.syncScreens() {
         settle(800)
         shoot("this device's own Home")
         tap(PadButton.B)
+    }
+}
+
+/** Syncthing as the library store made it. */
+private val AuditDriver.syncthing: AuditSyncthing
+    get() {
+        libraryStore
+        return controls.syncthing ?: throw NotCovered("This store has no Syncthing")
+    }
+
+/** Settings, Addons, Syncthing's page (through Addons, as a person gets there). */
+private fun AuditDriver.openSyncthingPage() {
+    openSettings()
+    focusText("Addons")
+    tap(PadButton.DPAD_RIGHT)
+    waitFor("Your emulators' save folders, through the Syncthing you already run")
+    tapText("Syncthing")
+    focusAny("Set Up Syncthing", "Devices and Save Folders")
+    tap(PadButton.A)
+    settle(900)
+}
+
+/**
+ * Syncthing, every state of its page: off (pointing at Fuse Sync), not found, found and needing its
+ * key, and connected with devices, one asking to join, and the save folders Fuse shares.
+ */
+internal fun AuditDriver.syncthingScreens() {
+    scenario("syncthing", "off") {
+        syncOff()
+        runBlocking { syncthing.setEnabled(false) }
+        useLibrary()
+        openSettings()
+        focusText("Addons")
+        tap(PadButton.DPAD_RIGHT)
+        waitFor("Your emulators' save folders, through the Syncthing you already run")
+        shoot("Addons, with Syncthing beside Fuse Sync")
+        tapText("Syncthing")
+        waitFor("Set Up Syncthing")
+        shoot("Syncthing's group, off")
+        focusText("Set Up Syncthing")
+        tap(PadButton.A)
+        waitFor("Fuse Sync Instead")
+        shoot("its page, off: what it is, and Fuse Sync instead", 1_000)
+    }
+
+    scenario("syncthing", "not found") {
+        syncOff()
+        syncthing.finds = io.github.matiyaaa.fuse.sync.syncthing.SyncthingState.NotFound(installed = false)
+        runBlocking { syncthing.setEnabled(true) }
+        useLibrary()
+        openSyncthingPage()
+        waitFor("Get Syncthing")
+        shoot("not found: get it, look again, or its address", 1_000)
+    }
+
+    scenario("syncthing", "needs its key") {
+        syncOff()
+        syncthing.finds = io.github.matiyaaa.fuse.sync.syncthing.SyncthingState.NeedsKey("http://127.0.0.1:8384")
+        runBlocking { syncthing.setEnabled(true) }
+        useLibrary()
+        openSyncthingPage()
+        waitFor("Enter Its API Key")
+        shoot("found, and where to find its key", 1_000)
+    }
+
+    scenario("syncthing", "connected") {
+        syncOff()
+        runBlocking { syncthing.setEnabled(true) }
+        syncthing.household()
+        useLibrary()
+        openSyncthingPage()
+        waitFor("Device ID")
+        shoot("connected: this device, the devices, the save folders", 1_400)
+        tap(PadButton.DPAD_DOWN, 5)
+        shoot("further down: the save folders")
+        tap(PadButton.DPAD_DOWN, 8)
+        shoot("around a game, and leaving")
+        runBlocking { syncthing.setEnabled(false) }
+    }
+
+    scenario("syncthing", "addons tab") {
+        syncOff()
+        runBlocking { syncthing.setEnabled(true) }
+        syncthing.household()
+        useLibrary()
+        tab(Destination.CARTRIDGE)
+        // Syncthing in use, so Addons has its tab (and no Sync tab beside it).
+        tap(PadButton.DPAD_UP)
+        focusText("Syncthing") { tap(PadButton.DPAD_RIGHT) }
+        tap(PadButton.DPAD_DOWN)
+        waitFor("Look Over Now")
+        shoot("Addons, Syncthing: devices, folders and what is still coming in", 1_500)
+        tap(PadButton.DPAD_DOWN)
+        shoot("the save folders it shares")
+        runBlocking { syncthing.setEnabled(false) }
     }
 }

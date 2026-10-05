@@ -181,6 +181,10 @@ class UiAudit {
     /** Fuse Sync by Fuse: at 1080p, on a 6 inch handheld, a phone held upright, and a small screen. */
     @Test fun syncM() = audit(AuditSize.M) { syncScreens() }
 
+    @Test fun syncthingM() = audit(AuditSize.M) { syncthingScreens() }
+
+    @Test fun syncthingH() = audit(AuditSize.H) { syncthingScreens() }
+
     @Test fun syncH() = audit(AuditSize.H) { syncScreens() }
 
     @Test fun syncV() = audit(AuditSize.V) { syncScreens() }

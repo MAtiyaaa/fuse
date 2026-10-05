@@ -43,7 +43,7 @@ data class FuseGeometry(
 
 /** How controller buttons are drawn in hints, and whether confirm is on the right (Nintendo layout). */
 @Immutable
-data class GlyphConfig(val style: GlyphStyle, val confirmOnRight: Boolean)
+data class GlyphConfig(val style: GlyphStyle, val confirmOnRight: Boolean, val swapShoulders: Boolean = false)
 
 /** Everything a Fuse composable may read about the current look. */
 @Immutable

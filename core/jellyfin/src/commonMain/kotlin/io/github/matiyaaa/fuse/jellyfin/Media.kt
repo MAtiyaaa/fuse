@@ -135,6 +135,12 @@ data class MediaFeed(
     val continueWatching: List<MediaItem> = emptyList(),
     val nextUp: List<MediaItem> = emptyList(),
     val recentlyAdded: List<MediaItem> = emptyList(),
+    /** Films and shows marked as favourites. */
+    val favorites: List<MediaItem> = emptyList(),
+    /** The newest films alone. */
+    val movies: List<MediaItem> = emptyList(),
+    /** The newest albums. */
+    val music: List<MediaItem> = emptyList(),
 )
 
 enum class ShelfKind { CONTINUE, NEXT_UP, LATEST, LIBRARY, FAVORITES, COLLECTIONS, MUSIC }

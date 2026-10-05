@@ -172,6 +172,10 @@ internal fun ChannelBoard(app: AppState, page: Int, pageKey: String, active: Boo
     val arranging = editor.arranging
     val op = editor.op
     val sel = rememberRouteState(app.navigator, if (page == 0) "home.board" else "home.board.$pageKey") { SpatialSelection() }
+    // Where each carousel widget stands, kept while Home is away so it comes back where it was.
+    val carousels = rememberRouteState(app.navigator, "home.carousels.$pageKey") { HashMap<String, CarouselState>() }
+    fun carouselOf(w: HomeWidget): CarouselState? = if (w.kind.isCarousel) carousels.getOrPut(w.id) { CarouselState() } else null
+    fun shownAt(w: HomeWidget?): Int = w?.let { carouselOf(it)?.index } ?: 0
     // After a change is kept the board's order follows its new reading order; the same widget stays chosen.
     var reselect by remember { mutableStateOf<String?>(null) }
     reselect?.let { id ->
@@ -202,14 +206,18 @@ internal fun ChannelBoard(app: AppState, page: Int, pageKey: String, active: Boo
     }
 
     val systems = rememberSystems(app)
-    PageEffect(current?.id, systems, active) {
+    // The room behind the board takes the focused widget's game: for a carousel, the one in front.
+    val shown = current?.let { carouselOf(it)?.index } ?: 0
+    PageEffect(current?.id, shown, systems, active) {
         if (!active) return@PageEffect
-        val game = current?.let { firstGame(it.kind, feed) }
+        val game = current?.let { shownGame(it.kind, feed, shown) }
         app.hero = game?.room(systems[game.platformId])
     }
-    PageEffect(arranging, op is BoardOp.Carry, resizeLook, onTools, active, paging.count) {
+    val turns = current?.let { carouselOf(it) }?.takeIf { it.count > 1 } != null
+    PageEffect(arranging, op is BoardOp.Carry, resizeLook, onTools, active, paging.count, turns) {
         if (!active) return@PageEffect
-        val pages = if (paging.count > 1) listOf(Hint(HintButton.RIGHT_STICK, "Pages")) else emptyList()
+        val pages = (if (turns) listOf(Hint(HintButton.PAGE_PREV, ""), Hint(HintButton.PAGE_NEXT, "Browse")) else emptyList()) +
+            if (paging.count > 1) listOf(Hint(HintButton.RIGHT_STICK, "Pages")) else emptyList()
         app.hints = when {
             arranging && onTools != null -> listOf(Hint(HintButton.CONFIRM, when (onTools) { 0 -> "Undo"; 1 -> if (page == 0) "Reset Home" else "Clear page"; 2 -> "New page"; else -> if (ownHome == true) "Home on all devices" else "This device's own Home" }), Hint(HintButton.BACK, "Done"))
             op is BoardOp.Carry -> listOf(Hint(HintButton.DPAD, "Move"), Hint(HintButton.CONFIRM, "Put down"), Hint(HintButton.BACK, "Cancel"))
@@ -297,7 +305,7 @@ internal fun ChannelBoard(app: AppState, page: Int, pageKey: String, active: Boo
         sel.clamp(widgets.size)
     }
 
-    fun open(w: HomeWidget) = app.openWidget(w.kind, feed, firstGame(w.kind, feed))
+    fun open(w: HomeWidget) = app.openWidget(w.kind, feed, shownAt(w))
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
         // Two columns only on a screen held upright (a phone) or a very thin one. A small screen
@@ -465,6 +473,18 @@ internal fun ChannelBoard(app: AppState, page: Int, pageKey: String, active: Boo
                         }
                         NavResult.ACTIVATED
                     }
+                    // The triggers (L2, R2) turn the focused widget's carousel; the bumpers stay on the tabs.
+                    NavAction.PAGE_UP, NavAction.PAGE_DOWN -> {
+                        val turn = w?.let { carouselOf(it) }?.takeIf { it.count > 1 && !arranging } ?: return@InputLayer NavResult.IGNORED
+                        if (turn.step(if (e.action == NavAction.PAGE_DOWN) 1 else -1)) {
+                            app.platform.sounds.play(io.github.matiyaaa.fuse.ui.designsystem.sound.SoundCue.MOVE)
+                            haptics.tick()
+                            NavResult.MOVED
+                        } else {
+                            app.platform.sounds.play(io.github.matiyaaa.fuse.ui.designsystem.sound.SoundCue.BUMP)
+                            NavResult.BLOCKED
+                        }
+                    }
                     NavAction.CONTEXT -> { app.openContextMenu(boardMenu(app, editor, w, ::addPicker, ::stopArranging, ::remove, committed, page, paging)); NavResult.ACTIVATED }
                     NavAction.BACK -> if (arranging) { stopArranging(); NavResult.CONSUMED } else NavResult.IGNORED
                     else -> NavResult.IGNORED
@@ -489,7 +509,11 @@ internal fun ChannelBoard(app: AppState, page: Int, pageKey: String, active: Boo
         }
         val wells by fuselineFloat(if (arranging) 1f else 0f, motion.fade(Durations.BASE), label = "wells")
         val cartridgeIcon = remember { if (app.store.apps.supported) io.github.matiyaaa.fuse.ui.shell.store.AppIconModel(io.github.matiyaaa.fuse.integrations.cartridge.CartridgeProtocol.PACKAGE_NAME) else null }
-        CompositionLocalProvider(LocalHomeTime provides time, LocalCartridgeIcon provides cartridgeIcon.takeIf { cartridge.installed }) {
+        CompositionLocalProvider(
+            LocalHomeTime provides time,
+            LocalCartridgeIcon provides cartridgeIcon.takeIf { cartridge.installed },
+            LocalSyncService provides app.store.sync.service.takeIf { prefs.sync.enabled },
+        ) {
             Column(Modifier.fillMaxSize()) {
                 // While arranging the board moves down to make room for Undo and Reset above it.
                 val toolsRoom by fuselineDp(if (arranging) ARRANGE_TOOLS_ROOM else 0.dp, motion.tween(Durations.BASE), label = "toolsRoom")
@@ -565,6 +589,7 @@ internal fun ChannelBoard(app: AppState, page: Int, pageKey: String, active: Boo
                                 }
                                 val selected = i == sel.index && app.focusZone == FocusZone.CONTENT
                                 BoardItem(
+                                    carousel = carouselOf(w),
                                     widget = w,
                                     size = rect.size,
                                     rect = px,
@@ -750,6 +775,7 @@ private fun boardMenu(
  */
 @Composable
 private fun BoardItem(
+    carousel: CarouselState?,
     widget: HomeWidget,
     size: BoardSize,
     rect: Rect,
@@ -812,13 +838,15 @@ private fun BoardItem(
             showSpark = !arranging,
             cornerFraction = cornerFraction,
             shape = shape,
-            glow = widgetGlow(widget.kind, feed, cartridge),
+            glow = widgetGlow(widget.kind, feed, cartridge, carousel?.index ?: 0),
             maxGrow = FOCUS_GROW,
             onClick = onClick,
         ) {
             // A new shape gets its own face, crossfading from the old one.
             Crossfade(FaceSize.of(size), animationSpec = motion.fade(Durations.BASE), label = "face") { _ ->
-                BoardFace(widget.kind, size, feed, cartridge, clock24h)
+                CompositionLocalProvider(LocalCarousel provides carousel) {
+                    BoardFace(widget.kind, size, feed, cartridge, clock24h)
+                }
             }
         }
         if (arranging) chrome()
@@ -832,12 +860,13 @@ private fun onBoard(w: HomeWidget, app: AppState, prefs: UiPrefs, cartridge: Car
         (w.kind != WidgetKind.COLLECTIONS || prefs.collectionsEnabled) &&
         (!w.kind.isAchievements || achievementsOn)
 
-private fun firstGame(kind: WidgetKind, feed: HomeFeed): GameCard? = boardGames(kind, feed).firstOrNull()
+/** The game a game widget shows: for a carousel, the one in front ([at]). */
+private fun shownGame(kind: WidgetKind, feed: HomeFeed, at: Int): GameCard? = boardGames(kind, feed).let { it.getOrNull(at) ?: it.firstOrNull() }
 
 /** A widget's glow when focused: its game's colour for game widgets, else its own (the accent for neutral ones). */
 @Composable
-private fun widgetGlow(kind: WidgetKind, feed: HomeFeed, cartridge: CartridgeStatus) =
-    firstGame(kind, feed)?.accent?.toColor() ?: widgetTint(kind, feed, cartridge).let { if (it == Fuse.colors.text) Fuse.colors.accent else it }
+private fun widgetGlow(kind: WidgetKind, feed: HomeFeed, cartridge: CartridgeStatus, at: Int) =
+    shownGame(kind, feed, at)?.accent?.toColor() ?: widgetTint(kind, feed, cartridge).let { if (it == Fuse.colors.text) Fuse.colors.accent else it }
 
 /** Widgets whose confirm plays a game, so a first tap only shows it. */
 private val playWidgets = setOf(

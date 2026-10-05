@@ -50,11 +50,14 @@ fun StatusCluster(
     modifier: Modifier = Modifier,
     showWifi: Boolean = true,
     showBluetooth: Boolean = false,
+    /** Drawn tighter, with smaller figures, when something else shares the end of the line. */
+    compact: Boolean = false,
 ) {
     val c = Fuse.colors
+    val numeric = if (compact) Fuse.type.numericSmall else Fuse.type.numeric
     Row(
         modifier,
-        horizontalArrangement = Arrangement.spacedBy(Space.l),
+        horizontalArrangement = Arrangement.spacedBy(if (compact) Space.s else Space.l),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (showBluetooth && status.bluetooth == ConnectionState.CONNECTED) {
@@ -67,12 +70,12 @@ fun StatusCluster(
             WifiGlyph(if (status.wifi == ConnectionState.CONNECTED) status.wifiStrength ?: 3 else 0, status.wifi == ConnectionState.CONNECTED)
         }
         status.batteryPercent?.let { pct ->
-            Row(horizontalArrangement = Arrangement.spacedBy(Space.s), verticalAlignment = Alignment.CenterVertically) {
+            Row(horizontalArrangement = Arrangement.spacedBy(if (compact) Space.xs else Space.s), verticalAlignment = Alignment.CenterVertically) {
                 BatteryGlyph(pct, status.charging)
-                FText("$pct%", Fuse.type.numeric, color = c.textMuted)
+                FText("$pct%", numeric, color = c.textMuted)
             }
         }
-        FText(time, Fuse.type.numeric.copy(fontSize = Fuse.type.numeric.fontSize * 1.15f), color = c.text)
+        FText(time, if (compact) Fuse.type.numeric else Fuse.type.numeric.copy(fontSize = Fuse.type.numeric.fontSize * 1.15f), color = c.text)
     }
 }
 

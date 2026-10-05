@@ -64,6 +64,14 @@ class AndroidFuseServices(
      * Fuse Sync by Fuse: Android connects to a host (a computer) rather than being one, since it
      * stops background work to save battery and couldn't promise to stay up for other devices.
      */
+    override fun syncthingService(scope: CoroutineScope): io.github.matiyaaa.fuse.sync.syncthing.SyncthingService =
+        io.github.matiyaaa.fuse.sync.syncthing.JvmSyncthingService(
+            platform = AndroidSyncthing(appContext),
+            settings = this.data.settings,
+            secrets = secrets,
+            scope = scope,
+        )
+
     override fun syncService(data: io.github.matiyaaa.fuse.sync.ProfileDataPort, scope: CoroutineScope): io.github.matiyaaa.fuse.sync.SyncService =
         io.github.matiyaaa.fuse.sync.JvmSyncService(
             dir = java.io.File(appContext.filesDir, "sync"),

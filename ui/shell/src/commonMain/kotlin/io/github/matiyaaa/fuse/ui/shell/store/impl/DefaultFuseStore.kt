@@ -100,6 +100,9 @@ internal class DefaultFuseStore private constructor(
         LibraryProfileData(ctx.data, settings = { settingsNow() }, applySettings = { t -> writeSettings(t) }),
     ) { t -> writeSettings(t) }
 
+    override val syncthing: io.github.matiyaaa.fuse.sync.syncthing.SyncthingService? =
+        runCatching { ctx.services.syncthingService(ctx.scope) }.getOrNull()
+
     init {
         mediaOps = DefaultMediaOps(ctx, credentials)
         // Apps that became games and games added by hand are identified and filled straight away.
@@ -109,6 +112,17 @@ internal class DefaultFuseStore private constructor(
             updatePrefs { it.copy(cleanDisplayNames = enabled) }
         }
         library.onGamesAdded = findArt
+        // Syncthing keeps a game's save folders in step around it, and plans folders from the library.
+        syncthing?.let { st ->
+            library.syncthing = st
+            st.useLibrary { library.saveSamples() }
+            // Fuse Sync and Syncthing would move the same saves: turning Fuse Sync on turns Syncthing off.
+            ctx.scope.launch {
+                sync.config.collect { c ->
+                    if (c.enabled && runCatching { ctx.data.settings.current().syncthing.enabled }.getOrDefault(false)) runCatching { st.setEnabled(false) }
+                }
+            }
+        }
         library.installedBoot = { id -> content.bootFile(id) }
         library.notInstalled = { id ->
             content.view(id)?.takeIf { it.plan.storageReadable && !it.plan.gameInstalled && it.mode == io.github.matiyaaa.fuse.ui.shell.store.InstallMode.FUSE }?.let { v ->
@@ -287,7 +301,7 @@ internal class DefaultFuseStore private constructor(
         // Home's Jellyfin widgets: asked for only while Jellyfin is on, signed in and one of them is
         // on Home; again when something was played or marked, and every few minutes.
         ctx.scope.launch {
-            val kinds = setOf(io.github.matiyaaa.fuse.model.WidgetKind.JELLYFIN_CONTINUE, io.github.matiyaaa.fuse.model.WidgetKind.JELLYFIN_NEXT_UP, io.github.matiyaaa.fuse.model.WidgetKind.JELLYFIN_RECENTLY_ADDED)
+            val kinds = io.github.matiyaaa.fuse.model.WidgetKind.entries.filter { it.name.startsWith("JELLYFIN_") }.toSet()
             kotlinx.coroutines.flow.combine(
                 prefsState.map { p -> p.jellyfin.enabled && (p.home.widgets.any { it.visible && it.kind in kinds } || p.home.boardWidgets().any { it.kind in kinds }) }.distinctUntilChanged(),
                 jellyfin.state.map { it.account != null && !it.authRequired }.distinctUntilChanged(),

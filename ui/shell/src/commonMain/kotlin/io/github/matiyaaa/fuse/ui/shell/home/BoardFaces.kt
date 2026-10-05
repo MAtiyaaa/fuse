@@ -96,16 +96,17 @@ internal fun BoardFace(kind: WidgetKind, size: BoardSize, feed: HomeFeed, cartri
     val face = FaceSize.of(size)
     when (kind) {
         WidgetKind.CONTINUE_PLAYING -> ContinueFace(feed, face)
-        WidgetKind.FAVORITES -> FavoritesFace(feed, face)
-        WidgetKind.RECENTLY_PLAYED, WidgetKind.RECENTLY_ADDED, WidgetKind.PINNED_GAMES,
-        -> GamesFace(kind, boardGames(kind, feed), face) { gameCaption(kind, it) }
+        WidgetKind.FAVORITES, WidgetKind.RECENTLY_PLAYED, WidgetKind.RECENTLY_ADDED, WidgetKind.PINNED_GAMES,
+        -> GameCarousel(kind, boardGames(kind, feed), feed, face)
         WidgetKind.CURRENT_GAME -> GamesFace(kind, listOfNotNull(feed.playtime.currentGame), face) { g ->
             feed.playtime.currentSince?.let { "Started ${agoText(it)}" } ?: g.platformShort
         }
-        WidgetKind.SYSTEMS -> SystemsFace(feed, face)
+        WidgetKind.SYSTEMS -> SystemsCarousel(feed, face)
         WidgetKind.PINNED_APPS -> AppsFace(feed)
-        WidgetKind.COLLECTIONS -> CollectionsFace(feed, face)
-        WidgetKind.JELLYFIN_CONTINUE, WidgetKind.JELLYFIN_NEXT_UP, WidgetKind.JELLYFIN_RECENTLY_ADDED -> MediaFace(kind, mediaItems(kind, feed), face)
+        WidgetKind.COLLECTIONS -> CollectionsCarousel(feed, face)
+        in MediaKinds -> MediaCarousel(kind, mediaItems(kind, feed), face)
+        WidgetKind.SYNC_STATUS -> SyncStatusFace(face)
+        WidgetKind.SYNC_DEVICES -> SyncDevicesFace(face)
         else -> Framed(kind, feed, cartridge) {
             when (kind) {
                 WidgetKind.PLAYTIME_WEEK -> WeekFace(feed, face)
@@ -116,8 +117,8 @@ internal fun BoardFace(kind: WidgetKind, size: BoardSize, feed: HomeFeed, cartri
                 WidgetKind.ACHIEVEMENT_PROGRESS -> ProgressFace(feed, face)
                 WidgetKind.RECENTLY_MASTERED -> MasteredFace(feed, face)
                 WidgetKind.CARTRIDGE_DOWNLOADS -> CartridgeFace(cartridge, face)
-                WidgetKind.STORAGE -> StorageFace(feed, face)
-                WidgetKind.CLOCK -> ClockFace(clock24h, face)
+                WidgetKind.STORAGE -> StorageFaceNew(feed, face)
+                WidgetKind.CLOCK -> ClockFaceNew(clock24h, face)
                 else -> WidgetHeader(widgetIcon(kind), kind.title())
             }
         }
@@ -134,12 +135,6 @@ internal fun boardGames(kind: WidgetKind, feed: HomeFeed): List<GameCard> = when
     WidgetKind.MOST_PLAYED -> feed.mostPlayed
     WidgetKind.CURRENT_GAME -> listOfNotNull(feed.playtime.currentGame)
     else -> emptyList()
-}
-
-private fun gameCaption(kind: WidgetKind, g: GameCard): String = when (kind) {
-    WidgetKind.CONTINUE_PLAYING, WidgetKind.RECENTLY_PLAYED -> g.lastPlayedAt?.let { "${g.platformShort}  ·  Played ${agoText(it)}" } ?: g.platformShort
-    WidgetKind.RECENTLY_ADDED -> "${g.platformShort}  ·  Added ${agoText(g.addedAt)}"
-    else -> g.platformShort
 }
 
 // ------------------------------------------------------------------------------------- games
@@ -220,103 +215,6 @@ private fun GamesFace(kind: WidgetKind, games: List<GameCard>, face: FaceSize, c
             }
         }
     }
-}
-
-/**
- * Jellyfin's widgets, built like the game lists: the first item's picture filling the face, its
- * title and where it's up to over a scrim, how far in it is, and the next ones' posters beside it
- * (wide) or under it.
- */
-@Composable
-internal fun MediaFace(kind: WidgetKind, items: List<io.github.matiyaaa.fuse.jellyfin.MediaItem>, face: FaceSize) {
-    val c = Fuse.colors
-    val first = items.firstOrNull()
-    if (first == null) {
-        Framed(kind, null, null) { EmptyFace(widgetIcon(kind), kind.title(), emptyMediaNote(kind)) }
-        return
-    }
-    val corner = Fuse.geometry.tileCornerFraction * COVER_CORNER
-    val shape = remember(corner) { SquircleShape.fraction(corner) }
-    BoxWithConstraints(Modifier.fillMaxSize()) {
-        val wide = maxWidth >= maxHeight * WIDE_COVERS
-        val pad = if (maxHeight < 140.dp) Space.m else Space.l
-        val rest = if (face == FaceSize.SMALL) emptyList() else items.drop(1)
-        val coverHeight = when {
-            rest.isEmpty() -> 0.dp
-            wide -> (maxHeight - pad * 2).coerceAtMost(COVER_MAX)
-            else -> (maxHeight * 0.3f).coerceIn(56.dp, COVER_MAX)
-        }
-        val coverWidth = coverHeight * (2f / 3f)
-        val room = if (wide) maxWidth * 0.48f else maxWidth - pad * 2
-        val fit = if (coverWidth <= 0.dp) 0 else ((room + Space.s) / (coverWidth + Space.s)).toInt().coerceIn(0, minOf(rest.size, MAX_COVERS))
-        val withCaption = maxHeight >= 120.dp
-        val titleStyle = when {
-            maxHeight >= 420.dp && maxWidth >= 560.dp -> Fuse.type.display
-            maxHeight >= 300.dp && maxWidth >= 360.dp -> Fuse.type.title
-            maxHeight >= 160.dp -> Fuse.type.titleSmall
-            else -> Fuse.type.bodyStrong
-        }
-        val accent = io.github.matiyaaa.fuse.ui.shell.jellyfin.accentOf(first.name)
-        val art = (if (first.type == io.github.matiyaaa.fuse.jellyfin.MediaType.EPISODE) first.thumb ?: first.backdrop else first.backdrop ?: first.thumb) ?: first.poster
-        Artwork(art?.sized(io.github.matiyaaa.fuse.ui.shell.jellyfin.WIDE_WIDTH), Modifier.fillMaxSize(), fallback = { GeneratedArt(first.seriesName ?: first.name, accent, slot = ArtSlot.WIDE, showText = false) })
-        val scrim = c.artScrim
-        Box(
-            Modifier.fillMaxSize().background(
-                if (wide) {
-                    Brush.horizontalGradient(0f to scrim, 0.62f to scrim.copy(alpha = scrim.alpha * 0.25f), 1f to scrim.copy(alpha = scrim.alpha * 0.5f))
-                } else {
-                    Brush.verticalGradient(0f to Color.Transparent, 0.4f to scrim.copy(alpha = scrim.alpha * 0.2f), 1f to scrim)
-                },
-            ),
-        )
-        Column(Modifier.fillMaxSize().padding(pad)) {
-            ArtLabel(kind)
-            Spacer(Modifier.weight(1f))
-            Row(verticalAlignment = Alignment.Bottom) {
-                Column(Modifier.weight(1f)) {
-                    FText(mediaTitle(first), titleStyle, color = c.onArt, maxLines = 2)
-                    if (withCaption) {
-                        mediaCaption(first)?.let {
-                            Spacer(Modifier.height(Space.xxs))
-                            FText(it, Fuse.type.caption, color = c.onArtMuted, maxLines = 1)
-                        }
-                    }
-                    first.progress?.let { p ->
-                        Spacer(Modifier.height(Space.s))
-                        ProgressBar(p, Modifier.fillMaxWidth(0.6f))
-                    }
-                }
-                if (wide && fit > 0) {
-                    Spacer(Modifier.width(Space.l))
-                    MediaCovers(rest.take(fit), coverHeight, shape)
-                }
-            }
-            if (!wide && fit > 0) {
-                Spacer(Modifier.height(Space.m))
-                MediaCovers(rest.take(fit), coverHeight, shape)
-            }
-        }
-    }
-}
-
-@Composable
-private fun MediaCovers(items: List<io.github.matiyaaa.fuse.jellyfin.MediaItem>, height: Dp, shape: androidx.compose.ui.graphics.Shape) {
-    Row(horizontalArrangement = Arrangement.spacedBy(Space.s), verticalAlignment = Alignment.Bottom) {
-        for (m in items) {
-            val poster = if (m.type == io.github.matiyaaa.fuse.jellyfin.MediaType.EPISODE) m.seriesPoster ?: m.poster else m.poster
-            Box(Modifier.height(height).aspectRatio(2f / 3f).lifted(shape)) {
-                Artwork(poster?.sized(io.github.matiyaaa.fuse.ui.shell.jellyfin.POSTER_WIDTH), Modifier.fillMaxSize(), fallback = {
-                    GeneratedArt(m.seriesName ?: m.name, io.github.matiyaaa.fuse.ui.shell.jellyfin.accentOf(m.name), slot = ArtSlot.BOX, showText = false)
-                })
-            }
-        }
-    }
-}
-
-private fun emptyMediaNote(kind: WidgetKind): String = when (kind) {
-    WidgetKind.JELLYFIN_CONTINUE -> "Films and episodes you stop part way show here"
-    WidgetKind.JELLYFIN_NEXT_UP -> "The next episode of shows you watch shows here"
-    else -> "What's new on your Jellyfin server shows here"
 }
 
 /** Covers standing in a row, each a small lit object over a contact shadow. */
@@ -443,8 +341,17 @@ private fun ColumnScope.WeekFace(feed: HomeFeed, face: FaceSize) {
     when (face) {
         FaceSize.SMALL -> {
             Spacer(Modifier.weight(1f))
-            WidgetValue(week)
-            if (!LocalWidgetRoom.current.tiny) WidgetCaption(today)
+            Row(verticalAlignment = Alignment.Bottom) {
+                Column(Modifier.weight(1f)) {
+                    WidgetValue(week)
+                    if (!LocalWidgetRoom.current.tiny) WidgetCaption(today)
+                }
+                // The week in miniature, where the cell has the width for it.
+                if (!LocalWidgetRoom.current.small) {
+                    Spacer(Modifier.width(Space.m))
+                    WeekBars(days, Modifier.width(72.dp).height(40.dp), letters = false)
+                }
+            }
         }
         FaceSize.WIDE -> {
             Spacer(Modifier.height(Space.s))
@@ -487,38 +394,104 @@ private fun ColumnScope.WeekFace(feed: HomeFeed, face: FaceSize) {
     }
 }
 
+/** The play-time marks people count toward, in hours. */
+private val MILESTONES = listOf(1L, 5L, 10L, 25L, 50L, 100L, 250L, 500L, 1_000L, 2_500L, 5_000L, 10_000L)
+
+/**
+ * All the time Fuse has seen you play, set large, and how near it is to the next round mark (a
+ * ring on larger faces, a bar on a strip): today and this week beside it, and on the largest, the
+ * games it went to.
+ */
 @Composable
 private fun ColumnScope.TotalFace(feed: HomeFeed, face: FaceSize) {
+    val c = Fuse.colors
     val p = feed.playtime
     val total = playtimeText(p.totalSeconds)
+    val hours = p.totalSeconds / 3_600f
+    val next = MILESTONES.firstOrNull { it > hours } ?: (((hours / 10_000).toLong() + 1) * 10_000)
+    val previous = MILESTONES.lastOrNull { it <= hours } ?: 0L
+    val toward = ((hours - previous) / (next - previous)).coerceIn(0f, 1f)
+    val left = "${playtimeText(((next - hours) * 3_600).toLong().coerceAtLeast(60))} to $next h"
+    val todaySeconds = p.lastSevenDays.lastOrNull() ?: 0L
     WidgetHeader(FuseIcons.Hourglass, widgetLabel(WidgetKind.PLAYTIME_TOTAL), short = "Total")
     when (face) {
         FaceSize.SMALL -> {
             Spacer(Modifier.weight(1f))
             WidgetValue(total)
-            if (!LocalWidgetRoom.current.tiny) WidgetCaption("Tracked by Fuse")
+            Spacer(Modifier.height(Space.xs))
+            ProgressBar(toward, Modifier.fillMaxWidth(), color = c.accent)
+            if (!LocalWidgetRoom.current.tiny) {
+                Spacer(Modifier.height(Space.xs))
+                WidgetCaption(left)
+            }
         }
         FaceSize.WIDE -> {
             Spacer(Modifier.weight(1f))
             Row(verticalAlignment = Alignment.Bottom) {
                 Column(Modifier.weight(1f)) {
                     WidgetValue(total)
-                    WidgetCaption("Tracked by Fuse")
+                    WidgetCaption(left)
                 }
                 Spacer(Modifier.width(Space.l))
-                Column(horizontalAlignment = Alignment.End) {
-                    FText(playtimeText(p.weekSeconds), Fuse.type.titleSmall.tabular(), maxLines = 1)
-                    WidgetCaption("this week")
+                StatPair(playtimeText(todaySeconds), "today")
+                Spacer(Modifier.width(Space.l))
+                StatPair(playtimeText(p.weekSeconds), "this week")
+            }
+            Spacer(Modifier.height(Space.s))
+            ProgressBar(toward, Modifier.fillMaxWidth(), color = c.accent)
+        }
+        else -> BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
+            val side = maxWidth > maxHeight * 1.2f
+            val showGames = face == FaceSize.LARGE && feed.mostPlayed.isNotEmpty()
+            val ring = (if (side) maxHeight * 0.8f else min(maxWidth, maxHeight * (if (showGames) 0.42f else 0.62f)) * 0.9f).coerceIn(96.dp, 240.dp)
+            val big = ring >= 180.dp
+            val dial: @Composable () -> Unit = {
+                ProgressRing(toward, size = ring, stroke = Size.track * if (big) 3 else 2, color = c.accent) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        FText(total, (if (big) Fuse.type.display else Fuse.type.title).tabular(), maxLines = 1)
+                        FText(if (big) "of play" else "played", Fuse.type.caption, color = c.textMuted, maxLines = 1)
+                    }
+                }
+            }
+            val facts: @Composable () -> Unit = {
+                Column(verticalArrangement = Arrangement.spacedBy(Space.m)) {
+                    StatPair(playtimeText(todaySeconds), "today")
+                    StatPair(playtimeText(p.weekSeconds), "this week")
+                    StatPair(left, "to the next mark", small = true)
+                }
+            }
+            if (side) {
+                Row(
+                    Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically,
+                    // Without the games beside them, the ring and its facts stand in the middle.
+                    horizontalArrangement = Arrangement.spacedBy(Space.xl, if (showGames) Alignment.Start else Alignment.CenterHorizontally),
+                ) {
+                    dial()
+                    facts()
+                    if (showGames) TopGames(feed.mostPlayed, Modifier.weight(1f).fillMaxHeight(), title = "Most played")
+                }
+            } else {
+                Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Spacer(Modifier.height(Space.s))
+                    dial()
+                    Spacer(Modifier.height(Space.m))
+                    WidgetCaption("$left  ·  ${playtimeText(p.weekSeconds)} this week")
+                    if (showGames) {
+                        Spacer(Modifier.height(Space.l))
+                        TopGames(feed.mostPlayed, Modifier.weight(1f).fillMaxWidth(), title = "Most played")
+                    }
                 }
             }
         }
-        else -> {
-            Spacer(Modifier.height(Space.xs))
-            WidgetValue(total)
-            WidgetCaption("${playtimeText(p.weekSeconds)} this week")
-            Spacer(Modifier.height(Space.l))
-            if (feed.mostPlayed.isNotEmpty()) TopGames(feed.mostPlayed, Modifier.weight(1f).fillMaxWidth(), title = "Most played")
-        }
+    }
+}
+
+/** A value over its label, as a pair in a row of facts. */
+@Composable
+private fun StatPair(value: String, label: String, small: Boolean = false) {
+    Column {
+        FText(value, (if (small) Fuse.type.label else Fuse.type.titleSmall).tabular(), maxLines = 1)
+        FText(label, Fuse.type.caption, color = Fuse.colors.textMuted, maxLines = 1)
     }
 }
 
@@ -528,10 +501,23 @@ private fun ColumnScope.MostPlayedFace(feed: HomeFeed, face: FaceSize) {
     val top = feed.mostPlayed
     WidgetHeader(FuseIcons.TrendingUp, WidgetKind.MOST_PLAYED.title())
     if (face == FaceSize.SMALL) {
+        // The leader: its art, its name and its time, with a crown for first place.
         val g = top.first()
         Spacer(Modifier.weight(1f))
-        FText(g.title, Fuse.type.bodyStrong, maxLines = 2)
-        WidgetCaption(playtimeText(g.playSeconds), c.textMuted)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            val shape = SquircleShape.fraction(Fuse.geometry.tileCornerFraction.coerceAtLeast(0.16f))
+            Box {
+                io.github.matiyaaa.fuse.ui.shell.components.SquareGameArt(
+                    g.art, Modifier.size(Size.thumb).clip(shape),
+                    fallback = { GeneratedArt(g.title, g.accent.toColor(), slot = ArtSlot.ICON) },
+                )
+            }
+            Spacer(Modifier.width(Space.m))
+            Column(Modifier.weight(1f)) {
+                FText(g.title, Fuse.type.label, maxLines = 2)
+                FText(playtimeText(g.playSeconds), Fuse.type.numericSmall, color = c.accent, maxLines = 1)
+            }
+        }
         return
     }
     Spacer(Modifier.height(Space.s))
@@ -569,7 +555,7 @@ private fun TopGames(games: List<GameCard>, modifier: Modifier, title: String? =
                             Spacer(Modifier.width(Space.s))
                             FText(playtimeText(g.playSeconds), Fuse.type.numericSmall, color = c.textMuted, maxLines = 1)
                         }
-                        ProgressBar(g.playSeconds.toFloat() / max, Modifier.fillMaxWidth(), color = if (i == 0) c.accent else c.textFaint, height = Space.xxs)
+                        ProgressBar(g.playSeconds.toFloat() / max, Modifier.fillMaxWidth(), color = if (i == 0) c.accent else c.textMuted.copy(alpha = 0.6f), height = Space.xs)
                     }
                 }
             }
@@ -948,193 +934,7 @@ private fun ColumnScope.CartridgeFace(cartridge: CartridgeStatus, face: FaceSize
     }
 }
 
-// ----------------------------------------------------------------------------------- storage
 
-@Composable
-private fun ColumnScope.StorageFace(feed: HomeFeed, face: FaceSize) {
-    val c = Fuse.colors
-    val s = feed.storage ?: return
-    val used = 1f - s.freeBytes.toFloat() / s.totalBytes.coerceAtLeast(1)
-    val low = storageLow(feed)
-    val tone = if (low) c.warning else c.accent
-    WidgetHeader(FuseIcons.HardDrive, WidgetKind.STORAGE.title(), if (low) c.warning else c.textMuted)
-    when (face) {
-        FaceSize.SMALL -> {
-            // A short cell (a handheld's) keeps its spacing tight so the last line still fits.
-            val tight = LocalWidgetRoom.current.compact
-            val tiny = LocalWidgetRoom.current.tiny
-            // Whatever is left under the header holds the reading; the line under the bar only
-            // shows where it fits whole (a TV's or a small handheld's short cell drops it).
-            BoxWithConstraints(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.BottomStart) {
-                val caption = maxHeight >= STORAGE_CAPTION_ROOM
-                Column {
-                    WidgetValue(bytesText(s.freeBytes))
-                    Spacer(Modifier.height(if (tight) Space.xs else Space.s))
-                    ProgressBar(used, Modifier.fillMaxWidth(), color = if (low) c.warning else c.textMuted)
-                    if (caption) {
-                        Spacer(Modifier.height(if (tight) Space.xxs else Space.xs + Space.xxs))
-                        WidgetCaption(if (tiny) "of ${bytesText(s.totalBytes)}" else "free of ${bytesText(s.totalBytes)}")
-                    }
-                }
-            }
-        }
-        FaceSize.WIDE -> {
-            Spacer(Modifier.weight(1f))
-            Row(verticalAlignment = Alignment.Bottom) {
-                WidgetValue(bytesText(s.freeBytes), Modifier.weight(1f))
-                Spacer(Modifier.width(Space.m))
-                FText("${(used * 100).toInt()}% used", Fuse.type.numericSmall, color = c.textMuted, maxLines = 1)
-            }
-            Spacer(Modifier.height(Space.s))
-            ProgressBar(used, Modifier.fillMaxWidth(), color = tone)
-            Spacer(Modifier.height(Space.xs + Space.xxs))
-            WidgetCaption("free of ${bytesText(s.totalBytes)}  ·  ${s.label}")
-        }
-        else -> {
-            BoxWithConstraints(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                val side = face == FaceSize.LARGE && maxWidth > maxHeight * 1.3f
-                val ring = (if (side) maxHeight * 0.8f else min(maxWidth, maxHeight) * 0.62f).coerceIn(Size.thumbL, if (face == FaceSize.LARGE) 280.dp else 180.dp)
-                val big = ring >= 200.dp
-                val dial: @Composable () -> Unit = {
-                    ProgressRing(used, size = ring, stroke = Size.track * if (big) 3 else 2, color = tone) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            FText(bytesText(s.freeBytes), (if (big) Fuse.type.title else Fuse.type.titleSmall).tabular(), maxLines = 1)
-                            FText("free", if (big) Fuse.type.label else Fuse.type.caption, color = c.textMuted, maxLines = 1)
-                        }
-                    }
-                }
-                val legend: @Composable () -> Unit = {
-                    Column(verticalArrangement = Arrangement.spacedBy(if (big) Space.s else Space.xs)) {
-                        LegendLine(tone, "Used", bytesText(s.totalBytes - s.freeBytes), big)
-                        LegendLine(null, "Free", bytesText(s.freeBytes), big)
-                        LegendLine(c.textFaint, "Drive", bytesText(s.totalBytes), big)
-                        FText(s.label, if (big) Fuse.type.label else Fuse.type.caption, color = c.textFaint, maxLines = 1)
-                    }
-                }
-                if (side) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.xl)) { dial(); legend() }
-                } else {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        dial()
-                        Spacer(Modifier.height(Space.m))
-                        WidgetCaption("of ${bytesText(s.totalBytes)}  ·  ${s.label}")
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun LegendLine(color: Color?, label: String, value: String, big: Boolean = false) {
-    val c = Fuse.colors
-    val ring = c.text.copy(alpha = 0.4f)
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Canvas(Modifier.size(if (big) Size.dot * 1.5f else Size.dot)) {
-            if (color != null) drawCircle(color) else drawCircle(ring, size.minDimension / 2 - 0.75.dp.toPx(), style = Stroke(1.5.dp.toPx()))
-        }
-        Spacer(Modifier.width(Space.s))
-        FText(label, if (big) Fuse.type.body else Fuse.type.caption, color = c.textMuted, maxLines = 1)
-        Spacer(Modifier.width(Space.s))
-        FText(value, if (big) Fuse.type.bodyStrong.tabular() else Fuse.type.numericSmall, maxLines = 1)
-    }
-}
-
-// ------------------------------------------------------------------------------------- clock
-
-@Composable
-private fun ColumnScope.ClockFace(clock24h: Boolean, face: FaceSize) {
-    val c = Fuse.colors
-    // Home's own clock when it provides one, so every clock turns over on the same minute.
-    val time = LocalHomeTime.current ?: rememberClockText(clock24h)
-    val (day, date) = todayParts()
-    when (face) {
-        FaceSize.SMALL -> {
-            WidgetHeader(FuseIcons.Clock3, day, short = day.take(3))
-            Spacer(Modifier.weight(1f))
-            WidgetValue(time)
-            WidgetCaption(date)
-        }
-        FaceSize.WIDE -> {
-            WidgetHeader(FuseIcons.Clock3, WidgetKind.CLOCK.title())
-            Spacer(Modifier.weight(1f))
-            Row(verticalAlignment = Alignment.Bottom) {
-                WidgetValue(time, Modifier.weight(1f))
-                Spacer(Modifier.width(Space.l))
-                Column(horizontalAlignment = Alignment.End) {
-                    FText(day, Fuse.type.bodyStrong, maxLines = 1)
-                    WidgetCaption(date)
-                }
-            }
-        }
-        else -> {
-            // A drawn dial, with the time and date beside it on a wide face and under it otherwise.
-            BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                val side = maxWidth > maxHeight * 1.3f
-                val dial = (if (side) maxHeight * 0.92f else min(maxWidth, maxHeight * 0.72f) * 0.92f).coerceAtMost(if (face == FaceSize.LARGE) 400.dp else 260.dp)
-                // The time grows with the dial, so a large clock reads from across the room.
-                val big = dial >= 220.dp
-                val words: @Composable () -> Unit = {
-                    Column(horizontalAlignment = if (side) Alignment.Start else Alignment.CenterHorizontally) {
-                        FText(time, (if (big) Fuse.type.hero else if (side) Fuse.type.display else Fuse.type.title).tabular(), maxLines = 1)
-                        FText("$day $date", if (big) Fuse.type.body else Fuse.type.caption, color = c.textMuted, maxLines = 1)
-                    }
-                }
-                if (side) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.xl)) {
-                        AnalogueDial(time, Modifier.size(dial))
-                        words()
-                    }
-                } else {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        AnalogueDial(time, Modifier.size(dial))
-                        Spacer(Modifier.height(Space.m))
-                        words()
-                    }
-                }
-            }
-        }
-    }
-}
-
-/**
- * A clock face: hour marks round the edge (the quarters longer), an hour and a minute hand, and a
- * small accent hub. It turns with [time] (the minute Home shows), so it never redraws in between.
- */
-@Composable
-private fun AnalogueDial(time: String, modifier: Modifier) {
-    val c = Fuse.colors
-    val face = c.text.copy(alpha = if (c.isDark) 0.05f else 0.04f)
-    val ring = c.text.copy(alpha = if (c.isDark) 0.12f else 0.1f)
-    val marks = c.textFaint
-    val hand = c.text
-    val accent = c.accent
-    // Read when the shown minute changes; time itself is only a key.
-    val now = remember(time) { Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()) }
-    val minutes = now.minute
-    val hours = now.hour % 12 + minutes / 60f
-    Canvas(modifier) {
-        val r = size.minDimension / 2
-        val centre = Offset(size.width / 2, size.height / 2)
-        drawCircle(face, r)
-        drawCircle(ring, r - 0.5.dp.toPx(), style = Stroke(1.dp.toPx()))
-        for (i in 0 until 12) {
-            val quarter = i % 3 == 0
-            val len = if (quarter) r * 0.12f else r * 0.06f
-            val a = i / 12f * 2f * PI.toFloat()
-            val outer = Offset(centre.x + sin(a) * (r * 0.9f), centre.y - cos(a) * (r * 0.9f))
-            val inner = Offset(centre.x + sin(a) * (r * 0.9f - len), centre.y - cos(a) * (r * 0.9f - len))
-            drawLine(marks, inner, outer, strokeWidth = if (quarter) 2.dp.toPx() else 1.25.dp.toPx(), cap = StrokeCap.Round)
-        }
-        rotate(hours / 12f * 360f, centre) {
-            drawLine(hand, centre, Offset(centre.x, centre.y - r * 0.5f), strokeWidth = 4.dp.toPx(), cap = StrokeCap.Round)
-        }
-        rotate(minutes / 60f * 360f, centre) {
-            drawLine(hand, centre, Offset(centre.x, centre.y - r * 0.74f), strokeWidth = 2.5.dp.toPx(), cap = StrokeCap.Round)
-        }
-        drawCircle(accent, 4.dp.toPx(), centre)
-    }
-}
 
 /** Covers' corners against the theme's tile corner. */
 private const val COVER_CORNER = 0.45f
@@ -1157,5 +957,3 @@ private val STRIP_ENTRY = 260.dp
 /** Lines of Cartridge's queue on a tall face. */
 private const val QUEUE_LINES = 4
 
-/** The height a small Storage face needs for its reading, its bar and the line under them. */
-private val STORAGE_CAPTION_ROOM = 84.dp

@@ -171,6 +171,7 @@ private fun WhoAreYou(app: AppState, mode: WhoMode) {
                         }
                     },
                     onBack = { if (closable) close() },
+                    onAdd = { step = WhoStep.Create },
                     closable = closable,
                 )
                 is WhoStep.Pin -> PinPad(
@@ -205,6 +206,7 @@ private fun People(
     onIndex: (Int) -> Unit,
     onChoose: (Int) -> Unit,
     onBack: () -> Unit,
+    onAdd: () -> Unit,
     closable: Boolean,
 ) {
     val c = Fuse.colors
@@ -221,6 +223,8 @@ private fun People(
             NavAction.DOWN -> if (sel + perRow < count) { onIndex(sel + perRow); NavResult.MOVED } else NavResult.BLOCKED
             NavAction.SELECT -> { if (count > 0) { app.platform.sounds.play(SoundCue.SELECT); onChoose(sel) }; NavResult.ACTIVATED }
             NavAction.BACK -> { onBack(); NavResult.CONSUMED }
+            // Y makes someone new from anywhere on the page, without walking to the last card.
+            NavAction.SEARCH -> { if (!offline) { app.platform.sounds.play(SoundCue.SELECT); onAdd() }; NavResult.ACTIVATED }
             else -> NavResult.CONSUMED
         }
     }
@@ -260,6 +264,7 @@ private fun People(
         Spacer(Modifier.height(if (compact) Space.l else Space.xxl))
         HintBar(buildList {
             add(Hint(HintButton.CONFIRM, "Choose"))
+            if (!offline) add(Hint(HintButton.SEARCH, "New Profile"))
             if (closable) add(Hint(HintButton.BACK, "Back"))
         })
     }

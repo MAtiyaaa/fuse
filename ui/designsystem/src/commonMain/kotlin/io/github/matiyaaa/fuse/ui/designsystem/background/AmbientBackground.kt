@@ -47,8 +47,9 @@ fun AmbientBackground(
     val colors = Fuse.colors
     var time by remember { mutableFloatStateOf(0f) }
     val k = ambient.intensity.coerceIn(0f, 1.5f)
-    val scene = remember(style, accent, ambient.secondary, colors, k) {
-        sceneFor(style, SceneLook(accent, ambient.secondary?.let { Color(it) }, colors, k))
+    val fusi = LocalFusiScreen.current
+    val scene = remember(style, accent, ambient.secondary, colors, k, fusi) {
+        sceneFor(style, SceneLook(accent, ambient.secondary?.let { Color(it) }, colors, k), fusi)
     }
     if (animate && style.moves && ambient.speed > 0f && k > 0f) {
         // Slow scenes ask for fewer frames than the caller allows; nothing moves faster than it needs.
@@ -75,7 +76,7 @@ fun AmbientBackground(
     }
 }
 
-private fun sceneFor(style: BackgroundStyle, look: SceneLook): Scene = when (style) {
+private fun sceneFor(style: BackgroundStyle, look: SceneLook, fusi: FusiScreen): Scene = when (style) {
     BackgroundStyle.HERO, BackgroundStyle.SOLID -> RoomScene(look)
     BackgroundStyle.WAVE -> WaveScene(look)
     BackgroundStyle.AURORA -> AuroraScene(look)
@@ -91,6 +92,7 @@ private fun sceneFor(style: BackgroundStyle, look: SceneLook): Scene = when (sty
     BackgroundStyle.MESH -> MeshScene(look)
     BackgroundStyle.CONTOURS -> ContoursScene(look)
     BackgroundStyle.DUNES -> DunesScene(look)
+    BackgroundStyle.FUSI -> FusiScene(look, fusi)
 }
 
 /**

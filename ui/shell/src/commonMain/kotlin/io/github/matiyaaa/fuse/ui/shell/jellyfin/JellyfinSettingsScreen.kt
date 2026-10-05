@@ -85,7 +85,8 @@ internal fun jellyfinStatus(s: JellyfinState, prefs: JellyfinSettings): Jellyfin
     prefs.localAddress.isBlank() && prefs.remoteAddress.isBlank() -> JellyfinStatus(null, "Not set up", "Add your server's address, then sign in")
     s.account == null -> JellyfinStatus(null, "Not signed in", "Sign in with your Jellyfin user to browse and play")
     s.authRequired -> JellyfinStatus(false, "Signed out", "The server signed this device out. Sign in again")
-    s.offline -> JellyfinStatus(false, "Can't reach the server", "Pages you've opened are kept. Playing waits until it answers")
+    s.checking && s.base == null -> JellyfinStatus(null, "Connecting", "Asking your home and outside addresses at once")
+    s.offline -> JellyfinStatus(false, "Can't reach the server", "Neither address answered. Pages you've opened are kept, and Fuse keeps trying")
     s.route == io.github.matiyaaa.fuse.jellyfin.Route.LOCAL -> JellyfinStatus(true, "Connected at home", s.serverName ?: "Your server")
     s.route == io.github.matiyaaa.fuse.jellyfin.Route.REMOTE -> JellyfinStatus(true, "Connected from outside", s.serverName ?: "Your server")
     else -> JellyfinStatus(null, "Connecting", s.serverName ?: "Looking for your server")
@@ -285,6 +286,8 @@ private fun jellyfinRows(
                         onSuccess = { (base, info) -> AddressTest(false, true, listOfNotNull(info.name, info.version?.let { "Jellyfin $it" }, base).joinToString("  ·  ")) },
                         onFailure = { AddressTest(false, false, it.message ?: "No answer") },
                     )
+                    // An address that answers here is one Fuse can use now: the status above follows it.
+                    if (r.isSuccess) service.reconnect(force = true)
                 }
             },
         ))
@@ -366,11 +369,14 @@ private fun jellyfinRows(
     if (app.platform.features.secondScreen || app.hasTwoScreens) {
         val second = "Second screen"
         add(app.choiceRow("c.where", "Films play on", FuseIcons.PanelTop, j.playOn,
-            listOf("MAIN" to "The main screen", "SECOND" to "The second screen"),
-            detail = "The other screen is its remote, and the menus stay free to browse. Swap them while it plays",
+            listOf("ASK" to "Ask each time", "MAIN" to "The main screen", "SECOND" to "The second screen"),
+            detail = "The other screen is its remote, and the menus stay free to browse. While it plays, Y moves it to the other screen",
             optionDetail = {
-                if (it == "SECOND") "The touch screen below: with the menus below, as on a phone; otherwise the main screen keeps browsing"
-                else "The big screen above, with the touch screen as its remote"
+                when (it) {
+                    "SECOND" -> "The touch screen below: with the menus below, as on a phone; otherwise the main screen keeps browsing"
+                    "MAIN" -> "The big screen above, with the touch screen as its remote"
+                    else -> "Each film or episode asks which screen, with the two drawn side by side"
+                }
             },
         ) { v -> set { it.copy(playOn = v) } }.copy(section = second))
         add(app.choiceRow("c.player", "While playing", FuseIcons.DualScreen, j.playerCompanion,
@@ -433,6 +439,7 @@ private fun saveAndTest(app: AppState, service: JellyfinService, page: JellyfinS
             onFailure = { AddressTest(false, false, it.message ?: "No answer") },
         )
         r.onFailure { app.toasts.show("Nothing answered at $address. ${it.message ?: ""}".trim()) }
+        if (r.isSuccess) service.reconnect(force = true)
     }
 }
 

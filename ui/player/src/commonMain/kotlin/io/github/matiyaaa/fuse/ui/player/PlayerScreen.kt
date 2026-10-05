@@ -3,9 +3,6 @@ package io.github.matiyaaa.fuse.ui.player
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
-import io.github.matiyaaa.fuse.ui.fuseline.Durations
-import io.github.matiyaaa.fuse.ui.fuseline.slideOutHorizontally
-import io.github.matiyaaa.fuse.ui.fuseline.slideInHorizontally
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -74,9 +71,12 @@ import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
 import io.github.matiyaaa.fuse.ui.designsystem.theme.tabular
 import io.github.matiyaaa.fuse.ui.fuseline.Appear
+import io.github.matiyaaa.fuse.ui.fuseline.Durations
 import io.github.matiyaaa.fuse.ui.fuseline.fadeIn
 import io.github.matiyaaa.fuse.ui.fuseline.fadeOut
 import io.github.matiyaaa.fuse.ui.fuseline.fuselineFloat
+import io.github.matiyaaa.fuse.ui.fuseline.slideInHorizontally
+import io.github.matiyaaa.fuse.ui.fuseline.slideOutHorizontally
 import kotlinx.coroutines.delay
 
 /** The player's sheets. */
@@ -111,6 +111,9 @@ fun PlayerScreen(
     var visible by remember { mutableStateOf(true) }
     var row by remember { mutableIntStateOf(BUTTONS) }
     var focus by remember { mutableIntStateOf(-1) }
+    // Along the top: Back (0), and Other screen (1) where the picture can move.
+    var topFocus by remember { mutableIntStateOf(0) }
+    val swap = onSwap?.takeIf { session.isVideo }
     var sheet by remember { mutableStateOf<PlayerSheet?>(null) }
     var touched by remember { mutableLongStateOf(0L) }
     var flash by remember { mutableStateOf<Flash?>(null) }
@@ -168,7 +171,6 @@ fun PlayerScreen(
         if ((src?.audioTracks?.size ?: 0) > 1) add(PlayerButton("audio", FuseIcons.AudioLines, "Audio") { sheet = PlayerSheet.AUDIO })
         if (src?.subtitleTracks?.isNotEmpty() == true) add(PlayerButton("subs", if (src.subtitle == null) FuseIcons.CaptionsOff else FuseIcons.Captions, "Subtitles") { sheet = PlayerSheet.SUBTITLES })
         add(PlayerButton("settings", FuseIcons.Settings2, "Settings") { sheet = PlayerSheet.SETTINGS })
-        if (session.isVideo) onSwap?.let { f -> add(PlayerButton("swap", FuseIcons.Swap, "Play on the other screen") { f() }) }
         fullscreen?.let { f -> add(PlayerButton("full", FuseIcons.Maximize, "Full screen") { f() }) }
     }
     val all = buttons + tools
@@ -197,13 +199,15 @@ fun PlayerScreen(
                     NavResult.CONSUMED
                 }
                 NavAction.SELECT -> {
-                    if (shown && row == TOP) onExit() else if (shown && row == BUTTONS) all.getOrNull(focus)?.onClick?.invoke() else session.toggle()
+                    if (shown && row == TOP && topFocus == 1 && swap != null) swap()
+                    else if (shown && row == TOP) onExit() else if (shown && row == BUTTONS) all.getOrNull(focus)?.onClick?.invoke() else session.toggle()
                     NavResult.ACTIVATED
                 }
                 NavAction.LEFT, NavAction.RIGHT -> {
                     val forward = e.action == NavAction.RIGHT
                     if (shown && row == TOP) {
-                        NavResult.CONSUMED
+                        topFocus = if (forward && swap != null) 1 else 0
+                        NavResult.MOVED
                     } else if (shown && row == BUTTONS) {
                         val next = focus + if (forward) 1 else -1
                         if (next in all.indices) focus = next
@@ -246,6 +250,11 @@ fun PlayerScreen(
                 NavAction.CONTEXT -> {
                     sheet = PlayerSheet.SETTINGS
                     NavResult.ACTIVATED
+                }
+                // Y moves the picture to the other screen, whatever is focused.
+                NavAction.SEARCH -> {
+                    swap?.invoke()
+                    if (swap != null) NavResult.ACTIVATED else NavResult.CONSUMED
                 }
                 else -> NavResult.CONSUMED
             }
@@ -345,6 +354,8 @@ fun PlayerScreen(
                 onBottomHeight = { controlsHeight = it },
                 onSeek = { ms -> session.seekTo(ms); poke() },
                 onExit = onExit,
+                topFocus = topFocus,
+                onSwap = swap,
             )
         }
 
@@ -412,6 +423,8 @@ private fun Controls(
     onBottomHeight: (Int) -> Unit,
     onSeek: (Long) -> Unit,
     onExit: () -> Unit,
+    topFocus: Int,
+    onSwap: (() -> Unit)?,
 ) {
     val item = session.item
     val pad = if (narrow) Space.l else Space.xxl
@@ -422,7 +435,7 @@ private fun Controls(
 
         // Title, what it is, and how it plays.
         Row(Modifier.fillMaxWidth().align(Alignment.TopStart).padding(horizontal = pad, vertical = if (short) Space.m else Space.xl), verticalAlignment = Alignment.CenterVertically) {
-            RoundButton(FuseIcons.ArrowLeft, "Back", selected = row == TOP, size = 44.dp, onClick = onExit)
+            RoundButton(FuseIcons.ArrowLeft, "Back", selected = row == TOP && topFocus == 0, size = 44.dp, onClick = onExit)
             Spacer(Modifier.width(Space.l))
             Column(Modifier.weight(1f)) {
                 // Music names the song below; the top says where it comes from.
@@ -436,6 +449,10 @@ private fun Controls(
                     Spacer(Modifier.width(Space.m))
                     Pill(src.method.label)
                 }
+            }
+            if (onSwap != null) {
+                Spacer(Modifier.width(Space.m))
+                SwapButton(selected = row == TOP && topFocus == 1, compact = narrow, onClick = onSwap)
             }
         }
 
@@ -545,6 +562,36 @@ internal fun RoundButton(icon: ImageVector, label: String, selected: Boolean, si
         if (badge != null) {
             FText(badge, Fuse.type.caption.copy(fontSize = Fuse.type.caption.fontSize * 0.72f), color = fg, maxLines = 1, modifier = Modifier.padding(top = 1.dp))
         }
+    }
+}
+
+/**
+ * Moves the picture to the other screen: said in words, with its icon and the button that does it
+ * from anywhere (Y), so it is found at a glance rather than hunted for among the tools.
+ */
+@Composable
+private fun SwapButton(selected: Boolean, compact: Boolean, onClick: () -> Unit) {
+    val lift by fuselineFloat(if (selected) 1f else 0f, Fuse.motion.focusSpring(), label = "swap")
+    val fg = if (selected) Color(0xFF101114) else Color.White
+    Row(
+        Modifier
+            .height(44.dp)
+            .graphicsLayer {
+                val s = 1f + 0.05f * lift
+                scaleX = s
+                scaleY = s
+            }
+            .clip(RoundedCornerShape(50))
+            .background(if (selected) Color.White else Color.White.copy(alpha = 0.16f))
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick)
+            .padding(start = Space.m, end = Space.s),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        FuseIcon(FuseIcons.Swap, size = 18.dp, tint = fg)
+        Spacer(Modifier.width(Space.s))
+        FText(if (compact) "Other screen" else "Watch on the other screen", Fuse.type.label, color = fg, maxLines = 1)
+        Spacer(Modifier.width(Space.s))
+        ButtonGlyph(HintButton.SEARCH, size = 22.dp, color = if (selected) Color(0xFF101114).copy(alpha = 0.7f) else Color.White.copy(alpha = 0.8f))
     }
 }
 

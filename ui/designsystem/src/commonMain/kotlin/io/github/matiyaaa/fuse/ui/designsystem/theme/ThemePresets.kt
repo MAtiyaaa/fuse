@@ -414,12 +414,36 @@ object ThemePresets {
     )
 
     /**
+     * Fusi's room, pink and cute like a cartoon from the early 2000s: polka dots drifting over a
+     * pink sky, puffy clouds, sparkles, and Fusi the white pixel dog playing on a mint hill.
+     * Plum text and a berry accent keep every word clear on the pink (11:1 and 5:1 at least).
+     */
+    val Fusi = ThemeSpec(
+        id = "fusi",
+        name = "Fusi",
+        tagline = "Pink, cute, and Fusi the dog at play",
+        palette = ThemePalette(
+            dark = false,
+            background = 0xFFFFE4F1, surface = 0xFFFFF6FA, surfaceRaised = 0xFFFFFFFF,
+            accent = 0xFFC72370, accentSoft = 0x29C72370, onAccent = 0xFFFFFFFF,
+            textPrimary = 0xFF4A1F3D, textSecondary = 0xFF80466C, focusRing = 0xFFC72370,
+            success = 0xFF1E8A57, warning = 0xFFA45C00, danger = 0xFFC0263F,
+        ),
+        background = BackgroundStyle.FUSI,
+        geometry = CornerFamily.PILL,
+        focus = FocusStyle.GLOW,
+        motion = MotionProfile.ENHANCED,
+        sound = SoundProfile.CHIME,
+        ambient = AmbientSpec(secondary = 0xFFB9E9FF),
+    )
+
+    /**
      * Every built-in theme in the order the gallery shows them: Fuse first (the default), then the
      * dark rooms from the plainest to the most decorated, then the bright ones.
      */
     val all: List<ThemeSpec> = listOf(
         Fuse, Glass, Pitch, Starlight, Orbital, Crossbar, Wave, Blossom, Lagoon, Canopy, Blades, Sundown, Crt,
-        Daylight, PaperMint, Channels, Opal, Noon, Ridge, Olive,
+        Daylight, PaperMint, Channels, Opal, Noon, Ridge, Olive, Fusi,
     )
 
     /** The dark rooms, in gallery order, for a gallery that shows them as a group. */

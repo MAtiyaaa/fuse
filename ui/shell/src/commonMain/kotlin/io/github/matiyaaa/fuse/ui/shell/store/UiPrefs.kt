@@ -24,6 +24,8 @@ import io.github.matiyaaa.fuse.ui.designsystem.theme.ThemePresets
 data class UiPrefs(
     /** Jellyfin, an addon: off until turned on in Settings, Addons, Jellyfin. */
     val jellyfin: io.github.matiyaaa.fuse.data.settings.JellyfinSettings = io.github.matiyaaa.fuse.data.settings.JellyfinSettings(),
+    /** Syncthing, an addon. Whether it is on follows [FuseStore.syncthing]'s state; only how it behaves changes here. */
+    val syncthing: io.github.matiyaaa.fuse.data.settings.SyncthingSettings = io.github.matiyaaa.fuse.data.settings.SyncthingSettings(),
     /**
      * Fuse Sync's settings, read only: changed through [FuseStore.sync], never through
      * [FuseStore.updatePrefs]. Here so every screen follows whether it is on.
@@ -154,6 +156,6 @@ data class MusicPrefs(
     val songPath: String? = null,
     val songName: String? = null,
     val track: String = io.github.matiyaaa.fuse.ui.shell.music.BundledMusic.MENU_DEFAULT,
-    /** Every bundled song in a random order, a new one each time a song ends, instead of looping [track]. */
-    val shuffle: Boolean = false,
+    /** Every bundled song in a random order, a new one each time a song ends, instead of looping [track] (the default). */
+    val shuffle: Boolean = true,
 )

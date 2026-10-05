@@ -64,13 +64,16 @@ fun AddonsScreen(app: AppState) {
     val prefs by app.store.prefs.collectAsState()
     val cartridge by app.store.cartridge.status.collectAsState()
     val store by app.store.appStore.state.collectAsState()
+    val syncthingState = app.store.syncthing?.state?.collectAsState()?.value
     // Cartridge only where it runs (Android and Linux) and is turned on; Jellyfin only once turned on.
     // In the order the user dragged them into; parts they never moved keep their usual place after.
     val parts = buildList {
         if (prefs.cartridgeEnabled && app.platform.features.cartridge) add(AddonsPart.CARTRIDGE)
         if (app.store.appStore.supported && prefs.storeEnabled) add(AddonsPart.STORE)
         if (prefs.jellyfin.enabled && app.store.jellyfin != null) add(AddonsPart.JELLYFIN)
+        // Fuse Sync or Syncthing, whichever is in use: they never run together, so never both.
         if (prefs.sync.enabled && app.store.sync.service != null) add(AddonsPart.SYNC)
+        else if (syncthingState != null && syncthingState !is io.github.matiyaaa.fuse.sync.syncthing.SyncthingState.Off) add(AddonsPart.SYNCTHING)
         if (isEmpty()) add(AddonsPart.CARTRIDGE)
     }.sortedBy { p -> prefs.addonsOrder.indexOf(p.name).let { if (it < 0) ORDER_REST + p.ordinal else it } }
     // Opens on the first tab, in the order they were dragged into (or on the one last shown, while
@@ -159,6 +162,7 @@ fun AddonsScreen(app: AppState) {
                     AddonsPart.STORE -> StoreContent(app, active = !inTabs, topPadding = top)
                     AddonsPart.JELLYFIN -> io.github.matiyaaa.fuse.ui.shell.jellyfin.JellyfinContent(app, active = !inTabs, topPadding = top)
                     AddonsPart.SYNC -> io.github.matiyaaa.fuse.ui.shell.sync.SyncTab(app, active = !inTabs, topPadding = top)
+                    AddonsPart.SYNCTHING -> io.github.matiyaaa.fuse.ui.shell.sync.SyncthingTab(app, active = !inTabs, topPadding = top)
                 }
             }
         }
@@ -169,6 +173,7 @@ fun AddonsScreen(app: AppState) {
                     AddonsPart.STORE -> ViewTab("Store", icon = FuseIcons.Store, badge = store.updates.size.takeIf { it > 0 }?.toString())
                     AddonsPart.JELLYFIN -> ViewTab("Jellyfin", icon = FuseIcons.Clapperboard)
                     AddonsPart.SYNC -> ViewTab("Sync", icon = FuseIcons.RefreshCcw)
+                    AddonsPart.SYNCTHING -> ViewTab("Syncthing", icon = FuseIcons.FolderSync)
                 }
             }
             // Open: the named tabs, which lift away and shrink toward the top left as the page scrolls.

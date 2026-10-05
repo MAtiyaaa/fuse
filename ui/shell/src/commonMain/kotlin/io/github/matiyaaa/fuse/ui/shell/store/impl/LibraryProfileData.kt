@@ -133,6 +133,15 @@ internal class LibraryProfileData(
             data.profileState.write(UserState(rows, sessions.distinct(), collections))
         }
         var incoming = if (sync.settings) meta.settings.mapValues { it.value.value }.filterKeys { p -> p in kept(now) && personal(now)[p] == lastSettings[p] } else emptyMap()
+        // What the profile never set is Fuse's own: a new profile starts with Fuse's Home, quick
+        // menu and theme, never the last person's. Only what wasn't changed here since is reset.
+        if (sync.settings && lastSettings.isNotEmpty()) {
+            val mine = personal(now)
+            val fresh = ProfileSettings.extract(AppSettings())
+            incoming = incoming + kept(now).filter { p ->
+                p !in meta.settings && mine[p] == lastSettings[p] && fresh[p] != null && mine[p] != fresh[p]
+            }.associateWith { fresh.getValue(it) }
+        }
         // Home rejoining the profile's: the profile's Home comes back as it was (this device's was kept apart).
         val rejoin = sync.homeScope == HOME_REJOIN
         if (rejoin) meta.settings[HOME_LAYOUT]?.let { incoming = incoming + (HOME_LAYOUT to it.value) }

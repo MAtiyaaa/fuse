@@ -427,10 +427,10 @@ class InputRouter(
             PadButton.B -> if (n) NavAction.SELECT else NavAction.BACK
             PadButton.X -> if (n) NavAction.SEARCH else NavAction.CONTEXT
             PadButton.Y -> if (n) NavAction.CONTEXT else NavAction.SEARCH
-            PadButton.L1 -> NavAction.PREVIOUS_SECTION
-            PadButton.R1 -> NavAction.NEXT_SECTION
-            PadButton.L2 -> NavAction.PAGE_UP
-            PadButton.R2 -> NavAction.PAGE_DOWN
+            PadButton.L1 -> if (profile.swapShoulders) NavAction.PAGE_UP else NavAction.PREVIOUS_SECTION
+            PadButton.R1 -> if (profile.swapShoulders) NavAction.PAGE_DOWN else NavAction.NEXT_SECTION
+            PadButton.L2 -> if (profile.swapShoulders) NavAction.PREVIOUS_SECTION else NavAction.PAGE_UP
+            PadButton.R2 -> if (profile.swapShoulders) NavAction.NEXT_SECTION else NavAction.PAGE_DOWN
             PadButton.START -> NavAction.QUICK_MENU
             PadButton.SELECT -> NavAction.CONTEXT
             PadButton.MODE -> NavAction.HOME

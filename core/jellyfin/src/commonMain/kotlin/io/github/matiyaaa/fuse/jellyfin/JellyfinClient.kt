@@ -49,6 +49,15 @@ class JellyfinClient(private val http: HttpClient, val device: DeviceInfo) {
     /** How long a kept answer is used without asking again, for browsing calls. */
     var freshForMs: Long = 0
 
+    /**
+     * Set by the service: runs [fetch] behind a kept answer that was shown at once, on whichever
+     * address is in use by then. Null means kept answers are only used fresh or offline.
+     */
+    var refreshBehind: ((key: String, fetch: suspend (base: String) -> Unit) -> Unit)? = null
+
+    /** Told when an answer fetched behind a shown one turned out different, so pages can ask again. */
+    var onRefreshed: (() -> Unit)? = null
+
     internal val json = Json {
         ignoreUnknownKeys = true
         isLenient = true
@@ -251,9 +260,11 @@ class JellyfinClient(private val http: HttpClient, val device: DeviceInfo) {
         timeoutMs: Long = 20_000,
         params: Params.() -> Unit,
     ): String {
-        val builder = URLBuilder(base.trimEnd('/')).apply { if (path.isNotEmpty()) appendPathSegments(path.split('/')) }
-        Params(builder).params()
-        val url = builder.buildString()
+        fun url(on: String): URLBuilder = URLBuilder(on.trimEnd('/')).apply {
+            if (path.isNotEmpty()) appendPathSegments(path.split('/'))
+            Params(this).params()
+        }
+        val builder = url(base)
         // Kept answers are keyed by who asked and what, never by the address.
         val key = if (method == Method.GET && token != null) {
             token.takeLast(8) + "|" + path + "?" + builder.parameters.entries().sortedBy { it.key }.joinToString("&") { "${it.key}=${it.value.joinToString(",")}" }
@@ -261,7 +272,37 @@ class JellyfinClient(private val http: HttpClient, val device: DeviceInfo) {
             null
         }
         val kept = cache
-        if (key != null && kept != null && freshForMs > 0) kept.fresh(key, freshForMs)?.let { return it }
+        if (key != null && kept != null && freshForMs > 0) {
+            kept.fresh(key, freshForMs)?.let { return it }
+            // An older answer that is still right shows at once; the fresh one follows behind it.
+            val behind = refreshBehind
+            if (behind != null) {
+                kept.current(key)?.let { shown ->
+                    behind(key) { on ->
+                        val text = fetch(url(on).buildString(), token, method, body, timeoutMs)
+                        if (kept.put(key, text) && text != shown) onRefreshed?.invoke()
+                    }
+                    return shown
+                }
+            }
+        }
+        val text = try {
+            fetch(builder.buildString(), token, method, body, timeoutMs)
+        } catch (e: JellyfinException) {
+            if (e.kind == JellyfinException.Kind.NETWORK && key != null && kept != null) {
+                kept.any(key)?.let {
+                    onReachable?.invoke(false)
+                    return it
+                }
+            }
+            throw e
+        }
+        if (key != null && kept != null) kept.put(key, text)
+        return text
+    }
+
+    /** One request to the server: its answer, or why not. */
+    private suspend fun fetch(url: String, token: String?, method: Method, body: String?, timeoutMs: Long): String {
         val block: HttpRequestBuilder.() -> Unit = {
             header(HttpHeaders.Authorization, authorization(token))
             header(HttpHeaders.Accept, "application/json")
@@ -280,12 +321,6 @@ class JellyfinClient(private val http: HttpClient, val device: DeviceInfo) {
         } catch (c: CancellationException) {
             throw c
         } catch (t: Throwable) {
-            if (key != null && kept != null) {
-                kept.any(key)?.let {
-                    onReachable?.invoke(false)
-                    return it
-                }
-            }
             throw JellyfinException(networkText(t), JellyfinException.Kind.NETWORK)
         }
         onReachable?.invoke(true)
@@ -297,9 +332,7 @@ class JellyfinClient(private val http: HttpClient, val device: DeviceInfo) {
                 else -> JellyfinException("The server had a problem ($status).", JellyfinException.Kind.SERVER, status)
             }
         }
-        val text = response.bodyAsText()
-        if (key != null && kept != null) kept.put(key, text)
-        return text
+        return response.bodyAsText()
     }
 
     private fun networkText(t: Throwable): String {

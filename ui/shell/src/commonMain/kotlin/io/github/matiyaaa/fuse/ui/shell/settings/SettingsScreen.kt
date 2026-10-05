@@ -137,7 +137,7 @@ val settingsSections: List<SettingsSection> = listOf(
     SettingsSection("displays", "Display", FuseIcons.Monitor, "Screens, rotation, performance", ::displayAndPerformanceRows, group = DEVICE),
     SettingsSection("sound", "Sound", FuseIcons.Volume, "Menu music and interface sounds", ::soundRows, group = DEVICE),
     SettingsSection("accounts", "Accounts", FuseIcons.CircleUser, "RetroAchievements and Phone Link", ::accountsRows, group = CONNECTIONS),
-    SettingsSection("addons", "Addons", FuseIcons.Blocks, "Fuse Sync, Jellyfin, the Store and Cartridge", ::addonsRows, group = CONNECTIONS, status = ::addonsStatus),
+    SettingsSection("addons", "Addons", FuseIcons.Blocks, "Fuse Sync, Syncthing, Jellyfin and more", ::addonsRows, group = CONNECTIONS, status = ::addonsStatus),
     SettingsSection("health", "System health", FuseIcons.HeartPulse, "What needs attention, and a bug report", ::healthRows, group = GENERAL, status = ::healthStatus),
     SettingsSection("storage", "Storage and backups", FuseIcons.HardDrive, "File access, drives, backup and restore", ::storageAndBackupRows, group = GENERAL),
     SettingsSection("about", "About", FuseIcons.Info, "Updates, privacy, licences, setup", ::aboutRows, group = GENERAL, status = ::aboutStatus),

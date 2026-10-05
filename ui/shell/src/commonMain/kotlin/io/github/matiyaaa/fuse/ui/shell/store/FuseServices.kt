@@ -53,6 +53,9 @@ interface FuseServices {
      */
     fun syncService(data: io.github.matiyaaa.fuse.sync.ProfileDataPort, scope: kotlinx.coroutines.CoroutineScope): io.github.matiyaaa.fuse.sync.SyncService? = null
 
+    /** Syncthing, for people who run it (see [io.github.matiyaaa.fuse.sync.syncthing.SyncthingService]); null where Fuse can't use it. */
+    fun syncthingService(scope: kotlinx.coroutines.CoroutineScope): io.github.matiyaaa.fuse.sync.syncthing.SyncthingService? = null
+
     /** Finds Jellyfin servers on the network; null where there is no way to. */
     val jellyfinDiscovery: io.github.matiyaaa.fuse.jellyfin.ServerDiscovery? get() = null
 

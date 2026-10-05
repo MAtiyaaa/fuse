@@ -44,7 +44,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
@@ -56,6 +55,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.layout.positionInParent
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
@@ -341,16 +341,25 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
     val inset = with(LocalDensity.current) { Space.l.roundToPx() }
     // Every line of detail cards scrolls to the Details section, so it stays in view as a whole.
     val section = if (row.startsWith("details:")) "details" else row
-    val timeRequester = remember { androidx.compose.foundation.relocation.BringIntoViewRequester() }
-    LaunchedEffect(section, tops[section], scroll.maxValue) {
+    // Where the time played ends, so the stick brings all of it above the hint line, not half.
+    var timeBottom by remember(game.id) { mutableIntStateOf(0) }
+    var topOfPage by remember { mutableIntStateOf(0) }
+    val clearBelow = with(LocalDensity.current) { (Size.hintHeight + Space.xxl).roundToPx() }
+    // Where each line of detail cards ends: on a small screen they stack, and each must come fully into view.
+    val lineBottoms = remember(game.id) { mutableStateMapOf<Int, Int>() }
+    LaunchedEffect(row, tops[section], scroll.maxValue, timeBottom, lineBottoms[row.removePrefix("details:").toIntOrNull() ?: -1]) {
         if (section == "playtime") {
-            timeRequester.bringIntoView()
+            val target = (timeBottom + clearBelow - scroll.viewportSize).coerceIn(0, scroll.maxValue)
+            if (target > scroll.value) scroll.fuselineScrollTo(target, motion.followSpring())
             return@LaunchedEffect
         }
+        val line = row.removePrefix("details:").toIntOrNull().takeIf { row.startsWith("details:") }
         val target = when {
             row == "facts" || row == "actions" -> 0
             // The last section shows the page's very end, so nothing is left below the stick's reach.
             sel.row == rows.lastIndex -> scroll.maxValue
+            // A line of cards: as much of Details as fits above it, and the whole line above the hints.
+            line != null -> maxOf((tops[section] ?: 0) - inset, (lineBottoms[line] ?: 0) + clearBelow - scroll.viewportSize).coerceIn(0, scroll.maxValue)
             else -> ((tops[section] ?: 0) - inset).coerceIn(0, scroll.maxValue)
         }
         scroll.fuselineScrollTo(target, motion.followSpring())
@@ -393,12 +402,15 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
             Modifier
                 .fillMaxSize()
                 .padding(top = Size.hudHeight)
+                .onPlaced { topOfPage = it.positionInRoot().y.toInt() }
                 .fadingEdges(scroll, top = Space.xl, bottom = Size.hintHeight + Space.l)
                 .verticalScroll(scroll)
                 .padding(horizontal = Space.gutter),
         ) {
             Spacer(Modifier.height(layout.top - Size.hudHeight))
-            Row(verticalAlignment = Alignment.Bottom) {
+            // The cover stands beside the title, level with its top: the column beside it grows down
+            // (play time, notes), and a cover held to its foot would sink with it.
+            Row(verticalAlignment = Alignment.Top) {
                 Column(Modifier.weight(1f)) {
                     GameTitle(d, layout, app.store.prefs.value.showLogo, Modifier.reveal(reveal, 0))
                     Spacer(Modifier.height(Space.l))
@@ -471,7 +483,7 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
                     Spacer(Modifier.height(Space.l))
                     TimeTogether(
                         d,
-                        Modifier.reveal(reveal, 3).bringIntoViewRequester(timeRequester),
+                        Modifier.reveal(reveal, 3).onPlaced { timeBottom = (it.positionInRoot().y + it.size.height).toInt() - topOfPage + scroll.value },
                         selected = row == "playtime" && focused,
                         onClick = { sel.row = rows.indexOf("playtime"); app.go(Route.PlayTime) },
                     )
@@ -583,7 +595,11 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
                 SideEffect { cardsPerLine = layout.cardsPerLine }
                 lines.forEachIndexed { line, chunk ->
                     if (line > 0) Spacer(Modifier.height(Space.l))
-                    Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(Space.l)) {
+                    Row(
+                        Modifier.fillMaxWidth().height(IntrinsicSize.Min)
+                            .onPlaced { lineBottoms[line] = (it.positionInRoot().y + it.size.height).toInt() - topOfPage + scroll.value },
+                        horizontalArrangement = Arrangement.spacedBy(Space.l),
+                    ) {
                         chunk.forEachIndexed { i, info ->
                             val key = "details:$line"
                             val selected = row == key && col == i && focused

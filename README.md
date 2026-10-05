@@ -29,7 +29,7 @@ Home screen.
 <a href="https://github.com/MAtiyaaa/fuse/releases/latest"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/brand/button-macos-dark.svg"><img src="docs/assets/brand/button-macos-light.svg" height="48" alt="Download for macOS"></picture></a>
 
 <sub>Android 9 or newer &nbsp;·&nbsp; 64-bit x86 Linux AppImage &nbsp;·&nbsp; Windows 10 and 11 &nbsp;·&nbsp; macOS on Apple silicon and Intel &nbsp;·&nbsp; <a href="#install">checksums and install notes</a></sub><br>
-<sub>0.3.0 is the <b>Sync &amp; Clean Update</b>: Fuse Sync by Fuse keeps your saves, play time and settings on every device, plus a quick menu you arrange, 86 more systems, Jellyfin in setup, swipe-back on touch screens, and Fuse Player by Fuse riding out weak Wi-Fi. <a href="#where-fuse-stands">Here is where it stands.</a></sub><br>
+<sub>0.3.1 is the <b>Glide Update</b>: Home widgets that turn like a catalogue, Jellyfin that answers quickly, Syncthing beside Fuse Sync by Fuse, the AYN Thor's two screens with the controller, and the clock, storage and play time widgets redrawn. <a href="#where-fuse-stands">Here is where it stands.</a></sub><br>
 <sub>Or download from <a href="https://matiyaaa.github.io/fuse/">Fuse's website</a>, which always offers the latest version for your system.</sub>
 
 <br>
@@ -145,6 +145,8 @@ They behave the same on every device, answer to one design, and get better with 
         total play time by profile and by device.</li>
         <li><b>Only what you made.</b> Saves, states, memory cards, play time and settings; your games
         themselves are never copied or synced.</li>
+        <li><b>Already run Syncthing?</b> Fuse can share your emulators' save folders through it
+        instead, bring in the newest save before a game and ask when two devices both played.</li>
       </ul>
       <a href="docs/sync.md"><b>How Fuse Sync works</b></a>
     </td>
@@ -540,15 +542,15 @@ Linux app, isn't offered on Windows and macOS.
 ## Where Fuse stands
 
 > [!IMPORTANT]
-> **Fuse 0.3.0 "The Sync & Clean Update" is still early, and cleaner than ever.** Fuse Sync by Fuse
-> arrived: your saves, play time, library and settings on every device, from a host of your own, with
-> a profile for each person and nothing ever silently lost. The quick menu became
-> yours to arrange, with widgets for what's playing (skip a song with a flick), brightness, volume
-> and the second screen's three ways (Off, Fuse and Flipped). Fuse now reads every game system ES-DE
-> knows, 86 more than before, and finds renamed emulator AppImages. Setup explains Jellyfin and
-> signs you in, the second screen keeps its pages while a film plays and gained them above too, a
-> swipe from the edge goes back on computers' touch screens, and Fuse Player by Fuse rides out weak
-> Wi-Fi by lowering the quality by itself. See [the release notes](docs/releases/0.3.0.md).
+> **Fuse 0.3.1 "The Glide Update" is still early, and smoother than ever.** Home's widgets turn
+> like a catalogue, one item at a time with L2 and R2 or a swipe, and the clock, storage and play
+> time widgets were redrawn. Jellyfin asks every way to the server at once and shows kept pages
+> straight away, so pages and widgets fill in quickly. For people who already run Syncthing, Fuse
+> can use it for their emulators' save folders, though Fuse Sync by Fuse (saves, play time,
+> library and settings on every device, a profile for each person) is still the one it
+> recommends, and setup now offers both. On the AYN Thor, the controller follows the screen the
+> Thor's Focus Mode picks, and a film asks which screen to play on. See
+> [the release notes](docs/releases/0.3.1.md).
 
 <details>
 <summary><b>Every release so far</b></summary>
@@ -556,6 +558,7 @@ Linux app, isn't offered on Windows and macOS.
 
 | Version | Name | What it brought |
 |---|---|---|
+| [0.3.1](docs/releases/0.3.1.md) | The Glide Update | Home widgets that turn like a catalogue, Jellyfin that answers quickly, Syncthing beside Fuse Sync, the Thor's two screens with the controller |
 | [0.3.0](docs/releases/0.3.0.md) | The Sync & Clean Update | Fuse Sync by Fuse, profiles, a quick menu you arrange, 157 systems, Jellyfin in setup, swipe-back on touch screens, the second screen's pages redesigned |
 | [0.2.9](docs/releases/0.2.9.md) | The Organized Update | Films on the screen you choose with a live swap, Addons in your order and in Settings, Jellyfin at home |
 | [0.2.8](docs/releases/0.2.8.md) | The Media & Connectivity Update | Jellyfin and Fuse Player by Fuse, a phone as keyboard and controller, Storage redesigned |
@@ -690,7 +693,7 @@ You need JDK 17 or newer and, for Android, the Android SDK with API level 37 ins
 ## Privacy
 
 Fuse contains **no telemetry, analytics, advertising or crash reporting**, and your library works
-fully offline. Fuse only contacts a service after you set it up: your own Fuse Sync host, your own Jellyfin server,
+fully offline. Fuse only contacts a service after you set it up: your own Fuse Sync host, your own Syncthing, your own Jellyfin server,
 RetroAchievements, SteamGridDB, IGDB, TheGamesDB, ScreenScraper and libretro thumbnails receive only what they need to answer (for example a
 game's title, or your own API key). The one service used without setup is GitHub, to check for new
 versions of Fuse; you can turn automatic checks off in Settings, About, and nothing is ever
@@ -707,7 +710,7 @@ what each service receives and when.
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Modules, domain model, scanning, launching, input, storage, security |
 | [INTEGRATIONS.md](INTEGRATIONS.md) | Every online service and the Cartridge bridge, and what leaves the device |
 | [DESIGN_SYSTEM.md](DESIGN_SYSTEM.md) | Tokens, type, focus, motion, themes, sound, accessibility |
-| [docs/sync.md](docs/sync.md) | Fuse Sync by Fuse: hosting, profiles, what syncs, saves, conflicts, security |
+| [docs/sync.md](docs/sync.md) | Fuse Sync by Fuse: hosting, profiles, what syncs, saves, conflicts, security, and Syncthing instead |
 | [docs/player.md](docs/player.md) | Fuse Player by Fuse: engines, subtitles, controls, two screens |
 | [docs/fuseline.md](docs/fuseline.md) | Fuseline by Fuse: curves, springs, transitions and how fast it is |
 | [docs/jellyfin.md](docs/jellyfin.md) | Jellyfin in Fuse: connecting, home and away, what is sent |

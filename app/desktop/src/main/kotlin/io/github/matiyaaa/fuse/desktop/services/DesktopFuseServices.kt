@@ -82,6 +82,26 @@ class DesktopFuseServices private constructor(
         DesktopEmulatorFiles(os, backups = java.io.File(dirs.data, "emulator-backups"))
 
     /** Fuse Sync by Fuse: a computer can be the host, kept running by [io.github.matiyaaa.fuse.desktop.platform.SyncHostService]. */
+    override fun syncthingService(scope: CoroutineScope): io.github.matiyaaa.fuse.sync.syncthing.SyncthingService =
+        io.github.matiyaaa.fuse.sync.syncthing.JvmSyncthingService(
+            platform = object : io.github.matiyaaa.fuse.sync.syncthing.SyncthingPlatform {
+                override val host = os.name
+                override val install = io.github.matiyaaa.fuse.sync.syncthing.SyncthingInstall(
+                    name = "Syncthing",
+                    url = "https://syncthing.net/downloads/",
+                    note = when (os.name) {
+                        "LINUX" -> "Install it from your package manager (or syncthing.net) and start it. Fuse finds it by itself."
+                        "MACOS" -> "Install Syncthing for macOS from syncthing.net and start it. Fuse finds it by itself."
+                        else -> "Install SyncTrayzor or Syncthing from syncthing.net and start it. Fuse finds it by itself."
+                    },
+                    canStart = false,
+                )
+            },
+            settings = this.data.settings,
+            secrets = secrets,
+            scope = scope,
+        )
+
     override fun syncService(data: io.github.matiyaaa.fuse.sync.ProfileDataPort, scope: CoroutineScope): io.github.matiyaaa.fuse.sync.SyncService {
         val port = java.util.concurrent.atomic.AtomicInteger(io.github.matiyaaa.fuse.sync.SyncApi.DEFAULT_PORT)
         val service = io.github.matiyaaa.fuse.sync.JvmSyncService(

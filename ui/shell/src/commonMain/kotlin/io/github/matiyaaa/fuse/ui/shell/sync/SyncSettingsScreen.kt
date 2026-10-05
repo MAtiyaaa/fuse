@@ -218,7 +218,7 @@ private fun syncRows(
 ): List<MenuAction> = buildList {
     fun configure(change: (SyncSettings) -> SyncSettings) = app.scope.launch { app.store.sync.configure(change) }
     add(toggleRow("enabled", "Use $SYNC_NAME", FuseIcons.Power, c.enabled, "Your saves, play time, library and settings on every device, from a host of your own") { v ->
-        app.scope.launch { app.store.sync.setEnabled(v) }
+        if (v) app.scope.launch { app.store.sync.setEnabled(true) } else turnOffFuseSync(app)
     })
     if (!c.enabled) {
         add(infoRow("off", "Nothing runs while it's off", detail = "No profiles, no Sync tab and nothing in the background. Everything on this device stays exactly as it is", icon = FuseIcons.ShieldCheck))

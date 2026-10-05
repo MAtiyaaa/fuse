@@ -119,10 +119,14 @@ class CompanionScreens(private val app: FuseApplication) : DualScreenHandoff {
             mainOff = off
             if (off) {
                 presentation?.setAway(true)
-                SecondScreenLog.add("Main screen off (lid closed or power): the second screen may sleep")
+                SecondScreenLog.add("Main screen off (lid closed, power, or only the second screen on): the second screen may sleep")
             } else if (!_away.value) {
                 presentation?.setAway(false)
             }
+            // Only the second screen on (the AYN menu's Mode, or the top screen locked off): the
+            // menus follow it there, and come back when the main screen does.
+            val main = app.activities.main
+            if (main != null && main.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) update(main, mode, flippedWanted)
         }
     }
 
@@ -134,6 +138,10 @@ class CompanionScreens(private val app: FuseApplication) : DualScreenHandoff {
             // No display service: nothing to watch.
         }
     }
+
+    /** The device is awake (not a lid closed or the power button): a screen turned off on purpose. */
+    private fun interactive(): Boolean =
+        app.getSystemService(android.os.PowerManager::class.java)?.isInteractive ?: true
 
     /** Follows [mode] and the current displays. Called on the main thread while [from] is started. */
     fun update(from: Activity, mode: DualScreenMode, flipped: Boolean = flippedWanted) {
@@ -151,12 +159,19 @@ class CompanionScreens(private val app: FuseApplication) : DualScreenHandoff {
         // Fuse is in front: the Presentation takes over from a companion activity left by a game.
         app.activities.companion?.let { finish(it, "Fuse is in front again") }
         showPresentation(main)
-        presentation?.setAway(mainOff)
-        val menusBelow = flippedWanted && presentation != null && menus != null
+        // The menus go where a screen is on: below when chosen and the second screen is on, and
+        // below too while the main screen is off and the second one isn't (only one is in use).
+        val belowOn = presentation?.let { p -> monitor.displays.value.any { it.id == p.display.displayId && it.isOn } } == true
+        val menusBelow = menus != null && belowOn && (flippedWanted || (mainOff && interactive()))
+        if (flippedWanted && presentation != null && !belowOn && _flipped.value) {
+            SecondScreenLog.add("The second screen is off: the menus come up to the main screen until it is back")
+        }
         if (flippedWanted && !menusBelow && !flippedRefusedLogged) {
             flippedRefusedLogged = true
             SecondScreenLog.add("Menus below was chosen, but no second screen took them: they stay on the main screen")
         }
+        // With the main screen off the second may sleep as usual, unless the menus are on it now.
+        presentation?.setAway(mainOff && !menusBelow)
         if (_flipped.value != menusBelow) {
             _flipped.value = menusBelow
             SecondScreenLog.add(if (menusBelow) "Menus moved to the second screen" else "Menus back on the main screen")

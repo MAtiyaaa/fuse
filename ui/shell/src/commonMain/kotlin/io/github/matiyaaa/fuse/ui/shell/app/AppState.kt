@@ -183,6 +183,12 @@ class AppState(
     /** Who is playing here (Fuse Sync's profile in use); null while Fuse Sync is off or no one is chosen. */
     var syncProfile by mutableStateOf<io.github.matiyaaa.fuse.sync.ProfileInfo?>(null)
 
+    /** How many profiles the Fuse Sync host has (0 while it is off): the top line shows who is playing only with two or more. */
+    var syncProfileCount by mutableStateOf(0)
+
+    /** Fuse is using Syncthing here (its state isn't Off): Addons shows its tab. */
+    var syncthingActive by mutableStateOf(false)
+
     /** Fuse Sync's startup choice of profile was made (once per run, not on every recomposition). */
     var syncStartupDone = false
 
