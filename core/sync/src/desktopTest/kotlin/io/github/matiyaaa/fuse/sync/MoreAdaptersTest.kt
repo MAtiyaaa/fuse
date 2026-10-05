@@ -82,8 +82,11 @@ class MoreAdaptersTest {
         val id0 = "0123456789abcdef0123456789abcdef"
         val id1 = "fedcba9876543210fedcba9876543210"
         val env = FakeEnv("LINUX", "/home/mo", files = mapOf("$base/sdmc/Nintendo 3DS/$id0/$id1/title/" to ""), bin = mapOf("/roms/3ds/X.3ds" to header))
-        val spot = SaveAdapters.forEmulator("azahar")!!.locate(q("3ds", "/roms/3ds/X.3ds", "azahar"), env).single()
-        assertEquals("$base/sdmc/Nintendo 3DS/$id0/$id1/title/00040000/00055d00/data", spot.root)
+        val spots = SaveAdapters.forEmulator("azahar")!!.locate(q("3ds", "/roms/3ds/X.3ds", "azahar"), env)
+        assertEquals("$base/sdmc/Nintendo 3DS/$id0/$id1/title/00040000/00055d00/data", spots.single { it.kind == SaveKind.SAVE }.root)
+        // Save states sit in the user folder's states, by title id and slot.
+        val states = spots.single { it.kind == SaveKind.STATE }
+        assertEquals("$base/states/0004000000055D00.01.cst", states.pathFor("state01"))
     }
 
     @Test

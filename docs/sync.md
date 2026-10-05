@@ -25,9 +25,21 @@ turn it on, then **Make This the Host**. Give it a name, choose whether it keeps
 is closed (see below), and it shows **Fuse Sync is ready** with an eight-character code.
 
 **On every other device**: Settings, Addons, Fuse Sync, turn it on, then **Connect to a Host**.
-Fuse looks on the network (**Fuse Sync found**), you choose the host and type its code, and then
-choose who is playing. A code works once, for ten minutes; the host makes a new one with
-**Add a Device**.
+Fuse looks on the network (**Fuse Sync found**) and you choose the host. Then either:
+
+- **Ask to Let This Device In.** A card pops up on the host and on every device already connected,
+  naming the device and showing a six-digit number; the new device shows the same number. Anyone
+  there checks they match and chooses **Let It In**. Nothing to type. The request lasts five
+  minutes.
+- **Type a Code.** **Add a Device** shows an eight-character code, on the host or on any device
+  already connected. A code works once, for ten minutes.
+
+Then the device makes its profile (or chooses one), and it is in.
+
+**The host's own profile.** Setting up a host makes **Admin**, a profile only that computer sees
+and plays as, so nobody needs a profile there. Other devices never see or open Admin; each person
+makes their own from their device. A host set up before 0.3.3 gets Admin too, and keeps playing as
+the profile it was using.
 
 Android devices connect to a host rather than being one: Android stops background work to save
 battery, so it couldn't promise to be there for your other devices.
@@ -179,7 +191,14 @@ journal). On a slow connection what matters most goes first: records, then the s
 At home, devices find the host by themselves. Away, give each device an **outside address** that
 reaches the host over the internet: a VPN such as Tailscale or WireGuard, or an https reverse
 proxy or tunnel in front of port 47311. Fuse uses the home address when it answers and the outside
-one otherwise, switching back by itself.
+one otherwise, switching back by itself, and tries it too while connecting when home doesn't answer.
+
+A Cloudflare tunnel works well: point it at `http://localhost:47311` on the host and use its
+address (`https://sync.example.com`) as the outside address. Leave Cloudflare Access off for that
+hostname (or let Fuse's requests through), since Fuse signs its own requests and can't answer a
+login page. An address typed without `https://` is reached securely when it is a name on the
+internet and plainly when it is at home. On Android, Fuse Sync uses Android's own secure
+connection, as the rest of Fuse does.
 
 ## Keeping the host running
 
@@ -205,6 +224,12 @@ the same Hub, with Sync Now, Switch Profile and Add a Device.
 
 - Pairing uses a one-time code, valid for ten minutes and five tries. The device's secret is sealed
   with that code (AES-GCM, key from PBKDF2) and never sent in the clear.
+- Asking to join uses a key exchange instead (ECDH on P-256): the device's secret is sealed with a
+  key only the device and the host have. Both screens show six digits made from both public keys,
+  so someone in the middle would show a different number. Only a device already in (or the host)
+  can let one in, and a request lasts five minutes.
+- The Hub page and the management calls answer only on the host computer itself. A call that a
+  tunnel or proxy on that computer carries (cloudflared, a reverse proxy) counts as from outside.
 - Every request is signed (HMAC-SHA256 over the method, path, time, a nonce and the body). Requests
   more than five minutes off, or seen before, are refused.
 - Each device has its own credential, scoped to it and revocable from the host at any time.

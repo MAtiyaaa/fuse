@@ -16,6 +16,8 @@ internal data class ProfileRecord(
     /** Grows every time the PIN changes: tickets from before stop working. */
     val pinEpoch: Int = 0,
     val deleted: Boolean = false,
+    /** The host computer's own (Admin), hidden from every other device. */
+    val hostOnly: Boolean = false,
 )
 
 /** A device as the host keeps it, with the secret its calls are signed with. */
@@ -31,6 +33,8 @@ internal data class DeviceRecord(
     val connection: String = "",
     val profile: String? = null,
     val revoked: Boolean = false,
+    /** The Fuse on the host computer itself: the one device that sees the host's own profile. */
+    val owner: Boolean = false,
     /** Profiles this device has opened, with the PIN epoch they were opened at. */
     val opened: Map<String, Int> = emptyMap(),
 )
@@ -55,6 +59,10 @@ class HostStore(val dir: File, private val clock: () -> Long = System::currentTi
     private val devicesFile = File(dir, "devices.json")
     private val profilesFile = File(dir, "profiles.json")
     private val sharedFile = File(dir, "shared-games.json")
+    private val aliasFile = File(dir, "game-aliases.json")
+
+    /** Every id a game has been known by, to the one id the household's saves and records use. */
+    private val aliases = HashMap<String, String>()
     private val journalFile = File(dir, "journal.jsonl")
 
     /**
@@ -106,6 +114,7 @@ class HostStore(val dir: File, private val clock: () -> Long = System::currentTi
         File(profileDir(SHARED_SAVES), "revisions.jsonl").takeIf { it.isFile }?.let { f ->
             revisions[SHARED_SAVES] = f.readLines().mapNotNull { line -> runCatching { json.decodeFromString(SaveRevision.serializer(), line) }.getOrNull() }.toMutableList()
         }
+        if (aliasFile.isFile) runCatching { json.decodeFromString(GameAliasesSerializer, aliasFile.readText()) }.getOrNull()?.let(aliases::putAll)
         if (sharedFile.isFile) runCatching { json.decodeFromString(SharedGames.serializer(), sharedFile.readText()).games }.getOrNull()?.let(shared::addAll)
         if (journalFile.isFile) {
             journalFile.readLines().mapNotNullTo(journal) { line -> runCatching { json.decodeFromString(JournalEvent.serializer(), line) }.getOrNull() }
@@ -125,6 +134,9 @@ class HostStore(val dir: File, private val clock: () -> Long = System::currentTi
             out.fd.sync()
         }
     }
+
+    /** Notes that a device asked to join, so the devices that may let it in look. */
+    internal fun noteJoin(): Unit = synchronized(lock) { event(JournalEvent.JOIN) }
 
     private fun event(type: String, profile: String? = null, game: String? = null, kind: SaveKind? = null, revision: String? = null, device: String? = null): JournalEvent {
         val e = JournalEvent(++seq, type, profile, game, kind, revision, device, clock())
@@ -200,13 +212,41 @@ class HostStore(val dir: File, private val clock: () -> Long = System::currentTi
 
     // ---------------------------------------------------------------- profiles
 
-    fun profiles(): List<ProfileInfo> = synchronized(lock) { profiles.values.filter { !it.deleted }.map(::infoOf) }
+    /**
+     * The profiles, as [device] may see them: the host's own (Admin) only on the host computer's
+     * Fuse. With no device (the Hub, the host's own status) every one.
+     */
+    fun profiles(device: String? = null): List<ProfileInfo> = synchronized(lock) {
+        val owner = device == null || devices[device]?.owner == true
+        profiles.values.filter { !it.deleted && (owner || !it.hostOnly) }.map(::infoOf)
+    }
+
+    /**
+     * Marks [deviceId] as the Fuse on the host computer itself and makes sure the host has its own
+     * profile, Admin: the host never needs a person's profile, and no other device sees Admin.
+     * Returns Admin. Safe to call again.
+     */
+    fun adoptOwner(deviceId: String): ProfileInfo = synchronized(lock) {
+        val d = devices[deviceId]
+        if (d != null && !d.owner) {
+            devices[deviceId] = d.copy(owner = true)
+            saveDevices()
+        }
+        val existing = profiles.values.firstOrNull { it.hostOnly && !it.deleted }
+        if (existing != null) return@synchronized infoOf(existing)
+        val taken = profiles.values.any { !it.deleted && it.name.equals(ADMIN_NAME, ignoreCase = true) }
+        val record = ProfileRecord(SyncCrypto.token(9), if (taken) "$ADMIN_NAME (Host)" else ADMIN_NAME, ADMIN_AVATAR, clock(), hostOnly = true)
+        profiles[record.id] = record
+        saveProfiles()
+        event(JournalEvent.PROFILE, profile = record.id)
+        infoOf(record)
+    }
 
     private fun infoOf(p: ProfileRecord): ProfileInfo {
         val revs = revisions[p.id].orEmpty()
         val bytes = revs.flatMap { it.manifest.files }.distinctBy { it.hash }.sumOf { it.size }
         val used = devices.values.filter { it.profile == p.id && !it.revoked }.map { it.name }
-        return ProfileInfo(p.id, p.name, p.avatar, p.pinHash != null, p.createdAt, bytes, used)
+        return ProfileInfo(p.id, p.name, p.avatar, p.pinHash != null, p.createdAt, bytes, used, hostOnly = p.hostOnly)
     }
 
     fun createProfile(request: NewProfile): ProfileInfo = synchronized(lock) {
@@ -263,6 +303,8 @@ class HostStore(val dir: File, private val clock: () -> Long = System::currentTi
     internal fun unlock(device: String, profile: String, pin: String?): UnlockResult = synchronized(lock) {
         val p = profiles[profile]?.takeIf { !it.deleted } ?: return@synchronized UnlockResult.NoProfile
         val d = devices[device] ?: return@synchronized UnlockResult.NoProfile
+        // The host's own profile doesn't exist for any other device.
+        if (p.hostOnly && !d.owner) return@synchronized UnlockResult.NoProfile
         val key = "$device/$profile"
         val (count, until) = failures[key] ?: (0 to 0L)
         val now = clock()
@@ -285,6 +327,8 @@ class HostStore(val dir: File, private val clock: () -> Long = System::currentTi
         if (profile == SHARED_SAVES) return@synchronized devices[device]?.revoked == false
         val p = profiles[profile]?.takeIf { !it.deleted } ?: return@synchronized false
         val d = devices[device]?.takeIf { !it.revoked } ?: return@synchronized false
+        // The host's own profile is the host computer's alone.
+        if (p.hostOnly && !d.owner) return@synchronized false
         if (p.pinHash == null) return@synchronized true
         d.opened[profile] == p.pinEpoch
     }
@@ -303,6 +347,64 @@ class HostStore(val dir: File, private val clock: () -> Long = System::currentTi
             event(JournalEvent.META, profile = profile, device = device)
         }
         MetaState(merged, seq)
+    }
+
+    // ---------------------------------------------------------------- one id per game
+
+    /**
+     * One id for each game across devices. Each list is every id a device may know a game by (its
+     * serial, its title), most trusted first. A game already known by any of them keeps that id;
+     * otherwise the one with saves or records already wins, else the first. Saves and records kept
+     * under the others move to it, so a device that knew the game by another name finds them.
+     * Returns the id for each list, in order ("" for an empty one).
+     */
+    fun resolveGames(lists: List<List<String>>): List<String> = synchronized(lock) {
+        var changed = false
+        val out = lists.map { raw ->
+            val ids = raw.filter { GameKey.parse(it) != null }.distinct().take(MAX_ALIASES)
+            if (ids.isEmpty()) return@map ""
+            val canon = ids.firstNotNullOfOrNull { aliases[it] } ?: ids.firstOrNull { hasData(it) } ?: ids.first()
+            if (aliases[canon] != canon) { aliases[canon] = canon; changed = true }
+            for (id in ids) {
+                if (id == canon || aliases[id] == canon) continue
+                if (aliases[id] == null) {
+                    aliases[id] = canon
+                    adopt(id, canon)
+                    changed = true
+                }
+            }
+            canon
+        }
+        if (changed) writeAtomically(aliasFile, json.encodeToString(GameAliasesSerializer, aliases).toByteArray())
+        out
+    }
+
+    private fun hasData(game: String): Boolean =
+        revisions.values.any { list -> list.any { it.game == game } } || metas.values.any { game in it.games }
+
+    /** Moves what was kept under [from] to [to]: saves (for slots [to] has none of yet) and records. */
+    private fun adopt(from: String, to: String) {
+        val key = GameKey.parse(to) ?: return
+        for ((profile, list) in revisions) {
+            val have = list.filter { it.game == to }.map { it.kind }.toSet()
+            var moved = false
+            for (i in list.indices) {
+                val r = list[i]
+                if (r.game == from && r.kind !in have) {
+                    list[i] = r.copy(game = to)
+                    moved = true
+                }
+            }
+            if (moved) rewriteRevisions(profile)
+        }
+        for ((profile, meta) in metas.toMap()) {
+            val old = meta.games[from] ?: continue
+            val moved = old.copy(key = key)
+            val games = meta.games - from + (to to (meta.games[to]?.merge(moved) ?: moved))
+            val next = meta.copy(games = games)
+            metas[profile] = next
+            writeAtomically(File(profileDir(profile), "meta.json"), json.encodeToString(ProfileMeta.serializer(), next).toByteArray())
+        }
     }
 
     // ---------------------------------------------------------------- revisions
@@ -492,3 +594,10 @@ internal sealed interface UnlockResult {
     data object NoProfile : UnlockResult
     data class Wait(val millis: Long) : UnlockResult
 }
+
+/** The host computer's own profile. */
+internal const val ADMIN_NAME = "Admin"
+internal const val ADMIN_AVATAR = "crown"
+
+/** The most ids one game may be claimed under at once. */
+private const val MAX_ALIASES = 8

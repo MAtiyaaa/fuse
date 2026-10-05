@@ -34,9 +34,14 @@ class ServiceTest {
     /** A device's library as Fuse Sync sees it: records by game, plus settings. */
     private class Library(val games: MutableMap<String, GameRecord> = HashMap(), val settings: MutableMap<String, JsonPrimitive> = HashMap()) : ProfileDataPort {
         var writes = 0
-        override suspend fun read(device: String, clock: HlcClock): ProfileMeta =
+        override suspend fun read(device: String, clock: HlcClock): ProfileMeta = synchronized(this) {
             ProfileMeta(games = games.toMap(), settings = settings.mapValues { Lww(it.value as kotlinx.serialization.json.JsonElement, Hlc.ZERO) })
-        override suspend fun write(meta: ProfileMeta) {
+        }
+
+        /** The games as they are now (the service writes them from its own thread). */
+        fun gamesNow(): Map<String, GameRecord> = synchronized(this) { games.toMap() }
+
+        override suspend fun write(meta: ProfileMeta) = synchronized(this) {
             writes++
             games.clear()
             meta.games.forEach { (k, r) ->
@@ -47,6 +52,12 @@ class ServiceTest {
             meta.settings.forEach { (k, v) -> settings[k] = v.value as JsonPrimitive }
         }
         override suspend fun keyOf(gameId: Long): GameKey? = null
+
+        /** The ids each game here is known by (what a real library sends: serial, then title). */
+        var known: List<List<GameKey>> = emptyList()
+        var aliases: Map<String, String> = emptyMap()
+        override suspend fun candidates(): List<List<GameKey>> = known
+        override fun useAliases(aliases: Map<String, String>) { this.aliases = aliases }
     }
 
     private lateinit var root: File
@@ -132,11 +143,44 @@ class ServiceTest {
         // The Deck's save is in the history.
         assertTrue(deck.versions(q, SaveKind.SAVE).size >= 3)
         // Unlinking keeps everything on the device exactly as it was.
-        val before = deckLib.games.toMap()
+        val before = deckLib.gamesNow()
         deck.unlink().getOrThrow()
-        assertEquals(before, deckLib.games)
+        assertEquals(before, deckLib.gamesNow())
         assertEquals("pc: elite four", File(roms, "Pokemon Ruby (USA).sav").readText())
         withTimeout(5_000) { deck.status.first { it is SyncStatus.NotSetUp } }
+        pc.stop()
+    }
+
+    @Test
+    fun aGameKnownBySerialOnOneDeviceAndTitleOnAnotherIsOneGame(): Unit = runBlocking {
+        // The Thor's copy has no serial (only its title); the PC's scan read the serial.
+        val byTitle = GameKey.of("gba", null, null, "Pokemon Ruby (USA)")
+        val thorLib = Library().apply { known = listOf(listOf(byTitle)) }
+        val pcLib = Library().apply { known = listOf(listOf(ct, GameKey.of("gba", null, null, "Pokemon Ruby"))) }
+        val (pc, _) = service("Gaming PC", pcLib)
+        val (thor, _) = service("AYN Thor", thorLib, platform = "ANDROID")
+        val code = assertNotNull(pc.hostHere("Gaming PC", installService = false).getOrThrow().pairingCode)
+        thor.connect("127.0.0.1:$port", code).getOrThrow()
+        val mo = pc.createProfile("Mo", "fox", null).getOrThrow()
+        thor.switchTo(mo.id).getOrThrow()
+        pc.switchTo(mo.id).getOrThrow()
+        // The Thor plays first, by title.
+        val thorRoms = File(root, "thor-roms").apply { mkdirs() }
+        File(thorRoms, "Pokemon Ruby (USA).sav").writeText("thor: 5 badges")
+        val tq = SaveQuery(byTitle, "gba", File(thorRoms, "Pokemon Ruby (USA).gba").path.replace('\\', '/'), "mgba", title = "Pokemon Ruby")
+        thor.afterExit(tq, 0, 60_000)
+        // Closed on the Thor, opened on the PC: the PC asks by serial and gets the Thor's save.
+        val pcRoms = File(root, "pc-roms").apply { mkdirs() }
+        val pq = SaveQuery(ct, "gba", File(pcRoms, "ruby.gba").path.replace('\\', '/'), "mgba", title = "Pokemon Ruby")
+        assertIs<LaunchGate.Go>(pc.beforeLaunch(pq))
+        assertEquals("thor: 5 badges", File(pcRoms, "ruby.sav").readText())
+        // Both libraries now call it by the same id.
+        assertEquals(thorLib.aliases[byTitle.id], pcLib.aliases[ct.id])
+        // And back: played on the PC, the Thor gets it.
+        File(pcRoms, "ruby.sav").writeText("pc: 6 badges")
+        pc.afterExit(pq, 0, 60_000)
+        assertIs<LaunchGate.Go>(thor.beforeLaunch(tq))
+        assertEquals("pc: 6 badges", File(thorRoms, "Pokemon Ruby (USA).sav").readText())
         pc.stop()
     }
 

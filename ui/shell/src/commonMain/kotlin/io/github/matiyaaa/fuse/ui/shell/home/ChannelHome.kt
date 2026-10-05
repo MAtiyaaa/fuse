@@ -476,14 +476,9 @@ internal fun ChannelBoard(app: AppState, page: Int, pageKey: String, active: Boo
                     // The triggers (L2, R2) turn the focused widget's carousel; the bumpers stay on the tabs.
                     NavAction.PAGE_UP, NavAction.PAGE_DOWN -> {
                         val turn = w?.let { carouselOf(it) }?.takeIf { it.count > 1 && !arranging } ?: return@InputLayer NavResult.IGNORED
-                        if (turn.step(if (e.action == NavAction.PAGE_DOWN) 1 else -1)) {
-                            app.platform.sounds.play(io.github.matiyaaa.fuse.ui.designsystem.sound.SoundCue.MOVE)
-                            haptics.tick()
-                            NavResult.MOVED
-                        } else {
-                            app.platform.sounds.play(io.github.matiyaaa.fuse.ui.designsystem.sound.SoundCue.BUMP)
-                            NavResult.BLOCKED
-                        }
+                        // The app's feedback gives the sound and the tick, once. Held at an end, the
+                        // repeats change nothing: one bump on the first press, then quiet.
+                        if (turn.step(if (e.action == NavAction.PAGE_DOWN) 1 else -1, nudge = !e.isRepeat)) NavResult.MOVED else NavResult.BLOCKED
                     }
                     NavAction.CONTEXT -> { app.openContextMenu(boardMenu(app, editor, w, ::addPicker, ::stopArranging, ::remove, committed, page, paging)); NavResult.ACTIVATED }
                     NavAction.BACK -> if (arranging) { stopArranging(); NavResult.CONSUMED } else NavResult.IGNORED
@@ -840,6 +835,8 @@ private fun BoardItem(
             shape = shape,
             glow = widgetGlow(widget.kind, feed, cartridge, carousel?.index ?: 0),
             maxGrow = FOCUS_GROW,
+            // A carousel draws its own cards (the next one peeking): no box around the empty parts.
+            surface = carousel == null,
             onClick = onClick,
         ) {
             // A new shape gets its own face, crossfading from the old one.

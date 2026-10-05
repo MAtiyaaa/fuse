@@ -126,8 +126,8 @@ internal fun SyncthingTab(app: AppState, active: Boolean, topPadding: Dp) {
             }
         } else {
             when (e.action) {
-                NavAction.LEFT -> if (index > 0) { index--; app.platform.sounds.play(SoundCue.MOVE); NavResult.MOVED } else NavResult.BLOCKED
-                NavAction.RIGHT -> if (index < actions.size - 1) { index++; app.platform.sounds.play(SoundCue.MOVE); NavResult.MOVED } else NavResult.BLOCKED
+                NavAction.LEFT -> if (index > 0) { index--; NavResult.MOVED } else NavResult.BLOCKED
+                NavAction.RIGHT -> if (index < actions.size - 1) { index++; NavResult.MOVED } else NavResult.BLOCKED
                 NavAction.SELECT -> { actions.getOrNull(index)?.third?.invoke(); NavResult.ACTIVATED }
                 NavAction.DOWN -> if (rows.isNotEmpty()) { inList = true; NavResult.MOVED } else NavResult.BLOCKED
                 else -> NavResult.IGNORED

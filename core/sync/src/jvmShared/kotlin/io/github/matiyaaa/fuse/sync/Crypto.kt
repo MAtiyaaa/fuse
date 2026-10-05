@@ -94,6 +94,37 @@ object SyncCrypto {
         cipher.doFinal(all.copyOfRange(12, all.size))
     }.getOrNull()
 
+    // ---------------------------------------------------------------- joining without a code
+
+    /** A fresh EC P-256 key pair for one request to join. */
+    fun joinKeys(): java.security.KeyPair =
+        java.security.KeyPairGenerator.getInstance("EC").apply { initialize(java.security.spec.ECGenParameterSpec("secp256r1"), random) }.generateKeyPair()
+
+    fun publicKeyText(keys: java.security.KeyPair): String = encode(keys.public.encoded)
+
+    /**
+     * The key both sides of a request to join arrive at from their own private key and the other's
+     * public one (ECDH), as text for [seal]; null when [otherPublic] isn't a P-256 key.
+     */
+    fun joinSecret(mine: java.security.KeyPair, otherPublic: String): String? = runCatching {
+        val other = java.security.KeyFactory.getInstance("EC").generatePublic(java.security.spec.X509EncodedKeySpec(decode(otherPublic)))
+        val agreement = javax.crypto.KeyAgreement.getInstance("ECDH")
+        agreement.init(mine.private)
+        agreement.doPhase(other, true)
+        sha256(agreement.generateSecret())
+    }.getOrNull()
+
+    /**
+     * The six digits both screens show for a request to join ("482 913"), from both public keys:
+     * someone in the middle would have keys of their own, and the numbers wouldn't match.
+     */
+    fun joinMatch(devicePublic: String, hostPublic: String): String {
+        val d = MessageDigest.getInstance("SHA-256").digest(decode(devicePublic) + decode(hostPublic))
+        val n = ((d[0].toLong() and 0xFF) shl 24 or ((d[1].toLong() and 0xFF) shl 16) or ((d[2].toLong() and 0xFF) shl 8) or (d[3].toLong() and 0xFF)) % 1_000_000
+        val s = n.toString().padStart(6, '0')
+        return s.take(3) + " " + s.drop(3)
+    }
+
     fun constantEquals(a: String, b: String): Boolean = MessageDigest.isEqual(a.toByteArray(), b.toByteArray())
 
     private fun hex(bytes: ByteArray): String {

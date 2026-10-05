@@ -24,6 +24,9 @@ sealed interface SyncStatus {
 }
 
 /** A host on this network, found by asking. */
+/** A request to join on its way: the host asked, and the number this device shows. */
+data class JoinWaiting(val hostName: String, val match: String)
+
 data class NearbyHost(val name: String, val hostId: String, val address: String)
 
 /** One thing Fuse Sync did, for the Sync tab's recent activity. */
@@ -114,6 +117,12 @@ interface ProfileDataPort {
 
     /** The game a launch is for, as Fuse Sync knows games. */
     suspend fun keyOf(gameId: Long): GameKey?
+
+    /** Every id each game here may be known by on any device (its serial, its title), most trusted first. */
+    suspend fun candidates(): List<List<GameKey>> = emptyList()
+
+    /** The one id the household knows each game by, from any of its ids: records are read and written by it. */
+    fun useAliases(aliases: Map<String, String>) {}
 }
 
 /**
@@ -168,6 +177,24 @@ interface SyncService {
 
     /** A code to add a device (on the host only). */
     suspend fun newPairingCode(): String?
+
+    /**
+     * Asks the host at [address] (else [remoteAddress]) to let this device in without a code.
+     * The answer is the number this device shows; someone lets it in on the host, or on any
+     * device already connected, after checking theirs shows the same.
+     */
+    suspend fun askToJoin(address: String, remoteAddress: String? = null): Result<JoinWaiting> = Result.failure(UnsupportedOperationException("Fuse Sync isn't part of this build."))
+
+    /** Waits for the request [askToJoin] made: the host's name once let in, a failure when turned away or out of time. */
+    suspend fun awaitJoin(): Result<String> = Result.failure(UnsupportedOperationException("Fuse Sync isn't part of this build."))
+
+    /** Gives up on a request to join. */
+    fun cancelJoin() {}
+
+    /** Devices asking to join right now, for this device to let in (on the host, and every device already connected). */
+    val joinRequests: StateFlow<List<JoinAsk>> get() = NO_JOIN_REQUESTS
+
+    suspend fun answerJoin(id: String, allow: Boolean): Result<Unit> = Result.failure(UnsupportedOperationException("Fuse Sync isn't set up."))
 
     suspend fun createProfile(name: String, avatar: String, pin: String?): Result<ProfileInfo>
     suspend fun changeProfile(id: String, change: ProfileChange): Result<ProfileInfo>
@@ -248,6 +275,8 @@ class NoHostLifetime(private val why: String) : HostLifetime {
     override fun install(): Result<ServiceState> = Result.failure(UnsupportedOperationException(why))
     override fun remove(): Result<ServiceState> = Result.success(state())
 }
+
+private val NO_JOIN_REQUESTS: StateFlow<List<JoinAsk>> = kotlinx.coroutines.flow.MutableStateFlow(emptyList())
 
 private val NO_SHARED_GAMES: StateFlow<Set<String>> = kotlinx.coroutines.flow.MutableStateFlow(emptySet())
 

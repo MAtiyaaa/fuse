@@ -83,12 +83,15 @@ internal class CarouselState {
         private set
 
     /** One item on ([by] = 1) or back (-1). False at an end, where the carousel leans and springs back. */
-    fun step(by: Int): Boolean {
+    /** Turns by [by]; at an end it doesn't, and leans that way when [nudge] (not for a held button's repeats). */
+    fun step(by: Int, nudge: Boolean = true): Boolean {
         if (count <= 1) return false
         val next = index + by
         if (next !in 0 until count) {
-            nudgeDirection = by
-            nudge++
+            if (nudge) {
+                nudgeDirection = by
+                this.nudge++
+            }
             return false
         }
         index = next

@@ -106,7 +106,7 @@ internal fun PairingOverlay(app: AppState) {
                         Spacer(Modifier.width(Space.l))
                         Column {
                             FText("Add a Device", Fuse.type.title, maxLines = 1, modifier = Modifier.semantics { heading() })
-                            FText("To ${host?.name ?: "this host"}", Fuse.type.body, color = Fuse.colors.textMuted, maxLines = 1)
+                            FText("To ${host?.name ?: app.store.sync.config.value.hostName.ifBlank { "your host" }}", Fuse.type.body, color = Fuse.colors.textMuted, maxLines = 1)
                         }
                     }
                     Spacer(Modifier.height(Space.l))

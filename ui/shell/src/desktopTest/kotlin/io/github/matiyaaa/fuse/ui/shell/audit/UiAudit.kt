@@ -185,6 +185,10 @@ class UiAudit {
 
     @Test fun saveFoldersM() = audit(AuditSize.M) { saveFolderScreens() }
 
+    @Test fun joinM() = audit(AuditSize.M) { joinScreens() }
+
+    @Test fun joinH() = audit(AuditSize.H) { joinScreens() }
+
     @Test fun saveFoldersH() = audit(AuditSize.H) { saveFolderScreens() }
 
     @Test fun syncthingH() = audit(AuditSize.H) { syncthingScreens() }

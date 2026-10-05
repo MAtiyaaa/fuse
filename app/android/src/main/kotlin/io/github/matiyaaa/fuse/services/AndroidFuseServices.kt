@@ -72,8 +72,10 @@ class AndroidFuseServices(
             scope = scope,
         )
 
-    override fun syncService(data: io.github.matiyaaa.fuse.sync.ProfileDataPort, scope: CoroutineScope): io.github.matiyaaa.fuse.sync.SyncService =
-        io.github.matiyaaa.fuse.sync.JvmSyncService(
+    override fun syncService(data: io.github.matiyaaa.fuse.sync.ProfileDataPort, scope: CoroutineScope): io.github.matiyaaa.fuse.sync.SyncService {
+        // The host is reached with Android's own TLS, as Jellyfin is, so an https tunnel answers the same way.
+        io.github.matiyaaa.fuse.sync.SyncHttp.factory = { block -> io.ktor.client.HttpClient(io.ktor.client.engine.okhttp.OkHttp, block) }
+        return io.github.matiyaaa.fuse.sync.JvmSyncService(
             dir = java.io.File(appContext.filesDir, "sync"),
             settings = this.data.settings,
             secrets = secrets,
@@ -91,6 +93,7 @@ class AndroidFuseServices(
                 }?.let { lock -> AutoCloseable { lock.release() } }
             },
         )
+    }
 
     override val emulators: EmulatorDetector = AndroidEmulatorDetector(appContext, storageVolumes)
     override val launcher: GameLauncher = AndroidGameLauncher(

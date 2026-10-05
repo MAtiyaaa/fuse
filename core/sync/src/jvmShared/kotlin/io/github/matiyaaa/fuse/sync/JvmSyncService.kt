@@ -135,6 +135,17 @@ class JvmSyncService(
         client = SyncClient(l.copy(localAddress = c.localAddress.ifBlank { l.localAddress }, remoteAddress = c.remoteAddress.ifBlank { l.remoteAddress }))
         _status.value = SyncStatus.Connecting(c.hostName.ifBlank { l.hostName })
         startLoop()
+        // A host set up before Admin existed gets it too (this computer keeps the profile it uses).
+        if (c.role == "HOST") scope.launch(Dispatchers.IO) { if (adoptHost() != null) runCatching { refreshLists() } }
+    }
+
+    /**
+     * On the host computer: this Fuse is the host's own, and the host has its own profile, Admin,
+     * which no other device sees. Returns Admin, or null when the host can't be asked.
+     */
+    private suspend fun adoptHost(): ProfileInfo? {
+        val id = cached.deviceId.takeIf { it.isNotEmpty() } ?: return null
+        return runCatching { hostServer?.store?.adoptOwner(id) ?: hostAdmin?.adoptOwner(id) }.getOrNull()
     }
 
     /**
@@ -181,11 +192,17 @@ class JvmSyncService(
         loop?.cancel()
         loop = scope.launch(Dispatchers.IO) {
             var backoff = 2_000L
+            var joinsChecked = false
             while (true) {
                 val c = client ?: break
                 try {
                     // Sends what is waiting and catches up, then waits for the host to say something changed.
                     syncOnce()
+                    // Requests to join: once on the way in, after being away, and while any are showing (they run out).
+                    if (!joinsChecked || backoff > 2_000L || _joins.value.isNotEmpty()) {
+                        refreshJoins()
+                        joinsChecked = true
+                    }
                     backoff = 2_000L
                     val since = device?.seq ?: 0
                     val page = c.events(since, waitSeconds = 25)
@@ -193,6 +210,7 @@ class JvmSyncService(
                         device?.saw(page.seq)
                         val active = cached.activeProfile
                         if (page.events.any { it.type == JournalEvent.PROFILE || it.type == JournalEvent.DEVICE }) refreshLists()
+                        if (page.events.any { it.type == JournalEvent.JOIN }) refreshJoins()
                         if (active.isNotEmpty() && page.events.any { it.profile == active && it.device != cached.deviceId }) pullActive()
                     }
                 } catch (e: CancellationException) {
@@ -242,6 +260,7 @@ class JvmSyncService(
         _status.value = SyncStatus.Online(name, c.route ?: Route.LOCAL, working = true, pending = d.pendingCount)
         if (_profiles.value.isEmpty()) refreshLists()
         val active = cached.activeProfile
+        runCatching { resolveGames(c) }
         if (active.isNotEmpty()) captureChanges(active)
         runCatching { c.sharedGames().games }.onSuccess { games ->
             if (games.toSet() != cached.sharedGames.toSet()) saveConfig { it.copy(sharedGames = games) }
@@ -339,7 +358,7 @@ class JvmSyncService(
     private suspend fun reachable(host: FoundHost): String {
         val candidates = host.candidates
         if (candidates.size == 1) return candidates.first()
-        val quick = io.ktor.client.HttpClient(io.ktor.client.engine.cio.CIO) {
+        val quick = SyncHttp.client {
             install(io.ktor.client.plugins.HttpTimeout) { connectTimeoutMillis = 1_500; requestTimeoutMillis = 2_500 }
             expectSuccess = false
         }
@@ -358,29 +377,143 @@ class JvmSyncService(
             val id = ensureDeviceId()
             val c = config()
             val name = c.deviceName.ifBlank { defaultDeviceName }
-            val link = try {
-                SyncClient.pair(address, code, id, name, platform)
+            suspend fun pairAt(at: String): HostLink? = try {
+                SyncClient.pair(at, code, id, name, platform)
             } catch (e: SyncException) {
                 throw e
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                // Nothing answered there: say what usually causes it, never the network's own words.
-                throw SyncException(unreachableWords(address), "offline", 0)
-            }.let { if (remoteAddress != null) it.copy(remoteAddress = remoteAddress) else it }
-            secrets.put(LINK_KEY, json.encodeToString(HostLink.serializer(), link))
+                null
+            }
+            // At home first; when nothing answers there, the address from outside (a tunnel or VPN).
+            val outside = remoteAddress?.takeIf { it.isNotBlank() && SyncClient.normalise(it) != SyncClient.normalise(address) }
+            val link = pairAt(address)
+                ?: outside?.let { o -> pairAt(o)?.let { l -> l.copy(localAddress = SyncClient.normalise(address).takeIf { !it.startsWith("https://") } ?: l.localAddress) } }
+                // Nothing answered: say what usually causes it, never the network's own words.
+                ?: throw SyncException(unreachableWords(outside ?: address), "offline", 0)
+            val linked = if (outside != null) link.copy(remoteAddress = SyncClient.normalise(outside)) else link
+            linkUp(linked)
+        }
+    }
+
+    /** Keeps [linked] as this device's link to its host and starts syncing with it. */
+    private suspend fun linkUp(linked: HostLink): String {
+        run {
+            secrets.put(LINK_KEY, json.encodeToString(HostLink.serializer(), linked))
             saveConfig {
                 it.copy(
-                    enabled = true, role = if (it.role == "HOST") "HOST" else "CLIENT", hostName = link.hostName, hostId = link.hostId,
-                    localAddress = link.localAddress.orEmpty(), remoteAddress = link.remoteAddress.orEmpty(),
+                    enabled = true, role = if (it.role == "HOST") "HOST" else "CLIENT", hostName = linked.hostName, hostId = linked.hostId,
+                    localAddress = linked.localAddress.orEmpty(), remoteAddress = linked.remoteAddress.orEmpty(),
                 )
             }
             stop()
             start()
             refreshLists()
-            log("Connected to ${link.hostName}")
-            link.hostName
+            log("Connected to ${linked.hostName}")
         }
+        return linked.hostName
+    }
+
+    // ---------------------------------------------------------------- one id per game
+
+    private val aliasFile get() = File(dir, "game-aliases.json")
+    private val aliasSerializer = GameAliasesSerializer
+
+    /** Every id a game here is known by, to the id the host keeps its saves and records under. */
+    @Volatile private var gameAliases: Map<String, String> =
+        runCatching { json.decodeFromString(aliasSerializer, aliasFile.readText()) }.getOrDefault(emptyMap()).also { data.useAliases(it) }
+
+    /** [q] for the game's one id across devices (as it is when the host hasn't been asked yet). */
+    private fun canonical(q: SaveQuery): SaveQuery =
+        gameAliases[q.game.id]?.takeIf { it != q.game.id }?.let(GameKey::parse)?.let { q.copy(game = it) } ?: q
+
+    /**
+     * Asks the host for the one id of each game here it hasn't settled yet, from every id this
+     * device knows it by: a serial on one device and only a title on another still meet.
+     */
+    private suspend fun resolveGames(c: SyncClient) {
+        val lists = runCatching { data.candidates() }.getOrDefault(emptyList()).map { l -> l.map { it.id }.distinct() }.filter { it.isNotEmpty() }
+        val known = gameAliases
+        val todo = lists.filter { l -> l.any { it !in known } }
+        if (todo.isEmpty()) return
+        val next = HashMap(known)
+        for (chunk in todo.chunked(RESOLVE_CHUNK)) {
+            val ids = c.resolveGames(chunk)
+            chunk.zip(ids).forEach { (l, canon) -> if (canon.isNotEmpty()) l.forEach { next[it] = canon } }
+        }
+        gameAliases = next
+        runCatching { writeAtomically(aliasFile, json.encodeToString(aliasSerializer, next).toByteArray()) }
+        data.useAliases(next)
+    }
+
+    // ---------------------------------------------------------------- joining without a code
+
+    private val _joins = MutableStateFlow<List<JoinAsk>>(emptyList())
+    override val joinRequests: StateFlow<List<JoinAsk>> = _joins.asStateFlow()
+    @Volatile private var joining: Pair<JoinSession, String?>? = null
+
+    override suspend fun askToJoin(address: String, remoteAddress: String?): Result<JoinWaiting> = withContext(Dispatchers.IO) {
+        runCatching {
+            val id = ensureDeviceId()
+            val name = config().deviceName.ifBlank { defaultDeviceName }
+            suspend fun askAt(at: String): JoinSession? = try {
+                SyncClient.askToJoin(at, id, name, platform)
+            } catch (e: SyncException) {
+                throw e
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                null
+            }
+            val outside = remoteAddress?.takeIf { it.isNotBlank() && SyncClient.normalise(it) != SyncClient.normalise(address) }
+            val session = askAt(address) ?: outside?.let { askAt(it) } ?: throw SyncException(unreachableWords(outside ?: address), "offline", 0)
+            joining = session to outside
+            JoinWaiting(session.ticket.hostName, session.match)
+        }
+    }
+
+    override suspend fun awaitJoin(): Result<String> = withContext(Dispatchers.IO) {
+        runCatching {
+            val (session, outside) = joining ?: error("Ask the host first.")
+            val until = clock() + SyncHost.JOIN_TTL_MS
+            var link: HostLink? = null
+            while (link == null) {
+                if (joining?.first !== session) throw CancellationException("Stopped asking")
+                if (clock() > until) throw SyncException("Nobody let this device in in time. Ask again.", "gone", 410)
+                link = try {
+                    SyncClient.joinResult(session)
+                } catch (e: SyncException) {
+                    throw e
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    null
+                }
+                if (link == null) delay(JOIN_POLL_MS)
+            }
+            joining = null
+            linkUp(if (outside != null) link.copy(remoteAddress = SyncClient.normalise(outside)) else link)
+        }
+    }
+
+    override fun cancelJoin() {
+        joining = null
+    }
+
+    override suspend fun answerJoin(id: String, allow: Boolean): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatching {
+            val c = client ?: error("Connect to your host first.")
+            c.answerJoin(id, allow)
+            _joins.value = _joins.value.filterNot { it.id == id }
+            refreshJoins()
+            log(if (allow) "Let a new device in" else "Turned a device away")
+        }
+    }
+
+    private suspend fun refreshJoins() {
+        val c = client ?: return
+        _joins.value = runCatching { c.joins() }.getOrDefault(_joins.value)
     }
 
     override suspend fun hostHere(name: String, installService: Boolean): Result<HostView> = withContext(Dispatchers.IO) {
@@ -395,6 +528,11 @@ class JvmSyncService(
             connect("127.0.0.1:${c.hostPort}", code).getOrThrow()
             // That code was this computer's own, and is used up: the one shown for other devices is new.
             lastCode = null
+            // The host plays as its own profile, Admin, so nobody has to make one here.
+            adoptHost()?.let { admin ->
+                refreshLists()
+                switchTo(admin.id, null)
+            }
             if (installService && lifetime.supported) handOver()
             newPairingCode()
             refreshHostView()
@@ -456,7 +594,8 @@ class JvmSyncService(
     @Volatile private var lastCode: String? = null
 
     override suspend fun newPairingCode(): String? {
-        val code = hostServer?.newPairingCode() ?: runCatching { hostAdmin?.pairingCode() }.getOrNull()
+        // The host makes it; any device already connected may ask the host for one too.
+        val code = hostServer?.newPairingCode() ?: runCatching { hostAdmin?.pairingCode() }.getOrNull() ?: runCatching { client?.pairingCode() }.getOrNull()
         lastCode = code
         adminStatus = runCatching { hostAdmin?.status() }.getOrNull() ?: adminStatus
         refreshHostView()
@@ -580,7 +719,10 @@ class JvmSyncService(
         }
     }
 
-    override suspend fun beforeLaunch(query: SaveQuery): LaunchGate = withContext(Dispatchers.IO) {
+    override suspend fun beforeLaunch(asked: SaveQuery): LaunchGate = withContext(Dispatchers.IO) {
+        // The game by the household's one id for it (another device may know it by another name).
+        client?.let { cl -> withTimeoutOrNull(RESOLVE_WAIT_MS) { runCatching { resolveGames(cl) } } }
+        val query = canonical(asked)
         val c = client
         val d = device
         val profile = cached.activeProfile
@@ -637,7 +779,8 @@ class JvmSyncService(
         }
     }
 
-    override suspend fun afterExit(query: SaveQuery, startedAt: Long, endedAt: Long) {
+    override suspend fun afterExit(asked: SaveQuery, startedAt: Long, endedAt: Long) {
+        val query = canonical(asked)
         val d = device ?: return
         val profile = cached.activeProfile.ifEmpty { return }
         withContext(Dispatchers.IO) {
@@ -660,7 +803,8 @@ class JvmSyncService(
         runCatching { c.report(profile) }.onFailure { if (it is SyncException) handle(it) }.getOrNull()
     }
 
-    override suspend fun versions(query: SaveQuery, kind: SaveKind): List<SaveVersion> = withContext(Dispatchers.IO) {
+    override suspend fun versions(asked: SaveQuery, kind: SaveKind): List<SaveVersion> = withContext(Dispatchers.IO) {
+        val query = canonical(asked)
         val c = client ?: return@withContext emptyList()
         val profile = cached.activeProfile.ifEmpty { return@withContext emptyList() }
         val slot = slots(query).firstOrNull { it.kind == kind }
@@ -671,7 +815,8 @@ class JvmSyncService(
         list.map { SaveVersion(it.id, it.deviceName, it.at.millis, it.playSeconds, it.size, it.reason, it.id == head) }
     }
 
-    override suspend fun restore(query: SaveQuery, kind: SaveKind, version: String): Result<Unit> = withContext(Dispatchers.IO) {
+    override suspend fun restore(asked: SaveQuery, kind: SaveKind, version: String): Result<Unit> = withContext(Dispatchers.IO) {
+        val query = canonical(asked)
         runCatching {
             val c = client ?: error("Fuse Sync isn't connected.")
             val d = device ?: error("Fuse Sync isn't set up.")
@@ -744,6 +889,13 @@ class JvmSyncService(
         }
 
         const val LINK_KEY = "sync.link"
+
+        /** The longest a launch waits for the host to settle game ids. */
+        const val RESOLVE_WAIT_MS = 3_000L
+        private const val RESOLVE_CHUNK = 1_000
+
+        /** How often a device waiting to be let in asks whether it has been. */
+        const val JOIN_POLL_MS = 1_500L
         private const val PROFILES_FILE = "profiles.json"
 
         /** The longest a launch waits on the host before playing with what is here. */

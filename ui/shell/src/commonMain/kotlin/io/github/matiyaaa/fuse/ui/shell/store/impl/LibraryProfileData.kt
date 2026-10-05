@@ -39,6 +39,22 @@ internal class LibraryProfileData(
     private var lastState: UserState? = null
     private var lastSettings: Map<String, JsonElement> = emptyMap()
 
+    /** The id the host gave each game, from the ids this library knows it by (so a serial here and a title on the Thor are one game). */
+    @kotlin.concurrent.Volatile private var aliases: Map<String, String> = emptyMap()
+
+    override fun useAliases(aliases: Map<String, String>) { this.aliases = aliases }
+
+    override suspend fun candidates(): List<List<GameKey>> =
+        data.profileState.read().games.map { candidatesOf(it) }.distinct()
+
+    /** The game's one id: the host's, when it has answered for any of the ids it is known by here. */
+    private fun keyOf(r: UserGameRow): GameKey {
+        val ids = candidatesOf(r)
+        val a = aliases
+        for (k in ids) a[k.id]?.let { found -> return GameKey.parse(found) ?: k }
+        return ids.first()
+    }
+
     override suspend fun read(device: String, clock: HlcClock): ProfileMeta = lock.withLock {
         val now = settings()
         val state = data.profileState.read()
@@ -158,7 +174,7 @@ internal class LibraryProfileData(
         lastSettings = personal(settings())
     }
 
-    override suspend fun keyOf(gameId: Long): GameKey? = data.profileState.read().games.firstOrNull { it.id == gameId }?.let { Companion.keyOf(it) }
+    override suspend fun keyOf(gameId: Long): GameKey? = data.profileState.read().games.firstOrNull { it.id == gameId }?.let { keyOf(it) }
 
     /** The person's settings, without Home while this device keeps its own. */
     private fun personal(s: AppSettings): Map<String, JsonElement> = ProfileSettings.extract(s).filterKeys { it in kept(s) }
@@ -175,6 +191,13 @@ internal class LibraryProfileData(
         const val HOME_LAYOUT = "home.layout"
 
         fun keyOf(r: UserGameRow): GameKey = GameKey.of(r.platform, r.serial, null, r.title)
+
+        /** Every id a game can be known by on some device: by serial when this library knows it, and always by title. */
+        fun candidatesOf(r: UserGameRow): List<GameKey> {
+            val byTitle = GameKey.of(r.platform, null, null, r.title)
+            val first = keyOf(r)
+            return if (first == byTitle) listOf(first) else listOf(first, byTitle)
+        }
 
         /** A collection's id everywhere: when it was made, which every device keeps as it is. */
         fun collectionId(createdAt: Long) = "c$createdAt"

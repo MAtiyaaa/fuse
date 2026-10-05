@@ -88,6 +88,13 @@ fun Tile(
      * (Home's widgets), where the usual share of their size would push them over their neighbours.
      */
     maxGrow: Dp? = null,
+    /**
+     * Whether the tile is a surface of its own: its shadow, glass sheen, light edge, hover and press
+     * tints and sweep. Off for content that draws its own cards and leaves parts of the tile empty
+     * (a carousel with the next card peeking), where those would show as a box around nothing; the
+     * lift, the bar and the ring stay.
+     */
+    surface: Boolean = true,
     content: @Composable BoxScope.() -> Unit,
 ) {
     val motion = Fuse.motion
@@ -164,7 +171,7 @@ fun Tile(
                 val rest = Elevation.tile.shadow.toPx()
                 val up = Elevation.tileFocused.shadow.toPx()
                 // A pressed tile is pushed toward the surface, so its shadow tightens.
-                shadowElevation = (rest + (up - rest) * raised) * (1f - 0.45f * p.coerceIn(0f, 1f))
+                shadowElevation = if (!surface) 0f else (rest + (up - rest) * raised) * (1f - 0.45f * p.coerceIn(0f, 1f))
                 spotShadowColor = if (glowing) lerp(restSpot, liftSpot, raised.coerceIn(0f, 1f)) else liftSpot
                 ambientShadowColor = ambient
                 this.shape = shape
@@ -241,7 +248,7 @@ fun Tile(
 
                 onDrawWithContent {
                     val l = lift
-                    if (pool && l > 0.01f) {
+                    if (pool && surface && l > 0.01f) {
                         translate(w / 2, h * 0.7f) {
                             scale(1f, poolSquash, pivot = Offset.Zero) {
                                 drawCircle(poolBrush, radius = poolRadius, center = Offset.Zero, alpha = POOL_ALPHA * l.coerceIn(0f, 1f))
@@ -252,13 +259,15 @@ fun Tile(
                     val hv = hover
                     val p = press.coerceIn(0f, 1f)
                     val lit = maxOf(l, hv * 0.5f)
-                    drawPath(outline, sheen, alpha = 0.35f + 0.65f * lit)
-                    if (hv > 0.005f) drawPath(outline, Color.White, alpha = HOVER_TINT * hv)
-                    if (p > 0.005f) drawPath(outline, Color.Black, alpha = PRESS_SHADE * p)
-                    drawPath(outline, edgeBrush, alpha = restEdge + (focusEdge - restEdge) * lit, style = edgeStroke)
+                    if (surface) {
+                        drawPath(outline, sheen, alpha = 0.35f + 0.65f * lit)
+                        if (hv > 0.005f) drawPath(outline, Color.White, alpha = HOVER_TINT * hv)
+                        if (p > 0.005f) drawPath(outline, Color.Black, alpha = PRESS_SHADE * p)
+                        drawPath(outline, edgeBrush, alpha = restEdge + (focusEdge - restEdge) * lit, style = edgeStroke)
+                    }
 
                     val s = sweep.value
-                    if (s < 1f && s > 0f && l > 0.3f) {
+                    if (surface && s < 1f && s > 0f && l > 0.3f) {
                         val x = -band + (w + band * 2 + slant) * s
                         clipPath(outline) {
                             translate(left = x) {

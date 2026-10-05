@@ -307,6 +307,12 @@ private fun syncRows(
     ))
     if (c.role != "HOST") {
         add(MenuAction(
+            "pair", "Add a Device", FuseIcons.Plus,
+            detail = "A code for another device to type. Or ask to join from it, and say yes here",
+            trailing = Trailing.Chevron, section = connection,
+            onSelect = { app.pairing = true },
+        ))
+        add(MenuAction(
             "local", "Home Address", FuseIcons.Home,
             detail = "Used on the same network. Found by itself when you connected",
             trailing = Trailing.Value(c.localAddress.ifBlank { "Not set" }), section = connection,

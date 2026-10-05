@@ -1,6 +1,9 @@
 package io.github.matiyaaa.fuse.sync
 
+import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.MapSerializer
+import kotlinx.serialization.builtins.serializer
 
 /**
  * Fuse Sync's wire format: what the host and its devices say to each other over HTTP(S), as JSON.
@@ -53,6 +56,8 @@ data class ProfileInfo(
     /** Bytes of saves and states this profile keeps on the host (shared files counted once). */
     val storageBytes: Long = 0,
     val devices: List<String> = emptyList(),
+    /** The host computer's own profile (Admin): only the host's own Fuse sees it or plays as it. */
+    val hostOnly: Boolean = false,
 )
 
 @Serializable
@@ -138,8 +143,48 @@ data class JournalEvent(
         const val META = "meta"
         const val PROFILE = "profile"
         const val DEVICE = "device"
+        /** A device asked to join: devices that may let it in look at the requests. */
+        const val JOIN = "join"
     }
 }
+
+/**
+ * A device asking to join without a code: who it is, and its half of a key exchange (an EC P-256
+ * public key). The host answers with its own half; both sides then show the same six-digit
+ * number, so whoever lets the device in can see it is this device, and the device's secret
+ * travels sealed with a key only the two of them have.
+ */
+@Serializable
+data class JoinRequest(val deviceId: String, val deviceName: String, val platform: String, val publicKey: String)
+
+@Serializable
+data class JoinTicket(val id: String, val hostId: String, val hostName: String, val publicKey: String)
+
+/** Where a request to join stands: [WAITING], [ALLOWED] (with the sealed secret), [DENIED] or [GONE] (ran out). */
+@Serializable
+data class JoinState(val state: String, val sealedSecret: String? = null, val salt: String? = null) {
+    companion object {
+        const val WAITING = "waiting"
+        const val ALLOWED = "allowed"
+        const val DENIED = "denied"
+        const val GONE = "gone"
+    }
+}
+
+/** A request to join, as a device that may let it in sees it: who asks, and the number both show. */
+@Serializable
+data class JoinAsk(val id: String, val deviceName: String, val platform: String, val match: String, val at: Long)
+
+@Serializable
+data class JoinAnswer(val allow: Boolean)
+
+/** Every id a device may know each game by (serial, title), most trusted first: one list per game. */
+@Serializable
+data class GameClaims(val games: List<List<String>>)
+
+/** The one id for each game in [GameClaims], in the same order. */
+@Serializable
+data class ResolvedGames(val ids: List<String>)
 
 @Serializable
 data class JournalPage(val events: List<JournalEvent>, val seq: Long)
@@ -224,3 +269,5 @@ data class SharedChange(val game: String, val shared: Boolean, val from: String?
 /** Where the saves of games played as one save are kept on the host, beside the people's own. */
 const val SHARED_SAVES = "@shared"
 
+/** Every id a game is known by, to its one id across devices (as the host and each device keep it). */
+val GameAliasesSerializer: KSerializer<Map<String, String>> = MapSerializer(String.serializer(), String.serializer())

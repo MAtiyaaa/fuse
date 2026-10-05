@@ -231,14 +231,14 @@ private fun People(
     val sel = index.coerceIn(0, maxOf(0, count - 1))
     InputLayer(priority = LayerPriority.DIALOG + 2, modal = true) { e ->
         when (e.action) {
-            NavAction.LEFT -> if (sel > 0) { onIndex(sel - 1); app.platform.sounds.play(SoundCue.MOVE); NavResult.MOVED } else NavResult.BLOCKED
-            NavAction.RIGHT -> if (sel < count - 1) { onIndex(sel + 1); app.platform.sounds.play(SoundCue.MOVE); NavResult.MOVED } else NavResult.BLOCKED
+            NavAction.LEFT -> if (sel > 0) { onIndex(sel - 1); NavResult.MOVED } else NavResult.BLOCKED
+            NavAction.RIGHT -> if (sel < count - 1) { onIndex(sel + 1); NavResult.MOVED } else NavResult.BLOCKED
             NavAction.UP -> if (sel - perRow >= 0) { onIndex(sel - perRow); NavResult.MOVED } else NavResult.BLOCKED
             NavAction.DOWN -> if (sel + perRow < count) { onIndex(sel + perRow); NavResult.MOVED } else NavResult.BLOCKED
-            NavAction.SELECT -> { if (count > 0) { app.platform.sounds.play(SoundCue.SELECT); onChoose(sel) }; NavResult.ACTIVATED }
+            NavAction.SELECT -> { if (count > 0) onChoose(sel); NavResult.ACTIVATED }
             NavAction.BACK -> { onBack(); NavResult.CONSUMED }
             // Y makes someone new from anywhere on the page, without walking to the last card.
-            NavAction.SEARCH -> { if (!offline) { app.platform.sounds.play(SoundCue.SELECT); onAdd() }; NavResult.ACTIVATED }
+            NavAction.SEARCH -> { if (!offline) onAdd(); NavResult.ACTIVATED }
             else -> NavResult.CONSUMED
         }
     }
@@ -321,7 +321,7 @@ private fun PersonCard(p: ProfileInfo, selected: Boolean, here: Boolean, working
         }
         Spacer(Modifier.height(Space.m))
         FText(p.name, Fuse.type.bodyStrong, color = nameColor, maxLines = 1, align = TextAlign.Center)
-        FText(if (here) "Playing here" else " ", Fuse.type.caption, color = c.accent, maxLines = 1, align = TextAlign.Center)
+        FText(if (here) "Playing here" else if (p.hostOnly) "This computer only" else " ", Fuse.type.caption, color = if (here) c.accent else c.textMuted, maxLines = 1, align = TextAlign.Center)
     }
 }
 

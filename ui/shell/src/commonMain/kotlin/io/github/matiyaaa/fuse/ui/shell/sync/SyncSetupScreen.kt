@@ -76,7 +76,11 @@ private sealed interface SetupStep {
     data object HostIntro : SetupStep
     data object HostReady : SetupStep
     data object Find : SetupStep
+    /** How to join the host: ask it to let this device in, or type a code. */
+    data class Way(val host: NearbyHost) : SetupStep
     data class Code(val host: NearbyHost) : SetupStep
+    /** Asked: waiting for someone to let this device in, with the number to check. */
+    data class Asking(val host: NearbyHost, val waiting: io.github.matiyaaa.fuse.sync.JoinWaiting) : SetupStep
     data class Connected(val hostName: String) : SetupStep
 }
 
@@ -99,8 +103,8 @@ private fun StepInput(app: AppState, keys: ActiveKeys, actions: List<SetupAction
     InputLayer(enabled = keys.active && app.focusZone == FocusZone.CONTENT && !app.overlayOpen) { e ->
         val index = keys.index
         when (e.action) {
-            NavAction.UP, NavAction.LEFT -> if (index > 0) { keys.keys.setIndex(index - 1); app.platform.sounds.play(SoundCue.MOVE); NavResult.MOVED } else NavResult.BLOCKED
-            NavAction.DOWN, NavAction.RIGHT -> if (index < actions.size - 1) { keys.keys.setIndex(index + 1); app.platform.sounds.play(SoundCue.MOVE); NavResult.MOVED } else NavResult.BLOCKED
+            NavAction.UP, NavAction.LEFT -> if (index > 0) { keys.keys.setIndex(index - 1); NavResult.MOVED } else NavResult.BLOCKED
+            NavAction.DOWN, NavAction.RIGHT -> if (index < actions.size - 1) { keys.keys.setIndex(index + 1); NavResult.MOVED } else NavResult.BLOCKED
             NavAction.SELECT -> { actions.getOrNull(index)?.onSelect?.invoke(); NavResult.ACTIVATED }
             NavAction.BACK -> { keys.keys.back(); NavResult.CONSUMED }
             else -> NavResult.IGNORED
@@ -122,13 +126,20 @@ internal fun SyncSetupScreen(app: AppState, host: Boolean) {
     var working by remember { mutableStateOf(false) }
     // Why the last try to connect didn't, shown under the code rather than over the button.
     var connectError by remember { mutableStateOf<String?>(null) }
+    // The host's address from outside, when given: used for asking and for a code alike.
+    var remote by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(Unit) {
         app.hero = null
         app.hints = listOf(Hint(HintButton.CONFIRM, "Choose"), Hint(HintButton.BACK, "Back"))
     }
     LaunchedEffect(step) { index = 0 }
     val keys = StepKeys(index = { index }, setIndex = { index = it }, back = {
-        if (step is SetupStep.Code) step = SetupStep.Find else app.back()
+        when (val s = step) {
+            is SetupStep.Code -> step = SetupStep.Way(s.host)
+            is SetupStep.Asking -> { svc.cancelJoin(); step = SetupStep.Way(s.host) }
+            is SetupStep.Way -> { connectError = null; step = SetupStep.Find }
+            else -> app.back()
+        }
     })
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
@@ -153,8 +164,25 @@ internal fun SyncSetupScreen(app: AppState, host: Boolean) {
                                 }
                             }
                             SetupStep.HostReady -> HostReady(app, compact, keys.at(s == step))
-                            SetupStep.Find -> Find(app, compact, keys.at(s == step)) { step = SetupStep.Code(it) }
-                            is SetupStep.Code -> CodeEntry(app, s.host, compact, keys.at(s == step), working, connectError) { code, remote ->
+                            SetupStep.Find -> Find(app, compact, keys.at(s == step)) { connectError = null; step = SetupStep.Way(it) }
+                            is SetupStep.Way -> JoinWay(app, s.host, compact, keys.at(s == step), working, connectError, remote, onRemote = { remote = it }, onCode = { connectError = null; step = SetupStep.Code(s.host) }) {
+                                working = true
+                                connectError = null
+                                app.scope.launch {
+                                    svc.askToJoin(s.host.address, remote)
+                                        .onSuccess { w -> step = SetupStep.Asking(s.host, w); app.platform.sounds.play(SoundCue.SELECT) }
+                                        .onFailure { connectError = it.message ?: "The host didn't answer"; app.platform.sounds.play(SoundCue.ERROR) }
+                                    working = false
+                                }
+                            }
+                            is SetupStep.Asking -> AskingToJoin(
+                                app, s.host, s.waiting, compact, keys.at(s == step),
+                                onJoined = { name -> step = SetupStep.Connected(name); app.platform.sounds.play(SoundCue.SELECT) },
+                                onFailed = { why -> connectError = why; step = SetupStep.Way(s.host); app.platform.sounds.play(SoundCue.ERROR) },
+                                onCode = { svc.cancelJoin(); connectError = null; step = SetupStep.Code(s.host) },
+                                onCancel = { svc.cancelJoin(); step = SetupStep.Way(s.host) },
+                            )
+                            is SetupStep.Code -> CodeEntry(app, s.host, compact, keys.at(s == step), working, connectError, remote) { code, remote ->
                                 working = true
                                 connectError = null
                                 app.scope.launch {
@@ -177,12 +205,12 @@ internal fun SyncSetupScreen(app: AppState, host: Boolean) {
 @Composable
 private fun StepRail(host: Boolean, step: SetupStep, modifier: Modifier) {
     val c = Fuse.colors
-    val steps = if (host) listOf("What it means", "Name it", "Ready") else listOf("Find your host", "Enter its code", "Who's playing")
+    val steps = if (host) listOf("What it means", "Name it", "Ready") else listOf("Find your host", "Join it", "Who's playing")
     val at = when (step) {
         SetupStep.HostIntro -> 1
         SetupStep.HostReady -> 2
         SetupStep.Find -> 0
-        is SetupStep.Code -> 1
+        is SetupStep.Way, is SetupStep.Asking, is SetupStep.Code -> 1
         is SetupStep.Connected -> 2
     }
     Column(modifier.padding(top = Space.l), verticalArrangement = Arrangement.spacedBy(Space.l)) {
@@ -323,23 +351,28 @@ private fun HostReady(app: AppState, compact: Boolean, keys: ActiveKeys) {
     val hostView by androidx.compose.runtime.produceState(svc.host.value, svc) { svc.host.collect { value = it } }
     val profiles by androidx.compose.runtime.produceState(svc.profiles.value, svc) { svc.profiles.collect { value = it } }
     val c = Fuse.colors
-    actions += SetupAction("profile") { app.back(); app.whoAreYou = if (profiles.isEmpty()) WhoMode.ADD else WhoMode.SWITCH }
     actions += SetupAction("done") { app.back() }
+    actions += SetupAction("profile") { app.back(); app.whoAreYou = WhoMode.ADD }
     SuccessMark(if (compact) 64.dp else 88.dp)
     Spacer(Modifier.height(Space.l))
     FText("Fuse Sync is ready", if (compact) Fuse.type.title else Fuse.type.display, maxLines = 1, modifier = Modifier.semantics { heading() })
     Spacer(Modifier.height(Space.xs))
-    FText("${hostView?.name ?: "This computer"} is your host. Add your other devices with its code.", Fuse.type.body, color = c.textMuted, maxLines = 3)
+    val admin = profiles.firstOrNull { it.hostOnly }
+    FText(
+        "${hostView?.name ?: "This computer"} is your host" + if (admin != null) ", and plays as ${admin.name}: a profile only this computer sees, so nobody needs one here." else ".",
+        Fuse.type.body, color = c.textMuted, maxLines = 3,
+    )
+    Spacer(Modifier.height(Space.xs))
+    FText(
+        "On each of your other devices, choose Connect to a Host and ask to join: a card asks here to let it in. Or type this code:",
+        Fuse.type.body, color = c.textMuted, maxLines = 3,
+    )
     Spacer(Modifier.height(Space.l))
     PairingCard(app, hostView?.pairingCode, hostView?.addresses.orEmpty(), compact)
     Spacer(Modifier.height(Space.xl))
     Row(horizontalArrangement = Arrangement.spacedBy(Space.m)) {
-        FuseButton(
-            if (profiles.isEmpty()) "Create Your Profile" else "Choose Your Profile", selected = index == 0,
-            onClick = { app.back(); app.whoAreYou = if (profiles.isEmpty()) WhoMode.ADD else WhoMode.SWITCH },
-            icon = FuseIcons.UserPlus, kind = ButtonKind.PRIMARY,
-        )
-        FuseButton("Done", selected = index == 1, onClick = { app.back() }, icon = FuseIcons.Check)
+        FuseButton("Done", selected = index == 0, onClick = { app.back() }, icon = FuseIcons.Check, kind = ButtonKind.PRIMARY)
+        FuseButton("Make a Profile for Me", selected = index == 1, onClick = { app.back(); app.whoAreYou = WhoMode.ADD }, icon = FuseIcons.UserPlus)
     }
     StepInput(app, keys, actions)
 }
@@ -385,7 +418,7 @@ internal fun PairingCard(app: AppState, code: String?, addresses: List<String>, 
         verticalArrangement = Arrangement.spacedBy(Space.m),
     ) {
         FText("To add a device", Fuse.type.bodyStrong, maxLines = 1)
-        FText("Open Fuse on it: Settings, Addons, Fuse Sync, Connect to a Host. Choose this computer, then type:", Fuse.type.caption, color = c.textMuted, maxLines = 3)
+        FText("On it: Settings, Addons, Fuse Sync, Connect to a Host, choose your host, then Type a Code:", Fuse.type.caption, color = c.textMuted, maxLines = 3)
         val letters = current?.toList() ?: List(8) { ' ' }
         Row(horizontalArrangement = Arrangement.spacedBy(if (compact) Space.xs else Space.s), verticalAlignment = Alignment.CenterVertically) {
             letters.forEachIndexed { i, ch ->
@@ -470,14 +503,133 @@ private fun Find(app: AppState, compact: Boolean, keys: ActiveKeys, onPick: (Nea
     StepInput(app, keys, actions)
 }
 
+/** Why the last try didn't work, under what was tried (never over a button), or nothing. */
+@Composable
+private fun Problem(text: String?) {
+    val c = Fuse.colors
+    Swap(text, label = "problem") { e ->
+        if (e != null) {
+            Row(
+                Modifier.padding(top = Space.m).fillMaxWidth().clip(RoundedCornerShape(Fuse.geometry.control))
+                    .background(c.danger.copy(alpha = 0.12f)).border(1.dp, c.danger.copy(alpha = 0.35f), RoundedCornerShape(Fuse.geometry.control))
+                    .padding(horizontal = Space.m, vertical = Space.s),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                FuseIcon(FuseIcons.Unplug, size = Size.iconM, tint = c.danger)
+                Spacer(Modifier.width(Space.m))
+                FText(e, Fuse.type.caption, color = c.text, maxLines = 4)
+            }
+        }
+    }
+}
+
+/**
+ * Joining the host: asking it to let this device in (someone says yes on the host, or on any
+ * device already connected, after checking a number), or typing a code from Add a Device. The
+ * address from outside, when given, is tried when home doesn't answer.
+ */
+@Composable
+private fun JoinWay(
+    app: AppState,
+    host: NearbyHost,
+    compact: Boolean,
+    keys: ActiveKeys,
+    working: Boolean,
+    error: String?,
+    remote: String?,
+    onRemote: (String?) -> Unit,
+    onCode: () -> Unit,
+    onAsk: () -> Unit,
+) {
+    val actions = mutableListOf<SetupAction>()
+    val index = keys.index
+    fun typeRemote() {
+        app.textInput = TextInputSpec("Outside address (optional)", remote.orEmpty(), "https://sync.example.com", capitalize = false) { v -> onRemote(v.trim().ifEmpty { null }) }
+    }
+    actions += SetupAction("ask") { if (!working) onAsk() }
+    actions += SetupAction("code") { onCode() }
+    actions += SetupAction("remote") { typeRemote() }
+
+    Heading(
+        "Join ${host.name}",
+        "Ask it to let this device in, or type a code from a device that's already connected.",
+        compact, FuseIcons.Link,
+    )
+    Spacer(Modifier.height(Space.l))
+    Column(verticalArrangement = Arrangement.spacedBy(Space.s)) {
+        ChoiceRow(
+            "No code to type", "Ask ${host.name} to Let This Device In", FuseIcons.UserPlus, selected = index == 0,
+            detail = "A card asks on ${host.name} and on every device already connected. Anyone there can say yes",
+            trailing = { if (working) Spinner(size = 20.dp, color = Fuse.colors.accent) else FuseIcon(FuseIcons.ChevronRight, size = Size.iconM, tint = if (index == 0) Fuse.colors.ink else Fuse.colors.textMuted) },
+        ) { if (!working) onAsk() }
+        ChoiceRow(
+            "Have a code?", "Type a Code", FuseIcons.Keyboard, selected = index == 1,
+            detail = "From Add a Device, on the host or on any device already connected",
+        ) { onCode() }
+        ChoiceRow(
+            "For away from home (optional)", remote ?: "Add an Outside Address", FuseIcons.Globe, selected = index == 2,
+            detail = "A tunnel or VPN address (https://sync.example.com). Used whenever home doesn't answer",
+        ) { typeRemote() }
+    }
+    Problem(error)
+    StepInput(app, keys, actions)
+}
+
+/**
+ * Asked, and waiting to be let in: the number this device shows, large, for whoever says yes to
+ * check against theirs. Lets in on its own as soon as someone does; turned away or out of time,
+ * it goes back with why.
+ */
+@Composable
+private fun AskingToJoin(
+    app: AppState,
+    host: NearbyHost,
+    waiting: io.github.matiyaaa.fuse.sync.JoinWaiting,
+    compact: Boolean,
+    keys: ActiveKeys,
+    onJoined: (String) -> Unit,
+    onFailed: (String) -> Unit,
+    onCode: () -> Unit,
+    onCancel: () -> Unit,
+) {
+    val svc = app.store.sync.service ?: return
+    val c = Fuse.colors
+    val index = keys.index
+    LaunchedEffect(waiting) {
+        svc.awaitJoin()
+            .onSuccess { onJoined(it) }
+            .onFailure { if (it !is kotlinx.coroutines.CancellationException) onFailed(it.message ?: "Nobody let this device in") }
+    }
+    val actions = listOf(SetupAction("code") { onCode() }, SetupAction("cancel") { onCancel() })
+    Heading(
+        "Waiting for ${waiting.hostName}",
+        "A card is asking on ${waiting.hostName}, and on your other connected devices, to let this device in. Say yes there if it shows this same number:",
+        compact, FuseIcons.Timer,
+    )
+    Spacer(Modifier.height(Space.l))
+    MatchNumber(waiting.match, compact)
+    Spacer(Modifier.height(Space.l))
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Spinner(size = 18.dp, color = c.accent)
+        Spacer(Modifier.width(Space.m))
+        FText("Waiting to be let in. This asks for five minutes", Fuse.type.caption, color = c.textMuted, maxLines = 2)
+    }
+    Spacer(Modifier.height(Space.xl))
+    Row(horizontalArrangement = Arrangement.spacedBy(Space.m)) {
+        FuseButton("Use a Code Instead", selected = index == 0, onClick = onCode, icon = FuseIcons.Keyboard)
+        FuseButton("Cancel", selected = index == 1, onClick = onCancel)
+    }
+    StepInput(app, keys, actions)
+}
+
 /** The host's code: eight boxes that fill as it is typed (on a keyboard, or with the on-screen one). */
 @Composable
-private fun CodeEntry(app: AppState, host: NearbyHost, compact: Boolean, keys: ActiveKeys, working: Boolean, error: String?, onConnect: (String, String?) -> Unit) {
+private fun CodeEntry(app: AppState, host: NearbyHost, compact: Boolean, keys: ActiveKeys, working: Boolean, error: String?, initialRemote: String?, onConnect: (String, String?) -> Unit) {
     val actions = mutableListOf<SetupAction>()
     val index = keys.index
     val c = Fuse.colors
     var code by remember { mutableStateOf("") }
-    var remote by remember { mutableStateOf<String?>(null) }
+    var remote by remember { mutableStateOf(initialRemote) }
     fun clean(s: String) = s.uppercase().filter { it.isLetterOrDigit() }.take(8)
     fun typeCode() {
         app.textInput = TextInputSpec("The code on ${host.name}", code, "8 letters and numbers", capitalize = false, doneLabel = "Connect") { v ->
@@ -534,20 +686,7 @@ private fun CodeEntry(app: AppState, host: NearbyHost, compact: Boolean, keys: A
         "For away from home (optional)", remote ?: "Add an Outside Address", FuseIcons.Globe, selected = index == 1,
         detail = "Fuse uses the home address when it answers and this one otherwise, by itself",
     ) { app.textInput = TextInputSpec("Outside address (optional)", remote.orEmpty(), "https://sync.example.com", capitalize = false) { v -> remote = v.trim().ifEmpty { null } } }
-    Swap(error, label = "connectError") { e ->
-        if (e != null) {
-            Row(
-                Modifier.padding(top = Space.m).fillMaxWidth().clip(RoundedCornerShape(Fuse.geometry.control))
-                    .background(c.danger.copy(alpha = 0.12f)).border(1.dp, c.danger.copy(alpha = 0.35f), RoundedCornerShape(Fuse.geometry.control))
-                    .padding(horizontal = Space.m, vertical = Space.s),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                FuseIcon(FuseIcons.Unplug, size = Size.iconM, tint = c.danger)
-                Spacer(Modifier.width(Space.m))
-                FText(e, Fuse.type.caption, color = c.text, maxLines = 4)
-            }
-        }
-    }
+    Problem(error)
     Spacer(Modifier.height(Space.xl))
     FuseButton(
         if (error != null) "Try Again" else "Connect", selected = index == 2, onClick = { if (code.length == 8 && !working) onConnect(code, remote) else typeCode() },
@@ -561,7 +700,11 @@ private fun Connected(app: AppState, hostName: String, compact: Boolean, keys: A
     val actions = mutableListOf<SetupAction>()
     val index = keys.index
     val c = Fuse.colors
-    actions += SetupAction("who") { app.back(); app.whoAreYou = WhoMode.SWITCH }
+    val svc = app.store.sync.service
+    val profiles by androidx.compose.runtime.produceState(svc?.profiles?.value.orEmpty(), svc) { svc?.profiles?.collect { value = it } }
+    // Nobody here yet (the host's own profile is the host's alone): this device makes the first.
+    val who = if (profiles.isEmpty()) WhoMode.ADD else WhoMode.SWITCH
+    actions += SetupAction("who") { app.back(); app.whoAreYou = who }
     actions += SetupAction("later") { app.back() }
     SuccessMark(if (compact) 64.dp else 88.dp)
     Spacer(Modifier.height(Space.l))
@@ -573,7 +716,7 @@ private fun Connected(app: AppState, hostName: String, compact: Boolean, keys: A
     )
     Spacer(Modifier.height(Space.xl))
     Row(horizontalArrangement = Arrangement.spacedBy(Space.m)) {
-        FuseButton("Choose Who's Playing", selected = index == 0, onClick = { app.back(); app.whoAreYou = WhoMode.SWITCH }, icon = FuseIcons.Users, kind = ButtonKind.PRIMARY)
+        FuseButton(if (profiles.isEmpty()) "Make Your Profile" else "Choose Who's Playing", selected = index == 0, onClick = { app.back(); app.whoAreYou = who }, icon = if (profiles.isEmpty()) FuseIcons.UserPlus else FuseIcons.Users, kind = ButtonKind.PRIMARY)
         FuseButton("Later", selected = index == 1, onClick = { app.back() })
     }
     StepInput(app, keys, actions)

@@ -2,7 +2,9 @@ package io.github.matiyaaa.fuse.ui.shell.home
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.BoxWithConstraintsScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -18,10 +20,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import io.github.matiyaaa.fuse.jellyfin.MediaItem
 import io.github.matiyaaa.fuse.jellyfin.MediaType
@@ -190,8 +196,8 @@ internal fun SystemsCarousel(feed: HomeFeed, face: FaceSize) {
         peek = true,
         cardShape = cardShape(),
         header = { dots -> CarouselHeader(FuseIcons.Chip, WidgetKind.SYSTEMS.title(), dots, compact = compact) },
-    ) { i, _ ->
-        SystemSlide(all[i], face)
+    ) { i, depth ->
+        SystemSlide(all[i], face, depth)
     }
 }
 
@@ -203,19 +209,85 @@ internal fun systemsInOrder(feed: HomeFeed): List<PlatformCard> {
 }
 
 @Composable
-private fun SystemSlide(s: PlatformCard, face: FaceSize) {
+private fun SystemSlide(s: PlatformCard, face: FaceSize, depth: CarouselDepth) {
     val c = Fuse.colors
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val room = roomOf(maxWidth, maxHeight)
-        // The system's art carries its own name and count, so it moves with its card, unzoomed.
-        Box(Modifier.fillMaxSize()) { SystemCardArt(s, large = room == Room.BIG) }
-        // Square art says nothing itself: its name and count go over a soft floor.
-        if ((s.art.square ?: s.art.icon) != null && face != FaceSize.SMALL) {
-            Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.5f to Color.Transparent, 1f to c.artScrim)))
-            Column(Modifier.align(Alignment.BottomStart).padding(if (room == Room.TINY) Space.m else Space.l)) {
-                FText(s.platform.name, if (room == Room.BIG) Fuse.type.title else Fuse.type.bodyStrong, color = c.onArt, maxLines = 1, fit = true)
-                FText(gamesText(s.gameCount), Fuse.type.caption.tabular(), color = c.onArtMuted, maxLines = 1, fit = true)
+        when {
+            // Art of the person's own choosing (or a square icon) fills the card; its name goes over a soft floor.
+            (s.art.square ?: s.art.icon) != null -> {
+                Box(Modifier.fillMaxSize().carouselParallax(depth)) { SystemCardArt(s, large = room == Room.BIG) }
+                if (face != FaceSize.SMALL) {
+                    Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.5f to Color.Transparent, 1f to c.artScrim)))
+                    Column(Modifier.align(Alignment.BottomStart).padding(if (room == Room.TINY) Space.m else Space.l).graphicsLayer { alpha = frontness(depth) }) {
+                        FText(s.platform.name, if (room == Room.BIG) Fuse.type.title else Fuse.type.bodyStrong, color = c.onArt, maxLines = 1, fit = true)
+                        FText(gamesText(s.gameCount), Fuse.type.caption.tabular(), color = c.onArtMuted, maxLines = 1, fit = true)
+                    }
+                }
             }
+            s.art.boxart != null || s.art.logo != null -> SystemPackSlide(s, room, depth)
+            else -> Box(Modifier.fillMaxSize()) { SystemCardArt(s, large = room == Room.BIG) }
+        }
+    }
+}
+
+/** How much a card is the one in front: 1 there, fading to 0 as it moves aside (a peeking card's words don't show cut off). */
+private fun frontness(depth: CarouselDepth): Float = (1f - kotlin.math.abs(depth()) * 1.6f).coerceIn(0f, 1f)
+
+/**
+ * A system from the art pack, laid out for a wide card: its colour across the card, the console's
+ * art as a panel on the right that fades into it, and the logo set modestly at the bottom left with
+ * the count under it, the way a console's own menu shows it. Sizes come from the card's height, so
+ * the logo never grows past a label on a wide screen.
+ */
+@Composable
+private fun BoxWithConstraintsScope.SystemPackSlide(s: PlatformCard, room: Room, depth: CarouselDepth) {
+    val c = Fuse.colors
+    val accent = s.platform.accent.toColor()
+    val deep = lerp(accent, Color.Black, 0.6f)
+    val w = maxWidth
+    val h = maxHeight
+    val pad = if (room == Room.TINY || w < 220.dp) Space.m else Space.l
+    Box(Modifier.fillMaxSize().background(Brush.linearGradient(listOf(lerp(accent, Color.Black, 0.12f), deep))))
+    // A soft sheen from the top left, so a flat brand colour has some depth.
+    Box(Modifier.fillMaxSize().background(Brush.radialGradient(listOf(Color.White.copy(alpha = 0.10f), Color.Transparent), center = Offset.Zero, radius = with(LocalDensity.current) { (h * 1.6f).toPx() })))
+    if (s.art.boxart != null) {
+        val panel = (h * 0.9f).coerceAtLeast(w * 0.3f).coerceAtMost(w * 0.46f)
+        // Clipped to its panel: the parallax zoom never lets the art spill past the fade.
+        Box(Modifier.align(Alignment.CenterEnd).width(panel).fillMaxHeight().clipToBounds()) {
+            Box(Modifier.fillMaxSize().carouselParallax(depth)) {
+                Artwork(s.art.boxart, Modifier.fillMaxSize(), contentScale = ContentScale.Crop, focusX = 0.5f, focusY = 0.38f)
+            }
+        }
+        // The panel's left edge melts into the card's colour.
+        Box(
+            Modifier.align(Alignment.CenterEnd).width(panel).fillMaxHeight()
+                .background(Brush.horizontalGradient(0f to lerp(accent, Color.Black, 0.35f), 0.55f to Color.Transparent)),
+        )
+    }
+    Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.55f to Color.Transparent, 1f to deep.copy(alpha = 0.55f))))
+    val logoHeight = when (room) {
+        Room.BIG -> (h * 0.16f).coerceIn(36.dp, 56.dp)
+        Room.TALL -> (h * 0.17f).coerceIn(28.dp, 44.dp)
+        Room.SHORT -> (h * 0.2f).coerceIn(22.dp, 34.dp)
+        Room.TINY -> (h * 0.22f).coerceIn(18.dp, 28.dp)
+    }
+    Column(
+        Modifier.align(Alignment.BottomStart).padding(pad).widthIn(max = (w * 0.42f).coerceAtMost(260.dp)).graphicsLayer { alpha = frontness(depth) },
+        verticalArrangement = Arrangement.spacedBy(Space.xs),
+    ) {
+        if (s.art.logo != null) {
+            Artwork(
+                s.art.logo,
+                Modifier.fillMaxWidth().height(logoHeight),
+                contentScale = ContentScale.Fit, focusX = 0f, focusY = 1f, tint = c.onArt,
+                fallback = { FText(s.platform.shortName, Fuse.type.title, color = c.onArt, maxLines = 1, fit = true) },
+            )
+        } else {
+            FText(s.platform.shortName, if (room == Room.BIG) Fuse.type.title else Fuse.type.bodyStrong, color = c.onArt, maxLines = 1, fit = true)
+        }
+        if (room != Room.TINY) {
+            FText(gamesText(s.gameCount), Fuse.type.caption.tabular(), color = c.onArtMuted, maxLines = 1, fit = true)
         }
     }
 }
