@@ -159,17 +159,33 @@ class JvmSyncService(
         val hostDir = hostDir(c)
         // The service already runs the host: never open its files from a second process.
         HostAdmin.of(hostDir, c.hostPort)?.let { admin ->
-            hostAdmin = admin
-            adminStatus = runCatching { admin.status() }.getOrNull()
-            refreshHostView()
-            return
+            // It may still be starting (just after the computer did): give it a moment to answer.
+            var answer: HostStatus? = null
+            for (attempt in 0 until ADMIN_TRIES) {
+                answer = runCatching { admin.status() }.getOrNull()
+                if (answer != null || HostAdmin.portFree(c.hostPort)) break
+                delay(ADMIN_RETRY_MS)
+            }
+            if (answer != null) {
+                hostAdmin = admin
+                adminStatus = answer
+                refreshHostView()
+                return
+            }
+            // Something else holds the port (or the service went away just now): serve here if the port is free again.
+            if (!HostAdmin.portFree(c.hostPort)) {
+                log("The host can't start: another program on this computer is using port ${c.hostPort}, which the host needs")
+                refreshHostView()
+                return
+            }
         }
         val store = HostStore(hostDir, clock, hostName = c.hostName.ifBlank { defaultDeviceName })
         val server = runCatching { SyncHost(store, c.hostPort, fuseVersion, clock).start() }.getOrNull()
         if (server != null) {
             hostServer = server
             responder = Discovery.answer({ store.hello(c.hostPort, fuseVersion) })
-            scope.launch { server.changes.collect { refreshHostView() } }
+            // Off the interface's thread: the host's status reads its own files.
+            scope.launch(Dispatchers.IO) { server.changes.collect { refreshHostView() } }
         }
         refreshHostView()
     }
@@ -233,11 +249,24 @@ class JvmSyncService(
 
     private fun handle(e: SyncException) {
         val name = cached.hostName
+        val active = cached.activeProfile
+        // The profile in use was deleted on another device: this device simply stops using it
+        // (everything here stays as it is) and asks who is playing.
+        if (e.code == "locked" && active.isNotEmpty() && _profiles.value.isNotEmpty() && _profiles.value.none { it.id == active }) {
+            scope.launch(Dispatchers.IO) {
+                if (cached.activeProfile != active) return@launch
+                runCatching { switchTo(null) }
+                log("The profile in use here was deleted on another device. Choose who's playing.")
+            }
+            return
+        }
         _status.value = when (e.code) {
             "offline" -> SyncStatus.Offline(name, device?.pendingCount ?: 0, (status.value as? SyncStatus.Offline)?.since ?: clock())
+            // Asked to slow down: nothing is wrong, the next round simply waits a little longer.
+            "rate" -> return
             "revoked" -> SyncStatus.NeedsAttention(name, "This device was unlinked from $name. Connect it again from Settings, Addons, Fuse Sync.", e.code)
             "clock" -> SyncStatus.NeedsAttention(name, "This device's clock is far from the host's. Set the date and time, and syncing carries on.", e.code)
-            "locked" -> SyncStatus.NeedsAttention(name, "This profile's PIN changed. Open it again to keep syncing.", e.code)
+            "locked" -> SyncStatus.NeedsAttention(name, "This profile's PIN changed on another device. Open it again with the new PIN to keep syncing.", e.code)
             else -> SyncStatus.NeedsAttention(name, e.message ?: "The host said no.", e.code)
         }
     }
@@ -343,13 +372,16 @@ class JvmSyncService(
         }
         stop()
         if (cached.role == "HOST" && lifetime.state().installed) runCatching { lifetime.remove() }
+        // Saves that never reached the host (it was away) are this device's only copy: they stay,
+        // as plain files, rather than going with the rest.
+        val unsent = runCatching { device?.exportUnsent(File(File(dir, KEPT_DIR), keptFolderName())) ?: 0 }.getOrDefault(0)
         hostAdmin = null
         adminStatus = null
         client = null
         device = null
         runCatching { secrets.remove(LINK_KEY) }
         val keep = hostDir(cached).canonicalFile
-        dir.listFiles()?.filter { it.canonicalFile != keep }?.forEach { it.deleteRecursively() }
+        dir.listFiles()?.filter { it.canonicalFile != keep && it.name != KEPT_DIR }?.forEach { it.deleteRecursively() }
         gameAliases = emptyMap()
         data.useAliases(emptyMap())
         saveConfig {
@@ -366,7 +398,11 @@ class JvmSyncService(
         _sharedGames.value = emptySet()
         _host.value = null
         log("Fuse Sync forgot its host")
+        if (unsent > 0) log(if (unsent == 1) "A save that hadn't reached the host is kept on this device" else "$unsent saves that hadn't reached the host are kept on this device", kind = "save")
     }
+
+    /** A folder name for saves kept when the host was forgotten: when it happened, sortable. */
+    private fun keptFolderName(): String = java.text.SimpleDateFormat("yyyy-MM-dd HH-mm-ss", java.util.Locale.ROOT).format(java.util.Date(clock()))
 
     override suspend fun deleteHost(): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
@@ -1120,7 +1156,7 @@ class JvmSyncService(
         } ?: return null
         val slot = slots(query).firstOrNull { it.kind != SaveKind.STATE }
         val last = slot?.let { s -> runCatching { c.revisions(ownerOf(query, s, profile), s.game.id, s.kind) }.getOrNull() }
-            ?.firstOrNull { it.device == other.deviceId && it.reason != RevisionReason.CONFLICT_COPY }?.at?.millis
+            ?.firstOrNull { it.device == other.deviceId && it.canBeNewest }?.at?.millis
         return LaunchGate.Busy(other.deviceName, query.title, other.state == Presence.PLAYING, other.at, last)
     }
 
@@ -1151,8 +1187,8 @@ class JvmSyncService(
         val key = slot?.game ?: query.game
         val owner = slot?.let { ownerOf(query, it, profile) } ?: profile
         val list = runCatching { c.revisions(owner, key.id, kind) }.getOrDefault(emptyList())
-        val head = list.firstOrNull { it.reason != RevisionReason.CONFLICT_COPY }?.id
-        list.map { SaveVersion(it.id, it.deviceName, it.at.millis, it.playSeconds, it.size, it.reason, it.id == head) }
+        val head = list.firstOrNull { it.canBeNewest }?.id
+        list.map { SaveVersion(it.id, it.deviceName, it.at.millis, it.playSeconds, it.size, it.reason, it.id == head, kept = it.kept) }
     }
 
     override suspend fun restore(asked: SaveQuery, kind: SaveKind, version: String): Result<Unit> = withContext(Dispatchers.IO) {
@@ -1163,9 +1199,8 @@ class JvmSyncService(
             val slot = slots(query).firstOrNull { it.kind == kind } ?: error("That save isn't here.")
             val owner = ownerOf(query, slot, cached.activeProfile)
             val rev = c.revisions(owner, slot.game.id, kind).firstOrNull { it.id == version } ?: error("That version is gone.")
-            // What is here now is kept in the history first, then the old one becomes the newest.
-            d.place(c, slot, rev)
-            d.capture(owner, slot, rev.playSeconds, Priority.LAUNCH, title = query.title)
+            // What is here now is kept in the history first, then the old one becomes the newest everywhere.
+            d.restore(c, owner, slot, rev, title = query.title)
             d.flush(c)
             log("${query.title}: restored the save from ${rev.deviceName}", query.game.id, "restore")
         }
@@ -1184,12 +1219,19 @@ class JvmSyncService(
             // Sends what it can first; then forgets the host. Nothing of this device's own changes.
             client?.let { c -> runCatching { device?.flush(c) }; runCatching { c.unlinkSelf() } }
             loop?.cancel()
+            nudge?.cancel()
+            watch?.job?.cancel()
+            watch = null
+            _nowPlaying.value = null
+            cancelJoin()
             client = null
             secrets.remove(LINK_KEY)
             File(dir, PROFILES_FILE).delete()
             saveConfig { it.copy(role = if (it.role == "HOST") "HOST" else "", activeProfile = "", hostName = if (it.role == "HOST") it.hostName else "", localAddress = "", remoteAddress = "") }
             _active.value = null
             _profiles.value = emptyList()
+            _devices.value = emptyList()
+            _joins.value = emptyList()
             _status.value = SyncStatus.NotSetUp
         }
     }
@@ -1230,6 +1272,9 @@ class JvmSyncService(
 
         const val LINK_KEY = "sync.link"
 
+        /** Where saves that never reached a forgotten host are kept, inside Fuse Sync's folder. */
+        const val KEPT_DIR = "kept"
+
         /** The longest a launch waits for the host to settle game ids. */
         const val RESOLVE_WAIT_MS = 3_000L
         private const val RESOLVE_CHUNK = 1_000
@@ -1262,6 +1307,10 @@ class JvmSyncService(
 
         /** When a device's records joining a profile already in use count as made: before anything real. */
         const val ADOPTED_AT = 1L
+
+        /** Tries, a moment apart, for a background service holding the host's port to answer. */
+        const val ADMIN_TRIES = 4
+        const val ADMIN_RETRY_MS = 750L
 
         /** How long Fuse waits for a freshly started service to answer. */
         const val SERVICE_WAIT_MS = 15_000L

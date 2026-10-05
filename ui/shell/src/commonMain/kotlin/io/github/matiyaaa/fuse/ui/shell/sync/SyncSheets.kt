@@ -175,7 +175,7 @@ internal fun SaveHistoryScreen(app: AppState, game: GameId, title: String) {
             TimeWords.relative(v.at, now, offset).replaceFirstChar { it.uppercase() },
             when {
                 v.current -> FuseIcons.CircleCheck
-                v.reason == RevisionReason.MILESTONE -> FuseIcons.Bookmark
+                v.kept || v.reason == RevisionReason.MILESTONE -> FuseIcons.Bookmark
                 v.reason == RevisionReason.CONFLICT_COPY -> FuseIcons.GitCompare
                 v.reason == RevisionReason.BEFORE_RESTORE -> FuseIcons.Undo
                 else -> FuseIcons.Save
@@ -183,7 +183,7 @@ internal fun SaveHistoryScreen(app: AppState, game: GameId, title: String) {
             detail = versionDetail(v, now, offset),
             trailing = when {
                 v.current -> Trailing.Value("In use")
-                v.reason == RevisionReason.MILESTONE -> Trailing.Value("Kept")
+                v.kept || v.reason == RevisionReason.MILESTONE -> Trailing.Value("Kept")
                 v.reason == RevisionReason.CONFLICT_COPY -> Trailing.Value("Other side of a conflict")
                 v.reason == RevisionReason.BEFORE_RESTORE -> Trailing.Value("Before a restore")
                 else -> Trailing.Chevron
@@ -250,7 +250,7 @@ private fun Center(content: @Composable () -> Unit) {
 
 private fun versionMenu(app: AppState, query: SaveQuery, kind: SaveKind, v: SaveVersion, title: String, changed: () -> Unit) {
     val svc = app.store.sync.service ?: return
-    val kept = v.reason == RevisionReason.MILESTONE
+    val kept = v.kept || v.reason == RevisionReason.MILESTONE
     app.choice = io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec(
         title = "${kind.label} from ${v.device}",
         icon = FuseIcons.History,

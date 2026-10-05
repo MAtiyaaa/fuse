@@ -628,11 +628,14 @@ class SyncHost(
      * headers: such a call is from outside, whatever address it arrives from.
      */
     private fun RoutingContext.fromThisComputer(): Boolean {
-        val loopback = call.request.origin.remoteHost.let { it == "127.0.0.1" || it == "::1" || it == "0:0:0:0:0:0:0:1" || it == "localhost" }
         val h = call.request.headers
         val proxied = PROXY_HEADERS.any { h[it] != null }
-        return loopback && !proxied
+        return loopback() && !proxied
     }
+
+    /** The call's connection comes from this computer (Fuse itself, or a tunnel or proxy running here). */
+    private fun RoutingContext.loopback(): Boolean =
+        call.request.origin.remoteAddress.let { it == "127.0.0.1" || it == "::1" || it == "0:0:0:0:0:0:0:1" || it == "localhost" || it.startsWith("127.") }
 
     /**
      * A paired device reached the host through a tunnel or proxy by name: that name (with https)
@@ -649,10 +652,16 @@ class SyncHost(
         if (store.setOutsideAddress((if (https) "https://" else "http://") + name, learned = true)) bump()
     }
 
-    /** Who is calling, for counting wrong passwords: the caller a tunnel names, else the address. */
+    /**
+     * Who is calling, for counting calls and wrong passwords: the caller a tunnel or proxy on this
+     * computer names, else the address the call came from. A name in the headers of a call from
+     * anywhere else is never believed (anyone could write one, to dodge a wait).
+     */
     private fun RoutingContext.caller(): String {
+        val from = call.request.origin.remoteAddress
+        if (!loopback()) return from
         val h = call.request.headers
-        return h["CF-Connecting-IP"] ?: h["X-Real-IP"] ?: h["X-Forwarded-For"]?.substringBefore(',')?.trim() ?: call.request.origin.remoteAddress
+        return h["CF-Connecting-IP"] ?: h["True-Client-IP"] ?: h["X-Real-IP"] ?: h["X-Forwarded-For"]?.substringBefore(',')?.trim()?.ifEmpty { null } ?: from
     }
 
     private fun RoutingContext.hubToken(): String? =
@@ -672,7 +681,8 @@ class SyncHost(
 
     /** True (after answering) when this address has made too many calls this minute. */
     private suspend fun RoutingContext.limited(weight: Int = 1): Boolean {
-        val who = call.request.origin.remoteAddress
+        // Each caller a tunnel carries counts on its own, so devices from away don't share one allowance.
+        val who = caller()
         val minute = clock() / 60_000
         val (m, count) = calls[who] ?: (minute to 0)
         val now = if (m == minute) count + weight else weight

@@ -51,7 +51,10 @@ enum class RevisionReason {
     /** What was on a device before an older revision was restored over it. */
     BEFORE_RESTORE,
 
-    /** Pinned by the person ("Keep this save"). */
+    /**
+     * Pinned by the person, as hosts before 0.3.4 kept it (the reason itself changed). Newer hosts
+     * keep the reason and set [SaveRevision.pinned] instead.
+     */
     MILESTONE,
 }
 
@@ -75,8 +78,20 @@ data class SaveRevision(
     val reason: RevisionReason = RevisionReason.PLAYED,
     /** The game's name as the saving device showed it, for the Hub. */
     val title: String = "",
+    /** Kept for good by the person ("Keep this save"): never cleaned up, whatever its [reason]. */
+    val pinned: Boolean = false,
 ) {
     val size: Long get() = manifest.size
+
+    /**
+     * Whether this revision may be a slot's newest. Copies kept for safety (the other side of a
+     * conflict, what was there before a restore) are history only: they never come down by
+     * themselves, whenever they were made.
+     */
+    val canBeNewest: Boolean get() = reason == RevisionReason.PLAYED || reason == RevisionReason.MILESTONE
+
+    /** Kept for good: pinned now, or by an older host that marked it a milestone. */
+    val kept: Boolean get() = pinned || reason == RevisionReason.MILESTONE
 }
 
 /** Where a slot's history stands on one side: the newest revision, by id, or none. */
@@ -130,7 +145,7 @@ data class Retention(val recent: Int = 10, val days: Int = 14, val weeks: Int = 
         val byNewest = revisions.sortedByDescending { it.at }
         val kept = LinkedHashSet<String>()
         byNewest.take(recent).forEach { kept += it.id }
-        byNewest.filter { it.reason != RevisionReason.PLAYED }.forEach { kept += it.id }
+        byNewest.filter { it.reason != RevisionReason.PLAYED || it.pinned }.forEach { kept += it.id }
         val day = 86_400_000L
         val seenDays = HashSet<Long>()
         val seenWeeks = HashSet<Long>()

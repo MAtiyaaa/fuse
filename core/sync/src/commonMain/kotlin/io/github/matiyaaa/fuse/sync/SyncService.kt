@@ -23,10 +23,10 @@ sealed interface SyncStatus {
     data class NeedsAttention(val hostName: String, val reason: String, val code: String) : SyncStatus
 }
 
-/** A host on this network, found by asking. */
 /** A request to join on its way: the host asked, and the number this device shows. */
 data class JoinWaiting(val hostName: String, val match: String, val account: Boolean = false)
 
+/** A host on this network, found by asking. */
 data class NearbyHost(val name: String, val hostId: String, val address: String)
 
 /** One thing Fuse Sync did, for the Sync tab's recent activity. */
@@ -119,6 +119,8 @@ data class SaveVersion(
     val bytes: Long,
     val reason: RevisionReason,
     val current: Boolean,
+    /** Kept for good by the person. */
+    val kept: Boolean = false,
 )
 
 /**

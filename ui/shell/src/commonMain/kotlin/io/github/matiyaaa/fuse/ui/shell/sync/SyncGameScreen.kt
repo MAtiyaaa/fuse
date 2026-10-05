@@ -134,7 +134,7 @@ private fun versionRows(app: AppState, g: GameReport, storePath: String): List<M
                 TimeWords.relative(v.at, now, offset).replaceFirstChar { it.uppercase() } + " on ${v.device}",
                 when {
                     v.current -> FuseIcons.CircleCheck
-                    v.reason == RevisionReason.MILESTONE -> FuseIcons.Bookmark
+                    v.kept || v.reason == RevisionReason.MILESTONE -> FuseIcons.Bookmark
                     v.reason == RevisionReason.CONFLICT_COPY -> FuseIcons.GitCompare
                     v.reason == RevisionReason.BEFORE_RESTORE -> FuseIcons.Undo
                     else -> FuseIcons.Save
@@ -153,16 +153,16 @@ private fun versionRows(app: AppState, g: GameReport, storePath: String): List<M
 }
 
 private fun reasonText(v: VersionReport): String? = when (v.reason) {
-    RevisionReason.PLAYED -> null
-    RevisionReason.CONFLICT_COPY -> "the other side of a conflict"
-    RevisionReason.BEFORE_RESTORE -> "kept before a restore"
+    RevisionReason.PLAYED -> "kept for good".takeIf { v.kept }
+    RevisionReason.CONFLICT_COPY -> "the other side of a conflict" + if (v.kept) ", kept for good" else ""
+    RevisionReason.BEFORE_RESTORE -> "kept before a restore" + if (v.kept) ", kept for good" else ""
     RevisionReason.MILESTONE -> "kept for good"
 }
 
 /** A version's files: each one's name in the save, its size, and where the host keeps it. */
 private fun versionFiles(app: AppState, g: GameReport, v: VersionReport, storePath: String) {
     val svc = app.store.sync.service ?: return
-    val kept = v.reason == RevisionReason.MILESTONE
+    val kept = v.kept || v.reason == RevisionReason.MILESTONE
     app.choice = ChoiceSpec(
         title = "${g.name}, saved on ${v.device}",
         icon = FuseIcons.FileText,

@@ -38,7 +38,7 @@ internal fun syncWords(status: SyncStatus): SyncWords = when (status) {
     )
     is SyncStatus.Offline -> SyncWords(
         false, "Offline",
-        if (status.pending > 0) "${status.hostName} isn't answering. ${status.pending} ${if (status.pending == 1) "change waits" else "changes wait"} here, safe" else "${status.hostName} isn't answering. Everything works here and catches up later",
+        if (status.pending > 0) "${status.hostName} isn't answering. ${status.pending} ${if (status.pending == 1) "change is" else "changes are"} kept here and ${if (status.pending == 1) "goes" else "go"} up when it's back" else "${status.hostName} isn't answering. Everything works here and catches up later",
     )
     is SyncStatus.NeedsAttention -> SyncWords(false, "Needs you", status.reason)
 }

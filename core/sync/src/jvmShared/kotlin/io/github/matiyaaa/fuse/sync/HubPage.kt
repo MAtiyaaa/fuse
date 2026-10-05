@@ -109,7 +109,7 @@ ${if (byDevice.isNotEmpty()) """<h2>Play time by device</h2>$byDevice""" else ""
             val rows = s.versions.joinToString("") { v ->
                 val files = v.files.joinToString("") { f -> """<li><code>${esc(f.path)}</code> <span>${size(f.bytes)}</span> <small>kept as <code>${esc(f.stored)}</code></small></li>""" }
                 """<tr${if (v.current) " class=\"current\"" else ""}><td>${at(v.at)}${if (v.current) " <em>in use</em>" else ""}</td><td>${esc(v.device)}</td>""" +
-                    """<td>${if (v.playSeconds > 0) duration(v.playSeconds) else "–"}</td><td>${size(v.bytes)}</td><td>${reason(v.reason)}</td>""" +
+                    """<td>${if (v.playSeconds > 0) duration(v.playSeconds) else "–"}</td><td>${size(v.bytes)}</td><td>${reason(v.reason)}${if (v.kept && v.reason != RevisionReason.MILESTONE) ", kept for good" else ""}</td>""" +
                     """<td><details><summary>${v.files.size} ${if (v.files.size == 1) "file" else "files"}</summary><ul class="files">$files</ul></details></td></tr>"""
             }
             """<h4>${s.kind.label}s <small>${s.versions.size} versions · ${size(s.bytes)} kept${if (s.format.isNotEmpty()) " · ${esc(s.format)}" else ""}</small></h4>

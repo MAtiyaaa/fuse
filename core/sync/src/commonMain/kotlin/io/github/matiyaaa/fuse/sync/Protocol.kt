@@ -303,6 +303,8 @@ data class VersionReport(
     val current: Boolean,
     val bytes: Long,
     val files: List<FileReport>,
+    /** Kept for good by the person. */
+    val kept: Boolean = false,
 )
 
 /** A file of a save: its name in the save, its size, and where the host keeps it (relative to [ProfileReport.storePath]). */

@@ -210,7 +210,8 @@ class SyncDevice(
         val slotState = state.slots[keyOf(profile, slot)] ?: SlotState()
         // Saved again while the last one still waits to go (played on, offline or mid-session): the
         // newer one takes its place, made from the same base, so the host sees one step, not a fork.
-        val waiting = state.outbox.lastOrNull { o -> o.revision?.let { it.profile == profile && it.game == slot.game.id && it.kind == slot.kind } == true }
+        // Copies kept for safety are history only: the line goes on from the last ordinary save waiting.
+        val waiting = state.outbox.lastOrNull { o -> o.revision?.let { it.profile == profile && it.game == slot.game.id && it.kind == slot.kind && it.canBeNewest } == true }
         if (manifest.fingerprint == (waiting?.revision?.manifest?.fingerprint ?: slotState.fingerprint)) return@withLock null
         val replaces = waiting?.takeIf { it.revision?.reason == RevisionReason.PLAYED && it.priority == priority.rank }
         for ((lf, h) in hashed) if (!store.has(h)) lf.file.inputStream().use { store.put(it, expected = h) }
@@ -252,8 +253,9 @@ class SyncDevice(
             val (current, hashed) = fingerprintOf(slot)
             for ((lf, h) in hashed) if (!store.has(h)) lf.file.inputStream().use { store.put(it, expected = h) }
             val mine = state.parked[keyOf(profile, slot)]
-            // Clear what is there (it is all in the store), then put this person's own back.
-            for (lf in slot.files) if (lf.file.isFile) lf.file.delete()
+            // Clear what is there (every file of it is in the store), then put this person's own
+            // back. A file Fuse Sync can't keep (a name it can't carry) is never touched.
+            for ((lf, h) in hashed) if (store.has(h)) lf.file.delete()
             if (mine != null && mine.files.all { store.has(it.hash) }) write(slot, mine)
             var parked = state.parked - keyOf(profile, slot)
             if (current.files.isNotEmpty()) parked = parked + (keyOf(holder, slot) to current)
@@ -271,7 +273,7 @@ class SyncDevice(
     suspend fun prepare(client: SyncClient?, profile: String, slot: LocalSlot): PrepareResult {
         if (!slot.available) return PrepareResult.Unavailable
         val head = try {
-            client?.revisions(profile, slot.game.id, slot.kind)?.firstOrNull { it.reason != RevisionReason.CONFLICT_COPY }
+            client?.revisions(profile, slot.game.id, slot.kind)?.firstOrNull { it.canBeNewest }
         } catch (e: SyncException) {
             if (e.code == "offline") return PrepareResult.Offline else throw e
         } ?: return if (client == null) PrepareResult.Offline else PrepareResult.Ready
@@ -280,7 +282,7 @@ class SyncDevice(
         val slotState = state.slots[keyOf(profile, slot)] ?: SlotState()
         val localChanged = manifest.files.isNotEmpty() && manifest.fingerprint != slotState.fingerprint
         // This person's saves queued from here and not yet sent are their newest (never anyone else's).
-        val queued = state.outbox.lastOrNull { it.profile == profile && it.revision?.game == slot.game.id && it.revision.kind == slot.kind }?.revision
+        val queued = state.outbox.lastOrNull { it.profile == profile && it.revision?.game == slot.game.id && it.revision.kind == slot.kind && it.revision.canBeNewest }?.revision
         return when (SyncRules.decide(slotState.base, localChanged || queued != null, head.id, sameContent = manifest.fingerprint == head.manifest.fingerprint)) {
             SyncDecision.UpToDate -> {
                 // What is here stays the fingerprint to compare with: when it came from a save kept
@@ -311,7 +313,8 @@ class SyncDevice(
         mutex.withLock {
             state = state.copy(
                 slots = state.slots + (keyOf(profile, slot) to SlotState(remote.id, remote.manifest.fingerprint)),
-                outbox = state.outbox.filterNot { it.profile == profile && it.revision?.game == slot.game.id && it.revision.kind == slot.kind },
+                // This device's save goes up as one new step; copies kept for safety still go.
+                outbox = state.outbox.filterNot { it.profile == profile && it.revision?.game == slot.game.id && it.revision.kind == slot.kind && it.revision.canBeNewest },
             )
             persist()
         }
@@ -321,7 +324,32 @@ class SyncDevice(
 
     /** The person took the host's save: this device's is kept as a revision on the host first, then replaced. */
     suspend fun takeRemote(client: SyncClient, profile: String, slot: LocalSlot, remote: SaveRevision) {
+        mutex.withLock {
+            // Saves of this one still waiting to go lost to the host's: they go as the other side
+            // of the conflict, never as the newest, and never as the start of what is played next.
+            state = state.copy(outbox = state.outbox.map { o ->
+                val r = o.revision
+                if (o.profile == profile && r != null && r.game == slot.game.id && r.kind == slot.kind && r.canBeNewest) o.copy(revision = r.copy(reason = RevisionReason.CONFLICT_COPY)) else o
+            })
+            persist()
+        }
         place(client, slot, remote)
+    }
+
+    /**
+     * Brings back [revision], an older version: it is put in place (what is here kept first, as
+     * history) and goes up as the newest, made from the host's newest, so every device takes it
+     * next and the restore sticks. Returns the revision sent, or null when it already is the newest.
+     */
+    suspend fun restore(client: SyncClient, profile: String, slot: LocalSlot, revision: SaveRevision, playSeconds: Long = revision.playSeconds, title: String = ""): SaveRevision? {
+        val head = client.revisions(profile, slot.game.id, slot.kind).firstOrNull { it.canBeNewest }
+        place(client, slot, revision, profile)
+        mutex.withLock {
+            // Agreed with the host's newest: what is here now differs from it, so it goes up made from it.
+            state = state.copy(slots = state.slots + (keyOf(profile, slot) to SlotState(head?.id, head?.manifest?.fingerprint)))
+            persist()
+        }
+        return capture(profile, slot, playSeconds, Priority.LAUNCH, title)
     }
 
     /**
@@ -329,27 +357,28 @@ class SyncDevice(
      * then moved over it, after the files that were here were kept (as a revision marked as before
      * a restore, which is queued for the host). If anything fails part way, what was here stays.
      */
-    suspend fun place(client: SyncClient, slot: LocalSlot, revision: SaveRevision) {
+    suspend fun place(client: SyncClient, slot: LocalSlot, revision: SaveRevision, owner: String = revision.profile) {
         for (f in revision.manifest.files) client.download(f.hash, store)
         mutex.withLock {
             // The save as this emulator keeps it (converted when it came from one that keeps it differently).
             val incoming = inSlotFormat(slot, revision.manifest)
             // What is here now is kept first, so taking another save never loses this one.
             val (current, hashed) = fingerprintOf(slot)
-            if (current.files.isNotEmpty() && current.fingerprint != incoming.fingerprint) {
+            val alreadyGoing = state.outbox.any { o -> o.revision?.let { it.profile == owner && it.game == slot.game.id && it.kind == slot.kind && it.manifest.fingerprint == current.fingerprint } == true }
+            if (current.files.isNotEmpty() && current.fingerprint != incoming.fingerprint && !alreadyGoing) {
                 for ((lf, h) in hashed) if (!store.has(h)) lf.file.inputStream().use { store.put(it, expected = h) }
                 val kept = SaveRevision(
-                    id = SyncCrypto.token(12), profile = revision.profile, game = slot.game.id, kind = slot.kind,
-                    parent = state.slots[keyOf(revision.profile, slot)]?.base, device = deviceId, deviceName = deviceName, at = hlc.now(),
+                    id = SyncCrypto.token(12), profile = owner, game = slot.game.id, kind = slot.kind,
+                    parent = state.slots[keyOf(owner, slot)]?.base, device = deviceId, deviceName = deviceName, at = hlc.now(),
                     manifest = current, reason = RevisionReason.BEFORE_RESTORE,
                 )
-                state = state.copy(outbox = state.outbox + Outgoing(kept.id, Priority.SAVE.rank, revision.profile, kept))
+                state = state.copy(outbox = state.outbox + Outgoing(kept.id, Priority.SAVE.rank, owner, kept))
             }
             write(slot, incoming)
             state = state.copy(
                 // Agreed as written here, so the converted copy isn't taken for a new save after playing.
-                slots = state.slots + (keyOf(revision.profile, slot) to SlotState(revision.id, incoming.fingerprint)),
-                holders = state.holders + (slot.key to revision.profile),
+                slots = state.slots + (keyOf(owner, slot) to SlotState(revision.id, incoming.fingerprint)),
+                holders = state.holders + (slot.key to owner),
             )
             persist()
         }
@@ -425,13 +454,14 @@ class SyncDevice(
             sent++
         }
         while (true) {
-            val next = mutex.withLock { state.outbox.minByOrNull { it.priority } } ?: break
+            val next = mutex.withLock { nextToSend() } ?: break
             val rev = next.revision ?: break
             val result = try {
                 client.push(next.profile, rev, store)
             } catch (e: SyncException) {
-                if (e.code == "offline") throw e
-                // The host refused it outright (a bad revision): it would never go; keep it locally, drop it from the queue.
+                // Only a revision the host can never take leaves the queue (its files stay here). Anything
+                // else (offline, a PIN to enter again, a clock to set, too many calls) keeps it waiting.
+                if (e.code !in REFUSED_FOR_GOOD) throw e
                 null
             }
             mutex.withLock {
@@ -454,6 +484,20 @@ class SyncDevice(
         return sent
     }
 
+    /**
+     * The most urgent revision waiting, but never ahead of the one it was made from: a save made
+     * from another still waiting goes after it, so the host sees one line, not a conflict.
+     */
+    private fun nextToSend(): Outgoing? {
+        var next = state.outbox.minByOrNull { it.priority } ?: return null
+        val seen = HashSet<String>()
+        while (seen.add(next.id)) {
+            val parent = next.revision?.parent ?: break
+            next = state.outbox.firstOrNull { it.revision?.id == parent } ?: break
+        }
+        return next
+    }
+
     /** Fetches the profile's records from the host and merges them in (after sending what changed here). */
     suspend fun pullMeta(client: SyncClient, profile: String): ProfileMeta {
         val m = client.meta(profile).meta
@@ -464,6 +508,29 @@ class SyncDevice(
         return meta(profile)
     }
 
+    /**
+     * Writes every save still waiting to go into [to] as plain files
+     * (`<profile>/<game>/<kind> <when>/<file>`), so they outlive this device's link to its host.
+     * Returns how many saves were written.
+     */
+    suspend fun exportUnsent(to: File): Int = mutex.withLock {
+        var count = 0
+        for (o in state.outbox) {
+            val r = o.revision ?: continue
+            if (r.manifest.files.none { store.has(it.hash) }) continue
+            fun part(text: String) = text.replace(Regex("[^A-Za-z0-9 ._()-]+"), "_").trim('.', ' ').take(80).ifEmpty { "_" }
+            val folder = File(File(File(to, part(o.profile)), part(r.title.ifBlank { r.game })), part("${r.kind.label} ${r.id}"))
+            for (f in r.manifest.files) {
+                if (!SavePath.isSafe(f.path) || !store.has(f.hash)) continue
+                val target = File(folder, f.path)
+                target.parentFile.mkdirs()
+                store.fileOf(f.hash).copyTo(target, overwrite = true)
+            }
+            count++
+        }
+        count
+    }
+
     suspend fun saw(seq: Long) = mutex.withLock {
         if (seq > state.seq) {
             state = state.copy(seq = seq)
@@ -471,6 +538,9 @@ class SyncDevice(
         }
     }
 }
+
+/** Answers that mean the host will never take a revision as it is: it leaves the queue (its files stay on the device). */
+private val REFUSED_FOR_GOOD = setOf("bad-revision", "bad-body", "too-large", "too-many", "bad-hash")
 
 /** Turns what a save adapter found into a slot this device can read and write. */
 object Slots {

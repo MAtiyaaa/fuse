@@ -28,19 +28,22 @@ data class Hlc(val millis: Long, val counter: Int, val device: String) : Compara
     }
 }
 
-/** Makes [Hlc] readings for one device: always later than anything it made or saw before. */
+/**
+ * Makes [Hlc] readings for one device: always later than anything it made or saw before. Safe to
+ * read from several threads at once (saves are captured while records are sent).
+ */
 class HlcClock(private val device: String, private val wall: () -> Long) {
     private var last = Hlc.ZERO
 
     /** A new reading, later than every earlier one. */
-    fun now(): Hlc {
+    fun now(): Hlc = synchronized(this) {
         val w = wall()
         last = if (w > last.millis) Hlc(w, 0, device) else Hlc(last.millis, last.counter + 1, device)
-        return last
+        last
     }
 
     /** Takes in a reading from elsewhere, so the next one is later than it too. */
-    fun seen(other: Hlc) {
+    fun seen(other: Hlc): Unit = synchronized(this) {
         if (other > last) last = Hlc(other.millis, other.counter, device)
     }
 }
