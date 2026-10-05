@@ -373,6 +373,12 @@ internal fun PairingCard(app: AppState, code: String?, addresses: List<String>, 
     val c = Fuse.colors
     var current by remember(code) { mutableStateOf(code) }
     LaunchedEffect(code) { if (current == null) current = svc.newPairingCode() }
+    // A code works for ten minutes: while it is shown, a fresh one takes its place just before.
+    LaunchedEffect(current) {
+        if (current == null) return@LaunchedEffect
+        kotlinx.coroutines.delay(9 * 60_000L + 30_000L)
+        current = svc.newPairingCode()
+    }
     Column(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(Fuse.geometry.panel)).background(c.text.copy(alpha = 0.05f))
             .border(1.dp, c.hairline, RoundedCornerShape(Fuse.geometry.panel)).padding(if (compact) Space.l else Space.xl),
@@ -388,7 +394,7 @@ internal fun PairingCard(app: AppState, code: String?, addresses: List<String>, 
                     Modifier.size(if (compact) 38.dp else 46.dp, if (compact) 46.dp else 56.dp).clip(RoundedCornerShape(10.dp)).background(c.surfaceRaised),
                     contentAlignment = Alignment.Center,
                 ) {
-                    if (current == null) Spinner(size = 14.dp, color = c.textFaint) else FText(ch.toString(), Fuse.type.numericLarge, maxLines = 1)
+                    if (current == null) Spinner(size = 14.dp, color = c.textFaint) else FText(ch.toString(), Fuse.type.numericLarge, maxLines = 1, fit = true, fitMin = 0.6f)
                 }
             }
         }

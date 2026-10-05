@@ -169,7 +169,9 @@ class JvmSyncService(
             running = server != null || hostAdmin != null,
             port = c.hostPort,
             addresses = lanAddresses().map { "$it:${c.hostPort}" },
-            pairingCode = server?.pairingCode() ?: lastCode,
+            // A code this process serves is shown only while it still works (one that was used,
+            // or ran out, is never shown); the background service's is the last one it gave.
+            pairingCode = if (server != null) server.pairingCode() else lastCode,
             status = runCatching { server?.store?.status(c.hostPort, fuseVersion) }.getOrNull() ?: adminStatus,
             service = lifetime.state(),
         )
@@ -391,7 +393,10 @@ class JvmSyncService(
             // This device connects to its own host, like any other.
             val code = newPairingCode() ?: error("The host couldn't start: port ${c.hostPort} is in use by something else.")
             connect("127.0.0.1:${c.hostPort}", code).getOrThrow()
+            // That code was this computer's own, and is used up: the one shown for other devices is new.
+            lastCode = null
             if (installService && lifetime.supported) handOver()
+            newPairingCode()
             refreshHostView()
             log("$name is a Fuse Sync Host")
             _host.value!!
