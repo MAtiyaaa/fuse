@@ -26,6 +26,8 @@ enum class PlaySessionSource {
     USAGE_STATS,
     /** Imported from another source; kept separate from observed time. */
     IMPORTED,
+    /** Played on another device of the same profile, brought in by Fuse Sync. */
+    SYNCED,
 }
 
 @Serializable

@@ -12,6 +12,7 @@ kotlin {
             api(projects.core.integrations)
             api(projects.core.data)
             api(projects.core.jellyfin)
+            api(projects.core.sync)
             api(projects.ui.player)
             implementation(libs.coil.compose)
             implementation(libs.coil.network.ktor)

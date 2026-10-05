@@ -77,7 +77,16 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 /** A play session Fuse started and has not closed yet. */
-private data class ActiveSession(val id: Long, val gameId: GameId, val endsOnResume: Boolean)
+private data class ActiveSession(
+    val id: Long,
+    val gameId: GameId,
+    val endsOnResume: Boolean,
+    /** The save Fuse Sync captures when the game ends, when Fuse Sync is in use. */
+    val save: io.github.matiyaaa.fuse.sync.SaveQuery? = null,
+)
+
+/** Fuse Sync, for the saves around a game: the service and how it knows games. */
+internal class SyncLaunch(val service: io.github.matiyaaa.fuse.sync.SyncService, val keys: io.github.matiyaaa.fuse.sync.ProfileDataPort)
 
 @OptIn(ExperimentalCoroutinesApi::class)
 internal class DefaultLibraryOps(
@@ -92,6 +101,9 @@ internal class DefaultLibraryOps(
 ) : LibraryOps {
     private val data = ctx.data
     private var active: ActiveSession? = null
+
+    /** Fuse Sync, set by the store when it runs here. */
+    @kotlin.concurrent.Volatile var sync: SyncLaunch? = null
 
     // Platforms ------------------------------------------------------------------------------------
 
@@ -372,12 +384,12 @@ internal class DefaultLibraryOps(
 
     // Launching -------------------------------------------------------------------------------------
 
-    override suspend fun launch(id: GameId, emulator: EmulatorId?, discPath: String?, display: LaunchDisplay?): LaunchOutcome =
-        launchGame(id, emulator, discPath, display).also { outcome ->
+    override suspend fun launch(id: GameId, emulator: EmulatorId?, discPath: String?, display: LaunchDisplay?, skipSaveCheck: Boolean): LaunchOutcome =
+        launchGame(id, emulator, discPath, display, skipSaveCheck).also { outcome ->
             if (outcome is LaunchOutcome.Problem) ctx.recordProblem(outcome.problem)
         }
 
-    private suspend fun launchGame(id: GameId, emulator: EmulatorId?, discPath: String?, display: LaunchDisplay?): LaunchOutcome {
+    private suspend fun launchGame(id: GameId, emulator: EmulatorId?, discPath: String?, display: LaunchDisplay?, skipSaveCheck: Boolean): LaunchOutcome {
         var stored = data.games.get(id) ?: return LaunchOutcome.Problem(LaunchProblems.gone())
         // A computer's Steam game still kept as a shortcut file that went away moves onto Steam's library.
         if (stored.location.launchPath.endsWith(".steam", ignoreCase = true) && !exists(stored.location.launchPath) && engine.moveSteamShortcutsToLibraries()) {
@@ -460,17 +472,44 @@ internal class DefaultLibraryOps(
                 RunResult.NotInstalled -> notInstalled(installedEmulator, id)
                 is RunResult.Failed -> LaunchOutcome.Problem(LaunchProblems.refused(installedEmulator, id, r.message, android))
             }
-            is LaunchPlan.AndroidIntent, is LaunchPlan.Command -> when (val r = ctx.services.launcher.run(resolved, displayId)) {
-                is RunResult.Started -> {
-                    startSession(id, installedEmulator.id, r.awaitExit)
-                    LaunchOutcome.Started
+            is LaunchPlan.AndroidIntent, is LaunchPlan.Command -> {
+                // Fuse Sync puts the newest save in place first, or asks when both sides played.
+                val save = saveQuery(id, game, installedEmulator, core ?: RetroArchCores.defaultCore(ctx.host, game.platformId))
+                var note: String? = null
+                val link = sync
+                if (save != null && link != null && !skipSaveCheck) {
+                    when (val gate = link.service.beforeLaunch(save)) {
+                        is io.github.matiyaaa.fuse.sync.LaunchGate.Conflict -> return LaunchOutcome.SaveConflict(gate.conflict)
+                        is io.github.matiyaaa.fuse.sync.LaunchGate.Go -> note = gate.note
+                    }
                 }
-                // Only the app opened; which game gets played there is unknown, so no session is recorded.
-                is RunResult.OpenedAppInstead -> LaunchOutcome.OpenedAppOnly(installedEmulator.name, r.reason)
-                RunResult.NotInstalled -> notInstalled(installedEmulator, id)
-                is RunResult.Failed -> LaunchOutcome.Problem(LaunchProblems.refused(installedEmulator, id, r.message, android))
+                when (val r = ctx.services.launcher.run(resolved, displayId)) {
+                    is RunResult.Started -> {
+                        startSession(id, installedEmulator.id, r.awaitExit, save?.takeIf { link != null })
+                        if (note != null) LaunchOutcome.Synced(note) else LaunchOutcome.Started
+                    }
+                    // Only the app opened; which game gets played there is unknown, so no session is recorded.
+                    is RunResult.OpenedAppInstead -> LaunchOutcome.OpenedAppOnly(installedEmulator.name, r.reason)
+                    RunResult.NotInstalled -> notInstalled(installedEmulator, id)
+                    is RunResult.Failed -> LaunchOutcome.Problem(LaunchProblems.refused(installedEmulator, id, r.message, android))
+                }
             }
         }
+    }
+
+    /** What Fuse Sync needs to find [game]'s saves for [emulator] here, or null without Fuse Sync. */
+    private suspend fun saveQuery(id: GameId, game: io.github.matiyaaa.fuse.model.Game, emulator: InstalledEmulator, core: String?): io.github.matiyaaa.fuse.sync.SaveQuery? {
+        val link = sync ?: return null
+        val key = link.keys.keyOf(id.value) ?: return null
+        return io.github.matiyaaa.fuse.sync.SaveQuery(
+            game = key,
+            platform = game.platformId.value,
+            romPath = game.location.launchPath,
+            emulatorId = emulator.id.value,
+            emulatorPath = emulator.appId,
+            core = core,
+            title = game.displayTitle,
+        )
     }
 
     private fun notInstalled(emulator: InstalledEmulator, game: GameId): LaunchOutcome {
@@ -494,9 +533,9 @@ internal class DefaultLibraryOps(
      * Opens an honest play session: it ends when the emulator process exits (Linux) or when Fuse
      * comes back to the front (Android). Nothing is estimated.
      */
-    private suspend fun startSession(game: GameId, emulator: EmulatorId, awaitExit: (suspend () -> Unit)?) {
+    private suspend fun startSession(game: GameId, emulator: EmulatorId, awaitExit: (suspend () -> Unit)?, save: io.github.matiyaaa.fuse.sync.SaveQuery? = null) {
         val sessionId = data.playSessions.start(game, emulator, ctx.now())
-        active = ActiveSession(sessionId, game, endsOnResume = awaitExit == null)
+        active = ActiveSession(sessionId, game, endsOnResume = awaitExit == null, save = save)
         if (awaitExit != null) {
             ctx.scope.launch {
                 try {
@@ -513,8 +552,14 @@ internal class DefaultLibraryOps(
     }
 
     private suspend fun endSession(sessionId: Long) {
+        val save = active?.takeIf { it.id == sessionId }?.save
         if (active?.id == sessionId) active = null
-        data.playSessions.end(sessionId, ctx.now())
+        val ended = data.playSessions.end(sessionId, ctx.now())
+        // Fuse Sync counts the session and keeps the save the game just wrote.
+        val link = sync
+        if (save != null && link != null && ended?.endedAt != null) {
+            ctx.scope.launch { runCatching { link.service.afterExit(save, ended.startedAt, ended.endedAt!!) } }
+        }
     }
 
     private fun afterPlaying() {
@@ -556,15 +601,15 @@ internal class DefaultLibraryOps(
 
     // Edits -----------------------------------------------------------------------------------------
 
-    override suspend fun setFavorite(id: GameId, favorite: Boolean) = data.games.setFavorite(id, favorite)
+    override suspend fun setFavorite(id: GameId, favorite: Boolean) = data.games.setFavorite(id, favorite).also { ctx.userChanged() }
 
-    override suspend fun setHidden(id: GameId, hidden: Boolean) = data.games.setHidden(id, hidden)
+    override suspend fun setHidden(id: GameId, hidden: Boolean) = data.games.setHidden(id, hidden).also { ctx.userChanged() }
 
-    override suspend fun setPinned(id: GameId, pinned: Boolean) = data.games.setPinned(id, pinned)
+    override suspend fun setPinned(id: GameId, pinned: Boolean) = data.games.setPinned(id, pinned).also { ctx.userChanged() }
 
-    override suspend fun rename(id: GameId, title: String?) = data.games.rename(id, title?.trim()?.takeIf { it.isNotEmpty() })
+    override suspend fun rename(id: GameId, title: String?) = data.games.rename(id, title?.trim()?.takeIf { it.isNotEmpty() }).also { ctx.userChanged() }
 
-    override suspend fun setEmulator(id: GameId, emulator: EmulatorId?) = data.games.setEmulatorOverride(id, emulator)
+    override suspend fun setEmulator(id: GameId, emulator: EmulatorId?) = data.games.setEmulatorOverride(id, emulator).also { ctx.userChanged() }
 
     override suspend fun setFolderPolicy(id: GameId, policy: FolderPolicy?) {
         val game = data.games.get(id) ?: return

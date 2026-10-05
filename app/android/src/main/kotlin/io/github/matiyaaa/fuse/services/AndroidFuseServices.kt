@@ -60,6 +60,30 @@ class AndroidFuseServices(
         }?.let { lock -> AutoCloseable { lock.release() } }
     }
 
+    /**
+     * Fuse Sync by Fuse: Android connects to a host (a computer) rather than being one, since it
+     * stops background work to save battery and couldn't promise to stay up for other devices.
+     */
+    override fun syncService(data: io.github.matiyaaa.fuse.sync.ProfileDataPort, scope: CoroutineScope): io.github.matiyaaa.fuse.sync.SyncService =
+        io.github.matiyaaa.fuse.sync.JvmSyncService(
+            dir = java.io.File(appContext.filesDir, "sync"),
+            settings = this.data.settings,
+            secrets = secrets,
+            data = data,
+            platform = "ANDROID",
+            defaultDeviceName = deviceName,
+            fuseVersion = appVersion,
+            lifetime = io.github.matiyaaa.fuse.sync.NoHostLifetime("Android stops background work to save battery, so it connects to a host instead of being one."),
+            scope = scope,
+            discoveryLock = {
+                val wifi = appContext.getSystemService(android.content.Context.WIFI_SERVICE) as? android.net.wifi.WifiManager
+                wifi?.createMulticastLock("fuse-sync")?.apply {
+                    setReferenceCounted(false)
+                    acquire()
+                }?.let { lock -> AutoCloseable { lock.release() } }
+            },
+        )
+
     override val emulators: EmulatorDetector = AndroidEmulatorDetector(appContext, storageVolumes)
     override val launcher: GameLauncher = AndroidGameLauncher(
         appContext,

@@ -22,9 +22,10 @@ import io.github.matiyaaa.fuse.ui.shell.store.ReleaseInstaller
 import io.github.matiyaaa.fuse.ui.shell.store.VolumeMonitor
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.IOException
@@ -79,6 +80,24 @@ class DesktopFuseServices private constructor(
     override val volumes: VolumeMonitor = io.github.matiyaaa.fuse.desktop.platform.DesktopVolumes(os)
     override val emulatorFiles: io.github.matiyaaa.fuse.ui.shell.store.EmulatorFiles =
         DesktopEmulatorFiles(os, backups = java.io.File(dirs.data, "emulator-backups"))
+
+    /** Fuse Sync by Fuse: a computer can be the host, kept running by [io.github.matiyaaa.fuse.desktop.platform.SyncHostService]. */
+    override fun syncService(data: io.github.matiyaaa.fuse.sync.ProfileDataPort, scope: CoroutineScope): io.github.matiyaaa.fuse.sync.SyncService {
+        val port = java.util.concurrent.atomic.AtomicInteger(io.github.matiyaaa.fuse.sync.SyncApi.DEFAULT_PORT)
+        val service = io.github.matiyaaa.fuse.sync.JvmSyncService(
+            dir = File(dirs.data, "sync"),
+            settings = this.data.settings,
+            secrets = secrets,
+            data = data,
+            platform = os.name,
+            defaultDeviceName = deviceName,
+            fuseVersion = appVersion,
+            lifetime = io.github.matiyaaa.fuse.desktop.platform.SyncHostService(dirs, { port.get() }, os),
+            scope = scope,
+        )
+        scope.launch { this@DesktopFuseServices.data.settings.settings.collect { port.set(it.sync.hostPort) } }
+        return service
+    }
 
     override fun writeCacheFile(relativePath: String, content: String): String? = writeBelow(cacheDir, relativePath, content)
 

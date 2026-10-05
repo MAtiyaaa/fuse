@@ -94,6 +94,12 @@ internal class DefaultFuseStore private constructor(
     override val library: DefaultLibraryOps
     override val health: DefaultHealthOps
 
+    /** Fuse Sync over this library: the person's records and settings, read and put in place. */
+    override val sync = DefaultSyncOps(
+        ctx,
+        LibraryProfileData(ctx.data, settings = { settingsNow() }, applySettings = { t -> writeSettings(t) }),
+    ) { t -> writeSettings(t) }
+
     init {
         mediaOps = DefaultMediaOps(ctx, credentials)
         // Apps that became games and games added by hand are identified and filled straight away.
@@ -117,6 +123,20 @@ internal class DefaultFuseStore private constructor(
             }
         }
         health = DefaultHealthOps(ctx, engine, library, mediaOps, updates, { credentials.stored.value }, { cartridge.status.value })
+    }
+
+    /** The settings with anything still on its way to the database written first. */
+    private suspend fun settingsNow() = writeLock.withLock {
+        val current = data.settings.current()
+        val next = current.withUiPrefs(prefsState.value)
+        if (next == current) current else data.settings.update { it.withUiPrefs(prefsState.value) }.also { ctx.settings.value = it }
+    }
+
+    /** Changes the settings (Fuse Sync bringing in a profile's) and has the interface follow at once. */
+    private suspend fun writeSettings(transform: (io.github.matiyaaa.fuse.data.settings.AppSettings) -> io.github.matiyaaa.fuse.data.settings.AppSettings) = writeLock.withLock {
+        val before = data.settings.current()
+        val after = data.settings.update { transform(it.withUiPrefs(prefsState.value)) }
+        if (after != before) reloadLocked()
     }
 
     override val media get() = mediaOps
@@ -191,6 +211,7 @@ internal class DefaultFuseStore private constructor(
         prefsState.value = after
         ctx.systemOrder.value = after.systemOrder
         writes.trySend(after)
+        ctx.userChanged()
     }
 
     private suspend fun persist(prefs: UiPrefs) = writeLock.withLock {
@@ -234,6 +255,11 @@ internal class DefaultFuseStore private constructor(
 
     private fun start() {
         io.github.matiyaaa.fuse.ui.shell.platform.JellyfinImages.service = jellyfin
+        // Fuse Sync: saves around games, and what the person changes goes up soon.
+        sync.service?.let { svc ->
+            library.sync = SyncLaunch(svc, sync.port)
+            ctx.onUserChange = { if (sync.config.value.enabled) svc.changed() }
+        }
         // Jellyfin follows its switch and addresses; off, it does nothing at all. Safe mode leaves it off.
         ctx.scope.launch {
             prefsState.map { it.jellyfin }.distinctUntilChanged().collect { j ->

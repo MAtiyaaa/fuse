@@ -42,6 +42,8 @@ class JvmSyncService(
     private val scope: CoroutineScope,
     private val saveEnv: SaveEnvironment = FileSaveEnvironment(platform),
     private val clock: () -> Long = System::currentTimeMillis,
+    /** Held while looking for hosts (Android only hears broadcast replies under a multicast lock). */
+    private val discoveryLock: () -> AutoCloseable? = { null },
 ) : SyncService {
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
     private val _status = MutableStateFlow<SyncStatus>(SyncStatus.Off)
@@ -256,8 +258,38 @@ class JvmSyncService(
         }
     }
 
+    override suspend fun setEnabled(enabled: Boolean): Unit = withContext(Dispatchers.IO) {
+        saveConfig { it.copy(enabled = enabled) }
+        stop()
+        client = null
+        if (enabled) {
+            runCatching { start() }
+        } else {
+            _status.value = SyncStatus.Off
+            _active.value = null
+            _profiles.value = emptyList()
+            _host.value = null
+        }
+    }
+
+    override suspend fun stopHosting(): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatching {
+            // This device was its own host's client: that link goes with it.
+            unlink()
+            if (lifetime.state().installed) lifetime.remove()
+            stop()
+            hostAdmin = null
+            adminStatus = null
+            saveConfig { it.copy(role = "", hostName = "") }
+            _host.value = null
+            _status.value = SyncStatus.NotSetUp
+            log("This device stopped being the host")
+        }
+    }
+
     override fun stop() {
         loop?.cancel()
+        nudge?.cancel()
         hostServer?.stop()
         responder?.stop()
         hostServer = null
@@ -266,7 +298,14 @@ class JvmSyncService(
 
     // ---------------------------------------------------------------- setting up
 
-    override suspend fun discover(): List<NearbyHost> = Discovery.find().map { NearbyHost(it.hello.name, it.hello.hostId, it.address) }
+    override suspend fun discover(): List<NearbyHost> = withContext(Dispatchers.IO) {
+        val lock = runCatching { discoveryLock() }.getOrNull()
+        try {
+            Discovery.find().map { NearbyHost(it.hello.name, it.hello.hostId, it.address) }
+        } finally {
+            runCatching { lock?.close() }
+        }
+    }
 
     override suspend fun connect(address: String, code: String, remoteAddress: String?): Result<String> = withContext(Dispatchers.IO) {
         runCatching {
@@ -299,16 +338,62 @@ class JvmSyncService(
             // This device connects to its own host, like any other.
             val code = newPairingCode() ?: error("The host couldn't start: port ${c.hostPort} is in use by something else.")
             connect("127.0.0.1:${c.hostPort}", code).getOrThrow()
-            if (installService && lifetime.supported) lifetime.install()
+            if (installService && lifetime.supported) handOver()
             refreshHostView()
             log("$name is a Fuse Sync Host")
             _host.value!!
         }
     }
 
-    override suspend fun installService(): Result<ServiceState> = withContext(Dispatchers.IO) { lifetime.install().also { refreshHostView() } }
+    override suspend fun installService(): Result<ServiceState> = withContext(Dispatchers.IO) { handOver().also { refreshHostView() } }
 
-    override suspend fun removeService(): Result<ServiceState> = withContext(Dispatchers.IO) { lifetime.remove().also { refreshHostView() } }
+    /**
+     * Hands the host over to the background service: this process stops serving (so the two never
+     * share its files), the service starts, and Fuse manages it from then on. Should the service
+     * not come up, this process serves again, so the host is never left down.
+     */
+    private suspend fun handOver(): Result<ServiceState> {
+        val c = config()
+        val server = hostServer
+        server?.stop()
+        responder?.stop()
+        hostServer = null
+        responder = null
+        val installed = lifetime.install()
+        if (installed.isSuccess) {
+            val admin = withTimeoutOrNull(SERVICE_WAIT_MS) {
+                var found: HostAdmin? = null
+                while (found == null) {
+                    found = HostAdmin.of(File(dir, "host"), c.hostPort)
+                    if (found == null) delay(250)
+                }
+                found
+            }
+            if (admin != null) {
+                hostAdmin = admin
+                adminStatus = runCatching { admin.status() }.getOrNull()
+                log("The host now runs on its own, with Fuse closed too")
+                return installed
+            }
+        }
+        // It didn't come up: serve here again.
+        startHostServer(c)
+        return if (installed.isSuccess) Result.failure(IllegalStateException("The service was set up but didn't start. Fuse keeps hosting while it is open.")) else installed
+    }
+
+    override suspend fun removeService(): Result<ServiceState> = withContext(Dispatchers.IO) {
+        lifetime.remove().also {
+            // The host lives in Fuse again, while it is open.
+            hostAdmin = null
+            adminStatus = null
+            val c = config()
+            if (c.role == "HOST") {
+                withTimeoutOrNull(5_000) { while (!HostAdmin.portFree(c.hostPort)) delay(200) }
+                startHostServer(c)
+            }
+            refreshHostView()
+        }
+    }
 
     @Volatile private var lastCode: String? = null
 
@@ -363,8 +448,13 @@ class JvmSyncService(
                 // The first profile this device ever uses takes in what it already had (nothing is lost).
                 val first = before.isEmpty() && d.meta(id) == ProfileMeta() && !adopted()
                 if (first) {
+                    // A profile someone already uses keeps what it has: this device's records only
+                    // fill what it doesn't (stamped older than anything real), and its play time
+                    // and sessions join. Only a new, empty profile takes this device's as they are.
+                    if (c != null) runCatching { d.pullMeta(c, id) }
+                    val fresh = d.meta(id) == ProfileMeta()
                     val local = data.read(d.deviceId, hlc)
-                    val adopt = ProfileDiff.changes(ProfileMeta(), local, d.deviceId, hlc)
+                    val adopt = ProfileDiff.changes(ProfileMeta(), local, d.deviceId, if (fresh) hlc else HlcClock(d.deviceId) { ADOPTED_AT })
                     d.changeMeta(id) { pending, _ -> pending.merge(adopt) }
                     saveConfig { it.copy(activeProfile = id) }
                     markAdopted()
@@ -459,7 +549,8 @@ class JvmSyncService(
         withContext(Dispatchers.IO) {
             // Emulators finish writing a moment after they close.
             delay(SETTLE_MS)
-            val session = SessionEntry(SyncCrypto.token(10), d.deviceId, startedAt, endedAt, query.emulatorId)
+            // The same id the library's own record of this session gets, so it is counted once whichever arrives first.
+            val session = SessionEntry(SessionEntry.idOf(startedAt, endedAt), d.deviceId, startedAt, endedAt, query.emulatorId)
             if (cached.records) d.played(profile, query.game, session)
             val total = d.meta(profile).game(query.game).totalSeconds
             for (slot in slots(query)) {
@@ -551,5 +642,11 @@ class JvmSyncService(
 
         /** How long after an emulator closes its saves are read (it may still be writing them). */
         const val SETTLE_MS = 1_500L
+
+        /** When a device's records joining a profile already in use count as made: before anything real. */
+        const val ADOPTED_AT = 1L
+
+        /** How long Fuse waits for a freshly started service to answer. */
+        const val SERVICE_WAIT_MS = 15_000L
     }
 }

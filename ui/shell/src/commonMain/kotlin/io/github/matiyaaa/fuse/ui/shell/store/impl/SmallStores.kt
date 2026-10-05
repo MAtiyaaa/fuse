@@ -37,24 +37,25 @@ internal class DefaultCollectionOps(private val ctx: StoreContext) : CollectionO
     override val collections: StateFlow<List<GameCollection>> =
         repo.observeManual().resilient().stateIn(ctx.scope, SharingStarted.Eagerly, emptyList())
 
-    override suspend fun create(name: String): CollectionId = repo.create(name.trim().ifEmpty { "New collection" })
+    override suspend fun create(name: String): CollectionId = repo.create(name.trim().ifEmpty { "New collection" }).also { ctx.userChanged() }
 
     override suspend fun rename(id: CollectionId, name: String) {
         name.trim().takeIf { it.isNotEmpty() }?.let { repo.rename(id, it) }
+        ctx.userChanged()
     }
 
     /** Deletes the collection only; its games stay in the library. */
-    override suspend fun delete(id: CollectionId) = repo.delete(id)
+    override suspend fun delete(id: CollectionId) = repo.delete(id).also { ctx.userChanged() }
 
-    override suspend fun add(id: CollectionId, game: GameId) = repo.addGames(id, listOf(game))
+    override suspend fun add(id: CollectionId, game: GameId) = repo.addGames(id, listOf(game)).also { ctx.userChanged() }
 
-    override suspend fun addGames(id: CollectionId, games: List<GameId>) = repo.addGames(id, games)
+    override suspend fun addGames(id: CollectionId, games: List<GameId>) = repo.addGames(id, games).also { ctx.userChanged() }
 
-    override suspend fun remove(id: CollectionId, game: GameId) = repo.removeGames(id, listOf(game))
+    override suspend fun remove(id: CollectionId, game: GameId) = repo.removeGames(id, listOf(game)).also { ctx.userChanged() }
 
     override suspend fun membership(game: GameId): Set<CollectionId> = repo.observeCollectionsOf(game).first()
 
-    override suspend fun keepSeries(id: CollectionId) = repo.setKind(id, CollectionKind.MANUAL)
+    override suspend fun keepSeries(id: CollectionId) = repo.setKind(id, CollectionKind.MANUAL).also { ctx.userChanged() }
 
     /**
      * Keeps series collections up to date: whenever games change (a scan, new details, a rename) or

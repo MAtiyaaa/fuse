@@ -74,6 +74,7 @@ fun OverlayHost(app: AppState) {
     ContextMenuOverlay(app)
     ChoiceOverlay(app)
     ProblemOverlay(app)
+    io.github.matiyaaa.fuse.ui.shell.sync.SaveConflictOverlay(app)
     TextPreviewOverlay(app)
     ReorderOverlay(app)
     ScreenPromptOverlay(app)

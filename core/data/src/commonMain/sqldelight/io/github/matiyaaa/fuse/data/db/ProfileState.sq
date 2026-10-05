@@ -1,0 +1,44 @@
+-- A person's state over the library, for Fuse Sync's profiles: read out to sync, written in when
+-- switching profiles. The library itself (which games, their files) is never touched here.
+
+userGames:
+SELECT id, platform_id, title_original, title_custom, tags_json, favorite, hidden, pinned, last_played_at, tracked_seconds, session_count, emulator_override
+FROM game WHERE removed_at IS NULL;
+
+setUserState:
+UPDATE game SET favorite = :favorite, hidden = :hidden, pinned = :pinned, last_played_at = :lastPlayed,
+    tracked_seconds = :tracked, session_count = :sessions, title_custom = :titleCustom, emulator_override = :emulator, updated_at = :now
+WHERE id = :id;
+
+endedSessions:
+SELECT id, game_id, emulator_id, started_at, ended_at FROM play_session WHERE ended_at IS NOT NULL;
+
+deleteSession:
+DELETE FROM play_session WHERE game_id = ? AND started_at = ? AND ended_at = ?;
+
+insertSession:
+INSERT INTO play_session(game_id, emulator_id, started_at, ended_at, source) VALUES (?, ?, ?, ?, 'SYNCED');
+
+manualCollections:
+SELECT id, name, sort_order, created_at FROM game_collection WHERE kind = 'MANUAL';
+
+collectionMembers:
+SELECT collection_id, game_id FROM collection_game;
+
+deleteCollection:
+DELETE FROM game_collection WHERE id = ? AND kind = 'MANUAL';
+
+updateCollection:
+UPDATE game_collection SET name = ?, sort_order = ? WHERE id = ?;
+
+clearMembers:
+DELETE FROM collection_game WHERE collection_id = ?;
+
+insertCollection:
+INSERT INTO game_collection(name, kind, sort_order, created_at) VALUES (?, 'MANUAL', ?, ?);
+
+lastCollectionId:
+SELECT last_insert_rowid();
+
+insertMember:
+INSERT OR IGNORE INTO collection_game(collection_id, game_id, sort_order) VALUES (?, ?, ?);

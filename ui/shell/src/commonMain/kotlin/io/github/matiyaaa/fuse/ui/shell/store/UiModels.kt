@@ -247,6 +247,15 @@ sealed interface LaunchOutcome {
 
     /** The game didn't start; [problem] says what happened and what can be done. */
     data class Problem(val problem: io.github.matiyaaa.fuse.ui.shell.store.Problem) : LaunchOutcome
+
+    /** Started, with word from Fuse Sync ("Your save from Steam Deck is in place"). */
+    data class Synced(val note: String) : LaunchOutcome
+
+    /**
+     * Not started yet: this device and Fuse Sync both have a newer save. The person picks one (the
+     * other is kept in its history), then it starts.
+     */
+    data class SaveConflict(val conflict: io.github.matiyaaa.fuse.sync.SaveConflict) : LaunchOutcome
 }
 
 /**

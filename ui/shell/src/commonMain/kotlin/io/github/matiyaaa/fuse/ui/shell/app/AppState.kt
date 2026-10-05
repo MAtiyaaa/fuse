@@ -180,6 +180,9 @@ class AppState(
     /** Something went wrong or needs attention, told with what can be done ([ProblemOverlay]). */
     var problem by mutableStateOf<ProblemSpec?>(null)
 
+    /** A save conflict Fuse Sync asks about before a game starts. */
+    var saveConflict by mutableStateOf<io.github.matiyaaa.fuse.ui.shell.sync.SaveConflictSpec?>(null)
+
     /** "Play on which screen?" on a device with two screens. */
     var screenPrompt by mutableStateOf<ScreenPromptSpec?>(null)
 
@@ -213,7 +216,7 @@ class AppState(
     var launching by mutableStateOf<LaunchVeil?>(null)
 
     val overlayOpen: Boolean
-        get() = quickMenuOpen || contextMenu != null || confirm != null || textInput != null || choice != null || reorder != null || screenPrompt != null || buttonDetect || problem != null || textPreview != null || phoneTyping
+        get() = quickMenuOpen || contextMenu != null || confirm != null || textInput != null || choice != null || reorder != null || screenPrompt != null || buttonDetect || problem != null || saveConflict != null || textPreview != null || phoneTyping
 
     fun openContextMenu(spec: ContextMenuSpec) {
         contextMenu = spec

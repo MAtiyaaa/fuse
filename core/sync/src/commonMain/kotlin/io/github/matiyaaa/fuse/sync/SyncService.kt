@@ -123,6 +123,18 @@ interface SyncService {
     /** What this platform can do: host for real (a computer), or only connect (Android). */
     val canHost: Boolean
 
+    /**
+     * Turns Fuse Sync on or off here. Off, nothing runs and nothing shows; what is on this device
+     * stays exactly as it is (the profile in use simply stops syncing), and on again picks up.
+     */
+    suspend fun setEnabled(enabled: Boolean)
+
+    /**
+     * Stops this device being the host: its server and its background service. Its data stays on
+     * disk (nothing is deleted), so hosting again here carries on where it was.
+     */
+    suspend fun stopHosting(): Result<Unit>
+
     suspend fun discover(): List<NearbyHost>
 
     /** Connects to the host at [address] with the [code] it shows. */

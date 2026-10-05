@@ -71,6 +71,7 @@ data class GameKey(val platform: String, val identity: String) {
 
     companion object {
         private val SAFE = Regex("[^a-z0-9._-]+")
+        private val TAGS = Regex("\\(.*?\\)|\\[.*?]")
 
         /** The key for a game known by [serial], [contentHash] or [title], in that order of trust. */
         fun of(platform: String, serial: String?, contentHash: String?, title: String): GameKey {
@@ -78,7 +79,8 @@ data class GameKey(val platform: String, val identity: String) {
                 // Serials are written many ways (SLUS-00067, slus_000.67, SLUS00067): letters and digits only.
                 !serial.isNullOrBlank() -> "s." + serial.lowercase().filter { it.isLetterOrDigit() }
                 !contentHash.isNullOrBlank() -> "h." + contentHash.lowercase().replace(SAFE, "")
-                else -> "t." + title.lowercase().replace(SAFE, "-").trim('-')
+                // Region and version tags differ between copies of one game: "Pokemon Ruby (USA)" is "pokemon-ruby".
+                else -> "t." + title.lowercase().replace(TAGS, "").replace(SAFE, "-").trim('-')
             }
             return GameKey(platform.lowercase().replace(SAFE, "-"), identity)
         }
@@ -101,6 +103,11 @@ data class SessionEntry(
     val emulator: String? = null,
 ) {
     val seconds: Long get() = ((endedAt - startedAt) / 1000).coerceAtLeast(0)
+
+    companion object {
+        /** A session's id from its times, so a device names the same session the same way however it learns of it. */
+        fun idOf(startedAt: Long, endedAt: Long): String = "t:$startedAt-$endedAt"
+    }
 }
 
 /**

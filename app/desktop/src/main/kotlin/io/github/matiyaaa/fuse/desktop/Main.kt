@@ -49,6 +49,10 @@ import java.awt.image.BufferedImage
 
 fun main(args: Array<String>) {
     if ("--self-test" in args) kotlin.system.exitProcess(SelfTest.run())
+    if ("--sync-host" in args) {
+        val dirs = FuseDirs.fromEnvironment().also { it.ensure() }
+        kotlin.system.exitProcess(SyncHostMain.run(dirs))
+    }
     setX11WmClass()
     // Fuse Player plays on FFmpeg here.
     io.github.matiyaaa.fuse.ui.player.FusePlayer.engineFactory = { io.github.matiyaaa.fuse.ui.player.ffmpeg.FfmpegEngine() }
