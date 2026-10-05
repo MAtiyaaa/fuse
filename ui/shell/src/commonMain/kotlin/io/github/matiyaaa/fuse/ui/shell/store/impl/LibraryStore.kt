@@ -392,12 +392,20 @@ internal class DefaultLibraryOps(
 
     // Launching -------------------------------------------------------------------------------------
 
-    override suspend fun launch(id: GameId, emulator: EmulatorId?, discPath: String?, display: LaunchDisplay?, skipSaveCheck: Boolean, playAnyway: Boolean): LaunchOutcome =
-        launchGame(id, emulator, discPath, display, skipSaveCheck, playAnyway).also { outcome ->
+    override suspend fun launch(id: GameId, emulator: EmulatorId?, discPath: String?, display: LaunchDisplay?, skipSaveCheck: Boolean, playAnyway: Boolean, onStage: (io.github.matiyaaa.fuse.ui.shell.store.LaunchStage) -> Unit): LaunchOutcome =
+        launchGame(id, emulator, discPath, display, skipSaveCheck, playAnyway, onStage).also { outcome ->
             if (outcome is LaunchOutcome.Problem) ctx.recordProblem(outcome.problem)
         }
 
-    private suspend fun launchGame(id: GameId, emulator: EmulatorId?, discPath: String?, display: LaunchDisplay?, skipSaveCheck: Boolean, playAnyway: Boolean = false): LaunchOutcome {
+    private suspend fun launchGame(
+        id: GameId,
+        emulator: EmulatorId?,
+        discPath: String?,
+        display: LaunchDisplay?,
+        skipSaveCheck: Boolean,
+        playAnyway: Boolean = false,
+        onStage: (io.github.matiyaaa.fuse.ui.shell.store.LaunchStage) -> Unit = {},
+    ): LaunchOutcome {
         var stored = data.games.get(id) ?: return LaunchOutcome.Problem(LaunchProblems.gone())
         // A computer's Steam game still kept as a shortcut file that went away moves onto Steam's library.
         if (stored.location.launchPath.endsWith(".steam", ignoreCase = true) && !exists(stored.location.launchPath) && engine.moveSteamShortcutsToLibraries()) {
@@ -486,6 +494,7 @@ internal class DefaultLibraryOps(
                 var note: String? = null
                 val link = sync
                 if (save != null && link != null && !skipSaveCheck) {
+                    onStage(io.github.matiyaaa.fuse.ui.shell.store.LaunchStage.CHECKING_SAVE)
                     when (val gate = link.service.beforeLaunch(save, waitForOthers = !playAnyway)) {
                         is io.github.matiyaaa.fuse.sync.LaunchGate.Conflict -> return LaunchOutcome.SaveConflict(gate.conflict)
                         is io.github.matiyaaa.fuse.sync.LaunchGate.Busy -> return LaunchOutcome.SyncBusy(gate)
@@ -496,12 +505,15 @@ internal class DefaultLibraryOps(
                 val st = syncthing?.takeIf { ctx.data.settings.current().syncthing.enabled }
                 val plainSave = if (st != null) plainSaveQuery(game, installedEmulator, core ?: RetroArchCores.defaultCore(ctx.host, game.platformId)) else null
                 if (st != null && plainSave != null && !skipSaveCheck) {
+                    onStage(io.github.matiyaaa.fuse.ui.shell.store.LaunchStage.CHECKING_SAVE)
                     when (val gate = st.beforeLaunch(plainSave)) {
                         is io.github.matiyaaa.fuse.sync.syncthing.SyncthingGate.Conflict -> return LaunchOutcome.SyncthingConflict(gate.conflicts)
                         is io.github.matiyaaa.fuse.sync.syncthing.SyncthingGate.Go -> note = note ?: gate.note
                     }
                 }
-                when (val r = ctx.services.launcher.run(resolved, displayId)) {
+                onStage(io.github.matiyaaa.fuse.ui.shell.store.LaunchStage.STARTING)
+                // From here the emulator is starting: nothing calls it off any more.
+                when (val r = kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) { ctx.services.launcher.run(resolved, displayId) }) {
                     is RunResult.Started -> {
                         startSession(id, installedEmulator.id, r.awaitExit, save?.takeIf { link != null }, plainSave)
                         if (note != null) LaunchOutcome.Synced(note) else LaunchOutcome.Started

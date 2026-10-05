@@ -340,6 +340,30 @@ class ServiceTest {
     }
 
     @Test
+    fun aHostInAFolderThatHoldsOtherThingsNeverTouchesThem(): Unit = runBlocking {
+        val (pc, pcSettings) = service("Gaming PC", Library())
+        // The person picks a whole drive for the host's saves.
+        val drive = File(root, "media/BigDrive").apply { mkdirs() }
+        val photos = File(drive, "Photos/holiday.jpg").apply { parentFile.mkdirs(); writeText("sunset") }
+        val notes = File(drive, "notes.txt").apply { writeText("keep") }
+        pcSettings.update { it.copy(sync = it.sync.copy(hostDataDir = drive.path)) }
+        pc.hostHere("Gaming PC", installService = false).getOrThrow()
+        // Its files go in a folder of their own there.
+        val own = File(drive, JvmSyncService.HOST_FOLDER)
+        assertEquals(own.path.replace('\\', '/'), pcSettings.current().sync.hostDataDir)
+        assertTrue(File(own, "host.json").isFile)
+        // Moved and then deleted: the drive's own things stay exactly where they were.
+        val elsewhere = File(root, "elsewhere")
+        pc.moveHostData(elsewhere.path).getOrThrow()
+        assertTrue(photos.isFile && notes.isFile)
+        pc.deleteHost().getOrThrow()
+        assertEquals("sunset", photos.readText())
+        assertEquals("keep", notes.readText())
+        assertTrue(!File(elsewhere, "host.json").exists())
+        pc.stop()
+    }
+
+    @Test
     fun withFuseSyncOffNothingHappens(): Unit = runBlocking {
         val settings = SettingsStore(DesktopDatabase.open(null))
         val lib = Library()

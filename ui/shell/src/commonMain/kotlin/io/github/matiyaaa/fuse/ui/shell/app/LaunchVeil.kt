@@ -1,6 +1,7 @@
 package io.github.matiyaaa.fuse.ui.shell.app
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -60,7 +61,8 @@ import io.github.matiyaaa.fuse.ui.shell.components.LocalTileMetrics
  * line says only what Fuse knows (it is starting the game), with a quiet spinner and no invented
  * progress. It is dark in every theme, since an emulator is about to take the screen.
  *
- * Input is held while it shows. Under Reduced motion and in Low Power Mode nothing settles or
+ * Input is held while it shows, except Back while the save is still being checked (a slow host must
+ * never hold the person there). Under Reduced motion and in Low Power Mode nothing settles or
  * rises: it simply fades in.
  */
 @Composable
@@ -73,7 +75,11 @@ fun LaunchVeilContent(veil: LaunchVeil) {
     LaunchedEffect(veil) {
         if (flourish) settle.animateTo(1f, tween(motion.ms(Durations.DELIBERATE * 3), easing = Curves.Enter))
     }
-    InputLayer(priority = LayerPriority.SYSTEM, modal = true) { NavResult.CONSUMED }
+    InputLayer(priority = LayerPriority.SYSTEM, modal = true) { e ->
+        // Only Back, and only while the save is still being checked: once the game starts, nothing stops it.
+        if (e.action == io.github.matiyaaa.fuse.model.NavAction.BACK) veil.cancel?.invoke()
+        NavResult.CONSUMED
+    }
     val accent = veil.accent.toColor()
     val floor = c.artScrim.copy(alpha = 1f)
     val reveal = rememberReveal(veil)
@@ -183,6 +189,21 @@ fun LaunchVeilContent(veil: LaunchVeil) {
                     Spinner(size = Size.iconS, color = c.onArt)
                     Spacer(Modifier.width(Space.s))
                     FText(veil.status ?: "Starting", Fuse.type.label, color = c.onArtMuted, maxLines = 1)
+                    // While it can still be called off, the way to do it sits beside what is happening.
+                    val cancel = veil.cancel
+                    if (cancel != null) {
+                        Spacer(Modifier.width(Space.xl))
+                        io.github.matiyaaa.fuse.ui.designsystem.icons.ButtonGlyph(
+                            io.github.matiyaaa.fuse.ui.designsystem.icons.HintButton.BACK,
+                            size = io.github.matiyaaa.fuse.ui.designsystem.icons.ButtonGlyphDefaults.SmallSize,
+                            color = c.onArtMuted,
+                        )
+                        Spacer(Modifier.width(Space.xs))
+                        FText(
+                            "Don't Start", Fuse.type.caption, color = c.onArtMuted, maxLines = 1,
+                            modifier = Modifier.clickable(onClick = cancel),
+                        )
+                    }
                 }
             }
         }

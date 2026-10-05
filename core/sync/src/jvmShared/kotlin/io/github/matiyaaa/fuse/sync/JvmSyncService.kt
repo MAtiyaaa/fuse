@@ -412,7 +412,8 @@ class JvmSyncService(
             forgetHost()
             // The background service needs a moment to let go of its files.
             delay(HOST_RELEASE_MS)
-            folder.deleteRecursively()
+            // Only what the host kept: a folder the person chose may hold other things too.
+            HostFiles.delete(folder)
             saveConfig { it.copy(hostDataDir = "") }
             _status.value = SyncStatus.NotSetUp
         }
@@ -442,16 +443,18 @@ class JvmSyncService(
                 delay(HOST_RELEASE_MS)
             }
             try {
-                if (from.isDirectory) {
-                    from.copyRecursively(target, overwrite = false)
-                    // Every file arrived whole before the old folder goes.
-                    from.walkTopDown().filter { it.isFile }.forEach { f ->
+                // Only the host's own files move: anything else in a folder the person chose stays.
+                val moving = if (from.isDirectory) HostFiles.own(from) else emptyList()
+                for (entry in moving) {
+                    entry.copyRecursively(File(target, entry.name), overwrite = false)
+                    // Every file arrived whole before the old ones go.
+                    entry.walkTopDown().filter { it.isFile }.forEach { f ->
                         val copy = File(target, f.relativeTo(from).path)
                         check(copy.isFile && copy.length() == f.length()) { "A file didn't copy: ${f.name}. Nothing was moved." }
                     }
                 }
                 saveConfig { it.copy(hostDataDir = target.path.replace('\\', '/')) }
-                if (from.isDirectory) from.deleteRecursively()
+                if (from.isDirectory) HostFiles.delete(from)
             } catch (e: Exception) {
                 if (target.canonicalFile != from) target.listFiles()?.forEach { it.deleteRecursively() }
                 throw e
@@ -745,6 +748,12 @@ class JvmSyncService(
         runCatching {
             require(canHost) { "This device can't be a host." }
             saveConfig { it.copy(enabled = true, role = "HOST", hostName = name.trim().ifEmpty { defaultDeviceName }) }
+            // A folder chosen for the host that already holds other things (a whole drive, say)
+            // gets a folder of the host's own inside it, so the host's files never mix with them.
+            val chosen = cached.hostDataDir.ifBlank { null }?.let(::File)
+            if (chosen != null && chosen.isDirectory && !File(chosen, "host.json").isFile && HostFiles.holdsOthers(chosen)) {
+                saveConfig { it.copy(hostDataDir = File(chosen, HOST_FOLDER).path.replace('\\', '/')) }
+            }
             val c = config()
             ensureDeviceId()
             startHostServer(c)
@@ -1282,6 +1291,9 @@ class JvmSyncService(
         }
 
         const val LINK_KEY = "sync.link"
+
+        /** The host's own folder inside a chosen folder that holds other things. */
+        const val HOST_FOLDER = "Fuse Sync Host"
 
         /** Where saves that never reached a forgotten host are kept, inside Fuse Sync's folder. */
         const val KEPT_DIR = "kept"

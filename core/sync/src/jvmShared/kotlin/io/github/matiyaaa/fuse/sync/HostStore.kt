@@ -709,6 +709,31 @@ internal sealed interface UnlockResult {
 internal const val ADMIN_NAME = "Admin"
 internal const val ADMIN_AVATAR = "crown"
 
+/**
+ * What a host keeps in its folder, and nothing else: the folder may be one the person chose (a big
+ * drive) that holds other things too, and those are never moved or deleted with the host.
+ */
+object HostFiles {
+    private val OWN = setOf(
+        "host.json", "devices.json", "profiles.json", "shared-games.json", "game-aliases.json", "account.json", "outside.json",
+        "journal.jsonl", "admin.token", "objects", "profiles",
+    )
+
+    /** The host's own files and folders in [dir] (with any write a crash left half done). */
+    fun own(dir: File): List<File> = dir.listFiles().orEmpty().filter { f ->
+        f.name in OWN || (f.name.startsWith(".") && f.name.endsWith(".tmp") && f.name.removePrefix(".").removeSuffix(".tmp") in OWN)
+    }
+
+    /** True when [dir] holds things that aren't a host's (so a new host belongs in a folder of its own inside it). */
+    fun holdsOthers(dir: File): Boolean = dir.listFiles().orEmpty().any { f -> f !in own(dir) && f.name != ".DS_Store" && f.name != "desktop.ini" }
+
+    /** Deletes the host's own files from [dir], then [dir] itself if nothing else is left in it. */
+    fun delete(dir: File) {
+        own(dir).forEach { it.deleteRecursively() }
+        if (dir.listFiles().isNullOrEmpty()) dir.delete()
+    }
+}
+
 /** Journal entries kept (twice as many before it is trimmed). */
 private const val JOURNAL_KEEP = 10_000
 

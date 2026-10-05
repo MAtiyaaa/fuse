@@ -240,6 +240,9 @@ data class SearchSuggestion(
     val key: io.github.matiyaaa.fuse.data.search.FilterKey,
 )
 
+/** Where a launch is, for the launch veil: bringing the save up to date (it can still be called off), or starting. */
+enum class LaunchStage { CHECKING_SAVE, STARTING }
+
 /** Result of asking to play a game, shown to the user when it didn't simply start. */
 sealed interface LaunchOutcome {
     data object Started : LaunchOutcome

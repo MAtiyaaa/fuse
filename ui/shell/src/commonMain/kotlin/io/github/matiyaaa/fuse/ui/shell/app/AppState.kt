@@ -305,6 +305,8 @@ data class LaunchVeil(
     val artBlurred: Boolean = false,
     /** What is happening now, under the title ("Installing 1 of 3"); null is "Starting". */
     val status: String? = null,
+    /** Calls the launch off, while nothing has started yet (the save is still being checked); null once it can't be. */
+    val cancel: (() -> Unit)? = null,
 )
 
 /**
