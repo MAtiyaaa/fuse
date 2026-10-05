@@ -4,6 +4,7 @@ import android.view.InputDevice
 import android.view.KeyEvent
 import android.view.MotionEvent
 import io.github.matiyaaa.fuse.model.PadButton
+import io.github.matiyaaa.fuse.model.PadFamily
 import io.github.matiyaaa.fuse.ui.designsystem.input.InputRouter
 import io.github.matiyaaa.fuse.ui.designsystem.input.InputSource
 
@@ -27,7 +28,11 @@ class GamepadInput(private val router: InputRouter) {
         val button = buttonFor(event.keyCode) ?: return false
         val source = sourceOf(event, button)
         when (event.action) {
-            KeyEvent.ACTION_DOWN -> if (event.repeatCount == 0) router.press(button, source)
+            KeyEvent.ACTION_DOWN -> if (event.repeatCount == 0) {
+                // Which controller this is (a DualSense, a Pro Controller...), so labels can follow it.
+                if (isFromController(event)) event.device?.let { router.padIdentified(PadFamily.of(it.name, it.vendorId)) }
+                router.press(button, source)
+            }
             KeyEvent.ACTION_UP -> router.release(button, source)
         }
         return true
@@ -39,6 +44,12 @@ class GamepadInput(private val router: InputRouter) {
         if (!fromPad || event.actionMasked != MotionEvent.ACTION_MOVE) return false
         val device = event.device
         router.stick(centered(event, device, MotionEvent.AXIS_X), centered(event, device, MotionEvent.AXIS_Y), InputSource.GAMEPAD)
+        // The right stick: Z and RZ on Android's standard gamepad layout, RX and RY on some pads.
+        if (device?.getMotionRange(MotionEvent.AXIS_Z, event.source) != null) {
+            router.rightStick(centered(event, device, MotionEvent.AXIS_Z), centered(event, device, MotionEvent.AXIS_RZ), InputSource.GAMEPAD)
+        } else if (device?.getMotionRange(MotionEvent.AXIS_RX, event.source) != null) {
+            router.rightStick(centered(event, device, MotionEvent.AXIS_RX), centered(event, device, MotionEvent.AXIS_RY), InputSource.GAMEPAD)
+        }
         if (device?.getMotionRange(MotionEvent.AXIS_HAT_X, event.source) != null) {
             hatX = hat(event.getAxisValue(MotionEvent.AXIS_HAT_X), hatX, PadButton.DPAD_LEFT, PadButton.DPAD_RIGHT)
         }

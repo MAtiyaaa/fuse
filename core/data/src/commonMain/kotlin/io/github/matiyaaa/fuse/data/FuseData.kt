@@ -10,6 +10,7 @@ import io.github.matiyaaa.fuse.data.repo.GameRepository
 import io.github.matiyaaa.fuse.data.repo.LibraryIndexer
 import io.github.matiyaaa.fuse.data.repo.LibrarySourceRepository
 import io.github.matiyaaa.fuse.data.repo.MediaRepository
+import io.github.matiyaaa.fuse.data.repo.ProfileStateRepository
 import io.github.matiyaaa.fuse.data.repo.OwnedChangesRepository
 import io.github.matiyaaa.fuse.data.repo.PlaySessionRepository
 import io.github.matiyaaa.fuse.data.repo.TitleCleanupRepository
@@ -42,4 +43,5 @@ class FuseData(
     val backup by lazy { BackupRepository(database, dispatcher, clock) }
     val search by lazy { SearchRepository(database, dispatcher) }
     val owned by lazy { OwnedChangesRepository(database, dispatcher, clock) }
+    val profileState by lazy { ProfileStateRepository(database, dispatcher, clock) }
 }

@@ -630,8 +630,14 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
                         IconGrid(list, state, gridState, cols, tileBase, metrics.gap, reveal, onTap = { i -> tapAt(i, list) }, onLong = { i -> state.pick(i, list); options(list[i]) }, focused = gridFocused)
                     }
                     LibraryLayout.CAPSULE -> {
-                        Box(Modifier.fillMaxWidth().weight(1f).padding(horizontal = Space.gutter).reveal(reveal, 1), contentAlignment = Alignment.BottomStart) {
-                            Stage(stageOf(selectedCard), showLogo = prefs.showLogo, logoHeight = if (compactHeader) CAPSULE_LOGO / 2 else CAPSULE_LOGO, titleStyle = stageTitle)
+                        BoxWithConstraints(Modifier.fillMaxWidth().weight(1f).padding(horizontal = Space.gutter).reveal(reveal, 1), contentAlignment = Alignment.BottomStart) {
+                            // Too little room above the covers (a small 4:3 handheld): the stage keeps
+                            // to its one-line form rather than running up under the toolbar.
+                            val tight = maxHeight < CAPSULE_STAGE_ROOM
+                            Stage(
+                                stageOf(selectedCard), showLogo = prefs.showLogo && !tight, logoHeight = if (compactHeader) CAPSULE_LOGO / 2 else CAPSULE_LOGO,
+                                titleStyle = if (tight) Fuse.type.title else stageTitle, fold = if (tight) 1f else 0f, inlineEyebrow = compactHeader,
+                            )
                         }
                         Spacer(Modifier.height(Space.xl))
                         CoverCarousel(
@@ -1387,6 +1393,9 @@ private val FOLDED_TOOLBAR_ROOM = 320.dp
 /** Capsule Mode's covers, against the capsule size, and the stage logo above them. */
 private const val CAPSULE_SCALE = 0.62f
 private val CAPSULE_LOGO = 128.dp
+
+/** Below this much room above Capsule Mode's covers, its stage keeps to one line. */
+private val CAPSULE_STAGE_ROOM = 150.dp
 
 /** The List layout's split between the list and the preview, and when the preview has room. */
 private const val LIST_WEIGHT = 1.15f

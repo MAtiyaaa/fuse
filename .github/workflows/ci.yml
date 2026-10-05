@@ -57,6 +57,7 @@ jobs:
           :core:launch:desktopTest
           :core:integrations:desktopTest
           :core:data:desktopTest
+          :core:sync:desktopTest
           :ui:shell:desktopTest
           :ui:designsystem:desktopTest
           :ui:link:desktopTest

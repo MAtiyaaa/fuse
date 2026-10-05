@@ -71,6 +71,8 @@ fun padButtonFor(key: Key): PadButton? = when (key) {
     Key.F -> PadButton.KEY_F
     Key.Q -> PadButton.KEY_Q
     Key.E -> PadButton.KEY_E
+    Key.LeftBracket -> PadButton.KEY_BRACKET_LEFT
+    Key.RightBracket -> PadButton.KEY_BRACKET_RIGHT
     Key.M -> PadButton.KEY_M
     Key.PageUp -> PadButton.KEY_PAGE_UP
     Key.PageDown -> PadButton.KEY_PAGE_DOWN
@@ -119,6 +121,7 @@ fun InputRouter.handleKeyEvent(event: KeyEvent): Boolean {
  */
 private fun InputRouter.typeInto(event: KeyEvent): Boolean {
     val input = textInput ?: return false
+    if (event.type == KeyEventType.KeyDown && !event.isCtrlPressed && !event.isAltPressed && !event.isMetaPressed) typedOnKeyboard()
     // Ctrl+V (Cmd+V) pastes; other shortcuts are left alone.
     if ((event.isCtrlPressed || event.isMetaPressed) && event.key == Key.V) {
         if (event.type == KeyEventType.KeyDown) input.paste()

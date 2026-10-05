@@ -48,11 +48,58 @@ data class AppSettings(
     val capture: CaptureSettings = CaptureSettings(),
     val store: StoreSettings = StoreSettings(),
     val jellyfin: JellyfinSettings = JellyfinSettings(),
+    val sync: SyncSettings = SyncSettings(),
 ) {
     companion object {
         const val CURRENT_VERSION = 2
     }
 }
+
+/**
+ * Fuse Sync by Fuse (Settings, Addons, Fuse Sync): off until set up. Whether this device hosts or
+ * connects, how it reaches its host, what syncs, how much history is kept, which profile it opens
+ * with, and this device's own Home when it keeps one. The device's secret is in the secret store,
+ * never here.
+ */
+@Serializable
+data class SyncSettings(
+    val enabled: Boolean = false,
+    /** "CLIENT", "HOST", or "" while not set up. */
+    val role: String = "",
+    /** This device's id with its host: made once, kept for the life of the install. */
+    val deviceId: String = "",
+    /** What this device is called on the host ("Steam Deck"); empty uses the device's own name. */
+    val deviceName: String = "",
+    /** The host's name and id, as it said when this device connected. */
+    val hostName: String = "",
+    val hostId: String = "",
+    val localAddress: String = "",
+    val remoteAddress: String = "",
+    /** Prefer home, fall back to outside, and back again by itself. */
+    val autoRoute: Boolean = true,
+    val wifiOnly: Boolean = false,
+    val mobileData: Boolean = false,
+    val saves: Boolean = true,
+    val states: Boolean = true,
+    val records: Boolean = true,
+    val settings: Boolean = true,
+    /** Games themselves, off: they are large, and Cartridge or the person's own copies usually have them. */
+    val gameFiles: Boolean = false,
+    val keepRecent: Int = 10,
+    val keepDays: Int = 14,
+    val keepWeeks: Int = 8,
+    /** "LAST" (the last used profile), "ASK" (Who are you? every start) or "PROFILE" ([startupProfile]). */
+    val startup: String = "LAST",
+    val startupProfile: String = "",
+    /** The profile in use on this device. */
+    val activeProfile: String = "",
+    /** Home on this device: "PROFILE" (the profile's, as on every device) or "DEVICE" (this device's own). */
+    val homeScope: String = "PROFILE",
+    /** This device's own Home, while [homeScope] is DEVICE; the profile's stays as it was. */
+    val deviceHome: io.github.matiyaaa.fuse.model.HomeLayoutConfig? = null,
+    /** The port a host serves on. */
+    val hostPort: Int = 47311,
+)
 
 /**
  * Jellyfin, an addon (Settings, Addons, Jellyfin): off until turned on. How Fuse reaches the
@@ -102,6 +149,8 @@ data class JellyfinSettings(
  */
 @Serializable
 data class StoreSettings(
+    /** The Store in Addons; off, it is gone from Addons and checks nothing. */
+    val enabled: Boolean = true,
     val variant: StoreVariant? = null,
     val autoCheck: Boolean = true,
     /** Apps Fuse installed or updated, by their key in the catalogue. */
@@ -168,6 +217,8 @@ data class HomeSettings(
     val continueDismissed: Map<String, Long> = emptyMap(),
     /** Addons' tabs (cartridge, store, jellyfin) in the order the user dragged them into; the rest follow. */
     val addonsOrder: List<String> = emptyList(),
+    /** The quick menu's items and widths ("WIFI:1"), in the user's order; empty is Fuse's own. */
+    val quickMenu: List<String> = emptyList(),
 ) {
     /**
      * Visible destinations in order. Destinations missing from the stored list (added in a newer

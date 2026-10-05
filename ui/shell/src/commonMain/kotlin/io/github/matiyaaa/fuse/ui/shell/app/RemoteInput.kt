@@ -56,6 +56,19 @@ object RemoteInput {
     /** How many phones are following the device live right now (Phone Link's event stream open). */
     val phones: StateFlow<Int> = phoneCount.asStateFlow()
 
+    private val padFamilyState = MutableStateFlow<io.github.matiyaaa.fuse.model.GlyphStyle?>(null)
+
+    /**
+     * The family of the controller in use on the device (a DualSense, an Xbox pad, a Pro
+     * Controller), or null when it doesn't say: a phone used as a controller is labelled the same.
+     */
+    val padFamily: StateFlow<io.github.matiyaaa.fuse.model.GlyphStyle?> = padFamilyState.asStateFlow()
+
+    /** The device's controller is now [family] (set by the shell from its input router). */
+    fun padInUse(family: io.github.matiyaaa.fuse.model.GlyphStyle?) {
+        padFamilyState.value = family
+    }
+
     private var nextId = 1
 
     /** A field opened: phones get it, and its id for every edit that follows. */

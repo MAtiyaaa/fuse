@@ -13,10 +13,10 @@ import io.github.matiyaaa.fuse.model.EmulatorId
 import io.github.matiyaaa.fuse.model.Host
 import io.github.matiyaaa.fuse.model.InstalledEmulator
 import io.github.matiyaaa.fuse.model.PerformanceMetric
-import io.github.matiyaaa.fuse.model.SystemStatus
 import io.github.matiyaaa.fuse.model.PlatformId
-import io.github.matiyaaa.fuse.ui.shell.platform.MenuMusicPlayer
+import io.github.matiyaaa.fuse.model.SystemStatus
 import io.github.matiyaaa.fuse.ui.shell.platform.HomeRole
+import io.github.matiyaaa.fuse.ui.shell.platform.MenuMusicPlayer
 import io.github.matiyaaa.fuse.ui.shell.platform.PlatformFeatures
 import io.github.matiyaaa.fuse.ui.shell.platform.PlatformUi
 import io.github.matiyaaa.fuse.ui.shell.screenshots.ScreenshotPlatform
@@ -30,11 +30,11 @@ import io.github.matiyaaa.fuse.ui.shell.store.GameLauncher
 import io.github.matiyaaa.fuse.ui.shell.store.LocationHint
 import io.github.matiyaaa.fuse.ui.shell.store.RunResult
 import io.ktor.client.engine.mock.respondError
-import java.io.File
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
+import java.io.File
 
 /**
  * What the audit can steer in the services: launches that wait until released, Cartridge's status,
@@ -80,6 +80,9 @@ internal class AuditControls(val cache: File) {
 
     val apps: AuditApps = AuditApps.create(File(cache, "app-icons"))
 
+    /** Fuse Sync as the library store made it, for scenarios to set up. */
+    @Volatile var sync: AuditSync? = null
+
     /** The drives the audit device reports; none by default, like a host that can't tell. */
     @Volatile var drives: List<io.github.matiyaaa.fuse.model.StorageVolume> = emptyList()
 }
@@ -94,6 +97,10 @@ internal class AuditServices(
     /** Android, for the screens only an Android device has (its games, APKs). */
     override val host: Host = base.host,
 ) : FuseServices by base {
+    /** Fuse Sync, made up (see [AuditSync]); the scenarios steer it through [AuditControls.sync]. */
+    override fun syncService(data: io.github.matiyaaa.fuse.sync.ProfileDataPort, scope: kotlinx.coroutines.CoroutineScope): io.github.matiyaaa.fuse.sync.SyncService =
+        AuditSync(base.data.settings).also { controls.sync = it }
+
     /** Windows and macOS: no app list, and emulators the user can point Fuse at. */
     private val desktop = host == Host.WINDOWS || host == Host.MACOS
 

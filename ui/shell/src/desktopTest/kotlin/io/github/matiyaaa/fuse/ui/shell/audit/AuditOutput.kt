@@ -23,6 +23,22 @@ internal enum class AuditSize(val widthPx: Int, val heightPx: Int, val density: 
 
     /** The lower screen of an AYN Thor, wider than tall: the companion, and the menus when flipped. */
     L(1240, 1080, 2.5f, "lower screen of a two-screen handheld, wider than tall (AYN Thor)"),
+
+    // 0.3.0: every class of screen Fuse runs on that the sizes above don't already stand for.
+    S(640, 480, 1.5f, "3.5 inch 4:3 handheld (Anbernic RG405M, Retroid Pocket 2S)"),
+    Q(1240, 1080, 2.25f, "3.9 inch near-square handheld (Retroid Pocket Mini)"),
+    O(960, 544, 1.5f, "5 inch OLED handheld (Anbernic RG505)"),
+    G(2560, 1600, 1.5f, "8.8 inch handheld at 150% (Legion Go)"),
+    E(1920, 1080, 2.0f, "Android TV, 1080p"),
+    K(1366, 768, 1.0f, "budget laptop"),
+    A(1920, 1080, 1.25f, "laptop at 125% (Windows default, ROG Ally)"),
+    B(3024, 1964, 2.0f, "MacBook Pro 14"),
+    Y(2880, 1920, 2.0f, "3:2 tablet laptop (Surface)"),
+    W(2560, 1440, 1.0f, "1440p monitor"),
+    Z(3840, 2160, 1.0f, "4K monitor at 100%"),
+    X(5120, 1440, 1.0f, "32:9 super ultrawide"),
+    R(1080, 1920, 1.0f, "monitor turned upright"),
+    F(2176, 1812, 2.625f, "foldable phone, open"),
     ;
 
     val widthDp: Int get() = (widthPx / density).roundToInt()

@@ -45,7 +45,7 @@ class CatalogTest {
 
     @Test
     fun everyCanonicalPlatformHasSomethingOnAndroid() {
-        val missing = Platforms.all.filter { EmulatorPriority.forPlatform(Host.ANDROID, it).isEmpty() }
+        val missing = (Platforms.all - Platforms.desktopOnly.toSet()).filter { EmulatorPriority.forPlatform(Host.ANDROID, it).isEmpty() }
         assertTrue(missing.isEmpty(), "no Android priority for $missing")
     }
 

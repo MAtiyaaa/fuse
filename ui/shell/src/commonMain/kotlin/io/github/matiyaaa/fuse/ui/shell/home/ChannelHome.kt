@@ -51,6 +51,7 @@ import io.github.matiyaaa.fuse.model.CartridgeStatus
 import io.github.matiyaaa.fuse.model.HomeWidget
 import io.github.matiyaaa.fuse.model.NavAction
 import io.github.matiyaaa.fuse.model.WidgetKind
+import io.github.matiyaaa.fuse.model.isAchievements
 import io.github.matiyaaa.fuse.ui.designsystem.components.Badge
 import io.github.matiyaaa.fuse.ui.designsystem.components.FText
 import io.github.matiyaaa.fuse.ui.designsystem.components.Hint
@@ -96,6 +97,7 @@ import io.github.matiyaaa.fuse.ui.shell.app.ConfirmSpec
 import io.github.matiyaaa.fuse.ui.shell.app.ContextMenuSpec
 import io.github.matiyaaa.fuse.ui.shell.app.FocusZone
 import io.github.matiyaaa.fuse.ui.shell.app.offers
+import io.github.matiyaaa.fuse.ui.shell.app.offersToAdd
 import io.github.matiyaaa.fuse.ui.shell.app.rememberClockText
 import io.github.matiyaaa.fuse.ui.shell.app.rememberRouteState
 import io.github.matiyaaa.fuse.ui.shell.app.rememberSystems
@@ -146,30 +148,30 @@ private const val WIDGET_CORNER = 0.6f
  * D-pad carries it a cell at a time; holding Options (X) turns the D-pad into resizing.
  */
 @Composable
-fun ChannelHome(app: AppState) {
+internal fun ChannelBoard(app: AppState, page: Int, pageKey: String, active: Boolean, editor: BoardEditor, paging: HomePaging) {
     val store = app.store
     val prefs by store.prefs.collectAsState()
     val feed by store.homeFeed.collectAsState()
     val cartridge by store.cartridge.status.collectAsState()
+    val achievementsOn by store.achievements.configured.collectAsState()
 
-    // Without a single game, system or app the board would be a wall of empty widgets: Home says
-    // how to begin instead (after a moment for the library to load, shown as the board's outline).
-    val nothing = feed.systems.isEmpty() && feed.pinnedApps.isEmpty() && feed.continuePlaying.isEmpty()
-    val loading = rememberHomeLoading(app, feed, nothing)
-    if (nothing) {
-        if (loading) HomeSkeleton(app, channels = true) else HomeEmpty(app)
-        return
-    }
-
-    val widgets = prefs.home.boardWidgets().filter { onBoard(it, app, prefs, cartridge) }
-    val editor = remember { BoardEditor() }
+    val widgets = prefs.home.boardWidgets(page).filter { onBoard(it, app, prefs, cartridge, achievementsOn) }
     // Every change made while arranging can be taken back, newest first; the floating Undo and
     // Reset at the top right ([ArrangeTools]) are reached by moving up past the board's top row.
     val history = remember { mutableStateListOf<KeptBoard>() }
     var onTools by remember { mutableStateOf<Int?>(null) }
+    // With Fuse Sync and settings following a profile: whose Home this is, this device's or everyone's.
+    val syncPrefs = app.store.prefs.collectAsState().value.sync
+    val ownHome: Boolean? = if (app.syncProfile != null && syncPrefs.settings) syncPrefs.homeScope == "DEVICE" else null
+    fun setOwnHome(own: Boolean) {
+        app.scope.launch {
+            app.store.sync.setOwnHome(own)
+            app.toasts.show(if (own) "This Home is now this device's own. The profile's is kept for later" else "Home now follows you to every device")
+        }
+    }
     val arranging = editor.arranging
     val op = editor.op
-    val sel = rememberRouteState(app.navigator, "home.board") { SpatialSelection() }
+    val sel = rememberRouteState(app.navigator, if (page == 0) "home.board" else "home.board.$pageKey") { SpatialSelection() }
     // After a change is kept the board's order follows its new reading order; the same widget stays chosen.
     var reselect by remember { mutableStateOf<String?>(null) }
     reselect?.let { id ->
@@ -200,17 +202,21 @@ fun ChannelHome(app: AppState) {
     }
 
     val systems = rememberSystems(app)
-    PageEffect(current?.id, systems) {
+    PageEffect(current?.id, systems, active) {
+        if (!active) return@PageEffect
         val game = current?.let { firstGame(it.kind, feed) }
         app.hero = game?.room(systems[game.platformId])
     }
-    PageEffect(arranging, op is BoardOp.Carry, resizeLook, onTools) {
+    PageEffect(arranging, op is BoardOp.Carry, resizeLook, onTools, active, paging.count) {
+        if (!active) return@PageEffect
+        val pages = if (paging.count > 1) listOf(Hint(HintButton.RIGHT_STICK, "Pages")) else emptyList()
         app.hints = when {
-            arranging && onTools != null -> listOf(Hint(HintButton.CONFIRM, if (onTools == 0) "Undo" else "Reset Home"), Hint(HintButton.BACK, "Done"))
+            arranging && onTools != null -> listOf(Hint(HintButton.CONFIRM, when (onTools) { 0 -> "Undo"; 1 -> if (page == 0) "Reset Home" else "Clear page"; 2 -> "New page"; else -> if (ownHome == true) "Home on all devices" else "This device's own Home" }), Hint(HintButton.BACK, "Done"))
             op is BoardOp.Carry -> listOf(Hint(HintButton.DPAD, "Move"), Hint(HintButton.CONFIRM, "Put down"), Hint(HintButton.BACK, "Cancel"))
             resizeLook -> listOf(Hint(HintButton.DPAD, "Resize"), Hint(HintButton.HOLD_OPTIONS, "Let go when done"))
             arranging -> listOf(Hint(HintButton.CONFIRM, "Pick up"), Hint(HintButton.HOLD_OPTIONS, "Resize"), Hint(HintButton.OPTIONS, "Edit"), Hint(HintButton.BACK, "Done"))
-            else -> listOf(Hint(HintButton.CONFIRM, "Open"), Hint(HintButton.HOLD_CONFIRM, "Arrange"), Hint(HintButton.OPTIONS, "Options"))
+            widgets.isEmpty() -> listOf(Hint(HintButton.CONFIRM, "Add widgets"), Hint(HintButton.OPTIONS, "Options")) + pages
+            else -> listOf(Hint(HintButton.CONFIRM, "Open"), Hint(HintButton.HOLD_CONFIRM, "Arrange"), Hint(HintButton.OPTIONS, "Options")) + pages
         }
     }
     // Leaving the board puts everything down where it was.
@@ -219,22 +225,24 @@ fun ChannelHome(app: AppState) {
     }
 
     fun keepForUndo() {
-        if (editor.arranging) history.add(KeptBoard(store.prefs.value.home.board))
+        if (editor.arranging) history.add(KeptBoard(store.prefs.value.home.storedBoard(page)))
     }
     fun undo() {
         val before = history.removeLastOrNull() ?: return app.toasts.show("Nothing to undo")
-        store.updatePrefs { p -> p.copy(home = p.home.copy(board = before.board)) }
+        store.updatePrefs { p -> p.copy(home = p.home.withBoard(page, before.board)) }
         app.platform.sounds.play(io.github.matiyaaa.fuse.ui.designsystem.sound.SoundCue.BACK)
     }
     fun reset() {
+        // The first page goes back as it came; a page added later is cleared.
+        val first = page == 0
         app.confirm = ConfirmSpec(
-            title = "Put Home back as it came?",
-            message = "Every widget returns to its first place and size, and widgets you added go. Undo brings your board back.",
-            confirmLabel = "Reset Home",
+            title = if (first) "Put Home back as it came?" else "Clear this page?",
+            message = if (first) "Every widget returns to its first place and size, and widgets you added go. Undo brings your board back." else "Its widgets come off. The page stays, and Undo brings them back.",
+            confirmLabel = if (first) "Reset Home" else "Clear page",
         ) {
             keepForUndo()
-            store.updatePrefs { p -> p.copy(home = p.home.copy(board = io.github.matiyaaa.fuse.model.HomeLayoutConfig.DefaultBoard)) }
-            app.toasts.show("Home is back as it came")
+            store.updatePrefs { p -> p.copy(home = p.home.withBoard(page, if (first) io.github.matiyaaa.fuse.model.HomeLayoutConfig.DefaultBoard else emptyList())) }
+            app.toasts.show(if (first) "Home is back as it came" else "This page is clear")
         }
     }
 
@@ -247,17 +255,17 @@ fun ChannelHome(app: AppState) {
         keepForUndo()
         val reading = layout.ids.withIndex().associate { it.value to it.index }
         store.updatePrefs { p ->
-            val board = p.home.boardWidgets().map { w ->
+            val board = p.home.boardWidgets(page).map { w ->
                 val r = layout[w.id] ?: return@map w
                 val sized = if (w.id == resized) w.copy(width = r.width, height = r.height) else w
                 sized.copy(spots = w.spots + (columns to r.spot))
             }.sortedWith(compareBy({ reading[it.id] ?: Int.MAX_VALUE }, { it.order }))
-            p.copy(home = p.home.copy(board = board.mapIndexed { i, w -> w.copy(order = i) }))
+            p.copy(home = p.home.withBoard(page, board.mapIndexed { i, w -> w.copy(order = i) }))
         }
     }
     fun saveBoard(change: (List<HomeWidget>) -> List<HomeWidget>) {
         keepForUndo()
-        store.updatePrefs { p -> p.copy(home = p.home.copy(board = change(p.home.boardWidgets()).mapIndexed { i, w -> w.copy(order = i) })) }
+        store.updatePrefs { p -> p.copy(home = p.home.withBoard(page, change(p.home.boardWidgets(page)).mapIndexed { i, w -> w.copy(order = i) })) }
     }
     fun remove(w: HomeWidget) {
         saveBoard { list -> list.filterNot { it.id == w.id } }
@@ -269,9 +277,9 @@ fun ChannelHome(app: AppState) {
         app.toasts.show("Added ${kind.title()}")
     }
     fun addPicker() {
-        val missing = WidgetKind.entries.filter { k -> prefs.home.boardWidgets().none { it.kind == k } && app.offers(k) }
+        val missing = WidgetKind.entries.filter { k -> prefs.home.boardWidgets(page).none { it.kind == k } && app.offersToAdd(k) }
         if (missing.isEmpty()) {
-            app.toasts.show("Every widget is on Home already")
+            app.toasts.show(if (paging.count > 1) "Every widget is on this page already" else "Every widget is on Home already")
             return
         }
         app.choice = ChoiceSpec(
@@ -348,7 +356,7 @@ fun ChannelHome(app: AppState) {
         val start = remember { TimeSource.Monotonic.markNow() }
         var lastResize by remember { mutableStateOf(-1_000L) }
         InputLayer(
-            enabled = app.focusZone == FocusZone.CONTENT && !app.overlayOpen,
+            enabled = active && app.focusZone == FocusZone.CONTENT && !app.overlayOpen,
             longPress = true,
             holdModifier = if (arranging) NavAction.CONTEXT else null,
         ) { e ->
@@ -356,13 +364,26 @@ fun ChannelHome(app: AppState) {
             val carried = editor.op as? BoardOp.Carry
             val direction = e.action == NavAction.LEFT || e.action == NavAction.RIGHT || e.action == NavAction.UP || e.action == NavAction.DOWN
             val tools = onTools
+            // The right stick, [ and ]: the next or previous page (not while a widget is carried).
+            if ((e.action == NavAction.PAGE_PREVIOUS || e.action == NavAction.PAGE_NEXT) && carried == null) {
+                onTools = null
+                return@InputLayer if (paging.turn(if (e.action == NavAction.PAGE_NEXT) 1 else -1)) NavResult.MOVED else NavResult.BLOCKED
+            }
             if (arranging && tools != null && carried == null && e.modifier == null) {
                 return@InputLayer when (e.action) {
                     NavAction.LEFT -> if (tools > 0) { onTools = tools - 1; NavResult.MOVED } else NavResult.BLOCKED
-                    NavAction.RIGHT -> if (tools < 1) { onTools = tools + 1; NavResult.MOVED } else NavResult.BLOCKED
+                    NavAction.RIGHT -> if (tools < (if (ownHome != null) 3 else 2)) { onTools = tools + 1; NavResult.MOVED } else NavResult.BLOCKED
                     NavAction.DOWN -> { onTools = null; NavResult.MOVED }
                     NavAction.UP -> NavResult.BLOCKED
-                    NavAction.SELECT -> { if (tools == 0) undo() else reset(); NavResult.ACTIVATED }
+                    NavAction.SELECT -> {
+                        when (tools) {
+                            0 -> undo()
+                            1 -> reset()
+                            2 -> { onTools = null; paging.add() }
+                            else -> setOwnHome(ownHome != true)
+                        }
+                        NavResult.ACTIVATED
+                    }
                     NavAction.BACK -> { stopArranging(); NavResult.CONSUMED }
                     else -> NavResult.CONSUMED
                 }
@@ -416,10 +437,18 @@ fun ChannelHome(app: AppState) {
                 }
                 else -> when (e.action) {
                     NavAction.UP, NavAction.DOWN, NavAction.LEFT, NavAction.RIGHT -> sel.move(e.action, cells).let { r ->
-                        // Past the top row while arranging: Undo and Reset.
-                        if (r != NavResult.MOVED && arranging && e.action == NavAction.UP) { onTools = 0; NavResult.MOVED } else r
+                        when {
+                            // Past the top row while arranging: Undo and Reset.
+                            r != NavResult.MOVED && arranging && e.action == NavAction.UP -> { onTools = 0; NavResult.MOVED }
+                            // Past the board's side: the page beside it, when there is one.
+                            r != NavResult.MOVED && (e.action == NavAction.LEFT || e.action == NavAction.RIGHT) && !e.isRepeat &&
+                                paging.turn(if (e.action == NavAction.RIGHT) 1 else -1, fromEdge = true) -> NavResult.MOVED
+                            else -> r
+                        }
                     }
                     NavAction.SELECT -> when {
+                        // An empty page: A fills it.
+                        widgets.isEmpty() && !arranging -> { editor.arranging = true; addPicker(); NavResult.ACTIVATED }
                         arranging && sel.index >= widgets.size -> { addPicker(); NavResult.ACTIVATED }
                         arranging && w != null -> {
                             committed[w.id]?.let { editor.start(BoardOp.Carry(w.id, committed, it)) }
@@ -436,7 +465,7 @@ fun ChannelHome(app: AppState) {
                         }
                         NavResult.ACTIVATED
                     }
-                    NavAction.CONTEXT -> { app.openContextMenu(boardMenu(app, editor, w, ::addPicker, ::stopArranging, ::remove, committed)); NavResult.ACTIVATED }
+                    NavAction.CONTEXT -> { app.openContextMenu(boardMenu(app, editor, w, ::addPicker, ::stopArranging, ::remove, committed, page, paging)); NavResult.ACTIVATED }
                     NavAction.BACK -> if (arranging) { stopArranging(); NavResult.CONSUMED } else NavResult.IGNORED
                     else -> NavResult.IGNORED
                 }
@@ -636,6 +665,8 @@ fun ChannelHome(app: AppState) {
                 compact = narrow || small,
                 onAdd = ::addPicker,
                 onDone = ::stopArranging,
+                ownHome = ownHome,
+                onOwnHome = { setOwnHome(it) },
             )
         }
         // Undo and Reset float at the top right while arranging, out of the board's way.
@@ -648,8 +679,12 @@ fun ChannelHome(app: AppState) {
             ArrangeTools(
                 focused = if (app.focusZone == FocusZone.CONTENT) onTools else null,
                 canUndo = history.isNotEmpty(),
+                resetLabel = if (page == 0) "Reset" else "Clear",
                 onUndo = { onTools = 0; undo() },
                 onReset = { onTools = 1; reset() },
+                onNewPage = { onTools = null; paging.add() },
+                ownHome = ownHome,
+                onOwnHome = { onTools = 3; setOwnHome(ownHome != true) },
             )
         }
         // Controls of widgets that are gone, or of a board no longer arranged, catch no touches.
@@ -670,6 +705,8 @@ private fun boardMenu(
     stopArranging: () -> Unit,
     remove: (HomeWidget) -> Unit,
     board: BoardLayout,
+    page: Int,
+    paging: HomePaging,
 ) = ContextMenuSpec(
     title = w?.kind?.title() ?: "Home",
     subtitle = "Home",
@@ -699,6 +736,8 @@ private fun boardMenu(
         },
         w?.let { MenuAction("remove", "Remove from Home", FuseIcons.Minus, destructive = true, onSelect = { app.closeOverlays(); remove(it) }) },
         if (editor.arranging) MenuAction("add", "Add a widget", FuseIcons.CirclePlus, onSelect = { app.closeOverlays(); addPicker() }) else null,
+        MenuAction("page.new", "New page", FuseIcons.CopyPlus, detail = "A page of its own for more widgets. The right stick or a swipe turns pages", onSelect = { app.closeOverlays(); paging.add() }),
+        if (page > 0) MenuAction("page.remove", "Remove this page", FuseIcons.Trash, destructive = true, onSelect = { app.closeOverlays(); paging.remove(page) }) else null,
         if (editor.arranging) MenuAction("done", "Done arranging", FuseIcons.Check, onSelect = { app.closeOverlays(); stopArranging() }) else null,
     ) + if (editor.arranging) emptyList() else app.homeStyleActions(),
 )
@@ -787,10 +826,11 @@ private fun BoardItem(
 }
 
 /** Whether [w] is shown on the board now: hidden, unavailable or switched-off widgets wait off it. */
-private fun onBoard(w: HomeWidget, app: AppState, prefs: UiPrefs, cartridge: CartridgeStatus): Boolean =
+private fun onBoard(w: HomeWidget, app: AppState, prefs: UiPrefs, cartridge: CartridgeStatus, achievementsOn: Boolean): Boolean =
     w.visible && app.offers(w.kind) &&
-        (w.kind != WidgetKind.CARTRIDGE_DOWNLOADS || cartridge.installed) &&
-        (w.kind != WidgetKind.COLLECTIONS || prefs.collectionsEnabled)
+        (w.kind != WidgetKind.CARTRIDGE_DOWNLOADS || (cartridge.installed && prefs.cartridgeEnabled)) &&
+        (w.kind != WidgetKind.COLLECTIONS || prefs.collectionsEnabled) &&
+        (!w.kind.isAchievements || achievementsOn)
 
 private fun firstGame(kind: WidgetKind, feed: HomeFeed): GameCard? = boardGames(kind, feed).firstOrNull()
 

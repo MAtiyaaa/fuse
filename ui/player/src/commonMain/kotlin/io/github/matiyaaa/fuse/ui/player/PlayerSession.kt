@@ -88,6 +88,17 @@ class PlayerSession(
     var speed by mutableStateOf(1f)
         private set
 
+    /**
+     * The most this connection has shown it can carry, learned from stalls this session (null until
+     * a stall teaches it). Streams are asked for at no more than this, so a weak Wi-Fi settles on a
+     * quality that plays smoothly instead of stopping again and again.
+     */
+    var qualityCap by mutableStateOf<Long?>(null)
+        private set
+
+    /** A short note for the screen (the quality was lowered); the screen clears it once shown. */
+    var notice by mutableStateOf<String?>(null)
+
     /** Cues from a subtitle file of its own (External), on the item's clock. */
     var fileCues by mutableStateOf(CueTimeline.EMPTY)
         private set
@@ -104,6 +115,12 @@ class PlayerSession(
     private var started = false
     private var recoveries = 0
     private var lastPosition = 0L
+
+    // Stalls while playing (not the wait after a seek or a start): when, and the watch on the one now.
+    private val clock = kotlin.time.TimeSource.Monotonic
+    private var lastSeek = clock.markNow()
+    private val stalls = ArrayDeque<kotlin.time.TimeSource.Monotonic.ValueTimeMark>()
+    private var stallWatch: Job? = null
 
     val active: Boolean get() = item != null
 
@@ -133,6 +150,7 @@ class PlayerSession(
         started = false
         resolving = true
         lastPosition = startMs
+        lastSeek = clock.markNow()
         scope.launch {
             try {
                 val e = engine()
@@ -140,7 +158,7 @@ class PlayerSession(
                     startMs = startMs,
                     audioStreamIndex = audio,
                     subtitleStreamIndex = subtitle,
-                    maxBitrate = settings.maxBitrate,
+                    maxBitrate = listOfNotNull(settings.maxBitrate?.takeIf { it > 0 }, qualityCap).minOrNull(),
                     capabilities = e.capabilities(settings.hardwareDecoding),
                     failed = failed,
                 )
@@ -169,7 +187,9 @@ class PlayerSession(
         // Remembered for getting back up after a failed stream, which can't ask the engine any more.
         if (s.status == EngineStatus.READY || s.status == EngineStatus.BUFFERING) lastPosition = src.offsetMs + s.positionMs
         when (s.status) {
+            EngineStatus.BUFFERING -> if (started && lastSeek.elapsedNow().inWholeMilliseconds > SEEK_GRACE_MS) stalled()
             EngineStatus.READY -> {
+                stallWatch?.cancel()
                 recoveries = 0
                 if (!started) {
                     started = true
@@ -181,6 +201,39 @@ class PlayerSession(
             EngineStatus.ERROR -> recover(s.error)
             else -> Unit
         }
+    }
+
+    /**
+     * Playing stopped to wait for data. Three stalls within a minute and a half, or one that lasts
+     * past [LONG_STALL_MS], and the stream is asked for again at about half the bitrate from the
+     * same moment: a slow connection gets a picture that keeps moving.
+     */
+    private fun stalled() {
+        if (stallWatch?.isActive == true) return
+        val now = clock.markNow()
+        while (stalls.isNotEmpty() && stalls.first().elapsedNow().inWholeMilliseconds > STALL_WINDOW_MS) stalls.removeFirst()
+        stalls.addLast(now)
+        if (stalls.size >= STALLS_TO_LOWER) {
+            lowerQuality()
+            return
+        }
+        stallWatch = scope.launch {
+            delay(LONG_STALL_MS)
+            if (engineOrNull?.state?.value?.status == EngineStatus.BUFFERING) lowerQuality()
+        }
+    }
+
+    private fun lowerQuality() {
+        val src = source ?: return
+        if (!isVideo) return
+        val current = qualityCap ?: src.bitrate ?: settings.maxBitrate?.takeIf { it > 0 } ?: ASSUMED_BITRATE
+        val next = (current / 2).coerceAtLeast(MIN_BITRATE)
+        stalls.clear()
+        stallWatch?.cancel()
+        if (next >= current) return
+        qualityCap = next
+        notice = "Lowered to about ${(next / 100_000) / 10.0} Mbps to keep playing smoothly"
+        reopen(positionMs())
     }
 
     /** A stream that failed: ask the provider for another way (another route, or converting it), twice at most. */
@@ -261,6 +314,7 @@ class PlayerSession(
     /** Seeks on the item's clock; a transcode that doesn't reach there is asked for again from that point. */
     fun seekTo(ms: Long) {
         val src = source ?: return
+        lastSeek = clock.markNow()
         val target = ms.coerceIn(0, durationMs() ?: Long.MAX_VALUE)
         lastPosition = target
         val local = target - src.offsetMs
@@ -388,6 +442,9 @@ class PlayerSession(
     /** Stops playing and closes the player. */
     fun stop() {
         stopCurrent(reportStop = true)
+        qualityCap = null
+        notice = null
+        stalls.clear()
         item = null
         source = null
         queue = emptyList()
@@ -425,6 +482,18 @@ class PlayerSession(
         const val RESTART_WITHIN_MS = 5_000L
 
         const val MAX_RECOVERIES = 2
+
+        /** Waiting just after a seek or a start is expected, not a stall. */
+        const val SEEK_GRACE_MS = 3_000L
+
+        /** How many stalls within [STALL_WINDOW_MS] lower the quality, or how long one may last. */
+        const val STALLS_TO_LOWER = 3
+        const val STALL_WINDOW_MS = 90_000L
+        const val LONG_STALL_MS = 8_000L
+
+        /** A stream of unknown bitrate is taken to be this; quality never goes below [MIN_BITRATE]. */
+        const val ASSUMED_BITRATE = 20_000_000L
+        const val MIN_BITRATE = 1_500_000L
     }
 }
 

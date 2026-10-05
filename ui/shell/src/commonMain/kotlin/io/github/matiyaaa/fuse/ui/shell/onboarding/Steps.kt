@@ -98,6 +98,7 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
     val scan by store.sources.scan.collectAsState()
     val sources by store.sources.sources.collectAsState()
     val raConfigured by store.achievements.configured.collectAsState()
+    val jellyfinState = store.jellyfin?.state?.collectAsState()?.value
     val secrets by store.credentials.stored.collectAsState()
     val displays by platform.displays.collectAsState()
     val suggestions = remember { mutableStateListOf<SuggestedSource>() }
@@ -384,6 +385,54 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
                 )
             },
         ))
+        // Jellyfin: what it is, for anyone who hasn't met it, and signing in right here.
+        val jellyfinAccount = jellyfinState?.account?.takeIf { prefs.jellyfin.enabled }
+        add(Step(
+            "jellyfin", "Films and shows", if (jellyfinAccount != null) "Jellyfin is connected" else "Your films, here too",
+            if (jellyfinAccount != null) {
+                "Signed in as ${jellyfinAccount.userName ?: "you"}. Your films, shows and music are in Addons, and Fuse Player plays them, with subtitles, resume and the next episode on its own."
+            } else {
+                "Jellyfin is a free media server you run at home, on a computer or a NAS. It keeps your films, shows and music in one library you can reach from anywhere. Connect it and Fuse plays them with its own player. No server? Skip this, and add one later in Settings, Addons."
+            },
+            optional = true, icon = FuseIcons.Clapperboard, chapter = Chapters.CONNECT,
+            actions = if (jellyfinAccount != null) {
+                listOf(StepAction("Continue", primary = true, run = next))
+            } else {
+                listOf(
+                    StepAction("Connect Jellyfin", primary = true) { connectJellyfin(app, live) { if (state.index < state.total - 1) next() } },
+                    StepAction("Skip", run = next),
+                )
+            },
+            content = { JellyfinStage(connected = jellyfinAccount != null, server = jellyfinAccount?.serverName) },
+        ))
+        // Fuse Sync: the same library on every device, from a host of their own. Only where it runs.
+        store.sync.service?.let { sync ->
+            val syncOn = prefs.sync.enabled && prefs.sync.role.isNotEmpty()
+            fun setUp(host: Boolean) {
+                if (!live) { next(); return }
+                app.scope.launch { store.sync.setEnabled(true) }
+                app.go(io.github.matiyaaa.fuse.ui.shell.app.Route.SyncSetup(host))
+            }
+            add(Step(
+                "sync", "Every device", if (syncOn) "Fuse Sync is on" else "Play on, anywhere",
+                if (syncOn) {
+                    "Your saves, play time, favourites and settings stay the same on every device, kept by ${prefs.sync.hostName.ifBlank { "your host" }}."
+                } else {
+                    "Fuse Sync by Fuse keeps your saves, play time, favourites and settings the same on every device you play on, from a computer of your own at home. Stop on the PC, carry on on the handheld. One device? Skip this; it waits in Settings, Addons."
+                },
+                optional = true, icon = FuseIcons.RefreshCcw, chapter = Chapters.CONNECT,
+                actions = if (syncOn) {
+                    listOf(StepAction("Continue", primary = true, run = next))
+                } else {
+                    listOfNotNull(
+                        StepAction("Make This the Host", primary = true) { setUp(host = true) }.takeIf { sync.canHost },
+                        StepAction("Connect to a Host", primary = !sync.canHost) { setUp(host = false) },
+                        StepAction("Skip", run = next),
+                    )
+                },
+                content = { SyncStage(on = syncOn) },
+            ))
+        }
         add(Step(
             "ra", "Achievements", if (raConfigured) "RetroAchievements connected" else "Show your achievements?",
             if (raConfigured) "Recent unlocks and progress appear on Home and on each game's page."

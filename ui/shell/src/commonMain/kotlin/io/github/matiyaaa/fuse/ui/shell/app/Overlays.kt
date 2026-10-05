@@ -34,6 +34,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.components.FText
 import io.github.matiyaaa.fuse.ui.designsystem.components.FuseButton
 import io.github.matiyaaa.fuse.ui.designsystem.components.KeyboardField
 import io.github.matiyaaa.fuse.ui.designsystem.components.KeyboardState
+import io.github.matiyaaa.fuse.ui.designsystem.components.KeysAway
 import io.github.matiyaaa.fuse.ui.designsystem.components.MenuHeader
 import io.github.matiyaaa.fuse.ui.designsystem.components.MenuList
 import io.github.matiyaaa.fuse.ui.designsystem.components.OnScreenKeyboard
@@ -44,11 +45,13 @@ import io.github.matiyaaa.fuse.ui.designsystem.components.Panel
 import io.github.matiyaaa.fuse.ui.designsystem.components.ReorderList
 import io.github.matiyaaa.fuse.ui.designsystem.components.ReorderListState
 import io.github.matiyaaa.fuse.ui.designsystem.components.handleMenuAction
+import io.github.matiyaaa.fuse.ui.designsystem.components.typingOnHardware
 import io.github.matiyaaa.fuse.ui.designsystem.focus.LinearSelection
 import io.github.matiyaaa.fuse.ui.designsystem.focus.ReorderDefaults
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
 import io.github.matiyaaa.fuse.ui.designsystem.input.InputLayer
+import io.github.matiyaaa.fuse.ui.designsystem.input.InputSource
 import io.github.matiyaaa.fuse.ui.designsystem.input.LayerPriority
 import io.github.matiyaaa.fuse.ui.designsystem.input.NavResult
 import io.github.matiyaaa.fuse.ui.designsystem.media.ArtSlot
@@ -71,9 +74,12 @@ fun OverlayHost(app: AppState) {
     ContextMenuOverlay(app)
     ChoiceOverlay(app)
     ProblemOverlay(app)
+    io.github.matiyaaa.fuse.ui.shell.sync.SaveConflictOverlay(app)
     TextPreviewOverlay(app)
     ReorderOverlay(app)
     ScreenPromptOverlay(app)
+    io.github.matiyaaa.fuse.ui.shell.sync.WhoAreYouOverlay(app)
+    io.github.matiyaaa.fuse.ui.shell.sync.PairingOverlay(app)
     ConfirmOverlay(app)
     TextInputOverlay(app)
     PhoneTypingOverlay(app)
@@ -297,6 +303,10 @@ private fun TextInputOverlay(app: AppState) {
     // The phone key: a code that opens this field's keyboard on a phone (where Phone Link exists).
     val phone: (() -> Unit)? = if (app.phoneLink != null) ({ app.phoneTyping = true }) else null
     val phones by RemoteInput.phones.collectAsState()
+    // Typing on a hardware keyboard (or using the mouse): the keys step aside, unless asked back.
+    val hardware = typingOnHardware()
+    var keysAsked by remember(spec) { mutableStateOf(false) }
+    val keysShown = !hardware || keysAsked
     if (spec != null) {
         InputLayer(
             priority = LayerPriority.DIALOG + 3,
@@ -305,6 +315,14 @@ private fun TextInputOverlay(app: AppState) {
         ) { e ->
             when (e.action) {
                 NavAction.BACK -> { app.textInput = null; NavResult.CONSUMED }
+                // Arrow keys move the caret while the keys are away.
+                NavAction.LEFT, NavAction.RIGHT -> if (!keysShown && e.source == InputSource.KEYBOARD) {
+                    val at = field.value.selection.start + if (e.action == NavAction.RIGHT) 1 else -1
+                    field.setCaret(at.coerceIn(0, field.text.length))
+                    NavResult.MOVED
+                } else {
+                    keyboard.handle(e, field, ::done, onPaste = paste, onPhone = phone)
+                }
                 else -> keyboard.handle(e, field, ::done, onPaste = paste, onPhone = phone)
             }
         }
@@ -329,18 +347,23 @@ private fun TextInputOverlay(app: AppState) {
                         secret = s.secret,
                         onClear = { field.replaceAll(""); keyboard.prepare(field) },
                     )
-                    Spacer(Modifier.height(Space.l))
-                    OnScreenKeyboard(
-                        keyboard, field, ::done,
-                        keyHeight = keyHeight,
-                        doneLabel = s.doneLabel,
-                        onPaste = paste,
-                        onKey = { app.platform.haptics.tick() },
-                        onPhone = phone,
-                    )
-                    Spacer(Modifier.height(Space.m))
-                    // Names the finishing key the way the key itself does (Save, Connect, Done).
-                    OnScreenKeyboardHints(doneLabel = s.doneLabel)
+                    if (keysShown) {
+                        Spacer(Modifier.height(Space.l))
+                        OnScreenKeyboard(
+                            keyboard, field, ::done,
+                            keyHeight = keyHeight,
+                            doneLabel = s.doneLabel,
+                            onPaste = paste,
+                            onKey = { app.platform.haptics.tick() },
+                            onPhone = phone,
+                        )
+                        Spacer(Modifier.height(Space.m))
+                        // Names the finishing key the way the key itself does (Save, Connect, Done).
+                        OnScreenKeyboardHints(doneLabel = s.doneLabel)
+                    } else {
+                        Spacer(Modifier.height(Space.m))
+                        KeysAway(s.doneLabel, onShowKeys = { keysAsked = true })
+                    }
                 }
             }
         }

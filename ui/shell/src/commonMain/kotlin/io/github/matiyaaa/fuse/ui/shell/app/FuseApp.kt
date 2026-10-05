@@ -213,10 +213,13 @@ private fun FuseAppContent(
     val spec = prefs.theme
     val quality = RenderQuality.of(prefs.performance, platform.device, prefs.lowPower)
     val lastSource by router.lastSource.collectAsState()
+    val padFamily by router.padFamily.collectAsState()
+    // A phone used as a controller is labelled like the controller in hand.
+    LaunchedEffect(padFamily) { RemoteInput.padInUse(padFamily) }
     val glyphStyle = when {
         !prefs.input.autoGlyphs -> prefs.input.glyphs
         lastSource == InputSource.KEYBOARD -> GlyphStyle.KEYBOARD
-        else -> prefs.input.glyphs
+        else -> padGlyphs(prefs.input.glyphs, padFamily)
     }
 
     // Input settings, sounds and haptics follow preferences.
@@ -227,6 +230,8 @@ private fun FuseAppContent(
         router.onCaptureCombo = if (capture != null && prefs.captureCombo) capture::onCombo else null
         onDispose { router.onCaptureCombo = null }
     }
+    // Fuse Sync: who is playing here, and at startup, who should be.
+    io.github.matiyaaa.fuse.ui.shell.sync.SyncProfiles(app)
     // A hardware keyboard types into whichever text field is open.
     val keyboardTarget = app.keyboardTarget
     DisposableEffect(router, keyboardTarget) {
@@ -340,7 +345,13 @@ private fun FuseAppContent(
                                 router.touched()
                             }
                         }
-                    },
+                    }
+                    // A swipe in from either side goes back, on computers' touch screens.
+                    .edgeSwipeBack(
+                        enabled = platform.host != io.github.matiyaaa.fuse.model.Host.ANDROID,
+                        onTick = { platform.haptics.tick() },
+                        onBack = { router.dispatch(NavAction.BACK, io.github.matiyaaa.fuse.ui.designsystem.input.InputSource.TOUCH) },
+                    ),
             ) {
                 // The room fills the whole screen; everything on it keeps clear of edges a TV cuts off.
                 Room(app, prefs.showHero, spec.background, prefs.heroDim, prefs.glass, prefs.videoPreview, prefs.videoDelaySeconds, spec.ambient, spec.wallpaper)
@@ -356,6 +367,12 @@ private fun FuseAppContent(
                     ArtWarmup(app)
                     ShellInput(app)
                     val tabs = rememberTabs(app, prefs)
+                    // A tab that went away while open (Addons with everything in it turned off, a
+                    // hidden section) leaves its pages for Home.
+                    LaunchedEffect(tabs) {
+                        val root = app.navigator.root?.destination
+                        if (root != null && root !in tabs && app.navigator.stack.size == 1) app.selectTab(Destination.HOME)
+                    }
                     Pages(app, tabs)
                     val route = app.navigator.current
                     if (route != Route.Onboarding) {
@@ -378,6 +395,7 @@ private fun FuseAppContent(
                             onSelect = { app.focusZone = FocusZone.CONTENT; app.selectTab(it) },
                             onStatusClick = { app.quickMenuOpen = true },
                             activities = hudActivities(app),
+                            profile = hudProfile(app),
                         )
                     }
                     if (prefs.performanceOverlay) {
@@ -692,6 +710,10 @@ private fun PushedPages(app: AppState, current: Route, direction: NavDirection, 
             is Route.MediaLibrary -> io.github.matiyaaa.fuse.ui.shell.jellyfin.MediaLibraryScreen(app, route.id, route.name, route.kind)
             Route.MediaSearch -> io.github.matiyaaa.fuse.ui.shell.jellyfin.MediaSearchScreen(app)
             Route.JellyfinSettings -> io.github.matiyaaa.fuse.ui.shell.jellyfin.JellyfinSettingsScreen(app)
+            Route.SyncSettings -> io.github.matiyaaa.fuse.ui.shell.sync.SyncSettingsScreen(app)
+            is Route.SyncSetup -> io.github.matiyaaa.fuse.ui.shell.sync.SyncSetupScreen(app, route.host)
+            is Route.SaveHistory -> io.github.matiyaaa.fuse.ui.shell.sync.SaveHistoryScreen(app, route.game, route.title)
+            is Route.SyncGame -> io.github.matiyaaa.fuse.ui.shell.sync.SyncGameScreen(app, route.game, route.name)
                     is Route.Root -> Unit
                 }
             }
@@ -707,7 +729,7 @@ internal fun hudPage(stack: List<Route>): HudButton? {
     for (route in stack.asReversed()) {
         when (route) {
             Route.Search -> return HudButton.SEARCH
-            is Route.Settings, is Route.PlatformSettings, Route.Controls, Route.Licenses, is Route.ReleaseNotes, Route.Themes, Route.Storage, Route.PhoneLink, Route.JellyfinSettings ->
+            is Route.Settings, is Route.PlatformSettings, Route.Controls, Route.Licenses, is Route.ReleaseNotes, Route.Themes, Route.Storage, Route.PhoneLink, Route.JellyfinSettings, Route.SyncSettings, is Route.SyncSetup ->
                 return HudButton.SETTINGS
             else -> Unit
         }
@@ -739,15 +761,24 @@ private fun ShellInput(app: AppState) {
             return@InputLayer when (e.action) {
                 // After the last tab the stick moves on to Search and Settings.
                 NavAction.LEFT -> when (button) {
-                    HudButton.STATUS -> { app.hudButton = HudButton.SETTINGS; NavResult.MOVED }
+                    HudButton.STATUS -> { app.hudButton = if (app.hudHasProfile) HudButton.PROFILE else HudButton.SETTINGS; NavResult.MOVED }
+                    HudButton.PROFILE -> { app.hudButton = HudButton.SETTINGS; NavResult.MOVED }
                     HudButton.SETTINGS -> { app.hudButton = HudButton.SEARCH; NavResult.MOVED }
-                    HudButton.SEARCH -> { app.hudButton = null; NavResult.MOVED }
+                    // Left of Search is the last tab, as the line shows it, whichever tab Search
+                    // or Settings was opened from.
+                    HudButton.SEARCH -> {
+                        app.hudButton = null
+                        val last = tabs.lastOrNull()
+                        if (hudPage(app.navigator.stack) != null || last != active) last?.let { app.selectTab(it) }
+                        NavResult.MOVED
+                    }
                     null -> cycle(-1)
                 }
                 NavAction.RIGHT -> when (button) {
                     HudButton.SEARCH -> { app.hudButton = HudButton.SETTINGS; NavResult.MOVED }
                     // Past Settings: Wi-Fi, battery and the clock, which open the quick menu.
-                    HudButton.SETTINGS -> { app.hudButton = HudButton.STATUS; NavResult.MOVED }
+                    HudButton.SETTINGS -> { app.hudButton = if (app.hudHasProfile) HudButton.PROFILE else HudButton.STATUS; NavResult.MOVED }
+                    HudButton.PROFILE -> { app.hudButton = HudButton.STATUS; NavResult.MOVED }
                     HudButton.STATUS -> NavResult.BLOCKED
                     null -> if (tabs.lastOrNull() == active) { app.hudButton = HudButton.SEARCH; NavResult.MOVED } else cycle(1)
                 }
@@ -780,7 +811,7 @@ private fun ShellInput(app: AppState) {
             NavAction.NEXT_SECTION -> when (page) {
                 null -> cycle(1)
                 HudButton.SEARCH -> { app.go(Route.Settings()); NavResult.MOVED }
-                HudButton.SETTINGS, HudButton.STATUS -> NavResult.BLOCKED
+                HudButton.SETTINGS, HudButton.PROFILE, HudButton.STATUS -> NavResult.BLOCKED
             }
             NavAction.QUICK_MENU -> { app.quickMenuOpen = true; NavResult.ACTIVATED }
             NavAction.SEARCH -> { app.go(Route.Search); NavResult.ACTIVATED }
@@ -799,8 +830,16 @@ private fun ShellInput(app: AppState) {
 private fun AppState.runHudButton(button: HudButton) = when (button) {
     HudButton.SEARCH -> go(Route.Search)
     HudButton.SETTINGS -> go(Route.Settings())
+    HudButton.PROFILE -> whoAreYou = io.github.matiyaaa.fuse.ui.shell.sync.WhoMode.SWITCH
     HudButton.STATUS -> quickMenuOpen = true
 }
+
+/** Whether the top line shows who is playing (Fuse Sync in use, with a profile chosen). */
+private val AppState.hudHasProfile: Boolean get() = syncProfile != null
+
+/** Who is playing here, for the top line. */
+@Composable
+private fun hudProfile(app: AppState): HudProfile? = app.syncProfile?.let { HudProfile(it.name, it.avatar) }
 
 /** A short, calm handoff while the emulator starts: the game's art fills the screen and dims away. */
 @Composable
@@ -865,10 +904,28 @@ private fun MenuMusic(app: AppState, player: MenuMusicPlayer?) {
     }
     LaunchedEffect(Unit) { for (path in ended) if (app.store.prefs.value.music.shuffle) shuffleOn() }
     val track = MenuMusicPlan.track(music, safeMode = app.safeMode != null, onboarding = app.navigator.current == Route.Onboarding, shuffled = shuffled)
+    // The quick menu's Now playing: a skip moves shuffle on (or back through what it played), and
+    // without shuffle steps through the songs in album order, keeping the one it lands on.
+    val remote = io.github.matiyaaa.fuse.ui.shell.music.MenuMusicRemote
+    LaunchedEffect(track) { remote.current = track }
+    LaunchedEffect(Unit) {
+        for (dir in remote.skips) {
+            val now = app.store.prefs.value.music
+            if (!now.enabled) continue
+            if (now.shuffle) {
+                val list = recent.toList()
+                val back = list.getOrNull(list.indexOf(shuffled) - 1)
+                if (dir < 0 && back != null) shuffled = back else shuffleOn()
+            } else {
+                val next = io.github.matiyaaa.fuse.ui.shell.music.MenuMusicRemote.neighbour(remote.current, dir)
+                app.store.updatePrefs { p -> p.copy(music = p.music.copy(track = next)) }
+            }
+        }
+    }
     // The startup animation has its own sound; the music waits until it has opened out.
     // Fuse Player playing a film or a song (on either screen) has the sound to itself.
     val quiet = app.launching != null || home.playtime.currentGame != null || app.intro || app.standby ||
-        app.playerOpen || mediaPlaying()
+        app.playerOpen || mediaPlaying() || remote.paused
     // The previous song keeps playing until the next one is ready, so the player can crossfade. The
     // file is looked up again whenever music comes back from a game: a bundled song's unpacked copy
     // lives in the cache, which the system may have cleared meanwhile.
@@ -1045,3 +1102,14 @@ private fun StandbyHost(app: AppState, clock24h: Boolean, intro: Boolean) {
 
 /** Waking from Standby within this long of the animation playing doesn't play it again. */
 private const val INTRO_AGAIN_AFTER_MS = 5 * 60_000L
+
+/**
+ * The glyphs for the controller in hand: a PlayStation pad shows shapes and an Xbox pad letters,
+ * whatever the setting says. Nintendo glyphs are left to the setting (and "Detect my buttons"),
+ * since how a Nintendo pad reports its buttons decides which one confirms.
+ */
+internal fun padGlyphs(setting: GlyphStyle, family: GlyphStyle?): GlyphStyle = when (family) {
+    GlyphStyle.PLAYSTATION -> GlyphStyle.PLAYSTATION
+    GlyphStyle.XBOX -> if (setting == GlyphStyle.NINTENDO) setting else GlyphStyle.XBOX
+    else -> setting
+}

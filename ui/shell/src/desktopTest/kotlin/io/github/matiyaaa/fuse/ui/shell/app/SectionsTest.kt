@@ -41,6 +41,13 @@ class SectionsTest {
     }
 
     @Test
+    fun withEverythingInAddonsOffThereIsNoTab() {
+        val off = Sections(addons = false, cartridgeOn = false)
+        assertFalse(off.showsTab(Destination.CARTRIDGE, offers = true, status = installed))
+        assertFalse(off.showsTab(Destination.CARTRIDGE, offers = true, status = notInstalled))
+    }
+
+    @Test
     fun otherSectionsAreTheSameEverywhere() {
         for (d in Destination.entries.filter { it != Destination.CARTRIDGE }) {
             assertEquals(elsewhere.label(d), android.label(d))

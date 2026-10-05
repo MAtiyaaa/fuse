@@ -962,12 +962,21 @@ private fun ColumnScope.StorageFace(feed: HomeFeed, face: FaceSize) {
         FaceSize.SMALL -> {
             // A short cell (a handheld's) keeps its spacing tight so the last line still fits.
             val tight = LocalWidgetRoom.current.compact
-            Spacer(Modifier.weight(1f))
-            WidgetValue(bytesText(s.freeBytes))
-            Spacer(Modifier.height(if (tight) Space.xs else Space.s))
-            ProgressBar(used, Modifier.fillMaxWidth(), color = if (low) c.warning else c.textMuted)
-            Spacer(Modifier.height(if (tight) Space.xxs else Space.xs + Space.xxs))
-            WidgetCaption(if (LocalWidgetRoom.current.tiny) "of ${bytesText(s.totalBytes)}" else "free of ${bytesText(s.totalBytes)}")
+            val tiny = LocalWidgetRoom.current.tiny
+            // Whatever is left under the header holds the reading; the line under the bar only
+            // shows where it fits whole (a TV's or a small handheld's short cell drops it).
+            BoxWithConstraints(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.BottomStart) {
+                val caption = maxHeight >= STORAGE_CAPTION_ROOM
+                Column {
+                    WidgetValue(bytesText(s.freeBytes))
+                    Spacer(Modifier.height(if (tight) Space.xs else Space.s))
+                    ProgressBar(used, Modifier.fillMaxWidth(), color = if (low) c.warning else c.textMuted)
+                    if (caption) {
+                        Spacer(Modifier.height(if (tight) Space.xxs else Space.xs + Space.xxs))
+                        WidgetCaption(if (tiny) "of ${bytesText(s.totalBytes)}" else "free of ${bytesText(s.totalBytes)}")
+                    }
+                }
+            }
         }
         FaceSize.WIDE -> {
             Spacer(Modifier.weight(1f))
@@ -1147,3 +1156,6 @@ private val STRIP_ENTRY = 260.dp
 
 /** Lines of Cartridge's queue on a tall face. */
 private const val QUEUE_LINES = 4
+
+/** The height a small Storage face needs for its reading, its bar and the line under them. */
+private val STORAGE_CAPTION_ROOM = 84.dp

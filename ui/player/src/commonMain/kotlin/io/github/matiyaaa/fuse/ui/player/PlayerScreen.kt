@@ -3,6 +3,9 @@ package io.github.matiyaaa.fuse.ui.player
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import io.github.matiyaaa.fuse.ui.fuseline.Durations
+import io.github.matiyaaa.fuse.ui.fuseline.slideOutHorizontally
+import io.github.matiyaaa.fuse.ui.fuseline.slideInHorizontally
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -194,12 +197,14 @@ fun PlayerScreen(
                     NavResult.CONSUMED
                 }
                 NavAction.SELECT -> {
-                    if (shown && row == BUTTONS) all.getOrNull(focus)?.onClick?.invoke() else session.toggle()
+                    if (shown && row == TOP) onExit() else if (shown && row == BUTTONS) all.getOrNull(focus)?.onClick?.invoke() else session.toggle()
                     NavResult.ACTIVATED
                 }
                 NavAction.LEFT, NavAction.RIGHT -> {
                     val forward = e.action == NavAction.RIGHT
-                    if (shown && row == BUTTONS) {
+                    if (shown && row == TOP) {
+                        NavResult.CONSUMED
+                    } else if (shown && row == BUTTONS) {
                         val next = focus + if (forward) 1 else -1
                         if (next in all.indices) focus = next
                         NavResult.MOVED
@@ -211,12 +216,13 @@ fun PlayerScreen(
                         NavResult.MOVED
                     }
                 }
+                // Up goes from the buttons to the timeline, then to Back at the top.
                 NavAction.UP -> {
-                    if (shown) row = TIMELINE
+                    if (shown) row = if (row == BUTTONS) TIMELINE else TOP
                     NavResult.MOVED
                 }
                 NavAction.DOWN -> {
-                    if (shown) row = BUTTONS
+                    if (shown) row = if (row == TOP) TIMELINE else BUTTONS
                     NavResult.MOVED
                 }
                 NavAction.NEXT_SECTION -> {
@@ -300,6 +306,26 @@ fun PlayerScreen(
             Spinner(Modifier.align(Alignment.Center), size = 44.dp, color = Color.White)
         }
 
+        // What the player did by itself (the quality lowered on a weak connection), said briefly.
+        val notice = session.notice
+        val noticeText = remember { arrayOf("") }
+        notice?.let { noticeText[0] = it }
+        LaunchedEffect(notice) {
+            if (notice == null) return@LaunchedEffect
+            kotlinx.coroutines.delay(NOTICE_MS)
+            session.notice = null
+        }
+        Appear(notice != null, Modifier.align(Alignment.TopCenter).padding(top = Space.xl), enter = fadeIn(), exit = fadeOut()) {
+            Row(
+                Modifier.clip(RoundedCornerShape(50)).background(Color.Black.copy(alpha = 0.72f)).padding(horizontal = Space.l, vertical = Space.s),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                FuseIcon(FuseIcons.Signal, size = 16.dp, tint = Fuse.colors.accent)
+                Spacer(Modifier.width(Space.s))
+                FText(noticeText[0], Fuse.type.label, color = Color.White, maxLines = 1)
+            }
+        }
+
         flash?.let { f ->
             SeekFlash(f, Modifier.align(if (f.forward) Alignment.CenterEnd else Alignment.CenterStart).padding(horizontal = maxWidth * 0.12f))
         }
@@ -331,13 +357,40 @@ fun PlayerScreen(
             Finished(session, onExit, Modifier.align(Alignment.Center))
         }
 
-        sheet?.let { s ->
-            PlayerSheetPanel(s, session, inputEnabled, onSettings = ::change, onClose = { sheet = null; poke() }, modifier = Modifier.align(Alignment.CenterEnd))
+        // A sheet slides in at the side over a light shade; a tap anywhere outside it closes it, as
+        // B does. The last sheet stays drawn while it slides away.
+        val shown = remember { arrayOfNulls<PlayerSheet>(1) }
+        sheet?.let { shown[0] = it }
+        Appear(sheet != null, enter = fadeIn(), exit = fadeOut()) {
+            Box(
+                Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.32f))
+                    .pointerInput(Unit) { detectTapGestures { sheet = null; poke() } },
+            )
+        }
+        Appear(
+            sheet != null,
+            modifier = Modifier.align(Alignment.CenterEnd),
+            enter = fadeIn() + slideInHorizontally(Fuse.motion.enter(Durations.BASE)) { it / 3 },
+            exit = fadeOut() + slideOutHorizontally(Fuse.motion.exit(Durations.FAST)) { it / 3 },
+        ) {
+            shown[0]?.let { s ->
+                PlayerSheetPanel(
+                    s, session, inputEnabled && sheet != null, onSettings = ::change, onClose = { sheet = null; poke() },
+                    // Taps on the sheet's own empty space stay on it.
+                    modifier = Modifier.pointerInput(Unit) { detectTapGestures { } },
+                )
+            }
         }
     }
 }
 
 private const val TIMELINE = 0
+
+/** The top row: Back. */
+private const val TOP = 2
+
+/** How long a note from the player stays. */
+private const val NOTICE_MS = 4_000L
 private const val BUTTONS = 1
 
 private class PlayerButton(val id: String, val icon: ImageVector, val label: String, val big: Boolean = false, val badge: String? = null, val active: Boolean = false, val onClick: () -> Unit)
@@ -369,7 +422,7 @@ private fun Controls(
 
         // Title, what it is, and how it plays.
         Row(Modifier.fillMaxWidth().align(Alignment.TopStart).padding(horizontal = pad, vertical = if (short) Space.m else Space.xl), verticalAlignment = Alignment.CenterVertically) {
-            RoundButton(FuseIcons.ArrowLeft, "Back", selected = false, size = 44.dp, onClick = onExit)
+            RoundButton(FuseIcons.ArrowLeft, "Back", selected = row == TOP, size = 44.dp, onClick = onExit)
             Spacer(Modifier.width(Space.l))
             Column(Modifier.weight(1f)) {
                 // Music names the song below; the top says where it comes from.

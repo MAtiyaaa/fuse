@@ -7,8 +7,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -55,8 +55,8 @@ private val TABS = 56.dp
 /**
  * Addons: Cartridge (where it runs and is turned on), the Store (Android) and Jellyfin (once turned
  * on in Settings), as views of one section. Up from the top of any reaches the tabs, Left and Right
- * switch them, Down returns. It opens on Cartridge when Cartridge is installed, else on the Store,
- * else on Jellyfin, and remembers which was shown. With one part, Addons is just that part, without
+ * switch them, Down returns. It opens on the first tab in the order they were dragged into, and
+ * remembers which was shown. With one part, Addons is just that part, without
  * tabs.
  */
 @Composable
@@ -68,14 +68,14 @@ fun AddonsScreen(app: AppState) {
     // In the order the user dragged them into; parts they never moved keep their usual place after.
     val parts = buildList {
         if (prefs.cartridgeEnabled && app.platform.features.cartridge) add(AddonsPart.CARTRIDGE)
-        if (app.store.appStore.supported) add(AddonsPart.STORE)
+        if (app.store.appStore.supported && prefs.storeEnabled) add(AddonsPart.STORE)
         if (prefs.jellyfin.enabled && app.store.jellyfin != null) add(AddonsPart.JELLYFIN)
+        if (prefs.sync.enabled && app.store.sync.service != null) add(AddonsPart.SYNC)
         if (isEmpty()) add(AddonsPart.CARTRIDGE)
     }.sortedBy { p -> prefs.addonsOrder.indexOf(p.name).let { if (it < 0) ORDER_REST + p.ordinal else it } }
-    val part = app.addonsPart?.takeIf { it in parts }
-        ?: AddonsPart.CARTRIDGE.takeIf { cartridge.installed && it in parts }
-        ?: AddonsPart.STORE.takeIf { it in parts }
-        ?: parts.first()
+    // Opens on the first tab, in the order they were dragged into (or on the one last shown, while
+    // Fuse remembers where you were).
+    val part = app.addonsPart?.takeIf { it in parts } ?: parts.first()
     var tabsFocused by remember { mutableStateOf(false) }
     val inTabs = tabsFocused && parts.size > 1 && app.focusZone == FocusZone.CONTENT
     // The tab picked up to move (held A on the tabs, or a finger or the mouse holding one).
@@ -158,6 +158,7 @@ fun AddonsScreen(app: AppState) {
                     AddonsPart.CARTRIDGE -> CartridgeContent(app, embedded = true, active = !inTabs, topPadding = top)
                     AddonsPart.STORE -> StoreContent(app, active = !inTabs, topPadding = top)
                     AddonsPart.JELLYFIN -> io.github.matiyaaa.fuse.ui.shell.jellyfin.JellyfinContent(app, active = !inTabs, topPadding = top)
+                    AddonsPart.SYNC -> io.github.matiyaaa.fuse.ui.shell.sync.SyncTab(app, active = !inTabs, topPadding = top)
                 }
             }
         }
@@ -167,6 +168,7 @@ fun AddonsScreen(app: AppState) {
                     AddonsPart.CARTRIDGE -> ViewTab("Cartridge", icon = FuseMarks.Cartridge, badge = (cartridge.activeDownloads + cartridge.queuedDownloads).takeIf { it > 0 }?.toString())
                     AddonsPart.STORE -> ViewTab("Store", icon = FuseIcons.Store, badge = store.updates.size.takeIf { it > 0 }?.toString())
                     AddonsPart.JELLYFIN -> ViewTab("Jellyfin", icon = FuseIcons.Clapperboard)
+                    AddonsPart.SYNC -> ViewTab("Sync", icon = FuseIcons.RefreshCcw)
                 }
             }
             // Open: the named tabs, which lift away and shrink toward the top left as the page scrolls.

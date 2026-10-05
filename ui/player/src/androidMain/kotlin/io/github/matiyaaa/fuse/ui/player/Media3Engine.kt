@@ -31,7 +31,9 @@ import androidx.media3.common.VideoSize
 import androidx.media3.common.text.CueGroup
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
+import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
@@ -105,7 +107,19 @@ class Media3Engine(private val context: Context) : PlayerEngine {
         val renderers = DefaultRenderersFactory(context)
             .setEnableDecoderFallback(true)
             .setMediaCodecSelector(selector)
-        return ExoPlayer.Builder(context, renderers).build().also { it.addListener(listener) }
+        // Starts as soon as a second is ready (Media3 waits two and a half), resumes after a stall
+        // with three, and reads up to two minutes ahead, so a weak or patchy connection fills a
+        // deep buffer while the picture moves. Ten seconds are kept behind for a quick skip back.
+        val loads = DefaultLoadControl.Builder()
+            .setBufferDurationsMs(MIN_BUFFER_MS, MAX_BUFFER_MS, START_AFTER_MS, RESUME_AFTER_MS)
+            .setBackBuffer(BACK_BUFFER_MS, true)
+            .setPrioritizeTimeOverSizeThresholds(true)
+            .build()
+        return ExoPlayer.Builder(context, renderers)
+            .setLoadControl(loads)
+            .setSeekBackIncrementMs(10_000)
+            .setSeekForwardIncrementMs(10_000)
+            .build().also { it.addListener(listener) }
     }
 
     override fun load(source: PlaySource, startMs: Long, audioOrder: Int?, subtitleOrder: Int?, play: Boolean) {
@@ -116,12 +130,17 @@ class Media3Engine(private val context: Context) : PlayerEngine {
         val http = DefaultHttpDataSource.Factory()
             .setUserAgent("Fuse")
             .setAllowCrossProtocolRedirects(true)
+            .setConnectTimeoutMs(CONNECT_TIMEOUT_MS)
+            .setReadTimeoutMs(READ_TIMEOUT_MS)
+            .setKeepPostFor302Redirects(true)
             .setDefaultRequestProperties(source.headers)
         val item = MediaItem.Builder()
             .setUri(source.url)
             .apply { if (source.isHls) setMimeType(MimeTypes.APPLICATION_M3U8) }
             .build()
-        p.setMediaSource(DefaultMediaSourceFactory(http).createMediaSource(item), startMs)
+        // A dropped connection is tried again, several times, before playback gives up.
+        val sources = DefaultMediaSourceFactory(http).setLoadErrorHandlingPolicy(DefaultLoadErrorHandlingPolicy(LOAD_RETRIES))
+        p.setMediaSource(sources.createMediaSource(item), startMs)
         p.prepare()
         p.playWhenReady = play
         stateFlow.value = EngineState(status = EngineStatus.LOADING, positionMs = startMs)
@@ -302,6 +321,18 @@ class Media3Engine(private val context: Context) : PlayerEngine {
 
     companion object {
         private const val TICK_MS = 250L
+
+        /** Buffering: kept at least, read ahead at most, before starting, and before going on after a stall. */
+        private const val MIN_BUFFER_MS = 30_000
+        private const val MAX_BUFFER_MS = 120_000
+        private const val START_AFTER_MS = 1_000
+        private const val RESUME_AFTER_MS = 3_000
+        private const val BACK_BUFFER_MS = 10_000
+
+        /** A slow server answers late rather than never; a dropped read is tried this many times. */
+        private const val CONNECT_TIMEOUT_MS = 10_000
+        private const val READ_TIMEOUT_MS = 20_000
+        private const val LOAD_RETRIES = 8
     }
 }
 

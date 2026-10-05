@@ -306,3 +306,46 @@ internal fun AuditDriver.homeEmpty() {
 
 /** Home's tabs, reached from Home: kept here so every group can go back to a known place. */
 internal fun AuditDriver.libraryTab() = tab(Destination.LIBRARY)
+
+/** Home's pages: the dots, turning with the right stick, a page of its own, an empty one, and adding one. */
+internal fun AuditDriver.homePages() {
+    scenario("home", "pages") {
+        val second = listOf(
+            io.github.matiyaaa.fuse.model.WidgetKind.SYSTEMS,
+            io.github.matiyaaa.fuse.model.WidgetKind.FAVORITES,
+            io.github.matiyaaa.fuse.model.WidgetKind.CLOCK,
+            io.github.matiyaaa.fuse.model.WidgetKind.PLAYTIME_TOTAL,
+        ).mapIndexed { i, k -> io.github.matiyaaa.fuse.model.HomeWidget(k.name.lowercase(), k, i) }
+        useLibrary {
+            it.copy(
+                home = HomeLayoutConfig(
+                    mode = HomeMode.CHANNELS,
+                    pages = listOf(io.github.matiyaaa.fuse.model.HomePage("page2", second), io.github.matiyaaa.fuse.model.HomePage("page3")),
+                ),
+            )
+        }
+        waitFor("Continue playing")
+        shoot("the first page, with dots for three", 1_500)
+        tap(PadButton.RSTICK_RIGHT)
+        settle(900)
+        shoot("the right stick turns to the second page")
+        tap(PadButton.KEY_BRACKET_RIGHT)
+        settle(900)
+        shoot("an empty page says how to fill it")
+        tap(PadButton.A)
+        settle(800)
+        shoot("A on an empty page arranges it and offers widgets")
+        tap(PadButton.B)
+        settle(400)
+        tap(PadButton.DPAD_UP)
+        settle(300)
+        shoot("arranging, Undo, Clear and New page at the top")
+        tap(PadButton.B)
+        settle(300)
+        tap(PadButton.RSTICK_LEFT)
+        settle(900)
+        tap(PadButton.RSTICK_LEFT)
+        settle(900)
+        shoot("back on the first page")
+    }
+}

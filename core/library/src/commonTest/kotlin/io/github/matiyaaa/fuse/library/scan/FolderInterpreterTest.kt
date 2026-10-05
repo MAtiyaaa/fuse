@@ -7,6 +7,7 @@ import io.github.matiyaaa.fuse.model.FolderInterpretation
 import io.github.matiyaaa.fuse.model.FolderPolicy
 import io.github.matiyaaa.fuse.model.LibrarySourceId
 import io.github.matiyaaa.fuse.model.LocationKind
+import io.github.matiyaaa.fuse.model.MediaKind
 import io.github.matiyaaa.fuse.model.PlatformId
 import io.github.matiyaaa.fuse.model.ScannedGame
 import kotlinx.coroutines.test.runTest
@@ -47,6 +48,50 @@ class FolderInterpreterTest {
         assertEquals(game, single.launchPath)
         assertEquals("BLUS30109", single.tags.serial)
         assertTrue(result.complete)
+    }
+
+    @Test
+    fun ps5DumpFolderIsOneGame() = runTest {
+        val game = "/ROMs/ps5/Astro Bot [PPSA01234]"
+        fs.file("$game/eboot.bin", size = 5_000_000)
+        fs.file("$game/sce_sys/param.json", content = "{\"titleId\": \"PPSA01234\"}")
+        fs.file("$game/sce_sys/icon0.png", size = 1000)
+
+        val single = scan("ps5", "/ROMs/ps5").games.single()
+        assertEquals(FolderInterpretation.FOLDER_IS_GAME, single.interpretation)
+        assertEquals(game, single.path)
+        assertEquals("$game/eboot.bin", single.launchPath)
+        assertEquals("$game/sce_sys/icon0.png", single.localMedia[MediaKind.SQUARE])
+    }
+
+    @Test
+    fun ps4UpdateFolderBelongsToItsGame() = runTest {
+        for (id in listOf("CUSA00900", "CUSA00900-UPDATE")) {
+            fs.file("/ROMs/ps4/$id/eboot.bin", size = 5_000_000)
+            fs.file("/ROMs/ps4/$id/sce_sys/param.sfo", content = "\u0000PSF\u0001TITLE_ID\u0000CUSA00900")
+        }
+        fs.file("/ROMs/ps4/CUSA00900/sce_sys/icon0.png", size = 1000)
+        fs.file("/ROMs/ps4/CUSA00900/sce_sys/pic1.png", size = 1000)
+        fs.file("/ROMs/ps4/CUSA03173-patch/eboot.bin", size = 5_000_000)
+        fs.file("/ROMs/ps4/CUSA03173-patch/sce_sys/param.sfo", content = "\u0000PSF\u0001TITLE_ID\u0000CUSA03173")
+
+        val games = scan("ps4", "/ROMs/ps4").games.sortedBy { it.path }
+        assertEquals(listOf("/ROMs/ps4/CUSA00900", "/ROMs/ps4/CUSA03173-patch"), games.map { it.path })
+        val game = games.first()
+        assertEquals(listOf(ContentKind.UPDATE), game.content.map { it.kind })
+        assertEquals("/ROMs/ps4/CUSA00900/sce_sys/icon0.png", game.localMedia[MediaKind.SQUARE])
+        assertEquals("/ROMs/ps4/CUSA00900/sce_sys/pic1.png", game.localMedia[MediaKind.HERO])
+        // An update alone stays a game: nothing else would show it.
+        assertTrue(games[1].content.isEmpty())
+    }
+
+    @Test
+    fun newSystemsReadTheirOwnFiles() = runTest {
+        fs.file("/ROMs/tic80/Into the Dark.tic", size = 100)
+        fs.file("/ROMs/vic20/Gridrunner.prg", size = 100)
+        fs.file("/ROMs/vic20/notes.txt", size = 100)
+        assertEquals(listOf("Into the Dark"), scan("tic-80", "/ROMs/tic80").games.map { it.title })
+        assertEquals(listOf("Gridrunner"), scan("vic-20", "/ROMs/vic20").games.map { it.title })
     }
 
     // Acceptance example 2: a Switch folder with base, update and DLC folders is one game.

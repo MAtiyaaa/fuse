@@ -20,6 +20,35 @@ class PlatformCatalogTest {
         "steam", "android", "scummvm", "msx", "c64", "amiga", "3do", "colecovision", "intellivision", "vectrex",
     )
 
+    /** Every game system folder ES-DE (and so EmuDeck, RetroDeck and Batocera's layouts) names. */
+    private val esdeFolders = listOf(
+        "3do", "adam", "amiga", "amiga1200", "amiga600", "amigacd32", "amstradcpc", "apple2", "apple2gs", "arcade",
+        "arcadia", "archimedes", "arduboy", "astrocde", "atari2600", "atari5200", "atari7800", "atari800",
+        "atarijaguar", "atarijaguarcd", "atarilynx", "atarist", "atarixe", "atomiswave", "bbcmicro", "c64",
+        "cdimono1", "cdtv", "chailove", "channelf", "coco", "colecovision", "consolearcade", "cps", "cps1", "cps2",
+        "cps3", "crvision", "daphne", "doom", "dos", "dragon32", "dreamcast", "easyrpg", "electron", "famicom",
+        "fba", "fbneo", "fds", "flash", "fm7", "fmtowns", "fpinball", "gamate", "gameandwatch", "gamecom",
+        "gamegear", "gb", "gba", "gbc", "gc", "genesis", "gmaster", "gx4000", "intellivision", "j2me", "laserdisc",
+        "lcdgames", "lowresnx", "lutro", "macintosh", "mame", "mame-advmame", "mark3", "mastersystem", "megacd",
+        "megacdjp", "megadrive", "megadrivejp", "megaduck", "model2", "model3", "moto", "msx", "msx1", "msx2",
+        "msxturbor", "mugen", "multivision", "n3ds", "n64", "n64dd", "naomi", "naomi2", "naomigd", "nds", "neogeo",
+        "neogeocd", "neogeocdjp", "nes", "ngage", "ngp", "ngpc", "odyssey2", "openbor", "oric", "palm", "pc", "pc88",
+        "pc98", "pcengine", "pcenginecd", "pcfx", "pico8", "plus4", "pokemini", "ps2", "ps3", "ps4", "psp", "psvita",
+        "psx", "pv1000", "quake", "samcoupe", "satellaview", "saturn", "saturnjp", "scummvm", "scv", "sega32x",
+        "sega32xjp", "sega32xna", "segacd", "sfc", "sg-1000", "sgb", "snes", "snesna", "solarus", "spectravideo",
+        "stv", "sufami", "supergrafx", "supervision", "supracan", "switch", "symbian", "tanodragon", "tg-cd", "tg16",
+        "ti99", "tic80", "to8", "triforce", "trs-80", "uzebox", "vectrex", "vic20", "videopac", "vircon32",
+        "virtualboy", "vpinball", "vsmile", "wasm4", "wii", "wiiu", "windows", "windows3x", "windows9x",
+        "wonderswan", "wonderswancolor", "x1", "x68000", "xbox", "xbox360", "xboxone", "zmachine", "zx81", "zxnext",
+        "zxspectrum",
+    )
+
+    @Test
+    fun everyEsDeSystemFolderIsKnown() {
+        val unknown = esdeFolders.filter { PlatformCatalog.resolveFolder(it) == null }
+        assertTrue(unknown.isEmpty(), "ES-DE folders Fuse doesn't read: $unknown")
+    }
+
     @Test
     fun containsEveryRequiredId() {
         val missing = required.filter { PlatformCatalog.byId(it) == null }

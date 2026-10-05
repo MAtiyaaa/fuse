@@ -1,6 +1,31 @@
 package io.github.matiyaaa.fuse.ui.player
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.vector.ImageVector
+import io.github.matiyaaa.fuse.ui.fuseline.Appear
+import io.github.matiyaaa.fuse.ui.fuseline.RepeatMode
+import io.github.matiyaaa.fuse.ui.fuseline.Swap
+import io.github.matiyaaa.fuse.ui.fuseline.fadeIn
+import io.github.matiyaaa.fuse.ui.fuseline.fadeOut
+import io.github.matiyaaa.fuse.ui.fuseline.fuselineFloat
+import io.github.matiyaaa.fuse.ui.fuseline.infiniteRepeatable
+import io.github.matiyaaa.fuse.ui.fuseline.rememberLoopClock
+import io.github.matiyaaa.fuse.ui.fuseline.scaleIn
+import io.github.matiyaaa.fuse.ui.fuseline.scaleOut
+import io.github.matiyaaa.fuse.ui.fuseline.slideInVertically
+import io.github.matiyaaa.fuse.ui.fuseline.slideOutVertically
+import io.github.matiyaaa.fuse.ui.fuseline.snap
+import io.github.matiyaaa.fuse.ui.fuseline.spring
+import io.github.matiyaaa.fuse.ui.fuseline.togetherWith
+import io.github.matiyaaa.fuse.ui.fuseline.tween
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -145,11 +170,13 @@ fun PlayerNowShowing(session: PlayerSession, modifier: Modifier = Modifier, wher
 private enum class RemoteList { AUDIO, SUBTITLES }
 
 /**
- * A remote for what plays on the other screen: its poster, what it is, the time and the timeline,
- * play and pause, skips, previous and next, the sound and subtitle tracks, and moving the picture
- * to this screen. Made for touch; with [inputEnabled] the controller drives it too (A plays or
- * pauses, Left and Right skip, LB and RB go to the previous and next, Y swaps the screens, X
- * stops, B goes back to browsing through [onBrowse], or stops through [onExit] without it).
+ * A remote for what plays on the other screen. Over the film's own backdrop: where it plays (with a
+ * live dot while it plays), its logo or its name, what it is; then a glass deck with the timeline,
+ * the times, and the transport (previous, skip back, play or pause in a ring that fills as it
+ * plays, skip forward, next); and under it the tools as one even bar (sound, subtitles, play here,
+ * stop). Every control answers a touch with a soft press. With [inputEnabled] the controller drives
+ * it too (A plays or pauses, Left and Right skip, LB and RB go to the previous and next, Y swaps the
+ * screens, X stops, B goes back to browsing through [onBrowse], or stops through [onExit] without it).
  *
  * The backdrop reaches every edge; [topInset] keeps the content clear of a status line drawn over
  * it. [where] says where the picture is ("On the main screen").
@@ -164,6 +191,8 @@ fun PlayerRemote(
     onBrowse: (() -> Unit)? = null,
     where: String? = null,
     topInset: androidx.compose.ui.unit.Dp = 0.dp,
+    /** Kept clear at the bottom for what is drawn over it (a pager's dots). */
+    bottomInset: androidx.compose.ui.unit.Dp = 0.dp,
 ) {
     val item = session.item ?: return
     val state = session.engine?.state?.collectAsState()?.value ?: EngineState()
@@ -193,36 +222,75 @@ fun PlayerRemote(
     val video = session.isVideo
     // A film or show is shown by its poster (an episode by its show's); music by its cover.
     val coverArt = if (video) item.poster ?: item.artwork else item.artwork
-    Box(modifier.fillMaxSize().background(Color(0xFF0B0C10))) {
-        Artwork(item.backdrop ?: coverArt, Modifier.fillMaxSize().blur(56.dp).graphicsLayer { alpha = 0.34f })
-        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.45f), Color.Black.copy(alpha = 0.2f), Color.Black.copy(alpha = 0.8f)))))
-        BoxWithConstraints(Modifier.fillMaxSize().padding(top = topInset).padding(horizontal = Space.l, vertical = Space.m)) {
+    val accent = Fuse.colors.accent
+    // How far in, read every frame for the ring around Play (only its drawing follows it).
+    val progress = remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
+    androidx.compose.runtime.LaunchedEffect(session) {
+        while (true) {
+            androidx.compose.runtime.withFrameMillis { }
+            val d = session.durationMs() ?: 0L
+            progress.floatValue = if (d > 0) (session.positionMs().toFloat() / d).coerceIn(0f, 1f) else 0f
+        }
+    }
+    Box(modifier.fillMaxSize().background(REMOTE_INK)) {
+        // The film's backdrop, softened, with a cinema's vignette: dark at the edges and the foot.
+        Artwork(item.backdrop ?: coverArt, Modifier.fillMaxSize().blur(18.dp).graphicsLayer { alpha = 0.5f })
+        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.55f), Color.Black.copy(alpha = 0.15f), Color.Black.copy(alpha = 0.88f)))))
+        Box(Modifier.fillMaxSize().background(Brush.radialGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.45f)), radius = 1600f)))
+        BoxWithConstraints(Modifier.fillMaxSize().padding(top = topInset, bottom = bottomInset).padding(horizontal = Space.l, vertical = Space.m)) {
             val wide = maxWidth > maxHeight * 1.15f
-            // The cover's width, so its height (tall for a film, square for music) leaves room for the controls.
+            val compact = maxHeight < 380.dp || (!wide && maxHeight < 560.dp)
             val tall = if (video) 1.5f else 1f
-            val art = if (wide) minOf(maxHeight * 0.78f / tall, maxWidth * 0.3f) else minOf(maxWidth * 0.42f, maxHeight * 0.3f / tall)
-            val compact = maxHeight < 360.dp || (!wide && maxHeight < 520.dp)
+            // Upright, the poster takes what the heading, the deck and the tools leave, and steps
+            // aside when that is too little to read as a poster.
+            val stack = if (compact) 360.dp else 430.dp
+            val art = if (wide) minOf(maxHeight * 0.74f / tall, maxWidth * 0.28f) else minOf(maxWidth * 0.36f, (maxHeight - stack) / tall)
+            val showCover = wide || art >= 72.dp
             val cover = @Composable {
                 Box(
                     Modifier.width(art).aspectRatio(if (video) 2f / 3f else 1f)
-                        .graphicsLayer { shadowElevation = 18.dp.toPx(); shape = RoundedCornerShape(14.dp); clip = true }
-                        .background(Color.White.copy(alpha = 0.08f)),
+                        .graphicsLayer { shadowElevation = 28.dp.toPx(); shape = RoundedCornerShape(16.dp); clip = true }
+                        .background(Color.White.copy(alpha = 0.06f)),
                 ) {
                     Artwork(coverArt, Modifier.fillMaxSize())
+                    // A thin light edge, as a print catches the light.
+                    Box(Modifier.fillMaxSize().border(1.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(16.dp)))
                 }
             }
-            val controls = @Composable {
-                Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(if (compact) Space.xs else Space.s)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        FuseIcon(if (video) FuseIcons.MonitorPlay else FuseIcons.Music, size = 14.dp, tint = Fuse.colors.accent)
-                        Spacer(Modifier.width(Space.xs))
-                        FText((where ?: if (video) "Playing on the other screen" else "Now playing").uppercase(), Fuse.type.overline, color = Color.White.copy(alpha = 0.7f), maxLines = 1)
-                    }
-                    FText(item.title, if (compact) Fuse.type.titleSmall else Fuse.type.title, color = Color.White, maxLines = 2)
-                    (item.subtitle ?: listOfNotNull(item.artist, item.album).joinToString("  ·  ").ifEmpty { null })?.let {
-                        FText(it, Fuse.type.label, color = Color.White.copy(alpha = 0.75f), maxLines = 1)
-                    }
+            val heading = @Composable { centred: Boolean ->
+                Column(
+                    Modifier.fillMaxWidth(),
+                    horizontalAlignment = if (centred) Alignment.CenterHorizontally else Alignment.Start,
+                    verticalArrangement = Arrangement.spacedBy(Space.xs),
+                ) {
+                    WherePill(where ?: if (video) "On the other screen" else "Now playing", state.playing, video)
                     Spacer(Modifier.height(Space.xxs))
+                    if (item.logo != null && video) {
+                        Artwork(
+                            item.logo, Modifier.fillMaxWidth(if (centred) 0.72f else 0.8f).height(if (compact) 52.dp else 72.dp),
+                            contentScale = androidx.compose.ui.layout.ContentScale.Fit, focusX = if (centred) 0.5f else 0f, backdrop = false,
+                            fallback = { FText(item.title, if (compact) Fuse.type.titleSmall else Fuse.type.title, color = Color.White, maxLines = 2) },
+                        )
+                    } else {
+                        FText(item.title, if (compact) Fuse.type.titleSmall else Fuse.type.title, color = Color.White, maxLines = 2,
+                            align = if (centred) androidx.compose.ui.text.style.TextAlign.Center else null)
+                    }
+                    (item.subtitle ?: listOfNotNull(item.artist, item.album).joinToString("  ·  ").ifEmpty { null })?.let {
+                        FText(it, Fuse.type.label, color = Color.White.copy(alpha = 0.72f), maxLines = 1,
+                            align = if (centred) androidx.compose.ui.text.style.TextAlign.Center else null)
+                    }
+                }
+            }
+            val deck = @Composable {
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(DECK_RADIUS))
+                        .background(Color.White.copy(alpha = 0.07f))
+                        .border(1.dp, Color.White.copy(alpha = 0.09f), RoundedCornerShape(DECK_RADIUS))
+                        .padding(horizontal = if (compact) Space.m else Space.l, vertical = if (compact) Space.s else Space.m),
+                    verticalArrangement = Arrangement.spacedBy(if (compact) Space.xxs else Space.xs),
+                ) {
                     PlayerTimeline(
                         position = { session.positionMs() },
                         durationMs = session.durationMs(),
@@ -236,60 +304,207 @@ fun PlayerRemote(
                         Spacer(Modifier.weight(1f))
                         session.durationMs()?.let { d -> TimeText({ -(d - session.positionMs()).coerceAtLeast(0) }) }
                     }
-                    val small = if (compact) 44.dp else 48.dp
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.m, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically) {
-                        if (hasPrevious) RoundButton(FuseIcons.SkipBack, "Previous", selected = false, size = small) { session.previous() }
-                        RoundButton(FuseIcons.RotateCcw, "Back ${settings.seekSeconds} seconds", selected = false, size = small, badge = settings.seekSeconds.toString()) { session.seekBy(-step) }
-                        RoundButton(if (state.playing) FuseIcons.Pause else FuseIcons.Play, if (state.playing) "Pause" else "Play", selected = false, size = if (compact) 56.dp else 64.dp, filled = true) { session.toggle() }
-                        RoundButton(FuseIcons.RotateCw, "Forward ${settings.seekSeconds} seconds", selected = false, size = small, badge = settings.seekSeconds.toString()) { session.seekBy(step) }
-                        if (hasNext) RoundButton(FuseIcons.SkipForward, "Next", selected = false, size = small) { session.next() }
-                    }
-                    // Wraps onto a second line on a narrow screen rather than cutting a label short.
-                    @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
-                    androidx.compose.foundation.layout.FlowRow(
-                        Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(Space.s, Alignment.CenterHorizontally),
-                        verticalArrangement = Arrangement.spacedBy(Space.s),
+                    val side = if (compact) 44.dp else 52.dp
+                    Row(
+                        Modifier.fillMaxWidth().padding(top = if (compact) 0.dp else Space.xs),
+                        horizontalArrangement = Arrangement.SpaceEvenly,
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        if ((src?.audioTracks?.size ?: 0) > 1) RemoteChip(FuseIcons.AudioLines, "Audio", list == RemoteList.AUDIO) { list = if (list == RemoteList.AUDIO) null else RemoteList.AUDIO }
-                        if (src?.subtitleTracks?.isNotEmpty() == true) RemoteChip(if (src.subtitle == null) FuseIcons.CaptionsOff else FuseIcons.Captions, "Subtitles", list == RemoteList.SUBTITLES) { list = if (list == RemoteList.SUBTITLES) null else RemoteList.SUBTITLES }
-                        if (onSwap != null && video) RemoteChip(FuseIcons.Swap, "Play here", false, onClick = onSwap)
-                        onExit?.let { RemoteChip(FuseIcons.Close, "Stop", false, onClick = it) }
+                        TransportButton(FuseIcons.SkipBack, "Previous", side, enabled = hasPrevious) { session.previous() }
+                        TransportButton(FuseIcons.RotateCcw, "Back ${settings.seekSeconds} seconds", side, badge = settings.seekSeconds.toString()) { session.seekBy(-step) }
+                        PlayRing(state.playing, if (compact) 64.dp else 76.dp, accent, { progress.floatValue }) { session.toggle() }
+                        TransportButton(FuseIcons.RotateCw, "Forward ${settings.seekSeconds} seconds", side, badge = settings.seekSeconds.toString()) { session.seekBy(step) }
+                        TransportButton(FuseIcons.SkipForward, "Next", side, enabled = hasNext) { session.next() }
                     }
                 }
             }
+            val tools = buildList {
+                if ((src?.audioTracks?.size ?: 0) > 1) add(RemoteTool(FuseIcons.AudioLines, "Sound", list == RemoteList.AUDIO) { list = if (list == RemoteList.AUDIO) null else RemoteList.AUDIO })
+                if (src?.subtitleTracks?.isNotEmpty() == true) {
+                    add(RemoteTool(if (src.subtitle == null) FuseIcons.CaptionsOff else FuseIcons.Captions, "Subtitles", list == RemoteList.SUBTITLES) { list = if (list == RemoteList.SUBTITLES) null else RemoteList.SUBTITLES })
+                }
+                if (onSwap != null && video) add(RemoteTool(FuseIcons.Swap, "Play here", false, onSwap))
+                onExit?.let { add(RemoteTool(FuseIcons.Square, "Stop", false, it)) }
+            }
+            val toolBar = @Composable { if (tools.isNotEmpty()) ToolBar(tools, compact) }
             if (wide) {
                 Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.xl)) {
                     cover()
-                    Box(Modifier.weight(1f).widthIn(max = 640.dp)) { controls() }
+                    Column(Modifier.weight(1f).widthIn(max = 640.dp), verticalArrangement = Arrangement.spacedBy(if (compact) Space.s else Space.m)) {
+                        heading(false)
+                        deck()
+                        toolBar()
+                    }
                 }
             } else {
-                Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(Space.m, Alignment.CenterVertically)) {
-                    cover()
-                    Box(Modifier.widthIn(max = 520.dp)) { controls() }
+                Column(
+                    Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(if (compact) Space.s else Space.m, Alignment.CenterVertically),
+                ) {
+                    if (showCover) cover()
+                    Column(Modifier.widthIn(max = 560.dp), verticalArrangement = Arrangement.spacedBy(if (compact) Space.s else Space.m)) {
+                        heading(true)
+                        deck()
+                        toolBar()
+                    }
                 }
             }
-            // The tracks, over the remote's lower part, chosen by touch.
-            list?.let { which ->
-                TrackList(session, which, Modifier.align(Alignment.BottomCenter).widthIn(max = 520.dp).fillMaxWidth().heightIn(max = maxHeight * 0.6f)) { list = null }
+            // The tracks rise over the remote's lower part, chosen by touch.
+            val shown = list
+            Appear(shown != null, Modifier.align(Alignment.BottomCenter), enter = fadeIn() + slideInVertically { it / 3 }, exit = fadeOut() + slideOutVertically { it / 3 }) {
+                var kept by remember { mutableStateOf(shown) }
+                if (shown != null) kept = shown
+                kept?.let { which ->
+                    TrackList(session, which, Modifier.widthIn(max = 560.dp).fillMaxWidth().heightIn(max = maxHeight * 0.62f)) { list = null }
+                }
             }
         }
     }
 }
 
+/** Where the picture is, in a quiet pill; a live dot breathes in the accent while it plays. */
 @Composable
-private fun RemoteChip(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, on: Boolean, onClick: () -> Unit) {
+private fun WherePill(text: String, playing: Boolean, video: Boolean) {
+    val accent = Fuse.colors.accent
+    val clock = rememberLoopClock("remote live")
+    val pulse by clock.animateFloat(0f, 1f, infiniteRepeatable(tween(1400), RepeatMode.Restart), "pulse")
+    val still = Fuse.motion.reduced || !playing
     Row(
-        Modifier.height(40.dp).clip(RoundedCornerShape(20.dp))
-            .background(if (on) Color.White else Color.White.copy(alpha = 0.12f))
-            .clickable(onClick = onClick)
-            .padding(horizontal = Space.m),
+        Modifier.height(26.dp).clip(RoundedCornerShape(13.dp)).background(Color.White.copy(alpha = 0.1f)).padding(horizontal = Space.s + 2.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        val fg = if (on) Color(0xFF101114) else Color.White
-        FuseIcon(icon, size = 18.dp, tint = fg)
-        Spacer(Modifier.width(Space.s))
-        FText(label, Fuse.type.label, color = fg, maxLines = 1)
+        Box(Modifier.size(14.dp), contentAlignment = Alignment.Center) {
+            if (playing) {
+                Box(Modifier.size(14.dp).graphicsLayer {
+                    val p = if (still) 0f else pulse
+                    scaleX = 0.5f + p
+                    scaleY = 0.5f + p
+                    alpha = if (still) 0f else (1f - p) * 0.6f
+                }.clip(androidx.compose.foundation.shape.CircleShape).background(accent))
+                Box(Modifier.size(7.dp).clip(androidx.compose.foundation.shape.CircleShape).background(accent))
+            } else {
+                FuseIcon(FuseIcons.Pause, size = 12.dp, tint = Color.White.copy(alpha = 0.8f))
+            }
+        }
+        Spacer(Modifier.width(Space.xs + 2.dp))
+        FuseIcon(if (video) FuseIcons.MonitorPlay else FuseIcons.Music, size = 13.dp, tint = Color.White.copy(alpha = 0.8f))
+        Spacer(Modifier.width(Space.xs))
+        FText(text, Fuse.type.caption, color = Color.White.copy(alpha = 0.86f), maxLines = 1)
+    }
+}
+
+/** How much a pressed control gives under a finger, sprung back with Fuseline. */
+@Composable
+private fun pressed(interaction: MutableInteractionSource): Float {
+    val down by interaction.collectIsPressedAsState()
+    val v by fuselineFloat(if (down) 1f else 0f, if (Fuse.motion.reduced) snap() else spring(dampingRatio = 0.6f, stiffness = 900f), label = "press")
+    return v
+}
+
+/** A transport control: an icon on nothing, a soft disc of light under it while pressed. */
+@Composable
+private fun TransportButton(icon: ImageVector, label: String, size: androidx.compose.ui.unit.Dp, enabled: Boolean = true, badge: String? = null, onClick: () -> Unit) {
+    val interaction = remember { MutableInteractionSource() }
+    val p = pressed(interaction)
+    Box(
+        Modifier
+            .size(size)
+            .graphicsLayer {
+                val s = 1f - 0.1f * p
+                scaleX = s
+                scaleY = s
+                alpha = if (enabled) 1f else 0.28f
+            }
+            .clip(androidx.compose.foundation.shape.CircleShape)
+            .background(Color.White.copy(alpha = 0.04f + 0.14f * p))
+            .clickable(interactionSource = interaction, indication = null, enabled = enabled, onClickLabel = label, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        FuseIcon(icon, size = size * 0.46f, tint = Color.White)
+        if (badge != null) {
+            FText(badge, Fuse.type.caption.copy(fontSize = Fuse.type.caption.fontSize * 0.7f), color = Color.White, maxLines = 1, modifier = Modifier.padding(top = 1.dp))
+        }
+    }
+}
+
+/**
+ * Play or pause: a white disc with a dark icon, in a ring that fills in the accent as the film
+ * plays, so how far in shows at a glance.
+ */
+@Composable
+private fun PlayRing(playing: Boolean, size: androidx.compose.ui.unit.Dp, accent: Color, progress: () -> Float, onClick: () -> Unit) {
+    val interaction = remember { MutableInteractionSource() }
+    val p = pressed(interaction)
+    Box(
+        Modifier
+            .size(size)
+            .graphicsLayer {
+                val s = 1f - 0.07f * p
+                scaleX = s
+                scaleY = s
+            }
+            .drawBehind {
+                val stroke = 3.dp.toPx()
+                val inset = stroke / 2
+                drawCircle(Color.White.copy(alpha = 0.16f), radius = this.size.minDimension / 2 - inset, style = Stroke(stroke))
+                drawArc(
+                    accent, startAngle = -90f, sweepAngle = 360f * progress(), useCenter = false,
+                    topLeft = Offset(inset, inset), size = androidx.compose.ui.geometry.Size(this.size.width - stroke, this.size.height - stroke),
+                    style = Stroke(stroke, cap = StrokeCap.Round),
+                )
+            }
+            .padding(7.dp)
+            .graphicsLayer { shadowElevation = 14.dp.toPx(); shape = androidx.compose.foundation.shape.CircleShape; clip = true }
+            .background(Color.White)
+            .clickable(interactionSource = interaction, indication = null, onClickLabel = if (playing) "Pause" else "Play", onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Swap(playing, contentAlignment = Alignment.Center, transitionSpec = { (fadeIn() + scaleIn(initialScale = 0.6f)) togetherWith (fadeOut() + scaleOut(targetScale = 0.6f)) }, label = "play") { on ->
+            FuseIcon(if (on) FuseIcons.Pause else FuseIcons.Play, size = size * 0.36f, tint = Color(0xFF101114))
+        }
+    }
+}
+
+private class RemoteTool(val icon: ImageVector, val label: String, val on: Boolean, val onClick: () -> Unit)
+
+/** The tools in one glass bar, each an icon over its name, the chosen one lit. */
+@Composable
+private fun ToolBar(tools: List<RemoteTool>, compact: Boolean) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(DECK_RADIUS))
+            .background(Color.White.copy(alpha = 0.06f))
+            .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(DECK_RADIUS))
+            .padding(Space.xs),
+        horizontalArrangement = Arrangement.spacedBy(Space.xs),
+    ) {
+        for (t in tools) {
+            val interaction = remember(t.label) { MutableInteractionSource() }
+            val p = pressed(interaction)
+            val lit by fuselineFloat(if (t.on) 1f else 0f, Fuse.motion.focusSpring(), label = "tool")
+            Column(
+                Modifier
+                    .weight(1f)
+                    .height(if (compact) 52.dp else 60.dp)
+                    .graphicsLayer {
+                        val s = 1f - 0.05f * p
+                        scaleX = s
+                        scaleY = s
+                    }
+                    .clip(RoundedCornerShape(DECK_RADIUS - Space.xs))
+                    .background(lerp(Color.White.copy(alpha = 0.1f * p), Color.White, lit))
+                    .clickable(interactionSource = interaction, indication = null, onClickLabel = t.label, onClick = t.onClick),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+            ) {
+                val fg = lerp(Color.White, Color(0xFF101114), lit)
+                FuseIcon(t.icon, size = 20.dp, tint = fg)
+                Spacer(Modifier.height(3.dp))
+                FText(t.label, Fuse.type.caption, color = fg.copy(alpha = if (t.on) 1f else 0.82f), maxLines = 1)
+            }
+        }
     }
 }
 
@@ -300,26 +515,41 @@ private fun TrackList(session: PlayerSession, which: RemoteList, modifier: Modif
         RemoteList.AUDIO -> src.audioTracks.map { Triple(it.label, it.codec?.uppercase(), src.audio == it.id) }
         RemoteList.SUBTITLES -> listOf(Triple("Off", null, src.subtitle == null)) + src.subtitleTracks.map { Triple(it.label, if (it.forced) "Forced" else it.codec?.uppercase(), src.subtitle == it.id) }
     }
-    LazyColumn(
-        modifier.clip(RoundedCornerShape(16.dp)).background(Color(0xF0181A20)).padding(vertical = Space.s),
+    Column(
+        modifier
+            .graphicsLayer { shadowElevation = 30.dp.toPx(); shape = RoundedCornerShape(DECK_RADIUS); clip = true }
+            .background(Color(0xF216181E))
+            .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(DECK_RADIUS)),
     ) {
-        itemsIndexed(rows) { i, (label, detail, on) ->
-            Row(
-                Modifier.fillMaxWidth().heightIn(min = 52.dp).clickable {
-                    when (which) {
-                        RemoteList.AUDIO -> session.chooseAudio(src.audioTracks[i])
-                        RemoteList.SUBTITLES -> session.chooseSubtitle(if (i == 0) null else src.subtitleTracks[i - 1])
+        Row(Modifier.fillMaxWidth().padding(start = Space.l, end = Space.s, top = Space.s), verticalAlignment = Alignment.CenterVertically) {
+            FText(if (which == RemoteList.AUDIO) "Sound" else "Subtitles", Fuse.type.bodyStrong, color = Color.White, maxLines = 1, modifier = Modifier.weight(1f))
+            TransportButton(FuseIcons.Close, "Close", 40.dp, onClick = onDone)
+        }
+        LazyColumn(Modifier.padding(bottom = Space.s)) {
+            itemsIndexed(rows) { i, (label, detail, on) ->
+                Row(
+                    Modifier.fillMaxWidth().heightIn(min = 54.dp).clickable {
+                        when (which) {
+                            RemoteList.AUDIO -> session.chooseAudio(src.audioTracks[i])
+                            RemoteList.SUBTITLES -> session.chooseSubtitle(if (i == 0) null else src.subtitleTracks[i - 1])
+                        }
+                        onDone()
+                    }.padding(horizontal = Space.l),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        FText(label, Fuse.type.bodyStrong, color = Color.White, maxLines = 1)
+                        if (detail != null) FText(detail, Fuse.type.caption, color = Color.White.copy(alpha = 0.6f), maxLines = 1)
                     }
-                    onDone()
-                }.padding(horizontal = Space.l),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(Modifier.weight(1f)) {
-                    FText(label, Fuse.type.bodyStrong, color = Color.White, maxLines = 1)
-                    if (detail != null) FText(detail, Fuse.type.caption, color = Color.White.copy(alpha = 0.6f), maxLines = 1)
+                    if (on) FuseIcon(FuseIcons.Check, size = 20.dp, tint = Fuse.colors.accent)
                 }
-                if (on) FuseIcon(FuseIcons.Check, size = 20.dp, tint = Fuse.colors.accent)
             }
         }
     }
 }
+
+/** The remote's room, under its backdrop. */
+private val REMOTE_INK = Color(0xFF08090C)
+
+/** Corner of the deck, the tool bar and the track list. */
+private val DECK_RADIUS = 22.dp

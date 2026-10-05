@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
@@ -29,9 +30,6 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import io.github.matiyaaa.fuse.ui.fuseline.fuselineScrollTo
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -54,6 +52,8 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.layout.onSizeChanged
@@ -85,20 +85,21 @@ import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
 import io.github.matiyaaa.fuse.ui.fuseline.Appear
 import io.github.matiyaaa.fuse.ui.fuseline.Curves
 import io.github.matiyaaa.fuse.ui.fuseline.Durations
+import io.github.matiyaaa.fuse.ui.fuseline.FuselineValue
 import io.github.matiyaaa.fuse.ui.fuseline.expandHorizontally
 import io.github.matiyaaa.fuse.ui.fuseline.fadeIn
 import io.github.matiyaaa.fuse.ui.fuseline.fadeOut
 import io.github.matiyaaa.fuse.ui.fuseline.fuselineColor
 import io.github.matiyaaa.fuse.ui.fuseline.fuselineFloat
+import io.github.matiyaaa.fuse.ui.fuseline.fuselineScrollTo
 import io.github.matiyaaa.fuse.ui.fuseline.infiniteRepeatable
-import io.github.matiyaaa.fuse.ui.fuseline.FuselineValue
 import io.github.matiyaaa.fuse.ui.fuseline.rememberLoopClock
 import io.github.matiyaaa.fuse.ui.fuseline.shrinkHorizontally
 import io.github.matiyaaa.fuse.ui.fuseline.tween
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.launch
 import kotlin.time.Clock
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 
@@ -107,9 +108,16 @@ enum class HudButton {
     SEARCH,
     SETTINGS,
 
+    /** The profile in use (Fuse Sync), beside the status: opens "Who's playing?". */
+    PROFILE,
+
     /** The status at the far right (Wi-Fi, battery, clock), which opens the quick menu. */
     STATUS,
 }
+
+/** The person playing here, for the top line (Fuse Sync's profile in use). */
+@androidx.compose.runtime.Immutable
+data class HudProfile(val name: String, val avatar: String)
 
 /**
  * The top line: Fuse's mark and the section tabs on the left, then Search and Settings, and status
@@ -142,6 +150,8 @@ fun Hud(
     activities: List<HudActivity> = emptyList(),
     /** Search or Settings is the page that is open: its button shows as the active place. */
     activeButton: HudButton? = null,
+    /** Who is playing here, when Fuse Sync is in use: their avatar sits with the status. */
+    profile: HudProfile? = null,
 ) {
     val time = rememberClockText(clock24h)
     val anchors = remember { HudAnchors() }
@@ -155,6 +165,8 @@ fun Hud(
         val labels = maxWidth > 120.dp * destinations.size + 430.dp
         // Narrow screens keep the tabs whole by giving up status first: Wi-Fi and battery, then the
         // clock (a phone held upright shows its own).
+        // The person playing is named beside their avatar only where nothing else needs the room.
+        val roomForName = maxWidth > 1100.dp
         val statusRoom = when {
             maxWidth < NARROW -> StatusRoom.NONE
             maxWidth < COMPACT -> StatusRoom.CLOCK
@@ -274,11 +286,22 @@ fun Hud(
                 active = activeButton == HudButton.SETTINGS,
                 modifier = Modifier.anchor(anchors, HudButton.SETTINGS),
             ) { onButton(HudButton.SETTINGS) }
-            if (statusRoom != StatusRoom.NONE) {
+            if (statusRoom != StatusRoom.NONE || profile != null) {
                 // A hairline keeps the things you open apart from the things you read.
                 Spacer(Modifier.width(Space.xs))
                 Box(Modifier.width(Size.divider).height(Size.iconM).background(Fuse.colors.hairlineStrong))
                 Spacer(Modifier.width(Space.xs))
+            }
+            if (profile != null) {
+                HudProfileChip(
+                    profile,
+                    focused = tabsFocused && focusedButton == HudButton.PROFILE,
+                    // With room, the name; on a small screen the avatar says who it is.
+                    showName = statusRoom == StatusRoom.ALL && roomForName,
+                    modifier = Modifier.anchor(anchors, HudButton.PROFILE),
+                ) { onButton(HudButton.PROFILE) }
+            }
+            if (statusRoom != StatusRoom.NONE) {
                 val shape = rememberHudShape(insetX = false)
                 val statusFocus by fuselineFloat(if (tabsFocused && focusedButton == HudButton.STATUS) 1f else 0f, Fuse.motion.tween(Durations.FAST), label = "statusFocus")
                 Box(
@@ -524,6 +547,29 @@ private fun Modifier.hudFocus(shape: Shape, focus: () -> Float, fill: Color, rin
 }
 
 /** A round icon button in the top line: the outline shows controller focus, full colour shows it is open. */
+/** The person playing here: their avatar (and name, with room), in the line's own focus shape. */
+@Composable
+private fun HudProfileChip(profile: HudProfile, focused: Boolean, showName: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    val c = Fuse.colors
+    val shape = rememberHudShape(insetX = !showName)
+    val focus by fuselineFloat(if (focused) 1f else 0f, Fuse.motion.tween(Durations.FAST), label = "hudProfile")
+    Row(
+        modifier
+            .height(Size.touch)
+            .fuseClickable(shape = shape, scale = false, role = Role.Button, onClickLabel = "Switch profile", onClick = onClick)
+            .hudFocus(shape, { focus }, c.text.copy(alpha = if (c.isDark) 0.12f else 0.08f), c.focus)
+            .padding(horizontal = if (showName) Space.s else Space.xs)
+            .semantics { contentDescription = "Playing as ${profile.name}" },
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        io.github.matiyaaa.fuse.ui.designsystem.components.ProfileAvatar(profile.avatar, 30.dp)
+        if (showName) {
+            Spacer(Modifier.width(Space.s))
+            FText(profile.name, Fuse.type.label, color = if (focused) c.text else c.textMuted, maxLines = 1, modifier = Modifier.widthIn(max = 110.dp))
+        }
+    }
+}
+
 @Composable
 private fun HudIconButton(icon: ImageVector, label: String, focused: Boolean, active: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val c = Fuse.colors

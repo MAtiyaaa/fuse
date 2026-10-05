@@ -10,7 +10,7 @@ import kotlin.test.assertTrue
 class SystemArtNamesTest {
 
     /** Catalog platforms Art Book Next has no art for at [SystemArtPack.REF]. */
-    private val knownAbsent = setOf("ps5", "switch-2")
+    private val knownAbsent = setOf("ps5", "switch-2", "adventure-vision", "cpet", "epoch-game-pocket-computer", "tomy-tutor", "vc-4000")
 
     @Test
     fun everyCatalogPlatformThatThePackCoversResolves() {

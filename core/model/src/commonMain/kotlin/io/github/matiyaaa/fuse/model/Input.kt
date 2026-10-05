@@ -17,6 +17,9 @@ enum class NavAction {
     NEXT_SECTION,
     PREVIOUS_SECTION,
     /** Page jump (triggers). */
+    /** Home's pages: the right stick, [ and ], or a swipe. */
+    PAGE_PREVIOUS,
+    PAGE_NEXT,
     PAGE_UP,
     PAGE_DOWN,
     HOME,
@@ -31,11 +34,41 @@ enum class PadButton {
     DPAD_UP, DPAD_DOWN, DPAD_LEFT, DPAD_RIGHT,
     KEY_ENTER, KEY_ESCAPE, KEY_BACKSPACE, KEY_TAB, KEY_SPACE, KEY_SLASH, KEY_F, KEY_Q, KEY_E, KEY_M, KEY_HOME,
     KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT, KEY_PAGE_UP, KEY_PAGE_DOWN,
+    /** The right stick pushed to a side, as a press (a flick turns Home's pages). */
+    RSTICK_LEFT, RSTICK_RIGHT, RSTICK_UP, RSTICK_DOWN,
+    /** [ and ]: Home's pages on a keyboard. */
+    KEY_BRACKET_LEFT, KEY_BRACKET_RIGHT,
 }
 
 /** Which face-button family's glyphs to show in hints. */
 @Serializable
 enum class GlyphStyle { XBOX, NINTENDO, PLAYSTATION, KEYBOARD }
+
+/**
+ * Which family a controller belongs to, from what it calls itself (its device name, or SDL's
+ * controller type) or its USB vendor: Sony's pads are PlayStation, Nintendo's are Nintendo,
+ * Microsoft's are Xbox. Null when it doesn't say (most third-party pads), so the setting decides.
+ */
+object PadFamily {
+    private const val SONY = 0x054C
+    private const val NINTENDO = 0x057E
+    private const val MICROSOFT = 0x045E
+
+    fun of(name: String?, vendorId: Int? = null): GlyphStyle? {
+        when (vendorId) {
+            SONY -> return GlyphStyle.PLAYSTATION
+            NINTENDO -> return GlyphStyle.NINTENDO
+            MICROSOFT -> return GlyphStyle.XBOX
+        }
+        val n = name?.lowercase() ?: return null
+        return when {
+            listOf("dualsense", "dualshock", "playstation", "sony", "ps3 ", "ps4", "ps5").any { it in n } || n.startsWith("ps3") -> GlyphStyle.PLAYSTATION
+            listOf("nintendo", "switch", "pro controller", "joy-con", "joycon").any { it in n } -> GlyphStyle.NINTENDO
+            listOf("xbox", "x-box", "xinput", "microsoft").any { it in n } -> GlyphStyle.XBOX
+            else -> null
+        }
+    }
+}
 
 @Serializable
 data class InputProfile(

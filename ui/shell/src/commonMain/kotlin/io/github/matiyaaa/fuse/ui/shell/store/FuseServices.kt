@@ -47,6 +47,12 @@ interface FuseServices {
     /** This device's name, as servers list it (Jellyfin's dashboard). */
     val deviceName: String get() = "Fuse"
 
+    /**
+     * Fuse Sync by Fuse on this device, over [data] (the person's records and settings here), or
+     * null where it can't run. Built once, when the store starts; off until turned on.
+     */
+    fun syncService(data: io.github.matiyaaa.fuse.sync.ProfileDataPort, scope: kotlinx.coroutines.CoroutineScope): io.github.matiyaaa.fuse.sync.SyncService? = null
+
     /** Finds Jellyfin servers on the network; null where there is no way to. */
     val jellyfinDiscovery: io.github.matiyaaa.fuse.jellyfin.ServerDiscovery? get() = null
 

@@ -180,6 +180,24 @@ class AppState(
     /** Something went wrong or needs attention, told with what can be done ([ProblemOverlay]). */
     var problem by mutableStateOf<ProblemSpec?>(null)
 
+    /** Who is playing here (Fuse Sync's profile in use); null while Fuse Sync is off or no one is chosen. */
+    var syncProfile by mutableStateOf<io.github.matiyaaa.fuse.sync.ProfileInfo?>(null)
+
+    /** Fuse Sync's startup choice of profile was made (once per run, not on every recomposition). */
+    var syncStartupDone = false
+
+    /** What the Fuse Sync host keeps for the profile in use, as the Sync tab last heard it. */
+    var syncReport by mutableStateOf<io.github.matiyaaa.fuse.sync.ProfileReport?>(null)
+
+    /** The host's "Add a device" sheet, with its pairing code. */
+    var pairing by mutableStateOf(false)
+
+    /** "Who's playing?", Fuse Sync's profile picker, and why it is open. */
+    var whoAreYou by mutableStateOf<io.github.matiyaaa.fuse.ui.shell.sync.WhoMode?>(null)
+
+    /** A save conflict Fuse Sync asks about before a game starts. */
+    var saveConflict by mutableStateOf<io.github.matiyaaa.fuse.ui.shell.sync.SaveConflictSpec?>(null)
+
     /** "Play on which screen?" on a device with two screens. */
     var screenPrompt by mutableStateOf<ScreenPromptSpec?>(null)
 
@@ -213,7 +231,7 @@ class AppState(
     var launching by mutableStateOf<LaunchVeil?>(null)
 
     val overlayOpen: Boolean
-        get() = quickMenuOpen || contextMenu != null || confirm != null || textInput != null || choice != null || reorder != null || screenPrompt != null || buttonDetect || problem != null || textPreview != null || phoneTyping
+        get() = quickMenuOpen || contextMenu != null || confirm != null || textInput != null || choice != null || reorder != null || screenPrompt != null || buttonDetect || problem != null || saveConflict != null || whoAreYou != null || pairing || textPreview != null || phoneTyping
 
     fun openContextMenu(spec: ContextMenuSpec) {
         contextMenu = spec

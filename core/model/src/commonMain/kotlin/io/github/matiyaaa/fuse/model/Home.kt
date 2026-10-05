@@ -49,6 +49,11 @@ enum class WidgetKind(val defaultSpan: WidgetSpan) {
 @Serializable
 enum class WidgetSpan(val columns: Int, val rows: Int) { SMALL(1, 1), MEDIUM(2, 1), WIDE(4, 1), LARGE(2, 2) }
 
+/** RetroAchievements' widgets: shown and offered only once RetroAchievements is connected. */
+val WidgetKind.isAchievements: Boolean
+    get() = this == WidgetKind.RECENT_ACHIEVEMENT || this == WidgetKind.RECENT_ACHIEVEMENTS ||
+        this == WidgetKind.ACHIEVEMENT_PROGRESS || this == WidgetKind.RECENTLY_MASTERED
+
 /** True for the kinds Flow shows as rows; the rest (clock, storage, playtime...) live on the board only. */
 val WidgetKind.isRow: Boolean
     get() = this in RowKinds
@@ -88,6 +93,13 @@ val WidgetKind.boardSize: BoardSize
         else -> BoardSize(2, 1)
     }
 
+/** One of the board's pages after the first: its own widgets, arranged on their own. */
+@Serializable
+data class HomePage(
+    val id: String,
+    val widgets: List<HomeWidget> = emptyList(),
+)
+
 /** A placed widget. In Flow only [order] matters; on the board [width] and [height] do too. */
 @Serializable
 data class HomeWidget(
@@ -123,7 +135,43 @@ data class HomeLayoutConfig(
     val widgets: List<HomeWidget> = DefaultFlow,
     /** The Channels board, in reading order; null until it is first changed (see [boardWidgets]). */
     val board: List<HomeWidget>? = null,
+    /** The board's pages after the first ([board]), in order; empty while Home is one page. */
+    val pages: List<HomePage> = emptyList(),
 ) {
+    /** How many pages the board has: the first, and [pages]. */
+    val pageCount: Int get() = 1 + pages.size
+
+    /** The widgets of [page] (0 is the first), in order; an unknown page is empty. */
+    fun boardWidgets(page: Int): List<HomeWidget> = if (page <= 0) boardWidgets() else pages.getOrNull(page - 1)?.widgets.orEmpty()
+
+    /** [page]'s widgets as stored, for Undo: null for a first page never changed. */
+    fun storedBoard(page: Int): List<HomeWidget>? = if (page <= 0) board else pages.getOrNull(page - 1)?.widgets
+
+    /** This config with [page]'s widgets replaced by [widgets] (null puts the first page back as it came). */
+    fun withBoard(page: Int, widgets: List<HomeWidget>?): HomeLayoutConfig = when {
+        page <= 0 -> copy(board = widgets)
+        page - 1 in pages.indices -> copy(pages = pages.mapIndexed { i, p -> if (i == page - 1) p.copy(widgets = widgets.orEmpty()) else p })
+        else -> this
+    }
+
+    /** A new, empty page at the end, with an id no other page has. */
+    fun addPage(): HomeLayoutConfig {
+        val taken = pages.map { it.id }.toSet()
+        val id = generateSequence(pages.size + 2) { it + 1 }.map { "page$it" }.first { it !in taken }
+        return copy(pages = pages + HomePage(id))
+    }
+
+    /** Without [page] (never the first, which is always there). */
+    fun removePage(page: Int): HomeLayoutConfig = if (page <= 0 || page - 1 !in pages.indices) this else copy(pages = pages.filterIndexed { i, _ -> i != page - 1 })
+
+    /** [page] moved to [to] among the pages after the first (the first page stays first). */
+    fun movePage(page: Int, to: Int): HomeLayoutConfig {
+        if (page <= 0 || to <= 0 || page - 1 !in pages.indices || to - 1 !in pages.indices || page == to) return this
+        val list = pages.toMutableList()
+        list.add(to - 1, list.removeAt(page - 1))
+        return copy(pages = list)
+    }
+
     /**
      * The board's widgets in order. Before the board is ever changed it is made from what Home
      * already had: the default board for a Home left as it came, else the shown widgets in their

@@ -38,7 +38,11 @@ internal class FakeServices(
     private val installedEmulators: List<InstalledEmulator>? = null,
     /** GitHub's answer for Fuse's latest release, as JSON; null answers 404 like everything else. */
     private val latestRelease: String? = null,
+    /** Fuse Sync, when a test runs it. */
+    private val sync: ((io.github.matiyaaa.fuse.sync.ProfileDataPort, kotlinx.coroutines.CoroutineScope) -> io.github.matiyaaa.fuse.sync.SyncService?)? = null,
 ) : FuseServices {
+    override fun syncService(data: io.github.matiyaaa.fuse.sync.ProfileDataPort, scope: kotlinx.coroutines.CoroutineScope) = sync?.invoke(data, scope)
+
     init {
         // Tests start fills themselves; the automatic one runs only where a test turns it on.
         kotlinx.coroutines.runBlocking { data.settings.update { it.copy(scraping = it.scraping.copy(autoFill = autoFill)) } }

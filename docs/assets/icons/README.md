@@ -45,6 +45,12 @@ contains text, so nothing depends on fonts.
 | <img src="backup.svg" width="40" height="40" alt=""> | <img src="line/backup.svg" width="20" height="20" alt=""> | `backup` | `database-backup` | Backup and restore |
 | <img src="search.svg" width="40" height="40" alt=""> | <img src="line/search.svg" width="20" height="20" alt=""> | `search` | `search` | Search |
 | <img src="patches.svg" width="40" height="40" alt=""> | <img src="line/patches.svg" width="20" height="20" alt=""> | `patches` | `bandage` | Emulator patches |
+| <img src="player.svg" width="40" height="40" alt=""> | <img src="line/player.svg" width="20" height="20" alt=""> | `player` | `clapperboard` | Fuse Player |
+| <img src="fuseline.svg" width="40" height="40" alt=""> | <img src="line/fuseline.svg" width="20" height="20" alt=""> | `fuseline` | `waves` | Fuseline |
+| <img src="jellyfin.svg" width="40" height="40" alt=""> | <img src="line/jellyfin.svg" width="20" height="20" alt=""> | `jellyfin` | `tv` | Films and shows |
+| <img src="quick-menu.svg" width="40" height="40" alt=""> | <img src="line/quick-menu.svg" width="20" height="20" alt=""> | `quick-menu` | `layout-dashboard` | Quick menu |
+| <img src="touch.svg" width="40" height="40" alt=""> | <img src="line/touch.svg" width="20" height="20" alt=""> | `touch` | `hand` | Touch |
+| <img src="sync.svg" width="40" height="40" alt=""> | <img src="line/sync.svg" width="20" height="20" alt=""> | `sync` | `refresh-ccw` | Fuse Sync |
 
 The `android` and `linux` icons are a generic phone and a generic monitor, not platform logos.
 

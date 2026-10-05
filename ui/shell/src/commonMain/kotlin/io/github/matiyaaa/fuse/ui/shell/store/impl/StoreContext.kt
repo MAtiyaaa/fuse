@@ -72,6 +72,14 @@ internal class StoreContext(
         recentProblems.update { (it + (now() to problem)).takeLast(10) }
     }
 
+    /**
+     * The person changed something of theirs (a favourite, a name, a collection, a setting): Fuse
+     * Sync sends it soon. Set by [DefaultFuseStore]; nothing while Fuse Sync is off.
+     */
+    @kotlin.concurrent.Volatile var onUserChange: () -> Unit = {}
+
+    fun userChanged() = onUserChange()
+
     /** Called whenever Fuse comes back to the front (after a game, or another app). */
     val resumeHooks = MutableStateFlow<List<() -> Unit>>(emptyList())
 

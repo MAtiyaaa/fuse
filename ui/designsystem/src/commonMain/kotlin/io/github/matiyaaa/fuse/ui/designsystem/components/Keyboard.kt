@@ -81,6 +81,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
 import io.github.matiyaaa.fuse.ui.designsystem.icons.HintButton
 import io.github.matiyaaa.fuse.ui.designsystem.input.NavEvent
 import io.github.matiyaaa.fuse.ui.designsystem.input.NavResult
+import io.github.matiyaaa.fuse.ui.designsystem.media.collectAsStateCompat
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
@@ -1015,6 +1016,49 @@ fun KeyboardField(
                     }
                 }
             }
+        }
+    }
+}
+
+/**
+ * True while a hardware keyboard or the mouse is what is being used: the on-screen keys step
+ * aside then, since letters typed on the keyboard already go into the field (and a mouse is there
+ * because a keyboard is). A controller press or a touch brings them back at once.
+ */
+@Composable
+fun typingOnHardware(): Boolean {
+    val source by io.github.matiyaaa.fuse.ui.designsystem.input.LocalInputRouter.current.lastSource.collectAsStateCompat()
+    return source == io.github.matiyaaa.fuse.ui.designsystem.input.InputSource.KEYBOARD ||
+        source == io.github.matiyaaa.fuse.ui.designsystem.input.InputSource.POINTER
+}
+
+/**
+ * Where the on-screen keys were, while typing on a keyboard: says so, how to finish, and offers
+ * the keys back for the mouse.
+ */
+@Composable
+fun KeysAway(doneLabel: String, onShowKeys: () -> Unit, modifier: Modifier = Modifier) {
+    val c = Fuse.colors
+    val interaction = remember { MutableInteractionSource() }
+    val hovered by interaction.collectIsHoveredAsState()
+    Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        FuseIcon(FuseIcons.Keyboard, size = Size.iconS, tint = c.textMuted)
+        Spacer(Modifier.width(Space.s))
+        FText("Typing on your keyboard. Enter to ${doneLabel.lowercase()}, Esc to close.", Fuse.type.caption, color = c.textMuted, maxLines = 2, modifier = Modifier.weight(1f))
+        Spacer(Modifier.width(Space.m))
+        Row(
+            Modifier
+                .height(Size.chipCompact)
+                .clip(RoundedCornerShape(Size.chipCompact / 2))
+                .background(c.text.copy(alpha = if (hovered) 0.14f else 0.08f))
+                .hoverable(interaction)
+                .clickable(interactionSource = interaction, indication = null, onClick = onShowKeys)
+                .padding(horizontal = Space.m),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            FuseIcon(FuseIcons.Grid3, size = Size.iconS, tint = c.text)
+            Spacer(Modifier.width(Space.xs + Space.xxs))
+            FText("Show keys", Fuse.type.caption, color = c.text, maxLines = 1)
         }
     }
 }

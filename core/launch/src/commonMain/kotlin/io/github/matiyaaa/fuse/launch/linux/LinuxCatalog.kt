@@ -1,5 +1,6 @@
 package io.github.matiyaaa.fuse.launch.linux
 
+import io.github.matiyaaa.fuse.launch.Confidence
 import io.github.matiyaaa.fuse.launch.Confidence.UNVERIFIED
 import io.github.matiyaaa.fuse.launch.Confidence.VERIFIED_ESDE
 import io.github.matiyaaa.fuse.launch.EmulatorAdapter
@@ -26,6 +27,9 @@ object LinuxCatalog {
     private val N3DS = platforms("3ds", "new-nintendo-3ds")
 
     private fun esde(rule: String) = "${Sources.ESDE_LINUX}: $rule"
+
+    /** SharpEmu's README (github.com/sharpemu/sharpemu): `SharpEmu <path to eboot.bin>`. */
+    internal const val SHARPEMU_SOURCE = "SharpEmu's README: SharpEmu \"<game>/eboot.bin\""
 
     private fun spec(args: Array<out String>, workingDir: String?) = LinuxCommandSpec(args.toList(), workingDir)
 
@@ -318,8 +322,9 @@ object LinuxCatalog {
         LinuxEmulatorDef(
             id = "linux.shadps4", name = "shadPS4", platforms = platforms("ps4"),
             detection = detect(
-                bin = listOf("shadps4"), appImage = listOf("shadps4-qt*.appimage", "shadps4-sdl*.appimage"),
-                dirBin = listOf("shadps4/shadps4"),
+                bin = listOf("shadps4"), flatpak = listOf("net.shadps4.shadPS4"),
+                appImage = listOf("shadps4-qt*.appimage", "shadps4-sdl*.appimage", "shadps4.appimage", "shadps4-linux*.appimage"),
+                dirBin = listOf("shadps4/shadps4", "shadps4/Shadps4-sdl.AppImage"),
             ),
             modes = listOf(
                 idFile("-g", "{SERIAL}", ext = setOf("ps4"), pattern = PS_TITLE_ID, label = "Game Serial"),
@@ -329,6 +334,13 @@ object LinuxCatalog {
             source = esde("SHADPS4, commands shadPS4 Game Serial / eboot.bin"), confidence = VERIFIED_ESDE,
             homepage = "https://shadps4.net/",
             capabilities = caps(installed = true), titleIdMode = TitleIdMode.OPTIONAL,
+        ),
+        LinuxEmulatorDef(
+            id = "linux.sharpemu", name = "SharpEmu", platforms = platforms("ps5"),
+            detection = detect(bin = listOf("sharpemu", "SharpEmu"), appImage = listOf("sharpemu*.appimage"), dirBin = listOf("SharpEmu/SharpEmu", "sharpemu/SharpEmu")),
+            modes = listOf(file("{ROM}", ext = setOf("bin"), workingDir = "{EMUDIR}", label = "eboot.bin")),
+            source = SHARPEMU_SOURCE, confidence = Confidence.VERIFIED_SOURCE, homepage = "https://sharpemu.app/",
+            limitations = listOf("PlayStation 5 emulation is young: a few games play, many stop at a menu or loading screen."),
         ),
         LinuxEmulatorDef(
             id = "linux.mednafen", name = "Mednafen",

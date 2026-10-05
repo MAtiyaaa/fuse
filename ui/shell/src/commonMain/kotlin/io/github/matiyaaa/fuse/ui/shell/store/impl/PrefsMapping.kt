@@ -36,6 +36,7 @@ internal fun AppSettings.toUiPrefs(scoped: GlobalScoped): UiPrefs {
     val theme = resolveTheme(appearance.themeId, custom)
     return UiPrefs(
         jellyfin = jellyfin,
+        sync = sync,
         onboardingDone = onboarding.completed,
         themeId = theme.id,
         customThemes = custom,
@@ -72,6 +73,7 @@ internal fun AppSettings.toUiPrefs(scoped: GlobalScoped): UiPrefs {
         systemOrder = library.systemOrder,
         continueDismissed = home.continueDismissed,
         addonsOrder = home.addonsOrder,
+        quickMenu = home.quickMenu,
         systemArtAuto = library.systemArtAuto,
         librarySort = library.sort,
         systemArtStyle = library.systemArtStyle,
@@ -102,6 +104,7 @@ internal fun AppSettings.toUiPrefs(scoped: GlobalScoped): UiPrefs {
         appsFilter = library.appsFilter,
         storeVariant = store.variant,
         storeAutoCheck = store.autoCheck,
+        storeEnabled = store.enabled,
     )
 }
 
@@ -116,7 +119,7 @@ internal fun AppSettings.withUiPrefs(prefs: UiPrefs): AppSettings {
         Destination.entries.filterNot { it in visible }.map { DestinationSetting(it, visible = false) }
     return copy(
         onboarding = onboarding.copy(completed = prefs.onboardingDone),
-        home = home.copy(layout = prefs.home, destinations = destinations, continueDismissed = prefs.continueDismissed, addonsOrder = prefs.addonsOrder),
+        home = home.copy(layout = prefs.home, destinations = destinations, continueDismissed = prefs.continueDismissed, addonsOrder = prefs.addonsOrder, quickMenu = prefs.quickMenu),
         appearance = appearance.copy(
             themeId = theme.id,
             motion = prefs.motion,
@@ -181,7 +184,7 @@ internal fun AppSettings.withUiPrefs(prefs: UiPrefs): AppSettings {
         updates = updates.copy(checkForUpdates = prefs.checkForUpdates),
         capture = capture.copy(combo = prefs.captureCombo, sound = prefs.captureSound),
         // What Fuse installed is kept as it is: only the Store writes it.
-        store = store.copy(variant = prefs.storeVariant, autoCheck = prefs.storeAutoCheck),
+        store = store.copy(enabled = prefs.storeEnabled, variant = prefs.storeVariant, autoCheck = prefs.storeAutoCheck),
         jellyfin = prefs.jellyfin,
     )
 }

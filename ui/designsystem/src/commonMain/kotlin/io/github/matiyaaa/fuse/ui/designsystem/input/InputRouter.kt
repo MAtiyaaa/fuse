@@ -93,6 +93,25 @@ class InputRouter(
     /** Last input kind used; the UI can adapt (for example hint glyphs) without hiding focus. */
     val lastSource: StateFlow<InputSource> = _lastSource.asStateFlow()
 
+    private val _padFamily = MutableStateFlow<io.github.matiyaaa.fuse.model.GlyphStyle?>(null)
+
+    /**
+     * The family of the controller last pressed ([io.github.matiyaaa.fuse.model.PadFamily]), or null
+     * when it doesn't say which it is. The platform's controller reader sets it.
+     */
+    val padFamily: StateFlow<io.github.matiyaaa.fuse.model.GlyphStyle?> = _padFamily.asStateFlow()
+
+    /** A hardware keyboard typed into the open field: the keyboard is the input in use. */
+    internal fun typedOnKeyboard() {
+        touched()
+        _lastSource.value = InputSource.KEYBOARD
+    }
+
+    /** The controller now in use calls itself [family] (null: it doesn't say). */
+    fun padIdentified(family: io.github.matiyaaa.fuse.model.GlyphStyle?) {
+        if (_padFamily.value != family) _padFamily.value = family
+    }
+
     internal class Layer(
         val priority: Int,
         val seq: Long,
@@ -432,6 +451,9 @@ class InputRouter(
             PadButton.KEY_PAGE_UP -> NavAction.PAGE_UP
             PadButton.KEY_PAGE_DOWN -> NavAction.PAGE_DOWN
             PadButton.KEY_HOME -> NavAction.HOME
+            PadButton.RSTICK_LEFT, PadButton.KEY_BRACKET_LEFT -> NavAction.PAGE_PREVIOUS
+            PadButton.RSTICK_RIGHT, PadButton.KEY_BRACKET_RIGHT -> NavAction.PAGE_NEXT
+            PadButton.RSTICK_UP, PadButton.RSTICK_DOWN -> null
         }
     }
 
@@ -460,6 +482,27 @@ class InputRouter(
         dir?.let { press(it, source) }
     }
 
+    private var rightDirection: PadButton? = null
+
+    /**
+     * Right stick position, each axis -1..1 (y down): pushed well over to a side it is a press of
+     * [PadButton.RSTICK_LEFT] and the rest, let go when it comes back toward the centre, so a flick
+     * is one press. Readers that see the stick as buttons already press those directly.
+     */
+    fun rightStick(x: Float, y: Float, source: InputSource = InputSource.GAMEPAD) {
+        val threshold = max(RIGHT_STICK_PRESS, profile.stickDeadzone)
+        val dir: PadButton? = when {
+            abs(x) >= abs(y) && abs(x) >= threshold -> if (x < 0) PadButton.RSTICK_LEFT else PadButton.RSTICK_RIGHT
+            abs(y) > abs(x) && abs(y) >= threshold -> if (y < 0) PadButton.RSTICK_UP else PadButton.RSTICK_DOWN
+            rightDirection != null && (abs(x) >= threshold * 0.6f || abs(y) >= threshold * 0.6f) -> rightDirection
+            else -> null
+        }
+        if (dir == rightDirection) return
+        rightDirection?.let { release(it, source) }
+        rightDirection = dir
+        dir?.let { press(it, source) }
+    }
+
     private val triggers = mutableMapOf<PadButton, Boolean>()
 
     /** Analog trigger value 0..1; crossing half travel counts as a press. */
@@ -473,6 +516,9 @@ class InputRouter(
     companion object {
         /** How long both sticks stay pressed in before the combo counts as a hold. */
         const val COMBO_HOLD_MS = 600L
+
+        /** How far the right stick goes over before it counts as pushed (a deliberate flick, not a drift). */
+        const val RIGHT_STICK_PRESS = 0.6f
     }
 }
 

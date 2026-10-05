@@ -48,6 +48,14 @@ sealed interface Route {
     data class MediaLibrary(val id: String, val name: String, val kind: String? = null) : Route
     data object MediaSearch : Route
 
+    /** Fuse Sync by Fuse: its settings, setting it up ([host]: this computer as the host, else connecting), and a game's saves through time. */
+    data object SyncSettings : Route
+    data class SyncSetup(val host: Boolean) : Route
+    data class SaveHistory(val game: GameId, val title: String) : Route
+
+    /** One game as the Fuse Sync host keeps it: play time by device, every save, version and file. */
+    data class SyncGame(val game: String, val name: String) : Route
+
     /** Where play time went: today, this week, this month, per day, per game and per system. */
     data object PlayTime : Route
     data object Themes : Route

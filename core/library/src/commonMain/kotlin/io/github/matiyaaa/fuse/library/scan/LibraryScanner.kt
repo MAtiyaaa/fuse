@@ -435,7 +435,8 @@ class LibraryScanner(
         if (index.isEmpty) return games
         return games.map { game ->
             val found = index.find(media.keysFor(game, platform, folder.path))
-            if (found.isEmpty()) game else game.copy(localMedia = found)
+            // Scraped art beside the library wins over what the game carries itself (sce_sys).
+            if (found.isEmpty()) game else game.copy(localMedia = game.localMedia + found)
         }
     }
 

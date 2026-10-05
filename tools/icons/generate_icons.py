@@ -106,6 +106,9 @@ ICONS = {
     "Store": "store", "ShoppingBag": "shopping-bag", "Scaling": "scaling", "MoveDiagonal": "move-diagonal-2",
     "ArrowDownToLine": "arrow-down-to-line", "CircleArrowDown": "circle-arrow-down", "CloudCheck": "cloud-check",
     "PackagePlus": "package-plus",
+    # Fuse Sync by Fuse.
+    "UserPlus": "user-plus", "UserCog": "user-cog", "ArrowLeftRight": "arrow-left-right", "Router": "router",
+    "CloudUpload": "cloud-upload", "RefreshCcw": "refresh-ccw",
 }
 
 NUM = r"-?(?:\d+\.?\d*|\.\d+)(?:e-?\d+)?"

@@ -83,6 +83,16 @@ object EmulatorPriority {
         listOf("vectrex") to ids(RA, "mame4droid-current"),
         listOf("pico8") to ids("pico8-android"),
         listOf("flash") to ids("swiff"),
+        listOf(
+            "64dd", "amiga-cd32", "amstrad-gx4000", "appleii", "arcadia-2001", "arduboy", "atari-jaguar-cd",
+            "atari8bit", "bbcmicro", "c-plus-4", "chailove", "commodore-cdtv", "creativision", "doom",
+            "fairchild-channel-f", "g-and-w", "handheld-electronic-lcd", "j2me", "laserdisc", "lowresnx", "lutro",
+            "mac", "mega-duck-slash-cougar-boy", "model2", "model3", "msx-turbo", "msx2plus", "multivision",
+            "odyssey-2", "palm-os", "pc-8800-series", "pc-9800-series", "philips-cd-i", "quake", "rpg-maker",
+            "satellaview", "sharp-x68000", "spectravideo", "stv", "sufami-turbo", "supervision", "thomson-mo5",
+            "tic-80", "uzebox", "vic-20", "videopac-g7400", "vircon32", "wasm-4", "win3x", "win9x", "x1",
+            "z-machine", "zx81",
+        ) to ids(RA),
     )
 
     private val LRA = "linux.retroarch"
@@ -93,6 +103,7 @@ object EmulatorPriority {
         listOf("ps2") to ids("linux.pcsx2", LRA, "linux.play", LRAS),
         listOf("ps3") to ids("linux.rpcs3"),
         listOf("ps4") to ids("linux.shadps4"),
+        listOf("ps5") to ids("linux.sharpemu"),
         listOf("psp") to ids("linux.ppsspp", LRA, LRAS),
         listOf("psvita") to ids("linux.vita3k"),
         listOf("n64") to ids(LRA, "linux.mupen64plus", LRAS),
@@ -121,6 +132,16 @@ object EmulatorPriority {
             "pokemon-mini", "segacd", "sega32", "sg1000", "neo-geo-cd", "atari2600", "atari5200", "atari7800", "jaguar",
             "msx", "c64", "amiga", "3do", "colecovision", "intellivision", "vectrex",
         ) to ids(LRA, LRAS),
+        listOf(
+            "64dd", "amiga-cd32", "amstrad-gx4000", "appleii", "arcadia-2001", "arduboy", "atari-jaguar-cd",
+            "atari8bit", "bbcmicro", "c-plus-4", "chailove", "commodore-cdtv", "creativision", "doom",
+            "fairchild-channel-f", "g-and-w", "handheld-electronic-lcd", "j2me", "laserdisc", "lowresnx", "lutro",
+            "mac", "mega-duck-slash-cougar-boy", "model2", "model3", "msx-turbo", "msx2plus", "multivision",
+            "odyssey-2", "palm-os", "pc-8800-series", "pc-9800-series", "philips-cd-i", "quake", "rpg-maker",
+            "satellaview", "sharp-x68000", "spectravideo", "stv", "sufami-turbo", "supervision", "thomson-mo5",
+            "tic-80", "uzebox", "vic-20", "videopac-g7400", "vircon32", "wasm-4", "win3x", "win9x", "x1",
+            "z-machine", "zx81",
+        ) to ids(LRA, LRAS),
     )
 
     /**
@@ -139,6 +160,7 @@ object EmulatorPriority {
             expand(
                 listOf("win") to ids("windows.shortcut", "windows.steam"),
                 listOf("steam") to ids("windows.steam", "windows.shortcut"),
+                listOf("ps5") to ids("windows.sharpemu", "windows.kytyps5"),
             ),
         )
     }

@@ -6,8 +6,6 @@ import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.v2.runDesktopComposeUiTest
 import androidx.compose.ui.unit.Density
 import io.github.matiyaaa.fuse.ui.designsystem.input.InputRouter
-import java.io.File
-import java.nio.file.Files
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -16,6 +14,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import org.junit.Assume.assumeTrue
+import java.io.File
+import java.nio.file.Files
 
 /**
  * The UI audit: every screen, overlay and state of the real interface, rendered headless over the
@@ -119,6 +119,34 @@ class UiAudit {
 
     @Test fun keyScreensU() = audit(AuditSize.U) { keyScreens() }
 
+    @Test fun keyScreensS() = audit(AuditSize.S) { keyScreens() }
+
+    @Test fun keyScreensQ() = audit(AuditSize.Q) { keyScreens() }
+
+    @Test fun keyScreensO() = audit(AuditSize.O) { keyScreens() }
+
+    @Test fun keyScreensG() = audit(AuditSize.G) { keyScreens() }
+
+    @Test fun keyScreensE() = audit(AuditSize.E) { keyScreens() }
+
+    @Test fun keyScreensK() = audit(AuditSize.K) { keyScreens() }
+
+    @Test fun keyScreensA() = audit(AuditSize.A) { keyScreens() }
+
+    @Test fun keyScreensB() = audit(AuditSize.B) { keyScreens() }
+
+    @Test fun keyScreensY() = audit(AuditSize.Y) { keyScreens() }
+
+    @Test fun keyScreensW() = audit(AuditSize.W) { keyScreens() }
+
+    @Test fun keyScreensZ() = audit(AuditSize.Z) { keyScreens() }
+
+    @Test fun keyScreensX() = audit(AuditSize.X) { keyScreens() }
+
+    @Test fun keyScreensR() = audit(AuditSize.R) { keyScreens() }
+
+    @Test fun keyScreensF() = audit(AuditSize.F) { keyScreens() }
+
     /** Every setup step at the sizes where it is tightest: a phone held sideways, the Deck and a 6 inch handheld. */
     @Test fun onboardingP() = audit(AuditSize.P) { onboardingScreens(exhaustive = true) }
 
@@ -141,6 +169,27 @@ class UiAudit {
     @Test fun flippedH() = audit(AuditSize.H) { flippedShowcase() }
 
     @Test fun lowerScreenL() = audit(AuditSize.L) { flippedMenus(); jellyfinDualScreens() }
+
+    @Test fun companionL() = audit(AuditSize.L) { companionScreens() }
+
+    @Test fun quickM() = audit(AuditSize.M) { quickScreens() }
+
+    @Test fun quickH() = audit(AuditSize.H) { quickScreens() }
+
+    @Test fun edgeBackM() = audit(AuditSize.M) { edgeBackScreens() }
+
+    /** Fuse Sync by Fuse: at 1080p, on a 6 inch handheld, a phone held upright, and a small screen. */
+    @Test fun syncM() = audit(AuditSize.M) { syncScreens() }
+
+    @Test fun syncH() = audit(AuditSize.H) { syncScreens() }
+
+    @Test fun syncV() = audit(AuditSize.V) { syncScreens() }
+
+    @Test fun syncS() = audit(AuditSize.S) { syncScreens() }
+
+    @Test fun homePagesM() = audit(AuditSize.M) { homePages() }
+
+    @Test fun homePagesH() = audit(AuditSize.H) { homePages() }
 
     @Test fun flippedM() = audit(AuditSize.M) { flippedShowcase() }
 

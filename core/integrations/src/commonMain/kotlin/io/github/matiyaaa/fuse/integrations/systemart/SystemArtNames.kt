@@ -57,6 +57,7 @@ object SystemArtNames {
         "win" to "windows",
         "zxs" to "zxspectrum",
         "acpc" to "amstradcpc",
+        "msx2plus" to "msx2",
     )
 
     /**

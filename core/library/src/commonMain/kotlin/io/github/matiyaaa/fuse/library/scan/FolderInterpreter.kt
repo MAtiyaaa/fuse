@@ -19,6 +19,7 @@ import io.github.matiyaaa.fuse.model.FolderInterpretation
 import io.github.matiyaaa.fuse.model.FolderPolicy
 import io.github.matiyaaa.fuse.model.LibrarySourceId
 import io.github.matiyaaa.fuse.model.LocationKind
+import io.github.matiyaaa.fuse.model.MediaKind
 import io.github.matiyaaa.fuse.model.Platform
 import io.github.matiyaaa.fuse.model.PlatformFamily
 import io.github.matiyaaa.fuse.model.ScannedGame
@@ -205,7 +206,7 @@ class FolderInterpreter(
             // Its storage folders (Cemu's mlc01/usr/title/00050000) only lead to the games inside.
             games += interpret(sub, if (native && isEmulatorStorage(sub.name)) depth else depth + 1, walk)
         }
-        return games
+        return foldUpdates(games, walk)
     }
 
     /** Interprets [folder], dropping games whose files a playlist higher up already owns. */
@@ -423,10 +424,18 @@ class FolderInterpreter(
                 walk.list(usrdir.path).orEmpty().any { it.name.equals("EBOOT.BIN", ignoreCase = true) }
             if (hasEboot) return game(folder.path, sfoSerial(folder, children, walk))
         }
-        // PS Vita: sce_sys/param.sfo.
+        // PS Vita and PS4: sce_sys/param.sfo. PS5: sce_sys/param.json beside eboot.bin.
         dir("sce_sys")?.let { sceSys ->
-            val sfo = walk.list(sceSys.path).orEmpty().firstOrNull { it.name.equals("param.sfo", ignoreCase = true) }
-            if (sfo != null) return game(folder.path, readSerial(sfo.path))
+            val inside = walk.list(sceSys.path).orEmpty()
+            val media = sceSysMedia(inside, walk)
+            val sfo = inside.firstOrNull { it.name.equals("param.sfo", ignoreCase = true) }
+            if (sfo != null) return game(folder.path, readSerial(sfo.path)).copy(localMedia = media)
+            val json = inside.firstOrNull { it.name.equals("param.json", ignoreCase = true) }
+            if (json != null) {
+                // PS5 emulators start eboot.bin itself (SharpEmu takes nothing else; KytyPS5 takes either).
+                val eboot = file("eboot.bin")?.path ?: folder.path
+                return game(eboot, FilenameParser.parse(folder.name, hasExtension = false).tags.serial ?: readSerial(json.path)).copy(localMedia = media)
+            }
         }
         // PSP extracted disc.
         if (dir("psp_game") != null) return game(folder.path)
@@ -459,6 +468,46 @@ class FolderInterpreter(
         for (ext in listOf("desktop", "conf")) pick(files.filter { it.extension == ext })?.let { return it }
         val programs = files.filter { it.extension in setOf("exe", "bat", "com") && !PC_HELPER.containsMatchIn(it.name) }
         return pick(programs)
+    }
+
+    /**
+     * The game's own art from its sce_sys folder: on PS4 and PS5 icon0.png is the 512 pixel square
+     * tile the console shows and pic1.png (else pic0.png) the full-screen backdrop behind it; on the
+     * Vita icon0.png is the small bubble icon and pic0.png the backdrop.
+     */
+    private fun sceSysMedia(inside: List<FsEntry>, walk: Walk): Map<MediaKind, String> {
+        fun png(name: String) = inside.firstOrNull { !it.isDirectory && it.name.equals(name, ignoreCase = true) }?.path
+        val icon = png("icon0.png")
+        val backdrop = png("pic1.png") ?: png("pic0.png")
+        return buildMap {
+            if (icon != null) {
+                put(MediaKind.ICON, icon)
+                if (walk.platform.id.value != "psvita") put(MediaKind.SQUARE, icon)
+            }
+            if (backdrop != null) put(MediaKind.HERO, backdrop)
+        }
+    }
+
+    /**
+     * PS4 and PS5 dumps keep an update beside its game, as `CUSA00001-UPDATE` or `CUSA00001-patch`
+     * (shadPS4's layout): one game with an update, not two games. An update with no game beside it
+     * stays as it is.
+     */
+    private fun foldUpdates(games: List<ScannedGame>, walk: Walk): List<ScannedGame> {
+        if (walk.platform.id.value != "ps4" && walk.platform.id.value != "ps5") return games
+        val updates = games.filter { UPDATE_FOLDER.matches(FsPath.name(it.path)) }
+        if (updates.isEmpty()) return games
+        val byName = games.associateBy { FsPath.name(it.path).lowercase() }
+        val folded = HashMap<String, List<ChildContent>>()
+        val absorbed = HashSet<String>()
+        for (u in updates) {
+            val base = UPDATE_FOLDER.matchEntire(FsPath.name(u.path))!!.groupValues[1].lowercase()
+            val owner = byName[base] ?: games.firstOrNull { it !== u && it.tags.serial != null && it.tags.serial == u.tags.serial && !UPDATE_FOLDER.matches(FsPath.name(it.path)) }
+            if (owner == null) continue
+            folded[owner.path] = folded[owner.path].orEmpty() + ChildContent(ContentKind.UPDATE, FsPath.name(u.path), u.path, isDirectory = true, sizeBytes = u.sizeBytes)
+            absorbed += u.path
+        }
+        return games.filter { it.path !in absorbed }.map { g -> folded[g.path]?.let { g.copy(content = g.content + it) } ?: g }
     }
 
     private suspend fun sfoSerial(folder: FsEntry, children: List<FsEntry>, walk: Walk): String? {
@@ -656,6 +705,7 @@ class FolderInterpreter(
         }
 
         /** Platforms whose games are normally folders: an unrecognised folder is still one game. */
+        val UPDATE_FOLDER = Regex("(?i)^(.+?)[-_ ](?:update|patch|upd)$")
         val FOLDER_NATIVE = setOf("ps3", "ps4", "ps5", "psvita", "wiiu", "xbox", "xbox360", "win", "dos", "scummvm")
 
         val PC_LAUNCHABLE = setOf("desktop", "conf", "exe", "bat", "com")

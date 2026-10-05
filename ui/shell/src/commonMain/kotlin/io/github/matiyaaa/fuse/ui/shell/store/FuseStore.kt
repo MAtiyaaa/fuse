@@ -87,6 +87,9 @@ interface FuseStore {
      */
     fun resumeAutomaticWork() = Unit
 
+    /** Fuse Sync by Fuse: off and invisible until turned on in Settings, Addons, Fuse Sync. */
+    val sync: SyncOps get() = SyncOps.None
+
     /** A song that ships with Fuse ([io.github.matiyaaa.fuse.ui.shell.music.BundledMusic]) as a file the player can open. */
     suspend fun bundledTrack(id: String): String? = null
 }
@@ -370,7 +373,11 @@ interface LibraryOps {
     fun search(query: String): Flow<SearchResults>
 
     /** [display] overrides the screen settings for this launch (the user just picked one). */
-    suspend fun launch(id: GameId, emulator: EmulatorId? = null, discPath: String? = null, display: LaunchDisplay? = null): LaunchOutcome
+    /**
+     * Starts [id]. With Fuse Sync, its newest save is put in place first; [skipSaveCheck] starts it
+     * as it is here (after the person settled a conflict).
+     */
+    suspend fun launch(id: GameId, emulator: EmulatorId? = null, discPath: String? = null, display: LaunchDisplay? = null, skipSaveCheck: Boolean = false): LaunchOutcome
 
     /** Called when Fuse comes back to the foreground: closes the running session, checks for changes. */
     fun onResume()

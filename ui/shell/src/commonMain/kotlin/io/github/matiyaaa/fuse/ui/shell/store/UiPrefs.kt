@@ -24,6 +24,11 @@ import io.github.matiyaaa.fuse.ui.designsystem.theme.ThemePresets
 data class UiPrefs(
     /** Jellyfin, an addon: off until turned on in Settings, Addons, Jellyfin. */
     val jellyfin: io.github.matiyaaa.fuse.data.settings.JellyfinSettings = io.github.matiyaaa.fuse.data.settings.JellyfinSettings(),
+    /**
+     * Fuse Sync's settings, read only: changed through [FuseStore.sync], never through
+     * [FuseStore.updatePrefs]. Here so every screen follows whether it is on.
+     */
+    val sync: io.github.matiyaaa.fuse.data.settings.SyncSettings = io.github.matiyaaa.fuse.data.settings.SyncSettings(),
     val onboardingDone: Boolean = false,
     val themeId: String = "fuse",
     val motion: MotionProfile? = null,
@@ -61,6 +66,8 @@ data class UiPrefs(
     val continueDismissed: Map<String, Long> = emptyMap(),
     /** Addons' tabs in the user's order (part names); parts not listed follow in their usual order. */
     val addonsOrder: List<String> = emptyList(),
+    /** The quick menu's items and widths, as [io.github.matiyaaa.fuse.ui.shell.quick.QuickLayout] stores them; empty is Fuse's own. */
+    val quickMenu: List<String> = emptyList(),
     val systemArtAuto: Boolean = true,
     /** How the Library is sorted. */
     val librarySort: io.github.matiyaaa.fuse.model.SortOrder = io.github.matiyaaa.fuse.model.SortOrder.TITLE,
@@ -114,6 +121,8 @@ data class UiPrefs(
     val storeVariant: io.github.matiyaaa.fuse.model.StoreVariant? = null,
     /** The Store checks installed apps for updates by itself. */
     val storeAutoCheck: Boolean = true,
+    /** The Store in Addons (Settings, Addons, Store); off, Addons has no Store and nothing is checked. */
+    val storeEnabled: Boolean = true,
 ) {
     /** The theme in use: a built-in one, else an added one, else Fuse (an added theme was removed). */
     val theme: ThemeSpec

@@ -51,6 +51,7 @@ import io.github.matiyaaa.fuse.ui.shell.app.emulatorFoldersPicker
 import io.github.matiyaaa.fuse.ui.shell.app.hasTwoScreens
 import io.github.matiyaaa.fuse.ui.shell.app.locatePicker
 import io.github.matiyaaa.fuse.ui.shell.app.offers
+import io.github.matiyaaa.fuse.ui.shell.app.offersToAdd
 import io.github.matiyaaa.fuse.ui.shell.app.openStore
 import io.github.matiyaaa.fuse.ui.shell.app.screenName
 import io.github.matiyaaa.fuse.ui.shell.app.sections
@@ -279,7 +280,7 @@ fun homeRows(app: AppState): List<MenuAction> {
                         )
                     }))
                 }
-                val missing = WidgetKind.entries.filter { k -> k.isRow && app.offers(k) && p.home.widgets.none { it.kind == k } }
+                val missing = WidgetKind.entries.filter { k -> k.isRow && app.offersToAdd(k) && p.home.widgets.none { it.kind == k } }
                 if (missing.isNotEmpty()) {
                     add(MenuAction("w.add", "Add a row", FuseIcons.CirclePlus, trailing = Trailing.Chevron, onSelect = {
                         app.choice = ChoiceSpec(
@@ -327,7 +328,7 @@ fun homeRows(app: AppState): List<MenuAction> {
                         },
                     ))
                 }
-                val missing = WidgetKind.entries.filter { k -> app.offers(k) && board.none { it.kind == k } }
+                val missing = WidgetKind.entries.filter { k -> app.offersToAdd(k) && board.none { it.kind == k } }
                 if (missing.isNotEmpty()) {
                     add(MenuAction("b.add", "Add a widget", FuseIcons.CirclePlus, detail = "It goes at the end of the board", trailing = Trailing.Chevron, onSelect = {
                         app.choice = ChoiceSpec(
@@ -1466,7 +1467,11 @@ fun aboutRows(app: AppState): List<MenuAction> = buildList {
         add(MenuAction("licences", "Open-source licences", FuseIcons.FileText, detail = "Fuse, its libraries, fonts and icons", trailing = Trailing.Chevron, onSelect = { app.go(Route.Licenses) }))
         addAll(app.group("about.credits", "Credits and links", FuseIcons.Heart, detail = "Who Fuse is built on, and where it lives") {
             listOf(
-                infoRow("credits", "Made with", detail = "Kotlin, Compose Multiplatform, SQLDelight, Ktor, Coil. Animations: Fuseline by Fuse. Icons: Lucide (ISC). Fonts: Sora and Manrope (SIL OFL). Emulator launch data: ES-DE (MIT) and Cartridge (MIT). Hashing rules: rcheevos (MIT)", icon = FuseIcons.Blocks),
+                // Fuse's own systems first: they are what Fuse is made of.
+                infoRow("credits.sync", "Fuse Sync by Fuse", detail = "Fuse's own sync: saves, play time, library and settings on every device, from a host of your own", icon = FuseIcons.RefreshCcw),
+                infoRow("credits.player", "Fuse Player by Fuse", detail = "Fuse's own video and music player: Media3 on Android, FFmpeg on computers, every subtitle drawn by Fuse", icon = FuseIcons.Clapperboard),
+                infoRow("credits.fuseline", "Fuseline by Fuse", detail = "Fuse's own animation engine: every movement in Fuse, at about a tenth of Compose's cost", icon = FuseIcons.Waves),
+                infoRow("credits", "Made with", detail = "Kotlin, Compose Multiplatform, SQLDelight, Ktor, Coil. Video: Media3 (Apache 2.0) and FFmpeg (GPL). Icons: Lucide (ISC). Fonts: Sora and Manrope (SIL OFL). Systems and emulator launch data: ES-DE (MIT), RomM and Cartridge (MIT). Hashing rules: rcheevos (MIT). Music: boipurple", icon = FuseIcons.Blocks),
                 MenuAction(
                     "cartridge.credit", "Cartridge by abdu2304", FuseIcons.CloudDownload,
                     detail = "The RomM companion Fuse pairs with. github.com/abdu2304/cartridge",
