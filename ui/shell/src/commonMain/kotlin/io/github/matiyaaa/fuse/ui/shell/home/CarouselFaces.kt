@@ -122,7 +122,8 @@ private fun GameSlide(game: GameCard, line: String, system: PlatformCard?, face:
         if (w > h * 1.4f) Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(0f to deep.copy(alpha = 0.7f), 0.6f to Color.Transparent)))
         // A cover stands beside the words where there is room, like a box on a shelf.
         val coverBeside = cover != null && backdrop != null && room != Room.TINY && face != FaceSize.SMALL && w >= 300.dp
-        Row(Modifier.fillMaxSize().padding(pad), verticalAlignment = Alignment.Bottom) {
+        // A card waiting at the edge shows its picture only: its words come in as it comes forward.
+        Row(Modifier.fillMaxSize().padding(pad).graphicsLayer { alpha = frontness(depth) }, verticalAlignment = Alignment.Bottom) {
             Column(Modifier.weight(1f)) {
                 val logoHeight = when (room) {
                     Room.BIG -> (h * 0.24f).coerceIn(48.dp, 140.dp)
@@ -153,7 +154,7 @@ private fun GameSlide(game: GameCard, line: String, system: PlatformCard?, face:
         }
         // The system it runs on, top right, where the card has the room for it beside a cover.
         if (w >= 260.dp && room != Room.TINY && !(coverBeside && room == Room.SHORT)) {
-            Box(Modifier.align(Alignment.TopEnd).padding(pad)) { PlatformChip(game, system) }
+            Box(Modifier.align(Alignment.TopEnd).padding(pad).graphicsLayer { alpha = frontness(depth) }) { PlatformChip(game, system) }
         }
     }
 }
@@ -339,7 +340,7 @@ private fun CollectionSlide(col: GameCollection, depth: CarouselDepth) {
             FuseIcons.Bookmark, size = mark, tint = Color.White.copy(alpha = 0.1f),
             modifier = Modifier.align(Alignment.CenterEnd).padding(end = Space.l),
         )
-        Column(Modifier.align(Alignment.BottomStart).padding(if (room == Room.TINY) Space.m else Space.l)) {
+        Column(Modifier.align(Alignment.BottomStart).padding(if (room == Room.TINY) Space.m else Space.l).graphicsLayer { alpha = frontness(depth) }) {
             FText(
                 col.name,
                 when (room) {
@@ -402,7 +403,8 @@ private fun MediaSlide(m: MediaItem, face: FaceSize, depth: CarouselDepth) {
         Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.3f to Color.Transparent, 1f to deep.copy(alpha = 0.94f))))
         if (w > h * 1.4f) Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(0f to deep.copy(alpha = 0.72f), 0.6f to Color.Transparent)))
         val coverBeside = poster != null && room != Room.TINY && face != FaceSize.SMALL && (w >= 300.dp || album || wide == null)
-        Row(Modifier.fillMaxSize().padding(pad), verticalAlignment = Alignment.Bottom) {
+        // A card waiting at the edge shows its picture only: its words come in as it comes forward.
+        Row(Modifier.fillMaxSize().padding(pad).graphicsLayer { alpha = frontness(depth) }, verticalAlignment = Alignment.Bottom) {
             if (coverBeside && album) {
                 MediaCover(poster, accent, m, h, square = true)
                 Spacer(Modifier.width(Space.l))
