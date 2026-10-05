@@ -158,6 +158,9 @@ class SyncClient(
         send(HttpMethod.Post, "/profiles/$profile/revisions/$revision/pin", pinned, Boolean.serializer(), kotlinx.serialization.json.JsonObject.serializer())
     suspend fun events(since: Long, waitSeconds: Int = 0): JournalPage = get("/events?since=$since&wait=$waitSeconds", JournalPage.serializer())
     suspend fun devices(): List<DeviceInfo> = get("/devices", ListSerializer(DeviceInfo.serializer()))
+    suspend fun sharedGames(): SharedGames = get("/shared-games", SharedGames.serializer())
+    suspend fun setShared(game: String, shared: Boolean, from: String?): SharedGames =
+        send(HttpMethod.Post, "/shared-games", SharedChange(game, shared, from), SharedChange.serializer(), SharedGames.serializer())
     suspend fun renameSelf(name: String): DeviceInfo = send(HttpMethod.Patch, "/devices/${link.deviceId}", DeviceChange(name = name), DeviceChange.serializer(), DeviceInfo.serializer())
     suspend fun unlinkSelf() = call<Unit>(HttpMethod.Delete, "/devices/${link.deviceId}", ByteArray(0), null)
 

@@ -110,6 +110,8 @@ data class SyncSettings(
     val startupProfile: String = "",
     /** The profile in use on this device. */
     val activeProfile: String = "",
+    /** Games the household plays as one save, as the host last said (kept here so it holds offline). */
+    val sharedGames: List<String> = emptyList(),
     /** Home on this device: "PROFILE" (the profile's, as on every device) or "DEVICE" (this device's own). */
     val homeScope: String = "PROFILE",
     /** This device's own Home, while [homeScope] is DEVICE; the profile's stays as it was. */

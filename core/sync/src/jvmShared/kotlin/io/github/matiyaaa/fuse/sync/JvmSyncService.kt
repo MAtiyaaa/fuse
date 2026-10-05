@@ -238,6 +238,10 @@ class JvmSyncService(
         if (_profiles.value.isEmpty()) refreshLists()
         val active = cached.activeProfile
         if (active.isNotEmpty()) captureChanges(active)
+        runCatching { c.sharedGames().games }.onSuccess { games ->
+            if (games.toSet() != cached.sharedGames.toSet()) saveConfig { it.copy(sharedGames = games) }
+            _sharedGames.value = games.toSet()
+        }
         val sent = d.flush(c)
         if (active.isNotEmpty()) {
             d.pullMeta(c, active)
@@ -512,15 +516,45 @@ class JvmSyncService(
             }
     }
 
+    private val _sharedGames = MutableStateFlow(cached.sharedGames.toSet())
+    override val sharedGames: StateFlow<Set<String>> = _sharedGames.asStateFlow()
+
+    /**
+     * Whose save [slot] is: the household's, for a game played as one save (a memory card holds
+     * other games too, so it always stays the person's), else the person playing's.
+     */
+    private fun ownerOf(query: SaveQuery, slot: LocalSlot, profile: String): String =
+        if (slot.kind != SaveKind.MEMORY_CARD && query.game.id in cached.sharedGames) SHARED_SAVES else profile
+
+    override suspend fun setShared(game: GameKey, shared: Boolean, fromMine: Boolean): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatching {
+            val c = client ?: error("Fuse Sync isn't connected. Sharing a game needs the host.")
+            val from = cached.activeProfile.takeIf { fromMine && shared && it.isNotEmpty() }
+            val result = c.setShared(game.id, shared, from)
+            saveConfig { it.copy(sharedGames = result.games) }
+            _sharedGames.value = result.games.toSet()
+            log(if (shared) "A game is now one save for everyone" else "A game is each person's own save again", game.id, "save")
+        }
+    }
+
     override suspend fun beforeLaunch(query: SaveQuery): LaunchGate = withContext(Dispatchers.IO) {
         val c = client
         val d = device
         val profile = cached.activeProfile
-        if (c == null || d == null || profile.isEmpty() || !cached.enabled) return@withContext LaunchGate.Go()
+        if (d == null || profile.isEmpty() || !cached.enabled) return@withContext LaunchGate.Go()
         var note: String? = null
         for (slot in slots(query)) {
+            // On a device more than one person plays, the folder must hold this person's save
+            // first (whoever played last keeps theirs); this needs no host, so it happens offline too.
+            val owner = ownerOf(query, slot, profile)
+            runCatching { d.handover(owner, slot) { who -> if (who == SHARED_SAVES) 0L else d.meta(who).game(query.game).totalSeconds } }
+                .onFailure { log("${query.title}: couldn't swap in this person's save (${it.message})", query.game.id, "save") }
+            if (c == null) {
+                note = note ?: "Fuse Sync is offline: playing with this device's save"
+                continue
+            }
             // A launch never waits long on a host that isn't there.
-            val result = withTimeoutOrNull(LAUNCH_WAIT_MS) { runCatching { d.prepare(c, profile, slot) }.getOrElse { PrepareResult.Offline } } ?: PrepareResult.Offline
+            val result = withTimeoutOrNull(LAUNCH_WAIT_MS) { runCatching { d.prepare(c, owner, slot) }.getOrElse { PrepareResult.Offline } } ?: PrepareResult.Offline
             when (result) {
                 is PrepareResult.Conflict -> return@withContext LaunchGate.Conflict(
                     SaveConflict(
@@ -548,11 +582,12 @@ class JvmSyncService(
             val c = client ?: error("Fuse Sync isn't connected.")
             val d = device ?: error("Fuse Sync isn't set up.")
             val slot = slots(conflict.query).firstOrNull { it.kind == conflict.kind } ?: error("That save isn't here any more.")
+            val owner = ownerOf(conflict.query, slot, cached.activeProfile)
             if (keepHere) {
-                d.keepLocal(c, cached.activeProfile, slot, conflict.remote, conflict.here.playSeconds)
+                d.keepLocal(c, owner, slot, conflict.remote, conflict.here.playSeconds)
                 log("${conflict.title}: kept this device's save; the other is in its history", conflict.game.id, "conflict")
             } else {
-                d.takeRemote(c, cached.activeProfile, slot, conflict.remote)
+                d.takeRemote(c, owner, slot, conflict.remote)
                 runCatching { d.flush(c) }
                 log("${conflict.title}: took the save from ${conflict.host.device}; this one is in its history", conflict.game.id, "conflict")
             }
@@ -570,7 +605,7 @@ class JvmSyncService(
             if (cached.records) d.played(profile, query.game, session)
             val total = d.meta(profile).game(query.game).totalSeconds
             for (slot in slots(query)) {
-                runCatching { d.capture(profile, slot, total, title = query.title) }.getOrNull()?.let { log("${query.title}: saved ${it.kind.label.lowercase()}", query.game.id, "save") }
+                runCatching { d.capture(ownerOf(query, slot, profile), slot, total, title = query.title) }.getOrNull()?.let { log("${query.title}: saved ${it.kind.label.lowercase()}", query.game.id, "save") }
             }
             client?.let { c -> runCatching { d.flush(c) }.onFailure { if (it is SyncException) handle(it) } }
         }
@@ -585,8 +620,10 @@ class JvmSyncService(
     override suspend fun versions(query: SaveQuery, kind: SaveKind): List<SaveVersion> = withContext(Dispatchers.IO) {
         val c = client ?: return@withContext emptyList()
         val profile = cached.activeProfile.ifEmpty { return@withContext emptyList() }
-        val key = slots(query).firstOrNull { it.kind == kind }?.game ?: query.game
-        val list = runCatching { c.revisions(profile, key.id, kind) }.getOrDefault(emptyList())
+        val slot = slots(query).firstOrNull { it.kind == kind }
+        val key = slot?.game ?: query.game
+        val owner = slot?.let { ownerOf(query, it, profile) } ?: profile
+        val list = runCatching { c.revisions(owner, key.id, kind) }.getOrDefault(emptyList())
         val head = list.firstOrNull { it.reason != RevisionReason.CONFLICT_COPY }?.id
         list.map { SaveVersion(it.id, it.deviceName, it.at.millis, it.playSeconds, it.size, it.reason, it.id == head) }
     }
@@ -596,16 +633,21 @@ class JvmSyncService(
             val c = client ?: error("Fuse Sync isn't connected.")
             val d = device ?: error("Fuse Sync isn't set up.")
             val slot = slots(query).firstOrNull { it.kind == kind } ?: error("That save isn't here.")
-            val rev = c.revisions(cached.activeProfile, slot.game.id, kind).firstOrNull { it.id == version } ?: error("That version is gone.")
+            val owner = ownerOf(query, slot, cached.activeProfile)
+            val rev = c.revisions(owner, slot.game.id, kind).firstOrNull { it.id == version } ?: error("That version is gone.")
             // What is here now is kept in the history first, then the old one becomes the newest.
             d.place(c, slot, rev)
-            d.capture(cached.activeProfile, slot, rev.playSeconds, Priority.LAUNCH, title = query.title)
+            d.capture(owner, slot, rev.playSeconds, Priority.LAUNCH, title = query.title)
             d.flush(c)
             log("${query.title}: restored the save from ${rev.deviceName}", query.game.id, "restore")
         }
     }
 
-    override suspend fun keepVersion(version: String, keep: Boolean): Result<Unit> = withClient { c -> c.pin(cached.activeProfile, version, keep); Unit }
+    // A version is the person's own, or (for a game played as one save) everyone's.
+    override suspend fun keepVersion(version: String, keep: Boolean): Result<Unit> = withClient { c ->
+        runCatching { c.pin(cached.activeProfile, version, keep) }.recoverCatching { c.pin(SHARED_SAVES, version, keep) }.getOrThrow()
+        Unit
+    }
 
     // ---------------------------------------------------------------- leaving
 

@@ -171,6 +171,97 @@ class EndToEndTest {
     }
 
     @Test
+    fun twoPeopleOnOneDeviceEachKeepTheirOwnSave(): Unit = runBlocking {
+        val (client, deck) = pairDevice("Deck")
+        val mo = client.createProfile(NewProfile("Mo", "fox")).id
+        val sam = client.createProfile(NewProfile("Sam", "owl")).id
+        val game = GameKey.of("gba", null, null, "Pokemon Emerald")
+        val saves = File(root, "shared-deck-saves")
+        val file = File(saves, "Pokemon Emerald.srm")
+
+        // Mo plays first.
+        deck.handover(mo, slot(saves, game))
+        assertIs<PrepareResult.Ready>(deck.prepare(client, mo, slotOf(saves, game)))
+        file.writeText("mo: 8 badges")
+        assertNotNull(deck.capture(mo, slotOf(saves, game), 3600))
+        deck.flush(client)
+
+        // Sam has never played it: he starts his own game, and Mo's save is untouched on the host.
+        deck.handover(sam, slotOf(saves, game))
+        assertIs<PrepareResult.Ready>(deck.prepare(client, sam, slotOf(saves, game)))
+        assertFalse(file.exists(), "Sam must not start on Mo's save")
+        file.writeText("sam: 1 badge")
+        assertNotNull(deck.capture(sam, slotOf(saves, game), 600))
+        deck.flush(client)
+        assertEquals("mo: 8 badges", client.revisions(mo, game.id, SaveKind.SAVE).first().manifest.files.single().let { deck.store.fileOf(it.hash).readText() })
+
+        // Mo again: his own save is back, with no conflict, and Sam's is kept for Sam.
+        deck.handover(mo, slotOf(saves, game))
+        assertIs<PrepareResult.Ready>(deck.prepare(client, mo, slotOf(saves, game)))
+        assertEquals("mo: 8 badges", file.readText())
+        deck.handover(sam, slotOf(saves, game))
+        assertEquals("sam: 1 badge", file.readText())
+    }
+
+    @Test
+    fun offlineEachPersonStillGetsTheirOwnSave(): Unit = runBlocking {
+        val (client, deck) = pairDevice("Deck")
+        val mo = client.createProfile(NewProfile("Mo", "fox")).id
+        val sam = client.createProfile(NewProfile("Sam", "owl")).id
+        val game = GameKey.of("snes", null, null, "Chrono Trigger")
+        val saves = File(root, "offline-shared-saves")
+        val file = File(saves, "Chrono Trigger.srm")
+        // No host at all: everything below happens on the device alone.
+        deck.handover(mo, slot(saves, game))
+        file.writeText("mo: chapter 4")
+        deck.capture(mo, slotOf(saves, game), 100)
+        deck.handover(sam, slotOf(saves, game))
+        assertFalse(file.exists())
+        file.writeText("sam: chapter 1")
+        deck.capture(sam, slotOf(saves, game), 50)
+        deck.handover(mo, slotOf(saves, game))
+        assertEquals("mo: chapter 4", file.readText())
+        deck.handover(sam, slotOf(saves, game))
+        assertEquals("sam: chapter 1", file.readText())
+        // Offline, their saves wait to go, each under its own person.
+        assertEquals(setOf(mo, sam), deck.pendingProfiles())
+        deck.flush(client)
+        assertTrue(client.revisions(sam, game.id, SaveKind.SAVE).isNotEmpty())
+    }
+
+    @Test
+    fun aGameCanBeOneSaveForEveryone(): Unit = runBlocking {
+        val (deckClient, deck) = pairDevice("Deck")
+        val (pcClient, pc) = pairDevice("PC")
+        val mo = deckClient.createProfile(NewProfile("Mo", "fox")).id
+        val game = GameKey.of("snes", null, null, "Super Mario World")
+        val deckSaves = File(root, "deck-smw")
+        deck.handover(mo, slot(deckSaves, game))
+        File(deckSaves, "Super Mario World.srm").writeText("mo: 40 exits")
+        deck.capture(mo, slotOf(deckSaves, game), 900)
+        deck.flush(deckClient)
+
+        // Made one save for everyone, starting from Mo's.
+        assertEquals(listOf(game.id), deckClient.setShared(game.id, true, mo).games)
+        assertEquals(listOf(game.id), pcClient.sharedGames().games)
+        // Sam, on the PC, plays the shared save (any trusted device may, no profile needed).
+        val pcSaves = File(root, "pc-smw")
+        pc.handover(SHARED_SAVES, slot(pcSaves, game))
+        assertIs<PrepareResult.Updated>(pc.prepare(pcClient, SHARED_SAVES, slotOf(pcSaves, game)))
+        assertEquals("mo: 40 exits", File(pcSaves, "Super Mario World.srm").readText())
+        File(pcSaves, "Super Mario World.srm").writeText("together: 52 exits")
+        pc.capture(SHARED_SAVES, slotOf(pcSaves, game), 1200)
+        pc.flush(pcClient)
+        // Back on the Deck, the shared save comes down; Mo's own stays his.
+        deck.handover(SHARED_SAVES, slotOf(deckSaves, game))
+        assertIs<PrepareResult.Updated>(deck.prepare(deckClient, SHARED_SAVES, slotOf(deckSaves, game)))
+        assertEquals("together: 52 exits", File(deckSaves, "Super Mario World.srm").readText())
+        assertEquals(1, deckClient.revisions(mo, game.id, SaveKind.SAVE).size)
+        // And back to each person's own.
+        assertEquals(emptyList(), deckClient.setShared(game.id, false, null).games)
+    }
+
+    @Test
     fun bothPlayedIsAConflictAndNothingIsLost(): Unit = runBlocking {
         val (deckClient, deck) = pairDevice("Deck")
         val (pcClient, pc) = pairDevice("PC")

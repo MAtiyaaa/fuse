@@ -61,6 +61,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
+import io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec
 import io.github.matiyaaa.fuse.ui.shell.app.ConfirmSpec
 import io.github.matiyaaa.fuse.ui.shell.app.FocusZone
 import io.github.matiyaaa.fuse.ui.shell.app.rememberRouteState
@@ -155,9 +156,20 @@ internal fun SaveHistoryScreen(app: AppState, game: GameId, title: String) {
         versions = null
         versions = svc.versions(q, page.kind)
     }
+    val sharedGames by svc.sharedGames.collectAsState()
+    val shared = query?.game?.id?.let { it in sharedGames } == true
     val now = kotlin.time.Clock.System.now().toEpochMilliseconds()
     val offset = localOffsetMillis(now)
-    val rows = versions.orEmpty().map { v ->
+    // One save for everyone, or each person's own: the first row, above the versions.
+    val shareRow = query?.let { q ->
+        MenuAction(
+            "shared", "Play One Save Together", FuseIcons.Users,
+            detail = if (shared) "Everyone on this host plays the same save of it; play time stays each person's own" else "Off: each person has their own save of this game",
+            trailing = Trailing.Switch(shared),
+            onSelect = { shareChoice(app, q, shared, hasMine = !versions.isNullOrEmpty()) { round++ } },
+        )
+    }
+    val rows = listOfNotNull(shareRow) + versions.orEmpty().map { v ->
         MenuAction(
             v.id,
             TimeWords.relative(v.at, now, offset).replaceFirstChar { it.uppercase() },
@@ -197,7 +209,7 @@ internal fun SaveHistoryScreen(app: AppState, game: GameId, title: String) {
             Spacer(Modifier.width(Space.l))
             Column {
                 FText("Save History", Fuse.type.display, maxLines = 1, modifier = Modifier.semantics { heading() })
-                FText(title, Fuse.type.body, color = c.textMuted, maxLines = 1)
+                FText(if (shared) "$title  ·  shared by everyone" else title, Fuse.type.body, color = c.textMuted, maxLines = 1)
             }
         }
         Spacer(Modifier.height(Space.l))
@@ -212,6 +224,14 @@ internal fun SaveHistoryScreen(app: AppState, game: GameId, title: String) {
             when {
                 query == null && versions == null -> Center { Spinner(size = 24.dp, color = c.textMuted) }
                 versions == null -> Center { Spinner(size = 24.dp, color = c.textMuted) }
+                rows.size <= 1 && shareRow != null -> Column {
+                    MenuList(rows, page.sel, modifier = Modifier.padding(Space.s), showSelection = app.focusZone == FocusZone.CONTENT)
+                    EmptyState(
+                        FuseIcons.History,
+                        if (page.kind == SaveKind.SAVE) "No saves yet" else "No save states yet",
+                        message = "Play it with Fuse Sync on, and each time it closes its save is kept here, from every device.",
+                    )
+                }
                 rows.isEmpty() -> EmptyState(
                     FuseIcons.History,
                     if (page.kind == SaveKind.SAVE) "No saves yet" else "No save states yet",
@@ -260,3 +280,39 @@ private fun versionMenu(app: AppState, query: SaveQuery, kind: SaveKind, v: Save
         ),
     )
 }
+
+/**
+ * Turning a game into one save for everyone (starting from the person's own, or fresh together),
+ * or back to each person's own. Nobody's own saves are lost either way: they stay in their history.
+ */
+private fun shareChoice(app: AppState, query: SaveQuery, shared: Boolean, hasMine: Boolean, changed: () -> Unit) {
+    val svc = app.store.sync.service ?: return
+    fun set(on: Boolean, fromMine: Boolean) {
+        app.scope.launch {
+            svc.setShared(query.game, on, fromMine)
+                .onSuccess {
+                    app.toasts.show(if (on) "Everyone now plays one save of ${query.title}" else "${query.title} is each person's own save again", ToastKind.SUCCESS, icon = FuseIcons.Users)
+                    changed()
+                }
+                .onFailure { app.toasts.show(it.message ?: "Couldn't change that", ToastKind.ERROR) }
+        }
+    }
+    if (shared) {
+        app.confirm = ConfirmSpec(
+            "Back to each person's own save?",
+            "Everyone goes back to their own save of ${query.title}. The save you played together stays on the host.",
+            "Each Their Own",
+        ) { set(false, fromMine = false) }
+        return
+    }
+    app.choice = ChoiceSpec(
+        title = "Play One Save Together",
+        icon = FuseIcons.Users,
+        message = "Everyone on this host plays the same save of ${query.title}, on any device. Each person's own save stays in their history.",
+        options = buildList {
+            if (hasMine) add(MenuAction("mine", "Start From My Save", FuseIcons.Save, detail = "Your newest save becomes everyone's", onSelect = { app.choice = null; set(true, fromMine = true) }))
+            add(MenuAction("fresh", "Start Fresh Together", FuseIcons.Sparkles, detail = "A new game for everyone", onSelect = { app.choice = null; set(true, fromMine = false) }))
+        },
+    )
+}
+
