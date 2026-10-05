@@ -31,6 +31,32 @@ class ModelTest {
     }
 
     @Test
+    fun aGameWhoseIdMovedIsNeverCountedTwice() {
+        // Kept here by its title, from before the household settled on its serial.
+        val byTitle = GameKey.of("gba", null, null, "Pokemon Ruby (USA)")
+        val bySerial = GameKey.of("gba", "AGB-AXVE", null, "Pokemon Ruby")
+        val kept = ProfileMeta(
+            games = mapOf(byTitle.id to GameRecord(byTitle, playSeconds = mapOf("deck" to 3_600, "thor" to 1_800), favorite = Lww(true, Hlc(5, 0, "deck")))),
+            collections = mapOf("c1" to CollectionRecord("c1", Lww("RPGs", Hlc.ZERO), members = mapOf(byTitle.id to Lww(true, Hlc(5, 0, "deck"))))),
+        )
+        val aliases = mapOf(byTitle.id to bySerial.id, bySerial.id to bySerial.id)
+        val seen = kept.byIds(aliases)
+        assertEquals(setOf(bySerial.id), seen.games.keys)
+        assertEquals(5_400L, seen.game(bySerial).totalSeconds)
+        assertEquals(listOf(bySerial.id), seen.collections.getValue("c1").games)
+        // The library here now names it by its serial and shows its whole play time: nothing new to send.
+        val local = ProfileMeta(
+            games = mapOf(bySerial.id to GameRecord(bySerial, playSeconds = mapOf("deck" to 5_400), favorite = Lww(true, Hlc.ZERO))),
+            collections = mapOf("c1" to CollectionRecord("c1", Lww("RPGs", Hlc.ZERO), members = mapOf(bySerial.id to Lww(true, Hlc.ZERO)))),
+        )
+        val changes = ProfileDiff.changes(seen, local, "deck", HlcClock("deck") { 10 })
+        assertTrue(ProfileDiff.isEmpty(changes), changes.toString())
+        // Compared with the old ids, the whole 90 minutes (the Thor's 30 among them) would have gone up as this device's.
+        val wrong = ProfileDiff.changes(kept, local, "deck", HlcClock("deck") { 10 })
+        assertEquals(5_400L, wrong.game(bySerial).playSeconds["deck"])
+    }
+
+    @Test
     fun theSameSessionIsCountedOnce() {
         val r = GameRecord(game).played(session("a", "deck", 10)).played(session("a", "deck", 10))
         assertEquals(600L, r.totalSeconds)

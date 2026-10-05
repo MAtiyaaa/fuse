@@ -173,8 +173,9 @@ class SyncDevice(
      * everything this device knows its counter to be (its counter only ever goes up, so it is
      * the whole count, never a part).
      */
-    suspend fun played(profile: String, game: GameKey, session: SessionEntry) = mutex.withLock {
-        val full = meta(profile).game(game)
+    suspend fun played(profile: String, game: GameKey, session: SessionEntry, known: ((ProfileMeta) -> ProfileMeta)? = null) = mutex.withLock {
+        // [known] views the records by the household's one id for each game, when ids have moved.
+        val full = (known?.invoke(meta(profile)) ?: meta(profile)).game(game)
         if (session.id in full.sessions) return@withLock
         val mine = (full.playSeconds[session.device] ?: 0) + session.seconds
         val pending = state.pendingMeta[profile] ?: ProfileMeta()

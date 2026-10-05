@@ -220,6 +220,32 @@ data class ProfileMeta(
 
     fun withGame(record: GameRecord): ProfileMeta = copy(games = games + (record.key.id to record))
 
+    /**
+     * These records by each game's one id across devices ([aliases]: every id a game has been known
+     * by, to its one id): records kept under an id since settled on another join that game's
+     * record, and collections name their games the same way. Merging is safe: counters take the
+     * larger, sessions join by id, settings take the later.
+     */
+    fun byIds(aliases: Map<String, String>): ProfileMeta {
+        if (aliases.isEmpty() || games.keys.none { id -> aliases[id]?.let { it != id } == true }) return this
+        val out = HashMap<String, GameRecord>()
+        for ((id, record) in games) {
+            val key = aliases[id]?.takeIf { it != id }?.let(GameKey::parse)
+            val moved = if (key != null) record.copy(key = key) else record
+            val at = key?.id ?: id
+            out[at] = out[at]?.copy(key = moved.key)?.merge(moved) ?: moved
+        }
+        val cols = collections.mapValues { (_, c) ->
+            val members = HashMap<String, Lww<Boolean>>()
+            for ((g, v) in c.members) {
+                val at = aliases[g] ?: g
+                members[at] = members[at].mergeWith(v)!!
+            }
+            c.copy(members = members)
+        }
+        return copy(games = out, collections = cols)
+    }
+
     /** The games played most recently first: Continue Playing, as every device of the profile sees it. */
     fun continuePlaying(): List<GameRecord> = games.values
         .filter { r -> r.lastPlayed != null && r.hidden?.value != true && (r.continueDismissed?.value ?: 0) < (r.lastPlayed ?: 0) }

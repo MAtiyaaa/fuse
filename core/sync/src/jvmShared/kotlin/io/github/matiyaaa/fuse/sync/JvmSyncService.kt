@@ -305,7 +305,7 @@ class JvmSyncService(
         val sent = d.flush(c)
         if (active.isNotEmpty()) {
             d.pullMeta(c, active)
-            data.write(d.meta(active))
+            data.write(canonical(d.meta(active)))
         }
         if (sent > 0) log(if (sent == 1) "Sent 1 change to $name" else "Sent $sent changes to $name")
         _status.value = SyncStatus.Online(name, c.route ?: Route.LOCAL, working = false, pending = d.pendingCount)
@@ -317,7 +317,7 @@ class JvmSyncService(
         val active = cached.activeProfile.ifEmpty { return@withLock }
         captureChanges(active)
         d.pullMeta(c, active)
-        data.write(d.meta(active))
+        data.write(canonical(d.meta(active)))
         log("Brought in changes from your other devices")
     }
 
@@ -326,9 +326,12 @@ class JvmSyncService(
         val d = device ?: return
         val local = data.read(d.deviceId, hlc)
         val c = cached
+        // Compared by the household's one id for each game: records kept here under another id
+        // (from before the host settled it) are the same game, never a new one.
+        val base = canonical(d.meta(profile))
         // Only what this device syncs: with records off it reads none, which must never read as
         // every collection deleted (or settings, with settings off).
-        val changes = ProfileDiff.changes(d.meta(profile), local, d.deviceId, hlc).let { all ->
+        val changes = ProfileDiff.changes(base, local, d.deviceId, hlc).let { all ->
             all.copy(
                 games = if (c.records) all.games else emptyMap(),
                 collections = if (c.records) all.collections else emptyMap(),
@@ -587,6 +590,14 @@ class JvmSyncService(
     /** Every id a game here is known by, to the id the host keeps its saves and records under. */
     @Volatile private var gameAliases: Map<String, String> =
         runCatching { json.decodeFromString(aliasSerializer, aliasFile.readText()) }.getOrDefault(emptyMap()).also { data.useAliases(it) }
+
+    /**
+     * [meta] by each game's one id across devices: records kept under an id the household has since
+     * settled on another (a title, where the serial is now the id) join that game's record, and
+     * collections name their games the same way. Merging is safe: counters take the larger, sessions
+     * join by id, settings take the later.
+     */
+    private fun canonical(meta: ProfileMeta): ProfileMeta = meta.byIds(gameAliases)
 
     /** [q] for the game's one id across devices (as it is when the host hasn't been asked yet). */
     private fun canonical(q: SaveQuery): SaveQuery =
@@ -917,7 +928,7 @@ class JvmSyncService(
                     d.pullMeta(c, id)
                 }
                 saveConfig { it.copy(activeProfile = id) }
-                data.write(d.meta(id))
+                data.write(canonical(d.meta(id)))
                 d.useProfile(id)
                 _active.value = _profiles.value.firstOrNull { it.id == id }
                 log("Switched to ${_active.value?.name ?: "a profile"}")
@@ -992,7 +1003,7 @@ class JvmSyncService(
             // On a device more than one person plays, the folder must hold this person's save
             // first (whoever played last keeps theirs); this needs no host, so it happens offline too.
             val owner = ownerOf(query, slot, profile)
-            runCatching { d.handover(owner, slot) { who -> if (who == SHARED_SAVES) 0L else d.meta(who).game(query.game).totalSeconds } }
+            runCatching { d.handover(owner, slot) { who -> if (who == SHARED_SAVES) 0L else canonical(d.meta(who)).game(query.game).totalSeconds } }
                 .onFailure { log("${query.title}: couldn't swap in this person's save (${it.message})", query.game.id, "save") }
             if (c == null) {
                 note = note ?: "Fuse Sync is offline: playing with this device's save"
@@ -1053,8 +1064,8 @@ class JvmSyncService(
             delay(SETTLE_MS)
             // The same id the library's own record of this session gets, so it is counted once whichever arrives first.
             val session = SessionEntry(SessionEntry.idOf(startedAt, endedAt), d.deviceId, startedAt, endedAt, query.emulatorId)
-            if (cached.records) d.played(profile, query.game, session)
-            val total = d.meta(profile).game(query.game).totalSeconds
+            if (cached.records) d.played(profile, query.game, session, ::canonical)
+            val total = canonical(d.meta(profile)).game(query.game).totalSeconds
             val c = liveLock.withLock {
                 val captured = slots(query).mapNotNull { slot ->
                     runCatching { d.capture(ownerOf(query, slot, profile), slot, total, title = query.title) }.getOrNull()
@@ -1163,7 +1174,7 @@ class JvmSyncService(
     private suspend fun sendLive(query: SaveQuery, profile: String, startedAt: Long) {
         val d = device ?: return
         val played = ((clock() - startedAt) / 1000).coerceAtLeast(0)
-        val total = d.meta(profile).game(query.game).totalSeconds + played
+        val total = canonical(d.meta(profile)).game(query.game).totalSeconds + played
         val captured = slots(query).mapNotNull { slot -> runCatching { d.capture(ownerOf(query, slot, profile), slot, total, title = query.title) }.getOrNull() }
         if (captured.isEmpty()) return
         log("${query.title}: saved ${captured.first().kind.label.lowercase()} while playing", query.game.id, "save")
