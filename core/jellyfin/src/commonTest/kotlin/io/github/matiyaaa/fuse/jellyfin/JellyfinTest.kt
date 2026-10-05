@@ -27,6 +27,7 @@ import kotlin.test.assertTrue
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -41,12 +42,19 @@ private class MemorySecrets : SecretStore {
 
 /** A pretend Jellyfin: answers by path, can be "unplugged" per host, and records what it was asked. */
 private class FakeServer {
-    val requests = mutableListOf<HttpRequestData>()
+    private val asked = kotlinx.coroutines.flow.MutableStateFlow<List<HttpRequestData>>(emptyList())
+
+    /** Every request so far. Requests arrive on the engine's threads, several at once. */
+    val requests: List<HttpRequestData> get() = asked.value
     val down = mutableSetOf<String>()
+
+    /** Hosts that answer only after this many milliseconds. */
+    val slow = mutableMapOf<String, Long>()
     var routes: (HttpRequestData) -> Pair<Int, String>? = { null }
 
     val http = HttpClient(MockEngine { r ->
-        requests += r
+        asked.update { it + r }
+        slow[r.url.host]?.let { kotlinx.coroutines.delay(it) }
         if (r.url.host in down) throw IllegalStateException("Connection refused")
         val path = r.url.encodedPath
         val answer = routes(r) ?: when {
@@ -183,7 +191,10 @@ class JellyfinTest {
         val scope = CoroutineScope(SupervisorJob())
         val s = service(server, MemorySecrets(), scope)
         s.configure(true, JellyfinConnection(ConnectionMode.AUTO, localAddress = "192.168.1.5:8096", remoteAddress = "media.example.com"))
-        s.reconnect(force = true)
+        // Home takes a moment to answer, so the way in from outside is surely asked meanwhile; the
+        // answers that lose are called off, and one called off at once might never be seen here.
+        server.slow["192.168.1.5"] = 200
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { s.reconnect(force = true) }
         assertEquals(Route.LOCAL, s.state.value.route)
         // Both were asked in the same look, not one after the other's timeout.
         val hosts = server.requests.filter { it.url.encodedPath.endsWith("/System/Info/Public") }.map { it.url.host }.toSet()
