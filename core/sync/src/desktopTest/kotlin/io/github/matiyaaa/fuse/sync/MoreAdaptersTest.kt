@@ -180,12 +180,12 @@ class MoreAdaptersTest {
             val footer = ByteArray(122).also { "|-DESMUME SAVE-|".encodeToByteArray().copyInto(it, 122 - 16) }
             File(drastic, "backup/Pokemon Platinum.dsv").writeBytes(raw + footer)
 
-            val phoneEnv = WithSaveFolders(FileSaveEnvironment("ANDROID", root.path)) { mapOf("drastic" to drastic.path) }
+            val phoneEnv = WithSaveFolders(FileSaveEnvironment("ANDROID", root.path, variables = { null })) { mapOf("drastic" to drastic.path) }
             val phoneSlot = Slots.of(game, SaveAdapters.forEmulator("drastic")!!.locate(SaveQuery(game, "nds", "/roms/Pokemon Platinum.nds", "drastic"), phoneEnv).single())
             assertNotNull(phone.capture(p, phoneSlot, 600))
             phone.flush(phoneClient)
 
-            val pcEnv = FileSaveEnvironment("LINUX", root.path)
+            val pcEnv = FileSaveEnvironment("LINUX", root.path, variables = { null })
             val pcQuery = SaveQuery(game, "nds", File(pcRoms, "Pokemon Platinum.nds").path, "melonds")
             val pcSlot = { Slots.of(game, SaveAdapters.forEmulator("melonds")!!.locate(pcQuery, pcEnv).single()) }
             assertIs<PrepareResult.Updated>(pc.prepare(pcClient, p, pcSlot()))

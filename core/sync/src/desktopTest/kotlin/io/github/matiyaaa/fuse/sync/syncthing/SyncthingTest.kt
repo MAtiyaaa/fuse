@@ -117,7 +117,7 @@ class SyncthingTest {
         File(home, ".config/retroarch/saves").mkdirs()
         File(home, "roms/gba").mkdirs()
         val settings = SettingsStore(DesktopDatabase.open(null))
-        val env = FileSaveEnvironment("LINUX", home.path)
+        val env = FileSaveEnvironment("LINUX", home.path, variables = { null })
         val q = SaveQuery(GameKey.of("gba", null, null, "Golden Sun"), "gba", File(home, "roms/gba/Golden Sun (USA).gba").path, "linux.retroarch", core = "mgba_libretro")
         val svc = JvmSyncthingService(Platform, settings, Secrets(), scope, env, samples = { listOf(q) })
         return svc to q
