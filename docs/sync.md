@@ -62,7 +62,9 @@ Played, collections, theme, Home and quick menu change to that person's at once.
 
 At startup Fuse can use the last profile, ask who's playing every time, or always start as one
 person (asking for their PIN when they have one). Several devices can be on different profiles at
-the same time.
+the same time. With the host away, Who's playing? can always be closed (Not Now), a profile without
+a PIN switches at once and catches up later, and one with a PIN waits for the host, the only one
+that can check it.
 
 The first time a device joins a profile, what it already had joins that profile: a new profile
 takes it as it is; a profile already in use keeps what it has and only gains what it was missing,
@@ -188,9 +190,12 @@ conflict is told by history, not clocks.
 ## Save history
 
 Every game has a **Save History** (in its options), with versions from every device. Any version can
-be put back (what is here now is kept first), and any can be **kept for good**. The rest are tidied
-over time: the last 10, then one a day for two weeks, then one a week for two months. The newest is
-always kept, and so is the other side of every conflict.
+be put back (what is here now is kept first), and the version put back becomes the newest on every
+device, so it sticks. Any version can be **kept for good**. The rest are tidied over time: the last
+10, then one a day for two weeks, then one a week for two months. The newest is always kept, and so
+is the other side of every conflict. Copies kept for safety (the other side of a conflict, what was
+there before a version was put back) are history only: they never become a game's newest save by
+themselves, kept for good or not.
 
 Every file is stored by its SHA-256 and checked after every transfer; a file is written to a temporary
 name, checked, and only then moved into place, so a cut connection never leaves half a save.
@@ -300,14 +305,17 @@ Fuse's own Backup (Settings, Backup) also keeps the person's records and setting
 **Unlink This Device** stops syncing and keeps everything on the device exactly as it is.
 
 **Turning Fuse Sync off** forgets the host: its link, the profiles, which one was in use, and
-anything still waiting to be sent. The device keeps its games, the saves in its emulators'
+anything still waiting to be sent. Saves that never reached the host are kept first, as plain
+files in a `kept` folder in Fuse Sync's data folder. The device keeps its games, the saves in its emulators'
 folders, its library, settings and Home as they are now, as plain Fuse. Turning it on again
 starts fresh (find the host, join, pick or make a profile).
 
 **Stop Hosting** stops the host and its service and keeps all of its data on the computer, so
 hosting again carries on where it was. **Delete This Host** removes every profile, save and device
 link kept there, after asking twice; the computer keeps its own games, library, settings and
-Home, and other devices keep everything they have.
+Home, and other devices keep everything they have. Deleting the host, or moving its saves, only
+ever deletes or moves the host's own files: a host set up in a folder that already held other
+things keeps its files in a `Fuse Sync Host` folder of its own there.
 
 **Erase Fuse** (the bottom of Settings, About) starts Fuse over as new: its library, settings,
 profiles, art and caches go, and Fuse Sync is let go of first (a host is deleted, a device forgets
