@@ -35,8 +35,33 @@ object LinuxDetector {
     fun findOnPath(env: LinuxEnvironment, binary: String): String? =
         env.pathDirectories().map { "${it.trimEnd('/')}/$binary" }.firstOrNull(env::isExecutable)
 
+    /**
+     * AppImages in [dirs] whose names say nothing, by what they update from: path to release name
+     * ([AppImageInfo]). Read once per detection, and only for files no emulator's globs already know.
+     */
+    fun identifyAppImages(env: LinuxEnvironment, dirs: List<String>, defs: List<LinuxEmulatorDef> = LinuxCatalog.defs): Map<String, String> {
+        val globs = defs.flatMap { it.detection.appImageGlobs }
+        val out = LinkedHashMap<String, String>()
+        for (dir in dirs) for (name in env.listFiles(dir)) {
+            if (globs.any { Glob.matches(it, name) }) continue
+            val lower = name.lowercase()
+            // AppImages keep their extension, or none at all once renamed; nothing else is opened.
+            if (!lower.endsWith(".appimage") && '.' in name.removePrefix(".")) continue
+            val path = "$dir/$name"
+            if (!env.isExecutable(path) && !lower.endsWith(".appimage")) continue
+            AppImageInfo.releaseName(env, path)?.let { out[path] = it }
+        }
+        return out
+    }
+
     /** Where [def] is installed, or null. [flatpaks] and [dirs] are passed in so they are read once. */
-    fun locate(env: LinuxEnvironment, def: LinuxEmulatorDef, flatpaks: Set<String>, dirs: List<String>): Found? {
+    fun locate(
+        env: LinuxEnvironment,
+        def: LinuxEmulatorDef,
+        flatpaks: Set<String>,
+        dirs: List<String>,
+        identified: Map<String, String> = emptyMap(),
+    ): Found? {
         val d = def.detection
         val home = env.homeDir.trimEnd('/')
         if (d.requiredFiles.isNotEmpty() && d.requiredFiles.none { env.exists("$home/$it") }) return null
@@ -50,6 +75,12 @@ object LinuxDetector {
                 }?.let { return Found(LinuxInstallKind.APPIMAGE, "$dir/$it") }
             }
             d.dirBinaries.firstOrNull { env.isExecutable("$dir/$it") }?.let { return Found(LinuxInstallKind.FOLDER, "$dir/$it") }
+        }
+        // A renamed AppImage, known by the release it updates from.
+        if (d.appImageGlobs.isNotEmpty()) {
+            identified.entries.firstOrNull { (_, release) ->
+                d.appImageGlobs.any { Glob.matches(it, release) } && d.appImageExcludes.none { Glob.matches(it, release) }
+            }?.let { return Found(LinuxInstallKind.APPIMAGE, it.key) }
         }
         return null
     }
@@ -65,7 +96,8 @@ object LinuxDetector {
     ): List<InstalledEmulator> {
         val flatpaks = env.flatpakApps()
         val dirs = searchDirs(env, extraDirs)
-        val found = defs.mapNotNull { def -> locate(env, def, flatpaks, dirs)?.let { toInstalled(def, it) } }
+        val identified = identifyAppImages(env, dirs, defs)
+        val found = defs.mapNotNull { def -> locate(env, def, flatpaks, dirs, identified)?.let { toInstalled(def, it) } }
         val gio = findOnPath(env, "gio")
         val desktop = InstalledEmulator(
             id = DesktopShortcutAdapter.id,

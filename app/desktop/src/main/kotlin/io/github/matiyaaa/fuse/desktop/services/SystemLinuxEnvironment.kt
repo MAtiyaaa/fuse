@@ -35,6 +35,20 @@ class SystemLinuxEnvironment(override val homeDir: String) : LinuxEnvironment {
 
     override fun readText(path: String): String? = readSmallText(path)
 
+    override fun readBytes(path: String, offset: Long, length: Int): ByteArray? = try {
+        java.io.RandomAccessFile(path, "r").use { f ->
+            if (offset < 0 || offset >= f.length()) return null
+            f.seek(offset)
+            val buf = ByteArray(minOf(length.toLong(), f.length() - offset).toInt())
+            f.readFully(buf)
+            buf
+        }
+    } catch (e: IOException) {
+        null
+    } catch (e: SecurityException) {
+        null
+    }
+
     companion object {
         /** Up to [maxBytes] of a UTF-8 text file, or null. */
         fun readSmallText(path: String, maxBytes: Int = 256 * 1024): String? = try {

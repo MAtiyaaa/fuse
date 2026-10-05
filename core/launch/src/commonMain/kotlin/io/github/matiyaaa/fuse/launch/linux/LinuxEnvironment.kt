@@ -28,4 +28,7 @@ interface LinuxEnvironment {
 
     /** Text of a small file (a `.desktop` shortcut or id file), or null. */
     fun readText(path: String): String?
+
+    /** [length] bytes of [path] from [offset] (fewer at its end), or null when it can't be read. */
+    fun readBytes(path: String, offset: Long, length: Int): ByteArray? = null
 }
