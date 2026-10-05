@@ -159,19 +159,17 @@ internal fun SyncthingScreen(app: AppState) {
  * turning Syncthing on while Fuse Sync is on asks first, then turns Fuse Sync off on this device.
  */
 internal fun useSyncthing(app: AppState, svc: SyncthingService, on: Boolean) {
-    if (on && app.store.prefs.value.sync.enabled) {
-        app.confirm = ConfirmSpec(
+    when {
+        !on -> turnOffSyncthing(app)
+        app.store.prefs.value.sync.enabled -> app.confirm = ConfirmSpec(
             title = "Use Syncthing instead of Fuse Sync?",
             message = "Both would move the same saves. Fuse Sync turns off on this device (its host and profiles stay as they are), and Syncthing takes over the save folders.",
             confirmLabel = "Use Syncthing",
         ) {
-            app.scope.launch {
-                app.store.sync.setEnabled(false)
-                svc.setEnabled(true)
-            }
+            // A Fuse Sync that is working asks once more before it stops.
+            turnOffFuseSync(app) { svc.setEnabled(true) }
         }
-    } else {
-        app.scope.launch { svc.setEnabled(on) }
+        else -> app.scope.launch { svc.setEnabled(true) }
     }
 }
 
@@ -280,20 +278,7 @@ private fun syncthingRows(
                 ))
             }
             add(MenuAction("add", "Add a Device", FuseIcons.Plus, detail = if (others.isEmpty()) "Type or paste your other device's ID, from its Syncthing" else "Another of your devices", section = people, onSelect = {
-                app.textInput = TextInputSpec("The other device's ID", "", "XXXXXXX-XXXXXXX-…", capitalize = false, doneLabel = "Next") { id ->
-                    val normal = SyncthingService.normaliseDeviceId(id)
-                    if (normal == null) {
-                        app.toasts.show("That isn't a device ID: eight groups of seven letters and numbers", ToastKind.ERROR)
-                        return@TextInputSpec
-                    }
-                    app.textInput = TextInputSpec("What is it called?", "", "Steam Deck", doneLabel = "Add") { name ->
-                        busy {
-                            svc.addDevice(normal, name.trim())
-                                .onSuccess { app.toasts.show("Added. Accept this device on it too, and the folders follow", ToastKind.SUCCESS) }
-                                .onFailure { app.toasts.show(it.message ?: "Couldn't add it", ToastKind.ERROR) }
-                        }
-                    }
-                }
+                promptAddDevice(app, svc)
             }))
             // The save folders: shared, waiting to be, or not possible here.
             val saves = "Save folders"
@@ -351,10 +336,31 @@ private fun syncthingRows(
                 app.store.updatePrefs { it.copy(syncthing = it.syncthing.copy(keepVersions = v)) }
             }.copy(section = play))
             add(MenuAction("leave", "Disconnect Syncthing", FuseIcons.LogOut, destructive = true, detail = "Fuse forgets its key. Syncthing and your folders carry on as they are", section = "Leaving", onSelect = {
-                app.confirm = ConfirmSpec("Disconnect Syncthing?", "Fuse stops using it and forgets its key. Syncthing keeps running and syncing what it shares.", "Disconnect", destructive = true) {
-                    busy { svc.disconnect() }
-                }
+                // Connected, so it asks twice: what stops, then once more.
+                confirmTurnOff(
+                    app, "Syncthing", working = true,
+                    first = "Fuse stops using it and forgets its key. Syncthing keeps running and syncing what it shares.",
+                    second = "Fuse won't bring in the newest save before a game, or ask when two devices both played, until you connect it again.",
+                ) { busy { svc.disconnect() } }
             }))
+        }
+    }
+}
+
+/** Asks for another device's ID and its name, then adds it and shares Fuse's folders with it. */
+internal fun promptAddDevice(app: AppState, svc: SyncthingService) {
+    app.textInput = TextInputSpec("The other device's ID", "", "XXXXXXX-XXXXXXX-…", capitalize = false, doneLabel = "Next") { id ->
+        val normal = SyncthingService.normaliseDeviceId(id)
+        if (normal == null) {
+            app.toasts.show("That isn't a device ID: eight groups of seven letters and numbers", ToastKind.ERROR)
+            return@TextInputSpec
+        }
+        app.textInput = TextInputSpec("What is it called?", "", "Steam Deck", doneLabel = "Add") { name ->
+            app.scope.launch {
+                svc.addDevice(normal, name.trim())
+                    .onSuccess { app.toasts.show("Added. Accept this device on it too, and the folders follow", ToastKind.SUCCESS) }
+                    .onFailure { app.toasts.show(it.message ?: "Couldn't add it", ToastKind.ERROR) }
+            }
         }
     }
 }

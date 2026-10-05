@@ -86,6 +86,8 @@ import io.github.matiyaaa.fuse.ui.fuseline.Appear
 import io.github.matiyaaa.fuse.ui.fuseline.Curves
 import io.github.matiyaaa.fuse.ui.fuseline.Durations
 import io.github.matiyaaa.fuse.ui.fuseline.FuselineValue
+import io.github.matiyaaa.fuse.ui.fuseline.Swap
+import io.github.matiyaaa.fuse.ui.fuseline.SwapTransform
 import io.github.matiyaaa.fuse.ui.fuseline.expandHorizontally
 import io.github.matiyaaa.fuse.ui.fuseline.fadeIn
 import io.github.matiyaaa.fuse.ui.fuseline.fadeOut
@@ -94,6 +96,8 @@ import io.github.matiyaaa.fuse.ui.fuseline.fuselineFloat
 import io.github.matiyaaa.fuse.ui.fuseline.fuselineScrollTo
 import io.github.matiyaaa.fuse.ui.fuseline.infiniteRepeatable
 import io.github.matiyaaa.fuse.ui.fuseline.rememberLoopClock
+import io.github.matiyaaa.fuse.ui.fuseline.scaleIn
+import io.github.matiyaaa.fuse.ui.fuseline.scaleOut
 import io.github.matiyaaa.fuse.ui.fuseline.shrinkHorizontally
 import io.github.matiyaaa.fuse.ui.fuseline.tween
 import kotlin.time.Clock
@@ -292,24 +296,17 @@ fun Hud(
                 Box(Modifier.width(Size.divider).height(Size.iconM).background(Fuse.colors.hairlineStrong))
                 Spacer(Modifier.width(Space.xs))
             }
-            if (profile != null) {
-                HudProfileChip(
-                    profile,
-                    focused = tabsFocused && focusedButton == HudButton.PROFILE,
-                    // With room, the name; on a small screen the avatar says who it is.
-                    showName = statusRoom == StatusRoom.ALL && roomForName,
-                    modifier = Modifier.anchor(anchors, HudButton.PROFILE),
-                ) { onButton(HudButton.PROFILE) }
-            }
             if (statusRoom != StatusRoom.NONE) {
                 val shape = rememberHudShape(insetX = false)
                 val statusFocus by fuselineFloat(if (tabsFocused && focusedButton == HudButton.STATUS) 1f else 0f, Fuse.motion.tween(Durations.FAST), label = "statusFocus")
+                // With someone to switch to at the far end, the status draws tighter to make room.
+                val tight = profile != null
                 Box(
                     Modifier
                         .height(Size.touch)
                         .fuseClickable(shape = shape, scale = false, role = Role.Button, onClickLabel = "Quick menu", onClick = onStatusClick)
                         .hudFocus(shape, { statusFocus }, Fuse.colors.text.copy(alpha = if (Fuse.colors.isDark) 0.12f else 0.08f), Fuse.colors.focus)
-                        .padding(horizontal = Space.m),
+                        .padding(horizontal = if (tight) Space.s else Space.m),
                     contentAlignment = Alignment.Center,
                 ) {
                     val all = statusRoom == StatusRoom.ALL
@@ -318,8 +315,17 @@ fun Hud(
                         time,
                         showWifi = showWifi && all,
                         showBluetooth = showBluetooth && all,
+                        compact = tight,
                     )
                 }
+            }
+            if (profile != null) {
+                Spacer(Modifier.width(Space.xxs))
+                HudProfileAvatar(
+                    profile,
+                    focused = tabsFocused && focusedButton == HudButton.PROFILE,
+                    modifier = Modifier.anchor(anchors, HudButton.PROFILE),
+                ) { onButton(HudButton.PROFILE) }
             }
         }
         val key: Any? = activeButton ?: active
@@ -546,30 +552,47 @@ private fun Modifier.hudFocus(shape: Shape, focus: () -> Float, fill: Color, rin
     }
 }
 
-/** A round icon button in the top line: the outline shows controller focus, full colour shows it is open. */
-/** The person playing here: their avatar (and name, with room), in the line's own focus shape. */
+/**
+ * The person playing here, at the far end of the line: their avatar alone, in a ring of the accent
+ * that lights when the stick reaches it. Switching profile turns the old face out and the new one in.
+ */
 @Composable
-private fun HudProfileChip(profile: HudProfile, focused: Boolean, showName: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
+private fun HudProfileAvatar(profile: HudProfile, focused: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val c = Fuse.colors
-    val shape = rememberHudShape(insetX = !showName)
-    val focus by fuselineFloat(if (focused) 1f else 0f, Fuse.motion.tween(Durations.FAST), label = "hudProfile")
-    Row(
+    val motion = Fuse.motion
+    val focus by fuselineFloat(if (focused) 1f else 0f, motion.tween(Durations.FAST), label = "hudProfile")
+    val ring = c.accent
+    Box(
         modifier
-            .height(Size.touch)
-            .fuseClickable(shape = shape, scale = false, role = Role.Button, onClickLabel = "Switch profile", onClick = onClick)
-            .hudFocus(shape, { focus }, c.text.copy(alpha = if (c.isDark) 0.12f else 0.08f), c.focus)
-            .padding(horizontal = if (showName) Space.s else Space.xs)
-            .semantics { contentDescription = "Playing as ${profile.name}" },
-        verticalAlignment = Alignment.CenterVertically,
+            .size(Size.touch)
+            .fuseClickable(shape = CircleShape, role = Role.Button, onClickLabel = "Switch profile", onClick = onClick)
+            .semantics { contentDescription = "Playing as ${profile.name}. Switch profile" }
+            .drawBehind {
+                val r = size.minDimension / 2f
+                // A soft halo while focused, and a ring that is always there, brighter on focus.
+                drawCircle(ring.copy(alpha = 0.22f * focus), r)
+                drawCircle(ring.copy(alpha = 0.45f + 0.55f * focus), r - 2.dp.toPx(), style = Stroke((1.5f + focus).dp.toPx()))
+            },
+        contentAlignment = Alignment.Center,
     ) {
-        io.github.matiyaaa.fuse.ui.designsystem.components.ProfileAvatar(profile.avatar, 30.dp)
-        if (showName) {
-            Spacer(Modifier.width(Space.s))
-            FText(profile.name, Fuse.type.label, color = if (focused) c.text else c.textMuted, maxLines = 1, modifier = Modifier.widthIn(max = 110.dp))
+        Swap(
+            profile,
+            transitionSpec = {
+                SwapTransform(
+                    fadeIn(motion.fade(Durations.BASE)) + scaleIn(motion.tween(Durations.BASE), initialScale = 0.6f),
+                    fadeOut(motion.fade(Durations.FAST)) + scaleOut(motion.tween(Durations.FAST), targetScale = 1.2f),
+                )
+            },
+            contentAlignment = Alignment.Center,
+            label = "hudProfileSwap",
+            contentKey = { it.avatar + it.name },
+        ) { p ->
+            io.github.matiyaaa.fuse.ui.designsystem.components.ProfileAvatar(p.avatar, Size.touch - 12.dp)
         }
     }
 }
 
+/** A round icon button in the top line: the outline shows controller focus, full colour shows it is open. */
 @Composable
 private fun HudIconButton(icon: ImageVector, label: String, focused: Boolean, active: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val c = Fuse.colors

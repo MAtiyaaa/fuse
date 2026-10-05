@@ -2,6 +2,14 @@
 
 ## New
 
+- **Fusi, a new theme.** Pink and cute like a cartoon from the early 2000s: polka dots drifting
+  over a pink sky, puffy clouds and sparkles, and a mint hill with pixel flowers, a pink doghouse
+  and a bowl. Fusi lives there: a white pixel Maltese with a pink bow who wanders, runs about, sits
+  and wags, sniffs the flowers, naps by her house, chases her ball and hops for joy, always in
+  front of any game art. On a two-screen device like the AYN Thor she now and then jumps down to the
+  screen below, or leaps up to the one above. On a dark palette her room turns to night. The theme
+  maker offers her room as a background for any theme, and every word stays clear on the pink
+  (plum text at 11:1, a berry accent with white text at 5:1).
 - **Syncthing, for people who already run it.** Settings, Addons, Syncthing finds the Syncthing
   on this device (its own key on a computer; Syncthing-Fork on Android), or takes an address and
   API key. It shares your emulators' save folders with the devices you add (a code to scan from
@@ -11,6 +19,18 @@
   keeps the other as an old version. Games themselves are never shared. Fuse Sync by Fuse is still
   the one Fuse recommends: it knows each game whatever its file is called, adds up play time and
   keeps a profile for each person. The two never run together; turning one on turns the other off.
+- **Who's playing, at the end of the top line.** With Fuse Sync on and more than one profile,
+  the clock, battery and Wi-Fi draw tighter, and the profile's avatar sits at the far right: the
+  stick reaches it after the status, and a press or a tap opens Who's playing. With one profile it
+  stays out of the way.
+- **New profiles, closer to hand.** Y makes one straight from Who's playing, and New Profile is in
+  Addons, Sync, in Settings, Addons, Fuse Sync, and as a Profiles tile you can add to the quick menu.
+- **Addons, Syncthing.** With Syncthing in use, Addons has a Syncthing tab in place of Sync: how
+  many devices are online, the folders shared and what is still coming in, every save folder and
+  how far along it is, this device's code to scan, and Look Over Now and Add a Device. Addons shows
+  Sync or Syncthing, whichever is in use, never both.
+- **Turning off a sync that works asks twice.** While Fuse Sync is in touch with its host, or
+  Syncthing is connected, turning it off (or switching to the other) asks, then asks once more.
 - **Setup asks how to stay in step.** The Every device step shows Fuse Sync and Syncthing side by
   side, Fuse Sync recommended, with Use Fuse Sync (this device the host, or connect to one), Use
   Syncthing, or Skip.

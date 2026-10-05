@@ -213,12 +213,11 @@ internal fun AuditDriver.syncScreens() {
     scenario("sync", "top line") {
         useSync(asHost = false)
         waitFor("Continue playing")
-        shoot("who's playing, beside the status", 1_200)
+        shoot("who's playing, at the far end of the top line", 1_200)
         tap(PadButton.DPAD_UP)
         tap(PadButton.R1, 8)
-        // Past the last tab: Search, Settings, the profile, then the status at the end; one back is the profile.
+        // Past the last tab: Search, Settings, the status, then at the far end who is playing.
         tap(PadButton.DPAD_RIGHT, 6)
-        tap(PadButton.DPAD_LEFT)
         settle(400)
         shoot("the stick reaches the profile")
         tap(PadButton.A)
@@ -355,5 +354,21 @@ internal fun AuditDriver.syncthingScreens() {
         shoot("around a game, and leaving")
         runBlocking { syncthing.setEnabled(false) }
     }
-}
 
+    scenario("syncthing", "addons tab") {
+        syncOff()
+        runBlocking { syncthing.setEnabled(true) }
+        syncthing.household()
+        useLibrary()
+        tab(Destination.CARTRIDGE)
+        // Syncthing in use, so Addons has its tab (and no Sync tab beside it).
+        tap(PadButton.DPAD_UP)
+        focusText("Syncthing") { tap(PadButton.DPAD_RIGHT) }
+        tap(PadButton.DPAD_DOWN)
+        waitFor("Look Over Now")
+        shoot("Addons, Syncthing: devices, folders and what is still coming in", 1_500)
+        tap(PadButton.DPAD_DOWN)
+        shoot("the save folders it shares")
+        runBlocking { syncthing.setEnabled(false) }
+    }
+}

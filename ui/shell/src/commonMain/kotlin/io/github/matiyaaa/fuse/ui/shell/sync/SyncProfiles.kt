@@ -19,7 +19,9 @@ internal fun SyncProfiles(app: AppState) {
     val prefs by app.store.prefs.collectAsState()
     val enabled = prefs.sync.enabled
     val active by svc.activeProfile.collectAsState()
+    val profiles by svc.profiles.collectAsState()
     LaunchedEffect(enabled, active) { app.syncProfile = if (enabled) active else null }
+    LaunchedEffect(enabled, profiles.size) { app.syncProfileCount = if (enabled) profiles.size else 0 }
     LaunchedEffect(enabled, prefs.onboardingDone) {
         if (!enabled || !prefs.onboardingDone || app.syncStartupDone) return@LaunchedEffect
         app.syncStartupDone = true

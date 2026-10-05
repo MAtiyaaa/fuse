@@ -122,6 +122,7 @@ internal fun SyncTab(app: AppState, active: Boolean, topPadding: Dp) {
             }
         })
         add("Switch Profile" to { app.whoAreYou = WhoMode.SWITCH })
+        add("New Profile" to { app.whoAreYou = WhoMode.ADD })
         if (host) add("Add a Device" to { app.pairing = true })
         add("Settings" to { app.go(Route.SyncSettings) })
     }
@@ -174,6 +175,7 @@ internal fun SyncTab(app: AppState, active: Boolean, topPadding: Dp) {
                     val icon = when (label) {
                         "Sync Now" -> FuseIcons.RefreshCcw
                         "Switch Profile" -> FuseIcons.Users
+                        "New Profile" -> FuseIcons.UserPlus
                         "Add a Device" -> FuseIcons.Plus
                         else -> FuseIcons.Settings
                     }

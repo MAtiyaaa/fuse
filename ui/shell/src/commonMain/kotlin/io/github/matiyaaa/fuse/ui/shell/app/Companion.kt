@@ -192,12 +192,15 @@ fun CompanionApp(store: FuseStore, platform: PlatformUi, mode: DualScreenMode, o
             // The main screen's own room (its scene, or the picture the theme uses) under everything,
             // so both screens read as one device; art for what is shown fades in over it.
             if (prefs.display.companionFollowsBackground) {
-                AmbientBackground(
-                    if (spec.background == io.github.matiyaaa.fuse.model.BackgroundStyle.HERO) io.github.matiyaaa.fuse.model.BackgroundStyle.SOLID else spec.background,
-                    hero?.accent ?: Fuse.colors.accent,
-                    Modifier.fillMaxSize(),
-                    ambient = spec.ambient,
-                )
+                // Fusi's room here is the screen below's half of the room she shares with the main screen.
+                CompositionLocalProvider(io.github.matiyaaa.fuse.ui.designsystem.background.LocalFusiScreen provides io.github.matiyaaa.fuse.ui.designsystem.background.FusiScreen.BOTTOM) {
+                    AmbientBackground(
+                        if (spec.background == io.github.matiyaaa.fuse.model.BackgroundStyle.HERO) io.github.matiyaaa.fuse.model.BackgroundStyle.SOLID else spec.background,
+                        hero?.accent ?: Fuse.colors.accent,
+                        Modifier.fillMaxSize(),
+                        ambient = spec.ambient,
+                    )
+                }
                 spec.wallpaper?.let { WallpaperLayer(it, Modifier.fillMaxSize()) }
             }
             // Films and shows are shown as a cinema shows them, on a dark room whatever the theme:
@@ -206,6 +209,10 @@ fun CompanionApp(store: FuseStore, platform: PlatformUi, mode: DualScreenMode, o
             val look = Fuse.look
             CompositionLocalProvider(LocalFuseLook provides if (cinema) look.copy(colors = look.colors.onArt()) else look) {
                 HeroBackdrop(hero, Modifier.fillMaxSize(), dim = if (cinema) 0.38f else 0.25f, gradient = if (cinema) 0.9f else 0.75f, settleMs = 30)
+            }
+            // Fusi, when she is down here, plays in front of the art.
+            if (prefs.display.companionFollowsBackground && spec.background == io.github.matiyaaa.fuse.model.BackgroundStyle.FUSI && !cinema) {
+                io.github.matiyaaa.fuse.ui.designsystem.background.FusiPet(io.github.matiyaaa.fuse.ui.designsystem.background.FusiScreen.BOTTOM)
             }
             // Status and controls sit on a deeper shade, so their cards read over any art.
             Box(

@@ -195,6 +195,7 @@ fun QuickMenu(app: AppState) {
         QuickId.BRIGHTNESS -> features.brightness && brightness != null
         QuickId.VOLUME -> features.volume && volume != null
         QuickId.FULLSCREEN -> windows != null
+        QuickId.PROFILES -> prefs.sync.enabled && prefs.sync.role.isNotEmpty()
         else -> true
     }
     val visible = all.filter { available(it.id) }
@@ -405,6 +406,11 @@ fun QuickMenu(app: AppState) {
                 if (pick == null) app.toasts.show("No games in your library yet") else app.go(Route.GameInfo(pick.id))
             }
         }
+        // Who is playing, a press from switching; held, someone new.
+        QuickId.PROFILES -> QuickTile(
+            app.syncProfile?.name ?: "Profiles", FuseIcons.Users, detail = "Hold for someone new",
+            hold = { close(); app.whoAreYou = io.github.matiyaaa.fuse.ui.shell.sync.WhoMode.ADD },
+        ) { close(); app.whoAreYou = io.github.matiyaaa.fuse.ui.shell.sync.WhoMode.SWITCH }
         QuickId.MUSIC -> QuickTile(now.title, FuseIcons.Music, active = now.playing, detail = if (now.off) "Turn on" else "Tap to skip", hold = ::toggleSong) {
             if (now.off) toggleSong() else skipSong(1)
         }
@@ -1135,6 +1141,7 @@ private fun iconFor(id: QuickId): ImageVector = when (id) {
     QuickId.FRAME_TIMES -> FuseIcons.Activity
     QuickId.FULLSCREEN -> FuseIcons.Maximize
     QuickId.SURPRISE -> FuseIcons.Dice
+    QuickId.PROFILES -> FuseIcons.Users
 }
 
 /** How a connection stands, for a tile's state line; nothing when the platform doesn't say. */

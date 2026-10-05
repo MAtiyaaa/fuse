@@ -64,7 +64,7 @@ internal val AppState.sections: Sections get() {
     val p = store.prefs.value
     return Sections(
         addons = (store.appStore.supported && p.storeEnabled) || (store.jellyfin != null && p.jellyfin.enabled) ||
-            (store.sync.service != null && p.sync.enabled),
+            (store.sync.service != null && p.sync.enabled) || syncthingOn,
         cartridgeOn = platform.features.cartridge && p.cartridgeEnabled,
     )
 }
@@ -79,7 +79,7 @@ internal fun rememberTabs(app: AppState, prefs: UiPrefs): List<Destination> {
 }
 
 /** Which part of Addons is showing. */
-enum class AddonsPart { CARTRIDGE, STORE, JELLYFIN, SYNC }
+enum class AddonsPart { CARTRIDGE, STORE, JELLYFIN, SYNC, SYNCTHING }
 
 /** Opens Jellyfin in Addons. */
 internal fun AppState.openJellyfin() {
@@ -87,11 +87,14 @@ internal fun AppState.openJellyfin() {
     selectTab(Destination.CARTRIDGE)
 }
 
-/** Opens Fuse Sync's Hub: the Sync part of Addons. */
+/** Opens whichever sync is in use in Addons: Fuse Sync's Hub (Sync), or Syncthing. */
 internal fun AppState.openSyncHub() {
-    addonsPart = AddonsPart.SYNC
+    addonsPart = if (syncthingOn) AddonsPart.SYNCTHING else AddonsPart.SYNC
     selectTab(Destination.CARTRIDGE)
 }
+
+/** Whether Fuse is using Syncthing here (kept by the app from Syncthing's state, so the tabs follow it). */
+internal val AppState.syncthingOn: Boolean get() = syncthingActive
 
 /** Opens Cartridge: its own section, or the Cartridge part of Addons. */
 internal fun AppState.openCartridge() {

@@ -102,7 +102,7 @@ private fun syncRowsFor(app: AppState, service: io.github.matiyaaa.fuse.sync.Syn
     val words = io.github.matiyaaa.fuse.ui.shell.sync.syncWords(if (c.enabled) status else io.github.matiyaaa.fuse.sync.SyncStatus.Off)
     return buildList {
         add(toggleRow("enabled", "Use Fuse Sync", FuseIcons.Power, c.enabled, "Your saves, play time, library and settings on every device, from a host of your own") { v ->
-            app.scope.launch { app.store.sync.setEnabled(v) }
+            if (v) app.scope.launch { app.store.sync.setEnabled(true) } else io.github.matiyaaa.fuse.ui.shell.sync.turnOffFuseSync(app)
         })
         add(MenuAction(
             "page", if (c.enabled && c.role.isEmpty()) "Set Up Fuse Sync" else "Profiles, Devices and What Syncs", FuseIcons.RefreshCcw,
@@ -110,6 +110,14 @@ private fun syncRowsFor(app: AppState, service: io.github.matiyaaa.fuse.sync.Syn
             trailing = Trailing.Value(words.title),
             onSelect = { app.go(Route.SyncSettings) },
         ))
+        if (c.enabled && c.role.isNotEmpty()) {
+            add(MenuAction(
+                "newProfile", "New Profile", FuseIcons.UserPlus,
+                detail = "Someone else who plays here: their own library, saves, Home and theme",
+                trailing = Trailing.Chevron,
+                onSelect = { app.whoAreYou = io.github.matiyaaa.fuse.ui.shell.sync.WhoMode.ADD },
+            ))
+        }
     }
 }
 

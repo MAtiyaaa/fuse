@@ -246,4 +246,51 @@ class BrandedFacesAudit {
             }
         }
     }
+
+    /** Fusi's room on a screen, a handheld and a theme card, by day and by night, as she moves about. */
+    @Test
+    fun fusiRoom() {
+        val dir = Audit.dir
+        assumeTrue("Only under desktopAudit", dir != null)
+        assumeTrue(Audit.sizeEnabled(AuditSize.D))
+        val night = io.github.matiyaaa.fuse.ui.designsystem.theme.ThemePresets.Fusi.copy(
+            palette = io.github.matiyaaa.fuse.ui.designsystem.theme.ThemePresets.Starlight.palette,
+        )
+        for ((label, spec, w, h) in listOf(
+            Quad("day", io.github.matiyaaa.fuse.ui.designsystem.theme.ThemePresets.Fusi, AuditSize.D.widthPx, AuditSize.D.heightPx),
+            Quad("night", night, AuditSize.D.widthPx, AuditSize.D.heightPx),
+            Quad("card", io.github.matiyaaa.fuse.ui.designsystem.theme.ThemePresets.Fusi, 520, 300),
+        )) {
+            if (!Audit.wants("widgets", "fusi $label")) continue
+            runDesktopComposeUiTest(w, h) {
+                // The room never stops moving, so the clock only moves when told to.
+                mainClock.autoAdvance = false
+                setContent {
+                    CompositionLocalProvider(LocalDensity provides Density(if (label == "card") 1f else AuditSize.D.density)) {
+                        FuseTheme(spec) {
+                            io.github.matiyaaa.fuse.ui.designsystem.background.AmbientBackground(
+                                io.github.matiyaaa.fuse.model.BackgroundStyle.FUSI, Fuse.colors.accent, Modifier.fillMaxSize(), ambient = spec.ambient,
+                            )
+                        }
+                    }
+                }
+                // She lives on real time: a few looks a moment apart, as she wanders.
+                repeat(if (label == "day") 6 else 2) { n ->
+                    repeat(30) {
+                        mainClock.advanceTimeBy(100)
+                        Thread.sleep(60)
+                    }
+                    val frame = onRoot().captureToImage().toAwtImage()
+                    val rgb = BufferedImage(frame.width, frame.height, BufferedImage.TYPE_INT_RGB)
+                    rgb.createGraphics().apply { drawImage(frame, 0, 0, null); dispose() }
+                    val file = File(dir, "D/widgets/${Audit.slug("fusi $label $n")}.png")
+                    file.parentFile.mkdirs()
+                    ImageIO.write(rgb, "png", file)
+                    println("Audit shot: ${file.absolutePath}")
+                }
+            }
+        }
+    }
+
+    private data class Quad(val label: String, val spec: io.github.matiyaaa.fuse.model.ThemeSpec, val w: Int, val h: Int)
 }

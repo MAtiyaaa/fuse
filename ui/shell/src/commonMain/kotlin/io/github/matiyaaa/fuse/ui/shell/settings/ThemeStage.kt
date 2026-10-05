@@ -620,6 +620,7 @@ internal fun BackgroundStyle.label(): String = when (this) {
     BackgroundStyle.MESH -> "Pearl"
     BackgroundStyle.CONTOURS -> "Contours"
     BackgroundStyle.DUNES -> "Dunes"
+    BackgroundStyle.FUSI -> "Fusi"
 }
 
 internal fun BackgroundStyle.icon(): ImageVector = when (this) {
@@ -639,6 +640,7 @@ internal fun BackgroundStyle.icon(): ImageVector = when (this) {
     BackgroundStyle.MESH -> FuseIcons.Blend
     BackgroundStyle.CONTOURS -> FuseIcons.Mountain
     BackgroundStyle.DUNES -> FuseIcons.SunDim
+    BackgroundStyle.FUSI -> FuseIcons.PawPrint
 }
 
 internal fun CornerFamily.label(): String = when (this) {

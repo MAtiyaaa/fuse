@@ -17,6 +17,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
+import kotlinx.coroutines.launch
 
 /** Fuse Sync's name wherever it is presented as one of Fuse's own. */
 internal const val SYNC_NAME = "Fuse Sync"
@@ -63,3 +64,49 @@ internal fun SyncMark(size: Dp, modifier: Modifier = Modifier, tint: Color = Fus
 
 /** "3 devices", "1 device". */
 internal fun count(n: Int, one: String, many: String = one + "s") = "$n ${if (n == 1) one else many}"
+
+/**
+ * Turning off a sync that is connected and working asks twice: once to say what stops, and once
+ * more, plainly, before anything changes. Off already, or not working, it simply turns off.
+ */
+internal fun confirmTurnOff(app: AppState, name: String, working: Boolean, first: String, second: String, off: () -> Unit) {
+    if (!working) {
+        off()
+        return
+    }
+    app.confirm = io.github.matiyaaa.fuse.ui.shell.app.ConfirmSpec("Turn off $name?", first, "Turn Off") {
+        app.confirm = io.github.matiyaaa.fuse.ui.shell.app.ConfirmSpec("Are you sure?", second, "Turn Off $name", destructive = true) { off() }
+    }
+}
+
+/** Fuse Sync off, asking twice while it is in touch with its host. */
+internal fun turnOffFuseSync(app: AppState, then: suspend () -> Unit = {}) {
+    val working = app.store.sync.service?.status?.value is SyncStatus.Online
+    confirmTurnOff(
+        app, SYNC_NAME, working,
+        first = "It's connected and keeping your saves, play time and settings in step. Turned off, this device stops syncing; everything here stays as it is.",
+        second = "Saves you make here won't reach your other devices, and theirs won't reach this one, until you turn it on again.",
+    ) {
+        app.scope.launch {
+            app.store.sync.setEnabled(false)
+            then()
+        }
+    }
+}
+
+/** Syncthing off, asking twice while it is connected. */
+internal fun turnOffSyncthing(app: AppState, then: suspend () -> Unit = {}) {
+    val svc = app.store.syncthing ?: return
+    val working = svc.state.value is io.github.matiyaaa.fuse.sync.syncthing.SyncthingState.Connected
+    confirmTurnOff(
+        app, "Syncthing", working,
+        first = "It's connected and sharing your save folders. Turned off, Fuse stops bringing in the newest save before a game; Syncthing itself keeps running.",
+        second = "Saves could fall out of step between your devices while Fuse isn't watching. Turn it off anyway?",
+    ) {
+        app.scope.launch {
+            svc.setEnabled(false)
+            then()
+        }
+    }
+}
+
