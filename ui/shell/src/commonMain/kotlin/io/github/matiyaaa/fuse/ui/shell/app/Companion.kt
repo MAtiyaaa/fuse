@@ -21,6 +21,7 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -59,6 +60,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.media.HeroSource
 import io.github.matiyaaa.fuse.ui.designsystem.shape.PillShape
 import io.github.matiyaaa.fuse.ui.designsystem.shape.SquircleShape
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
+import io.github.matiyaaa.fuse.ui.designsystem.theme.LocalFuseLook
 import io.github.matiyaaa.fuse.ui.designsystem.theme.FuseTheme
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
 import io.github.matiyaaa.fuse.ui.fuseline.Appear
@@ -198,7 +200,13 @@ fun CompanionApp(store: FuseStore, platform: PlatformUi, mode: DualScreenMode, o
                 )
                 spec.wallpaper?.let { WallpaperLayer(it, Modifier.fillMaxSize()) }
             }
-            HeroBackdrop(hero, Modifier.fillMaxSize(), dim = 0.25f, gradient = 0.75f, settleMs = 60)
+            // Films and shows are shown as a cinema shows them, on a dark room whatever the theme:
+            // their logos are drawn for dark backdrops, and a light theme's wash would lose them.
+            val cinema = content.target is io.github.matiyaaa.fuse.jellyfin.MediaItem
+            val look = Fuse.look
+            CompositionLocalProvider(LocalFuseLook provides if (cinema) look.copy(colors = look.colors.onArt()) else look) {
+                HeroBackdrop(hero, Modifier.fillMaxSize(), dim = if (cinema) 0.38f else 0.25f, gradient = if (cinema) 0.9f else 0.75f, settleMs = 30)
+            }
             // Status and controls sit on a deeper shade, so their cards read over any art.
             Box(
                 Modifier
@@ -221,7 +229,7 @@ fun CompanionApp(store: FuseStore, platform: PlatformUi, mode: DualScreenMode, o
             // Something starting to play brings the first page round, so its remote is in view.
             val playingId = player?.item?.id
             LaunchedEffect(playingId) { if (playingId != null && pager.currentPage != 0) pager.animateScrollToPage(0) }
-            HorizontalPager(state = pager, modifier = Modifier.fillMaxSize(), beyondViewportPageCount = 1, userScrollEnabled = sheet == null) { page ->
+            HorizontalPager(state = pager, modifier = Modifier.fillMaxSize(), beyondViewportPageCount = 1, userScrollEnabled = sheet == null && !(pictureHere && pager.currentPage == 0)) { page ->
                 when (page) {
                     0 -> when {
                         pictureHere && player != null -> CompanionPicture(player) { placement.swap() }
@@ -233,7 +241,9 @@ fun CompanionApp(store: FuseStore, platform: PlatformUi, mode: DualScreenMode, o
                             topInset = CompanionTopBar,
                             bottomInset = CompanionDotsBar,
                         )
-                        else -> Box(Modifier.fillMaxSize().padding(top = numbersRoom)) { SpotlightPage(store, content, home.playtime.currentSince, systems, time) { sheet = it } }
+                        else -> CompositionLocalProvider(LocalFuseLook provides if (cinema) look.copy(colors = look.colors.onArt()) else look) {
+                            Box(Modifier.fillMaxSize().padding(top = numbersRoom)) { SpotlightPage(store, content, home.playtime.currentSince, systems, time) { sheet = it } }
+                        }
                     }
                     1 -> StatusPage(store, platform, status)
                     else -> ControlsPage(store, platform, onHide)
@@ -247,30 +257,26 @@ fun CompanionApp(store: FuseStore, platform: PlatformUi, mode: DualScreenMode, o
                 )
             }
             sheet?.let { AchievementsSheet(store, it) }
-            // The top line: the page's title (or a close button over the achievements) and the status.
-            Row(
-                Modifier.align(Alignment.TopCenter).fillMaxWidth().height(CompanionTopBar).padding(start = Space.l, end = Space.l),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
-                    if (sheet != null) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(Modifier.padding(end = Space.xs).offset(x = (-6).dp)) { CompanionRoundButton(FuseIcons.Close) { sheet = null } }
-                            FText("Achievements", Fuse.type.titleSmall, maxLines = 1)
-                        }
-                    } else {
-                        // Titles cross-fade with the swipe; the first page has none, its art speaks.
-                        companionPages.forEachIndexed { i, title ->
-                            if (i > 0) {
-                                FText(
-                                    title, Fuse.type.titleSmall, maxLines = 1,
-                                    modifier = Modifier.graphicsLayer { alpha = (1f - abs(pager.currentPage + pager.currentPageOffsetFraction - i)).coerceIn(0f, 1f) },
-                                )
-                            }
+            // The top line: the page's title in the middle of the screen (or a close button and
+            // "Achievements" at the start, over the achievements), and the status at the end.
+            Box(Modifier.align(Alignment.TopCenter).fillMaxWidth().height(CompanionTopBar).padding(start = Space.l, end = Space.l)) {
+                if (sheet != null) {
+                    Row(Modifier.align(Alignment.CenterStart), verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.padding(end = Space.xs).offset(x = (-6).dp)) { CompanionRoundButton(FuseIcons.Close) { sheet = null } }
+                        FText("Achievements", Fuse.type.titleSmall, maxLines = 1)
+                    }
+                } else {
+                    // Titles cross-fade with the swipe; the first page has none, its art speaks.
+                    companionPages.forEachIndexed { i, title ->
+                        if (i > 0) {
+                            FText(
+                                title, Fuse.type.titleSmall, maxLines = 1, align = TextAlign.Center,
+                                modifier = Modifier.align(Alignment.Center).graphicsLayer { alpha = (1f - abs(pager.currentPage + pager.currentPageOffsetFraction - i)).coerceIn(0f, 1f) },
+                            )
                         }
                     }
                 }
-                StatusCluster(status, time, showWifi = prefs.showWifi, showBluetooth = prefs.showBluetooth)
+                Box(Modifier.align(Alignment.CenterEnd)) { StatusCluster(status, time, showWifi = prefs.showWifi, showBluetooth = prefs.showBluetooth) }
             }
             if (sheet == null) {
                 PageDots(
@@ -306,34 +312,13 @@ fun CompanionApp(store: FuseStore, platform: PlatformUi, mode: DualScreenMode, o
 }
 
 /**
- * Fuse Player's picture on this screen, put here from either screen. A tap shows, for a few
- * seconds, a button that puts it back on the main screen.
+ * Fuse Player's picture on this screen, put here from either screen, with controls for touch: a tap
+ * shows them (Stop, skip, play or pause, the timeline, and a button that puts the film back on the
+ * main screen); they fade again while it plays.
  */
 @Composable
 private fun CompanionPicture(player: io.github.matiyaaa.fuse.ui.player.PlayerSession, onSwap: () -> Unit) {
-    var shown by remember { mutableStateOf(false) }
-    // Each tap starts the wait again.
-    var taps by remember { mutableLongStateOf(0L) }
-    LaunchedEffect(taps) {
-        if (taps == 0L) return@LaunchedEffect
-        delay(3_500)
-        shown = false
-    }
-    Box(Modifier.fillMaxSize().pointerInput(Unit) { detectTapGestures { shown = !shown; taps++ } }) {
-        io.github.matiyaaa.fuse.ui.player.PlayerPicture(player, Modifier.fillMaxSize())
-        Appear(shown, Modifier.align(Alignment.BottomCenter).padding(bottom = Space.l), enter = fadeIn(), exit = fadeOut()) {
-            Row(
-                Modifier.clip(PillShape).background(Color.Black.copy(alpha = 0.72f))
-                    .pointerInput(Unit) { detectTapGestures { shown = false; onSwap() } }
-                    .padding(horizontal = Space.l, vertical = Space.s),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon(FuseIcons.Swap, size = 18.dp, tint = Color.White)
-                Spacer(Modifier.width(Space.s))
-                FText("Play on the main screen", Fuse.type.label, color = Color.White, maxLines = 1)
-            }
-        }
-    }
+    io.github.matiyaaa.fuse.ui.player.PlayerTouchPicture(player, Modifier.fillMaxSize(), onSwap = onSwap, swapLabel = "Play on the main screen")
 }
 
 /**
@@ -466,7 +451,7 @@ private fun FocusedMedia(item: io.github.matiyaaa.fuse.jellyfin.MediaItem, minim
             FText(io.github.matiyaaa.fuse.ui.shell.jellyfin.mediaFacts(item), Fuse.type.label, color = Fuse.colors.text.copy(alpha = 0.85f), maxLines = 1, align = TextAlign.Center)
             item.progress?.let { p ->
                 Spacer(Modifier.height(Space.s))
-                Box(Modifier.width(160.dp).height(4.dp).clip(RoundedCornerShape(2.dp)).background(Color.White.copy(alpha = 0.2f))) {
+                Box(Modifier.width(160.dp).height(4.dp).clip(RoundedCornerShape(2.dp)).background(Fuse.colors.text.copy(alpha = 0.22f))) {
                     Box(Modifier.fillMaxWidth(p).height(4.dp).background(Fuse.colors.accent))
                 }
             }
@@ -493,7 +478,7 @@ private fun GameLogo(logo: Any?, title: String, tint: Color? = null, below: @Com
                 .align(Alignment.Center)
                 .fillMaxWidth()
                 .fillMaxHeight(0.7f)
-                .background(Brush.radialGradient(listOf(Color.Black.copy(alpha = 0.38f), Color.Transparent))),
+                .background(Brush.radialGradient(listOf((if (Fuse.colors.isDark) Color.Black else Fuse.colors.ink).copy(alpha = if (Fuse.colors.isDark) 0.38f else 0.55f), Color.Transparent))),
         )
         Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
             val name: @Composable () -> Unit = {
@@ -588,3 +573,23 @@ private fun NowPlaying(store: FuseStore, game: GameCard, since: Long?, onAchieve
         }
     }
 }
+
+/**
+ * The look of text laid over a film's art: white on a dark room, whatever the theme, with the
+ * theme's accent kept. Muted and faint text stay at least 4.5:1 over the dimmed art.
+ */
+internal fun io.github.matiyaaa.fuse.ui.designsystem.theme.FuseColors.onArt() = if (isDark) this else copy(
+    ink = Color(0xFF07080B),
+    surface = Color(0xFF14161C),
+    surfaceRaised = Color(0xFF1E2129),
+    surfaceDim = Color(0xFF0F1116),
+    surfaceOverlay = Color(0xFF1E2129),
+    hairline = Color.White.copy(alpha = 0.10f),
+    hairlineStrong = Color.White.copy(alpha = 0.18f),
+    text = Color.White,
+    textMuted = Color.White.copy(alpha = 0.76f),
+    textFaint = Color.White.copy(alpha = 0.6f),
+    scrim = Color.Black.copy(alpha = 0.6f),
+    shadow = Color.Black,
+    isDark = true,
+)

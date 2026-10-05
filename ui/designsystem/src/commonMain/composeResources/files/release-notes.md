@@ -34,6 +34,15 @@
   retries a flaky connection, and when the connection can't keep up it lowers the quality by itself
   and carries on from the same second, saying so in a small note.
 
+- **Your phone is the controller you're holding.** Fuse now knows a DualSense from an Xbox pad or a
+  Pro Controller (by its name, or on Android by who made it). Hints show PlayStation shapes or
+  Xbox letters for the pad in your hand, and a phone used as a controller through Phone Link
+  relabels its buttons to match, live, when you pick up another one.
+- **Touch controls for a film on the other screen.** Playing a film on the screen above in Flipped
+  mode (or on a second screen), the controller stays with the menus, so the picture answers to
+  touch: a tap shows Stop, skip back, play or pause, skip forward and a timeline to drag, and they
+  fade again while it plays. A double tap on either side skips.
+
 ## Changed
 
 - **The second screen's Status and Controls pages, redesigned.** Status leads with the battery
@@ -50,6 +59,13 @@
   moving left from Search goes to the last tab.
 - Addons goes away when Jellyfin, the Store and Cartridge are all off. The Store has its own
   switch in Settings, Addons.
+- Typing on a hardware keyboard, or using the mouse, Fuse's on-screen keys step aside: the field
+  takes what you type, Enter finishes, Esc closes, and Show keys brings them back. A controller
+  press or a touch brings them back too.
+- Addons opens on its first tab, in the order you dragged them into.
+- The second screen's page name sits in the middle of the screen, above and below.
+- A film's or show's logo and backdrop on the second screen are fetched before you reach it, for
+  what is in focus and its neighbours on either side, so they show at once.
 - About's credits lead with Fuse Player by Fuse and Fuseline by Fuse.
 - The README, rewritten.
 - Every screen is rendered and checked at 23 sizes, from a 3.5 inch 4:3 handheld to a 32:9 monitor
@@ -57,6 +73,10 @@
 
 ## Fixed
 
+- A film's or show's page on the second screen could be hard to read with a light theme: it is
+  now always shown as a cinema shows it, light text on a darkened backdrop.
+- Fuse Player's Back button couldn't be reached with the controller: Up from the timeline goes to it.
+- Jellyfin opened scrolled past Search, Refresh and Settings.
 - Fuse Player's settings, audio and subtitle sheets couldn't be closed by touching outside them.
 - Moving left from Search in the top line went to Achievements rather than the last tab (Addons).
 - The second screen's Controls page cut off the target chips and its tiles on a wide lower screen.

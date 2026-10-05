@@ -1736,6 +1736,14 @@ function startLive() {
     const d = parseJSON(e.data);
     if (d !== undefined) setField(d);
   });
+  // The device picked up a different controller: label the pad like it.
+  es.addEventListener('pad', (e) => {
+    const d = parseJSON(e.data);
+    if (typeof d === 'string' && S.session && S.session.glyphs !== d) {
+      S.session.glyphs = d;
+      labelPad();
+    }
+  });
   es.addEventListener('error', () => {
     if (live.es !== es) return;
     es.close();

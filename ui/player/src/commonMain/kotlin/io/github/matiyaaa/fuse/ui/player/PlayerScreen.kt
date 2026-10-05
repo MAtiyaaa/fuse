@@ -197,12 +197,14 @@ fun PlayerScreen(
                     NavResult.CONSUMED
                 }
                 NavAction.SELECT -> {
-                    if (shown && row == BUTTONS) all.getOrNull(focus)?.onClick?.invoke() else session.toggle()
+                    if (shown && row == TOP) onExit() else if (shown && row == BUTTONS) all.getOrNull(focus)?.onClick?.invoke() else session.toggle()
                     NavResult.ACTIVATED
                 }
                 NavAction.LEFT, NavAction.RIGHT -> {
                     val forward = e.action == NavAction.RIGHT
-                    if (shown && row == BUTTONS) {
+                    if (shown && row == TOP) {
+                        NavResult.CONSUMED
+                    } else if (shown && row == BUTTONS) {
                         val next = focus + if (forward) 1 else -1
                         if (next in all.indices) focus = next
                         NavResult.MOVED
@@ -214,12 +216,13 @@ fun PlayerScreen(
                         NavResult.MOVED
                     }
                 }
+                // Up goes from the buttons to the timeline, then to Back at the top.
                 NavAction.UP -> {
-                    if (shown) row = TIMELINE
+                    if (shown) row = if (row == BUTTONS) TIMELINE else TOP
                     NavResult.MOVED
                 }
                 NavAction.DOWN -> {
-                    if (shown) row = BUTTONS
+                    if (shown) row = if (row == TOP) TIMELINE else BUTTONS
                     NavResult.MOVED
                 }
                 NavAction.NEXT_SECTION -> {
@@ -383,6 +386,9 @@ fun PlayerScreen(
 
 private const val TIMELINE = 0
 
+/** The top row: Back. */
+private const val TOP = 2
+
 /** How long a note from the player stays. */
 private const val NOTICE_MS = 4_000L
 private const val BUTTONS = 1
@@ -416,7 +422,7 @@ private fun Controls(
 
         // Title, what it is, and how it plays.
         Row(Modifier.fillMaxWidth().align(Alignment.TopStart).padding(horizontal = pad, vertical = if (short) Space.m else Space.xl), verticalAlignment = Alignment.CenterVertically) {
-            RoundButton(FuseIcons.ArrowLeft, "Back", selected = false, size = 44.dp, onClick = onExit)
+            RoundButton(FuseIcons.ArrowLeft, "Back", selected = row == TOP, size = 44.dp, onClick = onExit)
             Spacer(Modifier.width(Space.l))
             Column(Modifier.weight(1f)) {
                 // Music names the song below; the top says where it comes from.

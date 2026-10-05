@@ -64,7 +64,10 @@ import io.github.matiyaaa.fuse.ui.designsystem.components.FText
 import io.github.matiyaaa.fuse.ui.designsystem.components.Hint
 import io.github.matiyaaa.fuse.ui.designsystem.components.KeyboardField
 import io.github.matiyaaa.fuse.ui.designsystem.components.KeyboardState
+import io.github.matiyaaa.fuse.ui.designsystem.components.KeysAway
 import io.github.matiyaaa.fuse.ui.designsystem.components.OnScreenKeyboard
+import io.github.matiyaaa.fuse.ui.designsystem.components.typingOnHardware
+import io.github.matiyaaa.fuse.ui.designsystem.input.InputSource
 import io.github.matiyaaa.fuse.ui.designsystem.components.SectionLabel
 import io.github.matiyaaa.fuse.ui.designsystem.components.fadingEdges
 import io.github.matiyaaa.fuse.ui.designsystem.effects.fuseClickable
@@ -293,6 +296,10 @@ fun SearchScreen(app: AppState) {
         }
     }
 
+    // Typing on a hardware keyboard (or using the mouse): the keys step aside, unless asked back.
+    val hardware = typingOnHardware()
+    var keysAsked by remember { mutableStateOf(false) }
+    val keysShown = !hardware || keysAsked
     InputLayer(
         enabled = app.focusZone == FocusZone.CONTENT && !app.overlayOpen,
         repeats = if (inResults) emptySet() else keyboard.repeats,
@@ -308,6 +315,9 @@ fun SearchScreen(app: AppState) {
                 }
                 else -> NavResult.IGNORED
             }
+        } else if (!keysShown && e.source == InputSource.KEYBOARD && (e.action == NavAction.DOWN || e.action == NavAction.RIGHT)) {
+            // With the keys away, the arrows go from the field to the results.
+            if (hits.isNotEmpty()) { inResults = true; NavResult.MOVED } else NavResult.BLOCKED
         } else {
             val r = keyboard.handle(
                 e, field, { if (hits.isNotEmpty()) inResults = true }, onPaste = { app.pasteInto(field) },
@@ -342,7 +352,8 @@ fun SearchScreen(app: AppState) {
                 FilterChips(results.chips) { token -> field.replaceAll(SearchSyntax.remove(field.text, token)) }
             }
             Spacer(Modifier.height(if (compact) Space.m else Space.l))
-            OnScreenKeyboard(
+            if (!keysShown) KeysAway("see results", onShowKeys = { keysAsked = true }, modifier = Modifier.reveal(reveal, 1))
+            if (keysShown) OnScreenKeyboard(
                 keyboard, field, { if (hits.isNotEmpty()) inResults = true },
                 modifier = Modifier.reveal(reveal, 1),
                 keyHeight = keyHeight,

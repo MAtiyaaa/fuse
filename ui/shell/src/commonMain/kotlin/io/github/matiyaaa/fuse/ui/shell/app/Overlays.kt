@@ -36,7 +36,10 @@ import io.github.matiyaaa.fuse.ui.designsystem.components.KeyboardField
 import io.github.matiyaaa.fuse.ui.designsystem.components.KeyboardState
 import io.github.matiyaaa.fuse.ui.designsystem.components.MenuHeader
 import io.github.matiyaaa.fuse.ui.designsystem.components.MenuList
+import io.github.matiyaaa.fuse.ui.designsystem.components.KeysAway
 import io.github.matiyaaa.fuse.ui.designsystem.components.OnScreenKeyboard
+import io.github.matiyaaa.fuse.ui.designsystem.components.typingOnHardware
+import io.github.matiyaaa.fuse.ui.designsystem.input.InputSource
 import io.github.matiyaaa.fuse.ui.designsystem.components.OnScreenKeyboardHints
 import io.github.matiyaaa.fuse.ui.designsystem.components.Overlay
 import io.github.matiyaaa.fuse.ui.designsystem.components.OverlayEdge
@@ -297,6 +300,10 @@ private fun TextInputOverlay(app: AppState) {
     // The phone key: a code that opens this field's keyboard on a phone (where Phone Link exists).
     val phone: (() -> Unit)? = if (app.phoneLink != null) ({ app.phoneTyping = true }) else null
     val phones by RemoteInput.phones.collectAsState()
+    // Typing on a hardware keyboard (or using the mouse): the keys step aside, unless asked back.
+    val hardware = typingOnHardware()
+    var keysAsked by remember(spec) { mutableStateOf(false) }
+    val keysShown = !hardware || keysAsked
     if (spec != null) {
         InputLayer(
             priority = LayerPriority.DIALOG + 3,
@@ -305,6 +312,14 @@ private fun TextInputOverlay(app: AppState) {
         ) { e ->
             when (e.action) {
                 NavAction.BACK -> { app.textInput = null; NavResult.CONSUMED }
+                // Arrow keys move the caret while the keys are away.
+                NavAction.LEFT, NavAction.RIGHT -> if (!keysShown && e.source == InputSource.KEYBOARD) {
+                    val at = field.value.selection.start + if (e.action == NavAction.RIGHT) 1 else -1
+                    field.setCaret(at.coerceIn(0, field.text.length))
+                    NavResult.MOVED
+                } else {
+                    keyboard.handle(e, field, ::done, onPaste = paste, onPhone = phone)
+                }
                 else -> keyboard.handle(e, field, ::done, onPaste = paste, onPhone = phone)
             }
         }
@@ -329,18 +344,23 @@ private fun TextInputOverlay(app: AppState) {
                         secret = s.secret,
                         onClear = { field.replaceAll(""); keyboard.prepare(field) },
                     )
-                    Spacer(Modifier.height(Space.l))
-                    OnScreenKeyboard(
-                        keyboard, field, ::done,
-                        keyHeight = keyHeight,
-                        doneLabel = s.doneLabel,
-                        onPaste = paste,
-                        onKey = { app.platform.haptics.tick() },
-                        onPhone = phone,
-                    )
-                    Spacer(Modifier.height(Space.m))
-                    // Names the finishing key the way the key itself does (Save, Connect, Done).
-                    OnScreenKeyboardHints(doneLabel = s.doneLabel)
+                    if (keysShown) {
+                        Spacer(Modifier.height(Space.l))
+                        OnScreenKeyboard(
+                            keyboard, field, ::done,
+                            keyHeight = keyHeight,
+                            doneLabel = s.doneLabel,
+                            onPaste = paste,
+                            onKey = { app.platform.haptics.tick() },
+                            onPhone = phone,
+                        )
+                        Spacer(Modifier.height(Space.m))
+                        // Names the finishing key the way the key itself does (Save, Connect, Done).
+                        OnScreenKeyboardHints(doneLabel = s.doneLabel)
+                    } else {
+                        Spacer(Modifier.height(Space.m))
+                        KeysAway(s.doneLabel, onShowKeys = { keysAsked = true })
+                    }
                 }
             }
         }

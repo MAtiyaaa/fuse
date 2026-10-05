@@ -146,7 +146,9 @@ fun ShowcaseApp(store: FuseStore, platform: PlatformUi) {
             val player = if (io.github.matiyaaa.fuse.ui.player.FusePlayer.available) io.github.matiyaaa.fuse.ui.player.FusePlayer.session else null
             val playingId = player?.item?.id
             LaunchedEffect(playingId) { if (playingId != null && pager.currentPage != 0) pager.animateScrollToPage(0) }
-            HorizontalPager(state = pager, modifier = Modifier.fillMaxSize(), beyondViewportPageCount = 1) { page ->
+            // A film here takes every touch (its timeline drags sideways), so the pages hold still.
+            val filmShown = player?.item != null && !io.github.matiyaaa.fuse.ui.player.PlayerPlacement.withMenus && pager.currentPage == 0
+            HorizontalPager(state = pager, modifier = Modifier.fillMaxSize(), beyondViewportPageCount = 1, userScrollEnabled = !filmShown) { page ->
                 when (page) {
                     0 -> Box(Modifier.fillMaxSize()) {
                         BoxWithConstraints(Modifier.fillMaxSize().padding(horizontal = Space.gutter, vertical = Space.l)) {
@@ -183,7 +185,13 @@ fun ShowcaseApp(store: FuseStore, platform: PlatformUi) {
                         // screen; played on the touch screen instead, what is playing, large.
                         if (player?.item != null) {
                             if (!io.github.matiyaaa.fuse.ui.player.PlayerPlacement.withMenus) {
-                                io.github.matiyaaa.fuse.ui.player.PlayerPicture(player, Modifier.fillMaxSize())
+                                // The controller drives the menus below: here the film answers to touch alone.
+                                val placement = io.github.matiyaaa.fuse.ui.player.PlayerPlacement
+                                io.github.matiyaaa.fuse.ui.player.PlayerTouchPicture(
+                                    player, Modifier.fillMaxSize(),
+                                    onSwap = if (placement.canSwap) ({ placement.swap() }) else null,
+                                    swapLabel = "Play on the touch screen",
+                                )
                             } else {
                                 io.github.matiyaaa.fuse.ui.player.PlayerNowShowing(player, Modifier.fillMaxSize(), where = "Playing on the touch screen")
                             }
@@ -196,15 +204,19 @@ fun ShowcaseApp(store: FuseStore, platform: PlatformUi) {
             // The top line over every page (but not over a film filling the screen).
             val filmHere = player?.item != null && !io.github.matiyaaa.fuse.ui.player.PlayerPlacement.withMenus && pager.currentPage == 0
             if (!filmHere) {
-                Row(
-                    Modifier.fillMaxWidth().padding(horizontal = Space.gutter, vertical = Space.l).height(Size.hudHeight - Space.l),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    FuseMark(Modifier.size(28.dp))
-                    Spacer(Modifier.width(Space.s))
-                    FText(listOf("Fuse", "Status", "Controls")[pager.currentPage.coerceIn(0, 2)], Fuse.type.titleSmall, maxLines = 1)
-                    Spacer(Modifier.weight(1f))
-                    StatusCluster(status, time, showWifi = prefs.showWifi, showBluetooth = prefs.showBluetooth)
+                // The mark at the start, the page's name in the middle of the screen (cross-fading
+                // with the swipe), the status at the end.
+                Box(Modifier.fillMaxWidth().padding(horizontal = Space.gutter, vertical = Space.l).height(Size.hudHeight - Space.l)) {
+                    FuseMark(Modifier.align(Alignment.CenterStart).size(28.dp))
+                    listOf("Fuse", "Status", "Controls").forEachIndexed { i, title ->
+                        FText(
+                            title, Fuse.type.titleSmall, maxLines = 1, align = androidx.compose.ui.text.style.TextAlign.Center,
+                            modifier = Modifier.align(Alignment.Center).graphicsLayer {
+                                alpha = (1f - kotlin.math.abs(pager.currentPage + pager.currentPageOffsetFraction - i)).coerceIn(0f, 1f)
+                            },
+                        )
+                    }
+                    Box(Modifier.align(Alignment.CenterEnd)) { StatusCluster(status, time, showWifi = prefs.showWifi, showBluetooth = prefs.showBluetooth) }
                 }
                 PageDots(
                     count = 3,

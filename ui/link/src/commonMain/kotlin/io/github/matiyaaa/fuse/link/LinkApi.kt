@@ -78,8 +78,15 @@ internal class LinkApi(
         put("captures", capturesAvailable)
         // Whether the Remote's controller works (it can be turned off on the device).
         put("controller", store.prefs.value.phoneLinkController)
-        // How the Remote names its buttons: the way this device's controller is labelled.
-        put("glyphs", store.prefs.value.input.glyphs.name)
+        // How the Remote names its buttons: like the controller in use on the device, or as the
+        // device's controller is labelled in Settings when it doesn't say what it is.
+        put("glyphs", padGlyphs())
+    }
+
+    /** The Remote's button names: the controller in use, else the device's setting (never keyboard keys). */
+    fun padGlyphs(): String {
+        val setting = store.prefs.value.input.glyphs.takeIf { it != io.github.matiyaaa.fuse.model.GlyphStyle.KEYBOARD } ?: io.github.matiyaaa.fuse.model.GlyphStyle.XBOX
+        return (io.github.matiyaaa.fuse.ui.shell.app.RemoteInput.padFamily.value ?: setting).name
     }
 
     suspend fun login(body: JsonElement?): Login {

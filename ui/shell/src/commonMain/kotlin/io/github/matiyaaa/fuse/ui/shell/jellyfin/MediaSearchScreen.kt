@@ -126,6 +126,7 @@ internal fun MediaSearchScreen(app: AppState) {
     page.sel.clamp(keys, ::sizeOf)
     val rowKey = keys.getOrElse(page.sel.row) { "field" }
     val current = groups.firstOrNull { it.first.name == rowKey }?.third?.getOrNull(page.sel.column(rowKey))
+    PrefetchMediaArt(groups.firstOrNull { it.first.name == rowKey }?.third.orEmpty(), page.sel.column(rowKey))
 
     PageEffect(rowKey, current?.id, focused) {
         if (!focused) return@PageEffect

@@ -138,7 +138,15 @@ class SdlGamepads(private val sink: GamepadSink) : AutoCloseable {
             while (running.get()) {
                 manager.update()
                 var now = PadSnapshot.EMPTY
-                for (i in 0 until MAX_PADS) now = now.merge(PadSnapshot.of(manager.getState(i)))
+                var pressing: String? = null
+                for (i in 0 until MAX_PADS) {
+                    val state = manager.getState(i)
+                    val snap = PadSnapshot.of(state)
+                    // The pad with a newly pressed button is the one in use.
+                    if (pressing == null && (snap.buttons - previous.buttons).isNotEmpty()) pressing = state.controllerType
+                    now = now.merge(snap)
+                }
+                if (pressing != null) sink.identified(pressing)
                 PadSnapshot.diff(previous, now).forEach(::send)
                 previous = now
                 try {

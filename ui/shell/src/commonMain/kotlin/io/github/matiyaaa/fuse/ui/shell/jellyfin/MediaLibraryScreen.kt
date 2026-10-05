@@ -165,6 +165,7 @@ internal fun MediaLibraryScreen(app: AppState, id: String, name: String, kind: S
         val cell = if (compact) 128.dp else 160.dp
         val columns = ((maxWidth - Space.gutter * 2 + Space.l) / (cell + Space.l)).toInt().coerceAtLeast(2)
         val current = page.items.getOrNull(page.index)
+        if (!page.top) PrefetchMediaArt(page.items, page.index)
 
         PageEffect(current?.id, page.top, focused) {
             if (!focused) return@PageEffect

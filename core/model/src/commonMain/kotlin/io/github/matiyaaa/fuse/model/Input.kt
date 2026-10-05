@@ -37,6 +37,32 @@ enum class PadButton {
 @Serializable
 enum class GlyphStyle { XBOX, NINTENDO, PLAYSTATION, KEYBOARD }
 
+/**
+ * Which family a controller belongs to, from what it calls itself (its device name, or SDL's
+ * controller type) or its USB vendor: Sony's pads are PlayStation, Nintendo's are Nintendo,
+ * Microsoft's are Xbox. Null when it doesn't say (most third-party pads), so the setting decides.
+ */
+object PadFamily {
+    private const val SONY = 0x054C
+    private const val NINTENDO = 0x057E
+    private const val MICROSOFT = 0x045E
+
+    fun of(name: String?, vendorId: Int? = null): GlyphStyle? {
+        when (vendorId) {
+            SONY -> return GlyphStyle.PLAYSTATION
+            NINTENDO -> return GlyphStyle.NINTENDO
+            MICROSOFT -> return GlyphStyle.XBOX
+        }
+        val n = name?.lowercase() ?: return null
+        return when {
+            listOf("dualsense", "dualshock", "playstation", "sony", "ps3 ", "ps4", "ps5").any { it in n } || n.startsWith("ps3") -> GlyphStyle.PLAYSTATION
+            listOf("nintendo", "switch", "pro controller", "joy-con", "joycon").any { it in n } -> GlyphStyle.NINTENDO
+            listOf("xbox", "x-box", "xinput", "microsoft").any { it in n } -> GlyphStyle.XBOX
+            else -> null
+        }
+    }
+}
+
 @Serializable
 data class InputProfile(
     /**

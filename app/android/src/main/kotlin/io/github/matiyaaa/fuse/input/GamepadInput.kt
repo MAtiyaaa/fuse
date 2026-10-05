@@ -4,6 +4,7 @@ import android.view.InputDevice
 import android.view.KeyEvent
 import android.view.MotionEvent
 import io.github.matiyaaa.fuse.model.PadButton
+import io.github.matiyaaa.fuse.model.PadFamily
 import io.github.matiyaaa.fuse.ui.designsystem.input.InputRouter
 import io.github.matiyaaa.fuse.ui.designsystem.input.InputSource
 
@@ -27,7 +28,11 @@ class GamepadInput(private val router: InputRouter) {
         val button = buttonFor(event.keyCode) ?: return false
         val source = sourceOf(event, button)
         when (event.action) {
-            KeyEvent.ACTION_DOWN -> if (event.repeatCount == 0) router.press(button, source)
+            KeyEvent.ACTION_DOWN -> if (event.repeatCount == 0) {
+                // Which controller this is (a DualSense, a Pro Controller...), so labels can follow it.
+                if (isFromController(event)) event.device?.let { router.padIdentified(PadFamily.of(it.name, it.vendorId)) }
+                router.press(button, source)
+            }
             KeyEvent.ACTION_UP -> router.release(button, source)
         }
         return true

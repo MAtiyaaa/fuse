@@ -55,8 +55,8 @@ private val TABS = 56.dp
 /**
  * Addons: Cartridge (where it runs and is turned on), the Store (Android) and Jellyfin (once turned
  * on in Settings), as views of one section. Up from the top of any reaches the tabs, Left and Right
- * switch them, Down returns. It opens on Cartridge when Cartridge is installed, else on the Store,
- * else on Jellyfin, and remembers which was shown. With one part, Addons is just that part, without
+ * switch them, Down returns. It opens on the first tab in the order they were dragged into, and
+ * remembers which was shown. With one part, Addons is just that part, without
  * tabs.
  */
 @Composable
@@ -72,10 +72,9 @@ fun AddonsScreen(app: AppState) {
         if (prefs.jellyfin.enabled && app.store.jellyfin != null) add(AddonsPart.JELLYFIN)
         if (isEmpty()) add(AddonsPart.CARTRIDGE)
     }.sortedBy { p -> prefs.addonsOrder.indexOf(p.name).let { if (it < 0) ORDER_REST + p.ordinal else it } }
-    val part = app.addonsPart?.takeIf { it in parts }
-        ?: AddonsPart.CARTRIDGE.takeIf { cartridge.installed && it in parts }
-        ?: AddonsPart.STORE.takeIf { it in parts }
-        ?: parts.first()
+    // Opens on the first tab, in the order they were dragged into (or on the one last shown, while
+    // Fuse remembers where you were).
+    val part = app.addonsPart?.takeIf { it in parts } ?: parts.first()
     var tabsFocused by remember { mutableStateOf(false) }
     val inTabs = tabsFocused && parts.size > 1 && app.focusZone == FocusZone.CONTENT
     // The tab picked up to move (held A on the tabs, or a finger or the mouse holding one).

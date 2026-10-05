@@ -494,6 +494,10 @@ class PhoneLinkServer(
                 launch {
                     RemoteInput.field.collect { send("keyboard", LinkJson.encodeToString(JsonElement.serializer(), RemoteApi.field(it))) }
                 }
+                // A different controller picked up on the device: the Remote relabels its buttons.
+                launch {
+                    RemoteInput.padFamily.collect { send("pad", LinkJson.encodeToString(JsonElement.serializer(), kotlinx.serialization.json.JsonPrimitive(api.padGlyphs()))) }
+                }
                 share?.let { s -> launch { s.changes.collect { send("captures", "{}") } } }
                 launch {
                     while (true) {

@@ -173,6 +173,14 @@ private fun Shelves(app: AppState, page: JellyfinHomeState, focused: Boolean, to
         is HomeRow.Libraries -> row.items.getOrNull(col)
         else -> null
     }
+    PrefetchMediaArt(
+        when (row) {
+            is HomeRow.Items -> row.shelf.items
+            is HomeRow.Libraries -> row.items
+            else -> emptyList()
+        },
+        col,
+    )
 
     fun activate(r: HomeRow, i: Int) {
         when (r) {
@@ -208,7 +216,10 @@ private fun Shelves(app: AppState, page: JellyfinHomeState, focused: Boolean, to
     }
 
     val list = rememberLazyListState()
-    FollowSelection(list, { sel.row }, anchor = 0.12f)
+    // The first shelf keeps the page at its top, so Search, Refresh and Settings stay in view when
+    // Jellyfin opens on it; further down, the chosen shelf sits near the top. The offline banner,
+    // when shown, is the list's first item.
+    FollowSelection(list, { if (sel.row <= 1) 0 else sel.row + if (offline) 1 else 0 }, anchor = 0.12f)
     ReportScroll(list)
     val room = subTabsRoom()
     BoxWithConstraints(Modifier.fillMaxSize()) {

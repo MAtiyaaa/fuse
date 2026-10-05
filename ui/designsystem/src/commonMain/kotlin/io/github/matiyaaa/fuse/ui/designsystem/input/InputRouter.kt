@@ -93,6 +93,25 @@ class InputRouter(
     /** Last input kind used; the UI can adapt (for example hint glyphs) without hiding focus. */
     val lastSource: StateFlow<InputSource> = _lastSource.asStateFlow()
 
+    private val _padFamily = MutableStateFlow<io.github.matiyaaa.fuse.model.GlyphStyle?>(null)
+
+    /**
+     * The family of the controller last pressed ([io.github.matiyaaa.fuse.model.PadFamily]), or null
+     * when it doesn't say which it is. The platform's controller reader sets it.
+     */
+    val padFamily: StateFlow<io.github.matiyaaa.fuse.model.GlyphStyle?> = _padFamily.asStateFlow()
+
+    /** A hardware keyboard typed into the open field: the keyboard is the input in use. */
+    internal fun typedOnKeyboard() {
+        touched()
+        _lastSource.value = InputSource.KEYBOARD
+    }
+
+    /** The controller now in use calls itself [family] (null: it doesn't say). */
+    fun padIdentified(family: io.github.matiyaaa.fuse.model.GlyphStyle?) {
+        if (_padFamily.value != family) _padFamily.value = family
+    }
+
     internal class Layer(
         val priority: Int,
         val seq: Long,

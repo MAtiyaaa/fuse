@@ -213,10 +213,13 @@ private fun FuseAppContent(
     val spec = prefs.theme
     val quality = RenderQuality.of(prefs.performance, platform.device, prefs.lowPower)
     val lastSource by router.lastSource.collectAsState()
+    val padFamily by router.padFamily.collectAsState()
+    // A phone used as a controller is labelled like the controller in hand.
+    LaunchedEffect(padFamily) { RemoteInput.padInUse(padFamily) }
     val glyphStyle = when {
         !prefs.input.autoGlyphs -> prefs.input.glyphs
         lastSource == InputSource.KEYBOARD -> GlyphStyle.KEYBOARD
-        else -> prefs.input.glyphs
+        else -> padGlyphs(prefs.input.glyphs, padFamily)
     }
 
     // Input settings, sounds and haptics follow preferences.
@@ -1082,3 +1085,14 @@ private fun StandbyHost(app: AppState, clock24h: Boolean, intro: Boolean) {
 
 /** Waking from Standby within this long of the animation playing doesn't play it again. */
 private const val INTRO_AGAIN_AFTER_MS = 5 * 60_000L
+
+/**
+ * The glyphs for the controller in hand: a PlayStation pad shows shapes and an Xbox pad letters,
+ * whatever the setting says. Nintendo glyphs are left to the setting (and "Detect my buttons"),
+ * since how a Nintendo pad reports its buttons decides which one confirms.
+ */
+internal fun padGlyphs(setting: GlyphStyle, family: GlyphStyle?): GlyphStyle = when (family) {
+    GlyphStyle.PLAYSTATION -> GlyphStyle.PLAYSTATION
+    GlyphStyle.XBOX -> if (setting == GlyphStyle.NINTENDO) setting else GlyphStyle.XBOX
+    else -> setting
+}

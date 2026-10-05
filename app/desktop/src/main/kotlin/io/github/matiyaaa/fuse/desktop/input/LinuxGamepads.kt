@@ -19,6 +19,9 @@ interface GamepadSink {
 
     /** Analog trigger ([PadButton.L2] or [PadButton.R2]), 0..1. */
     fun trigger(button: PadButton, value: Float)
+
+    /** The controller being pressed calls itself [name] (its device name, or SDL's type for it). */
+    fun identified(name: String?) {}
 }
 
 /**
@@ -157,7 +160,10 @@ class LinuxGamepads(private val sink: GamepadSink) : AutoCloseable {
         private fun onButton(number: Int, down: Boolean) {
             val button = mapping.button(number) ?: return
             if (down) {
-                if (held.add(button)) sink.press(button)
+                if (held.add(button)) {
+                    sink.identified(label)
+                    sink.press(button)
+                }
             } else if (held.remove(button)) {
                 sink.release(button)
             }

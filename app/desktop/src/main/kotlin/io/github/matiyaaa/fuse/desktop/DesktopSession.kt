@@ -266,6 +266,11 @@ class DesktopSession(
 
         override fun release(button: PadButton) = EventQueue.invokeLater { router.release(button, InputSource.GAMEPAD) }
 
+        override fun identified(name: String?) {
+            val family = io.github.matiyaaa.fuse.model.PadFamily.of(name)
+            EventQueue.invokeLater { router.padIdentified(family) }
+        }
+
         override fun stick(x: Float, y: Float) {
             latestStick.set(x to y)
             // Coalesce: many axis events per frame become one router update.
