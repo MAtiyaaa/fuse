@@ -162,6 +162,7 @@ private val extraShared: Map<String, List<String>> = mapOf(
 )
 
 private val extraLinux: Map<String, List<String>> = mapOf(
+    "pico8" to listOf("retro8"),
     "64dd" to listOf("parallel_n64", "mupen64plus_next"),
     "appleii" to listOf("applewin", "mame"),
     "arcadia-2001" to listOf("amiarcadia", "mame"),

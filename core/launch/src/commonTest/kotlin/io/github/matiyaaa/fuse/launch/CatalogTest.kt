@@ -50,6 +50,18 @@ class CatalogTest {
     }
 
     @Test
+    fun everyPlatformHasSomethingOnTheDesktop() {
+        // Android apps only run on Android, and Xenia has no Mac build.
+        val none = mapOf(Host.MACOS to setOf("xbox360"))
+        for (host in listOf(Host.LINUX, Host.WINDOWS, Host.MACOS)) {
+            val missing = Platforms.all.map { it.value }
+                .filter { EmulatorPriority.forPlatform(host, io.github.matiyaaa.fuse.model.PlatformId(it)).isEmpty() }
+                .filter { it != "android" && it !in none[host].orEmpty() }
+            assertTrue(missing.isEmpty(), "no $host priority for $missing")
+        }
+    }
+
+    @Test
     fun adaptersAreDocumented() {
         val emDash = '\u2014'
         for (a in registry.adapters) {

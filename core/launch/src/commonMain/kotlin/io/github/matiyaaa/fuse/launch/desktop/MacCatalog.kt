@@ -78,6 +78,8 @@ object MacCatalog {
         port("mednafen", emptyList(), programs = listOf("mednafen")),
         port("mame", emptyList(), programs = listOf("mame")),
         port("scummvm", listOf("ScummVM.app"), programs = listOf("scummvm")),
+        port("pico8", listOf("PICO-8.app"), rule = "PICO-8"),
+        port("ruffle", listOf("Ruffle.app")),
         port("dosbox-staging", listOf("dosbox-staging.app", "DOSBox Staging.app"), programs = listOf("dosbox-staging")),
         port("dosbox-x", listOf("dosbox-x.app"), programs = listOf("dosbox-x")),
         port("steam-url", listOf("Steam.app"), rule = "STEAM", opener = "/usr/bin/open") {

@@ -65,14 +65,16 @@ internal class DesktopStorage(private val dirs: FuseDirs, private val host: Dial
     suspend fun saveFile(name: String, bytes: ByteArray): String? {
         val target = host.withDialog { pickSave(name) } ?: return null
         return withContext(Dispatchers.IO) {
+            val file = File(target)
+            val temp = File(file.absoluteFile.parentFile, ".${file.name}.part")
             try {
-                val file = File(target)
-                val temp = File(file.parentFile, ".${file.name}.part")
                 temp.writeBytes(bytes)
                 Files.move(temp.toPath(), file.toPath(), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
                 file.absoluteFile.fusePath
             } catch (e: Exception) {
                 Log.warn("could not save $name", e)
+                // A half-written copy is never left beside the person's files.
+                temp.delete()
                 null
             }
         }

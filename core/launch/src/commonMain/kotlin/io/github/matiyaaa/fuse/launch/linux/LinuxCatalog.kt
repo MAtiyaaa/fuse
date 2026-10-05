@@ -367,6 +367,21 @@ object LinuxCatalog {
             limitations = listOf("The .scummvm file must be named after the game's ScummVM short name (ES-DE)."),
         ),
         LinuxEmulatorDef(
+            id = "linux.pico8", name = "PICO-8", platforms = platforms("pico8"),
+            detection = detect(bin = listOf("pico8"), dirBin = listOf("pico-8/pico8")),
+            modes = listOf(file("-root_path", "{ROMDIR}", "-run", "{ROM}", ext = setOf("p8", "png"), label = "Cart")),
+            source = esde("PICO-8; %EMULATOR_PICO-8% -root_path %GAMEDIR% -run %ROM%"), confidence = VERIFIED_ESDE,
+            homepage = "https://www.lexaloffle.com/pico-8.php",
+            limitations = listOf("PICO-8 itself is sold by Lexaloffle; Fuse starts the copy you have."),
+        ),
+        LinuxEmulatorDef(
+            id = "linux.ruffle", name = "Ruffle", platforms = platforms("flash"),
+            detection = detect(bin = listOf("ruffle"), flatpak = listOf("rs.ruffle.Ruffle"), dirBin = listOf("ruffle/ruffle")),
+            modes = listOf(file("--fullscreen", "{ROM}")),
+            source = esde("RUFFLE; %EMULATOR_RUFFLE% --fullscreen %ROM%"), confidence = VERIFIED_ESDE, homepage = "https://ruffle.rs/",
+            limitations = listOf("Ruffle plays most ActionScript 1 and 2 games; ActionScript 3 support is still growing."),
+        ),
+        LinuxEmulatorDef(
             id = "linux.dosbox-staging", name = "DOSBox Staging", platforms = platforms("dos"),
             detection = detect(bin = listOf("dosbox-staging"), flatpak = listOf("io.github.dosbox-staging")),
             modes = listOf(file("{ROM}", workingDir = "{ROMDIR}")),

@@ -383,10 +383,10 @@ Play.
   confidence level.
 - **More than 100 definitions on Android** (RetroArch, Dolphin, PPSSPP, DuckStation, NetherSX2,
   ARMSX2, aPS3e, melonDS, Azahar, Eden, Vita3K, Flycast, Lemuroid, MAME4droid, ScummVM and many
-  more), **35 on Linux**, found on `$PATH`, as Flatpaks or as AppImages (RetroArch, PCSX2, RPCS3,
-  Dolphin, Cemu, Ryujinx, xemu, Xenia, shadPS4, MAME, DOSBox Staging and more), **32 on Windows**,
-  found in portable folders, Program Files, AppData, Scoop, Chocolatey, winget and Steam libraries,
-  and **29 on macOS**, found as apps or Homebrew programs. Anything Fuse misses on Windows or macOS
+  more), **38 on Linux**, found on `$PATH`, as Flatpaks or as AppImages (RetroArch, PCSX2, RPCS3,
+  Dolphin, Cemu, Ryujinx, xemu, Xenia, shadPS4, MAME, DOSBox Staging, Ruffle, PICO-8 and more),
+  **36 on Windows**, found in portable folders, Program Files, AppData, Scoop, Chocolatey, winget
+  and Steam libraries, and **32 on macOS**, found as apps or Homebrew programs. Anything Fuse misses on Windows or macOS
   can be located from Settings. An AppImage is known by the release it updates from, so a renamed
   one is still found.
 - **RetroArch for every system it runs**, with ES-DE's cores in ES-DE's order, on Android, Linux,
