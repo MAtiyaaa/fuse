@@ -24,7 +24,7 @@ class MenuMusicPlanTest {
 
     @Test
     fun zeroVolumeKeepsTheSongButPausesIt() {
-        val music = MusicPrefs(volume = 0f)
+        val music = MusicPrefs(volume = 0f, shuffle = false)
         assertEquals(BundledMusic.MENU_DEFAULT, MenuMusicPlan.track(music, safeMode = false, onboarding = false))
         // Paused rather than playing silently, so a screen recording never captures a muted song.
         assertEquals(MusicState(song, 0f, false), MenuMusicPlan.state(song, music, quiet = false))
@@ -34,7 +34,9 @@ class MenuMusicPlanTest {
     fun shufflePlaysEachSongOnceAndNeverRepeatsRecentOnes() {
         val shuffle = MusicPrefs(shuffle = true)
         assertEquals(false, MenuMusicPlan.state(song, shuffle, quiet = false).loop)
-        assertEquals(true, MenuMusicPlan.state(song, MusicPrefs(), quiet = false).loop)
+        // Shuffle is on unless turned off; one song loops.
+        assertEquals(false, MenuMusicPlan.state(song, MusicPrefs(), quiet = false).loop)
+        assertEquals(true, MenuMusicPlan.state(song, MusicPrefs(shuffle = false), quiet = false).loop)
         assertEquals("mirth", MenuMusicPlan.track(shuffle, safeMode = false, onboarding = false, shuffled = "mirth"))
         // Setup keeps its own song even with shuffle on.
         assertEquals(BundledMusic.ONBOARDING, MenuMusicPlan.track(shuffle, safeMode = false, onboarding = true, shuffled = "mirth"))
@@ -53,7 +55,7 @@ class MenuMusicPlanTest {
 
     @Test
     fun volumeChangedWhileOffIsInPlaceWhenMusicComesBack() {
-        val off = MusicPrefs(enabled = false, volume = 0.2f)
+        val off = MusicPrefs(enabled = false, volume = 0.2f, shuffle = false)
         assertNull(MenuMusicPlan.track(off, safeMode = false, onboarding = false))
         val changedWhileOff = off.copy(volume = 0.7f)
         assertEquals(0.7f, MenuMusicPlan.state(null, changedWhileOff, quiet = false).volume)
