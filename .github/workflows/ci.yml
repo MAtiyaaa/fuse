@@ -58,6 +58,10 @@ jobs:
           :core:integrations:desktopTest
           :core:data:desktopTest
           :core:sync:desktopTest
+          :core:jellyfin:desktopTest
+          :core:playback:desktopTest
+          :ui:fuseline:desktopTest
+          :ui:player:desktopTest
           :ui:shell:desktopTest
           :ui:designsystem:desktopTest
           :ui:link:desktopTest
