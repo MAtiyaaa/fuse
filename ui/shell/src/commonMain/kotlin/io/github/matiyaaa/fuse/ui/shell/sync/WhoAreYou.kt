@@ -127,7 +127,10 @@ private fun WhoAreYou(app: AppState, mode: WhoMode) {
     var index by remember { mutableIntStateOf(0) }
     var busy by remember { mutableStateOf<String?>(null) }
     val c = Fuse.colors
-    val closable = mode != WhoMode.STARTUP || active != null
+    // Asked at startup with nobody chosen yet, it waits for a choice; but never on a host that isn't
+    // answering: Fuse is used as it is meanwhile, and the question can be asked again from the top line.
+    val hostAway = status is SyncStatus.Offline || status is SyncStatus.Connecting || status is SyncStatus.NeedsAttention
+    val closable = mode != WhoMode.STARTUP || active != null || hostAway
     LaunchedEffect(profiles, active) {
         val at = profiles.indexOfFirst { it.id == active?.id }
         if (at >= 0 && index == 0) index = at
@@ -248,7 +251,7 @@ private fun People(
         FText("Who's playing?", if (compact) Fuse.type.title else Fuse.type.hero, align = TextAlign.Center, maxLines = 1, modifier = Modifier.semantics { heading() })
         Spacer(Modifier.height(Space.xs))
         FText(
-            if (offline) "The host isn't answering, so switching waits until it does. Everything here keeps working." else "Your games, saves, play time and settings follow you to every device.",
+            if (offline) "The host isn't answering. Profiles without a PIN switch now and catch up when it's back." else "Your games, saves, play time and settings follow you to every device.",
             Fuse.type.body, color = c.textMuted, align = TextAlign.Center, maxLines = 2, modifier = Modifier.widthIn(max = 560.dp),
         )
         Spacer(Modifier.height(if (compact) Space.l else Space.xxl))
@@ -283,7 +286,7 @@ private fun People(
         HintBar(buildList {
             add(Hint(HintButton.CONFIRM, "Choose"))
             if (!offline) add(Hint(HintButton.SEARCH, "New Profile"))
-            if (closable) add(Hint(HintButton.BACK, "Back"))
+            if (closable) add(Hint(HintButton.BACK, if (active == null) "Not Now" else "Back"))
         })
     }
 }

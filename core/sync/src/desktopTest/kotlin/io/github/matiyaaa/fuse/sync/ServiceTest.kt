@@ -152,6 +152,30 @@ class ServiceTest {
     }
 
     @Test
+    fun withTheHostAwayAProfileWithoutAPinStillSwitches(): Unit = runBlocking {
+        val (pc, _) = service("Gaming PC", Library())
+        val deckLib = Library(games = hashMapOf(ct.id to GameRecord(ct, playSeconds = mapOf("x" to 600), lastPlayed = 1_000)))
+        val (deck, deckSettings) = service("Steam Deck", deckLib)
+        val code = assertNotNull(pc.hostHere("Gaming PC", installService = false).getOrThrow().pairingCode)
+        deck.connect("127.0.0.1:$port", code).getOrThrow()
+        val mo = pc.createProfile("Mo", "fox", null).getOrThrow()
+        val sam = pc.createProfile("Sam", "owl", "2468").getOrThrow()
+        deck.syncNow().getOrThrow()
+        deck.switchTo(mo.id).getOrThrow()
+        // The host goes away (the computer sleeps).
+        pc.stop()
+        // Sam has a PIN only the host can check: that waits, and says why.
+        val refused = deck.switchTo(sam.id, "2468").exceptionOrNull()
+        assertTrue(refused?.message.orEmpty().contains("PIN"), refused?.message)
+        assertEquals(mo.id, deckSettings.current().sync.activeProfile)
+        // Back to no one and to Mo again works here alone; nothing of Mo's is lost on the way.
+        deck.switchTo(null).getOrThrow()
+        deck.switchTo(mo.id).getOrThrow()
+        assertEquals(mo.id, deckSettings.current().sync.activeProfile)
+        assertEquals(600L, deckLib.gamesNow()[ct.id]?.totalSeconds)
+    }
+
+    @Test
     fun aGameKnownBySerialOnOneDeviceAndTitleOnAnotherIsOneGame(): Unit = runBlocking {
         // The Thor's copy has no serial (only its title); the PC's scan read the serial.
         val byTitle = GameKey.of("gba", null, null, "Pokemon Ruby (USA)")

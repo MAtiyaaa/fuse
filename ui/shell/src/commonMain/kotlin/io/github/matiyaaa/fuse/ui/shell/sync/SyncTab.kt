@@ -73,6 +73,8 @@ import io.github.matiyaaa.fuse.ui.shell.app.Route
 import io.github.matiyaaa.fuse.ui.shell.components.playtimeText
 import io.github.matiyaaa.fuse.ui.shell.components.subTabsRoom
 import io.github.matiyaaa.fuse.ui.shell.store.impl.TimeWords
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 /**
@@ -129,14 +131,15 @@ internal fun SyncTab(app: AppState, active: Boolean, topPadding: Dp) {
     }
     // Each game's cover from this library, where it has the game (by its id across devices, or its name).
     val covers by androidx.compose.runtime.produceState(emptyMap<String, io.github.matiyaaa.fuse.ui.shell.store.GameCard>(), app.store) {
-        app.store.library.games(io.github.matiyaaa.fuse.ui.shell.store.GameQuery()).collect { cards ->
-            value = buildMap {
+        // Built off the interface's thread: a big library is thousands of keys.
+        app.store.library.games(io.github.matiyaaa.fuse.ui.shell.store.GameQuery()).map { cards ->
+            buildMap {
                 for (card in cards) {
                     put(io.github.matiyaaa.fuse.sync.GameKey.of(card.platformId.value, null, null, card.title).id, card)
                     put("name:" + card.title.lowercase(), card)
                 }
             }
-        }
+        }.flowOn(kotlinx.coroutines.Dispatchers.Default).collect { value = it }
     }
     val rows = report?.games.orEmpty().map { g -> gameRow(app, g, covers[g.game] ?: covers["name:" + g.name.lowercase()]) }
     sel.clamp(rows.size)

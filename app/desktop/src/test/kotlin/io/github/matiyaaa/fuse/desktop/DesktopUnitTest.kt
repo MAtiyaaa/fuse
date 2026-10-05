@@ -71,6 +71,23 @@ class DesktopUnitTest {
     }
 
     @Test
+    fun nintendoPadsConfirmWithTheirAOnLinuxToo() {
+        // hid-nintendo: A on BTN_EAST and B on BTN_SOUTH, X on BTN_NORTH and Y on BTN_WEST (positions).
+        val keys = JoystickMapping.parseBitmap("7cdb000000000000 0 0 0 0")!!
+        val abs = JoystickMapping.parseBitmap("3003f")!!
+        val m = JoystickMapping.fromCapabilities(keys, abs, playStation = false, nintendo = true)
+        // By label, as on Windows, macOS and Android: the button marked A is A (it confirms), X is X.
+        assertEquals(PadButton.B, m.button(0))
+        assertEquals(PadButton.A, m.button(1))
+        assertEquals(PadButton.X, m.button(2))
+        assertEquals(PadButton.Y, m.button(3))
+        assertTrue(JoystickMapping.isNintendo("Nintendo Switch Pro Controller"))
+        assertTrue(JoystickMapping.isNintendo("Nintendo Switch Combined Joy-Cons"))
+        assertFalse(JoystickMapping.isNintendo("Microsoft X-Box 360 pad"))
+        assertFalse(JoystickMapping.isNintendo("8BitDo Pro 2"))
+    }
+
+    @Test
     fun windowFlagsPickTheLastOne() {
         assertEquals(WindowMode.WINDOWED, WindowMode.fromArgs(listOf("--fullscreen", "--windowed")))
         assertEquals(WindowMode.BORDERLESS, WindowMode.fromArgs(listOf("cartridge://home", "--borderless")))

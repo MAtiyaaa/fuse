@@ -76,7 +76,17 @@ internal class JoystickMapping(
             val caps = "/sys/class/input/$jsName/device/capabilities"
             val keys = readBitmap("$caps/key") ?: return XPAD
             val abs = readBitmap("$caps/abs") ?: return XPAD
-            return fromCapabilities(keys, abs, isPlayStation(deviceName))
+            return fromCapabilities(keys, abs, isPlayStation(deviceName), isNintendo(deviceName))
+        }
+
+        /**
+         * Nintendo's own pads (hid-nintendo: the Pro Controller, Joy-Cons, and pads that act as one)
+         * report A on BTN_EAST and B on BTN_SOUTH, by position. Fuse reads them by label, as SDL does
+         * on Windows and macOS and Android does: A confirms on every system.
+         */
+        fun isNintendo(name: String?): Boolean {
+            val n = name?.lowercase(Locale.ROOT) ?: return false
+            return "nintendo" in n || "joy-con" in n || n == "pro controller"
         }
 
         /**
@@ -89,15 +99,15 @@ internal class JoystickMapping(
             return "sony" in n || "playstation" in n || "dualsense" in n || "dualshock" in n || n == "wireless controller"
         }
 
-        fun fromCapabilities(keyBits: BigInteger, absBits: BigInteger, playStation: Boolean): JoystickMapping {
+        fun fromCapabilities(keyBits: BigInteger, absBits: BigInteger, playStation: Boolean, nintendo: Boolean = false): JoystickMapping {
             val codes = ArrayList<Int>()
             for (code in BTN_JOYSTICK..KEY_MAX) if (keyBits.testBit(code)) codes += code
             for (code in BTN_MISC until BTN_JOYSTICK) if (keyBits.testBit(code)) codes += code
             val buttons = HashMap<Int, PadButton>()
             codes.forEachIndexed { number, code ->
                 val b = when (code) {
-                    BTN_SOUTH -> PadButton.A
-                    BTN_EAST -> PadButton.B
+                    BTN_SOUTH -> if (nintendo) PadButton.B else PadButton.A
+                    BTN_EAST -> if (nintendo) PadButton.A else PadButton.B
                     BTN_NORTH -> if (playStation) PadButton.Y else PadButton.X
                     BTN_WEST -> if (playStation) PadButton.X else PadButton.Y
                     BTN_TL -> PadButton.L1

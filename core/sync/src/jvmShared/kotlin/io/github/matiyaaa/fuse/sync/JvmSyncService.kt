@@ -866,15 +866,26 @@ class JvmSyncService(
                     _active.value = null
                     return@withLock
                 }
-                if (c != null) c.openProfile(id, pin)
+                if (c != null) {
+                    try {
+                        c.openProfile(id, pin)
+                    } catch (e: SyncException) {
+                        // The host is away: a profile without a PIN is switched to here and catches up
+                        // later; one with a PIN waits, since only the host can check it.
+                        val known = _profiles.value.firstOrNull { it.id == id }
+                        if (e.code != "offline" || known == null) throw e
+                        if (known.protected) throw SyncException("${known.name}'s profile has a PIN, which only the host can check. Try again when it's back.", "offline", 0)
+                    }
+                }
                 // The first profile this device ever uses takes in what it already had (nothing is lost).
                 val first = before.isEmpty() && d.meta(id) == ProfileMeta() && !adopted()
                 if (first) {
                     // A profile someone already uses keeps what it has: this device's records only
                     // fill what it doesn't (stamped older than anything real), and its play time
-                    // and sessions join. Only a new, empty profile takes this device's as they are.
-                    if (c != null) runCatching { d.pullMeta(c, id) }
-                    val fresh = d.meta(id) == ProfileMeta()
+                    // and sessions join. Only a new, empty profile takes this device's as they are,
+                    // and only the host can say it is new: offline, nothing here is taken as newer.
+                    val reached = c != null && runCatching { d.pullMeta(c, id) }.isSuccess
+                    val fresh = reached && d.meta(id) == ProfileMeta()
                     val local = data.read(d.deviceId, hlc)
                     val adopt = ProfileDiff.changes(ProfileMeta(), local, d.deviceId, if (fresh) hlc else HlcClock(d.deviceId) { ADOPTED_AT })
                     d.changeMeta(id) { pending, _ -> pending.merge(adopt) }

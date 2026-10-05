@@ -337,7 +337,7 @@ private fun FuseAppContent(
         spec = spec,
         motion = motionProfile,
         quality = quality,
-        glyphs = GlyphConfig(glyphStyle, prefs.input.confirmOnRight, prefs.input.swapShoulders),
+        glyphs = GlyphConfig(glyphStyle, hintConfirmOnRight(prefs.input, glyphStyle, padFamily), prefs.input.swapShoulders),
         glass = prefs.glass,
         highContrastFocus = prefs.highContrastFocus,
         animateChanges = true,
@@ -1147,4 +1147,14 @@ internal fun padGlyphs(setting: GlyphStyle, family: GlyphStyle?): GlyphStyle = w
     GlyphStyle.PLAYSTATION -> GlyphStyle.PLAYSTATION
     GlyphStyle.XBOX -> if (setting == GlyphStyle.NINTENDO) setting else GlyphStyle.XBOX
     else -> setting
+}
+
+/**
+ * Whether the hints put Confirm on the right face button for the glyphs shown. A PlayStation or
+ * Xbox pad in hand reports its bottom button as A wherever Fuse runs, so Confirm is the bottom one
+ * there unless confirm and back are swapped; otherwise the setting (and "Detect my buttons") decides.
+ */
+internal fun hintConfirmOnRight(input: io.github.matiyaaa.fuse.model.InputProfile, shown: GlyphStyle, family: GlyphStyle?): Boolean = when {
+    input.autoGlyphs && shown != GlyphStyle.NINTENDO && (family == GlyphStyle.PLAYSTATION || family == GlyphStyle.XBOX) -> input.swapConfirmBack
+    else -> input.confirmOnRight
 }
