@@ -65,6 +65,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
@@ -83,6 +84,8 @@ private data class ActiveSession(
     val endsOnResume: Boolean,
     /** The save Fuse Sync captures when the game ends, when Fuse Sync is in use. */
     val save: io.github.matiyaaa.fuse.sync.SaveQuery? = null,
+    /** The same, for Syncthing (no profile needed). */
+    val plainSave: io.github.matiyaaa.fuse.sync.SaveQuery? = null,
 )
 
 /** Fuse Sync, for the saves around a game: the service and how it knows games. */
@@ -104,6 +107,9 @@ internal class DefaultLibraryOps(
 
     /** Fuse Sync, set by the store when it runs here. */
     @kotlin.concurrent.Volatile var sync: SyncLaunch? = null
+
+    /** Syncthing, set by the store where Fuse can use it (it acts only while turned on). */
+    @kotlin.concurrent.Volatile var syncthing: io.github.matiyaaa.fuse.sync.syncthing.SyncthingService? = null
 
     // Platforms ------------------------------------------------------------------------------------
 
@@ -483,9 +489,18 @@ internal class DefaultLibraryOps(
                         is io.github.matiyaaa.fuse.sync.LaunchGate.Go -> note = gate.note
                     }
                 }
+                // Syncthing, where it is the one in use: its folders brought up to date, two versions asked about.
+                val st = syncthing?.takeIf { ctx.data.settings.current().syncthing.enabled }
+                val plainSave = if (st != null) plainSaveQuery(game, installedEmulator, core ?: RetroArchCores.defaultCore(ctx.host, game.platformId)) else null
+                if (st != null && plainSave != null && !skipSaveCheck) {
+                    when (val gate = st.beforeLaunch(plainSave)) {
+                        is io.github.matiyaaa.fuse.sync.syncthing.SyncthingGate.Conflict -> return LaunchOutcome.SyncthingConflict(gate.conflicts)
+                        is io.github.matiyaaa.fuse.sync.syncthing.SyncthingGate.Go -> note = note ?: gate.note
+                    }
+                }
                 when (val r = ctx.services.launcher.run(resolved, displayId)) {
                     is RunResult.Started -> {
-                        startSession(id, installedEmulator.id, r.awaitExit, save?.takeIf { link != null })
+                        startSession(id, installedEmulator.id, r.awaitExit, save?.takeIf { link != null }, plainSave)
                         if (note != null) LaunchOutcome.Synced(note) else LaunchOutcome.Started
                     }
                     // Only the app opened; which game gets played there is unknown, so no session is recorded.
@@ -508,6 +523,37 @@ internal class DefaultLibraryOps(
         val resolved = ctx.resolver.resolve(game, platformEmulator, ctx.installed.value, ctx.host, ScopedLaunchChoice(core = core, homeDir = ctx.services.emulators.homeDir))
         val installed = resolved.installed ?: return null
         return saveQuery(id, game, installed, core ?: RetroArchCores.defaultCore(ctx.host, game.platformId))
+    }
+
+    /** [game]'s saves for [emulator], as Syncthing looks for them: by the game's own name and system, no profile needed. */
+    private fun plainSaveQuery(game: io.github.matiyaaa.fuse.model.Game, emulator: InstalledEmulator, core: String?): io.github.matiyaaa.fuse.sync.SaveQuery =
+        io.github.matiyaaa.fuse.sync.SaveQuery(
+            game = io.github.matiyaaa.fuse.sync.GameKey.of(game.platformId.value, game.tags.serial, null, game.titles.original),
+            platform = game.platformId.value,
+            romPath = game.location.launchPath,
+            emulatorId = emulator.id.value,
+            emulatorPath = emulator.appId,
+            core = core,
+            serial = game.tags.serial,
+            title = game.displayTitle,
+        )
+
+    /**
+     * One game for each system in the library, with the emulator it would start in here: enough for
+     * Syncthing to know every save folder in use.
+     */
+    internal suspend fun saveSamples(): List<io.github.matiyaaa.fuse.sync.SaveQuery> {
+        if (ctx.installed.value.isEmpty()) emulators.detectNow()
+        val settings = data.scopedSettings
+        return data.games.platformCounts().first().keys.mapNotNull { pid ->
+            val summary = data.games.observeByPlatform(pid).first().firstOrNull() ?: return@mapNotNull null
+            val game = data.games.get(summary.id) ?: return@mapNotNull null
+            val platformEmulator = settings.resolve(ScopedSettings.Emulator, game.platformId, null).value.takeIf { it.isNotBlank() }?.let(::EmulatorId)
+            val core = settings.resolve(ScopedSettings.RetroArchCore, game.platformId, game.id).value.takeIf { it.isNotBlank() }
+            val resolved = ctx.resolver.resolve(game, platformEmulator, ctx.installed.value, ctx.host, ScopedLaunchChoice(core = core, homeDir = ctx.services.emulators.homeDir))
+            val installed = resolved.installed ?: return@mapNotNull null
+            plainSaveQuery(game, installed, core ?: RetroArchCores.defaultCore(ctx.host, game.platformId))
+        }
     }
 
     /** What Fuse Sync needs to find [game]'s saves for [emulator] here, or null without Fuse Sync. */
@@ -546,9 +592,9 @@ internal class DefaultLibraryOps(
      * Opens an honest play session: it ends when the emulator process exits (Linux) or when Fuse
      * comes back to the front (Android). Nothing is estimated.
      */
-    private suspend fun startSession(game: GameId, emulator: EmulatorId, awaitExit: (suspend () -> Unit)?, save: io.github.matiyaaa.fuse.sync.SaveQuery? = null) {
+    private suspend fun startSession(game: GameId, emulator: EmulatorId, awaitExit: (suspend () -> Unit)?, save: io.github.matiyaaa.fuse.sync.SaveQuery? = null, plainSave: io.github.matiyaaa.fuse.sync.SaveQuery? = null) {
         val sessionId = data.playSessions.start(game, emulator, ctx.now())
-        active = ActiveSession(sessionId, game, endsOnResume = awaitExit == null, save = save)
+        active = ActiveSession(sessionId, game, endsOnResume = awaitExit == null, save = save, plainSave = plainSave)
         if (awaitExit != null) {
             ctx.scope.launch {
                 try {
@@ -566,6 +612,8 @@ internal class DefaultLibraryOps(
 
     private suspend fun endSession(sessionId: Long) {
         val save = active?.takeIf { it.id == sessionId }?.save
+        // Syncthing sends the save the game just wrote.
+        active?.takeIf { it.id == sessionId }?.plainSave?.let { q -> syncthing?.let { st -> ctx.scope.launch { runCatching { st.afterExit(q) } } } }
         if (active?.id == sessionId) active = null
         val ended = data.playSessions.end(sessionId, ctx.now())
         // Fuse Sync counts the session and keeps the save the game just wrote.

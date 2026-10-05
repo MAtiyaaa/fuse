@@ -26,13 +26,32 @@ fun addonsRows(app: AppState): List<MenuAction> {
     val store = if (app.store.appStore.supported) storeRows(app) else null
     val cartridge = if (app.platform.features.cartridge) cartridgeRows(app) else null
     val sync = app.store.sync.service?.let { syncRowsFor(app, it, prefs.sync) }
+    val syncthing = app.store.syncthing
     // With one addon there is nothing to choose between: its rows are the section.
-    if (store == null && cartridge == null && sync == null && jellyfin != null) return jellyfin
+    if (store == null && cartridge == null && sync == null && syncthing == null && jellyfin != null) return jellyfin
     return buildList {
         if (sync != null) {
             val s = app.store.sync.service!!.status.collectAsState().value
             addAll(app.group(ADDONS_SYNC, "Fuse Sync", FuseIcons.RefreshCcw, summary = if (prefs.sync.enabled) io.github.matiyaaa.fuse.ui.shell.sync.syncWords(s).title else "Off", detail = "Your saves, play time, library and settings on every device") {
                 sync.map { it.copy(id = "sync.${it.id}") }
+            })
+        }
+        if (syncthing != null) {
+            val st = syncthing.state.collectAsState().value
+            val on = st !is io.github.matiyaaa.fuse.sync.syncthing.SyncthingState.Off
+            val words = io.github.matiyaaa.fuse.ui.shell.sync.syncthingWords(st)
+            addAll(app.group(ADDONS_SYNCTHING, "Syncthing", FuseIcons.FolderSync, summary = words.second, detail = "Your emulators' save folders, through the Syncthing you already run") {
+                listOf(
+                    toggleRow("syncthing.enabled", "Use Syncthing", FuseIcons.Power, on, "For people who run it already. Fuse Sync is the one Fuse recommends") { v ->
+                        io.github.matiyaaa.fuse.ui.shell.sync.useSyncthing(app, syncthing, v)
+                    },
+                    MenuAction(
+                        "syncthing.page", if (st is io.github.matiyaaa.fuse.sync.syncthing.SyncthingState.Connected) "Devices and Save Folders" else "Set Up Syncthing", FuseIcons.FolderSync,
+                        detail = words.third,
+                        trailing = Trailing.Value(words.second),
+                        onSelect = { app.go(Route.SyncthingSettings) },
+                    ),
+                )
             })
         }
         if (jellyfin != null) {
@@ -96,6 +115,7 @@ private fun syncRowsFor(app: AppState, service: io.github.matiyaaa.fuse.sync.Syn
 
 /** Addons' groups, by the ids that open them (from search, or a link to the Store's or Cartridge's settings). */
 const val ADDONS_SYNC = "addons.sync"
+const val ADDONS_SYNCTHING = "addons.syncthing"
 const val ADDONS_JELLYFIN = "addons.jellyfin"
 const val ADDONS_STORE = "addons.store"
 const val ADDONS_CARTRIDGE = "addons.cartridge"

@@ -90,6 +90,9 @@ interface FuseStore {
     /** Fuse Sync by Fuse: off and invisible until turned on in Settings, Addons, Fuse Sync. */
     val sync: SyncOps get() = SyncOps.None
 
+    /** Syncthing, for people who run it: off until chosen in setup or Settings, Addons, Syncthing. */
+    val syncthing: io.github.matiyaaa.fuse.sync.syncthing.SyncthingService? get() = null
+
     /** A song that ships with Fuse ([io.github.matiyaaa.fuse.ui.shell.music.BundledMusic]) as a file the player can open. */
     suspend fun bundledTrack(id: String): String? = null
 }

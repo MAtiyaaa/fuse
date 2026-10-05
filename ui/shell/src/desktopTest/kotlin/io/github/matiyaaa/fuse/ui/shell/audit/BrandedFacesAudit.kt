@@ -214,4 +214,36 @@ class BrandedFacesAudit {
             }
         }
     }
+
+    /** Setup's sync step stage: the choice, then each way chosen. */
+    @Test
+    fun syncChoiceStage() {
+        val dir = Audit.dir
+        assumeTrue("Only under desktopAudit", dir != null)
+        assumeTrue(Audit.sizeEnabled(AuditSize.D))
+        for ((label, state) in listOf("choice" to (false to false), "fuse sync on" to (true to false), "syncthing on" to (false to true))) {
+            if (!Audit.wants("widgets", "sync stage $label")) continue
+            runDesktopComposeUiTest(AuditSize.D.widthPx, AuditSize.D.heightPx) {
+                setContent {
+                    CompositionLocalProvider(LocalDensity provides Density(AuditSize.D.density)) {
+                        FuseTheme {
+                            Box(Modifier.fillMaxSize().background(Fuse.colors.ink), contentAlignment = androidx.compose.ui.Alignment.Center) {
+                                io.github.matiyaaa.fuse.ui.shell.onboarding.SyncChoiceStage(fuseSync = state.first, syncthing = state.second, hasFuseSync = true)
+                            }
+                        }
+                    }
+                }
+                mainClock.advanceTimeBy(3_000)
+                waitForIdle()
+                mainClock.advanceTimeBy(1_000)
+                val frame = onRoot().captureToImage().toAwtImage()
+                val rgb = BufferedImage(frame.width, frame.height, BufferedImage.TYPE_INT_RGB)
+                rgb.createGraphics().apply { drawImage(frame, 0, 0, null); dispose() }
+                val file = File(dir, "D/widgets/${Audit.slug("sync stage $label")}.png")
+                file.parentFile.mkdirs()
+                ImageIO.write(rgb, "png", file)
+                println("Audit shot: ${file.absolutePath}")
+            }
+        }
+    }
 }

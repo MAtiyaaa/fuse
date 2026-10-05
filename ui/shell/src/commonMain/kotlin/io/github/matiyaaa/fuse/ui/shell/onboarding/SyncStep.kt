@@ -2,12 +2,17 @@ package io.github.matiyaaa.fuse.ui.shell.onboarding
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -20,9 +25,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import io.github.matiyaaa.fuse.ui.designsystem.components.FText
 import io.github.matiyaaa.fuse.ui.designsystem.components.ProfileAvatar
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
@@ -30,8 +37,10 @@ import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
 import io.github.matiyaaa.fuse.ui.fuseline.RepeatMode
+import io.github.matiyaaa.fuse.ui.fuseline.fuselineFloat
 import io.github.matiyaaa.fuse.ui.fuseline.infiniteRepeatable
 import io.github.matiyaaa.fuse.ui.fuseline.rememberLoopClock
+import io.github.matiyaaa.fuse.ui.fuseline.spring
 import io.github.matiyaaa.fuse.ui.fuseline.tween
 
 /** Where each device sits around the host on the stage, as offsets from its centre. */
@@ -109,5 +118,120 @@ private fun Device(icon: ImageVector, name: String, spot: Offset, size: Dp = 64.
             FuseIcon(icon, size = 26.dp, tint = c.text)
         }
         FText(name, Fuse.type.caption, color = c.textMuted, maxLines = 1)
+    }
+}
+
+/**
+ * The stage when there is a choice: Fuse Sync and Syncthing side by side. Fuse Sync stands in front,
+ * lit in the accent and marked as the one Fuse recommends, with what only it does; Syncthing sits
+ * beside it, smaller, in its own teal. Both float gently. Once one is on, it comes forward with a
+ * check and the other steps back.
+ */
+@Composable
+internal fun SyncChoiceStage(fuseSync: Boolean, syncthing: Boolean, hasFuseSync: Boolean) {
+    val c = Fuse.colors
+    val still = Fuse.motion.reduced
+    val clock = rememberLoopClock("sync choice stage")
+    val drift by clock.animateFloat(-1f, 1f, infiniteRepeatable(tween(4600), RepeatMode.Reverse), "drift")
+    val drift2 by clock.animateFloat(1f, -1f, infiniteRepeatable(tween(5300), RepeatMode.Reverse), "drift2")
+    val breathe by clock.animateFloat(0f, 1f, infiniteRepeatable(tween(2800), RepeatMode.Reverse), "breathe")
+    // Which card leads: Fuse Sync, unless Syncthing is the one on.
+    val lead by fuselineFloat(if (syncthing) 0f else 1f, spring(dampingRatio = 0.8f, stiffness = 260f), label = "lead")
+    val teal = io.github.matiyaaa.fuse.ui.shell.sync.SYNCTHING_TINT
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(Modifier.size(340.dp, 250.dp), contentAlignment = Alignment.Center) {
+            // The glow behind whichever leads.
+            Canvas(Modifier.matchParentSize()) {
+                val centre = Offset(size.width * (0.30f + 0.40f * (1f - lead)), size.height / 2f)
+                val tint = lerp(teal, c.accent, lead)
+                drawCircle(
+                    Brush.radialGradient(listOf(tint.copy(alpha = 0.22f + 0.08f * breathe), Color.Transparent), centre, 150.dp.toPx()),
+                    150.dp.toPx(), centre,
+                )
+            }
+            if (hasFuseSync) {
+                ChoiceCard(
+                    name = "Fuse Sync", tag = if (fuseSync) "On" else "Recommended", tint = c.accent, mark = FuseIcons.RefreshCcw,
+                    lines = listOf(FuseIcons.Save to "Saves, by game", FuseIcons.Clock to "Play time", FuseIcons.Users to "A profile each"),
+                    on = fuseSync, filled = true,
+                    modifier = Modifier.offset((-76).dp, 0.dp).zIndex(lead).graphicsLayer {
+                        val s = 0.86f + 0.14f * lead
+                        scaleX = s; scaleY = s
+                        alpha = 0.55f + 0.45f * lead
+                        translationY = if (still) 0f else drift * 4.dp.toPx()
+                        rotationZ = -3f * lead
+                        shadowElevation = (6f + 18f * lead).dp.toPx()
+                        shape = RoundedCornerShape(22.dp)
+                    },
+                )
+            }
+            ChoiceCard(
+                name = "Syncthing", tag = if (syncthing) "On" else "Bring your own", tint = teal, mark = FuseIcons.FolderSync,
+                lines = listOf(FuseIcons.FolderOpen to "Save folders", FuseIcons.Link2 to "Your Syncthing"),
+                on = syncthing, filled = false,
+                modifier = Modifier.offset(if (hasFuseSync) 92.dp else 0.dp, 8.dp).zIndex(1f - lead).graphicsLayer {
+                    val s = 0.86f + 0.14f * (1f - lead)
+                    scaleX = s; scaleY = s
+                    alpha = 0.62f + 0.38f * (1f - lead)
+                    translationY = if (still) 0f else drift2 * 4.dp.toPx()
+                    rotationZ = 4f * lead
+                    shadowElevation = (6f + 18f * (1f - lead)).dp.toPx()
+                    shape = RoundedCornerShape(22.dp)
+                },
+            )
+        }
+        Spacer(Modifier.height(Space.m))
+        FText(
+            when {
+                fuseSync -> "Fuse Sync is on"
+                syncthing -> "Syncthing is on"
+                else -> "Two ways to stay in step"
+            },
+            Fuse.type.bodyStrong, maxLines = 1,
+        )
+    }
+}
+
+/** One of the two on the stage: its mark, name and tag, then what it keeps in step, one line each. */
+@Composable
+private fun ChoiceCard(
+    name: String,
+    tag: String,
+    tint: Color,
+    mark: ImageVector,
+    lines: List<Pair<ImageVector, String>>,
+    on: Boolean,
+    filled: Boolean,
+    modifier: Modifier,
+) {
+    val c = Fuse.colors
+    Column(
+        modifier.width(176.dp).clip(RoundedCornerShape(22.dp)).background(c.surfaceOverlay)
+            .background(Brush.verticalGradient(listOf(tint.copy(alpha = 0.16f), Color.Transparent)))
+            .padding(Space.m),
+        verticalArrangement = Arrangement.spacedBy(Space.s),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                Modifier.size(40.dp).clip(RoundedCornerShape(12.dp))
+                    .background(if (filled) Brush.linearGradient(listOf(tint, tint.copy(alpha = 0.72f))) else Brush.linearGradient(listOf(tint.copy(alpha = 0.28f), tint.copy(alpha = 0.12f)))),
+                contentAlignment = Alignment.Center,
+            ) {
+                FuseIcon(if (on) FuseIcons.Check else mark, size = 20.dp, tint = if (filled) c.onAccent else tint)
+            }
+            Spacer(Modifier.width(Space.s))
+            Column {
+                FText(name, Fuse.type.bodyStrong, maxLines = 1)
+                FText(tag, Fuse.type.caption, color = tint, maxLines = 1)
+            }
+        }
+        Box(Modifier.fillMaxWidth().height(1.dp).background(c.hairline))
+        for ((icon, line) in lines) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                FuseIcon(icon, size = 16.dp, tint = tint)
+                Spacer(Modifier.width(Space.s))
+                FText(line, Fuse.type.caption, color = c.textMuted, maxLines = 1)
+            }
+        }
     }
 }

@@ -100,6 +100,9 @@ internal class DefaultFuseStore private constructor(
         LibraryProfileData(ctx.data, settings = { settingsNow() }, applySettings = { t -> writeSettings(t) }),
     ) { t -> writeSettings(t) }
 
+    override val syncthing: io.github.matiyaaa.fuse.sync.syncthing.SyncthingService? =
+        runCatching { ctx.services.syncthingService(ctx.scope) }.getOrNull()
+
     init {
         mediaOps = DefaultMediaOps(ctx, credentials)
         // Apps that became games and games added by hand are identified and filled straight away.
@@ -109,6 +112,17 @@ internal class DefaultFuseStore private constructor(
             updatePrefs { it.copy(cleanDisplayNames = enabled) }
         }
         library.onGamesAdded = findArt
+        // Syncthing keeps a game's save folders in step around it, and plans folders from the library.
+        syncthing?.let { st ->
+            library.syncthing = st
+            st.useLibrary { library.saveSamples() }
+            // Fuse Sync and Syncthing would move the same saves: turning Fuse Sync on turns Syncthing off.
+            ctx.scope.launch {
+                sync.config.collect { c ->
+                    if (c.enabled && runCatching { ctx.data.settings.current().syncthing.enabled }.getOrDefault(false)) runCatching { st.setEnabled(false) }
+                }
+            }
+        }
         library.installedBoot = { id -> content.bootFile(id) }
         library.notInstalled = { id ->
             content.view(id)?.takeIf { it.plan.storageReadable && !it.plan.gameInstalled && it.mode == io.github.matiyaaa.fuse.ui.shell.store.InstallMode.FUSE }?.let { v ->

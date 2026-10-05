@@ -83,6 +83,9 @@ internal class AuditControls(val cache: File) {
     /** Fuse Sync as the library store made it, for scenarios to set up. */
     @Volatile var sync: AuditSync? = null
 
+    /** Syncthing as the library store made it. */
+    @Volatile var syncthing: AuditSyncthing? = null
+
     /** The drives the audit device reports; none by default, like a host that can't tell. */
     @Volatile var drives: List<io.github.matiyaaa.fuse.model.StorageVolume> = emptyList()
 }
@@ -100,6 +103,10 @@ internal class AuditServices(
     /** Fuse Sync, made up (see [AuditSync]); the scenarios steer it through [AuditControls.sync]. */
     override fun syncService(data: io.github.matiyaaa.fuse.sync.ProfileDataPort, scope: kotlinx.coroutines.CoroutineScope): io.github.matiyaaa.fuse.sync.SyncService =
         AuditSync(base.data.settings).also { controls.sync = it }
+
+    /** Syncthing, made up (see [AuditSyncthing]); the scenarios steer it through [AuditControls.syncthing]. */
+    override fun syncthingService(scope: kotlinx.coroutines.CoroutineScope): io.github.matiyaaa.fuse.sync.syncthing.SyncthingService =
+        AuditSyncthing(base.data.settings).also { controls.syncthing = it }
 
     /** Windows and macOS: no app list, and emulators the user can point Fuse at. */
     private val desktop = host == Host.WINDOWS || host == Host.MACOS

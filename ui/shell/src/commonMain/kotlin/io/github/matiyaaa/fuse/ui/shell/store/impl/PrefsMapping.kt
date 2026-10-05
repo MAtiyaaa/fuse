@@ -36,6 +36,7 @@ internal fun AppSettings.toUiPrefs(scoped: GlobalScoped): UiPrefs {
     val theme = resolveTheme(appearance.themeId, custom)
     return UiPrefs(
         jellyfin = jellyfin,
+        syncthing = syncthing,
         sync = sync,
         onboardingDone = onboarding.completed,
         themeId = theme.id,
@@ -186,6 +187,8 @@ internal fun AppSettings.withUiPrefs(prefs: UiPrefs): AppSettings {
         // What Fuse installed is kept as it is: only the Store writes it.
         store = store.copy(enabled = prefs.storeEnabled, variant = prefs.storeVariant, autoCheck = prefs.storeAutoCheck),
         jellyfin = prefs.jellyfin,
+        // Whether Syncthing is on, and where, is the Syncthing service's to write: only how it behaves comes from here.
+        syncthing = syncthing.copy(waitBeforePlaying = prefs.syncthing.waitBeforePlaying, keepVersions = prefs.syncthing.keepVersions),
     )
 }
 

@@ -86,8 +86,58 @@ private fun AppState.launch(card: GameCard, emulator: io.github.matiyaaa.fuse.mo
                 launching = null
                 saveConflict = io.github.matiyaaa.fuse.ui.shell.sync.SaveConflictSpec(outcome.conflict) { launch(card, emulator, discPath, display, skipSaveCheck = true) }
             }
+            // Syncthing kept two versions of the save: which one to play with, then the game starts.
+            is LaunchOutcome.SyncthingConflict -> {
+                launching = null
+                syncthingConflict(card, outcome.conflicts) { launch(card, emulator, discPath, display, skipSaveCheck = true) }
+            }
         }
     }
+}
+
+/**
+ * Two versions of [card]'s save, kept by Syncthing when this device and another both changed it:
+ * keep this device's, or take the other's. The one not kept goes to Syncthing's old versions, so
+ * nothing is lost; then [play].
+ */
+private fun AppState.syncthingConflict(card: GameCard, conflicts: List<io.github.matiyaaa.fuse.sync.syncthing.SyncthingConflict>, play: () -> Unit) {
+    val service = store.syncthing ?: return
+    val first = conflicts.first()
+    val other = first.device ?: "your other device"
+    fun settle(keepThis: Boolean) {
+        choice = null
+        scope.launch {
+            val failed = conflicts.map { service.resolve(it, keepThis) }.firstOrNull { it.isFailure }
+            if (failed != null) {
+                toasts.show(failed.exceptionOrNull()?.message ?: "Couldn't settle the two saves", io.github.matiyaaa.fuse.ui.designsystem.components.ToastKind.ERROR)
+            } else {
+                toasts.show(if (keepThis) "Kept this device's save" else "Using the save from $other", io.github.matiyaaa.fuse.ui.designsystem.components.ToastKind.SUCCESS)
+                play()
+            }
+        }
+    }
+    choice = ChoiceSpec(
+        title = "Two versions of ${card.title}'s save",
+        icon = FuseIcons.GitCompare,
+        message = "Syncthing kept both, because this device and $other each changed it. The one you don't pick stays in Syncthing's old versions.",
+        options = listOf(
+            io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction(
+                "this", "Keep This Device's", FuseIcons.MonitorSmartphone,
+                detail = "Saved ${io.github.matiyaaa.fuse.ui.shell.components.agoText(first.thisModified)}",
+                onSelect = { settle(keepThis = true) },
+            ),
+            io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction(
+                "other", "Use the One From $other", FuseIcons.RefreshCcw,
+                detail = "Saved ${io.github.matiyaaa.fuse.ui.shell.components.agoText(first.otherModified)}" +
+                    if (first.otherModified > first.thisModified) ", the newer one" else "",
+                onSelect = { settle(keepThis = false) },
+            ),
+        ) + if (conflicts.size > 1) {
+            listOf(io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction("n", "${conflicts.size} files in all", FuseIcons.Layers, detail = conflicts.joinToString(", ") { it.name }, section = "", onSelect = {}))
+        } else {
+            emptyList()
+        },
+    )
 }
 
 /** Takes [card] off Continue Playing until it is played again. */

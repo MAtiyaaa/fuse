@@ -278,3 +278,82 @@ internal fun AuditDriver.syncScreens() {
         tap(PadButton.B)
     }
 }
+
+/** Syncthing as the library store made it. */
+private val AuditDriver.syncthing: AuditSyncthing
+    get() {
+        libraryStore
+        return controls.syncthing ?: throw NotCovered("This store has no Syncthing")
+    }
+
+/** Settings, Addons, Syncthing's page (through Addons, as a person gets there). */
+private fun AuditDriver.openSyncthingPage() {
+    openSettings()
+    focusText("Addons")
+    tap(PadButton.DPAD_RIGHT)
+    waitFor("Your emulators' save folders, through the Syncthing you already run")
+    tapText("Syncthing")
+    focusAny("Set Up Syncthing", "Devices and Save Folders")
+    tap(PadButton.A)
+    settle(900)
+}
+
+/**
+ * Syncthing, every state of its page: off (pointing at Fuse Sync), not found, found and needing its
+ * key, and connected with devices, one asking to join, and the save folders Fuse shares.
+ */
+internal fun AuditDriver.syncthingScreens() {
+    scenario("syncthing", "off") {
+        syncOff()
+        runBlocking { syncthing.setEnabled(false) }
+        useLibrary()
+        openSettings()
+        focusText("Addons")
+        tap(PadButton.DPAD_RIGHT)
+        waitFor("Your emulators' save folders, through the Syncthing you already run")
+        shoot("Addons, with Syncthing beside Fuse Sync")
+        tapText("Syncthing")
+        waitFor("Set Up Syncthing")
+        shoot("Syncthing's group, off")
+        focusText("Set Up Syncthing")
+        tap(PadButton.A)
+        waitFor("Fuse Sync Instead")
+        shoot("its page, off: what it is, and Fuse Sync instead", 1_000)
+    }
+
+    scenario("syncthing", "not found") {
+        syncOff()
+        syncthing.finds = io.github.matiyaaa.fuse.sync.syncthing.SyncthingState.NotFound(installed = false)
+        runBlocking { syncthing.setEnabled(true) }
+        useLibrary()
+        openSyncthingPage()
+        waitFor("Get Syncthing")
+        shoot("not found: get it, look again, or its address", 1_000)
+    }
+
+    scenario("syncthing", "needs its key") {
+        syncOff()
+        syncthing.finds = io.github.matiyaaa.fuse.sync.syncthing.SyncthingState.NeedsKey("http://127.0.0.1:8384")
+        runBlocking { syncthing.setEnabled(true) }
+        useLibrary()
+        openSyncthingPage()
+        waitFor("Enter Its API Key")
+        shoot("found, and where to find its key", 1_000)
+    }
+
+    scenario("syncthing", "connected") {
+        syncOff()
+        runBlocking { syncthing.setEnabled(true) }
+        syncthing.household()
+        useLibrary()
+        openSyncthingPage()
+        waitFor("Device ID")
+        shoot("connected: this device, the devices, the save folders", 1_400)
+        tap(PadButton.DPAD_DOWN, 5)
+        shoot("further down: the save folders")
+        tap(PadButton.DPAD_DOWN, 8)
+        shoot("around a game, and leaving")
+        runBlocking { syncthing.setEnabled(false) }
+    }
+}
+

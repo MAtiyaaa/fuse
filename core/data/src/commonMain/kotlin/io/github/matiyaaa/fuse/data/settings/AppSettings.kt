@@ -49,6 +49,7 @@ data class AppSettings(
     val store: StoreSettings = StoreSettings(),
     val jellyfin: JellyfinSettings = JellyfinSettings(),
     val sync: SyncSettings = SyncSettings(),
+    val syncthing: SyncthingSettings = SyncthingSettings(),
 ) {
     companion object {
         const val CURRENT_VERSION = 3
@@ -61,6 +62,22 @@ data class AppSettings(
  * with, and this device's own Home when it keeps one. The device's secret is in the secret store,
  * never here.
  */
+/**
+ * Syncthing, for people who already run it (Fuse Sync is the one Fuse recommends): whether Fuse
+ * uses it, where it answers, and how Fuse keeps saves in step with it. Its API key is kept in the
+ * secret store, never here.
+ */
+@Serializable
+data class SyncthingSettings(
+    val enabled: Boolean = false,
+    /** Where Syncthing's API answers ("127.0.0.1:8384", or with https:// on Android). */
+    val address: String = "",
+    /** Before a game starts, wait a moment for Syncthing to bring in the newest save. */
+    val waitBeforePlaying: Boolean = true,
+    /** Folders Fuse shares keep older versions of each save (Syncthing's staggered versioning). */
+    val keepVersions: Boolean = true,
+)
+
 @Serializable
 data class SyncSettings(
     val enabled: Boolean = false,
