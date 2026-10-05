@@ -95,3 +95,26 @@ internal fun AuditDriver.quickScreens() {
         libraryStore.updatePrefs { it.copy(quickMenu = emptyList()) }
     }
 }
+
+/** Swiping in from the left edge goes back, on a computer's touch screen. */
+internal fun AuditDriver.edgeBackScreens() {
+    scenario("touch", "swipe back from the edge") {
+        useLibrary()
+        waitFor("Continue playing")
+        openGame("Hollow Meridian")
+        val y = size.heightPx / 2f
+        val from = androidx.compose.ui.geometry.Offset(4f, y)
+        touch { down(from) }
+        settle(60)
+        for (i in 1..6) {
+            touch { moveTo(from + androidx.compose.ui.geometry.Offset(i * 28f * size.density, i * 4f)) }
+            settle(40)
+        }
+        settle(150)
+        shoot("pulled in far enough: the arrow lights")
+        touch { up() }
+        waitFor("Continue playing")
+        settle(600)
+        shoot("back where it came from")
+    }
+}

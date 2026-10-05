@@ -340,7 +340,13 @@ private fun FuseAppContent(
                                 router.touched()
                             }
                         }
-                    },
+                    }
+                    // A swipe in from either side goes back, on computers' touch screens.
+                    .edgeSwipeBack(
+                        enabled = platform.host != io.github.matiyaaa.fuse.model.Host.ANDROID,
+                        onTick = { platform.haptics.tick() },
+                        onBack = { router.dispatch(NavAction.BACK, io.github.matiyaaa.fuse.ui.designsystem.input.InputSource.TOUCH) },
+                    ),
             ) {
                 // The room fills the whole screen; everything on it keeps clear of edges a TV cuts off.
                 Room(app, prefs.showHero, spec.background, prefs.heroDim, prefs.glass, prefs.videoPreview, prefs.videoDelaySeconds, spec.ambient, spec.wallpaper)
