@@ -473,7 +473,8 @@ fun QuickMenu(app: AppState) {
 
     // The grid: the items, and the Add tile last while editing.
     val gridSpans = visible.map { it.span } + if (editing) listOf(1) else emptyList()
-    val placed = QuickLayout.place(gridSpans)
+    // Outside editing, a row that stops short is filled out; editing shows every width as it is.
+    val placed = QuickLayout.place(gridSpans).let { if (editing) it else QuickLayout.filled(it) }
     val cells = gridSpans.size
     cell = cell.coerceIn(0, (cells - 1).coerceAtLeast(0))
     listRow = listRow.coerceIn(0, (actions.size - 1).coerceAtLeast(0))
@@ -523,7 +524,8 @@ fun QuickMenu(app: AppState) {
     }
 
     fun press(i: Int, hold: Boolean) {
-        val slot = visible.getOrNull(i) ?: return
+        // The width it shows at (a short row's tiles are widened outside editing).
+        val slot = visible.getOrNull(i)?.let { it.copy(span = placed.getOrNull(i)?.span ?: it.span) } ?: return
         when (slot.id.kind) {
             QuickKind.TILE -> tileFor(slot.id).let { t -> val h = t.hold; if (hold && h != null) h() else t.run() }
             QuickKind.CHOICE -> chooseSecond(SecondScreenChoice.entries[(choice.ordinal + 1) % SecondScreenChoice.entries.size])
@@ -535,7 +537,7 @@ fun QuickMenu(app: AppState) {
     if (open) {
         // Holding A turns into REORDER: the Screenshot tile records, Now playing pauses.
         InputLayer(priority = LayerPriority.OVERLAY, modal = true, longPress = true) { e ->
-            val slot = visible.getOrNull(cell)
+            val slot = visible.getOrNull(cell)?.let { it.copy(span = placed.getOrNull(cell)?.span ?: it.span) }
             when {
                 // A slider being set: every direction moves it, A or B is done.
                 adjusting && slot != null && slot.id.kind == QuickKind.SLIDER -> when (e.action) {
@@ -854,7 +856,8 @@ private fun QuickGrid(
         val tileH = colW / TILE_ASPECT
         fun heightOf(i: Int): Dp {
             val slot = slots.getOrNull(i) ?: return tileH
-            return if (slot.span < QuickLayout.COLUMNS) tileH else when (slot.id.kind) {
+            val span = placed.getOrNull(i)?.span ?: slot.span
+            return if (span < QuickLayout.COLUMNS) tileH else when (slot.id.kind) {
                 QuickKind.TILE -> WIDE_TILE_HEIGHT
                 QuickKind.SLIDER -> SLIDER_HEIGHT
                 QuickKind.MUSIC -> MUSIC_HEIGHT
@@ -962,7 +965,7 @@ private fun QuickGrid(
                             AddTile(selected, Modifier.fillMaxSize(), onAdd)
                         } else {
                             val slot = slots[i]
-                            item(i, slot, selected, Modifier.fillMaxSize())
+                            item(i, slot.copy(span = p.span), selected, Modifier.fillMaxSize())
                             if (editing) {
                                 // Over the item while editing: a tap selects it, so nothing inside acts.
                                 Box(Modifier.matchParentSize().pointerInput(k) { detectTapGestures { onSelect(indexOfKey.indexOf(k)) } })

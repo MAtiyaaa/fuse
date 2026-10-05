@@ -114,6 +114,29 @@ internal object QuickLayout {
         return out
     }
 
+    /**
+     * [placed] with every row that stops short widened to the full width: its items share what is
+     * left, the last taking any remainder, so a lone tile before a widget never leaves a hole.
+     * Only for showing; the stored widths stay as they are (editing shows them true).
+     */
+    fun filled(placed: List<QuickPlaced>): List<QuickPlaced> {
+        val out = ArrayList<QuickPlaced>(placed.size)
+        for ((_, row) in placed.groupBy { it.row }.toSortedMap()) {
+            val used = row.sumOf { it.span }
+            val spare = COLUMNS - used
+            if (spare <= 0) { out += row; continue }
+            val each = spare / row.size
+            var extra = spare - each * row.size
+            var col = 0
+            row.forEachIndexed { i, p ->
+                val add = each + if (i == row.lastIndex) extra.also { extra = 0 } else 0
+                out += p.copy(column = col, span = p.span + add)
+                col += p.span + add
+            }
+        }
+        return out.sortedBy { it.index }
+    }
+
     /** [slots] with the item at [from] taken out and put at [to]. */
     fun <T> move(slots: List<T>, from: Int, to: Int): List<T> {
         if (from !in slots.indices) return slots

@@ -65,4 +65,14 @@ class QuickLayoutTest {
         assertEquals(2, QuickLayout.at(placed, 0.2f, 1))
         assertEquals(2, QuickLayout.at(placed, 1f, 7))
     }
+
+    @Test
+    fun shortRowsAreFilledOutForShowing() {
+        // A lone tile before a widget, and two tiles before another.
+        val filled = QuickLayout.filled(QuickLayout.place(listOf(1, 3, 1, 1, 3)))
+        assertEquals(listOf(3, 3, 1, 2, 3), filled.map { it.span })
+        assertEquals(listOf(0, 0, 0, 1, 0), filled.map { it.column })
+        // Full rows are left alone.
+        assertEquals(listOf(1, 1, 1), QuickLayout.filled(QuickLayout.place(listOf(1, 1, 1))).map { it.span })
+    }
 }
