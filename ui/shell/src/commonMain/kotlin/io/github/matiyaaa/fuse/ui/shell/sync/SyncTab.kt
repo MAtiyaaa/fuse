@@ -73,6 +73,7 @@ import io.github.matiyaaa.fuse.ui.shell.app.Route
 import io.github.matiyaaa.fuse.ui.shell.components.playtimeText
 import io.github.matiyaaa.fuse.ui.shell.components.subTabsRoom
 import io.github.matiyaaa.fuse.ui.shell.store.impl.TimeWords
+import androidx.compose.foundation.gestures.animateScrollBy
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
@@ -97,6 +98,14 @@ internal fun SyncTab(app: AppState, active: Boolean, topPadding: Dp) {
     val words = syncWords(status)
     var index by remember { mutableIntStateOf(0) }
     var inList by remember { mutableStateOf(false) }
+    // The column beside the games (devices, play time by device, lately): reached with Right, so a
+    // controller can read all of it, not only what fits.
+    var inSide by remember { mutableStateOf(false) }
+    val sideScroll = rememberScrollState()
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val step = with(density) { 160.dp.toPx() }
+    // Worth reaching only when it holds more than fits.
+    val sideReachable = sideScroll.maxValue > 0
     val sel = remember { LinearSelection() }
     var syncing by remember { mutableStateOf(false) }
     var loading by remember { mutableStateOf(app.syncReport == null) }
@@ -143,13 +152,26 @@ internal fun SyncTab(app: AppState, active: Boolean, topPadding: Dp) {
     }
     val rows = report?.games.orEmpty().map { g -> gameRow(app, g, covers[g.game] ?: covers["name:" + g.name.lowercase()]) }
     sel.clamp(rows.size)
-    PageEffect(focused, inList) {
-        if (focused) app.hints = if (inList) listOf(Hint(HintButton.CONFIRM, "Open"), Hint(HintButton.BACK, "Back")) else listOf(Hint(HintButton.CONFIRM, "Choose"), Hint(HintButton.BACK, "Back"))
+    PageEffect(focused, inList, inSide) {
+        if (focused) app.hints = when {
+            inSide -> listOf(Hint(HintButton.DPAD, "Scroll"), Hint(HintButton.BACK, "Back"))
+            inList -> listOf(Hint(HintButton.CONFIRM, "Open"), Hint(HintButton.BACK, "Back"))
+            else -> listOf(Hint(HintButton.CONFIRM, "Choose"), Hint(HintButton.BACK, "Back"))
+        }
     }
     InputLayer(enabled = focused) { e ->
-        if (inList) {
+        if (inSide) {
+            when (e.action) {
+                NavAction.UP -> if (sideScroll.value > 0) { app.scope.launch { sideScroll.animateScrollBy(-step) }; NavResult.MOVED } else NavResult.BLOCKED
+                NavAction.DOWN -> if (sideScroll.value < sideScroll.maxValue) { app.scope.launch { sideScroll.animateScrollBy(step) }; NavResult.MOVED } else NavResult.BLOCKED
+                NavAction.LEFT, NavAction.BACK -> { inSide = false; NavResult.MOVED }
+                NavAction.RIGHT, NavAction.SELECT -> NavResult.BLOCKED
+                else -> NavResult.IGNORED
+            }
+        } else if (inList) {
             when {
                 e.action == NavAction.UP && sel.index == 0 -> { inList = false; NavResult.MOVED }
+                e.action == NavAction.RIGHT && sideReachable -> { inSide = true; NavResult.MOVED }
                 e.action == NavAction.LEFT || e.action == NavAction.RIGHT -> NavResult.BLOCKED
                 else -> handleMenuAction(e, rows, sel)
             }
@@ -219,12 +241,18 @@ internal fun SyncTab(app: AppState, active: Boolean, topPadding: Dp) {
                     }
                 }
                 if (side) {
-                    Column(Modifier.width(if (roomy) 380.dp else if (compact) 290.dp else 320.dp).fillMaxHeight().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(Space.m)) {
-                        DeviceCard(devices, prefs.sync.deviceId, profiles)
-                        if (report != null && report.devicePlay.size > 1) {
-                            Card("Play time by device", FuseIcons.ChartPie) { PlayBars(report.devicePlay, names) }
+                    Box(Modifier.width(if (roomy) 380.dp else if (compact) 290.dp else 320.dp).fillMaxHeight()) {
+                        Column(Modifier.fillMaxSize().verticalScroll(sideScroll), verticalArrangement = Arrangement.spacedBy(Space.m)) {
+                            DeviceCard(devices, prefs.sync.deviceId, profiles)
+                            if (report != null && report.devicePlay.size > 1) {
+                                Card("Play time by device", FuseIcons.ChartPie) { PlayBars(report.devicePlay, names) }
+                            }
+                            ActivityCard(activity)
                         }
-                        ActivityCard(activity)
+                        // Reached with the controller: ringed like anything else in focus.
+                        if (focused && inSide) {
+                            Spacer(Modifier.matchParentSize().border(Size.focusStroke, Fuse.colors.focus, RoundedCornerShape(Fuse.geometry.panel)))
+                        }
                     }
                 }
             }

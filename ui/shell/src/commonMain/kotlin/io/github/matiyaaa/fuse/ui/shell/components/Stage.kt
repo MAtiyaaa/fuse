@@ -322,7 +322,7 @@ fun playtimeText(seconds: Long): String {
     return when {
         minutes < 1 -> "Under a minute"
         minutes < 60 -> "$minutes min"
-        minutes < 600 -> "${minutes / 60} h ${minutes % 60} min"
+        minutes < 600 && minutes % 60 != 0L -> "${minutes / 60} h ${minutes % 60} min"
         else -> "${minutes / 60} h"
     }
 }

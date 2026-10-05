@@ -721,6 +721,7 @@ internal fun rememberTimeLeft(done: Long?, total: Long?): String? {
     return when {
         seconds < 60 -> "Under a minute left"
         seconds < 3_600 -> "${(seconds + 59) / 60} min left"
+        (seconds % 3_600) / 60 == 0L -> "${seconds / 3_600} h left"
         else -> "${seconds / 3_600} h ${(seconds % 3_600) / 60} min left"
     }
 }
