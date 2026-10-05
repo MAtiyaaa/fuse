@@ -67,7 +67,10 @@ import io.github.matiyaaa.fuse.ui.designsystem.icons.HintButton
 import io.github.matiyaaa.fuse.ui.designsystem.icons.PadGlyph
 import io.github.matiyaaa.fuse.ui.designsystem.input.InputLayer
 import io.github.matiyaaa.fuse.ui.designsystem.input.InputRouter
+import io.github.matiyaaa.fuse.ui.designsystem.components.ToastKind
 import io.github.matiyaaa.fuse.ui.designsystem.input.LocalInputRouter
+import io.github.matiyaaa.fuse.ui.designsystem.input.actionFor
+import io.github.matiyaaa.fuse.ui.designsystem.input.withMapping
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
@@ -101,6 +104,9 @@ private val remappable = listOf(
     // Some handhelds send a face button as the system Back key.
     PadButton.KEY_ESCAPE,
 )
+
+/** The buttons on the pad itself: the system Back key is left out, since not every pad has one. */
+private val padButtons = remappable - PadButton.KEY_ESCAPE
 
 /** [nintendoKeys]: the pad sends Nintendo keycodes, so A is the right button. */
 private fun PadButton.label(nintendoKeys: Boolean): String = when (this) {
@@ -163,7 +169,12 @@ fun ControlsScreen(app: AppState) {
         val target = capturing
         router.capture = if (target == null) null else { button ->
             if (button in remappable) {
-                setProfile { it.copy(remap = it.remap + (button to target.first)) }
+                val next = prefs.input.withMapping(button, target.first, padButtons)
+                if (next == null) {
+                    app.toasts.show("${button.label(prefs.input.glyphs == GlyphStyle.NINTENDO)} is the only button for ${if (prefs.input.actionFor(button) == NavAction.SELECT) "Confirm" else "Back"}. Map it to another button first", ToastKind.ERROR)
+                } else {
+                    setProfile { next }
+                }
                 capturing = null
             }
         }

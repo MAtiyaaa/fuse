@@ -64,3 +64,43 @@ class RemappedHintsTest {
         assertEquals(NavAction.SELECT, p.actionFor(PadButton.B))
     }
 }
+
+/** Mapping a button trades jobs with another, and never leaves the pad without Confirm or Back. */
+class WithMappingTest {
+    private val pad = listOf(
+        PadButton.A, PadButton.B, PadButton.X, PadButton.Y, PadButton.L1, PadButton.R1, PadButton.L2, PadButton.R2,
+        PadButton.L3, PadButton.R3, PadButton.START, PadButton.SELECT, PadButton.MODE,
+    )
+
+    @Test
+    fun confirmMovedOffAGoesToTheButtonThatHadTheNewJob() {
+        // A to Options: X did Options, so X confirms now. The Select button keeps Options too.
+        val p = InputProfile().withMapping(PadButton.A, NavAction.CONTEXT, pad)!!
+        assertEquals(NavAction.CONTEXT, p.actionFor(PadButton.A))
+        assertEquals(NavAction.SELECT, p.actionFor(PadButton.X))
+        assertEquals(NavAction.CONTEXT, p.actionFor(PadButton.SELECT))
+    }
+
+    @Test
+    fun swappingBackLeavesNoRemaps() {
+        val p = InputProfile().withMapping(PadButton.A, NavAction.CONTEXT, pad)!!
+            .withMapping(PadButton.A, NavAction.SELECT, pad)!!
+        assertEquals(NavAction.SELECT, p.actionFor(PadButton.A))
+        assertEquals(NavAction.CONTEXT, p.actionFor(PadButton.X))
+        assertTrue(p.remap.isEmpty())
+    }
+
+    @Test
+    fun theOnlyConfirmButtonCantBeGivenAJobNoOtherButtonHad() {
+        // Nothing on the pad does Page Next by default, so A would drop Confirm with nothing to trade.
+        assertEquals(null, InputProfile().withMapping(PadButton.A, NavAction.PAGE_NEXT, pad))
+    }
+
+    @Test
+    fun aSecondButtonForAnActionTakesNothingAway() {
+        // L3 does nothing by default: it becomes a second Confirm and A keeps confirming.
+        val p = InputProfile().withMapping(PadButton.L3, NavAction.SELECT, pad)!!
+        assertEquals(NavAction.SELECT, p.actionFor(PadButton.L3))
+        assertEquals(NavAction.SELECT, p.actionFor(PadButton.A))
+    }
+}

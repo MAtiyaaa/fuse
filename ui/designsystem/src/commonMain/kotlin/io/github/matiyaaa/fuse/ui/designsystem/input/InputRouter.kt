@@ -518,6 +518,30 @@ class InputRouter(
 /** What [button] does under this profile: the user's remap, else [defaultActionFor]. */
 fun InputProfile.actionFor(button: PadButton): NavAction? = remap[button] ?: defaultActionFor(button)
 
+/**
+ * This profile with [button] doing [action]. What [button] did before moves to the first button of
+ * [pad] that did [action], when no other button of [pad] would still do it or that button was mapped
+ * to it before, so mapping trades two buttons' jobs instead of dropping one. Null when that would leave Confirm or Back with no button
+ * on the pad at all. Entries that match the standard layout are dropped, so they don't count as remaps.
+ */
+fun InputProfile.withMapping(button: PadButton, action: NavAction, pad: List<PadButton>): InputProfile? {
+    val before = actionFor(button)
+    val remap = LinkedHashMap(remap)
+    remap[button] = action
+    if (before != null && before != action) {
+        val stillDone = pad.any { it != button && copy(remap = remap).actionFor(it) == before }
+        val other = pad.firstOrNull { it != button && actionFor(it) == action }
+        // A button that got [action] from an earlier mapping trades back, which undoes that mapping.
+        if (other != null && (!stillDone || other in this.remap)) remap[other] = before
+    }
+    val next = copy(remap = remap.filter { (b, a) -> defaultActionFor(b) != a })
+    val lost = ESSENTIAL.any { need -> pad.any { actionFor(it) == need } && pad.none { next.actionFor(it) == need } }
+    return if (lost) null else next
+}
+
+/** Actions a controller can never be left without: choosing and going back. */
+private val ESSENTIAL = listOf(NavAction.SELECT, NavAction.BACK)
+
 /** What [button] does with no remaps: the standard layout, with the confirm/back and shoulder swaps. */
 fun InputProfile.defaultActionFor(button: PadButton): NavAction? {
     val n = swapConfirmBack
