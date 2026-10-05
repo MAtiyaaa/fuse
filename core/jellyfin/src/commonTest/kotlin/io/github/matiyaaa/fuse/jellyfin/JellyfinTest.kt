@@ -50,7 +50,7 @@ private class FakeServer {
         if (r.url.host in down) throw IllegalStateException("Connection refused")
         val path = r.url.encodedPath
         val answer = routes(r) ?: when {
-            path.endsWith("/System/Info/Public") -> 200 to """{"ServerName":"Media Server","Version":"10.11.11","Id":"srv1"}"""
+            path.endsWith("/System/Info/Public") -> 200 to """{"ServerName":"Living Room PC","Version":"10.11.11","Id":"srv1"}"""
             path.endsWith("/Users/AuthenticateByName") -> 200 to """{"User":{"Id":"u1","Name":"pat"},"AccessToken":"tok123","ServerId":"srv1"}"""
             path.endsWith("/UserViews") -> 200 to """{"Items":[{"Id":"lib1","Name":"Films","Type":"CollectionFolder","CollectionType":"movies"},{"Id":"lib2","Name":"Shows","Type":"CollectionFolder","CollectionType":"tvshows"}],"TotalRecordCount":2}"""
             path.endsWith("/UserItems/Resume") -> 200 to """{"Items":[{"Id":"m1","Name":"Dune","Type":"Movie","RunTimeTicks":93600000000,"UserData":{"PlaybackPositionTicks":36000000000},"ImageTags":{"Primary":"p1"},"BackdropImageTags":["b1"]}],"TotalRecordCount":1}"""

@@ -35,7 +35,7 @@ class JoinTest {
     @BeforeTest
     fun start(): Unit = runBlocking {
         root = Files.createTempDirectory("fuse-join").toFile()
-        store = HostStore(File(root, "host"), hostName = "Media Server")
+        store = HostStore(File(root, "host"), hostName = "Living Room PC")
         host = SyncHost(store, port = 0, bind = "127.0.0.1", callsPerMinute = 100_000).start()
         port = host.boundPort()
     }
@@ -53,7 +53,7 @@ class JoinTest {
     fun aDeviceAsksAndSomeoneAlreadyInLetsItIn(): Unit = runBlocking {
         val pc = pair("Gaming PC")
         val session = SyncClient.askToJoin(address, "dev-thor-0001", "AYN Thor", "ANDROID", http)
-        assertEquals("Media Server", session.ticket.hostName)
+        assertEquals("Living Room PC", session.ticket.hostName)
         assertNull(SyncClient.joinResult(session, http))
         // The PC sees who asks, with the same number the Thor shows.
         val ask = pc.joins().single()
@@ -64,7 +64,7 @@ class JoinTest {
         val link = assertNotNull(SyncClient.joinResult(session, http))
         assertEquals("dev-thor-0001", link.deviceId)
         // The Thor is in: its signed calls work.
-        assertEquals("Media Server", SyncClient(link, http).status().hello.name)
+        assertEquals("Living Room PC", SyncClient(link, http).status().hello.name)
         assertTrue(pc.joins().isEmpty())
         // The answer is given once.
         assertEquals("gone", assertFailsWith<SyncException> { SyncClient.joinResult(session, http) }.code)
@@ -91,7 +91,7 @@ class JoinTest {
 
     @Test
     fun theHostsOwnProfileIsTheHostComputersAlone(): Unit = runBlocking {
-        val hostFuse = pair("Media Server")
+        val hostFuse = pair("Living Room PC")
         val deck = pair("Steam Deck")
         val admin = store.adoptOwner(hostFuse.link.deviceId)
         assertEquals("Admin", admin.name)
@@ -131,7 +131,7 @@ class JoinTest {
         assertNotNull(session.ticket.accountSalt)
         // Any case for the username; the password never travels.
         val link = SyncClient.joinWithAccount(session, "MO", "correct horse", http)
-        assertEquals("Media Server", SyncClient(link, http).status().hello.name)
+        assertEquals("Living Room PC", SyncClient(link, http).status().hello.name)
         assertTrue(store.checkAccount("mo", "correct horse"))
         assertTrue(store.accountName() == "mo")
     }

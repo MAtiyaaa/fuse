@@ -29,7 +29,7 @@ Home screen.
 <a href="https://github.com/MAtiyaaa/fuse/releases/latest"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/brand/button-macos-dark.svg"><img src="docs/assets/brand/button-macos-light.svg" height="48" alt="Download for macOS"></picture></a>
 
 <sub>Android 9 or newer &nbsp;·&nbsp; 64-bit x86 Linux AppImage &nbsp;·&nbsp; Windows 10 and 11 &nbsp;·&nbsp; macOS on Apple silicon and Intel &nbsp;·&nbsp; <a href="#install">checksums and install notes</a></sub><br>
-<sub>0.3.3 is the <b>Together Update</b>: joining Fuse Sync without a code, a host that plays as its own Admin, and a Systems carousel like a console menu, after 0.3.2, the Corner Update (each person's own saves, saves in 3DS, Switch and Wii U emulators), and 0.3.1, the Glide Update, which brought Home widgets that turn like a catalogue, Jellyfin that answers quickly, Syncthing beside Fuse Sync by Fuse, the Fusi theme, and the AYN Thor's two screens with the controller. <a href="#where-fuse-stands">Here is where it stands.</a></sub><br>
+<sub>0.3.3 is the <b>Together Update</b>: close the handheld and carry on at the computer, with saves sent while you play, devices that know who is playing, joining without a code, a host account and one outside address for every device, and a mouse that works first click, after 0.3.2, the Corner Update (each person's own saves, saves in 3DS, Switch and Wii U emulators), and 0.3.1, the Glide Update, which brought Home widgets that turn like a catalogue, Jellyfin that answers quickly, Syncthing beside Fuse Sync by Fuse, the Fusi theme, and the AYN Thor's two screens with the controller. <a href="#where-fuse-stands">Here is where it stands.</a></sub><br>
 <sub>Or download from <a href="https://matiyaaa.github.io/fuse/">Fuse's website</a>, which always offers the latest version for your system.</sub>
 
 <br>
@@ -546,11 +546,14 @@ Linux app, isn't offered on Windows and macOS.
 ## Where Fuse stands
 
 > [!IMPORTANT]
-> **Fuse 0.3.3 "The Together Update" is still early, and easier to share.** A new device joins Fuse
-> Sync without a code: it asks, a card pops up on the host and on every device already connected
-> with the same six-digit number, and anyone there lets it in. Any connected device can add
-> another, the host plays as its own Admin profile that nobody else sees, and an https tunnel to
-> the host works from Android too. The Systems carousel now looks like a console's own menu.
+> **Fuse 0.3.3 "The Together Update" is still early, and easier to share.** Close the handheld,
+> pick up the computer, keep playing: Fuse Sync sends a save while the game is still running, one
+> game is one game whatever each device calls it, and starting a game another device is still on
+> asks whether to wait for its save. A new device joins without a code (it asks, and anyone
+> already in lets it in), or with the host's account when nobody is at a screen. The host learns
+> its outside address once and shares it with every device, the Hub opens from away after signing
+> in, and the host chooses where everyone's saves live. The mouse highlights what it points at and
+> acts on one click, and computers that can't use their graphics card stay smooth.
 > 0.3.2, "The Corner Update", made the menus travel between a two-screen device's screens, kept
 > each person's saves apart on a shared device, and found saves in over 60 emulators, including
 > 3DS, Switch, Wii U and Xbox 360 ones. For people who already run Syncthing, Fuse can use it for
@@ -564,7 +567,7 @@ Linux app, isn't offered on Windows and macOS.
 
 | Version | Name | What it brought |
 |---|---|---|
-| [0.3.3](docs/releases/0.3.3.md) | The Together Update | Joining Fuse Sync without a code, adding devices from any device, the host's own Admin profile, https tunnels from Android, a Systems carousel like a console menu |
+| [0.3.3](docs/releases/0.3.3.md) | The Together Update | Saves sent while you play, who is playing what, one game across devices, joining without a code, a host account and shared outside address, Erase Fuse, a mouse that works first click, redesigned Sync and Syncthing tabs |
 | [0.3.2](docs/releases/0.3.2.md) | The Corner Update | Menus that travel between screens, a hello when switching profile, each person's own saves, saves in 3DS, Switch, Wii U and Xbox 360 emulators, Jellyfin widgets on every page, round corners |
 | [0.3.1](docs/releases/0.3.1.md) | The Glide Update | Home widgets that turn like a catalogue, Jellyfin that answers quickly, Syncthing beside Fuse Sync, the Thor's two screens with the controller |
 | [0.3.0](docs/releases/0.3.0.md) | The Sync & Clean Update | Fuse Sync by Fuse, profiles, a quick menu you arrange, 157 systems, Jellyfin in setup, swipe-back on touch screens, the second screen's pages redesigned |

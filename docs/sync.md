@@ -113,6 +113,11 @@ version tags), never by where its file is. "Pokemon Ruby (USA).gba" on the PC an
 "pokemon ruby (Europe).gba" on a card in the handheld are the same game, and its save lands where
 each device's emulator reads it.
 
+Each device tells the host every name it knows a game by (its serial when it has one, and its
+title), and the host answers with one id for the game that every device then uses. So a game the
+computer knows by its serial and the handheld knows only by its title is still one game, and saves
+kept under the other name are moved over by themselves.
+
 Saves are found by per-emulator adapters. Fuse Sync and Syncthing use the same ones.
 
 | Emulators | Where their saves are | Save states |
@@ -133,7 +138,7 @@ Saves are found by per-emulator adapters. Fuse Sync and Syncthing use the same o
 | RPCS3 (and on Android) | dev_hdd0 savedata by serial | |
 | Vita3K | ux0 savedata by title id | |
 | shadPS4 | User savedata by serial | |
-| Azahar, Citra, Lime3DS, Mandarine | The emulated SD card, by the cartridge's title id | |
+| Azahar, Citra, Lime3DS, Mandarine | The emulated SD card, by the cartridge's title id | `states/<title id>.<slot>.cst` |
 | Eden, Citron, Sudachi, yuzu and forks | The emulated NAND, by title id | |
 | Ryujinx | Its numbered save folders, matched by title id | |
 | Cemu | `mlc01/usr/save`, by the title id in the game's `meta.xml` | |
@@ -158,8 +163,21 @@ Winlator and similar (each keeps its own), and PC games (Steam has its own cloud
 **Before a game starts**, Fuse asks the host for that game's newest save and puts it in place (a
 launch never waits more than a few seconds; offline, the game starts with what is here).
 
+**While it runs**, Fuse watches the save. When the game writes it and leaves it alone for a few
+seconds, Fuse keeps it as a new version and sends it, so the host has the newest save even if the
+device is put away mid-game. On Android, a quiet notification ("Keeping your save in step") keeps
+Fuse running while the game is open, and when the screen goes off (a handheld's lid closing) Fuse
+sends the save at once, staying awake only for those few seconds.
+
 **After it closes**, Fuse waits a moment for the emulator to finish writing, counts the session,
-keeps the save as a new version, and sends it.
+keeps the save as a new version, and sends it. A short message says when a save reached the host,
+when one from another device was put in place, and when the newest can't be used here.
+
+**Another device on the same game.** Devices tell the host what they are playing. Starting a game
+another device is playing, or has just stopped and is still sending, asks first: wait for its save
+(the game starts by itself once it arrives) or play with the newest save the host has. A device
+that went quiet mid-game (asleep or switched off) is said to be quiet, with when its last save
+arrived.
 
 **When both sides played** since they last agreed, Fuse asks which save to use, showing where and
 when each was saved and how long the game had been played by then: **Use This Device** or
@@ -188,10 +206,14 @@ journal). On a slow connection what matters most goes first: records, then the s
 
 ## Reaching the host from outside
 
-At home, devices find the host by themselves. Away, give each device an **outside address** that
-reaches the host over the internet: a VPN such as Tailscale or WireGuard, or an https reverse
-proxy or tunnel in front of port 47311. Fuse uses the home address when it answers and the outside
-one otherwise, switching back by itself, and tries it too while connecting when home doesn't answer.
+At home, devices find the host by themselves. Away, the host needs an **outside address** that
+reaches it over the internet: a VPN such as Tailscale or WireGuard, or an https reverse proxy or
+tunnel in front of port 47311. Set it once on the host (Settings, Addons, Fuse Sync, Address From
+Outside), or simply connect a device through the tunnel: the host notices the name it was reached
+by and keeps it. Every device learns it from the host, so none has to be told. A device can still
+use its own (its Outside Address setting). Fuse uses the home address when it answers and the
+outside one otherwise, switching back by itself, and tries it too while connecting when home
+doesn't answer.
 
 A Cloudflare tunnel works well: point it at `http://localhost:47311` on the host and use its
 address (`https://sync.example.com`) as the outside address. Leave Cloudflare Access off for that
@@ -217,8 +239,23 @@ then on. Turning it off brings the host back into Fuse while it is open.
 
 On the host computer, **http://127.0.0.1:47311/hub** shows the Hub in a browser: how long the host
 has run, what it keeps, and every profile and device (who plays where, when each was last seen).
-It opens on that computer only and only shows; changes are made in Fuse. In Fuse, Addons, Sync is
-the same Hub, with Sync Now, Switch Profile and Add a Device.
+From away it is at the outside address too (`https://sync.example.com/hub`), after signing in with
+the host account. It only shows; changes are made in Fuse. In Fuse, Addons, Sync is the same Hub,
+with Sync Now, Switch Profile and Add a Device.
+
+## The host account
+
+**Host Account** (on the host: Settings, Addons, Fuse Sync) is one username and password for the
+times nobody is at a screen:
+
+- **Joining from away.** A device asking to join can choose **Use the Host's Account**. It
+  stretches the password itself and proves it knows it over the key exchange of that one request,
+  so the password never travels, and a recorded request can't be replayed.
+- **The Hub from away.** The Hub at the outside address asks to sign in; the session lasts twelve
+  hours and is kept in a cookie only the browser sends back to that page.
+
+Five wrong passwords in ten minutes make that caller wait. Without an account, devices join only
+with someone at a screen, and the Hub opens on the host computer only.
 
 ## Security
 
@@ -228,8 +265,12 @@ the same Hub, with Sync Now, Switch Profile and Add a Device.
   key only the device and the host have. Both screens show six digits made from both public keys,
   so someone in the middle would show a different number. Only a device already in (or the host)
   can let one in, and a request lasts five minutes.
-- The Hub page and the management calls answer only on the host computer itself. A call that a
-  tunnel or proxy on that computer carries (cloudflared, a reverse proxy) counts as from outside.
+- The management calls answer only on the host computer itself, and so does the Hub unless the
+  host account signs it in. A call that a tunnel or proxy on that computer carries (cloudflared, a
+  reverse proxy) counts as from outside.
+- The host account's password is kept as a salted PBKDF2 hash (210,000 rounds). Joining with it
+  sends a proof bound to that one key exchange, never the password; signing in to the Hub sends it
+  only over the https address.
 - Every request is signed (HMAC-SHA256 over the method, path, time, a nonce and the body). Requests
   more than five minutes off, or seen before, are refused.
 - Each device has its own credential, scoped to it and revocable from the host at any time.
@@ -246,6 +287,10 @@ the same Hub, with Sync Now, Switch Profile and Add a Device.
 | Host | `~/.local/share/fuse/sync/host` | `%LOCALAPPDATA%\Fuse\sync\host` | `~/Library/Application Support/Fuse/sync/host` | |
 | This device's queue and copies | `~/.local/share/fuse/sync/device` | `%LOCALAPPDATA%\Fuse\sync\device` | `~/Library/Application Support/Fuse/sync/device` | Fuse's app storage |
 
+Setting up a host asks **where to keep saves**: Fuse's own folder (above), or one you choose, such
+as a bigger drive. **Where Saves Are Kept** in the host's settings moves them later: the host stops
+for a moment, everything is copied and checked, and only then is the old folder cleared.
+
 **Backup and moving the host**: stop the host, copy its `host` folder to the new computer's, and
 make that computer the host; every device keeps working, with the same profiles and history.
 Fuse's own Backup (Settings, Backup) also keeps the person's records and settings.
@@ -253,9 +298,24 @@ Fuse's own Backup (Settings, Backup) also keeps the person's records and setting
 ## Leaving
 
 **Unlink This Device** stops syncing and keeps everything on the device exactly as it is.
+
+**Turning Fuse Sync off** forgets the host: its link, the profiles, which one was in use, and
+anything still waiting to be sent. The device keeps its games, the saves in its emulators'
+folders, its library, settings and Home as they are now, as plain Fuse. Turning it on again
+starts fresh (find the host, join, pick or make a profile).
+
 **Stop Hosting** stops the host and its service and keeps all of its data on the computer, so
-hosting again carries on where it was. Deleting a profile is the only thing that removes data from
-the host, and it asks first.
+hosting again carries on where it was. **Delete This Host** removes every profile, save and device
+link kept there, after asking twice; the computer keeps its own games, library, settings and
+Home, and other devices keep everything they have.
+
+**Erase Fuse** (the bottom of Settings, About) starts Fuse over as new: its library, settings,
+profiles, art and caches go, and Fuse Sync is let go of first (a host is deleted, a device forgets
+its host). Game files, emulators and the saves in the emulators' folders stay.
+
+A new profile starts with the device's current look, Home and settings, which then become the
+profile's own. Resetting Home (Settings, Home) changes this device only, and **Undo Home Reset**
+brings back the Home from before.
 
 ## Syncthing instead
 
