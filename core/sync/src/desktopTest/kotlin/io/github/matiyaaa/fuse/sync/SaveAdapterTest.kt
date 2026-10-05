@@ -104,7 +104,7 @@ class SaveAdapterTest {
             val pcRoms = File(root, "pc/roms").apply { mkdirs() }
             File(deckRoms, "Chrono Trigger (USA).srm").writeText("deck progress")
             val q = { rom: File -> SaveQuery(ct, "snes", rom.path.replace('\\', '/'), "mgba") }
-            val env = FileSaveEnvironment("LINUX", root.path)
+            val env = FileSaveEnvironment("LINUX", root.path, variables = { null })
             val deckSpot = SaveAdapters.forEmulator("mgba")!!.locate(q(File(deckRoms, "Chrono Trigger (USA).sfc")), env).single()
             // mGBA keeps .sav beside the game; write it there.
             File(deckSpot.pathFor("save.srm")!!).writeText("deck progress")

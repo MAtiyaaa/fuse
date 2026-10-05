@@ -389,8 +389,12 @@ object Slots {
     }
 }
 
-/** The device's own files, for save adapters. */
-class FileSaveEnvironment(override val host: String, override val home: String = System.getProperty("user.home") ?: "") : SaveEnvironment {
+/** The device's own files, for save adapters. [variables] are the environment's (XDG folders and the like). */
+class FileSaveEnvironment(
+    override val host: String,
+    override val home: String = System.getProperty("user.home") ?: "",
+    private val variables: (String) -> String? = System::getenv,
+) : SaveEnvironment {
     override fun exists(path: String) = File(path).exists()
     override fun isDirectory(path: String) = File(path).isDirectory
     override fun list(path: String): List<String> = File(path).list()?.sorted().orEmpty()
@@ -398,5 +402,5 @@ class FileSaveEnvironment(override val host: String, override val home: String =
         val f = File(path)
         if (!f.isFile || f.length() > limit) null else f.readText()
     }.getOrNull()
-    override fun env(name: String): String? = System.getenv(name)
+    override fun env(name: String): String? = variables(name)
 }
