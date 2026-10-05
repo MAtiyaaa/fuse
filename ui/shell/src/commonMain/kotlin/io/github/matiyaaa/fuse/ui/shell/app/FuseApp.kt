@@ -878,10 +878,28 @@ private fun MenuMusic(app: AppState, player: MenuMusicPlayer?) {
     }
     LaunchedEffect(Unit) { for (path in ended) if (app.store.prefs.value.music.shuffle) shuffleOn() }
     val track = MenuMusicPlan.track(music, safeMode = app.safeMode != null, onboarding = app.navigator.current == Route.Onboarding, shuffled = shuffled)
+    // The quick menu's Now playing: a skip moves shuffle on (or back through what it played), and
+    // without shuffle steps through the songs in album order, keeping the one it lands on.
+    val remote = io.github.matiyaaa.fuse.ui.shell.music.MenuMusicRemote
+    LaunchedEffect(track) { remote.current = track }
+    LaunchedEffect(Unit) {
+        for (dir in remote.skips) {
+            val now = app.store.prefs.value.music
+            if (!now.enabled) continue
+            if (now.shuffle) {
+                val list = recent.toList()
+                val back = list.getOrNull(list.indexOf(shuffled) - 1)
+                if (dir < 0 && back != null) shuffled = back else shuffleOn()
+            } else {
+                val next = io.github.matiyaaa.fuse.ui.shell.music.MenuMusicRemote.neighbour(remote.current, dir)
+                app.store.updatePrefs { p -> p.copy(music = p.music.copy(track = next)) }
+            }
+        }
+    }
     // The startup animation has its own sound; the music waits until it has opened out.
     // Fuse Player playing a film or a song (on either screen) has the sound to itself.
     val quiet = app.launching != null || home.playtime.currentGame != null || app.intro || app.standby ||
-        app.playerOpen || mediaPlaying()
+        app.playerOpen || mediaPlaying() || remote.paused
     // The previous song keeps playing until the next one is ready, so the player can crossfade. The
     // file is looked up again whenever music comes back from a game: a bundled song's unpacked copy
     // lives in the cache, which the system may have cleared meanwhile.

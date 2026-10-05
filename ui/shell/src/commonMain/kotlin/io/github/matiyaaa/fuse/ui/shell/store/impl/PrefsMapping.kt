@@ -72,6 +72,7 @@ internal fun AppSettings.toUiPrefs(scoped: GlobalScoped): UiPrefs {
         systemOrder = library.systemOrder,
         continueDismissed = home.continueDismissed,
         addonsOrder = home.addonsOrder,
+        quickMenu = home.quickMenu,
         systemArtAuto = library.systemArtAuto,
         librarySort = library.sort,
         systemArtStyle = library.systemArtStyle,
@@ -117,7 +118,7 @@ internal fun AppSettings.withUiPrefs(prefs: UiPrefs): AppSettings {
         Destination.entries.filterNot { it in visible }.map { DestinationSetting(it, visible = false) }
     return copy(
         onboarding = onboarding.copy(completed = prefs.onboardingDone),
-        home = home.copy(layout = prefs.home, destinations = destinations, continueDismissed = prefs.continueDismissed, addonsOrder = prefs.addonsOrder),
+        home = home.copy(layout = prefs.home, destinations = destinations, continueDismissed = prefs.continueDismissed, addonsOrder = prefs.addonsOrder, quickMenu = prefs.quickMenu),
         appearance = appearance.copy(
             themeId = theme.id,
             motion = prefs.motion,

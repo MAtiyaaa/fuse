@@ -170,6 +170,8 @@ data class HomeSettings(
     val continueDismissed: Map<String, Long> = emptyMap(),
     /** Addons' tabs (cartridge, store, jellyfin) in the order the user dragged them into; the rest follow. */
     val addonsOrder: List<String> = emptyList(),
+    /** The quick menu's items and widths ("WIFI:1"), in the user's order; empty is Fuse's own. */
+    val quickMenu: List<String> = emptyList(),
 ) {
     /**
      * Visible destinations in order. Destinations missing from the stored list (added in a newer

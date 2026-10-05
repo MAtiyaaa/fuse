@@ -144,6 +144,10 @@ class UiAudit {
 
     @Test fun companionL() = audit(AuditSize.L) { companionScreens() }
 
+    @Test fun quickM() = audit(AuditSize.M) { quickScreens() }
+
+    @Test fun quickH() = audit(AuditSize.H) { quickScreens() }
+
     @Test fun flippedM() = audit(AuditSize.M) { flippedShowcase() }
 
     @Test fun openingM() = audit(AuditSize.M) { setupOpening() }
