@@ -29,6 +29,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.CornerRadius
@@ -289,7 +290,9 @@ internal fun Carousel(
                 }
             }
         }
-        Box(Modifier.width(cardWidth)) {
+        // The header shades the top of the card in front, so it is cut to that card's shape: a plain
+        // box would poke out square past the card's rounded top corner.
+        Box(Modifier.size(cardWidth, faceHeight).clip(cardShape ?: androidx.compose.ui.graphics.RectangleShape)) {
             header { if (count > 1 && dotsFit) CarouselDots(count, ::shown) }
         }
     }

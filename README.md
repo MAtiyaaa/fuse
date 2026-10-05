@@ -29,7 +29,7 @@ Home screen.
 <a href="https://github.com/MAtiyaaa/fuse/releases/latest"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/brand/button-macos-dark.svg"><img src="docs/assets/brand/button-macos-light.svg" height="48" alt="Download for macOS"></picture></a>
 
 <sub>Android 9 or newer &nbsp;·&nbsp; 64-bit x86 Linux AppImage &nbsp;·&nbsp; Windows 10 and 11 &nbsp;·&nbsp; macOS on Apple silicon and Intel &nbsp;·&nbsp; <a href="#install">checksums and install notes</a></sub><br>
-<sub>0.3.1 is the <b>Glide Update</b>: Home widgets that turn like a catalogue, Jellyfin that answers quickly, Syncthing beside Fuse Sync by Fuse, the AYN Thor's two screens with the controller, and the clock, storage and play time widgets redrawn. <a href="#where-fuse-stands">Here is where it stands.</a></sub><br>
+<sub>0.3.2 is the <b>Corner Update</b>: a small fix to 0.3.1, the Glide Update, which brought Home widgets that turn like a catalogue, Jellyfin that answers quickly, Syncthing beside Fuse Sync by Fuse, the Fusi theme, and the AYN Thor's two screens with the controller. <a href="#where-fuse-stands">Here is where it stands.</a></sub><br>
 <sub>Or download from <a href="https://matiyaaa.github.io/fuse/">Fuse's website</a>, which always offers the latest version for your system.</sub>
 
 <br>
@@ -542,7 +542,8 @@ Linux app, isn't offered on Windows and macOS.
 ## Where Fuse stands
 
 > [!IMPORTANT]
-> **Fuse 0.3.1 "The Glide Update" is still early, and smoother than ever.** Home's widgets turn
+> **Fuse 0.3.2 "The Corner Update" is still early, and smoother than ever.** It rounds off a corner
+> left square in 0.3.1, "The Glide Update". Home's widgets turn
 > like a catalogue, one item at a time with L2 and R2 or a swipe, and the clock, storage and play
 > time widgets were redrawn. Jellyfin asks every way to the server at once and shows kept pages
 > straight away, so pages and widgets fill in quickly. For people who already run Syncthing, Fuse
@@ -558,6 +559,7 @@ Linux app, isn't offered on Windows and macOS.
 
 | Version | Name | What it brought |
 |---|---|---|
+| [0.3.2](docs/releases/0.3.2.md) | The Corner Update | Round corners on Home's carousel widgets |
 | [0.3.1](docs/releases/0.3.1.md) | The Glide Update | Home widgets that turn like a catalogue, Jellyfin that answers quickly, Syncthing beside Fuse Sync, the Thor's two screens with the controller |
 | [0.3.0](docs/releases/0.3.0.md) | The Sync & Clean Update | Fuse Sync by Fuse, profiles, a quick menu you arrange, 157 systems, Jellyfin in setup, swipe-back on touch screens, the second screen's pages redesigned |
 | [0.2.9](docs/releases/0.2.9.md) | The Organized Update | Films on the screen you choose with a live swap, Addons in your order and in Settings, Jellyfin at home |
