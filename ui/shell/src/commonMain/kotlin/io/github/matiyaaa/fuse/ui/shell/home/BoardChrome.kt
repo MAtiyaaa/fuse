@@ -52,6 +52,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.components.ButtonKind
 import io.github.matiyaaa.fuse.ui.designsystem.components.FText
 import io.github.matiyaaa.fuse.ui.designsystem.components.FuseButton
 import io.github.matiyaaa.fuse.ui.designsystem.components.Panel
+import io.github.matiyaaa.fuse.ui.designsystem.effects.fuseClickable
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
 import io.github.matiyaaa.fuse.ui.designsystem.shape.PillShape
@@ -63,6 +64,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
 import io.github.matiyaaa.fuse.ui.designsystem.theme.tabular
 import io.github.matiyaaa.fuse.ui.fuseline.Durations
+import io.github.matiyaaa.fuse.ui.fuseline.fuselineColor
 import io.github.matiyaaa.fuse.ui.fuseline.fuselineFloat
 
 /**
@@ -332,7 +334,7 @@ internal fun AddTile(selected: Boolean, shape: Shape, modifier: Modifier, onClic
  * for touch (the controller has the same in its hints). On a narrow screen only the buttons.
  */
 @Composable
-internal fun ArrangeBar(compact: Boolean, onAdd: () -> Unit, onDone: () -> Unit) {
+internal fun ArrangeBar(compact: Boolean, onAdd: () -> Unit, onDone: () -> Unit, ownHome: Boolean? = null, onOwnHome: (Boolean) -> Unit = {}) {
     val c = Fuse.colors
     Panel(raised = true, shape = RoundedCornerShape(Radius.pill)) {
         Row(Modifier.padding(start = if (compact) Space.s else Space.xl, end = Space.s, top = Space.s, bottom = Space.s), verticalAlignment = Alignment.CenterVertically) {
@@ -343,9 +345,41 @@ internal fun ArrangeBar(compact: Boolean, onAdd: () -> Unit, onDone: () -> Unit)
                 }
                 Spacer(Modifier.width(Space.xl))
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(Space.s)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(Space.s), verticalAlignment = Alignment.CenterVertically) {
+                // With Fuse Sync, whose Home this is: this device's own, or the profile's everywhere.
+                if (ownHome != null) HomeScopeSwitch(ownHome, compact, onOwnHome)
                 FuseButton("Add widget", selected = false, onClick = onAdd, kind = ButtonKind.SECONDARY, icon = FuseIcons.Plus)
                 FuseButton("Done", selected = false, onClick = onDone, kind = ButtonKind.PRIMARY)
+            }
+        }
+    }
+}
+
+/**
+ * Whose Home is being arranged, with Fuse Sync: "This Device" (its own, kept apart) or "All Devices"
+ * on the profile. Two segments in a pill; the one in force is lit. Compact, the icons say it.
+ */
+@Composable
+internal fun HomeScopeSwitch(own: Boolean, compact: Boolean, onChange: (Boolean) -> Unit) {
+    val c = Fuse.colors
+    Row(
+        Modifier.clip(RoundedCornerShape(Radius.pill)).background(c.text.copy(alpha = 0.06f)).padding(3.dp),
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        for (mine in listOf(true, false)) {
+            val on = own == mine
+            val bg by fuselineColor(if (on) c.accent else c.text.copy(alpha = 0f), Fuse.motion.tween(Durations.FAST), label = "scope")
+            Row(
+                Modifier.height(40.dp).clip(RoundedCornerShape(Radius.pill)).background(bg)
+                    .fuseClickable(shape = RoundedCornerShape(Radius.pill), scale = false, role = androidx.compose.ui.semantics.Role.RadioButton, onClickLabel = if (mine) "This device's Home" else "Home on all devices") { onChange(mine) }
+                    .padding(horizontal = if (compact) Space.m else Space.l),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                FuseIcon(if (mine) FuseIcons.MonitorSmartphone else FuseIcons.Users, size = Size.iconS, tint = if (on) c.onAccent else c.textMuted)
+                if (!compact) {
+                    Spacer(Modifier.width(Space.s))
+                    FText(if (mine) "This Device" else "All Devices on Profile", Fuse.type.label, color = if (on) c.onAccent else c.textMuted, maxLines = 1)
+                }
             }
         }
     }
@@ -364,12 +398,21 @@ internal fun ArrangeTools(
     onUndo: () -> Unit,
     onReset: () -> Unit,
     onNewPage: () -> Unit,
+    /** With Fuse Sync: whether this is this device's own Home (the controller's way to the scope). */
+    ownHome: Boolean? = null,
+    onOwnHome: () -> Unit = {},
 ) {
     Panel(raised = true, shape = RoundedCornerShape(Radius.pill)) {
         Row(Modifier.padding(Space.s), horizontalArrangement = Arrangement.spacedBy(Space.s), verticalAlignment = Alignment.CenterVertically) {
             FuseButton("Undo", selected = focused == 0, onClick = onUndo, kind = ButtonKind.SECONDARY, icon = FuseIcons.Undo, enabled = canUndo)
             FuseButton(resetLabel, selected = focused == 1, onClick = onReset, kind = ButtonKind.SECONDARY, icon = FuseIcons.RotateCcw)
             FuseButton("New page", selected = focused == 2, onClick = onNewPage, kind = ButtonKind.SECONDARY, icon = FuseIcons.CopyPlus)
+            if (ownHome != null) {
+                FuseButton(
+                    if (ownHome) "This Device" else "All Devices", selected = focused == 3, onClick = onOwnHome,
+                    kind = ButtonKind.SECONDARY, icon = if (ownHome) FuseIcons.MonitorSmartphone else FuseIcons.Users,
+                )
+            }
         }
     }
 }

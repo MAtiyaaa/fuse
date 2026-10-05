@@ -20,7 +20,7 @@ import io.github.matiyaaa.fuse.ui.shell.store.UiPrefs
  */
 @Immutable
 class Sections(
-    /** True where the Cartridge section is Addons (the Store is on here, or Jellyfin is). */
+    /** True where the Cartridge section is Addons (the Store is on here, or Jellyfin or Fuse Sync is). */
     val addons: Boolean,
     /** Cartridge runs here and is turned on in Fuse. With nothing else on, it is the section alone. */
     val cartridgeOn: Boolean = true,
@@ -63,7 +63,8 @@ class Sections(
 internal val AppState.sections: Sections get() {
     val p = store.prefs.value
     return Sections(
-        addons = (store.appStore.supported && p.storeEnabled) || (store.jellyfin != null && p.jellyfin.enabled),
+        addons = (store.appStore.supported && p.storeEnabled) || (store.jellyfin != null && p.jellyfin.enabled) ||
+            (store.sync.service != null && p.sync.enabled),
         cartridgeOn = platform.features.cartridge && p.cartridgeEnabled,
     )
 }
@@ -78,7 +79,7 @@ internal fun rememberTabs(app: AppState, prefs: UiPrefs): List<Destination> {
 }
 
 /** Which part of Addons is showing. */
-enum class AddonsPart { CARTRIDGE, STORE, JELLYFIN }
+enum class AddonsPart { CARTRIDGE, STORE, JELLYFIN, SYNC }
 
 /** Opens Jellyfin in Addons. */
 internal fun AppState.openJellyfin() {

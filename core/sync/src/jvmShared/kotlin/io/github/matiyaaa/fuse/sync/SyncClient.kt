@@ -147,6 +147,7 @@ class SyncClient(
     suspend fun deleteProfile(id: String) = call<Unit>(HttpMethod.Delete, "/profiles/$id", ByteArray(0), null)
     suspend fun openProfile(id: String, pin: String?): ProfileTicket = send(HttpMethod.Post, "/profiles/$id/open", UnlockRequest(pin), UnlockRequest.serializer(), ProfileTicket.serializer())
     suspend fun meta(profile: String): MetaState = get("/profiles/$profile/meta", MetaState.serializer())
+    suspend fun report(profile: String): ProfileReport = get("/profiles/$profile/report", ProfileReport.serializer())
     suspend fun pushMeta(profile: String, meta: ProfileMeta): MetaState = send(HttpMethod.Post, "/profiles/$profile/meta", MetaPush(meta), MetaPush.serializer(), MetaState.serializer())
     suspend fun heads(profile: String): Heads = get("/profiles/$profile/heads", Heads.serializer())
     suspend fun revisions(profile: String, game: String? = null, kind: SaveKind? = null): List<SaveRevision> {

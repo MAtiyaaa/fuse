@@ -312,6 +312,67 @@ class HostStore(val dir: File, private val clock: () -> Long = System::currentTi
         Heads(all.groupBy { it.game to it.kind }.values.map { group -> group.maxBy { it.at } }, seq)
     }
 
+    /**
+     * Everything kept for [profile], for the Hub: its play time in all and by device, and every game
+     * it played or saved, with each save's versions, their files, sizes and where each file is kept.
+     */
+    fun report(profile: String): ProfileReport? = synchronized(lock) {
+        val record = profiles[profile]?.takeIf { !it.deleted } ?: return null
+        val meta = metas[profile] ?: ProfileMeta()
+        val revs = revisions[profile].orEmpty()
+        fun stored(hash: String) = content.fileOf(hash).relativeTo(dir).path.replace('\\', '/')
+        val keys = (meta.games.keys + revs.map { it.game }).distinct()
+        val games = keys.map { id ->
+            val g = meta.games[id]
+            val mine = revs.filter { it.game == id }
+            val slots = mine.groupBy { it.kind }.map { (kind, list) ->
+                val newest = list.sortedByDescending { it.at }
+                val head = newest.firstOrNull { it.reason != RevisionReason.CONFLICT_COPY }?.id
+                SlotReport(
+                    kind = kind,
+                    format = newest.first().manifest.format,
+                    bytes = newest.flatMap { it.manifest.files }.distinctBy { it.hash }.sumOf { it.size },
+                    versions = newest.map { r ->
+                        VersionReport(
+                            r.id, r.device, r.deviceName, r.at.millis, r.playSeconds, r.reason, r.id == head, r.size,
+                            r.manifest.files.map { f -> FileReport(f.path, f.size, stored(f.hash)) },
+                        )
+                    },
+                )
+            }.sortedBy { it.kind.ordinal }
+            val key = GameKey.parse(id)
+            GameReport(
+                game = id,
+                name = g?.title?.value ?: g?.name ?: mine.firstOrNull { it.title.isNotBlank() }?.title ?: readable(key?.identity ?: id),
+                platform = key?.platform.orEmpty(),
+                playSeconds = g?.totalSeconds ?: 0,
+                devicePlay = g?.playSeconds.orEmpty(),
+                sessions = g?.sessions?.size ?: 0,
+                lastPlayed = g?.lastPlayed,
+                favorite = g?.favorite?.value == true,
+                slots = slots,
+            )
+        }.sortedWith(compareByDescending<GameReport> { maxOf(it.lastPlayed ?: 0, it.slots.flatMap { s -> s.versions }.maxOfOrNull { v -> v.at } ?: 0) })
+        val devicePlay = HashMap<String, Long>()
+        meta.games.values.forEach { g -> g.playSeconds.forEach { (d, sec) -> devicePlay[d] = (devicePlay[d] ?: 0) + sec } }
+        ProfileReport(
+            profile = infoOf(record),
+            playSeconds = meta.games.values.sumOf { it.totalSeconds },
+            devicePlay = devicePlay,
+            devices = devices.values.map(::deviceInfoOf),
+            games = games,
+            savesBytes = revs.flatMap { it.manifest.files }.distinctBy { it.hash }.sumOf { it.size },
+            storePath = dir.absolutePath,
+        )
+    }
+
+    /** "t.pokemon-ruby" as "Pokemon Ruby", "s.slus00067" as "SLUS00067": a game's key, readable. */
+    private fun readable(identity: String): String = when {
+        identity.startsWith("t.") -> identity.removePrefix("t.").split('-').filter { it.isNotEmpty() }.joinToString(" ") { it.replaceFirstChar(Char::uppercase) }
+        identity.startsWith("s.") -> identity.removePrefix("s.").uppercase()
+        else -> identity
+    }
+
     fun missing(hashes: List<String>): List<String> = hashes.filter { SavePath.isHash(it) && !content.has(it) }.distinct()
 
     /**

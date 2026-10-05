@@ -6,8 +6,6 @@ import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.v2.runDesktopComposeUiTest
 import androidx.compose.ui.unit.Density
 import io.github.matiyaaa.fuse.ui.designsystem.input.InputRouter
-import java.io.File
-import java.nio.file.Files
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -16,6 +14,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import org.junit.Assume.assumeTrue
+import java.io.File
+import java.nio.file.Files
 
 /**
  * The UI audit: every screen, overlay and state of the real interface, rendered headless over the
@@ -177,6 +177,15 @@ class UiAudit {
     @Test fun quickH() = audit(AuditSize.H) { quickScreens() }
 
     @Test fun edgeBackM() = audit(AuditSize.M) { edgeBackScreens() }
+
+    /** Fuse Sync by Fuse: at 1080p, on a 6 inch handheld, a phone held upright, and a small screen. */
+    @Test fun syncM() = audit(AuditSize.M) { syncScreens() }
+
+    @Test fun syncH() = audit(AuditSize.H) { syncScreens() }
+
+    @Test fun syncV() = audit(AuditSize.V) { syncScreens() }
+
+    @Test fun syncS() = audit(AuditSize.S) { syncScreens() }
 
     @Test fun homePagesM() = audit(AuditSize.M) { homePages() }
 

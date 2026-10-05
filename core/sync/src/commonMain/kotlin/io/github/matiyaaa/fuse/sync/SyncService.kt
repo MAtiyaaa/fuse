@@ -71,7 +71,18 @@ data class SaveConflict(
     internal val local: SaveRevision,
     internal val remote: SaveRevision,
     internal val query: SaveQuery,
-)
+) {
+    companion object {
+        /** A conflict to show without a host behind it (previews and the interface's own audit). */
+        fun forPreview(game: GameKey, title: String, kind: SaveKind, here: SaveSide, host: SaveSide): SaveConflict {
+            fun rev(side: SaveSide) = SaveRevision(
+                id = side.device, profile = "", game = game.id, kind = kind, parent = null, device = side.device, deviceName = side.device,
+                at = Hlc(side.at, 0, side.device), manifest = SaveManifest("", emptyList()), playSeconds = side.playSeconds,
+            )
+            return SaveConflict(game, title, kind, here, host, rev(here), rev(host), SaveQuery(game, game.platform, "", ""))
+        }
+    }
+}
 
 /** One side of a conflict: where it was saved, when, how long it had been played, and how big it is. */
 data class SaveSide(val device: String, val at: Long, val playSeconds: Long, val bytes: Long, val files: Int)
@@ -122,6 +133,12 @@ interface SyncService {
 
     /** What this platform can do: host for real (a computer), or only connect (Android). */
     val canHost: Boolean
+
+    /** This device's own name (the system's), until the person names it for Fuse Sync. */
+    val defaultName: String
+
+    /** How a host here would keep running without Fuse (before this device is one), for setting up. */
+    fun lifetimeState(): ServiceState
 
     /**
      * Turns Fuse Sync on or off here. Off, nothing runs and nothing shows; what is on this device
@@ -175,6 +192,9 @@ interface SyncService {
 
     /** After a game: its session counted and its save captured, sent when it can be. */
     suspend fun afterExit(query: SaveQuery, startedAt: Long, endedAt: Long)
+
+    /** Everything the host keeps for the profile in use (play time, every save and version), for the Hub; null offline. */
+    suspend fun report(): ProfileReport? = null
 
     suspend fun versions(query: SaveQuery, kind: SaveKind): List<SaveVersion>
     suspend fun restore(query: SaveQuery, kind: SaveKind, version: String): Result<Unit>

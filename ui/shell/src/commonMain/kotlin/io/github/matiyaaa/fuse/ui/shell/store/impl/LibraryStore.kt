@@ -44,19 +44,18 @@ import io.github.matiyaaa.fuse.ui.shell.store.GameDetail
 import io.github.matiyaaa.fuse.ui.shell.store.GameQuery
 import io.github.matiyaaa.fuse.ui.shell.store.HomeFeed
 import io.github.matiyaaa.fuse.ui.shell.store.LaunchOutcome
-import io.github.matiyaaa.fuse.ui.shell.store.Unavailable
 import io.github.matiyaaa.fuse.ui.shell.store.LibraryOps
 import io.github.matiyaaa.fuse.ui.shell.store.PlatformCard
+import io.github.matiyaaa.fuse.ui.shell.store.PlayTimeReport
 import io.github.matiyaaa.fuse.ui.shell.store.PlaytimeSummary
 import io.github.matiyaaa.fuse.ui.shell.store.RunResult
-import io.github.matiyaaa.fuse.ui.shell.store.PlayTimeReport
 import io.github.matiyaaa.fuse.ui.shell.store.SearchResults
 import io.github.matiyaaa.fuse.ui.shell.store.StorageSummary
+import io.github.matiyaaa.fuse.ui.shell.store.Unavailable
 import io.ktor.client.request.get
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.isSuccess
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -75,6 +74,7 @@ import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /** A play session Fuse started and has not closed yet. */
 private data class ActiveSession(
@@ -495,6 +495,19 @@ internal class DefaultLibraryOps(
                 }
             }
         }
+    }
+
+    /** What Fuse Sync needs to find [id]'s saves, with the emulator it would start with now; null when none would. */
+    internal suspend fun saveQueryFor(id: GameId): io.github.matiyaaa.fuse.sync.SaveQuery? {
+        if (sync == null) return null
+        val game = data.games.get(id) ?: return null
+        if (ctx.installed.value.isEmpty()) emulators.detectNow()
+        val settings = data.scopedSettings
+        val platformEmulator = settings.resolve(ScopedSettings.Emulator, game.platformId, null).value.takeIf { it.isNotBlank() }?.let(::EmulatorId)
+        val core = settings.resolve(ScopedSettings.RetroArchCore, game.platformId, id).value.takeIf { it.isNotBlank() }
+        val resolved = ctx.resolver.resolve(game, platformEmulator, ctx.installed.value, ctx.host, ScopedLaunchChoice(core = core, homeDir = ctx.services.emulators.homeDir))
+        val installed = resolved.installed ?: return null
+        return saveQuery(id, game, installed, core ?: RetroArchCores.defaultCore(ctx.host, game.platformId))
     }
 
     /** What Fuse Sync needs to find [game]'s saves for [emulator] here, or null without Fuse Sync. */

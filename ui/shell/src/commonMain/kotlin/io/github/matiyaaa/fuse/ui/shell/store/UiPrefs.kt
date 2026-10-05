@@ -24,6 +24,11 @@ import io.github.matiyaaa.fuse.ui.designsystem.theme.ThemePresets
 data class UiPrefs(
     /** Jellyfin, an addon: off until turned on in Settings, Addons, Jellyfin. */
     val jellyfin: io.github.matiyaaa.fuse.data.settings.JellyfinSettings = io.github.matiyaaa.fuse.data.settings.JellyfinSettings(),
+    /**
+     * Fuse Sync's settings, read only: changed through [FuseStore.sync], never through
+     * [FuseStore.updatePrefs]. Here so every screen follows whether it is on.
+     */
+    val sync: io.github.matiyaaa.fuse.data.settings.SyncSettings = io.github.matiyaaa.fuse.data.settings.SyncSettings(),
     val onboardingDone: Boolean = false,
     val themeId: String = "fuse",
     val motion: MotionProfile? = null,

@@ -8,8 +8,8 @@ import io.ktor.server.engine.EmbeddedServer
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.plugins.origin
 import io.ktor.server.request.httpMethod
-import io.ktor.server.request.uri
 import io.ktor.server.request.receiveChannel
+import io.ktor.server.request.uri
 import io.ktor.server.response.respondOutputStream
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.Route
@@ -106,6 +106,14 @@ class SyncHost(
     // ---------------------------------------------------------------- the API
 
     private fun Route.api() {
+        // The Hub as a web page, to this computer only (it names people and devices).
+        get("/hub") {
+            if (limited()) return@get
+            val local = call.request.origin.remoteHost.let { it == "127.0.0.1" || it == "::1" || it == "0:0:0:0:0:0:0:1" || it == "localhost" }
+            if (!local) return@get call.respondText("The Hub opens on the host computer itself.", ContentType.Text.Plain, HttpStatusCode.Forbidden)
+            val status = store.status(port, fuseVersion)
+            call.respondText(HubPage.render(status, status.profiles.mapNotNull { store.report(it.id) }, clock()), ContentType.Text.Html)
+        }
         route(SyncApi.BASE) {
             get("/hello") { if (limited()) return@get; call.json(HostHello.serializer(), store.hello(port, fuseVersion)) }
             post("/pair") {
@@ -170,6 +178,11 @@ class SyncHost(
                 }
             }
             get("/profiles/{id}/meta") { val (_, p) = profileCall() ?: return@get; call.json(MetaState.serializer(), store.meta(p)) }
+            get("/profiles/{id}/report") {
+                val (_, p) = profileCall() ?: return@get
+                val report = store.report(p) ?: return@get call.fail(HttpStatusCode.NotFound, "No such profile.", "no-profile")
+                call.json(ProfileReport.serializer(), report)
+            }
             post("/profiles/{id}/meta") {
                 val (d, p) = profileCall() ?: return@post
                 val req = signedBody(d, MetaPush.serializer()) ?: return@post
@@ -395,8 +408,12 @@ class SyncHost(
         /** The largest JSON call: a profile's records for a big library fit easily. */
         const val MAX_JSON = 16L * 1024 * 1024
 
-        /** The largest single file: memory cards and save states are far smaller; game files may be large. */
-        const val MAX_BLOB = 8L * 1024 * 1024 * 1024
+        /**
+         * The largest single file. Only saves, save states and memory cards are kept (never games
+         * themselves), and the biggest of those (a PS3 or Switch save, a state with its screenshot)
+         * stays well under this.
+         */
+        const val MAX_BLOB = 1L * 1024 * 1024 * 1024
 
         const val CALLS_PER_MINUTE = 1_200
     }

@@ -1,15 +1,15 @@
 package io.github.matiyaaa.fuse.sync
 
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 import kotlinx.serialization.json.Json
 import java.io.File
 import java.net.DatagramPacket
 import java.net.DatagramSocket
 import java.net.InetAddress
 import java.nio.file.Files
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertFalse
-import kotlin.test.assertTrue
 
 class HostTest {
     @Test
@@ -84,6 +84,22 @@ class HostTest {
             assertEquals(1, again.revisions(p).size)
             assertTrue(again.seq() >= 2)
         } finally {
+            dir.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun theHubPageShowsTheHostToThisComputerOnly() {
+        val dir = Files.createTempDirectory("hub").toFile()
+        val port = java.net.ServerSocket(0).use { it.localPort }
+        val host = HeadlessHost.serve(File(dir, "host"), port, "Mo's <PC>", "0.3.0")!!
+        try {
+            val page = java.net.URI("http://127.0.0.1:$port/hub").toURL().readText()
+            assertTrue("Mo&#39;s &lt;PC&gt;" in page, "the name is shown, escaped")
+            assertTrue("No profiles yet" in page)
+            assertFalse("<PC>" in page)
+        } finally {
+            host.close()
             dir.deleteRecursively()
         }
     }

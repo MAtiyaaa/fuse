@@ -160,6 +160,15 @@ internal fun ChannelBoard(app: AppState, page: Int, pageKey: String, active: Boo
     // Reset at the top right ([ArrangeTools]) are reached by moving up past the board's top row.
     val history = remember { mutableStateListOf<KeptBoard>() }
     var onTools by remember { mutableStateOf<Int?>(null) }
+    // With Fuse Sync and settings following a profile: whose Home this is, this device's or everyone's.
+    val syncPrefs = app.store.prefs.collectAsState().value.sync
+    val ownHome: Boolean? = if (app.syncProfile != null && syncPrefs.settings) syncPrefs.homeScope == "DEVICE" else null
+    fun setOwnHome(own: Boolean) {
+        app.scope.launch {
+            app.store.sync.setOwnHome(own)
+            app.toasts.show(if (own) "This Home is now this device's own. The profile's is kept for later" else "Home now follows you to every device")
+        }
+    }
     val arranging = editor.arranging
     val op = editor.op
     val sel = rememberRouteState(app.navigator, if (page == 0) "home.board" else "home.board.$pageKey") { SpatialSelection() }
@@ -202,7 +211,7 @@ internal fun ChannelBoard(app: AppState, page: Int, pageKey: String, active: Boo
         if (!active) return@PageEffect
         val pages = if (paging.count > 1) listOf(Hint(HintButton.RIGHT_STICK, "Pages")) else emptyList()
         app.hints = when {
-            arranging && onTools != null -> listOf(Hint(HintButton.CONFIRM, when (onTools) { 0 -> "Undo"; 1 -> if (page == 0) "Reset Home" else "Clear page"; else -> "New page" }), Hint(HintButton.BACK, "Done"))
+            arranging && onTools != null -> listOf(Hint(HintButton.CONFIRM, when (onTools) { 0 -> "Undo"; 1 -> if (page == 0) "Reset Home" else "Clear page"; 2 -> "New page"; else -> if (ownHome == true) "Home on all devices" else "This device's own Home" }), Hint(HintButton.BACK, "Done"))
             op is BoardOp.Carry -> listOf(Hint(HintButton.DPAD, "Move"), Hint(HintButton.CONFIRM, "Put down"), Hint(HintButton.BACK, "Cancel"))
             resizeLook -> listOf(Hint(HintButton.DPAD, "Resize"), Hint(HintButton.HOLD_OPTIONS, "Let go when done"))
             arranging -> listOf(Hint(HintButton.CONFIRM, "Pick up"), Hint(HintButton.HOLD_OPTIONS, "Resize"), Hint(HintButton.OPTIONS, "Edit"), Hint(HintButton.BACK, "Done"))
@@ -363,10 +372,18 @@ internal fun ChannelBoard(app: AppState, page: Int, pageKey: String, active: Boo
             if (arranging && tools != null && carried == null && e.modifier == null) {
                 return@InputLayer when (e.action) {
                     NavAction.LEFT -> if (tools > 0) { onTools = tools - 1; NavResult.MOVED } else NavResult.BLOCKED
-                    NavAction.RIGHT -> if (tools < 2) { onTools = tools + 1; NavResult.MOVED } else NavResult.BLOCKED
+                    NavAction.RIGHT -> if (tools < (if (ownHome != null) 3 else 2)) { onTools = tools + 1; NavResult.MOVED } else NavResult.BLOCKED
                     NavAction.DOWN -> { onTools = null; NavResult.MOVED }
                     NavAction.UP -> NavResult.BLOCKED
-                    NavAction.SELECT -> { when (tools) { 0 -> undo(); 1 -> reset(); else -> { onTools = null; paging.add() } }; NavResult.ACTIVATED }
+                    NavAction.SELECT -> {
+                        when (tools) {
+                            0 -> undo()
+                            1 -> reset()
+                            2 -> { onTools = null; paging.add() }
+                            else -> setOwnHome(ownHome != true)
+                        }
+                        NavResult.ACTIVATED
+                    }
                     NavAction.BACK -> { stopArranging(); NavResult.CONSUMED }
                     else -> NavResult.CONSUMED
                 }
@@ -648,6 +665,8 @@ internal fun ChannelBoard(app: AppState, page: Int, pageKey: String, active: Boo
                 compact = narrow || small,
                 onAdd = ::addPicker,
                 onDone = ::stopArranging,
+                ownHome = ownHome,
+                onOwnHome = { setOwnHome(it) },
             )
         }
         // Undo and Reset float at the top right while arranging, out of the board's way.
@@ -664,6 +683,8 @@ internal fun ChannelBoard(app: AppState, page: Int, pageKey: String, active: Boo
                 onUndo = { onTools = 0; undo() },
                 onReset = { onTools = 1; reset() },
                 onNewPage = { onTools = null; paging.add() },
+                ownHome = ownHome,
+                onOwnHome = { onTools = 3; setOwnHome(ownHome != true) },
             )
         }
         // Controls of widgets that are gone, or of a board no longer arranged, catch no touches.

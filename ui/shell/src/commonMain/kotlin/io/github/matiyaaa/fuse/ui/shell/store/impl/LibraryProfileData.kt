@@ -68,6 +68,7 @@ internal class LibraryProfileData(
                     continueDismissed = Lww(rows.mapNotNull { dismissed[it.id.toString()] }.maxOrNull(), Hlc.ZERO),
                     title = Lww(r.customTitle, Hlc.ZERO),
                     emulator = Lww(r.emulator, Hlc.ZERO),
+                    name = r.customTitle ?: r.title,
                 )
             }
         }

@@ -230,6 +230,8 @@ private fun FuseAppContent(
         router.onCaptureCombo = if (capture != null && prefs.captureCombo) capture::onCombo else null
         onDispose { router.onCaptureCombo = null }
     }
+    // Fuse Sync: who is playing here, and at startup, who should be.
+    io.github.matiyaaa.fuse.ui.shell.sync.SyncProfiles(app)
     // A hardware keyboard types into whichever text field is open.
     val keyboardTarget = app.keyboardTarget
     DisposableEffect(router, keyboardTarget) {
@@ -393,6 +395,7 @@ private fun FuseAppContent(
                             onSelect = { app.focusZone = FocusZone.CONTENT; app.selectTab(it) },
                             onStatusClick = { app.quickMenuOpen = true },
                             activities = hudActivities(app),
+                            profile = hudProfile(app),
                         )
                     }
                     if (prefs.performanceOverlay) {
@@ -707,6 +710,10 @@ private fun PushedPages(app: AppState, current: Route, direction: NavDirection, 
             is Route.MediaLibrary -> io.github.matiyaaa.fuse.ui.shell.jellyfin.MediaLibraryScreen(app, route.id, route.name, route.kind)
             Route.MediaSearch -> io.github.matiyaaa.fuse.ui.shell.jellyfin.MediaSearchScreen(app)
             Route.JellyfinSettings -> io.github.matiyaaa.fuse.ui.shell.jellyfin.JellyfinSettingsScreen(app)
+            Route.SyncSettings -> io.github.matiyaaa.fuse.ui.shell.sync.SyncSettingsScreen(app)
+            is Route.SyncSetup -> io.github.matiyaaa.fuse.ui.shell.sync.SyncSetupScreen(app, route.host)
+            is Route.SaveHistory -> io.github.matiyaaa.fuse.ui.shell.sync.SaveHistoryScreen(app, route.game, route.title)
+            is Route.SyncGame -> io.github.matiyaaa.fuse.ui.shell.sync.SyncGameScreen(app, route.game, route.name)
                     is Route.Root -> Unit
                 }
             }
@@ -722,7 +729,7 @@ internal fun hudPage(stack: List<Route>): HudButton? {
     for (route in stack.asReversed()) {
         when (route) {
             Route.Search -> return HudButton.SEARCH
-            is Route.Settings, is Route.PlatformSettings, Route.Controls, Route.Licenses, is Route.ReleaseNotes, Route.Themes, Route.Storage, Route.PhoneLink, Route.JellyfinSettings ->
+            is Route.Settings, is Route.PlatformSettings, Route.Controls, Route.Licenses, is Route.ReleaseNotes, Route.Themes, Route.Storage, Route.PhoneLink, Route.JellyfinSettings, Route.SyncSettings, is Route.SyncSetup ->
                 return HudButton.SETTINGS
             else -> Unit
         }
@@ -754,7 +761,8 @@ private fun ShellInput(app: AppState) {
             return@InputLayer when (e.action) {
                 // After the last tab the stick moves on to Search and Settings.
                 NavAction.LEFT -> when (button) {
-                    HudButton.STATUS -> { app.hudButton = HudButton.SETTINGS; NavResult.MOVED }
+                    HudButton.STATUS -> { app.hudButton = if (app.hudHasProfile) HudButton.PROFILE else HudButton.SETTINGS; NavResult.MOVED }
+                    HudButton.PROFILE -> { app.hudButton = HudButton.SETTINGS; NavResult.MOVED }
                     HudButton.SETTINGS -> { app.hudButton = HudButton.SEARCH; NavResult.MOVED }
                     // Left of Search is the last tab, as the line shows it, whichever tab Search
                     // or Settings was opened from.
@@ -769,7 +777,8 @@ private fun ShellInput(app: AppState) {
                 NavAction.RIGHT -> when (button) {
                     HudButton.SEARCH -> { app.hudButton = HudButton.SETTINGS; NavResult.MOVED }
                     // Past Settings: Wi-Fi, battery and the clock, which open the quick menu.
-                    HudButton.SETTINGS -> { app.hudButton = HudButton.STATUS; NavResult.MOVED }
+                    HudButton.SETTINGS -> { app.hudButton = if (app.hudHasProfile) HudButton.PROFILE else HudButton.STATUS; NavResult.MOVED }
+                    HudButton.PROFILE -> { app.hudButton = HudButton.STATUS; NavResult.MOVED }
                     HudButton.STATUS -> NavResult.BLOCKED
                     null -> if (tabs.lastOrNull() == active) { app.hudButton = HudButton.SEARCH; NavResult.MOVED } else cycle(1)
                 }
@@ -802,7 +811,7 @@ private fun ShellInput(app: AppState) {
             NavAction.NEXT_SECTION -> when (page) {
                 null -> cycle(1)
                 HudButton.SEARCH -> { app.go(Route.Settings()); NavResult.MOVED }
-                HudButton.SETTINGS, HudButton.STATUS -> NavResult.BLOCKED
+                HudButton.SETTINGS, HudButton.PROFILE, HudButton.STATUS -> NavResult.BLOCKED
             }
             NavAction.QUICK_MENU -> { app.quickMenuOpen = true; NavResult.ACTIVATED }
             NavAction.SEARCH -> { app.go(Route.Search); NavResult.ACTIVATED }
@@ -821,8 +830,16 @@ private fun ShellInput(app: AppState) {
 private fun AppState.runHudButton(button: HudButton) = when (button) {
     HudButton.SEARCH -> go(Route.Search)
     HudButton.SETTINGS -> go(Route.Settings())
+    HudButton.PROFILE -> whoAreYou = io.github.matiyaaa.fuse.ui.shell.sync.WhoMode.SWITCH
     HudButton.STATUS -> quickMenuOpen = true
 }
+
+/** Whether the top line shows who is playing (Fuse Sync in use, with a profile chosen). */
+private val AppState.hudHasProfile: Boolean get() = syncProfile != null
+
+/** Who is playing here, for the top line. */
+@Composable
+private fun hudProfile(app: AppState): HudProfile? = app.syncProfile?.let { HudProfile(it.name, it.avatar) }
 
 /** A short, calm handoff while the emulator starts: the game's art fills the screen and dims away. */
 @Composable

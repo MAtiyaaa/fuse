@@ -29,7 +29,7 @@ Home screen.
 <a href="https://github.com/MAtiyaaa/fuse/releases/latest"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/brand/button-macos-dark.svg"><img src="docs/assets/brand/button-macos-light.svg" height="48" alt="Download for macOS"></picture></a>
 
 <sub>Android 9 or newer &nbsp;·&nbsp; 64-bit x86 Linux AppImage &nbsp;·&nbsp; Windows 10 and 11 &nbsp;·&nbsp; macOS on Apple silicon and Intel &nbsp;·&nbsp; <a href="#install">checksums and install notes</a></sub><br>
-<sub>0.3.0 is the <b>Sync &amp; Clean Update</b>: a quick menu you arrange, 86 more systems, Jellyfin in setup, swipe-back on touch screens, and Fuse Player by Fuse riding out weak Wi-Fi. <a href="#where-fuse-stands">Here is where it stands.</a></sub><br>
+<sub>0.3.0 is the <b>Sync &amp; Clean Update</b>: Fuse Sync by Fuse keeps your saves, play time and settings on every device, plus a quick menu you arrange, 86 more systems, Jellyfin in setup, swipe-back on touch screens, and Fuse Player by Fuse riding out weak Wi-Fi. <a href="#where-fuse-stands">Here is where it stands.</a></sub><br>
 <sub>Or download from <a href="https://matiyaaa.github.io/fuse/">Fuse's website</a>, which always offers the latest version for your system.</sub>
 
 <br>
@@ -120,6 +120,30 @@ They behave the same on every device, answer to one design, and get better with 
 </div>
 
 <table>
+  <tr>
+    <td colspan="2" valign="top">
+      <img src="docs/assets/icons/sync.svg" width="56" height="56" alt=""><br>
+      <h3>Fuse Sync <sub>by Fuse</sub></h3>
+      Your saves, play time, library and settings, the same on every device you play on, from a
+      computer of your own at home. Stop on the PC, carry on on the handheld; nothing goes to anyone
+      else's server, and nothing is ever silently lost.
+      <ul>
+        <li><b>Saves where you play.</b> The newest save is put in place before a game starts and kept
+        after it closes, matched by the game, not the path: RetroArch, DuckStation, PCSX2, PPSSPP,
+        Dolphin, melonDS, mGBA, RPCS3, Vita3K, shadPS4, Flycast and more.</li>
+        <li><b>Play time that adds up.</b> 30 minutes on one device and 20 offline on another is 50,
+        never 30 and never 80. Everything works offline and catches up later.</li>
+        <li><b>Asks, never guesses.</b> When two devices both played, you choose which save to use;
+        the other is kept. Every save keeps its versions, from every device, to go back to.</li>
+        <li><b>A profile for each person</b>, with one of Fuse's own avatars and a PIN if they like:
+        their own library, favourites, collections, Home and theme, switched in place, no restart.</li>
+        <li><b>One click to host</b> on Linux, Windows or macOS, kept running when Fuse is closed and
+        after a restart; devices find it on the network and join with a code. Signed requests,
+        revocable devices, and an outside address for away from home.</li>
+      </ul>
+      <a href="docs/sync.md"><b>How Fuse Sync works</b></a>
+    </td>
+  </tr>
   <tr>
     <td width="50%" valign="top">
       <img src="docs/assets/icons/player.svg" width="56" height="56" alt=""><br>
@@ -511,7 +535,9 @@ Linux app, isn't offered on Windows and macOS.
 ## Where Fuse stands
 
 > [!IMPORTANT]
-> **Fuse 0.3.0 "The Sync & Clean Update" is still early, and cleaner than ever.** The quick menu became
+> **Fuse 0.3.0 "The Sync & Clean Update" is still early, and cleaner than ever.** Fuse Sync by Fuse
+> arrived: your saves, play time, library and settings on every device, from a host of your own, with
+> a profile for each person and nothing ever silently lost. The quick menu became
 > yours to arrange, with widgets for what's playing (skip a song with a flick), brightness, volume
 > and the second screen's three ways (Off, Fuse and Flipped). Fuse now reads every game system ES-DE
 > knows, 86 more than before, and finds renamed emulator AppImages. Setup explains Jellyfin and
@@ -525,7 +551,7 @@ Linux app, isn't offered on Windows and macOS.
 
 | Version | Name | What it brought |
 |---|---|---|
-| [0.3.0](docs/releases/0.3.0.md) | The Sync & Clean Update | A quick menu you arrange, 157 systems, Jellyfin in setup, swipe-back on touch screens, the second screen's pages redesigned |
+| [0.3.0](docs/releases/0.3.0.md) | The Sync & Clean Update | Fuse Sync by Fuse, profiles, a quick menu you arrange, 157 systems, Jellyfin in setup, swipe-back on touch screens, the second screen's pages redesigned |
 | [0.2.9](docs/releases/0.2.9.md) | The Organized Update | Films on the screen you choose with a live swap, Addons in your order and in Settings, Jellyfin at home |
 | [0.2.8](docs/releases/0.2.8.md) | The Media & Connectivity Update | Jellyfin and Fuse Player by Fuse, a phone as keyboard and controller, Storage redesigned |
 | [0.2.7](docs/releases/0.2.7.md) | The Swap & Clean Update | Fuse's menus on a dual-screen handheld's touch screen, like a 3DS, and Fuseline by Fuse |
@@ -676,6 +702,7 @@ what each service receives and when.
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Modules, domain model, scanning, launching, input, storage, security |
 | [INTEGRATIONS.md](INTEGRATIONS.md) | Every online service and the Cartridge bridge, and what leaves the device |
 | [DESIGN_SYSTEM.md](DESIGN_SYSTEM.md) | Tokens, type, focus, motion, themes, sound, accessibility |
+| [docs/sync.md](docs/sync.md) | Fuse Sync by Fuse: hosting, profiles, what syncs, saves, conflicts, security |
 | [docs/player.md](docs/player.md) | Fuse Player by Fuse: engines, subtitles, controls, two screens |
 | [docs/fuseline.md](docs/fuseline.md) | Fuseline by Fuse: curves, springs, transitions and how fast it is |
 | [docs/jellyfin.md](docs/jellyfin.md) | Jellyfin in Fuse: connecting, home and away, what is sent |
@@ -701,8 +728,8 @@ Third-party components keep their own licences; see [THIRD_PARTY_NOTICES.md](THI
 
 ## Credits
 
-- **Fuse Player by Fuse** and **Fuseline by Fuse**, Fuse's own media player and animation engine,
-  written for Fuse and part of this repository, under its licence.
+- **Fuse Sync by Fuse**, **Fuse Player by Fuse** and **Fuseline by Fuse**, Fuse's own sync,
+  media player and animation engine, written for Fuse and part of this repository, under its licence.
 - [ES-DE](https://es-de.org/), whose MIT-licensed emulator configuration is the best public record of
   how emulators accept games.
 - [RomM](https://github.com/rommapp/romm), whose folder conventions, platform names and alias table Fuse follows.

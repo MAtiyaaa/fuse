@@ -405,6 +405,34 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
             },
             content = { JellyfinStage(connected = jellyfinAccount != null, server = jellyfinAccount?.serverName) },
         ))
+        // Fuse Sync: the same library on every device, from a host of their own. Only where it runs.
+        store.sync.service?.let { sync ->
+            val syncOn = prefs.sync.enabled && prefs.sync.role.isNotEmpty()
+            fun setUp(host: Boolean) {
+                if (!live) { next(); return }
+                app.scope.launch { store.sync.setEnabled(true) }
+                app.go(io.github.matiyaaa.fuse.ui.shell.app.Route.SyncSetup(host))
+            }
+            add(Step(
+                "sync", "Every device", if (syncOn) "Fuse Sync is on" else "Play on, anywhere",
+                if (syncOn) {
+                    "Your saves, play time, favourites and settings stay the same on every device, kept by ${prefs.sync.hostName.ifBlank { "your host" }}."
+                } else {
+                    "Fuse Sync by Fuse keeps your saves, play time, favourites and settings the same on every device you play on, from a computer of your own at home. Stop on the PC, carry on on the handheld. One device? Skip this; it waits in Settings, Addons."
+                },
+                optional = true, icon = FuseIcons.RefreshCcw, chapter = Chapters.CONNECT,
+                actions = if (syncOn) {
+                    listOf(StepAction("Continue", primary = true, run = next))
+                } else {
+                    listOfNotNull(
+                        StepAction("Make This the Host", primary = true) { setUp(host = true) }.takeIf { sync.canHost },
+                        StepAction("Connect to a Host", primary = !sync.canHost) { setUp(host = false) },
+                        StepAction("Skip", run = next),
+                    )
+                },
+                content = { SyncStage(on = syncOn) },
+            ))
+        }
         add(Step(
             "ra", "Achievements", if (raConfigured) "RetroAchievements connected" else "Show your achievements?",
             if (raConfigured) "Recent unlocks and progress appear on Home and on each game's page."

@@ -2,6 +2,24 @@
 
 ## New
 
+- **Fuse Sync by Fuse.** Your saves, save states, play time, library and settings, the same on every
+  device you play on, from a computer of your own at home. Make one computer the host in one step
+  (it keeps running when Fuse is closed and after a restart, if you like); every other device finds
+  it on the network and joins with its code. A game's newest save is in place before it starts and
+  kept after it closes, matched by the game rather than its path, so a ROM named differently on a
+  card still gets its save. Play time adds up across devices, offline too. When two devices both
+  played, Fuse asks which save to use and keeps the other, and every save keeps its versions, from
+  every device, to go back to. Off, it does nothing at all.
+- **Profiles.** Everyone on a host has a profile, with one of Fuse's own avatars and a PIN if they
+  want one: their own library (favourites, names, collections, play time), Home, theme and quick
+  menu. Who's playing? opens from the avatar at the top right; switching changes everything at
+  once, without a restart. Fuse can start as the last profile, ask, or always start as one.
+- **Home on this device, or everywhere.** Arranging Home, a switch beside Add widget and Done keeps
+  this Home to this device or makes it the profile's on every device. Settings has the same choice.
+- **Addons, Sync.** Fuse Sync at a glance: where it stands, who's playing, every device on the host
+  and what happened lately, with Sync Now, Switch Profile and Add a Device.
+- **A game's save history.** In a game's options, every version of its saves from every device:
+  put one back (what is here is kept first) or keep one for good.
 - **A quick menu that's yours.** Press X in the quick menu (or the pencil, or Edit quick menu) to
   arrange it: A picks a tile up and the D-pad carries it, X changes its size, Y takes it out, and
   Add puts things back, or everything as it came. By touch or the mouse, drag a tile where it
@@ -79,7 +97,9 @@
 - The second screen's page name sits in the middle of the screen, above and below.
 - A film's or show's logo and backdrop on the second screen are fetched before you reach it, for
   what is in focus and its neighbours on either side, so they show at once.
-- About's credits lead with Fuse Player by Fuse and Fuseline by Fuse.
+- About's credits lead with Fuse Sync by Fuse, Fuse Player by Fuse and Fuseline by Fuse.
+- On a small 4:3 handheld, the Capsule layout keeps its game title to one line instead of running
+  under the toolbar.
 - The README, rewritten.
 - Every screen is rendered and checked at 23 sizes, from a 3.5 inch 4:3 handheld to a 32:9 monitor
   and a 4K screen at 100%.

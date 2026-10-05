@@ -1468,6 +1468,7 @@ fun aboutRows(app: AppState): List<MenuAction> = buildList {
         addAll(app.group("about.credits", "Credits and links", FuseIcons.Heart, detail = "Who Fuse is built on, and where it lives") {
             listOf(
                 // Fuse's own systems first: they are what Fuse is made of.
+                infoRow("credits.sync", "Fuse Sync by Fuse", detail = "Fuse's own sync: saves, play time, library and settings on every device, from a host of your own", icon = FuseIcons.RefreshCcw),
                 infoRow("credits.player", "Fuse Player by Fuse", detail = "Fuse's own video and music player: Media3 on Android, FFmpeg on computers, every subtitle drawn by Fuse", icon = FuseIcons.Clapperboard),
                 infoRow("credits.fuseline", "Fuseline by Fuse", detail = "Fuse's own animation engine: every movement in Fuse, at about a tenth of Compose's cost", icon = FuseIcons.Waves),
                 infoRow("credits", "Made with", detail = "Kotlin, Compose Multiplatform, SQLDelight, Ktor, Coil. Video: Media3 (Apache 2.0) and FFmpeg (GPL). Icons: Lucide (ISC). Fonts: Sora and Manrope (SIL OFL). Systems and emulator launch data: ES-DE (MIT), RomM and Cartridge (MIT). Hashing rules: rcheevos (MIT). Music: boipurple", icon = FuseIcons.Blocks),

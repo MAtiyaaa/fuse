@@ -1,7 +1,5 @@
 package io.github.matiyaaa.fuse.ui.shell.app
 
-import io.github.matiyaaa.fuse.ui.shell.settings.canMoveGames
-import io.github.matiyaaa.fuse.ui.shell.settings.moveGames
 import io.github.matiyaaa.fuse.launch.patches.PatchState
 import io.github.matiyaaa.fuse.model.CartridgeRoute
 import io.github.matiyaaa.fuse.model.FolderPolicy
@@ -15,6 +13,8 @@ import io.github.matiyaaa.fuse.ui.designsystem.components.Trailing
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
 import io.github.matiyaaa.fuse.ui.designsystem.sound.SoundCue
 import io.github.matiyaaa.fuse.ui.shell.cartridge.uploadToRomm
+import io.github.matiyaaa.fuse.ui.shell.settings.canMoveGames
+import io.github.matiyaaa.fuse.ui.shell.settings.moveGames
 import io.github.matiyaaa.fuse.ui.shell.store.CompatibilityAnswer
 import io.github.matiyaaa.fuse.ui.shell.store.GameCard
 import io.github.matiyaaa.fuse.ui.shell.store.LaunchOutcome
@@ -124,6 +124,12 @@ fun AppState.gameMenu(card: GameCard, fromDetail: Boolean = false, extra: List<M
             add(MenuAction("collection", "Add to Collection", FuseIcons.ListPlus, trailing = Trailing.Chevron, onSelect = { collectionPicker(card.id, card.title) }))
         }
         add(MenuAction("pin", "Pin to Home", FuseIcons.Pin, onSelect = { run { lib.setPinned(card.id, true); toasts.show("Pinned to Home") } }))
+        // Fuse Sync: this game's saves through time, from every device.
+        if (!card.isApp && syncProfile != null) {
+            add(MenuAction("saves", "Save History", FuseIcons.History, detail = "Every version of its saves, from every device", trailing = Trailing.Chevron, onSelect = {
+                closeOverlays(); go(Route.SaveHistory(card.id, card.title))
+            }))
+        }
         add(MenuAction("system", "System", FuseIcons.Layers, detail = if (card.isApp) "Android, or back to being an app" else "If it landed in the wrong one", trailing = Trailing.Value(card.platformShort), onSelect = { systemPicker(card) }))
         // An Android game always starts as its app.
         if (!card.isApp) add(MenuAction("emulator", "Emulator", FuseIcons.Chip, trailing = Trailing.Chevron, onSelect = { emulatorPicker(card) }))

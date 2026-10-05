@@ -148,3 +148,63 @@ data class Heads(val heads: List<SaveRevision>, val seq: Long)
 
 @Serializable
 data class ApiError(val error: String, val code: String = "")
+
+/**
+ * Everything the host keeps for one profile, for the Hub: play time (in all, and by device), every
+ * game with its saves and save states, each with every version, which device saved it, how big it
+ * is, and where each of its files is kept on the host.
+ */
+@Serializable
+data class ProfileReport(
+    val profile: ProfileInfo,
+    val playSeconds: Long,
+    /** Play time by device id. */
+    val devicePlay: Map<String, Long>,
+    val devices: List<DeviceInfo>,
+    val games: List<GameReport>,
+    /** Bytes the host keeps for this profile's saves, every version, files shared between versions counted once. */
+    val savesBytes: Long,
+    /** Where the host keeps its files, on the host computer. */
+    val storePath: String = "",
+)
+
+@Serializable
+data class GameReport(
+    val game: String,
+    val name: String,
+    val platform: String,
+    val playSeconds: Long,
+    val devicePlay: Map<String, Long>,
+    val sessions: Int,
+    val lastPlayed: Long?,
+    val favorite: Boolean,
+    val slots: List<SlotReport>,
+)
+
+/** One kind of save for a game ([SaveKind.SAVE], a state, a card) and its versions, newest first. */
+@Serializable
+data class SlotReport(
+    val kind: SaveKind,
+    val format: String,
+    /** Bytes kept for every version, files shared between versions counted once. */
+    val bytes: Long,
+    val versions: List<VersionReport>,
+)
+
+@Serializable
+data class VersionReport(
+    val id: String,
+    val deviceId: String,
+    val device: String,
+    val at: Long,
+    val playSeconds: Long,
+    val reason: RevisionReason,
+    val current: Boolean,
+    val bytes: Long,
+    val files: List<FileReport>,
+)
+
+/** A file of a save: its name in the save, its size, and where the host keeps it (relative to [ProfileReport.storePath]). */
+@Serializable
+data class FileReport(val path: String, val bytes: Long, val stored: String)
+

@@ -21,6 +21,11 @@ internal class DefaultSyncOps(
     /** Changes the settings and has the interface follow. */
     private val write: suspend ((AppSettings) -> AppSettings) -> Unit,
 ) : SyncOps {
+    /** Set by the store: how a game's saves are found here (its emulator as a launch would pick it). */
+    var queries: suspend (io.github.matiyaaa.fuse.model.GameId) -> io.github.matiyaaa.fuse.sync.SaveQuery? = { null }
+
+    override suspend fun saveQuery(game: io.github.matiyaaa.fuse.model.GameId) = queries(game)
+
     override val service: SyncService? = runCatching { ctx.services.syncService(port, ctx.scope) }.getOrNull()
 
     override val config: StateFlow<SyncSettings> = ctx.data.settings.settings.map { it.sync }

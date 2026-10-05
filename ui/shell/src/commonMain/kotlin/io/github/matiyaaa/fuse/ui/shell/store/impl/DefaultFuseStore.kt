@@ -10,13 +10,13 @@ import io.github.matiyaaa.fuse.model.ScopedSettings
 import io.github.matiyaaa.fuse.model.ThemeCodec
 import io.github.matiyaaa.fuse.model.ThemeLinks
 import io.github.matiyaaa.fuse.model.ThemeSpec
-import io.github.matiyaaa.fuse.ui.designsystem.theme.ThemePresets
 import io.github.matiyaaa.fuse.ui.designsystem.res.Res
+import io.github.matiyaaa.fuse.ui.designsystem.theme.ThemePresets
 import io.github.matiyaaa.fuse.ui.shell.music.BundledMusic
+import io.github.matiyaaa.fuse.ui.shell.store.AppStoreOps
 import io.github.matiyaaa.fuse.ui.shell.store.FuseServices
 import io.github.matiyaaa.fuse.ui.shell.store.FuseStore
 import io.github.matiyaaa.fuse.ui.shell.store.ThemeOps
-import io.github.matiyaaa.fuse.ui.shell.store.AppStoreOps
 import io.github.matiyaaa.fuse.ui.shell.store.UiPrefs
 import io.ktor.client.request.get
 import io.ktor.client.statement.bodyAsChannel
@@ -31,8 +31,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -206,7 +206,8 @@ internal class DefaultFuseStore private constructor(
 
     override fun updatePrefs(transform: (UiPrefs) -> UiPrefs) {
         val before = prefsState.value
-        val after = transform(before)
+        // Fuse Sync's settings change only through the sync store.
+        val after = transform(before).copy(sync = before.sync)
         if (after == before) return
         prefsState.value = after
         ctx.systemOrder.value = after.systemOrder
@@ -258,7 +259,17 @@ internal class DefaultFuseStore private constructor(
         // Fuse Sync: saves around games, and what the person changes goes up soon.
         sync.service?.let { svc ->
             library.sync = SyncLaunch(svc, sync.port)
+            sync.queries = { id -> library.saveQueryFor(id) }
             ctx.onUserChange = { if (sync.config.value.enabled) svc.changed() }
+        }
+        // The interface follows Fuse Sync's settings as stored (the service writes some itself).
+        ctx.scope.launch {
+            sync.config.collect { c ->
+                if (prefsState.value.sync != c) {
+                    prefsState.value = prefsState.value.copy(sync = c)
+                    writes.trySend(prefsState.value)
+                }
+            }
         }
         // Jellyfin follows its switch and addresses; off, it does nothing at all. Safe mode leaves it off.
         ctx.scope.launch {

@@ -73,6 +73,8 @@ data class SaveRevision(
     /** The profile's play time on this game when it was saved, for telling saves apart. */
     val playSeconds: Long = 0,
     val reason: RevisionReason = RevisionReason.PLAYED,
+    /** The game's name as the saving device showed it, for the Hub. */
+    val title: String = "",
 ) {
     val size: Long get() = manifest.size
 }

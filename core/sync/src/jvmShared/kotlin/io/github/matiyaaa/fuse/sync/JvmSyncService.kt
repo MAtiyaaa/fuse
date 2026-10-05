@@ -17,6 +17,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 import java.io.File
 import java.net.Inet4Address
@@ -59,6 +60,10 @@ class JvmSyncService(
     override val host: StateFlow<HostView?> = _host.asStateFlow()
     override val devices: StateFlow<List<DeviceInfo>> = _devices.asStateFlow()
     override val canHost: Boolean get() = platform != "ANDROID"
+
+    override fun lifetimeState(): ServiceState = lifetime.state()
+
+    override val defaultName: String get() = defaultDeviceName
 
     private var client: SyncClient? = null
     private var device: SyncDevice? = null
@@ -119,6 +124,10 @@ class JvmSyncService(
         if (l == null) {
             _status.value = SyncStatus.NotSetUp
             return
+        }
+        if (_profiles.value.isEmpty()) {
+            _profiles.value = knownProfiles()
+            _active.value = _profiles.value.firstOrNull { it.id == c.activeProfile }
         }
         client = SyncClient(l.copy(localAddress = c.localAddress.ifBlank { l.localAddress }, remoteAddress = c.remoteAddress.ifBlank { l.remoteAddress }))
         _status.value = SyncStatus.Connecting(c.hostName.ifBlank { l.hostName })
@@ -211,7 +220,14 @@ class JvmSyncService(
         _profiles.value = c.profiles()
         _devices.value = runCatching { c.devices() }.getOrDefault(_devices.value)
         _active.value = _profiles.value.firstOrNull { it.id == cached.activeProfile }
+        // Kept, so who is playing shows (and Who's playing? has faces) while the host is away.
+        runCatching { writeAtomically(File(dir, PROFILES_FILE), json.encodeToString(ListSerializer(ProfileInfo.serializer()), _profiles.value).toByteArray()) }
     }
+
+    /** The profiles as last heard from the host. */
+    private fun knownProfiles(): List<ProfileInfo> = runCatching {
+        json.decodeFromString(ListSerializer(ProfileInfo.serializer()), File(dir, PROFILES_FILE).readText())
+    }.getOrDefault(emptyList())
 
     /** Captures local changes, sends everything waiting, and brings in the active profile's newest records. */
     private suspend fun syncOnce() = work.withLock {
@@ -554,10 +570,16 @@ class JvmSyncService(
             if (cached.records) d.played(profile, query.game, session)
             val total = d.meta(profile).game(query.game).totalSeconds
             for (slot in slots(query)) {
-                runCatching { d.capture(profile, slot, total) }.getOrNull()?.let { log("${query.title}: saved ${it.kind.label.lowercase()}", query.game.id, "save") }
+                runCatching { d.capture(profile, slot, total, title = query.title) }.getOrNull()?.let { log("${query.title}: saved ${it.kind.label.lowercase()}", query.game.id, "save") }
             }
             client?.let { c -> runCatching { d.flush(c) }.onFailure { if (it is SyncException) handle(it) } }
         }
+    }
+
+    override suspend fun report(): ProfileReport? = withContext(Dispatchers.IO) {
+        val c = client ?: return@withContext null
+        val profile = cached.activeProfile.ifEmpty { return@withContext null }
+        runCatching { c.report(profile) }.onFailure { if (it is SyncException) handle(it) }.getOrNull()
     }
 
     override suspend fun versions(query: SaveQuery, kind: SaveKind): List<SaveVersion> = withContext(Dispatchers.IO) {
@@ -577,7 +599,7 @@ class JvmSyncService(
             val rev = c.revisions(cached.activeProfile, slot.game.id, kind).firstOrNull { it.id == version } ?: error("That version is gone.")
             // What is here now is kept in the history first, then the old one becomes the newest.
             d.place(c, slot, rev)
-            d.capture(cached.activeProfile, slot, rev.playSeconds, Priority.LAUNCH)
+            d.capture(cached.activeProfile, slot, rev.playSeconds, Priority.LAUNCH, title = query.title)
             d.flush(c)
             log("${query.title}: restored the save from ${rev.deviceName}", query.game.id, "restore")
         }
@@ -594,6 +616,7 @@ class JvmSyncService(
             loop?.cancel()
             client = null
             secrets.remove(LINK_KEY)
+            File(dir, PROFILES_FILE).delete()
             saveConfig { it.copy(role = if (it.role == "HOST") "HOST" else "", activeProfile = "", hostName = if (it.role == "HOST") it.hostName else "", localAddress = "", remoteAddress = "") }
             _active.value = null
             _profiles.value = emptyList()
@@ -636,6 +659,7 @@ class JvmSyncService(
 
     companion object {
         const val LINK_KEY = "sync.link"
+        private const val PROFILES_FILE = "profiles.json"
 
         /** The longest a launch waits on the host before playing with what is here. */
         const val LAUNCH_WAIT_MS = 8_000L

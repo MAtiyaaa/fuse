@@ -131,6 +131,8 @@ data class GameRecord(
     val title: Lww<String?>? = null,
     /** The emulator the person chose for it, by id (portable across devices that have it). */
     val emulator: Lww<String?>? = null,
+    /** Its name as a device last showed it, for the Hub (not the person's own name for it: that's [title]). */
+    val name: String? = null,
 ) {
     val totalSeconds: Long get() = playSeconds.values.sum()
 
@@ -147,6 +149,7 @@ data class GameRecord(
             continueDismissed = continueDismissed.mergeWith(other.continueDismissed),
             title = title.mergeWith(other.title),
             emulator = emulator.mergeWith(other.emulator),
+            name = other.name ?: name,
         )
     }
 

@@ -172,7 +172,7 @@ class SyncDevice(
      * keeps them as a new revision made from it and queues it for the host. An empty slot (the
      * game made no save, or its drive is gone) is never a revision.
      */
-    suspend fun capture(profile: String, slot: LocalSlot, playSeconds: Long, priority: Priority = Priority.SAVE): SaveRevision? = mutex.withLock {
+    suspend fun capture(profile: String, slot: LocalSlot, playSeconds: Long, priority: Priority = Priority.SAVE, title: String = ""): SaveRevision? = mutex.withLock {
         if (!slot.available) return@withLock null
         val (manifest, hashed) = fingerprintOf(slot)
         if (manifest.files.isEmpty()) return@withLock null
@@ -181,7 +181,7 @@ class SyncDevice(
         for ((lf, h) in hashed) if (!store.has(h)) lf.file.inputStream().use { store.put(it, expected = h) }
         val revision = SaveRevision(
             id = SyncCrypto.token(12), profile = profile, game = slot.game.id, kind = slot.kind, parent = slotState.base,
-            device = deviceId, deviceName = deviceName, at = hlc.now(), manifest = manifest, playSeconds = playSeconds,
+            device = deviceId, deviceName = deviceName, at = hlc.now(), manifest = manifest, playSeconds = playSeconds, title = title,
         )
         state = state.copy(outbox = state.outbox + Outgoing(revision.id, priority.rank, profile, revision))
         persist()

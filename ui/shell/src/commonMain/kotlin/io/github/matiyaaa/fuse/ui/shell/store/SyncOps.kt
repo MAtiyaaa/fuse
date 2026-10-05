@@ -31,6 +31,9 @@ interface SyncOps {
      */
     suspend fun setOwnHome(own: Boolean)
 
+    /** What Fuse Sync knows [game]'s saves by here (its emulator, files and names), or null. */
+    suspend fun saveQuery(game: io.github.matiyaaa.fuse.model.GameId): io.github.matiyaaa.fuse.sync.SaveQuery? = null
+
     object None : SyncOps {
         override val service: SyncService? = null
         override val config: StateFlow<SyncSettings> = MutableStateFlow(SyncSettings())

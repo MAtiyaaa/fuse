@@ -36,6 +36,7 @@ internal fun AppSettings.toUiPrefs(scoped: GlobalScoped): UiPrefs {
     val theme = resolveTheme(appearance.themeId, custom)
     return UiPrefs(
         jellyfin = jellyfin,
+        sync = sync,
         onboardingDone = onboarding.completed,
         themeId = theme.id,
         customThemes = custom,

@@ -13,7 +13,7 @@ object ProfileDiff {
         val games = HashMap<String, GameRecord>()
         for ((id, now) in local.games) {
             val before = base.games[id] ?: GameRecord(now.key)
-            var change = GameRecord(now.key)
+            var change = GameRecord(now.key, name = now.name)
             var changed = false
             // Play time this device counted beyond what was put in place is its own.
             val extra = now.totalSeconds - before.totalSeconds

@@ -75,6 +75,7 @@ ICONS = [
     ('jellyfin', 'Tv', 'Films and shows'),
     ('quick-menu', 'Dashboard', 'Quick menu'),
     ('touch', 'Hand', 'Touch'),
+    ('sync', 'RefreshCcw', 'Fuse Sync'),
 ]
 
 # Badge geometry, in the 48 x 48 tile

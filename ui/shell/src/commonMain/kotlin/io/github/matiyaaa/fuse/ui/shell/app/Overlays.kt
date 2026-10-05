@@ -34,12 +34,10 @@ import io.github.matiyaaa.fuse.ui.designsystem.components.FText
 import io.github.matiyaaa.fuse.ui.designsystem.components.FuseButton
 import io.github.matiyaaa.fuse.ui.designsystem.components.KeyboardField
 import io.github.matiyaaa.fuse.ui.designsystem.components.KeyboardState
+import io.github.matiyaaa.fuse.ui.designsystem.components.KeysAway
 import io.github.matiyaaa.fuse.ui.designsystem.components.MenuHeader
 import io.github.matiyaaa.fuse.ui.designsystem.components.MenuList
-import io.github.matiyaaa.fuse.ui.designsystem.components.KeysAway
 import io.github.matiyaaa.fuse.ui.designsystem.components.OnScreenKeyboard
-import io.github.matiyaaa.fuse.ui.designsystem.components.typingOnHardware
-import io.github.matiyaaa.fuse.ui.designsystem.input.InputSource
 import io.github.matiyaaa.fuse.ui.designsystem.components.OnScreenKeyboardHints
 import io.github.matiyaaa.fuse.ui.designsystem.components.Overlay
 import io.github.matiyaaa.fuse.ui.designsystem.components.OverlayEdge
@@ -47,11 +45,13 @@ import io.github.matiyaaa.fuse.ui.designsystem.components.Panel
 import io.github.matiyaaa.fuse.ui.designsystem.components.ReorderList
 import io.github.matiyaaa.fuse.ui.designsystem.components.ReorderListState
 import io.github.matiyaaa.fuse.ui.designsystem.components.handleMenuAction
+import io.github.matiyaaa.fuse.ui.designsystem.components.typingOnHardware
 import io.github.matiyaaa.fuse.ui.designsystem.focus.LinearSelection
 import io.github.matiyaaa.fuse.ui.designsystem.focus.ReorderDefaults
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
 import io.github.matiyaaa.fuse.ui.designsystem.input.InputLayer
+import io.github.matiyaaa.fuse.ui.designsystem.input.InputSource
 import io.github.matiyaaa.fuse.ui.designsystem.input.LayerPriority
 import io.github.matiyaaa.fuse.ui.designsystem.input.NavResult
 import io.github.matiyaaa.fuse.ui.designsystem.media.ArtSlot
@@ -78,6 +78,8 @@ fun OverlayHost(app: AppState) {
     TextPreviewOverlay(app)
     ReorderOverlay(app)
     ScreenPromptOverlay(app)
+    io.github.matiyaaa.fuse.ui.shell.sync.WhoAreYouOverlay(app)
+    io.github.matiyaaa.fuse.ui.shell.sync.PairingOverlay(app)
     ConfirmOverlay(app)
     TextInputOverlay(app)
     PhoneTypingOverlay(app)

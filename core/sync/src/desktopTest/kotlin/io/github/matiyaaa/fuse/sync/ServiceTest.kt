@@ -3,6 +3,13 @@ package io.github.matiyaaa.fuse.sync
 import io.github.matiyaaa.fuse.data.db.DesktopDatabase
 import io.github.matiyaaa.fuse.data.settings.SecretStore
 import io.github.matiyaaa.fuse.data.settings.SettingsStore
+import kotlin.test.AfterTest
+import kotlin.test.BeforeTest
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertIs
+import kotlin.test.assertNotNull
+import kotlin.test.assertTrue
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -14,12 +21,6 @@ import kotlinx.serialization.json.JsonPrimitive
 import java.io.File
 import java.net.ServerSocket
 import java.nio.file.Files
-import kotlin.test.AfterTest
-import kotlin.test.BeforeTest
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertIs
-import kotlin.test.assertTrue
 
 /** Fuse Sync as the app runs it: a host computer and a handheld, each with its own library and settings. */
 class ServiceTest {
@@ -108,6 +109,16 @@ class ServiceTest {
         assertEquals("8 badges", File(pcRoms, "ruby.sav").readText())
         pc.syncNow().getOrThrow()
         assertEquals(3_600L + 30 * 60, pcLib.games[ct.id]?.totalSeconds)
+        // The Hub sees all of it: play time by device, the save, who saved it, and where it is kept.
+        val report = assertNotNull(pc.report())
+        val g = report.games.first { it.game == ct.id }
+        assertEquals("Pokemon Ruby", g.name)
+        assertEquals(3_600L + 30 * 60, g.playSeconds)
+        val save = g.slots.single { it.kind == SaveKind.SAVE }.versions.first()
+        assertEquals("Steam Deck", save.device)
+        assertTrue(save.current)
+        assertTrue(save.files.single().stored.startsWith("objects/"), save.files.single().stored)
+        assertEquals("8 badges".length.toLong(), save.bytes)
         // Both play without syncing in between: a conflict, not a lost save.
         File(pcRoms, "ruby.sav").writeText("pc: elite four")
         File(roms, "Pokemon Ruby (USA).sav").writeText("deck: safari zone")
