@@ -67,6 +67,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
 import io.github.matiyaaa.fuse.ui.designsystem.icons.HintButton
 import io.github.matiyaaa.fuse.ui.designsystem.input.InputLayer
 import io.github.matiyaaa.fuse.ui.designsystem.input.LocalInputRouter
+import io.github.matiyaaa.fuse.ui.designsystem.input.mouseHover
 import io.github.matiyaaa.fuse.ui.designsystem.input.NavResult
 import io.github.matiyaaa.fuse.ui.designsystem.media.Artwork
 import io.github.matiyaaa.fuse.ui.designsystem.shape.SquircleShape
@@ -614,9 +615,16 @@ internal fun ChannelBoard(app: AppState, page: Int, pageKey: String, active: Boo
                                         app.focusZone = FocusZone.CONTENT
                                         when {
                                             arranging -> sel.index = i
-                                            // Widgets that play a game show it first; the rest open at once.
-                                            sel.index == i || w.kind !in playWidgets -> { sel.index = i; open(w) }
+                                            // A tap on a widget that plays a game shows it first; the rest open
+                                            // at once, and so does anything clicked with a mouse.
+                                            sel.index == i || w.kind !in playWidgets || router.mouse -> { sel.index = i; open(w) }
                                             else -> sel.index = i
+                                        }
+                                    },
+                                    onHover = {
+                                        if (!arranging && dragged == null) {
+                                            sel.index = i
+                                            app.focusZone = FocusZone.CONTENT
                                         }
                                     },
                                     chrome = {
@@ -797,6 +805,7 @@ private fun BoardItem(
     shape: Shape,
     cornerFraction: Float,
     onClick: () -> Unit,
+    onHover: () -> Unit,
     chrome: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit,
 ) {
     val motion = Fuse.motion
@@ -815,6 +824,8 @@ private fun BoardItem(
     Box(
         reveal(Modifier.boardPlace(rect, animate = !following))
             .zIndex(if (lifted) 2f else 0f)
+            // Pointing at it with the mouse highlights it, as the D-pad would; one click then opens it.
+            .mouseHover(!arranging) { onHover() }
             .graphicsLayer {
                 val t = wobble()
                 if (t != null && !lifted) rotationZ = sin((t + phase) * 2f * PI.toFloat()) * swing

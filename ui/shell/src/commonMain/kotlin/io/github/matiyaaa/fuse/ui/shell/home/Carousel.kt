@@ -197,7 +197,26 @@ internal fun Carousel(
         val last = (base + 2).coerceAtMost(count - 1)
 
         Box(
-            Modifier.fillMaxSize().pointerInput(count, stride) {
+            Modifier.fillMaxSize()
+                // A mouse wheel (or a two-finger swipe on a trackpad) turns it one card per notch.
+                .pointerInput(count) {
+                    if (count <= 1) return@pointerInput
+                    var pending = 0f
+                    awaitPointerEventScope {
+                        while (true) {
+                            val e = awaitPointerEvent()
+                            if (e.type != androidx.compose.ui.input.pointer.PointerEventType.Scroll) continue
+                            val d = e.changes.firstOrNull()?.scrollDelta ?: continue
+                            pending += if (kotlin.math.abs(d.x) > kotlin.math.abs(d.y)) d.x else d.y
+                            if (kotlin.math.abs(pending) >= 1f) {
+                                val by = if (pending > 0f) 1 else -1
+                                pending = 0f
+                                if (state.step(by, nudge = false)) e.changes.forEach { it.consume() }
+                            }
+                        }
+                    }
+                }
+                .pointerInput(count, stride) {
                 if (count <= 1) return@pointerInput
                 val tracker = VelocityTracker()
                 var travelled = 0f

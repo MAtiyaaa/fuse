@@ -89,6 +89,8 @@ import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
 import io.github.matiyaaa.fuse.ui.designsystem.icons.HintButton
 import io.github.matiyaaa.fuse.ui.designsystem.input.InputLayer
+import io.github.matiyaaa.fuse.ui.designsystem.input.LocalInputRouter
+import io.github.matiyaaa.fuse.ui.designsystem.input.mouseHover
 import io.github.matiyaaa.fuse.ui.designsystem.input.NavResult
 import io.github.matiyaaa.fuse.ui.designsystem.media.ArtSlot
 import io.github.matiyaaa.fuse.ui.designsystem.media.Artwork
@@ -497,14 +499,23 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
         val maxH = maxHeight
         val maxW = maxWidth
         val gridFocused = !state.inHeader && app.focusZone == FocusZone.CONTENT
+        val router = LocalInputRouter.current
         fun tapAt(i: Int, cards: List<GameCard>) {
             app.focusZone = FocusZone.CONTENT
             state.inHeader = false
             when {
                 special -> { state.pick(i, cards); options(cards[i]) }
-                state.grid.index == i -> app.activateGame(cards[i])
+                // A tap shows a game first, then plays it; a mouse click plays it at once.
+                state.grid.index == i || router.mouse -> { state.pick(i, cards); app.activateGame(cards[i]) }
                 else -> state.pick(i, cards)
             }
+        }
+        // Pointing with the mouse moves the highlight, as the D-pad would.
+        fun hoverAt(i: Int, cards: List<GameCard>) {
+            if (special || state.grid.index == i && !state.inHeader && app.focusZone == FocusZone.CONTENT) return
+            app.focusZone = FocusZone.CONTENT
+            state.inHeader = false
+            state.pick(i, cards)
         }
         val compactHeader = maxH < SHORT_SCREEN
         // Inside a system, saying which system each game is for says nothing.
@@ -627,7 +638,7 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
                         }
                         Spacer(Modifier.height(if (inSystem) lerp(Space.m, Space.s, collapse) else lerp(Space.l, Space.s, collapse)))
                         columns = cols
-                        IconGrid(list, state, gridState, cols, tileBase, metrics.gap, reveal, onTap = { i -> tapAt(i, list) }, onLong = { i -> state.pick(i, list); options(list[i]) }, focused = gridFocused)
+                        IconGrid(list, state, gridState, cols, tileBase, metrics.gap, reveal, onTap = { i -> tapAt(i, list) }, onHover = { i -> hoverAt(i, list) }, onLong = { i -> state.pick(i, list); options(list[i]) }, focused = gridFocused)
                     }
                     LibraryLayout.CAPSULE -> {
                         BoxWithConstraints(Modifier.fillMaxWidth().weight(1f).padding(horizontal = Space.gutter).reveal(reveal, 1), contentAlignment = Alignment.BottomStart) {
@@ -661,11 +672,11 @@ fun LibraryScreen(app: AppState, scope: LibraryScope) {
                         val coverW = metrics.coverWidth
                         val cols = ((maxW - Space.gutter * 2 + metrics.gap) / (coverW + metrics.gap)).toInt().coerceAtLeast(2)
                         columns = cols
-                        CoverGrid(list, state, gridState, cols, coverW, metrics.gap, reveal, onTap = { i -> tapAt(i, list) }, onLong = { i -> state.pick(i, list); options(list[i]) }, focused = gridFocused)
+                        CoverGrid(list, state, gridState, cols, coverW, metrics.gap, reveal, onTap = { i -> tapAt(i, list) }, onHover = { i -> hoverAt(i, list) }, onLong = { i -> state.pick(i, list); options(list[i]) }, focused = gridFocused)
                     }
                     LibraryLayout.COMPACT_LIST -> {
                         columns = 1
-                        CompactList(list, state, listState, reveal, onTap = { i -> tapAt(i, list) }, onLong = { i -> state.pick(i, list); options(list[i]) }, focused = gridFocused)
+                        CompactList(list, state, listState, reveal, onTap = { i -> tapAt(i, list) }, onHover = { i -> hoverAt(i, list) }, onLong = { i -> state.pick(i, list); options(list[i]) }, focused = gridFocused)
                     }
                   }
                 }
@@ -807,6 +818,7 @@ private fun IconGrid(
     reveal: Reveal,
     onTap: (Int) -> Unit,
     onLong: (Int) -> Unit,
+    onHover: (Int) -> Unit = {},
     focused: Boolean,
 ) {
     // The chosen row stays clear of the top's fading edge, and is followed again as tiles shrink with the folding stage.
@@ -827,7 +839,7 @@ private fun IconGrid(
                     card,
                     selected = focused && i == state.grid.index,
                     size = size,
-                    modifier = Modifier.reveal(reveal, 2 + i / columns),
+                    modifier = Modifier.reveal(reveal, 2 + i / columns).mouseHover { onHover(i) },
                     onClick = { onTap(i) },
                     onLongClick = { onLong(i) },
                 )
@@ -851,6 +863,7 @@ private fun CoverGrid(
     reveal: Reveal,
     onTap: (Int) -> Unit,
     onLong: (Int) -> Unit,
+    onHover: (Int) -> Unit = {},
     focused: Boolean,
 ) {
     FollowSelection(grid, { state.grid.index }, anchor = 0.1f)
@@ -875,7 +888,7 @@ private fun CoverGrid(
                     selected = focused && i == state.grid.index,
                     width = width,
                     aspect = Aspect.BOX,
-                    modifier = Modifier.reveal(reveal, 2 + i / columns),
+                    modifier = Modifier.reveal(reveal, 2 + i / columns).mouseHover { onHover(i) },
                     onClick = { onTap(i) },
                     onLongClick = { onLong(i) },
                 )
@@ -897,6 +910,7 @@ private fun CompactList(
     reveal: Reveal,
     onTap: (Int) -> Unit,
     onLong: (Int) -> Unit,
+    onHover: (Int) -> Unit = {},
     focused: Boolean,
 ) {
     FollowSelection(listState, { state.grid.index }, anchor = 0.35f)
@@ -914,7 +928,7 @@ private fun CompactList(
             ) { i, card, sel ->
                 GameRow(
                     card, sel, showsSystem, dense,
-                    Modifier.reveal(reveal, 2 + i),
+                    Modifier.reveal(reveal, 2 + i).mouseHover { onHover(i) },
                     onClick = { onTap(i) },
                     onLongClick = { onLong(i) },
                 )

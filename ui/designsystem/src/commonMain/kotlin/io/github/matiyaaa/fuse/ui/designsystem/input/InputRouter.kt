@@ -88,6 +88,35 @@ class InputRouter(
         lastActivityAt = kotlin.time.Clock.System.now().toEpochMilliseconds()
     }
 
+    /** The last pointer that reached Fuse was a mouse (or trackpad), not a finger or pen. */
+    @kotlin.concurrent.Volatile var mouse: Boolean = false
+        private set
+
+    /** When the mouse last really moved over Fuse (not content moving under a resting pointer). */
+    @kotlin.concurrent.Volatile var mouseMovedAt: Long = 0L
+        private set
+
+    private var lastMouseX = Float.NaN
+    private var lastMouseY = Float.NaN
+
+    /**
+     * A pointer event at the root, in the window's own coordinates: [mouse] says what kind, and a
+     * mouse whose place in the window changed has moved, so hovering may move the highlight.
+     */
+    fun pointer(mouse: Boolean, x: Float, y: Float, pressed: Boolean) {
+        this.mouse = mouse
+        if (!mouse) return
+        if (x != lastMouseX || y != lastMouseY) {
+            if (!lastMouseX.isNaN()) mouseMovedAt = kotlin.time.Clock.System.now().toEpochMilliseconds()
+            lastMouseX = x
+            lastMouseY = y
+        }
+        if (pressed) mouseMovedAt = kotlin.time.Clock.System.now().toEpochMilliseconds()
+    }
+
+    /** The mouse moved just now: hovering something may make it the highlighted one. */
+    fun mouseJustMoved(): Boolean = mouse && kotlin.time.Clock.System.now().toEpochMilliseconds() - mouseMovedAt < HOVER_FRESH_MS
+
     private val _lastSource = MutableStateFlow(InputSource.KEYBOARD)
 
     /** Last input kind used; the UI can adapt (for example hint glyphs) without hiding focus. */
@@ -541,3 +570,6 @@ interface TextInput {
     fun home() {}
     fun end() {}
 }
+
+/** How recently the mouse must have moved for a hover to count as the person pointing. */
+private const val HOVER_FRESH_MS = 120L

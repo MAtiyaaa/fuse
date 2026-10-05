@@ -336,7 +336,7 @@ private fun FuseAppContent(
         animateChanges = true,
         textScale = prefs.textScale,
     ) {
-        CompositionLocalProvider(LocalInputRouter provides router, LocalUiSounds provides platform.sounds) {
+        CompositionLocalProvider(LocalInputRouter provides router, io.github.matiyaaa.fuse.ui.designsystem.input.LocalPointerRouter provides router, LocalUiSounds provides platform.sounds) {
             BoxWithConstraints(
                 Modifier
                     .fillMaxSize()
@@ -345,8 +345,16 @@ private fun FuseAppContent(
                     .pointerInput(Unit) {
                         awaitPointerEventScope {
                             while (true) {
-                                awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial)
+                                val e = awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial)
                                 router.touched()
+                                // Whether it is a mouse, and whether it really moved, for hovering and clicking.
+                                e.changes.firstOrNull()?.let { ch ->
+                                    router.pointer(
+                                        mouse = ch.type == androidx.compose.ui.input.pointer.PointerType.Mouse,
+                                        x = ch.position.x, y = ch.position.y,
+                                        pressed = e.type == androidx.compose.ui.input.pointer.PointerEventType.Press,
+                                    )
+                                }
                             }
                         }
                     }

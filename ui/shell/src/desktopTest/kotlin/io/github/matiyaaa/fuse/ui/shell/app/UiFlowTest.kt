@@ -2,6 +2,9 @@ package io.github.matiyaaa.fuse.ui.shell.app
 
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onFirst
+import androidx.compose.ui.test.performMouseInput
+import androidx.compose.ui.test.click
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.v2.runComposeUiTest
 import androidx.compose.ui.test.onRoot
@@ -121,6 +124,37 @@ class UiFlowTest {
         val plan = assertIs<LaunchPlan.Command>(services.launched.single().plan)
         assertTrue(plan.argv.any { it.endsWith("Advance Wars (USA).gba") }, plan.argv.toString())
         assertEquals("linux.mgba", plan.emulatorId.value)
+    }
+
+    @Test
+    fun oneMouseClickPlaysAGame() = runComposeUiTest {
+        val services = newServices()
+        val store: FuseStore = runBlocking {
+            createFuseStore(services, scope).also { s ->
+                s.updatePrefs { it.copy(onboardingDone = true) }
+                s.sources.add(root.absolutePath, LibrarySourceKind.ROMS_ROOT)
+                withTimeout(20_000) { s.library.home.first { feed -> feed.recentlyAdded.isNotEmpty() } }
+            }
+        }
+        val router = InputRouter(scope)
+        mainClock.autoAdvance = false
+        setContent { FuseApp(store, TestPlatform, router) }
+        pumpUntil { onAllNodesWithText("NEW IN YOUR LIBRARY").fetchSemanticsNodes().isNotEmpty() }
+        // The game's tile, as a mouse sees it: moved over, then clicked once.
+        // Its tile shows the made-up art's initials while there is no cover.
+        val tile = androidx.compose.ui.test.hasClickAction() and androidx.compose.ui.test.hasAnyDescendant(androidx.compose.ui.test.hasText("AW"))
+        pumpUntil { onAllNodes(tile, useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() }
+        var clicks = 0
+        while (services.launched.isEmpty() && clicks < 4) {
+            onAllNodes(tile, useUnmergedTree = true).onFirst().performMouseInput {
+                moveTo(center)
+                click(center)
+            }
+            clicks++
+            repeat(20) { mainClock.advanceTimeBy(32); Thread.sleep(8) }
+            if (services.launched.isEmpty()) runCatching { pumpUntil(1_500) { services.launched.isNotEmpty() } }
+        }
+        assertEquals(1, clicks, "Clicks it took to play a game")
     }
 
     @Test
