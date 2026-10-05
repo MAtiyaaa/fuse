@@ -98,6 +98,7 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
     val scan by store.sources.scan.collectAsState()
     val sources by store.sources.sources.collectAsState()
     val raConfigured by store.achievements.configured.collectAsState()
+    val jellyfinState = store.jellyfin?.state?.collectAsState()?.value
     val secrets by store.credentials.stored.collectAsState()
     val displays by platform.displays.collectAsState()
     val suggestions = remember { mutableStateListOf<SuggestedSource>() }
@@ -383,6 +384,26 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
                     StepAction("Skip", run = next),
                 )
             },
+        ))
+        // Jellyfin: what it is, for anyone who hasn't met it, and signing in right here.
+        val jellyfinAccount = jellyfinState?.account?.takeIf { prefs.jellyfin.enabled }
+        add(Step(
+            "jellyfin", "Films and shows", if (jellyfinAccount != null) "Jellyfin is connected" else "Your films, here too",
+            if (jellyfinAccount != null) {
+                "Signed in as ${jellyfinAccount.userName ?: "you"}. Your films, shows and music are in Addons, and Fuse Player plays them, with subtitles, resume and the next episode on its own."
+            } else {
+                "Jellyfin is a free media server you run at home, on a computer or a NAS. It keeps your films, shows and music in one library you can reach from anywhere. Connect it and Fuse plays them with its own player. No server? Skip this, and add one later in Settings, Addons."
+            },
+            optional = true, icon = FuseIcons.Clapperboard, chapter = Chapters.CONNECT,
+            actions = if (jellyfinAccount != null) {
+                listOf(StepAction("Continue", primary = true, run = next))
+            } else {
+                listOf(
+                    StepAction("Connect Jellyfin", primary = true) { connectJellyfin(app, live) { if (state.index < state.total - 1) next() } },
+                    StepAction("Skip", run = next),
+                )
+            },
+            content = { JellyfinStage(connected = jellyfinAccount != null, server = jellyfinAccount?.serverName) },
         ))
         add(Step(
             "ra", "Achievements", if (raConfigured) "RetroAchievements connected" else "Show your achievements?",
