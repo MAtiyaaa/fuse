@@ -48,6 +48,9 @@ class FfmpegEngine : PlayerEngine {
     private var volume = 1f
     @Volatile private var released = false
 
+    /** Counts loads, so a stream's late news is told from the current one's. */
+    @Volatile private var loads = 0
+
     init {
         Thread({
             while (!released) {
@@ -69,8 +72,11 @@ class FfmpegEngine : PlayerEngine {
         playing = play
         stateFlow.value = EngineState(status = EngineStatus.LOADING, positionMs = startMs)
         cueFlow.value = emptyList()
+        // A stream still winding down after a quick switch must never speak for the new one.
+        val load = ++loads
         val listener = object : PlaybackListener {
             override fun opened(durationMs: Long?, width: Int, height: Int, pixelRatio: Float, hardware: Boolean, decoder: String?) {
+                if (load != loads) return
                 stateFlow.update {
                     it.copy(status = EngineStatus.BUFFERING, durationMs = durationMs, videoWidth = width, videoHeight = height, pixelRatio = pixelRatio, hardware = hardware, decoder = decoder)
                 }
@@ -79,10 +85,12 @@ class FfmpegEngine : PlayerEngine {
             }
 
             override fun failed(message: String) {
+                if (load != loads) return
                 stateFlow.update { it.copy(status = EngineStatus.ERROR, error = message, playing = false) }
             }
 
             override fun firstFrame() {
+                if (load != loads) return
                 stateFlow.update { if (it.status == EngineStatus.LOADING || it.status == EngineStatus.BUFFERING) it.copy(status = EngineStatus.READY) else it }
             }
         }
@@ -155,6 +163,7 @@ class FfmpegEngine : PlayerEngine {
     }
 
     override fun stop() {
+        loads++
         closePlayback()
         playing = false
         stateFlow.value = EngineState()
@@ -182,23 +191,30 @@ class FfmpegEngine : PlayerEngine {
     /** A few times a second: the position, buffering, the end, and the subtitles showing. */
     private fun tick() {
         val p = playback ?: return
-        val s = stateFlow.value
-        if (s.status == EngineStatus.ERROR || s.status == EngineStatus.IDLE) return
+        val first = stateFlow.value.status
+        if (first == EngineStatus.ERROR || first == EngineStatus.IDLE) return
         val now = positionMs()
         val ended = p.eof && p.videoDone && p.audioDone && audio.drained() && p.ready.isEmpty()
         val starving = playing && !p.eof && (if (p.hasAudio) audio.starving() else p.ready.isEmpty())
-        val status = when {
-            ended && s.status != EngineStatus.LOADING -> EngineStatus.ENDED
-            s.status == EngineStatus.LOADING -> EngineStatus.LOADING
-            starving && s.status != EngineStatus.READY -> EngineStatus.BUFFERING
-            starving -> s.status
-            else -> if (s.status == EngineStatus.BUFFERING && (p.hasVideo && p.ready.isEmpty())) EngineStatus.BUFFERING else EngineStatus.READY
+        var endedNow = false
+        // One atomic change: the stream's own threads update the state too (opened, its first
+        // picture, a failure), and a plain read then write here would put back what they changed.
+        stateFlow.update { s ->
+            if (s.status == EngineStatus.ERROR || s.status == EngineStatus.IDLE) return@update s
+            val status = when {
+                ended && s.status != EngineStatus.LOADING -> EngineStatus.ENDED
+                s.status == EngineStatus.LOADING -> EngineStatus.LOADING
+                starving && s.status != EngineStatus.READY -> EngineStatus.BUFFERING
+                starving -> s.status
+                else -> if (s.status == EngineStatus.BUFFERING && (p.hasVideo && p.ready.isEmpty())) EngineStatus.BUFFERING else EngineStatus.READY
+            }
+            endedNow = status == EngineStatus.ENDED && s.status != EngineStatus.ENDED
+            s.copy(status = status, positionMs = now, playing = playing && status != EngineStatus.ENDED, bufferedMs = now)
         }
-        if (status == EngineStatus.ENDED && s.status != EngineStatus.ENDED) {
+        if (endedNow) {
             playing = false
             audio.pause()
         }
-        stateFlow.value = s.copy(status = status, positionMs = now, playing = playing && status != EngineStatus.ENDED, bufferedMs = now)
         val c = p.cuesAt(now)
         if (c != cueFlow.value) cueFlow.value = c
     }

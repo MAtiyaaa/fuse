@@ -98,6 +98,24 @@ class FfmpegEngineTest {
     }
 
     @Test
+    fun theClipsSizeAndLengthSurviveTheClock() {
+        // The clock thread updates the state while the stream opens; what the stream says it is
+        // must never be written over, however the two line up. Loading again and again tries many.
+        val file = File(dir, "clip.mkv")
+        SampleMedia.write(file, seconds = 1, cues = emptyList(), audioTracks = 1)
+        val engine = FfmpegEngine()
+        engine.capabilities(hardwareDecoding = false)
+        repeat(25) { n ->
+            engine.load(PlaySource(url = file.absolutePath, method = PlayMethod.DIRECT_PLAY), startMs = 0, audioOrder = 0, subtitleOrder = null, play = true)
+            waitUntil("load $n to open") { engine.state.value.status == EngineStatus.READY }
+            val s = engine.state.value
+            assertEquals(320, s.videoWidth, "load $n")
+            assertTrue((s.durationMs ?: 0) > 0, "load $n has no length")
+        }
+        engine.release()
+    }
+
+    @Test
     fun aMissingFileFailsCleanly() {
         val engine = FfmpegEngine()
         engine.load(PlaySource(url = File(dir, "missing.mkv").absolutePath, method = PlayMethod.DIRECT_PLAY), 0, null, null)
