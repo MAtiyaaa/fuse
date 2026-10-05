@@ -39,7 +39,7 @@ class FfmpegEngineTest {
             Thread.sleep(20)
         }
         val e = watched
-        throw AssertionError("Timed out waiting for $what" + if (e == null) "" else ", state ${e.state.value}, at ${e.positionMs()} ms")
+        throw AssertionError("Timed out waiting for $what" + if (e == null) "" else ", state ${e.state.value}, at ${e.positionMs()} ms, ${e.endConditionsForTest()}")
     }
 
     @Test

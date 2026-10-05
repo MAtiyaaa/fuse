@@ -266,6 +266,13 @@ class FfmpegEngine : PlayerEngine {
         return copy
     }
 
+    /** For tests: everything the end of a stream waits on, to say why it hasn't come. */
+    internal fun endConditionsForTest(): String {
+        val p = playback ?: return "no stream"
+        return "eof=${p.eof} videoDone=${p.videoDone} audioDone=${p.audioDone} ready=${p.ready.size} " +
+            "drained=${audio.drained()} card=${audio.hasCard} silent=${audio.silent} serial=${p.currentSerial}/$seekSerial playing=$playing"
+    }
+
     /** For tests: the stream takes [ms] longer to act on each seek, as on a slow machine. */
     internal fun slowSeeksForTest(ms: Long) {
         playback?.seekDelayForTestMs = ms
