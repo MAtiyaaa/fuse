@@ -42,6 +42,14 @@ internal data class DeviceRecord(
 @Serializable
 internal data class HostIdentity(val hostId: String, val name: String, val createdAt: Long)
 
+/** The host's account: a username, and the password only as [SyncCrypto.hashSecret] keeps it. */
+@Serializable
+internal data class HostAccount(val username: String, val secret: String)
+
+/** The host's address from outside home; [learned] when it came from how a device reached it, not typed. */
+@Serializable
+internal data class OutsideAddress(val address: String = "", val learned: Boolean = false)
+
 /**
  * Everything a Fuse Sync Host keeps, on its own disk, under [dir]: who it is, its devices and
  * profiles, each profile's records and the history of every save, the journal of what changed,
@@ -60,6 +68,11 @@ class HostStore(val dir: File, private val clock: () -> Long = System::currentTi
     private val profilesFile = File(dir, "profiles.json")
     private val sharedFile = File(dir, "shared-games.json")
     private val aliasFile = File(dir, "game-aliases.json")
+    private val accountFile = File(dir, "account.json")
+    private val outsideFile = File(dir, "outside.json")
+
+    @Volatile private var account: HostAccount? = null
+    @Volatile private var outside = OutsideAddress()
 
     /** Every id a game has been known by, to the one id the household's saves and records use. */
     private val aliases = HashMap<String, String>()
@@ -114,6 +127,8 @@ class HostStore(val dir: File, private val clock: () -> Long = System::currentTi
         File(profileDir(SHARED_SAVES), "revisions.jsonl").takeIf { it.isFile }?.let { f ->
             revisions[SHARED_SAVES] = f.readLines().mapNotNull { line -> runCatching { json.decodeFromString(SaveRevision.serializer(), line) }.getOrNull() }.toMutableList()
         }
+        if (accountFile.isFile) account = runCatching { json.decodeFromString(HostAccount.serializer(), accountFile.readText()) }.getOrNull()
+        if (outsideFile.isFile) outside = runCatching { json.decodeFromString(OutsideAddress.serializer(), outsideFile.readText()) }.getOrDefault(OutsideAddress())
         if (aliasFile.isFile) runCatching { json.decodeFromString(GameAliasesSerializer, aliasFile.readText()) }.getOrNull()?.let(aliases::putAll)
         if (sharedFile.isFile) runCatching { json.decodeFromString(SharedGames.serializer(), sharedFile.readText()).games }.getOrNull()?.let(shared::addAll)
         if (journalFile.isFile) {
@@ -149,7 +164,68 @@ class HostStore(val dir: File, private val clock: () -> Long = System::currentTi
 
     val name: String get() = identity.name
 
-    fun hello(port: Int, fuseVersion: String) = HostHello(identity.hostId, identity.name, SyncApi.VERSION, port, fuseVersion)
+    fun hello(port: Int, fuseVersion: String) =
+        HostHello(identity.hostId, identity.name, SyncApi.VERSION, port, fuseVersion, outside = outside.address, account = account != null)
+
+    // ---------------------------------------------------------------- the account and the outside address
+
+    /** The account's username, or null when the host has none. */
+    fun accountName(): String? = account?.username
+
+    /** Sets the host's account; [password] null keeps the one it has. */
+    fun setAccount(username: String, password: String?) = synchronized(lock) {
+        val name = username.trim()
+        require(name.length in 1..40) { "Choose a username of up to 40 characters." }
+        val secret = when {
+            password != null -> {
+                require(password.length >= MIN_PASSWORD) { "Choose a password of at least $MIN_PASSWORD characters." }
+                SyncCrypto.hashSecret(password, iterations = ACCOUNT_ITERATIONS)
+            }
+            else -> account?.secret ?: throw IllegalArgumentException("Choose a password.")
+        }
+        val next = HostAccount(name, secret)
+        writeAtomically(accountFile, json.encodeToString(HostAccount.serializer(), next).toByteArray())
+        runCatching { accountFile.setReadable(false, false); accountFile.setReadable(true, true) }
+        account = next
+    }
+
+    fun clearAccount() = synchronized(lock) {
+        accountFile.delete()
+        account = null
+    }
+
+    /** True for the account's username (any case) and password. */
+    fun checkAccount(username: String, password: String): Boolean {
+        val a = account ?: return false
+        return a.username.equals(username.trim(), ignoreCase = true) && SyncCrypto.verifySecret(password, a.secret)
+    }
+
+    /** How the account's password is stretched, for a device joining with it; null without an account. */
+    fun accountStretch(): Pair<String, Int>? = account?.let { SyncCrypto.secretParts(it.secret) }?.let { (salt, n, _) -> salt to n }
+
+    /** True when [proof] shows the device knows the account's password, for the join sharing [joinSecret]. */
+    fun accountProofOk(username: String, joinSecret: String, proof: String): Boolean {
+        val a = account ?: return false
+        if (!a.username.equals(username.trim(), ignoreCase = true)) return false
+        val key = SyncCrypto.secretParts(a.secret)?.third ?: return false
+        return SyncCrypto.constantEquals(SyncCrypto.hmac(key, joinSecret), proof)
+    }
+
+    fun outsideAddress(): String = outside.address
+
+    /**
+     * Sets the address from outside home. One [learned] from how a device reached the host never
+     * replaces one the person typed.
+     */
+    fun setOutsideAddress(address: String, learned: Boolean = false): Boolean = synchronized(lock) {
+        val clean = address.trim().trimEnd('/')
+        if (learned && outside.address.isNotEmpty() && !outside.learned) return false
+        if (clean == outside.address && learned == outside.learned) return false
+        val next = OutsideAddress(clean, learned && clean.isNotEmpty())
+        writeAtomically(outsideFile, json.encodeToString(OutsideAddress.serializer(), next).toByteArray())
+        outside = next
+        true
+    }
 
     fun seq(): Long = synchronized(lock) { seq }
 
@@ -601,3 +677,9 @@ internal const val ADMIN_AVATAR = "crown"
 
 /** The most ids one game may be claimed under at once. */
 private const val MAX_ALIASES = 8
+
+/** The shortest password the host's account takes. */
+internal const val MIN_PASSWORD = 8
+
+/** How hard the account's password is stretched (it guards joining and the Hub from away). */
+internal const val ACCOUNT_ITERATIONS = 210_000

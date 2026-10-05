@@ -68,6 +68,17 @@ object SyncCrypto {
         return MessageDigest.isEqual(expected, actual)
     }
 
+    /** The parts of what [hashSecret] made: salt, iterations and the stretched key; null for anything else. */
+    fun secretParts(stored: String): Triple<String, Int, ByteArray>? {
+        val parts = stored.split('$')
+        if (parts.size != 4 || parts[0] != "pbkdf2-sha256") return null
+        val iterations = parts[1].toIntOrNull() ?: return null
+        return Triple(parts[2], iterations, runCatching { decode(parts[3]) }.getOrNull() ?: return null)
+    }
+
+    /** [secret] stretched as [hashSecret] does with [salt]: the key a device proves it knows. */
+    fun stretch(secret: String, salt: String, iterations: Int): ByteArray = pbkdf2(secret, decode(salt), iterations, 32)
+
     private fun pbkdf2(secret: String, salt: ByteArray, iterations: Int, bytes: Int): ByteArray {
         val spec = PBEKeySpec(secret.toCharArray(), salt, iterations, bytes * 8)
         return SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256").generateSecret(spec).encoded

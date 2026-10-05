@@ -25,7 +25,7 @@ sealed interface SyncStatus {
 
 /** A host on this network, found by asking. */
 /** A request to join on its way: the host asked, and the number this device shows. */
-data class JoinWaiting(val hostName: String, val match: String)
+data class JoinWaiting(val hostName: String, val match: String, val account: Boolean = false)
 
 data class NearbyHost(val name: String, val hostId: String, val address: String)
 
@@ -42,6 +42,10 @@ data class HostView(
     val status: HostStatus?,
     /** Whether it starts with the computer, without Fuse open (see [HostLifetime]). */
     val service: ServiceState,
+    /** Its address from outside home, shared with every device ("" when none). */
+    val outside: String = "",
+    /** The username of its account, for joining and the Hub from away; null when it has none. */
+    val accountName: String? = null,
 )
 
 /** How a host keeps running when Fuse is closed, and after a restart. */
@@ -206,6 +210,17 @@ interface SyncService {
 
     /** Gives up on a request to join. */
     fun cancelJoin() {}
+
+    /** Joins the host asked with [askToJoin] using its account, when nobody is at a screen. The host's name. */
+    suspend fun joinWithAccount(username: String, password: String): Result<String> = Result.failure(UnsupportedOperationException("Fuse Sync isn't part of this build."))
+
+    /** On the host: its account for joining and the Hub from away ([password] null keeps the one it has). */
+    suspend fun setHostAccount(username: String, password: String?): Result<Unit> = Result.failure(UnsupportedOperationException("This device isn't a host."))
+
+    suspend fun clearHostAccount(): Result<Unit> = Result.failure(UnsupportedOperationException("This device isn't a host."))
+
+    /** On the host: its address from outside home, shared with every device (empty clears it). */
+    suspend fun setOutsideAddress(address: String): Result<Unit> = Result.failure(UnsupportedOperationException("This device isn't a host."))
 
     /** Devices asking to join right now, for this device to let in (on the host, and every device already connected). */
     val joinRequests: StateFlow<List<JoinAsk>> get() = NO_JOIN_REQUESTS

@@ -92,6 +92,8 @@ data class SyncSettings(
     val hostId: String = "",
     val localAddress: String = "",
     val remoteAddress: String = "",
+    /** [remoteAddress] came from the host (it is updated when the host's changes); false when typed here. */
+    val remoteFromHost: Boolean = false,
     /** Prefer home, fall back to outside, and back again by itself. */
     val autoRoute: Boolean = true,
     val wifiOnly: Boolean = false,

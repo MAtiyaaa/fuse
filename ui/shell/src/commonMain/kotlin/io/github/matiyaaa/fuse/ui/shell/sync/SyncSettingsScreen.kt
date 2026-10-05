@@ -339,7 +339,7 @@ private fun syncRows(
             trailing = Trailing.Value(c.remoteAddress.ifBlank { "Not set" }), section = connection,
             onSelect = {
                 app.textInput = TextInputSpec("Outside address", c.remoteAddress, "https://sync.example.com", capitalize = false) { v ->
-                    app.scope.launch { app.store.sync.configure { it.copy(remoteAddress = v.trim()) }; svc.setEnabled(true) }
+                    app.scope.launch { app.store.sync.configure { it.copy(remoteAddress = v.trim(), remoteFromHost = false) }; svc.setEnabled(true) }
                 }
             },
         ))
@@ -376,6 +376,27 @@ private fun syncRows(
             trailing = Trailing.Value(count(linked.size, "device")), section = hostSection,
             onSelect = { manageDevices(app, svc, linked, c.deviceId) },
         ))
+        val outside = host?.outside.orEmpty()
+        add(MenuAction(
+            "outside", "Address From Outside", FuseIcons.Globe,
+            detail = "Every device uses it away from home, and the Hub opens there after signing in. Found by itself when a device connects through a tunnel",
+            trailing = Trailing.Value(outside.removePrefix("https://").removePrefix("http://").ifBlank { "Not set" }), section = hostSection,
+            onSelect = {
+                app.textInput = TextInputSpec("Address from outside", outside, "https://sync.example.com", capitalize = false) { v ->
+                    app.scope.launch {
+                        svc.setOutsideAddress(v).onSuccess { app.toasts.show(if (v.isBlank()) "No address from outside" else "Every device will use it away from home", ToastKind.SUCCESS) }
+                            .onFailure { app.toasts.show(it.message ?: "Couldn't set it", ToastKind.ERROR) }
+                    }
+                }
+            },
+        ))
+        val account = host?.accountName
+        add(MenuAction(
+            "account", "Host Account", FuseIcons.UserRound,
+            detail = "A username and password, for letting a device in and opening the Hub when you're away from this computer",
+            trailing = Trailing.Value(account?.ifBlank { "Set" } ?: "Not set"), section = hostSection,
+            onSelect = { hostAccount(app, svc, account) },
+        ))
         val service = host?.service
         if (service != null) {
             add(toggleRow(
@@ -399,8 +420,9 @@ private fun syncRows(
             ).copy(section = hostSection))
         }
         add(infoRow(
-            "hub", "The Hub in a Browser", value = "127.0.0.1:${c.hostPort}/hub",
-            detail = "Profiles, devices and storage at a glance, on this computer, with Fuse closed too",
+            "hub", "The Hub in a Browser", value = if (outside.isNotBlank()) "${outside.removePrefix("https://")}/hub" else "127.0.0.1:${c.hostPort}/hub",
+            detail = "Profiles, devices and storage at a glance, with Fuse closed too: here at 127.0.0.1:${c.hostPort}/hub" +
+                if (outside.isNotBlank()) ", and from away after signing in with the host account" else "",
             icon = FuseIcons.Globe,
         ).copy(section = hostSection))
         host?.addresses?.takeIf { it.isNotEmpty() }?.let { a ->
@@ -476,6 +498,56 @@ private fun syncRows(
             },
         ))
     }
+}
+
+/**
+ * The host's account: made with a username and a password typed twice; once made, its password or
+ * username can change, or it can go (then devices join only with someone at a screen, and the Hub
+ * opens on this computer only).
+ */
+private fun hostAccount(app: AppState, svc: SyncService, current: String?) {
+    fun askPassword(user: String) {
+        app.textInput = TextInputSpec("A password for $user", "", "At least 8 characters", secret = true, capitalize = false, doneLabel = "Next") { first ->
+            if (first.length < 8) return@TextInputSpec app.toasts.show("Choose a password of at least 8 characters", ToastKind.WARNING)
+            app.textInput = TextInputSpec("The same password again", "", "", secret = true, capitalize = false, doneLabel = "Save") { again ->
+                if (again != first) return@TextInputSpec app.toasts.show("The two passwords weren't the same. Nothing changed", ToastKind.WARNING)
+                app.scope.launch {
+                    svc.setHostAccount(user, first).onSuccess { app.toasts.show("The host account is ready", ToastKind.SUCCESS, icon = FuseIcons.UserRound) }
+                        .onFailure { app.toasts.show(it.message ?: "Couldn't save the account", ToastKind.ERROR) }
+                }
+            }
+        }
+    }
+    fun askName(then: (String) -> Unit) {
+        app.textInput = TextInputSpec("Username", current.orEmpty(), "Up to 40 characters", capitalize = false, doneLabel = "Next") { v ->
+            v.trim().take(40).takeIf { it.isNotEmpty() }?.let(then)
+        }
+    }
+    if (current == null) return askName { askPassword(it) }
+    app.choice = ChoiceSpec(
+        title = "Host Account",
+        icon = FuseIcons.UserRound,
+        message = if (current.isNotBlank()) "Signed in as $current from away" else null,
+        options = listOf(
+            MenuAction("pw", "Change the Password", FuseIcons.Lock, onSelect = {
+                app.choice = null
+                // The background service's host doesn't say its username: ask for it with the new password.
+                if (current.isBlank()) askName { askPassword(it) } else askPassword(current)
+            }),
+            MenuAction("name", "Change the Username", FuseIcons.Pencil, onSelect = {
+                app.choice = null
+                askName { name -> app.scope.launch { svc.setHostAccount(name, null).onFailure { app.toasts.show(it.message ?: "Couldn't change it", ToastKind.ERROR) } } }
+            }),
+            MenuAction("remove", "Remove the Account", FuseIcons.Trash, destructive = true, onSelect = {
+                app.choice = null
+                app.confirm = ConfirmSpec(
+                    "Remove the host account?",
+                    "Devices then join only with someone at a screen to let them in, and the Hub opens on this computer only. Devices already in stay in.",
+                    "Remove", destructive = true,
+                ) { app.scope.launch { svc.clearHostAccount() } }
+            }),
+        ),
+    )
 }
 
 /** Moves everyone's saves to a folder picked here, after saying what happens. */

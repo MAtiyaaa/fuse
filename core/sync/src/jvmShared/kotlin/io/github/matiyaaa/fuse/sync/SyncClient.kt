@@ -329,18 +329,44 @@ class SyncClient(
             }
             if (!resp.status.isSuccess()) throw SyncException("The host stopped answering (${resp.status.value}).", "offline", resp.status.value)
             val state = json.decodeFromString(JoinState.serializer(), resp.bodyAsText())
-            return when (state.state) {
-                JoinState.WAITING -> null
-                JoinState.DENIED -> throw SyncException("${session.ticket.hostName} didn't let this device in.", "denied", 403)
-                JoinState.ALLOWED -> {
-                    val secret = SyncCrypto.open(state.sealedSecret.orEmpty(), session.secret, state.salt.orEmpty())
-                        ?: throw SyncException("The host's answer couldn't be opened.", "seal", 0)
-                    val home = !session.base.startsWith("https://")
-                    HostLink(session.ticket.hostId, session.ticket.hostName, session.deviceId, secret.decodeToString(),
-                        localAddress = if (home) session.base else null, remoteAddress = if (home) null else session.base)
-                }
-                else -> throw SyncException("Nobody let this device in in time. Ask again.", "gone", 410)
+            return linkFrom(session, state)
+        }
+
+        private fun linkFrom(session: JoinSession, state: JoinState): HostLink? = when (state.state) {
+            JoinState.WAITING -> null
+            JoinState.DENIED -> throw SyncException("${session.ticket.hostName} didn't let this device in.", "denied", 403)
+            JoinState.ALLOWED -> {
+                val secret = SyncCrypto.open(state.sealedSecret.orEmpty(), session.secret, state.salt.orEmpty())
+                    ?: throw SyncException("The host's answer couldn't be opened.", "seal", 0)
+                val home = !session.base.startsWith("https://")
+                HostLink(session.ticket.hostId, session.ticket.hostName, session.deviceId, secret.decodeToString(),
+                    localAddress = if (home) session.base else null, remoteAddress = if (home) null else session.base)
             }
+            else -> throw SyncException("Nobody let this device in in time. Ask again.", "gone", 410)
+        }
+
+        /**
+         * Joins with the host's account, for when nobody is at a screen to let this device in. The
+         * password is stretched here and proves itself over the secret only this request shares
+         * with the host: it never travels.
+         */
+        suspend fun joinWithAccount(session: JoinSession, username: String, password: String, http: HttpClient = defaultClient()): HostLink {
+            val json = Json { ignoreUnknownKeys = true }
+            val salt = session.ticket.accountSalt ?: throw SyncException("${session.ticket.hostName} has no account. Ask someone there to let this device in.", "no-account", 403)
+            val key = SyncCrypto.stretch(password, salt, session.ticket.accountIterations)
+            val proof = SyncCrypto.hmac(key, session.secret)
+            val resp = http.request {
+                method = HttpMethod.Post
+                url(session.base + SyncApi.BASE + "/join/" + session.ticket.id + "/account")
+                contentType(ContentType.Application.Json)
+                setBody(json.encodeToString(JoinWithAccount.serializer(), JoinWithAccount(username.trim(), proof)))
+            }
+            val text = resp.bodyAsText()
+            if (!resp.status.isSuccess()) {
+                val err = runCatching { json.decodeFromString(ApiError.serializer(), text) }.getOrNull()
+                throw SyncException(err?.error ?: "The host didn't take it (${resp.status.value}).", err?.code ?: "", resp.status.value)
+            }
+            return linkFrom(session, json.decodeFromString(JoinState.serializer(), text)) ?: throw SyncException("The host didn't let this device in.", "denied", 403)
         }
 
         /** Says hello to the host at [address] without signing: who it is, or null when nothing answers. */

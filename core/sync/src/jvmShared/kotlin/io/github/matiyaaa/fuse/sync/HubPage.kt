@@ -15,7 +15,26 @@ import java.time.format.DateTimeFormatter
 internal object HubPage {
     private val time = DateTimeFormatter.ofPattern("d MMM yyyy, HH:mm").withZone(ZoneId.systemDefault())
 
-    fun render(status: HostStatus, reports: List<ProfileReport>, now: Long): String {
+    /**
+     * The Hub from away: the host's account first. [error] says why the last try didn't work; the
+     * form posts to /hub/login over the outside address's https.
+     */
+    fun login(hostName: String, error: String?): String = """<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${esc(hostName)} · Fuse Sync</title>
+<style>$CSS</style></head><body><main class="login">
+<form class="card signin" method="post" action="/hub/login" autocomplete="on">
+<div class="mark"><svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/></svg></div>
+<h1>${esc(hostName)}</h1><p class="sub">Sign in with the host's account to see the Hub from away.</p>
+${if (error != null) """<p class="error">${esc(error)}</p>""" else ""}
+<label>Username<input name="username" autocomplete="username" required maxlength="40" autofocus></label>
+<label>Password<input name="password" type="password" autocomplete="current-password" required maxlength="200"></label>
+<button type="submit">Sign In</button>
+<small>The account is set in Fuse on the host: Settings, Addons, Fuse Sync, Host Account.</small>
+</form></main></body></html>
+"""
+
+    fun render(status: HostStatus, reports: List<ProfileReport>, now: Long, away: Boolean = false): String {
         val h = status.hello
         val names = status.devices.associate { it.id to it.name }
         fun deviceName(id: String) = names[id] ?: id
@@ -47,7 +66,7 @@ internal object HubPage {
 <style>$CSS</style></head><body><main>
 <header><div class="mark"><svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/></svg></div>
 <div><h1>${esc(h.name)}</h1><div class="sub">Fuse Sync by Fuse · the host for your devices</div></div>
-<a class="refresh" href="">Refresh</a></header>
+<a class="refresh" href="">Refresh</a>${if (away) """<form method="post" action="/hub/logout"><button class="refresh" type="submit">Sign Out</button></form>""" else ""}</header>
 <section class="facts">
 <div class="fact"><small>Running for</small><b>$upText</b></div>
 <div class="fact"><small>Play time, everyone</small><b>${duration(totalPlay)}</b></div>
@@ -57,7 +76,7 @@ internal object HubPage {
 <section class="card"><h2>Devices</h2><ul>$devices</ul></section>
 $profiles
 <footer>Every file is kept once, by its SHA-256, under <code>${esc(store)}</code>; each version lists the files it is made of.
-This page only shows; changes are made in Fuse (Settings, Addons, Fuse Sync). It opens on this computer only.${if (h.fuseVersion.isNotEmpty()) " Fuse ${esc(h.fuseVersion)}." else ""}</footer>
+This page only shows; changes are made in Fuse (Settings, Addons, Fuse Sync). ${if (away) "From away it opens after signing in with the host's account." else "It opens on this computer, and from away after signing in."}${if (h.fuseVersion.isNotEmpty()) " Fuse ${esc(h.fuseVersion)}." else ""}</footer>
 </main></body></html>
 """
     }
@@ -147,7 +166,12 @@ ${if (byDevice.isNotEmpty()) """<h2>Play time by device</h2>$byDevice""" else ""
     private const val CSS = """
 :root{--bg:#07080b;--panel:#12141a;--raised:#191c24;--line:#232631;--text:#eef0f5;--muted:#9aa0ae;--accent:#ff6a3d;--ok:#3ccf8e}
 *{box-sizing:border-box}body{margin:0;background:radial-gradient(1200px 500px at 20% -10%,rgba(255,106,61,.16),transparent),var(--bg);color:var(--text);font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;padding:40px 20px}
-main{max-width:1080px;margin:0 auto}header{display:flex;align-items:center;gap:16px;margin-bottom:28px}
+main{max-width:1080px;margin:0 auto}header{display:flex;align-items:center;gap:16px;margin-bottom:28px}header form{margin:0}button.refresh{font:inherit;cursor:pointer}
+.login{max-width:420px;min-height:80vh;display:flex;align-items:center}.signin{width:100%;display:flex;flex-direction:column;gap:14px;padding:32px}
+.signin h1{margin:6px 0 0;font-size:24px}.signin .sub{margin:0;color:var(--muted)}.signin label{display:flex;flex-direction:column;gap:6px;color:var(--muted);font-size:13px}
+.signin input{font:inherit;color:var(--text);background:var(--raised);border:1px solid var(--line);border-radius:12px;padding:12px 14px;outline:none}.signin input:focus{border-color:var(--accent)}
+.signin button{font:inherit;font-weight:600;color:#fff;background:var(--accent);border:0;border-radius:12px;padding:12px;cursor:pointer;margin-top:6px}.signin button:hover{filter:brightness(1.08)}
+.signin small{color:var(--muted)}.error{margin:0;color:#ff8a7a;background:rgba(255,106,61,.10);border:1px solid rgba(255,106,61,.3);border-radius:10px;padding:10px 12px}
 .mark{width:56px;height:56px;border-radius:16px;background:linear-gradient(135deg,rgba(255,106,61,.35),rgba(255,106,61,.1));display:grid;place-items:center;flex:none}
 .mark svg{width:28px;height:28px;stroke:var(--accent);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 h1{margin:0;font-size:28px;letter-spacing:-.01em}h3{margin:0;font-size:20px}.sub{color:var(--muted)}

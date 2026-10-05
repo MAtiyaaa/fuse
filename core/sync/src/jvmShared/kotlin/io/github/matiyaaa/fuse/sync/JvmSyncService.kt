@@ -187,6 +187,8 @@ class JvmSyncService(
             pairingCode = if (server != null) server.pairingCode() else lastCode,
             status = runCatching { server?.store?.status(c.hostPort, fuseVersion) }.getOrNull() ?: adminStatus,
             service = lifetime.state(),
+            outside = server?.store?.outsideAddress() ?: adminStatus?.hello?.outside.orEmpty(),
+            accountName = server?.store?.accountName() ?: adminAccount ?: "".takeIf { adminStatus?.hello?.account == true },
         )
     }
 
@@ -263,6 +265,7 @@ class JvmSyncService(
         if (_profiles.value.isEmpty()) refreshLists()
         val active = cached.activeProfile
         runCatching { resolveGames(c) }
+        runCatching { adoptOutside(c) }
         if (active.isNotEmpty()) captureChanges(active)
         runCatching { c.sharedGames().games }.onSuccess { games ->
             if (games.toSet() != cached.sharedGames.toSet()) saveConfig { it.copy(sharedGames = games) }
@@ -580,7 +583,7 @@ class JvmSyncService(
             val outside = remoteAddress?.takeIf { it.isNotBlank() && SyncClient.normalise(it) != SyncClient.normalise(address) }
             val session = askAt(address) ?: outside?.let { askAt(it) } ?: throw SyncException(unreachableWords(outside ?: address), "offline", 0)
             joining = session to outside
-            JoinWaiting(session.ticket.hostName, session.match)
+            JoinWaiting(session.ticket.hostName, session.match, account = session.ticket.accountSalt != null)
         }
     }
 
@@ -610,6 +613,81 @@ class JvmSyncService(
 
     override fun cancelJoin() {
         joining = null
+    }
+
+    override suspend fun joinWithAccount(username: String, password: String): Result<String> = withContext(Dispatchers.IO) {
+        runCatching {
+            val (session, outside) = joining ?: error("Ask the host first.")
+            val link = SyncClient.joinWithAccount(session, username, password)
+            joining = null
+            linkUp(if (outside != null) link.copy(remoteAddress = SyncClient.normalise(outside)) else link)
+        }
+    }
+
+    // ---------------------------------------------------------------- the host's account and outside address
+
+    /** The account's username as the background service's host last said (it isn't in its status). */
+    @Volatile private var adminAccount: String? = null
+
+    override suspend fun setHostAccount(username: String, password: String?): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatching {
+            val store = hostServer?.store
+            when {
+                store != null -> store.setAccount(username, password)
+                hostAdmin != null -> hostAdmin!!.setAccount(username, password)
+                else -> error("Start the host first.")
+            }
+            adminAccount = username.trim()
+            refreshHostView()
+            log("The host's account is set")
+        }
+    }
+
+    override suspend fun clearHostAccount(): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatching {
+            val store = hostServer?.store
+            when {
+                store != null -> store.clearAccount()
+                hostAdmin != null -> hostAdmin!!.clearAccount()
+                else -> error("Start the host first.")
+            }
+            adminAccount = null
+            refreshHostView()
+        }
+    }
+
+    override suspend fun setOutsideAddress(address: String): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatching {
+            val clean = address.trim().takeIf { it.isNotEmpty() }?.let(SyncClient::normalise).orEmpty()
+            val store = hostServer?.store
+            when {
+                store != null -> store.setOutsideAddress(clean)
+                hostAdmin != null -> hostAdmin!!.setOutside(clean)
+                else -> error("Start the host first.")
+            }
+            adminStatus = runCatching { hostAdmin?.status() }.getOrNull() ?: adminStatus
+            // This computer's own link knows it too.
+            saveConfig { it.copy(remoteAddress = clean, remoteFromHost = true) }
+            refreshHostView()
+        }
+    }
+
+    @Volatile private var helloAt = 0L
+
+    /**
+     * The host's address from outside, as it says it, becomes this device's (unless the person
+     * typed another here): set once on the host, every device can reach it from away.
+     */
+    private suspend fun adoptOutside(c: SyncClient) {
+        if (clock() - helloAt < HELLO_EVERY_MS) return
+        helloAt = clock()
+        val outside = runCatching { c.status().hello.outside }.getOrNull()?.takeIf { it.isNotBlank() } ?: return
+        val cfg = cached
+        if (cfg.remoteAddress.isNotBlank() && !cfg.remoteFromHost) return
+        if (SyncClient.normalise(cfg.remoteAddress.ifBlank { "x" }) == SyncClient.normalise(outside)) return
+        saveConfig { it.copy(remoteAddress = outside, remoteFromHost = true) }
+        client = SyncClient(c.link.copy(remoteAddress = SyncClient.normalise(outside)))
+        log("Learned the host's address from outside")
     }
 
     override suspend fun answerJoin(id: String, allow: Boolean): Result<Unit> = withContext(Dispatchers.IO) {
@@ -1165,6 +1243,7 @@ class JvmSyncService(
 
         /** How often a running game's save is looked at. */
         const val LIVE_LOOK_MS = 15_000L
+        const val HELLO_EVERY_MS = 10 * 60_000L
         const val FORGET_WAIT_MS = 5_000L
         const val HOST_RELEASE_MS = 1_500L
 

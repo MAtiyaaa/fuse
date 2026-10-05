@@ -613,7 +613,31 @@ private fun AskingToJoin(
             .onSuccess { onJoined(it) }
             .onFailure { if (it !is kotlinx.coroutines.CancellationException) onFailed(it.message ?: "Nobody let this device in") }
     }
-    val actions = listOf(SetupAction("code") { onCode() }, SetupAction("cancel") { onCancel() })
+    // Nobody at a screen to say yes: the host's account lets this device in instead.
+    var signing by remember { mutableStateOf(false) }
+    var problem by remember { mutableStateOf<String?>(null) }
+    fun signIn() {
+        if (signing) return
+        app.textInput = TextInputSpec("${waiting.hostName}'s username", "", "The host's account", capitalize = false, doneLabel = "Next") { user ->
+            if (user.isBlank()) return@TextInputSpec
+            app.textInput = TextInputSpec("Password for ${user.trim()}", "", "", secret = true, capitalize = false, doneLabel = "Sign In") { pass ->
+                if (pass.isEmpty()) return@TextInputSpec
+                signing = true
+                problem = null
+                app.scope.launch {
+                    svc.joinWithAccount(user, pass)
+                        .onSuccess { onJoined(it) }
+                        .onFailure { problem = it.message ?: "That didn't work. Try again."; app.platform.sounds.play(SoundCue.ERROR) }
+                    signing = false
+                }
+            }
+        }
+    }
+    val actions = buildList {
+        if (waiting.account) add(SetupAction("account") { signIn() })
+        add(SetupAction("code") { onCode() })
+        add(SetupAction("cancel") { onCancel() })
+    }
     Heading(
         "Waiting for ${waiting.hostName}",
         "A card is asking on ${waiting.hostName}, and on your other connected devices, to let this device in. Say yes there if it shows this same number:",
@@ -627,10 +651,22 @@ private fun AskingToJoin(
         Spacer(Modifier.width(Space.m))
         FText("Waiting to be let in. This asks for five minutes", Fuse.type.caption, color = c.textMuted, maxLines = 2)
     }
+    problem?.let {
+        Spacer(Modifier.height(Space.m))
+        Problem(it)
+    }
     Spacer(Modifier.height(Space.xl))
+    val first = if (waiting.account) 1 else 0
     Row(horizontalArrangement = Arrangement.spacedBy(Space.m)) {
-        FuseButton("Use a Code Instead", selected = index == 0, onClick = onCode, icon = FuseIcons.Keyboard)
-        FuseButton("Cancel", selected = index == 1, onClick = onCancel)
+        if (waiting.account) {
+            FuseButton("Use the Host's Account", selected = index == 0, onClick = { signIn() }, icon = FuseIcons.UserRound, kind = ButtonKind.PRIMARY, loading = signing)
+        }
+        FuseButton("Use a Code Instead", selected = index == first, onClick = onCode, icon = FuseIcons.Keyboard)
+        FuseButton("Cancel", selected = index == first + 1, onClick = onCancel)
+    }
+    if (waiting.account) {
+        Spacer(Modifier.height(Space.s))
+        FText("Nobody there? Sign in with the username and password set on the host.", Fuse.type.caption, color = c.textMuted, maxLines = 2)
     }
     StepInput(app, keys, actions)
 }

@@ -2,6 +2,7 @@ package io.github.matiyaaa.fuse.sync
 
 import io.ktor.client.request.header
 import io.ktor.client.request.request
+import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpMethod
 import io.ktor.http.takeFrom
@@ -118,6 +119,88 @@ class JoinTest {
         // cloudflared connects from this computer, but says whom it carries.
         assertEquals(403, hub("CF-Connecting-IP" to "203.0.113.9"))
         assertEquals(403, hub("X-Forwarded-For" to "203.0.113.9"))
+    }
+
+    @Test
+    fun nobodyAtAScreenTheHostsAccountLetsADeviceIn(): Unit = runBlocking {
+        store.setAccount("mo", "correct horse")
+        val wrong = SyncClient.askToJoin(address, "dev-thor-0002", "AYN Thor", "ANDROID", http)
+        assertEquals("wrong-account", assertFailsWith<SyncException> { SyncClient.joinWithAccount(wrong, "mo", "not it", http) }.code)
+        assertNull(store.device("dev-thor-0002"))
+        val session = SyncClient.askToJoin(address, "dev-thor-0002", "AYN Thor", "ANDROID", http)
+        assertNotNull(session.ticket.accountSalt)
+        // Any case for the username; the password never travels.
+        val link = SyncClient.joinWithAccount(session, "MO", "correct horse", http)
+        assertEquals("Media Server", SyncClient(link, http).status().hello.name)
+        assertTrue(store.checkAccount("mo", "correct horse"))
+        assertTrue(store.accountName() == "mo")
+    }
+
+    @Test
+    fun tooManyWrongPasswordsWait(): Unit = runBlocking {
+        store.setAccount("mo", "correct horse")
+        repeat(5) {
+            val s = SyncClient.askToJoin(address, "dev-guess-0001", "Guesser", "ANDROID", http)
+            assertEquals("wrong-account", assertFailsWith<SyncException> { SyncClient.joinWithAccount(s, "mo", "guess $it", http) }.code)
+        }
+        val s = SyncClient.askToJoin(address, "dev-guess-0001", "Guesser", "ANDROID", http)
+        assertEquals("locked-out", assertFailsWith<SyncException> { SyncClient.joinWithAccount(s, "mo", "correct horse", http) }.code)
+    }
+
+    @Test
+    fun fromAwayTheHubOpensAfterSigningIn(): Unit = runBlocking {
+        suspend fun call(method: HttpMethod, path: String, body: String? = null, cookie: String? = null): io.ktor.client.statement.HttpResponse = http.request {
+            this.method = method
+            url.takeFrom("http://$address$path")
+            header("CF-Connecting-IP", "203.0.113.9")
+            header("X-Forwarded-Proto", "https")
+            cookie?.let { header("Cookie", it) }
+            if (body != null) {
+                header("Content-Type", "application/x-www-form-urlencoded")
+                setBody(body)
+            }
+        }
+        // No account: from away, never.
+        assertEquals(403, call(HttpMethod.Get, "/hub").status.value)
+        store.setAccount("mo", "correct horse")
+        // With one: the sign-in page, then the Hub.
+        val page = call(HttpMethod.Get, "/hub")
+        assertEquals(200, page.status.value)
+        assertTrue("password" in page.bodyAsText())
+        assertEquals(403, call(HttpMethod.Post, "/hub/login", "username=mo&password=nope").status.value)
+        val ok = call(HttpMethod.Post, "/hub/login", "username=mo&password=correct+horse")
+        assertEquals(303, ok.status.value)
+        val cookie = assertNotNull(ok.headers["Set-Cookie"])
+        assertTrue("HttpOnly" in cookie && "Secure" in cookie && "SameSite=Strict" in cookie)
+        val hub = call(HttpMethod.Get, "/hub", cookie = cookie.substringBefore(';'))
+        assertEquals(200, hub.status.value)
+        assertTrue("Sign Out" in hub.bodyAsText())
+        // A made-up session is no session.
+        assertTrue("Sign Out" !in call(HttpMethod.Get, "/hub", cookie = "fuse_hub=made-up").bodyAsText())
+    }
+
+    @Test
+    fun aDeviceComingThroughATunnelTeachesTheHostItsOutsideAddress(): Unit = runBlocking {
+        val pc = pair("Gaming PC")
+        assertEquals("", store.outsideAddress())
+        // A plain call at home teaches nothing.
+        pc.status()
+        assertEquals("", store.outsideAddress())
+        // As cloudflared carries it: from this computer, naming the caller and the name it was reached by.
+        val tunnel = SyncHttp.client {
+            install(io.ktor.client.plugins.DefaultRequest) {
+                header("CF-Connecting-IP", "203.0.113.9")
+                header("CF-Visitor", "{\"scheme\":\"https\"}")
+                header("X-Forwarded-Host", "sync.example.com")
+            }
+        }
+        SyncClient(pc.link, tunnel).status()
+        assertEquals("https://sync.example.com", store.outsideAddress())
+        assertEquals("https://sync.example.com", store.hello(0, "").outside)
+        // Typed by the person: a learned one never replaces it.
+        store.setOutsideAddress("https://home.example.org")
+        assertFalse(store.setOutsideAddress("https://other.example.com", learned = true))
+        assertEquals("https://home.example.org", store.outsideAddress())
     }
 
     @Test

@@ -32,6 +32,10 @@ data class HostHello(
     val fuseVersion: String = "",
     /** Where it can be reached on the home network, best first (in discovery answers). */
     val addresses: List<String> = emptyList(),
+    /** Its address from outside home (a tunnel's https name), shared with every device; empty when none. */
+    val outside: String = "",
+    /** It has an account, so a device can join with its username and password when nobody is at a screen. */
+    val account: Boolean = false,
 )
 
 /** A device asking to join: the code shown on the host, and who the device is. */
@@ -158,7 +162,30 @@ data class JournalEvent(
 data class JoinRequest(val deviceId: String, val deviceName: String, val platform: String, val publicKey: String)
 
 @Serializable
-data class JoinTicket(val id: String, val hostId: String, val hostName: String, val publicKey: String)
+data class JoinTicket(
+    val id: String,
+    val hostId: String,
+    val hostName: String,
+    val publicKey: String,
+    /** With an account on the host: how its password is stretched, so the device can prove it knows it. */
+    val accountSalt: String? = null,
+    val accountIterations: Int = 0,
+)
+
+/**
+ * Joining with the host's account: [proof] is an HMAC, keyed by the stretched password, of the
+ * secret only this device and the host share for this request. The password never travels.
+ */
+@Serializable
+data class JoinWithAccount(val username: String, val proof: String)
+
+/** The host's account, set on the host: [password] null keeps the one it has (a new username only). */
+@Serializable
+data class HostAccountChange(val username: String, val password: String? = null)
+
+/** The host's address from outside home, set on the host (empty clears it). */
+@Serializable
+data class OutsideChange(val address: String)
 
 /** Where a request to join stands: [WAITING], [ALLOWED] (with the sealed secret), [DENIED] or [GONE] (ran out). */
 @Serializable
