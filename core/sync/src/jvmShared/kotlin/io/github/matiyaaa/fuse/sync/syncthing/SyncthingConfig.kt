@@ -23,7 +23,12 @@ internal object SyncthingConfig {
             // Since Syncthing 1.27 its state lives under XDG_STATE_HOME; older installs kept it in .config.
             (env("XDG_STATE_HOME") ?: "$home/.local/state").let { File(it, "syncthing/config.xml") },
             (env("XDG_CONFIG_HOME") ?: "$home/.config").let { File(it, "syncthing/config.xml") },
+            // Flatpaks (SyncThingy is the usual one on a Steam Deck or Bazzite) and the Snap keep their own.
+            File(home, ".var/app/com.github.zocker_160.SyncThingy/config/syncthing/config.xml"),
+            File(home, ".var/app/com.github.zocker_160.SyncThingy/data/syncthing/config.xml"),
             File(home, ".var/app/me.kozec.syncthingtk/config/syncthing/config.xml"),
+            File(home, "snap/syncthing/common/.local/state/syncthing/config.xml"),
+            File(home, "snap/syncthing/common/.config/syncthing/config.xml"),
         )
         else -> emptyList()
     }
