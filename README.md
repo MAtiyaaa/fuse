@@ -140,6 +140,11 @@ They behave the same on every device, answer to one design, and get better with 
         <li><b>One click to host</b> on Linux, Windows or macOS, kept running when Fuse is closed and
         after a restart; devices find it on the network and join with a code. Signed requests,
         revocable devices, and an outside address for away from home.</li>
+        <li><b>The Hub shows everything.</b> In Fuse and in a browser on the host: every game's saves
+        and their versions, which device made each one, how big it is, where the host keeps it, and
+        total play time by profile and by device.</li>
+        <li><b>Only what you made.</b> Saves, states, memory cards, play time and settings; your games
+        themselves are never copied or synced.</li>
       </ul>
       <a href="docs/sync.md"><b>How Fuse Sync works</b></a>
     </td>
@@ -685,7 +690,7 @@ You need JDK 17 or newer and, for Android, the Android SDK with API level 37 ins
 ## Privacy
 
 Fuse contains **no telemetry, analytics, advertising or crash reporting**, and your library works
-fully offline. Fuse only contacts a service after you set it up: your own Jellyfin server,
+fully offline. Fuse only contacts a service after you set it up: your own Fuse Sync host, your own Jellyfin server,
 RetroAchievements, SteamGridDB, IGDB, TheGamesDB, ScreenScraper and libretro thumbnails receive only what they need to answer (for example a
 game's title, or your own API key). The one service used without setup is GitHub, to check for new
 versions of Fuse; you can turn automatic checks off in Settings, About, and nothing is ever
