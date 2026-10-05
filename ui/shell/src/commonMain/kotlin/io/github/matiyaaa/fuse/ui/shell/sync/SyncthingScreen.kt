@@ -202,7 +202,7 @@ private fun syncthingRows(
     }
     add(toggleRow("enabled", "Use Syncthing", FuseIcons.Power, s.enabled, "Keep your emulators' save folders in step through the Syncthing you run") { v -> useSyncthing(app, svc, v) })
     if (!s.enabled) {
-        add(MenuAction("fusesync", "Fuse Sync Instead", FuseIcons.RefreshCcw, detail = "Knows each game whatever its file is called, adds up play time, and keeps a profile for each person", trailing = Trailing.Chevron, onSelect = {
+        add(MenuAction("fusesync", "Fuse Sync Instead", FuseIcons.RefreshCcw, detail = "Knows each game whatever its file is called, adds up play time, and gives each person their own saves. Syncthing keeps one save per game for everyone", trailing = Trailing.Chevron, onSelect = {
             app.go(io.github.matiyaaa.fuse.ui.shell.app.Route.SyncSettings)
         }))
         return@buildList
@@ -315,10 +315,11 @@ private fun syncthingRows(
                                 else -> "Up to date"
                             },
                         ),
-                        enabled = f.blocked == null,
                         section = saves,
                         onSelect = {
-                            if (live != null) {
+                            // A folder Fuse can't reach: choosing where it is happens on Save Folders.
+                            if (f.blocked != null) app.go(io.github.matiyaaa.fuse.ui.shell.app.Route.SaveFolders)
+                            else if (live != null) {
                                 app.confirm = ConfirmSpec("Stop sharing ${f.emulator} ${kindWord(f.kind)}?", "Syncthing stops syncing this folder. The saves in it stay on every device.", "Stop sharing", destructive = true) {
                                     busy { svc.unshare(live.id); page.plan = svc.planLibrary() }
                                 }
@@ -327,6 +328,15 @@ private fun syncthingRows(
                     ))
                 }
             }
+            add(MenuAction("where", "Where Saves Are", FuseIcons.FolderOpen, detail = "Each emulator's save folder here, and one to choose where Fuse can't find it", trailing = Trailing.Chevron, section = saves, onSelect = {
+                app.go(io.github.matiyaaa.fuse.ui.shell.app.Route.SaveFolders)
+            }))
+            // Syncthing moves folders, not people's saves: say so where it matters.
+            add(infoRow(
+                "everyone", "One Save per Game, for Everyone",
+                detail = "Syncthing keeps one save per game for everyone who plays on these devices. Fuse Sync gives each person their own",
+                icon = FuseIcons.Users,
+            ).copy(section = saves))
             // Around each game.
             val play = "Around a game"
             add(toggleRow("wait", "Bring In the Newest Save First", FuseIcons.Timer, s.waitBeforePlaying, "Before a game starts, a moment for Syncthing to bring in what another device saved") { v ->
@@ -447,7 +457,7 @@ private fun SyncthingSide(app: AppState, state: SyncthingState, modifier: Modifi
             Box(Modifier.fillMaxWidth().height(1.dp).background(c.hairline))
             FText("Fuse Sync does more", Fuse.type.bodyStrong, maxLines = 1)
             FText(
-                "Syncthing moves files as they are named, so a save only matches where the game's file has the same name on every device. Fuse Sync knows each game by what it is, adds up play time, and keeps a profile for each person.",
+                "Syncthing moves files as they are named, so a save only matches where the game's file has the same name on every device, and everyone shares one save per game. Fuse Sync knows each game by what it is, adds up play time, and gives each person their own saves.",
                 Fuse.type.caption, color = c.textMuted, maxLines = 6,
             )
         }

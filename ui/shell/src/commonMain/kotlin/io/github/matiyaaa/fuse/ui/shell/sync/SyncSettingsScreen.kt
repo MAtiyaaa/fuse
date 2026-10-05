@@ -270,6 +270,12 @@ private fun syncRows(
     // What syncs -----------------------------------------------------------------------------------
     val what = "What syncs"
     add(toggleRow("saves", "Saves", FuseIcons.Save, c.saves, "Each game's saves, put in place before it starts and kept after it closes") { v -> configure { it.copy(saves = v) } }.copy(section = what))
+    add(MenuAction(
+        "folders", "Save Folders", FuseIcons.FolderOpen,
+        detail = "Where each emulator keeps its saves here, and a folder to choose where Fuse can't find them",
+        trailing = Trailing.Chevron, section = what,
+        onSelect = { app.go(Route.SaveFolders) },
+    ))
     add(toggleRow("states", "Save States", FuseIcons.Layers, c.states, "Snapshots from the emulator's own menu, for the same emulator elsewhere") { v -> configure { it.copy(states = v) } }.copy(section = what))
     add(toggleRow("records", "Play Time and Library", FuseIcons.Clock, c.records, "Play time, Last Played, favourites, hidden and pinned games, names and collections") { v -> configure { it.copy(records = v) } }.copy(section = what))
     add(toggleRow("settings", "Settings", FuseIcons.Palette, c.settings, "Your theme, Home, tabs, quick menu, sounds and music. Controllers, screens and drives stay this device's own") { v -> configure { it.copy(settings = v) } }.copy(section = what))

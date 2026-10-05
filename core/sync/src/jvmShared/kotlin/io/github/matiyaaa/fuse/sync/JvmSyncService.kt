@@ -41,7 +41,7 @@ class JvmSyncService(
     private val fuseVersion: String,
     private val lifetime: HostLifetime,
     private val scope: CoroutineScope,
-    private val saveEnv: SaveEnvironment = FileSaveEnvironment(platform),
+    files: SaveEnvironment = FileSaveEnvironment(platform),
     private val clock: () -> Long = System::currentTimeMillis,
     /** Held while looking for hosts (Android only hears broadcast replies under a multicast lock). */
     private val discoveryLock: () -> AutoCloseable? = { null },
@@ -77,6 +77,9 @@ class JvmSyncService(
     private val work = Mutex()
     private val hlc by lazy { HlcClock(deviceId(), clock) }
     @Volatile private var cached: SyncSettings = SyncSettings()
+
+    /** The device's files, with the save folders the person chose on top. */
+    private val saveEnv: SaveEnvironment = WithSaveFolders(files) { cached.saveFolders }
 
     init {
         scope.launch(Dispatchers.IO) { runCatching { start() } }
@@ -525,6 +528,11 @@ class JvmSyncService(
      */
     private fun ownerOf(query: SaveQuery, slot: LocalSlot, profile: String): String =
         if (slot.kind != SaveKind.MEMORY_CARD && query.game.id in cached.sharedGames) SHARED_SAVES else profile
+
+    override suspend fun saveFolders(samples: List<SaveQuery>): List<EmulatorSaves> = withContext(Dispatchers.IO) {
+        config()
+        SaveAdapters.survey(samples, saveEnv)
+    }
 
     override suspend fun setShared(game: GameKey, shared: Boolean, fromMine: Boolean): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {

@@ -80,7 +80,11 @@ class SaveAdapterTest {
     fun emulatorsWithoutAnAdapterSayWhy() {
         assertNull(SaveAdapters.forEmulator("linux.xemu"))
         assertTrue("disk image" in SaveAdapters.whyNot("linux.xemu"))
-        assertTrue("Switch" in SaveAdapters.whyNot("windows.eden"))
+        assertTrue("private Android folder" in SaveAdapters.whyNot("xendroid"))
+        // Switch, 3DS and Wii U emulators have their own now.
+        assertNotNull(SaveAdapters.forEmulator("windows.eden"))
+        assertNotNull(SaveAdapters.forEmulator("azahar"))
+        assertNotNull(SaveAdapters.forEmulator("linux.cemu"))
         assertEquals("retroarch", SaveAdapters.baseId("linux.retroarch-steam").removeSuffix("-steam"))
     }
 

@@ -278,7 +278,9 @@ class SyncDevice(
         val queued = state.outbox.lastOrNull { it.profile == profile && it.revision?.game == slot.game.id && it.revision.kind == slot.kind }?.revision
         return when (SyncRules.decide(slotState.base, localChanged || queued != null, head.id, sameContent = manifest.fingerprint == head.manifest.fingerprint)) {
             SyncDecision.UpToDate -> {
-                agree(keyOf(profile, slot), head.id, head.manifest.fingerprint)
+                // What is here stays the fingerprint to compare with: when it came from a save kept
+                // in another shape (and was converted), the host's own would never match it.
+                agree(keyOf(profile, slot), head.id, if (localChanged) head.manifest.fingerprint else slotState.fingerprint ?: head.manifest.fingerprint)
                 PrepareResult.Ready
             }
             SyncDecision.Upload -> PrepareResult.Ready
@@ -325,9 +327,11 @@ class SyncDevice(
     suspend fun place(client: SyncClient, slot: LocalSlot, revision: SaveRevision) {
         for (f in revision.manifest.files) client.download(f.hash, store)
         mutex.withLock {
+            // The save as this emulator keeps it (converted when it came from one that keeps it differently).
+            val incoming = inSlotFormat(slot, revision.manifest)
             // What is here now is kept first, so taking another save never loses this one.
             val (current, hashed) = fingerprintOf(slot)
-            if (current.files.isNotEmpty() && current.fingerprint != revision.manifest.fingerprint) {
+            if (current.files.isNotEmpty() && current.fingerprint != incoming.fingerprint) {
                 for ((lf, h) in hashed) if (!store.has(h)) lf.file.inputStream().use { store.put(it, expected = h) }
                 val kept = SaveRevision(
                     id = SyncCrypto.token(12), profile = revision.profile, game = slot.game.id, kind = slot.kind,
@@ -336,13 +340,27 @@ class SyncDevice(
                 )
                 state = state.copy(outbox = state.outbox + Outgoing(kept.id, Priority.SAVE.rank, revision.profile, kept))
             }
-            write(slot, revision.manifest)
+            write(slot, incoming)
             state = state.copy(
-                slots = state.slots + (keyOf(revision.profile, slot) to SlotState(revision.id, revision.manifest.fingerprint)),
+                // Agreed as written here, so the converted copy isn't taken for a new save after playing.
+                slots = state.slots + (keyOf(revision.profile, slot) to SlotState(revision.id, incoming.fingerprint)),
                 holders = state.holders + (slot.key to revision.profile),
             )
             persist()
         }
+    }
+
+    /**
+     * [manifest] in the shape [slot]'s emulator keeps it: as it is when that is already so, else
+     * converted (a DraStic `.dsv` for a raw DS save, an N64 save's four files for RetroArch's one),
+     * the converted files kept in the store.
+     */
+    private fun inSlotFormat(slot: LocalSlot, manifest: SaveManifest): SaveManifest {
+        if (manifest.format == slot.format || !SaveConversions.canConvert(manifest.format, slot.format)) return manifest
+        val bytes = manifest.files.associate { it.path to store.fileOf(it.hash).readBytes() }
+        val out = SaveConversions.convert(manifest.format, slot.format, bytes)
+            ?: throw IntegrityException("This save couldn't be turned into the shape this emulator reads")
+        return SaveManifest(slot.format, out.map { (name, b) -> SaveFile(name, store.put(b), b.size.toLong()) }.sortedBy { it.path })
     }
 
     /**
@@ -479,4 +497,11 @@ class FileSaveEnvironment(override val host: String, override val home: String =
         if (!f.isFile || f.length() > limit) null else f.readText()
     }.getOrNull()
     override fun env(name: String): String? = System.getenv(name)
+    override fun readBytes(path: String, offset: Long, length: Int): ByteArray? = runCatching {
+        java.io.RandomAccessFile(path, "r").use { f ->
+            if (offset < 0 || offset >= f.length()) return@use null
+            val n = minOf(length.toLong(), f.length() - offset).toInt()
+            ByteArray(n).also { f.seek(offset); f.readFully(it) }
+        }
+    }.getOrNull()
 }

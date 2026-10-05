@@ -11,7 +11,34 @@
   name, and the whole thing gathers itself into their avatar at the top right as their games,
   saves and Home arrive behind it.
 
+- **Each person's own saves.** On a device several people share, Fuse Sync now keeps each
+  person's saves apart. When someone else starts a game, the one who played last keeps theirs
+  (set aside on the device), and the new player gets their own: the newest from the host, or,
+  offline, the one set aside for them. Someone who never played it starts fresh. Memory cards
+  shared by every game work the same way.
+- **Play One Save Together.** In a game's Save History, a game can be one save for everyone, for
+  games a household plays together. Fuse asks whether to start from your save or fresh; play time
+  stays each person's own.
+- **Saves in many more emulators.** Fuse Sync and Syncthing now find saves in Azahar, Citra,
+  Lime3DS and Mandarine (3DS), Eden, Citron, Sudachi, yuzu and Ryujinx (Switch), Cemu (Wii U),
+  Xenia (Xbox 360), DraStic, Mupen64Plus and M64Plus FZ, Redream, ePSXe, FPse, Play!, MAME,
+  ScummVM, Lemuroid, My Boy!, Pizza Boy and more: over 60 in all. Title ids are read from the
+  game itself (a 3DS cartridge's header, a Switch game's tag or NSP ticket, a Wii U game's
+  meta.xml).
+- **Saves move between different emulators of a system.** A DraStic save reaches melonDS or
+  RetroArch on another device and back, and Mupen64Plus's N64 save files and RetroArch's one file
+  turn into each other.
+- **Save Folders.** Settings, Addons, Fuse Sync (or Syncthing) lists each emulator in your library
+  and where its saves are on this device. Those Fuse can't reach come first, each saying what to
+  do, and any can be pointed at a folder you chose (an emulator that saves where you tell it, a
+  memory stick on a card).
+
 ## Changed
+
+- **Syncthing says what it is for people.** Its page, setup and the docs now say it keeps one save
+  per game for everyone, while Fuse Sync gives each person their own.
+- Emulators Fuse still can't sync (xemu, Winlator and other Windows game apps, small Android
+  emulators that keep saves private) each say why, instead of a general "not yet".
 
 - **Who's playing opens gently.** The room settles in from a touch larger, and the people's cards
   rise into place one after another.
@@ -19,6 +46,15 @@
   instead of being cut short, so "Continue playing" reads in full even on the small screen.
 
 ## Fixed
+
+- On a device several people share, someone starting a game they had never played picked up the
+  last player's save, and it could then be kept as their own. Each person now starts with their
+  own save, or none.
+- Fuse Sync didn't pass a game's serial to RPCS3's, PPSSPP's and Vita3K's save lookups, so their
+  saves weren't found for games named by serial. It does now.
+- Several Android emulators (DuckStation, Dolphin, Flycast, NetherSX2, Lemuroid) were looked for
+  where newer versions no longer keep saves. Fuse now checks the folder you chose first, and says
+  when Android keeps the emulator's folder private, with how to move it.
 
 - Home's carousel widgets showed a square corner at the top right of the card in front, where the
   shade behind the widget's name poked out past the card's rounded corner. It is cut to the card's

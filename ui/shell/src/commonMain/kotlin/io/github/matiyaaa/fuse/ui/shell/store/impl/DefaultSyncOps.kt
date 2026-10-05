@@ -26,6 +26,11 @@ internal class DefaultSyncOps(
 
     override suspend fun saveQuery(game: io.github.matiyaaa.fuse.model.GameId) = queries(game)
 
+    /** Set by the store: one game for each system in the library, with the emulator it plays in here. */
+    var samples: suspend () -> List<io.github.matiyaaa.fuse.sync.SaveQuery> = { emptyList() }
+
+    override suspend fun saveFolders() = service?.saveFolders(runCatching { samples() }.getOrDefault(emptyList())).orEmpty()
+
     override val service: SyncService? = runCatching { ctx.services.syncService(port, ctx.scope) }.getOrNull()
 
     override val config: StateFlow<SyncSettings> = ctx.data.settings.settings.map { it.sync }

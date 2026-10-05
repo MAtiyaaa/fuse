@@ -274,6 +274,7 @@ internal class DefaultFuseStore private constructor(
         sync.service?.let { svc ->
             library.sync = SyncLaunch(svc, sync.port)
             sync.queries = { id -> library.saveQueryFor(id) }
+            sync.samples = { library.saveSamples() }
             ctx.onUserChange = { if (sync.config.value.enabled) svc.changed() }
         }
         // The interface follows Fuse Sync's settings as stored (the service writes some itself).

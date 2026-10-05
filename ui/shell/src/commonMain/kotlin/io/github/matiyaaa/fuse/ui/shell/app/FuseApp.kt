@@ -721,6 +721,7 @@ private fun PushedPages(app: AppState, current: Route, direction: NavDirection, 
             Route.JellyfinSettings -> io.github.matiyaaa.fuse.ui.shell.jellyfin.JellyfinSettingsScreen(app)
             Route.SyncSettings -> io.github.matiyaaa.fuse.ui.shell.sync.SyncSettingsScreen(app)
             Route.SyncthingSettings -> io.github.matiyaaa.fuse.ui.shell.sync.SyncthingScreen(app)
+            Route.SaveFolders -> io.github.matiyaaa.fuse.ui.shell.sync.SaveFoldersScreen(app)
             is Route.SyncSetup -> io.github.matiyaaa.fuse.ui.shell.sync.SyncSetupScreen(app, route.host)
             is Route.SaveHistory -> io.github.matiyaaa.fuse.ui.shell.sync.SaveHistoryScreen(app, route.game, route.title)
             is Route.SyncGame -> io.github.matiyaaa.fuse.ui.shell.sync.SyncGameScreen(app, route.game, route.name)
@@ -739,7 +740,7 @@ internal fun hudPage(stack: List<Route>): HudButton? {
     for (route in stack.asReversed()) {
         when (route) {
             Route.Search -> return HudButton.SEARCH
-            is Route.Settings, is Route.PlatformSettings, Route.Controls, Route.Licenses, is Route.ReleaseNotes, Route.Themes, Route.Storage, Route.PhoneLink, Route.JellyfinSettings, Route.SyncSettings, Route.SyncthingSettings, is Route.SyncSetup ->
+            is Route.Settings, is Route.PlatformSettings, Route.Controls, Route.Licenses, is Route.ReleaseNotes, Route.Themes, Route.Storage, Route.PhoneLink, Route.JellyfinSettings, Route.SyncSettings, Route.SyncthingSettings, Route.SaveFolders, is Route.SyncSetup ->
                 return HudButton.SETTINGS
             else -> Unit
         }

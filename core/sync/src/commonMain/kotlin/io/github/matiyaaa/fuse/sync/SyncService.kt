@@ -206,6 +206,12 @@ interface SyncService {
      */
     suspend fun setShared(game: GameKey, shared: Boolean, fromMine: Boolean): Result<Unit> = Result.failure(UnsupportedOperationException("Fuse Sync isn't set up."))
 
+    /**
+     * Where each emulator in [samples] keeps its saves on this device, with the folders the person
+     * chose (Settings, Save folders). The same for Fuse Sync and Syncthing, and works while off.
+     */
+    suspend fun saveFolders(samples: List<SaveQuery>): List<EmulatorSaves> = emptyList()
+
     suspend fun versions(query: SaveQuery, kind: SaveKind): List<SaveVersion>
     suspend fun restore(query: SaveQuery, kind: SaveKind, version: String): Result<Unit>
     suspend fun keepVersion(version: String, keep: Boolean): Result<Unit>

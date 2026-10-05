@@ -34,6 +34,13 @@ interface SyncOps {
     /** What Fuse Sync knows [game]'s saves by here (its emulator, files and names), or null. */
     suspend fun saveQuery(game: io.github.matiyaaa.fuse.model.GameId): io.github.matiyaaa.fuse.sync.SaveQuery? = null
 
+    /** Where each emulator in the library keeps its saves here (Settings, Save folders), for Fuse Sync and Syncthing alike. */
+    suspend fun saveFolders(): List<io.github.matiyaaa.fuse.sync.EmulatorSaves> = emptyList()
+
+    /** Keeps [emulator]'s saves at [path] from now on, or (null) where Fuse finds them by itself. */
+    suspend fun setSaveFolder(emulator: String, path: String?) =
+        configure { s -> s.copy(saveFolders = if (path.isNullOrBlank()) s.saveFolders - emulator else s.saveFolders + (emulator to path)) }
+
     object None : SyncOps {
         override val service: SyncService? = null
         override val config: StateFlow<SyncSettings> = MutableStateFlow(SyncSettings())
