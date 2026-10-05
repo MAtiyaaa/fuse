@@ -41,9 +41,17 @@ data class FuseGeometry(
     }
 }
 
-/** How controller buttons are drawn in hints, and whether confirm is on the right (Nintendo layout). */
+/**
+ * How controller buttons are drawn in hints, and whether confirm is on the right (Nintendo layout).
+ * [remapped] names the pad button for each hint the person's remaps moved (see `remappedHints`).
+ */
 @Immutable
-data class GlyphConfig(val style: GlyphStyle, val confirmOnRight: Boolean, val swapShoulders: Boolean = false)
+data class GlyphConfig(
+    val style: GlyphStyle,
+    val confirmOnRight: Boolean,
+    val swapShoulders: Boolean = false,
+    val remapped: Map<io.github.matiyaaa.fuse.ui.designsystem.icons.HintButton, io.github.matiyaaa.fuse.model.PadButton> = emptyMap(),
+)
 
 /** Everything a Fuse composable may read about the current look. */
 @Immutable

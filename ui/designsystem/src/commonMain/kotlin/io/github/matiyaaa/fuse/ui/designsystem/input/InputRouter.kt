@@ -448,43 +448,7 @@ class InputRouter(
             this == NavAction.RIGHT || this == NavAction.PAGE_UP || this == NavAction.PAGE_DOWN
 
     /** Maps a physical button to an action, applying the confirm/back swap and user remaps. */
-    fun actionFor(button: PadButton): NavAction? {
-        profile.remap[button]?.let { return it }
-        val n = profile.swapConfirmBack
-        return when (button) {
-            PadButton.A -> if (n) NavAction.BACK else NavAction.SELECT
-            PadButton.B -> if (n) NavAction.SELECT else NavAction.BACK
-            PadButton.X -> if (n) NavAction.SEARCH else NavAction.CONTEXT
-            PadButton.Y -> if (n) NavAction.CONTEXT else NavAction.SEARCH
-            PadButton.L1 -> if (profile.swapShoulders) NavAction.PAGE_UP else NavAction.PREVIOUS_SECTION
-            PadButton.R1 -> if (profile.swapShoulders) NavAction.PAGE_DOWN else NavAction.NEXT_SECTION
-            PadButton.L2 -> if (profile.swapShoulders) NavAction.PREVIOUS_SECTION else NavAction.PAGE_UP
-            PadButton.R2 -> if (profile.swapShoulders) NavAction.NEXT_SECTION else NavAction.PAGE_DOWN
-            PadButton.START -> NavAction.QUICK_MENU
-            PadButton.SELECT -> NavAction.CONTEXT
-            PadButton.MODE -> NavAction.HOME
-            // The right stick pressed in opens the quick menu too (Start and M stay); the left stick is free.
-            PadButton.R3 -> NavAction.QUICK_MENU
-            PadButton.L3 -> null
-            PadButton.DPAD_UP, PadButton.KEY_UP -> NavAction.UP
-            PadButton.DPAD_DOWN, PadButton.KEY_DOWN -> NavAction.DOWN
-            PadButton.DPAD_LEFT, PadButton.KEY_LEFT -> NavAction.LEFT
-            PadButton.DPAD_RIGHT, PadButton.KEY_RIGHT -> NavAction.RIGHT
-            PadButton.KEY_ENTER, PadButton.KEY_SPACE -> NavAction.SELECT
-            PadButton.KEY_ESCAPE, PadButton.KEY_BACKSPACE -> NavAction.BACK
-            PadButton.KEY_TAB -> NavAction.CONTEXT
-            PadButton.KEY_SLASH, PadButton.KEY_F -> NavAction.SEARCH
-            PadButton.KEY_M -> NavAction.QUICK_MENU
-            PadButton.KEY_Q -> NavAction.PREVIOUS_SECTION
-            PadButton.KEY_E -> NavAction.NEXT_SECTION
-            PadButton.KEY_PAGE_UP -> NavAction.PAGE_UP
-            PadButton.KEY_PAGE_DOWN -> NavAction.PAGE_DOWN
-            PadButton.KEY_HOME -> NavAction.HOME
-            PadButton.RSTICK_LEFT, PadButton.KEY_BRACKET_LEFT -> NavAction.PAGE_PREVIOUS
-            PadButton.RSTICK_RIGHT, PadButton.KEY_BRACKET_RIGHT -> NavAction.PAGE_NEXT
-            PadButton.RSTICK_UP, PadButton.RSTICK_DOWN -> null
-        }
-    }
+    fun actionFor(button: PadButton): NavAction? = profile.actionFor(button)
 
     // ---------------------------------------------------------------- analog sticks and triggers
 
@@ -548,6 +512,47 @@ class InputRouter(
 
         /** How far the right stick goes over before it counts as pushed (a deliberate flick, not a drift). */
         const val RIGHT_STICK_PRESS = 0.6f
+    }
+}
+
+/** What [button] does under this profile: the user's remap, else [defaultActionFor]. */
+fun InputProfile.actionFor(button: PadButton): NavAction? = remap[button] ?: defaultActionFor(button)
+
+/** What [button] does with no remaps: the standard layout, with the confirm/back and shoulder swaps. */
+fun InputProfile.defaultActionFor(button: PadButton): NavAction? {
+    val n = swapConfirmBack
+    return when (button) {
+        PadButton.A -> if (n) NavAction.BACK else NavAction.SELECT
+        PadButton.B -> if (n) NavAction.SELECT else NavAction.BACK
+        PadButton.X -> if (n) NavAction.SEARCH else NavAction.CONTEXT
+        PadButton.Y -> if (n) NavAction.CONTEXT else NavAction.SEARCH
+        PadButton.L1 -> if (swapShoulders) NavAction.PAGE_UP else NavAction.PREVIOUS_SECTION
+        PadButton.R1 -> if (swapShoulders) NavAction.PAGE_DOWN else NavAction.NEXT_SECTION
+        PadButton.L2 -> if (swapShoulders) NavAction.PREVIOUS_SECTION else NavAction.PAGE_UP
+        PadButton.R2 -> if (swapShoulders) NavAction.NEXT_SECTION else NavAction.PAGE_DOWN
+        PadButton.START -> NavAction.QUICK_MENU
+        PadButton.SELECT -> NavAction.CONTEXT
+        PadButton.MODE -> NavAction.HOME
+        // The right stick pressed in opens the quick menu too (Start and M stay); the left stick is free.
+        PadButton.R3 -> NavAction.QUICK_MENU
+        PadButton.L3 -> null
+        PadButton.DPAD_UP, PadButton.KEY_UP -> NavAction.UP
+        PadButton.DPAD_DOWN, PadButton.KEY_DOWN -> NavAction.DOWN
+        PadButton.DPAD_LEFT, PadButton.KEY_LEFT -> NavAction.LEFT
+        PadButton.DPAD_RIGHT, PadButton.KEY_RIGHT -> NavAction.RIGHT
+        PadButton.KEY_ENTER, PadButton.KEY_SPACE -> NavAction.SELECT
+        PadButton.KEY_ESCAPE, PadButton.KEY_BACKSPACE -> NavAction.BACK
+        PadButton.KEY_TAB -> NavAction.CONTEXT
+        PadButton.KEY_SLASH, PadButton.KEY_F -> NavAction.SEARCH
+        PadButton.KEY_M -> NavAction.QUICK_MENU
+        PadButton.KEY_Q -> NavAction.PREVIOUS_SECTION
+        PadButton.KEY_E -> NavAction.NEXT_SECTION
+        PadButton.KEY_PAGE_UP -> NavAction.PAGE_UP
+        PadButton.KEY_PAGE_DOWN -> NavAction.PAGE_DOWN
+        PadButton.KEY_HOME -> NavAction.HOME
+        PadButton.RSTICK_LEFT, PadButton.KEY_BRACKET_LEFT -> NavAction.PAGE_PREVIOUS
+        PadButton.RSTICK_RIGHT, PadButton.KEY_BRACKET_RIGHT -> NavAction.PAGE_NEXT
+        PadButton.RSTICK_UP, PadButton.RSTICK_DOWN -> null
     }
 }
 

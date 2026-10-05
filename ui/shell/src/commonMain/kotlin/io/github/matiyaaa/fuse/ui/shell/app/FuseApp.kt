@@ -44,6 +44,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.components.rememberHintFlash
 import io.github.matiyaaa.fuse.ui.designsystem.effects.RevealScope
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
 import io.github.matiyaaa.fuse.ui.designsystem.icons.HintButton
+import io.github.matiyaaa.fuse.ui.designsystem.icons.remappedHints
 import io.github.matiyaaa.fuse.ui.designsystem.input.InputFeedback
 import io.github.matiyaaa.fuse.ui.designsystem.input.InputLayer
 import io.github.matiyaaa.fuse.ui.designsystem.input.InputRouter
@@ -337,7 +338,7 @@ private fun FuseAppContent(
         spec = spec,
         motion = motionProfile,
         quality = quality,
-        glyphs = GlyphConfig(glyphStyle, hintConfirmOnRight(prefs.input, glyphStyle, padFamily), prefs.input.swapShoulders),
+        glyphs = GlyphConfig(glyphStyle, hintConfirmOnRight(prefs.input, glyphStyle, padFamily), prefs.input.swapShoulders, remappedHints(prefs.input)),
         glass = prefs.glass,
         highContrastFocus = prefs.highContrastFocus,
         animateChanges = true,
