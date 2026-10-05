@@ -94,7 +94,14 @@ class FuseApplication : Application(), SingletonImageLoader.Factory {
         activities.onFuseResumed = { platformUi.onFuseResumed() }
 
         val data = FuseData(AndroidDatabase.open(this))
-        http = FuseHttp.client(OkHttp.create(), FuseHttpConfig(appVersion = BuildConfig.VERSION_NAME))
+        // OkHttp lets only five requests run per server at once: a page of posters from one Jellyfin
+        // server would line up behind each other, and its page requests behind them.
+        http = FuseHttp.client(
+            OkHttp.create {
+                config { dispatcher(okhttp3.Dispatcher().apply { maxRequests = 64; maxRequestsPerHost = 16 }) }
+            },
+            FuseHttpConfig(appVersion = BuildConfig.VERSION_NAME),
+        )
         services = AndroidFuseServices(this, data, http, appScope, activities, companions) { platformUi.displayMonitor.secondary()?.id }
         io.github.matiyaaa.fuse.services.PlayShareProvider.grantToCartridge(this)
 

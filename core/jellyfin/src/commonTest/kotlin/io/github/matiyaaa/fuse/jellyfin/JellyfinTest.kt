@@ -18,6 +18,12 @@ import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.content.TextContent
 import io.ktor.http.headersOf
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
@@ -25,12 +31,6 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertFalse
-import kotlin.test.assertNotNull
-import kotlin.test.assertNull
-import kotlin.test.assertTrue
 
 private class MemorySecrets : SecretStore {
     val map = HashMap<String, String>()
@@ -145,7 +145,67 @@ class JellyfinTest {
         server.down += "media.example.com"
         val again = s.home()
         assertEquals(first.map { it.id }, again.map { it.id })
+        // Unreachable is decided by looking for every way in, never by one failed call.
+        s.reconnect(force = true)
         assertTrue(s.state.value.offline)
+        scope.cancel()
+    }
+
+    @Test
+    fun keptPagesShowAtOnceAndTheFreshAnswerFollows() = runTest {
+        val server = FakeServer()
+        val scope = CoroutineScope(SupervisorJob())
+        val s = service(server, MemorySecrets(), scope)
+        s.configure(true, JellyfinConnection(ConnectionMode.REMOTE, remoteAddress = "media.example.com"))
+        s.signIn("pat", "pw").getOrThrow()
+        assertEquals("Dune", s.home().first().items.single().name)
+        // Time passes and the server's answer changes: the kept page shows first, then the new one.
+        s.client.freshForMs = 1
+        kotlinx.coroutines.delay(5)
+        server.routes = { r ->
+            if (r.url.encodedPath.endsWith("/UserItems/Resume")) 200 to """{"Items":[{"Id":"m9","Name":"Heat","Type":"Movie"}],"TotalRecordCount":1}""" else null
+        }
+        val asked = server.requests.size
+        val rev = s.revision.value
+        assertEquals("Dune", s.home().first().items.single().name)
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+            kotlinx.coroutines.withTimeout(5_000) { while (s.revision.value == rev) kotlinx.coroutines.delay(20) }
+        }
+        assertTrue(server.requests.size > asked, "fresh answers are fetched behind the kept ones")
+        s.client.freshForMs = 60_000
+        assertEquals("Heat", s.home().first().items.single().name)
+        scope.cancel()
+    }
+
+    @Test
+    fun everyWayInIsAskedAtOnceAndHomeWinsWhenItAnswers() = runTest {
+        val server = FakeServer()
+        val scope = CoroutineScope(SupervisorJob())
+        val s = service(server, MemorySecrets(), scope)
+        s.configure(true, JellyfinConnection(ConnectionMode.AUTO, localAddress = "192.168.1.5:8096", remoteAddress = "media.example.com"))
+        s.reconnect(force = true)
+        assertEquals(Route.LOCAL, s.state.value.route)
+        // Both were asked in the same look, not one after the other's timeout.
+        val hosts = server.requests.filter { it.url.encodedPath.endsWith("/System/Info/Public") }.map { it.url.host }.toSet()
+        assertTrue("192.168.1.5" in hosts && "media.example.com" in hosts, hosts.toString())
+        scope.cancel()
+    }
+
+    @Test
+    fun aCallThatCantGetThroughTriesTheOtherWayInsteadOfGivingUp() = runTest {
+        val server = FakeServer()
+        val scope = CoroutineScope(SupervisorJob())
+        val s = service(server, MemorySecrets(), scope)
+        s.configure(true, JellyfinConnection(ConnectionMode.AUTO, localAddress = "192.168.1.5:8096", remoteAddress = "media.example.com"))
+        s.signIn("pat", "pw").getOrThrow()
+        assertEquals(Route.LOCAL, s.state.value.route)
+        // Leaving home: the home address stops answering mid-session.
+        server.down += "192.168.1.5"
+        s.client.freshForMs = 0
+        val libs = s.libraries()
+        assertEquals(2, libs.size)
+        assertEquals(Route.REMOTE, s.state.value.route)
+        assertFalse(s.state.value.offline)
         scope.cancel()
     }
 

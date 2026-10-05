@@ -383,6 +383,11 @@ private fun widgetIcon(k: WidgetKind) = when (k) {
     WidgetKind.JELLYFIN_CONTINUE -> FuseIcons.MonitorPlay
     WidgetKind.JELLYFIN_NEXT_UP -> FuseIcons.SkipForward
     WidgetKind.JELLYFIN_RECENTLY_ADDED -> FuseIcons.Film
+    WidgetKind.JELLYFIN_FAVORITES -> FuseIcons.Heart
+    WidgetKind.JELLYFIN_MOVIES -> FuseIcons.Clapperboard
+    WidgetKind.JELLYFIN_MUSIC -> FuseIcons.Disc
+    WidgetKind.SYNC_STATUS -> FuseIcons.RefreshCcw
+    WidgetKind.SYNC_DEVICES -> FuseIcons.MonitorSmartphone
 }
 
 @Composable

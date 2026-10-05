@@ -4,6 +4,8 @@ import io.github.matiyaaa.fuse.library.FsPath
 import io.github.matiyaaa.fuse.model.Destination
 import io.github.matiyaaa.fuse.model.WidgetKind
 import io.github.matiyaaa.fuse.model.isAchievements
+import io.github.matiyaaa.fuse.model.isJellyfin
+import io.github.matiyaaa.fuse.model.isSync
 import io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction
 import io.github.matiyaaa.fuse.ui.designsystem.components.ToastKind
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
@@ -26,9 +28,12 @@ internal fun AppState.offers(kind: WidgetKind): Boolean = when (kind) {
     WidgetKind.PINNED_APPS -> store.apps.supported
     WidgetKind.CARTRIDGE_DOWNLOADS -> platform.features.cartridge
     // Jellyfin's only while it is turned on; never added by themselves.
-    WidgetKind.JELLYFIN_CONTINUE, WidgetKind.JELLYFIN_NEXT_UP, WidgetKind.JELLYFIN_RECENTLY_ADDED ->
-        store.jellyfin != null && store.prefs.value.jellyfin.enabled
-    else -> true
+    else -> when {
+        kind.isJellyfin -> store.jellyfin != null && store.prefs.value.jellyfin.enabled
+        // Fuse Sync's only while it is on.
+        kind.isSync -> store.sync.service != null && store.prefs.value.sync.enabled
+        else -> true
+    }
 }
 
 /**

@@ -287,7 +287,7 @@ internal class DefaultFuseStore private constructor(
         // Home's Jellyfin widgets: asked for only while Jellyfin is on, signed in and one of them is
         // on Home; again when something was played or marked, and every few minutes.
         ctx.scope.launch {
-            val kinds = setOf(io.github.matiyaaa.fuse.model.WidgetKind.JELLYFIN_CONTINUE, io.github.matiyaaa.fuse.model.WidgetKind.JELLYFIN_NEXT_UP, io.github.matiyaaa.fuse.model.WidgetKind.JELLYFIN_RECENTLY_ADDED)
+            val kinds = io.github.matiyaaa.fuse.model.WidgetKind.entries.filter { it.name.startsWith("JELLYFIN_") }.toSet()
             kotlinx.coroutines.flow.combine(
                 prefsState.map { p -> p.jellyfin.enabled && (p.home.widgets.any { it.visible && it.kind in kinds } || p.home.boardWidgets().any { it.kind in kinds }) }.distinctUntilChanged(),
                 jellyfin.state.map { it.account != null && !it.authRequired }.distinctUntilChanged(),

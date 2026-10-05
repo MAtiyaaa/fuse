@@ -87,6 +87,12 @@ internal fun AppState.openJellyfin() {
     selectTab(Destination.CARTRIDGE)
 }
 
+/** Opens Fuse Sync's Hub: the Sync part of Addons. */
+internal fun AppState.openSyncHub() {
+    addonsPart = AddonsPart.SYNC
+    selectTab(Destination.CARTRIDGE)
+}
+
 /** Opens Cartridge: its own section, or the Cartridge part of Addons. */
 internal fun AppState.openCartridge() {
     addonsPart = AddonsPart.CARTRIDGE

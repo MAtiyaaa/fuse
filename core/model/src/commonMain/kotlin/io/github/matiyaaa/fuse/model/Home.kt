@@ -44,7 +44,22 @@ enum class WidgetKind(val defaultSpan: WidgetSpan) {
     JELLYFIN_CONTINUE(WidgetSpan.WIDE),
     JELLYFIN_NEXT_UP(WidgetSpan.WIDE),
     JELLYFIN_RECENTLY_ADDED(WidgetSpan.WIDE),
+    JELLYFIN_FAVORITES(WidgetSpan.WIDE),
+    JELLYFIN_MOVIES(WidgetSpan.WIDE),
+    JELLYFIN_MUSIC(WidgetSpan.WIDE),
+
+    /** Fuse Sync, offered only while it is turned on: how it stands, and the devices on it. */
+    SYNC_STATUS(WidgetSpan.MEDIUM),
+    SYNC_DEVICES(WidgetSpan.MEDIUM),
 }
+
+/** Fuse Sync's widgets: shown and offered only while Fuse Sync is on. */
+val WidgetKind.isSync: Boolean
+    get() = this == WidgetKind.SYNC_STATUS || this == WidgetKind.SYNC_DEVICES
+
+/** Jellyfin's widgets: shown and offered only while Jellyfin is on. */
+val WidgetKind.isJellyfin: Boolean
+    get() = name.startsWith("JELLYFIN_")
 
 @Serializable
 enum class WidgetSpan(val columns: Int, val rows: Int) { SMALL(1, 1), MEDIUM(2, 1), WIDE(4, 1), LARGE(2, 2) }
@@ -63,6 +78,7 @@ private val RowKinds = setOf(
     WidgetKind.PINNED_GAMES, WidgetKind.MOST_PLAYED, WidgetKind.PINNED_APPS, WidgetKind.COLLECTIONS,
     WidgetKind.SYSTEMS, WidgetKind.RECENT_ACHIEVEMENTS,
     WidgetKind.JELLYFIN_CONTINUE, WidgetKind.JELLYFIN_NEXT_UP, WidgetKind.JELLYFIN_RECENTLY_ADDED,
+    WidgetKind.JELLYFIN_FAVORITES, WidgetKind.JELLYFIN_MOVIES, WidgetKind.JELLYFIN_MUSIC,
 )
 
 /**

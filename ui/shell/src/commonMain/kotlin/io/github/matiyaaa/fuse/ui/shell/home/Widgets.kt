@@ -47,6 +47,7 @@ import io.github.matiyaaa.fuse.model.Destination
 import io.github.matiyaaa.fuse.model.QueueState
 import io.github.matiyaaa.fuse.model.WidgetKind
 import io.github.matiyaaa.fuse.model.WidgetSpan
+import io.github.matiyaaa.fuse.model.isJellyfin
 import io.github.matiyaaa.fuse.ui.designsystem.components.FText
 import io.github.matiyaaa.fuse.ui.designsystem.components.ProgressBar
 import io.github.matiyaaa.fuse.ui.designsystem.components.ProgressRing
@@ -69,14 +70,15 @@ import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.Route
 import io.github.matiyaaa.fuse.ui.shell.app.activateGame
 import io.github.matiyaaa.fuse.ui.shell.app.openJellyfin
+import io.github.matiyaaa.fuse.ui.shell.app.openSyncHub
 import io.github.matiyaaa.fuse.ui.shell.app.rememberClockText
 import io.github.matiyaaa.fuse.ui.shell.components.LocalTileMetrics
 import io.github.matiyaaa.fuse.ui.shell.components.SquareGameArt
 import io.github.matiyaaa.fuse.ui.shell.components.StageInfo
 import io.github.matiyaaa.fuse.ui.shell.components.agoText
+import io.github.matiyaaa.fuse.ui.shell.components.playtimeText
 import io.github.matiyaaa.fuse.ui.shell.jellyfin.openMedia
 import io.github.matiyaaa.fuse.ui.shell.jellyfin.play
-import io.github.matiyaaa.fuse.ui.shell.components.playtimeText
 import io.github.matiyaaa.fuse.ui.shell.store.GameCard
 import io.github.matiyaaa.fuse.ui.shell.store.HomeFeed
 import kotlin.time.Clock
@@ -125,7 +127,7 @@ fun WidgetCard(
 @Composable
 fun WidgetContent(kind: WidgetKind, feed: HomeFeed, cartridge: CartridgeStatus, clock24h: Boolean) {
     if (kind in MediaKinds) {
-        MediaFace(kind, mediaItems(kind, feed), FaceSize.WIDE)
+        MediaCarousel(kind, mediaItems(kind, feed), FaceSize.WIDE)
         return
     }
     val c = Fuse.colors
@@ -278,16 +280,24 @@ internal fun widgetIcon(kind: WidgetKind): ImageVector = when (kind) {
     WidgetKind.JELLYFIN_CONTINUE -> FuseIcons.MonitorPlay
     WidgetKind.JELLYFIN_NEXT_UP -> FuseIcons.SkipForward
     WidgetKind.JELLYFIN_RECENTLY_ADDED -> FuseIcons.Film
+    WidgetKind.JELLYFIN_FAVORITES -> FuseIcons.Heart
+    WidgetKind.JELLYFIN_MOVIES -> FuseIcons.Clapperboard
+    WidgetKind.JELLYFIN_MUSIC -> FuseIcons.Disc
+    WidgetKind.SYNC_STATUS -> FuseIcons.RefreshCcw
+    WidgetKind.SYNC_DEVICES -> FuseIcons.MonitorSmartphone
 }
 
 /** Jellyfin's widgets, which show films and episodes rather than games. */
-internal val MediaKinds = setOf(WidgetKind.JELLYFIN_CONTINUE, WidgetKind.JELLYFIN_NEXT_UP, WidgetKind.JELLYFIN_RECENTLY_ADDED)
+internal val MediaKinds = WidgetKind.entries.filter { it.isJellyfin }.toSet()
 
 /** What a Jellyfin widget shows, first first. */
 internal fun mediaItems(kind: WidgetKind, feed: HomeFeed): List<io.github.matiyaaa.fuse.jellyfin.MediaItem> = when (kind) {
     WidgetKind.JELLYFIN_CONTINUE -> feed.media.continueWatching
     WidgetKind.JELLYFIN_NEXT_UP -> feed.media.nextUp
     WidgetKind.JELLYFIN_RECENTLY_ADDED -> feed.media.recentlyAdded
+    WidgetKind.JELLYFIN_FAVORITES -> feed.media.favorites
+    WidgetKind.JELLYFIN_MOVIES -> feed.media.movies
+    WidgetKind.JELLYFIN_MUSIC -> feed.media.music
     else -> emptyList()
 }
 
@@ -315,7 +325,7 @@ internal fun widgetTint(kind: WidgetKind, feed: HomeFeed, cartridge: CartridgeSt
         WidgetKind.RECENT_ACHIEVEMENT, WidgetKind.RECENT_ACHIEVEMENTS, WidgetKind.ACHIEVEMENT_PROGRESS, WidgetKind.RECENTLY_MASTERED -> c.warning
         WidgetKind.CURRENT_GAME -> feed.playtime.currentGame?.accent?.toColor() ?: c.accent
         WidgetKind.STORAGE -> if (storageLow(feed)) c.warning else c.text
-        WidgetKind.JELLYFIN_CONTINUE, WidgetKind.JELLYFIN_NEXT_UP, WidgetKind.JELLYFIN_RECENTLY_ADDED ->
+        in MediaKinds ->
             mediaItems(kind, feed).firstOrNull()?.let { io.github.matiyaaa.fuse.ui.shell.jellyfin.accentOf(it.name) } ?: c.accent
         else -> c.text
     }
@@ -774,9 +784,10 @@ internal fun widgetStage(kind: WidgetKind, key: Any, feed: HomeFeed, cartridge: 
             val (day, date) = todayParts()
             info(time, "Today", "$day $date")
         }
-        WidgetKind.JELLYFIN_CONTINUE, WidgetKind.JELLYFIN_NEXT_UP, WidgetKind.JELLYFIN_RECENTLY_ADDED -> mediaItems(kind, feed).firstOrNull()?.let {
+        in MediaKinds -> mediaItems(kind, feed).firstOrNull()?.let {
             info(mediaTitle(it), kind.title(), mediaCaption(it), "Jellyfin")
         } ?: info(kind.title(), "Jellyfin", "Nothing here yet")
+        WidgetKind.SYNC_STATUS, WidgetKind.SYNC_DEVICES -> info(kind.title(), "Fuse Sync", "Your saves, play time and settings on every device")
         else -> feed.achievements?.recent?.firstOrNull()?.let {
             info(it.achievement.title, kind.title(), it.gameTitle, "${it.achievement.points} points")
         } ?: info(kind.title(), "Achievements", "Connect RetroAchievements in Settings")
@@ -799,21 +810,24 @@ fun bytesText(bytes: Long): String {
 
 /**
  * Where a widget leads when it is opened, the same on the board and in Flow: each one opens the
- * place its numbers come from. [firstGame] is the game a game widget shows first, if any.
+ * place its numbers come from. [at] is the item a carousel shows in front (the first otherwise):
+ * its game, system, collection or film is the one opened.
  */
-internal fun AppState.openWidget(kind: WidgetKind, feed: HomeFeed, firstGame: GameCard? = null) {
+internal fun AppState.openWidget(kind: WidgetKind, feed: HomeFeed, at: Int = 0) {
+    val game = boardGames(kind, feed).let { it.getOrNull(at) ?: it.firstOrNull() }
+    val media = mediaItems(kind, feed).let { it.getOrNull(at) ?: it.firstOrNull() }
     when (kind) {
         WidgetKind.CONTINUE_PLAYING, WidgetKind.RECENTLY_PLAYED, WidgetKind.PINNED_GAMES, WidgetKind.CURRENT_GAME,
         WidgetKind.MOST_PLAYED, WidgetKind.RECENTLY_ADDED,
-        -> firstGame?.let { activateGame(it) } ?: selectTab(Destination.LIBRARY)
-        // Favourites opens the Library on them, every favourite in one place.
-        WidgetKind.FAVORITES -> {
+        -> game?.let { activateGame(it) } ?: selectTab(Destination.LIBRARY)
+        // Favourites opens the game in front; with none, the Library on them.
+        WidgetKind.FAVORITES -> game?.let { activateGame(it) } ?: run {
             librarySegment = io.github.matiyaaa.fuse.ui.shell.library.LibrarySegment.FAVORITES
             selectTab(Destination.LIBRARY)
         }
-        WidgetKind.SYSTEMS -> selectTab(Destination.SYSTEMS)
+        WidgetKind.SYSTEMS -> feed.systems.getOrNull(at)?.let { go(Route.PlatformGames(it.platform.id)) } ?: selectTab(Destination.SYSTEMS)
         WidgetKind.PINNED_APPS -> selectTab(Destination.APPS)
-        WidgetKind.COLLECTIONS -> feed.collections.firstOrNull()?.let { go(Route.CollectionGames(it.id, it.name)) } ?: go(Route.Collections)
+        WidgetKind.COLLECTIONS -> (feed.collections.getOrNull(at) ?: feed.collections.firstOrNull())?.let { go(Route.CollectionGames(it.id, it.name)) } ?: go(Route.Collections)
         WidgetKind.RECENT_ACHIEVEMENT, WidgetKind.RECENT_ACHIEVEMENTS, WidgetKind.ACHIEVEMENT_PROGRESS,
         WidgetKind.RECENTLY_MASTERED,
         -> selectTab(Destination.ACHIEVEMENTS)
@@ -821,10 +835,11 @@ internal fun AppState.openWidget(kind: WidgetKind, feed: HomeFeed, firstGame: Ga
         WidgetKind.CARTRIDGE_DOWNLOADS -> selectTab(Destination.CARTRIDGE)
         WidgetKind.STORAGE -> go(Route.Storage)
         WidgetKind.CLOCK -> quickMenuOpen = true
-        // Something you were watching plays on; something new opens its page.
-        WidgetKind.JELLYFIN_CONTINUE, WidgetKind.JELLYFIN_NEXT_UP -> mediaItems(kind, feed).firstOrNull()
-            ?.let { play(it) } ?: openJellyfin()
-        WidgetKind.JELLYFIN_RECENTLY_ADDED -> mediaItems(kind, feed).firstOrNull()
-            ?.let { openMedia(it) } ?: openJellyfin()
+        // Something you were watching plays on; anything else opens its page.
+        WidgetKind.JELLYFIN_CONTINUE, WidgetKind.JELLYFIN_NEXT_UP -> media?.let { play(it) } ?: openJellyfin()
+        WidgetKind.JELLYFIN_RECENTLY_ADDED, WidgetKind.JELLYFIN_FAVORITES, WidgetKind.JELLYFIN_MOVIES, WidgetKind.JELLYFIN_MUSIC,
+        -> media?.let { openMedia(it) } ?: openJellyfin()
+        // Fuse Sync's widgets open its tab in Addons: the Hub, with every save and device.
+        WidgetKind.SYNC_STATUS, WidgetKind.SYNC_DEVICES -> openSyncHub()
     }
 }

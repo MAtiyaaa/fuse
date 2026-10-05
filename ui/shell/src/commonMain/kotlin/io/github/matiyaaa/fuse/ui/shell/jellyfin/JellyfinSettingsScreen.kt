@@ -85,7 +85,8 @@ internal fun jellyfinStatus(s: JellyfinState, prefs: JellyfinSettings): Jellyfin
     prefs.localAddress.isBlank() && prefs.remoteAddress.isBlank() -> JellyfinStatus(null, "Not set up", "Add your server's address, then sign in")
     s.account == null -> JellyfinStatus(null, "Not signed in", "Sign in with your Jellyfin user to browse and play")
     s.authRequired -> JellyfinStatus(false, "Signed out", "The server signed this device out. Sign in again")
-    s.offline -> JellyfinStatus(false, "Can't reach the server", "Pages you've opened are kept. Playing waits until it answers")
+    s.checking && s.base == null -> JellyfinStatus(null, "Connecting", "Asking your home and outside addresses at once")
+    s.offline -> JellyfinStatus(false, "Can't reach the server", "Neither address answered. Pages you've opened are kept, and Fuse keeps trying")
     s.route == io.github.matiyaaa.fuse.jellyfin.Route.LOCAL -> JellyfinStatus(true, "Connected at home", s.serverName ?: "Your server")
     s.route == io.github.matiyaaa.fuse.jellyfin.Route.REMOTE -> JellyfinStatus(true, "Connected from outside", s.serverName ?: "Your server")
     else -> JellyfinStatus(null, "Connecting", s.serverName ?: "Looking for your server")
@@ -285,6 +286,8 @@ private fun jellyfinRows(
                         onSuccess = { (base, info) -> AddressTest(false, true, listOfNotNull(info.name, info.version?.let { "Jellyfin $it" }, base).joinToString("  ·  ")) },
                         onFailure = { AddressTest(false, false, it.message ?: "No answer") },
                     )
+                    // An address that answers here is one Fuse can use now: the status above follows it.
+                    if (r.isSuccess) service.reconnect(force = true)
                 }
             },
         ))
@@ -433,6 +436,7 @@ private fun saveAndTest(app: AppState, service: JellyfinService, page: JellyfinS
             onFailure = { AddressTest(false, false, it.message ?: "No answer") },
         )
         r.onFailure { app.toasts.show("Nothing answered at $address. ${it.message ?: ""}".trim()) }
+        if (r.isSuccess) service.reconnect(force = true)
     }
 }
 

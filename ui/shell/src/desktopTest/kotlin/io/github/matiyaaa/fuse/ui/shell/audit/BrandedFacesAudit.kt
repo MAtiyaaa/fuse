@@ -41,6 +41,8 @@ import io.github.matiyaaa.fuse.ui.shell.store.Art
 import io.github.matiyaaa.fuse.ui.shell.store.GameCard
 import io.github.matiyaaa.fuse.ui.shell.store.HomeFeed
 import io.github.matiyaaa.fuse.ui.shell.store.PlatformCard
+import kotlin.test.Test
+import org.junit.Assume.assumeTrue
 import java.awt.BasicStroke
 import java.awt.Color
 import java.awt.GradientPaint
@@ -50,8 +52,6 @@ import java.awt.image.BufferedImage
 import java.io.File
 import java.nio.file.Files
 import javax.imageio.ImageIO
-import kotlin.test.Test
-import org.junit.Assume.assumeTrue
 
 /**
  * The widgets redesigned in 0.3.0 (Continue playing, Systems, Favourites, Collections, Cartridge)
@@ -158,7 +158,18 @@ class BrandedFacesAudit {
             Triple(WidgetKind.FAVORITES, "with covers", HomeFeed(favorites = favourites)),
             Triple(WidgetKind.COLLECTIONS, "with collections", HomeFeed(collections = collections)),
             Triple(WidgetKind.CARTRIDGE_DOWNLOADS, "installed and idle", HomeFeed()),
+            Triple(WidgetKind.RECENTLY_ADDED, "as a catalogue", HomeFeed(recentlyAdded = favourites, systems = systemsArt)),
+            Triple(WidgetKind.SYNC_STATUS, "online", HomeFeed()),
+            Triple(WidgetKind.SYNC_DEVICES, "three devices", HomeFeed()),
+            Triple(WidgetKind.CLOCK, "today", HomeFeed()),
+            Triple(WidgetKind.STORAGE, "a drive", HomeFeed(storage = io.github.matiyaaa.fuse.ui.shell.store.StorageSummary("Games", freeBytes = 182_000_000_000, totalBytes = 512_000_000_000))),
         )
+        // Fuse Sync's widgets read a household: three people, three devices, a little history.
+        val sync = run {
+            val db = File(art, "sync-${System.nanoTime()}.db")
+            val data = io.github.matiyaaa.fuse.data.FuseData(io.github.matiyaaa.fuse.data.db.DesktopDatabase.open(db.absolutePath))
+            AuditSync(data.settings).also { it.household(asHost = true) }
+        }
         for ((kind, label, feed) in cases) {
             if (!Audit.wants("widgets", "${kind.title()} $label")) continue
             val cartridge = CartridgeStatus(installed = true, connected = true, bridge = true)
@@ -167,6 +178,7 @@ class BrandedFacesAudit {
                     setContent {
                         CompositionLocalProvider(LocalDensity provides Density(AuditSize.D.density)) {
                             FuseTheme {
+                              CompositionLocalProvider(io.github.matiyaaa.fuse.ui.shell.home.LocalSyncService provides sync) {
                                 val cells = packBoard(sizes, 4)
                                 Box(Modifier.fillMaxSize().background(Fuse.colors.ink).padding(start = 40.dp, top = 80.dp)) {
                                     val shape = SquircleShape.fraction(Fuse.geometry.tileCornerFraction * 0.6f)
@@ -181,6 +193,7 @@ class BrandedFacesAudit {
                                         }
                                     }
                                 }
+                              }
                             }
                         }
                     }
