@@ -70,6 +70,11 @@ ICONS = [
     ('backup', 'DatabaseBackup', 'Backup and restore'),
     ('search', 'Search', 'Search'),
     ('patches', 'Bandage', 'Emulator patches'),
+    ('player', 'Clapperboard', 'Fuse Player'),
+    ('fuseline', 'Waves', 'Fuseline'),
+    ('jellyfin', 'Tv', 'Films and shows'),
+    ('quick-menu', 'Dashboard', 'Quick menu'),
+    ('touch', 'Hand', 'Touch'),
 ]
 
 # Badge geometry, in the 48 x 48 tile

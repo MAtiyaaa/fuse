@@ -29,12 +29,13 @@ Home screen.
 <a href="https://github.com/MAtiyaaa/fuse/releases/latest"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/brand/button-macos-dark.svg"><img src="docs/assets/brand/button-macos-light.svg" height="48" alt="Download for macOS"></picture></a>
 
 <sub>Android 9 or newer &nbsp;·&nbsp; 64-bit x86 Linux AppImage &nbsp;·&nbsp; Windows 10 and 11 &nbsp;·&nbsp; macOS on Apple silicon and Intel &nbsp;·&nbsp; <a href="#install">checksums and install notes</a></sub><br>
-<sub>0.2.9 is the Organized Update: films on the screen you choose with a live swap, Addons in your order and organised in Settings, Jellyfin at home that connects, and Fuseline by Fuse at a tenth of Compose's cost. 0.2.8 brought Jellyfin and Fuse Player. <a href="#where-fuse-stands">Here is where it stands.</a></sub><br>
+<sub>0.3.0 is the <b>Clean Update</b>: a quick menu you arrange, 86 more systems, Jellyfin in setup, swipe-back on touch screens, and Fuse Player by Fuse riding out weak Wi-Fi. <a href="#where-fuse-stands">Here is where it stands.</a></sub><br>
 <sub>Or download from <a href="https://matiyaaa.github.io/fuse/">Fuse's website</a>, which always offers the latest version for your system.</sub>
 
 <br>
 
 <b><a href="#a-dark-room-lit-by-the-game-youre-on">Tour</a></b> &nbsp;&nbsp;·&nbsp;&nbsp;
+<b><a href="#made-by-fuse">Made by Fuse</a></b> &nbsp;&nbsp;·&nbsp;&nbsp;
 <b><a href="#everything-in-its-place">Features</a></b> &nbsp;&nbsp;·&nbsp;&nbsp;
 <b><a href="#install">Install</a></b> &nbsp;&nbsp;·&nbsp;&nbsp;
 <b><a href="#romm-through-cartridge">Cartridge</a></b> &nbsp;&nbsp;·&nbsp;&nbsp;
@@ -90,7 +91,7 @@ under your thumb lifts toward you with a single sweep of light.
     <td width="50%" valign="top">
       <a href="docs/assets/screenshots/quick-menu.webp"><img src="docs/assets/screenshots/quick-menu.webp" width="100%" alt="The quick menu over Home: the time and date, battery at 80 percent with 4 hours left, and tiles for Wi-Fi, Bluetooth, Screenshot, Display, Controller, Performance, Low Power, Find games and Cartridge."></a>
       <br><b>Everything at a press</b>
-      <br><sub>The quick menu: time, battery left, Wi-Fi, screenshots and recordings, performance and more, from any screen.</sub>
+      <br><sub>The quick menu: time, battery left, Wi-Fi, screenshots, what is playing and more, from any screen, arranged the way you like.</sub>
     </td>
     <td width="50%" valign="top">
       <a href="docs/assets/screenshots/keyboard.webp"><img src="docs/assets/screenshots/keyboard.webp" width="100%" alt="Search with Fuse's controller keyboard: a field for games, systems and apps above a full keyboard, with hints for type, delete, space, cursor and results on the controller's buttons."></a>
@@ -103,6 +104,75 @@ under your thumb lifts toward you with a single sweep of light.
 <p align="center"><sub>Screenshots taken with Fuse on an AYN Thor (1920 x 1080), with a real library and the art Fuse filled
 in for it; system art from <a href="https://github.com/anthonycaccese/art-book-next-es-de">Art Book Next</a>. The games, their names and their art belong to their owners.
 Fuse comes with no games and is not affiliated with them.</sub></p>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/brand/divider-dark.svg">
+  <img src="docs/assets/brand/divider-light.svg" width="100%" alt="">
+</picture>
+
+<div align="center">
+
+## Made by Fuse
+
+The parts you feel most are Fuse's own: written for Fuse, in this repository, under its licence.
+They behave the same on every device, answer to one design, and get better with every release.
+
+</div>
+
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="docs/assets/icons/player.svg" width="56" height="56" alt=""><br>
+      <h3>Fuse Player <sub>by Fuse</sub></h3>
+      Fuse's own video and music player, for your films, shows and music from Jellyfin, with its own
+      controls, subtitles and remote. Not a web page, not another app: part of Fuse.
+      <ul>
+        <li><b>Two engines, one player.</b> Media3 on Android; FFmpeg on Linux, Windows and macOS,
+        decoding on the GPU where it can (VAAPI, D3D11VA, VideoToolbox).</li>
+        <li><b>Starts fast, keeps playing.</b> A short first buffer, a deep one behind it, retries
+        on a flaky link, and when Wi-Fi can't keep up, it lowers the quality by itself and carries on
+        from the same second.</li>
+        <li><b>Subtitles drawn by Fuse</b> on every platform: SRT, WebVTT, ASS with its styles, PGS
+        and DVD pictures, with size, position and delay you set.</li>
+        <li><b>Made for a controller</b>, with seeking that speeds up while held, and for touch:
+        double tap to skip, drag the timeline, tap outside a sheet to close it.</li>
+        <li><b>Two screens:</b> the film on one, a full remote on the other, swapped live while it plays.</li>
+      </ul>
+      <a href="docs/player.md"><b>How Fuse Player works</b></a>
+    </td>
+    <td width="50%" valign="top">
+      <img src="docs/assets/icons/fuseline.svg" width="56" height="56" alt=""><br>
+      <h3>Fuseline <sub>by Fuse</sub></h3>
+      Fuse's own animation engine, named after the line in Fuse's logo that carries the spark. Every
+      movement in Fuse runs on it, from a tile's lift to the setup's opening.
+      <ul>
+        <li><b>One frame for every move.</b> A hundred values moving cost one frame wait, not a
+        hundred: a screen full of motion takes about a tenth of Compose's time and memory.</li>
+        <li><b>Exact curves and springs.</b> Béziers solved with Newton steps, springs in closed
+        form, retargeted mid-flight without a jolt.</li>
+        <li><b>Colours blend through Oklab</b>, so a fade stays even instead of dipping grey.</li>
+        <li><b>Your motion choice everywhere</b>: Enhanced, Standard, Minimal, Reduced and Low Power apply to every
+        animation at once.</li>
+        <li><b>Guarded by tests:</b> nothing in Fuse may import Compose's animation, and the
+        benchmarks fail the build if Fuseline is ever slower.</li>
+      </ul>
+      <a href="docs/fuseline.md"><b>How Fuseline works</b></a>
+    </td>
+  </tr>
+</table>
+
+<div align="center">
+
+| Each frame, once every value moves | Fuseline by Fuse | Compose | |
+|---|--:|--:|--:|
+| 100 springs | 19.6 µs | 206.3 µs | **10x faster** |
+| 1,000 tweens | 145.1 µs | 2,848.0 µs | **20x faster** |
+| 100 colour fades | 19.9 µs | 208.4 µs | **10x faster** |
+| A page of 120 tiles swapping | 315 ms | 569 ms | **1.8x faster** |
+
+<sub>Measured on one thread with one manual frame clock, both warmed up (<a href="docs/fuseline.md#speed">method and every case</a>).</sub>
+
+</div>
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/brand/divider-dark.svg">
@@ -133,7 +203,7 @@ Play.
     <td width="33%" valign="top">
       <img src="docs/assets/icons/folders.svg" width="44" height="44" alt=""><br>
       <b>Your folders, understood</b><br>
-      <sub>ES-DE and RomM layouts, 69 platforms, multi-disc sets, and folder behaviour you choose per system or per game.</sub>
+      <sub>Every system folder ES-DE names, 157 systems by RomM slug, multi-disc sets, and folder behaviour you choose per system or per game.</sub>
     </td>
   </tr>
   <tr>
@@ -190,8 +260,8 @@ Play.
   <tr>
     <td width="33%" valign="top">
       <img src="docs/assets/icons/themes.svg" width="44" height="44" alt=""><br>
-      <b>Ten themes, and yours</b><br>
-      <sub>Fuse, Glass, Starlight, Crossbar, Orbital, Wave, Blades, Channels, CRT and Daylight, each with its own background, corners, focus, motion and sound. Add themes others made from a link or a file, or <a href="docs/THEMES.md">write your own</a>.</sub>
+      <b>Twenty themes, and yours</b><br>
+      <sub>Fuse, Glass, Starlight, Crossbar, Orbital, Wave, Blades, Channels, CRT, Daylight and ten more, each with its own background, corners, focus, motion and sound. Make one in the Theme Studio, add one from a link or a file, or <a href="docs/THEMES.md">write your own</a>.</sub>
     </td>
     <td width="33%" valign="top">
       <img src="docs/assets/icons/accessibility.svg" width="44" height="44" alt=""><br>
@@ -221,6 +291,23 @@ Play.
       <sub>Filters like <code>platform:snes</code>, <code>year:1990s</code> or <code>played:week</code> as chips, values offered as you type so a controller never has to spell them, typos forgiven, and every setting findable.</sub>
     </td>
   </tr>
+  <tr>
+    <td width="33%" valign="top">
+      <img src="docs/assets/icons/jellyfin.svg" width="44" height="44" alt=""><br>
+      <b>Films, shows and music</b><br>
+      <sub>Your Jellyfin server in Addons: continue watching, next up, seasons, music and search, played by Fuse Player by Fuse, at home or away. Setup explains Jellyfin and signs you in.</sub>
+    </td>
+    <td width="33%" valign="top">
+      <img src="docs/assets/icons/quick-menu.svg" width="44" height="44" alt=""><br>
+      <b>A quick menu that's yours</b><br>
+      <sub>Move, resize, add and take out its tiles with a controller, touch or the keyboard. Widgets for what's playing (skip a song with a flick), brightness and volume, and the second screen.</sub>
+    </td>
+    <td width="33%" valign="top">
+      <img src="docs/assets/icons/touch.svg" width="44" height="44" alt=""><br>
+      <b>Touch, everywhere</b><br>
+      <sub>Every screen answers a finger as well as a pad. On Linux, Windows and macOS touch screens, swipe in from either edge to go back, as on a phone.</sub>
+    </td>
+  </tr>
 </table>
 
 ### In detail
@@ -231,7 +318,9 @@ Play.
 
 - **Library roots** in ES-DE style `ROMs/<system>` folders, RomM Structure A and B libraries, single
   platform folders and folders of Steam or PC shortcuts.
-- **69 platforms** recognised by RomM slug, RomM alias, ES-DE name or full name.
+- **157 systems** recognised by RomM slug, RomM alias, ES-DE name or full name: every game system
+  folder ES-DE knows, from the Apple II and the VIC-20 to the PC-98, the Model 3 and WASM-4, each
+  reading the file types ES-DE accepts for it.
 - **One game, however it is stored.** Multi-disc sets, `.m3u`, `.cue` and `.gdi` files, PS3, PS Vita,
   PSP, Wii U, Xbox 360 and PC game folders, RomM content folders (DLC, updates, patches, hacks,
   translations and more) and loose Switch updates are each grouped into one game.
@@ -263,7 +352,10 @@ Play.
   Dolphin, Cemu, Ryujinx, xemu, Xenia, shadPS4, MAME, DOSBox Staging and more), **32 on Windows**,
   found in portable folders, Program Files, AppData, Scoop, Chocolatey, winget and Steam libraries,
   and **29 on macOS**, found as apps or Homebrew programs. Anything Fuse misses on Windows or macOS
-  can be located from Settings.
+  can be located from Settings. An AppImage is known by the release it updates from, so a renamed
+  one is still found.
+- **RetroArch for every system it runs**, with ES-DE's cores in ES-DE's order, on Android, Linux,
+  Windows and macOS.
 - **Pick an emulator** per system or per game. Forks and renamed builds are recognised by family, and
   shared package names are trusted only after Fuse checks that the expected activity exists.
 - **Honest fallbacks.** When an app has no documented way to start a specific game, Fuse opens the app
@@ -284,6 +376,27 @@ Play.
 - **How a PS3 game runs in RPCS3**, from RPCS3's compatibility list, asked only when you choose it.
 - **Problems that explain themselves**: when a game can't start, Fuse says why, that nothing was
   changed, and offers the fix. If Fuse itself fails to start three times, it starts in **safe mode**.
+
+</details>
+
+<details>
+<summary><b>Films, shows and music</b></summary>
+<br>
+
+- **Your Jellyfin server in Addons**, connected at home or from away, switching between the two by
+  itself: Continue watching, Next up, Recently added, libraries, seasons and episodes, collections,
+  music by artist and album, and search. Pages you've seen work offline.
+- **Played by Fuse Player by Fuse** ([how it works](docs/player.md)): Direct Play first, then Direct
+  Stream, then a transcode, decided from what your device can decode. Quality caps for home and
+  away, and on weak Wi-Fi a lower quality chosen by itself, from the same second.
+- **Subtitles and audio** in your languages, with size, position, delay and background; resume,
+  up next, the next episode on its own, and your playback speed kept if you like.
+- **On two screens**, the film plays on the screen you choose, the other becomes its remote, and the
+  two swap live. The second screen keeps its pages (Status and Controls) a swipe away.
+- **Home widgets** for Continue watching, Next up and Recently added, and the quick menu's Now
+  playing to pause or skip.
+- **Setup explains Jellyfin** for anyone who hasn't met it, finds servers on your network and signs
+  you in. Your password goes to your server and nowhere else.
 
 </details>
 
@@ -319,8 +432,13 @@ Play.
   four by three.
 - **Library** layouts from square box art to capsules to covers to a compact list; **Systems**, **Apps**
   (on Android), **Search** with filters, game pages, a media manager, a folder browser, the **quick
-  menu**, a **Play time** page and a guided setup.
-- **Nineteen themes** and community themes from a link or a file ([docs/THEMES.md](docs/THEMES.md)), square
+  menu** you arrange (tiles and widgets moved, resized, added and taken out by controller, touch or
+  keyboard), a **Play time** page and a guided setup.
+- **Touch everywhere**: every screen answers a finger, and on computers' touch screens a swipe in
+  from either edge goes back.
+- **A second screen with pages**: what's chosen (or the remote while a film plays), Status with the
+  battery large, and Controls with brightness, volume and switches, on the screen below or above.
+- **Twenty themes** and community themes from a link or a file ([docs/THEMES.md](docs/THEMES.md)), square
   box art or tall posters, four motion levels including Reduced, High contrast focus, optional glass
   panels and CRT effect, and interface sounds synthesised on the fly.
 - A **performance overlay** that only shows metrics the device can really measure.
@@ -393,30 +511,38 @@ Linux app, isn't offered on Windows and macOS.
 ## Where Fuse stands
 
 > [!IMPORTANT]
-> **Fuse 0.2.9 "The Organized Update" is still early.** It plays films on the screen you choose on
-> a two-screen handheld and swaps them live, hides the second screen, lets Addons' tabs be put in
-> any order and gathers Jellyfin, the Store and Cartridge in Settings, Addons, connects to a
-> Jellyfin server at home, and makes Fuseline by Fuse share one frame among every move (see
-> [the release notes](docs/releases/0.2.9.md)). 0.2.8 brought your Jellyfin server's films, shows
-> and music into Addons, played in Fuse Player, Fuse's own player, let a phone type into Fuse and
-> play it as a controller, and redesigned Storage ([Jellyfin](docs/jellyfin.md),
-> [Fuse Player](docs/player.md)). 0.2.7 put Fuse's menus on a dual-screen handheld's touch screen,
-> with the chosen game large on the main screen, like a 3DS. 0.2.6 brought a Store to Linux, Windows and macOS,
-> moved games to an SD card or another drive, showed Steam achievements and RPCS3 trophies, and
-> rebuilt setup. 0.2.5 started Fuse with its own logo burning in,
-> and opened games and apps cleanly on a dual-screen handheld's bottom screen. 0.2.4 brought installs of PS3, Vita and 3DS games,
-> their updates, DLC and licences into RPCS3, Vita3K and Azahar through each emulator's own
-> installer, checked step by step, 0.2.3 brought the guided Theme Studio and Store
-> support for every app it lists, 0.2.1 the Store and Addons, 0.2.0 SD cards and drives that come and
-> go, System health, backups and PCSX2 patches, 0.1.6 the resizable widget board, 0.1.4 downloads
-> from your phone, 0.1.3 screenshots and recordings, and 0.1.0 Windows and macOS. The shared core
-> (library scanning, launch resolution, integrations and the database) and the interface are in
-> place and tested where it matters. The Android app builds and passes its unit tests and lint, and
-> has been tried on one handheld so far. The Linux app builds, passes its tests, packages as an
-> AppImage and starts in a virtual display. The Windows and macOS builds pass their tests and a
-> self-test of the packaged app on each system in CI, but haven't been tried by hand on a PC or Mac
-> yet. Installing into real emulators hasn't been tried by hand yet either. Expect rough edges and
-> changes between versions.
+> **Fuse 0.3.0 "The Clean Update" is still early, and cleaner than ever.** The quick menu became
+> yours to arrange, with widgets for what's playing (skip a song with a flick), brightness, volume
+> and the second screen's three ways (Off, Fuse and Flipped). Fuse now reads every game system ES-DE
+> knows, 86 more than before, and finds renamed emulator AppImages. Setup explains Jellyfin and
+> signs you in, the second screen keeps its pages while a film plays and gained them above too, a
+> swipe from the edge goes back on computers' touch screens, and Fuse Player by Fuse rides out weak
+> Wi-Fi by lowering the quality by itself. See [the release notes](docs/releases/0.3.0.md).
+
+<details>
+<summary><b>Every release so far</b></summary>
+<br>
+
+| Version | Name | What it brought |
+|---|---|---|
+| [0.3.0](docs/releases/0.3.0.md) | The Clean Update | A quick menu you arrange, 157 systems, Jellyfin in setup, swipe-back on touch screens, the second screen's pages redesigned |
+| [0.2.9](docs/releases/0.2.9.md) | The Organized Update | Films on the screen you choose with a live swap, Addons in your order and in Settings, Jellyfin at home |
+| [0.2.8](docs/releases/0.2.8.md) | The Media & Connectivity Update | Jellyfin and Fuse Player by Fuse, a phone as keyboard and controller, Storage redesigned |
+| [0.2.7](docs/releases/0.2.7.md) | The Swap & Clean Update | Fuse's menus on a dual-screen handheld's touch screen, like a 3DS, and Fuseline by Fuse |
+| [0.2.6](docs/releases/0.2.6.md) | The Detail Update | A Store on computers, games moved between drives, Steam achievements and RPCS3 trophies, setup rebuilt |
+| [0.2.5](docs/releases/0.2.5.md) and before | The Ignition Update and earlier | The startup mark, PS3, Vita and 3DS installs, the Theme Studio, the Store and Addons, SD cards and drives, System health, backups, PCSX2 patches, the widget board, Windows and macOS |
+
+The full history is in [CHANGELOG.md](CHANGELOG.md).
+
+</details>
+
+The shared core (library scanning, launch resolution, integrations and the database) and the
+interface are in place and tested where it matters, and every screen is rendered and checked at 23
+screen sizes, from a 3.5 inch 4:3 handheld to a 32:9 monitor and a 4K screen at 100%. The Android
+app builds and passes its unit tests and lint, and runs on handhelds every day. The Linux app
+builds, passes its tests, packages as an AppImage and starts in a virtual display. The Windows and
+macOS builds pass their tests and a self-test of the packaged app on each system in CI, but haven't
+been tried by hand on a PC or Mac yet. Expect rough edges and changes between versions.
 
 Not there yet: checks on more handhelds and on Windows and Mac computers, signed Windows and macOS
 builds, video previews and screen capture on the desktop, a storage mode without All files access, translations (the
@@ -533,8 +659,8 @@ You need JDK 17 or newer and, for Android, the Android SDK with API level 37 ins
 ## Privacy
 
 Fuse contains **no telemetry, analytics, advertising or crash reporting**, and your library works
-fully offline. Fuse only contacts a service after you set it up: RetroAchievements, SteamGridDB, IGDB,
-TheGamesDB, ScreenScraper and libretro thumbnails receive only what they need to answer (for example a
+fully offline. Fuse only contacts a service after you set it up: your own Jellyfin server,
+RetroAchievements, SteamGridDB, IGDB, TheGamesDB, ScreenScraper and libretro thumbnails receive only what they need to answer (for example a
 game's title, or your own API key). The one service used without setup is GitHub, to check for new
 versions of Fuse; you can turn automatic checks off in Settings, About, and nothing is ever
 downloaded or installed without your confirmation. rpcs3.net is asked, with only a game's title id,
@@ -550,6 +676,10 @@ what each service receives and when.
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Modules, domain model, scanning, launching, input, storage, security |
 | [INTEGRATIONS.md](INTEGRATIONS.md) | Every online service and the Cartridge bridge, and what leaves the device |
 | [DESIGN_SYSTEM.md](DESIGN_SYSTEM.md) | Tokens, type, focus, motion, themes, sound, accessibility |
+| [docs/player.md](docs/player.md) | Fuse Player by Fuse: engines, subtitles, controls, two screens |
+| [docs/fuseline.md](docs/fuseline.md) | Fuseline by Fuse: curves, springs, transitions and how fast it is |
+| [docs/jellyfin.md](docs/jellyfin.md) | Jellyfin in Fuse: connecting, home and away, what is sent |
+| [docs/PHONE_LINK.md](docs/PHONE_LINK.md) | Phone Link: your phone as a window on the library, a keyboard and a controller |
 | [docs/THEMES.md](docs/THEMES.md) | Writing, sharing and adding themes |
 | [RESEARCH.md](RESEARCH.md) | What we learned about frontends, Android, emulators, RomM and scrapers |
 | [ROADMAP.md](ROADMAP.md) | What is done and what comes next |
@@ -571,19 +701,25 @@ Third-party components keep their own licences; see [THIRD_PARTY_NOTICES.md](THI
 
 ## Credits
 
+- **Fuse Player by Fuse** and **Fuseline by Fuse**, Fuse's own media player and animation engine,
+  written for Fuse and part of this repository, under its licence.
 - [ES-DE](https://es-de.org/), whose MIT-licensed emulator configuration is the best public record of
   how emulators accept games.
-- [RomM](https://github.com/rommapp/romm), whose folder conventions and platform names Fuse follows.
+- [RomM](https://github.com/rommapp/romm), whose folder conventions, platform names and alias table Fuse follows.
 - **[Cartridge](https://github.com/abdu2304/cartridge) by [abdu2304](https://github.com/abdu2304)**
-  (MIT), the RomM companion Fuse pairs with, and where Fuse learned to match emulator forks by name.
+  (MIT), the RomM companion Fuse pairs with, and where Fuse learned to match emulator forks by name
+  and to know an AppImage by what it updates from.
   Fuse's bridge (live downloads, deep links and uploads) is being contributed to Cartridge; until
   it is merged there, Fuse installs Cartridge from the [MAtiyaaa/cartridge](https://github.com/MAtiyaaa/cartridge)
   fork, and will switch to abdu2304's releases once it is.
+- [Jellyfin](https://jellyfin.org/), the free media server Fuse plays your films, shows and music
+  from, and [FFmpeg](https://ffmpeg.org/) (through [JavaCPP](https://github.com/bytedeco/javacpp-presets))
+  and [Media3](https://developer.android.com/media/media3), which Fuse Player by Fuse decodes with.
 - [rcheevos](https://github.com/RetroAchievements/rcheevos) and
   [RetroAchievements](https://retroachievements.org/).
-- **Music by boipurple.** Fuse's menu music is the album *jam channel* by boipurple: puddleworld
-  plays under the menus and alright apothecary during setup, and every song on the album can be
-  picked in Settings, Sound. The songs remain the artist's own and are not covered by Fuse's
+- **Music by boipurple.** Fuse's menu music is boipurple's albums *jam channel* and *creature
+  interchange*: puddleworld plays under the menus and alright apothecary during setup, and every
+  song can be picked in Settings, Sound, shuffled, or skipped from the quick menu. The songs remain the artist's own and are not covered by Fuse's
   licence.
 - [Lucide](https://lucide.dev/) icons (ISC), and the [Sora](https://github.com/sora-xor/sora-font) and
   [Manrope](https://github.com/googlefonts/manrope) typefaces (SIL Open Font License).

@@ -121,6 +121,7 @@ import io.github.matiyaaa.fuse.ui.shell.settings.next
 import io.github.matiyaaa.fuse.ui.shell.settings.performanceLabel
 import io.github.matiyaaa.fuse.ui.shell.store.UpdateState
 import kotlin.math.roundToInt
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 /**
@@ -393,6 +394,15 @@ fun QuickMenu(app: AppState) {
             val full = windows?.mode == WindowStyle.FULLSCREEN
             QuickTile("Full screen", if (full) FuseIcons.Minimize else FuseIcons.Maximize, active = full, toggle = true) {
                 windows?.setMode(if (full) WindowStyle.WINDOWED else WindowStyle.FULLSCREEN)
+            }
+        }
+        // A random game's page, as ES-DE and Daijishō offer: for when nothing comes to mind.
+        QuickId.SURPRISE -> QuickTile("Surprise me", FuseIcons.Dice, detail = "A random game") {
+            close()
+            app.scope.launch {
+                val games = app.store.library.games(io.github.matiyaaa.fuse.ui.shell.store.GameQuery()).first()
+                val pick = games.filter { it.platformId.value != "android" }.ifEmpty { games }.randomOrNull()
+                if (pick == null) app.toasts.show("No games in your library yet") else app.go(Route.GameInfo(pick.id))
             }
         }
         QuickId.MUSIC -> QuickTile(now.title, FuseIcons.Music, active = now.playing, detail = if (now.off) "Turn on" else "Tap to skip", hold = ::toggleSong) {
@@ -1121,6 +1131,7 @@ private fun iconFor(id: QuickId): ImageVector = when (id) {
     QuickId.STANDBY -> FuseIcons.Moon
     QuickId.FRAME_TIMES -> FuseIcons.Activity
     QuickId.FULLSCREEN -> FuseIcons.Maximize
+    QuickId.SURPRISE -> FuseIcons.Dice
 }
 
 /** How a connection stands, for a tile's state line; nothing when the platform doesn't say. */
