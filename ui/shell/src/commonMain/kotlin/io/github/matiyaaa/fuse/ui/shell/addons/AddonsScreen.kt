@@ -68,7 +68,7 @@ fun AddonsScreen(app: AppState) {
     // In the order the user dragged them into; parts they never moved keep their usual place after.
     val parts = buildList {
         if (prefs.cartridgeEnabled && app.platform.features.cartridge) add(AddonsPart.CARTRIDGE)
-        if (app.store.appStore.supported) add(AddonsPart.STORE)
+        if (app.store.appStore.supported && prefs.storeEnabled) add(AddonsPart.STORE)
         if (prefs.jellyfin.enabled && app.store.jellyfin != null) add(AddonsPart.JELLYFIN)
         if (isEmpty()) add(AddonsPart.CARTRIDGE)
     }.sortedBy { p -> prefs.addonsOrder.indexOf(p.name).let { if (it < 0) ORDER_REST + p.ordinal else it } }

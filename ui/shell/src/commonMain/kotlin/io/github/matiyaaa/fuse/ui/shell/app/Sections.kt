@@ -20,8 +20,10 @@ import io.github.matiyaaa.fuse.ui.shell.store.UiPrefs
  */
 @Immutable
 class Sections(
-    /** True where the Cartridge section is Addons (the Store exists here, or Jellyfin is on). */
+    /** True where the Cartridge section is Addons (the Store is on here, or Jellyfin is). */
     val addons: Boolean,
+    /** Cartridge runs here and is turned on in Fuse. With nothing else on, it is the section alone. */
+    val cartridgeOn: Boolean = true,
 ) {
     fun label(d: Destination): String = when (d) {
         Destination.HOME -> "Home"
@@ -42,13 +44,14 @@ class Sections(
     }
 
     /**
-     * Whether [d] has a tab, given what this device [offers] and Cartridge's [status]. Cartridge's
-     * own tab waits for Cartridge to be installed; Addons always has the Store, so it is always there.
+     * Whether [d] has a tab, given what this device [offers] and Cartridge's [status]. Addons is there
+     * while something in it is on (the Store, Jellyfin); Cartridge's own tab waits for Cartridge to be
+     * installed and turned on. With all of them off, there is no tab at all.
      */
     fun showsTab(d: Destination, offers: Boolean, status: CartridgeStatus): Boolean = offers && when {
         d != Destination.CARTRIDGE -> true
         addons -> true
-        else -> status.installed
+        else -> cartridgeOn && status.installed
     }
 
     /** Whether Settings offers a tab for [d]: Cartridge's only while Cartridge is turned on in Fuse. */
@@ -57,7 +60,13 @@ class Sections(
 }
 
 /** How this device presents its sections (see [Sections]). */
-internal val AppState.sections: Sections get() = Sections(addons = store.appStore.supported || (store.jellyfin != null && store.prefs.value.jellyfin.enabled))
+internal val AppState.sections: Sections get() {
+    val p = store.prefs.value
+    return Sections(
+        addons = (store.appStore.supported && p.storeEnabled) || (store.jellyfin != null && p.jellyfin.enabled),
+        cartridgeOn = platform.features.cartridge && p.cartridgeEnabled,
+    )
+}
 
 /** The tabs shown in the top line: Home first, then the user's order, each offered and present here. */
 @Composable

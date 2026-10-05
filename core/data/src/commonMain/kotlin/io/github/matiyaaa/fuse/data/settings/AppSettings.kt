@@ -102,6 +102,8 @@ data class JellyfinSettings(
  */
 @Serializable
 data class StoreSettings(
+    /** The Store in Addons; off, it is gone from Addons and checks nothing. */
+    val enabled: Boolean = true,
     val variant: StoreVariant? = null,
     val autoCheck: Boolean = true,
     /** Apps Fuse installed or updated, by their key in the catalogue. */

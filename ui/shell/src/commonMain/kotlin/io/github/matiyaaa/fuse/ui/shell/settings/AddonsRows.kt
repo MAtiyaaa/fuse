@@ -35,8 +35,11 @@ fun addonsRows(app: AppState): List<MenuAction> {
             add(infoRow("none", "Jellyfin isn't part of this build", icon = FuseIcons.Clapperboard))
         }
         if (store != null) {
-            addAll(app.group("addons.store", "Store", FuseIcons.Store, summary = if (prefs.storeVariant == null) "Not set up" else null, detail = "Apps and emulators, their updates and where the catalogue comes from") {
-                store.map { it.copy(id = "store.${it.id}", section = null) }
+            val on = prefs.storeEnabled
+            addAll(app.group("addons.store", "Store", FuseIcons.Store, summary = when { !on -> "Off"; prefs.storeVariant == null && !app.store.appStore.state.value.desktop -> "Not set up"; else -> "On" }, detail = "Apps and emulators, their updates and where the catalogue comes from") {
+                listOf(toggleRow("store.enabled", "Use the Store", FuseIcons.Power, on, if (on) "The Store in Addons, and its update checks" else "Off: no Store in Addons, and nothing is checked") { v ->
+                    app.store.updatePrefs { it.copy(storeEnabled = v) }
+                }) + if (on) store.map { it.copy(id = "store.${it.id}", section = null) } else emptyList()
             })
         }
         if (cartridge != null) {

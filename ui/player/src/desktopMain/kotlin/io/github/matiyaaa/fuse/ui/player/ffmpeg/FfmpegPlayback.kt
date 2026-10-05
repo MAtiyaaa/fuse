@@ -192,6 +192,11 @@ internal class FfmpegPlayback(
         av_dict_set(options, "reconnect_streamed", "1", 0)
         av_dict_set(options, "reconnect_delay_max", "4", 0)
         av_dict_set(options, "rw_timeout", "20000000", 0)
+        // Opens quicker: a stream's layout is read from its first two megabytes and three seconds
+        // (FFmpeg reads five of each), and one connection is kept for every request it makes.
+        av_dict_set(options, "probesize", PROBE_BYTES, 0)
+        av_dict_set(options, "analyzeduration", PROBE_MICROS, 0)
+        av_dict_set(options, "multiple_requests", "1", 0)
         // The system's proxy, as browsers use it (FFmpeg honours no_proxy itself).
         systemProxy()?.let { av_dict_set(options, "http_proxy", it, 0) }
         val opened = avformat_open_input(fmt, source.url, null, options)
@@ -651,8 +656,11 @@ internal class FfmpegPlayback(
 
     companion object {
         private const val FRAME_POOL = 4
-        private const val MAX_VIDEO_PACKETS = 240
-        private const val MAX_AUDIO_PACKETS = 480
+        // About half a minute read ahead at 24 frames a second, so a patchy connection is ridden out.
+        private const val MAX_VIDEO_PACKETS = 720
+        private const val MAX_AUDIO_PACKETS = 1_440
+        private const val PROBE_BYTES = "2000000"
+        private const val PROBE_MICROS = "3000000"
         private const val FRAME_SLACK_MS = 20L
         private const val CUE_KEEP_MS = 30_000L
         private const val MAX_OUT_WIDTH = 1920.0

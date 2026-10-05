@@ -291,7 +291,9 @@ fun SettingsScreen(app: AppState, initialSection: String?, initialRow: String? =
         } else if (onSearch) {
             when (e.action) {
                 NavAction.DOWN, NavAction.PAGE_DOWN -> { onSearch = false; NavResult.MOVED }
-                NavAction.SELECT, NavAction.RIGHT -> { search(); NavResult.MOVED }
+                NavAction.SELECT -> { search(); NavResult.MOVED }
+                // Right goes across to the open section's first row, as it does from any section.
+                NavAction.RIGHT -> { onSearch = false; rowSel.index = 0; inRows = true; NavResult.MOVED }
                 else -> NavResult.IGNORED
             }
         } else if (e.action == NavAction.UP && sectionSel.index == 0) {

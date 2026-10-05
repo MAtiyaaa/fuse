@@ -114,6 +114,8 @@ data class UiPrefs(
     val storeVariant: io.github.matiyaaa.fuse.model.StoreVariant? = null,
     /** The Store checks installed apps for updates by itself. */
     val storeAutoCheck: Boolean = true,
+    /** The Store in Addons (Settings, Addons, Store); off, Addons has no Store and nothing is checked. */
+    val storeEnabled: Boolean = true,
 ) {
     /** The theme in use: a built-in one, else an added one, else Fuse (an added theme was removed). */
     val theme: ThemeSpec

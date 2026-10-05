@@ -436,7 +436,7 @@ internal class DefaultAppStoreOps(
     }
 
     private suspend fun autoCheck() {
-        if (!prefs.value.storeAutoCheck || mutable.value.variant == null) return
+        if (!prefs.value.storeEnabled || !prefs.value.storeAutoCheck || mutable.value.variant == null) return
         if (ctx.now() - lastAutoCheck < AUTO_CHECK_EVERY_MS) return
         lastAutoCheck = ctx.now()
         refreshInstalled()

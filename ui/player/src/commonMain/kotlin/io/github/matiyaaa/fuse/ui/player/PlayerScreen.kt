@@ -3,6 +3,9 @@ package io.github.matiyaaa.fuse.ui.player
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import io.github.matiyaaa.fuse.ui.fuseline.Durations
+import io.github.matiyaaa.fuse.ui.fuseline.slideOutHorizontally
+import io.github.matiyaaa.fuse.ui.fuseline.slideInHorizontally
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -300,6 +303,26 @@ fun PlayerScreen(
             Spinner(Modifier.align(Alignment.Center), size = 44.dp, color = Color.White)
         }
 
+        // What the player did by itself (the quality lowered on a weak connection), said briefly.
+        val notice = session.notice
+        val noticeText = remember { arrayOf("") }
+        notice?.let { noticeText[0] = it }
+        LaunchedEffect(notice) {
+            if (notice == null) return@LaunchedEffect
+            kotlinx.coroutines.delay(NOTICE_MS)
+            session.notice = null
+        }
+        Appear(notice != null, Modifier.align(Alignment.TopCenter).padding(top = Space.xl), enter = fadeIn(), exit = fadeOut()) {
+            Row(
+                Modifier.clip(RoundedCornerShape(50)).background(Color.Black.copy(alpha = 0.72f)).padding(horizontal = Space.l, vertical = Space.s),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                FuseIcon(FuseIcons.Signal, size = 16.dp, tint = Fuse.colors.accent)
+                Spacer(Modifier.width(Space.s))
+                FText(noticeText[0], Fuse.type.label, color = Color.White, maxLines = 1)
+            }
+        }
+
         flash?.let { f ->
             SeekFlash(f, Modifier.align(if (f.forward) Alignment.CenterEnd else Alignment.CenterStart).padding(horizontal = maxWidth * 0.12f))
         }
@@ -331,13 +354,37 @@ fun PlayerScreen(
             Finished(session, onExit, Modifier.align(Alignment.Center))
         }
 
-        sheet?.let { s ->
-            PlayerSheetPanel(s, session, inputEnabled, onSettings = ::change, onClose = { sheet = null; poke() }, modifier = Modifier.align(Alignment.CenterEnd))
+        // A sheet slides in at the side over a light shade; a tap anywhere outside it closes it, as
+        // B does. The last sheet stays drawn while it slides away.
+        val shown = remember { arrayOfNulls<PlayerSheet>(1) }
+        sheet?.let { shown[0] = it }
+        Appear(sheet != null, enter = fadeIn(), exit = fadeOut()) {
+            Box(
+                Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.32f))
+                    .pointerInput(Unit) { detectTapGestures { sheet = null; poke() } },
+            )
+        }
+        Appear(
+            sheet != null,
+            modifier = Modifier.align(Alignment.CenterEnd),
+            enter = fadeIn() + slideInHorizontally(Fuse.motion.enter(Durations.BASE)) { it / 3 },
+            exit = fadeOut() + slideOutHorizontally(Fuse.motion.exit(Durations.FAST)) { it / 3 },
+        ) {
+            shown[0]?.let { s ->
+                PlayerSheetPanel(
+                    s, session, inputEnabled && sheet != null, onSettings = ::change, onClose = { sheet = null; poke() },
+                    // Taps on the sheet's own empty space stay on it.
+                    modifier = Modifier.pointerInput(Unit) { detectTapGestures { } },
+                )
+            }
         }
     }
 }
 
 private const val TIMELINE = 0
+
+/** How long a note from the player stays. */
+private const val NOTICE_MS = 4_000L
 private const val BUTTONS = 1
 
 private class PlayerButton(val id: String, val icon: ImageVector, val label: String, val big: Boolean = false, val badge: String? = null, val active: Boolean = false, val onClick: () -> Unit)

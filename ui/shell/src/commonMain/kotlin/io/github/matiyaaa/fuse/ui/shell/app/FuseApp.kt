@@ -356,6 +356,12 @@ private fun FuseAppContent(
                     ArtWarmup(app)
                     ShellInput(app)
                     val tabs = rememberTabs(app, prefs)
+                    // A tab that went away while open (Addons with everything in it turned off, a
+                    // hidden section) leaves its pages for Home.
+                    LaunchedEffect(tabs) {
+                        val root = app.navigator.root?.destination
+                        if (root != null && root !in tabs && app.navigator.stack.size == 1) app.selectTab(Destination.HOME)
+                    }
                     Pages(app, tabs)
                     val route = app.navigator.current
                     if (route != Route.Onboarding) {
@@ -741,7 +747,14 @@ private fun ShellInput(app: AppState) {
                 NavAction.LEFT -> when (button) {
                     HudButton.STATUS -> { app.hudButton = HudButton.SETTINGS; NavResult.MOVED }
                     HudButton.SETTINGS -> { app.hudButton = HudButton.SEARCH; NavResult.MOVED }
-                    HudButton.SEARCH -> { app.hudButton = null; NavResult.MOVED }
+                    // Left of Search is the last tab, as the line shows it, whichever tab Search
+                    // or Settings was opened from.
+                    HudButton.SEARCH -> {
+                        app.hudButton = null
+                        val last = tabs.lastOrNull()
+                        if (hudPage(app.navigator.stack) != null || last != active) last?.let { app.selectTab(it) }
+                        NavResult.MOVED
+                    }
                     null -> cycle(-1)
                 }
                 NavAction.RIGHT -> when (button) {
