@@ -135,7 +135,7 @@ private fun GameSlide(game: GameCard, line: String, system: PlatformCard?, face:
                 )
                 if (room != Room.TINY && line.isNotEmpty()) {
                     Spacer(Modifier.height(Space.xs + Space.xxs))
-                    FText(line, Fuse.type.caption, color = c.onArtMuted, maxLines = 1)
+                    FText(line, Fuse.type.caption, color = c.onArtMuted, maxLines = 1, fit = true)
                 }
             }
             if (coverBeside) {
@@ -213,8 +213,8 @@ private fun SystemSlide(s: PlatformCard, face: FaceSize) {
         if ((s.art.square ?: s.art.icon) != null && face != FaceSize.SMALL) {
             Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.5f to Color.Transparent, 1f to c.artScrim)))
             Column(Modifier.align(Alignment.BottomStart).padding(if (room == Room.TINY) Space.m else Space.l)) {
-                FText(s.platform.name, if (room == Room.BIG) Fuse.type.title else Fuse.type.bodyStrong, color = c.onArt, maxLines = 1)
-                FText(gamesText(s.gameCount), Fuse.type.caption.tabular(), color = c.onArtMuted, maxLines = 1)
+                FText(s.platform.name, if (room == Room.BIG) Fuse.type.title else Fuse.type.bodyStrong, color = c.onArt, maxLines = 1, fit = true)
+                FText(gamesText(s.gameCount), Fuse.type.caption.tabular(), color = c.onArtMuted, maxLines = 1, fit = true)
             }
         }
     }
@@ -278,7 +278,7 @@ private fun CollectionSlide(col: GameCollection, depth: CarouselDepth) {
                 color = c.onArt, maxLines = 2,
             )
             Spacer(Modifier.height(Space.xxs))
-            FText(gamesText(col.gameCount), Fuse.type.caption.tabular(), color = c.onArtMuted, maxLines = 1)
+            FText(gamesText(col.gameCount), Fuse.type.caption.tabular(), color = c.onArtMuted, maxLines = 1, fit = true)
         }
     }
 }
@@ -348,7 +348,7 @@ private fun MediaSlide(m: MediaItem, face: FaceSize, depth: CarouselDepth) {
                 val line = if (album) m.albumArtist ?: m.artists.firstOrNull() ?: m.year?.toString() else mediaCaption(m)
                 if (room != Room.TINY && line != null) {
                     Spacer(Modifier.height(Space.xxs))
-                    FText(line, Fuse.type.caption, color = c.onArtMuted, maxLines = 1)
+                    FText(line, Fuse.type.caption, color = c.onArtMuted, maxLines = 1, fit = true)
                 }
                 m.progress?.let { p ->
                     Spacer(Modifier.height(Space.s))

@@ -542,8 +542,9 @@ Linux app, isn't offered on Windows and macOS.
 ## Where Fuse stands
 
 > [!IMPORTANT]
-> **Fuse 0.3.2 "The Corner Update" is still early, and smoother than ever.** It rounds off a corner
-> left square in 0.3.1, "The Glide Update". Home's widgets turn
+> **Fuse 0.3.2 "The Corner Update" is still early, and smoother than ever.** The menus now travel
+> between a two-screen device's screens, switching profile says hello, Jellyfin's widgets fill in
+> on every Home page, and a corner left square in 0.3.1, "The Glide Update", is round. Home's widgets turn
 > like a catalogue, one item at a time with L2 and R2 or a swipe, and the clock, storage and play
 > time widgets were redrawn. Jellyfin asks every way to the server at once and shows kept pages
 > straight away, so pages and widgets fill in quickly. For people who already run Syncthing, Fuse
@@ -559,7 +560,7 @@ Linux app, isn't offered on Windows and macOS.
 
 | Version | Name | What it brought |
 |---|---|---|
-| [0.3.2](docs/releases/0.3.2.md) | The Corner Update | Round corners on Home's carousel widgets |
+| [0.3.2](docs/releases/0.3.2.md) | The Corner Update | Menus that travel between screens, a hello when switching profile, Jellyfin widgets on every page, round corners |
 | [0.3.1](docs/releases/0.3.1.md) | The Glide Update | Home widgets that turn like a catalogue, Jellyfin that answers quickly, Syncthing beside Fuse Sync, the Thor's two screens with the controller |
 | [0.3.0](docs/releases/0.3.0.md) | The Sync & Clean Update | Fuse Sync by Fuse, profiles, a quick menu you arrange, 157 systems, Jellyfin in setup, swipe-back on touch screens, the second screen's pages redesigned |
 | [0.2.9](docs/releases/0.2.9.md) | The Organized Update | Films on the screen you choose with a live swap, Addons in your order and in Settings, Jellyfin at home |

@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.Stable
@@ -44,6 +45,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import io.github.matiyaaa.fuse.model.WidgetKind
 import io.github.matiyaaa.fuse.ui.designsystem.components.FText
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
@@ -365,11 +367,21 @@ internal fun BoxScope.CarouselHeader(icon: ImageVector, label: String, dots: @Co
         Modifier.fillMaxWidth().height(if (compact) 44.dp else 64.dp)
             .background(Brush.verticalGradient(0f to Color.Black.copy(alpha = 0.34f), 1f to Color.Transparent)),
     )
-    Row(Modifier.padding(if (compact) Space.m else Space.l), verticalAlignment = Alignment.CenterVertically) {
+    // The name on the left, always whole (set smaller when the card is narrow, never cut short), the
+    // dots pinned to the right, so neither runs into the other or off the card on a small screen.
+    Row(Modifier.fillMaxWidth().padding(if (compact) Space.m else Space.l), verticalAlignment = Alignment.CenterVertically) {
         FuseIcon(icon, size = Size.iconXS, tint = c.onArtMuted)
         Spacer(Modifier.width(Space.s - Space.xxs))
-        FText(label.uppercase(), Fuse.type.overline, color = c.onArtMuted, maxLines = 1)
-        Spacer(Modifier.width(Space.s))
+        val style = Fuse.type.overline
+        androidx.compose.foundation.text.BasicText(
+            label.uppercase(),
+            Modifier.weight(1f, fill = false),
+            style = style.copy(color = c.onArtMuted),
+            maxLines = 1,
+            softWrap = false,
+            autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(minFontSize = style.fontSize * 0.55f, maxFontSize = style.fontSize, stepSize = 0.5.sp),
+        )
+        Spacer(Modifier.weight(1f).widthIn(min = Space.s))
         dots()
     }
 }

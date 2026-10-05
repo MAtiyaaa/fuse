@@ -201,7 +201,7 @@ private fun GamesFace(kind: WidgetKind, games: List<GameCard>, face: FaceSize, c
                     FText(first.title, titleStyle, color = c.onArt, maxLines = 2)
                     if (withCaption) {
                         Spacer(Modifier.height(Space.xxs))
-                        FText(caption(first), Fuse.type.caption, color = c.onArtMuted, maxLines = 1)
+                        FText(caption(first), Fuse.type.caption, color = c.onArtMuted, maxLines = 1, fit = true)
                     }
                 }
                 if (wide && fit > 0) {
@@ -238,7 +238,7 @@ private fun ArtLabel(kind: WidgetKind) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         FuseIcon(widgetIcon(kind), size = Size.iconXS, tint = c.onArtMuted)
         Spacer(Modifier.width(Space.s - Space.xxs))
-        FText(widgetLabel(kind).uppercase(), Fuse.type.overline, color = c.onArtMuted, maxLines = 1)
+        FText(widgetLabel(kind).uppercase(), Fuse.type.overline, color = c.onArtMuted, maxLines = 1, fit = true)
     }
 }
 
@@ -290,7 +290,7 @@ private fun AppsFace(feed: HomeFeed) {
                                 Artwork(a.icon, Modifier.size(icon), contentScale = ContentScale.Fit)
                                 if (named) {
                                     Spacer(Modifier.height(Space.xs))
-                                    FText(a.entry.customTitle ?: a.entry.label, Fuse.type.caption, color = Fuse.colors.textMuted, align = TextAlign.Center, maxLines = 1)
+                                    FText(a.entry.customTitle ?: a.entry.label, Fuse.type.caption, color = Fuse.colors.textMuted, align = TextAlign.Center, maxLines = 1, fit = true)
                                 }
                             }
                         }
@@ -449,7 +449,7 @@ private fun ColumnScope.TotalFace(feed: HomeFeed, face: FaceSize) {
                 ProgressRing(toward, size = ring, stroke = Size.track * if (big) 3 else 2, color = c.accent) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         FText(total, (if (big) Fuse.type.display else Fuse.type.title).tabular(), maxLines = 1)
-                        FText(if (big) "of play" else "played", Fuse.type.caption, color = c.textMuted, maxLines = 1)
+                        FText(if (big) "of play" else "played", Fuse.type.caption, color = c.textMuted, maxLines = 1, fit = true)
                     }
                 }
             }
@@ -491,7 +491,7 @@ private fun ColumnScope.TotalFace(feed: HomeFeed, face: FaceSize) {
 private fun StatPair(value: String, label: String, small: Boolean = false) {
     Column {
         FText(value, (if (small) Fuse.type.label else Fuse.type.titleSmall).tabular(), maxLines = 1)
-        FText(label, Fuse.type.caption, color = Fuse.colors.textMuted, maxLines = 1)
+        FText(label, Fuse.type.caption, color = Fuse.colors.textMuted, maxLines = 1, fit = true)
     }
 }
 
@@ -515,7 +515,7 @@ private fun ColumnScope.MostPlayedFace(feed: HomeFeed, face: FaceSize) {
             Spacer(Modifier.width(Space.m))
             Column(Modifier.weight(1f)) {
                 FText(g.title, Fuse.type.label, maxLines = 2)
-                FText(playtimeText(g.playSeconds), Fuse.type.numericSmall, color = c.accent, maxLines = 1)
+                FText(playtimeText(g.playSeconds), Fuse.type.numericSmall, color = c.accent, maxLines = 1, fit = true)
             }
         }
         return
@@ -538,7 +538,7 @@ private fun TopGames(games: List<GameCard>, modifier: Modifier, title: String? =
         val shown = games.take(count)
         val max = (shown.maxOfOrNull { it.playSeconds } ?: 1L).coerceAtLeast(1L)
         Column(verticalArrangement = Arrangement.spacedBy(Space.s)) {
-            if (title != null) FText(title.uppercase(), Fuse.type.overline, color = c.textFaint, maxLines = 1)
+            if (title != null) FText(title.uppercase(), Fuse.type.overline, color = c.textFaint, maxLines = 1, fit = true)
             shown.forEachIndexed { i, g ->
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (art) {
@@ -553,7 +553,7 @@ private fun TopGames(games: List<GameCard>, modifier: Modifier, title: String? =
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             FText(g.title, Fuse.type.label, color = if (i == 0) c.text else c.textMuted, maxLines = 1, modifier = Modifier.weight(1f))
                             Spacer(Modifier.width(Space.s))
-                            FText(playtimeText(g.playSeconds), Fuse.type.numericSmall, color = c.textMuted, maxLines = 1)
+                            FText(playtimeText(g.playSeconds), Fuse.type.numericSmall, color = c.textMuted, maxLines = 1, fit = true)
                         }
                         ProgressBar(g.playSeconds.toFloat() / max, Modifier.fillMaxWidth(), color = if (i == 0) c.accent else c.textMuted.copy(alpha = 0.6f), height = Space.xs)
                     }
@@ -592,7 +592,7 @@ private fun ColumnScope.LatestAchievementFace(feed: HomeFeed, face: FaceSize) {
                     Spacer(Modifier.height(Space.m))
                     FText(a.achievement.title, Fuse.type.titleSmall, align = TextAlign.Center, maxLines = 2)
                     Spacer(Modifier.height(Space.xxs))
-                    FText("${a.gameTitle}  ·  ${a.achievement.points} points", Fuse.type.caption, color = c.textMuted, align = TextAlign.Center, maxLines = 1)
+                    FText("${a.gameTitle}  ·  ${a.achievement.points} points", Fuse.type.caption, color = c.textMuted, align = TextAlign.Center, maxLines = 1, fit = true)
                 }
             }
         }
@@ -612,7 +612,7 @@ private fun ColumnScope.AchievementsFace(feed: HomeFeed, face: FaceSize) {
                 Badge(list.first().achievement.badgeUrl, Size.thumb)
                 Spacer(Modifier.width(Space.m))
                 Column {
-                    FText("${list.size}", Fuse.type.titleSmall.tabular(), maxLines = 1)
+                    FText("${list.size}", Fuse.type.titleSmall.tabular(), maxLines = 1, fit = true)
                     WidgetCaption(if (list.size == 1) "unlocked" else "unlocked lately")
                 }
             }
@@ -627,8 +627,8 @@ private fun ColumnScope.AchievementsFace(feed: HomeFeed, face: FaceSize) {
                             Badge(a.achievement.badgeUrl, Size.thumb)
                             Spacer(Modifier.width(Space.s))
                             Column(Modifier.weight(1f)) {
-                                FText(a.achievement.title, Fuse.type.label, maxLines = 1)
-                                FText(a.gameTitle, Fuse.type.caption, color = c.textMuted, maxLines = 1)
+                                FText(a.achievement.title, Fuse.type.label, maxLines = 1, fit = true)
+                                FText(a.gameTitle, Fuse.type.caption, color = c.textMuted, maxLines = 1, fit = true)
                             }
                         }
                     }
@@ -661,7 +661,7 @@ private fun ColumnScope.AchievementsFace(feed: HomeFeed, face: FaceSize) {
                                     Badge(a.achievement.badgeUrl, badge)
                                     if (titled) {
                                         Spacer(Modifier.height(Space.xs))
-                                        FText(a.achievement.title, Fuse.type.caption, color = c.textMuted, align = if (face == FaceSize.WIDE) null else TextAlign.Center, maxLines = 1)
+                                        FText(a.achievement.title, Fuse.type.caption, color = c.textMuted, align = if (face == FaceSize.WIDE) null else TextAlign.Center, maxLines = 1, fit = true)
                                     }
                                 }
                             }
@@ -692,8 +692,8 @@ private fun ColumnScope.ProgressFace(feed: HomeFeed, face: FaceSize) {
                             Ring(st.progress, ring)
                             Spacer(Modifier.width(Space.m))
                             Column(Modifier.weight(1f)) {
-                                FText(st.title, Fuse.type.bodyStrong, maxLines = 1)
-                                FText("${st.earned} of ${st.total}", Fuse.type.numericSmall, color = c.textMuted, maxLines = 1)
+                                FText(st.title, Fuse.type.bodyStrong, maxLines = 1, fit = true)
+                                FText("${st.earned} of ${st.total}", Fuse.type.numericSmall, color = c.textMuted, maxLines = 1, fit = true)
                             }
                         }
                     }
@@ -707,7 +707,7 @@ private fun ColumnScope.ProgressFace(feed: HomeFeed, face: FaceSize) {
                     Ring(s.progress, ring, big = true)
                     Spacer(Modifier.height(Space.m))
                     FText(s.title, Fuse.type.bodyStrong, align = TextAlign.Center, maxLines = 2)
-                    FText("${s.earned} of ${s.total}", Fuse.type.numericSmall, color = c.textMuted, maxLines = 1)
+                    FText("${s.earned} of ${s.total}", Fuse.type.numericSmall, color = c.textMuted, maxLines = 1, fit = true)
                 }
             }
         }
@@ -724,8 +724,8 @@ private fun ColumnScope.ProgressFace(feed: HomeFeed, face: FaceSize) {
                                 Column(Modifier.width(RING_CARD), horizontalAlignment = Alignment.CenterHorizontally) {
                                     Ring(st.progress, ring, big = ring >= 96.dp)
                                     Spacer(Modifier.height(Space.s))
-                                    FText(st.title, Fuse.type.label, align = TextAlign.Center, maxLines = 1)
-                                    FText("${st.earned} of ${st.total}", Fuse.type.numericSmall, color = c.textMuted, maxLines = 1)
+                                    FText(st.title, Fuse.type.label, align = TextAlign.Center, maxLines = 1, fit = true)
+                                    FText("${st.earned} of ${st.total}", Fuse.type.numericSmall, color = c.textMuted, maxLines = 1, fit = true)
                                 }
                             }
                         }
@@ -749,7 +749,7 @@ private fun ColumnScope.MasteredFace(feed: HomeFeed, face: FaceSize) {
                 Badge(s.iconUrl, if (LocalWidgetRoom.current.compact) Size.thumb else Size.thumbL)
                 Spacer(Modifier.width(Space.m))
                 Column(Modifier.weight(1f)) {
-                    FText(s.title, Fuse.type.bodyStrong, maxLines = 1)
+                    FText(s.title, Fuse.type.bodyStrong, maxLines = 1, fit = true)
                     WidgetCaption(s.consoleName.orEmpty())
                 }
             }
@@ -764,8 +764,8 @@ private fun ColumnScope.MasteredFace(feed: HomeFeed, face: FaceSize) {
                             Badge(m.iconUrl, Size.thumb)
                             Spacer(Modifier.width(Space.m))
                             Column(Modifier.weight(1f)) {
-                                FText(m.title, Fuse.type.label, maxLines = 1)
-                                FText(m.consoleName.orEmpty(), Fuse.type.caption, color = c.textMuted, maxLines = 1)
+                                FText(m.title, Fuse.type.label, maxLines = 1, fit = true)
+                                FText(m.consoleName.orEmpty(), Fuse.type.caption, color = c.textMuted, maxLines = 1, fit = true)
                             }
                         }
                     }
@@ -779,7 +779,7 @@ private fun ColumnScope.MasteredFace(feed: HomeFeed, face: FaceSize) {
                     Badge(s.iconUrl, badge, glow = true)
                     Spacer(Modifier.height(Space.m))
                     FText(s.title, Fuse.type.titleSmall, align = TextAlign.Center, maxLines = 2)
-                    FText(s.consoleName.orEmpty(), Fuse.type.caption, color = c.textMuted, align = TextAlign.Center, maxLines = 1)
+                    FText(s.consoleName.orEmpty(), Fuse.type.caption, color = c.textMuted, align = TextAlign.Center, maxLines = 1, fit = true)
                 }
             }
         }
@@ -807,7 +807,7 @@ private fun Badge(model: Any?, size: Dp, glow: Boolean = false) {
 @Composable
 private fun Ring(progress: Float, size: Dp, big: Boolean = false) {
     ProgressRing(progress, size = size, stroke = if (big) Size.track * 2 else Size.track, color = Fuse.colors.warning) {
-        FText("${(progress * 100).toInt()}%", if (big) Fuse.type.titleSmall.tabular() else Fuse.type.numericSmall, maxLines = 1)
+        FText("${(progress * 100).toInt()}%", if (big) Fuse.type.titleSmall.tabular() else Fuse.type.numericSmall, maxLines = 1, fit = true)
     }
 }
 
@@ -840,14 +840,14 @@ private fun ColumnScope.CartridgeFace(cartridge: CartridgeStatus, face: FaceSize
                 }
                 Spacer(Modifier.width(Space.s))
                 Column {
-                    FText(now.percent ?: "…", Fuse.type.titleSmall.tabular(), maxLines = 1)
+                    FText(now.percent ?: "…", Fuse.type.titleSmall.tabular(), maxLines = 1, fit = true)
                     WidgetCaption(if (now.waiting > 0) "${now.waiting} queued" else "Downloading")
                 }
             }
         } else {
             CartridgeEmblem(36.dp)
             Spacer(Modifier.height(Space.xs))
-            FText(if (cartridge.connected == false) "Not connected" else "Cartridge", Fuse.type.bodyStrong, maxLines = 1)
+            FText(if (cartridge.connected == false) "Not connected" else "Cartridge", Fuse.type.bodyStrong, maxLines = 1, fit = true)
             WidgetCaption(cartridge.recent.firstOrNull()?.title?.let { "Latest: $it" } ?: "No downloads")
         }
         return
@@ -861,7 +861,7 @@ private fun ColumnScope.CartridgeFace(cartridge: CartridgeStatus, face: FaceSize
     if (face == FaceSize.WIDE) {
         Spacer(Modifier.weight(1f))
         if (downloading) {
-            FText(now.title ?: "Downloading", Fuse.type.bodyStrong, maxLines = 1)
+            FText(now.title ?: "Downloading", Fuse.type.bodyStrong, maxLines = 1, fit = true)
             Spacer(Modifier.height(Space.s))
             ProgressBar(now.progress, Modifier.fillMaxWidth(), color = CARTRIDGE_TINT.toColor())
             Spacer(Modifier.height(Space.xs + Space.xxs))
@@ -871,7 +871,7 @@ private fun ColumnScope.CartridgeFace(cartridge: CartridgeStatus, face: FaceSize
                 CartridgeEmblem(if (LocalWidgetRoom.current.compact) 36.dp else 48.dp)
                 Spacer(Modifier.width(Space.m))
                 Column {
-                    FText(cartridge.recent.firstOrNull()?.let { "Latest: ${it.title}" } ?: "No downloads", Fuse.type.bodyStrong, maxLines = 1)
+                    FText(cartridge.recent.firstOrNull()?.let { "Latest: ${it.title}" } ?: "No downloads", Fuse.type.bodyStrong, maxLines = 1, fit = true)
                     status?.let { WidgetCaption(it) }
                 }
             }
@@ -892,7 +892,7 @@ private fun ColumnScope.CartridgeFace(cartridge: CartridgeStatus, face: FaceSize
                 ProgressRing(now.progress ?: 0f, size = ring, stroke = Size.track * if (big) 3 else 2, color = CARTRIDGE_TINT.toColor()) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         FText(now.percent ?: "", (if (big) Fuse.type.title else Fuse.type.titleSmall).tabular(), maxLines = 1)
-                        FText("downloaded", Fuse.type.caption, color = c.textMuted, maxLines = 1)
+                        FText("downloaded", Fuse.type.caption, color = c.textMuted, maxLines = 1, fit = true)
                     }
                 }
             } else {
@@ -915,7 +915,7 @@ private fun ColumnScope.CartridgeFace(cartridge: CartridgeStatus, face: FaceSize
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 FuseIcon(icon, size = Size.iconXS, tint = c.textFaint)
                                 Spacer(Modifier.width(Space.s))
-                                FText(title, Fuse.type.caption, color = c.textMuted, maxLines = 1)
+                                FText(title, Fuse.type.caption, color = c.textMuted, maxLines = 1, fit = true)
                             }
                         }
                     }

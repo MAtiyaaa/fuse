@@ -367,10 +367,10 @@ internal fun WidgetHeader(icon: ImageVector, label: String, tint: Color = Fuse.c
             FuseIcon(icon, size = Size.iconXS, tint = tint)
             if (text != null) {
                 Spacer(Modifier.width(Space.s - Space.xxs))
-                FText(text, style, color = tint, maxLines = 1)
+                FText(text, style, color = tint, maxLines = 1, fit = true)
             }
             Spacer(Modifier.weight(1f))
-            if (trailing != null) FText(trailing, Fuse.type.numericSmall, color = c.textMuted, maxLines = 1)
+            if (trailing != null) FText(trailing, Fuse.type.numericSmall, color = c.textMuted, maxLines = 1, fit = true)
         }
     }
 }
@@ -583,7 +583,7 @@ private fun ColumnScope.MostPlayed(feed: HomeFeed, room: WidgetRoom) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     FText(g.title, Fuse.type.label, color = if (i == 0) c.text else c.textMuted, maxLines = 1, modifier = Modifier.weight(1f))
                     Spacer(Modifier.width(Space.s))
-                    FText(playtimeText(g.playSeconds), Fuse.type.numericSmall, color = c.textMuted, maxLines = 1)
+                    FText(playtimeText(g.playSeconds), Fuse.type.numericSmall, color = c.textMuted, maxLines = 1, fit = true)
                 }
                 // The leader in the accent, the rest quiet.
                 ProgressBar(g.playSeconds.toFloat() / max, Modifier.fillMaxWidth(), color = if (i == 0) c.accent else c.textFaint, height = Space.xxs)
@@ -660,7 +660,7 @@ private fun ColumnScope.RecentAchievements(feed: HomeFeed, room: WidgetRoom) {
                 Artwork(a.achievement.badgeUrl, Modifier.size(badge).clip(shape), fallback = { BadgeFallback() })
                 if (!room.compact) {
                     Spacer(Modifier.height(Space.xs))
-                    FText(a.achievement.title, Fuse.type.caption, color = c.textMuted, maxLines = 1)
+                    FText(a.achievement.title, Fuse.type.caption, color = c.textMuted, maxLines = 1, fit = true)
                 }
             }
         }
@@ -675,12 +675,12 @@ private fun ColumnScope.AchievementProgress(feed: HomeFeed, room: WidgetRoom) {
     Spacer(Modifier.weight(1f))
     Row(verticalAlignment = Alignment.CenterVertically) {
         ProgressRing(s.progress, size = if (room.compact) Size.thumb else Size.thumbL, stroke = Size.track, color = c.warning) {
-            FText("${(s.progress * 100).toInt()}%", Fuse.type.numericSmall, maxLines = 1)
+            FText("${(s.progress * 100).toInt()}%", Fuse.type.numericSmall, maxLines = 1, fit = true)
         }
         Spacer(Modifier.width(Space.m))
         Column(Modifier.weight(1f)) {
-            FText(s.title, Fuse.type.bodyStrong, maxLines = 1)
-            FText("${s.earned} of ${s.total}", Fuse.type.numericSmall, color = c.textMuted, maxLines = 1)
+            FText(s.title, Fuse.type.bodyStrong, maxLines = 1, fit = true)
+            FText("${s.earned} of ${s.total}", Fuse.type.numericSmall, color = c.textMuted, maxLines = 1, fit = true)
         }
     }
 }
@@ -722,11 +722,11 @@ private fun ColumnScope.CartridgeWidget(status: CartridgeStatus, room: WidgetRoo
     Spacer(Modifier.weight(1f))
     when {
         !status.installed -> {
-            FText("Get games from RomM", Fuse.type.bodyStrong, maxLines = 1)
+            FText("Get games from RomM", Fuse.type.bodyStrong, maxLines = 1, fit = true)
             WidgetCaption("Install Cartridge", c.accent)
         }
         downloading -> {
-            FText(now.title ?: "Downloading", Fuse.type.bodyStrong, maxLines = 1)
+            FText(now.title ?: "Downloading", Fuse.type.bodyStrong, maxLines = 1, fit = true)
             Spacer(Modifier.height(Space.s))
             ProgressBar(now.progress, Modifier.fillMaxWidth())
             if (!room.compact) {
@@ -735,7 +735,7 @@ private fun ColumnScope.CartridgeWidget(status: CartridgeStatus, room: WidgetRoo
             }
         }
         else -> {
-            FText(status.recent.firstOrNull()?.let { "Latest: ${it.title}" } ?: "No downloads", Fuse.type.bodyStrong, maxLines = 1)
+            FText(status.recent.firstOrNull()?.let { "Latest: ${it.title}" } ?: "No downloads", Fuse.type.bodyStrong, maxLines = 1, fit = true)
             // Being connected is the normal state; only its absence is worth a line.
             when (status.connected) {
                 true -> Unit

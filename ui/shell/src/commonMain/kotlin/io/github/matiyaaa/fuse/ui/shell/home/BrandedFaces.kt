@@ -90,9 +90,9 @@ internal fun ContinueFace(feed: HomeFeed, face: FaceSize) {
     Carousel(
         count = games.size,
         peek = false,
-        header = { dots -> CarouselHeader(FuseIcons.CirclePlay, if (compact) "Continue" else "Continue playing", dots, compact = compact) },
+        header = { dots -> CarouselHeader(FuseIcons.CirclePlay, "Continue playing", dots, compact = compact) },
     ) { i, depth ->
-        ContinueSlide(games[i], feed, face, depth)
+        ContinueSlide(games[i], feed, face, depth, underHeader = if (compact) 44.dp else 64.dp)
     }
 }
 
@@ -107,7 +107,7 @@ internal fun ContinueFace(feed: HomeFeed, face: FaceSize) {
  * cover beside a large logo and the time played.
  */
 @Composable
-private fun ContinueSlide(game: GameCard, feed: HomeFeed, face: FaceSize, depth: CarouselDepth?) {
+private fun ContinueSlide(game: GameCard, feed: HomeFeed, face: FaceSize, depth: CarouselDepth?, underHeader: Dp = 0.dp) {
     val system = feed.systems.firstOrNull { it.platform.id == game.platformId }
     val accent = game.accent.toColor()
     val deep = lerp(accent, Color.Black, 0.86f)
@@ -158,8 +158,9 @@ private fun ContinueSlide(game: GameCard, feed: HomeFeed, face: FaceSize, depth:
                 FText(lastPlayed(game), Fuse.type.caption, color = Fuse.colors.onArtMuted, maxLines = 1, align = TextAlign.Center)
             }
             else -> Column(Modifier.fillMaxSize().padding(pad)) {
+                // The name and dots run along the top; the game's system sits just under them.
+                Spacer(Modifier.height((underHeader - pad).coerceAtLeast(0.dp)))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    // The name and dots stay over the top left; the game's system rides with it.
                     Spacer(Modifier.weight(1f))
                     PlatformChip(game, system)
                 }
@@ -174,7 +175,7 @@ private fun ContinueSlide(game: GameCard, feed: HomeFeed, face: FaceSize, depth:
                             if (big && h >= 300.dp) Fuse.type.display else Fuse.type.title,
                         )
                         Spacer(Modifier.height(Space.s))
-                        FText(continueLine(game), Fuse.type.caption, color = Fuse.colors.onArtMuted, maxLines = 1)
+                        FText(continueLine(game), Fuse.type.caption, color = Fuse.colors.onArtMuted, maxLines = 1, fit = true)
                         if (big) {
                             Spacer(Modifier.height(Space.m))
                             ContinuePill(accent)
@@ -256,7 +257,7 @@ internal fun PlatformChip(game: GameCard, system: PlatformCard?) {
         contentAlignment = Alignment.Center,
     ) {
         val logo = system?.art?.logo
-        val short: @Composable () -> Unit = { FText(game.platformShort, Fuse.type.overline, color = c.onArt, maxLines = 1) }
+        val short: @Composable () -> Unit = { FText(game.platformShort, Fuse.type.overline, color = c.onArt, maxLines = 1, fit = true) }
         if (logo != null) {
             Artwork(logo, Modifier.height(14.dp).widthIn(max = 84.dp).width(84.dp), contentScale = ContentScale.Fit, tint = c.onArt, loading = false, fallback = short)
         } else {
@@ -282,7 +283,7 @@ private fun ContinuePill(accent: Color) {
     ) {
         ButtonGlyph(HintButton.CONFIRM, size = 20.dp, color = lerp(accent, Color.Black, 0.6f))
         Spacer(Modifier.width(Space.s))
-        FText("Continue", Fuse.type.label, color = lerp(accent, Color.Black, 0.75f), maxLines = 1)
+        FText("Continue", Fuse.type.label, color = lerp(accent, Color.Black, 0.75f), maxLines = 1, fit = true)
     }
 }
 

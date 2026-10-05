@@ -98,7 +98,7 @@ internal fun SyncStatusFace(face: FaceSize) {
                     StateMark(tone, working, 48.dp)
                     Spacer(Modifier.width(Space.m))
                     Column(Modifier.weight(1f)) {
-                        FText(words.title, Fuse.type.titleSmall, maxLines = 1)
+                        FText(words.title, Fuse.type.titleSmall, maxLines = 1, fit = true)
                         WidgetCaption(words.detail)
                     }
                     profile?.let { p ->
@@ -114,7 +114,7 @@ internal fun SyncStatusFace(face: FaceSize) {
                     StateMark(tone, working, 56.dp)
                     Spacer(Modifier.width(Space.m))
                     Column(Modifier.weight(1f)) {
-                        FText(words.title, Fuse.type.title, maxLines = 1)
+                        FText(words.title, Fuse.type.title, maxLines = 1, fit = true)
                         WidgetCaption(words.detail)
                     }
                 }
@@ -220,7 +220,7 @@ private fun ProfileTag(avatar: String, name: String) {
     ) {
         ProfileAvatar(avatar, 28.dp)
         Spacer(Modifier.width(Space.s))
-        FText(name, Fuse.type.label, maxLines = 1)
+        FText(name, Fuse.type.label, maxLines = 1, fit = true)
         Spacer(Modifier.width(Space.m))
     }
 }
@@ -238,7 +238,7 @@ private fun ColumnScope.RecentLines(lines: List<Pair<String, Long>>) {
                 Spacer(Modifier.width(Space.s))
                 FText(text, Fuse.type.caption, maxLines = 1, modifier = Modifier.weight(1f))
                 Spacer(Modifier.width(Space.s))
-                FText(TimeWords.relative(at, now, offset), Fuse.type.caption, color = c.textFaint, maxLines = 1)
+                FText(TimeWords.relative(at, now, offset), Fuse.type.caption, color = c.textFaint, maxLines = 1, fit = true)
             }
         }
     }
@@ -290,8 +290,8 @@ private fun DeviceChip(d: DeviceInfo, now: Long, avatar: String?, modifier: Modi
             }
         }
         Spacer(Modifier.height(Space.xs))
-        FText(d.name, Fuse.type.label, maxLines = 1)
-        FText(seenText(d, now), Fuse.type.caption.tabular(), color = c.textMuted, maxLines = 1)
+        FText(d.name, Fuse.type.label, maxLines = 1, fit = true)
+        FText(seenText(d, now), Fuse.type.caption.tabular(), color = c.textMuted, maxLines = 1, fit = true)
     }
 }
 
@@ -307,8 +307,8 @@ private fun DeviceRow(d: DeviceInfo, now: Long, avatar: String?) {
         }
         Spacer(Modifier.width(Space.m))
         Column(Modifier.weight(1f)) {
-            FText(d.name, Fuse.type.bodyStrong, maxLines = 1)
-            FText(seenText(d, now), Fuse.type.caption, color = c.textMuted, maxLines = 1)
+            FText(d.name, Fuse.type.bodyStrong, maxLines = 1, fit = true)
+            FText(seenText(d, now), Fuse.type.caption, color = c.textMuted, maxLines = 1, fit = true)
         }
         if (avatar != null) ProfileAvatar(avatar, 26.dp)
     }

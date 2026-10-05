@@ -303,7 +303,14 @@ internal class DefaultFuseStore private constructor(
         ctx.scope.launch {
             val kinds = io.github.matiyaaa.fuse.model.WidgetKind.entries.filter { it.name.startsWith("JELLYFIN_") }.toSet()
             kotlinx.coroutines.flow.combine(
-                prefsState.map { p -> p.jellyfin.enabled && (p.home.widgets.any { it.visible && it.kind in kinds } || p.home.boardWidgets().any { it.kind in kinds }) }.distinctUntilChanged(),
+                // On any of Home's pages, not only the first.
+                prefsState.map { p ->
+                    p.jellyfin.enabled && (
+                        p.home.widgets.any { it.visible && it.kind in kinds } ||
+                            p.home.boardWidgets().any { it.kind in kinds } ||
+                            p.home.pages.any { page -> page.widgets.any { it.kind in kinds } }
+                        )
+                }.distinctUntilChanged(),
                 jellyfin.state.map { it.account != null && !it.authRequired }.distinctUntilChanged(),
                 jellyfin.revision,
             ) { wanted, signedIn, rev -> Triple(wanted, signedIn, rev) }.collectLatest { (wanted, signedIn, _) ->
@@ -312,8 +319,9 @@ internal class DefaultFuseStore private constructor(
                     return@collectLatest
                 }
                 while (true) {
-                    runCatching { jellyfin.widgetFeed() }.onSuccess { mediaFeed.value = it }
-                    delay(MEDIA_FEED_EVERY_MS)
+                    val got = runCatching { jellyfin.widgetFeed() }.onSuccess { mediaFeed.value = it }.getOrNull()
+                    // Nothing came (the server not answering yet): soon again, not in five minutes.
+                    delay(if (got == null || got.isEmpty) MEDIA_FEED_RETRY_MS else MEDIA_FEED_EVERY_MS)
                 }
             }
         }
@@ -400,6 +408,7 @@ internal class DefaultFuseStore private constructor(
 
         /** How often Home's Jellyfin widgets ask again while nothing changed. */
         const val MEDIA_FEED_EVERY_MS = 5 * 60_000L
+        const val MEDIA_FEED_RETRY_MS = 20_000L
 
         /** How long after a scan (or a new key) the automatic fill starts. */
         const val AUTO_FILL_DELAY_MS = 5_000L
