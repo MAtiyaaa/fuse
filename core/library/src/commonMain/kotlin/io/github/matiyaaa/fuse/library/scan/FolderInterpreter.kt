@@ -423,10 +423,13 @@ class FolderInterpreter(
                 walk.list(usrdir.path).orEmpty().any { it.name.equals("EBOOT.BIN", ignoreCase = true) }
             if (hasEboot) return game(folder.path, sfoSerial(folder, children, walk))
         }
-        // PS Vita: sce_sys/param.sfo.
+        // PS Vita and PS4: sce_sys/param.sfo. PS5: sce_sys/param.json beside eboot.bin.
         dir("sce_sys")?.let { sceSys ->
-            val sfo = walk.list(sceSys.path).orEmpty().firstOrNull { it.name.equals("param.sfo", ignoreCase = true) }
+            val inside = walk.list(sceSys.path).orEmpty()
+            val sfo = inside.firstOrNull { it.name.equals("param.sfo", ignoreCase = true) }
             if (sfo != null) return game(folder.path, readSerial(sfo.path))
+            val json = inside.firstOrNull { it.name.equals("param.json", ignoreCase = true) }
+            if (json != null) return game(folder.path, FilenameParser.parse(folder.name, hasExtension = false).tags.serial ?: readSerial(json.path))
         }
         // PSP extracted disc.
         if (dir("psp_game") != null) return game(folder.path)

@@ -58,7 +58,7 @@ object RetroArchCores {
         "colecovision" to listOf("gearcoleco", "bluemsx", "jollycv", "blastem"),
         "intellivision" to listOf("freeintv"),
         "vectrex" to listOf("vecx"),
-    )
+    ) + extraShared
 
     private val ARCADE_TAIL = listOf("mame2010", "mame2003", "mame2000", "hbmame", "fbalpha2012", "geolith", "flycast", "dice", "supermodel")
 
@@ -70,7 +70,7 @@ object RetroArchCores {
             "new-nintendo-3ds" to listOf("citra", "citra2018"),
             "arcade" to listOf("fbneo", "mame2003_plus", "mamearcade") + ARCADE_TAIL,
             "neogeoaes" to listOf("fbneo", "geolith", "mamearcade"),
-        )
+        ) + extraAndroid
         ).mapKeys { PlatformId(it.key) }
 
     /** Linux differences: desktop core names and a few extra cores ES-DE lists only on Linux. */
@@ -88,7 +88,7 @@ object RetroArchCores {
             "atari7800" to listOf("prosystem", "mame"),
             "intellivision" to listOf("freeintv", "mame"),
             "vectrex" to listOf("vecx", "mame"),
-        )
+        ) + extraLinux
         ).mapKeys { PlatformId(it.key) }
 
     /** Windows and macOS builds name their cores as Linux does (ES-DE's windows and macos systems). */
@@ -119,3 +119,86 @@ private val SNES = listOf(
 )
 private val MD = listOf("genesis_plus_gx", "picodrive", "genesis_plus_gx_wide", "blastem", "clownmdemu")
 private val PCE = listOf("mednafen_pce_fast", "mednafen_pce", "mednafen_supergrafx", "geargrafx", "mesen2")
+
+// The systems added in 0.3.0, generated from ES-DE's es_systems.xml (Linux and Android): every
+// RetroArch core ES-DE offers for the system, in its order. Systems ES-DE runs only through
+// MAME's computer drivers on Linux are left out: RetroArch for Android has no such core.
+private val extraShared: Map<String, List<String>> = mapOf(
+    "amiga-cd32" to listOf("puae", "puae2021", "amiberry"),
+    "commodore-cdtv" to listOf("puae", "puae2021", "amiberry"),
+    "amstrad-gx4000" to listOf("cap32", "crocods"),
+    "mac" to listOf("minivmac"),
+    "arduboy" to listOf("arduous", "ardens"),
+    "atari8bit" to listOf("atari800"),
+    "atari-jaguar-cd" to listOf("virtualjaguar"),
+    "bbcmicro" to listOf("b2"),
+    "c-plus-4" to listOf("vice_xplus4"),
+    "vic-20" to listOf("vice_xvic"),
+    "j2me" to listOf("squirreljme"),
+    "msx-turbo" to listOf("bluemsx"),
+    "msx2plus" to listOf("bluemsx", "fmsx"),
+    "palm-os" to listOf("mu"),
+    "pc-8800-series" to listOf("quasi88"),
+    "pc-9800-series" to listOf("np2kai", "nekop2"),
+    "rpg-maker" to listOf("easyrpg"),
+    "satellaview" to listOf("snes9x", "snes9x2010", "snes9x2005_plus", "bsnes", "bsnes_hd_beta", "bsnes-jg", "bsnes_mercury_accuracy", "mesen-s", "mesen2"),
+    "sufami-turbo" to listOf("snes9x", "snes9x2010", "snes9x2005_plus", "bsnes", "bsnes_hd_beta", "bsnes-jg", "bsnes_mercury_accuracy"),
+    "sharp-x68000" to listOf("px68k"),
+    "x1" to listOf("x1"),
+    "thomson-mo5" to listOf("theodore"),
+    "tic-80" to listOf("tic80"),
+    "uzebox" to listOf("uzem"),
+    "wasm-4" to listOf("wasm4"),
+    "win3x" to listOf("dosbox_pure"),
+    "win9x" to listOf("dosbox_pure"),
+    "z-machine" to listOf("mojozork"),
+    "zx81" to listOf("81"),
+    "multivision" to listOf("gearsystem"),
+    "spectravideo" to listOf("bluemsx"),
+    "lowresnx" to listOf("lowresnx"),
+    "lutro" to listOf("lutro"),
+    "chailove" to listOf("chailove"),
+    "vircon32" to listOf("vircon32"),
+)
+
+private val extraLinux: Map<String, List<String>> = mapOf(
+    "64dd" to listOf("parallel_n64", "mupen64plus_next"),
+    "appleii" to listOf("applewin", "mame"),
+    "arcadia-2001" to listOf("amiarcadia", "mame"),
+    "creativision" to listOf("jollycv", "mame"),
+    "doom" to listOf("prboom", "boom3", "boom3_xp"),
+    "fairchild-channel-f" to listOf("freechaf", "mame"),
+    "g-and-w" to listOf("mame", "gw"),
+    "handheld-electronic-lcd" to listOf("mame", "gw"),
+    "mega-duck-slash-cougar-boy" to listOf("sameduck", "mame"),
+    "model2" to listOf("mame"),
+    "model3" to listOf("supermodel", "mame"),
+    "stv" to listOf("kronos", "mame"),
+    "odyssey-2" to listOf("o2em", "mame"),
+    "videopac-g7400" to listOf("o2em", "mame"),
+    "philips-cd-i" to listOf("same_cdi", "cdi2015"),
+    "supervision" to listOf("potator", "mame"),
+    "quake" to listOf("tyrquake", "vitaquake2", "vitaquake2-rogue", "vitaquake2-xatrix", "vitaquake2-zaero", "vitaquake3"),
+    "laserdisc" to listOf("mame", "dirksimple"),
+)
+
+private val extraAndroid: Map<String, List<String>> = mapOf(
+    "64dd" to listOf("mupen64plus_next_gles3", "parallel_n64"),
+    "appleii" to listOf("applewin"),
+    "arcadia-2001" to listOf("amiarcadia"),
+    "creativision" to listOf("jollycv"),
+    "doom" to listOf("prboom", "boom3"),
+    "fairchild-channel-f" to listOf("freechaf"),
+    "g-and-w" to listOf("mamemess", "gw"),
+    "handheld-electronic-lcd" to listOf("mamemess", "gw"),
+    "mega-duck-slash-cougar-boy" to listOf("sameduck"),
+    "model2" to listOf("mamearcade"),
+    "model3" to listOf("supermodel", "mamearcade"),
+    "stv" to listOf("mamearcade"),
+    "odyssey-2" to listOf("o2em"),
+    "videopac-g7400" to listOf("o2em"),
+    "philips-cd-i" to listOf("same_cdi"),
+    "supervision" to listOf("potator"),
+    "quake" to listOf("tyrquake", "vitaquake2", "vitaquake2-rogue", "vitaquake2-xatrix", "vitaquake2-zaero"),
+    "laserdisc" to listOf("dirksimple"),
+)

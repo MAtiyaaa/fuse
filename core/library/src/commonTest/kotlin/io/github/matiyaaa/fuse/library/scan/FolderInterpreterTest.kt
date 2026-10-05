@@ -49,6 +49,27 @@ class FolderInterpreterTest {
         assertTrue(result.complete)
     }
 
+    @Test
+    fun ps5DumpFolderIsOneGame() = runTest {
+        val game = "/ROMs/ps5/Astro Bot [PPSA01234]"
+        fs.file("$game/eboot.bin", size = 5_000_000)
+        fs.file("$game/sce_sys/param.json", content = "{\"titleId\": \"PPSA01234\"}")
+        fs.file("$game/sce_sys/icon0.png", size = 1000)
+
+        val single = scan("ps5", "/ROMs/ps5").games.single()
+        assertEquals(FolderInterpretation.FOLDER_IS_GAME, single.interpretation)
+        assertEquals(game, single.path)
+    }
+
+    @Test
+    fun newSystemsReadTheirOwnFiles() = runTest {
+        fs.file("/ROMs/tic80/Into the Dark.tic", size = 100)
+        fs.file("/ROMs/vic20/Gridrunner.prg", size = 100)
+        fs.file("/ROMs/vic20/notes.txt", size = 100)
+        assertEquals(listOf("Into the Dark"), scan("tic-80", "/ROMs/tic80").games.map { it.title })
+        assertEquals(listOf("Gridrunner"), scan("vic-20", "/ROMs/vic20").games.map { it.title })
+    }
+
     // Acceptance example 2: a Switch folder with base, update and DLC folders is one game.
     @Test
     fun switchFolderWithBaseUpdateAndDlcIsOneGame() = runTest {
