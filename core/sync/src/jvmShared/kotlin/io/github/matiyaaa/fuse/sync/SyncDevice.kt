@@ -25,8 +25,18 @@ data class LocalSlot(
     val root: File,
     val files: List<LocalFile>,
     val available: Boolean = true,
+    /** Where each named file goes here, for saves whose files are named per device (`save.srm` is `Chrono Trigger.srm`). */
+    val targets: Map<String, File> = emptyMap(),
 ) {
     val key: String get() = "${game.id}|${kind.name}"
+
+    /** Where the file named [name] goes: its own target, else inside [root] (never outside it). */
+    fun target(name: String): File? {
+        targets[name]?.let { return it }
+        if (!SavePath.isSafe(name)) return null
+        val f = File(root, name)
+        return f.takeIf { it.canonicalPath.startsWith(root.canonicalPath + File.separator) }
+    }
 }
 
 /** Why a launch would wait, and what the person can choose. */
@@ -42,6 +52,13 @@ sealed interface PrepareResult {
 
     /** The save's drive isn't here: nothing was touched. */
     data object Unavailable : PrepareResult
+
+    /**
+     * The newest save is in a format this emulator can't read (a state from another emulator, or a
+     * save from an emulator that keeps them differently): nothing was touched, and it stays on the
+     * host for the device that can use it.
+     */
+    data class Incompatible(val revision: SaveRevision) : PrepareResult
 
     /**
      * This device and another both played since they last agreed. [local] is what is here (not
@@ -169,6 +186,7 @@ class SyncDevice(
         } catch (e: SyncException) {
             if (e.code == "offline") return PrepareResult.Offline else throw e
         } ?: return if (client == null) PrepareResult.Offline else PrepareResult.Ready
+        if (!SaveSlotFormats.compatible(head.manifest.format, slot.format)) return PrepareResult.Incompatible(head)
         val (manifest, _) = fingerprintOf(slot)
         val slotState = state.slots[slot.key] ?: SlotState()
         val localChanged = manifest.files.isNotEmpty() && manifest.fingerprint != slotState.fingerprint
@@ -237,9 +255,7 @@ class SyncDevice(
             val staged = ArrayList<Pair<File, File>>()
             try {
                 for (f in revision.manifest.files) {
-                    require(SavePath.isSafe(f.path)) { "Unsafe path in a save" }
-                    val target = File(slot.root, f.path)
-                    require(target.canonicalPath.startsWith(slot.root.canonicalPath + File.separator)) { "Path outside the save" }
+                    val target = slot.target(f.path) ?: throw IntegrityException("A file in the save has nowhere safe to go: ${f.path}")
                     target.parentFile.mkdirs()
                     val tmp = File(target.parentFile, ".${target.name}.fuse-sync")
                     store.fileOf(f.hash).copyTo(tmp, overwrite = true)
@@ -329,4 +345,43 @@ class SyncDevice(
             persist()
         }
     }
+}
+
+/** Turns what a save adapter found into a slot this device can read and write. */
+object Slots {
+    fun of(game: GameKey, spot: SaveSpot): LocalSlot {
+        val files = ArrayList<LocalFile>()
+        val targets = LinkedHashMap<String, File>()
+        for (f in spot.files) {
+            val file = File(f.path)
+            targets[f.name] = file
+            if (file.isFile) files += LocalFile(f.name, file)
+        }
+        val root = spot.root?.let(::File) ?: spot.files.firstOrNull()?.let { File(it.path).parentFile } ?: File(".")
+        if (spot.root != null) {
+            // Folder saves: every file in this game's folders, named by its path inside the root.
+            val folders = spot.folders.ifEmpty { listOf("") }
+            for (folder in folders) {
+                val dir = if (folder.isEmpty()) root else File(root, folder)
+                if (!dir.isDirectory) continue
+                dir.walkTopDown().filter { it.isFile && !it.name.startsWith(".") }.forEach { f ->
+                    val name = f.relativeTo(root).path.replace(File.separatorChar, '/')
+                    if (SavePath.isSafe(name)) files += LocalFile(name, f)
+                }
+            }
+        }
+        return LocalSlot(game, spot.kind, spot.format, root, files.sortedBy { it.path }, spot.available, targets)
+    }
+}
+
+/** The device's own files, for save adapters. */
+class FileSaveEnvironment(override val host: String, override val home: String = System.getProperty("user.home") ?: "") : SaveEnvironment {
+    override fun exists(path: String) = File(path).exists()
+    override fun isDirectory(path: String) = File(path).isDirectory
+    override fun list(path: String): List<String> = File(path).list()?.sorted().orEmpty()
+    override fun readText(path: String, limit: Int): String? = runCatching {
+        val f = File(path)
+        if (!f.isFile || f.length() > limit) null else f.readText()
+    }.getOrNull()
+    override fun env(name: String): String? = System.getenv(name)
 }
