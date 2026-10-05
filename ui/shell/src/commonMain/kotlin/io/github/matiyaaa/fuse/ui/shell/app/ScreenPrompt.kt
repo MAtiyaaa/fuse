@@ -85,10 +85,14 @@ data class ScreenPromptSpec(
     val fitArt: Boolean = false,
     /** A game's own art for the header: its box art, as its tile shows it. */
     val cover: io.github.matiyaaa.fuse.ui.shell.store.Art? = null,
-)
+    /** The line under the ticks: how to change it later. */
+    val footnote: String = "Leave both unticked for just this time. Settings, Display changes it later.",
+) {
+    /** The ticks offered: a blank [groupLabel] leaves only the one. */
+    val memories: List<ScreenMemory> get() = if (groupLabel.isBlank()) listOf(ScreenMemory.ITEM) else listOf(ScreenMemory.ITEM, ScreenMemory.GROUP)
+}
 
 private val screens = listOf(LaunchDisplay.PRIMARY, LaunchDisplay.SECONDARY)
-private val memories = listOf(ScreenMemory.ITEM, ScreenMemory.GROUP)
 
 @Composable
 internal fun ScreenPromptOverlay(app: AppState) {
@@ -101,6 +105,7 @@ internal fun ScreenPromptOverlay(app: AppState) {
     var tick by remember(spec) { mutableIntStateOf(0) }
     var memory by remember(spec) { mutableStateOf(ScreenMemory.ONCE) }
     LaunchedEffect(spec != null) { if (spec != null) app.platform.sounds.play(SoundCue.OPEN) }
+    val memories = (spec ?: shown)?.memories ?: listOf(ScreenMemory.ITEM, ScreenMemory.GROUP)
 
     fun pick(display: LaunchDisplay) {
         val s = spec ?: return
@@ -121,7 +126,7 @@ internal fun ScreenPromptOverlay(app: AppState) {
                 }
                 NavAction.RIGHT -> when {
                     row == 0 && screen < 1 -> { screen = 1; NavResult.MOVED }
-                    row == 1 && tick < 1 -> { tick = 1; NavResult.MOVED }
+                    row == 1 && tick < memories.size - 1 -> { tick = 1; NavResult.MOVED }
                     else -> NavResult.BLOCKED
                 }
                 NavAction.DOWN -> if (row == 0) { row = 1; NavResult.MOVED } else NavResult.BLOCKED
@@ -177,7 +182,7 @@ internal fun ScreenPromptOverlay(app: AppState) {
                     }
                     Spacer(Modifier.height(Space.s))
                     FText(
-                        "Leave both unticked for just this time. Settings, Display changes it later.",
+                        s.footnote,
                         Fuse.type.caption,
                         color = Fuse.colors.textFaint,
                         maxLines = 2,

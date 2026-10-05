@@ -5,14 +5,14 @@ import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.descriptors.StructureKind
 import kotlinx.serialization.encoding.CompositeDecoder
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.intOrNull
-import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 
 /**
  * Reads and writes [AppSettings] so that no version of Fuse destroys another's settings:
@@ -29,7 +29,7 @@ internal object AppSettingsCodec {
     }
 
     /** Step i upgrades a version i + 1 document to version i + 2. */
-    private val steps: List<(JsonObject) -> JsonObject> = listOf(::toVersion2)
+    private val steps: List<(JsonObject) -> JsonObject> = listOf(::toVersion2, ::toVersion3)
 
     /** The 0.0.1 tab order; a document still using it gets the new default order. */
     private val version1Tabs = listOf("HOME", "LIBRARY", "SYSTEMS", "APPS", "CARTRIDGE")
@@ -51,6 +51,22 @@ internal object AppSettingsCodec {
             if ((input["nintendoLayout"] as? JsonPrimitive)?.booleanOrNull == true) {
                 out["input"] = JsonObject(input + ("nintendoLayout" to JsonPrimitive(false)) + ("glyphs" to JsonPrimitive("NINTENDO")))
             }
+        }
+        return JsonObject(out)
+    }
+
+    /**
+     * 0.3.1: menu music shuffles by default, so it is turned on once for everyone, except where
+     * the music is the person's own song (which plays on its own). Films on a device with two
+     * screens ask which screen by default; the old default (the main screen) becomes asking.
+     */
+    private fun toVersion3(obj: JsonObject): JsonObject {
+        val out = LinkedHashMap(obj)
+        (obj["music"] as? JsonObject)?.let { music ->
+            if ((music["track"] as? JsonPrimitive)?.contentOrNull != "file") out["music"] = JsonObject(music + ("shuffle" to JsonPrimitive(true)))
+        }
+        (obj["jellyfin"] as? JsonObject)?.let { j ->
+            if ((j["playOn"] as? JsonPrimitive)?.contentOrNull == "MAIN") out["jellyfin"] = JsonObject(j + ("playOn" to JsonPrimitive("ASK")))
         }
         return JsonObject(out)
     }

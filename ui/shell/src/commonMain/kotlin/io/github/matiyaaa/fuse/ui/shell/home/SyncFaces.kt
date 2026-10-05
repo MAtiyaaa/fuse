@@ -146,7 +146,11 @@ internal fun SyncDevicesFace(face: FaceSize) {
         val now = kotlin.time.Clock.System.now().toEpochMilliseconds()
         val linked = devices.filterNot { it.revoked }.sortedByDescending { it.lastSeen }
         val online = linked.count { now - it.lastSeen < ONLINE_MS }
-        WidgetHeader(FuseIcons.MonitorSmartphone, "Your devices", short = "Devices", trailing = if (linked.isEmpty()) null else "$online of ${linked.size} on")
+        WidgetHeader(FuseIcons.MonitorSmartphone, "Your devices", short = "Devices", trailing = when {
+            linked.isEmpty() -> null
+            online > 0 -> "$online online"
+            else -> "${linked.size}"
+        })
         if (linked.isEmpty()) {
             Spacer(Modifier.weight(1f))
             WidgetCaption("Connect another device to see it here")

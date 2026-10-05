@@ -154,6 +154,6 @@ data class MusicPrefs(
     val songPath: String? = null,
     val songName: String? = null,
     val track: String = io.github.matiyaaa.fuse.ui.shell.music.BundledMusic.MENU_DEFAULT,
-    /** Every bundled song in a random order, a new one each time a song ends, instead of looping [track]. */
-    val shuffle: Boolean = false,
+    /** Every bundled song in a random order, a new one each time a song ends, instead of looping [track] (the default). */
+    val shuffle: Boolean = true,
 )

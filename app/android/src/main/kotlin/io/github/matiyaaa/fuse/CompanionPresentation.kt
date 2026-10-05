@@ -7,6 +7,8 @@ import android.graphics.drawable.ColorDrawable
 import android.os.Bundle
 import android.os.SystemClock
 import android.view.Display
+import android.view.InputDevice
+import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
@@ -47,9 +49,12 @@ import io.github.matiyaaa.fuse.ui.shell.app.CompanionApp
  * It stays while a game or an app Fuse opened is in front ([away]). It has its own lifecycle for
  * that, since the main activity's stops with it and would freeze what it shows.
  *
- * Touch only: the window is not focusable, so the controller stays with the main screen and the
- * game. Back on this screen does nothing (see [SecondScreenTouch]); [CompanionScreens] decides when
- * it shows.
+ * The controller: while Fuse is in front this window can take it, because a two-screen handheld
+ * may send it here (the AYN Thor's Focus Mode follows the screen last touched, or is locked to one
+ * screen), and everything it receives goes on to Fuse's menus, wherever they are drawn. While a
+ * game or app Fuse opened is in front ([setAway]) it can't, so the controller stays with the game.
+ * Back from this screen's own navigation does nothing (see [SecondScreenTouch]); [CompanionScreens]
+ * decides when it shows.
  */
 internal class CompanionPresentation(
     private val owner: ComponentActivity,
@@ -73,8 +78,10 @@ internal class CompanionPresentation(
         val window = window ?: return
         if (away) {
             window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            window.addFlags(WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE)
         } else {
             window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            window.clearFlags(WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE)
         }
     }
 
@@ -85,10 +92,7 @@ internal class CompanionPresentation(
         val window = window ?: return
         // Touches next to it (the second screen's own navigation bar) are reported too, so a Back
         // pressed down there is known to come from this screen ([SecondScreenTouch]).
-        window.addFlags(
-            WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH,
-        )
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH)
         app.platformUi.quick.attachSecond(window)
         window.setBackgroundDrawable(ColorDrawable(INK_ARGB.toInt()))
         // Compose finds its lifecycle, saved state and back handling through the view tree. They
@@ -124,6 +128,35 @@ internal class CompanionPresentation(
     override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
         SecondScreenTouch.touched()
         return super.dispatchTouchEvent(ev)
+    }
+
+    /**
+     * The controller (or a keyboard) sent to this screen goes on to Fuse's menus, as if it had gone
+     * to the main screen. Back from this screen's own navigation bar or gesture does nothing.
+     */
+    @SuppressLint("RestrictedApi") // Lint false positive: Dialog.dispatchKeyEvent is public API.
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        val controller = event.isFromSource(InputDevice.SOURCE_GAMEPAD) || event.isFromSource(InputDevice.SOURCE_JOYSTICK)
+        if (event.keyCode == KeyEvent.KEYCODE_BACK && !controller) return true
+        if (controller) SecondScreenFocus.arrived()
+        return app.activities.main?.forwardKey(event) == true || super.dispatchKeyEvent(event)
+    }
+
+    override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean =
+        app.activities.main?.forwardMotion(event) == true || super.dispatchGenericMotionEvent(event)
+}
+
+/**
+ * Says once a session, in Settings, Second screen status, that the controller reached Fuse through
+ * the second screen (a two-screen handheld sent it there), so it is clear why it still works.
+ */
+internal object SecondScreenFocus {
+    @Volatile private var said = false
+
+    fun arrived() {
+        if (said) return
+        said = true
+        SecondScreenLog.add("The controller was sent to the second screen; Fuse took it there and passed it to its menus")
     }
 }
 

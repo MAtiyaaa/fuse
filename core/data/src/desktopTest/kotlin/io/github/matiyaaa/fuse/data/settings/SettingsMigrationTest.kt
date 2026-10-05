@@ -57,4 +57,20 @@ class SettingsMigrationTest {
         assertFalse(again.library.cleanDisplayNames)
         assertTrue(again.library.cleanedExistingNames)
     }
+
+    @Test
+    fun menuMusicShufflesAndFilmsAskWhichScreenFromVersion3() {
+        val v2 = """{"version":2,"music":{"track":"menu","shuffle":false},"jellyfin":{"playOn":"MAIN"}}"""
+        val s = AppSettingsCodec.decode(v2)
+        assertTrue(s.music.shuffle)
+        assertEquals("ASK", s.jellyfin.playOn)
+        // The person's own song plays on its own, and a screen chosen on purpose stays.
+        val own = AppSettingsCodec.decode("""{"version":2,"music":{"track":"file","shuffle":false},"jellyfin":{"playOn":"SECOND"}}""")
+        assertFalse(own.music.shuffle)
+        assertEquals("SECOND", own.jellyfin.playOn)
+        // Written by this version, choices made since stay as they are.
+        val now = AppSettingsCodec.decode("""{"version":3,"music":{"shuffle":false},"jellyfin":{"playOn":"MAIN"}}""")
+        assertFalse(now.music.shuffle)
+        assertEquals("MAIN", now.jellyfin.playOn)
+    }
 }

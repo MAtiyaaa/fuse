@@ -51,7 +51,7 @@ data class AppSettings(
     val sync: SyncSettings = SyncSettings(),
 ) {
     companion object {
-        const val CURRENT_VERSION = 2
+        const val CURRENT_VERSION = 3
     }
 }
 
@@ -133,11 +133,11 @@ data class JellyfinSettings(
     /** The other screen while playing: "REMOTE" (controls and art) or "OFF". */
     val playerCompanion: String = "REMOTE",
     /**
-     * On a device with two screens, where the picture goes: "MAIN" (the main screen, the one above)
-     * or "SECOND" (the second screen, the touch screen below). The other screen is its remote, and
-     * the menus stay free to browse.
+     * On a device with two screens, where the picture goes: "ASK" (each time, the default), "MAIN"
+     * (the main screen, the one above) or "SECOND" (the second screen, the touch screen below). The
+     * other screen is its remote, and the menus stay free to browse.
      */
-    val playOn: String = "MAIN",
+    val playOn: String = "ASK",
     /** The other screen while browsing: "DETAILS", "MINIMAL" or "OFF". */
     val browsingCompanion: String = "DETAILS",
 )
@@ -397,8 +397,8 @@ data class MusicSettings(
      * were bundled: the user's own song if there is one, else the default bundled song.
      */
     val track: String? = null,
-    /** Plays Fuse's songs one after another in a random order instead of looping [track]. */
-    val shuffle: Boolean = false,
+    /** Plays Fuse's songs one after another in a random order instead of looping [track] (the default). */
+    val shuffle: Boolean = true,
 )
 
 @Serializable

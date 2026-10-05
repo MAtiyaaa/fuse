@@ -1,15 +1,13 @@
 package io.github.matiyaaa.fuse.ui.shell.jellyfin
 
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import io.github.matiyaaa.fuse.ui.designsystem.components.Hint
-import io.github.matiyaaa.fuse.ui.designsystem.icons.HintButton
-import io.github.matiyaaa.fuse.ui.fuseline.PageEffect
+import androidx.compose.ui.graphics.toArgb
 import io.github.matiyaaa.fuse.data.settings.JellyfinSettings
 import io.github.matiyaaa.fuse.jellyfin.JellyfinArt
 import io.github.matiyaaa.fuse.jellyfin.JellyfinQuality
@@ -17,11 +15,15 @@ import io.github.matiyaaa.fuse.jellyfin.JellyfinResolver
 import io.github.matiyaaa.fuse.jellyfin.JellyfinService
 import io.github.matiyaaa.fuse.jellyfin.MediaItem
 import io.github.matiyaaa.fuse.jellyfin.MediaType
+import io.github.matiyaaa.fuse.ui.designsystem.components.Hint
+import io.github.matiyaaa.fuse.ui.designsystem.icons.HintButton
 import io.github.matiyaaa.fuse.ui.designsystem.media.HeroSource
+import io.github.matiyaaa.fuse.ui.fuseline.PageEffect
 import io.github.matiyaaa.fuse.ui.player.FusePlayer
 import io.github.matiyaaa.fuse.ui.player.PlayerScreen
 import io.github.matiyaaa.fuse.ui.player.PlayerSettings
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
+import io.github.matiyaaa.fuse.ui.shell.app.askScreen
 import kotlinx.coroutines.launch
 
 /** Jellyfin, when this build has it. */
@@ -90,18 +92,41 @@ internal fun AppState.play(item: MediaItem, fromStart: Boolean = false, queue: L
             toasts.show("Nothing to play here yet")
             return@launch
         }
-        val session = FusePlayer.session
         val j = store.prefs.value.jellyfin
-        session.settings = j.toPlayerSettings()
-        // The picture goes to the screen asked for (Films play on), where there is another screen.
         val placement = io.github.matiyaaa.fuse.ui.player.PlayerPlacement
-        placement.withMenus = !placement.canSwap || target.type == MediaType.SONG || menusOnSecondScreen == (j.playOn == "SECOND")
-        val start = if (fromStart) 0 else target.resumeMs
-        val list = (if (queue.isEmpty()) listOf(target) else queue).map { it.toPlayItem() }
-        session.start(target.toPlayItem(), resolver, start, list)
-        if (j.rememberSpeed && j.speed != 1f) session.changeSpeed(j.speed)
-        playerOpen = true
+        val video = target.type != MediaType.SONG
+        // With two screens and no screen chosen for good: which one, asked as games ask.
+        if (video && placement.canSwap && j.playOn != "MAIN" && j.playOn != "SECOND") {
+            val accent = accentOf(target.seriesName ?: target.name).toArgb().toLong() and 0xFFFFFFFFL
+            askScreen(
+                "Watch", io.github.matiyaaa.fuse.ui.shell.home.mediaTitle(target),
+                (target.backdrop ?: target.thumb ?: target.poster)?.sized(WIDE_WIDTH)?.let { art -> jellyfin?.imageUrl(art) },
+                accent, "Always on this screen", "",
+                footnote = "Leave it unticked to be asked each time. Settings, Addons, Jellyfin changes it later. While it plays, Y moves it to the other screen.",
+            ) { display, memory ->
+                val second = display == io.github.matiyaaa.fuse.model.LaunchDisplay.SECONDARY
+                if (memory != io.github.matiyaaa.fuse.ui.shell.app.ScreenMemory.ONCE) {
+                    store.updatePrefs { it.copy(jellyfin = it.jellyfin.copy(playOn = if (second) "SECOND" else "MAIN")) }
+                }
+                startPlaying(target, queue, fromStart, resolver, withMenus = menusOnSecondScreen == second)
+            }
+            return@launch
+        }
+        // The picture goes to the screen chosen (Films play on), where there is another screen.
+        startPlaying(target, queue, fromStart, resolver, withMenus = !placement.canSwap || !video || menusOnSecondScreen == (j.playOn == "SECOND"))
     }
+}
+
+private fun AppState.startPlaying(target: MediaItem, queue: List<MediaItem>, fromStart: Boolean, resolver: io.github.matiyaaa.fuse.playback.PlaybackResolver, withMenus: Boolean) {
+    val session = FusePlayer.session
+    val j = store.prefs.value.jellyfin
+    session.settings = j.toPlayerSettings()
+    io.github.matiyaaa.fuse.ui.player.PlayerPlacement.withMenus = withMenus
+    val start = if (fromStart) 0 else target.resumeMs
+    val list = (if (queue.isEmpty()) listOf(target) else queue).map { it.toPlayItem() }
+    session.start(target.toPlayItem(), resolver, start, list)
+    if (j.rememberSpeed && j.speed != 1f) session.changeSpeed(j.speed)
+    playerOpen = true
 }
 
 /**

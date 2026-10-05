@@ -145,8 +145,8 @@ private fun GameSlide(game: GameCard, line: String, system: PlatformCard?, face:
                 }
             }
         }
-        // The system it runs on, top right, where the card has the width for it.
-        if (w >= 260.dp && room != Room.TINY) {
+        // The system it runs on, top right, where the card has the room for it beside a cover.
+        if (w >= 260.dp && room != Room.TINY && !(coverBeside && room == Room.SHORT)) {
             Box(Modifier.align(Alignment.TopEnd).padding(pad)) { PlatformChip(game, system) }
         }
     }
@@ -190,8 +190,8 @@ internal fun SystemsCarousel(feed: HomeFeed, face: FaceSize) {
         peek = true,
         cardShape = cardShape(),
         header = { dots -> CarouselHeader(FuseIcons.Chip, WidgetKind.SYSTEMS.title(), dots, compact = compact) },
-    ) { i, depth ->
-        SystemSlide(all[i], face, depth)
+    ) { i, _ ->
+        SystemSlide(all[i], face)
     }
 }
 
@@ -203,11 +203,12 @@ internal fun systemsInOrder(feed: HomeFeed): List<PlatformCard> {
 }
 
 @Composable
-private fun SystemSlide(s: PlatformCard, face: FaceSize, depth: CarouselDepth) {
+private fun SystemSlide(s: PlatformCard, face: FaceSize) {
     val c = Fuse.colors
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val room = roomOf(maxWidth, maxHeight)
-        Box(Modifier.fillMaxSize().carouselParallax(depth)) { SystemCardArt(s, large = room == Room.BIG) }
+        // The system's art carries its own name and count, so it moves with its card, unzoomed.
+        Box(Modifier.fillMaxSize()) { SystemCardArt(s, large = room == Room.BIG) }
         // Square art says nothing itself: its name and count go over a soft floor.
         if ((s.art.square ?: s.art.icon) != null && face != FaceSize.SMALL) {
             Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.5f to Color.Transparent, 1f to c.artScrim)))

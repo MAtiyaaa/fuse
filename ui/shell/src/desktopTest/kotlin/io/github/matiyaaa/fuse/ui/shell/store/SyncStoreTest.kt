@@ -10,9 +10,6 @@ import io.github.matiyaaa.fuse.sync.NoHostLifetime
 import io.github.matiyaaa.fuse.sync.SyncService
 import io.github.matiyaaa.fuse.sync.SyncStatus
 import io.github.matiyaaa.fuse.ui.designsystem.theme.ThemePresets
-import java.io.File
-import java.net.ServerSocket
-import java.nio.file.Files
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -27,6 +24,9 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import java.io.File
+import java.net.ServerSocket
+import java.nio.file.Files
 
 /**
  * Fuse Sync through the app's own store: a computer hosting and a handheld connected to it, each
@@ -121,19 +121,27 @@ class SyncStoreTest {
                 deck.store.collections.membership(deckWars.id).isNotEmpty()
         }
 
-        // A second person on the handheld: their library is their own, switched in place.
+        // Mo arranges the quick menu on the handheld.
+        deck.store.updatePrefs { it.copy(quickMenu = listOf("WIFI:2", "CLOCK:1")) }
+        deck.sync.syncNow().getOrThrow()
+
+        // A second person on the handheld: their library is their own, switched in place, and they
+        // start with Fuse's own Home, quick menu and theme, never Mo's.
         val sam = pc.sync.createProfile("Sam", "rocket", null).getOrThrow()
         deck.sync.switchTo(sam.id).getOrThrow()
         eventually("Sam starts fresh") {
             deck.services.data.games.summary(deckWars.id)?.favorite == false &&
-                deck.store.collections.collections.value.none { it.name == "Strategy" }
+                deck.store.collections.collections.value.none { it.name == "Strategy" } &&
+                deck.store.prefs.value.quickMenu.isEmpty() &&
+                deck.store.prefs.value.themeId == "fuse"
         }
         // Back to Mo: all of it returns.
         deck.sync.switchTo(mo.id).getOrThrow()
         eventually("Mo's library is back") {
             deck.services.data.games.summary(deckWars.id)?.favorite == true &&
                 deck.services.data.games.summary(deckWars.id)?.titles?.custom == "Wars!" &&
-                deck.store.prefs.value.themeId == deckTheme
+                deck.store.prefs.value.themeId == deckTheme &&
+                deck.store.prefs.value.quickMenu == listOf("WIFI:2", "CLOCK:1")
         }
 
         // Home kept as this device's own: a change here doesn't reach the PC; back to the profile's brings Mo's.

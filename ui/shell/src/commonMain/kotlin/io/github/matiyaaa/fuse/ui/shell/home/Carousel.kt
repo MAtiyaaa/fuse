@@ -271,10 +271,10 @@ internal fun Carousel(
                                     transformOrigin = TransformOrigin(0f, 0.5f)
                                 }
                             }
-                            if (cardShape != null) {
-                                shape = cardShape
-                                clip = true
-                            }
+                            // Each card holds its own picture: the parallax draws art a little
+                            // larger than the card, which must never spill onto its neighbour.
+                            shape = cardShape ?: androidx.compose.ui.graphics.RectangleShape
+                            clip = true
                         }
                         .drawWithContent {
                             drawContent()
@@ -360,7 +360,7 @@ internal fun BoxScope.CarouselHeader(icon: ImageVector, label: String, dots: @Co
     val c = Fuse.colors
     Box(
         Modifier.fillMaxWidth().height(if (compact) 44.dp else 64.dp)
-            .background(Brush.verticalGradient(0f to Color.Black.copy(alpha = 0.42f), 1f to Color.Transparent)),
+            .background(Brush.verticalGradient(0f to Color.Black.copy(alpha = 0.34f), 1f to Color.Transparent)),
     )
     Row(Modifier.padding(if (compact) Space.m else Space.l), verticalAlignment = Alignment.CenterVertically) {
         FuseIcon(icon, size = Size.iconXS, tint = c.onArtMuted)
