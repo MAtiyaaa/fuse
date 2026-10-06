@@ -27,6 +27,7 @@ import kotlin.test.assertTrue
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.JsonArray
@@ -50,11 +51,15 @@ private class FakeServer {
 
     /** Hosts that answer only after this many milliseconds. */
     val slow = mutableMapOf<String, Long>()
+
+    /** Hosts that answer only once another host has been asked (or two seconds have passed). */
+    val after = mutableMapOf<String, String>()
     var routes: (HttpRequestData) -> Pair<Int, String>? = { null }
 
     val http = HttpClient(MockEngine { r ->
         asked.update { it + r }
         slow[r.url.host]?.let { kotlinx.coroutines.delay(it) }
+        after[r.url.host]?.let { other -> kotlinx.coroutines.withTimeoutOrNull(2_000) { asked.first { list -> list.any { it.url.host == other } } } }
         if (r.url.host in down) throw IllegalStateException("Connection refused")
         val path = r.url.encodedPath
         val answer = routes(r) ?: when {
@@ -191,9 +196,9 @@ class JellyfinTest {
         val scope = CoroutineScope(SupervisorJob())
         val s = service(server, MemorySecrets(), scope)
         s.configure(true, JellyfinConnection(ConnectionMode.AUTO, localAddress = "192.168.1.5:8096", remoteAddress = "media.example.com"))
-        // Home takes a moment to answer, so the way in from outside is surely asked meanwhile; the
-        // answers that lose are called off, and one called off at once might never be seen here.
-        server.slow["192.168.1.5"] = 200
+        // Home answers only once the way in from outside has been asked too: asked at once, both are
+        // seen whatever the machine's speed; asked one after the other, outside never is in time.
+        server.after["192.168.1.5"] = "media.example.com"
         kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { s.reconnect(force = true) }
         assertEquals(Route.LOCAL, s.state.value.route)
         // Both were asked in the same look, not one after the other's timeout.
