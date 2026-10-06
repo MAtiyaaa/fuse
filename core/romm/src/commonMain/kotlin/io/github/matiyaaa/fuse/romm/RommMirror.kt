@@ -83,7 +83,8 @@ class RommMirror(
                 if (!incremental) putCursor(server, offset + page.items.size, started)
             }
             offset += page.items.size
-            progress(MirrorProgress("Games", offset, total))
+            // Bringing in what changed counts nothing worth showing ("1 of 1"); the whole library does.
+            progress(if (incremental) MirrorProgress("Changes", offset, null) else MirrorProgress("Games", offset, total))
             if (page.items.size < size || (total != null && offset >= total)) break
         }
         // Games that went: the server's own list of ids where it has one, else (a full read) anything not seen.

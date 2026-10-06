@@ -423,13 +423,13 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
                 // A game not here yet has only RomM's options: what to download.
                 if (remote != null) {
                     app.openContextMenu(io.github.matiyaaa.fuse.ui.shell.app.ContextMenuSpec(
-                        title = game.displayTitle, subtitle = d.platform.name, art = d.art.boxart, accent = d.platform.accent,
+                        title = game.displayTitle, subtitle = d.platform.name, art = d.art.tile, accent = d.platform.accent,
                         actions = listOf(
                             io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction("r.dl", "Download", FuseIcons.Download, onSelect = { app.closeOverlays(); app.rommDownload(remote, game.displayTitle) }),
                             io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction("r.all", "Download Everything", FuseIcons.CloudDownload, detail = "With its updates and DLC, where RomM has them", onSelect = {
                                 app.closeOverlays(); app.rommDownload(remote, game.displayTitle, io.github.matiyaaa.fuse.ui.shell.store.RommDownloadWhat.Everything)
                             }),
-                        ),
+                        ) + io.github.matiyaaa.fuse.ui.shell.romm.rommEditActions(app, game.id, game.displayTitle),
                     ))
                 } else {
                     app.openContextMenu(app.gameMenu(card, fromDetail = true))

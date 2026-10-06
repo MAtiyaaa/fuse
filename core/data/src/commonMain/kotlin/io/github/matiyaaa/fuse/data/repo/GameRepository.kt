@@ -404,7 +404,7 @@ internal fun SortOrder.code(): Long = when (this) {
     SortOrder.RELEASE_YEAR -> 4
 }
 
-internal fun GameMetadata.fillFrom(other: GameMetadata) = GameMetadata(
+fun GameMetadata.fillFrom(other: GameMetadata) = GameMetadata(
     description = description ?: other.description,
     releaseYear = releaseYear ?: other.releaseYear,
     developer = developer ?: other.developer,
@@ -416,7 +416,7 @@ internal fun GameMetadata.fillFrom(other: GameMetadata) = GameMetadata(
     source = source ?: other.source,
 )
 
-private fun GameMetadata.overwriteWith(other: GameMetadata) = GameMetadata(
+fun GameMetadata.overwriteWith(other: GameMetadata) = GameMetadata(
     description = other.description ?: description,
     releaseYear = other.releaseYear ?: releaseYear,
     developer = other.developer ?: developer,

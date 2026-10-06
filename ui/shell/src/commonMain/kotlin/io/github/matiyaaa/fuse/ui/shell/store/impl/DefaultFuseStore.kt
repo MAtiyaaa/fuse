@@ -150,6 +150,7 @@ internal class DefaultFuseStore private constructor(
             cartridgeOff = { writeSettings { s -> if (s.cartridge.enabled) s.copy(cartridge = s.cartridge.copy(enabled = false)) else s } },
             choiceFor = { g -> library.choiceFor(g) },
             details = CartridgeDetails(ctx),
+            fillRemote = { ids -> mediaOps.fillRemote(ids) },
         )
     }
 

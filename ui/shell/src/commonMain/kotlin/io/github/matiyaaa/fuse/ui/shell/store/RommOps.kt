@@ -83,6 +83,10 @@ data class RommSystem(
     val games: Int,
     val installed: Int,
     val sizeBytes: Long,
+    /** The system's art, as on Fuse's Systems page. */
+    val art: Art = Art.None,
+    /** The system's brand colour from the art pack, when it has one. */
+    val accent: Long? = null,
 )
 
 @Immutable
