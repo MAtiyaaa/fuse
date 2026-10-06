@@ -15,6 +15,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.JsonPrimitive
@@ -32,10 +33,14 @@ class ServiceTest {
     }
 
     /** A device's library as Fuse Sync sees it: records by game, plus settings. */
-    private class Library(val games: MutableMap<String, GameRecord> = HashMap(), val settings: MutableMap<String, JsonPrimitive> = HashMap()) : ProfileDataPort {
+    private class Library(
+        val games: MutableMap<String, GameRecord> = HashMap(),
+        val settings: MutableMap<String, JsonPrimitive> = HashMap(),
+        val collections: MutableMap<String, CollectionRecord> = HashMap(),
+    ) : ProfileDataPort {
         var writes = 0
         override suspend fun read(device: String, clock: HlcClock): ProfileMeta = synchronized(this) {
-            ProfileMeta(games = games.toMap(), settings = settings.mapValues { Lww(it.value as kotlinx.serialization.json.JsonElement, Hlc.ZERO) })
+            ProfileMeta(games = games.toMap(), collections = collections.toMap(), settings = settings.mapValues { Lww(it.value as kotlinx.serialization.json.JsonElement, Hlc.ZERO) })
         }
 
         /** The games as they are now (the service writes them from its own thread). */
@@ -50,6 +55,8 @@ class ServiceTest {
             }
             settings.clear()
             meta.settings.forEach { (k, v) -> settings[k] = v.value as JsonPrimitive }
+            collections.clear()
+            meta.collections.filterValues { it.deleted?.value != true }.forEach { (k, c) -> collections[k] = c }
         }
         override suspend fun keyOf(gameId: Long): GameKey? = null
 
@@ -72,10 +79,11 @@ class ServiceTest {
         root.deleteRecursively()
     }
 
-    private fun service(name: String, library: Library, platform: String = "LINUX"): Pair<JvmSyncService, SettingsStore> {
+    private fun service(name: String, library: Library, platform: String = "LINUX", home: File? = null): Pair<JvmSyncService, SettingsStore> {
         val settings = SettingsStore(DesktopDatabase.open(null))
         runBlocking { settings.update { it.copy(sync = it.sync.copy(enabled = true, hostPort = port, deviceName = name)) } }
-        val svc = JvmSyncService(File(root, name), settings, Secrets(), library, platform, name, "test", NoHostLifetime("test"), scope, liveLookMs = 300)
+        val files = home?.let { FileSaveEnvironment(platform, it.path.replace('\\', '/'), variables = { null }) } ?: FileSaveEnvironment(platform)
+        val svc = JvmSyncService(File(root, name), settings, Secrets(), library, platform, name, "test", NoHostLifetime("test"), scope, files = files, liveLookMs = 300)
         return svc to settings
     }
 
@@ -149,6 +157,30 @@ class ServiceTest {
         assertEquals("pc: elite four", File(roms, "Pokemon Ruby (USA).sav").readText())
         withTimeout(5_000) { deck.status.first { it is SyncStatus.NotSetUp } }
         pc.stop()
+    }
+
+    @Test
+    fun withTheHostAwayAProfileWithoutAPinStillSwitches(): Unit = runBlocking {
+        val (pc, _) = service("Gaming PC", Library())
+        val deckLib = Library(games = hashMapOf(ct.id to GameRecord(ct, playSeconds = mapOf("x" to 600), lastPlayed = 1_000)))
+        val (deck, deckSettings) = service("Steam Deck", deckLib)
+        val code = assertNotNull(pc.hostHere("Gaming PC", installService = false).getOrThrow().pairingCode)
+        deck.connect("127.0.0.1:$port", code).getOrThrow()
+        val mo = pc.createProfile("Mo", "fox", null).getOrThrow()
+        val sam = pc.createProfile("Sam", "owl", "2468").getOrThrow()
+        deck.syncNow().getOrThrow()
+        deck.switchTo(mo.id).getOrThrow()
+        // The host goes away (the computer sleeps).
+        pc.stop()
+        // Sam has a PIN only the host can check: that waits, and says why.
+        val refused = deck.switchTo(sam.id, "2468").exceptionOrNull()
+        assertTrue(refused?.message.orEmpty().contains("PIN"), refused?.message)
+        assertEquals(mo.id, deckSettings.current().sync.activeProfile)
+        // Back to no one and to Mo again works here alone; nothing of Mo's is lost on the way.
+        deck.switchTo(null).getOrThrow()
+        deck.switchTo(mo.id).getOrThrow()
+        assertEquals(mo.id, deckSettings.current().sync.activeProfile)
+        assertEquals(600L, deckLib.gamesNow()[ct.id]?.totalSeconds)
     }
 
     @Test
@@ -263,7 +295,7 @@ class ServiceTest {
         val mo = pc.createProfile("Mo", "fox", null).getOrThrow()
         deck.switchTo(mo.id).getOrThrow()
         val before = deckLib.gamesNow()
-        deck.setEnabled(false)
+        deck.setEnabled(false, keepProfiles = false)
         // Forgotten: no host, no profiles, no profile in use.
         val s = deckSettings.current().sync
         assertEquals("", s.role)
@@ -316,6 +348,54 @@ class ServiceTest {
     }
 
     @Test
+    fun aHostInAFolderThatHoldsOtherThingsNeverTouchesThem(): Unit = runBlocking {
+        val (pc, pcSettings) = service("Gaming PC", Library())
+        // The person picks a whole drive for the host's saves.
+        val drive = File(root, "media/BigDrive").apply { mkdirs() }
+        val photos = File(drive, "Photos/holiday.jpg").apply { parentFile.mkdirs(); writeText("sunset") }
+        val notes = File(drive, "notes.txt").apply { writeText("keep") }
+        pcSettings.update { it.copy(sync = it.sync.copy(hostDataDir = drive.path)) }
+        pc.hostHere("Gaming PC", installService = false).getOrThrow()
+        // Its files go in a folder of their own there.
+        val own = File(drive, JvmSyncService.HOST_FOLDER)
+        assertEquals(own.path.replace('\\', '/'), pcSettings.current().sync.hostDataDir)
+        assertTrue(File(own, "host.json").isFile)
+        // Moved and then deleted: the drive's own things stay exactly where they were.
+        val elsewhere = File(root, "elsewhere")
+        pc.moveHostData(elsewhere.path).getOrThrow()
+        assertTrue(photos.isFile && notes.isFile)
+        pc.deleteHost().getOrThrow()
+        assertEquals("sunset", photos.readText())
+        assertEquals("keep", notes.readText())
+        assertTrue(!File(elsewhere, "host.json").exists())
+        pc.stop()
+    }
+
+    @Test
+    fun recordsTurnedOffOnOneDeviceNeverDeleteTheProfilesCollections(): Unit = runBlocking {
+        val pcLib = Library()
+        val deckLib = Library(collections = hashMapOf("c1" to CollectionRecord("c1", Lww("RPGs", Hlc.ZERO), members = mapOf(ct.id to Lww(true, Hlc.ZERO)))))
+        val (pc, _) = service("Gaming PC", pcLib)
+        val (deck, deckSettings) = service("Steam Deck", deckLib)
+        val code = assertNotNull(pc.hostHere("Gaming PC", installService = false).getOrThrow().pairingCode)
+        deck.connect("127.0.0.1:$port", code).getOrThrow()
+        val mo = pc.createProfile("Mo", "fox", null).getOrThrow()
+        // The Deck's collection becomes Mo's, and reaches the PC.
+        deck.switchTo(mo.id).getOrThrow()
+        pc.switchTo(mo.id).getOrThrow()
+        assertEquals("RPGs", pcLib.collections["c1"]?.name?.value)
+        // On the Deck, records stop syncing: its library then reports no collections at all.
+        deckSettings.update { it.copy(sync = it.sync.copy(records = false)) }
+        kotlinx.coroutines.delay(500)
+        synchronized(deckLib) { deckLib.collections.clear() }
+        deck.syncNow().getOrThrow()
+        pc.syncNow().getOrThrow()
+        // Nothing of that reached the profile: the collection is still everyone's.
+        assertEquals("RPGs", pcLib.collections["c1"]?.name?.value)
+        pc.stop()
+    }
+
+    @Test
     fun withFuseSyncOffNothingHappens(): Unit = runBlocking {
         val settings = SettingsStore(DesktopDatabase.open(null))
         val lib = Library()
@@ -325,5 +405,63 @@ class ServiceTest {
         svc.afterExit(SaveQuery(ct, "gba", "/x.gba", "mgba"), 0, 1)
         assertEquals(0, lib.writes)
         assertTrue(svc.profiles.value.isEmpty())
+    }
+
+    @Test
+    fun aPlayTeachesFuseWhereASaveWithAnUnknownIdLives(): Unit = runBlocking {
+        // PPSSPP names saves by a game's id, which Fuse doesn't know for this game: its first play here
+        // shows which save folder is its, and from then on the save is kept in step.
+        val home = File(root, "home").apply { mkdirs() }
+        val savedata = File(home, ".config/ppsspp/PSP/SAVEDATA").apply { mkdirs() }
+        File(savedata, "NPUH10001DATA/DATA.BIN").apply { parentFile.mkdirs(); writeText("another game") }.setLastModified(1_000_000)
+        File(savedata, "NPUH10001DATA").setLastModified(1_000_000)
+        val (pc, _) = service("Gaming PC", Library(), home = home)
+        pc.hostHere("Gaming PC", installService = false).getOrThrow()
+        val game = GameKey.of("psp", null, null, "Patapon")
+        val q = SaveQuery(game, "psp", File(root, "Patapon.iso").path.replace('\\', '/'), "ppsspp", title = "Patapon")
+        val notices = java.util.Collections.synchronizedList(ArrayList<SyncNotice>())
+        val listening = scope.launch { pc.notices.collect { notices += it } }
+        assertIs<LaunchGate.Go>(pc.beforeLaunch(q))
+        // The game saves into its own folder while it runs.
+        File(savedata, "UCUS98711DATA00/DATA.BIN").apply { parentFile.mkdirs(); writeText("level 3") }
+        pc.afterExit(q, 0, 60_000)
+        val versions = pc.versions(q, SaveKind.SAVE)
+        assertEquals(1, versions.size, "the learned save was kept")
+        // Next time it is found before the game starts, like any other.
+        File(savedata, "UCUS98711DATA00/DATA.BIN").writeText("level 4")
+        pc.afterExit(q, 0, 60_000)
+        assertEquals(2, pc.versions(q, SaveKind.SAVE).size)
+        listening.cancel()
+        assertTrue(notices.none { it is SyncNotice.NotSynced }, notices.toString())
+        pc.stop()
+    }
+
+    @Test
+    fun aSaveThatCantBeKeptSaysWhyOnceAndAnUnchangedOneSaysNothing(): Unit = runBlocking {
+        val home = File(root, "home").apply { mkdirs() }
+        val (pc, _) = service("Gaming PC", Library(), home = home)
+        pc.hostHere("Gaming PC", installService = false).getOrThrow()
+        val notices = java.util.Collections.synchronizedList(ArrayList<SyncNotice>())
+        val listening = scope.launch { pc.notices.collect { notices += it } }
+        // DuckStation's folder isn't on this computer: the save can't be kept, and Fuse says so, once.
+        val psx = SaveQuery(GameKey.of("psx", null, null, "Vagrant Story"), "psx", File(root, "vs.cue").path, "duckstation", title = "Vagrant Story")
+        pc.afterExit(psx, 0, 60_000)
+        pc.afterExit(psx, 0, 60_000)
+        withTimeout(5_000) { while (notices.none { it is SyncNotice.NotSynced }) kotlinx.coroutines.delay(20) }
+        val said = notices.filterIsInstance<SyncNotice.NotSynced>()
+        assertEquals(1, said.size, said.toString())
+        assertEquals("Vagrant Story", said.single().title)
+        // A game whose save didn't change since it was last kept: nothing to say.
+        val roms = File(root, "roms").apply { mkdirs() }
+        File(roms, "Ruby.sav").writeText("8 badges")
+        val gba = SaveQuery(ct, "gba", File(roms, "Ruby.gba").path.replace('\\', '/'), "mgba", title = "Pokemon Ruby")
+        pc.afterExit(gba, 0, 60_000)
+        pc.afterExit(gba, 0, 60_000)
+        // A game that keeps its own saves (a PC game): nothing to say either.
+        pc.afterExit(SaveQuery(GameKey.of("win", null, null, "Hades"), "win", "/games/Hades.exe", "steam", title = "Hades"), 0, 60_000)
+        kotlinx.coroutines.delay(300)
+        listening.cancel()
+        assertEquals(1, notices.filterIsInstance<SyncNotice.NotSynced>().size, notices.toString())
+        pc.stop()
     }
 }

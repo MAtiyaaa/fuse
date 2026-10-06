@@ -11,22 +11,24 @@ import kotlinx.coroutines.withTimeoutOrNull
 /**
  * Keeps who is playing on screen ([AppState.syncProfile]) and, once per start, does what Settings
  * asks for at startup: the last profile (nothing to do), "Who's playing?" every time, or a chosen
- * profile (switched to, or asked for its PIN). Nothing at all while Fuse Sync is off.
+ * profile (switched to, or asked for its PIN). Profiles work with Fuse Sync or without it (this
+ * device's own); with neither on and no profiles, nothing at all.
  */
 @Composable
 internal fun SyncProfiles(app: AppState) {
     val svc = app.store.sync.service ?: return
     val prefs by app.store.prefs.collectAsState()
-    val enabled = prefs.sync.enabled
     val active by svc.activeProfile.collectAsState()
     val profiles by svc.profiles.collectAsState()
-    LaunchedEffect(enabled, active) { app.syncProfile = if (enabled) active else null }
-    LaunchedEffect(enabled, profiles.size) { app.syncProfileCount = if (enabled) profiles.size else 0 }
-    LaunchedEffect(enabled, prefs.onboardingDone) {
-        if (!enabled || !prefs.onboardingDone || app.syncStartupDone) return@LaunchedEffect
-        app.syncStartupDone = true
+    val on = prefs.sync.enabled || profiles.isNotEmpty()
+    LaunchedEffect(on, active) { app.syncProfile = if (on) active else null }
+    LaunchedEffect(on, profiles.size) { app.syncProfileCount = if (on) profiles.size else 0 }
+    LaunchedEffect(on, prefs.onboardingDone, profiles.isNotEmpty()) {
+        if (!on || !prefs.onboardingDone || app.syncStartupDone) return@LaunchedEffect
         val c = prefs.sync
-        if (c.role.isEmpty()) return@LaunchedEffect
+        // Nothing to choose from yet: a host still to set up, and no profiles of this device's own.
+        if (c.role.isEmpty() && profiles.isEmpty()) return@LaunchedEffect
+        app.syncStartupDone = true
         when (c.startup) {
             "ASK" -> app.whoAreYou = WhoMode.STARTUP
             "PROFILE" -> {

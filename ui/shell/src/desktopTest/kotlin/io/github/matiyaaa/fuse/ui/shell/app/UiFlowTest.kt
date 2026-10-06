@@ -1,6 +1,12 @@
 package io.github.matiyaaa.fuse.ui.shell.app
 
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.performMouseInput
@@ -9,6 +15,8 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.v2.runComposeUiTest
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.printToString
+import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.graphics.toAwtImage
 import io.github.matiyaaa.fuse.data.FuseData
 import io.github.matiyaaa.fuse.data.db.DesktopDatabase
 import io.github.matiyaaa.fuse.model.CapabilityProfile
@@ -158,6 +166,42 @@ class UiFlowTest {
     }
 
     @Test
+    fun tabsSwitchedQuicklyMidSlideStillShowThePage() = runComposeUiTest {
+        val services = newServices()
+        val store: FuseStore = runBlocking {
+            createFuseStore(services, scope).also { s ->
+                s.updatePrefs { it.copy(onboardingDone = true) }
+                s.sources.add(root.absolutePath, LibrarySourceKind.ROMS_ROOT)
+                withTimeout(20_000) { s.library.home.first { feed -> feed.recentlyAdded.isNotEmpty() } }
+            }
+        }
+        val router = InputRouter(scope)
+        mainClock.autoAdvance = false
+        setContent { FuseApp(store, TestPlatform, router) }
+        pumpUntil { onAllNodesWithText("NEW IN YOUR LIBRARY").fetchSemanticsNodes().isNotEmpty() }
+        repeat(20) { mainClock.advanceTimeBy(64) }
+        // R1 starts Systems sliding in; R1 again while it is part way is a quick switch to the Library.
+        router.tap(PadButton.R1)
+        mainClock.advanceTimeBy(64)
+        router.tap(PadButton.R1)
+        repeat(30) { mainClock.advanceTimeBy(64); Thread.sleep(4) }
+        pumpUntil { onAllNodesWithText("Advance Wars", substring = true).fetchSemanticsNodes().isNotEmpty() }
+        repeat(20) { mainClock.advanceTimeBy(64) }
+        // The Library is really there: its game's name is drawn bright, not left faded mid-slide.
+        val image = onRoot().captureToImage().toAwtImage()
+        val node = onAllNodesWithText("Advance Wars", substring = true).fetchSemanticsNodes().first()
+        val r = node.boundsInRoot
+        var brightest = 0
+        for (y in r.top.toInt().coerceAtLeast(0) until r.bottom.toInt().coerceAtMost(image.height)) {
+            for (x in r.left.toInt().coerceAtLeast(0) until r.right.toInt().coerceAtMost(image.width)) {
+                val rgb = image.getRGB(x, y)
+                brightest = maxOf(brightest, ((rgb shr 16 and 0xFF) + (rgb shr 8 and 0xFF) + (rgb and 0xFF)) / 3)
+            }
+        }
+        assertTrue(brightest > 150, "The Library's text is drawn at brightness $brightest")
+    }
+
+    @Test
     fun aGameOpenedOnTheOtherScreenLeavesFuseUsableHere() = runComposeUiTest {
         val services = newServices().also { it.secondDisplay = 2 }
         val store: FuseStore = runBlocking {
@@ -187,11 +231,144 @@ class UiFlowTest {
         val shown = mainClock.currentTime - launchedAt
         assertTrue(shown < 2_500, "The veil stayed ${shown} ms")
     }
+
+    @Test
+    fun setupMakesTheFirstProfileAndComesBackToTheStepItLeft() = runComposeUiTest {
+        lateinit var services: FakeServices
+        services = FakeServices(FuseData(DesktopDatabase.open(File(cache, "fuse-${System.nanoTime()}.db").absolutePath)), cache, sync = { port, sc ->
+            io.github.matiyaaa.fuse.sync.JvmSyncService(
+                File(cache, "sync"), services.data.settings, services.secrets, port, "LINUX", "Steam Deck", "test",
+                io.github.matiyaaa.fuse.sync.NoHostLifetime("test"), sc,
+            )
+        })
+        val store = runBlocking { createFuseStore(services, scope) }
+        val svc = assertNotNullOf(store.sync.service)
+        val router = InputRouter(scope)
+        mainClock.autoAdvance = false
+        val app = AppState(store, TestPlatform, scope, Route.Onboarding)
+        setContent {
+            io.github.matiyaaa.fuse.ui.designsystem.theme.FuseTheme {
+                androidx.compose.runtime.CompositionLocalProvider(io.github.matiyaaa.fuse.ui.designsystem.input.LocalInputRouter provides router) {
+                    androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.size(1280.dp, 720.dp)) {
+                        if (app.navigator.current == Route.Onboarding) io.github.matiyaaa.fuse.ui.shell.onboarding.OnboardingScreen(app)
+                        else androidx.compose.foundation.text.BasicText("Somewhere else")
+                        io.github.matiyaaa.fuse.ui.shell.sync.WhoAreYouOverlay(app)
+                        io.github.matiyaaa.fuse.ui.shell.sync.ProfileArrival(app)
+                    }
+                }
+            }
+        }
+        fun shows(text: String) = onAllNodesWithText(text, useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()
+        pumpUntil { shows("Welcome to Fuse") }
+        router.tap(PadButton.A)
+        pumpUntil { shows("Tuned for this device") }
+        router.tap(PadButton.A)
+        // Who's playing comes early: no host needed, and skipping it is fine.
+        pumpUntil { shows("Make your profile") }
+        router.tap(PadButton.A)
+        pumpUntil { shows("New Profile") }
+        mainClock.advanceTimeBy(600)
+        router.tap(PadButton.A)
+        mainClock.advanceTimeBy(120)
+        assertEquals("Profile name", app.textInput?.title)
+        app.textInput!!.onDone("Mo")
+        app.textInput = null
+        mainClock.advanceTimeBy(200)
+        // From the PIN, down into the pictures, then A goes to Create Profile and A makes it.
+        router.tap(PadButton.DPAD_DOWN)
+        mainClock.advanceTimeBy(120)
+        router.tap(PadButton.A)
+        mainClock.advanceTimeBy(120)
+        router.tap(PadButton.A)
+        mainClock.advanceTimeBy(120)
+        router.tap(PadButton.A)
+        // The first profile here gets the grand welcome, and the step greets them.
+        pumpUntil { app.profileArrival != null }
+        assertTrue(app.arrivalGrand, "the first profile's arrival is the grand one")
+        pumpUntil { app.profileArrival == null && shows("Hi, Mo") }
+        assertEquals(listOf("Mo"), svc.profiles.value.map { it.name })
+        assertTrue(shows("Add Another"))
+        // Off to set up Fuse Sync (a page of its own) and back: the same step, not the beginning.
+        app.go(Route.SyncSetup(host = true))
+        pumpUntil { shows("Somewhere else") }
+        app.back()
+        pumpUntil { shows("Hi, Mo") }
+        assertTrue(!shows("Welcome to Fuse"))
+        // Setup opened afresh starts at the beginning.
+        app.go(Route.Onboarding)
+        pumpUntil { shows("Welcome to Fuse") }
+    }
+
+    private fun <T : Any> assertNotNullOf(v: T?): T = kotlin.test.assertNotNull(v)
+
+    @Test
+    fun theProfileEditorFitsTheThorsScreensAndTheDpadReachesEveryPart() = runComposeUiTest {
+        val store = runBlocking { createFuseStore(newServices(), scope) }
+        val router = InputRouter(scope)
+        mainClock.autoAdvance = false
+        val app = AppState(store, TestPlatform, scope, Route.Root(io.github.matiyaaa.fuse.model.Destination.HOME))
+        var size by androidx.compose.runtime.mutableStateOf(androidx.compose.ui.unit.DpSize(640.dp, 360.dp))
+        var made: Triple<String, String, io.github.matiyaaa.fuse.ui.shell.sync.PinChoice>? = null
+        var backs = 0
+        setContent {
+            io.github.matiyaaa.fuse.ui.designsystem.theme.FuseTheme {
+                androidx.compose.runtime.CompositionLocalProvider(io.github.matiyaaa.fuse.ui.designsystem.input.LocalInputRouter provides router) {
+                    androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.size(size).testTag("window")) {
+                        io.github.matiyaaa.fuse.ui.shell.sync.ProfileEditor(
+                            app, "New Profile", "Everyone gets their own saves.", "Create Profile", io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons.UserPlus,
+                            onSubmit = { n, a, p -> made = Triple(n, a, p); null },
+                            onBack = { backs++ },
+                        )
+                    }
+                }
+            }
+        }
+        // The AYN Thor's upper screen at its largest text, its lower screen, and a 4:3 handheld: the
+        // buttons are always wholly on screen.
+        for (s in listOf(androidx.compose.ui.unit.DpSize(640.dp, 360.dp), androidx.compose.ui.unit.DpSize(496.dp, 432.dp), androidx.compose.ui.unit.DpSize(427.dp, 320.dp))) {
+            size = s
+            mainClock.advanceTimeBy(600)
+            val window = onNodeWithTag("window").fetchSemanticsNode().boundsInRoot
+            val buttons = onNodeWithTag("editor.buttons", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+            assertTrue(buttons.top >= window.top && buttons.bottom <= window.bottom + 0.5f && buttons.left >= window.left && buttons.right <= window.right + 0.5f, "buttons $buttons outside $window at $s")
+        }
+        fun press(b: PadButton) { router.tap(b); mainClock.advanceTimeBy(120) }
+        // Name first: A asks for it, and typing it moves on to the PIN.
+        press(PadButton.A)
+        assertEquals("Profile name", app.textInput?.title)
+        app.textInput!!.onDone("Mo")
+        app.textInput = null
+        mainClock.advanceTimeBy(200)
+        // The PIN is next, right below the name (A asks for one; closing the keyboard keeps the D-pad).
+        press(PadButton.A)
+        assertTrue(app.textInput?.title?.startsWith("A PIN for Mo") == true)
+        app.textInput = null
+        mainClock.advanceTimeBy(200)
+        // Down into the pictures (no tap needed), along them, then down to the buttons.
+        press(PadButton.DPAD_DOWN)
+        // The pictures are one row on this short screen: Left all the way reaches the first.
+        repeat(io.github.matiyaaa.fuse.ui.designsystem.components.FuseAvatars.all.size) { press(PadButton.DPAD_LEFT) }
+        press(PadButton.DPAD_RIGHT)
+        press(PadButton.DPAD_RIGHT)
+        press(PadButton.A)
+        // On the buttons: Left is Cancel, Right back to Create, A makes the profile.
+        press(PadButton.DPAD_LEFT)
+        press(PadButton.DPAD_RIGHT)
+        press(PadButton.A)
+        pumpUntil { made != null }
+        assertEquals("Mo", made!!.first)
+        assertEquals(io.github.matiyaaa.fuse.ui.designsystem.components.FuseAvatars.all[2].id, made!!.second)
+        // B leaves, from anywhere.
+        press(PadButton.B)
+        assertEquals(1, backs)
+    }
+
 }
 
 /** A handheld with a second screen that games can open on. */
 private object TwoScreenPlatform : PlatformUi by TestPlatform {
     override val features = PlatformFeatures(windowModes = true, launchOnOtherDisplay = true)
+
 }
 
 /**

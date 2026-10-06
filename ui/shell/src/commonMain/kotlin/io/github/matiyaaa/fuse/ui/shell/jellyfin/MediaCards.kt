@@ -165,8 +165,12 @@ private fun posterLine(item: MediaItem): String? = when (item.type) {
     else -> listOfNotNull(item.year?.toString(), item.runtimeMs?.let { minutes(it) }).joinToString("  ·  ").ifEmpty { null }
 }
 
-/** "1 h 52 min" or "48 min". */
+/** "1 h 52 min", "2 h" or "48 min". */
 internal fun minutes(ms: Long): String {
     val m = (ms / 60_000).coerceAtLeast(1)
-    return if (m >= 60) "${m / 60} h ${m % 60} min" else "$m min"
+    return when {
+        m < 60 -> "$m min"
+        m % 60 == 0L -> "${m / 60} h"
+        else -> "${m / 60} h ${m % 60} min"
+    }
 }

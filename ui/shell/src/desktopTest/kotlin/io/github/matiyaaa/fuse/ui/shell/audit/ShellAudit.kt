@@ -44,7 +44,7 @@ internal fun AuditDriver.openSettings() {
     tap(PadButton.START)
     waitFor("Arrange Home")
     tapText("Settings")
-    waitFor("Theme, game art, glass and CRT")
+    waitFor("Search settings")
     settle()
 }
 
@@ -519,6 +519,33 @@ internal fun AuditDriver.onboardingScreens(exhaustive: Boolean) {
         if (exhaustive) shoot("Home screen role (optional)")
         tap(PadButton.DPAD_RIGHT)
         tap(PadButton.A)
+        waitFor("Make your profile")
+        if (exhaustive) {
+            shoot("who's playing: no profile yet (optional)", 1_200)
+            // The first profile, made right here, and its grand arrival frame by frame.
+            tap(PadButton.A)
+            waitFor("New Profile")
+            tap(PadButton.A)
+            settle(500)
+            type("Mo")
+            router.textInput?.submit()
+            settle(400)
+            tap(PadButton.DPAD_DOWN)
+            tap(PadButton.A)
+            shoot("the first profile, Create chosen")
+            tap(PadButton.A)
+            shoot("first arrival: the fuse burning in", 420)
+            shoot("first arrival: ignition", 420)
+            shoot("first arrival: welcome typing in", 520)
+            // The arrival plays over everything (and holds input) until it gathers into the corner.
+            settleUntil("Welcome, Mo", shown = false, timeoutMs = 60_000)
+            waitFor("Hi, Mo")
+            shoot("who's playing: Mo made, add another or continue", 1_000)
+            tap(PadButton.A)
+        } else {
+            tap(PadButton.DPAD_RIGHT)
+            tap(PadButton.A)
+        }
         waitFor("Let Fuse see your games")
         if (exhaustive) shoot("storage access")
         tap(PadButton.A)

@@ -1,5 +1,6 @@
 package io.github.matiyaaa.fuse.ui.shell.sync
 
+import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -87,6 +88,10 @@ internal fun SyncthingTab(app: AppState, active: Boolean, topPadding: Dp) {
     val words = syncthingWords(state)
     var index by remember { mutableIntStateOf(0) }
     var inList by remember { mutableStateOf(false) }
+    // The column beside the folders (devices, this device's ID): reached with Right, to read all of it.
+    var inSide by remember { mutableStateOf(false) }
+    val sideScroll = rememberScrollState()
+    val step = with(androidx.compose.ui.platform.LocalDensity.current) { 160.dp.toPx() }
     var looking by remember { mutableStateOf(false) }
     val sel = remember { LinearSelection() }
     val focused = active && app.focusZone == FocusZone.CONTENT && !app.overlayOpen
@@ -114,13 +119,23 @@ internal fun SyncthingTab(app: AppState, active: Boolean, topPadding: Dp) {
     }
     val rows = shared.map { f -> folderRow(app, f, others) }
     sel.clamp(rows.size)
-    PageEffect(focused, inList) {
-        if (focused) app.hints = listOf(Hint(HintButton.CONFIRM, if (inList) "Open" else "Choose"), Hint(HintButton.BACK, "Back"))
+    PageEffect(focused, inList, inSide) {
+        if (focused) app.hints = if (inSide) listOf(Hint(HintButton.DPAD, "Scroll"), Hint(HintButton.BACK, "Back"))
+        else listOf(Hint(HintButton.CONFIRM, if (inList) "Open" else "Choose"), Hint(HintButton.BACK, "Back"))
     }
     InputLayer(enabled = focused) { e ->
-        if (inList) {
+        if (inSide) {
+            when (e.action) {
+                NavAction.UP -> if (sideScroll.value > 0) { app.scope.launch { sideScroll.animateScrollBy(-step) }; NavResult.MOVED } else NavResult.BLOCKED
+                NavAction.DOWN -> if (sideScroll.value < sideScroll.maxValue) { app.scope.launch { sideScroll.animateScrollBy(step) }; NavResult.MOVED } else NavResult.BLOCKED
+                NavAction.LEFT, NavAction.BACK -> { inSide = false; NavResult.MOVED }
+                NavAction.RIGHT, NavAction.SELECT -> NavResult.BLOCKED
+                else -> NavResult.IGNORED
+            }
+        } else if (inList) {
             when {
                 e.action == NavAction.UP && sel.index == 0 -> { inList = false; NavResult.MOVED }
+                e.action == NavAction.RIGHT && sideScroll.maxValue > 0 -> { inSide = true; NavResult.MOVED }
                 e.action == NavAction.LEFT || e.action == NavAction.RIGHT -> NavResult.BLOCKED
                 else -> handleMenuAction(e, rows, sel)
             }
@@ -192,9 +207,14 @@ internal fun SyncthingTab(app: AppState, active: Boolean, topPadding: Dp) {
                     }
                 }
                 if (side) {
-                    Column(Modifier.width(if (roomy) 380.dp else if (compact) 290.dp else 320.dp).fillMaxHeight().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(Space.m)) {
-                        DevicesCard(others, pending)
-                        if (connected != null) ThisDeviceCard(app, connected)
+                    Box(Modifier.width(if (roomy) 380.dp else if (compact) 290.dp else 320.dp).fillMaxHeight()) {
+                        Column(Modifier.fillMaxSize().verticalScroll(sideScroll), verticalArrangement = Arrangement.spacedBy(Space.m)) {
+                            DevicesCard(others, pending)
+                            if (connected != null) ThisDeviceCard(app, connected)
+                        }
+                        if (focused && inSide) {
+                            Spacer(Modifier.matchParentSize().border(Size.focusStroke, Fuse.colors.focus, RoundedCornerShape(Fuse.geometry.panel)))
+                        }
                     }
                 }
             }
@@ -219,6 +239,8 @@ private fun folderRow(app: AppState, f: SyncthingFolder, others: List<SyncthingD
             when {
                 f.error != null -> "Problem"
                 f.paused -> "Paused"
+                // Nothing to be up to date with yet: it only lives on this device.
+                with.isEmpty() -> "Only here"
                 f.needBytes > 0 -> "${bytesText(f.needBytes)} to go"
                 f.state == "scanning" -> "Looking"
                 f.state == "syncing" -> "Syncing"

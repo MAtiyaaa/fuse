@@ -29,6 +29,11 @@ class SettingHit(val topic: SettingTopic, val title: String, val path: String, v
  */
 object SettingsIndex {
     val rows = listOf(
+        SettingTopic("profiles", null, "profiles people users accounts family kids who's playing switch"),
+        SettingTopic("profiles", "Add Profile", "new profile person user someone else kid"),
+        SettingTopic("profiles", "Playing As", "switch profile who's playing user"),
+        SettingTopic("profiles", "Profile Order", "reorder profiles arrange order"),
+        SettingTopic("profiles", "At Startup", "who's playing ask start profile"),
         SettingTopic("appearance", "Theme", "colours colors look dark light skin"),
         SettingTopic("appearance", "Game art", "box art covers tiles posters"),
         SettingTopic("appearance", "Background art", "wallpaper hero"),
@@ -40,7 +45,7 @@ object SettingsIndex {
         SettingTopic("accessibility", "Screen edges", "overscan tv safe area margin cut off borders"),
         SettingTopic("accessibility", "Motion", "animations reduce motion"),
         SettingTopic("accessibility", "High contrast focus", "visibility outline"),
-        SettingTopic("home", "Home style", "flow channels widgets rows layout"),
+        SettingTopic("home", "Home style", "fused network flow channels widgets rows layout"),
         SettingTopic("home", "Add a widget", "board widgets"),
         SettingTopic("home", "Row order", "rows reorder"),
         SettingTopic("home", "Section order", "tabs top bar reorder"),

@@ -149,7 +149,8 @@ internal class DesktopLauncher(
         private const val QUICK_FAIL_MS = 600L
         private val HANDOFF = setOf("gio", "xdg-open", "steam", "kde-open", "kde-open5", "gnome-open", "exo-open", "explorer")
 
-        fun baseName(path: String): String = path.trimEnd('/').substringAfterLast('/')
+        /** The last part of a path, with Windows' backslashes too (a Windows program's own path keeps them). */
+        fun baseName(path: String): String = path.trimEnd('/', '\\').substringAfterLast('/').substringAfterLast('\\')
 
         /** The `X.app` around a program at `X.app/Contents/MacOS/x`, or null. */
         fun macApp(path: String): String? {

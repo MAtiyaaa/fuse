@@ -134,6 +134,7 @@ class HostStore(val dir: File, private val clock: () -> Long = System::currentTi
         if (journalFile.isFile) {
             journalFile.readLines().mapNotNullTo(journal) { line -> runCatching { json.decodeFromString(JournalEvent.serializer(), line) }.getOrNull() }
             seq = journal.lastOrNull()?.seq ?: 0
+            trimJournal()
         }
     }
 
@@ -157,7 +158,20 @@ class HostStore(val dir: File, private val clock: () -> Long = System::currentTi
         val e = JournalEvent(++seq, type, profile, game, kind, revision, device, clock())
         journal += e
         append(journalFile, json.encodeToString(JournalEvent.serializer(), e))
+        trimJournal()
         return e
+    }
+
+    /**
+     * Keeps the journal to its newest [JOURNAL_KEEP] entries once it has twice that. The journal only
+     * tells devices to look (they always catch up in full), so one that was away longer misses nothing.
+     */
+    private fun trimJournal() {
+        if (journal.size <= JOURNAL_KEEP * 2) return
+        val keep = journal.takeLast(JOURNAL_KEEP)
+        journal.clear()
+        journal.addAll(keep)
+        writeAtomically(journalFile, keep.joinToString("") { json.encodeToString(JournalEvent.serializer(), it) + "\n" }.toByteArray())
     }
 
     // ---------------------------------------------------------------- host
@@ -229,18 +243,24 @@ class HostStore(val dir: File, private val clock: () -> Long = System::currentTi
 
     fun seq(): Long = synchronized(lock) { seq }
 
-    fun status(port: Int, fuseVersion: String): HostStatus = synchronized(lock) {
-        HostStatus(
-            hello = hello(port, fuseVersion),
-            profiles = profiles.values.filter { !it.deleted }.map(::infoOf),
-            devices = devices.values.map(::deviceInfoOf),
-            storageBytes = content.totalBytes(),
-            objectCount = content.all().count(),
-            revisionCount = revisions.values.sumOf { it.size },
-            journalSeq = seq,
-            startedAt = startedAt,
-            freeBytes = dir.usableSpace,
-        )
+    fun status(port: Int, fuseVersion: String): HostStatus {
+        // The files' totals are read outside the lock: devices' calls never wait on the disk for them.
+        val bytes = content.totalBytes()
+        val objects = content.count()
+        val free = dir.usableSpace
+        return synchronized(lock) {
+            HostStatus(
+                hello = hello(port, fuseVersion),
+                profiles = profiles.values.filter { !it.deleted }.map(::infoOf),
+                devices = devices.values.map(::deviceInfoOf),
+                storageBytes = bytes,
+                objectCount = objects,
+                revisionCount = revisions.values.sumOf { it.size },
+                journalSeq = seq,
+                startedAt = startedAt,
+                freeBytes = free,
+            )
+        }
     }
 
     // ---------------------------------------------------------------- devices
@@ -330,7 +350,9 @@ class HostStore(val dir: File, private val clock: () -> Long = System::currentTi
         require(name.isNotEmpty()) { "A profile needs a name" }
         require(profiles.values.none { !it.deleted && it.name.equals(name, ignoreCase = true) }) { "A profile is already called $name" }
         val id = SyncCrypto.token(9)
-        val record = ProfileRecord(id, name, request.avatar.take(32), clock(), pinHash = request.pin?.takeIf { it.isNotBlank() }?.let { pinOk(it); SyncCrypto.hashSecret(it) })
+        val pinHash = request.pin?.takeIf { it.isNotBlank() }?.let { pinOk(it); SyncCrypto.hashSecret(it) }
+            ?: request.pinHash?.let { carried -> carried.takeIf(::hashOk) ?: throw IllegalArgumentException("That PIN couldn't be carried over") }
+        val record = ProfileRecord(id, name, request.avatar.take(32), clock(), pinHash = pinHash)
         profiles[id] = record
         saveProfiles()
         event(JournalEvent.PROFILE, profile = id)
@@ -338,6 +360,34 @@ class HostStore(val dir: File, private val clock: () -> Long = System::currentTi
     }
 
     private fun pinOk(pin: String) = require(pin.length in 4..64) { "A PIN or password is 4 to 64 characters" }
+
+    /** A PIN already hashed elsewhere (a profile made without a host): only Fuse's own kind, never one too costly to check. */
+    private fun hashOk(hash: String): Boolean {
+        val (_, iterations, key) = SyncCrypto.secretParts(hash) ?: return false
+        return iterations in MIN_PIN_ITERATIONS..SyncCrypto.PIN_ITERATIONS * 2 && key.size in 16..64
+    }
+
+    /** The device that made a profile with a carried PIN may use it (it never saw the PIN typed here). */
+    internal fun openFor(device: String, profile: String): Unit = synchronized(lock) {
+        val p = profiles[profile]?.takeIf { !it.deleted } ?: return@synchronized
+        val d = devices[device] ?: return@synchronized
+        devices[device] = d.copy(opened = d.opened + (profile to p.pinEpoch), profile = profile)
+        saveDevices()
+    }
+
+    /**
+     * Puts the profiles in the order of [ids] (any not named keep their place after them), for
+     * every device: Who's playing? and every list follow it.
+     */
+    fun setOrder(ids: List<String>): Unit = synchronized(lock) {
+        val first = ids.distinct().mapNotNull { id -> profiles[id]?.let { id to it } }
+        if (first.isEmpty()) return@synchronized
+        val rest = profiles.entries.filter { it.key !in ids }.map { it.key to it.value }
+        profiles.clear()
+        (first + rest).forEach { (k, v) -> profiles[k] = v }
+        saveProfiles()
+        event(JournalEvent.PROFILE)
+    }
 
     fun changeProfile(id: String, change: ProfileChange): ProfileInfo = synchronized(lock) {
         val p = profiles[id]?.takeIf { !it.deleted } ?: throw NoSuchElementException("No such profile")
@@ -490,12 +540,12 @@ class HostStore(val dir: File, private val clock: () -> Long = System::currentTi
     }
 
     fun head(profile: String, game: String, kind: SaveKind): SaveRevision? = synchronized(lock) {
-        // The newest revision played (or restored); conflict copies are kept but never the head.
-        revisions[profile].orEmpty().filter { it.game == game && it.kind == kind && it.reason != RevisionReason.CONFLICT_COPY }.maxByOrNull { it.at }
+        // The newest revision played (or restored); copies kept for safety are history, never the head.
+        revisions[profile].orEmpty().filter { it.game == game && it.kind == kind && it.canBeNewest }.maxByOrNull { it.at }
     }
 
     fun heads(profile: String): Heads = synchronized(lock) {
-        val all = revisions[profile].orEmpty().filter { it.reason != RevisionReason.CONFLICT_COPY }
+        val all = revisions[profile].orEmpty().filter { it.canBeNewest }
         Heads(all.groupBy { it.game to it.kind }.values.map { group -> group.maxBy { it.at } }, seq)
     }
 
@@ -514,7 +564,7 @@ class HostStore(val dir: File, private val clock: () -> Long = System::currentTi
             val mine = revs.filter { it.game == id }
             val slots = mine.groupBy { it.kind }.map { (kind, list) ->
                 val newest = list.sortedByDescending { it.at }
-                val head = newest.firstOrNull { it.reason != RevisionReason.CONFLICT_COPY }?.id
+                val head = newest.firstOrNull { it.canBeNewest }?.id
                 SlotReport(
                     kind = kind,
                     format = newest.first().manifest.format,
@@ -523,6 +573,7 @@ class HostStore(val dir: File, private val clock: () -> Long = System::currentTi
                         VersionReport(
                             r.id, r.device, r.deviceName, r.at.millis, r.playSeconds, r.reason, r.id == head, r.size,
                             r.manifest.files.map { f -> FileReport(f.path, f.size, stored(f.hash)) },
+                            kept = r.kept,
                         )
                     },
                 )
@@ -578,12 +629,16 @@ class HostStore(val dir: File, private val clock: () -> Long = System::currentTi
         list.firstOrNull { it.id == revision.id }?.let { existing ->
             // The same push again (a retry after a lost answer): same answer.
             val head = head(profile, revision.game, revision.kind)
-            return@synchronized RevisionResult(accepted = existing.reason != RevisionReason.CONFLICT_COPY, head = head, conflict = existing.reason == RevisionReason.CONFLICT_COPY)
+            val conflict = existing.reason == RevisionReason.CONFLICT_COPY && revision.reason != RevisionReason.CONFLICT_COPY
+            return@synchronized RevisionResult(accepted = !conflict, head = head, conflict = conflict)
         }
         val head = head(profile, revision.game, revision.kind)
         // The device's clock may be wrong: the host's order is the host's.
         val at = Hlc(maxOf(clock(), (head?.at?.millis ?: 0) + 1), 0, device)
-        val fits = head == null || head.id == revision.parent || head.manifest.fingerprint == revision.manifest.fingerprint
+        // A copy kept for safety (before a restore, the other side of a conflict) joins the history
+        // as it is and never becomes the newest, whatever it was made from.
+        val historyOnly = !revision.canBeNewest
+        val fits = historyOnly || head == null || head.id == revision.parent || head.manifest.fingerprint == revision.manifest.fingerprint
         val kept = if (fits) {
             revision.copy(at = at, device = device)
         } else {
@@ -592,7 +647,11 @@ class HostStore(val dir: File, private val clock: () -> Long = System::currentTi
         list += kept
         append(File(profileDir(profile), "revisions.jsonl"), json.encodeToString(SaveRevision.serializer(), kept))
         event(JournalEvent.REVISION, profile, revision.game, revision.kind, kept.id, device)
-        if (fits) RevisionResult(accepted = true, head = kept) else RevisionResult(accepted = false, head = head, conflict = true)
+        when {
+            historyOnly -> RevisionResult(accepted = true, head = head)
+            fits -> RevisionResult(accepted = true, head = kept)
+            else -> RevisionResult(accepted = false, head = head, conflict = true)
+        }
     }
 
     /** The games played as one save for everyone. */
@@ -608,14 +667,14 @@ class HostStore(val dir: File, private val clock: () -> Long = System::currentTi
         require(GameKey.parse(game) != null) { "Bad game key" }
         if (isShared) {
             if (from != null) {
-                val heads = revisions[from].orEmpty().filter { it.game == game && it.reason != RevisionReason.CONFLICT_COPY }
+                val heads = revisions[from].orEmpty().filter { it.game == game && it.canBeNewest }
                     .groupBy { it.kind }.mapNotNull { (_, list) -> list.maxByOrNull { it.at } }
                 val list = revisions.getOrPut(SHARED_SAVES) { ArrayList() }
                 for (h in heads) {
                     val parent = head(SHARED_SAVES, game, h.kind)
                     val copy = h.copy(
                         id = SyncCrypto.token(12), profile = SHARED_SAVES, parent = parent?.id,
-                        at = Hlc(maxOf(clock(), (parent?.at?.millis ?: 0) + 1), 0, device), reason = RevisionReason.PLAYED,
+                        at = Hlc(maxOf(clock(), (parent?.at?.millis ?: 0) + 1), 0, device), reason = RevisionReason.PLAYED, pinned = false,
                     )
                     list += copy
                     append(File(profileDir(SHARED_SAVES), "revisions.jsonl"), json.encodeToString(SaveRevision.serializer(), copy))
@@ -630,12 +689,17 @@ class HostStore(val dir: File, private val clock: () -> Long = System::currentTi
         SharedGames(shared.toList())
     }
 
-    /** Marks a revision as one to keep for good (or not). */
+    /**
+     * Marks a revision as one to keep for good (or not). Only the mark changes: a copy kept for
+     * safety stays one, so keeping it never makes it the newest.
+     */
     fun pin(profile: String, id: String, pinned: Boolean): Boolean = synchronized(lock) {
         val list = revisions[profile] ?: return@synchronized false
         val i = list.indexOfFirst { it.id == id }
         if (i < 0) return@synchronized false
-        list[i] = list[i].copy(reason = if (pinned) RevisionReason.MILESTONE else RevisionReason.PLAYED)
+        val r = list[i]
+        // An older host kept a pin as the reason itself; letting go of one of those makes it an ordinary save.
+        list[i] = if (!pinned && r.reason == RevisionReason.MILESTONE) r.copy(reason = RevisionReason.PLAYED, pinned = false) else r.copy(pinned = pinned)
         rewriteRevisions(profile)
         true
     }
@@ -673,7 +737,38 @@ internal sealed interface UnlockResult {
 
 /** The host computer's own profile. */
 internal const val ADMIN_NAME = "Admin"
+
+/** The fewest rounds a carried PIN hash may have been stretched with. */
+internal const val MIN_PIN_ITERATIONS = 10_000
 internal const val ADMIN_AVATAR = "crown"
+
+/**
+ * What a host keeps in its folder, and nothing else: the folder may be one the person chose (a big
+ * drive) that holds other things too, and those are never moved or deleted with the host.
+ */
+object HostFiles {
+    private val OWN = setOf(
+        "host.json", "devices.json", "profiles.json", "shared-games.json", "game-aliases.json", "account.json", "outside.json",
+        "journal.jsonl", "admin.token", "objects", "profiles",
+    )
+
+    /** The host's own files and folders in [dir] (with any write a crash left half done). */
+    fun own(dir: File): List<File> = dir.listFiles().orEmpty().filter { f ->
+        f.name in OWN || (f.name.startsWith(".") && f.name.endsWith(".tmp") && f.name.removePrefix(".").removeSuffix(".tmp") in OWN)
+    }
+
+    /** True when [dir] holds things that aren't a host's (so a new host belongs in a folder of its own inside it). */
+    fun holdsOthers(dir: File): Boolean = dir.listFiles().orEmpty().any { f -> f !in own(dir) && f.name != ".DS_Store" && f.name != "desktop.ini" }
+
+    /** Deletes the host's own files from [dir], then [dir] itself if nothing else is left in it. */
+    fun delete(dir: File) {
+        own(dir).forEach { it.deleteRecursively() }
+        if (dir.listFiles().isNullOrEmpty()) dir.delete()
+    }
+}
+
+/** Journal entries kept (twice as many before it is trimmed). */
+private const val JOURNAL_KEEP = 10_000
 
 /** The most ids one game may be claimed under at once. */
 private const val MAX_ALIASES = 8

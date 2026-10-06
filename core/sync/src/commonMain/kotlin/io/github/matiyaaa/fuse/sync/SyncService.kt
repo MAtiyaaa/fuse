@@ -23,10 +23,10 @@ sealed interface SyncStatus {
     data class NeedsAttention(val hostName: String, val reason: String, val code: String) : SyncStatus
 }
 
-/** A host on this network, found by asking. */
 /** A request to join on its way: the host asked, and the number this device shows. */
 data class JoinWaiting(val hostName: String, val match: String, val account: Boolean = false)
 
+/** A host on this network, found by asking. */
 data class NearbyHost(val name: String, val hostId: String, val address: String)
 
 /** One thing Fuse Sync did, for the Sync tab's recent activity. */
@@ -82,6 +82,36 @@ sealed interface SyncNotice {
 
     /** The newest save could not be used here (another emulator's, or another format), and stays on the host. */
     data class CantUse(val title: String, val kind: SaveKind, val from: String, val why: String) : SyncNotice
+
+    /** After a game, nothing of its save could be kept to send: [why] says why, and what to do. */
+    data class NotSynced(val title: String, val kind: SaveKind, val why: String) : SyncNotice
+
+    /** This device's profiles went to [hostName] as they were ([count] of them), joining it. */
+    data class Brought(val count: Int, val hostName: String) : SyncNotice
+}
+
+/**
+ * Joining a host while this device has profiles of its own, and the host has people too: who is
+ * who. [suggested] pairs a profile here with one on the host of the same name (case and spaces
+ * aside). The host's own profile (Admin) is never among [host].
+ */
+data class ProfileMerge(
+    val hostName: String,
+    val here: List<ProfileInfo>,
+    val host: List<ProfileInfo>,
+    val suggested: Map<String, String>,
+)
+
+/** What becomes of one profile of this device's when it joins a host. */
+sealed interface MergeChoice {
+    /** The same person as [hostProfile] there: records and saves join theirs ([pin] when theirs has one). */
+    data class Same(val hostProfile: String, val pin: String? = null) : MergeChoice
+
+    /** Someone new to the host: it goes up as it is, PIN and all. */
+    data object Add : MergeChoice
+
+    /** Left out: removed from this device (its saves kept as plain files in Fuse Sync's kept folder). */
+    data object LeaveOut : MergeChoice
 }
 
 /** A save conflict, as the person sees it. */
@@ -119,6 +149,8 @@ data class SaveVersion(
     val bytes: Long,
     val reason: RevisionReason,
     val current: Boolean,
+    /** Kept for good by the person. */
+    val kept: Boolean = false,
 )
 
 /**
@@ -171,9 +203,10 @@ interface SyncService {
 
     /**
      * Turns Fuse Sync on or off here. Off, nothing runs and nothing shows; what is on this device
-     * stays exactly as it is (the profile in use simply stops syncing), and on again picks up.
+     * stays exactly as it is, and on again picks up. With [keepProfiles], the people who played here
+     * stay as this device's own profiles (their records and saves with them); otherwise they go too.
      */
-    suspend fun setEnabled(enabled: Boolean)
+    suspend fun setEnabled(enabled: Boolean, keepProfiles: Boolean = true)
 
     /**
      * Stops this device being the host: its server and its background service. Its data stays on
@@ -227,7 +260,26 @@ interface SyncService {
 
     suspend fun answerJoin(id: String, allow: Boolean): Result<Unit> = Result.failure(UnsupportedOperationException("Fuse Sync isn't set up."))
 
+    /**
+     * Profiles work without a host: made here, they are this device's own (PINs kept as a salted
+     * hash), and go to a host when this device joins one. With a host, they are the host's.
+     */
     suspend fun createProfile(name: String, avatar: String, pin: String?): Result<ProfileInfo>
+
+    /** The profiles in the order of [ids], here and (with a host) on every device. */
+    suspend fun reorderProfiles(ids: List<String>): Result<Unit> = Result.failure(UnsupportedOperationException("Profiles aren't part of this build."))
+
+    /**
+     * Set while joining a host that has people of its own and this device has profiles: the person
+     * says who is who ([bringProfiles]), or stops joining ([cancelMerge]). Null otherwise.
+     */
+    val merge: StateFlow<ProfileMerge?> get() = NO_MERGE
+
+    /** Joins the host [merge] is about, with each profile here as [choices] says (unnamed ones go up as new). */
+    suspend fun bringProfiles(choices: Map<String, MergeChoice>): Result<Unit> = Result.failure(UnsupportedOperationException("Nothing to bring."))
+
+    /** Stops joining the host [merge] is about: this device keeps its profiles and isn't linked. */
+    suspend fun cancelMerge(): Result<Unit> = Result.success(Unit)
     suspend fun changeProfile(id: String, change: ProfileChange): Result<ProfileInfo>
     suspend fun deleteProfile(id: String): Result<Unit>
 
@@ -302,8 +354,11 @@ interface SyncService {
     /** Records changed here (a favourite, a collection, a setting): they go up soon. */
     fun changed()
 
-    /** Leaves the host: everything here stays exactly as it is; this device just stops syncing. */
-    suspend fun unlink(): Result<Unit>
+    /**
+     * Leaves the host: everything here stays exactly as it is; this device just stops syncing. With
+     * [keepProfiles], the people who played here stay as this device's own profiles.
+     */
+    suspend fun unlink(keepProfiles: Boolean = true): Result<Unit>
 
     /**
      * On the host: deletes it (everyone's saves and profiles kept on this computer, and the
@@ -347,6 +402,8 @@ private val NO_PLAYING: StateFlow<String?> = kotlinx.coroutines.flow.MutableStat
 private val NO_NOTICES: kotlinx.coroutines.flow.SharedFlow<SyncNotice> = kotlinx.coroutines.flow.MutableSharedFlow()
 
 private val NO_JOIN_REQUESTS: StateFlow<List<JoinAsk>> = kotlinx.coroutines.flow.MutableStateFlow(emptyList())
+
+private val NO_MERGE: StateFlow<ProfileMerge?> = kotlinx.coroutines.flow.MutableStateFlow(null)
 
 private val NO_SHARED_GAMES: StateFlow<Set<String>> = kotlinx.coroutines.flow.MutableStateFlow(emptySet())
 

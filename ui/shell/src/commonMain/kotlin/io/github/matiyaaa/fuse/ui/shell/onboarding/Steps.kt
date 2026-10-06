@@ -102,6 +102,9 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
     val syncthingState = store.syncthing?.state?.collectAsState()?.value
     val secrets by store.credentials.stored.collectAsState()
     val displays by platform.displays.collectAsState()
+    val people = store.sync.service
+    val profiles = people?.profiles?.collectAsState()?.value.orEmpty()
+    val playing = people?.activeProfile?.collectAsState()?.value
     val suggestions = remember { mutableStateListOf<SuggestedSource>() }
     val chosen = remember { mutableStateListOf<String>() }
     var suggestionsLoaded by remember { mutableStateOf(false) }
@@ -166,6 +169,35 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
             optional = true, icon = FuseIcons.Home, chapter = Chapters.START,
             actions = if (isHome) listOf(StepAction("Continue", primary = true, run = next))
             else listOf(StepAction("Use Fuse as Home", primary = true) { role.request() }, StepAction("Not now", run = next)),
+        ))
+
+        // Who's playing: a profile of your own from the start. No host needed; Fuse Sync, set up later
+        // in setup or any time after, takes everyone along.
+        if (people != null) add(Step(
+            "profile", "Who's playing",
+            when {
+                profiles.isEmpty() -> "Make your profile"
+                playing != null -> "Hi, ${playing.name}"
+                else -> "Who's playing?"
+            },
+            if (profiles.isEmpty()) {
+                "Your saves, play time, favourites and theme stay yours, even when someone else plays here. Only you? Skip it, and make profiles any time in Settings, Profiles."
+            } else {
+                "Everyone who plays here gets their own saves, play time, favourites and theme. Add someone now, or any time in Settings, Profiles."
+            },
+            optional = true, icon = FuseIcons.UserRound, chapter = Chapters.START,
+            actions = if (profiles.isEmpty()) {
+                listOf(
+                    StepAction("Create Your Profile", primary = true) { if (live) app.whoAreYou = io.github.matiyaaa.fuse.ui.shell.sync.WhoMode.ADD else next() },
+                    StepAction("Skip", run = next),
+                )
+            } else {
+                listOf(
+                    StepAction("Continue", primary = true, run = next),
+                    StepAction("Add Another") { if (live) app.whoAreYou = io.github.matiyaaa.fuse.ui.shell.sync.WhoMode.ADD },
+                )
+            },
+            content = { ProfilesStage(profiles, playing) },
         ))
 
         // ------------------------------------------------------------------------------- games
@@ -547,13 +579,14 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
         ))
         add(Step(
             "homestyle", "Home", "Pick a Home style",
-            "Flow is a continuous dashboard of shelves. Channels is a board of tiles you arrange yourself. Either can be rearranged by holding confirm.",
+            "Fused, the one we recommend, is a board of tiles you arrange yourself. Network is a continuous dashboard of shelves. Either can be rearranged by holding confirm.",
             icon = FuseIcons.Dashboard, chapter = Chapters.YOURS,
             actions = listOf(
-                StepAction("Flow", primary = prefs.home.mode == HomeMode.FLOW) { store.updatePrefs { it.copy(home = it.home.copy(mode = HomeMode.FLOW)) }; next() },
-                StepAction("Channels", primary = prefs.home.mode == HomeMode.CHANNELS) { store.updatePrefs { it.copy(home = it.home.copy(mode = HomeMode.CHANNELS)) }; next() },
+                // Fused first, and the one chosen on arrival: it's the one we recommend.
+                StepAction("Fused (Recommended)", primary = true) { store.updatePrefs { it.copy(home = it.home.copy(mode = HomeMode.CHANNELS)) }; next() },
+                StepAction("Network") { store.updatePrefs { it.copy(home = it.home.copy(mode = HomeMode.FLOW)) }; next() },
             ),
-            content = { HomeStylePreview(if (state.button == 1) HomeMode.CHANNELS else HomeMode.FLOW) },
+            content = { HomeStylePreview(if (state.button == 1) HomeMode.FLOW else HomeMode.CHANNELS) },
         ))
         val themes = ThemePresets.all
         val themeIndex = themes.indexOfFirst { it.id == prefs.themeId }.coerceAtLeast(0)
@@ -923,11 +956,11 @@ private fun LaunchStylePreview(pagesFirst: Boolean) {
     }
 }
 
-/** Flow (shelves) and Channels (a board of tiles), the highlighted one lit. */
+/** Network (shelves) and Fused (a board of tiles), the highlighted one lit. */
 @Composable
 private fun HomeStylePreview(mode: HomeMode) {
     val c = Fuse.colors
-    // Channels as Home really lays it out: the default board through the board's own layout.
+    // Fused as Home really lays it out: the default board through the board's own layout.
     val board = remember {
         val widgets = io.github.matiyaaa.fuse.model.HomeLayoutConfig.DefaultBoard
         io.github.matiyaaa.fuse.ui.shell.home.BoardGrid.layout(
@@ -935,8 +968,8 @@ private fun HomeStylePreview(mode: HomeMode) {
         )
     }
     Row(Modifier.widthIn(max = 620.dp).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.l)) {
-        for (m in HomeMode.entries) {
-            MiniScreen(if (m == HomeMode.FLOW) "Flow" else "Channels", active = m == mode, modifier = Modifier.weight(1f)) { lit ->
+        for (m in listOf(HomeMode.CHANNELS, HomeMode.FLOW)) {
+            MiniScreen(if (m == HomeMode.FLOW) "Network" else "Fused", active = m == mode, modifier = Modifier.weight(1f)) { lit ->
                 val quiet = c.text.copy(alpha = 0.16f + 0.06f * lit)
                 val strong = c.text.copy(alpha = 0.55f + 0.3f * lit)
                 val accent = c.accent.copy(alpha = 0.55f + 0.4f * lit)
@@ -965,7 +998,7 @@ private fun HomeStylePreview(mode: HomeMode) {
                     val sw = w * 0.11f
                     for (i in 0 until 8) box(w * 0.04f + i * (sw + w * 0.012f), h * 0.77f, sw, h * 0.2f, quiet)
                 } else {
-                    // Channels: the board, each widget its real size and place.
+                    // Fused: the board, each widget its real size and place.
                     val cols = board.columns
                     val rows = board.rows.coerceAtLeast(1)
                     val gap = w * 0.02f

@@ -201,6 +201,22 @@ class UiAudit {
 
     @Test fun syncS() = audit(AuditSize.S) { syncScreens() }
 
+    /** Who's playing and the profile editor on both of the AYN Thor's screens. */
+    @Test fun syncJ() = audit(AuditSize.J) { syncScreens() }
+
+    @Test fun syncL() = audit(AuditSize.L) { syncScreens() }
+
+    @Test fun syncthingS() = audit(AuditSize.S) { syncthingScreens() }
+
+    /** Profiles with and without a host, and joining one with people: 1080p, a handheld, both of the Thor's screens. */
+    @Test fun profilesM() = audit(AuditSize.M) { profileScreens() }
+
+    @Test fun profilesH() = audit(AuditSize.H) { profileScreens() }
+
+    @Test fun profilesJ() = audit(AuditSize.J) { profileScreens() }
+
+    @Test fun profilesL() = audit(AuditSize.L) { profileScreens() }
+
     @Test fun homePagesM() = audit(AuditSize.M) { homePages() }
 
     @Test fun homePagesH() = audit(AuditSize.H) { homePages() }

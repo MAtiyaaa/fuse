@@ -89,8 +89,8 @@ fun WidgetKind.title(): String = when (this) {
 }
 
 /**
- * Turns the user's widget list into Flow's rows: only the kinds that are rows ([isRow]); the
- * widgets that aren't (clock, storage, playtime and the like) live on the Channels board. Empty
+ * Turns the user's widget list into Network's rows: only the kinds that are rows ([isRow]); the
+ * widgets that aren't (clock, storage, playtime and the like) live on the Fused board. Empty
  * rows are dropped so Home never shows a heading over nothing.
  */
 fun buildShelves(widgets: List<HomeWidget>, feed: HomeFeed, achievementsOn: Boolean): List<Shelf> {

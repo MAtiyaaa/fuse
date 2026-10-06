@@ -61,6 +61,8 @@ class JvmSyncthingService(
     override val install: SyncthingInstall get() = platform.install
 
     private val lock = Mutex()
+    /** Each folder's last status from Syncthing, with when it was asked. */
+    private val statusCache = java.util.concurrent.ConcurrentHashMap<String, Pair<Long, JsonObject>>()
     private var api: SyncthingApi? = null
     private var http: HttpClient? = null
     private var watcher: Job? = null
@@ -146,10 +148,13 @@ class JvmSyncthingService(
     override suspend fun addDevice(id: String, name: String): Result<Unit> = call { a ->
         val deviceId = SyncthingService.normaliseDeviceId(id) ?: throw SyncthingException("That isn't a Syncthing device ID: it is eight groups of seven letters and numbers.", SyncthingException.Kind.REFUSED)
         if (deviceId == myId) throw SyncthingException("That is this device's own ID. Add it on your other device instead.", SyncthingException.Kind.REFUSED)
-        a.putDevice(
-            JsonObject(mapOf("deviceID" to JsonPrimitive(deviceId), "name" to JsonPrimitive(name.ifBlank { deviceId.take(7) }), "addresses" to JsonArray(listOf(JsonPrimitive("dynamic"))))),
-            deviceId,
-        )
+        // A device already in Syncthing keeps its own settings (addresses, name, everything): only Fuse's folders are added to it.
+        if (a.devices().none { it.str("deviceID") == deviceId }) {
+            a.putDevice(
+                JsonObject(mapOf("deviceID" to JsonPrimitive(deviceId), "name" to JsonPrimitive(name.ifBlank { deviceId.take(7) }), "addresses" to JsonArray(listOf(JsonPrimitive("dynamic"))))),
+                deviceId,
+            )
+        }
         // Fuse's folders go to it too.
         for (f in a.folders().filter { it.str("id").orEmpty().startsWith(SyncthingService.PREFIX) }) {
             val devices = (f["devices"] as? JsonArray).orEmpty()
@@ -160,7 +165,17 @@ class JvmSyncthingService(
     }
 
     override suspend fun removeDevice(id: String): Result<Unit> = call { a ->
-        a.deleteDevice(id)
+        val folders = a.folders()
+        fun sharesWith(f: JsonObject) = (f["devices"] as? JsonArray).orEmpty().any { (it as? JsonObject)?.str("deviceID") == id }
+        // Shared with it by hand too (photos, documents): it stays in Syncthing and only leaves Fuse's folders.
+        if (folders.any { f -> !f.str("id").orEmpty().startsWith(SyncthingService.PREFIX) && sharesWith(f) }) {
+            for (f in folders.filter { it.str("id").orEmpty().startsWith(SyncthingService.PREFIX) && sharesWith(it) }) {
+                val devices = (f["devices"] as? JsonArray).orEmpty().filterNot { (it as? JsonObject)?.str("deviceID") == id }
+                a.putFolder(JsonObject(f + ("devices" to JsonArray(devices))), f.str("id")!!)
+            }
+        } else {
+            a.deleteDevice(id)
+        }
         refreshNow(a)
     }
 
@@ -190,17 +205,25 @@ class JvmSyncthingService(
         val current = runCatching { api?.folders() }.getOrNull().orEmpty()
         found.groupBy { it.emulator to it.kind }.map { (key, list) ->
             val (emu, kind) = key
-            val dirs = list.mapNotNull { f -> f.dir.takeIf { f.blocked == null } }.distinct()
-            val dir = commonDir(dirs)
+            val dirs = list.mapNotNull { f -> f.dir.takeIf { f.blocked == null } }
+            val dir = commonDir(dirs, env.home)
             val id = "${SyncthingService.PREFIX}${slug(emu)}-${slug(kindWord(kind))}"
+            val others = current.filter { it.str("id") != id }.mapNotNull { f -> norm(f.str("path"))?.let { it to f.str("label").orEmpty().ifBlank { f.str("id").orEmpty() } } }
+            // Syncthing folders inside one another copy the same files twice: one already shared around it covers it, and one inside it stops it.
+            val around = dir?.let { d -> others.firstOrNull { (p, _) -> d == p || d.startsWith("$p/") } }
+            val inside = dir?.let { d -> others.firstOrNull { (p, _) -> p.startsWith("$d/") } }
             SyncthingPlanFolder(
                 id = id,
                 label = "Fuse: ${emulatorName(emu)} ${kindWord(kind)}",
                 path = dir ?: list.firstNotNullOfOrNull { it.dir }.orEmpty(),
                 emulator = emulatorName(emu),
                 kind = kind,
-                shared = current.any { it.str("id") == id || (dir != null && norm(it.str("path")) == dir) },
-                blocked = if (dir == null) list.firstNotNullOfOrNull { it.blocked } ?: "Fuse couldn't find this folder." else null,
+                shared = current.any { it.str("id") == id } || around != null,
+                blocked = when {
+                    dir == null -> list.firstNotNullOfOrNull { it.blocked } ?: "Fuse couldn't find this folder."
+                    around == null && inside != null -> "Holds \"${inside.second}\", which Syncthing already shares. Sharing both would copy those files twice."
+                    else -> null
+                },
             )
         }.sortedWith(compareBy({ it.blocked != null }, { it.emulator }, { it.kind.ordinal }))
     }
@@ -297,8 +320,13 @@ class JvmSyncthingService(
             if (keepThis) {
                 other.renameTo(File(keep, other.name + stamp)) || error("Couldn't move the other version aside.")
             } else {
-                if (original.exists() && !original.renameTo(File(keep, original.name + stamp))) error("Couldn't keep this device's version aside.")
-                other.renameTo(original) || error("Couldn't put the other version in place.")
+                val aside = File(keep, original.name + stamp)
+                if (original.exists() && !original.renameTo(aside)) error("Couldn't keep this device's version aside.")
+                if (!other.renameTo(original)) {
+                    // Nothing changes when the other can't go in: this device's goes back where it was.
+                    if (aside.exists()) aside.renameTo(original)
+                    error("Couldn't put the other version in place. Both are as they were.")
+                }
             }
             folder?.let { f -> api?.let { a -> runCatching { a.scan(f.id) } } }
             Unit
@@ -359,9 +387,19 @@ class JvmSyncthingService(
             val o = v as? JsonObject ?: return@mapNotNull null
             SyncthingPendingDevice(id, o.str("name").orEmpty().ifBlank { id.take(7) }, o.str("address"))
         }
-        _folders.value = a.folders().map { f ->
+        val now = clock()
+        val configured = a.folders()
+        statusCache.keys.retainAll(configured.mapNotNull { it.str("id") }.toSet())
+        _folders.value = configured.map { f ->
             val id = f.str("id").orEmpty()
-            val st = runCatching { a.folderStatus(id) }.getOrNull()
+            // Syncthing calls a folder's status expensive: Fuse's own folders are asked every round,
+            // the person's other folders only now and then (they are shown, not acted on).
+            val cached = statusCache[id]
+            val st = if (cached != null && !id.startsWith(SyncthingService.PREFIX) && now - cached.first < OTHER_STATUS_MS) {
+                cached.second
+            } else {
+                runCatching { a.folderStatus(id) }.getOrNull()?.also { statusCache[id] = now to it } ?: cached?.second
+            }
             SyncthingFolder(
                 id = id,
                 label = f.str("label").orEmpty().ifBlank { id },
@@ -491,6 +529,7 @@ class JvmSyncthingService(
         private const val POLL_MS = 300L
         private const val WATCH_MS = 20_000L
         private const val RETRY_MS = 10_000L
+        private const val OTHER_STATUS_MS = 2 * 60_000L
 
         private fun norm(path: String?): String? = path?.replace('\\', '/')?.trimEnd('/')?.ifEmpty { null }
 
@@ -502,16 +541,35 @@ class JvmSyncthingService(
             SaveKind.MEMORY_CARD -> "memory cards"
         }
 
-        /** The deepest folder holding all of [dirs]; a shared parent only when it isn't too shallow to be safe. */
-        internal fun commonDir(dirs: List<String>): String? {
-            val clean = dirs.mapNotNull { norm(it) }.distinct()
+        /**
+         * The deepest folder holding all of [dirs], when it is safe to share; otherwise the folder
+         * holding most of them. A shared parent is never the home folder or above it, nor a folder
+         * every program keeps things in (`.config`, `.local/share`, `AppData`, `Documents`...).
+         */
+        internal fun commonDir(dirs: List<String>, home: String? = null): String? {
+            val all = dirs.mapNotNull { norm(it) }
+            val clean = all.distinct()
             if (clean.size <= 1) return clean.firstOrNull()
             val parts = clean.map { it.split('/') }
             val shared = parts.first().indices.takeWhile { i -> parts.all { it.size > i && it[i] == parts.first()[i] } }.size
             val prefix = parts.first().take(shared).joinToString("/")
-            // "/home/mo" or "C:" alone would share far more than saves.
-            return prefix.takeIf { shared >= 4 } ?: clean.first()
+            val mostUsed = all.groupingBy { it }.eachCount().maxBy { it.value }.key
+            return prefix.takeIf { shared >= 4 && !tooBroad(it, home) } ?: mostUsed
         }
+
+        /** Folders far too broad to share for saves: the home folder and above, and the ones every program uses. */
+        internal fun tooBroad(path: String, home: String?): Boolean {
+            val p = path.trimEnd('/').lowercase()
+            val h = home?.let { norm(it) }?.lowercase()
+            if (h != null && (p == h || h.startsWith("$p/"))) return true
+            return p.substringAfterLast('/') in BROAD
+        }
+
+        private val BROAD = setOf(
+            ".config", ".local", "share", "state", ".var", "app", "appdata", "roaming", "local", "locallow", "documents", "my documents",
+            "library", "application support", "containers", "android", "data", "media", "obb", "users", "home", "emulated", "storage",
+            "0", "sdcard", "games", "roms", "downloads", "desktop", "program files", "program files (x86)", "programdata",
+        )
 
         internal fun emulatorName(base: String): String = when (base) {
             "retroarch" -> "RetroArch"

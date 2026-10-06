@@ -19,6 +19,10 @@ import java.security.MessageDigest
 class ContentStore(val root: File) {
     private val temp = File(root, "tmp")
 
+    /** How many files are kept and their bytes, counted once and then kept up to date (null until first asked). */
+    private var counted: Pair<Int, Long>? = null
+    private val countLock = Any()
+
     init {
         root.mkdirs()
         temp.mkdirs()
@@ -68,6 +72,7 @@ class ContentStore(val root: File) {
             } catch (e: AtomicMoveNotSupportedException) {
                 Files.move(tmp.toPath(), dest.toPath(), StandardCopyOption.REPLACE_EXISTING)
             }
+            synchronized(countLock) { counted = counted?.let { (n, b) -> (n + 1) to (b + total) } }
             return hash
         } finally {
             tmp.delete()
@@ -101,10 +106,25 @@ class ContentStore(val root: File) {
             freed += f.length()
             f.delete()
         }
+        synchronized(countLock) { counted = null }
         return freed
     }
 
-    fun totalBytes(): Long = all().sumOf { fileOf(it).length() }
+    fun totalBytes(): Long = totals().second
+
+    /** How many files are kept: walked once, then followed as files arrive (cheap enough for every status call). */
+    fun count(): Int = totals().first
+
+    private fun totals(): Pair<Int, Long> {
+        synchronized(countLock) { counted?.let { return it } }
+        var n = 0
+        var bytes = 0L
+        for (h in all()) {
+            n++
+            bytes += fileOf(h).length()
+        }
+        return synchronized(countLock) { counted ?: (n to bytes).also { counted = it } }
+    }
 }
 
 /** Bytes that aren't what they claim to be. Nothing is stored or replaced when this is thrown. */

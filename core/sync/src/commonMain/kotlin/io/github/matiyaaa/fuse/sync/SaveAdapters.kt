@@ -18,11 +18,31 @@ interface SaveEnvironment {
 
     /** The folder the person chose for [emulator]'s saves (its id without a host prefix), when they did. */
     fun saveFolder(emulator: String): String? = null
+
+    /** When [path] last changed: a file's own time, a folder's newest file inside it; null when it isn't there. */
+    fun modified(path: String): Long? = null
+
+    /**
+     * The folders Fuse learned hold [game]'s saves of [format], from a play that changed them (see
+     * [SaveSpot.learnIn]): used when the game's id can't be read.
+     */
+    fun learned(game: String, format: String): List<String> = emptyList()
+
+    /** Where people's own files live, to look for an emulator's data folder in (Android: its storage and cards). */
+    fun storageRoots(): List<String> = emptyList()
+
+    /** [compute]'s answer for [key], kept a while by environments that can (searching storage is slow). */
+    fun remember(key: String, compute: () -> List<String>): List<String> = compute()
 }
 
-/** [base] with the save folders the person chose (Settings, Save folders) on top. */
-class WithSaveFolders(private val base: SaveEnvironment, private val folders: () -> Map<String, String>) : SaveEnvironment by base {
+/** [base] with the save folders the person chose (Settings, Save folders) and the ones Fuse learned on top. */
+class WithSaveFolders(
+    private val base: SaveEnvironment,
+    private val learnedFolders: (String, String) -> List<String> = { _, _ -> emptyList() },
+    private val folders: () -> Map<String, String>,
+) : SaveEnvironment by base {
     override fun saveFolder(emulator: String): String? = folders()[emulator]?.takeIf { it.isNotBlank() }
+    override fun learned(game: String, format: String): List<String> = learnedFolders(game, format)
 }
 
 /** The game whose saves are wanted, and what it is played with here. */
@@ -58,6 +78,11 @@ data class SaveSpot(
     val folders: List<String> = emptyList(),
     val available: Boolean = true,
     val note: String? = null,
+    /**
+     * For a save Fuse can't place yet because the game's id is unknown: the folder whose subfolders
+     * are each one game's saves. The folders a play changes there are learned as this game's.
+     */
+    val learnIn: String? = null,
 ) {
     /** Where the file named [name] goes here. */
     fun pathFor(name: String): String? = files.firstOrNull { it.name == name }?.path ?: root?.let { "$it/$name" }
@@ -146,7 +171,13 @@ object SaveAdapters {
     /** Folders under Android's other apps' private storage, which Android 11 and later keep from other apps. */
     internal fun androidPrivate(path: String): Boolean = "/Android/data/" in path || "/Android/obb/" in path
 
-    internal fun unavailable(kind: SaveKind, format: String, note: String) = SaveSpot(kind, format, available = false, note = note)
+    internal fun unavailable(kind: SaveKind, format: String, note: String, learnIn: String? = null) = SaveSpot(kind, format, available = false, note = note, learnIn = learnIn)
+
+    /** What to say while a game's saves wait to be learned from its first play here. */
+    internal const val PLAY_ONCE = "Play it once here and save: Fuse learns where its save is from that, and keeps it in step from then on."
+
+    /** The learned folders for [q]'s saves of [format], if a play taught Fuse them. */
+    internal fun learned(env: SaveEnvironment, q: SaveQuery, format: String): List<String> = env.learned(q.game.id, format)
 }
 
 /** Reads `key = "value"` lines of a RetroArch-style config. */
@@ -186,6 +217,8 @@ internal object RetroArch : SaveAdapter {
 
     override fun locate(q: SaveQuery, env: SaveEnvironment): List<SaveSpot> {
         val config = configs(env, q.emulatorPath).firstOrNull(env::exists)
+            // On Android, its folder may be anywhere the person moved it.
+            ?: DataFolders.find(env, "retroarch", listOf("retroarch")) { d -> "$d/retroarch.cfg".takeIf(env::exists) }.firstOrNull()
         val cfg = config?.let { env.readText(it) }?.let(::parseCfg).orEmpty()
         val (defSaves, defStates) = defaults(env, config, q.emulatorPath)
         fun dir(key: String, fallback: String): String {
@@ -261,6 +294,7 @@ internal object DuckStation : SaveAdapter {
         "WINDOWS" -> SaveAdapters.firstDir(env, emuPath?.let(SaveAdapters::parent)?.takeIf { env.exists("$it/portable.txt") }, "${SaveAdapters.documents(env)}/DuckStation")
         "MACOS" -> SaveAdapters.firstDir(env, "${SaveAdapters.macSupport(env)}/DuckStation")
         "ANDROID" -> SaveAdapters.firstDir(env, "/storage/emulated/0/duckstation", "/storage/emulated/0/DuckStation", "/storage/emulated/0/Android/data/com.github.stenzek.duckstation/files")
+            ?: DataFolders.find(env, "duckstation", listOf("duckstation", "psx", "ps1")) { d -> d.takeIf { env.isDirectory("$it/memcards") && (env.exists("$it/settings.ini") || env.isDirectory("$it/savestates")) } }.firstOrNull()
         else -> SaveAdapters.firstDir(env, "${SaveAdapters.xdgData(env)}/duckstation", "${SaveAdapters.xdgConfig(env)}/duckstation", "${env.home}/.var/app/org.duckstation.DuckStation/data/duckstation")
     }
 
@@ -292,7 +326,7 @@ internal object Pcsx2 : SaveAdapter {
     private fun dataDir(env: SaveEnvironment, emuPath: String?): String? = when (env.host) {
         "WINDOWS" -> SaveAdapters.firstDir(env, emuPath?.let { SaveAdapters.parent(it) }?.takeIf { env.exists("$it/portable.ini") || env.exists("$it/portable.txt") }, "${SaveAdapters.documents(env)}/PCSX2")
         "MACOS" -> SaveAdapters.firstDir(env, "${SaveAdapters.macSupport(env)}/PCSX2")
-        "ANDROID" -> null
+        "ANDROID" -> DataFolders.find(env, "ps2", listOf("armsx2", "nethersx2", "aethersx2", "pcsx2", "ps2")) { d -> d.takeIf { env.exists("$it/memcards/Mcd001.ps2") } }.firstOrNull()
         else -> SaveAdapters.firstDir(env, "${SaveAdapters.xdgConfig(env)}/PCSX2", "${env.home}/.var/app/net.pcsx2.PCSX2/config/PCSX2")
     }
 
@@ -308,19 +342,26 @@ internal object Pcsx2 : SaveAdapter {
 internal object Ppsspp : SaveAdapter {
     override val emulators = setOf("ppsspp")
 
-    private fun memstick(env: SaveEnvironment, emuPath: String?): String? = when (env.host) {
+    private fun memstick(env: SaveEnvironment, emuPath: String?, id: String?): String? = when (env.host) {
         "WINDOWS" -> SaveAdapters.firstDir(env, emuPath?.let { SaveAdapters.join(SaveAdapters.parent(it), "memstick") }, "${SaveAdapters.documents(env)}/PPSSPP")
         "MACOS" -> SaveAdapters.firstDir(env, "${env.home}/.config/ppsspp", "${SaveAdapters.macSupport(env)}/PPSSPP")
         "ANDROID" -> "/storage/emulated/0".takeIf { env.isDirectory("$it/PSP") }
+            ?: DataFolders.find(env, "ppsspp", listOf("ppsspp", "psp"), holds = { r -> id != null && env.list("$r/PSP/SAVEDATA").any { it.uppercase().startsWith(id) } }) { d ->
+                d.takeIf { env.isDirectory("$it/PSP/SAVEDATA") || env.isDirectory("$it/PSP/SYSTEM") }
+            }.firstOrNull()
         else -> SaveAdapters.firstDir(env, "${SaveAdapters.xdgConfig(env)}/ppsspp", "${env.home}/.var/app/org.ppsspp.PPSSPP/config/ppsspp")
     }
 
     override fun locate(q: SaveQuery, env: SaveEnvironment): List<SaveSpot> {
-        val root = SaveAdapters.chosen(env, q) ?: memstick(env, q.emulatorPath)
+        val known = q.serial?.uppercase()?.filter { it.isLetterOrDigit() }
+        val root = SaveAdapters.chosen(env, q) ?: memstick(env, q.emulatorPath, known)
             ?: return listOf(SaveAdapters.unavailable(SaveKind.SAVE, "psp.savedata", if (env.host == "ANDROID") "PPSSPP's memory stick folder wasn't found. Choose the folder you picked in PPSSPP (the one with PSP inside) in Fuse, Settings, Save folders." else "PPSSPP's memory stick wasn't found here."))
         val savedata = "$root/PSP/SAVEDATA"
-        val id = q.serial?.uppercase()?.filter { it.isLetterOrDigit() }
-            ?: return listOf(SaveAdapters.unavailable(SaveKind.SAVE, "psp.savedata", "Fuse doesn't know this game's id yet, which PPSSPP names its saves by."))
+        val id = known ?: run {
+            val learned = SaveAdapters.learned(env, q, "psp.savedata")
+            if (learned.isNotEmpty()) return listOf(SaveSpot(SaveKind.SAVE, "psp.savedata", root = savedata, folders = learned))
+            return listOf(SaveAdapters.unavailable(SaveKind.SAVE, "psp.savedata", SaveAdapters.PLAY_ONCE, learnIn = savedata))
+        }
         val folders = env.list(savedata).filter { it.uppercase().startsWith(id) }
         return listOf(SaveSpot(SaveKind.SAVE, "psp.savedata", root = savedata, folders = folders.ifEmpty { listOf(id) }))
     }
@@ -337,6 +378,7 @@ internal object Dolphin : SaveAdapter {
         "WINDOWS" -> SaveAdapters.firstDir(env, emuPath?.let { SaveAdapters.join(SaveAdapters.parent(it), "User") }, "${SaveAdapters.documents(env)}/Dolphin Emulator", "${SaveAdapters.appData(env)}/Dolphin Emulator")
         "MACOS" -> SaveAdapters.firstDir(env, "${SaveAdapters.macSupport(env)}/Dolphin")
         "ANDROID" -> SaveAdapters.firstDir(env, "/storage/emulated/0/dolphin-emu")
+            ?: DataFolders.find(env, "dolphin", listOf("dolphin", "gamecube", "wii")) { d -> d.takeIf { (env.isDirectory("$it/GC") || env.isDirectory("$it/Wii")) && env.isDirectory("$it/Config") } }.firstOrNull()
         else -> SaveAdapters.firstDir(env, "${SaveAdapters.xdgData(env)}/dolphin-emu", "${env.home}/.dolphin-emu", "${env.home}/.var/app/org.DolphinEmu.dolphin-emu/data/dolphin-emu")
     }
 
@@ -344,6 +386,12 @@ internal object Dolphin : SaveAdapter {
         val user = SaveAdapters.chosen(env, q) ?: userDir(env, q.emulatorPath)
             ?: return listOf(SaveAdapters.unavailable(SaveKind.SAVE, "dolphin", if (env.host == "ANDROID") SaveAdapters.androidPrivateNote("Dolphin", "Use its Export user data, then choose that folder in Fuse, Settings, Save folders.") else "Dolphin's folder wasn't found here."))
         val id = q.serial?.uppercase()?.takeIf { it.length >= 4 }
+        if (q.platform == "wii" && id == null) {
+            val titles = "$user/Wii/title/00010000"
+            val learned = SaveAdapters.learned(env, q, "wii.nand").firstOrNull()
+                ?: return listOf(SaveAdapters.unavailable(SaveKind.SAVE, "wii.nand", SaveAdapters.PLAY_ONCE, learnIn = titles))
+            return listOf(SaveSpot(SaveKind.SAVE, "wii.nand", root = "$titles/$learned/data"))
+        }
         return if (q.platform == "wii" && id != null) {
             val title = id.take(4).map { c -> "%02x".format(c.code) }.joinToString("")
             listOf(SaveSpot(SaveKind.SAVE, "wii.nand", root = "$user/Wii/title/00010000/$title/data", folders = emptyList()))
@@ -380,8 +428,12 @@ internal object Rpcs3 : SaveAdapter {
             "MACOS" -> SaveAdapters.firstDir(env, "${SaveAdapters.macSupport(env)}/rpcs3")
             else -> SaveAdapters.firstDir(env, "${SaveAdapters.xdgConfig(env)}/rpcs3", "${env.home}/.var/app/net.rpcs3.RPCS3/config/rpcs3")
         } ?: return listOf(SaveAdapters.unavailable(SaveKind.SAVE, "ps3.savedata", "RPCS3's folder wasn't found here."))
-        val serial = q.serial?.uppercase()?.filter { it.isLetterOrDigit() } ?: return listOf(SaveAdapters.unavailable(SaveKind.SAVE, "ps3.savedata", "Fuse doesn't know this game's serial yet, which RPCS3 names its saves by."))
         val savedata = "$base/dev_hdd0/home/00000001/savedata"
+        val serial = q.serial?.uppercase()?.filter { it.isLetterOrDigit() } ?: run {
+            val learned = SaveAdapters.learned(env, q, "ps3.savedata")
+            if (learned.isNotEmpty()) return listOf(SaveSpot(SaveKind.SAVE, "ps3.savedata", root = savedata, folders = learned))
+            return listOf(SaveAdapters.unavailable(SaveKind.SAVE, "ps3.savedata", SaveAdapters.PLAY_ONCE, learnIn = savedata))
+        }
         return listOf(SaveSpot(SaveKind.SAVE, "ps3.savedata", root = savedata, folders = env.list(savedata).filter { it.uppercase().startsWith(serial) }.ifEmpty { listOf(serial) }))
     }
 }
@@ -397,8 +449,13 @@ internal object Vita3k : SaveAdapter {
             "ANDROID" -> null
             else -> SaveAdapters.firstDir(env, "${SaveAdapters.xdgData(env)}/Vita3K/Vita3K/ux0")
         } ?: return listOf(SaveAdapters.unavailable(SaveKind.SAVE, "vita.savedata", "Vita3K's folder wasn't found here."))
-        val id = q.serial?.uppercase() ?: return listOf(SaveAdapters.unavailable(SaveKind.SAVE, "vita.savedata", "Fuse doesn't know this game's title id yet."))
-        return listOf(SaveSpot(SaveKind.SAVE, "vita.savedata", root = "$base/user/00/savedata", folders = listOf(id)))
+        val savedata = "$base/user/00/savedata"
+        val id = q.serial?.uppercase() ?: run {
+            val learned = SaveAdapters.learned(env, q, "vita.savedata")
+            if (learned.isNotEmpty()) return listOf(SaveSpot(SaveKind.SAVE, "vita.savedata", root = savedata, folders = learned))
+            return listOf(SaveAdapters.unavailable(SaveKind.SAVE, "vita.savedata", SaveAdapters.PLAY_ONCE, learnIn = savedata))
+        }
+        return listOf(SaveSpot(SaveKind.SAVE, "vita.savedata", root = savedata, folders = listOf(id)))
     }
 }
 
@@ -415,9 +472,13 @@ internal object ShadPs4 : SaveAdapter {
             "${SaveAdapters.macSupport(env)}/shadPS4",
             "${SaveAdapters.appData(env)}/shadPS4",
         ) ?: return listOf(SaveAdapters.unavailable(SaveKind.SAVE, "ps4.savedata", "shadPS4's user folder wasn't found here."))
-        val id = q.serial?.uppercase()?.takeIf { it.startsWith("CUSA") || it.startsWith("PPSA") }
-            ?: return listOf(SaveAdapters.unavailable(SaveKind.SAVE, "ps4.savedata", "Fuse doesn't know this game's id yet."))
-        return listOf(SaveSpot(SaveKind.SAVE, "ps4.savedata", root = "$user/savedata/1", folders = listOf(id)))
+        val savedata = "$user/savedata/1"
+        val id = q.serial?.uppercase()?.takeIf { it.startsWith("CUSA") || it.startsWith("PPSA") } ?: run {
+            val learned = SaveAdapters.learned(env, q, "ps4.savedata")
+            if (learned.isNotEmpty()) return listOf(SaveSpot(SaveKind.SAVE, "ps4.savedata", root = savedata, folders = learned))
+            return listOf(SaveAdapters.unavailable(SaveKind.SAVE, "ps4.savedata", SaveAdapters.PLAY_ONCE, learnIn = savedata))
+        }
+        return listOf(SaveSpot(SaveKind.SAVE, "ps4.savedata", root = savedata, folders = listOf(id)))
     }
 }
 
@@ -430,6 +491,7 @@ internal object Flycast : SaveAdapter {
             "WINDOWS" -> SaveAdapters.firstDir(env, q.emulatorPath?.let { SaveAdapters.parent(it) + "/data" })
             "MACOS" -> SaveAdapters.firstDir(env, "${SaveAdapters.macSupport(env)}/Flycast")
             "ANDROID" -> SaveAdapters.firstDir(env, "/storage/emulated/0/Flycast/data")
+                ?: DataFolders.find(env, "flycast", listOf("flycast", "dreamcast")) { d -> "$d/data".takeIf { env.exists("$it/vmu_save_A1.bin") } }.firstOrNull()
             else -> SaveAdapters.firstDir(env, "${SaveAdapters.xdgData(env)}/flycast", "${env.home}/.var/app/org.flycast.Flycast/data/flycast")
         } ?: return listOf(SaveAdapters.unavailable(SaveKind.MEMORY_CARD, "dc.vmu", if (env.host == "ANDROID") SaveAdapters.androidPrivateNote("Flycast", "Use its save data export, then choose that folder in Fuse, Settings, Save folders.") else "Flycast's folder wasn't found here."))
         return listOf(SaveSpot(SaveKind.MEMORY_CARD, "dc.vmu", listOf(SpotFile("vmu_save_A1.bin", "$dir/vmu_save_A1.bin"))))

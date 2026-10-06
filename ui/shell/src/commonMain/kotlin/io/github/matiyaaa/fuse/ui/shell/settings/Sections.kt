@@ -199,7 +199,7 @@ fun homeRows(app: AppState): List<MenuAction> {
                     onSelect = { if (isHome) homeRole.openHomeSettings() else homeRole.request() },
                 ))
             }
-            add(app.choiceRow("mode", "Home style", FuseIcons.Dashboard, p.home.mode, listOf(HomeMode.FLOW to "Flow", HomeMode.CHANNELS to "Channels"), optionDetail = {
+            add(app.choiceRow("mode", "Home style", FuseIcons.Dashboard, p.home.mode, listOf(HomeMode.CHANNELS to "Fused (recommended)", HomeMode.FLOW to "Network"), optionDetail = {
                 if (it == HomeMode.FLOW) "A continuous dashboard of shelves" else "A board of tiles you arrange yourself"
             }) { v -> set { it.copy(home = it.home.copy(mode = v)) } })
             add(toggleRow(
@@ -254,7 +254,7 @@ fun homeRows(app: AppState): List<MenuAction> {
             add(toggleRow("bt", "Bluetooth in the top bar", FuseIcons.Bluetooth, p.showBluetooth) { v -> set { it.copy(showBluetooth = v) } })
         }
         if (p.home.mode == HomeMode.FLOW) {
-            // Flow is rows of games, systems and apps; the board's widgets don't appear in it.
+            // Network is rows of games, systems and apps; the board's widgets don't appear in it.
             labelled("Rows") {
                 val rows = p.home.widgets.filter { it.kind.isRow && app.offers(it.kind) }.sortedBy { it.order }
                 for (w in rows) {
@@ -346,7 +346,7 @@ fun homeRows(app: AppState): List<MenuAction> {
                 add(MenuAction("b.reset", "Reset the board", FuseIcons.RotateCcw, detail = "Back to the widgets and sizes Home comes with, on this device", onSelect = {
                     app.confirm = ConfirmSpec(
                         title = "Reset the board?",
-                        message = "Home on this device goes back to the widgets, sizes and order it came with. Flow's rows stay as they are" +
+                        message = "Home on this device goes back to the widgets, sizes and order it came with. Network's rows stay as they are" +
                             (if (app.store.sync.inUse) ", and your Home on your other devices stays as it is." else ".") +
                             " Undo Home Reset brings this one back.",
                         confirmLabel = "Reset",
@@ -1523,6 +1523,18 @@ fun aboutRows(app: AppState): List<MenuAction> = buildList {
                 detail = "The longer animation setup opens with on the first start",
                 onSelect = { app.setupOpening = true },
             ))
+            // Profile arrivals, as the person playing (or a sample when nobody is): nothing changes.
+            fun arriving() = app.syncProfile ?: io.github.matiyaaa.fuse.sync.ProfileInfo("dev.sample", "Mo", "cat", protected = false, createdAt = 0)
+            add(MenuAction(
+                "dev.arrival", "Play profile switch", FuseIcons.Users,
+                detail = "The animation when someone becomes the one playing",
+                onSelect = { app.arrivalGrand = false; app.profileArrival = arriving() },
+            ))
+            add(MenuAction(
+                "dev.firstArrival", "Play first profile welcome", FuseIcons.UserPlus,
+                detail = "The fuse that burns in when the first profile is made, as in setup",
+                onSelect = { app.arrivalGrand = true; app.profileArrival = arriving() },
+            ))
             add(MenuAction(
                 "dev.intro", "Play startup animation", FuseIcons.Sparkles,
                 detail = "Plays it now, as when Fuse starts",
@@ -1579,7 +1591,7 @@ private fun eraseRow(app: AppState): MenuAction = MenuAction(
                     val sync = app.store.sync.service
                     if (sync != null) {
                         if (host) runCatching { sync.deleteHost() }
-                        runCatching { sync.setEnabled(false) }
+                        runCatching { sync.setEnabled(false, keepProfiles = false) }
                     }
                     // Saved keys too, wherever the system keeps them.
                     for (k in app.store.credentials.stored.value) runCatching { app.store.credentials.remove(k) }

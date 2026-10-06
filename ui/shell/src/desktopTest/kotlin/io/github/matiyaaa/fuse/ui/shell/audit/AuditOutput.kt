@@ -21,6 +21,9 @@ internal enum class AuditSize(val widthPx: Int, val heightPx: Int, val density: 
     /** The second screen of a dual-screen handheld, for the companion. */
     C(1080, 1240, 2.5f, "second screen of a dual-screen handheld"),
 
+    /** The upper screen of an AYN Thor (6 inch, 1080p) at its largest display size: the shortest a handheld's main screen gets. */
+    J(1920, 1080, 3.0f, "upper screen of a two-screen handheld at its largest display size (AYN Thor)"),
+
     /** The lower screen of an AYN Thor, wider than tall: the companion, and the menus when flipped. */
     L(1240, 1080, 2.5f, "lower screen of a two-screen handheld, wider than tall (AYN Thor)"),
 

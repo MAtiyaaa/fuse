@@ -189,8 +189,14 @@ class AppState(
     /** Someone just became the one playing: their arrival plays over everything, then clears. */
     var profileArrival by mutableStateOf<io.github.matiyaaa.fuse.sync.ProfileInfo?>(null)
 
+    /** The arrival is the first profile ever made here: it gets the grand one (a fuse burns in and lights them). */
+    var arrivalGrand by mutableStateOf(false)
+
     /** Fuse is using Syncthing here (its state isn't Off): Addons shows its tab. */
     var syncthingActive by mutableStateOf(false)
+
+    /** "Your profiles and the host's" is on screen while joining a host (see [io.github.matiyaaa.fuse.sync.SyncService.merge]). */
+    var profileMerge by mutableStateOf(false)
 
     /** Fuse Sync's startup choice of profile was made (once per run, not on every recomposition). */
     var syncStartupDone = false
@@ -203,6 +209,9 @@ class AppState(
 
     /** "Who's playing?", Fuse Sync's profile picker, and why it is open. */
     var whoAreYou by mutableStateOf<io.github.matiyaaa.fuse.ui.shell.sync.WhoMode?>(null)
+
+    /** A profile being edited (name, picture, PIN), with its PIN as typed to open it when it has one. */
+    var profileEdit by mutableStateOf<io.github.matiyaaa.fuse.ui.shell.sync.ProfileEditSpec?>(null)
 
     /** A save conflict Fuse Sync asks about before a game starts. */
     var saveConflict by mutableStateOf<io.github.matiyaaa.fuse.ui.shell.sync.SaveConflictSpec?>(null)
@@ -240,7 +249,7 @@ class AppState(
     var launching by mutableStateOf<LaunchVeil?>(null)
 
     val overlayOpen: Boolean
-        get() = quickMenuOpen || contextMenu != null || confirm != null || textInput != null || choice != null || reorder != null || screenPrompt != null || buttonDetect || problem != null || saveConflict != null || whoAreYou != null || pairing || textPreview != null || phoneTyping
+        get() = quickMenuOpen || contextMenu != null || confirm != null || textInput != null || choice != null || reorder != null || screenPrompt != null || buttonDetect || problem != null || saveConflict != null || whoAreYou != null || profileEdit != null || profileMerge || pairing || textPreview != null || phoneTyping
 
     fun openContextMenu(spec: ContextMenuSpec) {
         contextMenu = spec
@@ -259,8 +268,17 @@ class AppState(
         buttonDetect = false
     }
 
+    /**
+     * Where setup is: kept here rather than in its page, so a detour from it (setting up Fuse Sync
+     * or Syncthing, which are pages of their own) comes back to the very step it left, with that
+     * step's news ("Fuse Sync is on"). Setup opened afresh starts from the beginning.
+     */
+    var onboarding by mutableStateOf(io.github.matiyaaa.fuse.ui.shell.onboarding.OnboardingState())
+        private set
+
     fun go(route: Route) {
         focusZone = FocusZone.CONTENT
+        if (route == Route.Onboarding) onboarding = io.github.matiyaaa.fuse.ui.shell.onboarding.OnboardingState()
         navigator.push(route)
     }
 
@@ -305,6 +323,8 @@ data class LaunchVeil(
     val artBlurred: Boolean = false,
     /** What is happening now, under the title ("Installing 1 of 3"); null is "Starting". */
     val status: String? = null,
+    /** Calls the launch off, while nothing has started yet (the save is still being checked); null once it can't be. */
+    val cancel: (() -> Unit)? = null,
 )
 
 /**

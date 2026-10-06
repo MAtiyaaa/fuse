@@ -38,8 +38,8 @@ the server's id and name in its secret store, never in logs or backups.
   Resume, From the start, Favourite and Watched.
 - **Search:** Jellyfin only (films, shows, episodes, collections, people, artists, albums, songs),
   never your games.
-- **Home widgets:** Continue watching, Next up and New on Jellyfin, as board widgets in Channels
-  and rows in Flow. They are offered only while Jellyfin is on and never added by themselves.
+- **Home widgets:** Continue watching, Next up and New on Jellyfin, as board widgets in Fused
+  and rows in Network. They are offered only while Jellyfin is on and never added by themselves.
 
 ## Playing
 

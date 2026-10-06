@@ -42,7 +42,6 @@ data class HostLink(
     val remoteAddress: String? = null,
 )
 
-/** A host's answer that wasn't a success: what it said, its code, and the HTTP status. */
 /**
  * How Fuse Sync makes its HTTP clients. CIO by default; Android sets one over OkHttp, so the host
  * is reached with the system's own TLS (an https tunnel such as Cloudflare's) as the rest of Fuse is.
@@ -63,7 +62,20 @@ class JoinSession internal constructor(
     val match: String,
 )
 
+/** A host's answer that wasn't a success: what it said, its code, and the HTTP status. */
 class SyncException(message: String, val code: String, val status: Int) : IOException(message)
+
+/**
+ * Something other than a Fuse host answered (a reverse proxy or tunnel whose host is off, a Wi-Fi
+ * sign-in page, another program on the address): to Fuse Sync, the host simply wasn't reached.
+ */
+internal class NotTheHost(status: Int) : IOException("Something other than the host answered ($status).")
+
+/** A failed answer as Fuse Sync takes it: the host's own error, or [NotTheHost] when it wasn't the host's. */
+internal fun hostError(status: Int, text: String, json: Json): IOException {
+    val err = runCatching { json.decodeFromString(ApiError.serializer(), text) }.getOrNull() ?: return NotTheHost(status)
+    return SyncException(err.error, err.code, status)
+}
 
 /**
  * A device's side of Fuse Sync: every call signed with the device's secret, sent to the home
@@ -126,14 +138,14 @@ class SyncClient(
                 }
                 if (raw != null) {
                     return http.prepareRequest(build).execute { resp ->
-                        if (!resp.status.isSuccess()) throw failure(resp.status.value, resp.bodyAsText())
+                        if (!resp.status.isSuccess()) throw hostError(resp.status.value, resp.bodyAsText(), json)
                         route = r
                         raw(resp)
                     }
                 }
                 val resp = http.request(build)
                 val text = resp.bodyAsText()
-                if (!resp.status.isSuccess()) throw failure(resp.status.value, text)
+                if (!resp.status.isSuccess()) throw hostError(resp.status.value, text, json)
                 route = r
                 @Suppress("UNCHECKED_CAST")
                 return if (out == null) Unit as T else json.decodeFromString(out, text)
@@ -149,11 +161,6 @@ class SyncClient(
         throw SyncException("The host didn't answer. ${last?.message ?: ""}".trim(), "offline", 0)
     }
 
-    private fun failure(status: Int, text: String): SyncException {
-        val err = runCatching { json.decodeFromString(ApiError.serializer(), text) }.getOrNull()
-        return SyncException(err?.error ?: "The host said no ($status).", err?.code ?: "", status)
-    }
-
     private suspend fun <T> get(path: String, out: KSerializer<T>): T = call(HttpMethod.Get, path, null, out)
     private suspend fun <B, T> send(method: HttpMethod, path: String, body: B, inS: KSerializer<B>, out: KSerializer<T>): T =
         call(method, path, json.encodeToString(inS, body).toByteArray(), out)
@@ -165,6 +172,7 @@ class SyncClient(
     suspend fun createProfile(p: NewProfile): ProfileInfo = send(HttpMethod.Post, "/profiles", p, NewProfile.serializer(), ProfileInfo.serializer())
     suspend fun changeProfile(id: String, c: ProfileChange): ProfileInfo = send(HttpMethod.Patch, "/profiles/$id", c, ProfileChange.serializer(), ProfileInfo.serializer())
     suspend fun deleteProfile(id: String) = call<Unit>(HttpMethod.Delete, "/profiles/$id", ByteArray(0), null)
+    suspend fun orderProfiles(ids: List<String>) = call<Unit>(HttpMethod.Post, "/profiles/order", json.encodeToString(ProfileOrder.serializer(), ProfileOrder(ids)).toByteArray(), null)
     suspend fun openProfile(id: String, pin: String?): ProfileTicket = send(HttpMethod.Post, "/profiles/$id/open", UnlockRequest(pin), UnlockRequest.serializer(), ProfileTicket.serializer())
     suspend fun meta(profile: String): MetaState = get("/profiles/$profile/meta", MetaState.serializer())
     suspend fun report(profile: String): ProfileReport = get("/profiles/$profile/report", ProfileReport.serializer())
@@ -282,10 +290,7 @@ class SyncClient(
                 setBody(json.encodeToString(PairRequest.serializer(), PairRequest(code.trim().uppercase(), deviceId, deviceName, platform)))
             }
             val text = resp.bodyAsText()
-            if (!resp.status.isSuccess()) {
-                val err = runCatching { json.decodeFromString(ApiError.serializer(), text) }.getOrNull()
-                throw SyncException(err?.error ?: "Pairing failed (${resp.status.value}).", err?.code ?: "", resp.status.value)
-            }
+            if (!resp.status.isSuccess()) throw hostError(resp.status.value, text, json)
             val r = json.decodeFromString(PairResponse.serializer(), text)
             val secret = SyncCrypto.open(r.sealedSecret, code.trim().uppercase(), r.salt) ?: throw SyncException("The host's answer couldn't be opened with that code.", "seal", 0)
             val home = !base.startsWith("https://")
@@ -308,10 +313,7 @@ class SyncClient(
                 setBody(json.encodeToString(JoinRequest.serializer(), JoinRequest(deviceId, deviceName, platform, mine)))
             }
             val text = resp.bodyAsText()
-            if (!resp.status.isSuccess()) {
-                val err = runCatching { json.decodeFromString(ApiError.serializer(), text) }.getOrNull()
-                throw SyncException(err?.error ?: "The host didn't take the request (${resp.status.value}).", err?.code ?: "", resp.status.value)
-            }
+            if (!resp.status.isSuccess()) throw hostError(resp.status.value, text, json)
             val ticket = json.decodeFromString(JoinTicket.serializer(), text)
             val secret = SyncCrypto.joinSecret(keys, ticket.publicKey) ?: throw SyncException("The host's answer wasn't a key.", "bad-key", 0)
             return JoinSession(base, deviceId, ticket, secret, SyncCrypto.joinMatch(mine, ticket.publicKey))
@@ -327,8 +329,13 @@ class SyncClient(
                 method = HttpMethod.Get
                 url(session.base + SyncApi.BASE + "/join/" + session.ticket.id)
             }
-            if (!resp.status.isSuccess()) throw SyncException("The host stopped answering (${resp.status.value}).", "offline", resp.status.value)
-            val state = json.decodeFromString(JoinState.serializer(), resp.bodyAsText())
+            if (!resp.status.isSuccess()) {
+                // A moment's trouble on the way (too many calls, a proxy between) isn't an answer: ask again.
+                val e = hostError(resp.status.value, resp.bodyAsText(), json)
+                if (e is SyncException && e.code != "rate") throw e
+                return null
+            }
+            val state = runCatching { json.decodeFromString(JoinState.serializer(), resp.bodyAsText()) }.getOrNull() ?: return null
             return linkFrom(session, state)
         }
 
@@ -363,8 +370,8 @@ class SyncClient(
             }
             val text = resp.bodyAsText()
             if (!resp.status.isSuccess()) {
-                val err = runCatching { json.decodeFromString(ApiError.serializer(), text) }.getOrNull()
-                throw SyncException(err?.error ?: "The host didn't take it (${resp.status.value}).", err?.code ?: "", resp.status.value)
+                val e = hostError(resp.status.value, text, json)
+                throw e as? SyncException ?: SyncException("The host didn't answer. Try again in a moment.", "offline", resp.status.value)
             }
             return linkFrom(session, json.decodeFromString(JoinState.serializer(), text)) ?: throw SyncException("The host didn't let this device in.", "denied", 403)
         }

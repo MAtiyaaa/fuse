@@ -254,18 +254,10 @@ private fun syncRows(
     ))
     add(MenuAction(
         "profiles", "Profiles", FuseIcons.Users,
-        detail = "Add someone, rename a profile, set or remove a PIN",
+        detail = "Add someone, edit or reorder profiles, and who Fuse starts as",
         trailing = Trailing.Value(count(profiles.size, "profile")), section = you,
-        onSelect = { manageProfiles(app, svc, profiles, active) },
+        onSelect = { app.go(Route.Settings("profiles")) },
     ))
-    add(app.choiceRow(
-        "startup", "At Startup", FuseIcons.Power,
-        if (c.startup == "PROFILE") "PROFILE:${c.startupProfile}" else c.startup,
-        listOf("LAST" to "The last one used", "ASK" to "Ask who's playing") + profiles.map { "PROFILE:${it.id}" to "Always ${it.name}" },
-        detail = "Who Fuse starts as on this device",
-    ) { v ->
-        configure { s -> if (v.startsWith("PROFILE:")) s.copy(startup = "PROFILE", startupProfile = v.removePrefix("PROFILE:")) else s.copy(startup = v, startupProfile = "") }
-    }.copy(section = you))
 
     // What syncs -----------------------------------------------------------------------------------
     val what = "What syncs"
@@ -490,9 +482,11 @@ private fun syncRows(
                     "This device keeps every game, save, setting and record exactly as it is now and stops syncing. The host keeps everything too. You can connect again any time.",
                     "Unlink", destructive = true,
                 ) {
-                    app.scope.launch {
-                        svc.unlink().onSuccess { app.toasts.show("Unlinked. Everything here stays as it was") }
-                            .onFailure { app.toasts.show(it.message ?: "Couldn't unlink", ToastKind.ERROR) }
+                    keepProfilesHere(app) { keep ->
+                        app.scope.launch {
+                            svc.unlink(keep).onSuccess { app.toasts.show("Unlinked. Everything here stays as it was") }
+                                .onFailure { app.toasts.show(it.message ?: "Couldn't unlink", ToastKind.ERROR) }
+                        }
                     }
                 }
             },
@@ -566,87 +560,6 @@ private fun moveHostData(app: AppState, svc: SyncService) {
             }
         }
     }
-}
-
-/** Profiles, each with what can be changed, and adding one. */
-private fun manageProfiles(app: AppState, svc: SyncService, profiles: List<ProfileInfo>, active: ProfileInfo?) {
-    app.choice = ChoiceSpec(
-        title = "Profiles",
-        icon = FuseIcons.Users,
-        message = "Each person's saves, play time, library and settings, on every device they use",
-        options = profiles.map { p ->
-            MenuAction(
-                "p.${p.id}", p.name, io.github.matiyaaa.fuse.ui.designsystem.components.FuseAvatars.of(p.avatar).glyph,
-                detail = listOfNotNull(
-                    "Playing here".takeIf { p.id == active?.id },
-                    "PIN".takeIf { p.protected },
-                    sizeText(p.storageBytes).takeIf { p.storageBytes > 0 }?.let { "$it of saves" },
-                ).joinToString("  ·  ").ifBlank { null },
-                trailing = Trailing.Chevron,
-                onSelect = { profileMenu(app, svc, p, active) },
-            )
-        } + MenuAction("add", "Add Profile", FuseIcons.UserPlus, onSelect = {
-            app.choice = null
-            app.whoAreYou = WhoMode.ADD
-        }),
-    )
-}
-
-private fun profileMenu(app: AppState, svc: SyncService, p: ProfileInfo, active: ProfileInfo?) {
-    fun run(block: suspend () -> Result<*>, done: String) {
-        app.choice = null
-        app.scope.launch { block().onSuccess { app.toasts.show(done, ToastKind.SUCCESS) }.onFailure { app.toasts.show(it.message ?: "Couldn't change that", ToastKind.ERROR) } }
-    }
-    fun withPin(title: String, next: (String?) -> Unit) {
-        if (!p.protected) return next(null)
-        app.textInput = TextInputSpec(title, "", "Current PIN", secret = true, capitalize = false, doneLabel = "Next") { next(it.filter(Char::isDigit)) }
-    }
-    app.choice = ChoiceSpec(
-        title = p.name,
-        icon = io.github.matiyaaa.fuse.ui.designsystem.components.FuseAvatars.of(p.avatar).glyph,
-        options = listOfNotNull(
-            MenuAction("rename", "Rename", FuseIcons.Pencil, onSelect = {
-                app.choice = null
-                app.textInput = TextInputSpec("Rename ${p.name}", p.name, "Name") { v ->
-                    val name = v.trim().take(24)
-                    if (name.isNotEmpty()) withPin("${p.name}'s PIN") { pin -> run({ svc.changeProfile(p.id, ProfileChange(name = name, currentPin = pin)) }, "Renamed to $name") }
-                }
-            }),
-            MenuAction("avatar", "Change Avatar", FuseIcons.Palette, onSelect = {
-                app.choice = ChoiceSpec(
-                    title = "Avatar",
-                    icon = FuseIcons.Palette,
-                    options = io.github.matiyaaa.fuse.ui.designsystem.components.FuseAvatars.all.map { a ->
-                        MenuAction("a.${a.id}", a.name, a.glyph, trailing = Trailing.Check(a.id == p.avatar), onSelect = {
-                            withPin("${p.name}'s PIN") { pin -> run({ svc.changeProfile(p.id, ProfileChange(avatar = a.id, currentPin = pin)) }, "Avatar changed") }
-                        })
-                    },
-                )
-            }),
-            MenuAction("pin", if (p.protected) "Change PIN" else "Set a PIN", FuseIcons.Lock, onSelect = {
-                app.choice = null
-                withPin("${p.name}'s current PIN") { current ->
-                    app.textInput = TextInputSpec("New PIN for ${p.name}", "", "4 to 8 digits", secret = true, capitalize = false, doneLabel = "Set PIN") { v ->
-                        val digits = v.filter(Char::isDigit)
-                        if (digits.length !in 4..8) app.toasts.show("A PIN is 4 to 8 digits", ToastKind.WARNING)
-                        else run({ svc.changeProfile(p.id, ProfileChange(pin = digits, currentPin = current)) }, "PIN set")
-                    }
-                }
-            }),
-            MenuAction("nopin", "Remove PIN", FuseIcons.LockOpen, onSelect = {
-                app.choice = null
-                withPin("${p.name}'s PIN") { pin -> run({ svc.changeProfile(p.id, ProfileChange(removePin = true, currentPin = pin)) }, "PIN removed") }
-            }).takeIf { p.protected },
-            MenuAction("delete", "Delete Profile", FuseIcons.Trash, destructive = true, onSelect = {
-                app.choice = null
-                app.confirm = ConfirmSpec(
-                    "Delete ${p.name}?",
-                    "Their saves, versions and records leave the host. What each device has right now stays on it." + if (p.id == active?.id) " This device stops using it." else "",
-                    "Delete", destructive = true,
-                ) { run({ svc.deleteProfile(p.id) }, "${p.name} was deleted") }
-            }),
-        ),
-    )
 }
 
 /** The host's devices: when each was last seen, and renaming or unlinking one. */

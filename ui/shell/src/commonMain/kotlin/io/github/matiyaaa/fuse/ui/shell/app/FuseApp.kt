@@ -44,6 +44,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.components.rememberHintFlash
 import io.github.matiyaaa.fuse.ui.designsystem.effects.RevealScope
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
 import io.github.matiyaaa.fuse.ui.designsystem.icons.HintButton
+import io.github.matiyaaa.fuse.ui.designsystem.icons.remappedHints
 import io.github.matiyaaa.fuse.ui.designsystem.input.InputFeedback
 import io.github.matiyaaa.fuse.ui.designsystem.input.InputLayer
 import io.github.matiyaaa.fuse.ui.designsystem.input.InputRouter
@@ -337,7 +338,7 @@ private fun FuseAppContent(
         spec = spec,
         motion = motionProfile,
         quality = quality,
-        glyphs = GlyphConfig(glyphStyle, prefs.input.confirmOnRight, prefs.input.swapShoulders),
+        glyphs = GlyphConfig(glyphStyle, hintConfirmOnRight(prefs.input, glyphStyle, padFamily), prefs.input.swapShoulders, remappedHints(prefs.input)),
         glass = prefs.glass,
         highContrastFocus = prefs.highContrastFocus,
         animateChanges = true,
@@ -613,7 +614,13 @@ private fun RootPages(app: AppState, current: Route, direction: NavDirection, pl
     // at its start next time instead of as it was left.
     if (app.navigator.forgetsTabs) kept.retainAll { it == shownRoot || it == leaving }
     LaunchedEffect(shownRoot) {
-        if (!starting) return@LaunchedEffect
+        if (!starting) {
+            // A quick switch lands at once, and also finishes any slide this one cut short: a page
+            // left part way in (faded, offset) would stay so until the next slow switch.
+            incoming.snapTo(1f)
+            outgoing.snapTo(1f)
+            return@LaunchedEffect
+        }
         incoming.snapTo(0f)
         outgoing.snapTo(0f)
         starting = false
@@ -639,8 +646,13 @@ private fun RootPages(app: AppState, current: Route, direction: NavDirection, pl
                         Modifier.fillMaxSize().graphicsLayer {
                             val w = size.width
                             if (d == shownRoot) {
-                                // Coming in: fades in just after it starts sliding.
-                                val p = if (starting) 0f else incoming.value
+                                // Coming in: fades in just after it starts sliding. With nothing leaving
+                                // (a quick switch, or the slide done) it is simply there.
+                                val p = when {
+                                    starting -> 0f
+                                    leaving == null -> 1f
+                                    else -> incoming.value
+                                }
                                 val fade = ((p - 0.08f) / 0.92f).coerceIn(0f, 1f)
                                 val v = visible.value
                                 alpha = fade * v
@@ -1147,4 +1159,14 @@ internal fun padGlyphs(setting: GlyphStyle, family: GlyphStyle?): GlyphStyle = w
     GlyphStyle.PLAYSTATION -> GlyphStyle.PLAYSTATION
     GlyphStyle.XBOX -> if (setting == GlyphStyle.NINTENDO) setting else GlyphStyle.XBOX
     else -> setting
+}
+
+/**
+ * Whether the hints put Confirm on the right face button for the glyphs shown. A PlayStation or
+ * Xbox pad in hand reports its bottom button as A wherever Fuse runs, so Confirm is the bottom one
+ * there unless confirm and back are swapped; otherwise the setting (and "Detect my buttons") decides.
+ */
+internal fun hintConfirmOnRight(input: io.github.matiyaaa.fuse.model.InputProfile, shown: GlyphStyle, family: GlyphStyle?): Boolean = when {
+    input.autoGlyphs && shown != GlyphStyle.NINTENDO && (family == GlyphStyle.PLAYSTATION || family == GlyphStyle.XBOX) -> input.swapConfirmBack
+    else -> input.confirmOnRight
 }

@@ -391,7 +391,16 @@ interface LibraryOps {
      * as it is here (after the person settled a conflict). [playAnyway] doesn't wait for another
      * device still playing it or sending its save.
      */
-    suspend fun launch(id: GameId, emulator: EmulatorId? = null, discPath: String? = null, display: LaunchDisplay? = null, skipSaveCheck: Boolean = false, playAnyway: Boolean = false): LaunchOutcome
+    suspend fun launch(
+        id: GameId,
+        emulator: EmulatorId? = null,
+        discPath: String? = null,
+        display: LaunchDisplay? = null,
+        skipSaveCheck: Boolean = false,
+        playAnyway: Boolean = false,
+        /** Told as the launch moves on: checking the save first (when Fuse Sync or Syncthing does), then starting. */
+        onStage: (LaunchStage) -> Unit = {},
+    ): LaunchOutcome
 
     /** Called when Fuse comes back to the foreground: closes the running session, checks for changes. */
     fun onResume()

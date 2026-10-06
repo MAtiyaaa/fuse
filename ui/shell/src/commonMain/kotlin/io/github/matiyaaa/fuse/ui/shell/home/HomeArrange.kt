@@ -25,7 +25,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
 
 /**
  * How Home's widgets are rearranged, by touch or with the D-pad alike. What Home shows is a list of
- * blocks (a Flow shelf, or one channel), each made of one or more widgets; moving a block moves its
+ * blocks (a Network shelf, or one channel), each made of one or more widgets; moving a block moves its
  * widgets together. Widgets that show nothing right now (hidden, empty, not offered here) stay right
  * behind the widget they followed, so they come back where they were.
  */

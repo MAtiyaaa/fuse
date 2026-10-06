@@ -271,7 +271,7 @@ private fun syncthingRows(
                     trailing = Trailing.Value(if (d.connected) "Online" else "Offline"),
                     section = people,
                     onSelect = {
-                        app.confirm = ConfirmSpec("Remove ${d.name}?", "Syncthing stops syncing with it. Its files and this device's stay as they are.", "Remove", destructive = true) {
+                        app.confirm = ConfirmSpec("Remove ${d.name}?", "Your save folders stop syncing with it. Anything else you share with it in Syncthing carries on, and the files on both devices stay as they are.", "Remove", destructive = true) {
                             busy { svc.removeDevice(d.id) }
                         }
                     },
@@ -309,6 +309,7 @@ private fun syncthingRows(
                                 live == null -> "Not shared"
                                 live.error != null -> "Problem"
                                 live.paused -> "Paused"
+                                others.none { it.id in live.devices } -> "Only here"
                                 live.needBytes > 0 -> "${bytesText(live.needBytes)} to go"
                                 live.state == "scanning" -> "Looking"
                                 live.state == "syncing" -> "Syncing"

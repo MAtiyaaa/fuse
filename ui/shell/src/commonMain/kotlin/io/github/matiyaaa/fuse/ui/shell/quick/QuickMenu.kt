@@ -195,7 +195,8 @@ fun QuickMenu(app: AppState) {
         QuickId.BRIGHTNESS -> features.brightness && brightness != null
         QuickId.VOLUME -> features.volume && volume != null
         QuickId.FULLSCREEN -> windows != null
-        QuickId.PROFILES -> prefs.sync.enabled && prefs.sync.role.isNotEmpty()
+        // Profiles with a host, or this device's own without one.
+        QuickId.PROFILES -> (prefs.sync.enabled && prefs.sync.role.isNotEmpty()) || app.syncProfileCount > 0
         else -> true
     }
     val visible = all.filter { available(it.id) }
@@ -374,7 +375,7 @@ fun QuickMenu(app: AppState) {
             }
         }
         QuickId.CARTRIDGE -> QuickTile(sections.label(Destination.CARTRIDGE), sections.icon(Destination.CARTRIDGE)) { close(); app.selectTab(Destination.CARTRIDGE) }
-        QuickId.HOME_STYLE -> QuickTile("Home", if (prefs.home.mode == HomeMode.CHANNELS) FuseIcons.Grid else FuseIcons.Rows, detail = if (prefs.home.mode == HomeMode.CHANNELS) "Channels" else "Flow") {
+        QuickId.HOME_STYLE -> QuickTile("Home", if (prefs.home.mode == HomeMode.CHANNELS) FuseIcons.Grid else FuseIcons.Rows, detail = if (prefs.home.mode == HomeMode.CHANNELS) "Fused" else "Network") {
             app.switchHomeStyle()
         }
         QuickId.SOUND -> {

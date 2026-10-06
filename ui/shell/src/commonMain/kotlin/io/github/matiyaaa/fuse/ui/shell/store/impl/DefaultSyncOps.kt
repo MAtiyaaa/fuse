@@ -41,9 +41,9 @@ internal class DefaultSyncOps(
         service?.changed()
     }
 
-    override suspend fun setEnabled(enabled: Boolean) {
+    override suspend fun setEnabled(enabled: Boolean, keepProfiles: Boolean) {
         val s = service
-        if (s != null) s.setEnabled(enabled) else configure { it.copy(enabled = enabled) }
+        if (s != null) s.setEnabled(enabled, keepProfiles) else configure { it.copy(enabled = enabled) }
     }
 
     override suspend fun setOwnHome(own: Boolean) {

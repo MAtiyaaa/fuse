@@ -25,9 +25,11 @@ class SettingsLayoutTest {
     }
 
     @Test
-    fun fourteenSectionsUnderFiveHeadingsWithTheStoreAndCartridgeInAddons() {
+    fun fifteenSectionsUnderFiveHeadingsWithTheStoreAndCartridgeInAddons() {
         // The Store and Cartridge are groups of Addons, beside Jellyfin, not sections of their own.
-        assertEquals(14, settingsSections.size)
+        // Profiles leads Personalize: they work with Fuse Sync or without it.
+        assertEquals(15, settingsSections.size)
+        assertEquals("profiles", settingsSections.first().id)
         assertTrue(settingsSections.none { it.id == "store" || it.id == "cartridge" })
         assertEquals("addons", settingsSectionId("store"))
         assertEquals("addons", settingsSectionId("cartridge"))

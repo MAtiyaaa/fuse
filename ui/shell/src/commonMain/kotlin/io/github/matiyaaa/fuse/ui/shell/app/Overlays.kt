@@ -79,6 +79,8 @@ fun OverlayHost(app: AppState) {
     ReorderOverlay(app)
     ScreenPromptOverlay(app)
     io.github.matiyaaa.fuse.ui.shell.sync.WhoAreYouOverlay(app)
+    io.github.matiyaaa.fuse.ui.shell.sync.ProfileEditOverlay(app)
+    io.github.matiyaaa.fuse.ui.shell.sync.ProfileMergeOverlay(app)
     io.github.matiyaaa.fuse.ui.shell.sync.ProfileArrival(app)
     io.github.matiyaaa.fuse.ui.shell.sync.PairingOverlay(app)
     io.github.matiyaaa.fuse.ui.shell.sync.JoinRequestOverlay(app)

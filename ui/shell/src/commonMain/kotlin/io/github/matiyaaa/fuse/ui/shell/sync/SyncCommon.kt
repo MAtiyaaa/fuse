@@ -38,7 +38,7 @@ internal fun syncWords(status: SyncStatus): SyncWords = when (status) {
     )
     is SyncStatus.Offline -> SyncWords(
         false, "Offline",
-        if (status.pending > 0) "${status.hostName} isn't answering. ${status.pending} ${if (status.pending == 1) "change waits" else "changes wait"} here, safe" else "${status.hostName} isn't answering. Everything works here and catches up later",
+        if (status.pending > 0) "${status.hostName} isn't answering. ${status.pending} ${if (status.pending == 1) "change is" else "changes are"} kept here and ${if (status.pending == 1) "goes" else "go"} up when it's back" else "${status.hostName} isn't answering. Everything works here and catches up later",
     )
     is SyncStatus.NeedsAttention -> SyncWords(false, "Needs you", status.reason)
 }
@@ -80,23 +80,54 @@ internal fun confirmTurnOff(app: AppState, name: String, working: Boolean, first
 }
 
 /**
- * Fuse Sync off: this device forgets its host and its profiles, and keeps its games, saves,
- * library, settings and Home as they are now. Asks twice while it is in touch with its host, once
- * while it is set up but not, and not at all when there is nothing to forget.
+ * Leaving a host: whether the people who played here stay as this device's own profiles (with their
+ * saves and play time) or go too. Asked only when there is someone to keep; [then] gets the answer.
+ */
+internal fun keepProfilesHere(app: AppState, then: (Boolean) -> Unit) {
+    val people = app.store.sync.service?.profiles?.value.orEmpty().filterNot { it.hostOnly }
+    if (people.isEmpty()) return then(true)
+    app.choice = io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec(
+        title = "Profiles on This Device",
+        icon = FuseIcons.Users,
+        message = "Everyone's profiles can stay on this device, without a host, with their play time, favourites, theme and the saves here. Join a host again later and they come along.",
+        options = listOf(
+            io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction(
+                "keep", "Keep Profiles Here", FuseIcons.UserRound,
+                detail = "Every profile, and what this device has of theirs, stays here",
+                onSelect = { app.choice = null; then(true) },
+            ),
+            io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction(
+                "forget", "Forget Them Too", FuseIcons.Trash, destructive = true,
+                detail = "No profiles here. The library and the saves in the emulators' folders stay as they are now",
+                onSelect = { app.choice = null; then(false) },
+            ),
+        ),
+    )
+}
+
+/**
+ * Fuse Sync off: this device forgets its host, and keeps its games, saves, library, settings and
+ * Home as they are now; the people who played here stay as its own profiles unless they should go
+ * too. Asks twice while it is in touch with its host, once while it is set up but not, and not at
+ * all when there is nothing to forget.
  */
 internal fun turnOffFuseSync(app: AppState, then: suspend () -> Unit = {}) {
     val status = app.store.sync.service?.status?.value
     val working = status is SyncStatus.Online
     val host = app.store.prefs.value.sync.role == "HOST"
-    val first = "This device forgets its host and its profiles. Its games, saves, library, settings and Home stay exactly as they are now." +
+    val first = "This device forgets its host. Its games, saves, library, settings and Home stay exactly as they are now." +
         if (host) " This computer stops hosting; everyone's saves stay on it until you delete them." else ""
-    val second = "Turning it on again starts fresh: find the host, join, then pick or make a profile. " +
+    val second = "Turning it on again starts fresh: find the host, join, and bring your profiles along. " +
         if (host) "Your other devices stop syncing until there is a host again." else "Saves made here won't reach your other devices until then."
     fun off() {
-        app.scope.launch {
-            app.store.sync.setEnabled(false)
-            then()
+        fun go(keep: Boolean) {
+            app.scope.launch {
+                app.store.sync.setEnabled(false, keep)
+                then()
+            }
         }
+        // Without a host, the profiles here are this device's own already: turning Fuse Sync off leaves them be.
+        if (app.store.prefs.value.sync.role.isEmpty()) go(true) else keepProfilesHere(app, ::go)
     }
     when {
         working -> confirmTurnOff(app, SYNC_NAME, working = true, first = first, second = second) { off() }

@@ -1,5 +1,6 @@
 package io.github.matiyaaa.fuse.ui.shell.sync
 
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -145,6 +146,7 @@ internal fun SyncSetupScreen(app: AppState, host: Boolean) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val compact = maxHeight < 600.dp
         val wide = maxWidth >= 980.dp
+        androidx.compose.runtime.CompositionLocalProvider(LocalSetupShort provides (maxHeight < 420.dp)) {
         Row(
             Modifier.fillMaxSize().padding(horizontal = Space.gutter).padding(top = Size.hudHeight + Space.l, bottom = Size.hintHeight + Space.s),
             horizontalArrangement = Arrangement.spacedBy(Space.xl),
@@ -199,6 +201,7 @@ internal fun SyncSetupScreen(app: AppState, host: Boolean) {
                 }
             }
         }
+        }
     }
 }
 
@@ -243,7 +246,8 @@ private fun StepRail(host: Boolean, step: SetupStep, modifier: Modifier) {
 @Composable
 private fun Heading(title: String, body: String, compact: Boolean, icon: ImageVector? = null) {
     val c = Fuse.colors
-    if (icon != null) {
+    // On the shortest screens (a 4:3 handheld) the words go first; the icon would push them off.
+    if (icon != null && !LocalSetupShort.current) {
         Box(Modifier.size(if (compact) 44.dp else 56.dp).clip(RoundedCornerShape(16.dp)).background(c.accent.copy(alpha = 0.14f)), contentAlignment = Alignment.Center) {
             FuseIcon(icon, size = Size.iconL, tint = c.accent)
         }
@@ -272,7 +276,7 @@ private fun ChoiceRow(label: String, value: String, icon: ImageVector, selected:
     val bg by fuselineColor(if (selected) c.text else c.text.copy(alpha = 0.05f), Fuse.motion.tween(Durations.FAST), label = "setupRow")
     val fg = if (selected) c.ink else c.text
     Row(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(Fuse.geometry.control)).background(bg)
+        Modifier.keptInView(selected).fillMaxWidth().clip(RoundedCornerShape(Fuse.geometry.control)).background(bg)
             .clickable(remember { MutableInteractionSource() }, indication = null, onClick = onClick)
             .padding(horizontal = Space.l, vertical = Space.m),
         verticalAlignment = Alignment.CenterVertically,
@@ -285,19 +289,6 @@ private fun ChoiceRow(label: String, value: String, icon: ImageVector, selected:
             if (detail != null) FText(detail, Fuse.type.caption, color = if (selected) fg.copy(alpha = 0.7f) else c.textMuted, maxLines = 3)
         }
         trailing?.invoke()
-    }
-}
-
-@Composable
-private fun Switch(on: Boolean, selected: Boolean) {
-    val c = Fuse.colors
-    val t by fuselineFloat(if (on) 1f else 0f, Fuse.motion.focusSpring(), label = "sw")
-    val track = if (on) c.accent else if (selected) c.ink.copy(alpha = 0.25f) else c.text.copy(alpha = 0.18f)
-    Box(Modifier.width(44.dp).height(26.dp).clip(RoundedCornerShape(50)).background(track)) {
-        Box(
-            Modifier.padding(3.dp).size(20.dp).graphicsLayer { translationX = t * 18.dp.toPx() }
-                .clip(RoundedCornerShape(50)).background(if (on) c.onAccent else if (selected) c.ink else c.text),
-        )
     }
 }
 
@@ -338,7 +329,7 @@ private fun HostIntro(app: AppState, compact: Boolean, keys: ActiveKeys, working
         ChoiceRow(
             "Keep running when Fuse is closed", if (keep) "On" else "Off", FuseIcons.ServerCog, selected = index == 1,
             detail = listOfNotNull(lifetime.description, lifetime.caveat).joinToString(". "),
-            trailing = { Switch(keep, index == 1) },
+            trailing = { io.github.matiyaaa.fuse.ui.designsystem.components.Toggle(keep) },
         ) { keep = !keep }
     }
     Spacer(Modifier.height(Space.s))
@@ -349,10 +340,21 @@ private fun HostIntro(app: AppState, compact: Boolean, keys: ActiveKeys, working
     ) { askFolder() }
     Spacer(Modifier.height(Space.xl))
     FuseButton(
-        "Make This the Host", selected = index == actions.size - 1, onClick = { if (!working) onGo(name, keep && lifetime.supported, folder) },
+        "Make This the Host", selected = index == actions.size - 1, modifier = Modifier.keptInView(index == actions.size - 1), onClick = { if (!working) onGo(name, keep && lifetime.supported, folder) },
         icon = FuseIcons.Server, kind = ButtonKind.PRIMARY, loading = working,
     )
     StepInput(app, keys, actions)
+}
+
+/** True on the shortest screens, where setup keeps only what is needed above the fold. */
+private val LocalSetupShort = androidx.compose.runtime.staticCompositionLocalOf { false }
+
+/** Scrolls this into view while it is [selected], so the controller's choice is never below the screen. */
+@Composable
+private fun Modifier.keptInView(selected: Boolean): Modifier {
+    val requester = remember { androidx.compose.foundation.relocation.BringIntoViewRequester() }
+    LaunchedEffect(selected) { if (selected) requester.bringIntoView() }
+    return this.bringIntoViewRequester(requester)
 }
 
 /** The big moment: a ring that draws itself round a check, the host's name, and the code to add devices. */
@@ -384,8 +386,8 @@ private fun HostReady(app: AppState, compact: Boolean, keys: ActiveKeys) {
     PairingCard(app, hostView?.pairingCode, hostView?.addresses.orEmpty(), compact)
     Spacer(Modifier.height(Space.xl))
     Row(horizontalArrangement = Arrangement.spacedBy(Space.m)) {
-        FuseButton("Done", selected = index == 0, onClick = { app.back() }, icon = FuseIcons.Check, kind = ButtonKind.PRIMARY)
-        FuseButton("Make a Profile for Me", selected = index == 1, onClick = { app.back(); app.whoAreYou = WhoMode.ADD }, icon = FuseIcons.UserPlus)
+        FuseButton("Done", selected = index == 0, modifier = Modifier.keptInView(index == 0), onClick = { app.back() }, icon = FuseIcons.Check, kind = ButtonKind.PRIMARY)
+        FuseButton("Make a Profile for Me", selected = index == 1, modifier = Modifier.keptInView(index == 1), onClick = { app.back(); app.whoAreYou = WhoMode.ADD }, icon = FuseIcons.UserPlus)
     }
     StepInput(app, keys, actions)
 }
@@ -659,10 +661,10 @@ private fun AskingToJoin(
     val first = if (waiting.account) 1 else 0
     Row(horizontalArrangement = Arrangement.spacedBy(Space.m)) {
         if (waiting.account) {
-            FuseButton("Use the Host's Account", selected = index == 0, onClick = { signIn() }, icon = FuseIcons.UserRound, kind = ButtonKind.PRIMARY, loading = signing)
+            FuseButton("Use the Host's Account", selected = index == 0, modifier = Modifier.keptInView(index == 0), onClick = { signIn() }, icon = FuseIcons.UserRound, kind = ButtonKind.PRIMARY, loading = signing)
         }
-        FuseButton("Use a Code Instead", selected = index == first, onClick = onCode, icon = FuseIcons.Keyboard)
-        FuseButton("Cancel", selected = index == first + 1, onClick = onCancel)
+        FuseButton("Use a Code Instead", selected = index == first, modifier = Modifier.keptInView(index == first), onClick = onCode, icon = FuseIcons.Keyboard)
+        FuseButton("Cancel", selected = index == first + 1, modifier = Modifier.keptInView(index == first + 1), onClick = onCancel)
     }
     if (waiting.account) {
         Spacer(Modifier.height(Space.s))
@@ -738,7 +740,7 @@ private fun CodeEntry(app: AppState, host: NearbyHost, compact: Boolean, keys: A
     Problem(error)
     Spacer(Modifier.height(Space.xl))
     FuseButton(
-        if (error != null) "Try Again" else "Connect", selected = index == 2, onClick = { if (code.length == 8 && !working) onConnect(code, remote) else typeCode() },
+        if (error != null) "Try Again" else "Connect", selected = index == 2, modifier = Modifier.keptInView(index == 2), onClick = { if (code.length == 8 && !working) onConnect(code, remote) else typeCode() },
         icon = FuseIcons.Link, kind = ButtonKind.PRIMARY, loading = working, enabled = code.length == 8 || index == 2,
     )
     StepInput(app, keys, actions)
@@ -751,22 +753,36 @@ private fun Connected(app: AppState, hostName: String, compact: Boolean, keys: A
     val c = Fuse.colors
     val svc = app.store.sync.service
     val profiles by androidx.compose.runtime.produceState(svc?.profiles?.value.orEmpty(), svc) { svc?.profiles?.collect { value = it } }
+    val playing by androidx.compose.runtime.produceState(svc?.activeProfile?.value, svc) { svc?.activeProfile?.collect { value = it } }
     // Nobody here yet (the host's own profile is the host's alone): this device makes the first.
     val who = if (profiles.isEmpty()) WhoMode.ADD else WhoMode.SWITCH
-    actions += SetupAction("who") { app.back(); app.whoAreYou = who }
-    actions += SetupAction("later") { app.back() }
+    // Someone already playing came along with their profile: done, unless someone else is playing.
+    val here = playing?.takeIf { !it.hostOnly }
+    if (here != null) {
+        actions += SetupAction("done") { app.back() }
+        actions += SetupAction("who") { app.back(); app.whoAreYou = WhoMode.SWITCH }
+    } else {
+        actions += SetupAction("who") { app.back(); app.whoAreYou = who }
+        actions += SetupAction("later") { app.back() }
+    }
     SuccessMark(if (compact) 64.dp else 88.dp)
     Spacer(Modifier.height(Space.l))
     FText("Connected to $hostName", if (compact) Fuse.type.title else Fuse.type.display, maxLines = 2, modifier = Modifier.semantics { heading() })
     Spacer(Modifier.height(Space.xs))
     FText(
-        "Next, choose who's playing on this device. What it already has joins that profile, and nothing here is replaced without asking.",
+        if (here != null) "${here.name} is playing here, and this device's profiles are on $hostName now, saves and play time with them."
+        else "Next, choose who's playing on this device. What it already has joins that profile, and nothing here is replaced without asking.",
         Fuse.type.body, color = c.textMuted, maxLines = 4,
     )
     Spacer(Modifier.height(Space.xl))
     Row(horizontalArrangement = Arrangement.spacedBy(Space.m)) {
-        FuseButton(if (profiles.isEmpty()) "Make Your Profile" else "Choose Who's Playing", selected = index == 0, onClick = { app.back(); app.whoAreYou = who }, icon = if (profiles.isEmpty()) FuseIcons.UserPlus else FuseIcons.Users, kind = ButtonKind.PRIMARY)
-        FuseButton("Later", selected = index == 1, onClick = { app.back() })
+        if (here != null) {
+            FuseButton("Done", selected = index == 0, modifier = Modifier.keptInView(index == 0), onClick = { app.back() }, icon = FuseIcons.Check, kind = ButtonKind.PRIMARY)
+            FuseButton("Someone Else Is Playing", selected = index == 1, modifier = Modifier.keptInView(index == 1), onClick = { app.back(); app.whoAreYou = WhoMode.SWITCH }, icon = FuseIcons.Users)
+        } else {
+            FuseButton(if (profiles.isEmpty()) "Make Your Profile" else "Choose Who's Playing", selected = index == 0, modifier = Modifier.keptInView(index == 0), onClick = { app.back(); app.whoAreYou = who }, icon = if (profiles.isEmpty()) FuseIcons.UserPlus else FuseIcons.Users, kind = ButtonKind.PRIMARY)
+            FuseButton("Later", selected = index == 1, modifier = Modifier.keptInView(index == 1), onClick = { app.back() })
+        }
     }
     StepInput(app, keys, actions)
 }

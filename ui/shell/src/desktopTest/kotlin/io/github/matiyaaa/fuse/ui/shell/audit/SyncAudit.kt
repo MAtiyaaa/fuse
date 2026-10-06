@@ -84,7 +84,8 @@ internal fun AuditDriver.syncScreens() {
         tapText("Make This the Host")
         waitFor("Make this computer the host")
         shoot("what being the host means, its name, and keeping it running", 1_200)
-        tap(PadButton.DPAD_DOWN, 2)
+        // Name, keeping it running, where saves are kept, then the button.
+        tap(PadButton.DPAD_DOWN, 3)
         shoot("Make This the Host chosen")
         tap(PadButton.A)
         waitFor("Fuse Sync is ready")
@@ -141,10 +142,17 @@ internal fun AuditDriver.syncScreens() {
         shoot("Add Profile chosen")
         tap(PadButton.A)
         waitFor("New Profile")
-        shoot("a new profile: name, avatar, PIN", 1_000)
+        shoot("a new profile: name, PIN, pictures", 1_000)
+        // In the order they sit: the PIN below the name, then the pictures, then the buttons.
+        tap(PadButton.DPAD_DOWN)
+        shoot("the PIN chosen")
         tap(PadButton.DPAD_DOWN)
         tap(PadButton.DPAD_RIGHT, 3)
-        shoot("choosing an avatar")
+        shoot("choosing a picture")
+        tap(PadButton.DPAD_DOWN, 4)
+        shoot("Create Profile chosen, on screen")
+        tap(PadButton.DPAD_LEFT)
+        shoot("Cancel chosen")
         tap(PadButton.B)
     }
 
@@ -416,5 +424,72 @@ internal fun AuditDriver.syncthingScreens() {
         tap(PadButton.DPAD_DOWN)
         shoot("the save folders it shares")
         runBlocking { syncthing.setEnabled(false) }
+    }
+}
+
+/**
+ * Profiles with and without Fuse Sync: Settings, Profiles with none yet and with this device's own,
+ * a profile's options and its editor, putting them in order, and joining a host that has people
+ * ("Your profiles and Gaming PC's"), from a suggestion to the buttons.
+ */
+internal fun AuditDriver.profileScreens() {
+    fun openProfiles() {
+        openSettings()
+        focusText("Profiles")
+        tap(PadButton.DPAD_RIGHT)
+        settle(600)
+    }
+
+    scenario("profiles", "none yet") {
+        syncOff()
+        useLibrary()
+        openProfiles()
+        waitFor("Everyone gets their own")
+        shoot("Settings, Profiles, before anyone has one")
+    }
+
+    scenario("profiles", "this device's own") {
+        syncOff()
+        sync.ownProfiles()
+        useLibrary()
+        openProfiles()
+        waitFor("Add Profile")
+        shoot("Settings, Profiles: Mo and Kid, no host", 900)
+        tapText("Mo")
+        waitFor("Edit Profile")
+        shoot("Mo's options")
+        tap(PadButton.A)
+        waitFor("Save Changes")
+        shoot("editing Mo", 1_000)
+        tap(PadButton.B)
+        settle(600)
+        focusText("Profile Order")
+        tap(PadButton.A)
+        waitFor("Drag a row by its grip", ignoreCase = true)
+        shoot("putting them in order")
+    }
+
+    scenario("profiles", "joining a host with people") {
+        syncOff()
+        sync.ownProfiles()
+        useLibrary()
+        sync.joining()
+        waitFor("Your profiles and Gaming PC's")
+        shoot("who's who: mo suggested as Mo", 1_400)
+        tap(PadButton.DPAD_RIGHT)
+        shoot("mo as someone new instead")
+        tap(PadButton.DPAD_DOWN, 2)
+        tap(PadButton.DPAD_LEFT)
+        shoot("Guest left out")
+        tap(PadButton.DPAD_DOWN)
+        shoot("Bring Them chosen")
+        tap(PadButton.DPAD_LEFT)
+        tap(PadButton.A)
+        waitFor("Use only Gaming PC's profiles?")
+        shoot("only theirs, asked first")
+        tap(PadButton.B)
+        settle(400)
+        runBlocking { sync.cancelMerge() }
+        settle(600)
     }
 }

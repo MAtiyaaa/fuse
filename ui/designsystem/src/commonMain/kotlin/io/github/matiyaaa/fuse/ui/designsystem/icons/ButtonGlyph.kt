@@ -33,7 +33,11 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import io.github.matiyaaa.fuse.model.GlyphStyle
+import io.github.matiyaaa.fuse.model.InputProfile
+import io.github.matiyaaa.fuse.model.NavAction
 import io.github.matiyaaa.fuse.model.PadButton
+import io.github.matiyaaa.fuse.ui.designsystem.input.actionFor
+import io.github.matiyaaa.fuse.ui.designsystem.input.defaultActionFor
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.GlyphConfig
 import kotlin.math.ceil
@@ -52,6 +56,44 @@ enum class HintButton {
 
     /** The right stick. Keyboards show the arrow keys. */
     RIGHT_STICK,
+}
+
+/** The action a hint stands for, and the pad buttons its glyph can depict with no remaps. */
+private fun HintButton.mapping(): Pair<NavAction, List<PadButton>>? = when (this) {
+    HintButton.CONFIRM, HintButton.HOLD_CONFIRM -> NavAction.SELECT to FACES_AND_SHOULDERS
+    HintButton.BACK -> NavAction.BACK to FACES_AND_SHOULDERS
+    HintButton.OPTIONS, HintButton.HOLD_OPTIONS -> NavAction.CONTEXT to FACES_AND_SHOULDERS
+    HintButton.SEARCH -> NavAction.SEARCH to FACES_AND_SHOULDERS
+    HintButton.PREV -> NavAction.PREVIOUS_SECTION to FACES_AND_SHOULDERS
+    HintButton.NEXT -> NavAction.NEXT_SECTION to FACES_AND_SHOULDERS
+    HintButton.PAGE_PREV -> NavAction.PAGE_UP to FACES_AND_SHOULDERS
+    HintButton.PAGE_NEXT -> NavAction.PAGE_DOWN to FACES_AND_SHOULDERS
+    HintButton.MENU -> NavAction.QUICK_MENU to listOf(PadButton.START)
+    HintButton.VIEW -> NavAction.CONTEXT to listOf(PadButton.SELECT)
+    else -> null
+}
+
+private val FACES_AND_SHOULDERS = listOf(
+    PadButton.A, PadButton.B, PadButton.X, PadButton.Y, PadButton.L1, PadButton.R1, PadButton.L2, PadButton.R2,
+)
+
+/** Pad buttons a remap can move an action to, in the order a hint prefers to show them. */
+private val REMAP_TARGETS = FACES_AND_SHOULDERS + listOf(PadButton.START, PadButton.SELECT, PadButton.R3, PadButton.L3, PadButton.MODE)
+
+/**
+ * The hints whose action the person's remaps took off the button the hint shows, each with a pad
+ * button that does it now, so the hint line always names the button to press. Empty without remaps.
+ */
+fun remappedHints(profile: InputProfile): Map<HintButton, PadButton> {
+    if (profile.remap.isEmpty()) return emptyMap()
+    val out = LinkedHashMap<HintButton, PadButton>()
+    for (hint in HintButton.entries) {
+        val (action, shown) = hint.mapping() ?: continue
+        val usual = shown.firstOrNull { profile.defaultActionFor(it) == action } ?: continue
+        if (profile.actionFor(usual) == action) continue
+        REMAP_TARGETS.firstOrNull { profile.actionFor(it) == action }?.let { out[hint] = it }
+    }
+    return out
 }
 
 /** Sizes for [ButtonGlyph] and [PadGlyph], matched optically to the text they sit beside. */
@@ -134,6 +176,11 @@ private fun hintGlyph(button: HintButton, glyphs: GlyphConfig): Glyph {
             HintButton.DPAD, HintButton.LEFT_STICK, HintButton.RIGHT_STICK -> Glyph(Body.ARROWS)
             else -> Glyph(Body.KEYCAP, keyboardLabel(button))
         }
+    }
+    glyphs.remapped[button]?.let { pad ->
+        val glyph = padGlyph(pad, style)
+        val hold = button == HintButton.HOLD_CONFIRM || button == HintButton.HOLD_OPTIONS
+        return if (hold && glyph.body == Body.DISC) glyph.copy(body = Body.HOLD) else glyph
     }
     val nintendo = style == GlyphStyle.NINTENDO
     // With the shoulders swapped, tabs are on the triggers and pages on the bumpers, and the hints say so.

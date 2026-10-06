@@ -123,8 +123,11 @@ class StoreIntegrationTest {
         // Launch: the fake launcher gets mGBA's command and the session stays open until it exits.
         val exit = CompletableDeferred<Unit>()
         services.exit = exit
-        val outcome = store.library.launch(game.id)
+        val stages = mutableListOf<io.github.matiyaaa.fuse.ui.shell.store.LaunchStage>()
+        val outcome = store.library.launch(game.id) { stages += it }
         assertIs<LaunchOutcome.Started>(outcome)
+        // Without Fuse Sync or Syncthing there is no save to check: it simply starts (and the veil says so).
+        assertEquals(listOf(io.github.matiyaaa.fuse.ui.shell.store.LaunchStage.STARTING), stages)
         val plan = assertIs<LaunchPlan.Command>(services.launched.single().plan)
         assertEquals(EmulatorId("linux.mgba"), plan.emulatorId)
         assertTrue(plan.argv.any { it.endsWith("Advance Wars (USA).gba") }, plan.argv.toString())

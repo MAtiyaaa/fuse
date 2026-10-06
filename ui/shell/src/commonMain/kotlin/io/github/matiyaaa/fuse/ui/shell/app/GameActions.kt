@@ -62,8 +62,23 @@ private fun AppState.launch(card: GameCard, emulator: io.github.matiyaaa.fuse.mo
         artBlurred = room.blurred,
     )
     platform.sounds.play(SoundCue.LAUNCH)
-    scope.launch {
-        when (val outcome = store.library.launch(card.id, emulator, discPath, display, skipSaveCheck, playAnyway)) {
+    var job: kotlinx.coroutines.Job? = null
+    // Bringing the save up to date can wait on the host: Back calls it off until the game starts.
+    val callOff: () -> Unit = {
+        if (launching?.cancel != null) {
+            job?.cancel()
+            launching = null
+            toasts.show("${card.title} wasn't started", ToastKind.INFO)
+        }
+    }
+    job = scope.launch {
+        val outcome = store.library.launch(card.id, emulator, discPath, display, skipSaveCheck, playAnyway) { stage ->
+            launching = when (stage) {
+                io.github.matiyaaa.fuse.ui.shell.store.LaunchStage.CHECKING_SAVE -> launching?.copy(status = "Checking your save", cancel = callOff)
+                io.github.matiyaaa.fuse.ui.shell.store.LaunchStage.STARTING -> launching?.copy(status = null, cancel = null)
+            }
+        }
+        when (outcome) {
             LaunchOutcome.Started, is LaunchOutcome.Synced -> {
                 if (outcome is LaunchOutcome.Synced) toasts.show(outcome.note, ToastKind.INFO, icon = FuseIcons.CloudCheck)
                 // On the other screen the game opens beside Fuse, which stays in front here: the
@@ -269,8 +284,8 @@ fun AppState.gameMenu(card: GameCard, fromDetail: Boolean = false, extra: List<M
             add(MenuAction("collection", "Add to Collection", FuseIcons.ListPlus, trailing = Trailing.Chevron, onSelect = { collectionPicker(card.id, card.title) }))
         }
         add(MenuAction("pin", "Pin to Home", FuseIcons.Pin, onSelect = { run { lib.setPinned(card.id, true); toasts.show("Pinned to Home") } }))
-        // Fuse Sync: this game's saves through time, from every device.
-        if (!card.isApp && syncProfile != null) {
+        // Fuse Sync: this game's saves through time, from every device (a host keeps them).
+        if (!card.isApp && syncProfile != null && store.prefs.value.sync.role.isNotEmpty()) {
             add(MenuAction("saves", "Save History", FuseIcons.History, detail = "Every version of its saves, from every device", trailing = Trailing.Chevron, onSelect = {
                 closeOverlays(); go(Route.SaveHistory(card.id, card.title))
             }))

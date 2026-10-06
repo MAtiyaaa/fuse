@@ -97,6 +97,8 @@ object WindowsCatalog {
         port("mednafen", "mednafen.exe"),
         port("mame", "mame.exe", fromItsFolder = true),
         port("scummvm", "scummvm.exe"),
+        port("pico8", "pico8.exe", rule = "PICO-8"),
+        port("ruffle", "ruffle.exe"),
         port("dosbox-staging", "dosbox.exe", folders = listOf("*staging*")),
         port("dosbox-x", "dosbox-x.exe"),
         port("steam", "steam.exe") {

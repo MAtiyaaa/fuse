@@ -31,7 +31,7 @@ internal enum class QuickId(val title: String, val kind: QuickKind, val spans: L
     LOW_POWER("Low Power", QuickKind.TILE, listOf(1, 2, 3), 1, "Calmer motion, longer battery"),
     FIND_GAMES("Find games", QuickKind.TILE, listOf(1, 2, 3), 1, "A quick look for new games"),
     CARTRIDGE("Cartridge", QuickKind.TILE, listOf(1, 2, 3), 1, "Opens Cartridge"),
-    HOME_STYLE("Home", QuickKind.TILE, listOf(1, 2, 3), 1, "Flow or Channels, in one press"),
+    HOME_STYLE("Home", QuickKind.TILE, listOf(1, 2, 3), 1, "Fused or Network, in one press"),
     SOUND("Sound", QuickKind.TILE, listOf(1, 2, 3), 1, "Interface sounds on or off"),
     MUSIC("Now playing", QuickKind.MUSIC, listOf(1, 2, 3), 3, "The menu music or Fuse Player, with skip"),
     BRIGHTNESS("Brightness", QuickKind.SLIDER, listOf(1, 3), 3, "A slider for the screen's brightness"),

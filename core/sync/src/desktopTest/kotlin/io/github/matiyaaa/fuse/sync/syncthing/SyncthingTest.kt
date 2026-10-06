@@ -67,6 +67,7 @@ class SyncthingTest {
             get("/rest/system/connections") { authed { """{"connections":{"$deck":{"connected":true,"address":"192.168.1.30:22000"}}}""" } }
             get("/rest/config/devices") { authed { JsonArray(devices).toString() } }
             put("/rest/config/devices/{id}") { authed { devices.removeAll { it.s("deviceID") == call.parameters["id"] }; devices += parse(call.receiveText()); "{}" } }
+            delete("/rest/config/devices/{id}") { authed { devices.removeAll { it.s("deviceID") == call.parameters["id"] }; "{}" } }
             get("/rest/config/folders") { authed { JsonArray(folders).toString() } }
             get("/rest/config/defaults/folder") { authed { """{"rescanIntervalS":3600,"type":"sendreceive"}""" } }
             put("/rest/config/folders/{id}") { authed { folders.removeAll { it.s("id") == call.parameters["id"] }; folders += parse(call.receiveText()); pendingFolders.remove(call.parameters["id"]); "{}" } }
@@ -228,6 +229,63 @@ class SyncthingTest {
         assertNull(SyncthingService.conflictOf("save.srm"))
         assertFalse(SyncthingApi.isLoopback("https://192.168.1.20:8384"))
         assertTrue(SyncthingApi.isLoopback("127.0.0.1:8384"))
+    }
+
+    @Test
+    fun aDeviceAlreadyInSyncthingKeepsItsOwnSettings(): Unit = runBlocking {
+        val (svc, _) = service()
+        devices += JsonObject(mapOf("deviceID" to JsonPrimitive(deck), "name" to JsonPrimitive("Deck (by hand)"), "addresses" to JsonArray(listOf(JsonPrimitive("tcp://192.168.1.30:22000")))))
+        svc.connect("127.0.0.1:$port", key).getOrThrow()
+        svc.addDevice(deck, "Steam Deck").getOrThrow()
+        val kept = devices.single { it.s("deviceID") == deck }
+        assertEquals("Deck (by hand)", kept.s("name"))
+        assertEquals("tcp://192.168.1.30:22000", (kept["addresses"] as JsonArray).single().jsonPrimitive.content)
+    }
+
+    @Test
+    fun removingADeviceSharedWithByHandOnlyTakesItOffFusesFolders(): Unit = runBlocking {
+        val (svc, q) = service()
+        svc.connect("127.0.0.1:$port", key).getOrThrow()
+        svc.addDevice(deck, "Steam Deck").getOrThrow()
+        svc.share(svc.plan(listOf(q)), keepVersions = false).getOrThrow()
+        folders += JsonObject(mapOf("id" to JsonPrimitive("photos"), "path" to JsonPrimitive("/home/mo/Pictures"), "devices" to JsonArray(listOf(JsonObject(mapOf("deviceID" to JsonPrimitive(deck)))))))
+        svc.removeDevice(deck).getOrThrow()
+        assertTrue(devices.any { it.s("deviceID") == deck }, "the device stays for the folders shared by hand")
+        val fuses = folders.filter { it.s("id")!!.startsWith("fuse-") }
+        assertTrue(fuses.isNotEmpty() && fuses.none { f -> (f["devices"] as JsonArray).any { it.jsonObject.s("deviceID") == deck } })
+        // Shared with nothing else: it is removed outright.
+        folders.removeAll { it.s("id") == "photos" }
+        svc.addDevice(deck, "Steam Deck").getOrThrow()
+        svc.removeDevice(deck).getOrThrow()
+        assertTrue(devices.none { it.s("deviceID") == deck })
+    }
+
+    @Test
+    fun aFolderSyncthingAlreadySharesIsNeverSharedAgainInsideOrAround(): Unit = runBlocking {
+        val (svc, q) = service()
+        val home = File(root, "home").path
+        svc.connect("127.0.0.1:$port", key).getOrThrow()
+        // The whole RetroArch folder is shared by hand: the saves inside it already go.
+        folders += JsonObject(mapOf("id" to JsonPrimitive("retroarch"), "label" to JsonPrimitive("RetroArch"), "path" to JsonPrimitive("$home/.config/retroarch")))
+        assertTrue(svc.plan(listOf(q)).first { it.kind == SaveKind.SAVE }.shared)
+        assertEquals(0, svc.share(svc.plan(listOf(q)), keepVersions = false).getOrThrow())
+        // A folder inside the saves is shared by hand: sharing the saves too would copy it twice.
+        folders.clear()
+        folders += JsonObject(mapOf("id" to JsonPrimitive("gba"), "label" to JsonPrimitive("GBA saves"), "path" to JsonPrimitive("$home/.config/retroarch/saves/gba")))
+        val saves = svc.plan(listOf(q)).first { it.kind == SaveKind.SAVE }
+        assertFalse(saves.shared)
+        assertTrue(saves.blocked!!.contains("GBA saves"))
+    }
+
+    @Test
+    fun aSharedParentIsNeverTooBroad() {
+        val home = "/home/mo"
+        // One emulator's saves in two places under .local: never all of .local.
+        val split = JvmSyncthingService.commonDir(listOf("$home/.local/share/emu/saves", "$home/.local/state/emu/saves", "$home/.local/share/emu/saves"), home)
+        assertEquals("$home/.local/share/emu/saves", split)
+        assertEquals("C:/Users/mo/AppData/Roaming/RetroArch/saves", JvmSyncthingService.commonDir(listOf("C:/Users/mo/AppData/Roaming/RetroArch/saves", "C:/Users/mo/AppData/Local/Other/saves"), "C:/Users/mo"))
+        // A deep shared folder is fine.
+        assertEquals("$home/Emulation/saves/psp", JvmSyncthingService.commonDir(listOf("$home/Emulation/saves/psp/A", "$home/Emulation/saves/psp/B"), home))
     }
 
     private fun obj(vararg pairs: Pair<String, String>) = JsonObject(pairs.associate { it.first to JsonPrimitive(it.second) })

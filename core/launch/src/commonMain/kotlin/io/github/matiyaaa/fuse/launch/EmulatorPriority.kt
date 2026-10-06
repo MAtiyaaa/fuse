@@ -124,6 +124,8 @@ object EmulatorPriority {
         listOf("win") to ids("linux.desktop", "linux.steam", "linux.steam-url", "linux.script"),
         listOf("dos") to ids(LRA, "linux.dosbox-staging", "linux.dosbox-x", LRAS),
         listOf("scummvm") to ids("linux.scummvm", LRA, LRAS),
+        listOf("pico8") to ids("linux.pico8", LRA, LRAS),
+        listOf("flash") to ids("linux.ruffle"),
         listOf(
             "nes", "famicom", "fds", "snes", "sfam", "virtualboy", "saturn", "genesis", "sms", "gamegear", "lynx",
             "neo-geo-pocket", "neo-geo-pocket-color", "wonderswan", "wonderswan-color", "tg16", "turbografx-cd",

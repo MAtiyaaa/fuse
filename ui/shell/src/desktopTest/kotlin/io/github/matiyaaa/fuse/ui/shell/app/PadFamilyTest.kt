@@ -39,4 +39,20 @@ class PadFamilyTest {
         assertEquals(GlyphStyle.NINTENDO, padGlyphs(GlyphStyle.NINTENDO, GlyphStyle.XBOX))
         assertEquals(GlyphStyle.PLAYSTATION, padGlyphs(GlyphStyle.PLAYSTATION, null))
     }
+
+    @Test
+    fun hintsConfirmWithTheButtonThatConfirms() {
+        val nintendoHandheld = io.github.matiyaaa.fuse.model.InputProfile(glyphs = GlyphStyle.NINTENDO)
+        // The handheld's own pad: Nintendo labels, A on the right confirms.
+        assertEquals(true, hintConfirmOnRight(nintendoHandheld, GlyphStyle.NINTENDO, null))
+        // A DualSense plugged into it: cross (its bottom button, reported as A) confirms.
+        assertEquals(false, hintConfirmOnRight(nintendoHandheld, padGlyphs(GlyphStyle.NINTENDO, GlyphStyle.PLAYSTATION), GlyphStyle.PLAYSTATION))
+        // Swapped on purpose: the right button, for every pad.
+        val swapped = nintendoHandheld.copy(swapConfirmBack = true)
+        assertEquals(true, hintConfirmOnRight(swapped, GlyphStyle.PLAYSTATION, GlyphStyle.PLAYSTATION))
+        // An Xbox layout setting with an Xbox pad: the bottom button.
+        assertEquals(false, hintConfirmOnRight(io.github.matiyaaa.fuse.model.InputProfile(), GlyphStyle.XBOX, GlyphStyle.XBOX))
+        // Glyphs fixed by hand: the setting alone decides.
+        assertEquals(true, hintConfirmOnRight(nintendoHandheld.copy(autoGlyphs = false), GlyphStyle.NINTENDO, GlyphStyle.PLAYSTATION))
+    }
 }

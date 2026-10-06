@@ -28,19 +28,22 @@ data class Hlc(val millis: Long, val counter: Int, val device: String) : Compara
     }
 }
 
-/** Makes [Hlc] readings for one device: always later than anything it made or saw before. */
+/**
+ * Makes [Hlc] readings for one device: always later than anything it made or saw before. Safe to
+ * read from several threads at once (saves are captured while records are sent).
+ */
 class HlcClock(private val device: String, private val wall: () -> Long) {
     private var last = Hlc.ZERO
 
     /** A new reading, later than every earlier one. */
-    fun now(): Hlc {
+    fun now(): Hlc = synchronized(this) {
         val w = wall()
         last = if (w > last.millis) Hlc(w, 0, device) else Hlc(last.millis, last.counter + 1, device)
-        return last
+        last
     }
 
     /** Takes in a reading from elsewhere, so the next one is later than it too. */
-    fun seen(other: Hlc) {
+    fun seen(other: Hlc): Unit = synchronized(this) {
         if (other > last) last = Hlc(other.millis, other.counter, device)
     }
 }
@@ -216,6 +219,50 @@ data class ProfileMeta(
     fun game(key: GameKey): GameRecord = games[key.id] ?: GameRecord(key)
 
     fun withGame(record: GameRecord): ProfileMeta = copy(games = games + (record.key.id to record))
+
+    /**
+     * These records by each game's one id across devices ([aliases]: every id a game has been known
+     * by, to its one id): records kept under an id since settled on another join that game's
+     * record, and collections name their games the same way. Merging is safe: counters take the
+     * larger, sessions join by id, settings take the later.
+     */
+    fun byIds(aliases: Map<String, String>): ProfileMeta {
+        if (aliases.isEmpty() || games.keys.none { id -> aliases[id]?.let { it != id } == true }) return this
+        val out = HashMap<String, GameRecord>()
+        for ((id, record) in games) {
+            val key = aliases[id]?.takeIf { it != id }?.let(GameKey::parse)
+            val moved = if (key != null) record.copy(key = key) else record
+            val at = key?.id ?: id
+            out[at] = out[at]?.copy(key = moved.key)?.merge(moved) ?: moved
+        }
+        val cols = collections.mapValues { (_, c) ->
+            val members = HashMap<String, Lww<Boolean>>()
+            for ((g, v) in c.members) {
+                val at = aliases[g] ?: g
+                members[at] = members[at].mergeWith(v)!!
+            }
+            c.copy(members = members)
+        }
+        return copy(games = out, collections = cols)
+    }
+
+    /**
+     * These records with every choice (favourites, names, settings, collections) stamped [at]: put
+     * into another profile that is the same person, anything it already says wins and these only
+     * fill what it doesn't. Play time and sessions keep their counts, so time played joins up.
+     */
+    fun stampedAt(at: Hlc): ProfileMeta {
+        fun <T> Lww<T>?.re(): Lww<T>? = this?.copy(at = at)
+        return ProfileMeta(
+            games = games.mapValues { (_, g) ->
+                g.copy(favorite = g.favorite.re(), hidden = g.hidden.re(), pinned = g.pinned.re(), continueDismissed = g.continueDismissed.re(), title = g.title.re(), emulator = g.emulator.re())
+            },
+            collections = collections.mapValues { (_, c) ->
+                c.copy(name = c.name.copy(at = at), deleted = c.deleted.re(), members = c.members.mapValues { (_, m) -> m.copy(at = at) }, order = c.order.re())
+            },
+            settings = settings.mapValues { (_, v) -> v.copy(at = at) },
+        )
+    }
 
     /** The games played most recently first: Continue Playing, as every device of the profile sees it. */
     fun continuePlaying(): List<GameRecord> = games.values
