@@ -182,6 +182,12 @@ internal class FfmpegPlayback(
     // Reading -------------------------------------------------------------------------------------
 
     private fun readLoop() {
+        try {
+            FfmpegNatives.await()
+        } catch (_: InterruptedException) {
+            // Closed before the libraries were ready: there is nothing to play.
+            return
+        }
         val fmt = avformat_alloc_context()
         // Blocking network reads give up as soon as the player closes.
         val interrupt = object : AVIOInterruptCB.Callback_Pointer() {
