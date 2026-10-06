@@ -537,8 +537,10 @@ internal fun AuditDriver.onboardingScreens(exhaustive: Boolean) {
             shoot("first arrival: the fuse burning in", 420)
             shoot("first arrival: ignition", 420)
             shoot("first arrival: welcome typing in", 520)
+            // The arrival plays over everything (and holds input) until it gathers into the corner.
+            settleUntil("Welcome, Mo", shown = false, timeoutMs = 60_000)
             waitFor("Hi, Mo")
-            shoot("who's playing: Mo made, add another or continue", 2_400)
+            shoot("who's playing: Mo made, add another or continue", 1_000)
             tap(PadButton.A)
         } else {
             tap(PadButton.DPAD_RIGHT)
