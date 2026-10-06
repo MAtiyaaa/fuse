@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 import java.io.File
@@ -277,7 +278,9 @@ class TransferManager(
         meters.getOrPut(item.id) { SpeedMeter() }.reset()
         val job = scope.launch(start = kotlinx.coroutines.CoroutineStart.LAZY) {
             val outcome: (TransferItem) -> TransferItem = try {
-                handler.run(item, io)
+                // A transfer reads and hashes whole files: never on the thread that draws Fuse (a
+                // desktop's scope is the UI's own), so the interface keeps moving while it runs.
+                withContext(Dispatchers.IO) { handler.run(item, io) }
                 val live = liveOf(item.id).value
                 ({ t -> t.copy(status = TransferStatus.DONE, phase = null, finishedAt = clock(), doneBytes = live.totalBytes ?: live.doneBytes, totalBytes = live.totalBytes ?: t.totalBytes, error = null) })
             } catch (e: CancellationException) {

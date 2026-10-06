@@ -12,8 +12,10 @@ import io.ktor.http.headersOf
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import java.io.File
 import java.nio.file.Files
@@ -201,6 +203,41 @@ class TransferTest {
         assertFalse(File(root, "games/.Game.bin.fuse-part").exists())
         delay(50)
         assertEquals(1, handler.done.get())
+    }
+
+    /**
+     * On a computer Fuse hands the transfers the UI's own scope. A transfer that reads a big file
+     * (an upload hashing a disc image) must leave that thread free, or Fuse freezes until it ends.
+     */
+    @Test
+    fun `a transfer never runs on the thread that draws Fuse`() = runBlocking<Unit> {
+        val ui = java.util.concurrent.Executors.newSingleThreadExecutor { r -> Thread(r, "fuse-ui") }
+        val scope = CoroutineScope(SupervisorJob() + ui.asCoroutineDispatcher())
+        scopes += scope
+        val ranOn = java.util.concurrent.atomic.AtomicReference<String>()
+        val release = java.util.concurrent.CountDownLatch(1)
+        val m = TransferManager(File(root, "ui-state"), scope, volumes = { emptyList() }).also { it.start() }
+        m.register(object : TransferHandler {
+            override val source = "test"
+            override suspend fun run(item: TransferItem, io: TransferIo) {
+                ranOn.set(Thread.currentThread().name)
+                // Blocking work, like hashing a file.
+                release.await()
+            }
+        })
+        val id = m.enqueue(download("Big.iso"))
+        val until = System.currentTimeMillis() + 10_000
+        while (ranOn.get() == null && System.currentTimeMillis() < until) delay(10)
+        // While the transfer blocks, the UI thread still answers straight away.
+        val reply = kotlinx.coroutines.CompletableDeferred<Boolean>()
+        scope.launch { reply.complete(true) }
+        val answered = kotlinx.coroutines.withTimeoutOrNull(1_000) { reply.await() }
+        release.countDown()
+        assertEquals(true, answered, "The UI thread was blocked by the transfer")
+        assertNotNull(ranOn.get())
+        assertFalse(ranOn.get() == "fuse-ui")
+        m.awaitStatus(id, TransferStatus.DONE)
+        ui.shutdown()
     }
 
     @Test
