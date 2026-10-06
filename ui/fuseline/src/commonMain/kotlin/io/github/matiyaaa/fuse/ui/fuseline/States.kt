@@ -1,6 +1,7 @@
 package io.github.matiyaaa.fuse.ui.fuseline
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.FloatState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.State
@@ -28,7 +29,22 @@ fun <T> fuselineValueAsState(
     threshold: Float = converter.threshold,
     label: String = "FuselineValue",
     finishedListener: ((T) -> Unit)? = null,
-): State<T> {
+): State<T> = rememberFollowing(targetValue, converter, animationSpec, threshold, label, finishedListener).asState()
+
+/**
+ * The [FuselineValue] behind [fuselineValueAsState]: it follows [targetValue], and a motion under way
+ * takes each new target in place ([FuselineValue.retarget]), carrying on from where it is and how fast
+ * it is going, whatever kind of motion it is.
+ */
+@Composable
+fun <T> rememberFollowing(
+    targetValue: T,
+    converter: Converter<T>,
+    animationSpec: Motion = Spring(),
+    threshold: Float = converter.threshold,
+    label: String = "FuselineValue",
+    finishedListener: ((T) -> Unit)? = null,
+): FuselineValue<T> {
     val value = remember { FuselineValue(targetValue, converter, threshold, label) }
     val spec by rememberUpdatedState(animationSpec)
     val listener by rememberUpdatedState(finishedListener)
@@ -38,9 +54,9 @@ fun <T> fuselineValueAsState(
     LaunchedEffect(targets) {
         for (target in targets) {
             val newest = targets.tryReceive().getOrNull() ?: target
-            // A spring under way takes the new target in place (Fuseline 2): no new move.
+            // A motion under way takes the new target in place: no new move, no jolt.
             val motion = spec
-            if (newest != value.targetValue && motion is Spring && value.retarget(newest, motion)) continue
+            if (newest != value.targetValue && value.retarget(newest, motion)) continue
             launch {
                 if (newest != value.targetValue) {
                     value.animateTo(newest, spec)
@@ -49,10 +65,10 @@ fun <T> fuselineValueAsState(
             }
         }
     }
-    return value.asState()
+    return value
 }
 
-/** A float that follows [targetValue] (see [fuselineValueAsState]). */
+/** A float that follows [targetValue] (see [fuselineValueAsState]), read without boxing. */
 @Composable
 fun fuselineFloat(
     targetValue: Float,
@@ -60,7 +76,7 @@ fun fuselineFloat(
     visibilityThreshold: Float = 0.01f,
     label: String = "FuselineFloat",
     finishedListener: ((Float) -> Unit)? = null,
-): State<Float> = fuselineValueAsState(targetValue, FloatConverter, animationSpec, visibilityThreshold, label, finishedListener)
+): FloatState = rememberFollowing(targetValue, FloatConverter, animationSpec, visibilityThreshold, label, finishedListener).asFloatState()
 
 /** A colour that follows [targetValue], blending through Oklab (see [ColorConverter]). */
 @Composable

@@ -26,11 +26,14 @@ internal class FrameDriver private constructor(private val clock: MonotonicFrame
     private inner class Move(
         var durationNanos: Long,
         val scale: Float,
-        val onFrame: (playNanos: Long) -> Unit,
+        val onFrame: FrameStep,
         val waiting: CancellableContinuation<Unit>,
     ) : Retimer {
         var start = Long.MIN_VALUE
         var gone = false
+
+        /** A seek asked for before the first frame: where the play starts. */
+        var pending = -1L
 
         /**
          * Plays again for [durationNanos] from the frame just shown (where its value is now), keeping
@@ -39,6 +42,11 @@ internal class FrameDriver private constructor(private val clock: MonotonicFrame
         override fun retime(durationNanos: Long) {
             this.durationNanos = durationNanos
             start = if (start == Long.MIN_VALUE) Long.MIN_VALUE else lastFrame
+        }
+
+        /** Puts the play at [playNanos] as of the frame just shown, so the next frame carries on from there. */
+        override fun seek(playNanos: Long) {
+            if (start == Long.MIN_VALUE) pending = playNanos else start = lastFrame - (playNanos * scale).toLong()
         }
     }
 
@@ -49,7 +57,7 @@ internal class FrameDriver private constructor(private val clock: MonotonicFrame
     private var lastFrame = Long.MIN_VALUE
 
     /** Steps [onFrame] on every frame until [durationNanos] has played (scaled by [scale]), then returns. */
-    suspend fun run(context: CoroutineContext, durationNanos: Long, scale: Float, onStart: ((Retimer) -> Unit)?, onFrame: (Long) -> Unit) {
+    suspend fun run(context: CoroutineContext, durationNanos: Long, scale: Float, onStart: ((Retimer) -> Unit)?, onFrame: FrameStep) {
         suspendCancellableCoroutine { waiting ->
             val move = Move(durationNanos, scale, onFrame, waiting)
             onStart?.invoke(move)
@@ -65,7 +73,7 @@ internal class FrameDriver private constructor(private val clock: MonotonicFrame
         CoroutineScope(context.minusKey(Job) + Job()).launch(start = CoroutineStart.UNDISPATCHED) {
             try {
                 while (true) {
-                    clock.withFrameNanos(::step)
+                    clock.withFrameNanos(stepper)
                     if (moves.isEmpty()) break
                 }
             } finally {
@@ -80,6 +88,9 @@ internal class FrameDriver private constructor(private val clock: MonotonicFrame
         }
     }
 
+    /** The frame callback, made once rather than on every frame. */
+    private val stepper: (Long) -> Unit = ::step
+
     /** One frame: every move steps; the ones that arrived carry on with the frames after. */
     private fun step(frameNanos: Long) {
         lastFrame = frameNanos
@@ -88,9 +99,9 @@ internal class FrameDriver private constructor(private val clock: MonotonicFrame
         for (i in 0 until count) {
             val m = moves[i]
             if (!m.gone) {
-                if (m.start == Long.MIN_VALUE) m.start = frameNanos
+                if (m.start == Long.MIN_VALUE) m.start = frameNanos - if (m.pending >= 0) (m.pending * m.scale).toLong() else 0L
                 val play = ((frameNanos - m.start) / m.scale).toLong()
-                m.onFrame(play.coerceAtMost(m.durationNanos))
+                m.onFrame.step(play.coerceAtMost(m.durationNanos))
                 if (play >= m.durationNanos) {
                     m.gone = true
                     m.waiting.resume(Unit)
@@ -115,6 +126,17 @@ internal class FrameDriver private constructor(private val clock: MonotonicFrame
  * A move under way that can be given a new length and started again from its next frame, in place:
  * how a spring takes a new target without a new move (see [FuselineValue.retarget]).
  */
-internal fun interface Retimer {
+/**
+ * One frame of a move, given the time played. An interface of its own rather than a function type,
+ * so the time passes as a plain number: a `(Long) -> Unit` would box it on every frame of every value.
+ */
+internal fun interface FrameStep {
+    fun step(playNanos: Long)
+}
+
+internal interface Retimer {
     fun retime(durationNanos: Long)
+
+    /** Moves the play to [playNanos], as of the frame just shown. */
+    fun seek(playNanos: Long)
 }

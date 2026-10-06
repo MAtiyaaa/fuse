@@ -18,7 +18,12 @@ internal const val NANOS_PER_MS = 1_000_000L
 internal const val NANOS_PER_SECOND = 1_000_000_000.0
 
 /** One component of a value travelling under a motion. */
-internal abstract class Track(val start: Float, val target: Float) {
+internal abstract class Track(start: Float, target: Float) {
+    var start: Float = start
+        protected set
+    var target: Float = target
+        protected set
+
     /** How long the motion plays, in nanoseconds ([Long.MAX_VALUE] for a loop that never ends). */
     abstract val durationNanos: Long
 
@@ -59,6 +64,17 @@ internal abstract class Track(val start: Float, val target: Float) {
             is Sequence -> SequenceTrack(motion, start, target, velocity, threshold, component)
             is Parallel -> of(motion.forComponent(component), start, target, velocity, threshold, component)
         }
+
+        /**
+         * [of], but reusing [old] in place when it is the same kind of track: a value retargeted every
+         * frame (following a finger, a scroll, the selection) then makes no new objects at all.
+         */
+        fun reuse(old: Track?, motion: Motion, start: Float, target: Float, velocity: Float, threshold: Float, component: Int = 0): Track = when {
+            motion is Spring && old is SpringTrack -> old.apply { reset(motion, start, target, velocity, motion.threshold ?: threshold) }
+            motion is Tween && old is TweenTrack -> old.apply { reset(motion, start, target, velocity) }
+            motion is Parallel -> reuse(old, motion.forComponent(component), start, target, velocity, threshold, component)
+            else -> of(motion, start, target, velocity, threshold, component)
+        }
     }
 }
 
@@ -75,18 +91,35 @@ internal abstract class Track(val start: Float, val target: Float) {
  * - A value at rest has no motion to carry on: the curve starts as drawn.
  */
 internal class TweenTrack(tween: Tween, start: Float, target: Float, velocity: Float) : Track(start, target) {
-    private val curve = tween.curve
-    private val delay = tween.delayMs * NANOS_PER_MS
-    private val length = tween.durationMs * NANOS_PER_MS
-    private val seconds = length / NANOS_PER_SECOND
-    private val distance = target.toDouble() - start.toDouble()
-    override val durationNanos: Long = delay + length
+    private var curve: Curve = Curves.Linear
+    private var delay = 0L
+    private var length = 0L
+    private var seconds = 0.0
+    private var distance = 0.0
+    private var duration = 0L
+    override val durationNanos: Long get() = duration
 
-    /** The speed to blend away: the value's own, less what the curve already starts with. */
-    private val boost: Double = if (tween.inheritVelocity && delay == 0L && length > 0L && velocity != 0f && velocity.isFinite()) {
-        val startSlope = curve.derivative(0f).toDouble()
-        if (abs(startSlope) > GENTLE_SLOPE) velocity.toDouble() else velocity - distance * startSlope / seconds
-    } else 0.0
+    /** The speed to blend away (see the class's notes). */
+    private var boost = 0.0
+
+    init {
+        reset(tween, start, target, velocity)
+    }
+
+    fun reset(tween: Tween, start: Float, target: Float, velocity: Float) {
+        this.start = start
+        this.target = target
+        curve = tween.curve
+        delay = tween.delayMs * NANOS_PER_MS
+        length = tween.durationMs * NANOS_PER_MS
+        seconds = length / NANOS_PER_SECOND
+        distance = target.toDouble() - start.toDouble()
+        duration = delay + length
+        boost = if (tween.inheritVelocity && delay == 0L && length > 0L && velocity != 0f && velocity.isFinite()) {
+            val startSlope = curve.derivative(0f).toDouble()
+            if (abs(startSlope) > GENTLE_SLOPE) velocity.toDouble() else velocity - distance * startSlope / seconds
+        } else 0.0
+    }
 
     fun fraction(playNanos: Long): Float {
         if (length == 0L) return if (playNanos >= delay) 1f else 0f
@@ -95,7 +128,7 @@ internal class TweenTrack(tween: Tween, start: Float, target: Float, velocity: F
 
     override fun valueAt(playNanos: Long): Float {
         if (playNanos <= delay) return if (length == 0L && playNanos >= delay) target else start
-        if (playNanos >= durationNanos) return target
+        if (playNanos >= duration) return target
         val f = fraction(playNanos)
         var v = start + distance * curve.transform(f)
         if (boost != 0.0) {
@@ -108,7 +141,7 @@ internal class TweenTrack(tween: Tween, start: Float, target: Float, velocity: F
 
     override fun velocityAt(playNanos: Long): Float {
         if (playNanos < delay || length == 0L) return 0f
-        if (playNanos >= durationNanos) return (distance * curve.derivative(1f) / seconds).toFloat()
+        if (playNanos >= duration) return (distance * curve.derivative(1f) / seconds).toFloat()
         val f = fraction(playNanos)
         var v = distance * curve.derivative(f) / seconds
         if (boost != 0.0) {
@@ -148,26 +181,47 @@ internal class SpringTrack(
     spring: Spring,
     start: Float,
     target: Float,
-    private val velocity: Float,
-    private val threshold: Float,
+    velocity: Float,
+    threshold: Float,
 ) : Track(start, target) {
-    private val omega = sqrt(spring.stiffness.toDouble())
-    private val zeta = spring.dampingRatio.toDouble()
-    private val a = zeta * omega
-    private val q = omega * omega * (zeta - 1.0) * (zeta + 1.0)
-    private val x0 = start.toDouble() - target.toDouble()
-    private val v0 = velocity.toDouble()
-    private val b = v0 + a * x0
-    private val k = q * x0 - a * b
+    private var threshold = 0f
+    private var a = 0.0
+    private var q = 0.0
+    private var x0 = 0.0
+    private var v0 = 0.0
+    private var b = 0.0
+    private var k = 0.0
 
     /** Below critical: the ringing frequency; above: γ. Zero at critical. */
-    private val freq = sqrt(abs(q))
-    private val under = q < 0.0
-    private val over = q > 0.0
+    private var freq = 0.0
+    private var under = false
+    private var over = false
 
     // Filled by [solve]: e^(−at)·C(t) and e^(−at)·S(t).
     private var ec = 0.0
     private var es = 0.0
+
+    init {
+        reset(spring, start, target, velocity, threshold)
+    }
+
+    fun reset(spring: Spring, start: Float, target: Float, velocity: Float, threshold: Float) {
+        this.start = start
+        this.target = target
+        this.threshold = threshold
+        val omega = sqrt(spring.stiffness.toDouble())
+        val zeta = spring.dampingRatio.toDouble()
+        a = zeta * omega
+        q = omega * omega * (zeta - 1.0) * (zeta + 1.0)
+        x0 = start.toDouble() - target.toDouble()
+        v0 = velocity.toDouble()
+        b = v0 + a * x0
+        k = q * x0 - a * b
+        freq = sqrt(abs(q))
+        under = q < 0.0
+        over = q > 0.0
+        duration = UNKNOWN
+    }
 
     private fun solve(t: Double) {
         when {
@@ -207,8 +261,16 @@ internal class SpringTrack(
      * earlier of the two counts. The bound is found by Newton's method on its logarithm (concave, so
      * it converges from the right), a handful of steps, so a spring retargeted every frame stays cheap.
      */
-    override val durationNanos: Long by lazy(LazyThreadSafetyMode.NONE) {
-        if (x0 == 0.0 && v0 == 0.0) return@lazy 0L
+    private var duration = UNKNOWN
+
+    override val durationNanos: Long
+        get() {
+            if (duration == UNKNOWN) duration = settle()
+            return duration
+        }
+
+    private fun settle(): Long {
+        if (x0 == 0.0 && v0 == 0.0) return 0L
         val th = threshold.toDouble()
         val ax = abs(x0)
         val ab = abs(b)
@@ -226,7 +288,7 @@ internal class SpringTrack(
             seconds = min(seconds, ringing)
         }
         if (!(seconds >= 0.0)) seconds = MAX_SPRING_SECONDS
-        (min(seconds, MAX_SPRING_SECONDS) * NANOS_PER_SECOND).toLong()
+        return (min(seconds, MAX_SPRING_SECONDS) * NANOS_PER_SECOND).toLong()
     }
 
     override fun valueAt(playNanos: Long): Float {
@@ -253,6 +315,8 @@ internal class SpringTrack(
     }
 
     internal companion object {
+        private const val UNKNOWN = -1L
+
         /** No spring runs longer than this, however soft. */
         const val MAX_SPRING_SECONDS = 60.0
 
