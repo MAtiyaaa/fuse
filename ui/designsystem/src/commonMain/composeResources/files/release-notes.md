@@ -2,6 +2,16 @@
 
 Uploads to RomM no longer freeze Fuse on a computer, and the standby screen never stops Fuse's work.
 
+## New
+
+- **Fuse keeps the device awake while it works.** While Fuse finds art and details, downloads or
+  uploads, it asks the system to stay awake, and lets go once the work is done.
+
+## Changed
+
+- **Every transfer runs in the background.** Uploads, RomM and Jellyfin downloads and updates no
+  longer share the thread that draws Fuse on a computer.
+
 ## Fixed
 
 - **Uploading to RomM froze Fuse until it finished.** On a computer, Fuse's transfers ran on the
