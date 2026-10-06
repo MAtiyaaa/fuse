@@ -32,11 +32,23 @@ internal object UpdateHandoff {
 
 /**
  * Installs AppImages (Fuse updates and Cartridge) for the current user: downloads into
- * `~/.cache/fuse/updates/<name>.part`, checks the published sha256 digest, then places the file next
- * to the running AppImage (or in `~/Applications`) and marks it executable. An existing file is never
- * replaced or deleted: an identical one counts as installed, a different one gets a numbered name.
+ * `~/.cache/fuse/updates/<name>.part` and checks the published sha256 digest.
+ *
+ * A Fuse update replaces the AppImage Fuse runs from, at the same path, so shortcuts, the login
+ * entry and Steam's Non-Steam entry keep working: the running copy goes on from the file it has
+ * open, the restart starts the new one, the one before is kept beside it as `.<name>.previous` (one
+ * step back), and the numbered copies older updates left beside it are removed. Without a running
+ * AppImage (an installed or development run) it goes to `~/Applications/Fuse.AppImage` the same way.
+ *
+ * Other AppImages (Cartridge) are placed beside it and never replace a file: an identical one counts
+ * as installed, a different one gets a numbered name.
  */
-internal class DesktopReleaseInstaller(private val dirs: FuseDirs, private val http: HttpClient) : ReleaseInstaller {
+internal class DesktopReleaseInstaller(
+    private val dirs: FuseDirs,
+    private val http: HttpClient,
+    /** The AppImage Fuse runs from, if it does. */
+    private val running: () -> String? = { System.getenv("APPIMAGE") },
+) : ReleaseInstaller {
     override val platform: ReleasePlatform = ReleasePlatform.LINUX_X86_64
 
     /** Downloads, verifies and places the new AppImage; [applyUpdate] then restarts into it. */
@@ -62,8 +74,9 @@ internal class DesktopReleaseInstaller(private val dirs: FuseDirs, private val h
                     error("The download of $name did not match its published checksum. Nothing was installed.")
                 }
             }
-            val target = place(part, name, sha256)
-            if (name.lowercase(Locale.ROOT).startsWith("fuse")) UpdateHandoff.installedFuseAppImage = target.path
+            val fuse = name.lowercase(Locale.ROOT).startsWith("fuse")
+            val target = if (fuse) replaceFuse(part) else place(part, name, sha256)
+            if (fuse) UpdateHandoff.installedFuseAppImage = target.path
             Log.info("installed $name to ${target.parent}")
             onProgress(1f)
             Result.success(Unit)
@@ -116,6 +129,45 @@ internal class DesktopReleaseInstaller(private val dirs: FuseDirs, private val h
     }
 
     private suspend fun ensureActiveHere() = kotlin.coroutines.coroutineContext.ensureActive()
+
+    /**
+     * Puts the verified Fuse download at the path Fuse runs from (or `~/Applications/Fuse.AppImage`),
+     * keeping the one before as `.<name>.previous` and clearing the versioned copies earlier updates
+     * left beside it. Returns where it went.
+     */
+    internal fun replaceFuse(part: File): File {
+        val current = running()?.let(::File)?.takeIf { it.isFile && it.parentFile?.canWrite() == true }
+        val target = current ?: File(File(dirs.home, "Applications"), "Fuse.AppImage")
+        val folder = target.parentFile
+        folder.mkdirs()
+        if (!folder.isDirectory || !folder.canWrite()) throw IOException("Can't write to ${folder.path}.")
+        // Copied next to the target first (the cache may be another file system), so the swap is a rename.
+        val staging = File(folder, ".${target.name}.part")
+        val previous = File(folder, ".${target.name}.previous")
+        try {
+            Files.move(part.toPath(), staging.toPath(), StandardCopyOption.REPLACE_EXISTING)
+            makeExecutable(staging)
+            if (target.exists()) {
+                // The running copy keeps its open file; only its name moves aside.
+                Files.move(target.toPath(), previous.toPath(), StandardCopyOption.REPLACE_EXISTING)
+            }
+            try {
+                Files.move(staging.toPath(), target.toPath(), StandardCopyOption.ATOMIC_MOVE)
+            } catch (e: IOException) {
+                // Put the old one back, so Fuse is never left without its AppImage.
+                if (previous.exists() && !target.exists()) Files.move(previous.toPath(), target.toPath())
+                throw e
+            }
+        } catch (e: IOException) {
+            staging.delete()
+            throw e
+        }
+        // Copies earlier updates placed beside it ("Fuse-0.3.6.2-x86_64.AppImage", "...-2.AppImage").
+        folder.listFiles()?.filter { it.isFile && it != target && OLD_COPY.matches(it.name) }?.forEach { old ->
+            if (!old.delete()) Log.warn("could not remove ${old.name}")
+        }
+        return target
+    }
 
     /** Moves the verified download to its install folder without overwriting anything. */
     private fun place(part: File, name: String, sha256: String): File {
@@ -180,6 +232,11 @@ internal class DesktopReleaseInstaller(private val dirs: FuseDirs, private val h
         digest.digest().joinToString("") { "%02x".format(it) }
     } catch (e: IOException) {
         null
+    }
+
+    private companion object {
+        /** A Fuse AppImage an earlier update placed under its versioned name. */
+        val OLD_COPY = Regex("""Fuse-\d+(\.\d+){2,3}-x86_64(-\d+)?\.AppImage""")
     }
 
     private fun isSafeName(name: String): Boolean =

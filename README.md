@@ -29,7 +29,7 @@ Home screen.
 <a href="https://github.com/MAtiyaaa/fuse/releases/latest"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/brand/button-macos-dark.svg"><img src="docs/assets/brand/button-macos-light.svg" height="48" alt="Download for macOS"></picture></a>
 
 <sub>Android 9 or newer &nbsp;·&nbsp; 64-bit x86 Linux AppImage &nbsp;·&nbsp; Windows 10 and 11 &nbsp;·&nbsp; macOS on Apple silicon and Intel &nbsp;·&nbsp; <a href="#install">checksums and install notes</a></sub><br>
-<sub>0.3.6.3 is the <b>Unity Update</b> with your household's RomM and Jellyfin coming along with Fuse Sync, each person with their own Jellyfin account, and RomM games that get your own art and details: Fuse RomM, Fuse's native RomM integration, one Downloads page for every transfer, Jellyfin films and episodes kept for offline, streaming from a computer at home through Moonlight, saves that reach every device in the house by themselves, screenshots and recordings on computers and a friend for Fusi, after 0.3.5, the Swift Update (Fuse Sync straight to the outside address, quick profile switches, tabs that change in the next frame), and 0.3.4, the Household Update (a profile for everyone, with or without a host). <a href="#where-fuse-stands">Here is where it stands.</a></sub><br>
+<sub>0.3.6.4 is the <b>Unity Update</b> with your household's RomM and Jellyfin coming along with Fuse Sync, each person with their own Jellyfin account, and RomM games that get your own art and details: Fuse RomM, Fuse's native RomM integration, one Downloads page for every transfer, Jellyfin films and episodes kept for offline, streaming from a computer at home through Moonlight, saves that reach every device in the house by themselves, screenshots and recordings on computers and a friend for Fusi, after 0.3.5, the Swift Update (Fuse Sync straight to the outside address, quick profile switches, tabs that change in the next frame), and 0.3.4, the Household Update (a profile for everyone, with or without a host). <a href="#where-fuse-stands">Here is where it stands.</a></sub><br>
 <sub>Or download from <a href="https://matiyaaa.github.io/fuse/">Fuse's website</a>, which always offers the latest version for your system.</sub>
 
 <br>
@@ -554,7 +554,7 @@ Linux app, isn't offered on Windows and macOS (Fuse RomM is, on every computer).
 ## Where Fuse stands
 
 > [!IMPORTANT]
-> **Fuse 0.3.6.3 "The Unity Update" is still early, and brings everything into one place.** Fuse RomM,
+> **Fuse 0.3.6.4 "The Unity Update" is still early, and brings everything into one place.** Fuse RomM,
 > Fuse's native RomM integration, browses a RomM server, downloads games and BIOS into the folders
 > Fuse already has, uploads yours and keeps an offline copy of the library; Cartridge is still fully
 > supported. Every download and upload Fuse makes is on one Downloads page. Jellyfin films and
@@ -564,8 +564,9 @@ Linux app, isn't offered on Windows and macOS (Fuse RomM is, on every computer).
 > Update", made Fuse Sync quick from outside home and tabs change in the very next frame. Fuse
 > Sync by Fuse (saves, play time, library and settings on every device, a profile for each person)
 > is still the sync Fuse recommends. 0.3.6.1 brings large RomM libraries in quickly and keeps them,
-> 0.3.6.2 gives RomM games your own art and details, and 0.3.6.3 brings your household's RomM and
-> Jellyfin along with Fuse Sync, each person with their own Jellyfin account. See [the release notes](docs/releases/0.3.6.3.md).
+> 0.3.6.2 gives RomM games your own art and details, 0.3.6.3 brings your household's RomM and
+> Jellyfin along with Fuse Sync, each person with their own Jellyfin account, and 0.3.6.4 shows RomM
+> games' box art at once, makes system panels from your games' screenshots (the PS5's by itself) and puts RomM on the second screen. See [the release notes](docs/releases/0.3.6.4.md).
 
 <details>
 <summary><b>Every release so far</b></summary>
@@ -573,6 +574,7 @@ Linux app, isn't offered on Windows and macOS (Fuse RomM is, on every computer).
 
 | Version | Name | What it brought |
 |---|---|---|
+| [0.3.6.4](docs/releases/0.3.6.4.md) | The Unity Update | RomM games' box art shown as soon as it is found, without reopening Fuse; system panels from your games' screenshots, cut like Art Book Next's, by themselves for the PS5 and as a style or your pick for any system; RomM on the second screen; Fuse's art in Steam; Linux updates in place |
 | [0.3.6.3](docs/releases/0.3.6.3.md) | The Unity Update | RomM and Jellyfin that come with Fuse Sync, sealed for each device and asked once when you update; each person's own Jellyfin account; whose saves move on each device; Fuse Sync first in setup; the grand welcome the first time anyone plays here; motion that follows the device |
 | [0.3.6.2](docs/releases/0.3.6.2.md) | The Unity Update | RomM games with your own art and details, kept and editable; the library's games not on RomM; box art instead of RomM's posters; system art for RomM-only systems; a nicer RomM tab |
 | [0.3.6.1](docs/releases/0.3.6.1.md) | The Unity Update | Fuse RomM libraries with large PS4 and PS5 games read quickly, resumed and kept; Test Connection; PS4 and PS5 folders matched to their RomM zips |

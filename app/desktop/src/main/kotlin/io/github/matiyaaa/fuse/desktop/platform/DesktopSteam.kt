@@ -14,8 +14,11 @@ import kotlinx.coroutines.withContext
 
 /**
  * Puts Fuse in Steam's library as a non-Steam game, for each Steam user on this computer, so Game
- * Mode can start it. The entry runs the AppImage (or the installed program) full screen. The first
- * time a user's list is changed, a copy of it is kept next to it.
+ * Mode can start it. The entry runs the AppImage (or the installed program) full screen, with
+ * Fuse's own art in every place Steam shows a game: the library capsule, the wide capsule, the
+ * hero, the logo over it and the icon (in the user's `config/grid`, by the entry's id; art already
+ * there, such as the person's own, is left as it is). The first time a user's list is changed, a
+ * copy of it is kept next to it.
  */
 internal class DesktopSteam(private val folders: KnownFolders) : SteamIntegration {
     override val gameMode: Boolean get() = GameMode.active
@@ -30,11 +33,10 @@ internal class DesktopSteam(private val folders: KnownFolders) : SteamIntegratio
         if (steamRunning()) return@withContext Result.failure(IllegalStateException("Close Steam first: it rewrites its library when it quits. Then add Fuse again."))
         val users = userConfigDirs()
         if (users.isEmpty()) return@withContext Result.failure(IllegalStateException("No Steam user here yet. Sign in to Steam once, close it, then try again."))
-        val shortcut = SteamShortcut(
+        val base = SteamShortcut(
             name = "Fuse",
             exe = quote(exe),
             startDir = quote(File(exe).parent ?: "."),
-            icon = iconFor(exe),
             launchOptions = "--fullscreen",
             tags = listOf("Fuse"),
         )
@@ -42,6 +44,9 @@ internal class DesktopSteam(private val folders: KnownFolders) : SteamIntegratio
         for (dir in users) {
             val file = File(dir, "shortcuts.vdf")
             try {
+                // Steam's art for the entry, then the entry pointing at its icon.
+                val icon = runCatching { placeArt(File(dir, "grid"), base) }.onFailure { Log.warn("could not give Steam Fuse's art in $dir", it) }.getOrNull()
+                val shortcut = base.copy(icon = icon ?: "")
                 val before = if (file.isFile) file.readBytes() else null
                 val after = SteamShortcuts.add(before, shortcut) ?: continue
                 if (before != null) {
@@ -78,9 +83,27 @@ internal class DesktopSteam(private val folders: KnownFolders) : SteamIntegratio
 
     private fun quote(path: String): String = "\"$path\""
 
-    private fun iconFor(exe: String): String {
-        val png = File(File(exe).parentFile, "Fuse.png")
-        return if (png.isFile) png.absolutePath else ""
+    /**
+     * Writes Fuse's art for [shortcut] into [grid], named as Steam looks for a non-Steam game's:
+     * `<id>p.png` (library capsule), `<id>.png` (wide capsule), `<id>_hero.png`, `<id>_logo.png` and
+     * `<id>_icon.png`. Returns the icon's path for the entry.
+     */
+    internal fun placeArt(grid: File, shortcut: SteamShortcut): String {
+        val id = SteamShortcuts.appId(shortcut.exe, shortcut.name).toLong() and 0xFFFFFFFFL
+        grid.mkdirs()
+        for ((resource, name) in listOf("portrait" to "${id}p", "capsule" to "$id", "hero" to "${id}_hero", "logo" to "${id}_logo", "icon" to "${id}_icon")) {
+            // Art already there for this entry (the person's own, from SteamGridDB or Steam) stays.
+            if (listOf("png", "jpg", "jpeg", "webp").any { File(grid, "$name.$it").exists() }) continue
+            val bytes = javaClass.getResourceAsStream("/steam/$resource.png")?.use { it.readBytes() } ?: continue
+            val target = File(grid, "$name.png")
+            val tmp = File(grid, ".$name.png.fuse-tmp")
+            tmp.writeBytes(bytes)
+            if (!tmp.renameTo(target)) {
+                tmp.delete()
+                target.writeBytes(bytes)
+            }
+        }
+        return listOf("png", "jpg", "jpeg").map { File(grid, "${id}_icon.$it") }.firstOrNull { it.isFile }?.absolutePath.orEmpty()
     }
 
     /** Every Steam user's config folder (`userdata/<id>/config`), on every Steam install found. */

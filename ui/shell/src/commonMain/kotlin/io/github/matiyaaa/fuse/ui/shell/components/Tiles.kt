@@ -3,6 +3,8 @@ package io.github.matiyaaa.fuse.ui.shell.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -23,6 +25,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
@@ -504,13 +507,7 @@ private fun PackCard(card: PlatformCard, accent: Color, large: Boolean) {
         // Pack artwork is a tall panel (about 454 x 1080); it fills the height on the right.
         val artWidth = (maxHeight * 0.52f).coerceAtMost(maxWidth * 0.6f)
         if (card.art.boxart != null) {
-            Artwork(
-                card.art.boxart,
-                Modifier.align(Alignment.CenterEnd).width(artWidth).fillMaxHeight(),
-                contentScale = ContentScale.Crop,
-                focusX = 0.5f,
-                focusY = 0.35f,
-            )
+            SystemPanel(card.art, Modifier.align(Alignment.CenterEnd).width(artWidth).fillMaxHeight())
             // Blend the panel's left edge into the card colour.
             Box(
                 Modifier.align(Alignment.CenterEnd).width(artWidth).fillMaxHeight()
@@ -544,6 +541,65 @@ private fun PackCard(card: PlatformCard, accent: Color, large: Boolean) {
         }
         SystemWarning(card, Modifier.align(Alignment.TopEnd))
     }
+}
+
+/**
+ * A system's tall artwork panel, the same wherever systems are drawn (tiles, Home, the Systems page,
+ * Downloads, RomM): the pack's image as it comes, or one made from a game's screenshot cut to the
+ * pack's slanted band, at the same place and size.
+ */
+@Composable
+fun SystemPanel(art: Art, modifier: Modifier, focusY: Float = 0.35f) {
+    if (art.boxartFromGames) {
+        GamesPanel(art.boxart, modifier, focusY)
+    } else {
+        Artwork(art.boxart, modifier, contentScale = ContentScale.Crop, focusX = 0.5f, focusY = focusY)
+    }
+}
+
+/**
+ * A system's artwork panel made from one of its games' screenshots, laid out exactly as a pack
+ * panel is: the pack's 454 x 1080 frame, cropped into [modifier]'s box the way the pack image is
+ * (filling it, a little above the middle), with the screenshot cut to the pack's slanted band so it
+ * reads as one of the set.
+ */
+@Composable
+private fun GamesPanel(model: Any?, modifier: Modifier, focusY: Float) {
+    BoxWithConstraints(modifier.clipToBounds()) {
+        val boxW = maxWidth
+        val boxH = maxHeight
+        // Fill the box with the frame's shape, as ContentScale.Crop does with the pack's image.
+        val byWidth = boxW * PACK_FRAME_H / PACK_FRAME_W >= boxH
+        val frameW = if (byWidth) boxW else boxH * PACK_FRAME_W / PACK_FRAME_H
+        val frameH = if (byWidth) boxW * PACK_FRAME_H / PACK_FRAME_W else boxH
+        Box(
+            Modifier
+                .requiredSize(frameW, frameH)
+                .offset(x = -(frameW - boxW) * 0.5f, y = -(frameH - boxH) * focusY)
+                .align(Alignment.TopStart)
+                .clip(PackPanelShape),
+        ) {
+            Artwork(model, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+        }
+    }
+}
+
+/** The pack's panel frame, in its own pixels. */
+private const val PACK_FRAME_W = 454f
+private const val PACK_FRAME_H = 1080f
+
+/**
+ * The slanted band the pack's panels are cut to, measured from them: 340 of the frame's 454 pixels
+ * wide, leaning from the top right (112 to 452) to the bottom left (0 to 340).
+ */
+private val PackPanelShape = androidx.compose.foundation.shape.GenericShape { size, _ ->
+    val w = size.width
+    val h = size.height
+    moveTo(w * 112f / PACK_FRAME_W, 0f)
+    lineTo(w * 452f / PACK_FRAME_W, 0f)
+    lineTo(w * 340f / PACK_FRAME_W, h)
+    lineTo(0f, h)
+    close()
 }
 
 /** A small warning mark when a system has no emulator. Firmware is told on the system's own page. */

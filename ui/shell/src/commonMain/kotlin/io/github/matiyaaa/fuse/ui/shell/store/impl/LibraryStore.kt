@@ -306,7 +306,8 @@ internal class DefaultLibraryOps(
 
     // Game page -------------------------------------------------------------------------------------
 
-    override fun game(id: GameId): Flow<GameDetail?> = data.games.observe(id).flatMapLatest { record ->
+    // A RomM game Fuse doesn't have is the RomM store's to describe (the second screen shows it too).
+    override fun game(id: GameId): Flow<GameDetail?> = ctx.remoteDetail(id) ?: data.games.observe(id).flatMapLatest { record ->
         val game = record?.game ?: return@flatMapLatest flowOf(null)
         val platform = ctx.platform(game.platformId) ?: return@flatMapLatest flowOf(null)
         val weekStart = ctx.weekStart()

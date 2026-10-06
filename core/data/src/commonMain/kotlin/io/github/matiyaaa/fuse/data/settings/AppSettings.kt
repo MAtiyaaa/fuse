@@ -398,8 +398,16 @@ data class LibraryPreferences(
     val systemArtAuto: Boolean = true,
     /** How the Library is sorted. */
     val sort: io.github.matiyaaa.fuse.model.SortOrder = io.github.matiyaaa.fuse.model.SortOrder.TITLE,
-    /** Artwork set used from the system art pack (a SystemArtStyle name). */
+    /**
+     * Artwork set used from the system art pack (a SystemArtStyle name), or "GAMES": the pack's
+     * logos with a screenshot of one of each system's own games as the panel.
+     */
     val systemArtStyle: String = "CLASSIC",
+    /**
+     * Systems whose panel the person picked from a game's screenshot, by platform id, to the
+     * picture's model: drawn cut to the pack's panel like the automatic ones.
+     */
+    val systemPanels: Map<String, String> = emptyMap(),
     /** Confirm on a game opens its page instead of starting it. */
     val selectOpensGamePage: Boolean = false,
     /** Phone Link's server runs while this is on (Settings, Accounts, Phone Link). */

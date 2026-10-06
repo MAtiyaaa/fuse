@@ -656,7 +656,7 @@ internal fun gameMenu(app: AppState, g: RommGame): ContextMenuSpec {
     return ContextMenuSpec(
         title = g.card.title,
         subtitle = listOfNotNull(g.card.platformShort, g.card.year?.toString(), io.github.matiyaaa.fuse.ui.shell.downloads.sizeOf(g.sizeBytes).takeIf { g.sizeBytes > 0 }).joinToString("  ·  "),
-        art = g.card.art.boxart ?: g.card.art.square,
+        art = g.card.art.square ?: g.card.art.icon ?: g.card.art.boxart,
         accent = g.card.accent,
         actions = buildList {
             add(MenuAction("romm.open", "Open", FuseIcons.Info, onSelect = { app.closeOverlays(); app.go(Route.GameInfo(g.game ?: g.card.id)) }))

@@ -85,6 +85,14 @@ internal class DefaultMediaOps(
 
     override fun downloadSystemArt() = systemArt.downloadAll()
 
+    override suspend fun panelGames(platform: PlatformId) = systemArt.panelGames(platform)
+
+    override suspend fun panelPictures(game: GameId) = systemArt.panelPictures(game)
+
+    override suspend fun setSystemPanel(platform: PlatformId, option: ArtworkOption) = systemArt.setPanel(platform, option)
+
+    override suspend fun autoSystemPanel(platform: PlatformId) = systemArt.autoPanel(platform)
+
     override suspend fun restoreDefaultSystemArt(platforms: List<PlatformId>): io.github.matiyaaa.fuse.ui.shell.store.ArtUndo {
         val ids = platforms.ifEmpty { ctx.data.games.platformCounts().first().filterValues { it > 0 }.keys.toList() }
         return systemArt.restoreDefault(ids)
@@ -660,7 +668,10 @@ internal class DefaultMediaOps(
                 MediaItem(option.kind, option.provider.mediaSource(), remoteUrl = option.url, width = option.width, height = option.height, order = index)
             }
         val added = if (items.isEmpty()) 0 else media.putScraped(MediaOwner.OfGame(game.id), items, mode, kinds)
-        if (added > 0) remoteOf(game.id)?.changed(game.id)
+        if (added > 0) {
+            remoteOf(game.id)?.changed(game.id)
+            ctx.gameArtFound.update { it + 1 }
+        }
         outcome.metadata?.let { meta ->
             applyMetadata(
                 game.id,

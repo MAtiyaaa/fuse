@@ -60,6 +60,7 @@ import io.github.matiyaaa.fuse.model.MediaOwner
 import io.github.matiyaaa.fuse.model.MediaSet
 import io.github.matiyaaa.fuse.model.MediaSource
 import io.github.matiyaaa.fuse.model.NavAction
+import io.github.matiyaaa.fuse.model.PlatformId
 import io.github.matiyaaa.fuse.model.ScopeRef
 import io.github.matiyaaa.fuse.model.ScopedSettings
 import io.github.matiyaaa.fuse.model.ScrapeCandidate
@@ -114,6 +115,7 @@ import io.github.matiyaaa.fuse.ui.shell.components.controlWellShape
 import io.github.matiyaaa.fuse.ui.shell.components.rememberRowHighlight
 import io.github.matiyaaa.fuse.ui.shell.store.ArtworkResult
 import io.github.matiyaaa.fuse.ui.shell.store.IdentifyResult
+import io.github.matiyaaa.fuse.ui.shell.store.PanelGame
 import io.github.matiyaaa.fuse.ui.shell.store.SearchTitle
 import kotlin.math.roundToInt
 import kotlinx.coroutines.CancellationException
@@ -135,7 +137,14 @@ private sealed interface Browser {
     /** On its way: art of [art] (shown as a grid of its shape), or matches when [art] is null. */
     data class Loading(val label: String? = null, val art: MediaKind? = null) : Browser
     /** Art to pick; [guess] is the game it was found for when that was a best guess by name. */
-    data class Options(val kind: MediaKind, val options: List<ArtworkOption>, val guess: ScrapeCandidate? = null) : Browser
+    data class Options(
+        val kind: MediaKind,
+        val options: List<ArtworkOption>,
+        val guess: ScrapeCandidate? = null,
+        /** A game's pictures for a system's panel ([label] names the game): picked as the panel, cut like the pack's. */
+        val panelOf: PlatformId? = null,
+        val label: String? = null,
+    ) : Browser
     /** What happened ([title]) and what to do ([text]); [error] when something failed rather than found nothing. */
     data class Message(val title: String, val text: String, val icon: ImageVector = FuseIcons.SearchX, val error: Boolean = false) : Browser
     /** Games the sources list for [query]; after picking one, art of [then] is searched when set. */
@@ -321,8 +330,69 @@ fun MediaScreen(app: AppState, owner: MediaOwner, title: String, identifyFirst: 
         }
     }
 
+    // A system's panel from one of its games: the game, then which of its pictures.
+    fun panelPictures(platform: PlatformId, game: PanelGame) {
+        browser = Browser.Loading("Getting ${game.title}'s pictures", art = MediaKind.SCREENSHOT)
+        grid.index = 0
+        app.scope.launch {
+            val options = runCatching { app.store.media.panelPictures(game.id) }.getOrDefault(emptyList())
+            browser = if (options.isEmpty()) {
+                Browser.Message("No pictures", "${game.title} has no screenshots or background yet. Find art for it first, or pick another game.", FuseIcons.Image)
+            } else {
+                Browser.Options(MediaKind.SCREENSHOT, options, panelOf = platform, label = "${game.title}: pick the picture for the panel")
+            }
+        }
+    }
+
+    fun panelGames(platform: PlatformId) {
+        app.scope.launch {
+            val games = runCatching { app.store.media.panelGames(platform) }.getOrDefault(emptyList())
+            if (games.isEmpty()) {
+                browser = Browser.Message(
+                    "No pictures yet",
+                    "None of $title's games has a screenshot or background yet. Fuse finds them with your art sources; then any of them can be the panel.",
+                    FuseIcons.Image,
+                )
+                return@launch
+            }
+            app.choice = io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec(
+                "Take the panel from",
+                "Pick a game, then one of its screenshots. It's cut to the art pack's slanted panel and used everywhere $title shows.",
+                games.map { g ->
+                    MenuAction(
+                        "panel.${g.id.value}", g.title,
+                        art = io.github.matiyaaa.fuse.ui.designsystem.components.MenuArt(g.art.screenshot ?: g.art.hero ?: g.art.tile, fallbackTitle = g.title),
+                        detail = if (g.pictures == 1) "1 picture" else "${g.pictures} pictures",
+                        trailing = Trailing.Chevron,
+                        onSelect = { app.choice = null; panelPictures(platform, g) },
+                    )
+                },
+                icon = FuseIcons.Images,
+            )
+        }
+    }
+
     fun slotActions(k: MediaKind): List<MenuAction> = buildList {
         add(MenuAction("browse", "Find ${slotName(k).lowercase()}", FuseIcons.Search, onSelect = { app.choice = null; browse(k) }))
+        val platform = (owner as? MediaOwner.OfPlatform)?.id
+        if (platform != null && k == MediaKind.BOXART) {
+            add(MenuAction(
+                "panel.game", "From a game's screenshot", FuseIcons.Images,
+                detail = "Pick one of its games and a picture, cut like the art pack's panels",
+                onSelect = { app.choice = null; panelGames(platform) },
+            ))
+            add(MenuAction(
+                "panel.auto", "Automatic, from its games", FuseIcons.Wand,
+                detail = "Fuse picks a screenshot from the game played most recently, and keeps it up to date",
+                onSelect = {
+                    app.choice = null
+                    app.scope.launch {
+                        app.store.media.autoSystemPanel(platform)
+                        app.toasts.show("Fuse picks the panel from its games", icon = FuseIcons.Wand)
+                    }
+                },
+            ))
+        }
         add(MenuAction("file", "Choose a file", FuseIcons.Folder, onSelect = {
             app.choice = null
             app.scope.launch {
@@ -533,8 +603,16 @@ fun MediaScreen(app: AppState, owner: MediaOwner, title: String, identifyFirst: 
             when (val b = browser) {
                 is Browser.Loading -> LoadingPane(b)
                 is Browser.Message -> MessagePane(b, onRename = if (gameId != null) ({ editSearchName(thenIdentify = false) }) else null)
-                is Browser.Options -> ArtworkGrid(b, grid, current = media.first(b.kind)?.remoteUrl, onColumns = { optionCols = it }, onIdentify = { identify(then = b.kind) }) { opt ->
-                    app.scope.launch { app.store.media.apply(owner, opt) }
+                is Browser.Options -> ArtworkGrid(b, grid, current = media.first(if (b.panelOf != null) MediaKind.BOXART else b.kind)?.model, onColumns = { optionCols = it }, onIdentify = { identify(then = b.kind) }) { opt ->
+                    val panelOf = b.panelOf
+                    app.scope.launch {
+                        if (panelOf != null) {
+                            app.store.media.setSystemPanel(panelOf, opt)
+                            app.toasts.show("The panel is this picture now, cut like the art pack's", icon = FuseIcons.Images)
+                        } else {
+                            app.store.media.apply(owner, opt)
+                        }
+                    }
                     browser = Browser.Closed
                 }
                 is Browser.Matches -> MatchList(b, matchSel, onPick = { link(it, b.then) }, onRename = { editSearchName(thenIdentify = true) })
@@ -706,7 +784,13 @@ private fun Preview(media: MediaSet, kind: MediaKind, adjusting: MediaKind?, fx:
         SectionLabel(if (adjusting != null) "Adjusting ${slotName(kind).lowercase()}" else slotName(kind))
         Spacer(Modifier.height(Space.m))
         Tile(selected = false, showSpark = false, modifier = Modifier.size(tileW, tileW / aspect)) {
-            if (m != null && kind != MediaKind.VIDEO) {
+            val art = remember(media) { io.github.matiyaaa.fuse.ui.shell.store.Art.from(media) }
+            if (m != null && kind == MediaKind.BOXART && adjusting == null && art.boxartFromGames) {
+                // A system's panel made from a game's screenshot, as it shows everywhere: cut like the pack's.
+                Box(Modifier.fillMaxSize().background(c.surfaceDim)) {
+                    io.github.matiyaaa.fuse.ui.shell.components.SystemPanel(art, Modifier.fillMaxSize())
+                }
+            } else if (m != null && kind != MediaKind.VIDEO) {
                 Artwork(
                     m.model, Modifier.fillMaxSize(),
                     contentScale = if (kind == MediaKind.LOGO) ContentScale.Fit else ContentScale.Crop,
@@ -780,7 +864,7 @@ private fun ArtworkGrid(b: Browser.Options, grid: GridSelection, current: String
     val columns = optionColumns(b.kind, maxWidth)
     LaunchedEffect(columns) { onColumns(columns) }
     Column {
-        SectionLabel("${b.options.size} options for ${slotName(b.kind).lowercase()}")
+        SectionLabel(b.label ?: "${b.options.size} options for ${slotName(b.kind).lowercase()}")
         val guess = b.guess
         if (guess != null) {
             // Found by the game's name without asking which game it is; one press says it's another.
@@ -868,6 +952,7 @@ private fun sourceName(s: MediaSource) = when (s) {
     MediaSource.LIBRETRO -> "Libretro thumbnails"
     MediaSource.ART_PACK -> "Art Book Next"
     MediaSource.GENERATED -> "Generated"
+    MediaSource.GAME_ART -> "From its games"
 }
 
 private fun sourceLine(media: MediaSet, k: MediaKind): String {

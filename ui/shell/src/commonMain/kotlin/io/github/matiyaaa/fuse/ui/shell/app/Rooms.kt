@@ -1,8 +1,6 @@
 package io.github.matiyaaa.fuse.ui.shell.app
 
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import io.github.matiyaaa.fuse.model.PlatformId
 import io.github.matiyaaa.fuse.ui.designsystem.media.HeroSource
@@ -14,7 +12,8 @@ import io.github.matiyaaa.fuse.ui.shell.store.PlatformCard
 /** The systems by id, for games whose background falls back to their system's. */
 @Composable
 fun rememberSystems(app: AppState): Map<PlatformId, PlatformCard> {
-    val list by app.store.library.platforms.collectAsState()
+    // The library's systems and the RomM server's Fuse has no games for, with the same art everywhere.
+    val list = rememberShownSystems(app.store)
     return remember(list) { list.associateBy { it.platform.id } }
 }
 
