@@ -351,9 +351,10 @@ Fuse's own Backup (Settings, Backup) also keeps the person's records and setting
 
 **Unlink This Device** stops syncing and keeps everything on the device exactly as it is.
 
-**Turning Fuse Sync off** forgets the host: its link and anything still waiting to be sent. The
-people who played on this device stay as its own profiles (**Keep Profiles Here**, the default),
-with their records, saves and the PIN last typed here; everyone else's saves parked here are kept
+**Turning Fuse Sync off** forgets the host: its link and anything still waiting to be sent. Fuse
+asks first: with **Keep Profiles Here** (the default) every profile on the host (Admin aside)
+stays as this device's own, with its newest records brought down first (a profile with a PIN when
+this device has opened it), the saves here and the PIN last typed here; everyone else's saves parked here are kept
 as plain files in a `kept` folder in Fuse Sync's data folder. **Forget Them Too** lets the
 profiles go as well, saves that never reached the host kept first the same way. Unlinking asks the
 same. The device keeps its games, the saves in its emulators' folders, its library, settings and

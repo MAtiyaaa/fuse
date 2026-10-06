@@ -1,8 +1,9 @@
-# Fuse 0.3.4 - The Unity Update
+# Fuse 0.3.4 - The Household Update
 
-One Fuse on every device and with every controller. This release went through Fuse Sync,
-Syncthing, input, tabs and small screens looking for anything that could lose a save, trap you in
-a menu or say the wrong thing, and fixed what it found.
+Everyone in the house gets their own Fuse: profiles with or without a host, made in setup, and
+carried along when a device joins one. This release also went through Fuse Sync, Syncthing, input,
+tabs and small screens looking for anything that could lose a save, trap you in a menu or say the
+wrong thing, and fixed what it found.
 
 ## New
 
@@ -15,7 +16,8 @@ a menu or say the wrong thing, and fixed what it found.
 - **Profiles go with you to a host.** Joining a host that has nobody but its Admin takes every
   profile here up as it is. Joining one with people shows your profiles beside theirs: each is the
   same person as someone there (suggested by name, and their play time adds up), someone new, or
-  left out. Leaving a host keeps the people who played here as this device's own profiles.
+  left out. Turning Fuse Sync off or unlinking asks whether to keep every profile, with its
+  records and the saves here, on this device.
 - **PICO-8 and Flash games on the computer.** Fuse finds PICO-8 and Ruffle on Linux, Windows and
   macOS, and RetroArch's Retro8 core for PICO-8, and starts games in them the way ES-DE does.
   Every system now has something to play it with on every desktop.
@@ -27,12 +29,17 @@ a menu or say the wrong thing, and fixed what it found.
 - **The column beside the Sync and Syncthing tabs is reachable with a controller.** Devices, play
   time by device and recent activity used to run off the screen with no way down except touch.
   Right from the list moves into that column, Up and Down scroll it, Left or Back returns.
+- **Profile arrivals in Developer options.** Play the profile switch and the first profile's
+  welcome on demand, to see them again.
 - **Back calls off a slow save check.** While Fuse Sync or Syncthing checks the save before a
   game, the launch screen says so and Back cancels the launch. Once the emulator starts, nothing
   interrupts it.
 
 ## Changed
 
+- **Home styles are Fused and Network.** Channels is now **Fused**, the style Fuse recommends and
+  setup offers first; Flow is now **Network**. The Channels theme is now called Fused too. Your
+  choice stays as it was.
 - **Who's playing? never holds Fuse hostage.** At startup it can always be closed while the host
   isn't answering (Back reads Not Now). With the host away, a profile without a PIN switches at
   once and catches up later; one with a PIN says only the host can check it.

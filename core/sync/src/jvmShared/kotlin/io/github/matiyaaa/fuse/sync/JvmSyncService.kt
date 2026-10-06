@@ -450,6 +450,7 @@ class JvmSyncService(
         val c = client
         if (c != null) {
             runCatching { withTimeoutOrNull(FORGET_WAIT_MS) { device?.flush(c) } }
+            if (keepProfiles) bringDownRecords(c)
             runCatching { withTimeoutOrNull(FORGET_WAIT_MS) { c.unlinkSelf() } }
         }
         stop()
@@ -494,8 +495,22 @@ class JvmSyncService(
     }
 
     /**
-     * Leaving a host: the people who played on this device (the one in use, and anyone with records
-     * or saves here) become its own profiles, keeping their ids, names, pictures and the PIN as last
+     * Before leaving a host whose profiles stay here: each person's newest records come down from it
+     * (a profile with a PIN only when this device has opened it), so everyone kept has their play
+     * time, favourites and settings without the host. Saves stay where they are: each person's own
+     * in the emulators' folders or parked here.
+     */
+    private suspend fun bringDownRecords(c: SyncClient) {
+        val d = device ?: return
+        val people = runCatching { c.profiles() }.getOrDefault(_profiles.value).filterNot { it.hostOnly }
+        withTimeoutOrNull(FORGET_WAIT_MS * 2) {
+            for (p in people) runCatching { d.pullMeta(c, p.id) }
+        }
+        if (people.isNotEmpty()) _profiles.value = people
+    }
+
+    /**
+     * Leaving a host: everyone's profiles (the host's Admin aside) become this device's own, keeping their ids, names, pictures and the PIN as last
      * typed here. Everyone else's saves here go to the kept folder as plain files. The host's own
      * profile (Admin) is never kept. Returns the ids kept. Without a host, its profiles simply stay.
      */
@@ -505,7 +520,8 @@ class JvmSyncService(
         val known = _profiles.value.ifEmpty { knownProfiles() }
         val here = d.people()
         val active = cached.activeProfile
-        val stay = known.filter { !it.hostOnly && (it.id == active || it.id in here) }
+        // Everyone on the host (Admin aside) stays, with what this device has of theirs.
+        val stay = known.filter { !it.hostOnly }
         if (stay.isEmpty()) return emptyList()
         val ids = stay.map { it.id }.toSet()
         val kept = keptFolder()
@@ -1660,7 +1676,11 @@ class JvmSyncService(
     override suspend fun unlink(keepProfiles: Boolean): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
             // Sends what it can first; then forgets the host. Nothing of this device's own changes.
-            client?.let { c -> runCatching { device?.flush(c) }; runCatching { c.unlinkSelf() } }
+            client?.let { c ->
+                runCatching { device?.flush(c) }
+                if (keepProfiles) bringDownRecords(c)
+                runCatching { c.unlinkSelf() }
+            }
             loop?.cancel()
             nudge?.cancel()
             watch?.job?.cancel()

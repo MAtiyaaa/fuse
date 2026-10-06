@@ -144,7 +144,7 @@ Each built-in theme can be named in `extends`. They are listed as the gallery sh
 | `crt` | CRT | Scanlines and phosphor glow | `grid` |
 | `daylight` | Daylight (bright) | Fuse in a bright room | `hero` |
 | `paper-mint` | Paper Mint (bright) | A bright desk with a cool green accent | `stripes` |
-| `channels` | Channels (bright) | Bright tiles you arrange yourself | `stripes` |
+| `channels` | Fused (bright) | Bright tiles you arrange yourself | `stripes` |
 | `opal` | Opal (bright) | Pearl light that shifts as it settles | `mesh` |
 | `noon` | Noon (bright) | Warm dunes under a high sun | `dunes` |
 | `ridge` | Ridge (bright) | Contour lines on a quiet map | `contours` |

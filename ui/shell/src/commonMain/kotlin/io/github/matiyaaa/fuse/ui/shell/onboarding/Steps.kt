@@ -579,13 +579,14 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
         ))
         add(Step(
             "homestyle", "Home", "Pick a Home style",
-            "Flow is a continuous dashboard of shelves. Channels is a board of tiles you arrange yourself. Either can be rearranged by holding confirm.",
+            "Fused, the one we recommend, is a board of tiles you arrange yourself. Network is a continuous dashboard of shelves. Either can be rearranged by holding confirm.",
             icon = FuseIcons.Dashboard, chapter = Chapters.YOURS,
             actions = listOf(
-                StepAction("Flow", primary = prefs.home.mode == HomeMode.FLOW) { store.updatePrefs { it.copy(home = it.home.copy(mode = HomeMode.FLOW)) }; next() },
-                StepAction("Channels", primary = prefs.home.mode == HomeMode.CHANNELS) { store.updatePrefs { it.copy(home = it.home.copy(mode = HomeMode.CHANNELS)) }; next() },
+                // Fused first, and the one chosen on arrival: it's the one we recommend.
+                StepAction("Fused (Recommended)", primary = true) { store.updatePrefs { it.copy(home = it.home.copy(mode = HomeMode.CHANNELS)) }; next() },
+                StepAction("Network") { store.updatePrefs { it.copy(home = it.home.copy(mode = HomeMode.FLOW)) }; next() },
             ),
-            content = { HomeStylePreview(if (state.button == 1) HomeMode.CHANNELS else HomeMode.FLOW) },
+            content = { HomeStylePreview(if (state.button == 1) HomeMode.FLOW else HomeMode.CHANNELS) },
         ))
         val themes = ThemePresets.all
         val themeIndex = themes.indexOfFirst { it.id == prefs.themeId }.coerceAtLeast(0)
@@ -955,11 +956,11 @@ private fun LaunchStylePreview(pagesFirst: Boolean) {
     }
 }
 
-/** Flow (shelves) and Channels (a board of tiles), the highlighted one lit. */
+/** Network (shelves) and Fused (a board of tiles), the highlighted one lit. */
 @Composable
 private fun HomeStylePreview(mode: HomeMode) {
     val c = Fuse.colors
-    // Channels as Home really lays it out: the default board through the board's own layout.
+    // Fused as Home really lays it out: the default board through the board's own layout.
     val board = remember {
         val widgets = io.github.matiyaaa.fuse.model.HomeLayoutConfig.DefaultBoard
         io.github.matiyaaa.fuse.ui.shell.home.BoardGrid.layout(
@@ -967,8 +968,8 @@ private fun HomeStylePreview(mode: HomeMode) {
         )
     }
     Row(Modifier.widthIn(max = 620.dp).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.l)) {
-        for (m in HomeMode.entries) {
-            MiniScreen(if (m == HomeMode.FLOW) "Flow" else "Channels", active = m == mode, modifier = Modifier.weight(1f)) { lit ->
+        for (m in listOf(HomeMode.CHANNELS, HomeMode.FLOW)) {
+            MiniScreen(if (m == HomeMode.FLOW) "Network" else "Fused", active = m == mode, modifier = Modifier.weight(1f)) { lit ->
                 val quiet = c.text.copy(alpha = 0.16f + 0.06f * lit)
                 val strong = c.text.copy(alpha = 0.55f + 0.3f * lit)
                 val accent = c.accent.copy(alpha = 0.55f + 0.4f * lit)
@@ -997,7 +998,7 @@ private fun HomeStylePreview(mode: HomeMode) {
                     val sw = w * 0.11f
                     for (i in 0 until 8) box(w * 0.04f + i * (sw + w * 0.012f), h * 0.77f, sw, h * 0.2f, quiet)
                 } else {
-                    // Channels: the board, each widget its real size and place.
+                    // Fused: the board, each widget its real size and place.
                     val cols = board.columns
                     val rows = board.rows.coerceAtLeast(1)
                     val gap = w * 0.02f

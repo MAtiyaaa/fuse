@@ -158,7 +158,7 @@ object ThemePresets {
     /** Bright tiles on soft pinstripes, a clear sky blue. */
     val Channels = ThemeSpec(
         id = "channels",
-        name = "Channels",
+        name = "Fused",
         tagline = "Bright tiles you arrange yourself",
         palette = ThemePalette(
             dark = false,

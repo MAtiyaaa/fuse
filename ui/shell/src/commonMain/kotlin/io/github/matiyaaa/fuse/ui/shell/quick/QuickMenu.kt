@@ -375,7 +375,7 @@ fun QuickMenu(app: AppState) {
             }
         }
         QuickId.CARTRIDGE -> QuickTile(sections.label(Destination.CARTRIDGE), sections.icon(Destination.CARTRIDGE)) { close(); app.selectTab(Destination.CARTRIDGE) }
-        QuickId.HOME_STYLE -> QuickTile("Home", if (prefs.home.mode == HomeMode.CHANNELS) FuseIcons.Grid else FuseIcons.Rows, detail = if (prefs.home.mode == HomeMode.CHANNELS) "Channels" else "Flow") {
+        QuickId.HOME_STYLE -> QuickTile("Home", if (prefs.home.mode == HomeMode.CHANNELS) FuseIcons.Grid else FuseIcons.Rows, detail = if (prefs.home.mode == HomeMode.CHANNELS) "Fused" else "Network") {
             app.switchHomeStyle()
         }
         QuickId.SOUND -> {

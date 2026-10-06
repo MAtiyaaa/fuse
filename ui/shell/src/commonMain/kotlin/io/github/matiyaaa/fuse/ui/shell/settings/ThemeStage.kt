@@ -299,7 +299,7 @@ private fun VirtualScreen(modifier: Modifier = Modifier, content: @Composable Bo
 }
 
 /**
- * Home in the current theme, the way Flow lays it out: the top line, the stage with the first game's
+ * Home in the current theme, the way Network lays it out: the top line, the stage with the first game's
  * title, a shelf of wide game tiles with the first one focused, the systems below, and the hint line.
  * With no games yet it shows the theme's own name over generated tiles.
  */

@@ -773,7 +773,7 @@ private fun ColumnScope.ClockWidget(clock24h: Boolean) {
 }
 
 /**
- * What the stage (Flow) and the spotlight (Channels) tell about a widget, the same in both modes:
+ * What the stage (Network) and the spotlight (Fused) tell about a widget, the same in both modes:
  * its value told big under the widget's name, with what it means beside it. [accent] colours the
  * stage's dot.
  */
@@ -829,7 +829,7 @@ fun bytesText(bytes: Long): String {
 }
 
 /**
- * Where a widget leads when it is opened, the same on the board and in Flow: each one opens the
+ * Where a widget leads when it is opened, the same on the board and in Network: each one opens the
  * place its numbers come from. [at] is the item a carousel shows in front (the first otherwise):
  * its game, system, collection or film is the one opened.
  */

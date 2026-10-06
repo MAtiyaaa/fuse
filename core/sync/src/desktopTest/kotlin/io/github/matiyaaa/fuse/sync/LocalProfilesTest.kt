@@ -251,11 +251,11 @@ class LocalProfilesTest {
         deck.play("mo: on the deck", seconds = 300)
         deck.svc.syncNow().getOrThrow()
 
-        // Fuse Sync off: Mo played here, so Mo stays (PIN and all); Sam never did, so Sam isn't here.
+        // Fuse Sync off, keeping profiles: everyone on the host stays (Mo with the PIN typed here).
         deck.svc.setEnabled(false)
         assertIs<SyncStatus.Off>(deck.svc.status.value)
-        assertEquals(listOf("Mo"), deck.svc.profiles.value.map { it.name })
-        assertTrue(deck.svc.profiles.value.single().protected)
+        assertEquals(setOf("Mo", "Sam"), deck.svc.profiles.value.map { it.name }.toSet())
+        assertTrue(deck.svc.profiles.value.first { it.name == "Mo" }.protected)
         assertEquals(mo.id, deck.active())
         assertEquals(300L, deck.lib.now()[ruby.id]?.totalSeconds)
         deck.svc.switchTo(null).getOrThrow()
@@ -269,7 +269,9 @@ class LocalProfilesTest {
         deck.svc.connect("127.0.0.1:$port", next).getOrThrow()
         val offer = assertNotNull(deck.svc.merge.value)
         assertEquals(mo.id, offer.suggested[mo.id])
-        deck.svc.bringProfiles(mapOf(mo.id to MergeChoice.Same(mo.id, "2468"))).getOrThrow()
+        val sam = offer.here.first { it.name == "Sam" }
+        assertEquals(sam.id, offer.suggested[sam.id])
+        deck.svc.bringProfiles(mapOf(mo.id to MergeChoice.Same(mo.id, "2468"), sam.id to MergeChoice.Same(sam.id))).getOrThrow()
         deck.svc.syncNow().getOrThrow()
         assertEquals(mo.id, deck.active())
         pc.svc.switchTo(mo.id, "2468").getOrThrow()

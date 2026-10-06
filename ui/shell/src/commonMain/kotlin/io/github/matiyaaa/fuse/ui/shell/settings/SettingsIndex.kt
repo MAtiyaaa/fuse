@@ -45,7 +45,7 @@ object SettingsIndex {
         SettingTopic("accessibility", "Screen edges", "overscan tv safe area margin cut off borders"),
         SettingTopic("accessibility", "Motion", "animations reduce motion"),
         SettingTopic("accessibility", "High contrast focus", "visibility outline"),
-        SettingTopic("home", "Home style", "flow channels widgets rows layout"),
+        SettingTopic("home", "Home style", "fused network flow channels widgets rows layout"),
         SettingTopic("home", "Add a widget", "board widgets"),
         SettingTopic("home", "Row order", "rows reorder"),
         SettingTopic("home", "Section order", "tabs top bar reorder"),

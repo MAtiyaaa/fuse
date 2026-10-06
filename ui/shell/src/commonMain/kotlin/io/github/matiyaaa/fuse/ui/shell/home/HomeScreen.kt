@@ -123,19 +123,19 @@ fun HomeScreen(app: AppState) {
     if (prefs.home.mode == HomeMode.CHANNELS) ChannelHome(app) else FlowHome(app)
 }
 
-/** Flips Home between Flow and Channels, and says which one it is now. */
+/** Flips Home between Network and Fused, and says which one it is now. */
 fun AppState.switchHomeStyle() {
     val next = if (store.prefs.value.home.mode == HomeMode.CHANNELS) HomeMode.FLOW else HomeMode.CHANNELS
     store.updatePrefs { it.copy(home = it.home.copy(mode = next)) }
-    toasts.show(if (next == HomeMode.CHANNELS) "Home is now Channels" else "Home is now Flow")
+    toasts.show(if (next == HomeMode.CHANNELS) "Home is now Fused" else "Home is now Network")
 }
 
-/** "Switch to Channels" (or Flow) and "Home settings", for Home's option menus. */
+/** "Switch to Fused" (or Network) and "Home settings", for Home's option menus. */
 fun AppState.homeStyleActions(): List<MenuAction> {
     val channels = store.prefs.value.home.mode == HomeMode.CHANNELS
     return listOf(
         MenuAction(
-            "style", if (channels) "Switch to Flow" else "Switch to Channels",
+            "style", if (channels) "Switch to Network" else "Switch to Fused",
             if (channels) FuseIcons.Rows else FuseIcons.Grid,
             detail = if (channels) "Rows of games under a big title" else "A board of tiles you arrange",
             onSelect = { closeOverlays(); switchHomeStyle() },
@@ -145,7 +145,7 @@ fun AppState.homeStyleActions(): List<MenuAction> {
 }
 
 /**
- * Flow Mode: a continuous dashboard. The selected item is told big at the top (the stage) and lights
+ * Network Mode: a continuous dashboard. The selected item is told big at the top (the stage) and lights
  * the room; shelves below slide so the selected shelf always sits in the same place, and each shelf
  * slides sideways under a fixed focus spot, so your eyes never have to chase the selection.
  */

@@ -89,11 +89,11 @@ internal fun keepProfilesHere(app: AppState, then: (Boolean) -> Unit) {
     app.choice = io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec(
         title = "Profiles on This Device",
         icon = FuseIcons.Users,
-        message = "Whoever played here can stay, without a host. Join one again later and they come along.",
+        message = "Everyone's profiles can stay on this device, without a host, with their play time, favourites, theme and the saves here. Join a host again later and they come along.",
         options = listOf(
             io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction(
                 "keep", "Keep Profiles Here", FuseIcons.UserRound,
-                detail = "Each keeps their saves, play time, favourites and theme on this device",
+                detail = "Every profile, and what this device has of theirs, stays here",
                 onSelect = { app.choice = null; then(true) },
             ),
             io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction(

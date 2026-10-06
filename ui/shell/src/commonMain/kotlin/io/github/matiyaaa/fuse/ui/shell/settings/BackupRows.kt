@@ -155,7 +155,7 @@ private fun AppState.chooseRestore(preview: BackupPreview) {
                 ))
                 add(MenuAction(
                     "look", "Look and Home", FuseIcons.Palette,
-                    detail = "The theme, added themes, Flow's rows and the widget board",
+                    detail = "The theme, added themes, Network's rows and the widget board",
                     onSelect = { restore(setOf(BackupPart.APPEARANCE)) },
                 ))
             }

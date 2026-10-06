@@ -29,7 +29,7 @@ Home screen.
 <a href="https://github.com/MAtiyaaa/fuse/releases/latest"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/brand/button-macos-dark.svg"><img src="docs/assets/brand/button-macos-light.svg" height="48" alt="Download for macOS"></picture></a>
 
 <sub>Android 9 or newer &nbsp;·&nbsp; 64-bit x86 Linux AppImage &nbsp;·&nbsp; Windows 10 and 11 &nbsp;·&nbsp; macOS on Apple silicon and Intel &nbsp;·&nbsp; <a href="#install">checksums and install notes</a></sub><br>
-<sub>0.3.4 is the <b>Unity Update</b>: one Fuse on every device and controller, with profiles that need no host, saves from every system reaching it, Fuse Sync and Syncthing that never lose a save or touch what you set up, hints that follow your button mapping, PICO-8 and Flash on the computer, and small screens that show what you're choosing, after 0.3.3, the Together Update (saves sent while you play, joining without a code, a host account and one outside address for every device), and 0.3.2, the Corner Update (each person's own saves, saves in 3DS, Switch and Wii U emulators). <a href="#where-fuse-stands">Here is where it stands.</a></sub><br>
+<sub>0.3.4 is the <b>Household Update</b>: a profile for everyone in the house, with or without a host, made in setup and carried along when a device joins one, plus a Fused Home first in setup, saves from every system reaching the host, Fuse Sync and Syncthing that never lose a save or touch what you set up, hints that follow your button mapping, PICO-8 and Flash on the computer, and small screens that show what you're choosing, after 0.3.3, the Together Update (saves sent while you play, joining without a code, a host account and one outside address for every device), and 0.3.2, the Corner Update (each person's own saves, saves in 3DS, Switch and Wii U emulators). <a href="#where-fuse-stands">Here is where it stands.</a></sub><br>
 <sub>Or download from <a href="https://matiyaaa.github.io/fuse/">Fuse's website</a>, which always offers the latest version for your system.</sub>
 
 <br>
@@ -297,7 +297,7 @@ Play.
     <td width="33%" valign="top">
       <img src="docs/assets/icons/themes.svg" width="44" height="44" alt=""><br>
       <b>Twenty themes, and yours</b><br>
-      <sub>Fuse, Glass, Starlight, Crossbar, Orbital, Wave, Blades, Channels, CRT, Daylight and ten more, each with its own background, corners, focus, motion and sound. Make one in the Theme Studio, add one from a link or a file, or <a href="docs/THEMES.md">write your own</a>.</sub>
+      <sub>Fuse, Glass, Starlight, Crossbar, Orbital, Wave, Blades, Fused, CRT, Daylight and ten more, each with its own background, corners, focus, motion and sound. Make one in the Theme Studio, add one from a link or a file, or <a href="docs/THEMES.md">write your own</a>.</sub>
     </td>
     <td width="33%" valign="top">
       <img src="docs/assets/icons/accessibility.svg" width="44" height="44" alt=""><br>
@@ -463,8 +463,8 @@ Play.
   deadzones, **Detect my buttons** (Xbox, Nintendo or PlayStation layout from two presses), and hint
   glyphs for Xbox, Nintendo, PlayStation or keyboard.
 - A **button mapping** screen with capture and a live button test that no button can leave by accident.
-- **Home** as a flowing dashboard of rows (Flow) or a board of widgets you move and resize like a
-  phone's home screen (Channels): 19 kinds of widgets, each designed for every size from one cell to
+- **Home** as a board of widgets you move and resize like a phone's home screen (Fused, the one
+  we recommend) or a flowing dashboard of rows (Network): 19 kinds of widgets, each designed for every size from one cell to
   four by three.
 - **Library** layouts from square box art to capsules to covers to a compact list; **Systems**, **Apps**
   (on Android), **Search** with filters, game pages, a media manager, a folder browser, the **quick
@@ -547,7 +547,7 @@ Linux app, isn't offered on Windows and macOS.
 ## Where Fuse stands
 
 > [!IMPORTANT]
-> **Fuse 0.3.4 "The Unity Update" is still early, and steadier everywhere.** This release went
+> **Fuse 0.3.4 "The Household Update" is still early, and steadier everywhere.** This release went
 > through Fuse Sync, Syncthing, controllers, tabs and small screens looking for anything that could
 > lose a save, trap you in a menu or say the wrong thing. Profiles work without a host and go along
 > when a device joins one, and saves from every system find their way there. A restored save sticks
@@ -567,7 +567,7 @@ Linux app, isn't offered on Windows and macOS.
 
 | Version | Name | What it brought |
 |---|---|---|
-| [0.3.4](docs/releases/0.3.4.md) | The Unity Update | Profiles without a host, saves from every system reaching it, Fuse Sync and Syncthing that never lose a save or touch what you set up, hints that follow your button mapping, Nintendo pads that confirm with A everywhere, PICO-8 and Flash on the computer, small screens that fit |
+| [0.3.4](docs/releases/0.3.4.md) | The Household Update | Profiles without a host, saves from every system reaching it, Fuse Sync and Syncthing that never lose a save or touch what you set up, hints that follow your button mapping, Nintendo pads that confirm with A everywhere, PICO-8 and Flash on the computer, small screens that fit |
 | [0.3.3](docs/releases/0.3.3.md) | The Together Update | Saves sent while you play, who is playing what, one game across devices, joining without a code, a host account and shared outside address, Erase Fuse, a mouse that works first click, redesigned Sync and Syncthing tabs |
 | [0.3.2](docs/releases/0.3.2.md) | The Corner Update | Menus that travel between screens, a hello when switching profile, each person's own saves, saves in 3DS, Switch, Wii U and Xbox 360 emulators, Jellyfin widgets on every page, round corners |
 | [0.3.1](docs/releases/0.3.1.md) | The Glide Update | Home widgets that turn like a catalogue, Jellyfin that answers quickly, Syncthing beside Fuse Sync, the Thor's two screens with the controller |
