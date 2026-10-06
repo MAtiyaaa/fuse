@@ -44,10 +44,13 @@ class RommMirror(
      * new, for "New in Your Library".
      */
     suspend fun sync(client: RommClient, server: String, full: Boolean = false, pageSize: Int = 250, progress: (MirrorProgress) -> Unit = {}): MirrorResult = withContext(dispatcher) {
-        val started = clock()
         val since = syncedUpTo(server)
-        val firstEver = since == 0L && q.romCount(server).executeAsOne() == 0L
-        val incremental = !full && since > 0 && client.capabilities.incremental
+        // A read of the whole library that stopped part way (the app closed, the server went away, a
+        // page too slow) carries on from the page it reached, never from the start again.
+        val resume = cursor(server)
+        val started = resume?.second ?: clock()
+        val firstEver = since == 0L
+        val incremental = resume == null && !full && since > 0 && client.capabilities.incremental
         progress(MirrorProgress("Systems", 0, null))
         val platforms = client.platforms()
         db.transaction {
@@ -57,23 +60,31 @@ class RommMirror(
         var added = 0
         var changed = 0
         var newest = since
-        var offset = 0
+        var offset = resume?.first ?: 0
         var total: Int? = null
+        var size = pageSize
         while (true) {
-            val page = client.roms(offset, pageSize, updatedAfter = if (incremental) since - CLOCK_SKEW_MS else null)
+            val page = try {
+                client.roms(offset, size, updatedAfter = if (incremental) since - CLOCK_SKEW_MS else null)
+            } catch (e: RommException) {
+                // A server slow to put a page together gets asked for smaller ones.
+                if (e.code == RommClient.SLOW && size > MIN_PAGE) { size = maxOf(MIN_PAGE, size / 2); continue }
+                throw e
+            }
             total = page.total ?: total
             if (page.items.isEmpty()) break
             db.transaction {
                 for (r in page.items) {
-                    val existed = q.rom(server, r.id).executeAsOneOrNull() != null
-                    write(server, r, started, markNew = !firstEver && !existed)
-                    if (existed) changed++ else added++
+                    val before = q.rom(server, r.id).executeAsOneOrNull()
+                    write(server, r, started, markNew = !firstEver && before == null, keepFiles = before?.files_json)
+                    if (before != null) changed++ else added++
                     if (r.updatedAt > newest) newest = r.updatedAt
                 }
+                if (!incremental) putCursor(server, offset + page.items.size, started)
             }
             offset += page.items.size
             progress(MirrorProgress("Games", offset, total))
-            if (page.items.size < pageSize || (total != null && offset >= total)) break
+            if (page.items.size < size || (total != null && offset >= total)) break
         }
         // Games that went: the server's own list of ids where it has one, else (a full read) anything not seen.
         var removed = 0
@@ -104,12 +115,40 @@ class RommMirror(
                 for (c in cs) q.upsertCollection(server, c.id, c.name, if (c.smart) 1 else 0, c.romIds.joinToString(","), c.cover)
             }
         }
-        db.kvCacheQueries.put(NS, "upTo:$server", maxOf(newest, since).toString(), clock(), null)
+        db.transaction {
+            db.kvCacheQueries.put(NS, "upTo:$server", maxOf(newest, since).toString(), clock(), null)
+            db.kvCacheQueries.delete(NS, "cursor:$server")
+        }
         MirrorResult(added, changed, removed, q.romCount(server).executeAsOne().toInt(), full = !incremental)
     }
 
-    private fun write(server: String, r: RommRom, now: Long, markNew: Boolean) {
-        val files = RommParse.json.encodeToString(filesSerializer, r.files)
+    /** Where an unfinished read of the whole library got to (games done, when it started), if one did. */
+    private fun cursor(server: String): Pair<Int, Long>? {
+        val v = db.kvCacheQueries.get(NS, "cursor:$server").executeAsOneOrNull()?.value_json ?: return null
+        val done = v.substringBefore(':').toIntOrNull() ?: return null
+        val at = v.substringAfter(':').toLongOrNull() ?: return null
+        return done to at
+    }
+
+    private fun putCursor(server: String, done: Int, started: Long) =
+        db.kvCacheQueries.put(NS, "cursor:$server", "$done:$started", clock(), null)
+
+    /**
+     * [romId] with its files, brought from the server the first time they are needed (the library
+     * is read without them) and kept from then on. Null when the game isn't known; the game as kept
+     * when the server can't be asked.
+     */
+    suspend fun withFiles(client: RommClient?, server: String, romId: Long): RommRom? {
+        val kept = rom(server, romId) ?: return null
+        if (kept.files.isNotEmpty() || client == null) return kept
+        val fresh = runCatching { client.rom(romId) }.getOrNull() ?: return kept
+        put(server, fresh)
+        return rom(server, romId) ?: fresh
+    }
+
+    private fun write(server: String, r: RommRom, now: Long, markNew: Boolean, keepFiles: String? = null) {
+        // A page of the library comes without files: the ones already brought for this game stay.
+        val files = if (r.files.isEmpty() && keepFiles != null) keepFiles else RommParse.json.encodeToString(filesSerializer, r.files)
         q.insertRomIfAbsent(
             server, r.id, r.platformId, r.platformSlug, r.name, sortName(r.name), r.fsName, r.sizeBytes, r.md5, r.sha1, r.crc,
             r.titleId, r.regions.joinToString(SEP), r.revision, r.year?.toLong(), r.summary, r.genres.joinToString(SEP), r.developer,
@@ -216,6 +255,9 @@ class RommMirror(
 
         /** A server's clock and this device's can disagree: changes are asked for a little before the last seen. */
         private const val CLOCK_SKEW_MS = 5 * 60_000L
+
+        /** The smallest page asked for when the server is slow to answer bigger ones. */
+        private const val MIN_PAGE = 25
 
         /** The name a game sorts by: leading articles aside, case aside. */
         fun sortName(name: String): String {

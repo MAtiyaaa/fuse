@@ -44,6 +44,11 @@ object RommMatch {
         val bySerial = live.filter { !it.serial.isNullOrBlank() }.groupBy { it.platform to idKey(it.serial!!) }
         val byFile = live.groupBy { it.platform to it.fileName.lowercase() }
         val byName = live.groupBy { it.platform to nameKey(it.fileName.ifBlank { it.title }) }
+        // PS4 and PS5 games are zips on RomM but played from the folder they unpack to, named for the
+        // zip or carrying the game's own id (CUSA12345, PPSA12345), as Cartridge matches them.
+        val byPsId = live.filter { it.platform in FOLDER_SYSTEMS }
+            .mapNotNull { g -> (listOfNotNull(g.serial, g.fileName, g.title).firstNotNullOfOrNull(::playStationId))?.let { (g.platform to it) to g } }
+            .groupBy({ it.first }, { it.second })
         val romsByName = roms.groupBy { (platformOf(it.platformSlug) ?: it.platformSlug) to nameKey(it.fsName.ifBlank { it.name }) }
 
         val taken = HashSet<Long>()
@@ -58,6 +63,13 @@ object RommMatch {
             hashes.firstNotNullOfOrNull { h -> byMd5[h]?.singleOrNull { it.platform == platform } }?.let { candidates += RommMatchResult(r.id, it.id, MatchReason.HASH) }
             r.titleId?.let { t -> bySerial[platform to idKey(t)]?.singleOrNull() }?.let { candidates += RommMatchResult(r.id, it.id, MatchReason.TITLE_ID) }
             byFile[platform to r.fsName.lowercase()]?.singleOrNull()?.let { candidates += RommMatchResult(r.id, it.id, MatchReason.FILE_NAME) }
+            if (platform in FOLDER_SYSTEMS) {
+                val unpacked = r.fsName.replace(ARCHIVE, "").lowercase()
+                if (unpacked != r.fsName.lowercase()) byFile[platform to unpacked]?.singleOrNull()?.let { candidates += RommMatchResult(r.id, it.id, MatchReason.FILE_NAME) }
+                (listOfNotNull(r.titleId, r.fsName, r.name).firstNotNullOfOrNull(::playStationId))
+                    ?.let { byPsId[platform to it]?.singleOrNull() }
+                    ?.let { candidates += RommMatchResult(r.id, it.id, MatchReason.TITLE_ID) }
+            }
             val key = platform to nameKey(r.fsName.ifBlank { r.name })
             val locals = byName[key]
             if (locals != null && locals.size == 1 && romsByName[key]?.size == 1 && key.second.isNotEmpty()) {
@@ -73,6 +85,14 @@ object RommMatch {
         }
         return out
     }
+
+    /** Systems whose games RomM keeps as archives but that are played from the folder they unpack to. */
+    private val FOLDER_SYSTEMS = setOf("ps4", "ps5")
+    private val ARCHIVE = Regex("\\.(zip|7z|rar)$", RegexOption.IGNORE_CASE)
+    private val PS_ID = Regex("\\b(CUSA|PPSA)[-_ ]?(\\d{5})\\b", RegexOption.IGNORE_CASE)
+
+    /** A PS4 or PS5 game's own id in [text] (CUSA12345, PPSA12345), however it is written. */
+    internal fun playStationId(text: String): String? = PS_ID.find(text)?.let { it.groupValues[1].uppercase() + it.groupValues[2] }
 
     /** A console id written any way ("SLUS-00067", "slus_000.67", "0100ABCD...") the same. */
     fun idKey(id: String): String = id.lowercase().filter { it.isLetterOrDigit() }

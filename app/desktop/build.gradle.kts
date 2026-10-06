@@ -42,12 +42,16 @@ val fuseVersion: String = providers.gradleProperty("fuse.version").getOrElse("0.
 
 /**
  * The version Windows Installer and macOS read. Both refuse a leading 0 (macOS) or compare only
- * numbers (MSI upgrades), so 0.1.0 is packaged as 1.1.0, and 1.0.0 later as 2.0.0: always rising.
+ * three numbers (MSI upgrades), so 0.1.0 is packaged as 1.1.0, and 1.0.0 later as 2.0.0: always
+ * rising. A fourth number (a fix release such as 0.3.6.1) shares the third with it, two digits each
+ * (0.3.6.1 is 1.3.601, after 0.3.6's 1.3.6 and before 0.3.7's 1.3.700), so it upgrades in place too.
  * Fuse itself still shows [fuseVersion].
  */
 val installerVersion: String = fuseVersion.substringBefore('-').split('.').let { parts ->
-    val n = parts.map { it.toIntOrNull() ?: 0 } + listOf(0, 0, 0)
-    "${n[0] + 1}.${n[1]}.${n[2]}"
+    val n = parts.map { it.toIntOrNull() ?: 0 } + listOf(0, 0, 0, 0)
+    // Versions up to 0.3.6 were packaged with the third number as it is; every later one by the new rule.
+    val afterScheme = compareValuesBy(n, listOf(0, 3, 6, 0), { it[0] }, { it[1] }, { it[2] }, { it[3] }) > 0
+    "${n[0] + 1}.${n[1]}.${if (afterScheme) n[2] * 100 + n[3] else n[2]}"
 }
 
 /** Writes BuildInfo.kt so the running app knows its version without reading gradle.properties. */

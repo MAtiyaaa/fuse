@@ -279,7 +279,10 @@ turning one on turns the other off in Fuse and keeps both set up.
 - **The offline copy:** `/api/platforms`, `/api/collections`, `/api/collections/smart` and
   `/api/roms` a page at a time (only games changed since the last time, after the first), kept in
   Fuse's database. Games removed on the server are found through `/api/roms/identifiers` where it
-  exists. The Fuse RomM tab, its grids and Search read the copy, so they work offline.
+  exists. The library is read without file lists (a PS4 or PS5 game can list tens of thousands);
+  a game's files come from `/api/roms/{id}` the first time it is opened or downloaded, and are kept.
+  A read that stops part way carries on from the page it reached, and a page RomM is slow to send is
+  asked for again in smaller ones. The Fuse RomM tab, its grids and Search read the copy, so they work offline.
 - **Matching:** a RomM game is joined to a library game by the link Fuse keeps, an MD5, a console's
   title id, the exact file name, or the same name with the same region, revision, version and disc
   when it is the only one on each side. A name that only looks alike is never enough, and a library

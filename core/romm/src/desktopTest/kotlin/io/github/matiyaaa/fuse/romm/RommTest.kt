@@ -31,6 +31,7 @@ import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
@@ -189,7 +190,9 @@ class RommTest {
         assertEquals(2, mirror.count("main"))
         // Nothing is new on the first sync: it is the library.
         assertEquals(emptyList(), mirror.newGames("main"))
-        val ff7 = mirror.rom("main", 2)!!
+        // The library is read without files; a game's come the first time it is opened.
+        assertEquals(0, mirror.rom("main", 2)!!.files.size)
+        val ff7 = mirror.withFiles(c, "main", 2)!!
         assertEquals(3, ff7.files.size)
         assertEquals(listOf("RPG"), ff7.genres)
         assertEquals(2000, ff7.year)
@@ -225,12 +228,97 @@ class RommTest {
         assertEquals(2, mirror.count("main"))
     }
 
+    @Test
+    fun `a page the server is too slow to put together is asked for again in smaller ones`() = runBlocking<Unit> {
+        val fake = server()
+        fake.slowAbove = 40
+        val c = client(fake)
+        c.detect()
+        val mirror = RommMirror(db(), System::currentTimeMillis)
+        val result = mirror.sync(c, "main", pageSize = 250)
+        assertEquals(2, result.total)
+        val limits = fake.calls.filter { it.startsWith("GET /api/roms?") }.mapNotNull { Regex("limit=(\\d+)").find(it)?.groupValues?.get(1)?.toInt() }
+        assertEquals(listOf(250, 125, 62, 31), limits)
+    }
+
+    @Test
+    fun `a slow answer is slow, not a server that is away`() = runBlocking<Unit> {
+        val fake = server()
+        fake.slowAbove = 0
+        val c = client(fake)
+        c.detect()
+        val e = assertFailsWith<RommException> { c.roms(0, 50) }
+        assertEquals(RommClient.SLOW, e.code)
+    }
+
+    @Test
+    fun `a sync that stops part way carries on from the page it reached`() = runBlocking<Unit> {
+        val fake = FakeRomm()
+        for (i in 1L..6L) fake.games += FakeRomm.Game(i, 10, "gba", "Game $i", "Game $i (USA).gba", listOf(Triple(100 + i, "Game $i (USA).gba", ByteArray(10) { i.toByte() })))
+        fake.dropFrom = 2
+        val c = client(fake)
+        c.detect()
+        val db = db()
+        var now = 1_000_000L
+        val mirror = RommMirror(db, { now })
+        assertFailsWith<RommException> { mirror.sync(c, "main", pageSize = 2) }
+        assertEquals(2, mirror.count("main"))
+        // Fuse opened again later: the read carries on from game 3, not from the start.
+        fake.dropFrom = Int.MAX_VALUE
+        now += 60_000
+        val calls = fake.calls.size
+        val result = mirror.sync(c, "main", pageSize = 2)
+        val offsets = fake.calls.drop(calls).filter { it.startsWith("GET /api/roms?") }.mapNotNull { Regex("offset=(\\d+)").find(it)?.groupValues?.get(1)?.toInt() }
+        assertEquals(listOf(2, 4), offsets)
+        assertEquals(6, result.total)
+        assertEquals(6, mirror.count("main"))
+        // Still the first read of the library: nothing in it is "new".
+        assertEquals(emptyList(), mirror.newGames("main"))
+        // Finished: the next one only asks for what changed.
+        val again = mirror.sync(c, "main", pageSize = 2)
+        assertFalse(again.full)
+    }
+
+    @Test
+    fun `a game's files are kept once brought, through later reads of the library`() = runBlocking<Unit> {
+        val fake = server()
+        val c = client(fake)
+        c.detect()
+        val mirror = RommMirror(db(), System::currentTimeMillis)
+        mirror.sync(c, "main")
+        assertEquals(3, mirror.withFiles(c, "main", 2)!!.files.size)
+        fake.games.first { it.id == 2L }.updated = "2026-03-01T00:00:00+00:00"
+        mirror.sync(c, "main", full = true)
+        // Without the server, from what Fuse kept.
+        assertEquals(3, mirror.withFiles(null, "main", 2)!!.files.size)
+    }
+
     // ------------------------------------------------------------------ one game, not five
 
     private fun platformOf(slug: String) = PlatformCatalog.resolveFolder(slug)?.id?.value
 
     private fun rom(id: Long, slug: String, fs: String, md5: String? = null, titleId: String? = null) =
         RommRom(id, 1, slug, fs.substringBefore(" ("), fs, md5 = md5, titleId = titleId, files = listOf(RommFile(id * 10, fs)))
+
+    @Test
+    fun `PS4 and PS5 zips find the folders they unpack to, by name or by the game's own id`() {
+        val roms = listOf(
+            rom(1, "ps4", "Bloodborne (USA).zip"),
+            rom(2, "ps5", "Astro Bot [PPSA12345].zip"),
+            rom(3, "ps4", "Gravity Rush 2 (USA).zip"),
+        )
+        val games = listOf(
+            LocalGame(10, "ps4", "Bloodborne", "Bloodborne (USA)"),
+            LocalGame(20, "ps5", "Astro Bot", "PPSA-12345"),
+            LocalGame(30, "ps4", "Gravity Rush", "Gravity Rush (USA)"),
+        )
+        val m = RommMatch.match(roms, games, ::platformOf).associate { it.romId to (it.gameId to it.reason) }
+        assertEquals(10L to MatchReason.FILE_NAME, m[1])
+        assertEquals(20L to MatchReason.TITLE_ID, m[2])
+        // A different game whose name only starts the same is never joined.
+        assertNull(m[3])
+        assertEquals("CUSA07408", RommMatch.playStationId("Bloodborne [cusa_07408]"))
+    }
 
     @Test
     fun `matching uses the strongest evidence and never a look-alike name`() {
@@ -387,7 +475,7 @@ class RommTest {
         val host = Host(fake, c, mirror)
         val m = manager()
         m.register(RommDownloadHandler(fake.client, host))
-        val ff7 = mirror.rom("main", 2)!!
+        val ff7 = mirror.withFiles(c, "main", 2)!!
         val placement = RommPlacement.layout(ff7, ff7.files, File(root, "roms/psx").path)
         val job = RommDownloadJob("main", ff7.id, ff7.files.map { RommDownloadFile(it, it.name) }, newFolder = true, platform = "psx")
         val id = m.enqueue(TransferItem("", "romm:rom:2", ROMM_SOURCE, TransferDirection.DOWNLOAD, TransferKind.GAME, ff7.name, place = TransferPlace(placement.gamePath), totalBytes = ff7.sizeBytes, payload = job.encode()))
