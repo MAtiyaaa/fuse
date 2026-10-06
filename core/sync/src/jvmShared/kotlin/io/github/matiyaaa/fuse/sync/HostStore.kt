@@ -62,7 +62,13 @@ internal data class OutsideAddress(val address: String = "", val learned: Boolea
  * that was being answered, never what was already kept. One lock keeps calls from different
  * devices in order; the host is the one place that decides what is newest.
  */
-class HostStore(val dir: File, private val clock: () -> Long = System::currentTimeMillis, hostName: String = "Fuse Sync Host") {
+class HostStore(
+    val dir: File,
+    private val clock: () -> Long = System::currentTimeMillis,
+    hostName: String = "Fuse Sync Host",
+    /** The free space on [dir]'s drive, as the Hub shows it. */
+    private val freeSpace: (File) -> Long = { it.usableSpace },
+) {
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
     private val lock = Any()
     val content = ContentStore(File(dir, "objects"))
@@ -262,7 +268,7 @@ class HostStore(val dir: File, private val clock: () -> Long = System::currentTi
         // The files' totals are read outside the lock: devices' calls never wait on the disk for them.
         val bytes = content.totalBytes()
         val objects = content.count()
-        val free = dir.usableSpace
+        val free = freeSpace(dir)
         return synchronized(lock) {
             HostStatus(
                 hello = hello(port, fuseVersion),

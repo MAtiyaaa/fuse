@@ -28,7 +28,13 @@ class HubTest {
     @BeforeTest
     fun start(): Unit = runBlocking {
         root = Files.createTempDirectory("fuse-hub").toFile()
-        host = SyncHost(HostStore(File(root, "host"), hostName = "Gaming PC"), port = 0, bind = "127.0.0.1", callsPerMinute = 100_000).start()
+        // The page shows how long the host has run and the drive's free space; held still here, so
+        // a Refresh with nothing new brings the very same page while other work fills the disk.
+        val now = System.currentTimeMillis()
+        host = SyncHost(
+            HostStore(File(root, "host"), clock = { now }, hostName = "Gaming PC", freeSpace = { 64L * 1024 * 1024 * 1024 }),
+            port = 0, clock = { now }, bind = "127.0.0.1", callsPerMinute = 100_000,
+        ).start()
         port = host.boundPort()
     }
 
