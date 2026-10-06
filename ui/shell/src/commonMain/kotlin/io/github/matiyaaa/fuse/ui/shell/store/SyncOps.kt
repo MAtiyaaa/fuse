@@ -21,8 +21,8 @@ interface SyncOps {
 
     suspend fun configure(change: (SyncSettings) -> SyncSettings)
 
-    /** Turns it on or off here; off keeps everything on this device as it is. */
-    suspend fun setEnabled(enabled: Boolean)
+    /** Turns it on or off here; off keeps everything on this device as it is (the people who played here too, with [keepProfiles]). */
+    suspend fun setEnabled(enabled: Boolean, keepProfiles: Boolean = true)
 
     /**
      * Home on this device: the profile's, the same on every device ([own] false), or this device's
@@ -45,7 +45,7 @@ interface SyncOps {
         override val service: SyncService? = null
         override val config: StateFlow<SyncSettings> = MutableStateFlow(SyncSettings())
         override suspend fun configure(change: (SyncSettings) -> SyncSettings) = Unit
-        override suspend fun setEnabled(enabled: Boolean) = Unit
+        override suspend fun setEnabled(enabled: Boolean, keepProfiles: Boolean) = Unit
         override suspend fun setOwnHome(own: Boolean) = Unit
     }
 }

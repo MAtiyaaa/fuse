@@ -29,7 +29,7 @@ Home screen.
 <a href="https://github.com/MAtiyaaa/fuse/releases/latest"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/brand/button-macos-dark.svg"><img src="docs/assets/brand/button-macos-light.svg" height="48" alt="Download for macOS"></picture></a>
 
 <sub>Android 9 or newer &nbsp;·&nbsp; 64-bit x86 Linux AppImage &nbsp;·&nbsp; Windows 10 and 11 &nbsp;·&nbsp; macOS on Apple silicon and Intel &nbsp;·&nbsp; <a href="#install">checksums and install notes</a></sub><br>
-<sub>0.3.4 is the <b>Unity Update</b>: one Fuse on every device and controller, with Fuse Sync and Syncthing that never lose a save or touch what you set up, hints that follow your button mapping, PICO-8 and Flash on the computer, and small screens that show what you're choosing, after 0.3.3, the Together Update (saves sent while you play, joining without a code, a host account and one outside address for every device), and 0.3.2, the Corner Update (each person's own saves, saves in 3DS, Switch and Wii U emulators). <a href="#where-fuse-stands">Here is where it stands.</a></sub><br>
+<sub>0.3.4 is the <b>Unity Update</b>: one Fuse on every device and controller, with profiles that need no host, saves from every system reaching it, Fuse Sync and Syncthing that never lose a save or touch what you set up, hints that follow your button mapping, PICO-8 and Flash on the computer, and small screens that show what you're choosing, after 0.3.3, the Together Update (saves sent while you play, joining without a code, a host account and one outside address for every device), and 0.3.2, the Corner Update (each person's own saves, saves in 3DS, Switch and Wii U emulators). <a href="#where-fuse-stands">Here is where it stands.</a></sub><br>
 <sub>Or download from <a href="https://matiyaaa.github.io/fuse/">Fuse's website</a>, which always offers the latest version for your system.</sub>
 
 <br>
@@ -139,7 +139,8 @@ They behave the same on every device, answer to one design, and get better with 
         the other is kept. Every save keeps its versions, from every device, to go back to.</li>
         <li><b>A profile for each person</b>, with one of Fuse's own avatars and a PIN if they like:
         their own saves (even on a device everyone shares), library, favourites, collections, Home
-        and theme, switched in place, no restart. A game can be one save for everyone too.</li>
+        and theme, switched in place, no restart. Profiles work without a host too, and go with you
+        when the device joins one. A game can be one save for everyone too.</li>
         <li><b>One click to host</b> on Linux, Windows or macOS, kept running when Fuse is closed and
         after a restart; devices find it on the network and ask to join (anyone already in says yes
         after checking a number), or type a code. The host plays as its own Admin. Signed requests,
@@ -547,17 +548,18 @@ Linux app, isn't offered on Windows and macOS.
 
 > [!IMPORTANT]
 > **Fuse 0.3.4 "The Unity Update" is still early, and steadier everywhere.** This release went
-> through Fuse Sync, Syncthing, controllers, tabs and small screens looking for anything that
-> could lose a save, trap you in a menu or say the wrong thing. A restored save sticks on every
-> device, copies kept for safety never become the newest save, nothing waiting to be sent is
-> dropped, and a host never touches files it didn't make. Syncthing leaves the devices and folders
-> you set up yourself alone. Hints follow your button mapping, a mapping can't leave the pad
-> without Confirm or Back, Nintendo pads confirm with A everywhere, and PICO-8 and Flash games
-> play on the computer. 0.3.3, "The Together Update", sent saves while you play, let devices join
-> without a code, and gave the host an account and one outside address for every device. For
-> people who already run Syncthing, Fuse can use it for their emulators' save folders, though Fuse
-> Sync by Fuse (saves, play time, library and settings on every device, a profile for each person)
-> is still the one it recommends. See [the release notes](docs/releases/0.3.4.md).
+> through Fuse Sync, Syncthing, controllers, tabs and small screens looking for anything that could
+> lose a save, trap you in a menu or say the wrong thing. Profiles work without a host and go along
+> when a device joins one, and saves from every system find their way there. A restored save sticks
+> on every device, copies kept for safety never become the newest save, nothing waiting to be sent
+> is dropped, and a host never touches files it didn't make. Syncthing leaves the devices and
+> folders you set up yourself alone. Hints follow your button mapping, a mapping can't leave the pad
+> without Confirm or Back, Nintendo pads confirm with A everywhere, and PICO-8 and Flash games play
+> on the computer. 0.3.3, "The Together Update", sent saves while you play, let devices join without
+> a code, and gave the host an account and one outside address for every device. For people who
+> already run Syncthing, Fuse can use it for their emulators' save folders, though Fuse Sync by Fuse
+> (saves, play time, library and settings on every device, a profile for each person) is still the
+> one it recommends. See [the release notes](docs/releases/0.3.4.md).
 
 <details>
 <summary><b>Every release so far</b></summary>
@@ -565,7 +567,7 @@ Linux app, isn't offered on Windows and macOS.
 
 | Version | Name | What it brought |
 |---|---|---|
-| [0.3.4](docs/releases/0.3.4.md) | The Unity Update | Fuse Sync and Syncthing that never lose a save or touch what you set up, hints that follow your button mapping, Nintendo pads that confirm with A everywhere, PICO-8 and Flash on the computer, small screens that fit |
+| [0.3.4](docs/releases/0.3.4.md) | The Unity Update | Profiles without a host, saves from every system reaching it, Fuse Sync and Syncthing that never lose a save or touch what you set up, hints that follow your button mapping, Nintendo pads that confirm with A everywhere, PICO-8 and Flash on the computer, small screens that fit |
 | [0.3.3](docs/releases/0.3.3.md) | The Together Update | Saves sent while you play, who is playing what, one game across devices, joining without a code, a host account and shared outside address, Erase Fuse, a mouse that works first click, redesigned Sync and Syncthing tabs |
 | [0.3.2](docs/releases/0.3.2.md) | The Corner Update | Menus that travel between screens, a hello when switching profile, each person's own saves, saves in 3DS, Switch, Wii U and Xbox 360 emulators, Jellyfin widgets on every page, round corners |
 | [0.3.1](docs/releases/0.3.1.md) | The Glide Update | Home widgets that turn like a catalogue, Jellyfin that answers quickly, Syncthing beside Fuse Sync, the Thor's two screens with the controller |

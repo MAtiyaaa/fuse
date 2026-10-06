@@ -16,7 +16,9 @@ It sits beside Fuse's other first-party parts: **Fuse Player by Fuse** (films, s
 Your games themselves are never synced or copied to the host: each device keeps its own games, and
 Fuse Sync carries only what you made playing them.
 
-Off, Fuse Sync does nothing at all: no profiles, no Sync tab, no network, nothing in the background.
+Off, Fuse Sync does nothing at all: no Sync tab, no network, nothing in the background. Profiles
+don't need it: a device keeps its own (see [Profiles](#profiles)), and Fuse Sync takes them along
+when it joins a host.
 
 ## Setting it up
 
@@ -34,7 +36,8 @@ Fuse looks on the network (**Fuse Sync found**) and you choose the host. Then ei
 - **Type a Code.** **Add a Device** shows an eight-character code, on the host or on any device
   already connected. A code works once, for ten minutes.
 
-Then the device makes its profile (or chooses one), and it is in.
+Then the device makes its profile (or chooses one), and it is in. A device that already has
+profiles of its own brings them along (see [Joining with profiles](#joining-with-profiles)).
 
 **The host's own profile.** Setting up a host makes **Admin**, a profile only that computer sees
 and plays as, so nobody needs a profile there. Other devices never see or open Admin; each person
@@ -55,7 +58,17 @@ is the "Allow access" prompt the first time Fuse hosts, or Windows Security, Fir
 
 ## Profiles
 
-Every person has a profile on the host, with one of Fuse's own avatars and, if they want, a PIN.
+Every person has a profile, with one of Fuse's own avatars and, if they want, a PIN. Profiles work
+without Fuse Sync: on a device with no host they are that device's own, each with their own saves,
+play time, favourites, collections, Home and theme, and a PIN kept only as a salted hash. Each
+person's save in an emulator's folder is put away when someone else plays that game and put back
+when they do. With a host, profiles are the host's and follow each person to every device.
+
+Setup asks who's playing near the start (**Create Your Profile**, then **Add Another** or
+**Continue**; it can be skipped). **Settings, Profiles** lists everyone, adds someone, edits a
+profile (name, picture and PIN, asking for the PIN first when it has one), puts them in order
+(**Profile Order**, the same order on every device with a host) and deletes one. Deleting a
+profile without a host keeps their saves as plain files in Fuse Sync's `kept` folder.
 **Who's playing?** opens from the avatar at the top right, from the Sync tab and from Settings.
 Switching happens in place, without a restart: the library's favourites, names, play time, Last
 Played, collections, theme, Home and quick menu change to that person's at once.
@@ -69,6 +82,25 @@ that can check it.
 The first time a device joins a profile, what it already had joins that profile: a new profile
 takes it as it is; a profile already in use keeps what it has and only gains what it was missing,
 plus this device's play time. Nothing on the device is replaced without asking.
+
+### Joining with profiles
+
+A device with profiles of its own joining a host (or becoming one) takes them along. The host's
+own profile (Admin) never counts either way.
+
+- **The host has nobody yet** (or only its Admin): every profile goes up as it is, PIN and all,
+  with its records and saves, and the person playing stays playing. A message says so.
+- **The host has people**: **Your profiles and the host's** pairs each profile here with what it
+  becomes. **Same as** someone there (suggested when the names match, case and spaces aside):
+  their records join (the host's choices win where both say something, play time adds up) and the
+  saves go up as their history, so a different save on both sides is a choice later; joining a
+  profile with a PIN asks for it. **Someone new**: it goes up as it is. **Leave out**: it leaves
+  this device, its saves kept as plain files. **Bring Them** does it all at once; **Use Only
+  Theirs** leaves every profile here out; **Not Now** stops joining and keeps everything here.
+- **Making this computer the host** with profiles here: the new host has only Admin, so they all
+  go up, and this computer keeps playing as its own person rather than Admin.
+- **The same person on two devices**: the second device suggests **Same as** them by name, and
+  their play time from both adds up.
 
 ## People and saves
 
@@ -146,8 +178,23 @@ Saves are found by per-emulator adapters. Fuse Sync and Syncthing use the same o
 | Cemu | `mlc01/usr/save`, by the title id in the game's `meta.xml` | |
 | Xenia | `content`, by the title id in the game's name | |
 
-Title ids come from the game itself where they can: a 3DS cartridge's header, a Switch game's
-`[0100…]` tag or the ticket inside its NSP, a Wii U game's `meta.xml`. A save is only put where the
+Title ids come from the game itself where they can: a 3DS cartridge's header (a `.3ds`, a `.cxi`
+or the TMD inside a `.cia`), a Switch game's `[0100…]` tag or the ticket inside its NSP, a Wii U
+game's `meta.xml`. Where Fuse can't read a game's id (a compressed 3DS game, a PSP or PS3 game with
+no serial, a Vita, PS4, Wii or Switch game it can't open), the first play here teaches it: Fuse
+notes the emulator's save folders before the game starts and, after it closes, takes the one or
+few game folders that changed as that game's, then keeps them in step from then on.
+
+On Android, emulators that ask for a folder on first start (Azahar, PPSSPP, Dolphin, DuckStation,
+ARMSX2, Flycast) keep the answer in their own private settings. Fuse finds that folder by its
+layout wherever it is, in the device's storage or on a card (two folders down anywhere, three
+under folders named for emulation, never inside photos, music or other apps' private storage),
+after the folder chosen in Save Folders and the usual places. With several, the one holding the
+game's save wins.
+
+**Never silent.** When a played game's save can't be kept to send (its folder isn't reachable, or
+Fuse found no save where it looked), a message says why and what to do, once per game while Fuse
+runs. A save that simply didn't change says nothing. A save is only put where the
 same format is read (a state from one core never lands in another), except where Fuse can convert:
 DraStic's `.dsv` and a plain DS save, and Mupen64Plus's separate N64 save files and RetroArch's one
 `.srm`.
@@ -304,11 +351,13 @@ Fuse's own Backup (Settings, Backup) also keeps the person's records and setting
 
 **Unlink This Device** stops syncing and keeps everything on the device exactly as it is.
 
-**Turning Fuse Sync off** forgets the host: its link, the profiles, which one was in use, and
-anything still waiting to be sent. Saves that never reached the host are kept first, as plain
-files in a `kept` folder in Fuse Sync's data folder. The device keeps its games, the saves in its emulators'
-folders, its library, settings and Home as they are now, as plain Fuse. Turning it on again
-starts fresh (find the host, join, pick or make a profile).
+**Turning Fuse Sync off** forgets the host: its link and anything still waiting to be sent. The
+people who played on this device stay as its own profiles (**Keep Profiles Here**, the default),
+with their records, saves and the PIN last typed here; everyone else's saves parked here are kept
+as plain files in a `kept` folder in Fuse Sync's data folder. **Forget Them Too** lets the
+profiles go as well, saves that never reached the host kept first the same way. Unlinking asks the
+same. The device keeps its games, the saves in its emulators' folders, its library, settings and
+Home as they are now. Turning it on again and joining a host brings the profiles kept here along.
 
 **Stop Hosting** stops the host and its service and keeps all of its data on the computer, so
 hosting again carries on where it was. **Delete This Host** removes every profile, save and device

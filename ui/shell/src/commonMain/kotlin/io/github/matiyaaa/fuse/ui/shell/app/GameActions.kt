@@ -284,8 +284,8 @@ fun AppState.gameMenu(card: GameCard, fromDetail: Boolean = false, extra: List<M
             add(MenuAction("collection", "Add to Collection", FuseIcons.ListPlus, trailing = Trailing.Chevron, onSelect = { collectionPicker(card.id, card.title) }))
         }
         add(MenuAction("pin", "Pin to Home", FuseIcons.Pin, onSelect = { run { lib.setPinned(card.id, true); toasts.show("Pinned to Home") } }))
-        // Fuse Sync: this game's saves through time, from every device.
-        if (!card.isApp && syncProfile != null) {
+        // Fuse Sync: this game's saves through time, from every device (a host keeps them).
+        if (!card.isApp && syncProfile != null && store.prefs.value.sync.role.isNotEmpty()) {
             add(MenuAction("saves", "Save History", FuseIcons.History, detail = "Every version of its saves, from every device", trailing = Trailing.Chevron, onSelect = {
                 closeOverlays(); go(Route.SaveHistory(card.id, card.title))
             }))

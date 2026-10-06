@@ -30,6 +30,11 @@ internal fun SyncNotices(app: AppState) {
                     icon = FuseIcons.CloudOff,
                     durationMs = 9_000L,
                 )
+                is SyncNotice.Brought -> app.toasts.show(
+                    if (n.count == 1) "Your profile is on ${n.hostName} now" else "Your ${n.count} profiles are on ${n.hostName} now",
+                    ToastKind.SUCCESS,
+                    icon = FuseIcons.Users,
+                )
                 is SyncNotice.CantUse -> app.toasts.show(
                     "${n.title}: the newest ${n.kind.label.lowercase()} can't be used here. ${n.why}",
                     ToastKind.WARNING,

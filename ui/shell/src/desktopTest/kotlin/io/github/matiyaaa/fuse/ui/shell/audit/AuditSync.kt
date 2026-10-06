@@ -55,6 +55,51 @@ internal class AuditSync(private val settings: SettingsStore) : SyncService {
             note = "Windows games keep their own saves inside this app's Windows drive, a different place for every game.", canChoose = false),
     )
 
+    /** Joining a host while this device has profiles of its own, for "Your profiles and the host's". */
+    override val merge = MutableStateFlow<io.github.matiyaaa.fuse.sync.ProfileMerge?>(null)
+
+    /** Profiles this device keeps by itself (no host), as a household without Fuse Sync has them. */
+    fun ownProfiles(playing: String? = "mo") {
+        val t = now
+        profiles.value = listOf(
+            ProfileInfo("mo", "Mo", "cat", protected = false, createdAt = t - 9 * DAY),
+            ProfileInfo("kid", "Kid", "rocket", protected = true, createdAt = t - 4 * DAY),
+        )
+        activeProfile.value = profiles.value.firstOrNull { it.id == playing }
+        status.value = SyncStatus.Off
+        runBlocking { settings.update { it.copy(sync = it.sync.copy(enabled = false, role = "", activeProfile = playing.orEmpty())) } }
+    }
+
+    /** "Your profiles and Gaming PC's": Mo is Mo there too; Kid and Guest are this device's alone. */
+    fun joining() {
+        val t = now
+        val here = listOf(
+            ProfileInfo("mo-here", "mo", "cat", protected = false, createdAt = t - 9 * DAY),
+            ProfileInfo("kid", "Kid", "rocket", protected = true, createdAt = t - 4 * DAY),
+            ProfileInfo("guest", "Guest", "flower", protected = false, createdAt = t - DAY),
+        )
+        val there = listOf(
+            ProfileInfo("mo", "Mo", "cat", protected = true, createdAt = t - 90 * DAY),
+            ProfileInfo("sam", "Sam", "owl", protected = false, createdAt = t - 60 * DAY),
+        )
+        merge.value = io.github.matiyaaa.fuse.sync.ProfileMerge("Gaming PC", here, there, mapOf("mo-here" to "mo"))
+    }
+
+    override suspend fun bringProfiles(choices: Map<String, io.github.matiyaaa.fuse.sync.MergeChoice>): Result<Unit> {
+        merge.value = null
+        return Result.success(Unit)
+    }
+
+    override suspend fun cancelMerge(): Result<Unit> {
+        merge.value = null
+        return Result.success(Unit)
+    }
+
+    override suspend fun reorderProfiles(ids: List<String>): Result<Unit> {
+        profiles.value = ids.mapNotNull { id -> profiles.value.firstOrNull { it.id == id } }
+        return Result.success(Unit)
+    }
+
     /** The next game launched meets a save conflict. */
     @Volatile var conflictNext: SaveConflict? = null
 
@@ -99,7 +144,7 @@ internal class AuditSync(private val settings: SettingsStore) : SyncService {
         }
     }
 
-    override suspend fun setEnabled(enabled: Boolean) {
+    override suspend fun setEnabled(enabled: Boolean, keepProfiles: Boolean) {
         settings.update { it.copy(sync = it.sync.copy(enabled = enabled)) }
         val c = settings.current().sync
         status.value = when {
@@ -232,7 +277,7 @@ internal class AuditSync(private val settings: SettingsStore) : SyncService {
     override suspend fun restore(query: SaveQuery, kind: SaveKind, version: String): Result<Unit> = Result.success(Unit)
     override suspend fun keepVersion(version: String, keep: Boolean): Result<Unit> = Result.success(Unit)
     override fun changed() = Unit
-    override suspend fun unlink(): Result<Unit> = Result.success(Unit)
+    override suspend fun unlink(keepProfiles: Boolean): Result<Unit> = Result.success(Unit)
     override suspend fun renameDevice(id: String, name: String): Result<Unit> = Result.success(Unit)
     override suspend fun revokeDevice(id: String): Result<Unit> = Result.success(Unit)
     override fun stop() = Unit

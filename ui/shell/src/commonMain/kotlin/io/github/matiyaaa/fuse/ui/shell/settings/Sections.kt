@@ -1579,7 +1579,7 @@ private fun eraseRow(app: AppState): MenuAction = MenuAction(
                     val sync = app.store.sync.service
                     if (sync != null) {
                         if (host) runCatching { sync.deleteHost() }
-                        runCatching { sync.setEnabled(false) }
+                        runCatching { sync.setEnabled(false, keepProfiles = false) }
                     }
                     // Saved keys too, wherever the system keeps them.
                     for (k in app.store.credentials.stored.value) runCatching { app.store.credentials.remove(k) }

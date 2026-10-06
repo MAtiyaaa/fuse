@@ -426,3 +426,70 @@ internal fun AuditDriver.syncthingScreens() {
         runBlocking { syncthing.setEnabled(false) }
     }
 }
+
+/**
+ * Profiles with and without Fuse Sync: Settings, Profiles with none yet and with this device's own,
+ * a profile's options and its editor, putting them in order, and joining a host that has people
+ * ("Your profiles and Gaming PC's"), from a suggestion to the buttons.
+ */
+internal fun AuditDriver.profileScreens() {
+    fun openProfiles() {
+        openSettings()
+        focusText("Profiles")
+        tap(PadButton.DPAD_RIGHT)
+        settle(600)
+    }
+
+    scenario("profiles", "none yet") {
+        syncOff()
+        useLibrary()
+        openProfiles()
+        waitFor("Everyone gets their own")
+        shoot("Settings, Profiles, before anyone has one")
+    }
+
+    scenario("profiles", "this device's own") {
+        syncOff()
+        sync.ownProfiles()
+        useLibrary()
+        openProfiles()
+        waitFor("Add Profile")
+        shoot("Settings, Profiles: Mo and Kid, no host", 900)
+        tapText("Mo")
+        waitFor("Edit Profile")
+        shoot("Mo's options")
+        tap(PadButton.A)
+        waitFor("Save Changes")
+        shoot("editing Mo", 1_000)
+        tap(PadButton.B)
+        settle(600)
+        focusText("Profile Order")
+        tap(PadButton.A)
+        waitFor("Drag a row by its grip", ignoreCase = true)
+        shoot("putting them in order")
+    }
+
+    scenario("profiles", "joining a host with people") {
+        syncOff()
+        sync.ownProfiles()
+        useLibrary()
+        sync.joining()
+        waitFor("Your profiles and Gaming PC's")
+        shoot("who's who: mo suggested as Mo", 1_400)
+        tap(PadButton.DPAD_RIGHT)
+        shoot("mo as someone new instead")
+        tap(PadButton.DPAD_DOWN, 2)
+        tap(PadButton.DPAD_LEFT)
+        shoot("Guest left out")
+        tap(PadButton.DPAD_DOWN)
+        shoot("Bring Them chosen")
+        tap(PadButton.DPAD_LEFT)
+        tap(PadButton.A)
+        waitFor("Use only Gaming PC's profiles?")
+        shoot("only theirs, asked first")
+        tap(PadButton.B)
+        settle(400)
+        runBlocking { sync.cancelMerge() }
+        settle(600)
+    }
+}

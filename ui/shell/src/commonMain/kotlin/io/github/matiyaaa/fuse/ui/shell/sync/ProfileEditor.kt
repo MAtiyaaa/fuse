@@ -232,8 +232,8 @@ internal fun ProfileEditor(
                             EditorField(
                                 label = "PIN",
                                 value = when (val p = pin) {
-                                    PinChoice.Keep -> "Set. Choose to take it off"
-                                    PinChoice.None -> "None, anyone here can open it"
+                                    PinChoice.Keep -> "Set. Choose to remove"
+                                    PinChoice.None -> "Not set"
                                     is PinChoice.Set -> "Set, ${p.digits.length} digits"
                                 },
                                 filled = pin != PinChoice.None,

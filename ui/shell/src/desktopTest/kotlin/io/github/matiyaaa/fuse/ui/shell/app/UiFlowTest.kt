@@ -233,6 +233,75 @@ class UiFlowTest {
     }
 
     @Test
+    fun setupMakesTheFirstProfileAndComesBackToTheStepItLeft() = runComposeUiTest {
+        lateinit var services: FakeServices
+        services = FakeServices(FuseData(DesktopDatabase.open(File(cache, "fuse-${System.nanoTime()}.db").absolutePath)), cache, sync = { port, sc ->
+            io.github.matiyaaa.fuse.sync.JvmSyncService(
+                File(cache, "sync"), services.data.settings, services.secrets, port, "LINUX", "Steam Deck", "test",
+                io.github.matiyaaa.fuse.sync.NoHostLifetime("test"), sc,
+            )
+        })
+        val store = runBlocking { createFuseStore(services, scope) }
+        val svc = assertNotNullOf(store.sync.service)
+        val router = InputRouter(scope)
+        mainClock.autoAdvance = false
+        val app = AppState(store, TestPlatform, scope, Route.Onboarding)
+        setContent {
+            io.github.matiyaaa.fuse.ui.designsystem.theme.FuseTheme {
+                androidx.compose.runtime.CompositionLocalProvider(io.github.matiyaaa.fuse.ui.designsystem.input.LocalInputRouter provides router) {
+                    androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.size(1280.dp, 720.dp)) {
+                        if (app.navigator.current == Route.Onboarding) io.github.matiyaaa.fuse.ui.shell.onboarding.OnboardingScreen(app)
+                        else androidx.compose.foundation.text.BasicText("Somewhere else")
+                        io.github.matiyaaa.fuse.ui.shell.sync.WhoAreYouOverlay(app)
+                        io.github.matiyaaa.fuse.ui.shell.sync.ProfileArrival(app)
+                    }
+                }
+            }
+        }
+        fun shows(text: String) = onAllNodesWithText(text, useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()
+        pumpUntil { shows("Welcome to Fuse") }
+        router.tap(PadButton.A)
+        pumpUntil { shows("Tuned for this device") }
+        router.tap(PadButton.A)
+        // Who's playing comes early: no host needed, and skipping it is fine.
+        pumpUntil { shows("Make your profile") }
+        router.tap(PadButton.A)
+        pumpUntil { shows("New Profile") }
+        mainClock.advanceTimeBy(600)
+        router.tap(PadButton.A)
+        mainClock.advanceTimeBy(120)
+        assertEquals("Profile name", app.textInput?.title)
+        app.textInput!!.onDone("Mo")
+        app.textInput = null
+        mainClock.advanceTimeBy(200)
+        // From the PIN, down into the pictures, then A goes to Create Profile and A makes it.
+        router.tap(PadButton.DPAD_DOWN)
+        mainClock.advanceTimeBy(120)
+        router.tap(PadButton.A)
+        mainClock.advanceTimeBy(120)
+        router.tap(PadButton.A)
+        mainClock.advanceTimeBy(120)
+        router.tap(PadButton.A)
+        // The first profile here gets the grand welcome, and the step greets them.
+        pumpUntil { app.profileArrival != null }
+        assertTrue(app.arrivalGrand, "the first profile's arrival is the grand one")
+        pumpUntil { app.profileArrival == null && shows("Hi, Mo") }
+        assertEquals(listOf("Mo"), svc.profiles.value.map { it.name })
+        assertTrue(shows("Add Another"))
+        // Off to set up Fuse Sync (a page of its own) and back: the same step, not the beginning.
+        app.go(Route.SyncSetup(host = true))
+        pumpUntil { shows("Somewhere else") }
+        app.back()
+        pumpUntil { shows("Hi, Mo") }
+        assertTrue(!shows("Welcome to Fuse"))
+        // Setup opened afresh starts at the beginning.
+        app.go(Route.Onboarding)
+        pumpUntil { shows("Welcome to Fuse") }
+    }
+
+    private fun <T : Any> assertNotNullOf(v: T?): T = kotlin.test.assertNotNull(v)
+
+    @Test
     fun theProfileEditorFitsTheThorsScreensAndTheDpadReachesEveryPart() = runComposeUiTest {
         val store = runBlocking { createFuseStore(newServices(), scope) }
         val router = InputRouter(scope)

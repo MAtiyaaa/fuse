@@ -169,7 +169,8 @@ class OnboardingState {
  */
 @Composable
 fun OnboardingScreen(app: AppState) {
-    val state = remember { OnboardingState() }
+    // Setup's place outlives this page: a detour to Fuse Sync or Syncthing comes back to the same step.
+    val state = app.onboarding
     val steps = rememberSteps(app, state)
     state.total = steps.size
     val step = steps[state.index.coerceIn(0, steps.lastIndex)]
@@ -194,7 +195,9 @@ fun OnboardingScreen(app: AppState) {
         }
     }
 
-    LaunchedEffect(step.id) {
+    // Again when a step's buttons change (back from setting up Fuse Sync, a profile just made), so the
+    // selection is always one of them.
+    LaunchedEffect(step.id, step.actions.map { it.label }) {
         app.hero = null
         app.hints = buildList {
             add(Hint(HintButton.CONFIRM, "Choose"))

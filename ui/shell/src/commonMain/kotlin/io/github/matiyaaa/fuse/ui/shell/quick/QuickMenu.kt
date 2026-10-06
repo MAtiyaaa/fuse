@@ -195,7 +195,8 @@ fun QuickMenu(app: AppState) {
         QuickId.BRIGHTNESS -> features.brightness && brightness != null
         QuickId.VOLUME -> features.volume && volume != null
         QuickId.FULLSCREEN -> windows != null
-        QuickId.PROFILES -> prefs.sync.enabled && prefs.sync.role.isNotEmpty()
+        // Profiles with a host, or this device's own without one.
+        QuickId.PROFILES -> (prefs.sync.enabled && prefs.sync.role.isNotEmpty()) || app.syncProfileCount > 0
         else -> true
     }
     val visible = all.filter { available(it.id) }

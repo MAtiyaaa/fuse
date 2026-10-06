@@ -6,6 +6,16 @@ a menu or say the wrong thing, and fixed what it found.
 
 ## New
 
+- **Profiles without Fuse Sync.** Everyone who plays on one device can have their own profile:
+  saves, play time, favourites, Home and theme kept apart, with a PIN if they want one. Settings,
+  Profiles adds, edits, puts in order and deletes them. No host needed.
+- **Your first profile in setup.** Setup asks who's playing right after the start, then offers
+  Add Another or Continue. The very first profile arrives with a fuse that burns in from the
+  corner and lights it up.
+- **Profiles go with you to a host.** Joining a host that has nobody but its Admin takes every
+  profile here up as it is. Joining one with people shows your profiles beside theirs: each is the
+  same person as someone there (suggested by name, and their play time adds up), someone new, or
+  left out. Leaving a host keeps the people who played here as this device's own profiles.
 - **PICO-8 and Flash games on the computer.** Fuse finds PICO-8 and Ruffle on Linux, Windows and
   macOS, and RetroArch's Retro8 core for PICO-8, and starts games in them the way ES-DE does.
   Every system now has something to play it with on every desktop.
@@ -44,6 +54,16 @@ a menu or say the wrong thing, and fixed what it found.
 
 ## Fixed
 
+- **Saves from every system reach the host.** On Android, an emulator's data folder is found
+  wherever you chose to put it (Azahar, PPSSPP, Dolphin, DuckStation, ARMSX2, Flycast, RetroArch),
+  a 3DS game installed from a CIA or CXI is placed by its own title id, and a game whose id Fuse
+  can't read (PSP, PS3, Vita, PS4, Wii, Switch, Wii U, Xbox 360) has its save folder learned from
+  its first play. A save that still can't be sent says why, instead of nothing.
+- Finishing Fuse Sync or Syncthing setup during first-run setup went back to the start of setup.
+  It comes back to the same step.
+- On the AYN Thor, the profile pictures couldn't be reached with the controller until tapped, and
+  Cancel and Create Profile were cut off on both screens. The editor now fits every screen, and the
+  controller moves through it in the order things sit.
 - A restored save could be undone by the next launch on another device. It now goes up as the
   newest save and sticks everywhere.
 - Copies kept for safety (the other side of a conflict, what was there before a restore) could

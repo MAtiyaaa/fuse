@@ -98,8 +98,8 @@ private sealed interface WhoStep {
 }
 
 /**
- * "Who's playing?": everyone with a profile on this Fuse Sync host as a card with their avatar, and
- * a card to add someone. Choosing one switches this device to them in place (their library, saves,
+ * "Who's playing?": everyone with a profile (this device's own, or on its Fuse Sync host) as a card
+ * with their avatar, and a card to add someone. Choosing one switches this device to them in place (their library, saves,
  * theme and Home arrive at once; no restart), asking for their PIN first when they set one. Left
  * and Right (and Up and Down across rows) move, A chooses, B closes when switching.
  */
@@ -162,6 +162,7 @@ private fun WhoAreYou(app: AppState, mode: WhoMode) {
                 app.profileArrival = p
                 app.whoAreYou = null
             }.onFailure { e ->
+                app.arrivalGrand = false
                 val code = (e as? SyncException)?.code
                 if (code == "wrong-pin" || code == "wait") onWrongPin(e.message ?: "That PIN isn't right.")
                 else app.toasts.show(e.message ?: "Couldn't switch profiles", ToastKind.ERROR)
@@ -191,6 +192,8 @@ private fun WhoAreYou(app: AppState, mode: WhoMode) {
                 CreateProfile(
                     app,
                     onCreated = { p, pin ->
+                        // The very first profile here arrives with the grand welcome.
+                        if (profiles.none { it.id != p.id }) app.arrivalGrand = true
                         index = profiles.size
                         step = WhoStep.People
                         switchTo(p, pin)
@@ -251,6 +254,7 @@ private fun People(
 ) {
     val c = Fuse.colors
     val offline = status is SyncStatus.Offline || status is SyncStatus.Connecting
+    val hosted = status !is SyncStatus.Off && status !is SyncStatus.NotSetUp
     val count = profiles.size + if (offline) 0 else 1
     val card = when {
         short -> 88.dp
@@ -282,7 +286,11 @@ private fun People(
         if (!short || offline) {
             Spacer(Modifier.height(Space.xs))
             FText(
-                if (offline) "The host isn't answering. Profiles without a PIN switch now and catch up when it's back." else "Your games, saves, play time and settings follow you to every device.",
+                when {
+                    offline -> "The host isn't answering. Profiles without a PIN switch now and catch up when it's back."
+                    hosted -> "Your games, saves, play time and settings follow you to every device."
+                    else -> "Everyone gets their own saves, play time, favourites and theme here."
+                },
                 Fuse.type.body, color = c.textMuted, align = TextAlign.Center, maxLines = 2, modifier = Modifier.widthIn(max = 560.dp),
             )
         }

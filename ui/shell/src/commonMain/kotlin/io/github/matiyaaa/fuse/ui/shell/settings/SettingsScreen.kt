@@ -127,6 +127,7 @@ private const val CONNECTIONS = "Connections"
 private const val GENERAL = "General"
 
 val settingsSections: List<SettingsSection> = listOf(
+    SettingsSection("profiles", "Profiles", FuseIcons.Users, "Who plays here, each with their own saves", ::profilesRows, group = PERSONAL, available = { it.store.sync.service != null }),
     SettingsSection("appearance", "Appearance", FuseIcons.Palette, "Theme, game art, glass and CRT", ::appearanceRows, group = PERSONAL),
     SettingsSection("accessibility", "Accessibility", FuseIcons.Accessibility, "Text size, screen edges, motion, focus", ::accessibilityRows, group = PERSONAL),
     SettingsSection("home", "Home", FuseIcons.Home, "Style, rows or widgets, top bar", ::homeRows, group = PERSONAL),

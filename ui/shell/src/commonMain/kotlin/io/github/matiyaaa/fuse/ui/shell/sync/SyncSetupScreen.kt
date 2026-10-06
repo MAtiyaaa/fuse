@@ -753,22 +753,36 @@ private fun Connected(app: AppState, hostName: String, compact: Boolean, keys: A
     val c = Fuse.colors
     val svc = app.store.sync.service
     val profiles by androidx.compose.runtime.produceState(svc?.profiles?.value.orEmpty(), svc) { svc?.profiles?.collect { value = it } }
+    val playing by androidx.compose.runtime.produceState(svc?.activeProfile?.value, svc) { svc?.activeProfile?.collect { value = it } }
     // Nobody here yet (the host's own profile is the host's alone): this device makes the first.
     val who = if (profiles.isEmpty()) WhoMode.ADD else WhoMode.SWITCH
-    actions += SetupAction("who") { app.back(); app.whoAreYou = who }
-    actions += SetupAction("later") { app.back() }
+    // Someone already playing came along with their profile: done, unless someone else is playing.
+    val here = playing?.takeIf { !it.hostOnly }
+    if (here != null) {
+        actions += SetupAction("done") { app.back() }
+        actions += SetupAction("who") { app.back(); app.whoAreYou = WhoMode.SWITCH }
+    } else {
+        actions += SetupAction("who") { app.back(); app.whoAreYou = who }
+        actions += SetupAction("later") { app.back() }
+    }
     SuccessMark(if (compact) 64.dp else 88.dp)
     Spacer(Modifier.height(Space.l))
     FText("Connected to $hostName", if (compact) Fuse.type.title else Fuse.type.display, maxLines = 2, modifier = Modifier.semantics { heading() })
     Spacer(Modifier.height(Space.xs))
     FText(
-        "Next, choose who's playing on this device. What it already has joins that profile, and nothing here is replaced without asking.",
+        if (here != null) "${here.name} is playing here, and this device's profiles are on $hostName now, saves and play time with them."
+        else "Next, choose who's playing on this device. What it already has joins that profile, and nothing here is replaced without asking.",
         Fuse.type.body, color = c.textMuted, maxLines = 4,
     )
     Spacer(Modifier.height(Space.xl))
     Row(horizontalArrangement = Arrangement.spacedBy(Space.m)) {
-        FuseButton(if (profiles.isEmpty()) "Make Your Profile" else "Choose Who's Playing", selected = index == 0, modifier = Modifier.keptInView(index == 0), onClick = { app.back(); app.whoAreYou = who }, icon = if (profiles.isEmpty()) FuseIcons.UserPlus else FuseIcons.Users, kind = ButtonKind.PRIMARY)
-        FuseButton("Later", selected = index == 1, modifier = Modifier.keptInView(index == 1), onClick = { app.back() })
+        if (here != null) {
+            FuseButton("Done", selected = index == 0, modifier = Modifier.keptInView(index == 0), onClick = { app.back() }, icon = FuseIcons.Check, kind = ButtonKind.PRIMARY)
+            FuseButton("Someone Else Is Playing", selected = index == 1, modifier = Modifier.keptInView(index == 1), onClick = { app.back(); app.whoAreYou = WhoMode.SWITCH }, icon = FuseIcons.Users)
+        } else {
+            FuseButton(if (profiles.isEmpty()) "Make Your Profile" else "Choose Who's Playing", selected = index == 0, modifier = Modifier.keptInView(index == 0), onClick = { app.back(); app.whoAreYou = who }, icon = if (profiles.isEmpty()) FuseIcons.UserPlus else FuseIcons.Users, kind = ButtonKind.PRIMARY)
+            FuseButton("Later", selected = index == 1, modifier = Modifier.keptInView(index == 1), onClick = { app.back() })
+        }
     }
     StepInput(app, keys, actions)
 }
