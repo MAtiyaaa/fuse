@@ -113,4 +113,23 @@ class HandheldSavesTest {
         assertEquals(SaveConfidence.GUESS, spot.confidence)
         assertNotNull(spot.note)
     }
+
+    @Test
+    fun `logs, temporary files, caches and system leftovers are never part of a folder save`() {
+        val root = java.nio.file.Files.createTempDirectory("noise").toFile()
+        try {
+            val game = java.io.File(root, "ULUS10041").apply { mkdirs() }
+            java.io.File(game, "DATA.BIN").writeText("save")
+            java.io.File(game, "Thumbs.db").writeText("x")
+            java.io.File(game, "debug.log").writeText("x")
+            java.io.File(game, "SAVE.BIN.tmp").writeText("x")
+            java.io.File(game, "cache").apply { mkdirs(); java.io.File(this, "blob").writeText("x") }
+            val slot = Slots.of(GameKey.of("psp", "ULUS10041", null, "Lumines"), SaveSpot(SaveKind.SAVE, "psp.savedata", root = root.path, folders = listOf("ULUS10041")))
+            assertEquals(listOf("ULUS10041/DATA.BIN"), slot.files.map { it.path })
+            assertTrue(SaveNoise.folder("ShaderCache"))
+            assertFalse(SaveNoise.file("SAVEDATA.BIN"))
+        } finally {
+            root.deleteRecursively()
+        }
+    }
 }

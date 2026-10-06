@@ -1574,6 +1574,7 @@ class JvmSyncService(
         val snaps = learnSnaps.remove(query.game.id) ?: return
         for (snap in snaps) {
             val changed = saveEnv.list(snap.folder).filter { name ->
+                if (SaveNoise.folder(name) || SaveNoise.file(name)) return@filter false
                 val now = saveEnv.modified("${snap.folder}/$name") ?: return@filter false
                 val before = snap.times[name]
                 before == null || now > before

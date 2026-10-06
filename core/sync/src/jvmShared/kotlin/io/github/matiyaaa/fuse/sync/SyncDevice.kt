@@ -759,11 +759,12 @@ object Slots {
             for (folder in folders) {
                 val dir = if (folder.isEmpty()) root else File(root, folder)
                 if (!dir.isDirectory) continue
-                dir.walkTopDown().forEach { f ->
+                // Logs, temporary files, caches and what the system leaves behind are never the save's.
+                dir.walkTopDown().onEnter { d -> d == dir || !SaveNoise.folder(d.name) }.forEach { f ->
                     val name = f.relativeTo(root).path.replace(File.separatorChar, '/')
                     when {
                         f.name.startsWith(".") -> {}
-                        f.isFile -> if (SavePath.isSafe(name)) files += LocalFile(name, f)
+                        f.isFile -> if (!SaveNoise.file(f.name) && SavePath.isSafe(name)) files += LocalFile(name, f)
                         // An empty folder inside the save is part of its structure too.
                         f != dir && f.isDirectory && f.list()?.isEmpty() == true -> if (SavePath.isSafe(name)) empty += name
                     }
