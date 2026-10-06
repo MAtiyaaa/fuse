@@ -29,3 +29,5 @@ quickly, carries on where it stopped, and is kept for next time. Fuse's first fo
   connected, on libraries with large PS4 and PS5 games.
 - Every start of Fuse read the RomM library from the beginning again until a full read had once
   finished.
+- Fuse closed when RomM had two folders for one system (a `dc` and a `dreamcast` folder, say): the
+  Fuse RomM tab listed the system twice. It is now one system with every game of both.

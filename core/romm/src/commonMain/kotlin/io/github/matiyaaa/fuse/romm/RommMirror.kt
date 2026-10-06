@@ -168,12 +168,17 @@ class RommMirror(
 
     // ------------------------------------------------------------------ reading
 
+    /**
+     * The server's systems with games, one per system: RomM can have several platforms for one
+     * system (a `dc` folder and a `dreamcast` folder are both `dc`), and Fuse shows them as one,
+     * with every game of each.
+     */
     suspend fun platforms(server: String): List<RommPlatform> = withContext(dispatcher) {
         val counts = q.platformCounts(server).executeAsList().associate { it.platform_slug to (it.games to (it.bytes ?: 0L)) }
         q.platforms(server).executeAsList().filter { it.on_server == 1L }.map { p ->
             val (games, bytes) = counts[p.slug] ?: (0L to 0L)
             RommPlatform(p.id, p.slug, p.fs_slug, p.name, games.toInt(), bytes)
-        }.filter { it.romCount > 0 }
+        }.filter { it.romCount > 0 }.distinctBy { it.slug }
     }
 
     suspend fun rom(server: String, id: Long): RommRom? = withContext(dispatcher) { q.rom(server, id).executeAsOneOrNull()?.let(::toRom) }

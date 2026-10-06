@@ -229,6 +229,20 @@ class RommTest {
     }
 
     @Test
+    fun `two RomM platforms for one system show as one`() = runBlocking<Unit> {
+        val fake = server()
+        // A second Dreamcast-like case: another folder RomM also calls gba.
+        fake.games += FakeRomm.Game(5, 11, "gba", "Golden Sun", "Golden Sun (USA).gba", listOf(Triple(51L, "Golden Sun (USA).gba", ByteArray(10))))
+        val c = client(fake)
+        c.detect()
+        val mirror = RommMirror(db(), System::currentTimeMillis)
+        mirror.sync(c, "main")
+        val systems = mirror.platforms("main")
+        assertEquals(systems.map { it.slug }.distinct(), systems.map { it.slug })
+        assertEquals(2, systems.single { it.slug == "gba" }.romCount)
+    }
+
+    @Test
     fun `a page the server is too slow to put together is asked for again in smaller ones`() = runBlocking<Unit> {
         val fake = server()
         fake.slowAbove = 40
