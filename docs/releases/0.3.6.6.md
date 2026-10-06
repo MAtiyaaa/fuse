@@ -1,6 +1,6 @@
 # Fuse 0.3.6.6 - The Unity Update
 
-Uploads to RomM, and every other transfer, no longer freeze Fuse on a computer.
+Uploads to RomM no longer freeze Fuse on a computer, and the standby screen never stops Fuse's work.
 
 ## Fixed
 
@@ -11,3 +11,10 @@ Uploads to RomM, and every other transfer, no longer freeze Fuse on a computer.
   was done. Every transfer (uploads, RomM and Jellyfin downloads, updates) now runs in the
   background, so Fuse stays responsive and the Downloads page shows the upload moving. Android was
   not affected.
+- **The standby screen stopped Fuse's work.** Left on the standby screen (Fuse's dark screen that
+  guards OLED screens against burn-in), the system's own sleep soon followed, and finding art and
+  details, downloads and uploads stopped with it. While Fuse works, it now asks the system to stay
+  awake: on Android the processor and Wi-Fi stay up, and the screen stays on under the standby
+  screen; on Linux and the Steam Deck through `systemd-inhibit`, on macOS through `caffeinate`, and on
+  Windows through the system's own setting. Once the work is done, Fuse lets go and the device
+  sleeps as usual.

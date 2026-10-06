@@ -54,6 +54,13 @@ interface PlatformUi {
     fun restart()
 
     /**
+     * Keeps the device from sleeping while Fuse works in the background ([StayAwake.cpu]: art and
+     * details being found, downloads, uploads), and the screen on while the standby screen shows over
+     * that work ([StayAwake.screen]), so leaving Fuse alone never stops it. [StayAwake.NONE] lets go.
+     */
+    fun stayAwake(awake: StayAwake) = Unit
+
+    /**
      * How Fuse is being drawn ("OpenGL", "Metal", "Without the graphics card"), or null where it
      * isn't known. Drawing without the graphics card (a computer whose driver Fuse can't use) makes
      * every moving frame costly, so Fuse keeps its motion light there.
@@ -335,3 +342,20 @@ interface MenuMusicPlayer {
 data class DrawingInfo(val name: String, val gpu: Boolean)
 
 private val NoDrawingInfo: kotlinx.coroutines.flow.StateFlow<DrawingInfo?> = kotlinx.coroutines.flow.MutableStateFlow(null)
+
+/** What Fuse asks of the system's sleep while it works: see [PlatformUi.stayAwake]. */
+data class StayAwake(val cpu: Boolean, val screen: Boolean) {
+    companion object {
+        val NONE = StayAwake(cpu = false, screen = false)
+
+        /**
+         * Awake while anything moves or waits its turn ([transfers]) or art and details are being
+         * found ([finding]). The screen stays on only under the standby screen, which is made to be
+         * left on: anywhere else the system may turn the screen off and the work carries on.
+         */
+        fun plan(transfers: Int, finding: Boolean, standby: Boolean): StayAwake {
+            val working = transfers > 0 || finding
+            return StayAwake(cpu = working, screen = working && standby)
+        }
+    }
+}

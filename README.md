@@ -570,7 +570,7 @@ Linux app, isn't offered on Windows and macOS (Fuse RomM is, on every computer).
 > puts RomM on the second screen, and 0.3.6.5 sizes Fuse for a 4K TV by itself, lets you arrange
 > your systems like Home, starts emulators in Game Mode, removes any emulator from the Store (or all at
 > once), finds RomM on your network, sharpens big-screen backgrounds, cleans up subtitles and keeps Steam out when you say no, and
-> 0.3.6.6 keeps Fuse responsive while it uploads to RomM. See [the release notes](docs/releases/0.3.6.6.md).
+> 0.3.6.6 keeps Fuse responsive while it uploads to RomM and keeps its work going under the standby screen. See [the release notes](docs/releases/0.3.6.6.md).
 
 <details>
 <summary><b>Every release so far</b></summary>
@@ -578,7 +578,7 @@ Linux app, isn't offered on Windows and macOS (Fuse RomM is, on every computer).
 
 | Version | Name | What it brought |
 |---|---|---|
-| [0.3.6.6](docs/releases/0.3.6.6.md) | The Unity Update | Uploads to RomM, and every other transfer, no longer freeze Fuse on a computer |
+| [0.3.6.6](docs/releases/0.3.6.6.md) | The Unity Update | Uploads to RomM, and every other transfer, no longer freeze Fuse on a computer; scraping, downloads and uploads carry on under the standby screen |
 | [0.3.6.5](docs/releases/0.3.6.5.md) | The Unity Update | Fuse sized for a 4K TV by itself, with an Interface size setting; the Systems page arranged like Home, with sizes and pages; logos that fit every card and a PS5 logo; Downloads that open their game; RomM art kept on download; RomM found on the network; emulators that start in Game Mode; Store uninstalls with a password prompt, Install All and Uninstall All; one delete per press and a full stop key on the on-screen keyboard; Steam art on any Fuse entry; sharper backgrounds; subtitles outlined in black again; no to Steam kept |
 | [0.3.6.4](docs/releases/0.3.6.4.md) | The Unity Update | RomM games' box art shown as soon as it is found, without reopening Fuse; system panels from your games' screenshots, cut like Art Book Next's, by themselves for the PS5 and as a style or your pick for any system; RomM on the second screen; Fuse's art in Steam; Linux updates in place |
 | [0.3.6.3](docs/releases/0.3.6.3.md) | The Unity Update | RomM and Jellyfin that come with Fuse Sync, sealed for each device and asked once when you update; each person's own Jellyfin account; whose saves move on each device; Fuse Sync first in setup; the grand welcome the first time anyone plays here; motion that follows the device |
