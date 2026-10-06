@@ -1,33 +1,36 @@
-# Fuse 0.3.6.1 - The Unity Update
+# Fuse 0.3.6.2 - The Unity Update
 
-A quick fix for Fuse RomM with large libraries, PS4 and PS5 games above all: the library comes in
-quickly, carries on where it stopped, and is kept for next time. Fuse's first four-number version.
+Your RomM games, as much Fuse games as the ones on this device: the same art and details from your
+own sources, kept for good, editable, and a RomM tab that looks the part.
 
 ## New
 
-- **Test Connection on the Fuse RomM tab.** It asks your home and outside addresses whether RomM
-  answers, says what it found, and connects again when one does.
-- **PS4 and PS5 games find their folders.** RomM keeps them as zips, but they are played from the
-  folder they unpack to: Fuse now matches that folder by the zip's name or by the game's own id
-  (CUSA12345, PPSA12345), as Cartridge does.
+- **RomM games get Fuse's art and details.** Games on your server that aren't on this device are
+  looked up with your own sources in your own order (SteamGridDB, IGDB, TheGamesDB and the rest,
+  whatever you have set up), the games you can see first. Their box art, icons, heroes, logos and
+  details are kept, so they are there at once next time and never looked for twice.
+- **Not on RomM.** A shelf under Systems on the RomM tab lists the games in your library your RomM
+  server hasn't got, with how many there are; each one's options include Upload to RomM. It shows
+  once Fuse has read the whole server's library, so nothing is listed only because it wasn't read
+  yet.
+- **Edit them like any game.** A RomM game's options and page offer Manage Media, Find Details and
+  Art, Rename Display Title and Reset Name and Details, as for a game on this device.
 
 ## Changed
 
-- **The library comes in quickly.** Fuse reads your RomM library without every game's file list
-  (a PS4 or PS5 game kept as a folder can list tens of thousands of files) and brings a game's
-  files the first time you open or download it, then keeps them.
-- **Kept for next time.** A first read of the library that stops part way (Fuse closed, the
-  server went away) carries on from the page it reached instead of starting again, and once it is
-  done only what changed is asked for.
-- **A slow server is slow, not gone.** A page RomM takes too long to put together is asked for
-  again in smaller ones, and a slow or unusual answer no longer counts as the server not answering.
-- Fuse's version can now have four numbers; installers on Windows and macOS upgrade in place.
+- **Box art, not RomM's posters.** RomM games now show the box art Fuse found, like every other
+  game; RomM's own cover is only used when nothing else was found. Posters still show everywhere
+  when Posters is chosen in Settings, Appearance.
+- **The RomM tab looks the part.** The tab is called RomM. Its line names the server with a few
+  quiet facts (home or away, games, systems, how many are downloaded), the chosen game or system
+  fills the room behind the page, the chosen game is named under its shelf with its system, year and
+  whether it is downloaded, and collections lift when chosen like every other tile.
+- **Systems on the RomM tab show the server's count**, with how many of them are downloaded under
+  each, instead of the library's count beside a "1 of 1 here".
+- Bringing in only what changed on the server no longer shows a count like "1 of 1".
 
 ## Fixed
 
-- Fuse RomM said "The server isn't answering" and stopped at 250 games while the server was
-  connected, on libraries with large PS4 and PS5 games.
-- Every start of Fuse read the RomM library from the beginning again until a full read had once
-  finished.
-- Fuse closed when RomM had two folders for one system (a `dc` and a `dreamcast` folder, say): the
-  Fuse RomM tab listed the system twice. It is now one system with every game of both.
+- The chosen tile on the RomM tab covered the title of its shelf.
+- Systems you only have on RomM (PS4, PS5, Vita, Wii, Wii U, Xbox and others) had no art and showed
+  a plain coloured tile; they now get Fuse's system art and colour like the library's systems.

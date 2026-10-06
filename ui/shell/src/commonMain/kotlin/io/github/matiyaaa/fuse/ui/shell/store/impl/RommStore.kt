@@ -60,6 +60,7 @@ import io.github.matiyaaa.fuse.transfer.TransferPlaces
 import io.github.matiyaaa.fuse.transfer.TransferStatus
 import io.github.matiyaaa.fuse.transfer.Transfers
 import io.github.matiyaaa.fuse.ui.shell.store.Art
+import io.github.matiyaaa.fuse.ui.shell.store.RommNotOnServer
 import io.github.matiyaaa.fuse.ui.shell.store.EmulatorChoice
 import io.github.matiyaaa.fuse.ui.shell.store.GameCard
 import io.github.matiyaaa.fuse.ui.shell.store.GameDetail
@@ -88,6 +89,8 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
@@ -124,9 +127,31 @@ internal class DefaultRommOps(
     private val choiceFor: suspend (Game) -> EmulatorChoice,
     /** Applies RomM's details and pictures to the games a download brought in (Cartridge's own path, shared). */
     private val details: CartridgeDetails,
+    /** Has Fuse's sources find art and details for games Fuse doesn't have, first ones first. */
+    private val fillRemote: (List<GameId>) -> Unit = {},
 ) : RommOps {
     override val supported = true
     private val mirror = RommMirror(ctx.data.database, ctx::now)
+
+    /** The server's games Fuse doesn't have, as games: their own names, details and art, kept ([RommGames]). */
+    private val remote = RommGames(ctx, mirror, { server }, { redrawSoon() })
+    private var redrawJob: Job? = null
+
+    /** Art or details of a game Fuse doesn't have changed: the lists draw again, once for a burst of them. */
+    private fun redrawSoon() {
+        if (redrawJob?.isActive == true) return
+        redrawJob = ctx.scope.launch {
+            delay(REDRAW_MS)
+            mirrorRevision.update { it + 1 }
+            publishLists()
+        }
+    }
+
+    /** Games on the server that Fuse doesn't have, for Fuse's sources to fill, these first. */
+    private fun fillUnmatched(roms: List<RommRom>) {
+        val m = matches.value
+        fillRemote(roms.filter { it.id !in m }.map { rommGameId(it.id) })
+    }
     private val _state = MutableStateFlow(RommState())
     override val state: StateFlow<RommState> = _state
 
@@ -147,6 +172,7 @@ internal class DefaultRommOps(
     // ------------------------------------------------------------------ start
 
     fun start() {
+        ctx.remoteGames = remote
         rommArtCache = RommArtCache(ctx, this::clientFor)
         transfers.let { t -> rommHandlers(ctx.services.http, host).forEach(t::register) }
         ctx.scope.launch {
@@ -280,6 +306,7 @@ internal class DefaultRommOps(
             rematch()
             mirrorRevision.update { it + 1 }
             publishLists()
+            fillUnmatched(mirror.all(server))
             val now = mirror.newGames(server, 1000).size
             if (now > before && settings.newGames == "NOTIFY") noticeFlow.tryEmit(if (now - before == 1) "A new game is on your RomM server" else "${now - before} new games are on your RomM server")
         } catch (e: CancellationException) {
@@ -411,13 +438,33 @@ internal class DefaultRommOps(
                 val row = byId[m.gameId] ?: continue
                 if (row.rommRomId == null && m.reason != MatchReason.NAME_AND_TAGS) ctx.data.games.updateLinks(GameId(m.gameId)) { it.copy(rommRomId = m.romId) }
             }
+            // A scan or a download changed what the library has: what RomM hasn't got follows.
+            _notOnServer.value = notOnServerNow()
         }
     }
 
     // ------------------------------------------------------------------ lists
 
     private val _systems = MutableStateFlow<List<RommSystem>>(emptyList())
+
+    /** The server's systems with Fuse's system art and colours, drawn again as that art arrives. */
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     override val systems: StateFlow<List<RommSystem>> = _systems
+        .flatMapLatest { list ->
+            val ids = list.mapNotNull { it.platform }.distinct()
+            if (ids.isEmpty()) {
+                kotlinx.coroutines.flow.flowOf(list)
+            } else {
+                combine(ctx.data.media.observeFor(ids.map { MediaOwner.OfPlatform(it) }), ctx.settings.map { it.library.systemColors }) { media, colors ->
+                    list.map { s ->
+                        val id = s.platform ?: return@map s
+                        s.copy(art = media[MediaOwner.OfPlatform(id)]?.let(Art::from) ?: Art.None, accent = colors[id.value])
+                    }
+                }
+            }
+        }
+        .flowOn(Dispatchers.Default)
+        .stateIn(ctx.scope, kotlinx.coroutines.flow.SharingStarted.Eagerly, emptyList())
     private val _recent = MutableStateFlow<List<RommGame>>(emptyList())
     override val recent: StateFlow<List<RommGame>> = _recent
     private val _new = MutableStateFlow<List<RommGame>>(emptyList())
@@ -432,14 +479,36 @@ internal class DefaultRommOps(
         _systems.value = platforms.map { p ->
             RommSystem(ctx.platforms.resolveFolder(p.slug)?.id ?: ctx.platforms.resolveFolder(p.fsSlug)?.id, p.slug, p.name, p.romCount, installedBySlug[p.slug] ?: 0, p.sizeBytes)
         }.sortedWith(compareBy({ it.platform == null }, { it.name.lowercase() }))
-        _recent.value = toGames(mirror.recent(server, 40))
+        // These get Fuse's system art like the library's systems.
+        ctx.shownPlatforms.value = _systems.value.mapNotNull { it.platform }.toSet()
+        val recentRoms = mirror.recent(server, 40)
+        _recent.value = toGames(recentRoms)
         val fresh = mirror.newGames(server, 200)
         _new.value = toGames(fresh, isNew = true)
+        // What shows first gets its art first.
+        fillUnmatched(fresh + recentRoms)
         _state.update { it.copy(newGames = fresh.size, games = mirror.count(server)) }
+        _notOnServer.value = notOnServerNow()
         val cols = mirror.collections(server)
         _collections.value = cols.map { c ->
             RommCollectionCard(c.id, c.name, c.smart, c.romIds.size, toGames(mirror.roms(server, c.romIds.take(4))).map { it.card })
         }.filter { it.games > 0 }
+    }
+
+    private val _notOnServer = MutableStateFlow(RommNotOnServer())
+    override val notOnServer: StateFlow<RommNotOnServer> = _notOnServer
+
+    /**
+     * Library games no RomM game was matched to, apps and games whose files are gone aside. Only
+     * once a whole read of the server's library has finished: before that, most would look missing.
+     */
+    private suspend fun notOnServerNow(): RommNotOnServer {
+        if (mirror.syncedAt(server) <= 0L) return RommNotOnServer()
+        val matched = matches.value.values.mapTo(HashSet()) { it.first }
+        val missing = ctx.data.games.observeAll().first().filter { !it.isApp && !it.missing && !it.removed && it.id !in matched }
+        val shown = missing.take(NOT_ON_SERVER_SHOWN)
+        val media = if (shown.isEmpty()) emptyMap() else ctx.data.media.observeFor(shown.map { MediaOwner.OfGame(it.id) }).first()
+        return RommNotOnServer(shown.map { ctx.summaryToCard(it, media[MediaOwner.OfGame(it.id)]) }, missing.size)
     }
 
     override fun games(slug: String?): Flow<List<RommGame>> = combine(mirrorRevision, matches, transfers.items) { _, _, _ -> }.mapLatest {
@@ -468,13 +537,16 @@ internal class DefaultRommOps(
         val m = matches.value
         val running = transfers.items.value.filter { it.source == ROMM_SOURCE && !it.status.finished }.associateBy { it.key }
         val ids = roms.mapNotNull { m[it.id]?.first }
-        val media = if (ids.isEmpty()) emptyMap() else ctx.data.media.observeFor(ids.map { MediaOwner.OfGame(it) }).first()
+        val owners = ids.map { MediaOwner.OfGame(it) } + roms.filter { it.id !in m }.map { MediaOwner.OfGame(rommGameId(it.id)) }
+        val media = if (owners.isEmpty()) emptyMap() else ctx.data.media.observeFor(owners).first()
+        val records = remote.all()
         val summaries = ids.mapNotNull { id -> ctx.data.games.summary(id)?.let { id to it } }.toMap()
         return roms.map { r ->
             val game = m[r.id]?.first
             val summary = game?.let { summaries[it] }
             val t = running[keyOf(r.id)]
-            val card = summary?.let { ctx.summaryToCard(it, media[MediaOwner.OfGame(it.id)]).copy(rommRomId = r.id) } ?: cardOf(r)
+            val card = summary?.let { ctx.summaryToCard(it, media[MediaOwner.OfGame(it.id)]).copy(rommRomId = r.id) }
+                ?: cardOf(r, records[r.id], media[MediaOwner.OfGame(rommGameId(r.id))])
             RommGame(
                 romId = r.id, card = card,
                 presence = when {
@@ -488,20 +560,30 @@ internal class DefaultRommOps(
         }
     }
 
-    /** A RomM game Fuse doesn't have, drawn like any Fuse game: its cover as box art, Fuse's art rules decide. */
-    private fun cardOf(r: RommRom): GameCard {
+    /**
+     * A RomM game Fuse doesn't have, drawn like any Fuse game: the art Fuse's sources found for it
+     * (or the user chose), with RomM's own pictures only where nothing else was found, and its name
+     * and year as Fuse knows them. The tile picks box art or poster by the Posters setting, as ever.
+     */
+    private fun cardOf(r: RommRom, record: RommGameRecord?, media: MediaSet?): GameCard {
         val platform = ctx.platforms.resolveFolder(r.platformSlug)
         return GameCard(
             id = rommGameId(r.id),
             platformId = platform?.id ?: io.github.matiyaaa.fuse.model.PlatformId(r.platformSlug),
-            title = r.name,
+            title = remote.title(r, record),
             platformShort = platform?.shortName ?: r.platformSlug.uppercase(),
             accent = platform?.accent ?: StoreContext.DEFAULT_ACCENT,
-            art = artOf(r),
-            year = r.year,
+            art = withServerArt(media?.let(Art::from) ?: Art.None, r),
+            year = record?.metadata?.releaseYear ?: r.year,
             discs = RommContent.parts(r).count { it.disc != null },
             rommRomId = r.id,
         )
+    }
+
+    /** [found] with RomM's pictures where Fuse has none of that kind. */
+    private fun withServerArt(found: Art, r: RommRom): Art {
+        val theirs = artOf(r)
+        return found.copy(boxart = found.boxart ?: theirs.boxart, logo = found.logo ?: theirs.logo, screenshot = found.screenshot ?: theirs.screenshot)
     }
 
     private fun artOf(r: RommRom): Art = Art(
@@ -512,26 +594,21 @@ internal class DefaultRommOps(
 
     // ------------------------------------------------------------------ one game
 
-    override fun detail(romId: Long): Flow<GameDetail?> = combine(mirrorRevision, ctx.installed) { _, _ -> }.mapLatest {
-        val r = mirror.withFiles(clientFor(server), server, romId) ?: return@mapLatest null
-        val platform = ctx.platforms.resolveFolder(r.platformSlug) ?: return@mapLatest null
-        val game = Game(
-            id = rommGameId(r.id),
-            platformId = platform.id,
-            titles = GameTitles(original = r.fsName.substringBeforeLast('.').ifBlank { r.name }, metadata = r.name),
-            location = GameLocation(LibrarySourceId(0), "romm://${r.id}", if (r.multi) LocationKind.FOLDER else LocationKind.FILE, "romm://${r.id}/${r.fsName}", sizeBytes = r.sizeBytes),
-            metadata = GameMetadata(description = r.summary, releaseYear = r.year, developer = r.developer, genres = r.genres, source = MetadataSource.ROMM),
-            links = ExternalLinks(rommRomId = r.id),
-        )
-        val art = artOf(r)
-        // Its pictures are RomM's, drawn through [art]; nothing is kept in the library for a game not here.
-        val media = MediaSet()
-        GameDetail(
-            game = game, platform = platform, media = media, art = art,
-            emulator = runCatching { choiceFor(game) }.getOrDefault(EmulatorChoice(null, emptyList(), "Automatic", null, false)),
-            contentNotes = emptyList(), achievements = null, collections = emptyList(), secondsThisWeek = 0,
-        )
-    }.flowOn(Dispatchers.Default)
+    override fun detail(romId: Long): Flow<GameDetail?> {
+        val owner = MediaOwner.OfGame(rommGameId(romId))
+        // Opened: its art and details are looked for straight away, if they aren't already there.
+        fillRemote(listOf(rommGameId(romId)))
+        return combine(mirrorRevision, ctx.installed, ctx.data.media.observe(owner)) { _, _, m -> m }.mapLatest { media ->
+            val r = mirror.withFiles(clientFor(server), server, romId) ?: return@mapLatest null
+            val platform = ctx.platforms.resolveFolder(r.platformSlug) ?: return@mapLatest null
+            val game = remote.game(r, remote.all()[romId]) ?: return@mapLatest null
+            GameDetail(
+                game = game, platform = platform, media = media, art = withServerArt(Art.from(media), r),
+                emulator = runCatching { choiceFor(game) }.getOrDefault(EmulatorChoice(null, emptyList(), "Automatic", null, false)),
+                contentNotes = emptyList(), achievements = null, collections = emptyList(), secondsThisWeek = 0,
+            )
+        }.flowOn(Dispatchers.Default)
+    }
 
     override fun forGame(game: GameId): Flow<RommGameView?> = combine(matches, transfers.items, mirrorRevision) { m, _, _ -> m.entries.firstOrNull { it.value.first == game } }
         .mapLatest { e ->
@@ -795,6 +872,12 @@ internal class DefaultRommOps(
 
     companion object {
         const val SECRET = "romm.credential"
+
+        /** Library games not on RomM shown on the tab's shelf (the rest are counted). */
+        private const val NOT_ON_SERVER_SHOWN = 60
+
+        /** How long a burst of art arriving waits before the lists are drawn again. */
+        private const val REDRAW_MS = 4_000L
         private const val NS = "romm"
         private const val PROBE_MS = 1_500L
         private const val LOOP_MS = 60_000L

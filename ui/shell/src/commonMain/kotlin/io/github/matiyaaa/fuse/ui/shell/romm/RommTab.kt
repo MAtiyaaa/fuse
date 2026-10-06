@@ -67,7 +67,10 @@ import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.ContextMenuSpec
 import io.github.matiyaaa.fuse.ui.shell.app.FocusZone
 import io.github.matiyaaa.fuse.ui.shell.app.Route
+import io.github.matiyaaa.fuse.ui.shell.app.gameMenu
 import io.github.matiyaaa.fuse.ui.shell.app.rememberSystems
+import io.github.matiyaaa.fuse.ui.designsystem.theme.toColor
+import io.github.matiyaaa.fuse.ui.shell.app.room
 import io.github.matiyaaa.fuse.ui.shell.components.GameIconTile
 import io.github.matiyaaa.fuse.ui.shell.components.LocalTileMetrics
 import io.github.matiyaaa.fuse.ui.shell.components.SystemTile
@@ -99,6 +102,8 @@ fun RommContent(app: AppState, active: Boolean, topPadding: Dp) {
     val fresh by ops.newGames.collectAsState()
     val systems by ops.systems.collectAsState()
     val collections by ops.collections.collectAsState()
+    val notOnServer by ops.notOnServer.collectAsState()
+    val missing = notOnServer.games
     val summary by app.store.transfers.summary.collectAsState()
     val library = rememberSystems(app)
     val focused = active && app.focusZone == FocusZone.CONTENT && !app.overlayOpen
@@ -120,6 +125,7 @@ fun RommContent(app: AppState, active: Boolean, topPadding: Dp) {
         if (fresh.isNotEmpty()) add("new")
         if (recent.isNotEmpty()) add("recent")
         if (systems.isNotEmpty()) add("systems")
+        if (missing.isNotEmpty()) add("missing")
         if (collections.isNotEmpty()) add("collections")
     }
     fun sizeOf(key: String) = when (key) {
@@ -127,6 +133,7 @@ fun RommContent(app: AppState, active: Boolean, topPadding: Dp) {
         "new" -> fresh.size
         "recent" -> recent.size
         "systems" -> systems.size
+        "missing" -> missing.size
         "collections" -> collections.size
         else -> 0
     }
@@ -145,6 +152,24 @@ fun RommContent(app: AppState, active: Boolean, topPadding: Dp) {
     LaunchedEffect(fresh.isNotEmpty(), row) {
         // Seen: the new games stop being marked new once their shelf was looked at.
         if (row == "new") ops.markNewSeen()
+    }
+    fun gameAt(r: String, c: Int): RommGame? = when (r) {
+        "new" -> fresh.getOrNull(c)
+        "recent" -> recent.getOrNull(c)
+        else -> null
+    }
+    // The room behind the page: the chosen game's or system's art, as on the Library and Systems pages;
+    // on the line at the top, the first game shown.
+    val shown = gameAt(row, col)?.card ?: (if (row == "missing") missing.getOrNull(col) else null)
+        ?: if (row == "head") (fresh.firstOrNull() ?: recent.firstOrNull())?.card else null
+    val shownSystem = if (row == "systems") systems.getOrNull(col)?.let { systemCard(it, library) } else null
+    PageEffect(focused, shown?.id, shown?.art, shownSystem?.art) {
+        if (!focused) return@PageEffect
+        app.hero = when {
+            shownSystem != null -> io.github.matiyaaa.fuse.ui.designsystem.media.HeroSource(shownSystem.platform.id, shownSystem.art.hero, shownSystem.platform.accent.toColor())
+            shown != null -> shown.room(library[shown.platformId] ?: systems.firstOrNull { it.platform == shown.platformId }?.let { systemCard(it, library) })
+            else -> null
+        }
     }
     PageEffect(focused, row, col) {
         if (!focused) return@PageEffect
@@ -165,6 +190,7 @@ fun RommContent(app: AppState, active: Boolean, topPadding: Dp) {
                     "new" -> fresh.getOrNull(col)?.let(::openGame)
                     "recent" -> recent.getOrNull(col)?.let(::openGame)
                     "systems" -> systems.getOrNull(col)?.let(::openSystem)
+                    "missing" -> missing.getOrNull(col)?.let { app.go(Route.GameInfo(it.id)) }
                     "collections" -> collections.getOrNull(col)?.let(::openCollection)
                 }
                 NavResult.ACTIVATED
@@ -173,6 +199,8 @@ fun RommContent(app: AppState, active: Boolean, topPadding: Dp) {
                 when (row) {
                     "new" -> fresh.getOrNull(col)?.let(::gameOptions)
                     "recent" -> recent.getOrNull(col)?.let(::gameOptions)
+                    // A game of the library's: its own options, Upload to RomM among them.
+                    "missing" -> missing.getOrNull(col)?.let { app.openContextMenu(app.gameMenu(it)) }
                 }
                 NavResult.ACTIVATED
             }
@@ -194,7 +222,7 @@ fun RommContent(app: AppState, active: Boolean, topPadding: Dp) {
             verticalArrangement = Arrangement.spacedBy(if (compact) Space.s else Space.m),
         ) {
             item("head") {
-                Header(state, actions, if (focused && row == "head") col else -1, compact, labels, Modifier.padding(horizontal = Space.gutter)) { i ->
+                Header(state, systems.sumOf { it.installed }, systems.size, actions, if (focused && row == "head") col else -1, compact, labels, Modifier.padding(horizontal = Space.gutter)) { i ->
                     sel.row = 0
                     sel.setColumn("head", i)
                     actions[i].run()
@@ -208,6 +236,9 @@ fun RommContent(app: AppState, active: Boolean, topPadding: Dp) {
             }
             if ("systems" in rows) item("systems") {
                 SystemShelf(systems, library, if (focused && row == "systems") col else -1, tile, onOpen = ::openSystem)
+            }
+            if ("missing" in rows) item("missing") {
+                LibraryShelf(missing, notOnServer.total, if (focused && row == "missing") col else -1, tile, onOpen = { app.go(Route.GameInfo(it.id)) }, onOptions = { app.openContextMenu(app.gameMenu(it)) })
             }
             if ("collections" in rows) item("collections") {
                 CollectionShelf(collections, if (focused && row == "collections") col else -1, tile, onOpen = ::openCollection)
@@ -241,30 +272,33 @@ private fun testConnection(app: AppState, p: io.github.matiyaaa.fuse.data.settin
 private class PillAction(val label: String, val icon: ImageVector, val run: () -> Unit)
 
 /**
- * Fuse RomM's line: the server and how it is reached, with its counts where there is room; the warning
- * band only when something is wrong (away, signed out); then the things to do.
+ * RomM's line: its name and the server in a few chips (version, home or away, games, how many are
+ * here), the warning band only when something is wrong, and the things to do on the right.
  */
 @Composable
-private fun Header(state: RommState, actions: List<PillAction>, selected: Int, compact: Boolean, labels: Boolean, modifier: Modifier, onAction: (Int) -> Unit) {
+private fun Header(state: RommState, here: Int, systemCount: Int, actions: List<PillAction>, selected: Int, compact: Boolean, labels: Boolean, modifier: Modifier, onAction: (Int) -> Unit) {
     val c = Fuse.colors
     val now = kotlin.time.Clock.System.now().toEpochMilliseconds()
     Column(modifier, verticalArrangement = Arrangement.spacedBy(Space.s)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            RommMark(if (compact) 40.dp else 48.dp)
+            RommMark(if (compact) 40.dp else 52.dp)
             Spacer(Modifier.width(Space.m))
-            Column(Modifier.weight(1f)) {
-                FText("Fuse RomM", if (compact) Fuse.type.bodyStrong else Fuse.type.title, maxLines = 1)
-                val route = when (state.route) {
-                    NetRoute.LOCAL -> "At home"
-                    NetRoute.REMOTE -> "From outside"
-                    null -> null
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Space.xs)) {
+                FText("RomM", if (compact) Fuse.type.title else Fuse.type.display, maxLines = 1)
+                val synced = state.syncing?.let { p -> "Bringing in ${p.label.lowercase()}" + (p.total?.let { t -> ", ${p.done} of $t" } ?: "") }
+                    ?: state.syncedAt.takeIf { it > 0 }?.let { "Up to date ${TimeWords.relative(it, now, 0)}" }
+                Row(horizontalArrangement = Arrangement.spacedBy(Space.xs), verticalAlignment = Alignment.CenterVertically) {
+                    when (state.route) {
+                        NetRoute.LOCAL -> StatChip(FuseIcons.Router, "At home")
+                        NetRoute.REMOTE -> StatChip(FuseIcons.Globe, "From outside")
+                        null -> Unit
+                    }
+                    if (state.games > 0) StatChip(FuseIcons.LibraryBig, if (state.games == 1) "1 game" else "${state.games} games")
+                    if (!compact && systemCount > 0) StatChip(FuseIcons.Chip, if (systemCount == 1) "1 system" else "$systemCount systems")
+                    if (here > 0) StatChip(FuseIcons.HardDrive, "$here on this device")
+                    if (!compact && state.version.isNotBlank()) StatChip(FuseIcons.Server, "RomM ${state.version}")
                 }
-                val synced = state.syncing?.let { p -> "Syncing ${p.label.lowercase()}" + (p.total?.let { t -> " ${p.done} of $t" } ?: "") }
-                    ?: state.syncedAt.takeIf { it > 0 }?.let { "synced ${TimeWords.relative(it, now, 0)}" }
-                FText(
-                    listOfNotNull(route, state.version.takeIf { it.isNotBlank() }?.let { "RomM $it" }, "${state.games} games".takeIf { state.games > 0 }, synced.takeIf { !compact || state.syncing != null }).joinToString("  ·  "),
-                    Fuse.type.caption, color = c.textMuted, maxLines = 1,
-                )
+                if (synced != null && (!compact || state.syncing != null)) FText(synced, Fuse.type.caption, color = c.textMuted, maxLines = 1)
             }
             Spacer(Modifier.width(Space.m))
             Row(horizontalArrangement = Arrangement.spacedBy(Space.s), verticalAlignment = Alignment.CenterVertically) {
@@ -290,6 +324,27 @@ private fun Header(state: RommState, actions: List<PillAction>, selected: Int, c
         }
     }
 }
+
+/** One fact about the server, quiet beside the title. */
+@Composable
+private fun StatChip(icon: ImageVector, text: String) {
+    val c = Fuse.colors
+    Row(
+        Modifier.clip(CircleShape).background(c.text.copy(alpha = 0.07f)).padding(horizontal = 10.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        FuseIcon(icon, size = 14.dp, tint = c.textMuted)
+        Spacer(Modifier.width(6.dp))
+        FText(text, Fuse.type.caption, color = c.textMuted, maxLines = 1)
+    }
+}
+
+/**
+ * Room above and below a shelf for its chosen tile: it lifts toward you (it grows and its glow
+ * spreads), and without this it would cover the shelf's title above.
+ */
+@Composable
+private fun liftRoom(tile: Dp): Dp = tile * ((Fuse.motion.focusScale - 1f) / 2f) + Space.s
 
 /** Fuse RomM's mark: Fuse's library drawn in its accent, not RomM's own logo (RomM is its own project). */
 @Composable
@@ -333,10 +388,10 @@ private fun Pill(a: PillAction, selected: Boolean, label: Boolean, primary: Bool
 @Composable
 private fun ShelfTitle(title: String, icon: ImageVector, trailing: String?) {
     val c = Fuse.colors
-    Row(Modifier.padding(horizontal = Space.gutter).padding(bottom = Space.s), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.padding(horizontal = Space.gutter), verticalAlignment = Alignment.CenterVertically) {
         FuseIcon(icon, size = Size.iconS, tint = c.textMuted)
         Spacer(Modifier.width(Space.s))
-        FText(title, Fuse.type.label, color = c.textMuted, maxLines = 1)
+        FText(title, Fuse.type.bodyStrong, maxLines = 1)
         if (trailing != null) {
             Spacer(Modifier.width(Space.s))
             FText(trailing, Fuse.type.caption, color = c.textFaint, maxLines = 1)
@@ -358,17 +413,39 @@ internal fun GameShelf(
 ) {
     val state = rememberLazyListState()
     LaunchedEffect(selected) { if (selected >= 0) state.animateScrollToItem(maxOf(0, selected - 1)) }
+    val room = liftRoom(tile)
     Column {
         ShelfTitle(title, icon, trailing)
         LazyRow(
             state = state,
-            contentPadding = PaddingValues(horizontal = Space.gutter),
+            contentPadding = PaddingValues(horizontal = Space.gutter, vertical = room),
             horizontalArrangement = Arrangement.spacedBy(LocalTileMetrics.current.gap),
         ) {
             itemsIndexed(games, key = { _, g -> g.romId }) { i, g ->
                 RommTile(g, selected == i, tile, onClick = { onOpen(g) }, onLongClick = { onOptions(g) })
             }
         }
+        // The chosen game, named under its shelf: what it is and whether it is here.
+        games.getOrNull(selected)?.let { g -> SelectedLine(g, Modifier.padding(horizontal = Space.gutter)) }
+    }
+}
+
+@Composable
+private fun SelectedLine(g: RommGame, modifier: Modifier) {
+    val c = Fuse.colors
+    val where = when (g.presence) {
+        RommPresence.ON_SERVER -> "On the server"
+        RommPresence.QUEUED -> "Waiting to download"
+        RommPresence.DOWNLOADING -> "Downloading"
+        RommPresence.INSTALLED -> "On this device"
+        RommPresence.PARTLY_INSTALLED -> "Partly on this device"
+    }
+    Column(modifier) {
+        FText(g.card.title, Fuse.type.bodyStrong, maxLines = 1)
+        FText(
+            listOfNotNull(g.card.platformShort, g.card.year?.toString(), where, io.github.matiyaaa.fuse.ui.shell.downloads.sizeOf(g.sizeBytes).takeIf { g.sizeBytes > 0 }).joinToString("  ·  "),
+            Fuse.type.caption, color = c.textMuted, maxLines = 1,
+        )
     }
 }
 
@@ -405,26 +482,59 @@ private fun SystemShelf(systems: List<RommSystem>, library: Map<PlatformId, Plat
     LaunchedEffect(selected) { if (selected >= 0) state.animateScrollToItem(maxOf(0, selected - 1)) }
     Column {
         ShelfTitle("Systems", FuseIcons.Chip, "${systems.size}")
-        LazyRow(state = state, contentPadding = PaddingValues(horizontal = Space.gutter), horizontalArrangement = Arrangement.spacedBy(LocalTileMetrics.current.gap)) {
+        LazyRow(state = state, contentPadding = PaddingValues(horizontal = Space.gutter, vertical = liftRoom(tile)), horizontalArrangement = Arrangement.spacedBy(LocalTileMetrics.current.gap)) {
             itemsIndexed(systems, key = { _, s -> s.slug }) { i, s ->
                 Column(Modifier.width(tile)) {
                     val card = systemCard(s, library)
                     if (card != null) {
                         SystemTile(card, selected == i, size = tile, onClick = { onOpen(s) })
                     } else {
-                        Box(
-                            Modifier.size(tile).clip(RoundedCornerShape(Fuse.geometry.control)).background(Fuse.colors.surface)
-                                .then(if (selected == i) Modifier.border(Size.focusStroke, Fuse.colors.focus, RoundedCornerShape(Fuse.geometry.control)) else Modifier)
-                                .clickable(remember { MutableInteractionSource() }, indication = null) { onOpen(s) },
-                            contentAlignment = Alignment.Center,
-                        ) { FText(s.name, Fuse.type.label, maxLines = 3, modifier = Modifier.padding(Space.s)) }
+                        // A system Fuse doesn't know: its name on a plain tile, lifting like the rest.
+                        io.github.matiyaaa.fuse.ui.designsystem.components.Tile(selected == i, Modifier.size(tile), onClick = { onOpen(s) }) {
+                            Box(Modifier.fillMaxSize().background(Fuse.colors.surface), contentAlignment = Alignment.Center) {
+                                FText(s.name, Fuse.type.label, maxLines = 3, modifier = Modifier.padding(Space.s))
+                            }
+                        }
                     }
-                    Spacer(Modifier.height(Space.xs))
-                    FText(
-                        if (s.installed > 0) "${s.installed} of ${s.games} here" else "${s.games} games",
-                        Fuse.type.caption, color = Fuse.colors.textMuted, maxLines = 1,
-                    )
+                    // Below the bar a chosen tile springs out under it.
+                    Spacer(Modifier.height(liftRoom(tile)))
+                    FText(systemCaption(s), Fuse.type.caption, color = Fuse.colors.textMuted, maxLines = 1)
                 }
+            }
+        }
+    }
+}
+
+/** How many of a system's games on the server are downloaded, in words short enough for a handheld (the tile counts the server's). */
+internal fun systemCaption(s: RommSystem): String = when {
+    s.installed <= 0 -> "None downloaded"
+    s.installed >= s.games -> "All downloaded"
+    else -> "${s.installed} downloaded"
+}
+
+/**
+ * Games in the library RomM hasn't got, as the library's own tiles: open one for its page, or its
+ * options to send it to RomM. The trailing count is all of them; the shelf holds the first.
+ */
+@Composable
+private fun LibraryShelf(games: List<io.github.matiyaaa.fuse.ui.shell.store.GameCard>, total: Int, selected: Int, tile: Dp, onOpen: (io.github.matiyaaa.fuse.ui.shell.store.GameCard) -> Unit, onOptions: (io.github.matiyaaa.fuse.ui.shell.store.GameCard) -> Unit) {
+    val state = rememberLazyListState()
+    LaunchedEffect(selected) { if (selected >= 0) state.animateScrollToItem(maxOf(0, selected - 1)) }
+    Column {
+        ShelfTitle("Not on RomM", FuseIcons.Upload, if (total == 1) "1 game" else "$total games")
+        LazyRow(
+            state = state,
+            contentPadding = PaddingValues(horizontal = Space.gutter, vertical = liftRoom(tile)),
+            horizontalArrangement = Arrangement.spacedBy(LocalTileMetrics.current.gap),
+        ) {
+            itemsIndexed(games, key = { _, g -> g.id.value }) { i, g ->
+                GameIconTile(g, selected == i, size = tile, onClick = { onOpen(g) }, onLongClick = { onOptions(g) })
+            }
+        }
+        games.getOrNull(selected)?.let { g ->
+            Column(Modifier.padding(horizontal = Space.gutter)) {
+                FText(g.title, Fuse.type.bodyStrong, maxLines = 1)
+                FText(listOfNotNull(g.platformShort, g.year?.toString(), "On this device, not on your RomM server").joinToString("  ·  "), Fuse.type.caption, color = Fuse.colors.textMuted, maxLines = 1)
             }
         }
     }
@@ -433,9 +543,11 @@ private fun SystemShelf(systems: List<RommSystem>, library: Map<PlatformId, Plat
 /** The Systems page's card for a RomM system, or one made from Fuse's catalogue for a system the library hasn't got yet. */
 internal fun systemCard(s: RommSystem, library: Map<PlatformId, PlatformCard>): PlatformCard? {
     val id = s.platform ?: return null
-    library[id]?.let { return it }
+    // On RomM's tab a system counts the server's games, not the library's.
+    library[id]?.let { return it.copy(gameCount = s.games) }
     val p = io.github.matiyaaa.fuse.library.PlatformCatalog.byId(id) ?: return null
-    return PlatformCard(p, 0, Art.None, null, false, 0, io.github.matiyaaa.fuse.model.BiosStatus.NotRequired, p.defaultLayout, emptyList())
+    // A system with no games here yet still has its art and colour, as on the Systems page.
+    return PlatformCard(s.accent?.let { p.copy(accent = it) } ?: p, s.games, s.art, null, false, 0, io.github.matiyaaa.fuse.model.BiosStatus.NotRequired, p.defaultLayout, emptyList())
 }
 
 @Composable
@@ -444,19 +556,17 @@ private fun CollectionShelf(collections: List<RommCollectionCard>, selected: Int
     LaunchedEffect(selected) { if (selected >= 0) state.animateScrollToItem(maxOf(0, selected - 1)) }
     Column {
         ShelfTitle("Collections", FuseIcons.Layers, "${collections.size}")
-        LazyRow(state = state, contentPadding = PaddingValues(horizontal = Space.gutter), horizontalArrangement = Arrangement.spacedBy(LocalTileMetrics.current.gap)) {
+        LazyRow(state = state, contentPadding = PaddingValues(horizontal = Space.gutter, vertical = liftRoom(tile)), horizontalArrangement = Arrangement.spacedBy(LocalTileMetrics.current.gap)) {
             itemsIndexed(collections, key = { _, c -> c.id }) { i, c ->
                 Column(Modifier.width(tile)) {
-                    Box(
-                        Modifier.size(tile).clip(RoundedCornerShape(Fuse.geometry.control))
-                            .then(if (selected == i) Modifier.border(Size.focusStroke, Fuse.colors.focus, RoundedCornerShape(Fuse.geometry.control)) else Modifier)
-                            .clickable(remember { MutableInteractionSource() }, indication = null) { onOpen(c) },
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        if (c.covers.isNotEmpty()) io.github.matiyaaa.fuse.ui.shell.components.CoverCollage(c.covers, tile)
-                        else FuseIcon(FuseIcons.Layers, size = Size.iconL, tint = Fuse.colors.textMuted)
+                    // Lifts when chosen, like every other tile on the page.
+                    io.github.matiyaaa.fuse.ui.designsystem.components.Tile(selected == i, Modifier.size(tile), glow = c.covers.firstOrNull()?.accent?.toColor() ?: Fuse.colors.accent, onClick = { onOpen(c) }) {
+                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            if (c.covers.isNotEmpty()) io.github.matiyaaa.fuse.ui.shell.components.CoverCollage(c.covers, tile)
+                            else FuseIcon(FuseIcons.Layers, size = Size.iconL, tint = Fuse.colors.textMuted)
+                        }
                     }
-                    Spacer(Modifier.height(Space.xs))
+                    Spacer(Modifier.height(liftRoom(tile)))
                     FText(c.name, Fuse.type.label, maxLines = 1)
                     FText("${c.games} games", Fuse.type.caption, color = Fuse.colors.textMuted, maxLines = 1)
                 }
@@ -500,6 +610,38 @@ private fun NotSetUp(app: AppState, state: RommState, focused: Boolean, topPaddi
     }
 }
 
+/**
+ * What can be changed about a RomM game Fuse doesn't have, as about any game: its art, its details
+ * found again, its name, or what sources said about it forgotten. Kept with Fuse RomM.
+ */
+internal fun rommEditActions(app: AppState, id: io.github.matiyaaa.fuse.model.GameId, title: String): List<MenuAction> = listOf(
+    MenuAction("media", "Manage Media", FuseIcons.Images, trailing = io.github.matiyaaa.fuse.ui.designsystem.components.Trailing.Chevron, onSelect = {
+        app.closeOverlays(); app.go(Route.Media(io.github.matiyaaa.fuse.model.MediaOwner.OfGame(id), title))
+    }),
+    MenuAction("rescrape", "Find Details and Art", FuseIcons.Wand, detail = "Fills what's missing, including a proper title. Your own art and names stay", onSelect = {
+        app.closeOverlays()
+        app.store.media.fill(io.github.matiyaaa.fuse.model.MediaFillMode.FILL_MISSING, io.github.matiyaaa.fuse.model.MediaKind.Fillable, game = id)
+        app.toasts.show("Looking for details and art for $title")
+    }),
+    MenuAction("rename", "Rename Display Title", FuseIcons.TextCursor, detail = "RomM keeps its own name", onSelect = {
+        app.closeOverlays()
+        app.textInput = io.github.matiyaaa.fuse.ui.shell.app.TextInputSpec("Display title", title) { t ->
+            app.scope.launch {
+                app.store.library.rename(id, t.ifBlank { null })
+                if (t.isNotBlank() && t.trim() != title && app.store.media.followRename(id, title)) app.toasts.show("Looking for details for ${t.trim()}")
+            }
+        }
+    }),
+    MenuAction("reset", "Reset Name and Details", FuseIcons.RotateCcw, detail = "For a game mixed up with another. Your own name and art stay", onSelect = {
+        app.closeOverlays()
+        app.confirm = io.github.matiyaaa.fuse.ui.shell.app.ConfirmSpec(
+            "Reset $title?",
+            "Fuse forgets the name, details and art sources gave this game and goes back to RomM's. Your own name and the art you chose stay. Find Details and Art looks again.",
+            "Reset",
+        ) { app.scope.launch { if (app.store.media.resetDetails(id)) app.toasts.show("Reset. It goes by RomM's name again") } }
+    }),
+)
+
 /** A RomM game's options: open its page, download it (or what it is missing), or see it in Downloads. */
 internal fun gameMenu(app: AppState, g: RommGame): ContextMenuSpec {
     val ops = app.store.romm
@@ -526,6 +668,8 @@ internal fun gameMenu(app: AppState, g: RommGame): ContextMenuSpec {
                 RommPresence.DOWNLOADING, RommPresence.QUEUED -> add(MenuAction("romm.downloads", "See in Downloads", FuseIcons.Download, onSelect = { app.closeOverlays(); app.go(Route.Downloads) }))
                 else -> add(MenuAction("romm.content", "Download Missing Content", FuseIcons.CloudDownload, onSelect = { queue(RommDownloadWhat.Everything) }))
             }
+            // Not here yet: its art, details and name are Fuse RomM's to change, as for any game.
+            if (g.game == null) addAll(rommEditActions(app, g.card.id, g.card.title))
         },
     )
 }

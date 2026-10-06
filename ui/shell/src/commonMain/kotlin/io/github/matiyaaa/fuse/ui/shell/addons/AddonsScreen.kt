@@ -175,7 +175,7 @@ fun AddonsScreen(app: AppState) {
             val items = parts.map { p ->
                 when (p) {
                     AddonsPart.CARTRIDGE -> ViewTab("Cartridge", icon = FuseMarks.Cartridge, badge = (cartridge.activeDownloads + cartridge.queuedDownloads).takeIf { it > 0 }?.toString())
-                    AddonsPart.ROMM -> ViewTab("Fuse RomM", icon = FuseIcons.LibraryBig, badge = app.store.romm.state.value.newGames.takeIf { it > 0 }?.toString())
+                    AddonsPart.ROMM -> ViewTab("RomM", icon = FuseIcons.LibraryBig, badge = app.store.romm.state.value.newGames.takeIf { it > 0 }?.toString())
                     AddonsPart.STORE -> ViewTab("Store", icon = FuseIcons.Store, badge = store.updates.size.takeIf { it > 0 }?.toString())
                     AddonsPart.JELLYFIN -> ViewTab("Jellyfin", icon = FuseIcons.Clapperboard)
                     AddonsPart.SYNC -> ViewTab("Sync", icon = FuseIcons.RefreshCcw)

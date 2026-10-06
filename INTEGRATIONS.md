@@ -289,6 +289,10 @@ turning one on turns the other off in Fuse and keeps both set up.
   game is matched at most once.
 - **Downloads** (`/api/roms/{id}/content/{file}`) go through Downloads into the system folder Fuse
   already uses for that system, resumed with HTTP ranges and checked before being put in place.
+- **Art and details for games not on this device** come from the sources set up in Settings, Art
+  and details, in their order, exactly as for library games: the same requests (a game's name, its
+  system, the providers' ids once known) go to the same services. What they find, and what you
+  change, is kept in Fuse's database and asked for once.
 - **Uploads** use `/api/roms/upload/start`, a `PUT` per piece and `/complete`, resumed where they
   stopped, and optionally a scan of that system (`/api/tasks/scan`) afterwards.
 - **BIOS** (`/api/firmware`): planned against what Fuse's system health expects. A file already in

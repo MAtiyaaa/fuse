@@ -53,6 +53,8 @@ internal class SystemArtStore(private val ctx: StoreContext) {
         ctx.scope.launch {
             data.games.platformCounts()
                 .map { counts -> counts.filterValues { it > 0 }.keys }
+                // RomM's systems show on its tab with the same art, games here or not.
+                .combine(ctx.shownPlatforms) { here, shown -> here + shown }
                 .distinctUntilChanged()
                 .flatMapLatest { ids ->
                     data.media.observeFor(ids.map { MediaOwner.OfPlatform(it) }).map { media ->
@@ -81,7 +83,7 @@ internal class SystemArtStore(private val ctx: StoreContext) {
             if (ctx.settings.value.library.systemArtDefault.isNotEmpty()) {
                 ctx.settings.value = ctx.data.settings.update { it.copy(library = it.library.copy(systemArtDefault = emptyList())) }
             }
-            val ids = ctx.data.games.platformCounts().first().filterValues { it > 0 }.keys.toList()
+            val ids = (ctx.data.games.platformCounts().first().filterValues { it > 0 }.keys + ctx.shownPlatforms.value).toList()
             var added = 0
             progressState.value = FillProgress(0, ids.size, null, 0, finished = ids.isEmpty())
             ids.forEachIndexed { i, id ->

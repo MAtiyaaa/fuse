@@ -240,6 +240,10 @@ class UiAudit {
 
     @Test fun phoneTypingV() = audit(AuditSize.V) { phoneTypingScreens() }
 
+    @Test fun rommD() = audit(AuditSize.D) { rommScreens() }
+
+    @Test fun rommH() = audit(AuditSize.H) { rommScreens() }
+
     @Test fun jellyfinM() = audit(AuditSize.M) { jellyfinScreens() }
 
     @Test fun jellyfinH() = audit(AuditSize.H) { jellyfinScreens() }

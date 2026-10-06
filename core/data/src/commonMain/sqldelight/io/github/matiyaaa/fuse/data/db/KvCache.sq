@@ -24,3 +24,6 @@ DELETE FROM kv_cache WHERE namespace = ?;
 
 purgeExpired:
 DELETE FROM kv_cache WHERE expires_at IS NOT NULL AND expires_at <= :now;
+
+inNamespace:
+SELECT key, value_json FROM kv_cache WHERE namespace = ?;

@@ -706,7 +706,12 @@ internal class DefaultLibraryOps(
 
     override suspend fun setPinned(id: GameId, pinned: Boolean) = data.games.setPinned(id, pinned).also { ctx.userChanged() }
 
-    override suspend fun rename(id: GameId, title: String?) = data.games.rename(id, title?.trim()?.takeIf { it.isNotEmpty() }).also { ctx.userChanged() }
+    override suspend fun rename(id: GameId, title: String?) {
+        // A RomM game Fuse doesn't have keeps its name with Fuse RomM.
+        ctx.remoteGames?.takeIf { it.owns(id) }?.let { it.rename(id, title); return }
+        data.games.rename(id, title?.trim()?.takeIf { it.isNotEmpty() })
+        ctx.userChanged()
+    }
 
     override suspend fun setEmulator(id: GameId, emulator: EmulatorId?) = data.games.setEmulatorOverride(id, emulator).also { ctx.userChanged() }
 

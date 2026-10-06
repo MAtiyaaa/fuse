@@ -235,7 +235,7 @@ internal class DefaultMediaOps(
             ?: SearchTitles.clean(game.titles.original).ifBlank { game.titles.cleaned ?: game.titles.original }
 
     override suspend fun searchTitle(game: GameId): SearchTitle? {
-        val g = ctx.data.games.get(game) ?: return null
+        val g = gameOf(game) ?: return null
         return SearchTitle(current = searchAs(g) ?: defaultSearchTitle(g), custom = searchAs(g) != null, default = defaultSearchTitle(g))
     }
 
@@ -252,6 +252,37 @@ internal class DefaultMediaOps(
             collectAllArtwork = collectAll,
         )
         return request to coordinator
+    }
+
+    // ------------------------------------------------------------------ the library's games, or a server's
+
+    /** [id] as a game: the library's, or one a server has that Fuse shows without having ([RemoteGames]). */
+    private suspend fun gameOf(id: GameId): Game? {
+        val r = ctx.remoteGames
+        return if (r != null && r.owns(id)) r.get(id) else ctx.data.games.get(id)
+    }
+
+    private fun remoteOf(id: GameId): RemoteGames? = ctx.remoteGames?.takeIf { it.owns(id) }
+
+    private suspend fun updateLinks(id: GameId, transform: (io.github.matiyaaa.fuse.model.ExternalLinks) -> io.github.matiyaaa.fuse.model.ExternalLinks) {
+        remoteOf(id)?.let { it.updateLinks(id, transform); return }
+        ctx.data.games.updateLinks(id, transform)
+    }
+
+    private suspend fun applyMetadata(id: GameId, metadata: GameMetadata, titleFromMetadata: String?, onlyFillEmpty: Boolean) {
+        remoteOf(id)?.let { it.applyMetadata(id, metadata, titleFromMetadata, onlyFillEmpty); it.changed(id); return }
+        ctx.data.games.applyMetadata(id, metadata, titleFromMetadata = titleFromMetadata, onlyFillEmpty = onlyFillEmpty)
+    }
+
+    private suspend fun replaceMetadata(id: GameId, metadata: GameMetadata?, titleMetadata: String?) {
+        remoteOf(id)?.let { it.replaceMetadata(id, metadata, titleMetadata); it.changed(id); return }
+        ctx.data.games.replaceMetadata(id, metadata = metadata, titleMetadata = titleMetadata)
+    }
+
+    /** A server's game whose art changed is drawn again where it shows. */
+    private fun artChanged(owner: MediaOwner) {
+        val id = (owner as? MediaOwner.OfGame)?.id ?: return
+        remoteOf(id)?.changed(id)
     }
 
     override fun media(owner: MediaOwner): Flow<MediaSet> = media.observe(owner)
@@ -271,7 +302,7 @@ internal class DefaultMediaOps(
         }
         val gameId = (owner as? MediaOwner.OfGame)?.id
             ?: return ArtworkResult.Unavailable("Online artwork is found for games and systems. Here, choose an image from a file.")
-        val game = ctx.data.games.get(gameId) ?: return ArtworkResult.Unavailable("This game is no longer in your library.")
+        val game = gameOf(gameId) ?: return ArtworkResult.Unavailable("This game is no longer in your library.")
         val (request, coordinator) = request(game, setOf(kind), metadata = false, collectAll = true)
         // A game identified before is looked up by its ids, so it is never asked about again.
         coordinator.known(request, knownIds(game))?.let { known ->
@@ -319,25 +350,29 @@ internal class DefaultMediaOps(
         val sgdb = links[ScrapeProviderId.STEAMGRIDDB]?.toLongOrNull()
         val igdb = links[ScrapeProviderId.IGDB]?.toLongOrNull()?.takeIf { !outcome.guessed }
         if ((sgdb == null || sgdb == game.links.steamGridDbGameId) && (igdb == null || igdb == game.links.igdbId)) return
-        ctx.data.games.updateLinks(game.id) { l -> l.copy(steamGridDbGameId = sgdb ?: l.steamGridDbGameId, igdbId = igdb ?: l.igdbId) }
+        updateLinks(game.id) { l -> l.copy(steamGridDbGameId = sgdb ?: l.steamGridDbGameId, igdbId = igdb ?: l.igdbId) }
     }
 
     override suspend fun apply(owner: MediaOwner, option: ArtworkOption) {
         media.setCustom(owner, option.kind, localPath = null, remoteUrl = option.url, width = option.width, height = option.height)
+        artChanged(owner)
     }
 
     override suspend fun setFromFile(owner: MediaOwner, kind: MediaKind, path: String) {
         media.setCustom(owner, kind, localPath = path)
+        artChanged(owner)
     }
 
     override suspend fun adjust(owner: MediaOwner, kind: MediaKind, focusX: Float, focusY: Float, zoom: Float) {
         media.adjust(owner, kind, focusX.coerceIn(0f, 1f), focusY.coerceIn(0f, 1f), zoom.coerceIn(1f, 4f))
+        artChanged(owner)
     }
 
     /** Removes custom art ([kind] null: every kind) so found or scraped art shows again. */
     override suspend fun reset(owner: MediaOwner, kind: MediaKind?) {
         val kinds = kind?.let(::listOf) ?: MediaKind.entries
         kinds.forEach { media.resetCustom(owner, it) }
+        artChanged(owner)
     }
 
     override fun fill(mode: MediaFillMode, kinds: Set<MediaKind>, platform: PlatformId?, game: GameId?) =
@@ -395,7 +430,7 @@ internal class DefaultMediaOps(
     }
 
     private suspend fun fillFresh(id: GameId) {
-        val g = ctx.data.games.get(id) ?: return
+        val g = gameOf(id) ?: return
         if (!ctx.data.scopedSettings.resolve(ScopedSettings.ScrapeEnabled, g.platformId, g.id).value) return
         val (configured, coordinator) = coordinator()
         val priority = ctx.settings.value.scraping.effectiveOrder()
@@ -403,6 +438,46 @@ internal class DefaultMediaOps(
         val details = coordinator.providesMetadata(priority, configured)
         if (kinds.isEmpty() && !details) return
         fillOne(g, FillJob(MediaFillMode.FILL_MISSING, kinds, g.platformId, game = g.id, everything = false, auto = true), kinds, details, configured)
+    }
+
+    /** A server's games waiting for art and details ([fillRemote]), each in line once. */
+    private val remoteQueue = Channel<GameId>(Channel.UNLIMITED)
+    private val remoteQueued = MutableStateFlow<Set<GameId>>(emptySet())
+    private var remoteWorker: Job? = null
+
+    /**
+     * Finds art and details for games a server has and Fuse shows ([RemoteGames]), first in [ids]
+     * first, with the library's sources and order: what is found is kept, and what the sources
+     * didn't have is remembered as for the library, so a game is looked for once, not every time
+     * the list is shown. Runs beside any library fill, one game at a time.
+     */
+    fun fillRemote(ids: List<GameId>) {
+        if (ids.isEmpty() || !ctx.settings.value.scraping.autoFill) return
+        val fresh = ids.distinct().filter { it !in remoteQueued.value }
+        if (fresh.isEmpty()) return
+        remoteQueued.update { it + fresh }
+        fresh.forEach { remoteQueue.trySend(it) }
+        if (remoteWorker?.isActive == true) return
+        remoteWorker = ctx.scope.launch {
+            for (id in remoteQueue) {
+                try {
+                    val g = gameOf(id) ?: continue
+                    if (!ctx.data.scopedSettings.resolve(ScopedSettings.ScrapeEnabled, g.platformId, g.id).value) continue
+                    val (configured, coordinator) = coordinator()
+                    val priority = ctx.settings.value.scraping.effectiveOrder()
+                    val kinds = FILLABLE intersect coordinator.availableKinds(priority, configured)
+                    val details = coordinator.providesMetadata(priority, configured)
+                    if (kinds.isEmpty() && !details) continue
+                    fillOne(g, FillJob(MediaFillMode.FILL_MISSING, kinds, platform = null, game = null, everything = false, auto = true), kinds, details, configured)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Throwable) {
+                    // One game failing never holds up the others.
+                } finally {
+                    remoteQueued.update { it - id }
+                }
+            }
+        }
     }
 
     override fun cancelFill() {
@@ -441,7 +516,7 @@ internal class DefaultMediaOps(
             val targets = if (job.remembers) {
                 listed.filter { id ->
                     if (id in busy) return@filter false
-                    val g = ctx.data.games.get(id) ?: return@filter false
+                    val g = gameOf(id) ?: return@filter false
                     when (val tried = coveredBy(g, job, kinds, details, configured)) {
                         null -> true
                         else -> {
@@ -467,7 +542,7 @@ internal class DefaultMediaOps(
                 repeat(workers.coerceAtMost(targets.size)) {
                     launch {
                         for (id in queue) {
-                            val g = ctx.data.games.get(id)
+                            val g = gameOf(id)
                             val enabled = g != null && ctx.data.scopedSettings.resolve(ScopedSettings.ScrapeEnabled, g.platformId, g.id).value
                             if (g != null && enabled) {
                                 lock.withLock { state = state.copy(current = g.displayTitle); progress.value = state }
@@ -585,8 +660,9 @@ internal class DefaultMediaOps(
                 MediaItem(option.kind, option.provider.mediaSource(), remoteUrl = option.url, width = option.width, height = option.height, order = index)
             }
         val added = if (items.isEmpty()) 0 else media.putScraped(MediaOwner.OfGame(game.id), items, mode, kinds)
+        if (added > 0) remoteOf(game.id)?.changed(game.id)
         outcome.metadata?.let { meta ->
-            ctx.data.games.applyMetadata(
+            applyMetadata(
                 game.id,
                 meta.copy(source = meta.source ?: outcome.candidate.provider.metadataSource()),
                 // A confident match also names the game properly; an existing name is kept when only filling.
@@ -599,7 +675,7 @@ internal class DefaultMediaOps(
     }
 
     override suspend fun identify(game: GameId): IdentifyResult {
-        val g = ctx.data.games.get(game) ?: return IdentifyResult.Unavailable("This game is no longer in your library.")
+        val g = gameOf(game) ?: return IdentifyResult.Unavailable("This game is no longer in your library.")
         val (request, coordinator) = request(g, emptySet(), metadata = true, collectAll = false)
         // Only these search by name; the keyless sources look art up by file name.
         if (request.configured.none { it in namedSearch }) {
@@ -617,11 +693,11 @@ internal class DefaultMediaOps(
     }
 
     override suspend fun resetDetails(game: GameId): Boolean {
-        val g = ctx.data.games.get(game) ?: return false
-        ctx.data.games.replaceMetadata(game, metadata = null, titleMetadata = null)
+        val g = gameOf(game) ?: return false
+        replaceMetadata(game, metadata = null, titleMetadata = null)
         val owner = MediaOwner.OfGame(game)
         for (source in SCRAPED_SOURCES) ctx.data.media.removeSource(owner, source)
-        if (g.links.rommRomId != null) ctx.data.games.updateLinks(game) { it.copy(rommRomId = null) }
+        if (g.links.rommRomId != null) updateLinks(game) { it.copy(rommRomId = null) }
         // RomM's details come back only if they fit the game (CartridgeDetails), and a fill may try again.
         ctx.data.cache.remove("cartridge.romm", "g${game.value}")
         ctx.data.cache.remove("cartridge.romm.before", "g${game.value}")
@@ -630,7 +706,7 @@ internal class DefaultMediaOps(
     }
 
     override suspend fun followRename(game: GameId, previous: String): Boolean {
-        val g = ctx.data.games.get(game) ?: return false
+        val g = gameOf(game) ?: return false
         val name = g.titles.custom ?: return false
         val theirs = g.titles.metadata
         val hasDetails = theirs != null || g.metadata != GameMetadata()
@@ -649,13 +725,13 @@ internal class DefaultMediaOps(
     }
 
     override suspend fun acceptCandidate(game: GameId, candidate: ScrapeCandidate): Boolean {
-        val g = ctx.data.games.get(game) ?: return false
+        val g = gameOf(game) ?: return false
         val plan = FillPlanner.plan(media.get(MediaOwner.OfGame(game)), MediaFillMode.REPLACE_ALL, FILLABLE)
         val (request, coordinator) = request(g, plan.fetch, metadata = true, collectAll = false)
         val outcome = coordinator.accept(request, candidate) as? ScrapeOutcome.Accepted ?: return false
         ctx.data.cache.remove(FILL_TRIED, game.value.toString())
         store(g, outcome, MediaFillMode.REPLACE_ALL, plan.fetch)
-        ctx.data.games.applyMetadata(
+        applyMetadata(
             game,
             (outcome.metadata ?: GameMetadata()).copy(source = candidate.provider.metadataSource()),
             titleFromMetadata = candidate.title,

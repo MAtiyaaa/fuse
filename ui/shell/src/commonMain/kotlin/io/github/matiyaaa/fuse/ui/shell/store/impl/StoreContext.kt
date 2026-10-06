@@ -92,6 +92,12 @@ internal class StoreContext(
     /** Library folders that can't be read right now ([Drives]); their games show as unavailable. */
     val offline = MutableStateFlow<List<OfflineRoot>>(emptyList())
 
+    /** Systems Fuse shows without having games for them (a RomM server's), so they get system art too. */
+    val shownPlatforms = MutableStateFlow<Set<PlatformId>>(emptySet())
+
+    /** Games Fuse shows but doesn't have (RomM's, by negative id), set by the store that keeps them. */
+    @kotlin.concurrent.Volatile var remoteGames: RemoteGames? = null
+
     fun now(): Long = Clock.System.now().toEpochMilliseconds()
 
     fun platform(id: PlatformId): Platform? = platforms.byId(id)
@@ -181,4 +187,31 @@ internal fun <T> Flow<T>.resilient(): Flow<T> = retryWhen { cause, attempt ->
         delay(minOf(2_000L, 200L * (attempt + 1)))
         true
     }
+}
+
+/**
+ * Games Fuse shows without having them (a RomM server's), found, filled and edited like any game:
+ * Fuse's own name, details and provider links for them are kept here, and their art in the media
+ * table under their (negative) id, so nothing is asked for twice.
+ */
+internal interface RemoteGames {
+    /** Whether [id] is one of these. */
+    fun owns(id: io.github.matiyaaa.fuse.model.GameId): Boolean
+
+    /** The game as Fuse knows it: the server's details under Fuse's own; null when gone. */
+    suspend fun get(id: io.github.matiyaaa.fuse.model.GameId): io.github.matiyaaa.fuse.model.Game?
+
+    /** As [io.github.matiyaaa.fuse.data.repo.GameRepository.applyMetadata]. */
+    suspend fun applyMetadata(id: io.github.matiyaaa.fuse.model.GameId, metadata: io.github.matiyaaa.fuse.model.GameMetadata, titleFromMetadata: String?, onlyFillEmpty: Boolean)
+
+    /** As [io.github.matiyaaa.fuse.data.repo.GameRepository.replaceMetadata]. */
+    suspend fun replaceMetadata(id: io.github.matiyaaa.fuse.model.GameId, metadata: io.github.matiyaaa.fuse.model.GameMetadata?, titleMetadata: String?)
+
+    suspend fun updateLinks(id: io.github.matiyaaa.fuse.model.GameId, transform: (io.github.matiyaaa.fuse.model.ExternalLinks) -> io.github.matiyaaa.fuse.model.ExternalLinks)
+
+    /** The user's own name for it; null puts the found one back. */
+    suspend fun rename(id: io.github.matiyaaa.fuse.model.GameId, title: String?)
+
+    /** Its art or details changed (a fill, a pick): the lists showing it draw it again. */
+    fun changed(id: io.github.matiyaaa.fuse.model.GameId)
 }
