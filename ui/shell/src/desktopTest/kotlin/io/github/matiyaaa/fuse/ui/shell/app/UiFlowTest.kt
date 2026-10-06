@@ -203,6 +203,37 @@ class UiFlowTest {
     }
 
     @Test
+    fun aTabChosenFromHomeIsThereInTheVeryNextFrame() = runComposeUiTest {
+        val services = newServices()
+        val store: FuseStore = runBlocking {
+            createFuseStore(services, scope).also { s ->
+                s.updatePrefs { it.copy(onboardingDone = true) }
+                s.sources.add(root.absolutePath, LibrarySourceKind.ROMS_ROOT)
+                withTimeout(20_000) { s.library.home.first { feed -> feed.recentlyAdded.isNotEmpty() } }
+            }
+        }
+        val router = InputRouter(scope)
+        mainClock.autoAdvance = false
+        setContent { FuseApp(store, TestPlatform, router) }
+        pumpUntil { onAllNodesWithText("NEW IN YOUR LIBRARY").fetchSemanticsNodes().isNotEmpty() }
+        // Home has its first moments to itself; Systems and the Library are built behind it meanwhile.
+        repeat(40) { mainClock.advanceTimeBy(64); Thread.sleep(4) }
+        fun placed(d: io.github.matiyaaa.fuse.model.Destination) =
+            onAllNodesWithTag("page.${d.name}", useUnmergedTree = true).fetchSemanticsNodes(atLeastOneRootRequired = false).any { it.layoutInfo.isPlaced }
+        fun built(d: io.github.matiyaaa.fuse.model.Destination) =
+            onAllNodesWithTag("page.${d.name}", useUnmergedTree = true).fetchSemanticsNodes(atLeastOneRootRequired = false).isNotEmpty()
+        assertTrue(placed(io.github.matiyaaa.fuse.model.Destination.HOME))
+        assertTrue(!placed(io.github.matiyaaa.fuse.model.Destination.SYSTEMS), "Systems isn't drawn over Home")
+        // One press, one frame: Systems is on screen, and Home is no longer drawn under it.
+        router.tap(PadButton.R1)
+        mainClock.advanceTimeBy(16)
+        assertTrue(placed(io.github.matiyaaa.fuse.model.Destination.SYSTEMS), "Systems is there the frame after the press")
+        assertTrue(!placed(io.github.matiyaaa.fuse.model.Destination.HOME), "Home isn't drawn under it")
+        // The Library was built ahead too, though nobody has opened it yet.
+        assertTrue(built(io.github.matiyaaa.fuse.model.Destination.LIBRARY), "the Library is ready before its first visit")
+    }
+
+    @Test
     fun aGameOpenedOnTheOtherScreenLeavesFuseUsableHere() = runComposeUiTest {
         val services = newServices().also { it.secondDisplay = 2 }
         val store: FuseStore = runBlocking {
