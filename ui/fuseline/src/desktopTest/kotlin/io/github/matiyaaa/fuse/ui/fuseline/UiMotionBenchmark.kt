@@ -212,8 +212,8 @@ class UiMotionBenchmark {
                 val others = listOfNotNull(r.f2, r.compose)
                 val first = others.all { r.f3.nanos < it.nanos } && others.all { r.f3.bytes < it.bytes }
                 if (!first) losses += r.case
-                fun us(x: Result?) = x?.let { "%.0f µs".format(it.nanos / 1000) } ?: "—"
-                fun kb(x: Result?) = x?.let { "%.1f KB".format(it.bytes / 1024) } ?: "—"
+                fun us(x: Result?) = x?.let { "%.0f µs".format(it.nanos / 1000) } ?: "n/a"
+                fun kb(x: Result?) = x?.let { "%.1f KB".format(it.bytes / 1024) } ?: "n/a"
                 appendLine("| ${r.case} | ${us(r.f3)} | ${us(r.f2)} | ${us(r.compose)} | ${kb(r.f3)} | ${kb(r.f2)} | ${kb(r.compose)} | ${if (first) "Fuseline 3" else "NOT FIRST"} |")
             }
         }

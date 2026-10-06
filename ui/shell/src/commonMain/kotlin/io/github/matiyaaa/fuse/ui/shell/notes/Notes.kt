@@ -42,13 +42,17 @@ private fun plain(s: String) = s.replace(tag, "").replace(image, "").replace(lin
 /**
  * Release notes (Markdown, as GitHub and docs/releases keep them) as plain lines: headings and list
  * items kept as such, a list item's wrapped lines joined back to it, links as their text, pictures
- * and markup left out. At most [max] lines.
+ * and markup left out. A table's rows become items, each led by its first cell with the others named
+ * by their column ("1 tweens: Fuseline 3 0.82 µs, Fuseline 2 0.90 µs"); code blocks (commands for
+ * developers) are left out. At most [max] lines.
  */
 internal fun noteLines(markdown: String, max: Int = Int.MAX_VALUE): List<NoteLine> {
     val out = mutableListOf<NoteLine>()
     // A paragraph or list item is read whole first, so text wrapped over several lines stays one.
     var open: StringBuilder? = null
     var openKind = NoteLine.Kind.TEXT
+    var inCode = false
+    var header: List<String>? = null
     fun close() {
         val raw = open?.toString()?.trim() ?: return
         open = null
@@ -62,7 +66,30 @@ internal fun noteLines(markdown: String, max: Int = Int.MAX_VALUE): List<NoteLin
     for (rawLine in markdown.lineSequence()) {
         val line = rawLine.trimEnd()
         val t = line.trim()
+        if (t.startsWith("```")) {
+            close()
+            inCode = !inCode
+            continue
+        }
+        if (inCode) continue
+        if (!t.startsWith("|")) header = null
         when {
+            t.startsWith("|") -> {
+                close()
+                val cells = t.trim('|').split('|').map { plain(it) }
+                val columns = header
+                when {
+                    columns == null -> header = cells
+                    cells.all { c -> c.isNotEmpty() && c.all { it == '-' || it == ':' } } -> Unit
+                    else -> {
+                        val named = cells.drop(1).mapIndexedNotNull { i, c ->
+                            val name = columns.getOrNull(i + 1).orEmpty()
+                            c.takeIf { it.isNotEmpty() }?.let { if (name.isEmpty()) it else "$name $it" }
+                        }
+                        out += NoteLine(named.joinToString(", "), NoteLine.Kind.ITEM, cells.firstOrNull()?.takeIf { it.isNotEmpty() })
+                    }
+                }
+            }
             t.isEmpty() -> close()
             t.all { it == '-' || it == '=' || it == '*' || it == '_' } -> close()
             t.startsWith("#") -> {

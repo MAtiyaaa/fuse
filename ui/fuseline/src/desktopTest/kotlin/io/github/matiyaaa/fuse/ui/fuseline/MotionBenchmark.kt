@@ -377,8 +377,8 @@ class MotionBenchmark {
 
     // ------------------------------------------------------------------ the table
 
-    private fun us(r: Result?) = r?.let { "%.1f µs".format(it.nanos / 1000) } ?: "—"
-    private fun b(r: Result?) = r?.let { "%.0f B".format(it.bytes) } ?: "—"
+    private fun us(r: Result?) = r?.let { "%.2f µs".format(it.nanos / 1000) } ?: "n/a"
+    private fun b(r: Result?) = r?.let { "%.0f B".format(it.bytes) } ?: "n/a"
 
     private fun report() {
         val losses = ArrayList<String>()
@@ -407,7 +407,8 @@ class MotionBenchmark {
             Time and bytes allocated are per frame, less the harness's own cost (an empty workload
             measured the same way), so a row shows only what the engine itself does; below 50 ns or
             half a byte is nothing. Fuseline 2 is the 0.3.6 engine kept unchanged in
-            the tests. "—" is a workload the engine has no equivalent for.
+            the tests. "n/a" is a workload the engine has no equivalent for. Who is first is decided on
+            the unrounded numbers.
             JVM: ${System.getProperty("java.vm.name")} ${System.getProperty("java.version")}, ${Runtime.getRuntime().availableProcessors()} processors, ${System.getProperty("os.name")} ${System.getProperty("os.arch")}.
         """.trimIndent()
         val report = "$table\n$method\n"
