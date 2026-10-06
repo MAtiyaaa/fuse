@@ -1,103 +1,51 @@
-# Fuse 0.3.4 - The Household Update
+# Fuse 0.3.5 - The Swift Update
 
-Everyone in the house gets their own Fuse: profiles with or without a host, made in setup, and
-carried along when a device joins one. This release also went through Fuse Sync, Syncthing, input,
-tabs and small screens looking for anything that could lose a save, trap you in a menu or say the
-wrong thing, and fixed what it found.
+Quicker where it was slow: Fuse Sync from outside home, switching profiles, moving between tabs and
+the Hub in a browser. The Sync tab is rebuilt so your games come first, and saves that are whole
+folders now arrive exactly as they were made.
 
 ## New
 
-- **Profiles without Fuse Sync.** Everyone who plays on one device can have their own profile:
-  saves, play time, favourites, Home and theme kept apart, with a PIN if they want one. Settings,
-  Profiles adds, edits, puts in order and deletes them. No host needed.
-- **Your first profile in setup.** Setup asks who's playing right after the start, then offers
-  Add Another or Continue. The very first profile arrives with a fuse that burns in from the
-  corner and lights it up.
-- **Profiles go with you to a host.** Joining a host that has nobody but its Admin takes every
-  profile here up as it is. Joining one with people shows your profiles beside theirs: each is the
-  same person as someone there (suggested by name, and their play time adds up), someone new, or
-  left out. Turning Fuse Sync off or unlinking asks whether to keep every profile, with its
-  records and the saves here, on this device.
-- **PICO-8 and Flash games on the computer.** Fuse finds PICO-8 and Ruffle on Linux, Windows and
-  macOS, and RetroArch's Retro8 core for PICO-8, and starts games in them the way ES-DE does.
-  Every system now has something to play it with on every desktop.
-- **Hints follow your button mapping.** Map Confirm to another button and every hint line shows
-  that button, not the standard one.
-- **Mapping a button trades jobs.** In Controls, giving a button a new action hands its old one to
-  the button that had the new one, and mapping it back undoes the trade. A mapping that would
-  leave the pad with no Confirm or no Back is refused, with a message saying why.
-- **The column beside the Sync and Syncthing tabs is reachable with a controller.** Devices, play
-  time by device and recent activity used to run off the screen with no way down except touch.
-  Right from the list moves into that column, Up and Down scroll it, Left or Back returns.
-- **Profile arrivals in Developer options.** Play the profile switch and the first profile's
-  welcome on demand, to see them again.
-- **Back calls off a slow save check.** While Fuse Sync or Syncthing checks the save before a
-  game, the launch screen says so and Back cancels the launch. Once the emulator starts, nothing
-  interrupts it.
+- **A Sync tab you can see.** Who's playing and the things to do sit in one slim line that folds
+  away with the tabs as you move into your games, so four or more are always in view, even on the
+  AYN Thor's upper screen. Each game shows its cover, system, play time, saves and states, and
+  which device saved last. Devices and recent activity sit beside the games on wide screens and
+  after them on smaller ones.
+- **A page for each game's saves.** Opening a game on the Sync tab shows its cover and figures
+  (play time, sessions, last played, what the host keeps), then every version of each save on a
+  timeline: the one in use lit, the ones kept for good marked, each with its device, how far in
+  and why it was kept.
+- **Folder saves keep their whole structure.** Saves that are folders (PSP, PS3, Switch and the
+  like) travel with every nested folder, empty ones included, and a save put in place is that
+  save exactly: files of the one it replaced that it doesn't have are removed, and kept in its
+  history first.
+- **A new update viewer on the website.** Every release, newest first, with its notes in sections
+  you can filter and a link straight to any version.
 
 ## Changed
 
-- **Home styles are Fused and Network.** Channels is now **Fused**, the style Fuse recommends and
-  setup offers first; Flow is now **Network**. The Channels theme is now called Fused too. Your
-  choice stays as it was.
-- **Who's playing? never holds Fuse hostage.** At startup it can always be closed while the host
-  isn't answering (Back reads Not Now). With the host away, a profile without a PIN switches at
-  once and catches up later; one with a PIN says only the host can check it.
-- **A host never touches files it didn't make.** Set up in a folder that already holds other
-  things, a host keeps its files in a Fuse Sync Host folder of its own there, and Delete This Host
-  or moving its saves only ever deletes or moves the host's own files.
-- **Syncthing leaves your own setup alone.** Adding a device Syncthing already knows keeps its
-  name, addresses and settings, removing one that also shares folders you set up by hand only
-  takes it off Fuse's save folders, a save folder inside one already shared is never shared
-  twice, and an emulator's folders are never merged into something as broad as your home folder.
-- **Nintendo controllers confirm with A everywhere.** On Linux, Nintendo pads are read by their
-  labels, as on Windows, macOS and Android. With a PlayStation or Xbox pad in hand, hints put
-  Confirm on its bottom button even when the handheld's own glyphs are Nintendo's.
-- **Small screens show what you're choosing.** On a 4:3 handheld, Who's playing? scrolls and puts
-  the PIN pad beside the person, and Fuse Sync setup keeps the selected row and the code field in
-  view.
-- A save folder Syncthing shares with no device yet says Only here instead of Up to date.
-- Durations read 9 h rather than 9 h 0 min everywhere.
+- **Fuse Sync from outside home is much quicker.** Away from home, Fuse goes straight to the
+  outside address instead of waiting on home first for every call, and only looks for home now
+  and then on the side, switching to it the moment it answers. Saves go up and come down four
+  files at a time, and big answers from the host come compressed.
+- **Switching profiles is quick.** A switch sends and brings in only the records, once; saves
+  waiting to go follow in the background without holding the switch up or rewriting the library
+  as you start using it.
+- **Tabs change at once.** Moving from Home to Systems or the Library shows the page in the very
+  next frame, with a short nudge from its side, instead of sliding two pages across each other.
+  Systems and the Library are built ahead while Home sits idle, so even the first visit is
+  instant.
+- **The Hub opens at once.** The Hub in a browser lists every game first, and brings a game's
+  versions and files only when you open it. Pages come compressed, and Refresh with nothing new
+  sends nothing again.
+- **No light for all being well.** The Sync and Syncthing tabs only show how things stand when
+  something is wrong, such as the host being away.
+- The website tells more of what Fuse does, from profiles for everyone to saves from every system.
 
 ## Fixed
 
-- **Saves from every system reach the host.** On Android, an emulator's data folder is found
-  wherever you chose to put it (Azahar, PPSSPP, Dolphin, DuckStation, ARMSX2, Flycast, RetroArch),
-  a 3DS game installed from a CIA or CXI is placed by its own title id, and a game whose id Fuse
-  can't read (PSP, PS3, Vita, PS4, Wii, Switch, Wii U, Xbox 360) has its save folder learned from
-  its first play. A save that still can't be sent says why, instead of nothing.
-- Finishing Fuse Sync or Syncthing setup during first-run setup went back to the start of setup.
-  It comes back to the same step.
-- On the AYN Thor, the profile pictures couldn't be reached with the controller until tapped, and
-  Cancel and Create Profile were cut off on both screens. The editor now fits every screen, and the
-  controller moves through it in the order things sit.
-- A restored save could be undone by the next launch on another device. It now goes up as the
-  newest save and sticks everywhere.
-- Copies kept for safety (the other side of a conflict, what was there before a restore) could
-  become a game's newest save. They stay history only.
-- Pinning a conflict copy made it the newest save, and unpinning one turned it into a played save.
-  Keeping a save for good is now its own mark.
-- A save sent the moment a game started could overtake the save it was made from and turn into a
-  conflict. A save now waits for the one it came from.
-- A save waiting to be sent could be dropped when the host asked for a PIN, a clock fix or a
-  pause. Only a save the host can never take leaves the queue.
-- A proxy's error page or a Wi-Fi sign-in page counted as the host refusing the device. Fuse now
-  tries the next address and shows the device as offline.
-- Saves that never reached a host you forgot are kept as plain files instead of disappearing.
-- Turning records off on one device deleted the profile's collections on every device.
-- A game known by a serial on one device and by its title on another could have its whole play
-  time counted again as one device's own.
-- Deleting a host set up in a folder that already held other things deleted all of them.
-- The wrong-password wait could be dodged by sending proxy headers, and everyone behind one
-  tunnel shared a single call allowance.
-- Keeping the other device's version in Syncthing could lose this one if the swap failed.
-- A tab switched to quickly while the one before was still sliding in could stay faded part way.
-- On the computer, a video could lose its size and length as it opened, and switching quickly
-  between videos could show the one before's error on the new one.
-- On the computer, seeking back in a video and pressing play straight away could leave it paused
-  where you sought to, because the old end of the video still counted for a moment.
-- On the computer, switching videos quickly the first time the player started could leave every
-  video after it with no sound and never ending, until Fuse was restarted.
-- On Windows, a program's own name was read wrongly from a path with backslashes.
-- A failed export left a half-written file next to your files.
-- Setting up a host used a switch that looked unlike every other switch in Fuse.
+- On a handheld, the Sync tab's games were hidden behind its header, its buttons and the column
+  beside them, leaving about one and a half games on screen.
+- A folder save brought down over another could leave the other's files mixed into it.
+- Switching people on one device could leave the last person's empty folders in the next person's
+  save.

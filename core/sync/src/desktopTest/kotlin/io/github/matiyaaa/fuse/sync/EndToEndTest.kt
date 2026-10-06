@@ -437,4 +437,36 @@ class EndToEndTest {
         assertTrue(owner.revisions(profiles[1]).all { it.profile == profiles[1] })
         assertEquals(200, owner.revisions(profiles[1]).size)
     }
+
+    @Test
+    fun awayFromHomeCallsGoOutsideFirstAndBigAnswersComeGzipped(): Unit = runBlocking {
+        // Home is an address that takes the connection and never answers, as a home network seen
+        // from elsewhere does; outside is the real host.
+        val dead = java.net.ServerSocket(0)
+        val knocks = java.util.concurrent.atomic.AtomicInteger()
+        val door = Thread {
+            while (!dead.isClosed) runCatching { dead.accept().use { knocks.incrementAndGet() } }
+        }.apply { isDaemon = true; start() }
+        try {
+            val (paired, _) = pairDevice("Deck")
+            val away = SyncClient(paired.link.copy(localAddress = "http://127.0.0.1:${dead.localPort}", remoteAddress = "http://$address"), http)
+            val mo = away.createProfile(NewProfile("Mo", "fox"))
+            assertEquals(Route.REMOTE, away.route)
+            val before = knocks.get()
+            repeat(6) { away.status() }
+            // Six more calls never waited on home: at most one quiet look on the side.
+            assertTrue(knocks.get() - before <= 1, "home was knocked ${knocks.get() - before} times")
+            // A profile's records for a big library: gzipped on the way back, the same once unpacked.
+            val games = (1..400).associate { i ->
+                val key = GameKey.of("snes", "SNS-$i", null, "Game $i")
+                key.id to GameRecord(key, playSeconds = mapOf("deck" to i * 60L), lastPlayed = i.toLong())
+            }
+            away.pushMeta(mo.id, ProfileMeta(games = games))
+            assertEquals(400, away.meta(mo.id).meta.games.size)
+            assertEquals(400L * 60, away.meta(mo.id).meta.games.getValue(GameKey.of("snes", "SNS-400", null, "Game 400").id).totalSeconds)
+        } finally {
+            dead.close()
+            door.join(2_000)
+        }
+    }
 }

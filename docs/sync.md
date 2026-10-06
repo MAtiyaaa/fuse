@@ -192,6 +192,11 @@ under folders named for emulation, never inside photos, music or other apps' pri
 after the folder chosen in Save Folders and the usual places. With several, the one holding the
 game's save wins.
 
+**Folder saves.** A save that is a folder (a PSP or PS3 game's save folder, a Switch save) goes
+with its whole structure: every nested folder, empty ones included. Putting a save in place makes the
+folder exactly that save: files of the save it replaces that it doesn't have are removed (they are
+kept first, as that save's own version in the history), along with the folders that leaves empty.
+
 **Never silent.** When a played game's save can't be kept to send (its folder isn't reachable, or
 Fuse found no save where it looked), a message says why and what to do, once per game while Fuse
 runs. A save that simply didn't change says nothing. A save is only put where the
@@ -264,8 +269,11 @@ tunnel in front of port 47311. Set it once on the host (Settings, Addons, Fuse S
 Outside), or simply connect a device through the tunnel: the host notices the name it was reached
 by and keeps it. Every device learns it from the host, so none has to be told. A device can still
 use its own (its Outside Address setting). Fuse uses the home address when it answers and the
-outside one otherwise, switching back by itself, and tries it too while connecting when home
-doesn't answer.
+outside one otherwise, and tries it too while connecting when home doesn't answer. Once away, every
+call goes straight to the outside address: home is only looked for on the side, at most once a
+minute and for a second and a half, and Fuse switches back to it the moment it answers. Saves go up
+and come down four files at a time, and big answers (a profile's records for a large library, the
+Hub) come compressed.
 
 A Cloudflare tunnel works well: point it at `http://localhost:47311` on the host and use its
 address (`https://sync.example.com`) as the outside address. Leave Cloudflare Access off for that
@@ -291,6 +299,8 @@ then on. Turning it off brings the host back into Fuse while it is open.
 
 On the host computer, **http://127.0.0.1:47311/hub** shows the Hub in a browser: how long the host
 has run, what it keeps, and every profile and device (who plays where, when each was last seen).
+Every game is listed at once; a game's versions and files are brought when it is opened, so the Hub
+opens quickly however much the host keeps.
 From away it is at the outside address too (`https://sync.example.com/hub`), after signing in with
 the host account. It only shows; changes are made in Fuse. In Fuse, Addons, Sync is the same Hub,
 with Sync Now, Switch Profile and Add a Device.

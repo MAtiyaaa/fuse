@@ -2,6 +2,7 @@ package io.github.matiyaaa.fuse.sync
 
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
+import io.ktor.http.withCharset
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.cio.CIO
 import io.ktor.server.engine.EmbeddedServer
@@ -11,6 +12,7 @@ import io.ktor.server.request.httpMethod
 import io.ktor.server.request.receiveChannel
 import io.ktor.server.request.uri
 import io.ktor.server.response.respondOutputStream
+import io.ktor.server.response.respondBytes
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.RoutingContext
@@ -208,8 +210,22 @@ class SyncHost(
                 }
             }
             val status = store.status(port, fuseVersion)
-            call.response.headers.append("Cache-Control", "no-store")
-            call.respondText(HubPage.render(status, status.profiles.mapNotNull { store.report(it.id) }, clock(), away = away), ContentType.Text.Html)
+            call.html(HubPage.render(status, status.profiles.mapNotNull { store.report(it.id) }, clock(), away = away))
+        }
+        // One game's versions and files, asked for when it is opened on the Hub (or as a page of
+        // its own, without scripting). The same rule as the Hub: this computer, or signed in.
+        get("/hub/game") {
+            if (limited()) return@get
+            if (!fromThisComputer() && !hubSignedIn()) return@get call.respondText("Sign in to the Hub first.", ContentType.Text.Plain, HttpStatusCode.Forbidden)
+            val profile = call.request.queryParameters["p"].orEmpty()
+            val game = call.request.queryParameters["g"].orEmpty()
+            val g = store.gameReport(profile, game) ?: return@get call.respondText("That game isn't on the host.", ContentType.Text.Plain, HttpStatusCode.NotFound)
+            val names = store.status(port, fuseVersion).devices.associate { it.id to it.name }
+            val deviceName = { id: String -> names[id] ?: id }
+            call.html(
+                if (call.request.queryParameters["page"] != null) HubPage.gamePage(store.name, g, deviceName)
+                else HubPage.gameBody(g, deviceName),
+            )
         }
         post("/hub/login") {
             if (limited(weight = 20)) return@post
@@ -702,13 +718,43 @@ class SyncHost(
         return false
     }
 
-    private suspend fun <T> ApplicationCall.json(serializer: KSerializer<T>, value: T) =
-        respondText(json.encodeToString(serializer, value), ContentType.Application.Json)
+    /**
+     * A Hub page: never cached as is, but a Refresh that would bring the very same page answers
+     * 304, and a big one goes gzipped to a browser that takes it.
+     */
+    private suspend fun ApplicationCall.html(text: String) {
+        val bytes = text.encodeToByteArray()
+        val tag = "\"" + SyncCrypto.sha256(bytes.inputStream()).take(32) + "\""
+        response.headers.append("Cache-Control", "no-cache")
+        response.headers.append(io.ktor.http.HttpHeaders.ETag, tag)
+        if (request.headers[io.ktor.http.HttpHeaders.IfNoneMatch]?.split(',')?.any { it.trim() == tag } == true) {
+            return respondBytes(ByteArray(0), status = HttpStatusCode.NotModified)
+        }
+        val gzip = bytes.size >= GZIP_FROM && request.headers[io.ktor.http.HttpHeaders.AcceptEncoding]?.contains("gzip") == true
+        if (!gzip) return respondBytes(bytes, ContentType.Text.Html.withCharset(Charsets.UTF_8))
+        response.headers.append(io.ktor.http.HttpHeaders.ContentEncoding, "gzip")
+        response.headers.append(io.ktor.http.HttpHeaders.Vary, io.ktor.http.HttpHeaders.AcceptEncoding)
+        respondBytes(Gzip.pack(bytes), ContentType.Text.Html.withCharset(Charsets.UTF_8))
+    }
+
+    private suspend fun <T> ApplicationCall.json(serializer: KSerializer<T>, value: T) {
+        val text = json.encodeToString(serializer, value)
+        // Gzipped when asked for and worth it: a profile's records for a big library are a lot of
+        // text, and from outside home every byte goes the long way.
+        val gzip = text.length >= GZIP_FROM && request.headers[io.ktor.http.HttpHeaders.AcceptEncoding]?.contains("gzip") == true
+        if (!gzip) return respondText(text, ContentType.Application.Json)
+        response.headers.append(io.ktor.http.HttpHeaders.ContentEncoding, "gzip")
+        response.headers.append(io.ktor.http.HttpHeaders.Vary, io.ktor.http.HttpHeaders.AcceptEncoding)
+        respondBytes(Gzip.pack(text.encodeToByteArray()), ContentType.Application.Json)
+    }
 
     private suspend fun ApplicationCall.fail(status: HttpStatusCode, message: String, code: String) =
         respondText(json.encodeToString(ApiError.serializer(), ApiError(message, code)), ContentType.Application.Json, status)
 
     companion object {
+        /** Answers this long or longer are gzipped for a caller that takes it. */
+        const val GZIP_FROM = 1_024
+
         /** The most profiles one reorder names. */
         const val MAX_ORDER = 200
 

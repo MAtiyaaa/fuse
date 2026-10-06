@@ -557,40 +557,11 @@ class HostStore(val dir: File, private val clock: () -> Long = System::currentTi
         val record = profiles[profile]?.takeIf { !it.deleted } ?: return null
         val meta = metas[profile] ?: ProfileMeta()
         val revs = revisions[profile].orEmpty()
-        fun stored(hash: String) = content.fileOf(hash).relativeTo(dir).path.replace('\\', '/')
-        val keys = (meta.games.keys + revs.map { it.game }).distinct()
-        val games = keys.map { id ->
-            val g = meta.games[id]
-            val mine = revs.filter { it.game == id }
-            val slots = mine.groupBy { it.kind }.map { (kind, list) ->
-                val newest = list.sortedByDescending { it.at }
-                val head = newest.firstOrNull { it.canBeNewest }?.id
-                SlotReport(
-                    kind = kind,
-                    format = newest.first().manifest.format,
-                    bytes = newest.flatMap { it.manifest.files }.distinctBy { it.hash }.sumOf { it.size },
-                    versions = newest.map { r ->
-                        VersionReport(
-                            r.id, r.device, r.deviceName, r.at.millis, r.playSeconds, r.reason, r.id == head, r.size,
-                            r.manifest.files.map { f -> FileReport(f.path, f.size, stored(f.hash)) },
-                            kept = r.kept,
-                        )
-                    },
-                )
-            }.sortedBy { it.kind.ordinal }
-            val key = GameKey.parse(id)
-            GameReport(
-                game = id,
-                name = g?.title?.value ?: g?.name ?: mine.firstOrNull { it.title.isNotBlank() }?.title ?: readable(key?.identity ?: id),
-                platform = key?.platform.orEmpty(),
-                playSeconds = g?.totalSeconds ?: 0,
-                devicePlay = g?.playSeconds.orEmpty(),
-                sessions = g?.sessions?.size ?: 0,
-                lastPlayed = g?.lastPlayed,
-                favorite = g?.favorite?.value == true,
-                slots = slots,
-            )
-        }.sortedWith(compareByDescending<GameReport> { maxOf(it.lastPlayed ?: 0, it.slots.flatMap { s -> s.versions }.maxOfOrNull { v -> v.at } ?: 0) })
+        // Each game's versions in one pass, not one pass over every version per game.
+        val byGame = revs.groupBy { it.game }
+        val keys = (meta.games.keys + byGame.keys).distinct()
+        val games = keys.map { id -> gameReportOf(id, meta.games[id], byGame[id].orEmpty()) }
+            .sortedWith(compareByDescending<GameReport> { maxOf(it.lastPlayed ?: 0, it.slots.flatMap { s -> s.versions }.maxOfOrNull { v -> v.at } ?: 0) })
         val devicePlay = HashMap<String, Long>()
         meta.games.values.forEach { g -> g.playSeconds.forEach { (d, sec) -> devicePlay[d] = (devicePlay[d] ?: 0) + sec } }
         ProfileReport(
@@ -601,6 +572,47 @@ class HostStore(val dir: File, private val clock: () -> Long = System::currentTi
             games = games,
             savesBytes = revs.flatMap { it.manifest.files }.distinctBy { it.hash }.sumOf { it.size },
             storePath = dir.absolutePath,
+        )
+    }
+
+    /** One game of [profile] as [report] has it, without building every other game's. */
+    fun gameReport(profile: String, game: String): GameReport? = synchronized(lock) {
+        profiles[profile]?.takeIf { !it.deleted } ?: return null
+        val g = metas[profile]?.games?.get(game)
+        val mine = revisions[profile].orEmpty().filter { it.game == game }
+        if (g == null && mine.isEmpty()) return null
+        gameReportOf(game, g, mine)
+    }
+
+    private fun gameReportOf(id: String, g: GameRecord?, mine: List<SaveRevision>): GameReport {
+        fun stored(hash: String) = content.fileOf(hash).relativeTo(dir).path.replace('\\', '/')
+        val slots = mine.groupBy { it.kind }.map { (kind, list) ->
+            val newest = list.sortedByDescending { it.at }
+            val head = newest.firstOrNull { it.canBeNewest }?.id
+            SlotReport(
+                kind = kind,
+                format = newest.first().manifest.format,
+                bytes = newest.flatMap { it.manifest.files }.distinctBy { it.hash }.sumOf { it.size },
+                versions = newest.map { r ->
+                    VersionReport(
+                        r.id, r.device, r.deviceName, r.at.millis, r.playSeconds, r.reason, r.id == head, r.size,
+                        r.manifest.files.map { f -> FileReport(f.path, f.size, stored(f.hash)) },
+                        kept = r.kept,
+                    )
+                },
+            )
+        }.sortedBy { it.kind.ordinal }
+        val key = GameKey.parse(id)
+        return GameReport(
+            game = id,
+            name = g?.title?.value ?: g?.name ?: mine.firstOrNull { it.title.isNotBlank() }?.title ?: readable(key?.identity ?: id),
+            platform = key?.platform.orEmpty(),
+            playSeconds = g?.totalSeconds ?: 0,
+            devicePlay = g?.playSeconds.orEmpty(),
+            sessions = g?.sessions?.size ?: 0,
+            lastPlayed = g?.lastPlayed,
+            favorite = g?.favorite?.value == true,
+            slots = slots,
         )
     }
 
@@ -621,6 +633,7 @@ class HostStore(val dir: File, private val clock: () -> Long = System::currentTi
     fun push(profile: String, device: String, revision: SaveRevision): RevisionResult = synchronized(lock) {
         require(revision.profile == profile) { "Revision for another profile" }
         require(revision.manifest.files.all { SavePath.isSafe(it.path) && SavePath.isHash(it.hash) && it.size >= 0 }) { "Bad file in the save" }
+        require(revision.manifest.folders.size <= MAX_FOLDERS && revision.manifest.folders.all(SavePath::isSafe)) { "Bad folder in the save" }
         require(revision.id.length in 8..64 && revision.id.all { it.isLetterOrDigit() || it == '-' || it == '_' }) { "Bad revision id" }
         require(GameKey.parse(revision.game) != null) { "Bad game key" }
         val missing = missing(revision.manifest.files.map { it.hash })
@@ -772,6 +785,9 @@ private const val JOURNAL_KEEP = 10_000
 
 /** The most ids one game may be claimed under at once. */
 private const val MAX_ALIASES = 8
+
+/** Empty folders one save may carry. */
+private const val MAX_FOLDERS = 10_000
 
 /** The shortest password the host's account takes. */
 internal const val MIN_PASSWORD = 8

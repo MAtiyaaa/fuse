@@ -2,7 +2,8 @@
 #
 # The site in site/ is put together with the brand art, icons, screenshots, fonts and theme files
 # from the repository, and the latest release is written into it, so it shows the right version and
-# links straight to each download. It is rebuilt when the site or its art changes on main, after
+# links straight to each download, with every release's notes for the update viewer (dated from
+# GitHub's list of releases). It is rebuilt when the site, its art or the notes change on main, after
 # every Release run (releases are made with GITHUB_TOKEN, which never starts a `release` event, so
 # this follows the workflow instead), and by hand. The page also asks GitHub for the latest release
 # when it opens, so a release shows up even before the next rebuild.
@@ -16,6 +17,7 @@ on:
     branches: [main]
     paths:
       - "site/**"
+      - "docs/releases/**"
       - "docs/assets/**"
       - "docs/themes/**"
       - "gradle.properties"
@@ -52,9 +54,13 @@ jobs:
             echo "No release yet; the site shows the version in gradle.properties."
             echo '{}' > "$RUNNER_TEMP/release.json"
           fi
+          # Every release, for the dates in the update viewer.
+          if ! gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/releases?per_page=100" > "$RUNNER_TEMP/releases.json"; then
+            echo '[]' > "$RUNNER_TEMP/releases.json"
+          fi
 
       - name: Build
-        run: python3 site/build.py --out _site --release "$RUNNER_TEMP/release.json"
+        run: python3 site/build.py --out _site --release "$RUNNER_TEMP/release.json" --releases "$RUNNER_TEMP/releases.json"
 
       - name: Check for dashes and emoji
         # The site follows the app's writing rules.

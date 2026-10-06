@@ -71,6 +71,7 @@
     const released = $("[data-released]");
     if (released) released.textContent = rel.published_at ? `Fuse ${version}, released ${ago(rel.published_at)}` : `Fuse ${version}`;
     $$("[data-notes]").forEach((el) => { el.href = url; });
+    $$("[data-updates-link]").forEach((el) => { el.href = `#v${version}`; });
 
     for (const tile of $$(".platform")) {
       const key = tile.dataset.platform;
@@ -634,6 +635,177 @@
     }
   }
 
+  // ------------------------------------------------------------------ updates
+
+  // Every release's notes (releases.json, made from docs/releases with the site): a rail of
+  // versions, newest first, and the chosen one's notes in its sections, which a switch filters.
+  // #v0.3.5 opens a version straight away.
+  const KINDS = {
+    New: '<path d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"/>',
+    Changed: '<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/>',
+    Fixed: '<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.106-3.105c.32-.322.863-.22.983.218a6 6 0 0 1-8.259 7.057l-7.91 7.91a1 1 0 0 1-2.999-3l7.91-7.91a6 6 0 0 1 7.057-8.259c.438.12.54.662.219.984z"/>',
+  };
+  let releaseNotes = [];
+  let shownVersion = null;
+  let noteKind = "all";
+
+  async function loadUpdates() {
+    const viewer = $("[data-viewer]");
+    if (!viewer) return;
+    try {
+      const r = await fetch("releases.json");
+      if (r.ok) releaseNotes = await r.json();
+    } catch (e) { /* the links to the changelog stay */ }
+    if (!releaseNotes.length) return;
+    viewer.hidden = false;
+    const off = $("[data-viewer-off]");
+    if (off) off.hidden = true;
+    const total = $("[data-update-count]");
+    if (total) total.textContent = String(releaseNotes.length);
+
+    const rail = $("[data-rail]");
+    releaseNotes.forEach((rel, i) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "tile release";
+      b.setAttribute("role", "option");
+      b.dataset.version = rel.version;
+      const ver = document.createElement("span");
+      ver.className = "r-ver";
+      ver.textContent = rel.version;
+      const when = document.createElement("span");
+      when.className = i === 0 ? "r-tag" : "r-date";
+      when.textContent = i === 0 ? "Latest" : shortDate(rel.date);
+      const name = document.createElement("span");
+      name.className = "r-name";
+      name.textContent = rel.name.replace(/^The /, "").replace(/ Update$/, "");
+      b.title = rel.name;
+      b.append(ver, when, name);
+      b.addEventListener("click", () => showRelease(rel.version, { remember: true }));
+      rail.append(b);
+    });
+
+    const seg = $("[data-n-filter]");
+    for (const btn of $$(".seg-btn", seg)) {
+      btn.addEventListener("click", () => {
+        if (btn.disabled) return;
+        noteKind = btn.dataset.kind;
+        const rel = releaseNotes.find((r) => r.version === shownVersion);
+        if (rel) { markKinds(rel, true); renderNotes(rel); }
+      });
+    }
+    window.addEventListener("resize", () => placeKindGlide(false), { passive: true });
+
+    const asked = versionInHash();
+    showRelease(asked || releaseNotes[0].version, { scroll: !!asked });
+    window.addEventListener("hashchange", () => {
+      const v = versionInHash();
+      if (v) showRelease(v, { scroll: true });
+    });
+  }
+
+  function versionInHash() {
+    const m = /^#v(\d+(?:\.\d+)+)$/.exec(location.hash);
+    return m && releaseNotes.some((r) => r.version === m[1]) ? m[1] : null;
+  }
+
+  const day = (iso) => (iso ? new Date(`${iso}T12:00:00`) : null);
+  function shortDate(iso) {
+    const d = day(iso);
+    return d ? new Intl.DateTimeFormat(undefined, { month: "short", year: "numeric" }).format(d) : "";
+  }
+
+  function showRelease(version, { remember = false, scroll = false } = {}) {
+    const rel = releaseNotes.find((r) => r.version === version);
+    if (!rel) return;
+    const changed = shownVersion !== version;
+    shownVersion = version;
+    const rail = $("[data-rail]");
+    for (const b of $$(".release", rail)) {
+      const on = b.dataset.version === version;
+      b.setAttribute("aria-selected", String(on));
+      if (on && changed) {
+        // Keep the chosen one in view inside the rail, without moving the page.
+        const r = b.getBoundingClientRect();
+        const box = rail.getBoundingClientRect();
+        if (rail.scrollHeight > rail.clientHeight && (r.top < box.top || r.bottom > box.bottom)) rail.scrollTop += r.top - box.top - box.height / 2 + r.height / 2;
+        if (rail.scrollWidth > rail.clientWidth && (r.left < box.left || r.right > box.right)) rail.scrollLeft += r.left - box.left - box.width / 2 + r.width / 2;
+      }
+    }
+    if (remember) history.replaceState(null, "", `#v${version}`);
+
+    const d = day(rel.date);
+    $("[data-n-version]").textContent = rel.version === releaseNotes[0].version ? `${rel.version} · Latest` : rel.version;
+    $("[data-n-date]").textContent = d ? new Intl.DateTimeFormat(undefined, { day: "numeric", month: "long", year: "numeric" }).format(d) : "";
+    $("[data-n-name]").textContent = rel.name;
+    $("[data-n-link]").href = `https://github.com/${REPO}/releases/tag/v${rel.version}`;
+    // The notes are the repository's own, made safe when the site was built.
+    $("[data-n-intro]").innerHTML = rel.intro.map((p) => `<p>${p}</p>`).join("");
+    markKinds(rel, false);
+    renderNotes(rel);
+    if (scroll) $("#updates").scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "start" });
+  }
+
+  function markKinds(rel, animate) {
+    const seg = $("[data-n-filter]");
+    const counts = { all: 0 };
+    for (const sec of rel.sections) {
+      const n = sec.items.length + sec.lead.length;
+      counts[sec.title] = n;
+      counts.all += n;
+    }
+    if (noteKind !== "all" && !counts[noteKind]) noteKind = "all";
+    for (const btn of $$(".seg-btn", seg)) {
+      const k = btn.dataset.kind;
+      btn.disabled = !counts[k];
+      btn.setAttribute("aria-pressed", String(k === noteKind));
+      const b = $(`[data-kcount="${k}"]`, seg);
+      if (b) b.textContent = String(counts[k] || 0);
+    }
+    placeKindGlide(animate);
+  }
+
+  function placeKindGlide(animate) {
+    const seg = $("[data-n-filter]");
+    const glide = seg && $(".seg-glide", seg);
+    const on = seg && $('.seg-btn[aria-pressed="true"]', seg);
+    if (!glide || !on) return;
+    glide.classList.toggle("is-moving", !!animate && !reduced);
+    glide.style.setProperty("--gx", `${on.offsetLeft}px`);
+    glide.style.setProperty("--gw", `${on.offsetWidth}px`);
+  }
+
+  function renderNotes(rel) {
+    const body = $("[data-n-body]");
+    body.textContent = "";
+    for (const sec of rel.sections) {
+      if (noteKind !== "all" && sec.title !== noteKind) continue;
+      if (!sec.items.length && !sec.lead.length) continue;
+      const el = document.createElement("section");
+      el.className = `kind kind-${sec.title.toLowerCase()}`;
+      const n = sec.items.length + sec.lead.length;
+      el.innerHTML = `<h4><span class="k-icon"><svg viewBox="0 0 24 24" aria-hidden="true">${KINDS[sec.title] || KINDS.New}</svg></span>${sec.title}<b>${n}</b></h4>` +
+        sec.lead.map((p) => `<p class="k-lead">${p}</p>`).join("");
+      const titled = sec.items.filter((it) => it.title);
+      const plain = sec.items.filter((it) => !it.title);
+      if (titled.length) {
+        const cards = document.createElement("div");
+        cards.className = "cards";
+        cards.innerHTML = titled.map((it) =>
+          `<div class="note"><b>${it.title}</b>${it.text ? `<p>${it.text}</p>` : ""}${it.sub.length ? `<ul>${it.sub.map((x) => `<li>${x}</li>`).join("")}</ul>` : ""}</div>`).join("");
+        el.append(cards);
+      }
+      if (plain.length) {
+        const list = document.createElement("ul");
+        list.className = "plain";
+        list.innerHTML = plain.map((it) => `<li>${it.text}${it.sub.length ? `<ul>${it.sub.map((x) => `<li>${x}</li>`).join("")}</ul>` : ""}</li>`).join("");
+        el.append(list);
+      }
+      body.append(el);
+    }
+    revealAll($$(".kind", body));
+  }
+
   // ------------------------------------------------------------------ start
 
   clock();
@@ -645,4 +817,5 @@
   if (mine) choose(mine, false);
   loadRelease().then(applyRelease);
   loadThemes();
+  loadUpdates();
 })();

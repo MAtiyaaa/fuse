@@ -213,12 +213,16 @@ internal fun AuditDriver.syncScreens() {
         tap(PadButton.DPAD_DOWN)
         shoot("every game on the host, with its saves")
         tap(PadButton.A)
-        waitFor("Kept on the host")
-        shoot("one game: play time by device and every version", 1_000)
+        waitFor("In use")
+        shoot("one game: its figures and every version on a timeline", 1_000)
         tap(PadButton.A)
         waitFor("Kept as")
         shoot("a version's files and where they are kept")
         tap(PadButton.B)
+        tap(PadButton.B)
+        waitFor("Your games on the host")
+        tap(PadButton.DPAD_DOWN, 5)
+        shoot("further down the games: the header folded away", 600)
     }
 
     scenario("sync", "top line") {

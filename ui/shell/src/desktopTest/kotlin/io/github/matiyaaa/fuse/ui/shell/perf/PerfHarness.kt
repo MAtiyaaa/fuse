@@ -115,6 +115,20 @@ class PerfHarness {
             }
             fun press(b: PadButton) { router.press(b, InputSource.GAMEPAD); router.release(b, InputSource.GAMEPAD) }
 
+            // Home to Systems and Home to Library, one press each: the first time (nothing built
+            // yet) and again. Frame 0 is the one the press lands in; the rest is the slide.
+            fun switch(name: String, presses: Int) {
+                driver.home()
+                driver.settle(1_500)
+                measure(name, frames = 30, everyFrames = 30) { repeat(presses) { press(PadButton.R1) } }
+                val first = results.last().second.take(3).joinToString(" ") { "%.1f".format(it) }
+                println("Perf: $name first frames $first ms, done in ${results.last().second.indexOfLast { it > FRAME_MS * 0.5 }.coerceAtLeast(0) * FRAME_MS} ms")
+            }
+            switch("switch-systems-cold", 1)
+            switch("switch-library-cold", 2)
+            switch("switch-systems-warm", 1)
+            switch("switch-library-warm", 2)
+
             // Tabs: R1 along the top bar and back, a press every ~110 ms.
             driver.home()
             measure("tabs-run", frames = 90, everyFrames = 7) { i -> press(if (i < 6) PadButton.R1 else PadButton.L1) }

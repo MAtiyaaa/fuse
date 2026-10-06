@@ -28,6 +28,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import io.github.matiyaaa.fuse.model.BackgroundStyle
 import io.github.matiyaaa.fuse.model.Destination
@@ -108,7 +109,6 @@ import io.github.matiyaaa.fuse.ui.shell.store.FuseStore
 import io.github.matiyaaa.fuse.ui.shell.store.PhoneLinkControl
 import io.github.matiyaaa.fuse.ui.shell.store.UpdateState
 import io.github.matiyaaa.fuse.ui.shell.systems.SystemsScreen
-import kotlin.time.TimeSource
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -556,21 +556,25 @@ private fun Pages(app: AppState, tabs: List<Destination>) {
     // Tabs follow the order the top line shows them in, which the user may have changed.
     fun place(d: Destination): Int = tabs.indexOf(d).takeIf { it >= 0 } ?: (tabs.size + d.ordinal)
     Box(Modifier.fillMaxSize()) {
-        RootPages(app, current, nav.direction, ::place)
+        RootPages(app, current, nav.direction, ::place, tabs)
         PushedPages(app, current, nav.direction, motion)
     }
 }
 
 /**
  * The tabs' own pages, kept ready once visited (the [KEPT_PAGES] most recent), so going back to one
- * is instant: it is shown again as it was left, with nothing to build. Only the page shown (and the
- * one leaving, for the moment it takes) is laid out and drawn; the others hear no input, run no
- * loops and keep their effects waiting ([LocalPageActive], [PageEffect]) until shown again.
+ * is instant: it is shown again as it was left, with nothing to build. The tabs beside Home are
+ * built and laid out ahead, while Home sits idle, so even the first visit to Systems or the Library
+ * builds nothing. Only the page shown is drawn; the others hear no input, run no loops and keep
+ * their effects waiting ([LocalPageActive], [PageEffect]) until shown again.
+ *
+ * A tab changes in the very frame it is chosen: the page is simply there, with a short nudge from
+ * the side it came from (a moving layer, nothing faded or drawn twice).
  */
 @Composable
-private fun RootPages(app: AppState, current: Route, direction: NavDirection, place: (Destination) -> Int) {
+private fun RootPages(app: AppState, current: Route, direction: NavDirection, place: (Destination) -> Int, tabs: List<Destination>) {
     val motion = Fuse.motion
-    // Drawn without the graphics card: tabs change at once, as a sliding page would stutter.
+    // Drawn without the graphics card: tabs change without the nudge.
     val cpuDrawing = app.platform.drawing.collectAsState().value?.gpu == false
     val root = (current as? Route.Root)?.destination
     // Most recent last. Updated as composition runs: a new tab joins in the same frame it is chosen.
@@ -582,53 +586,37 @@ private fun RootPages(app: AppState, current: Route, direction: NavDirection, pl
     }
     val shownRoot = kept.lastOrNull() ?: return
     val onRoot = current is Route.Root
-    // The tab page coming in (and the one leaving) as a share of the way, and whether tab pages show
-    // at all (a pushed page covers them).
+    // The page coming in as a share of its nudge, and whether tab pages show at all (a pushed page covers them).
     val incoming = remember { FuselineValue(1f) }
-    val outgoing = remember { FuselineValue(1f) }
     val visible = remember { FuselineValue(if (onRoot) 1f else 0f) }
     val dir = remember { intArrayOf(1) }
-    // The page leaving while another comes in, decided as composition runs so the very first frame
-    // of a switch already shows the old page, never the new one at full strength or nothing at all.
-    var leaving by remember { mutableStateOf<Destination?>(null) }
-    var starting by remember { mutableStateOf(false) }
     val last = remember { arrayOf<Destination?>(shownRoot) }
-    val lastSwitch = remember { arrayOf<TimeSource.Monotonic.ValueTimeMark?>(null) }
+    var nudging by remember { mutableStateOf(false) }
     if (last[0] != shownRoot) {
         val before = last[0]
         last[0] = shownRoot
-        val now = TimeSource.Monotonic.markNow()
-        // A run of quick switches (a shoulder button tapped again and again) changes at once.
-        val quick = lastSwitch[0]?.let { (now - it).inWholeMilliseconds < QUICK_SWITCH_MS } == true || motion.reduced || cpuDrawing
-        lastSwitch[0] = now
-        if (before != null && !quick) {
-            leaving = before
-            starting = true
-            dir[0] = if (place(shownRoot) >= place(before)) 1 else -1
-        } else {
-            leaving = null
-            starting = false
-        }
+        nudging = before != null && !motion.reduced && !cpuDrawing
+        if (before != null) dir[0] = if (place(shownRoot) >= place(before)) 1 else -1
     }
-    // Remember where you were, off: a tab left behind is let go once it has slid away, so it opens
-    // at its start next time instead of as it was left.
-    if (app.navigator.forgetsTabs) kept.retainAll { it == shownRoot || it == leaving }
+    // Remember where you were, off: a tab left behind is let go, so it opens at its start next time.
+    val forgets = app.navigator.forgetsTabs
+    if (forgets) kept.retainAll { it == shownRoot }
+    // Systems and the Library, built ahead once Home has had its first moments to itself.
+    var warm by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(WARM_AFTER_MS)
+        warm = true
+    }
+    val ahead = if (warm && !forgets) WARM_PAGES.filter { it != shownRoot && it !in kept && it in tabs } else emptyList()
+    val pages = ahead + kept
     LaunchedEffect(shownRoot) {
-        if (!starting) {
-            // A quick switch lands at once, and also finishes any slide this one cut short: a page
-            // left part way in (faded, offset) would stay so until the next slow switch.
+        if (!nudging) {
             incoming.snapTo(1f)
-            outgoing.snapTo(1f)
             return@LaunchedEffect
         }
         incoming.snapTo(0f)
-        outgoing.snapTo(0f)
-        starting = false
-        kotlinx.coroutines.coroutineScope {
-            launch { outgoing.animateTo(1f, motion.tween(Durations.FAST, Curves.Standard)) }
-            incoming.animateTo(1f, motion.tween(Durations.BASE, Curves.Enter))
-        }
-        leaving = null
+        incoming.animateTo(1f, motion.tween(Durations.FAST, Curves.Enter))
+        nudging = false
     }
     LaunchedEffect(onRoot) {
         dir[0] = if (direction == NavDirection.BACK) -1 else 1
@@ -639,48 +627,36 @@ private fun RootPages(app: AppState, current: Route, direction: NavDirection, pl
     Layout(
         modifier = Modifier.fillMaxSize(),
         content = {
-            for (d in kept) key(d) {
+            for (d in pages) key(d) {
                 val active = d == shownRoot && onRoot
                 CompositionLocalProvider(LocalPageActive provides active) {
                     Box(
                         Modifier.fillMaxSize().graphicsLayer {
+                            if (d != shownRoot) return@graphicsLayer
                             val w = size.width
-                            if (d == shownRoot) {
-                                // Coming in: fades in just after it starts sliding. With nothing leaving
-                                // (a quick switch, or the slide done) it is simply there.
-                                val p = when {
-                                    starting -> 0f
-                                    leaving == null -> 1f
-                                    else -> incoming.value
-                                }
-                                val fade = ((p - 0.08f) / 0.92f).coerceIn(0f, 1f)
-                                val v = visible.value
-                                alpha = fade * v
-                                translationX = (1f - p) * shift * w * dir[0] + (1f - v) * -shift * 0.5f * w * dir[0]
-                            } else {
-                                val p = if (starting) 0f else outgoing.value
-                                alpha = 1f - p
-                                translationX = -p * shift * 0.5f * w * dir[0]
-                            }
+                            val v = visible.value
+                            // A pushed page leaving fades this one back in; a new tab is there at
+                            // once, nudged in from its side.
+                            alpha = v
+                            val nudge = if (nudging) (1f - incoming.value) * TAB_NUDGE.toPx() * dir[0] else 0f
+                            translationX = nudge + (1f - v) * -shift * 0.5f * w * dir[0]
                         },
                     ) {
                         RevealScope(Route.Root(d)) {
-                            Box(Modifier.fillMaxSize()) { RootPage(app, d) }
+                            Box(Modifier.fillMaxSize().testTag("page.${d.name}")) { RootPage(app, d) }
                         }
                     }
                 }
             }
         },
     ) { measurables, constraints ->
-        // Only what shows is measured: the page in front while tab pages show, and the one leaving.
-        // Every value is read up front, so any of them changing measures again.
+        // Every page is measured (a page already laid out costs nothing to measure again, and one
+        // built ahead is then ready to show), but only the one in front is placed, so only it is drawn.
         val inFront = visible.value > 0f
-        val stillLeaving = leaving?.takeIf { starting || outgoing.value < 1f }
-        val drawn = kept.mapIndexedNotNull { i, d ->
-            val show = (d == shownRoot && inFront) || d == stillLeaving
-            if (show) measurables[i].measure(constraints) else null
+        val measured = measurables.map { it.measure(constraints) }
+        layout(constraints.maxWidth, constraints.maxHeight) {
+            if (inFront) measured.getOrNull(pages.indexOf(shownRoot))?.place(0, 0)
         }
-        layout(constraints.maxWidth, constraints.maxHeight) { drawn.forEach { it.place(0, 0) } }
     }
 }
 
@@ -1108,7 +1084,12 @@ private fun hudActivities(app: AppState): List<HudActivity> {
 private const val HERO_SETTLE_MS = 160L
 
 /** A page that arrives sooner than this after the last one switches without a transition. */
-private const val QUICK_SWITCH_MS = 300L
+/** How far a new tab's page slides in from the side it came from. */
+private val TAB_NUDGE = 24.dp
+
+/** The tabs built ahead (beside Home), and how long after starting. */
+private val WARM_PAGES = listOf(Destination.SYSTEMS, Destination.LIBRARY)
+private const val WARM_AFTER_MS = 1_500L
 
 /** How many tabs' pages are kept ready once visited. */
 private const val KEPT_PAGES = 4

@@ -51,6 +51,8 @@ contains text, so nothing depends on fonts.
 | <img src="quick-menu.svg" width="40" height="40" alt=""> | <img src="line/quick-menu.svg" width="20" height="20" alt=""> | `quick-menu` | `layout-dashboard` | Quick menu |
 | <img src="touch.svg" width="40" height="40" alt=""> | <img src="line/touch.svg" width="20" height="20" alt=""> | `touch` | `hand` | Touch |
 | <img src="sync.svg" width="40" height="40" alt=""> | <img src="line/sync.svg" width="20" height="20" alt=""> | `sync` | `refresh-ccw` | Fuse Sync |
+| <img src="profiles.svg" width="40" height="40" alt=""> | <img src="line/profiles.svg" width="20" height="20" alt=""> | `profiles` | `users` | Profiles |
+| <img src="saves.svg" width="40" height="40" alt=""> | <img src="line/saves.svg" width="20" height="20" alt=""> | `saves` | `folder-sync` | Saves from every system |
 
 The `android` and `linux` icons are a generic phone and a generic monitor, not platform logos.
 

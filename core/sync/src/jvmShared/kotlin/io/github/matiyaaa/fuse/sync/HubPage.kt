@@ -75,6 +75,7 @@ ${if (error != null) """<p class="error">${esc(error)}</p>""" else ""}
 </section>
 <section class="card"><h2>Devices</h2><ul>$devices</ul></section>
 $profiles
+<script>$SCRIPT</script>
 <footer>Every file is kept once, by its SHA-256, under <code>${esc(store)}</code>; each version lists the files it is made of.
 This page only shows; changes are made in Fuse (Settings, Addons, Fuse Sync). ${if (away) "From away it opens after signing in with the host's account." else "It opens on this computer, and from away after signing in."}${if (h.fuseVersion.isNotEmpty()) " Fuse ${esc(h.fuseVersion)}." else ""}</footer>
 </main></body></html>
@@ -86,7 +87,7 @@ This page only shows; changes are made in Fuse (Settings, Addons, Fuse Sync). ${
         val played = r.games.filter { it.playSeconds > 0 }
         val saved = r.games.count { it.slots.isNotEmpty() }
         val byDevice = bars(r.devicePlay, deviceName)
-        val games = r.games.joinToString("") { game(it, deviceName) }
+        val games = r.games.joinToString("") { summary(it, p.id) }
             .ifEmpty { """<p class="empty">Nothing played or saved yet.</p>""" }
         return """<section class="card profile">
 <div class="phead"><span class="avatar">${esc(p.name.take(1).uppercase())}</span><div><h3>${esc(p.name)}</h3>
@@ -97,28 +98,51 @@ ${if (byDevice.isNotEmpty()) """<h2>Play time by device</h2>$byDevice""" else ""
 </section>"""
     }
 
-    private fun game(g: GameReport, deviceName: (String) -> String): String {
+    /** A game's line: what it is and how much of it there is. Its versions come when it is opened. */
+    private fun summary(g: GameReport, profile: String): String {
+        val link = "/hub/game?p=${url(profile)}&amp;g=${url(g.game)}"
+        return """<details class="game" data-p="${esc(profile)}" data-g="${esc(g.game)}"><summary><b>${esc(g.name)}</b>${if (g.favorite) " <span class=\"fav\">Favourite</span>" else ""}<small>${line(g)}</small></summary>""" +
+            """<div class="gbody"><p class="empty">Bringing its versions</p><noscript><p><a href="$link&amp;page=1">Open its versions</a></p></noscript></div></details>"""
+    }
+
+    private fun line(g: GameReport): String {
         val kinds = g.slots.joinToString(", ") { "${it.kind.label.lowercase()}s (${it.versions.size})" }
-        val summary = listOfNotNull(
+        return listOfNotNull(
             g.platform.uppercase().takeIf { it.isNotEmpty() },
             duration(g.playSeconds).takeIf { g.playSeconds > 0 },
             g.lastPlayed?.let { "last played ${at(it)}" },
             kinds.takeIf { it.isNotEmpty() },
         ).joinToString(" · ")
+    }
+
+    /** One game on a page of its own, for a browser without scripting. */
+    fun gamePage(hostName: String, g: GameReport, deviceName: (String) -> String): String = """<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${esc(g.name)} · ${esc(hostName)}</title>
+<style>$CSS</style></head><body><main>
+<header><div><h1>${esc(g.name)}</h1><div class="sub">${line(g)}</div></div><a class="refresh" href="/hub">Back to the Hub</a></header>
+<section class="card">${gameBody(g, deviceName)}</section>
+</main></body></html>
+"""
+
+    /** A game's play time by device and every version of each of its saves, with their files. */
+    fun gameBody(g: GameReport, deviceName: (String) -> String): String {
         val slots = g.slots.joinToString("") { s ->
             val rows = s.versions.joinToString("") { v ->
                 val files = v.files.joinToString("") { f -> """<li><code>${esc(f.path)}</code> <span>${size(f.bytes)}</span> <small>kept as <code>${esc(f.stored)}</code></small></li>""" }
                 """<tr${if (v.current) " class=\"current\"" else ""}><td>${at(v.at)}${if (v.current) " <em>in use</em>" else ""}</td><td>${esc(v.device)}</td>""" +
-                    """<td>${if (v.playSeconds > 0) duration(v.playSeconds) else "–"}</td><td>${size(v.bytes)}</td><td>${reason(v.reason)}${if (v.kept && v.reason != RevisionReason.MILESTONE) ", kept for good" else ""}</td>""" +
+                    """<td>${if (v.playSeconds > 0) duration(v.playSeconds) else "None"}</td><td>${size(v.bytes)}</td><td>${reason(v.reason)}${if (v.kept && v.reason != RevisionReason.MILESTONE) ", kept for good" else ""}</td>""" +
                     """<td><details><summary>${v.files.size} ${if (v.files.size == 1) "file" else "files"}</summary><ul class="files">$files</ul></details></td></tr>"""
             }
             """<h4>${s.kind.label}s <small>${s.versions.size} versions · ${size(s.bytes)} kept${if (s.format.isNotEmpty()) " · ${esc(s.format)}" else ""}</small></h4>
 <table><thead><tr><th>Saved</th><th>On</th><th>Played by then</th><th>Size</th><th>Why kept</th><th>Files</th></tr></thead><tbody>$rows</tbody></table>"""
         }
         val play = bars(g.devicePlay, deviceName)
-        return """<details class="game"><summary><b>${esc(g.name)}</b>${if (g.favorite) " <span class=\"fav\">Favourite</span>" else ""}<small>$summary</small></summary>
-<div class="gbody">${if (play.isNotEmpty()) "<h4>Play time by device <small>${g.sessions} sessions</small></h4>$play" else ""}${slots.ifEmpty { "<p class=\"empty\">No saves kept for it yet.</p>" }}</div></details>"""
+        return (if (play.isNotEmpty()) "<h4>Play time by device <small>${g.sessions} sessions</small></h4>$play" else "") +
+            slots.ifEmpty { "<p class=\"empty\">No saves kept for it yet.</p>" }
     }
+
+    private fun url(s: String) = java.net.URLEncoder.encode(s, Charsets.UTF_8)
 
     /** Play time by device as bars, longest first. */
     private fun bars(play: Map<String, Long>, deviceName: (String) -> String): String {
@@ -162,6 +186,18 @@ ${if (byDevice.isNotEmpty()) """<h2>Play time by device</h2>$byDevice""" else ""
     }
 
     fun esc(s: String) = s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;").replace("'", "&#39;")
+
+    /**
+     * A game's versions are brought when it is opened (once), so the Hub opens at once however
+     * many games and versions the host keeps.
+     */
+    private const val SCRIPT = """
+document.addEventListener("toggle",async function(e){var d=e.target;if(!d.classList||!d.classList.contains("game")||!d.open||d.dataset.state)return;
+d.dataset.state="loading";var b=d.querySelector(".gbody");
+try{var r=await fetch("/hub/game?p="+encodeURIComponent(d.dataset.p)+"&g="+encodeURIComponent(d.dataset.g),{credentials:"same-origin"});
+if(!r.ok)throw new Error(r.status);b.innerHTML=await r.text();d.dataset.state="done"}
+catch(x){d.dataset.state="";b.innerHTML='<p class="empty">That didn\'t come through. Close it and open it again.</p>'}},true);
+"""
 
     private const val CSS = """
 :root{--bg:#07080b;--panel:#12141a;--raised:#191c24;--line:#232631;--text:#eef0f5;--muted:#9aa0ae;--accent:#ff6a3d;--ok:#3ccf8e}
