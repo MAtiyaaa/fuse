@@ -212,6 +212,11 @@ internal class DesktopReleaseInstaller(
     }
 
     private fun makeExecutable(file: File) {
+        // A file system without POSIX permissions (Windows, a FAT drive) has only the owner's flag.
+        if (!file.toPath().fileSystem.supportedFileAttributeViews().contains("posix")) {
+            file.setExecutable(true)
+            return
+        }
         val perms = Files.getPosixFilePermissions(file.toPath()).toMutableSet()
         perms += PosixFilePermission.OWNER_EXECUTE
         if (PosixFilePermission.GROUP_READ in perms) perms += PosixFilePermission.GROUP_EXECUTE
