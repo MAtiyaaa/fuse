@@ -93,6 +93,16 @@ internal class FrameDriver private constructor(private val clock: MonotonicFrame
 
     /** One frame: every move steps; the ones that arrived carry on with the frames after. */
     private fun step(frameNanos: Long) {
+        val inspected = MotionInspector.enabled
+        val began = if (inspected) monotonicNanos() else 0L
+        stepMoves(frameNanos)
+        if (inspected) {
+            MotionInspector.frameCostNanos = monotonicNanos() - began
+            MotionInspector.sample()
+        }
+    }
+
+    private fun stepMoves(frameNanos: Long) {
         FramePacing.frameAt(frameNanos)
         lastFrame = frameNanos
         val count = moves.size

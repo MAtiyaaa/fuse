@@ -140,10 +140,7 @@ class MotionTransition<S>(
         targetState = target
         val incoming = partOf(target) ?: Part(target, 0f, dir.sign.toFloat()).also { list.add(it) }
         // Not on screen (fully gone and still): placed at its arrival side, unseen, so placing it moves nothing visible.
-        if (incoming.presenceValue <= 0f && incoming.settled) {
-            incoming.place.dragTo(dir.sign.toFloat())
-            incoming.place.cancelDrag()
-        }
+        if (incoming.presenceValue <= 0f && incoming.settled) incoming.place.jumpTo(dir.sign.toFloat())
         return incoming
     }
 
@@ -154,6 +151,10 @@ class MotionTransition<S>(
     fun go(target: S, scope: CoroutineScope, motion: Motion = Spring(1f, 500f), towards: TransitionDirection? = null) {
         if (target == targetState && partOf(target)?.presence?.targetValue == 1f) return
         val dir = towards ?: directionOf(targetState, target)
+        if (MotionTrace.enabled) {
+            val reversing = target == previousState && partOf(target) != null
+            MotionTrace.record(if (reversing) MotionTrace.Kind.REVERSAL else MotionTrace.Kind.TRANSITION, "$targetState → $target", progress, partOf(targetState)?.presenceVelocity ?: 0f, dir.name)
+        }
         val incoming = aim(target, dir)
         // The target comes to its place; everything else leaves toward the side opposite the arrival
         // (or, with no direction, fades where it is), each from its own place and speed.
@@ -187,7 +188,7 @@ class MotionTransition<S>(
             if (p.settled && p.presenceValue == 1f) list.removeAll { it !== p && it.presenceValue == 0f && !it.presence.isRunning && !it.presence.isDragging }
         } else if (p.presenceValue == 0f && !p.presence.isRunning && !p.presence.isDragging) {
             // Invisible: whatever its position still does doesn't show, so it goes now.
-            p.place.cancelDrag()
+            p.place.jumpTo(p.place.floatValue)
             list.remove(p)
         }
     }

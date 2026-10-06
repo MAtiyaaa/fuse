@@ -127,8 +127,7 @@ private class MotionBoundsNode(var motion: Motion, var space: MotionSpace, var a
     /** Sends a two-number [value] toward (x, y) in place if that moved, or puts it there the first time; nothing is boxed per frame. */
     private fun <T> follow(value: FuselineValue<T>, x: Float, y: Float, started: Boolean) {
         if (!started) {
-            value.dragTo(value.converter.read(floatArrayOf(x, y)))
-            value.cancelDrag()
+            value.jumpTo(value.converter.read(floatArrayOf(x, y)))
             return
         }
         if (value.targetComponent(0) == x && value.targetComponent(1) == y) return
@@ -248,18 +247,19 @@ internal class SharedMotionNode(var shared: SharedMotion, var key: Any, var corn
                 val from = shared.arriving(key, this@SharedMotionNode)
                 if (from != null) {
                     travelling = true
-                    bounds.dragTo(from.bounds); bounds.cancelDrag()
-                    radius.dragTo(from.corner); radius.cancelDrag()
+                    bounds.jumpTo(from.bounds)
+                    radius.jumpTo(from.corner)
                     coroutineScope.launch {
                         launch { radius.animateTo(ownCorner, shared.motion) }
                         bounds.animateTo(own, shared.motion, from.velocity)
                         travelling = false
                     }
                 } else {
-                    radius.dragTo(ownCorner); radius.cancelDrag()
+                    radius.jumpTo(ownCorner)
                 }
             } else if (travelling && bounds.targetValue != own) {
                 // The destination moved: chase it from here, at the speed it has.
+                if (MotionTrace.enabled) MotionTrace.record(MotionTrace.Kind.MOVING_TARGET, "shared $key", bounds.component(0), bounds.velocityComponent(0), "to ${own.left}, ${own.top}")
                 if (!bounds.retarget(own)) coroutineScope.launch { bounds.animateTo(own, shared.motion); travelling = false }
             }
             p.placeWithLayer(0, 0) { showAt(own) }

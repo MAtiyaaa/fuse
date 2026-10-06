@@ -101,6 +101,24 @@ class FuselineValue<T>(
         return now[index]
     }
 
+    /** One number of the velocity, read without building it. */
+    fun velocityComponent(index: Int): Float {
+        version.intValue
+        return speed[index]
+    }
+
+    /** How long the motion under way has left, in nanoseconds (0 at rest; [Long.MAX_VALUE] for a loop). */
+    val remainingNanos: Long
+        get() {
+            val r = ride ?: return 0L
+            if (r.durationNanos == Long.MAX_VALUE) return Long.MAX_VALUE
+            return (r.durationNanos - r.playNanos).coerceAtLeast(0L)
+        }
+
+    private fun trace(kind: MotionTrace.Kind, detail: String? = null) {
+        MotionTrace.record(kind, label, now[0], speed[0], detail)
+    }
+
     /** One number of the target, read without building it. */
     fun targetComponent(index: Int): Float {
         targetVersion.intValue
@@ -194,6 +212,7 @@ class FuselineValue<T>(
             targetFollowsValue = false
             targetVersion.intValue++
             moved()
+            if (MotionTrace.enabled) trace(MotionTrace.Kind.SNAP)
         }
     }
 
@@ -205,6 +224,7 @@ class FuselineValue<T>(
             targetFollowsValue = false
             targetVersion.intValue++
             moved()
+            if (MotionTrace.enabled) trace(MotionTrace.Kind.STOP)
         }
     }
 
@@ -224,10 +244,21 @@ class FuselineValue<T>(
             converter.write(targetValue, goal)
             if (initialVelocity != null) converter.write(initialVelocity, speed)
             val r = Ride(animationSpec)
+            val fromGesture = owner == MotionOwner.GESTURE
             build(r, animationSpec)
             aimed(animationSpec)
             ride = r
             owner = MotionOwner.ANIMATION
+            if (MotionTrace.enabled) trace(
+                when {
+                    fromGesture -> MotionTrace.Kind.RELEASE
+                    animationSpec is Decay -> MotionTrace.Kind.DECAY
+                    speed.any { it != 0f } -> MotionTrace.Kind.HANDOFF
+                    else -> MotionTrace.Kind.START
+                },
+                MotionInspector.describe(animationSpec),
+            )
+            if (MotionInspector.enabled) MotionInspector.watch(this)
             try {
                 runFrames(r.durationNanos, onStart = { r.retimer = it }) { play ->
                     step(r, play)
@@ -238,6 +269,7 @@ class FuselineValue<T>(
                 speed.fill(0f)
                 r.playNanos = r.durationNanos
                 moved()
+                if (MotionTrace.enabled) trace(MotionTrace.Kind.SETTLE)
                 block?.invoke(this)
             } finally {
                 if (ride === r) {
@@ -321,9 +353,11 @@ class FuselineValue<T>(
 
     private fun rebuild(r: Ride, retimer: Retimer, animationSpec: Motion?): Boolean {
         val motion = animationSpec ?: r.motion
+        val switched = motion != r.motion
         build(r, motion)
         aimed(motion)
         retimer.retime(r.durationNanos)
+        if (MotionTrace.enabled) trace(MotionTrace.Kind.RETARGET, if (switched) MotionInspector.describe(motion) else null)
         return true
     }
 
@@ -337,6 +371,7 @@ class FuselineValue<T>(
         val play = playNanos.coerceIn(0L, r.durationNanos)
         retimer.seek(play)
         step(r, play)
+        if (MotionTrace.enabled) trace(MotionTrace.Kind.SEEK)
         return true
     }
 
@@ -345,6 +380,23 @@ class FuselineValue<T>(
         val d = ride?.durationNanos ?: return false
         if (d == Long.MAX_VALUE) return false
         return seek((d * fraction.coerceIn(0f, 1f).toDouble()).toLong())
+    }
+
+    /**
+     * Puts the value at [target] at once, still, from outside a coroutine: for Fuseline's own parts
+     * placing a value nobody sees yet (a page waiting off to its side, an element's first place).
+     */
+    internal fun jumpTo(target: T) {
+        job?.cancel(TakenOver())
+        job = null
+        ride = null
+        if (owner != MotionOwner.IDLE) owner = MotionOwner.IDLE
+        converter.write(target, now)
+        converter.write(target, goal)
+        speed.fill(0f)
+        targetFollowsValue = false
+        targetVersion.intValue++
+        moved()
     }
 
     // ----------------------------------------------------------------------------------------
@@ -362,6 +414,8 @@ class FuselineValue<T>(
         t.reset()
         t.add(timeNanos, now)
         speed.fill(0f)
+        if (MotionTrace.enabled) trace(MotionTrace.Kind.GESTURE_TAKEOVER)
+        if (MotionInspector.enabled) MotionInspector.watch(this)
     }
 
     private fun dragged(timeNanos: Long) {
@@ -430,7 +484,9 @@ class FuselineValue<T>(
         val v = releaseVelocity(timeNanos)
         converter.write(v, scratch)
         val projected = FloatArray(dims) { i -> projectDecay(now[i], scratch[i], decay, decay.threshold ?: threshold) }
-        animateTo(choose(converter.read(projected)), settle, v)
+        val chosen = choose(converter.read(projected))
+        if (MotionTrace.enabled) trace(MotionTrace.Kind.DESTINATION, "projected ${projected.joinToString { fmt(it, 1) }}, chose $chosen")
+        animateTo(chosen, settle, v)
     }
 
     /**
