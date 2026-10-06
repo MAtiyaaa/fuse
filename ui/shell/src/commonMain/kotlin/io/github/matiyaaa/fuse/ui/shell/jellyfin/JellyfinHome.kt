@@ -122,7 +122,13 @@ internal fun JellyfinContent(app: AppState, active: Boolean, topPadding: Dp) {
             SetUpState(app, focused, "Sign in again", "The server signed this device out. Sign in again in Settings, Addons, Jellyfin.", "Sign in")
         }
         page.shelves == null && page.error != null -> Centered(topPadding) {
-            ErrorState(app, focused, page.error!!) { app.scope.launch { load(service, page) } }
+            val kept by app.store.offlineMedia.entries.collectAsState()
+            // Away from the server, what was downloaded still plays: offered first.
+            if (kept.any { it.here }) {
+                ErrorState(app, focused, "${page.error!!} What you downloaded still plays.", "Watch downloaded", FuseIcons.Download) { app.go(Route.OfflineMedia) }
+            } else {
+                ErrorState(app, focused, page.error!!) { app.scope.launch { load(service, page) } }
+            }
         }
         page.shelves == null -> HomeSkeleton(topPadding)
         else -> Shelves(app, page, focused, topPadding, state.offline)
@@ -143,10 +149,11 @@ private suspend fun load(service: io.github.matiyaaa.fuse.jellyfin.JellyfinServi
 private fun Shelves(app: AppState, page: JellyfinHomeState, focused: Boolean, topPadding: Dp, offline: Boolean) {
     val sel = page.sel
     val shelves = page.shelves.orEmpty()
+    val kept by app.store.offlineMedia.entries.collectAsState()
     val rows: List<HomeRow> = buildList {
         add(
             HomeRow.Top(
-                listOf(
+                listOf<Pair<String, () -> Unit>>(
                     "Search" to { app.go(Route.MediaSearch) },
                     "Refresh" to {
                         app.scope.launch {
@@ -155,7 +162,7 @@ private fun Shelves(app: AppState, page: JellyfinHomeState, focused: Boolean, to
                         }
                     },
                     "Settings" to { app.go(Route.JellyfinSettings) },
-                ),
+                ) + listOfNotNull<Pair<String, () -> Unit>>(("Downloaded" to { app.go(Route.OfflineMedia) }).takeIf { kept.isNotEmpty() }),
             ),
         )
         // What you were in the middle of first, then your libraries, then what's new.
@@ -318,7 +325,7 @@ internal fun ShelfRow(
 
 @Composable
 private fun TopButtons(buttons: List<Pair<String, () -> Unit>>, chosen: Int, narrow: Boolean, onClick: (Int) -> Unit) {
-    val icons = listOf(FuseIcons.Search, FuseIcons.Refresh, FuseIcons.Settings2)
+    val icons = listOf(FuseIcons.Search, FuseIcons.Refresh, FuseIcons.Settings2, FuseIcons.Download)
     Row(Modifier.padding(horizontal = Space.gutter), horizontalArrangement = Arrangement.spacedBy(Space.s), verticalAlignment = Alignment.CenterVertically) {
         buttons.forEachIndexed { i, (label, _) ->
             // Narrow, only Search keeps its word; the others are their icons.
@@ -359,12 +366,19 @@ private fun SetUpState(app: AppState, focused: Boolean, title: String, message: 
 }
 
 @Composable
-private fun ErrorState(app: AppState, focused: Boolean, message: String, retry: () -> Unit) {
-    PageEffect(focused) { if (focused) { app.hero = null; app.hints = listOf(Hint(HintButton.CONFIRM, "Try again")) } }
+private fun ErrorState(
+    app: AppState,
+    focused: Boolean,
+    message: String,
+    label: String = "Try again",
+    icon: androidx.compose.ui.graphics.vector.ImageVector = FuseIcons.Refresh,
+    retry: () -> Unit,
+) {
+    PageEffect(focused, label) { if (focused) { app.hero = null; app.hints = listOf(Hint(HintButton.CONFIRM, label)) } }
     InputLayer(enabled = focused && !app.overlayOpen) { e ->
         if (e.action == NavAction.SELECT) { retry(); NavResult.ACTIVATED } else NavResult.IGNORED
     }
-    EmptyState(FuseIcons.WifiOff, "Jellyfin can't be reached", message = message, actionLabel = "Try again", actionSelected = focused, onAction = retry, actionIcon = FuseIcons.Refresh)
+    EmptyState(FuseIcons.WifiOff, "Jellyfin can't be reached", message = message, actionLabel = label, actionSelected = focused, onAction = retry, actionIcon = icon)
 }
 
 @Composable
@@ -403,6 +417,7 @@ internal fun AppState.mediaOptions(item: MediaItem) {
                 MenuAction("play", if (item.resumeMs > 0) "Resume" else "Play", FuseIcons.Play, onSelect = { close(); play(item) }).takeIf { item.isPlayable || item.type == MediaType.SERIES || item.type == MediaType.SEASON },
                 MenuAction("start", "Play from the start", FuseIcons.RotateCcw, onSelect = { close(); play(item, fromStart = true) }).takeIf { item.resumeMs > 0 },
                 MenuAction("page", "Details", FuseIcons.Info, onSelect = { close(); go(Route.MediaPage(item.id)) }),
+                *offlineActions(item, ::close).toTypedArray(),
                 item.seriesId?.let { sid -> MenuAction("series", "Go to ${item.seriesName ?: "the show"}", FuseIcons.Tv, onSelect = { close(); go(Route.MediaPage(sid)) }) },
                 MenuAction("played", if (item.played) "Mark unwatched" else "Mark watched", if (item.played) FuseIcons.EyeOff else FuseIcons.Eye, onSelect = {
                     close()

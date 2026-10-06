@@ -26,7 +26,8 @@ val LocalInputRouter = staticCompositionLocalOf<InputRouter> { error("No InputRo
  * [io.github.matiyaaa.fuse.model.NavAction.REORDER] here, and [repeats] for other actions that should
  * repeat while their button is held (directions always do). With [holdModifier], holding that
  * action's button changes what the directions do (see [InputRouter.heldModifier]); a quick press of
- * it still arrives as itself.
+ * it still arrives as itself. With [contextHold], holding Options arrives as
+ * [io.github.matiyaaa.fuse.model.NavAction.CONTEXT_HOLD] and a quick press as Options.
  */
 @Composable
 fun InputLayer(
@@ -36,6 +37,7 @@ fun InputLayer(
     longPress: Boolean = false,
     repeats: Set<io.github.matiyaaa.fuse.model.NavAction> = emptySet(),
     holdModifier: io.github.matiyaaa.fuse.model.NavAction? = null,
+    contextHold: Boolean = false,
     onAction: (NavEvent) -> NavResult,
 ) {
     val router = LocalInputRouter.current
@@ -46,14 +48,14 @@ fun InputLayer(
     val holder = remember { arrayOfNulls<InputRouter.Registration>(1) }
     DisposableEffect(router, priority) {
         val registration = router.register(priority, modal, longPress) { handler.value(it) }
-        registration.update(enabled, modal, longPress, { handler.value(it) }, repeats, holdModifier)
+        registration.update(enabled, modal, longPress, { handler.value(it) }, repeats, holdModifier, contextHold)
         holder[0] = registration
         onDispose {
             registration.remove()
             holder[0] = null
         }
     }
-    SideEffect { holder[0]?.update(enabled, modal, longPress, { handler.value(it) }, repeats, holdModifier) }
+    SideEffect { holder[0]?.update(enabled, modal, longPress, { handler.value(it) }, repeats, holdModifier, contextHold) }
 }
 
 /** Maps a Compose key to Fuse's physical button names (desktop keyboards, some Android keyboards). */

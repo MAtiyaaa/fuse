@@ -55,6 +55,9 @@ interface AppStoreOps {
     /** Opens Android's "Install unknown apps" page for Fuse. */
     fun allowInstalls()
 
+    /** The Store's key for the app installed as [packageName], when the Store offers it. */
+    fun keyFor(packageName: String): String? = null
+
     /** The installed app's own icon, or null when it isn't installed. */
     fun iconModel(key: String): Any?
 
@@ -83,6 +86,9 @@ interface AppStoreOps {
     companion object {
         /** Where added apps go unless the user picks another category. */
         const val OTHER = "Other"
+
+        /** The category of the apps Fuse offers itself, beside the pack's. */
+        const val COMPANIONS = "Fuse companions"
     }
 
     object None : AppStoreOps {

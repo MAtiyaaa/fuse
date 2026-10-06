@@ -189,3 +189,23 @@ object SavePath {
     /** True for a SHA-256 written as 64 lower-case hex digits: the only names the content store takes. */
     fun isHash(text: String): Boolean = text.length == 64 && text.all { it in '0'..'9' || it in 'a'..'f' }
 }
+
+/**
+ * Files and folders that are never part of a save, whatever folder they turn up in: what the
+ * system leaves behind (Thumbs.db, desktop.ini), logs, half-written temporary files and caches. A
+ * folder save never carries them, and a folder only they changed is never learned as a save.
+ */
+object SaveNoise {
+    private val FILES = setOf("thumbs.db", "desktop.ini", "ehthumbs.db", "icon\r")
+    private val FOLDERS = setOf("cache", "caches", "shadercache", "shader_cache", "shaders", "log", "logs", "temp", "tmp", "crashdumps")
+    private val ENDINGS = listOf(".log", ".tmp", ".temp", ".part", ".crdownload", ".fuse-sync", ".fuse-part")
+
+    /** Whether a file named [name] is never a save's. */
+    fun file(name: String): Boolean {
+        val n = name.lowercase()
+        return n.startsWith(".") || n.startsWith("~$") || n in FILES || ENDINGS.any { n.endsWith(it) }
+    }
+
+    /** Whether a folder named [name] holds only what is never a save's. */
+    fun folder(name: String): Boolean = name.startsWith(".") || name.lowercase() in FOLDERS
+}

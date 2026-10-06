@@ -104,6 +104,26 @@ internal class FusiWorld(
     private val heartScreen = IntArray(HEARTS)
     private var nextHeart = 0
 
+    // Bo, her friend: calmer than her, and he keeps to the main screen. He sits and watches, lies
+    // down, ambles about, trots after her when she runs, says hello when she comes close, and naps
+    // beside her when she sleeps.
+    private enum class BoAct { SIT, LIE, WALK, FOLLOW, GREET, NAP }
+    private var boX = 0.3f
+    private var boFacing = 1
+    private var boAct = BoAct.SIT
+    private var boT = 0f
+    private var boDur = 6f
+    private var boTarget = 0.3f
+    private var boMoving = false
+    private var boBlinking = 0f
+    private var boBlinkIn = 3.5f
+    private var boPhase = 0
+    private var sinceGreet = 0f
+
+    /** Where Bo is across the main screen, and what he is doing, for tests. */
+    internal val boAcross: Float get() = boX
+    internal val boNapping: Boolean get() = boAct == BoAct.NAP && boPhase == 1
+
     private val dustX = FloatArray(DUST)
     private val dustLife = FloatArray(DUST)
     private val dustScreen = IntArray(DUST)
@@ -218,6 +238,7 @@ internal class FusiWorld(
                 landed()
             }
         }
+        stepBo(dt, 1f / (sw[0].coerceAtLeast(1f) / sd[0]))
         stepBall(dt, perDp)
         for (i in 0 until HEARTS) if (heartLife[i] > 0f) {
             heartLife[i] -= dt / 1.8f
@@ -225,6 +246,111 @@ internal class FusiWorld(
         }
         for (i in 0 until DUST) if (dustLife[i] > 0f) dustLife[i] -= dt / 0.5f
     }
+
+    /** Bo's minute: calm, mostly sitting and watching her, with a few things he does with her. */
+    private fun stepBo(dt: Float, perDp: Float) {
+        boT += dt
+        sinceGreet += dt
+        boMoving = false
+        if (boBlinking > 0f) boBlinking -= dt else {
+            boBlinkIn -= dt
+            if (boBlinkIn <= 0f) {
+                boBlinking = 0.16f
+                boBlinkIn = 3f + rnd.nextFloat() * 5f
+            }
+        }
+        val here = screen == 0
+        val near = here && abs(x - boX) < 0.075f
+        val sheSleeps = here && act == Act.SLEEP
+        // She went to her house to sleep: he goes and lies down beside it.
+        if (sheSleeps && boAct != BoAct.NAP) boStart(BoAct.NAP, FusiGround.HOUSE_X + 0.2f)
+        when (boAct) {
+            BoAct.SIT, BoAct.LIE -> {
+                // Watching her: he turns her way.
+                if (here && boAct == BoAct.SIT) boFacing = if (x >= boX) 1 else -1
+                if (near && sinceGreet > 20f && (act == Act.IDLE || act == Act.SIT || act == Act.SNIFF)) boStart(BoAct.GREET)
+                else if (boT >= boDur) boNext()
+            }
+            BoAct.WALK -> if (boMoveTo(boTarget, 34f * perDp, dt)) boStart(if (rnd.nextFloat() < 0.6f) BoAct.SIT else BoAct.LIE)
+            BoAct.FOLLOW -> {
+                // A little behind her, at a trot; once she stops (or he tires), he sits.
+                val keep = if (x >= boX) x - 0.09f else x + 0.09f
+                if (!here || boT > 9f) boStart(BoAct.SIT)
+                else if (boMoveTo(keep.coerceIn(0.05f, 0.95f), 96f * perDp, dt) && act != Act.RUN && act != Act.PLAY) boStart(BoAct.SIT)
+            }
+            BoAct.GREET -> {
+                // Nose to nose for a moment, and a heart.
+                if (here) boFacing = if (x >= boX) 1 else -1
+                if (boT >= boDur) {
+                    sinceGreet = 0f
+                    boStart(BoAct.SIT)
+                }
+            }
+            BoAct.NAP -> when (boPhase) {
+                0 -> if (boMoveTo(boTarget, 34f * perDp, dt)) { boPhase = 1; boFacing = -1 }
+                1 -> if (!sheSleeps) { boStart(BoAct.SIT); boDur = 2.5f }
+            }
+        }
+    }
+
+    private fun boStart(a: BoAct, to: Float = boTarget) {
+        boAct = a
+        boT = 0f
+        boPhase = 0
+        boTarget = to
+        boDur = when (a) {
+            BoAct.SIT -> 5f + rnd.nextFloat() * 6f
+            BoAct.LIE -> 8f + rnd.nextFloat() * 8f
+            BoAct.GREET -> 1.8f
+            else -> 0f
+        }
+        if (a == BoAct.GREET) {
+            // The heart rises between them.
+            if (screen == 0) heart((x + boX) / 2f, 50f)
+        }
+    }
+
+    /** What Bo does next: mostly sitting and lying about, sometimes an amble, sometimes after her. */
+    private fun boNext() {
+        val herRunning = screen == 0 && (act == Act.RUN || act == Act.PLAY)
+        val r = rnd.nextFloat()
+        when {
+            herRunning && r < 0.55f -> boStart(BoAct.FOLLOW)
+            r < 0.4f -> boStart(BoAct.SIT)
+            r < 0.62f -> boStart(BoAct.LIE)
+            else -> {
+                // An amble to somewhere she isn't standing.
+                var to = 0.15f + rnd.nextFloat() * 0.7f
+                if (abs(to - x) < 0.1f) to = if (x < 0.5f) (x + 0.2f).coerceAtMost(0.88f) else (x - 0.2f).coerceAtLeast(0.12f)
+                boStart(BoAct.WALK, to)
+            }
+        }
+    }
+
+    private fun boMoveTo(to: Float, speed: Float, dt: Float): Boolean {
+        val d = to - boX
+        if (abs(d) < 0.004f) return true
+        boFacing = if (d > 0f) 1 else -1
+        val stepX = speed * dt
+        boX = if (abs(d) <= stepX) to else boX + boFacing * stepX
+        boMoving = true
+        return false
+    }
+
+    private fun boSprite(): PixelSprite {
+        val f = BoFrames
+        val blink = boBlinking > 0f
+        return when (boAct) {
+            BoAct.SIT -> if (blink) f.sitBlink else if ((anim * 1.2f).toInt() % 2 == 0) f.sit0 else f.sit1
+            BoAct.LIE -> f.sleep
+            BoAct.NAP -> if (boPhase == 1) f.sleep else boWalk()
+            BoAct.WALK -> boWalk()
+            BoAct.FOLLOW -> if (boMoving) boWalk(fast = true) else f.stand0
+            BoAct.GREET -> if ((anim * 4f).toInt() % 2 == 0) f.sniff0 else f.sniff1
+        }
+    }
+
+    private fun boWalk(fast: Boolean = false) = if ((anim * (if (fast) 7.5f else 4.2f)).toInt() % 2 == 0) BoFrames.walk0 else BoFrames.walk1
 
     /** Walks or runs toward [to]; true once there. */
     private fun moveTo(to: Float, speed: Float, dt: Float): Boolean {
@@ -302,6 +428,8 @@ internal class FusiWorld(
 
     private fun landed() {
         for (k in 0 until 4) dust(x)
+        // Landing a hop by Bo: he gets up to say hello.
+        if (screen == 0 && act == Act.HOP && abs(x - boX) < 0.12f && (boAct == BoAct.SIT || boAct == BoAct.LIE) && sinceGreet > 8f) boStart(BoAct.GREET)
         if (act == Act.HOP || act == Act.CROSS) {
             heart(x - 0.01f, 54f)
             heart(x + 0.012f, 64f)
@@ -413,6 +541,14 @@ internal class FusiWorld(
             val dx = dustX[i] * w
             val gy = FusiGround.y(dx, w, h, density)
             drawCircle(Color.White, (1.4f - life) * 3.2f * cell, Offset(dx, gy - cell), alpha = life * 0.75f)
+        }
+
+        // Bo, behind her, on the main screen.
+        if (index == 0) {
+            val bx = boX * w
+            val gy = FusiGround.y(bx, w, h, density)
+            drawOval(shadow, Offset(bx - 10f * cell, gy - cell * 0.7f), Size(20f * cell, cell * 1.6f))
+            with(boSprite()) { draw(snap(bx - 15f * cell), snap(gy + 2f * cell), cell, boFacing < 0, palette) }
         }
 
         if (screen == index) {

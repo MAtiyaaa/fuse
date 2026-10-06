@@ -26,12 +26,20 @@ data class UiPrefs(
     val jellyfin: io.github.matiyaaa.fuse.data.settings.JellyfinSettings = io.github.matiyaaa.fuse.data.settings.JellyfinSettings(),
     /** Syncthing, an addon. Whether it is on follows [FuseStore.syncthing]'s state; only how it behaves changes here. */
     val syncthing: io.github.matiyaaa.fuse.data.settings.SyncthingSettings = io.github.matiyaaa.fuse.data.settings.SyncthingSettings(),
+    /** Fuse RomM, the Fuse RomM native integration. Its sign-in is in the secret store. */
+    val romm: io.github.matiyaaa.fuse.data.settings.FuseRommSettings = io.github.matiyaaa.fuse.data.settings.FuseRommSettings(),
+    /** Streaming from a computer at home with Moonlight. */
+    val streaming: io.github.matiyaaa.fuse.data.settings.StreamingSettings = io.github.matiyaaa.fuse.data.settings.StreamingSettings(),
+    /** How every transfer (Downloads) behaves. */
+    val downloads: io.github.matiyaaa.fuse.data.settings.DownloadSettings = io.github.matiyaaa.fuse.data.settings.DownloadSettings(),
     /**
      * Fuse Sync's settings, read only: changed through [FuseStore.sync], never through
      * [FuseStore.updatePrefs]. Here so every screen follows whether it is on.
      */
     val sync: io.github.matiyaaa.fuse.data.settings.SyncSettings = io.github.matiyaaa.fuse.data.settings.SyncSettings(),
     val onboardingDone: Boolean = false,
+    /** The answer to setup's "Do you use RomM?": "FUSE", "CARTRIDGE", "NONE", or "" when not asked yet. */
+    val rommAnswer: String = "",
     val themeId: String = "fuse",
     val motion: MotionProfile? = null,
     val glass: GlassSettings = GlassSettings(),

@@ -39,6 +39,7 @@ internal fun AppSettings.toUiPrefs(scoped: GlobalScoped): UiPrefs {
         syncthing = syncthing,
         sync = sync,
         onboardingDone = onboarding.completed,
+        rommAnswer = onboarding.romm,
         themeId = theme.id,
         customThemes = custom,
         motion = appearance.motion,
@@ -107,6 +108,9 @@ internal fun AppSettings.toUiPrefs(scoped: GlobalScoped): UiPrefs {
         storeVariant = store.variant,
         storeAutoCheck = store.autoCheck,
         storeEnabled = store.enabled,
+        romm = romm,
+        streaming = streaming,
+        downloads = downloads,
     )
 }
 
@@ -120,7 +124,7 @@ internal fun AppSettings.withUiPrefs(prefs: UiPrefs): AppSettings {
     val destinations = visible.map { DestinationSetting(it, visible = true) } +
         Destination.entries.filterNot { it in visible }.map { DestinationSetting(it, visible = false) }
     return copy(
-        onboarding = onboarding.copy(completed = prefs.onboardingDone),
+        onboarding = onboarding.copy(completed = prefs.onboardingDone, romm = prefs.rommAnswer),
         home = home.copy(layout = prefs.home, destinations = destinations, continueDismissed = prefs.continueDismissed, addonsOrder = prefs.addonsOrder, quickMenu = prefs.quickMenu),
         appearance = appearance.copy(
             themeId = theme.id,
@@ -188,6 +192,9 @@ internal fun AppSettings.withUiPrefs(prefs: UiPrefs): AppSettings {
         // What Fuse installed is kept as it is: only the Store writes it.
         store = store.copy(enabled = prefs.storeEnabled, variant = prefs.storeVariant, autoCheck = prefs.storeAutoCheck),
         jellyfin = prefs.jellyfin,
+        romm = prefs.romm,
+        streaming = prefs.streaming,
+        downloads = prefs.downloads,
         // Whether Syncthing is on, and where, is the Syncthing service's to write: only how it behaves comes from here.
         syncthing = syncthing.copy(waitBeforePlaying = prefs.syncthing.waitBeforePlaying, keepVersions = prefs.syncthing.keepVersions),
     )

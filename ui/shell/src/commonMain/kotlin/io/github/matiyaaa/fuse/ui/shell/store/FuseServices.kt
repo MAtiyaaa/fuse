@@ -44,6 +44,37 @@ interface FuseServices {
      */
     val cacheDir: String
 
+    /**
+     * Fuse's own data directory, which the system never clears (unlike [cacheDir]): the transfer
+     * queue and its partial work are kept here so they survive a restart. Defaults to the cache.
+     */
+    val dataDir: String get() = cacheDir
+
+    /** Where films and episodes kept for watching offline go, unless the person chose a folder. */
+    val mediaDir: String get() = "$dataDir/Offline"
+
+    /** Sends a Wake-on-LAN [packet] to every port in [ports], broadcast on this network (and to [address] directly). */
+    suspend fun sendWake(packet: ByteArray, ports: List<Int>, address: String?): Boolean = false
+
+    /**
+     * Starts Moonlight streaming [app] from the computer Moonlight knows as [hostName] (or by
+     * [uniqueId], or [address]). Null when it started, else what is wrong in words for the person.
+     */
+    suspend fun startStream(hostName: String, uniqueId: String?, address: String, app: String, client: String): String? = "Streaming isn't available on this device."
+
+    /** Whether a Moonlight is installed here to stream with. */
+    fun streamClient(): String? = null
+
+    /** Whether this device's connection is unmetered (Wi-Fi or wired), for transfers kept to Wi-Fi. */
+    fun unmetered(): Boolean = true
+
+    /**
+     * Keeps Fuse running while transfers the person started are moving (Android: a foreground
+     * service with a quiet notification saying [text], with [progress] 0..100 when known); called
+     * again as either changes. [active] false lets it go. Nothing to do on a computer.
+     */
+    fun keepAliveForTransfers(active: Boolean, text: String, progress: Int?) = Unit
+
     /** This device's name, as servers list it (Jellyfin's dashboard). */
     val deviceName: String get() = "Fuse"
 

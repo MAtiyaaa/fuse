@@ -313,6 +313,40 @@ class ServiceTest {
     }
 
     @Test
+    fun aSaveMadeElsewhereIsInPlaceWithoutLaunchingTheGame(): Unit = runBlocking {
+        val (pc, _) = service("Gaming PC", Library())
+        val (deck, _) = service("Steam Deck", Library())
+        val code = assertNotNull(pc.hostHere("Gaming PC", installService = false).getOrThrow().pairingCode)
+        deck.connect("127.0.0.1:$port", code).getOrThrow()
+        val mo = pc.createProfile("Mo", "fox", null).getOrThrow()
+        deck.switchTo(mo.id).getOrThrow()
+        pc.switchTo(mo.id).getOrThrow()
+        // The PC keeps Ruby in a folder that doesn't exist yet.
+        val pcRoms = File(root, "pc/Games/GBA")
+        val pcQuery = SaveQuery(ct, "gba", File(pcRoms, "Pokemon Ruby.gba").path.replace('\\', '/'), "mgba", title = "Pokemon Ruby")
+        pc.saveQueries { id -> pcQuery.takeIf { id == ct.id } }
+        // Played on the Deck.
+        val roms = File(root, "deck-roms").apply { mkdirs() }
+        val q = SaveQuery(ct, "gba", File(roms, "ruby.gba").path.replace('\\', '/'), "mgba", title = "Pokemon Ruby")
+        File(roms, "ruby.sav").writeText("made on the deck")
+        deck.afterExit(q, 0, 60_000)
+        // The PC brings it in by itself, folders and all, and the host knows both are current.
+        val target = File(pcRoms, "Pokemon Ruby.sav")
+        val until = System.currentTimeMillis() + 20_000
+        while (!target.isFile && System.currentTimeMillis() < until) kotlinx.coroutines.delay(50)
+        assertEquals("made on the deck", target.readText())
+        var conv: Convergence? = null
+        while (System.currentTimeMillis() < until) {
+            conv = deck.convergence(ct)
+            if (conv?.slots?.singleOrNull()?.current == 2) break
+            kotlinx.coroutines.delay(50)
+        }
+        assertEquals(2, conv?.slots?.single()?.current)
+        pc.stop()
+        deck.stop()
+    }
+
+    @Test
     fun theHostsSavesMoveToAnotherFolderAndCanBeDeleted(): Unit = runBlocking {
         val (pc, pcSettings) = service("Gaming PC", Library())
         val (deck, _) = service("Steam Deck", Library())

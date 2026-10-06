@@ -68,12 +68,15 @@ fun AddonsScreen(app: AppState) {
     // Cartridge only where it runs (Android and Linux) and is turned on; Jellyfin only once turned on.
     // In the order the user dragged them into; parts they never moved keep their usual place after.
     val parts = buildList {
-        if (prefs.cartridgeEnabled && app.platform.features.cartridge) add(AddonsPart.CARTRIDGE)
+        // One RomM integration at a time holds this place: Fuse RomM when it is on, else Cartridge.
+        if (prefs.romm.enabled && app.store.romm.supported) add(AddonsPart.ROMM)
+        else if (prefs.cartridgeEnabled && app.platform.features.cartridge) add(AddonsPart.CARTRIDGE)
         if (app.store.appStore.supported && prefs.storeEnabled) add(AddonsPart.STORE)
         if (prefs.jellyfin.enabled && app.store.jellyfin != null) add(AddonsPart.JELLYFIN)
         // Fuse Sync or Syncthing, whichever is in use: they never run together, so never both.
         if (prefs.sync.enabled && app.store.sync.service != null) add(AddonsPart.SYNC)
         else if (syncthingState != null && syncthingState !is io.github.matiyaaa.fuse.sync.syncthing.SyncthingState.Off) add(AddonsPart.SYNCTHING)
+        if (app.store.streaming.supported && prefs.streaming.enabled && prefs.streaming.hosts.isNotEmpty()) add(AddonsPart.STREAMING)
         if (isEmpty()) add(AddonsPart.CARTRIDGE)
     }.sortedBy { p -> prefs.addonsOrder.indexOf(p.name).let { if (it < 0) ORDER_REST + p.ordinal else it } }
     // Opens on the first tab, in the order they were dragged into (or on the one last shown, while
@@ -159,10 +162,12 @@ fun AddonsScreen(app: AppState) {
                 val top = if (many) foldedTop else Size.hudHeight
                 when (part) {
                     AddonsPart.CARTRIDGE -> CartridgeContent(app, embedded = true, active = !inTabs, topPadding = top)
+                    AddonsPart.ROMM -> io.github.matiyaaa.fuse.ui.shell.romm.RommContent(app, active = !inTabs, topPadding = top)
                     AddonsPart.STORE -> StoreContent(app, active = !inTabs, topPadding = top)
                     AddonsPart.JELLYFIN -> io.github.matiyaaa.fuse.ui.shell.jellyfin.JellyfinContent(app, active = !inTabs, topPadding = top)
                     AddonsPart.SYNC -> io.github.matiyaaa.fuse.ui.shell.sync.SyncTab(app, active = !inTabs, topPadding = top)
                     AddonsPart.SYNCTHING -> io.github.matiyaaa.fuse.ui.shell.sync.SyncthingTab(app, active = !inTabs, topPadding = top)
+                    AddonsPart.STREAMING -> io.github.matiyaaa.fuse.ui.shell.stream.StreamTab(app, active = !inTabs, topPadding = top)
                 }
             }
         }
@@ -170,10 +175,12 @@ fun AddonsScreen(app: AppState) {
             val items = parts.map { p ->
                 when (p) {
                     AddonsPart.CARTRIDGE -> ViewTab("Cartridge", icon = FuseMarks.Cartridge, badge = (cartridge.activeDownloads + cartridge.queuedDownloads).takeIf { it > 0 }?.toString())
+                    AddonsPart.ROMM -> ViewTab("Fuse RomM", icon = FuseIcons.LibraryBig, badge = app.store.romm.state.value.newGames.takeIf { it > 0 }?.toString())
                     AddonsPart.STORE -> ViewTab("Store", icon = FuseIcons.Store, badge = store.updates.size.takeIf { it > 0 }?.toString())
                     AddonsPart.JELLYFIN -> ViewTab("Jellyfin", icon = FuseIcons.Clapperboard)
                     AddonsPart.SYNC -> ViewTab("Sync", icon = FuseIcons.RefreshCcw)
                     AddonsPart.SYNCTHING -> ViewTab("Syncthing", icon = FuseIcons.FolderSync)
+                    AddonsPart.STREAMING -> ViewTab("Streaming", icon = FuseIcons.MonitorPlay)
                 }
             }
             // Open: the named tabs, which lift away and shrink toward the top left as the page scrolls.

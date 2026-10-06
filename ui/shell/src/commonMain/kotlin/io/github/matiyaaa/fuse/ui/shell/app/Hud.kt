@@ -2,6 +2,7 @@ package io.github.matiyaaa.fuse.ui.shell.app
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -109,6 +110,8 @@ import kotlinx.datetime.toLocalDateTime
 
 /** The buttons at the end of the tab line, reachable with the stick after the last tab. */
 enum class HudButton {
+    /** Downloads, while anything moves (or just failed): the one way into every transfer. */
+    DOWNLOADS,
     SEARCH,
     SETTINGS,
 
@@ -156,6 +159,8 @@ fun Hud(
     activeButton: HudButton? = null,
     /** Who is playing here, when Fuse Sync is in use: their avatar sits with the status. */
     profile: HudProfile? = null,
+    /** Transfers moving (or failed), for the Downloads button; null hides it. */
+    downloads: HudDownloads? = null,
 ) {
     val time = rememberClockText(clock24h)
     val anchors = remember { HudAnchors() }
@@ -277,6 +282,15 @@ fun Hud(
             for (a in activities) {
                 HudActivityChip(a)
                 Spacer(Modifier.width(Space.xs))
+            }
+            if (downloads != null) {
+                HudDownloadsButton(
+                    downloads,
+                    focused = tabsFocused && focusedButton == HudButton.DOWNLOADS,
+                    active = activeButton == HudButton.DOWNLOADS,
+                    modifier = Modifier.anchor(anchors, HudButton.DOWNLOADS),
+                ) { onButton(HudButton.DOWNLOADS) }
+                Spacer(Modifier.width(Space.xxs))
             }
             HudIconButton(
                 FuseIcons.Search, "Search",
@@ -441,6 +455,80 @@ private fun BoxScope.ActiveMarker(anchors: HudAnchors, key: Any) {
             drawRoundRect(accent, Offset(start, top), GSize(end - start, h), CornerRadius(h / 2))
         },
     )
+}
+
+/**
+ * What the Downloads button shows: how many transfers move, whether any go up, overall progress
+ * where the sizes are known, and failures waiting to be looked at.
+ */
+data class HudDownloads(val active: Int, val uploading: Boolean, val progress: Float?, val failed: Int, val waiting: Int) {
+    val label: String get() = buildString {
+        append("Downloads")
+        if (active > 0) append(": $active moving")
+        if (uploading) append(", uploads among them")
+        if (failed > 0) append(", $failed failed")
+        append(". Select to open")
+    }
+}
+
+/**
+ * The Downloads button: an arrow in a ring that fills with the overall progress (turning while sizes
+ * are unknown), a small count when more than one moves, an up arrow when uploads are among them, and
+ * an accent dot when something failed. Reached with the stick like Search and Settings.
+ */
+@Composable
+private fun HudDownloadsButton(d: HudDownloads, focused: Boolean, active: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    val c = Fuse.colors
+    val sweep by fuselineFloat((d.progress ?: 0f).coerceIn(0f, 1f), Fuse.motion.value(), label = "downloads")
+    val moving = d.active > 0
+    val turning = moving && d.progress == null && !Fuse.motion.reduced && Fuse.quality.animatedBackground
+    val angle = if (turning) rememberLoopClock(label = "dlspin").animateFloat(0f, 360f, infiniteRepeatable(tween(1100, easing = Curves.Linear)), label = "dlangle") else null
+    val shape = rememberHudShape(insetX = true)
+    val focus by fuselineFloat(if (focused) 1f else 0f, Fuse.motion.tween(Durations.FAST), label = "dlFocus")
+    Box(
+        modifier
+            .size(Size.touch)
+            .fuseClickable(shape = shape, scale = false, role = Role.Button, onClickLabel = d.label, onClick = onClick)
+            .hudFocus(shape, { maxOf(focus, if (active) 0.6f else 0f) }, c.text.copy(alpha = if (c.isDark) 0.12f else 0.08f), c.focus)
+            .semantics { contentDescription = d.label },
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(
+            Modifier
+                .size(Size.chip)
+                .drawWithCache {
+                    val stroke = Size.track.toPx() * 0.6f
+                    val inset = stroke / 2
+                    val arc = GSize(size.width - stroke, size.height - stroke)
+                    val track = Stroke(stroke)
+                    val line = Stroke(stroke, cap = StrokeCap.Round)
+                    onDrawBehind {
+                        if (moving) drawArc(c.text.copy(alpha = 0.14f), 0f, 360f, false, Offset(inset, inset), arc, style = track)
+                        when {
+                            moving && d.progress != null -> drawArc(c.accent, -90f, 360f * sweep, false, Offset(inset, inset), arc, style = line)
+                            moving -> drawArc(c.accent, angle?.value ?: -90f, 90f, false, Offset(inset, inset), arc, style = line)
+                        }
+                        if (d.failed > 0) drawCircle(c.danger, radius = Size.dot.toPx() / 2, center = Offset(size.width - Size.dot.toPx() * 0.75f, Size.dot.toPx() * 0.75f))
+                    }
+                },
+            contentAlignment = Alignment.Center,
+        ) {
+            FuseIcon(FuseIcons.Download, size = Size.iconS, tint = c.text)
+            if (d.uploading) {
+                Box(Modifier.align(Alignment.BottomEnd).size(14.dp).clip(CircleShape).background(c.accent), contentAlignment = Alignment.Center) {
+                    FuseIcon(FuseIcons.ArrowUp, size = 10.dp, tint = c.onAccent)
+                }
+            }
+        }
+        if (d.active > 1) {
+            Box(
+                Modifier.align(Alignment.TopEnd).padding(top = 6.dp, end = 4.dp).height(16.dp).clip(CircleShape).background(c.surfaceRaised).padding(horizontal = 4.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                FText("${d.active}", Fuse.type.numericSmall, color = c.text, maxLines = 1)
+            }
+        }
+    }
 }
 
 /**

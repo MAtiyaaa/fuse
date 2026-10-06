@@ -60,6 +60,19 @@ sealed interface Route {
     /** One game as the Fuse Sync host keeps it: play time by device, every save, version and file. */
     data class SyncGame(val game: String, val name: String) : Route
 
+    /** Downloads: every transfer Fuse makes for the person, in one place (the top line's Downloads button). */
+    data object Downloads : Route
+
+    /** Jellyfin films and episodes kept on this device: play, delete, move to another drive. */
+    data object OfflineMedia : Route
+
+    /** Fuse RomM's settings (Settings, Addons, Fuse RomM) and its setup ([pairing]: straight to signing in). */
+    data object RommSettings : Route
+    data class RommSetup(val pairing: Boolean = false) : Route
+
+    /** A system's games on the RomM server, or a collection's. */
+    data class RommGames(val slug: String?, val name: String, val collection: String? = null) : Route
+
     /** Where play time went: today, this week, this month, per day, per game and per system. */
     data object PlayTime : Route
     data object Themes : Route

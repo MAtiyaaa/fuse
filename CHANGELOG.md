@@ -9,6 +9,7 @@ Versions follow `fuse.version` in `gradle.properties`, and every release is tagg
 
 | Version | Name | Notes |
 |---|---|---|
+| 0.3.6 | The Unity Update | [docs/releases/0.3.6.md](docs/releases/0.3.6.md) |
 | 0.3.5 | The Swift Update | [docs/releases/0.3.5.md](docs/releases/0.3.5.md) |
 | 0.3.4 | The Household Update | [docs/releases/0.3.4.md](docs/releases/0.3.4.md) |
 | 0.3.3 | The Together Update | [docs/releases/0.3.3.md](docs/releases/0.3.3.md) |

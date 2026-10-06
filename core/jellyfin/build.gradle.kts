@@ -12,10 +12,14 @@ kotlin {
         commonMain.dependencies {
             api(projects.core.playback)
             api(projects.core.data)
+            api(projects.core.transfer)
             api(libs.ktor.client.core)
             implementation(libs.kotlinx.serialization.json)
         }
         commonTest.dependencies {
+            implementation(libs.ktor.client.mock)
+        }
+        getByName("desktopTest").dependencies {
             implementation(libs.ktor.client.mock)
         }
         // Android and the desktop are both the JVM: discovery's UDP lives here once.

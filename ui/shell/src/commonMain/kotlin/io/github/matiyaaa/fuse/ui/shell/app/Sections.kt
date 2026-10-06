@@ -64,7 +64,8 @@ internal val AppState.sections: Sections get() {
     val p = store.prefs.value
     return Sections(
         addons = (store.appStore.supported && p.storeEnabled) || (store.jellyfin != null && p.jellyfin.enabled) ||
-            (store.sync.service != null && p.sync.enabled) || syncthingOn,
+            (store.sync.service != null && p.sync.enabled) || syncthingOn || (store.romm.supported && p.romm.enabled) ||
+            (store.streaming.supported && p.streaming.enabled && p.streaming.hosts.isNotEmpty()),
         cartridgeOn = platform.features.cartridge && p.cartridgeEnabled,
     )
 }
@@ -79,7 +80,13 @@ internal fun rememberTabs(app: AppState, prefs: UiPrefs): List<Destination> {
 }
 
 /** Which part of Addons is showing. */
-enum class AddonsPart { CARTRIDGE, STORE, JELLYFIN, SYNC, SYNCTHING }
+enum class AddonsPart { CARTRIDGE, ROMM, STORE, JELLYFIN, SYNC, SYNCTHING, STREAMING }
+
+/** Opens Streaming in Addons. */
+internal fun AppState.openStreaming() {
+    addonsPart = AddonsPart.STREAMING
+    selectTab(Destination.CARTRIDGE)
+}
 
 /** Opens Jellyfin in Addons. */
 internal fun AppState.openJellyfin() {
@@ -99,6 +106,12 @@ internal val AppState.syncthingOn: Boolean get() = syncthingActive
 /** Opens Cartridge: its own section, or the Cartridge part of Addons. */
 internal fun AppState.openCartridge() {
     addonsPart = AddonsPart.CARTRIDGE
+    selectTab(Destination.CARTRIDGE)
+}
+
+/** Opens Fuse RomM in Addons. */
+internal fun AppState.openRomm() {
+    addonsPart = AddonsPart.ROMM
     selectTab(Destination.CARTRIDGE)
 }
 

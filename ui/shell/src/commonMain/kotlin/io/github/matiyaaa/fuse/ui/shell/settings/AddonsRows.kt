@@ -9,6 +9,8 @@ import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseMarks
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.Route
+import io.github.matiyaaa.fuse.ui.shell.app.openStreaming
+import io.github.matiyaaa.fuse.ui.shell.stream.addStreamHost
 import io.github.matiyaaa.fuse.ui.shell.jellyfin.jellyfinStatus
 import kotlinx.coroutines.launch
 
@@ -27,9 +29,16 @@ fun addonsRows(app: AppState): List<MenuAction> {
     val cartridge = if (app.platform.features.cartridge) cartridgeRows(app) else null
     val sync = app.store.sync.service?.let { syncRowsFor(app, it, prefs.sync) }
     val syncthing = app.store.syncthing
+    val romm = if (app.store.romm.supported) rommRowsFor(app, prefs.romm) else null
     // With one addon there is nothing to choose between: its rows are the section.
-    if (store == null && cartridge == null && sync == null && syncthing == null && jellyfin != null) return jellyfin
+    if (store == null && cartridge == null && sync == null && syncthing == null && romm == null && jellyfin != null) return jellyfin
     return buildList {
+        if (romm != null) {
+            val st = app.store.romm.state.collectAsState().value
+            addAll(app.group(ADDONS_ROMM, "Fuse RomM", FuseIcons.LibraryBig, summary = io.github.matiyaaa.fuse.ui.shell.romm.rommStatus(st, prefs.romm).second, detail = "Your RomM server's games, downloads and uploads, inside Fuse") {
+                romm.map { it.copy(id = "romm.${it.id}") }
+            })
+        }
         if (sync != null) {
             val s = app.store.sync.service!!.status.collectAsState().value
             addAll(app.group(ADDONS_SYNC, "Fuse Sync", FuseIcons.RefreshCcw, summary = if (prefs.sync.enabled) io.github.matiyaaa.fuse.ui.shell.sync.syncWords(s).title else "Off", detail = "Your saves, play time, library and settings on every device") {
@@ -52,6 +61,33 @@ fun addonsRows(app: AppState): List<MenuAction> {
                         onSelect = { app.go(Route.SyncthingSettings) },
                     ),
                 )
+            })
+        }
+        if (app.store.streaming.supported) {
+            val s = prefs.streaming
+            val hosts = app.store.streaming.hosts.collectAsState().value
+            addAll(app.group("addons.streaming", "Streaming", FuseIcons.MonitorPlay, summary = if (!s.enabled) "Off" else if (s.hosts.isEmpty()) "No computers" else "${s.hosts.size} ${if (s.hosts.size == 1) "computer" else "computers"}", detail = "Play from a computer at home with Moonlight, waking it when it sleeps") {
+                buildList {
+                    add(toggleRow("streaming.enabled", "Stream from a Computer", FuseIcons.Power, s.enabled, "A Streaming tab in Addons for the computers running Sunshine or Apollo") { v ->
+                        app.store.updatePrefs { it.copy(streaming = it.streaming.copy(enabled = v)) }
+                    })
+                    if (s.enabled) {
+                        val client = app.store.streaming.client
+                        add(infoRow("streaming.client", if (client != null) "Moonlight is installed" else "Moonlight isn't installed", detail = if (client != null) "Fuse starts it on the app you choose. Pair it with each computer once, in Moonlight" else "Get Moonlight, pair it with your computer once, then stream from Fuse", icon = if (client != null) FuseIcons.CircleCheck else FuseIcons.Warning))
+                        for (h in hosts) add(MenuAction(
+                            "streaming.host.${h.host.id}", h.host.name, FuseIcons.Monitor,
+                            detail = listOfNotNull(h.host.address, h.host.mac.takeIf { it.isNotBlank() }?.let { "wakes by $it" }, "${h.host.apps.size} apps").joinToString("  ·  "),
+                            trailing = Trailing.Value(when (h.online) { true -> "Ready"; false -> if (h.canWake) "Asleep" else "Off"; null -> "" }),
+                            onSelect = { app.openStreaming() },
+                        ))
+                        add(MenuAction("streaming.add", "Add a Computer", FuseIcons.Plus, detail = "By its address on your network", onSelect = { app.addStreamHost() }))
+                        add(app.choiceRow(
+                            "streaming.wait", "Wait for a Computer to Wake", FuseIcons.Clock, s.wakeWaitSeconds.toString(),
+                            listOf("45" to "45 seconds", "75" to "75 seconds", "120" to "2 minutes", "180" to "3 minutes"),
+                            detail = "How long Fuse waits before saying it didn't wake",
+                        ) { v -> app.store.updatePrefs { it.copy(streaming = it.streaming.copy(wakeWaitSeconds = v.toInt())) } })
+                    }
+                }
             })
         }
         if (jellyfin != null) {
@@ -95,6 +131,37 @@ private fun jellyfinRowsFor(app: AppState, service: io.github.matiyaaa.fuse.jell
     }
 }
 
+/**
+ * Fuse RomM's rows in Addons: the switch (which turns Cartridge off in Fuse while it's on, each
+ * keeping its own setup), then its own page.
+ */
+@Composable
+private fun rommRowsFor(app: AppState, r: io.github.matiyaaa.fuse.data.settings.FuseRommSettings): List<MenuAction> {
+    val st = app.store.romm.state.collectAsState().value
+    val (_, title, detail) = io.github.matiyaaa.fuse.ui.shell.romm.rommStatus(st, r)
+    return buildList {
+        add(toggleRow("enabled", "Use Fuse RomM", FuseIcons.Power, r.enabled, "The Fuse RomM native integration. Turning it on turns Cartridge off in Fuse; both keep their setup") { v ->
+            app.scope.launch { app.store.romm.setEnabled(v) }
+        })
+        add(MenuAction(
+            "page", if (r.enabled && !r.configured) "Set Up Fuse RomM" else "Server, Library, Transfers and BIOS", FuseIcons.Server,
+            detail = detail,
+            trailing = Trailing.Value(title),
+            onSelect = { if (r.enabled && !r.configured) app.go(Route.RommSetup()) else app.go(Route.RommSettings) },
+        ))
+    }
+}
+
+/** Settings, Downloads: how every transfer behaves, wherever it comes from. */
+@Composable
+fun downloadsRows(app: AppState): List<MenuAction> {
+    val dl = app.store.prefs.collectAsState().value.downloads
+    return buildList {
+        add(MenuAction("open", "Open Downloads", FuseIcons.Download, detail = "Everything moving, waiting, finished or failed", trailing = Trailing.Chevron, onSelect = { app.go(Route.Downloads) }))
+        addAll(io.github.matiyaaa.fuse.ui.shell.romm.transferRows(app, dl, { t -> app.store.updatePrefs { it.copy(downloads = t(it.downloads)) } }, section = "Transfers"))
+    }
+}
+
 /** The Fuse Sync rows of Addons: the switch, then its own page for everything else. */
 @Composable
 private fun syncRowsFor(app: AppState, service: io.github.matiyaaa.fuse.sync.SyncService, c: io.github.matiyaaa.fuse.data.settings.SyncSettings): List<MenuAction> {
@@ -127,6 +194,7 @@ const val ADDONS_SYNCTHING = "addons.syncthing"
 const val ADDONS_JELLYFIN = "addons.jellyfin"
 const val ADDONS_STORE = "addons.store"
 const val ADDONS_CARTRIDGE = "addons.cartridge"
+const val ADDONS_ROMM = "addons.romm"
 
 /** What the Addons section's row in the list shows: only when Jellyfin needs something. */
 @Composable

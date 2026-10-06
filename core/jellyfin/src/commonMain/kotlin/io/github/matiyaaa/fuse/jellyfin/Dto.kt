@@ -100,6 +100,7 @@ internal data class MediaSourceDto(
     @SerialName("Id") val id: String? = null,
     @SerialName("Name") val name: String? = null,
     @SerialName("Container") val container: String? = null,
+    @SerialName("Path") val path: String? = null,
     @SerialName("Size") val size: Long? = null,
     @SerialName("Bitrate") val bitrate: Long? = null,
     @SerialName("RunTimeTicks") val runTimeTicks: Long? = null,

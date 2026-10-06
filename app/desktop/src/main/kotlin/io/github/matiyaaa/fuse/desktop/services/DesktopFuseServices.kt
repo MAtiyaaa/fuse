@@ -54,6 +54,23 @@ class DesktopFuseServices private constructor(
     private val engine = CIO.create()
     override val http: HttpClient = FuseHttp.client(engine, FuseHttpConfig(appVersion = appVersion))
     override val cacheDir: String = dirs.cache
+    override val dataDir: String = dirs.data
+
+    /** The person's own videos folder (Movies on a Mac), or beside a portable Fuse. */
+    override val mediaDir: String = when {
+        dirs.portable -> "${dirs.data}/Offline"
+        System.getProperty("os.name").orEmpty().lowercase().contains("mac") -> "${dirs.home}/Movies/Fuse"
+        else -> "${dirs.home}/Videos/Fuse"
+    }
+    override suspend fun sendWake(packet: ByteArray, ports: List<Int>, address: String?): Boolean =
+        io.github.matiyaaa.fuse.desktop.stream.DesktopStreaming.wake(packet, ports, address)
+
+    override suspend fun startStream(hostName: String, uniqueId: String?, address: String, app: String, client: String): String? =
+        // Moonlight knows the computer by its id once paired; its address works too.
+        io.github.matiyaaa.fuse.desktop.stream.DesktopStreaming.start(uniqueId?.takeIf { it.isNotBlank() } ?: address, app, client)
+
+    override fun streamClient(): String? = io.github.matiyaaa.fuse.desktop.stream.DesktopStreaming.client()?.joinToString(" ")
+
     override val deviceName: String = runCatching { java.net.InetAddress.getLocalHost().hostName }.getOrNull()?.takeIf { it.isNotBlank() } ?: "Fuse"
     override val jellyfinDiscovery = io.github.matiyaaa.fuse.jellyfin.UdpDiscovery()
 

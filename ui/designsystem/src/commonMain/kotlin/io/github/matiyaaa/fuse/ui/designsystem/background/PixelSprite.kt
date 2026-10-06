@@ -11,6 +11,8 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
  * nothing. Pixels land on whole device pixels, so the art stays crisp at any size.
  */
 internal class PixelSprite(vararg rows: String) {
+    /** The art as drawn, row by row (kept for making a variation of it, such as [BoFrames]). */
+    val rows: List<String> = rows.toList()
     val width: Int = rows.maxOf { it.length }
     val height: Int = rows.size
 
@@ -60,7 +62,7 @@ internal class PixelSprite(vararg rows: String) {
 
 /** Fusi's colours: her own whatever the theme (she is a little white dog with a pink bow). */
 internal object FusiPalette {
-    private const val KEYS = "owsSenmtcbBrRdkyh"
+    private const val KEYS = "owsSenmtcbBrRdkyhKg"
 
     fun index(ch: Char): Int = KEYS.indexOf(ch).also { require(it >= 0) { "No colour for '$ch'" } }
 
@@ -83,6 +85,8 @@ internal object FusiPalette {
         Color(0xFFC48460), // k kibble
         Color(0xFFFFE28C), // y kibble, lit
         Color(0xFFFFFFFF), // h shine
+        Color(0xFF1E1A22), // K collar, near black
+        Color(0xFFF2C14E), // g the collar's tag
     )
 
     /** At night the fur takes the room's moonlight a little, so she never glows against a dark sky. */

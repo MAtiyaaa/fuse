@@ -100,6 +100,18 @@ interface FuseStore {
     /** Fuse Sync by Fuse: off and invisible until turned on in Settings, Addons, Fuse Sync. */
     val sync: SyncOps get() = SyncOps.None
 
+    /** Downloads: every transfer Fuse makes for the person, in one place. */
+    val transfers: TransfersOps get() = TransfersOps.None
+
+    /** Fuse RomM, the Fuse RomM native integration. */
+    val romm: RommOps get() = RommOps.None
+
+    /** Streaming games from a computer at home with Moonlight. */
+    val streaming: StreamingOps get() = StreamingOps.None
+
+    /** Jellyfin films and episodes kept on this device for watching offline. */
+    val offlineMedia: OfflineMediaOps get() = OfflineMediaOps.None
+
     /** Syncthing, for people who run it: off until chosen in setup or Settings, Addons, Syncthing. */
     val syncthing: io.github.matiyaaa.fuse.sync.syncthing.SyncthingService? get() = null
 
@@ -611,6 +623,15 @@ interface MediaOps {
     fun checkKeys()
     /** Fetches logos, artwork and colours from the system art pack for every system with games. */
     fun downloadSystemArt()
+
+    /**
+     * Puts [platforms] (every system with games when empty) back to Fuse's own art: downloaded and
+     * chosen art is removed and not downloaded again by itself. Null where this can't be done.
+     */
+    suspend fun restoreDefaultSystemArt(platforms: List<PlatformId>): ArtUndo? = null
+
+    /** Puts back what [restoreDefaultSystemArt] replaced. */
+    suspend fun undoSystemArt(undo: ArtUndo) {}
     val systemArtProgress: StateFlow<FillProgress?>
 }
 
@@ -820,3 +841,8 @@ data class PhoneLinkState(
     val sessions: Int = 0,
     val error: String? = null,
 )
+
+/** What a "Restore Fuse Default Art" replaced, for Undo; [count] systems had art of their own. */
+interface ArtUndo {
+    val count: Int
+}

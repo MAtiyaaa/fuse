@@ -72,6 +72,8 @@ class FuselineBenchmark {
 
     private val lines = ArrayList<String>()
     private val ratios = ArrayList<Pair<String, Double>>()
+    private val v2lines = ArrayList<String>()
+    private val speedups = ArrayList<Pair<String, Double>>()
 
     /** Both engines, each measured twice in turn so neither gains from going second; the better of each counts. */
     private fun compare(case: String, fuselineRun: () -> Result, composeRun: () -> Result) {
@@ -120,6 +122,28 @@ class FuselineBenchmark {
                 { measure(0, perFrame = { f -> co.forEach { v -> launch { v.animateTo(f * 10f, composeSpring(0.8f, 300f)) } } }) {} },
             )
         }
+        // Fuseline 2: the same retargeting, in place (FuselineValue.retarget), against Fuseline 1's
+        // way (a new move per target) and Compose's.
+        for (n in listOf(100, 1000)) {
+            val one = List(n) { FuselineValue(0f) }
+            val two = List(n) { FuselineValue(0f) }
+            val co = List(n) { Animatable(0f) }
+            val s = spring(0.8f, 300f)
+            val r1 = measure(0, perFrame = { f -> one.forEach { v -> launch { v.animateTo(f * 10f, s) } } }) {}
+            val r2 = measure(0, perFrame = { f -> two.forEach { v -> if (!v.retarget(f * 10f, s)) launch { v.animateTo(f * 10f, s) } } }) {}
+            val rc = measure(0, perFrame = { f -> co.forEach { v -> launch { v.animateTo(f * 10f, composeSpring(0.8f, 300f)) } } }) {}
+            // Each measured again in turn, the better of each kept, as [compare] does.
+            val r1b = measure(0, perFrame = { f -> one.forEach { v -> launch { v.animateTo(f * 10f, s) } } }) {}
+            val r2b = measure(0, perFrame = { f -> two.forEach { v -> if (!v.retarget(f * 10f, s)) launch { v.animateTo(f * 10f, s) } } }) {}
+            val best1 = if (r1.nanosPerFrame <= r1b.nanosPerFrame) r1 else r1b
+            val best2 = if (r2.nanosPerFrame <= r2b.nanosPerFrame) r2 else r2b
+            val speedup = best1.nanosPerFrame / best2.nanosPerFrame
+            speedups += "$n springs retargeted every frame" to speedup
+            v2lines += String.format(
+                "| %d springs retargeted every frame | %.1f us | %.1f us | %.1f us | %.1fx | %.0f B | %.0f B |",
+                n, best2.nanosPerFrame / 1000, best1.nanosPerFrame / 1000, rc.nanosPerFrame / 1000, speedup, best2.bytesPerFrame, best1.bytesPerFrame,
+            )
+        }
         compare(
             "100 colour fades",
             { measure(100) { launch { FuselineValue(Color.Red).animateTo(Color.Blue, tween(long, easing = Curves.Linear)) } } },
@@ -129,10 +153,16 @@ class FuselineBenchmark {
             appendLine("| Case | Fuseline | Compose | Fuseline / Compose | Fuseline memory | Compose memory |")
             appendLine("|---|---|---|---|---|---|")
             lines.forEach { appendLine(it) }
+            appendLine()
+            appendLine("| Fuseline 2 case | Fuseline 2 | Fuseline 1 | Compose | Fuseline 2 speed-up | Fuseline 2 memory | Fuseline 1 memory |")
+            appendLine("|---|---|---|---|---|---|---|")
+            v2lines.forEach { appendLine(it) }
         }
         println(report)
         File("build/fuseline-bench.txt").apply { parentFile.mkdirs() }.writeText(report)
         // Fuseline is at least as fast in every case (a little slack for a busy machine).
         for ((case, ratio) in ratios) assertTrue(ratio <= 1.1, "$case: Fuseline took ${"%.2f".format(ratio)}x Compose's time")
+        // Retargeting in place is much faster than a new move per target (the reason it exists).
+        for ((case, s) in speedups) assertTrue(s >= 4.0, "$case: Fuseline 2 only ${"%.1f".format(s)}x Fuseline 1")
     }
 }

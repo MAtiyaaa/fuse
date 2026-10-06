@@ -311,6 +311,8 @@ sealed interface ProblemAction {
     data class GrantAccess(override val label: String = "Allow access") : ProblemAction
     data class OpenSystem(val platform: io.github.matiyaaa.fuse.model.PlatformId, override val label: String) : ProblemAction
     data class OpenGame(val game: GameId, override val label: String) : ProblemAction
+    /** A system's missing firmware from the person's own RomM server, through Fuse RomM. */
+    data class BiosFromRomm(val platform: io.github.matiyaaa.fuse.model.PlatformId, val name: String, override val label: String = "Download from RomM") : ProblemAction
     /** The game's Installed Content page, to install it into its emulator. */
     data class InstallContent(val game: GameId, override val label: String = "Install it") : ProblemAction
     data class AdoptDrive(val source: io.github.matiyaaa.fuse.model.LibrarySourceId, override val label: String = "It's the same library") : ProblemAction

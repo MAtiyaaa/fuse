@@ -49,6 +49,33 @@ class AndroidFuseServices(
     override val fs: FuseFileSystem = AndroidFileSystem(storageVolumes::mounted, appContext.packageName, storageVolumes::hasFullAccess)
     override val secrets: SecretStore = KeystoreSecretStore(appContext)
     override val cacheDir: String = appContext.cacheDir.absolutePath
+    override val dataDir: String = appContext.filesDir.absolutePath
+
+    /** The shared Movies folder when Fuse may write there, so other apps see the films too; else Fuse's own. */
+    override val mediaDir: String
+        get() = if (storageVolumes.hasFullAccess()) {
+            java.io.File(android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_MOVIES), "Fuse").absolutePath
+        } else {
+            (appContext.getExternalFilesDir(android.os.Environment.DIRECTORY_MOVIES) ?: java.io.File(appContext.filesDir, "Offline")).absolutePath
+        }
+
+    override suspend fun sendWake(packet: ByteArray, ports: List<Int>, address: String?): Boolean =
+        kotlinx.coroutines.withContext(Dispatchers.IO) { io.github.matiyaaa.fuse.stream.AndroidStreaming.sendWake(packet, ports, address) }
+
+    override suspend fun startStream(hostName: String, uniqueId: String?, address: String, app: String, client: String): String? =
+        io.github.matiyaaa.fuse.stream.AndroidStreaming.start(appContext, hostName, uniqueId, app, client)
+
+    override fun streamClient(): String? = io.github.matiyaaa.fuse.stream.AndroidStreaming.installed(appContext)
+
+    override fun unmetered(): Boolean {
+        val cm = appContext.getSystemService(android.net.ConnectivityManager::class.java) ?: return true
+        return runCatching { !cm.isActiveNetworkMetered }.getOrDefault(true)
+    }
+
+    override fun keepAliveForTransfers(active: Boolean, text: String, progress: Int?) {
+        if (active) io.github.matiyaaa.fuse.transfer.TransferService.show(appContext, text, progress)
+        else io.github.matiyaaa.fuse.transfer.TransferService.stop(appContext)
+    }
     override val deviceName: String =
         android.provider.Settings.Global.getString(appContext.contentResolver, android.provider.Settings.Global.DEVICE_NAME)?.takeIf { it.isNotBlank() } ?: android.os.Build.MODEL
 

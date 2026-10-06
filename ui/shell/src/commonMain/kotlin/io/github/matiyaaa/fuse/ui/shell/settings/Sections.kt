@@ -1,5 +1,7 @@
 package io.github.matiyaaa.fuse.ui.shell.settings
 
+import io.github.matiyaaa.fuse.ui.shell.systems.restoreSystemArt
+import io.github.matiyaaa.fuse.ui.shell.systems.undoSystemArt
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -591,6 +593,14 @@ fun systemsRows(app: AppState): List<MenuAction> {
                             app.toasts.show("Downloading system art")
                         },
                     ))
+                    add(MenuAction(
+                        "art.default", "Restore Fuse Default Art", FuseIcons.RotateCcw,
+                        detail = "Every system shows Fuse's own icon, background and logo again; nothing is downloaded for them by itself",
+                        onSelect = { app.restoreSystemArt(emptyList(), null) },
+                    ))
+                    app.artUndo?.let { u ->
+                        add(MenuAction("art.undo", "Undo Restore Art", FuseIcons.Undo, detail = "Puts back the art ${u.count} systems had", onSelect = { app.undoSystemArt(u) }))
+                    }
                     add(infoRow("art.credit", "Art Book Next", detail = SystemArtPack.ATTRIBUTION, icon = FuseIcons.Info))
                 }
             })
@@ -1378,6 +1388,17 @@ fun storageRows(app: AppState): List<MenuAction> {
             trailing = Trailing.Chevron,
             onSelect = { app.go(Route.Storage) },
         ))
+        // Films and shows kept from Jellyfin: their own page, since they move and go as a group.
+        if (app.store.offlineMedia.supported && app.store.prefs.value.jellyfin.enabled) {
+            val kept by app.store.offlineMedia.entries.collectAsState()
+            add(MenuAction(
+                "offline", "Films and shows downloaded", FuseIcons.Clapperboard,
+                detail = if (kept.isEmpty()) "Nothing kept yet. Download from Jellyfin to watch without the server"
+                else "${kept.size} kept, ${bytesText(kept.filter { it.here }.sumOf { it.meta.sizeBytes })}. Play, delete or move them to another drive",
+                trailing = Trailing.Chevron,
+                onSelect = { app.go(Route.OfflineMedia) },
+            ))
+        }
         add(infoRow("readonly", "Fuse only changes your games when you ask", detail = "It reads your folders. Files are only deleted when you delete games in Games and space, after you confirm. Playlists for multi-disc games are made in Fuse's own storage", icon = FuseIcons.ShieldCheck))
     }
 }

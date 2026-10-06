@@ -234,6 +234,23 @@ class SyncClient(
     suspend fun devices(): List<DeviceInfo> = get("/devices", ListSerializer(DeviceInfo.serializer()))
     suspend fun resolveGames(games: List<List<String>>): List<String> =
         send(HttpMethod.Post, "/games/resolve", GameClaims(games), GameClaims.serializer(), ResolvedGames.serializer()).ids
+    /** Tells the host which saves are in place here. A host before 0.3.6 doesn't take these; that is fine. */
+    suspend fun noteApplied(notes: List<AppliedNote>) {
+        if (notes.isEmpty()) return
+        try {
+            send(HttpMethod.Post, "/applied", AppliedNotes(notes), AppliedNotes.serializer(), kotlinx.serialization.json.JsonObject.serializer())
+        } catch (e: SyncException) {
+            if (e.code == "offline" || e.code == "rate") throw e
+        }
+    }
+
+    /** Every device's place with [game]'s saves for [profile]; null from a host before 0.3.6. */
+    suspend fun convergence(profile: String, game: String): Convergence? = try {
+        get("/profiles/$profile/convergence?game=${java.net.URLEncoder.encode(game, "UTF-8")}", Convergence.serializer())
+    } catch (e: SyncException) {
+        if (e.code == "offline") throw e else null
+    }
+
     suspend fun presence(): List<Presence> = get("/presence", ListSerializer(Presence.serializer()))
     suspend fun notePresence(note: PresenceNote) = send(HttpMethod.Post, "/presence", note, PresenceNote.serializer(), kotlinx.serialization.json.JsonObject.serializer())
     suspend fun joins(): List<JoinAsk> = get("/joins", ListSerializer(JoinAsk.serializer()))

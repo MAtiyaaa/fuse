@@ -38,6 +38,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import io.github.matiyaaa.fuse.ui.designsystem.components.StatusDot
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.heading
@@ -105,6 +108,12 @@ internal fun SyncGameScreen(app: AppState, game: String, name: String) {
         val v = versions.getOrNull(i) ?: return
         if (g != null && report != null) versionFiles(app, g, v.version, report.storePath)
     }
+    // Where every device stands with this game's save, asked of the host now and after each change.
+    var convergence by remember(game) { mutableStateOf<io.github.matiyaaa.fuse.sync.Convergence?>(null) }
+    val activity by svc.activity.collectAsState()
+    LaunchedEffect(game, activity.size) {
+        io.github.matiyaaa.fuse.sync.GameKey.parse(game)?.let { k -> convergence = runCatching { svc.convergence(k) }.getOrNull() }
+    }
     val focused = app.focusZone == FocusZone.CONTENT && !app.overlayOpen
     InputLayer(enabled = focused) { e ->
         when (e.action) {
@@ -168,6 +177,7 @@ internal fun SyncGameScreen(app: AppState, game: String, name: String) {
                         }
                     }
                     if (!wide && g != null) {
+                        convergence?.takeIf { it.slots.isNotEmpty() }?.let { cv -> item("devices") { DevicesCard(cv, Modifier.padding(top = Space.l)) } }
                         if (g.devicePlay.size > 1) item("play") { Card("Play time by device", FuseIcons.ChartPie, Modifier.padding(top = Space.l)) { PlayBars(g.devicePlay, names) } }
                         if (report != null) item("kept") { KeptCard(g, report.storePath, Modifier.padding(top = Space.s)) }
                     }
@@ -177,6 +187,7 @@ internal fun SyncGameScreen(app: AppState, game: String, name: String) {
                         Modifier.width(340.dp).fillMaxHeight().verticalScroll(rememberScrollState()).padding(bottom = Size.hintHeight + Space.m),
                         verticalArrangement = Arrangement.spacedBy(Space.m),
                     ) {
+                        convergence?.takeIf { it.slots.isNotEmpty() }?.let { DevicesCard(it) }
                         if (g.devicePlay.isNotEmpty()) Card("Play time by device", FuseIcons.ChartPie) { PlayBars(g.devicePlay, names) }
                         if (report != null) KeptCard(g, report.storePath)
                     }
@@ -371,4 +382,50 @@ private fun versionFiles(app: AppState, g: GameReport, v: VersionReport, storePa
             },
         ),
     )
+}
+
+/**
+ * Where every device that plays this game stands with its save: one line for all ("Synced
+ * everywhere", "4 of 5 devices current"), then each device with a dot and a word. Devices that never
+ * reported the game (they don't have it) aren't counted.
+ */
+@Composable
+private fun DevicesCard(cv: io.github.matiyaaa.fuse.sync.Convergence, modifier: Modifier = Modifier) {
+    val c = Fuse.colors
+    val slot = cv.slots.firstOrNull { it.kind != SaveKind.STATE } ?: cv.slots.first()
+    val playing = slot.playing
+    Card("Devices", FuseIcons.MonitorSmartphone, modifier) {
+        FText(
+            when {
+                playing.isEmpty() -> "No device has reported this game yet"
+                slot.current == playing.size -> if (playing.size == 1) "On one device" else "Synced everywhere"
+                else -> "${slot.current} of ${playing.size} devices current"
+            },
+            Fuse.type.bodyStrong, maxLines = 1,
+        )
+        for (d in playing.sortedWith(compareBy({ it.state != io.github.matiyaaa.fuse.sync.AppliedState.CURRENT }, { it.name.lowercase() }))) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                StatusDot(
+                    when (d.state) {
+                        io.github.matiyaaa.fuse.sync.AppliedState.CURRENT -> true
+                        io.github.matiyaaa.fuse.sync.AppliedState.CONFLICT -> false
+                        else -> null
+                    },
+                )
+                Spacer(Modifier.width(Space.s))
+                FText(d.name, Fuse.type.body, maxLines = 1, modifier = Modifier.weight(1f))
+                FText(
+                    when (d.state) {
+                        io.github.matiyaaa.fuse.sync.AppliedState.CURRENT -> if (slot.headDevice == d.name) "Newest from here" else "Current"
+                        io.github.matiyaaa.fuse.sync.AppliedState.BEHIND -> "Gets it next"
+                        io.github.matiyaaa.fuse.sync.AppliedState.CONFLICT -> "Both played: asks at launch"
+                        io.github.matiyaaa.fuse.sync.AppliedState.INCOMPATIBLE -> "Another emulator's save"
+                        io.github.matiyaaa.fuse.sync.AppliedState.UNAVAILABLE -> "Save folder not reachable"
+                        null -> ""
+                    },
+                    Fuse.type.caption, color = c.textMuted, maxLines = 1,
+                )
+            }
+        }
+    }
 }

@@ -13,6 +13,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.components.Trailing
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
 import io.github.matiyaaa.fuse.ui.designsystem.sound.SoundCue
 import io.github.matiyaaa.fuse.ui.shell.cartridge.uploadToRomm
+import io.github.matiyaaa.fuse.ui.shell.romm.rommUpload
 import io.github.matiyaaa.fuse.ui.shell.settings.canMoveGames
 import io.github.matiyaaa.fuse.ui.shell.settings.moveGames
 import io.github.matiyaaa.fuse.ui.shell.store.CompatibilityAnswer
@@ -348,8 +349,14 @@ fun AppState.gameMenu(card: GameCard, fromDetail: Boolean = false, extra: List<M
             }))
         }
         if (!card.isApp) add(MenuAction("folder", "Folder Behaviour", FuseIcons.FolderOpen, trailing = Trailing.Chevron, onSelect = { folderPolicyPicker(card) }))
+        // Fuse RomM, when it is the RomM integration in use: games not on RomM go up from here.
+        if (store.prefs.value.romm.enabled && store.romm.supported && !card.isApp && card.rommRomId == null) {
+            add(MenuAction("romm.upload", "Upload to RomM", FuseIcons.Upload, detail = "With its other discs, DLC and updates, through Downloads", onSelect = {
+                rommUpload(card)
+            }))
+        }
         // Only while Cartridge support is on and Cartridge is installed.
-        if (store.cartridge.status.value.installed) {
+        if (store.cartridge.status.value.installed && !store.prefs.value.romm.enabled) {
             if (card.rommRomId != null) {
                 add(MenuAction("cartridge", "Open in Cartridge", FuseIcons.CloudDownload, onSelect = {
                     closeOverlays(); store.cartridge.open(CartridgeRoute.Game(card.rommRomId))

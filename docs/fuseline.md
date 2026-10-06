@@ -82,14 +82,32 @@ time over Compose's.
 
 | Case | Fuseline | Compose | Fuseline / Compose | Fuseline memory | Compose memory |
 |---|---|---|---|---|---|
-| 1 tweens | 1.7 us | 2.4 us | 0.71x | 520 B | 528 B |
-| 1 springs | 1.9 us | 2.0 us | 0.94x | 520 B | 528 B |
-| 100 tweens | 14.9 us | 214.0 us | 0.07x | 4480 B | 50424 B |
-| 100 springs | 19.6 us | 206.3 us | 0.10x | 4480 B | 50424 B |
-| 1000 tweens | 145.1 us | 2848.0 us | 0.05x | 40480 B | 504024 B |
-| 1000 springs | 203.5 us | 2634.4 us | 0.08x | 40480 B | 504024 B |
-| 100 springs retargeted every frame | 588.3 us | 1409.4 us | 0.42x | 192697 B | 553538 B |
-| 100 colour fades | 19.9 us | 208.4 us | 0.10x | 5280 B | 51224 B |
+| 1 tweens | 1.2 us | 1.4 us | 0.84x | 520 B | 528 B |
+| 1 springs | 1.2 us | 1.4 us | 0.85x | 520 B | 528 B |
+| 100 tweens | 12.6 us | 175.1 us | 0.07x | 4480 B | 50424 B |
+| 100 springs | 12.6 us | 140.1 us | 0.09x | 4480 B | 50424 B |
+| 1000 tweens | 133.4 us | 1663.5 us | 0.08x | 40480 B | 504024 B |
+| 1000 springs | 158.6 us | 1598.4 us | 0.10x | 40480 B | 504024 B |
+| 100 springs retargeted every frame | 373.2 us | 1055.5 us | 0.35x | 199891 B | 555918 B |
+| 100 colour fades | 24.6 us | 168.5 us | 0.15x | 5280 B | 51224 B |
+
+### Fuseline 2: retargeting in place
+
+Fuse 0.3.6 adds `FuselineValue.retarget`: a spring under way takes a new target in place,
+carrying on from where it is at the speed it has, without starting a new move. `fuselineFloat`,
+`fuselineColor` and the other followers use it by themselves whenever their spec is a spring, so a
+value following a finger, a scroll, the D-pad or a selection pays for a few small objects per
+target instead of a whole move (a coroutine, its job, a frame wait and a cancellation). Measured
+the same way, retargeting every frame (the case that matters for following):
+
+| Case | Fuseline 2 | Fuseline 1 | Compose | Fuseline 2 speed-up | Fuseline 2 memory | Fuseline 1 memory |
+|---|---|---|---|---|---|---|
+| 100 springs retargeted every frame | 25.3 us | 414.0 us | 935.6 us | 16.4x | 25432 B | 199091 B |
+| 1000 springs retargeted every frame | 267.0 us | 4412.6 us | 10576.6 us | 16.5x | 249614 B | 1986565 B |
+
+That is the stress case Fuseline 2 was built for, and the only one the speed-up is claimed for:
+moves that simply run to the end cost what they cost in Fuseline 1 (the table above). The
+benchmark fails if retargeting in place is ever less than four times faster than a new move.
 
 Transitions (`Appear` and `Swap` against `AnimatedVisibility` and `AnimatedContent`, the whole run
 including composition and layout):
@@ -110,8 +128,10 @@ What makes it quick:
   strides and then to the millisecond.
 - A value writes its frame straight from its own buffer, with no copy per frame.
 - A new move takes over from the one under way without waiting for it to unwind, and ends it
-  with an exception that carries no stack trace. A value following a finger or a scroll, given a
-  new target every frame, costs about half of Compose's and a fraction of its memory.
+  with an exception that carries no stack trace.
+- A spring given a new target keeps its move and its place on the frame driver: its tracks are
+  replaced and its clock starts again from the frame just shown, so the next frame is one frame
+  into the new motion, never a pause or a jump (Fuseline 2, `FuselineValue.retarget`).
 
 ## Tests
 

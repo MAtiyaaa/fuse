@@ -59,6 +59,24 @@ class MediaRepository(
         return combine(flows) { parts -> parts.flatMap { it }.groupedByOwner(owners) }.flowOn(dispatcher)
     }
 
+    /** Every stored row of [owner]'s art, exactly as kept, for putting back with [putBack]. */
+    suspend fun rows(owner: MediaOwner): List<io.github.matiyaaa.fuse.data.db.Media> = withContext(dispatcher) {
+        q.selectByOwner(owner.type(), owner.key()).executeAsList()
+    }
+
+    /** Removes all of [owner]'s art, the user's own and downloaded alike (the files stay where they are). */
+    suspend fun clearOwner(owner: MediaOwner): Unit = withContext(dispatcher) {
+        q.deleteOwner(owner.type(), owner.key())
+    }
+
+    /** Puts [rows] back as they were (after [clearOwner]), replacing what [owner] has now. */
+    suspend fun putBack(owner: MediaOwner, rows: List<io.github.matiyaaa.fuse.data.db.Media>): Unit = withContext(dispatcher) {
+        db.transaction {
+            q.deleteOwner(owner.type(), owner.key())
+            for (r in rows) q.insert(r.owner_type, r.owner_id, r.kind, r.source, r.local_path, r.remote_url, r.width, r.height, r.focus_x, r.focus_y, r.zoom, r.sort_order, r.added_at)
+        }
+    }
+
     /**
      * Sets the user's own artwork for [kind], replacing any previous USER item of that kind. Scraped
      * items stay stored underneath and show again after [resetCustom].

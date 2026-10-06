@@ -379,42 +379,93 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
 
         // ----------------------------------------------------------------------------- connect
         val cartridgeHere = platform.features.cartridge
-        add(Step(
-            "cartridge", "RomM and Cartridge", when {
-                !cartridgeHere -> "Cartridge runs on Android and Linux"
-                cartridge.installed && cartridge.bridge -> "Cartridge is linked"
-                cartridge.installed -> "Cartridge found"
-                else -> "Get games from your RomM server"
+        val rommHere = store.romm.supported
+        val rommConnected = prefs.romm.enabled && prefs.romm.configured
+        // What the person answered; Fuse RomM counts as chosen once it is on, however it got there.
+        val answer = when {
+            rommConnected -> "FUSE"
+            else -> prefs.rommAnswer
+        }
+        fun answerRomm(choice: String) {
+            store.updatePrefs { p ->
+                when (choice) {
+                    // Turning one on turns the other off; neither forgets how it was set up.
+                    "FUSE" -> p.copy(rommAnswer = choice, cartridgeEnabled = false, romm = p.romm.copy(enabled = true))
+                    "CARTRIDGE" -> p.copy(rommAnswer = choice, cartridgeEnabled = true, romm = p.romm.copy(enabled = false))
+                    else -> p.copy(rommAnswer = choice)
+                }
+            }
+        }
+        if (rommHere || cartridgeHere) add(Step(
+            "romm", "RomM", when (answer) {
+                "FUSE" -> if (rommConnected) "Fuse RomM is connected" else "Connect Fuse RomM"
+                "CARTRIDGE" -> when {
+                    cartridge.installed && cartridge.bridge -> "Cartridge is linked"
+                    cartridge.installed -> "Cartridge found"
+                    else -> "Install Cartridge"
+                }
+                else -> "Do you use RomM?"
             },
-            when {
-                !cartridgeHere -> "Cartridge, the companion that downloads games from your RomM server, isn't made for this system. Add your RomM library folder in Settings, Library, and Fuse reads it as it is."
-                cartridge.installed && cartridge.bridge -> "Downloads from Cartridge appear in Fuse on their own. Open it anytime from the Cartridge tab."
-                cartridge.installed -> "This Cartridge opens from Fuse. Version 0.9.10 or newer adds live download status and direct links."
-                else -> "Cartridge is a companion app that downloads games from your RomM server into the right folders. Install it now or later from the Cartridge tab."
+            when (answer) {
+                "FUSE" -> if (rommConnected) {
+                    "Your RomM library is in Addons, Fuse RomM, next to everything else. Games you download land in the right folders and play like any other."
+                } else {
+                    "Fuse connects straight to your RomM server: your games and systems appear in Addons, and downloads land in your library's folders. It takes a minute."
+                }
+                "CARTRIDGE" -> when {
+                    cartridge.installed && cartridge.bridge -> "Downloads from Cartridge appear in Fuse on their own. Open it anytime from the Cartridge tab."
+                    cartridge.installed -> "This Cartridge opens from Fuse. Version 0.9.10 or newer adds live download status and direct links."
+                    else -> "Cartridge is a companion app that downloads games from your RomM server into the right folders. Install it now, or later from the Cartridge tab."
+                }
+                else -> "RomM is a game library server you run at home. If you keep your games on one, Fuse can connect to it directly, or work with Cartridge. If not, carry on: Fuse plays what is on this device."
             },
-            optional = true, icon = io.github.matiyaaa.fuse.ui.designsystem.icons.FuseMarks.Cartridge, chapter = Chapters.CONNECT,
-            actions = when {
-                !cartridgeHere -> listOf(
-                    StepAction("Install Cartridge", enabled = false, note = "Cartridge isn't available on Windows or macOS") {},
-                    StepAction("Continue", primary = true, run = next),
-                )
-                cartridge.installed -> listOf(StepAction("Continue", primary = true, run = next))
-                else -> listOf(
-                    StepAction("Install Cartridge", primary = true) {
-                        app.scope.launch {
-                            val release = store.cartridge.latestRelease()
-                            if (release == null) {
-                                app.toasts.show("Couldn't reach GitHub. You can install Cartridge later from its tab.")
-                            } else {
-                                app.confirm = ConfirmSpec(
-                                    "Install Cartridge ${release.tag.removePrefix("v")}?",
-                                    "Fuse downloads the official release from GitHub and hands it to your system's installer, where you confirm it.",
-                                    "Download and install",
-                                ) { if (live) app.scope.launch { store.cartridge.install(release) } }
+            optional = true, icon = FuseIcons.LibraryBig, chapter = Chapters.CONNECT,
+            actions = when (answer) {
+                "FUSE" -> if (rommConnected) {
+                    listOf(StepAction("Continue", primary = true, run = next), StepAction("Choose again") { answerRomm("") })
+                } else {
+                    listOf(
+                        StepAction("Connect", primary = true) { if (live) app.go(Route.RommSetup()) else next() },
+                        StepAction("Choose again") { answerRomm("") },
+                    )
+                }
+                "CARTRIDGE" -> when {
+                    cartridge.installed -> listOf(StepAction("Continue", primary = true, run = next), StepAction("Choose again") { answerRomm("") })
+                    else -> listOf(
+                        StepAction("Install Cartridge", primary = true) {
+                            app.scope.launch {
+                                val release = store.cartridge.latestRelease()
+                                if (release == null) {
+                                    app.toasts.show("Couldn't reach GitHub. You can install Cartridge later from its tab.")
+                                } else {
+                                    app.confirm = ConfirmSpec(
+                                        "Install Cartridge ${release.tag.removePrefix("v")}?",
+                                        "Fuse downloads the official release from GitHub and hands it to your system's installer, where you confirm it.",
+                                        "Download and install",
+                                    ) { if (live) app.scope.launch { store.cartridge.install(release) } }
+                                }
                             }
-                        }
-                    },
-                    StepAction("Skip", run = next),
+                        },
+                        StepAction("Later", run = next),
+                        StepAction("Choose again") { answerRomm("") },
+                    )
+                }
+                else -> listOfNotNull(
+                    StepAction("Fuse RomM", primary = true) {
+                        answerRomm("FUSE")
+                        if (live) app.go(Route.RommSetup())
+                    }.takeIf { rommHere },
+                    StepAction("Cartridge", primary = !rommHere, enabled = cartridgeHere, note = "Cartridge runs on Android and Linux") { answerRomm("CARTRIDGE") },
+                    StepAction("Neither") { answerRomm("NONE"); next() },
+                )
+            },
+            content = {
+                RommChoiceStage(
+                    chosen = answer,
+                    connected = rommConnected,
+                    cartridgeReady = cartridge.installed,
+                    hasRomm = rommHere,
+                    hasCartridge = cartridgeHere,
                 )
             },
         ))

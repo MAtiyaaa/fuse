@@ -94,11 +94,18 @@ internal class DefaultFuseStore private constructor(
     override val library: DefaultLibraryOps
     override val health: DefaultHealthOps
 
+    /** Every transfer Fuse makes for the person, kept in Fuse's own data folder across restarts. */
+    private val transferEngine = io.github.matiyaaa.fuse.transfer.newTransfers(
+        "${ctx.services.dataDir.trimEnd('/')}/transfers", ctx.scope, ctx::now, { engine.drives.volumes.value },
+    )
+    override val transfers = DefaultTransfersOps(ctx, transferEngine, appStore, updates, cartridge)
+    override val romm: DefaultRommOps
+    override val streaming: DefaultStreamingOps by lazy { DefaultStreamingOps(ctx) { t -> writeSettings(t) } }
+    override val offlineMedia: DefaultOfflineMedia by lazy { DefaultOfflineMedia(ctx, engine, transferEngine, jellyfin) }
+
     /** Fuse Sync over this library: the person's records and settings, read and put in place. */
-    override val sync = DefaultSyncOps(
-        ctx,
-        LibraryProfileData(ctx.data, settings = { settingsNow() }, applySettings = { t -> writeSettings(t) }),
-    ) { t -> writeSettings(t) }
+    private val profileData = LibraryProfileData(ctx.data, settings = { settingsNow() }, applySettings = { t -> writeSettings(t) })
+    override val sync = DefaultSyncOps(ctx, profileData) { t -> writeSettings(t) }
 
     override val syncthing: io.github.matiyaaa.fuse.sync.syncthing.SyncthingService? =
         runCatching { ctx.services.syncthingService(ctx.scope) }.getOrNull()
@@ -137,6 +144,13 @@ internal class DefaultFuseStore private constructor(
             }
         }
         health = DefaultHealthOps(ctx, engine, library, mediaOps, updates, { credentials.stored.value }, { cartridge.status.value })
+        romm = DefaultRommOps(
+            ctx, engine, transferEngine,
+            write = { t -> writeSettings { s -> s.copy(romm = t(s.romm)) } },
+            cartridgeOff = { writeSettings { s -> if (s.cartridge.enabled) s.copy(cartridge = s.cartridge.copy(enabled = false)) else s } },
+            choiceFor = { g -> library.choiceFor(g) },
+            details = CartridgeDetails(ctx),
+        )
     }
 
     /** The settings with anything still on its way to the database written first. */
@@ -299,10 +313,31 @@ internal class DefaultFuseStore private constructor(
 
     private fun start() {
         io.github.matiyaaa.fuse.ui.shell.platform.JellyfinImages.service = jellyfin
+        // Downloads, and Fuse RomM feeding the library through them.
+        transfers.start()
+        romm.start()
+        offlineMedia.start()
+        streaming.start()
+        ctx.scope.launch { ctx.playing.collect { transfers.conditions(playing = it != null) } }
+        // One RomM integration at a time: turning Cartridge on in Fuse turns Fuse RomM off, and the
+        // other way round. Turning one off keeps everything it was set up with.
+        ctx.scope.launch {
+            var before = prefsState.value.cartridgeEnabled to prefsState.value.romm.enabled
+            prefsState.map { it.cartridgeEnabled to it.romm.enabled }.distinctUntilChanged().collect { now ->
+                val (cart, romm) = now
+                if (cart && romm) {
+                    if (!before.first) updatePrefs { it.copy(romm = it.romm.copy(enabled = false)) }
+                    else if (!before.second) updatePrefs { it.copy(cartridgeEnabled = false) }
+                }
+                before = prefsState.value.cartridgeEnabled to prefsState.value.romm.enabled
+            }
+        }
         // Fuse Sync: saves around games, and what the person changes goes up soon.
         sync.service?.let { svc ->
             library.sync = SyncLaunch(svc, sync.port)
             sync.queries = { id -> library.saveQueryFor(id) }
+            // A save made on another device comes into place here by itself, for games this library has.
+            svc.saveQueries { household -> profileData.gameFor(household)?.let { library.saveQueryFor(io.github.matiyaaa.fuse.model.GameId(it)) } }
             sync.samples = { library.saveSamples() }
             ctx.onUserChange = { if (sync.config.value.enabled) svc.changed() }
         }

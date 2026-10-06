@@ -45,6 +45,13 @@ class FuselineValue<T>(
     private val speed = FloatArray(dims)
     private var owner: Job? = null
 
+    /** The move under way: its tracks and where it lands, which [retarget] replaces in place. */
+    private class Ride<T>(var tracks: Array<Track>, val goal: FloatArray, var target: T, val spring: Boolean) {
+        var retimer: Retimer? = null
+    }
+
+    private var ride: Ride<T>? = null
+
     /** Where the value is now. */
     var value: T by mutableStateOf(initialValue)
         private set
@@ -98,28 +105,58 @@ class FuselineValue<T>(
             val goal = FloatArray(dims).also { converter.write(targetValue, it) }
             val startSpeed = initialVelocity?.let { v -> FloatArray(dims).also { converter.write(v, it) } } ?: speed.copyOf()
             val tracks = Array(dims) { i -> Track.of(animationSpec, now[i], goal[i], startSpeed[i], threshold) }
+            val r = Ride(tracks, goal, targetValue, animationSpec is Spring)
+            ride = r
             this.targetValue = targetValue
             isRunning = true
             try {
-                runFrames(tracks.maxOf { it.durationNanos }) { play ->
+                runFrames(tracks.maxOf { it.durationNanos }, onStart = { r.retimer = it }) { play ->
+                    // The tracks may have been replaced since the last frame (a new target, in place).
+                    val tr = r.tracks
                     for (i in 0 until dims) {
-                        now[i] = tracks[i].valueAt(play)
-                        speed[i] = tracks[i].velocityAt(play)
+                        now[i] = tr[i].valueAt(play)
+                        speed[i] = tr[i].velocityAt(play)
                     }
                     // Converters only read the array, so no copy is made per frame.
                     value = converter.read(now)
                     block?.invoke(this)
                 }
                 // Lands exactly, whatever the last frame's rounding.
-                goal.copyInto(now)
+                r.goal.copyInto(now)
                 speed.fill(0f)
-                value = targetValue
+                value = r.target
                 block?.invoke(this)
             } finally {
+                if (ride === r) ride = null
                 // A move that was taken over leaves the running flag to the one in charge now.
                 if (owner === currentCoroutineContext().job) isRunning = false
             }
         }
+    }
+
+    /**
+     * Gives the spring under way a new [targetValue] in place: it carries on from where it is, at
+     * the speed it has, toward the new target under [animationSpec], without a new move. This is
+     * what a value following a finger, a scroll or a selection wants every frame, and it costs a
+     * few small objects instead of a whole move. The move's caller still returns when it arrives
+     * (at the new target). False when no spring is under way here: then start one with [animateTo].
+     */
+    fun retarget(targetValue: T, animationSpec: Spring = Spring(threshold = threshold)): Boolean {
+        val r = ride ?: return false
+        val retimer = r.retimer ?: return false
+        if (!r.spring) return false
+        converter.write(targetValue, r.goal)
+        var longest = 0L
+        val tracks = r.tracks
+        for (i in 0 until dims) {
+            val t = Track.of(animationSpec, now[i], r.goal[i], speed[i], threshold)
+            tracks[i] = t
+            if (t.durationNanos > longest) longest = t.durationNanos
+        }
+        r.target = targetValue
+        this.targetValue = targetValue
+        retimer.retime(longest)
+        return true
     }
 
     /**
@@ -188,7 +225,7 @@ suspend fun animate(
  * turned off) nothing plays and the move ends at once. A move that never ends tells the platform
  * so, the way tests and screenshot tools expect of loops ([InfiniteAnimationPolicy]).
  */
-internal suspend fun runFrames(durationNanos: Long, onFrame: (playNanos: Long) -> Unit) {
+internal suspend fun runFrames(durationNanos: Long, onStart: ((Retimer) -> Unit)? = null, onFrame: (playNanos: Long) -> Unit) {
     val context = currentCoroutineContext()
     val scale = context[MotionDurationScale]?.scaleFactor ?: 1f
     if (durationNanos == 0L || scale == 0f) return
@@ -196,16 +233,21 @@ internal suspend fun runFrames(durationNanos: Long, onFrame: (playNanos: Long) -
     // A move that ends shares its frames with every other on the same clock ([FrameDriver]).
     val clock = context[androidx.compose.runtime.MonotonicFrameClock]
     if (!forever && clock != null) {
-        FrameDriver.of(clock).run(context, durationNanos, scale, onFrame)
+        FrameDriver.of(clock).run(context, durationNanos, scale, onStart, onFrame)
         return
     }
     var start = Long.MIN_VALUE
+    var last = Long.MIN_VALUE
+    var length = durationNanos
+    // Again from the frame just shown, as on the shared driver.
+    onStart?.invoke(Retimer { d -> length = d; start = last })
     while (true) {
-        val done = frame(forever) { frameNanos ->
+        val done = frame(length == Long.MAX_VALUE) { frameNanos ->
+            last = frameNanos
             if (start == Long.MIN_VALUE) start = frameNanos
             val play = ((frameNanos - start) / scale).toLong()
-            onFrame(play.coerceAtMost(durationNanos))
-            play >= durationNanos
+            onFrame(play.coerceAtMost(length))
+            play >= length
         }
         if (done) return
     }

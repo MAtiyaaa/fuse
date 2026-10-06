@@ -1,0 +1,46 @@
+-- 0.3.6: films and episodes kept for watching offline, each with where it is (and on which drive),
+-- its subtitle and what Fuse Player needs to show it while the server is away.
+CREATE TABLE offline_media (
+    key TEXT NOT NULL PRIMARY KEY,
+    source TEXT NOT NULL,
+    server TEXT NOT NULL,
+    item_id TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    title TEXT NOT NULL,
+    series_name TEXT,
+    series_id TEXT,
+    season_id TEXT,
+    season INTEGER,
+    episode INTEGER,
+    path TEXT NOT NULL,
+    volume_json TEXT,
+    subtitle_path TEXT,
+    subtitle_language TEXT,
+    size_bytes INTEGER NOT NULL DEFAULT 0,
+    runtime_ms INTEGER,
+    poster TEXT,
+    meta_json TEXT NOT NULL DEFAULT '{}',
+    added_at INTEGER NOT NULL
+);
+
+CREATE INDEX offline_media_item ON offline_media(source, server, item_id);
+
+upsert:
+INSERT OR REPLACE INTO offline_media(key, source, server, item_id, kind, title, series_name, series_id, season_id, season, episode,
+    path, volume_json, subtitle_path, subtitle_language, size_bytes, runtime_ms, poster, meta_json, added_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+all:
+SELECT * FROM offline_media ORDER BY series_name, season, episode, title COLLATE NOCASE;
+
+byKey:
+SELECT * FROM offline_media WHERE key = ?;
+
+byItem:
+SELECT * FROM offline_media WHERE source = ? AND server = ? AND item_id = ?;
+
+moved:
+UPDATE offline_media SET path = :path, volume_json = :volumeJson, subtitle_path = :subtitlePath WHERE key = :key;
+
+remove:
+DELETE FROM offline_media WHERE key = ?;

@@ -335,3 +335,48 @@ const val SHARED_SAVES = "@shared"
 
 /** Every id a game is known by, to its one id across devices (as the host and each device keep it). */
 val GameAliasesSerializer: KSerializer<Map<String, String>> = MapSerializer(String.serializer(), String.serializer())
+
+/**
+ * Where one device stands with one save, as it reports it after looking (0.3.6 hosts keep these;
+ * an older host simply doesn't take them, and devices carry on). "Applied" means only what it says:
+ * the save is in the emulator's folder on that device, or is that device's own.
+ */
+@Serializable
+enum class AppliedState {
+    /** The host's newest is in place here (or was made here). */
+    CURRENT,
+
+    /** This device played since it last agreed and the host moved on too: kept for the person to choose. */
+    CONFLICT,
+
+    /** The newest is for an emulator this device plays the game with differently: it stays on the host. */
+    INCOMPATIBLE,
+
+    /** The save's folder isn't reachable here (a card out, a private folder). */
+    UNAVAILABLE,
+
+    /** An older one is here; the newest is on its way. */
+    BEHIND,
+}
+
+/** One device's report on one save: which revision is in place, and how things stand. */
+@Serializable
+data class AppliedNote(val profile: String, val game: String, val kind: SaveKind, val revision: String?, val state: AppliedState, val at: Long = 0)
+
+@Serializable
+data class AppliedNotes(val notes: List<AppliedNote>)
+
+/** One device's place with one save, for "5 of 6 devices current". */
+@Serializable
+data class DeviceSlot(val device: String, val name: String, val platform: String = "", val state: AppliedState? = null, val revision: String? = null, val at: Long = 0, val lastSeen: Long = 0)
+
+/** Every device's place with one save of one game. [state] null for a device that never reported it (it may not have the game). */
+@Serializable
+data class SlotDevices(val game: String, val kind: SaveKind, val head: String?, val headDevice: String? = null, val devices: List<DeviceSlot>) {
+    /** Devices that reported this save at all: the ones that play the game. */
+    val playing: List<DeviceSlot> get() = devices.filter { it.state != null }
+    val current: Int get() = playing.count { it.state == AppliedState.CURRENT }
+}
+
+@Serializable
+data class Convergence(val slots: List<SlotDevices>)

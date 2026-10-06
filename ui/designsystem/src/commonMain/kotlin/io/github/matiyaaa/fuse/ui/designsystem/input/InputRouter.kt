@@ -152,6 +152,8 @@ class InputRouter(
         var repeats: Set<NavAction> = emptySet(),
         /** An action whose button modifies directions while held, instead of acting at once. */
         var holdModifier: NavAction? = null,
+        /** Holding Options becomes [NavAction.CONTEXT_HOLD] here; a quick press is still Options. */
+        var contextHold: Boolean = false,
     )
 
     private val layers = mutableListOf<Layer>()
@@ -166,7 +168,9 @@ class InputRouter(
             handler: (NavEvent) -> NavResult,
             repeats: Set<NavAction> = emptySet(),
             holdModifier: NavAction? = null,
+            contextHold: Boolean = false,
         ) {
+            layer.contextHold = contextHold
             layer.enabled = enabled
             layer.modal = modal
             layer.longPress = longPress
@@ -328,6 +332,14 @@ class InputRouter(
                     dispatch(NavAction.REORDER, source)
                 }
             }
+            action == NavAction.CONTEXT && orderedLayers().firstOrNull()?.contextHold == true -> {
+                // The same for Options: let go early it is Options, held it is the second action.
+                held[button] = scope.launch {
+                    delay(profile.longPressMs.toLong())
+                    longPressConsumed += button
+                    dispatch(NavAction.CONTEXT_HOLD, source)
+                }
+            }
             else -> {
                 held[button] = null
                 dispatch(action, source)
@@ -366,8 +378,9 @@ class InputRouter(
         val job = held.remove(button)
         job?.cancel()
         // A pending long press that was let go early is an ordinary select.
-        if (job != null && actionFor(button) == NavAction.SELECT && !longPressConsumed.remove(button)) {
-            dispatch(NavAction.SELECT, source)
+        val pressed = actionFor(button)
+        if (job != null && (pressed == NavAction.SELECT || pressed == NavAction.CONTEXT) && !longPressConsumed.remove(button)) {
+            dispatch(pressed, source)
         }
     }
 

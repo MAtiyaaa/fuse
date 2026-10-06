@@ -385,6 +385,20 @@ class SyncHost(
                 bump()
                 call.json(MetaState.serializer(), state)
             }
+            get("/profiles/{id}/convergence") {
+                val (_, p) = profileCall() ?: return@get
+                val game = call.request.queryParameters["game"].orEmpty()
+                if (game.isEmpty()) return@get call.fail(HttpStatusCode.BadRequest, "Which game?", "bad-request")
+                call.json(Convergence.serializer(), store.convergence(p, game))
+            }
+            post("/applied") {
+                val d = device() ?: return@post
+                val req = signedBody(d, AppliedNotes.serializer()) ?: return@post
+                // Only what this device may see: its own profiles' saves and the shared ones.
+                store.noteApplied(d.id, req.notes.filter { it.profile == SHARED_SAVES || store.mayUse(d.id, it.profile) })
+                store.touchDevice(d.id, route())
+                call.respondText("{}", ContentType.Application.Json)
+            }
             get("/profiles/{id}/heads") { val (_, p) = profileCall() ?: return@get; call.json(Heads.serializer(), store.heads(p)) }
             get("/profiles/{id}/revisions") {
                 val (_, p) = profileCall() ?: return@get

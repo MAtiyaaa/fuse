@@ -183,6 +183,16 @@ interface ProfileDataPort {
  * when the host can't be reached, nothing waits on it and nothing is lost.
  */
 interface SyncService {
+    /**
+     * How this device plays a game, by the household's id for it, or null when it doesn't have
+     * it. Set by the app, so a save made on another device can be put in place here in the
+     * background (never while that game is being played).
+     */
+    fun saveQueries(provider: suspend (gameId: String) -> SaveQuery?) {}
+
+    /** Every device's place with [game]'s saves for the person playing here ("5 of 6 devices current"); null when the host can't say. */
+    suspend fun convergence(game: GameKey): Convergence? = null
+
     val status: StateFlow<SyncStatus>
     val profiles: StateFlow<List<ProfileInfo>>
 

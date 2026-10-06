@@ -606,6 +606,13 @@ fun AppState.systemMenu(card: PlatformCard, onMove: (() -> Unit)? = null): Conte
             MenuAction("media", "Change System Media", FuseIcons.Image, detail = "Icon, background and logo for ${p.shortName}", trailing = Trailing.Chevron, onSelect = {
                 closeOverlays(); go(Route.Media(owner, p.name))
             }),
+            MenuAction("default", "Restore Fuse Default Art", FuseIcons.RotateCcw, detail = "Fuse's own icon, background and logo for ${p.shortName}", onSelect = {
+                closeOverlays()
+                restoreSystemArt(listOf(p.id), p.shortName)
+            }),
+            artUndo?.let { u ->
+                MenuAction("default.undo", "Undo Restore Art", FuseIcons.Undo, detail = "Puts back the art that was there", onSelect = { closeOverlays(); undoSystemArt(u) })
+            },
             MenuAction("fill", "Fill Missing Game Art", FuseIcons.Wand, detail = "Only games without art; your custom art is never replaced", onSelect = {
                 closeOverlays()
                 store.media.fill(MediaFillMode.FILL_MISSING, MediaKind.Fillable, platform = p.id)
@@ -702,4 +709,34 @@ internal object SystemOrder {
 
     /** The order to save: every shown system in [ids] order, then systems hidden right now as they were. */
     fun save(ids: List<String>, saved: List<String>): List<String> = ids + saved.filterNot { it in ids }
+}
+
+/**
+ * Puts [ids] (every system when empty) back to Fuse's own art after asking, keeping what was there
+ * so it can be undone from the same menu (or Settings, Systems) while Fuse runs.
+ */
+internal fun AppState.restoreSystemArt(ids: List<io.github.matiyaaa.fuse.model.PlatformId>, name: String?) {
+    confirm = io.github.matiyaaa.fuse.ui.shell.app.ConfirmSpec(
+        if (name != null) "Restore Fuse's art for $name?" else "Restore Fuse's art for every system?",
+        "Downloaded and chosen art is put aside and Fuse's own shows again. Nothing is downloaded for ${if (name != null) "it" else "them"} by itself after this. You can undo it.",
+        "Restore",
+    ) {
+        scope.launch {
+            val undo = store.media.restoreDefaultSystemArt(ids)
+            if (undo == null) {
+                toasts.show("System art can't be changed here")
+                return@launch
+            }
+            artUndo = undo
+            toasts.show(if (name != null) "Fuse's art is back for $name. Undo it in its options" else "Fuse's art is back for ${undo.count} systems. Undo it in Settings, Systems", io.github.matiyaaa.fuse.ui.designsystem.components.ToastKind.SUCCESS, icon = FuseIcons.RotateCcw, durationMs = 5000)
+        }
+    }
+}
+
+internal fun AppState.undoSystemArt(u: io.github.matiyaaa.fuse.ui.shell.store.ArtUndo) {
+    scope.launch {
+        store.media.undoSystemArt(u)
+        artUndo = null
+        toasts.show("The art that was there is back", io.github.matiyaaa.fuse.ui.designsystem.components.ToastKind.SUCCESS, icon = FuseIcons.Undo)
+    }
 }

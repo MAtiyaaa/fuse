@@ -134,6 +134,21 @@ class GameRepository(
         q.selectPaths().executeAsList().map { GameId(it.id) to it.path }
     }
 
+    /** Every game with what tells it apart (its file, serial and RomM link), for Fuse RomM's matching. */
+    suspend fun matchRows(): List<GameMatchRow> = withContext(dispatcher) {
+        q.matchRows().executeAsList().map { r ->
+            GameMatchRow(
+                id = GameId(r.id),
+                platform = r.platform_id,
+                title = r.title_original,
+                path = r.path,
+                serial = io.github.matiyaaa.fuse.data.decodeOrNull(io.github.matiyaaa.fuse.model.FilenameTags.serializer(), r.tags_json)?.serial,
+                rommRomId = r.romm_rom_id,
+                missing = r.missing != 0L,
+            )
+        }
+    }
+
     /** Local games linked to each RetroAchievements game id (for the COMPLETED collection). */
     /** Games set to an emulator of their own, present and in the library. */
     suspend fun emulatorOverrides(): Map<GameId, EmulatorId> = withContext(dispatcher) {
@@ -411,4 +426,15 @@ private fun GameMetadata.overwriteWith(other: GameMetadata) = GameMetadata(
     players = other.players ?: players,
     rating = other.rating ?: rating,
     source = other.source ?: source,
+)
+
+/** A game as Fuse RomM's matching sees it. */
+data class GameMatchRow(
+    val id: GameId,
+    val platform: String,
+    val title: String,
+    val path: String,
+    val serial: String?,
+    val rommRomId: Long?,
+    val missing: Boolean,
 )

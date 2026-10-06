@@ -83,6 +83,8 @@ data class SaveSpot(
      * are each one game's saves. The folders a play changes there are learned as this game's.
      */
     val learnIn: String? = null,
+    /** How sure Fuse is that the save is (or goes) here; see [SaveConfidence]. */
+    val confidence: SaveConfidence = SaveConfidence.KNOWN,
 ) {
     /** Where the file named [name] goes here. */
     fun pathFor(name: String): String? = files.firstOrNull { it.name == name }?.path ?: root?.let { "$it/$name" }
@@ -103,7 +105,7 @@ interface SaveAdapter {
  */
 object SaveAdapters {
     val all: List<SaveAdapter> = listOf(
-        RetroArch, Lemuroid, DuckStation, Pcsx2, Ppsspp, Dolphin, BesideRom, Rpcs3, Vita3k, ShadPs4, Flycast,
+        RetroArch, Lemuroid, DuckStation, Pcsx2, Ppsspp, Dolphin, MelonDs, NooDs, Mgba, SkyEmu, Mednafen, MyBoy, UnpublishedHandheld, Rpcs3, Vita3k, ShadPs4, Flycast,
         DraStic, Mupen64, Redream, Epsxe, Fpse, PlayPs2, SaturnBackup, Mame, ScummVm,
         ThreeDs, SwitchNand, Ryujinx, Cemu, Xenia,
     )
@@ -403,21 +405,6 @@ internal object Dolphin : SaveAdapter {
     }
 }
 
-/** Emulators that keep the save beside the game, named after it: melonDS, mGBA, Mednafen. */
-internal object BesideRom : SaveAdapter {
-    override val emulators = setOf(
-        "melonds", "melonds-nightly", "watermelonds", "seedlessds", "noods", "mgba", "mednafen", "skyemu",
-        "my-boy", "my-oldboy", "pizza-boy-gba", "pizza-boy-gbc", "pizza-boy-sc", "linkboy",
-    )
-
-    override fun locate(q: SaveQuery, env: SaveEnvironment): List<SaveSpot> {
-        // Beside the game, unless the person pointed Fuse at the emulator's own save folder.
-        val dir = SaveAdapters.chosen(env, q) ?: SaveAdapters.parent(q.romPath)
-        val stem = SaveAdapters.stem(q.romPath)
-        return listOf(SaveSpot(SaveKind.SAVE, SaveAdapters.sramFormat(q.platform), listOf(SpotFile("save.srm", "$dir/$stem.sav"))))
-    }
-}
-
 /** RPCS3: each game's save folders under dev_hdd0 by its serial (BLUS30109...). */
 internal object Rpcs3 : SaveAdapter {
     override val emulators = setOf("rpcs3", "rpcs3-android", "aps3e", "rpcsx")
@@ -606,7 +593,7 @@ fun SaveAdapters.survey(samples: List<SaveQuery>, env: SaveEnvironment): List<Em
         val reached = spots.firstOrNull { it.available }
         val where = when {
             reached == null -> null
-            adapter === BesideRom && chosen == null -> "Beside each game"
+            chosen == null && qs.all { qq -> reached.files.firstOrNull()?.path?.let(::parent) == parent(qq.romPath) } -> "Beside each game"
             reached.root != null -> reached.root
             else -> reached.files.firstOrNull()?.path?.let(::parent)
         }
@@ -614,7 +601,8 @@ fun SaveAdapters.survey(samples: List<SaveQuery>, env: SaveEnvironment): List<Em
             emulator, q.emulatorId, systems,
             state = if (reached != null) EmulatorSaves.State.FOUND else EmulatorSaves.State.NOT_FOUND,
             where = where, chosen = chosen,
-            note = if (reached == null) spots.firstNotNullOfOrNull { it.note } else null,
+            // Unreachable: why. Reached, but not certain or with a catch (melonDS's ROM list): that too.
+            note = if (reached == null) spots.firstNotNullOfOrNull { it.note } else reached.note,
             canChoose = adapter !== RetroArch,
         )
     }.sortedWith(compareBy({ it.state.ordinal }, { it.emulator }))

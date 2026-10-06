@@ -217,7 +217,21 @@ private fun syncthingRows(
                     if (svc.startApp()) app.toasts.show("Starting ${install.name}. Come back once it is running") else app.toasts.show("Couldn't open ${install.name}")
                 }))
             } else {
-                add(MenuAction("get", "Get ${install.name}", FuseIcons.Download, detail = install.note, trailing = Trailing.Chevron, section = setup, onSelect = { app.platform.openUrl(install.url) }))
+                // From Fuse's own Store where there is one: installed there, setup carries on here by itself.
+                val storeKey = app.store.appStore.takeIf { it.supported }?.keyFor(SYNCTHING_FORK_PACKAGE)
+                add(MenuAction(
+                    "get", "Get ${install.name}", FuseIcons.Download,
+                    detail = if (storeKey != null) "From the Store, here in Fuse. Setup carries on once it is installed" else install.note,
+                    trailing = Trailing.Chevron, section = setup,
+                    onSelect = {
+                        if (storeKey != null) {
+                            app.awaitingSyncthing = true
+                            app.go(io.github.matiyaaa.fuse.ui.shell.app.Route.StoreApp(storeKey))
+                        } else {
+                            app.platform.openUrl(install.url)
+                        }
+                    },
+                ))
             }
             add(MenuAction("again", "Look Again", FuseIcons.RefreshCcw, section = setup, onSelect = { busy { svc.find() } }))
             add(manualRow(app, svc, section = setup))
@@ -476,3 +490,6 @@ internal fun SyncthingMark(size: Dp, modifier: Modifier = Modifier) {
         FuseIcon(FuseIcons.FolderSync, size = size * 0.48f, tint = SYNCTHING_TINT)
     }
 }
+
+/** Syncthing-Fork's package, as the Store offers it. */
+internal const val SYNCTHING_FORK_PACKAGE = "com.github.catfriend1.syncthingfork"

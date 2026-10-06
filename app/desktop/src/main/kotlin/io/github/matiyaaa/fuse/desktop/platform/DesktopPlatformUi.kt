@@ -88,6 +88,10 @@ class DesktopPlatformUi(
 
     override val device: CapabilityProfile = measureDevice()
 
+    /** Screenshots and recordings of Fuse's own window. */
+    override val capture: io.github.matiyaaa.fuse.ui.shell.platform.ScreenCapture =
+        io.github.matiyaaa.fuse.desktop.capture.DesktopScreenCapture { window.parent }
+
     private val _drawing = kotlinx.coroutines.flow.MutableStateFlow<io.github.matiyaaa.fuse.ui.shell.platform.DrawingInfo?>(null)
     override val drawing: kotlinx.coroutines.flow.StateFlow<io.github.matiyaaa.fuse.ui.shell.platform.DrawingInfo?> = _drawing
 
