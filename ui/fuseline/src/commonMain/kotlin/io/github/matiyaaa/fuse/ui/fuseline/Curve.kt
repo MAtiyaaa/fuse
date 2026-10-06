@@ -1,6 +1,7 @@
 package io.github.matiyaaa.fuse.ui.fuseline
 
 import androidx.compose.runtime.Immutable
+import kotlin.concurrent.Volatile
 import kotlin.math.abs
 
 /**
@@ -61,44 +62,113 @@ class CubicCurve(val x1: Float, val y1: Float, val x2: Float, val y2: Float) : C
     private val ay = 1.0 - cy - by
 
     private fun x(t: Double) = ((ax * t + bx) * t + cx) * t
-    private fun y(t: Double) = ((ay * t + by) * t + cy) * t
+    internal fun y(t: Double) = ((ay * t + by) * t + cy) * t
     private fun dx(t: Double) = (3.0 * ax * t + 2.0 * bx) * t + cx
     private fun dy(t: Double) = (3.0 * ay * t + 2.0 * by) * t + cy
     private fun ddx(t: Double) = 6.0 * ax * t + 2.0 * bx
     private fun ddy(t: Double) = 6.0 * ay * t + 2.0 * by
 
-    // x(t) sampled at even steps of t, so a solve starts next to its answer.
+    // x(t) sampled at even steps of t, for the careful fallback.
     private val samples = DoubleArray(SAMPLES + 1) { x(it / SAMPLES.toDouble()) }
+
+    // The inverse, t at even steps of x, found once (on the first solve) by bisection, with its slope
+    // dt/dx there. Between two steps the inverse is a cubic (Hermite) through both ends and their
+    // slopes; each interval where that cubic was checked to land within a hundredth of the precision
+    // asked is answered by the cubic alone. Elsewhere (where the curve's time flattens, near an end
+    // whose control point sits on the time axis), Newton's method finishes from the table's guess.
+    //
+    // Five numbers an interval: the cubic's four coefficients, and 1 where the cubic alone answers.
+    // Built whole before it is published, so a solve on another thread sees all of it or none.
+    @Volatile
+    private var table: DoubleArray? = null
+
+    private fun build(): DoubleArray {
+        val nodes = DoubleArray(INVERSE + 1) { j ->
+            val target = j / INVERSE.toDouble()
+            var a = 0.0
+            var b = 1.0
+            repeat(60) { val m = (a + b) / 2.0; if (x(m) < target) a = m else b = m }
+            (a + b) / 2.0
+        }
+        val h = 1.0 / INVERSE
+        val coefficients = DoubleArray(INVERSE * STRIDE)
+        for (j in 0 until INVERSE) {
+            val t0 = nodes[j]
+            val t1 = nodes[j + 1]
+            val d0 = dx(t0)
+            val d1 = dx(t1)
+            val o = j * STRIDE
+            if (d0 > FLAT_SLOPE && d1 > FLAT_SLOPE) {
+                // Hermite in s (0 to 1 across the interval): t(s) = c0 + s(c1 + s(c2 + s c3)).
+                val m0 = h / d0
+                val m1 = h / d1
+                coefficients[o] = t0
+                coefficients[o + 1] = m0
+                coefficients[o + 2] = 3.0 * (t1 - t0) - 2.0 * m0 - m1
+                coefficients[o + 3] = 2.0 * (t0 - t1) + m0 + m1
+                var good = true
+                for (k in 1 until CHECKS) {
+                    val sv = k / CHECKS.toDouble()
+                    val g = ((coefficients[o + 3] * sv + coefficients[o + 2]) * sv + coefficients[o + 1]) * sv + t0
+                    if (g < t0 || g > t1 || abs(x(g) - (j + sv) * h) > EPSILON / 100.0) { good = false; break }
+                }
+                if (good) coefficients[o + 4] = 1.0
+            } else {
+                coefficients[o] = t0
+                coefficients[o + 1] = t1 - t0
+            }
+        }
+        table = coefficients
+        return coefficients
+    }
 
     /** The curve's parameter t at which x(t) = [x]. */
     internal fun solve(x: Double): Double {
         if (x <= 0.0) return 0.0
         if (x >= 1.0) return 1.0
-        // The sample interval that holds x (x(t) only ever rises): a binary search over the samples.
-        var lo = 0
-        var hi = SAMPLES
-        while (hi - lo > 1) {
-            val mid = (lo + hi) ushr 1
-            if (samples[mid] < x) lo = mid else hi = mid
+        val c = table ?: build()
+        val pos = x * INVERSE
+        val j = pos.toInt().coerceAtMost(INVERSE - 1)
+        val s = pos - j
+        val o = j * STRIDE
+        var g = ((c[o + 3] * s + c[o + 2]) * s + c[o + 1]) * s + c[o]
+        if (c[o + 4] != 0.0) return g
+        // From the table's guess, Newton: one or two steps land within a billionth almost
+        // everywhere; the careful path below covers flat stretches.
+        repeat(2) {
+            val err = x(g) - x
+            if (abs(err) < EPSILON) return g
+            val d = dx(g)
+            if (abs(d) < 1e-6) return@repeat
+            g -= err / d
         }
-        val x0 = samples[lo]
-        val span = samples[hi] - x0
-        var t = (lo + if (span > 0.0) (x - x0) / span else 0.0) / SAMPLES
+        if (g in 0.0..1.0 && abs(x(g) - x) < EPSILON) return g
+        // The sample interval that holds x: x(t) is close to t for real easing curves, so x itself
+        // names the interval, and a step or two either way finds it (no unpredictable search).
+        var i = (x * SAMPLES).toInt()
+        if (i >= SAMPLES) i = SAMPLES - 1
+        while (i > 0 && samples[i] > x) i--
+        while (i < SAMPLES - 1 && samples[i + 1] < x) i++
+        val x0 = samples[i]
+        val span = samples[i + 1] - x0
+        var t = (i + if (span > 0.0) (x - x0) / span else 0.0) / SAMPLES
+        val lo = i.toDouble() / SAMPLES
+        val hi = (i + 1).toDouble() / SAMPLES
         // Newton's method from there: two or three steps where the curve has slope.
-        repeat(NEWTON_STEPS) {
+        for (n in 0 until NEWTON_STEPS) {
             val err = x(t) - x
             if (abs(err) < EPSILON) return t
             val d = dx(t)
-            if (abs(d) < 1e-9) return@repeat
+            if (abs(d) < 1e-9) break
             val next = t - err / d
             // Newton can't leave the interval that holds the answer; when it would, bisect instead.
-            if (next < lo.toDouble() / SAMPLES || next > hi.toDouble() / SAMPLES) return@repeat
+            if (next < lo || next > hi) break
             t = next
         }
         if (abs(x(t) - x) < EPSILON) return t
         // Bisection within the sample interval: always lands, even on a flat stretch.
-        var a = lo.toDouble() / SAMPLES
-        var b = hi.toDouble() / SAMPLES
+        var a = lo
+        var b = hi
         t = (a + b) / 2.0
         repeat(BISECT_STEPS) {
             val v = x(t)
@@ -140,11 +210,20 @@ class CubicCurve(val x1: Float, val y1: Float, val x2: Float, val y2: Float) : C
 
     internal companion object {
         const val SAMPLES = 32
-        const val NEWTON_STEPS = 6
+        const val INVERSE = 256
+
+        /** Points checked inside each interval of the inverse before the cubic alone answers there. */
+        const val CHECKS = 8
+
+        const val STRIDE = 5
+
+        /** Where x'(t) is too flat for the inverse's cubic. */
+        const val FLAT_SLOPE = 1e-3
+        const val NEWTON_STEPS = 5
         const val BISECT_STEPS = 52
 
-        // Far below a pixel on any screen, and well within a double.
-        const val EPSILON = 1e-12
+        // A billionth of the way: far below a pixel on any screen, and past what a float result shows.
+        const val EPSILON = 1e-9
 
         /** Where x'(t) counts as zero. */
         const val FLAT = 1e-9

@@ -55,7 +55,8 @@ class FuselineValue<T>(
     private val now = FloatArray(dims).also { converter.write(initialValue, it) }
     private val speed = FloatArray(dims)
     private val goal = FloatArray(dims).also { converter.write(initialValue, it) }
-    private val scratch = FloatArray(dims)
+    private var scratchArray: FloatArray? = null
+    private val scratch: FloatArray get() = scratchArray ?: FloatArray(dims).also { scratchArray = it }
     private val tracks = arrayOfNulls<Track>(dims)
 
     /** The coroutine of the move in charge, if any. */
@@ -174,18 +175,18 @@ class FuselineValue<T>(
     val playNanos: Long get() = ride?.playNanos ?: 0L
 
     /** The value as read-only state, for handing out. */
-    fun asState(): State<T> = valueState
-
-    private val valueState = object : State<T> {
+    fun asState(): State<T> = valueState ?: object : State<T> {
         override val value: T get() = this@FuselineValue.value
-    }
+    }.also { valueState = it }
+
+    private var valueState: State<T>? = null
 
     /** A one-number value as [FloatState], read without boxing. */
-    fun asFloatState(): FloatState = floatState
-
-    private val floatState = object : FloatState {
+    fun asFloatState(): FloatState = floatState ?: object : FloatState {
         override val floatValue: Float get() = this@FuselineValue.floatValue
-    }
+    }.also { floatState = it }
+
+    private var floatState: FloatState? = null
 
     private fun moved() {
         version.intValue++

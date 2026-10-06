@@ -71,4 +71,6 @@ dependencies {
     implementation(libs.media3.ui)
 
     testImplementation(libs.junit)
+    // Fuseline's own Android build, checked on the JVM (FuselineAndroidTest).
+    testImplementation(projects.ui.fuseline)
 }

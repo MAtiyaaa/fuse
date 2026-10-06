@@ -19,6 +19,9 @@ kotlin {
 // The benchmark (FuselineBenchmark) runs only when asked: -Pfuse.bench=true.
 tasks.withType<Test>().configureEach {
     systemProperty("fuse.bench", providers.gradleProperty("fuse.bench").getOrElse("false"))
+    systemProperty("fuse.bench.only", providers.gradleProperty("fuse.bench.only").getOrElse(""))
+    // The benchmark keeps thousands of values per engine alive at once.
+    maxHeapSize = "2g"
     outputs.upToDateWhen { false }
     providers.gradleProperty("fuse.jfr").orNull?.let { jvmArgs("-XX:StartFlightRecording=filename=$it,settings=profile") }
 }

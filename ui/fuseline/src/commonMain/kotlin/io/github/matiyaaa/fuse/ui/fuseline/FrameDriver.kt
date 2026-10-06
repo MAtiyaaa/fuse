@@ -52,6 +52,7 @@ internal class FrameDriver private constructor(private val clock: MonotonicFrame
 
     private val moves = ArrayList<Move>()
     private var running = false
+    private var loop: Job? = null
 
     /** The time of the frame last stepped. */
     private var lastFrame = Long.MIN_VALUE
@@ -62,7 +63,12 @@ internal class FrameDriver private constructor(private val clock: MonotonicFrame
             val move = Move(durationNanos, scale, onFrame, waiting)
             onStart?.invoke(move)
             moves += move
-            waiting.invokeOnCancellation { move.gone = true }
+            waiting.invokeOnCancellation {
+                move.gone = true
+                // The last move gone: stop waiting for frames now. A clock that never ticks again
+                // (its window closed, a test over) would otherwise hold the driver for ever.
+                if (moves.all { m -> m.gone }) loop?.cancel()
+            }
             if (!running) start(context)
         }
     }
@@ -70,7 +76,7 @@ internal class FrameDriver private constructor(private val clock: MonotonicFrame
     private fun start(context: CoroutineContext) {
         running = true
         // Its own job: a move that is cancelled never takes the others' frames with it.
-        CoroutineScope(context.minusKey(Job) + Job()).launch(start = CoroutineStart.UNDISPATCHED) {
+        loop = CoroutineScope(context.minusKey(Job) + Job()).launch(start = CoroutineStart.UNDISPATCHED) {
             try {
                 while (true) {
                     clock.withFrameNanos(stepper)
@@ -80,7 +86,8 @@ internal class FrameDriver private constructor(private val clock: MonotonicFrame
                 // Normally every move has ended; if the clock itself stopped (its window closed),
                 // the moves still waiting end with it rather than wait for a frame that never comes.
                 running = false
-                drivers.remove(clock)
+                loop = null
+                if (drivers[clock] === this@FrameDriver) drivers.remove(clock)
                 val left = moves.toList()
                 moves.clear()
                 for (m in left) if (!m.gone) m.waiting.cancel()
@@ -171,6 +178,7 @@ object FramePacing {
     private const val ON_TIME_TO_RESTORE = 30
 
     private val intervals = LongArray(HISTORY)
+    private var shortest = Long.MAX_VALUE
     private var count = 0
     private var head = 0
     private var late = 0
@@ -205,13 +213,20 @@ object FramePacing {
     /** Records one frame [nanos] after the one before. */
     fun frame(nanos: Long) {
         if (nanos <= 0L || nanos > 1_000_000_000L) return
+        val evicted = if (count == HISTORY) intervals[head] else Long.MAX_VALUE
         intervals[head] = nanos
         head = (head + 1) % HISTORY
         if (count < HISTORY) count++
         // The display's interval is the quickest steady frame lately: late frames only ever add time.
-        var best = Long.MAX_VALUE
-        for (i in 0 until count) if (intervals[i] < best) best = intervals[i]
-        intervalNanos = best
+        // Kept as it goes; looked for again only when the quickest one just left the history.
+        if (nanos <= shortest || count == 1) {
+            shortest = nanos
+        } else if (evicted == shortest) {
+            var best = Long.MAX_VALUE
+            for (i in 0 until count) if (intervals[i] < best) best = intervals[i]
+            shortest = best
+        }
+        intervalNanos = shortest
         if (nanos > intervalNanos * LATE_RATIO) {
             late++
             onTime = 0
@@ -242,6 +257,7 @@ object FramePacing {
         onTime = 0
         underLoad = false
         intervalNanos = 16_666_667L
+        shortest = Long.MAX_VALUE
         decorationTick = 0L
         lastSeen = Long.MIN_VALUE
     }

@@ -185,7 +185,12 @@ class MotionTransition<S>(
     /** A part that has arrived: fully shown and in place; or gone (and let go). */
     private fun settle(p: Part<S>) {
         if (p.state == targetState) {
-            if (p.settled && p.presenceValue == 1f) list.removeAll { it !== p && it.presenceValue == 0f && !it.presence.isRunning && !it.presence.isDragging }
+            // Rebuilding the parts list is a snapshot write: only when something has really gone.
+            if (p.settled && p.presenceValue == 1f && list.size > 1) {
+                var gone = false
+                for (o in list) if (o !== p && o.presenceValue == 0f && !o.presence.isRunning && !o.presence.isDragging) gone = true
+                if (gone) list.removeAll { it !== p && it.presenceValue == 0f && !it.presence.isRunning && !it.presence.isDragging }
+            }
         } else if (p.presenceValue == 0f && !p.presence.isRunning && !p.presence.isDragging) {
             // Invisible: whatever its position still does doesn't show, so it goes now.
             p.place.jumpTo(p.place.floatValue)

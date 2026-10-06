@@ -50,6 +50,24 @@ class CurveMathTest {
     }
 
     @Test
+    fun theSolveLandsWithinABillionthEverywhere() {
+        // Fuse's curves and fuzzed ones, densely: whichever way a solve is answered (the inverse's
+        // cubic alone, or Newton from its guess), x(t) is the fraction asked to a billionth.
+        val rnd = Random(0xB111L)
+        val curves = listOf(Curves.Standard, Curves.Enter, Curves.Exit, Curves.Fade, Curves.Sweep).map { it as CubicCurve } +
+            List(300) { CubicCurve(rnd.nextFloat(), rnd.nextFloat() * 3f - 1f, rnd.nextFloat(), rnd.nextFloat() * 3f - 1f) } +
+            listOf(CubicCurve(0f, 0f, 1f, 1f), CubicCurve(0f, 1f, 1f, 0f), CubicCurve(1f, 0f, 0f, 1f), CubicCurve(0f, 0f, 0f, 1f))
+        for (c in curves) {
+            val ref = Reference(c.x1.toDouble(), c.y1.toDouble(), c.x2.toDouble(), c.y2.toDouble())
+            for (i in 1 until 20_000) {
+                val f = i / 20_000.0 + rnd.nextDouble() / 20_000.0
+                val t = c.solve(f)
+                assertTrue(abs(ref.x(t) - f) < 1e-9 || abs(t - ref.t(f)) < 1e-9, "$c at $f: x(t) = ${ref.x(t)}")
+            }
+        }
+    }
+
+    @Test
     fun fuzzedCurvesAgreeWithTheReferenceAndStayFinite() {
         val seed = 0x3F05E3L
         val rnd = Random(seed)

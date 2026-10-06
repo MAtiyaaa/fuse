@@ -166,4 +166,15 @@ class FrameDriverTest {
         assertTrue(c.now - seen.max() <= 25_000_000L, "at most one frame behind the real time")
         c.close()
     }
+
+    /** Every move cancelled on a clock that never ticks again (a closed window): the driver lets go at once. */
+    @Test
+    fun aDriverLetsGoWhenEveryMoveIsCancelled() {
+        val c = MotionClock()
+        repeat(50) { val v = FuselineValue(0f); c.launch { v.animateTo(1f, Spring()) } }
+        c.advance(16_666_667L)
+        assertTrue(c.busy)
+        c.close()
+        assertFalse(c.busy, "no frame is waited for once every move is gone")
+    }
 }

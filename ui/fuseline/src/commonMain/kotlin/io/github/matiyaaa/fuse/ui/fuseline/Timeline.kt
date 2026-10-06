@@ -53,13 +53,17 @@ class Timeline(val lengthMs: Int, build: Builder.() -> Unit) {
 
     /** One track: its keys in time order, and how its run of keys repeats. */
     internal class TrackData(val keys: List<Key>, val times: Int, val reverse: Boolean) {
+        // The keys laid out flat, so a frame's read touches arrays, not objects.
         private val at = FloatArray(keys.size) { keys[it].atMs }
+        private val values = FloatArray(keys.size) { keys[it].value }
+        private val curves = Array(keys.size) { keys[it].curve }
         private val first = if (keys.isEmpty()) 0f else at.first()
         private val span = if (keys.isEmpty()) 0f else at.last() - first
 
         /** The time within the keys a moment maps to, and whether it plays backwards there. */
         private fun local(timeMs: Float): Float {
-            if (times <= 1 || span <= 0f || timeMs <= first) return timeMs
+            if (times <= 1) return timeMs
+            if (span <= 0f || timeMs <= first) return timeMs
             val since = timeMs - first
             val loops = since / span
             if (loops >= times) return if (reverse && times % 2 == 0) first else first + span
@@ -74,27 +78,24 @@ class Timeline(val lengthMs: Int, build: Builder.() -> Unit) {
             return loops < times && loops.toInt() % 2 == 1
         }
 
+        /** The keyframe at or before [t] (a track has a handful, so a straight scan beats a search). */
         private fun segment(t: Float): Int {
-            var lo = 0
-            var hi = at.size - 1
-            while (hi - lo > 1) {
-                val mid = (lo + hi) ushr 1
-                if (at[mid] <= t) lo = mid else hi = mid
-            }
-            return lo
+            var i = 0
+            val last = at.size - 2
+            while (i < last && at[i + 1] <= t) i++
+            return i
         }
 
         fun value(timeMs: Float): Float {
-            if (keys.isEmpty()) return 0f
-            val t = local(timeMs)
-            if (t <= at.first()) return keys.first().value
-            if (t >= at.last()) return keys.last().value
+            val n = at.size
+            if (n == 0) return 0f
+            val t = if (times <= 1) timeMs else local(timeMs)
+            if (t <= at[0]) return values[0]
+            if (t >= at[n - 1]) return values[n - 1]
             val i = segment(t)
-            val a = keys[i]
-            val b = keys[i + 1]
             val gap = at[i + 1] - at[i]
-            val f = if (gap <= 0f) 1f else b.curve.transform((t - at[i]) / gap)
-            return a.value + (b.value - a.value) * f
+            val f = if (gap <= 0f) 1f else curves[i + 1].transform((t - at[i]) / gap)
+            return values[i] + (values[i + 1] - values[i]) * f
         }
 
         fun velocity(timeMs: Float): Float {
@@ -102,11 +103,9 @@ class Timeline(val lengthMs: Int, build: Builder.() -> Unit) {
             val t = local(timeMs)
             if (t <= at.first() || t >= at.last()) return 0f
             val i = segment(t)
-            val a = keys[i]
-            val b = keys[i + 1]
             val gap = at[i + 1] - at[i]
             if (gap <= 0f) return 0f
-            val v = (b.value - a.value) * b.curve.derivative((t - at[i]) / gap) / (gap / 1000f)
+            val v = (values[i + 1] - values[i]) * curves[i + 1].derivative((t - at[i]) / gap) / (gap / 1000f)
             return if (backwards(timeMs)) -v else v
         }
     }
@@ -214,6 +213,9 @@ class TimelinePlayer internal constructor(val timeline: Timeline) {
     var forward by mutableStateOf(true)
         private set
 
+    // The same, plain, for the frame (a frame reads it without a snapshot read).
+    private var goingForward = true
+
     // Where the play was anchored: a timeline time, and the frame it was at (plain, read per frame).
     private var anchorMs = 0.0
     private var anchorNanos = Long.MIN_VALUE
@@ -254,7 +256,8 @@ class TimelinePlayer internal constructor(val timeline: Timeline) {
     fun reverse() {
         val wasDone = finished
         reanchor()
-        forward = !forward
+        goingForward = !goingForward
+        forward = goingForward
         if (wasDone && !finished) restarts++
     }
 
@@ -264,9 +267,11 @@ class TimelinePlayer internal constructor(val timeline: Timeline) {
         if (anchorNanos == Long.MIN_VALUE) anchorNanos = frameNanos
         val real = (frameNanos - anchorNanos) / NANOS_PER_MS.toDouble() / scale
         val step = real * baseSpeed * speed
-        exactMs = (if (forward) anchorMs + step else anchorMs - step).coerceIn(0.0, timeline.lengthMs.toDouble())
-        playedMs = exactMs.toLong()
-        return finished
+        val length = timeline.lengthMs.toDouble()
+        exactMs = (if (goingForward) anchorMs + step else anchorMs - step).coerceIn(0.0, length)
+        val played = exactMs.toLong()
+        playedMs = played
+        return if (goingForward) played >= timeline.lengthMs else played <= 0L
     }
 }
 

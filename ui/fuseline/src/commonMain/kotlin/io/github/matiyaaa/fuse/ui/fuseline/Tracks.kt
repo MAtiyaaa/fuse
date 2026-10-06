@@ -151,6 +151,31 @@ internal class TweenTrack(tween: Tween, start: Float, target: Float, velocity: F
         return v.toFloat()
     }
 
+    /**
+     * Position and velocity from one solve of the curve: a cubic Bézier's parameter is found once and
+     * gives both its height and its slope, where asking for each would solve it twice.
+     */
+    override fun sample(playNanos: Long) {
+        val c = curve
+        if (c !is CubicCurve || playNanos <= delay || playNanos >= duration || length == 0L) {
+            super.sample(playNanos)
+            return
+        }
+        // The same rounding as valueAt and velocityAt, so sampling is exactly the same function of time.
+        val f = fraction(playNanos)
+        val t = c.solve(f.toDouble())
+        var value = start + distance * c.y(t).toFloat()
+        var velocity = distance * c.slope(t).toFloat() / seconds
+        if (boost != 0.0) {
+            val tau = (playNanos - delay) / NANOS_PER_SECOND
+            val u = tau / seconds
+            value += boost * tau * (1.0 - u) * (1.0 - u)
+            velocity += boost * (1.0 - u) * (1.0 - 3.0 * u)
+        }
+        sampledValue = value.toFloat()
+        sampledVelocity = velocity.toFloat()
+    }
+
     internal companion object {
         /** The steepest start a curve may have and still be matched to the value's speed exactly. */
         const val GENTLE_SLOPE = 3.0
