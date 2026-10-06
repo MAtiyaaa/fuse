@@ -1,7 +1,9 @@
 # Fuse 0.3.6.5 - The Unity Update
 
 Fuse sized for a 4K TV by itself, a Systems page you arrange like Home, sharper backgrounds on big
-screens, clean subtitles, downloads that open their game, and Steam kept out when you say no.
+screens, clean subtitles, downloads that open their game, emulators that start in Game Mode, a
+Store that removes anything (and everything at once), a full stop on the on-screen keyboard, RomM
+found on your network, and Steam kept out when you say no.
 
 ## New
 
@@ -20,6 +22,18 @@ screens, clean subtitles, downloads that open their game, and Steam kept out whe
   the screen changes, like docking. Handhelds, phones and 1080p TVs look as before.
 - **Interface size** in Settings, Display, This screen: Automatic (it says what it picked), or 100%
   to 300% for a size of your own.
+- **Fuse RomM finds your server.** Like Fuse Sync and Jellyfin, setting up Fuse RomM now looks for
+  RomM on your home network: the computer already running Jellyfin or your Fuse Sync host first,
+  then RomM's usual names (`romm.local`), then the rest of the network, on RomM's usual ports. Only
+  a server that answers as RomM is offered. One found is filled in by itself; several are listed
+  with their version. Home address in Fuse RomM's settings looks again, and Type an address is
+  always there for a server Fuse can't see.
+- **Install All and Uninstall All** in Settings, Store: every emulator and app on this device's
+  list installed in one go, or removed in one go, each after a confirm.
+- **Hold the full stop for address endings.** The on-screen keyboard's letters have a full stop
+  where the apostrophe was. Hold it (hold confirm on a controller, or press and hold by touch) for
+  `.com`, `.net`, `.org`, `.io`, `.local`, `.lan`, `:` and `/`; choose one with left and right, or
+  slide to it and let go.
 - **Steam games** in Settings, Library, Steam: a switch for whether Steam's games are in your
   library at all.
 
@@ -41,6 +55,20 @@ screens, clean subtitles, downloads that open their game, and Steam kept out whe
   Balanced allows art past 1080p's on a big screen (High quality up to 4K).
 
 ## Fixed
+
+- **Game Mode couldn't start emulators.** Under Steam's Game Mode, Fuse runs inside Steam's
+  runtime, and every emulator Fuse started inherited Steam's libraries and paths, so many failed at
+  once; an emulator opened through its desktop entry was also handed to the system, where Game Mode
+  never shows it. Emulators now start with this computer's own environment, always as Fuse's own
+  program so Game Mode shows them, and Fuse steps aside while a game runs and comes back when it
+  ends.
+- **Game Mode couldn't uninstall emulators.** The Store only removed what it installed itself. It
+  now removes any emulator or app on its list, however it got there: a Flatpak installed for you, a
+  Flatpak installed for everyone, or an AppImage. When removing one needs administrator rights,
+  Fuse asks for this computer's password (once for Uninstall All), uses it for that removal only
+  and never keeps it. On a Steam Deck that never had a password, set one with `passwd` in Konsole.
+- **Backspace on the on-screen keyboard deleted twice.** A firm press on a controller lasted long
+  enough to repeat. One press is now one delete; holding it still deletes on and on.
 
 - **A RomM game's page said Download after it was downloaded.** It now turns into the game's own
   page as soon as the game is in the library, with Play.
