@@ -2,6 +2,7 @@ package io.github.matiyaaa.fuse.sync
 
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
+import io.ktor.http.withCharset
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.cio.CIO
 import io.ktor.server.engine.EmbeddedServer
@@ -209,8 +210,22 @@ class SyncHost(
                 }
             }
             val status = store.status(port, fuseVersion)
-            call.response.headers.append("Cache-Control", "no-store")
-            call.respondText(HubPage.render(status, status.profiles.mapNotNull { store.report(it.id) }, clock(), away = away), ContentType.Text.Html)
+            call.html(HubPage.render(status, status.profiles.mapNotNull { store.report(it.id) }, clock(), away = away))
+        }
+        // One game's versions and files, asked for when it is opened on the Hub (or as a page of
+        // its own, without scripting). The same rule as the Hub: this computer, or signed in.
+        get("/hub/game") {
+            if (limited()) return@get
+            if (!fromThisComputer() && !hubSignedIn()) return@get call.respondText("Sign in to the Hub first.", ContentType.Text.Plain, HttpStatusCode.Forbidden)
+            val profile = call.request.queryParameters["p"].orEmpty()
+            val game = call.request.queryParameters["g"].orEmpty()
+            val g = store.gameReport(profile, game) ?: return@get call.respondText("That game isn't on the host.", ContentType.Text.Plain, HttpStatusCode.NotFound)
+            val names = store.status(port, fuseVersion).devices.associate { it.id to it.name }
+            val deviceName = { id: String -> names[id] ?: id }
+            call.html(
+                if (call.request.queryParameters["page"] != null) HubPage.gamePage(store.name, g, deviceName)
+                else HubPage.gameBody(g, deviceName),
+            )
         }
         post("/hub/login") {
             if (limited(weight = 20)) return@post
@@ -701,6 +716,25 @@ class SyncHost(
             return true
         }
         return false
+    }
+
+    /**
+     * A Hub page: never cached as is, but a Refresh that would bring the very same page answers
+     * 304, and a big one goes gzipped to a browser that takes it.
+     */
+    private suspend fun ApplicationCall.html(text: String) {
+        val bytes = text.encodeToByteArray()
+        val tag = "\"" + SyncCrypto.sha256(bytes.inputStream()).take(32) + "\""
+        response.headers.append("Cache-Control", "no-cache")
+        response.headers.append(io.ktor.http.HttpHeaders.ETag, tag)
+        if (request.headers[io.ktor.http.HttpHeaders.IfNoneMatch]?.split(',')?.any { it.trim() == tag } == true) {
+            return respondBytes(ByteArray(0), status = HttpStatusCode.NotModified)
+        }
+        val gzip = bytes.size >= GZIP_FROM && request.headers[io.ktor.http.HttpHeaders.AcceptEncoding]?.contains("gzip") == true
+        if (!gzip) return respondBytes(bytes, ContentType.Text.Html.withCharset(Charsets.UTF_8))
+        response.headers.append(io.ktor.http.HttpHeaders.ContentEncoding, "gzip")
+        response.headers.append(io.ktor.http.HttpHeaders.Vary, io.ktor.http.HttpHeaders.AcceptEncoding)
+        respondBytes(Gzip.pack(bytes), ContentType.Text.Html.withCharset(Charsets.UTF_8))
     }
 
     private suspend fun <T> ApplicationCall.json(serializer: KSerializer<T>, value: T) {
