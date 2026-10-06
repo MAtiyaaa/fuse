@@ -1,6 +1,12 @@
 package io.github.matiyaaa.fuse.ui.shell.app
 
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.performMouseInput
@@ -225,11 +231,75 @@ class UiFlowTest {
         val shown = mainClock.currentTime - launchedAt
         assertTrue(shown < 2_500, "The veil stayed ${shown} ms")
     }
+
+    @Test
+    fun theProfileEditorFitsTheThorsScreensAndTheDpadReachesEveryPart() = runComposeUiTest {
+        val store = runBlocking { createFuseStore(newServices(), scope) }
+        val router = InputRouter(scope)
+        mainClock.autoAdvance = false
+        val app = AppState(store, TestPlatform, scope, Route.Root(io.github.matiyaaa.fuse.model.Destination.HOME))
+        var size by androidx.compose.runtime.mutableStateOf(androidx.compose.ui.unit.DpSize(640.dp, 360.dp))
+        var made: Triple<String, String, io.github.matiyaaa.fuse.ui.shell.sync.PinChoice>? = null
+        var backs = 0
+        setContent {
+            io.github.matiyaaa.fuse.ui.designsystem.theme.FuseTheme {
+                androidx.compose.runtime.CompositionLocalProvider(io.github.matiyaaa.fuse.ui.designsystem.input.LocalInputRouter provides router) {
+                    androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.size(size).testTag("window")) {
+                        io.github.matiyaaa.fuse.ui.shell.sync.ProfileEditor(
+                            app, "New Profile", "Everyone gets their own saves.", "Create Profile", io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons.UserPlus,
+                            onSubmit = { n, a, p -> made = Triple(n, a, p); null },
+                            onBack = { backs++ },
+                        )
+                    }
+                }
+            }
+        }
+        // The AYN Thor's upper screen at its largest text, its lower screen, and a 4:3 handheld: the
+        // buttons are always wholly on screen.
+        for (s in listOf(androidx.compose.ui.unit.DpSize(640.dp, 360.dp), androidx.compose.ui.unit.DpSize(496.dp, 432.dp), androidx.compose.ui.unit.DpSize(427.dp, 320.dp))) {
+            size = s
+            mainClock.advanceTimeBy(600)
+            val window = onNodeWithTag("window").fetchSemanticsNode().boundsInRoot
+            val buttons = onNodeWithTag("editor.buttons", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+            assertTrue(buttons.top >= window.top && buttons.bottom <= window.bottom + 0.5f && buttons.left >= window.left && buttons.right <= window.right + 0.5f, "buttons $buttons outside $window at $s")
+        }
+        fun press(b: PadButton) { router.tap(b); mainClock.advanceTimeBy(120) }
+        // Name first: A asks for it, and typing it moves on to the PIN.
+        press(PadButton.A)
+        assertEquals("Profile name", app.textInput?.title)
+        app.textInput!!.onDone("Mo")
+        app.textInput = null
+        mainClock.advanceTimeBy(200)
+        // The PIN is next, right below the name (A asks for one; closing the keyboard keeps the D-pad).
+        press(PadButton.A)
+        assertTrue(app.textInput?.title?.startsWith("A PIN for Mo") == true)
+        app.textInput = null
+        mainClock.advanceTimeBy(200)
+        // Down into the pictures (no tap needed), along them, then down to the buttons.
+        press(PadButton.DPAD_DOWN)
+        // The pictures are one row on this short screen: Left all the way reaches the first.
+        repeat(io.github.matiyaaa.fuse.ui.designsystem.components.FuseAvatars.all.size) { press(PadButton.DPAD_LEFT) }
+        press(PadButton.DPAD_RIGHT)
+        press(PadButton.DPAD_RIGHT)
+        press(PadButton.A)
+        // On the buttons: Left is Cancel, Right back to Create, A makes the profile.
+        press(PadButton.DPAD_LEFT)
+        press(PadButton.DPAD_RIGHT)
+        press(PadButton.A)
+        pumpUntil { made != null }
+        assertEquals("Mo", made!!.first)
+        assertEquals(io.github.matiyaaa.fuse.ui.designsystem.components.FuseAvatars.all[2].id, made!!.second)
+        // B leaves, from anywhere.
+        press(PadButton.B)
+        assertEquals(1, backs)
+    }
+
 }
 
 /** A handheld with a second screen that games can open on. */
 private object TwoScreenPlatform : PlatformUi by TestPlatform {
     override val features = PlatformFeatures(windowModes = true, launchOnOtherDisplay = true)
+
 }
 
 /**

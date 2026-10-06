@@ -142,10 +142,17 @@ internal fun AuditDriver.syncScreens() {
         shoot("Add Profile chosen")
         tap(PadButton.A)
         waitFor("New Profile")
-        shoot("a new profile: name, avatar, PIN", 1_000)
+        shoot("a new profile: name, PIN, pictures", 1_000)
+        // In the order they sit: the PIN below the name, then the pictures, then the buttons.
+        tap(PadButton.DPAD_DOWN)
+        shoot("the PIN chosen")
         tap(PadButton.DPAD_DOWN)
         tap(PadButton.DPAD_RIGHT, 3)
-        shoot("choosing an avatar")
+        shoot("choosing a picture")
+        tap(PadButton.DPAD_DOWN, 4)
+        shoot("Create Profile chosen, on screen")
+        tap(PadButton.DPAD_LEFT)
+        shoot("Cancel chosen")
         tap(PadButton.B)
     }
 

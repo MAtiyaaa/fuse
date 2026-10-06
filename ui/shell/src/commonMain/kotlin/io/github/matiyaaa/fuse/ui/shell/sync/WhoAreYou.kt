@@ -186,6 +186,19 @@ private fun WhoAreYou(app: AppState, mode: WhoMode) {
             val room = maxHeight
             val wide = maxWidth
             LaunchedEffect(step) { scroll.scrollTo(0) }
+            if (step == WhoStep.Create) {
+                // Its own layout: the buttons stay on screen and the rest scrolls above them.
+                CreateProfile(
+                    app,
+                    onCreated = { p, pin ->
+                        index = profiles.size
+                        step = WhoStep.People
+                        switchTo(p, pin)
+                    },
+                    onBack = { if (mode == WhoMode.ADD) close() else step = WhoStep.People },
+                )
+                return@BoxWithConstraints
+            }
             Box(Modifier.fillMaxSize().verticalScroll(scroll)) {
             Box(Modifier.fillMaxWidth().heightIn(min = room).padding(vertical = Space.m), contentAlignment = Alignment.Center) {
             when (val s = step) {
@@ -211,15 +224,7 @@ private fun WhoAreYou(app: AppState, mode: WhoMode) {
                     onSubmit = { pin, wrong -> switchTo(s.profile, pin, wrong) },
                     onBack = { step = WhoStep.People },
                 )
-                WhoStep.Create -> CreateProfile(
-                    app, compact, short,
-                    onCreated = { p, pin ->
-                        index = profiles.size
-                        step = WhoStep.People
-                        switchTo(p, pin)
-                    },
-                    onBack = { if (mode == WhoMode.ADD) close() else step = WhoStep.People },
-                )
+                WhoStep.Create -> Unit
             }
             }
             }
@@ -550,163 +555,20 @@ private fun PadKey(k: String, selected: Boolean, size: Dp, enabled: Boolean, wor
     }
 }
 
-/** The new profile's parts the D-pad moves between: its name, the avatars, the PIN, and Create. */
-private enum class CreatePart { NAME, AVATARS, PIN, CREATE }
-
-/**
- * A new profile: a name, one of Fuse's avatars (shown large as it is chosen), and a PIN if they
- * want one. Created on the host, then this device switches to it.
- */
+/** A new profile: a name, one of Fuse's pictures and a PIN if they want one, in [ProfileEditor]. */
 @Composable
-private fun CreateProfile(app: AppState, compact: Boolean, short: Boolean, onCreated: (ProfileInfo, String?) -> Unit, onBack: () -> Unit) {
+private fun CreateProfile(app: AppState, onCreated: (ProfileInfo, String?) -> Unit, onBack: () -> Unit) {
     val svc = app.store.sync.service ?: return
-    val c = Fuse.colors
-    val avatars = FuseAvatars.all
-    var name by remember { mutableStateOf("") }
-    var avatar by remember { mutableIntStateOf((0 until avatars.size).random()) }
-    var pin by remember { mutableStateOf<String?>(null) }
-    var part by remember { mutableStateOf(CreatePart.NAME) }
-    var making by remember { mutableStateOf(false) }
-    val columns = if (compact) 8 else 10
-    fun askName() {
-        app.textInput = TextInputSpec("Profile name", name, "Name", doneLabel = "Next") { v ->
-            name = v.trim().take(24)
-            if (name.isNotEmpty()) part = CreatePart.AVATARS
-        }
-    }
-    fun askPin() {
-        if (pin != null) {
-            pin = null
-            return
-        }
-        app.textInput = TextInputSpec("A PIN for ${name.ifBlank { "this profile" }}", "", "4 to 8 digits", secret = true, capitalize = false, doneLabel = "Set PIN") { v ->
-            val digits = v.filter { it.isDigit() }
-            if (digits.length in 4..8) pin = digits else app.toasts.show("A PIN is 4 to 8 digits", ToastKind.WARNING)
-        }
-    }
-    fun create() {
-        if (making) return
-        if (name.isBlank()) {
-            askName()
-            return
-        }
-        making = true
-        app.scope.launch {
-            val r = svc.createProfile(name, avatars[avatar].id, pin)
-            making = false
-            r.onSuccess { onCreated(it, pin) }.onFailure { app.toasts.show(it.message ?: "Couldn't make the profile", ToastKind.ERROR) }
-        }
-    }
-    InputLayer(priority = LayerPriority.DIALOG + 2, modal = true, enabled = app.textInput == null) { e ->
-        when (part) {
-            CreatePart.AVATARS -> when (e.action) {
-                NavAction.LEFT -> if (avatar % columns > 0) { avatar--; NavResult.MOVED } else NavResult.BLOCKED
-                NavAction.RIGHT -> if (avatar % columns < columns - 1 && avatar < avatars.size - 1) { avatar++; NavResult.MOVED } else NavResult.BLOCKED
-                NavAction.UP -> if (avatar >= columns) { avatar -= columns; NavResult.MOVED } else { part = CreatePart.NAME; NavResult.MOVED }
-                NavAction.DOWN -> if (avatar + columns < avatars.size) { avatar += columns; NavResult.MOVED } else { part = CreatePart.PIN; NavResult.MOVED }
-                NavAction.SELECT -> { part = CreatePart.PIN; NavResult.ACTIVATED }
-                NavAction.BACK -> { onBack(); NavResult.CONSUMED }
-                else -> NavResult.CONSUMED
-            }
-            else -> when (e.action) {
-                NavAction.UP -> { part = CreatePart.entries[maxOf(0, part.ordinal - 1)]; NavResult.MOVED }
-                NavAction.DOWN -> { part = CreatePart.entries[minOf(CreatePart.entries.size - 1, part.ordinal + 1)]; NavResult.MOVED }
-                NavAction.SELECT -> {
-                    when (part) {
-                        CreatePart.NAME -> askName()
-                        CreatePart.PIN -> askPin()
-                        CreatePart.CREATE -> create()
-                        CreatePart.AVATARS -> Unit
-                    }
-                    NavResult.ACTIVATED
-                }
-                NavAction.BACK -> { onBack(); NavResult.CONSUMED }
-                else -> NavResult.CONSUMED
-            }
-        }
-    }
-    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.widthIn(max = 720.dp)) {
-        FText("New Profile", if (compact) Fuse.type.title else Fuse.type.display, maxLines = 1, modifier = Modifier.semantics { heading() })
-        if (!short) {
-            Spacer(Modifier.height(Space.xs))
-            FText("Everyone gets their own saves, play time, favourites, Home and theme.", Fuse.type.body, color = c.textMuted, maxLines = 2, align = TextAlign.Center)
-        }
-        Spacer(Modifier.height(if (compact) Space.m else Space.xl))
-        // The part in use is kept in view where the page is taller than the screen.
-        val partInView = remember { CreatePart.entries.associateWith { BringIntoViewRequester() } }
-        val avatarInView = remember(avatars.size) { List(avatars.size) { BringIntoViewRequester() } }
-        LaunchedEffect(part, avatar) {
-            when (part) {
-                CreatePart.AVATARS -> avatarInView.getOrNull(avatar)?.bringIntoView()
-                // The name and PIN rows sit together.
-                CreatePart.PIN -> partInView[CreatePart.NAME]?.bringIntoView()
-                else -> partInView[part]?.bringIntoView()
-            }
-        }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            ProfileAvatar(avatars[avatar].id, if (compact) 72.dp else 104.dp)
-            Spacer(Modifier.width(Space.l))
-            Column(Modifier.width(if (compact) 240.dp else 320.dp).bringIntoViewRequester(partInView.getValue(CreatePart.NAME))) {
-                FieldRow(
-                    label = "Name", value = name.ifBlank { "Tap to type a name" }, filled = name.isNotBlank(),
-                    icon = FuseIcons.Pencil, selected = part == CreatePart.NAME,
-                ) { part = CreatePart.NAME; askName() }
-                Spacer(Modifier.height(Space.s))
-                FieldRow(
-                    label = "PIN", value = if (pin != null) "Set, ${pin!!.length} digits" else "None, anyone here can open it", filled = pin != null,
-                    icon = if (pin != null) FuseIcons.Lock else FuseIcons.LockOpen, selected = part == CreatePart.PIN,
-                ) { part = CreatePart.PIN; askPin() }
-            }
-        }
-        Spacer(Modifier.height(if (compact) Space.m else Space.l))
-        val cell = if (compact) 36.dp else 44.dp
-        Column(verticalArrangement = Arrangement.spacedBy(Space.s)) {
-            for (row in avatars.indices.chunked(columns)) {
-                Row(horizontalArrangement = Arrangement.spacedBy(Space.s)) {
-                    for (i in row) {
-                        val chosen = i == avatar
-                        Box(
-                            Modifier.bringIntoViewRequester(avatarInView[i]).clip(CircleShape).clickable(remember { MutableInteractionSource() }, indication = null) {
-                                avatar = i
-                                part = CreatePart.AVATARS
-                            },
-                        ) {
-                            ProfileAvatar(
-                                avatars[i].id, cell,
-                                ring = if (chosen && part == CreatePart.AVATARS) c.focus else if (chosen) c.text else null,
-                                dim = !chosen && part == CreatePart.AVATARS,
-                            )
-                        }
-                    }
-                }
-            }
-        }
-        Spacer(Modifier.height(if (compact) Space.m else Space.xl))
-        Row(Modifier.bringIntoViewRequester(partInView.getValue(CreatePart.CREATE)), horizontalArrangement = Arrangement.spacedBy(Space.m)) {
-            FuseButton("Back", selected = false, onClick = onBack, icon = FuseIcons.ArrowLeft, kind = ButtonKind.GHOST)
-            FuseButton(
-                "Create Profile", selected = part == CreatePart.CREATE, onClick = { part = CreatePart.CREATE; create() },
-                icon = FuseIcons.UserPlus, kind = ButtonKind.PRIMARY, loading = making,
-            )
-        }
-    }
-}
-
-@Composable
-private fun FieldRow(label: String, value: String, filled: Boolean, icon: androidx.compose.ui.graphics.vector.ImageVector, selected: Boolean, onClick: () -> Unit) {
-    val c = Fuse.colors
-    val bg by fuselineColor(if (selected) c.text else c.text.copy(alpha = 0.06f), Fuse.motion.tween(Durations.FAST), label = "field")
-    val fg = if (selected) c.ink else c.text
-    Row(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(Fuse.geometry.control)).background(bg)
-            .clickable(remember { MutableInteractionSource() }, indication = null, onClick = onClick)
-            .padding(horizontal = Space.l, vertical = Space.m),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(Modifier.weight(1f)) {
-            FText(label, Fuse.type.caption, color = if (selected) fg.copy(alpha = 0.7f) else c.textMuted, maxLines = 1)
-            FText(value, Fuse.type.bodyStrong, color = if (filled || selected) fg else c.textMuted, maxLines = 1)
-        }
-        FuseIcon(icon, size = Size.iconM, tint = fg.copy(alpha = 0.8f))
-    }
+    ProfileEditor(
+        app,
+        title = "New Profile",
+        subtitle = "Everyone gets their own saves, play time, favourites, Home and theme.",
+        submitLabel = "Create Profile",
+        submitIcon = FuseIcons.UserPlus,
+        onSubmit = { name, avatar, pin ->
+            val digits = (pin as? PinChoice.Set)?.digits
+            svc.createProfile(name, avatar, digits).fold({ onCreated(it, digits); null }, { it.message ?: "Couldn't make the profile" })
+        },
+        onBack = onBack,
+    )
 }
