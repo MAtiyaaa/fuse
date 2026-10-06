@@ -215,6 +215,7 @@ internal class DefaultHealthOps(
 
     /** Firmware Fuse looked for and knows is missing. Unknown (a folder it can't read) is never reported. */
     private fun firmwareIssues(platforms: List<PlatformCard>): List<HealthIssue> = platforms.mapNotNull { p ->
+        val romm = ctx.settings.value.romm.let { it.enabled && it.configured }
         val bios = p.bios
         val (severity, title) = when (bios.state) {
             BiosState.MISSING -> Severity.ATTENTION to "${p.platform.name} firmware missing"
@@ -227,11 +228,15 @@ internal class DefaultHealthOps(
                 title = title,
                 message = "Fuse looked in your firmware folders and didn't find " +
                     bios.missing.take(3).joinToString(", ") + (if (bios.missing.size > 3) " and ${bios.missing.size - 3} more" else "") +
-                    ". Many ${p.platform.shortName} games need it to start. Fuse never ships firmware: dump it from your own console.",
+                    ". Many ${p.platform.shortName} games need it to start. Fuse never ships firmware: dump it from your own console" +
+                    (if (romm) ", or bring it from your RomM server." else "."),
                 kind = ProblemKind.FIRMWARE,
                 severity = severity,
                 reassurance = null,
-                actions = listOf(ProblemAction.OpenSystem(p.platform.id, "${p.platform.name} settings")),
+                actions = listOfNotNull(
+                    ProblemAction.BiosFromRomm(p.platform.id, p.platform.name).takeIf { romm },
+                    ProblemAction.OpenSystem(p.platform.id, "${p.platform.name} settings"),
+                ),
                 details = "Searched:\n" + bios.searched.joinToString("\n").ifEmpty { "(no folders)" },
             ),
             platform = p.platform.id,

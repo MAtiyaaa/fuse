@@ -90,8 +90,18 @@ internal class DefaultTransfersOps(
         }
         // Long transfers keep Fuse running (Android) while they move.
         ctx.scope.launch {
-            engine.summary.map { it.active > 0 }.distinctUntilChanged().collect { active ->
-                ctx.services.keepAliveForTransfers(active, "Downloads")
+            engine.summary.map { s -> if (s.active > 0) keepAliveText(s) to s.progress?.let { (it * 100).toInt() } else null }
+                .distinctUntilChanged().collect { now ->
+                    if (now == null) ctx.services.keepAliveForTransfers(false, "", null)
+                    else ctx.services.keepAliveForTransfers(true, now.first, now.second)
+                }
+        }
+        // Wi-Fi comes and goes without telling: transfers kept to Wi-Fi look every little while.
+        ctx.scope.launch {
+            while (true) {
+                kotlinx.coroutines.delay(15_000)
+                val unmetered = ctx.services.unmetered()
+                if (unmetered != lastUnmetered) conditions(lastPlaying)
             }
         }
         // Drives come and go: transfers waiting for one look again at once.
@@ -99,8 +109,13 @@ internal class DefaultTransfersOps(
     }
 
     /** A game started or stopped, or the connection changed: transfers follow the person's rules. */
+    @kotlin.concurrent.Volatile private var lastPlaying = false
+    @kotlin.concurrent.Volatile private var lastUnmetered = true
+
     fun conditions(playing: Boolean) {
-        engine.conditions(TransferConditions(playing = playing, unmetered = ctx.services.unmetered()))
+        lastPlaying = playing
+        lastUnmetered = ctx.services.unmetered()
+        engine.conditions(TransferConditions(playing = playing, unmetered = lastUnmetered))
     }
 
     override fun live(id: String): StateFlow<TransferLive> = synchronized(mirroredLive) { mirroredLive[id] } ?: engine.live(id)
@@ -295,3 +310,10 @@ internal fun DownloadSettings.toTransferSettings(cores: Int = defaultCores(), lo
 }
 
 internal expect fun defaultCores(): Int
+
+/** The notification's line while transfers move: what, how many, in which direction. */
+internal fun keepAliveText(s: TransferSummary): String = listOfNotNull(
+    when (s.activeDownloads) { 0 -> null; 1 -> "Downloading 1 item"; else -> "Downloading ${s.activeDownloads} items" },
+    when (s.activeUploads) { 0 -> null; 1 -> "uploading 1"; else -> "uploading ${s.activeUploads}" },
+    if (s.queued > 0) "${s.queued} queued" else null,
+).joinToString(", ").replaceFirstChar { it.uppercase() }

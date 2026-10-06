@@ -338,6 +338,12 @@
             android:exported="false"
             android:foregroundServiceType="dataSync" />
 
+        <!-- Runs only while Downloads moves something (see TransferService). -->
+        <service
+            android:name=".transfer.TransferService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+
         <!-- Read-only play sessions for Cartridge (see PlayShareProvider and READ_PLAY above). -->
         <provider
             android:name=".services.PlayShareProvider"

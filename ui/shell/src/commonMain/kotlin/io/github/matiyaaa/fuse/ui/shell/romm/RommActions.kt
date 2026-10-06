@@ -73,3 +73,31 @@ fun AppState.rommDownload(romId: Long, title: String, what: RommDownloadWhat = R
         else toasts.show("$title is on its way", ToastKind.SUCCESS, icon = FuseIcons.Download)
     }
 }
+
+/**
+ * A system's missing BIOS from the person's RomM server: Fuse works out which files the system
+ * needs that are not here, shows them, and downloads them into the system's firmware folder. Files
+ * already here, by name, are never replaced.
+ */
+fun AppState.rommBios(platform: io.github.matiyaaa.fuse.model.PlatformId, name: String) {
+    closeOverlays()
+    scope.launch {
+        val picks = store.romm.biosPlan(all = false).filter { it.platform == platform.value }
+        if (picks.isEmpty()) {
+            toasts.show("Your RomM server has no $name firmware this device is missing", ToastKind.INFO, icon = FuseIcons.Info)
+            return@launch
+        }
+        choice = ChoiceSpec(
+            title = "$name BIOS from RomM",
+            message = "${picks.size} ${if (picks.size == 1) "file" else "files"} from your server. Files already here are never replaced.",
+            icon = FuseIcons.Chip,
+            options = listOf(MenuAction("bios.go", "Download ${picks.size}", FuseIcons.Download, onSelect = {
+                choice = null
+                scope.launch {
+                    val n = store.romm.downloadBios(picks)
+                    toasts.show("$n $name BIOS ${if (n == 1) "file is" else "files are"} on the way", ToastKind.SUCCESS, icon = FuseIcons.Download)
+                }
+            })) + picks.map { p -> MenuAction("bios.${p.firmware.id}.${p.destination}", p.firmware.fileName, FuseIcons.File, detail = p.why, enabled = false) },
+        )
+    }
+}

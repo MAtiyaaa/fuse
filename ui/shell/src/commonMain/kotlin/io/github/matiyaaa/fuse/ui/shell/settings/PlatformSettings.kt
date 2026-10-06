@@ -19,6 +19,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import io.github.matiyaaa.fuse.model.BiosState
+import io.github.matiyaaa.fuse.ui.shell.romm.rommBios
 import io.github.matiyaaa.fuse.model.BorderMode
 import io.github.matiyaaa.fuse.model.BorderStyle
 import io.github.matiyaaa.fuse.model.FolderPolicy
@@ -260,7 +261,14 @@ internal fun AppState.biosChoice(platform: io.github.matiyaaa.fuse.model.Platfor
         }
         toasts.show(if (on) "$name firmware marked as set up" else "Fuse goes by its own check for $name again")
     }
+    val romm = store.prefs.value.romm.let { it.enabled && it.configured }
     val options = buildList {
+        if (romm && !bios.confirmed && bios.state != io.github.matiyaaa.fuse.model.BiosState.READY) {
+            add(MenuAction("romm", "Download from RomM", FuseIcons.Download, detail = "What your RomM server has for $name. Files already here are never replaced", onSelect = {
+                choice = null
+                rommBios(platform, name)
+            }))
+        }
         add(MenuAction("again", "Check again", FuseIcons.Refresh, detail = "Looks through the firmware folders once more", onSelect = {
             choice = null
             store.sources.refreshBios()

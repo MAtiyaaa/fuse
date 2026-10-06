@@ -1,5 +1,6 @@
 package io.github.matiyaaa.fuse.ui.shell.app
 
+import io.github.matiyaaa.fuse.ui.shell.romm.rommBios
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -130,6 +131,7 @@ fun AppState.runProblemAction(action: ProblemAction, spec: ProblemSpec?) {
         is ProblemAction.GrantAccess -> platform.storage.request()
         is ProblemAction.OpenSystem -> go(Route.PlatformSettings(action.platform))
         is ProblemAction.OpenGame -> go(Route.GameInfo(action.game))
+        is ProblemAction.BiosFromRomm -> rommBios(action.platform, action.name)
         is ProblemAction.InstallContent -> go(Route.GameContent(action.game))
         is ProblemAction.AdoptDrive -> scope.launch {
             val ok = store.sources.adoptDrive(action.source)
@@ -300,6 +302,7 @@ private fun ProblemAction.icon(): ImageVector = when (this) {
     is ProblemAction.GrantAccess -> FuseIcons.LockOpen
     is ProblemAction.OpenSystem -> FuseIcons.Layers
     is ProblemAction.OpenGame -> FuseIcons.Gamepad
+    is ProblemAction.BiosFromRomm -> FuseIcons.Download
     is ProblemAction.InstallContent -> FuseIcons.Download
     is ProblemAction.AdoptDrive -> FuseIcons.FolderSync
     is ProblemAction.RemoveSource -> FuseIcons.FolderX

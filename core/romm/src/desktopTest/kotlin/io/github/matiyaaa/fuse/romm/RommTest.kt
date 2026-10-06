@@ -343,6 +343,21 @@ class RommTest {
         assertEquals(emptyList(), RommBios.needed(listOf(ps1), { BiosStatus(BiosState.READY) }, fw, slugs::get, PlatformCatalog::resolveFolder, { _, f -> "/x/${f.name}" }, { false }))
     }
 
+    @Test
+    fun `firmware an emulator installs goes to a folder of its own, with how to install it`() {
+        val ps3 = PlatformCatalog.byId("ps3")!!.copy(bios = BiosRequirement("PS3", listOf(BiosFile("PS3UPDAT.PUP")), installedInEmulator = true, hint = "Install it from RPCS3's File menu."))
+        val fw = listOf(RommFirmware(3, 30, "PS3UPDAT.PUP", 200_000_000))
+        val slugs = mapOf(30L to "ps3")
+        val folder = { _: io.github.matiyaaa.fuse.model.Platform -> "/games/Firmware/PS3" }
+        // Fuse can't look inside the emulator: unknown is not missing, so nothing unless asked for everything.
+        assertEquals(emptyList(), RommBios.needed(listOf(ps3), { BiosStatus(BiosState.UNKNOWN) }, fw, slugs::get, PlatformCatalog::resolveFolder, { _, _ -> null }, { false }, installerFolder = folder))
+        val all = RommBios.needed(listOf(ps3), { BiosStatus(BiosState.UNKNOWN) }, fw, slugs::get, PlatformCatalog::resolveFolder, { _, _ -> null }, { false }, all = true, installerFolder = folder)
+        assertEquals(listOf("/games/Firmware/PS3/PS3UPDAT.PUP"), all.map { it.destination })
+        assertEquals("Install it from RPCS3's File menu.", all.single().install)
+        // Already brought over: never again.
+        assertEquals(emptyList(), RommBios.needed(listOf(ps3), { BiosStatus(BiosState.UNKNOWN) }, fw, slugs::get, PlatformCatalog::resolveFolder, { _, _ -> null }, { it == "/games/Firmware/PS3/PS3UPDAT.PUP" }, all = true, installerFolder = folder))
+    }
+
     // ------------------------------------------------------------------ transfers, end to end
 
     private inner class Host(val fake: FakeRomm, val c: RommClient, override val mirror: RommMirror) : RommTransferHost {

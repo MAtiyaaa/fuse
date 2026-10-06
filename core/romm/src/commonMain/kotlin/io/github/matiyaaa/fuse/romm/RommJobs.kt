@@ -27,6 +27,8 @@ data class RommDownloadJob(
     val newFolder: Boolean = false,
     /** Fuse's platform id, for the scan once it lands. */
     val platform: String = "",
+    /** For firmware an emulator installs: how, said once the file is here. */
+    val install: String? = null,
 )
 
 /** One local file of an upload, and the folder it goes in inside the game on RomM ("" for the game itself). */

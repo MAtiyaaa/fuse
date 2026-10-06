@@ -469,6 +469,7 @@ private fun FuseAppContent(
     // The Store's news (an app installed, updated or removed), wherever the user is.
     LaunchedEffect(Unit) { store.appStore.notices.collect { app.toasts.show(it) } }
     LaunchedEffect(Unit) { store.cartridge.notices.collect { app.toasts.show(it) } }
+    LaunchedEffect(Unit) { store.romm.notices.collect { app.toasts.show(it, durationMs = 5200) } }
 }
 
 /** The background: theme renderer, then the selected item's art with video after it rests. */

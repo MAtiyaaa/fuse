@@ -154,6 +154,9 @@ interface RommOps {
     val supported: Boolean
     val state: StateFlow<RommState>
 
+    /** Short messages for the person: an upload done, new games on the server, firmware brought over. */
+    val notices: Flow<String> get() = kotlinx.coroutines.flow.emptyFlow()
+
     // ---------------------------------------------------------------- set-up and sign-in
     suspend fun test(local: String, remote: String, mode: RouteMode): RommTest
     suspend fun setAddresses(local: String, remote: String, mode: RouteMode)

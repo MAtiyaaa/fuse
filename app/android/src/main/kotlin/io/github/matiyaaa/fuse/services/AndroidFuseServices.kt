@@ -50,6 +50,16 @@ class AndroidFuseServices(
     override val secrets: SecretStore = KeystoreSecretStore(appContext)
     override val cacheDir: String = appContext.cacheDir.absolutePath
     override val dataDir: String = appContext.filesDir.absolutePath
+
+    override fun unmetered(): Boolean {
+        val cm = appContext.getSystemService(android.net.ConnectivityManager::class.java) ?: return true
+        return runCatching { !cm.isActiveNetworkMetered }.getOrDefault(true)
+    }
+
+    override fun keepAliveForTransfers(active: Boolean, text: String, progress: Int?) {
+        if (active) io.github.matiyaaa.fuse.transfer.TransferService.show(appContext, text, progress)
+        else io.github.matiyaaa.fuse.transfer.TransferService.stop(appContext)
+    }
     override val deviceName: String =
         android.provider.Settings.Global.getString(appContext.contentResolver, android.provider.Settings.Global.DEVICE_NAME)?.takeIf { it.isNotBlank() } ?: android.os.Build.MODEL
 

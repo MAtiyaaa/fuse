@@ -205,14 +205,19 @@ object RommPlacement {
     }
 }
 
-/** One BIOS file Fuse would fetch from RomM, and where it goes. */
-data class BiosPick(val firmware: RommFirmware, val platform: String, val destination: String, val why: String)
+/**
+ * One BIOS file Fuse would fetch from RomM, and where it goes. [install] is set for firmware an
+ * emulator installs itself (a PS3 update, Vita firmware): the words saying how, since Fuse can only
+ * bring the file and point at it.
+ */
+data class BiosPick(val firmware: RommFirmware, val platform: String, val destination: String, val why: String, val install: String? = null)
 
 /**
  * Which of a server's BIOS and firmware files this device needs: for each system it plays whose
  * firmware Fuse found missing or partial, the server's files that are what is missing (by name,
  * then checked by size and hash where Fuse knows them). A file already there is never replaced.
- * Firmware an emulator installs itself (a PS3 or Switch update) is left to that emulator's installer.
+ * Firmware an emulator installs itself (a PS3 update, Vita firmware) is brought to [installerFolder]
+ * for that emulator's own installer, never into its storage; without a folder it is left out.
  */
 object RommBios {
     fun needed(
@@ -224,13 +229,26 @@ object RommBios {
         destinationFor: (Platform, BiosFile) -> String?,
         exists: (String) -> Boolean,
         all: Boolean = false,
+        installerFolder: (Platform) -> String? = { null },
     ): List<BiosPick> {
         val out = ArrayList<BiosPick>()
         val bySystem = firmware.groupBy { f -> rommPlatformOf(f.platformId)?.let { resolveSlug(it)?.id?.value } }
         for (p in platforms) {
             val req = p.bios ?: continue
-            if (req.installedInEmulator) continue
             val status = statusOf(p)
+            if (req.installedInEmulator) {
+                // Fuse can't see inside the emulator, so it can't know this is missing: offered when
+                // asked for everything, or when Fuse's check says so (the person marked it otherwise).
+                if (!all && status?.state != BiosState.MISSING) continue
+                val folder = installerFolder(p) ?: continue
+                for (file in req.files) {
+                    val fw = bySystem[p.id.value].orEmpty().firstOrNull { fits(it, file) } ?: continue
+                    val dest = folder.trimEnd('/', '\\') + "/" + fw.fileName
+                    if (exists(dest)) continue
+                    out += BiosPick(fw, p.id.value, dest, "For ${p.name}, installed from the emulator", install = req.hint.ifBlank { "Install it from the emulator's menu." })
+                }
+                continue
+            }
             val wanted = when {
                 all -> req.files
                 status == null || status.state == BiosState.READY || status.state == BiosState.NOT_REQUIRED -> continue

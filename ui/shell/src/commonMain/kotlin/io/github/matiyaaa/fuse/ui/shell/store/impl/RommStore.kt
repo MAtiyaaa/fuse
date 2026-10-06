@@ -281,6 +281,7 @@ internal class DefaultRommOps(
     }
 
     val noticeFlow = kotlinx.coroutines.flow.MutableSharedFlow<String>(extraBufferCapacity = 4)
+    override val notices: Flow<String> get() = noticeFlow
 
     // ------------------------------------------------------------------ set-up and sign-in
 
@@ -643,8 +644,10 @@ internal class DefaultRommOps(
         override val mirror: RommMirror get() = this@DefaultRommOps.mirror
 
         override suspend fun landed(job: RommDownloadJob, item: TransferItem, paths: List<String>) {
-            if (job.firmware != null) {
+            val fw = job.firmware
+            if (fw != null) {
                 engine.refreshBios()
+                job.install?.let { how -> noticeFlow.tryEmit("${fw.fileName} is in ${shortPath(FsPath.parent(paths.firstOrNull() ?: "") ?: "")}. $how") }
                 return
             }
             val r = mirror.rom(job.server, job.romId) ?: return
@@ -752,6 +755,11 @@ internal class DefaultRommOps(
             },
             exists = { false },
             all = all,
+            installerFolder = { p ->
+                // Beside the library (or the BIOS folder), in a folder of its own: never inside the emulator.
+                val base = settings.libraryRoot.ifBlank { null } ?: chosen ?: roots.firstOrNull()
+                base?.let { FsPath.join(FsPath.join(it, "Firmware"), p.shortName.replace(Regex("[^A-Za-z0-9 ._-]"), "")) }
+            },
         ).filter { !fileExists(it.destination) }
     }
 
@@ -765,7 +773,7 @@ internal class DefaultRommOps(
                     id = "", key = "romm:bios:${p.firmware.id}:${p.destination}", source = ROMM_SOURCE, direction = TransferDirection.DOWNLOAD,
                     kind = TransferKind.BIOS, title = p.firmware.fileName, detail = p.why, platform = p.platform,
                     place = place, target = "${place.volume?.label ?: "This device"}  ·  ${shortPath(FsPath.parent(p.destination) ?: p.destination)}",
-                    totalBytes = p.firmware.sizeBytes, payload = RommDownloadJob(server, firmware = p.firmware).encode(),
+                    totalBytes = p.firmware.sizeBytes, payload = RommDownloadJob(server, firmware = p.firmware, install = p.install).encode(),
                 ),
             )
             n++

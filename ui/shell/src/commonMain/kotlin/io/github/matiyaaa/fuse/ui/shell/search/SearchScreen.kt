@@ -179,6 +179,14 @@ private sealed interface Hit {
         override val detail = "In Cartridge, every system on your RomM server"
     }
 
+    /** A game on the person's RomM server that isn't here yet, from Fuse RomM's copy of the library. */
+    data class RommGame(val g: io.github.matiyaaa.fuse.ui.shell.store.RommGame) : Hit {
+        override val key = "rg${g.romId}"
+        override val title = g.card.title
+        override val kind = HitKind.ROMM
+        override val detail = listOfNotNull(g.card.platformShort, "Not downloaded yet").joinToString("  ·  ")
+    }
+
     data class App(val card: AppCard) : Hit {
         override val key = "a${card.entry.id}"
         override val title = card.entry.displayTitle
@@ -240,17 +248,27 @@ fun SearchScreen(app: AppState) {
             .flatMapLatest { q -> app.store.library.search(q) }
     }
     val results by flow.collectAsState(initial = SearchResults())
+    // Fuse RomM on: the same words through its copy of the server's library, offline too. Games
+    // already here are found above as themselves, so only what isn't here is listed.
+    val rommOn = app.store.prefs.collectAsState().value.romm.enabled
+    val rommFlow = remember(rommOn) {
+        if (!rommOn) kotlinx.coroutines.flow.flowOf(emptyList())
+        else androidx.compose.runtime.snapshotFlow { field.text }.debounce(140)
+            .flatMapLatest { q -> if (q.trim().length < 2 || SearchSyntax.parse(q).pending != null || ':' in q) kotlinx.coroutines.flow.flowOf(emptyList()) else app.store.romm.search(q.trim()) }
+    }
+    val rommGames by rommFlow.collectAsState(initial = emptyList())
     val sections = remember { settingsSections.filter { it.available(app) } }
-    val hits = remember(results) {
+    val hits = remember(results, rommGames) {
         // Settings are found by name alone, never with filters.
         val settings = if (results.chips.isEmpty()) SettingsIndex.search(results.query, sections, cartridge = app.platform.features.cartridge, secondScreen = app.platform.features.secondScreen).map { Hit.Setting(it) } else emptyList()
         val choosing = SearchSyntax.parse(results.query).pending != null
         results.suggestions.map { Hit.Suggestion(it, choosing) } +
             results.games.map { Hit.Game(it) } + results.platforms.map { Hit.System(it) } +
             results.apps.map { Hit.App(it) } + results.collections.filter { app.store.prefs.value.collectionsEnabled }.map { Hit.Collection(it) } +
+            rommGames.filter { it.game == null && results.chips.isEmpty() }.take(ROMM_HITS).map { Hit.RommGame(it) } +
             settings + listOfNotNull(
                 // Plain words (no filters), with Cartridge there: the same search on the RomM server.
-                results.query.trim().takeIf { it.length >= 2 && results.chips.isEmpty() && SearchSyntax.parse(it).pending == null && app.store.cartridge.status.value.installed }
+                results.query.trim().takeIf { !rommOn && it.length >= 2 && results.chips.isEmpty() && SearchSyntax.parse(it).pending == null && app.store.cartridge.status.value.installed }
                     ?.let { Hit.Romm(it) },
             )
     }
@@ -288,6 +306,7 @@ fun SearchScreen(app: AppState) {
             is Hit.Collection -> app.go(Route.CollectionGames(hit.c.id, hit.c.name))
             is Hit.Setting -> hit.hit.topic.let { t -> app.openSettings(t.section, t.row, t.group) }
             is Hit.Romm -> app.store.cartridge.open(io.github.matiyaaa.fuse.model.CartridgeRoute.Search(hit.query, null))
+            is Hit.RommGame -> app.go(Route.GameInfo(hit.g.card.id))
             // A filter goes into the search; the keys take over again for what comes next.
             is Hit.Suggestion -> {
                 field.replaceAll(hit.s.text)
@@ -591,6 +610,7 @@ private fun HitThumb(h: Hit, size: androidx.compose.ui.unit.Dp) {
         is Hit.Setting -> IconWell(h.hit.section.icon, size, shape)
         is Hit.Suggestion -> IconWell(h.s.key.icon(), size, shape)
         is Hit.Romm -> IconWell(FuseIcons.CloudDownload, size, shape)
+        is Hit.RommGame -> SquareGameArt(h.g.card.art, Modifier.size(size).clip(shape), fallback = { GeneratedArt(h.title, h.g.card.accent.toColor(), slot = ArtSlot.ICON) })
     }
 }
 
@@ -731,3 +751,6 @@ private class ResultLayout(val keys: List<String>, private val items: IntArray, 
 
 /** The accent bar at the start of the selected row. */
 private val BAR = Size.track - Space.hair
+
+/** How many RomM games Search lists under the library's own: enough to find one, never a wall. */
+private const val ROMM_HITS = 8

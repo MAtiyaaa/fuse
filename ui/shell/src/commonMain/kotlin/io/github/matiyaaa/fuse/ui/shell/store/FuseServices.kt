@@ -55,9 +55,10 @@ interface FuseServices {
 
     /**
      * Keeps Fuse running while transfers the person started are moving (Android: a foreground
-     * service with a quiet notification); [active] false lets it go. Nothing to do on a computer.
+     * service with a quiet notification saying [text], with [progress] 0..100 when known); called
+     * again as either changes. [active] false lets it go. Nothing to do on a computer.
      */
-    fun keepAliveForTransfers(active: Boolean, label: String) = Unit
+    fun keepAliveForTransfers(active: Boolean, text: String, progress: Int?) = Unit
 
     /** This device's name, as servers list it (Jellyfin's dashboard). */
     val deviceName: String get() = "Fuse"
