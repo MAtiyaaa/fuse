@@ -90,6 +90,9 @@ data class RommSystem(
 )
 
 @Immutable
+/** Library games RomM hasn't got: the first of them as cards, and how many there are in all. */
+data class RommNotOnServer(val games: List<GameCard> = emptyList(), val total: Int = 0)
+
 data class RommCollectionCard(val id: String, val name: String, val smart: Boolean, val games: Int, val covers: List<GameCard>)
 
 /** One part of a game on RomM (the game, a disc, an update, DLC), and whether it is here. */
@@ -188,6 +191,12 @@ interface RommOps {
     val recent: StateFlow<List<RommGame>>
     val newGames: StateFlow<List<RommGame>>
     val collections: StateFlow<List<RommCollectionCard>>
+
+    /**
+     * Games in the library that RomM has no match for (apps aside), once the server's whole
+     * library is known: the ones to send to RomM. [RommNotOnServer.total] counts them all.
+     */
+    val notOnServer: StateFlow<RommNotOnServer> get() = MutableStateFlow(RommNotOnServer())
     fun games(slug: String?): Flow<List<RommGame>>
     fun collection(id: String): Flow<List<RommGame>>
     fun search(text: String): Flow<List<RommGame>>

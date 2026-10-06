@@ -9,6 +9,10 @@ own sources, kept for good, editable, and a RomM tab that looks the part.
   looked up with your own sources in your own order (SteamGridDB, IGDB, TheGamesDB and the rest,
   whatever you have set up), the games you can see first. Their box art, icons, heroes, logos and
   details are kept, so they are there at once next time and never looked for twice.
+- **Not on RomM.** A shelf under Systems on the RomM tab lists the games in your library your RomM
+  server hasn't got, with how many there are; each one's options include Upload to RomM. It shows
+  once Fuse has read the whole server's library, so nothing is listed only because it wasn't read
+  yet.
 - **Edit them like any game.** A RomM game's options and page offer Manage Media, Find Details and
   Art, Rename Display Title and Reset Name and Details, as for a game on this device.
 

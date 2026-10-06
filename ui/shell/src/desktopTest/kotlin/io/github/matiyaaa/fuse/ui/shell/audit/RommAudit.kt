@@ -44,6 +44,8 @@ private class AuditRomm(base: FuseStore) : RommOps by RommOps.None {
             RommSystem(PlatformId("ps4"), "ps4", "PlayStation 4", 12, 0, 0),
     )
     override val collections: StateFlow<List<RommCollectionCard>> = MutableStateFlow(listOf(RommCollectionCard("user-1", "Couch co-op", false, 18, cards.take(4))))
+    override val notOnServer: StateFlow<io.github.matiyaaa.fuse.ui.shell.store.RommNotOnServer> =
+        MutableStateFlow(io.github.matiyaaa.fuse.ui.shell.store.RommNotOnServer(cards.drop(24).take(8), 31))
     override fun games(slug: String?): Flow<List<RommGame>> = flowOf(games)
     override fun markNewSeen() = Unit
 }
@@ -59,17 +61,19 @@ internal fun AuditDriver.rommScreens() {
         // RomM holds Addons' first place, so the page opens on it.
         waitFor("New in Your Library")
         shoot("RomM's line", 1_200)
-        tap(PadButton.DPAD_DOWN, 2)
+        tap(PadButton.DPAD_DOWN)
         tap(PadButton.DPAD_RIGHT)
         shoot("a new game chosen", 1_500)
         tap(PadButton.DPAD_DOWN, 2)
         tap(PadButton.DPAD_RIGHT, 5)
-        shoot("a collection chosen", 1_500)
-        tap(PadButton.DPAD_UP)
-        tap(PadButton.DPAD_RIGHT, 5)
         shoot("systems, one not in the library", 1_500)
-        tap(PadButton.DPAD_UP)
-        tap(PadButton.DPAD_LEFT, 4)
+        tap(PadButton.DPAD_DOWN)
+        tap(PadButton.DPAD_RIGHT)
+        shoot("games not on RomM", 1_500)
+        tap(PadButton.DPAD_DOWN)
+        shoot("a collection chosen", 1_500)
+        tap(PadButton.DPAD_UP, 3)
+        tap(PadButton.DPAD_RIGHT)
         tap(PadButton.X)
         waitFor("Find Details and Art")
         shoot("a game's options")

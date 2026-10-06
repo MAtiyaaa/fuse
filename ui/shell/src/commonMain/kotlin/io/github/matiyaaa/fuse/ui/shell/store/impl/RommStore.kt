@@ -60,6 +60,7 @@ import io.github.matiyaaa.fuse.transfer.TransferPlaces
 import io.github.matiyaaa.fuse.transfer.TransferStatus
 import io.github.matiyaaa.fuse.transfer.Transfers
 import io.github.matiyaaa.fuse.ui.shell.store.Art
+import io.github.matiyaaa.fuse.ui.shell.store.RommNotOnServer
 import io.github.matiyaaa.fuse.ui.shell.store.EmulatorChoice
 import io.github.matiyaaa.fuse.ui.shell.store.GameCard
 import io.github.matiyaaa.fuse.ui.shell.store.GameDetail
@@ -437,6 +438,8 @@ internal class DefaultRommOps(
                 val row = byId[m.gameId] ?: continue
                 if (row.rommRomId == null && m.reason != MatchReason.NAME_AND_TAGS) ctx.data.games.updateLinks(GameId(m.gameId)) { it.copy(rommRomId = m.romId) }
             }
+            // A scan or a download changed what the library has: what RomM hasn't got follows.
+            _notOnServer.value = notOnServerNow()
         }
     }
 
@@ -485,10 +488,27 @@ internal class DefaultRommOps(
         // What shows first gets its art first.
         fillUnmatched(fresh + recentRoms)
         _state.update { it.copy(newGames = fresh.size, games = mirror.count(server)) }
+        _notOnServer.value = notOnServerNow()
         val cols = mirror.collections(server)
         _collections.value = cols.map { c ->
             RommCollectionCard(c.id, c.name, c.smart, c.romIds.size, toGames(mirror.roms(server, c.romIds.take(4))).map { it.card })
         }.filter { it.games > 0 }
+    }
+
+    private val _notOnServer = MutableStateFlow(RommNotOnServer())
+    override val notOnServer: StateFlow<RommNotOnServer> = _notOnServer
+
+    /**
+     * Library games no RomM game was matched to, apps and games whose files are gone aside. Only
+     * once a whole read of the server's library has finished: before that, most would look missing.
+     */
+    private suspend fun notOnServerNow(): RommNotOnServer {
+        if (mirror.syncedAt(server) <= 0L) return RommNotOnServer()
+        val matched = matches.value.values.mapTo(HashSet()) { it.first }
+        val missing = ctx.data.games.observeAll().first().filter { !it.isApp && !it.missing && !it.removed && it.id !in matched }
+        val shown = missing.take(NOT_ON_SERVER_SHOWN)
+        val media = if (shown.isEmpty()) emptyMap() else ctx.data.media.observeFor(shown.map { MediaOwner.OfGame(it.id) }).first()
+        return RommNotOnServer(shown.map { ctx.summaryToCard(it, media[MediaOwner.OfGame(it.id)]) }, missing.size)
     }
 
     override fun games(slug: String?): Flow<List<RommGame>> = combine(mirrorRevision, matches, transfers.items) { _, _, _ -> }.mapLatest {
@@ -852,6 +872,9 @@ internal class DefaultRommOps(
 
     companion object {
         const val SECRET = "romm.credential"
+
+        /** Library games not on RomM shown on the tab's shelf (the rest are counted). */
+        private const val NOT_ON_SERVER_SHOWN = 60
 
         /** How long a burst of art arriving waits before the lists are drawn again. */
         private const val REDRAW_MS = 4_000L
