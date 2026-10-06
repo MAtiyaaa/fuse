@@ -295,7 +295,7 @@ class ServiceTest {
         val mo = pc.createProfile("Mo", "fox", null).getOrThrow()
         deck.switchTo(mo.id).getOrThrow()
         val before = deckLib.gamesNow()
-        deck.setEnabled(false)
+        deck.setEnabled(false, keepProfiles = false)
         // Forgotten: no host, no profiles, no profile in use.
         val s = deckSettings.current().sync
         assertEquals("", s.role)

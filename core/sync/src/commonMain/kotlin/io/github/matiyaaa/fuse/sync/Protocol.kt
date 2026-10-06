@@ -64,8 +64,16 @@ data class ProfileInfo(
     val hostOnly: Boolean = false,
 )
 
+/**
+ * A profile to make. [pinHash] carries a PIN already kept as [SyncCrypto]'s salted hash (a profile
+ * made on a device without a host, brought to one), so the PIN itself never needs typing again.
+ */
 @Serializable
-data class NewProfile(val name: String, val avatar: String, val pin: String? = null)
+data class NewProfile(val name: String, val avatar: String, val pin: String? = null, val pinHash: String? = null)
+
+/** The order profiles show in, everywhere: their ids, first to last. */
+@Serializable
+data class ProfileOrder(val ids: List<String>)
 
 @Serializable
 data class ProfileChange(val name: String? = null, val avatar: String? = null, val pin: String? = null, val removePin: Boolean = false, val currentPin: String? = null)

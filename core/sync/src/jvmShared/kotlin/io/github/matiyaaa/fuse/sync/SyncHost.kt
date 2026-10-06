@@ -310,10 +310,17 @@ class SyncHost(
                 val d = device() ?: return@post
                 val req = signedBody(d, NewProfile.serializer()) ?: return@post
                 val made = runCatching { store.createProfile(req) }.getOrElse { return@post call.fail(HttpStatusCode.BadRequest, it.message ?: "Couldn't make the profile", "bad-profile") }
-                // The device that made a profile may use it.
-                store.unlock(d.id, made.id, req.pin)
+                // The device that made a profile may use it (with a carried PIN, it proved it elsewhere).
+                if (req.pin.isNullOrBlank() && req.pinHash != null) store.openFor(d.id, made.id) else store.unlock(d.id, made.id, req.pin)
                 bump()
                 call.json(ProfileInfo.serializer(), made)
+            }
+            post("/profiles/order") {
+                val d = device() ?: return@post
+                val req = signedBody(d, ProfileOrder.serializer()) ?: return@post
+                store.setOrder(req.ids.take(MAX_ORDER))
+                bump()
+                call.respondText("{}", ContentType.Application.Json)
             }
             patch("/profiles/{id}") {
                 val d = device() ?: return@patch
@@ -702,6 +709,9 @@ class SyncHost(
         respondText(json.encodeToString(ApiError.serializer(), ApiError(message, code)), ContentType.Application.Json, status)
 
     companion object {
+        /** The most profiles one reorder names. */
+        const val MAX_ORDER = 200
+
         /** The largest JSON call: a profile's records for a big library fit easily. */
         const val MAX_JSON = 16L * 1024 * 1024
 

@@ -350,7 +350,9 @@ class HostStore(val dir: File, private val clock: () -> Long = System::currentTi
         require(name.isNotEmpty()) { "A profile needs a name" }
         require(profiles.values.none { !it.deleted && it.name.equals(name, ignoreCase = true) }) { "A profile is already called $name" }
         val id = SyncCrypto.token(9)
-        val record = ProfileRecord(id, name, request.avatar.take(32), clock(), pinHash = request.pin?.takeIf { it.isNotBlank() }?.let { pinOk(it); SyncCrypto.hashSecret(it) })
+        val pinHash = request.pin?.takeIf { it.isNotBlank() }?.let { pinOk(it); SyncCrypto.hashSecret(it) }
+            ?: request.pinHash?.let { carried -> carried.takeIf(::hashOk) ?: throw IllegalArgumentException("That PIN couldn't be carried over") }
+        val record = ProfileRecord(id, name, request.avatar.take(32), clock(), pinHash = pinHash)
         profiles[id] = record
         saveProfiles()
         event(JournalEvent.PROFILE, profile = id)
@@ -358,6 +360,34 @@ class HostStore(val dir: File, private val clock: () -> Long = System::currentTi
     }
 
     private fun pinOk(pin: String) = require(pin.length in 4..64) { "A PIN or password is 4 to 64 characters" }
+
+    /** A PIN already hashed elsewhere (a profile made without a host): only Fuse's own kind, never one too costly to check. */
+    private fun hashOk(hash: String): Boolean {
+        val (_, iterations, key) = SyncCrypto.secretParts(hash) ?: return false
+        return iterations in MIN_PIN_ITERATIONS..SyncCrypto.PIN_ITERATIONS * 2 && key.size in 16..64
+    }
+
+    /** The device that made a profile with a carried PIN may use it (it never saw the PIN typed here). */
+    internal fun openFor(device: String, profile: String): Unit = synchronized(lock) {
+        val p = profiles[profile]?.takeIf { !it.deleted } ?: return@synchronized
+        val d = devices[device] ?: return@synchronized
+        devices[device] = d.copy(opened = d.opened + (profile to p.pinEpoch), profile = profile)
+        saveDevices()
+    }
+
+    /**
+     * Puts the profiles in the order of [ids] (any not named keep their place after them), for
+     * every device: Who's playing? and every list follow it.
+     */
+    fun setOrder(ids: List<String>): Unit = synchronized(lock) {
+        val first = ids.distinct().mapNotNull { id -> profiles[id]?.let { id to it } }
+        if (first.isEmpty()) return@synchronized
+        val rest = profiles.entries.filter { it.key !in ids }.map { it.key to it.value }
+        profiles.clear()
+        (first + rest).forEach { (k, v) -> profiles[k] = v }
+        saveProfiles()
+        event(JournalEvent.PROFILE)
+    }
 
     fun changeProfile(id: String, change: ProfileChange): ProfileInfo = synchronized(lock) {
         val p = profiles[id]?.takeIf { !it.deleted } ?: throw NoSuchElementException("No such profile")
@@ -707,6 +737,9 @@ internal sealed interface UnlockResult {
 
 /** The host computer's own profile. */
 internal const val ADMIN_NAME = "Admin"
+
+/** The fewest rounds a carried PIN hash may have been stretched with. */
+internal const val MIN_PIN_ITERATIONS = 10_000
 internal const val ADMIN_AVATAR = "crown"
 
 /**

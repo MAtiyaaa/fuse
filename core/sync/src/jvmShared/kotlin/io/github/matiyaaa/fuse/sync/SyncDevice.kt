@@ -248,7 +248,7 @@ class SyncDevice(
      * game (nothing is deleted: every file is in the device's store). The host's newest still comes
      * down afterwards, in [prepare].
      */
-    suspend fun handover(profile: String, slot: LocalSlot, holderSeconds: (String) -> Long = { 0L }) {
+    suspend fun handover(profile: String, slot: LocalSlot, holderSeconds: (String) -> Long = { 0L }, orphanTo: File? = null) {
         if (!slot.available) return
         val holder = state.holders[slot.key]
         if (holder == profile) return
@@ -260,19 +260,149 @@ class SyncDevice(
             }
             return
         }
-        capture(holder, slot, holderSeconds(holder), Priority.SAVE)
+        // A removed profile's save has no one to keep it for: it goes to [orphanTo] as plain files.
+        val orphan = holder == ORPHAN
+        if (!orphan) capture(holder, slot, holderSeconds(holder), Priority.SAVE)
         mutex.withLock {
             val (current, hashed) = fingerprintOf(slot)
             for ((lf, h) in hashed) if (!store.has(h)) lf.file.inputStream().use { store.put(it, expected = h) }
+            if (orphan && orphanTo != null && current.files.isNotEmpty()) writeOut(File(File(orphanTo, part(slot.game.id)), part(slot.kind.label)), current)
             val mine = state.parked[keyOf(profile, slot)]
             // Clear what is there (every file of it is in the store), then put this person's own
             // back. A file Fuse Sync can't keep (a name it can't carry) is never touched.
             for ((lf, h) in hashed) if (store.has(h)) lf.file.delete()
             if (mine != null && mine.files.all { store.has(it.hash) }) write(slot, mine)
             var parked = state.parked - keyOf(profile, slot)
-            if (current.files.isNotEmpty()) parked = parked + (keyOf(holder, slot) to current)
+            if (current.files.isNotEmpty() && (!orphan || orphanTo == null)) parked = parked + (keyOf(holder, slot) to current)
             state = state.copy(parked = parked, holders = state.holders + (slot.key to profile))
             persist()
+        }
+    }
+
+    // ---------------------------------------------------------------- people coming and going
+
+    /** Everyone this device keeps anything for: records, saves waiting to go, saves parked or in a folder. */
+    fun people(): Set<String> = buildSet {
+        addAll(state.metas.keys)
+        addAll(state.pendingMeta.keys)
+        state.outbox.forEach { add(it.profile) }
+        state.parked.keys.forEach { add(it.substringBefore('|')) }
+        state.slots.keys.forEach { add(it.substringBefore('|')) }
+        addAll(state.holders.values)
+    } - ORPHAN - ""
+
+    /**
+     * People's ids change ([ids], old to new: profiles made here going to a host, or one found to be
+     * the same person as someone there). Everything here follows: records, saves waiting to go,
+     * parked saves, whose save each folder holds, and what was agreed. Where two become one, records
+     * merge, and a save of the same game parked for both keeps the one already there.
+     */
+    suspend fun rekey(ids: Map<String, String>) = mutex.withLock {
+        if (ids.all { (a, b) -> a == b }) return@withLock
+        fun id(p: String) = ids[p] ?: p
+        fun key(k: String): String {
+            val p = k.substringBefore('|')
+            return id(p) + k.substring(p.length)
+        }
+        fun <V> Map<String, V>.moved(join: (V, V) -> V): Map<String, V> {
+            val out = LinkedHashMap<String, V>()
+            for ((k, v) in this) {
+                val to = key(k)
+                out[to] = out[to]?.let { join(it, v) } ?: v
+            }
+            return out
+        }
+        state = state.copy(
+            profile = state.profile?.let(::id),
+            slots = state.slots.moved { a, _ -> a },
+            holders = state.holders.mapValues { (_, v) -> id(v) },
+            parked = state.parked.moved { a, _ -> a },
+            outbox = state.outbox.map { o -> o.copy(profile = id(o.profile), revision = o.revision?.let { it.copy(profile = id(it.profile)) }) },
+            metas = state.metas.moved { a, b -> a.merge(b) },
+            pendingMeta = state.pendingMeta.moved { a, b -> a.merge(b) },
+        )
+        persist()
+    }
+
+    /**
+     * [profile]'s records here with every choice stamped [at] (see [ProfileMeta.stampedAt]), as
+     * changes waiting to go: joined to the same person on a host, theirs win and these fill gaps.
+     */
+    suspend fun restamp(profile: String, at: Hlc) = mutex.withLock {
+        val m = meta(profile)
+        state = state.copy(metas = state.metas - profile, pendingMeta = state.pendingMeta + (profile to m.stampedAt(at)))
+        persist()
+    }
+
+    /**
+     * Forgets [profile] on this device: its records, saves waiting to go and parked saves. Those
+     * saves are written to [to] first as plain files (when given), so nothing is lost silently.
+     * A folder holding their save now is left as it is; the next person to play that game here
+     * finds it and it goes to [to] then. Returns how many saves were written out.
+     */
+    suspend fun forget(profile: String, to: File?): Int = mutex.withLock {
+        var count = 0
+        if (to != null) {
+            for (o in state.outbox) {
+                val r = o.revision ?: continue
+                if (o.profile != profile || r.manifest.files.none { store.has(it.hash) }) continue
+                writeOut(File(File(to, part(r.title.ifBlank { r.game })), part("${r.kind.label} ${r.id}")), r.manifest)
+                count++
+            }
+            for ((k, m) in state.parked) {
+                if (!k.startsWith("$profile|") || m.files.none { store.has(it.hash) }) continue
+                val (_, game, kind) = k.split('|').let { Triple(it[0], it.getOrElse(1) { "" }, it.getOrElse(2) { "" }) }
+                writeOut(File(File(to, part(game)), part("$kind parked")), m)
+                count++
+            }
+        }
+        state = state.copy(
+            profile = state.profile.takeIf { it != profile },
+            metas = state.metas - profile,
+            pendingMeta = state.pendingMeta - profile,
+            outbox = state.outbox.filterNot { it.profile == profile },
+            parked = state.parked.filterKeys { !it.startsWith("$profile|") },
+            slots = state.slots.filterKeys { !it.startsWith("$profile|") },
+            holders = state.holders.mapValues { (_, v) -> if (v == profile) ORPHAN else v },
+        )
+        persist()
+        count
+    }
+
+    /**
+     * Leaving the host: each person's records become this device's own changes (so a host joined
+     * later gets them as theirs), and nothing is agreed with any host any more. Saves waiting to go
+     * stay, as does whose save each folder holds.
+     */
+    suspend fun detach() = mutex.withLock {
+        state = state.copy(
+            seq = 0,
+            slots = emptyMap(),
+            pendingMeta = (state.metas.keys + state.pendingMeta.keys).associateWith { meta(it) },
+            metas = emptyMap(),
+        )
+        persist()
+    }
+
+    /**
+     * Frees stored files nothing here needs any more: without a host, a save replaced by a newer
+     * one before it was ever sent. Only for a device with no host (one with a host also keeps what
+     * it is bringing down).
+     */
+    suspend fun collect(): Long = mutex.withLock {
+        val used = HashSet<String>()
+        state.outbox.forEach { o -> o.revision?.manifest?.files?.forEach { used += it.hash } }
+        state.parked.values.forEach { m -> m.files.forEach { used += it.hash } }
+        store.collect(used)
+    }
+
+    /** Copies [manifest]'s files (in the store) into [folder] as plain files. */
+    private fun writeOut(folder: File, manifest: SaveManifest) {
+        for (f in manifest.files) {
+            if (!SavePath.isSafe(f.path) || !store.has(f.hash)) continue
+            val target = File(folder, f.path)
+            target.parentFile.mkdirs()
+            store.fileOf(f.hash).copyTo(target, overwrite = true)
         }
     }
 
@@ -530,14 +660,7 @@ class SyncDevice(
         for (o in state.outbox) {
             val r = o.revision ?: continue
             if (r.manifest.files.none { store.has(it.hash) }) continue
-            fun part(text: String) = text.replace(Regex("[^A-Za-z0-9 ._()-]+"), "_").trim('.', ' ').take(80).ifEmpty { "_" }
-            val folder = File(File(File(to, part(o.profile)), part(r.title.ifBlank { r.game })), part("${r.kind.label} ${r.id}"))
-            for (f in r.manifest.files) {
-                if (!SavePath.isSafe(f.path) || !store.has(f.hash)) continue
-                val target = File(folder, f.path)
-                target.parentFile.mkdirs()
-                store.fileOf(f.hash).copyTo(target, overwrite = true)
-            }
+            writeOut(File(File(File(to, part(o.profile)), part(r.title.ifBlank { r.game })), part("${r.kind.label} ${r.id}")), r.manifest)
             count++
         }
         count
@@ -550,6 +673,12 @@ class SyncDevice(
         }
     }
 }
+
+/** Whose save a folder holds after its person's profile was removed here. */
+internal const val ORPHAN = "~removed"
+
+/** [text] as a safe folder name. */
+private fun part(text: String) = text.replace(Regex("[^A-Za-z0-9 ._()-]+"), "_").trim('.', ' ').take(80).ifEmpty { "_" }
 
 /** Answers that mean the host will never take a revision as it is: it leaves the queue (its files stay on the device). */
 private val REFUSED_FOR_GOOD = setOf("bad-revision", "bad-body", "too-large", "too-many", "bad-hash")

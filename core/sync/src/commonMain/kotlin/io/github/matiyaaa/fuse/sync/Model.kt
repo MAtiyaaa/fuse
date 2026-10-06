@@ -246,6 +246,24 @@ data class ProfileMeta(
         return copy(games = out, collections = cols)
     }
 
+    /**
+     * These records with every choice (favourites, names, settings, collections) stamped [at]: put
+     * into another profile that is the same person, anything it already says wins and these only
+     * fill what it doesn't. Play time and sessions keep their counts, so time played joins up.
+     */
+    fun stampedAt(at: Hlc): ProfileMeta {
+        fun <T> Lww<T>?.re(): Lww<T>? = this?.copy(at = at)
+        return ProfileMeta(
+            games = games.mapValues { (_, g) ->
+                g.copy(favorite = g.favorite.re(), hidden = g.hidden.re(), pinned = g.pinned.re(), continueDismissed = g.continueDismissed.re(), title = g.title.re(), emulator = g.emulator.re())
+            },
+            collections = collections.mapValues { (_, c) ->
+                c.copy(name = c.name.copy(at = at), deleted = c.deleted.re(), members = c.members.mapValues { (_, m) -> m.copy(at = at) }, order = c.order.re())
+            },
+            settings = settings.mapValues { (_, v) -> v.copy(at = at) },
+        )
+    }
+
     /** The games played most recently first: Continue Playing, as every device of the profile sees it. */
     fun continuePlaying(): List<GameRecord> = games.values
         .filter { r -> r.lastPlayed != null && r.hidden?.value != true && (r.continueDismissed?.value ?: 0) < (r.lastPlayed ?: 0) }
