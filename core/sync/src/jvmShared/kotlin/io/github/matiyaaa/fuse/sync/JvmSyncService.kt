@@ -221,7 +221,12 @@ class JvmSyncService(
      * Runs the host here, unless another process (the background service) already serves on its
      * port: then this one just connects to it.
      */
-    private suspend fun startHostServer(c: SyncSettings) {
+    /** One start of the host at a time: setting up a host and Fuse's own start-up can both ask at once. */
+    private val hostStart = Mutex()
+
+    private suspend fun startHostServer(c: SyncSettings) = hostStart.withLock { startHostServerOnce(c) }
+
+    private suspend fun startHostServerOnce(c: SyncSettings) {
         if (hostServer != null) return
         val hostDir = hostDir(c)
         // The service already runs the host: never open its files from a second process.
