@@ -111,6 +111,7 @@ object SettingsIndex {
         SettingTopic("storage", "Restore a backup", "restore import move device"),
         SettingTopic("storage", "File access", "permission storage access sd card"),
         SettingTopic("storage", "Games and space", "disk space drives size usage"),
+        SettingTopic("storage", "Films and shows downloaded", "offline jellyfin downloaded movies episodes"),
         SettingTopic("about", "Check for updates", "update new version"),
         SettingTopic("about", "Wi-Fi settings", "wifi internet network"),
         SettingTopic("about", "What Fuse connects to", "network internet privacy online"),

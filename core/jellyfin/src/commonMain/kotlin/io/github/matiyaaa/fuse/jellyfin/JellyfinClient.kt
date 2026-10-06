@@ -1,5 +1,8 @@
 package io.github.matiyaaa.fuse.jellyfin
 
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.jsonObject
 import io.ktor.client.HttpClient
 import io.ktor.client.plugins.timeout
 import io.ktor.client.request.HttpRequestBuilder
@@ -221,6 +224,35 @@ class JellyfinClient(private val http: HttpClient, val device: DeviceInfo) {
 
     internal suspend fun report(base: String, a: Account, path: String, body: PlaybackReportDto) {
         call(base, path, a.token, method = Method.POST, body = json.encodeToString(PlaybackReportDto.serializer(), body)) { }
+    }
+
+    /** An item's file on the server as it is (size, container, streams), for keeping it offline. */
+    internal suspend fun mediaSource(base: String, a: Account, id: String): MediaSourceDto? {
+        val text = call(base, "Items/$id/PlaybackInfo", a.token) { param("userId", a.userId) }
+        return json.decodeFromString(PlaybackInfoDto.serializer(), text).mediaSources.firstOrNull()
+    }
+
+    /** Whether [a]'s policy lets them download (EnableContentDownloading); true when the server doesn't say. */
+    suspend fun downloadAllowed(base: String, a: Account): Boolean {
+        val text = call(base, "Users/${a.userId}", a.token) { }
+        val policy = runCatching { json.parseToJsonElement(text).jsonObject["Policy"]?.jsonObject }.getOrNull() ?: return true
+        return policy["EnableContentDownloading"]?.jsonPrimitive?.booleanOrNull ?: true
+    }
+
+    /** The original file of [id] (Jellyfin's download, which needs the account's download permission). */
+    fun downloadUrl(base: String, id: String): String =
+        URLBuilder(base.trimEnd('/')).apply { appendPathSegments("Items", id, "Download") }.buildString()
+
+    /** An external subtitle of [id] as a text file. */
+    fun subtitleUrl(base: String, id: String, mediaSourceId: String, index: Int, ext: String): String =
+        URLBuilder(base.trimEnd('/')).apply { appendPathSegments("Videos", id, mediaSourceId, "Subtitles", index.toString(), "0", "Stream.$ext") }.buildString()
+
+    /**
+     * Tells the server where [id] was left, after watching it offline: a stop report carries the
+     * position, which Jellyfin keeps as the resume point (or marks it watched near the end).
+     */
+    suspend fun reportPosition(base: String, a: Account, id: String, positionMs: Long) {
+        report(base, a, "Sessions/Playing/Stopped", PlaybackReportDto(itemId = id, positionTicks = positionMs * 10_000, playMethod = "DirectPlay"))
     }
 
     /** A text file from the server (a subtitle), with the token in the header. */

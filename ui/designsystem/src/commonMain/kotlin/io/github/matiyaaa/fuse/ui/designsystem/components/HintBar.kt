@@ -228,6 +228,7 @@ private fun actionOf(button: HintButton): io.github.matiyaaa.fuse.model.NavActio
     HintButton.PAGE_PREV -> io.github.matiyaaa.fuse.model.NavAction.PAGE_UP
     HintButton.PAGE_NEXT -> io.github.matiyaaa.fuse.model.NavAction.PAGE_DOWN
     HintButton.HOLD_CONFIRM -> io.github.matiyaaa.fuse.model.NavAction.REORDER
+    HintButton.HOLD_OPTIONS -> io.github.matiyaaa.fuse.model.NavAction.CONTEXT_HOLD
     else -> null
 }
 

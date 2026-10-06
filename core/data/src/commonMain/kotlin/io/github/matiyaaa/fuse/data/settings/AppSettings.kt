@@ -139,6 +139,8 @@ data class SyncSettings(
 @Serializable
 data class JellyfinSettings(
     val enabled: Boolean = false,
+    /** Where films and episodes kept offline go; empty uses Fuse's choice for this device. */
+    val offlineFolder: String = "",
     /** "AUTO", "LOCAL" or "REMOTE". */
     val mode: String = "AUTO",
     val localAddress: String = "",

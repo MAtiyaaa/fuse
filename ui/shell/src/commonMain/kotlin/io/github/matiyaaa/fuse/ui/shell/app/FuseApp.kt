@@ -470,6 +470,7 @@ private fun FuseAppContent(
     LaunchedEffect(Unit) { store.appStore.notices.collect { app.toasts.show(it) } }
     LaunchedEffect(Unit) { store.cartridge.notices.collect { app.toasts.show(it) } }
     LaunchedEffect(Unit) { store.romm.notices.collect { app.toasts.show(it, durationMs = 5200) } }
+    LaunchedEffect(Unit) { (store.offlineMedia as? io.github.matiyaaa.fuse.ui.shell.store.impl.DefaultOfflineMedia)?.notices?.collect { app.toasts.show(it) } }
 }
 
 /** The background: theme renderer, then the selected item's art with video after it rests. */
@@ -736,6 +737,7 @@ private fun PushedPages(app: AppState, current: Route, direction: NavDirection, 
             is Route.SaveHistory -> io.github.matiyaaa.fuse.ui.shell.sync.SaveHistoryScreen(app, route.game, route.title)
             is Route.SyncGame -> io.github.matiyaaa.fuse.ui.shell.sync.SyncGameScreen(app, route.game, route.name)
             Route.Downloads -> io.github.matiyaaa.fuse.ui.shell.downloads.DownloadsScreen(app)
+            Route.OfflineMedia -> io.github.matiyaaa.fuse.ui.shell.jellyfin.OfflineMediaScreen(app)
             Route.RommSettings -> io.github.matiyaaa.fuse.ui.shell.romm.RommSettingsScreen(app)
             is Route.RommSetup -> io.github.matiyaaa.fuse.ui.shell.romm.RommSetupScreen(app, route.pairing)
             is Route.RommGames -> io.github.matiyaaa.fuse.ui.shell.romm.RommGamesScreen(app, route.slug, route.name, route.collection)

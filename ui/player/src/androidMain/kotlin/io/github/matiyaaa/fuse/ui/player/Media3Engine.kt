@@ -139,7 +139,9 @@ class Media3Engine(private val context: Context) : PlayerEngine {
             .apply { if (source.isHls) setMimeType(MimeTypes.APPLICATION_M3U8) }
             .build()
         // A dropped connection is tried again, several times, before playback gives up.
-        val sources = DefaultMediaSourceFactory(http).setLoadErrorHandlingPolicy(DefaultLoadErrorHandlingPolicy(LOAD_RETRIES))
+        // A file kept on the device (a download) reads from storage; everything else over HTTP.
+        val data = androidx.media3.datasource.DefaultDataSource.Factory(context, http)
+        val sources = DefaultMediaSourceFactory(data).setLoadErrorHandlingPolicy(DefaultLoadErrorHandlingPolicy(LOAD_RETRIES))
         p.setMediaSource(sources.createMediaSource(item), startMs)
         p.prepare()
         p.playWhenReady = play

@@ -50,6 +50,9 @@ interface FuseServices {
      */
     val dataDir: String get() = cacheDir
 
+    /** Where films and episodes kept for watching offline go, unless the person chose a folder. */
+    val mediaDir: String get() = "$dataDir/Offline"
+
     /** Whether this device's connection is unmetered (Wi-Fi or wired), for transfers kept to Wi-Fi. */
     fun unmetered(): Boolean = true
 

@@ -55,6 +55,13 @@ class DesktopFuseServices private constructor(
     override val http: HttpClient = FuseHttp.client(engine, FuseHttpConfig(appVersion = appVersion))
     override val cacheDir: String = dirs.cache
     override val dataDir: String = dirs.data
+
+    /** The person's own videos folder (Movies on a Mac), or beside a portable Fuse. */
+    override val mediaDir: String = when {
+        dirs.portable -> "${dirs.data}/Offline"
+        System.getProperty("os.name").orEmpty().lowercase().contains("mac") -> "${dirs.home}/Movies/Fuse"
+        else -> "${dirs.home}/Videos/Fuse"
+    }
     override val deviceName: String = runCatching { java.net.InetAddress.getLocalHost().hostName }.getOrNull()?.takeIf { it.isNotBlank() } ?: "Fuse"
     override val jellyfinDiscovery = io.github.matiyaaa.fuse.jellyfin.UdpDiscovery()
 

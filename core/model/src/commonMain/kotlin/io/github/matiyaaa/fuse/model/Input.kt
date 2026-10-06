@@ -25,6 +25,8 @@ enum class NavAction {
     HOME,
     /** Enter/confirm reorder (long press A by default). */
     REORDER,
+    /** Options held down (Select on a pad), where a layer asks for it: a second action beside Options. */
+    CONTEXT_HOLD,
 }
 
 /** Physical buttons, named by position on an Xbox-style pad. Layout swaps are applied in mapping. */

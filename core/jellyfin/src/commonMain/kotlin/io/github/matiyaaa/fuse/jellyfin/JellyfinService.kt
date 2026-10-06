@@ -393,6 +393,24 @@ class JellyfinService(
 
     suspend fun item(id: String): MediaItem = call { b, a -> client.item(b, a, id) }
 
+    /**
+     * What keeping [item] on this device takes: the server's file (its name and size) and what Fuse
+     * keeps to show and play it offline. [server] names the server in Fuse's records.
+     */
+    suspend fun offlineJob(item: MediaItem, server: String): JellyfinDownloadJob = call { b, a ->
+        val ms = client.mediaSource(b, a, item.id)
+        JellyfinDownloadJob(server, item.id, OfflinePlan.fileName(item, ms?.container, ms?.path), OfflinePlan.meta(item, ms))
+    }
+
+    /** Whether this account may download (an administrator can turn it off per user). Null when unknown. */
+    suspend fun downloadAllowed(): Boolean? = runCatching { call { b, a -> client.downloadAllowed(b, a) } }.getOrNull()
+
+    /** Sends where a kept item was left while offline. */
+    suspend fun reportPosition(id: String, positionMs: Long) = call { b, a -> client.reportPosition(b, a, id, positionMs) }
+
+    /** The server's name for Fuse's records: its id, so two servers never mix. */
+    val serverKey: String get() = stateFlow.value.account?.serverId ?: "main"
+
     suspend fun seasons(seriesId: String): List<MediaItem> = call { b, a -> client.seasons(b, a, seriesId) }
 
     suspend fun episodes(seriesId: String, seasonId: String?): List<MediaItem> = call { b, a -> client.episodes(b, a, seriesId, seasonId) }

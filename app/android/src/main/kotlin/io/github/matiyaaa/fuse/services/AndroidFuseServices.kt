@@ -51,6 +51,14 @@ class AndroidFuseServices(
     override val cacheDir: String = appContext.cacheDir.absolutePath
     override val dataDir: String = appContext.filesDir.absolutePath
 
+    /** The shared Movies folder when Fuse may write there, so other apps see the films too; else Fuse's own. */
+    override val mediaDir: String
+        get() = if (storageVolumes.hasFullAccess()) {
+            java.io.File(android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_MOVIES), "Fuse").absolutePath
+        } else {
+            (appContext.getExternalFilesDir(android.os.Environment.DIRECTORY_MOVIES) ?: java.io.File(appContext.filesDir, "Offline")).absolutePath
+        }
+
     override fun unmetered(): Boolean {
         val cm = appContext.getSystemService(android.net.ConnectivityManager::class.java) ?: return true
         return runCatching { !cm.isActiveNetworkMetered }.getOrDefault(true)

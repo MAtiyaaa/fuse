@@ -214,7 +214,7 @@ fun DownloadsScreen(app: AppState) {
 
 private const val HEAD_ITEMS = 2
 
-private class TopAction(val label: String, val icon: ImageVector, val run: () -> Unit)
+internal class TopAction(val label: String, val icon: ImageVector, val run: () -> Unit)
 
 /** The page's title line: how many move each way, at what speed, and the few things to do. */
 @Composable
@@ -243,7 +243,7 @@ private fun Header(summary: io.github.matiyaaa.fuse.transfer.TransferSummary, ac
 }
 
 @Composable
-private fun ActionPill(a: TopAction, selected: Boolean, label: Boolean, onClick: () -> Unit) {
+internal fun ActionPill(a: TopAction, selected: Boolean, label: Boolean, onClick: () -> Unit) {
     val c = Fuse.colors
     val bg by fuselineColor(if (selected) c.text else c.text.copy(alpha = 0.07f), Fuse.motion.tween(Durations.FAST), label = "dlAction")
     val fg = if (selected) c.ink else c.text

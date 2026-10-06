@@ -106,6 +106,9 @@ interface FuseStore {
     /** Fuse RomM, the Fuse RomM native integration. */
     val romm: RommOps get() = RommOps.None
 
+    /** Jellyfin films and episodes kept on this device for watching offline. */
+    val offlineMedia: OfflineMediaOps get() = OfflineMediaOps.None
+
     /** Syncthing, for people who run it: off until chosen in setup or Settings, Addons, Syncthing. */
     val syncthing: io.github.matiyaaa.fuse.sync.syncthing.SyncthingService? get() = null
 

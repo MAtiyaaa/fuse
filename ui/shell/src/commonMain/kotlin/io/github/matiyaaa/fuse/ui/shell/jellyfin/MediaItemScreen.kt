@@ -29,6 +29,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -178,6 +179,8 @@ internal fun MediaItemScreen(app: AppState, id: String) {
         }
     }
 
+    val offline by remember(item.id) { app.store.offlineMedia.state(item.id) }.collectAsState(initial = io.github.matiyaaa.fuse.ui.shell.store.OfflineState.None)
+    val kept = (offline as? io.github.matiyaaa.fuse.ui.shell.store.OfflineState.Here)?.entry
     val buttons = buildList {
         val target = if (item.type == MediaType.SERIES) page.nextUp else null
         when (item.type) {
@@ -196,6 +199,19 @@ internal fun MediaItemScreen(app: AppState, id: String) {
             add(PageButton(if (item.played) "Watched" else "Mark watched", if (item.played) FuseIcons.CircleCheck else FuseIcons.Check) { toggle(played = !item.played) })
         }
         add(PageButton(if (item.favorite) "Favourite" else "Favourite", if (item.favorite) FuseIcons.HeartFilled else FuseIcons.Heart) { toggle(favorite = !item.favorite) })
+        // Keeping it on this device: one button that says where it stands.
+        if (app.store.offlineMedia.supported && downloadable(item.type)) {
+            val episodes = item.type == MediaType.SERIES || item.type == MediaType.SEASON
+            when (val o = offline) {
+                is io.github.matiyaaa.fuse.ui.shell.store.OfflineState.Here ->
+                    add(PageButton("Downloaded", FuseIcons.CircleCheck) { app.mediaOptions(item) })
+                is io.github.matiyaaa.fuse.ui.shell.store.OfflineState.Downloading ->
+                    add(PageButton(if (o.waiting) "Waiting to download" else o.progress?.let { "Downloading ${(it * 100).toInt()}%" } ?: "Downloading", FuseIcons.Download) { app.go(Route.Downloads) })
+                is io.github.matiyaaa.fuse.ui.shell.store.OfflineState.Away ->
+                    add(PageButton("On ${o.entry.driveLabel ?: "another drive"}", FuseIcons.HardDrive) { app.mediaOptions(item) })
+                else -> add(PageButton(if (episodes) "Download episodes" else "Download", FuseIcons.Download) { app.downloadMedia(item) })
+            }
+        }
         item.seriesId?.takeIf { item.type == MediaType.EPISODE || item.type == MediaType.SEASON }?.let { sid ->
             add(PageButton("Go to the show", FuseIcons.Tv) { app.go(Route.MediaPage(sid)) })
         }
@@ -245,18 +261,22 @@ internal fun MediaItemScreen(app: AppState, id: String) {
         }
     }
 
-    PageEffect(item.id, row.key, col, focused) {
+    // Held Options plays the copy on this device, for the item or the episode chosen.
+    val heldTarget = (if (row is PageRow.Buttons) item else currentCard)?.let { app.keptCopy(it) }
+    PageEffect(item.id, row.key, col, focused, heldTarget?.key) {
         if (!focused) return@PageEffect
         app.hero = item.hero()
+        val held = heldTarget?.let { Hint(HintButton.HOLD_OPTIONS, "Play downloaded") }
         app.hints = when (row) {
-            is PageRow.Cards -> listOf(Hint(HintButton.CONFIRM, if (currentCard?.type == MediaType.EPISODE) "Play" else "Open"), Hint(HintButton.OPTIONS, "More"), Hint(HintButton.BACK, "Back"))
+            is PageRow.Cards -> listOfNotNull(Hint(HintButton.CONFIRM, if (currentCard?.type == MediaType.EPISODE) "Play" else "Open"), Hint(HintButton.OPTIONS, "More"), held, Hint(HintButton.BACK, "Back"))
             is PageRow.Track -> listOf(Hint(HintButton.CONFIRM, "Play from here"), Hint(HintButton.OPTIONS, "More"), Hint(HintButton.BACK, "Back"))
-            else -> listOf(Hint(HintButton.CONFIRM, "Choose"), Hint(HintButton.BACK, "Back"))
+            else -> listOfNotNull(Hint(HintButton.CONFIRM, "Choose"), Hint(HintButton.OPTIONS, "More"), held, Hint(HintButton.BACK, "Back"))
         }
     }
 
-    InputLayer(enabled = focused && !app.overlayOpen) { e ->
+    InputLayer(enabled = focused && !app.overlayOpen, contextHold = heldTarget != null) { e ->
         when (e.action) {
+            NavAction.CONTEXT_HOLD -> { heldTarget?.let { app.playDownloaded(it) }; NavResult.ACTIVATED }
             NavAction.LEFT, NavAction.RIGHT -> {
                 val r = sel.move(e.action, keys, ::sizeOf)
                 // Moving along the seasons shows that season's episodes.

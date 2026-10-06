@@ -63,6 +63,9 @@ sealed interface Route {
     /** Downloads: every transfer Fuse makes for the person, in one place (the top line's Downloads button). */
     data object Downloads : Route
 
+    /** Jellyfin films and episodes kept on this device: play, delete, move to another drive. */
+    data object OfflineMedia : Route
+
     /** Fuse RomM's settings (Settings, Addons, Fuse RomM) and its setup ([pairing]: straight to signing in). */
     data object RommSettings : Route
     data class RommSetup(val pairing: Boolean = false) : Route
