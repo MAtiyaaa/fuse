@@ -470,6 +470,22 @@ private fun FuseAppContent(
     LaunchedEffect(Unit) { store.appStore.notices.collect { app.toasts.show(it) } }
     LaunchedEffect(Unit) { store.cartridge.notices.collect { app.toasts.show(it) } }
     LaunchedEffect(Unit) { store.romm.notices.collect { app.toasts.show(it, durationMs = 5200) } }
+    // Syncthing-Fork installed from the Store while setting Syncthing up: back to setup, and it starts.
+    store.syncthing?.let { st ->
+        val stState by st.state.collectAsState()
+        LaunchedEffect(app.awaitingSyncthing) {
+            if (!app.awaitingSyncthing) return@LaunchedEffect
+            store.appStore.notices.collect { msg ->
+                if (!msg.startsWith("Syncthing-Fork")) return@collect
+                app.awaitingSyncthing = false
+                st.find()
+                if (app.navigator.current is Route.StoreApp) app.back()
+                if (app.navigator.current != Route.SyncthingSettings) app.go(Route.SyncthingSettings)
+                if (st.startApp()) app.toasts.show("Syncthing-Fork is installed. Starting it; come back here once it runs", io.github.matiyaaa.fuse.ui.designsystem.components.ToastKind.SUCCESS)
+            }
+        }
+        LaunchedEffect(stState) { if (stState is io.github.matiyaaa.fuse.sync.syncthing.SyncthingState.Connected) app.awaitingSyncthing = false }
+    }
     LaunchedEffect(Unit) { (store.offlineMedia as? io.github.matiyaaa.fuse.ui.shell.store.impl.DefaultOfflineMedia)?.notices?.collect { app.toasts.show(it) } }
 }
 

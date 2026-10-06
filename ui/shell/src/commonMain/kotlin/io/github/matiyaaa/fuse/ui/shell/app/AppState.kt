@@ -134,6 +134,9 @@ class AppState(
     var contextMenu by mutableStateOf<ContextMenuSpec?>(null)
     var confirm by mutableStateOf<ConfirmSpec?>(null)
 
+    /** Syncthing setup sent the person to the Store for Syncthing-Fork: once installed, setup carries on. */
+    var awaitingSyncthing by mutableStateOf(false)
+
     /** What the last "Restore Fuse Default Art" replaced, while it can still be undone (this session). */
     var artUndo by mutableStateOf<io.github.matiyaaa.fuse.ui.shell.store.ArtUndo?>(null)
     var textInput by mutableStateOf<TextInputSpec?>(null)

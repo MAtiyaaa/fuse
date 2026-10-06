@@ -109,6 +109,7 @@ internal fun AppSettings.toUiPrefs(scoped: GlobalScoped): UiPrefs {
         storeAutoCheck = store.autoCheck,
         storeEnabled = store.enabled,
         romm = romm,
+        streaming = streaming,
         downloads = downloads,
     )
 }
@@ -192,6 +193,7 @@ internal fun AppSettings.withUiPrefs(prefs: UiPrefs): AppSettings {
         store = store.copy(enabled = prefs.storeEnabled, variant = prefs.storeVariant, autoCheck = prefs.storeAutoCheck),
         jellyfin = prefs.jellyfin,
         romm = prefs.romm,
+        streaming = prefs.streaming,
         downloads = prefs.downloads,
         // Whether Syncthing is on, and where, is the Syncthing service's to write: only how it behaves comes from here.
         syncthing = syncthing.copy(waitBeforePlaying = prefs.syncthing.waitBeforePlaying, keepVersions = prefs.syncthing.keepVersions),

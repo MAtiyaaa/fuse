@@ -59,6 +59,14 @@ class AndroidFuseServices(
             (appContext.getExternalFilesDir(android.os.Environment.DIRECTORY_MOVIES) ?: java.io.File(appContext.filesDir, "Offline")).absolutePath
         }
 
+    override suspend fun sendWake(packet: ByteArray, ports: List<Int>, address: String?): Boolean =
+        kotlinx.coroutines.withContext(Dispatchers.IO) { io.github.matiyaaa.fuse.stream.AndroidStreaming.sendWake(packet, ports, address) }
+
+    override suspend fun startStream(hostName: String, uniqueId: String?, address: String, app: String, client: String): String? =
+        io.github.matiyaaa.fuse.stream.AndroidStreaming.start(appContext, hostName, uniqueId, app, client)
+
+    override fun streamClient(): String? = io.github.matiyaaa.fuse.stream.AndroidStreaming.installed(appContext)
+
     override fun unmetered(): Boolean {
         val cm = appContext.getSystemService(android.net.ConnectivityManager::class.java) ?: return true
         return runCatching { !cm.isActiveNetworkMetered }.getOrDefault(true)

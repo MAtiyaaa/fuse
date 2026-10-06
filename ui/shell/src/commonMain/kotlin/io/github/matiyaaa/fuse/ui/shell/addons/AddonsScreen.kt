@@ -76,6 +76,7 @@ fun AddonsScreen(app: AppState) {
         // Fuse Sync or Syncthing, whichever is in use: they never run together, so never both.
         if (prefs.sync.enabled && app.store.sync.service != null) add(AddonsPart.SYNC)
         else if (syncthingState != null && syncthingState !is io.github.matiyaaa.fuse.sync.syncthing.SyncthingState.Off) add(AddonsPart.SYNCTHING)
+        if (app.store.streaming.supported && prefs.streaming.enabled && prefs.streaming.hosts.isNotEmpty()) add(AddonsPart.STREAMING)
         if (isEmpty()) add(AddonsPart.CARTRIDGE)
     }.sortedBy { p -> prefs.addonsOrder.indexOf(p.name).let { if (it < 0) ORDER_REST + p.ordinal else it } }
     // Opens on the first tab, in the order they were dragged into (or on the one last shown, while
@@ -166,6 +167,7 @@ fun AddonsScreen(app: AppState) {
                     AddonsPart.JELLYFIN -> io.github.matiyaaa.fuse.ui.shell.jellyfin.JellyfinContent(app, active = !inTabs, topPadding = top)
                     AddonsPart.SYNC -> io.github.matiyaaa.fuse.ui.shell.sync.SyncTab(app, active = !inTabs, topPadding = top)
                     AddonsPart.SYNCTHING -> io.github.matiyaaa.fuse.ui.shell.sync.SyncthingTab(app, active = !inTabs, topPadding = top)
+                    AddonsPart.STREAMING -> io.github.matiyaaa.fuse.ui.shell.stream.StreamTab(app, active = !inTabs, topPadding = top)
                 }
             }
         }
@@ -178,6 +180,7 @@ fun AddonsScreen(app: AppState) {
                     AddonsPart.JELLYFIN -> ViewTab("Jellyfin", icon = FuseIcons.Clapperboard)
                     AddonsPart.SYNC -> ViewTab("Sync", icon = FuseIcons.RefreshCcw)
                     AddonsPart.SYNCTHING -> ViewTab("Syncthing", icon = FuseIcons.FolderSync)
+                    AddonsPart.STREAMING -> ViewTab("Streaming", icon = FuseIcons.MonitorPlay)
                 }
             }
             // Open: the named tabs, which lift away and shrink toward the top left as the page scrolls.

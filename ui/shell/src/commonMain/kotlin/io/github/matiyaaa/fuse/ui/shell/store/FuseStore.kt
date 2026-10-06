@@ -106,6 +106,9 @@ interface FuseStore {
     /** Fuse RomM, the Fuse RomM native integration. */
     val romm: RommOps get() = RommOps.None
 
+    /** Streaming games from a computer at home with Moonlight. */
+    val streaming: StreamingOps get() = StreamingOps.None
+
     /** Jellyfin films and episodes kept on this device for watching offline. */
     val offlineMedia: OfflineMediaOps get() = OfflineMediaOps.None
 

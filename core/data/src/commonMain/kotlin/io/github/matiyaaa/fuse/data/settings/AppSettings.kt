@@ -52,6 +52,7 @@ data class AppSettings(
     val syncthing: SyncthingSettings = SyncthingSettings(),
     val romm: FuseRommSettings = FuseRommSettings(),
     val downloads: DownloadSettings = DownloadSettings(),
+    val streaming: StreamingSettings = StreamingSettings(),
 ) {
     companion object {
         const val CURRENT_VERSION = 3
@@ -568,3 +569,32 @@ abstract class LenientListSerializer<T>(private val element: KSerializer<T>) : K
 object ScrapeProviderListSerializer : LenientListSerializer<ScrapeProviderId>(ScrapeProviderId.serializer())
 
 object DestinationListSerializer : LenientListSerializer<DestinationSetting>(DestinationSetting.serializer())
+
+/**
+ * Streaming games from a computer at home with Moonlight: the computers running Sunshine (or
+ * Apollo, or GeForce Experience), how to wake them, and the apps on each.
+ */
+@Serializable
+data class StreamingSettings(
+    val enabled: Boolean = false,
+    val hosts: List<StreamHostSettings> = emptyList(),
+    /** How long to wait for a computer to wake before saying it didn't, in seconds. */
+    val wakeWaitSeconds: Int = 75,
+    /** Which Moonlight to start when several are installed (an Android package, or a program path); empty picks one. */
+    val client: String = "",
+)
+
+/** One computer to stream from. [uniqueId] and [mac] are filled in from what it says about itself. */
+@Serializable
+data class StreamHostSettings(
+    val id: String,
+    val name: String,
+    val address: String,
+    val uniqueId: String = "",
+    /** Its network card's address, for waking it (Wake-on-LAN). */
+    val mac: String = "",
+    val wake: Boolean = true,
+    /** The apps to offer on it, as Sunshine names them. */
+    val apps: List<String> = listOf("Desktop", "Steam Big Picture"),
+)
+

@@ -9,6 +9,8 @@ import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseMarks
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.Route
+import io.github.matiyaaa.fuse.ui.shell.app.openStreaming
+import io.github.matiyaaa.fuse.ui.shell.stream.addStreamHost
 import io.github.matiyaaa.fuse.ui.shell.jellyfin.jellyfinStatus
 import kotlinx.coroutines.launch
 
@@ -59,6 +61,33 @@ fun addonsRows(app: AppState): List<MenuAction> {
                         onSelect = { app.go(Route.SyncthingSettings) },
                     ),
                 )
+            })
+        }
+        if (app.store.streaming.supported) {
+            val s = prefs.streaming
+            val hosts = app.store.streaming.hosts.collectAsState().value
+            addAll(app.group("addons.streaming", "Streaming", FuseIcons.MonitorPlay, summary = if (!s.enabled) "Off" else if (s.hosts.isEmpty()) "No computers" else "${s.hosts.size} ${if (s.hosts.size == 1) "computer" else "computers"}", detail = "Play from a computer at home with Moonlight, waking it when it sleeps") {
+                buildList {
+                    add(toggleRow("streaming.enabled", "Stream from a Computer", FuseIcons.Power, s.enabled, "A Streaming tab in Addons for the computers running Sunshine or Apollo") { v ->
+                        app.store.updatePrefs { it.copy(streaming = it.streaming.copy(enabled = v)) }
+                    })
+                    if (s.enabled) {
+                        val client = app.store.streaming.client
+                        add(infoRow("streaming.client", if (client != null) "Moonlight is installed" else "Moonlight isn't installed", detail = if (client != null) "Fuse starts it on the app you choose. Pair it with each computer once, in Moonlight" else "Get Moonlight, pair it with your computer once, then stream from Fuse", icon = if (client != null) FuseIcons.CircleCheck else FuseIcons.Warning))
+                        for (h in hosts) add(MenuAction(
+                            "streaming.host.${h.host.id}", h.host.name, FuseIcons.Monitor,
+                            detail = listOfNotNull(h.host.address, h.host.mac.takeIf { it.isNotBlank() }?.let { "wakes by $it" }, "${h.host.apps.size} apps").joinToString("  ·  "),
+                            trailing = Trailing.Value(when (h.online) { true -> "Ready"; false -> if (h.canWake) "Asleep" else "Off"; null -> "" }),
+                            onSelect = { app.openStreaming() },
+                        ))
+                        add(MenuAction("streaming.add", "Add a Computer", FuseIcons.Plus, detail = "By its address on your network", onSelect = { app.addStreamHost() }))
+                        add(app.choiceRow(
+                            "streaming.wait", "Wait for a Computer to Wake", FuseIcons.Clock, s.wakeWaitSeconds.toString(),
+                            listOf("45" to "45 seconds", "75" to "75 seconds", "120" to "2 minutes", "180" to "3 minutes"),
+                            detail = "How long Fuse waits before saying it didn't wake",
+                        ) { v -> app.store.updatePrefs { it.copy(streaming = it.streaming.copy(wakeWaitSeconds = v.toInt())) } })
+                    }
+                }
             })
         }
         if (jellyfin != null) {

@@ -100,6 +100,7 @@ internal class DefaultFuseStore private constructor(
     )
     override val transfers = DefaultTransfersOps(ctx, transferEngine, appStore, updates, cartridge)
     override val romm: DefaultRommOps
+    override val streaming: DefaultStreamingOps by lazy { DefaultStreamingOps(ctx) { t -> writeSettings(t) } }
     override val offlineMedia: DefaultOfflineMedia by lazy { DefaultOfflineMedia(ctx, engine, transferEngine, jellyfin) }
 
     /** Fuse Sync over this library: the person's records and settings, read and put in place. */
@@ -316,6 +317,7 @@ internal class DefaultFuseStore private constructor(
         transfers.start()
         romm.start()
         offlineMedia.start()
+        streaming.start()
         ctx.scope.launch { ctx.playing.collect { transfers.conditions(playing = it != null) } }
         // One RomM integration at a time: turning Cartridge on in Fuse turns Fuse RomM off, and the
         // other way round. Turning one off keeps everything it was set up with.

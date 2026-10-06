@@ -261,8 +261,10 @@ internal class DefaultAppStoreOps(
         lastPack = PackShown(variant, pack, version, fetchedAt, sourceUrl)
         val byKey = LinkedHashMap<String, PackApp>()
         for (app in pack.apps) byKey[keyOf(app)] = app
-        // Apps the user added follow the pack's, under their category.
-        val custom = ctx.settings.value.store.custom.map(::customApp)
+        // Fuse's own companions are always there (unless the pack carries them already), then the
+        // apps the user added, under their category.
+        for (app in COMPANIONS) if (byKey.values.none { it.id == app.id }) byKey[keyOf(app)] = app
+        val custom = ctx.settings.value.store.custom.map(::customApp) + COMPANIONS.filter { c -> pack.apps.none { it.id == c.id } }
         for (app in custom) byKey.getOrPut(keyOf(app)) { app }
         val categories = pack.categories.map { StoreCategory(it.name, it.color) } +
             custom.flatMap { it.categories }.distinct().filter { c -> pack.categories.none { it.name.equals(c, ignoreCase = true) } }.map { StoreCategory(it, OTHER_COLOR) }
@@ -335,6 +337,9 @@ internal class DefaultAppStoreOps(
         preferredApkIndex = null,
         rules = io.github.matiyaaa.fuse.integrations.obtainium.PackRules(about = "Added by you from ${c.url.substringAfter("://")}.", fallbackToOlderReleases = true),
     )
+
+    override fun keyFor(packageName: String): String? =
+        packApps.entries.firstOrNull { it.value.id == packageName }?.key ?: COMPANIONS.firstOrNull { it.id == packageName }?.let(::keyOf)
 
     override suspend fun addCustom(url: String, category: String): String? {
         val clean = url.trim().removeSuffix("/").removeSuffix(".git").let { if (it.startsWith("github.com/")) "https://$it" else it }
@@ -731,6 +736,28 @@ internal class DefaultAppStoreOps(
 
         /** The id apps the user added carry (their key adds their address). */
         private const val CUSTOM_ID = "custom"
+
+        /** Syncthing-Fork, for keeping save folders in step with Syncthing (Settings, Addons, Syncthing). */
+        val SYNCTHING_FORK = PackApp(
+            id = "com.github.catfriend1.syncthingfork",
+            url = "https://github.com/researchxxl/syncthing-android",
+            name = "Syncthing-Fork",
+            author = "researchxxl",
+            categories = listOf(AppStoreOps.COMPANIONS),
+            source = PackSourceKind.GITHUB,
+            allowIdChange = false,
+            preferredApkIndex = null,
+            rules = io.github.matiyaaa.fuse.integrations.obtainium.PackRules(
+                about = "Syncthing for Android, kept up by the community. Fuse can use it to keep your emulators' save folders in step across devices.",
+                fallbackToOlderReleases = true,
+            ),
+        )
+
+        /** Apps Fuse offers in every edition of the Store, beside the pack's. */
+        val COMPANIONS = listOf(SYNCTHING_FORK)
+
+        /** The Store's key for Syncthing-Fork. */
+        val SYNCTHING_KEY: String get() = keyOf(SYNCTHING_FORK)
         private const val OTHER_COLOR = 0xFF8A93A6
         private val GITHUB_REPO = Regex("^https://github\\.com/([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+)$")
         const val ICON_LOOKUPS = 4

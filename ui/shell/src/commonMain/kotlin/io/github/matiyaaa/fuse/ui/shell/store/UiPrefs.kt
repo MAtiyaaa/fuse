@@ -28,6 +28,8 @@ data class UiPrefs(
     val syncthing: io.github.matiyaaa.fuse.data.settings.SyncthingSettings = io.github.matiyaaa.fuse.data.settings.SyncthingSettings(),
     /** Fuse RomM, the Fuse RomM native integration. Its sign-in is in the secret store. */
     val romm: io.github.matiyaaa.fuse.data.settings.FuseRommSettings = io.github.matiyaaa.fuse.data.settings.FuseRommSettings(),
+    /** Streaming from a computer at home with Moonlight. */
+    val streaming: io.github.matiyaaa.fuse.data.settings.StreamingSettings = io.github.matiyaaa.fuse.data.settings.StreamingSettings(),
     /** How every transfer (Downloads) behaves. */
     val downloads: io.github.matiyaaa.fuse.data.settings.DownloadSettings = io.github.matiyaaa.fuse.data.settings.DownloadSettings(),
     /**
