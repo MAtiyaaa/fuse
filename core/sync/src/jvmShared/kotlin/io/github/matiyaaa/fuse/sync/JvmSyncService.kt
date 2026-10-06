@@ -381,6 +381,18 @@ class JvmSyncService(
         _status.value = SyncStatus.Online(name, c.route ?: Route.LOCAL, working = false, pending = d.pendingCount)
     }
 
+    /** Sends what is queued (saves included) without bringing anything in. */
+    private suspend fun sendWaiting() = work.withLock {
+        val c = client ?: return@withLock
+        val d = device ?: return@withLock
+        if (d.pendingCount == 0) return@withLock
+        val name = cached.hostName.ifBlank { c.link.hostName }
+        _status.value = SyncStatus.Online(name, c.route ?: Route.LOCAL, working = true, pending = d.pendingCount)
+        val sent = d.flush(c)
+        if (sent > 0) log(if (sent == 1) "Sent 1 change to $name" else "Sent $sent changes to $name")
+        _status.value = SyncStatus.Online(name, c.route ?: Route.LOCAL, working = false, pending = d.pendingCount)
+    }
+
     private suspend fun pullActive() = work.withLock {
         val c = client ?: return@withLock
         val d = device ?: return@withLock
@@ -1285,8 +1297,10 @@ class JvmSyncService(
                 _active.value = _profiles.value.firstOrNull { it.id == id }
                 log("Switched to ${_active.value?.name ?: "a profile"}")
             }
-            // Saves waiting to go (the last person's, anyone's) go up now, behind the switch.
-            if (c != null) scope.launch(Dispatchers.IO) { runCatching { syncOnce() }.onFailure { if (it is SyncException) handle(it) } }
+            // Saves waiting to go (the last person's, anyone's) go up now, behind the switch. Only
+            // the saves: the records were just brought in, so nothing here rewrites the library
+            // while the person starts using it.
+            if (c != null) scope.launch(Dispatchers.IO) { runCatching { sendWaiting() }.onFailure { if (it is SyncException) handle(it) } }
         }
     }
 

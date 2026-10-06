@@ -7,6 +7,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.size
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.performMouseInput
@@ -300,6 +301,43 @@ class UiFlowTest {
     }
 
     private fun <T : Any> assertNotNullOf(v: T?): T = kotlin.test.assertNotNull(v)
+
+    @Test
+    fun theSyncTabShowsAtLeastFourGamesAtOnceEvenOnTheThorsUpperScreen() = runComposeUiTest {
+        val data = FuseData(DesktopDatabase.open(File(cache, "fuse-${System.nanoTime()}.db").absolutePath))
+        val sync = io.github.matiyaaa.fuse.ui.shell.audit.AuditSync(data.settings).also { it.household(asHost = true) }
+        val store = runBlocking { createFuseStore(FakeServices(data, cache, sync = { _, _ -> sync }), scope) }
+        val router = InputRouter(scope)
+        mainClock.autoAdvance = false
+        val app = AppState(store, TestPlatform, scope, Route.Root(io.github.matiyaaa.fuse.model.Destination.CARTRIDGE))
+        var size by androidx.compose.runtime.mutableStateOf(androidx.compose.ui.unit.DpSize(640.dp, 360.dp))
+        setContent {
+            io.github.matiyaaa.fuse.ui.designsystem.theme.FuseTheme {
+                androidx.compose.runtime.CompositionLocalProvider(io.github.matiyaaa.fuse.ui.designsystem.input.LocalInputRouter provides router) {
+                    androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.size(size).testTag("window")) {
+                        // Below the top line and the folded tabs, as Addons places it.
+                        io.github.matiyaaa.fuse.ui.shell.sync.SyncTab(app, active = true, topPadding = 120.dp)
+                    }
+                }
+            }
+        }
+        pumpUntil { onAllNodesWithTag("sync.game", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() }
+        // The AYN Thor's upper screen at its largest text, a 6 inch handheld and a 1080p one: once
+        // in the games, at least four whole rows are in view.
+        for (s in listOf(androidx.compose.ui.unit.DpSize(640.dp, 360.dp), androidx.compose.ui.unit.DpSize(853.dp, 480.dp), androidx.compose.ui.unit.DpSize(1280.dp, 720.dp))) {
+            size = s
+            mainClock.advanceTimeBy(600)
+            router.tap(PadButton.DPAD_DOWN)
+            mainClock.advanceTimeBy(1_200)
+            val window = onNodeWithTag("window").fetchSemanticsNode().boundsInRoot
+            val top = window.top + with(density) { 120.dp.toPx() }
+            val whole = onAllNodesWithTag("sync.game", useUnmergedTree = true).fetchSemanticsNodes()
+                .map { it.boundsInRoot }.count { it.top >= top - 0.5f && it.bottom <= window.bottom + 0.5f }
+            assertTrue(whole >= 4, "only $whole whole games in view at $s")
+            router.tap(PadButton.DPAD_UP)
+            mainClock.advanceTimeBy(1_200)
+        }
+    }
 
     @Test
     fun theProfileEditorFitsTheThorsScreensAndTheDpadReachesEveryPart() = runComposeUiTest {

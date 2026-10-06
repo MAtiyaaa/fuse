@@ -30,6 +30,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.Dp
@@ -43,6 +44,7 @@ import io.github.matiyaaa.fuse.sync.SyncActivity
 import io.github.matiyaaa.fuse.sync.SyncStatus
 import io.github.matiyaaa.fuse.ui.designsystem.components.ButtonKind
 import io.github.matiyaaa.fuse.ui.designsystem.components.FText
+import io.github.matiyaaa.fuse.ui.designsystem.components.fadingEdges
 import io.github.matiyaaa.fuse.ui.designsystem.components.FuseButton
 import io.github.matiyaaa.fuse.ui.designsystem.components.Hint
 import io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction
@@ -66,7 +68,11 @@ import io.github.matiyaaa.fuse.ui.designsystem.sound.SoundCue
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Size
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Space
+import io.github.matiyaaa.fuse.ui.fuseline.Durations
 import io.github.matiyaaa.fuse.ui.fuseline.PageEffect
+import io.github.matiyaaa.fuse.ui.fuseline.fuselineColor
+import io.github.matiyaaa.fuse.ui.fuseline.tween
+import androidx.compose.foundation.clickable
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.FocusZone
 import io.github.matiyaaa.fuse.ui.shell.app.Route
@@ -79,11 +85,13 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 /**
- * Addons, Sync: Fuse Sync's Hub in the app, everything the host keeps for the person playing. Where
- * things stand with Sync Now, Switch Profile and Add a Device; their play time in all and by
- * device; how much the host keeps; and every game it knows, each with its play time and saves (how
- * many versions, how big, which device saved the newest), opening into the game's every version
- * and file. Beside it on wide screens: who is playing, every device, and what happened lately.
+ * Addons, Sync: what the host keeps for the person playing. A slim line at the top says who is
+ * playing, on which host, and carries the few things to do (Sync Now, switching profile, adding
+ * someone or a device, Settings); how things stand shows only when something is wrong. Below it,
+ * every game the host knows, as one list that the top line and the tabs fold away from as you go
+ * down, so several games are always in view; each opens into its saves through time. Devices,
+ * play time by device and what happened lately sit beside the games on wide screens, and after
+ * them on narrower ones.
  */
 @Composable
 internal fun SyncTab(app: AppState, active: Boolean, topPadding: Dp) {
@@ -98,19 +106,19 @@ internal fun SyncTab(app: AppState, active: Boolean, topPadding: Dp) {
     val words = syncWords(status)
     var index by remember { mutableIntStateOf(0) }
     var inList by remember { mutableStateOf(false) }
-    // The column beside the games (devices, play time by device, lately): reached with Right, so a
-    // controller can read all of it, not only what fits.
+    // Past the last game, on a screen with no column beside: reading devices and what happened.
+    var inRest by remember { mutableStateOf(false) }
+    // The column beside the games on wide screens, reached with Right.
     var inSide by remember { mutableStateOf(false) }
     val sideScroll = rememberScrollState()
+    val list = androidx.compose.foundation.lazy.rememberLazyListState()
+    io.github.matiyaaa.fuse.ui.shell.components.ReportScroll(list)
     val density = androidx.compose.ui.platform.LocalDensity.current
     val step = with(density) { 160.dp.toPx() }
-    // Worth reaching only when it holds more than fits.
-    val sideReachable = sideScroll.maxValue > 0
     val sel = remember { LinearSelection() }
     var syncing by remember { mutableStateOf(false) }
     var loading by remember { mutableStateOf(app.syncReport == null) }
     val focused = active && app.focusZone == FocusZone.CONTENT && !app.overlayOpen
-    val reveal = rememberReveal()
     // The report comes again whenever something happened (a save kept, changes brought in).
     LaunchedEffect(profile?.id, activity.firstOrNull()?.at) {
         val r = svc.report()
@@ -120,8 +128,8 @@ internal fun SyncTab(app: AppState, active: Boolean, topPadding: Dp) {
     val report = app.syncReport?.takeIf { it.profile.id == profile?.id }
     val names = devices.associate { it.id to it.name }
 
-    val actions = buildList<Pair<String, () -> Unit>> {
-        add("Sync Now" to {
+    val actions = buildList {
+        add(SyncAction("Sync Now", FuseIcons.RefreshCcw) {
             if (!syncing) {
                 syncing = true
                 app.scope.launch {
@@ -132,127 +140,147 @@ internal fun SyncTab(app: AppState, active: Boolean, topPadding: Dp) {
                 }
             }
         })
-        add("Switch Profile" to { app.whoAreYou = WhoMode.SWITCH })
-        add("New Profile" to { app.whoAreYou = WhoMode.ADD })
+        add(SyncAction("Switch Profile", FuseIcons.Users) { app.whoAreYou = WhoMode.SWITCH })
+        add(SyncAction("New Profile", FuseIcons.UserPlus) { app.whoAreYou = WhoMode.ADD })
         // Any device already in can bring in another: a code here, or saying yes when it asks.
-        add("Add a Device" to { app.pairing = true })
-        add("Settings" to { app.go(Route.SyncSettings) })
+        add(SyncAction("Add a Device", FuseIcons.Plus) { app.pairing = true })
+        add(SyncAction("Settings", FuseIcons.Settings) { app.go(Route.SyncSettings) })
     }
     // Each game's cover from this library, where it has the game (by its id across devices, or its name).
-    val covers by androidx.compose.runtime.produceState(emptyMap<String, io.github.matiyaaa.fuse.ui.shell.store.GameCard>(), app.store) {
-        // Built off the interface's thread: a big library is thousands of keys.
-        app.store.library.games(io.github.matiyaaa.fuse.ui.shell.store.GameQuery()).map { cards ->
-            buildMap {
-                for (card in cards) {
-                    put(io.github.matiyaaa.fuse.sync.GameKey.of(card.platformId.value, null, null, card.title).id, card)
-                    put("name:" + card.title.lowercase(), card)
+    val covers = rememberSyncCovers(app)
+    val games = report?.games.orEmpty()
+    sel.clamp(games.size)
+    fun open(i: Int) {
+        val g = games.getOrNull(i) ?: return
+        app.go(Route.SyncGame(g.game, g.name))
+    }
+    PageEffect(focused, inList, inSide, inRest, index) {
+        if (focused) app.hints = when {
+            inSide || inRest -> listOf(Hint(HintButton.DPAD, "Scroll"), Hint(HintButton.BACK, "Back"))
+            inList -> listOf(Hint(HintButton.CONFIRM, "Open"), Hint(HintButton.BACK, "Back"))
+            else -> listOf(Hint(HintButton.CONFIRM, actions.getOrNull(index)?.label ?: "Choose"), Hint(HintButton.BACK, "Back"))
+        }
+    }
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        // Devices and what happened lately sit beside the games only where the games keep plenty of room.
+        val side = maxWidth >= 1100.dp
+        val compact = maxHeight < 560.dp
+        val labels = maxWidth >= 900.dp
+        // The list's items: the top line, the games' heading, the games, then (no column beside) the rest.
+        val firstGame = 2
+        val rest = if (side) 0 else 3
+        InputLayer(enabled = focused) { e ->
+            when {
+                inSide -> when (e.action) {
+                    NavAction.UP -> if (sideScroll.value > 0) { app.scope.launch { sideScroll.animateScrollBy(-step) }; NavResult.MOVED } else NavResult.BLOCKED
+                    NavAction.DOWN -> if (sideScroll.value < sideScroll.maxValue) { app.scope.launch { sideScroll.animateScrollBy(step) }; NavResult.MOVED } else NavResult.BLOCKED
+                    NavAction.LEFT, NavAction.BACK -> { inSide = false; NavResult.MOVED }
+                    NavAction.RIGHT, NavAction.SELECT -> NavResult.BLOCKED
+                    else -> NavResult.IGNORED
+                }
+                inRest -> when (e.action) {
+                    NavAction.DOWN -> if (list.canScrollForward) { app.scope.launch { list.animateScrollBy(step) }; NavResult.MOVED } else NavResult.BLOCKED
+                    NavAction.UP, NavAction.BACK -> { inRest = false; NavResult.MOVED }
+                    NavAction.LEFT, NavAction.RIGHT, NavAction.SELECT -> NavResult.BLOCKED
+                    else -> NavResult.IGNORED
+                }
+                inList -> when (e.action) {
+                    NavAction.UP -> if (sel.index > 0) { sel.index--; NavResult.MOVED } else { inList = false; NavResult.MOVED }
+                    NavAction.DOWN -> when {
+                        sel.index < games.size - 1 -> { sel.index++; NavResult.MOVED }
+                        rest > 0 -> { inRest = true; app.scope.launch { list.animateScrollBy(step) }; NavResult.MOVED }
+                        else -> NavResult.BLOCKED
+                    }
+                    NavAction.RIGHT -> if (side && sideScroll.maxValue > 0) { inSide = true; NavResult.MOVED } else NavResult.BLOCKED
+                    NavAction.LEFT -> NavResult.BLOCKED
+                    NavAction.SELECT -> { open(sel.index); NavResult.ACTIVATED }
+                    else -> NavResult.IGNORED
+                }
+                else -> when (e.action) {
+                    NavAction.LEFT -> if (index > 0) { index--; NavResult.MOVED } else NavResult.BLOCKED
+                    NavAction.RIGHT -> if (index < actions.size - 1) { index++; NavResult.MOVED } else NavResult.BLOCKED
+                    NavAction.SELECT -> { actions.getOrNull(index)?.run?.invoke(); NavResult.ACTIVATED }
+                    NavAction.DOWN -> when {
+                        games.isNotEmpty() -> { inList = true; NavResult.MOVED }
+                        rest > 0 -> { inRest = true; app.scope.launch { list.animateScrollBy(step) }; NavResult.MOVED }
+                        else -> NavResult.BLOCKED
+                    }
+                    else -> NavResult.IGNORED
                 }
             }
-        }.flowOn(kotlinx.coroutines.Dispatchers.Default).collect { value = it }
-    }
-    val rows = report?.games.orEmpty().map { g -> gameRow(app, g, covers[g.game] ?: covers["name:" + g.name.lowercase()]) }
-    sel.clamp(rows.size)
-    PageEffect(focused, inList, inSide) {
-        if (focused) app.hints = when {
-            inSide -> listOf(Hint(HintButton.DPAD, "Scroll"), Hint(HintButton.BACK, "Back"))
-            inList -> listOf(Hint(HintButton.CONFIRM, "Open"), Hint(HintButton.BACK, "Back"))
-            else -> listOf(Hint(HintButton.CONFIRM, "Choose"), Hint(HintButton.BACK, "Back"))
         }
-    }
-    InputLayer(enabled = focused) { e ->
-        if (inSide) {
-            when (e.action) {
-                NavAction.UP -> if (sideScroll.value > 0) { app.scope.launch { sideScroll.animateScrollBy(-step) }; NavResult.MOVED } else NavResult.BLOCKED
-                NavAction.DOWN -> if (sideScroll.value < sideScroll.maxValue) { app.scope.launch { sideScroll.animateScrollBy(step) }; NavResult.MOVED } else NavResult.BLOCKED
-                NavAction.LEFT, NavAction.BACK -> { inSide = false; NavResult.MOVED }
-                NavAction.RIGHT, NavAction.SELECT -> NavResult.BLOCKED
-                else -> NavResult.IGNORED
+        // The game chosen stays in view with the one before it above, so moving down folds the top
+        // line and the tabs away; back up at the actions, everything is in view again.
+        LaunchedEffect(inList, sel.index, games.size) {
+            if (!inList) {
+                if (!inRest) list.animateScrollToItem(0)
+                return@LaunchedEffect
             }
-        } else if (inList) {
-            when {
-                e.action == NavAction.UP && sel.index == 0 -> { inList = false; NavResult.MOVED }
-                e.action == NavAction.RIGHT && sideReachable -> { inSide = true; NavResult.MOVED }
-                e.action == NavAction.LEFT || e.action == NavAction.RIGHT -> NavResult.BLOCKED
-                else -> handleMenuAction(e, rows, sel)
-            }
-        } else {
-            when (e.action) {
-                NavAction.LEFT -> if (index > 0) { index--; NavResult.MOVED } else NavResult.BLOCKED
-                NavAction.RIGHT -> if (index < actions.size - 1) { index++; NavResult.MOVED } else NavResult.BLOCKED
-                NavAction.SELECT -> { actions.getOrNull(index)?.second?.invoke(); NavResult.ACTIVATED }
-                NavAction.DOWN -> if (rows.isNotEmpty()) { inList = true; NavResult.MOVED } else NavResult.BLOCKED
-                else -> NavResult.IGNORED
-            }
+            // In the games, they have the whole height: the first one goes to the top, then the one
+            // before the chosen one stays above it.
+            list.animateScrollToItem(firstGame + maxOf(0, sel.index - 1))
         }
-    }
-
-    BoxWithConstraints(Modifier.fillMaxSize()) {
-        // Devices and what happened lately sit beside the games wherever there is room for both.
-        val side = maxWidth >= 820.dp
-        val roomy = maxWidth >= 1200.dp
-        val compact = maxHeight < 560.dp
-        Column(
-            Modifier.fillMaxSize().padding(horizontal = Space.gutter)
-                .padding(top = topPadding + subTabsRoom() + Space.m, bottom = Size.hintHeight + Space.s),
-            verticalArrangement = Arrangement.spacedBy(if (compact) Space.s else Space.m),
-        ) {
-            HostHero(
-                hostName = prefs.sync.hostName.ifBlank { words.title },
-                host = host,
-                words = words,
-                profile = profile,
-                report = report,
-                devices = devices,
-                compact = compact,
-                showDevices = !side,
-                modifier = Modifier.reveal(reveal, 0),
-            )
-            Row(Modifier.reveal(reveal, 1), horizontalArrangement = Arrangement.spacedBy(Space.s)) {
-                actions.forEachIndexed { i, (label, run) ->
-                    val icon = when (label) {
-                        "Sync Now" -> FuseIcons.RefreshCcw
-                        "Switch Profile" -> FuseIcons.Users
-                        "New Profile" -> FuseIcons.UserPlus
-                        "Add a Device" -> FuseIcons.Plus
-                        else -> FuseIcons.Settings
-                    }
-                    FuseButton(
-                        label, selected = focused && !inList && index == i, onClick = { index = i; inList = false; run() }, icon = icon,
-                        kind = if (i == 0) ButtonKind.PRIMARY else ButtonKind.SECONDARY,
-                        loading = i == 0 && (syncing || (status as? SyncStatus.Online)?.working == true),
-                        height = if (compact) 40.dp else Size.touch,
+        // Short screens (the AYN Thor's upper one) get slimmer rows: four or more always in view.
+        val rowHeight = when {
+            maxHeight < 420.dp -> 48.dp
+            compact -> 60.dp
+            else -> 68.dp
+        }
+        Row(Modifier.fillMaxSize().padding(horizontal = Space.gutter), horizontalArrangement = Arrangement.spacedBy(Space.l)) {
+            androidx.compose.foundation.lazy.LazyColumn(
+                state = list,
+                // Below the top line, never under it: what scrolls past softens away at the top edge.
+                modifier = Modifier.weight(1f).fillMaxHeight().padding(top = topPadding)
+                    .fadingEdges(list, top = Space.xl, bottom = Space.xl),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(top = subTabsRoom() + Space.s, bottom = Size.hintHeight + Space.m),
+                verticalArrangement = Arrangement.spacedBy(Space.xs),
+            ) {
+                item("head") {
+                    SyncHeader(
+                        hostName = prefs.sync.hostName.ifBlank { "your host" },
+                        host = host, words = words, profile = profile, report = report,
+                        actions = actions, selected = if (focused && !inList && !inRest && !inSide) index else -1,
+                        busy = syncing || (status as? SyncStatus.Online)?.working == true,
+                        labels = labels, compact = compact,
+                        onAction = { i -> index = i; inList = false; inRest = false; actions[i].run() },
                     )
                 }
-            }
-            Row(Modifier.weight(1f).reveal(reveal, 2), horizontalArrangement = Arrangement.spacedBy(Space.l)) {
-                Panel(Modifier.weight(1f).fillMaxHeight()) {
-                    Column {
-                        SectionTitle(
-                            "Your games on the host", FuseIcons.Gamepad,
-                            trailing = report?.let { r -> "${r.games.size} games  ·  ${sizeText(r.savesBytes)}" },
-                            modifier = Modifier.padding(start = Space.l, end = Space.l, top = Space.m, bottom = Space.xs),
+                item("games") {
+                    SectionTitle(
+                        "Your games on the host", FuseIcons.Gamepad,
+                        trailing = report?.let { r -> "${count(r.games.size, "game")}  ·  ${sizeText(r.savesBytes)}" },
+                        modifier = Modifier.padding(start = Space.xs, end = Space.xs, top = Space.m, bottom = Space.xs),
+                    )
+                }
+                when {
+                    report == null && loading -> item("wait") { Box(Modifier.fillMaxWidth().padding(Space.xxl), contentAlignment = Alignment.Center) { Spinner(size = 24.dp, color = Fuse.colors.textMuted) } }
+                    report == null -> item("away") { Quiet(FuseIcons.CloudOff, "The host isn't answering. Your games show here once it does.") }
+                    games.isEmpty() -> item("none") { Quiet(FuseIcons.Gamepad, "Nothing yet. Play something, and its saves and play time show up here.") }
+                    else -> items(games.size, key = { games[it].game }) { i ->
+                        val g = games[i]
+                        GameRow(
+                            g, covers.of(g.game, g.name),
+                            selected = focused && inList && !inRest && sel.index == i, height = rowHeight,
+                            onClick = { sel.index = i; inList = true; open(i) },
                         )
-                        when {
-                            report == null && loading -> Box(Modifier.fillMaxWidth().padding(Space.xxl), contentAlignment = Alignment.Center) { Spinner(size = 24.dp, color = Fuse.colors.textMuted) }
-                            report == null -> Quiet(FuseIcons.CloudOff, "The host isn't answering. Your games show here once it does.")
-                            rows.isEmpty() -> Quiet(FuseIcons.Gamepad, "Nothing yet. Play something, and its saves and play time show up here.")
-                            else -> MenuList(rows, sel, modifier = Modifier.padding(Space.s), showSelection = focused && inList)
-                        }
                     }
                 }
-                if (side) {
-                    Box(Modifier.width(if (roomy) 380.dp else if (compact) 290.dp else 320.dp).fillMaxHeight()) {
-                        Column(Modifier.fillMaxSize().verticalScroll(sideScroll), verticalArrangement = Arrangement.spacedBy(Space.m)) {
-                            DeviceCard(devices, prefs.sync.deviceId, profiles)
-                            if (report != null && report.devicePlay.size > 1) {
-                                Card("Play time by device", FuseIcons.ChartPie) { PlayBars(report.devicePlay, names) }
-                            }
-                            ActivityCard(activity)
-                        }
-                        // Reached with the controller: ringed like anything else in focus.
-                        if (focused && inSide) {
-                            Spacer(Modifier.matchParentSize().border(Size.focusStroke, Fuse.colors.focus, RoundedCornerShape(Fuse.geometry.panel)))
-                        }
+                if (!side) {
+                    item("devices") { DeviceCard(devices, prefs.sync.deviceId, profiles, Modifier.padding(top = Space.l)) }
+                    item("play") { if (report != null && report.devicePlay.size > 1) Card("Play time by device", FuseIcons.ChartPie, Modifier.padding(top = Space.s)) { PlayBars(report.devicePlay, names) } }
+                    item("lately") { ActivityCard(activity, Modifier.padding(top = Space.s)) }
+                }
+            }
+            if (side) {
+                Box(Modifier.width(340.dp).fillMaxHeight().padding(top = topPadding + subTabsRoom() + Space.s, bottom = Size.hintHeight + Space.m)) {
+                    Column(Modifier.fillMaxSize().verticalScroll(sideScroll), verticalArrangement = Arrangement.spacedBy(Space.m)) {
+                        DeviceCard(devices, prefs.sync.deviceId, profiles)
+                        if (report != null && report.devicePlay.size > 1) Card("Play time by device", FuseIcons.ChartPie) { PlayBars(report.devicePlay, names) }
+                        ActivityCard(activity)
+                    }
+                    // Reached with the controller: ringed like anything else in focus.
+                    if (focused && inSide) {
+                        Spacer(Modifier.matchParentSize().border(Size.focusStroke, Fuse.colors.focus, RoundedCornerShape(Fuse.geometry.panel)))
                     }
                 }
             }
@@ -260,63 +288,183 @@ internal fun SyncTab(app: AppState, active: Boolean, topPadding: Dp) {
     }
 }
 
+/** One of the few things to do on the Sync tab. */
+private class SyncAction(val label: String, val icon: ImageVector, val run: () -> Unit)
+
 /**
- * The top of the tab: the host and how things stand, who is playing here, and their totals. With no
- * room for the devices column, the devices count shows among the totals instead.
+ * The top of the Sync tab, in one slim line: who is playing and on which host (with their totals
+ * when there is room), and the things to do. How things stand appears only when something is
+ * wrong (the host away, a PIN to type again); all being well needs no saying.
  */
 @Composable
-private fun HostHero(
+private fun SyncHeader(
     hostName: String,
     host: Boolean,
     words: SyncWords,
     profile: ProfileInfo?,
     report: ProfileReport?,
-    devices: List<DeviceInfo>,
+    actions: List<SyncAction>,
+    selected: Int,
+    busy: Boolean,
+    labels: Boolean,
     compact: Boolean,
-    showDevices: Boolean,
-    modifier: Modifier,
+    onAction: (Int) -> Unit,
 ) {
     val c = Fuse.colors
-    val tint = if (words.ok == false) c.warning else c.accent
-    val facts = buildList {
-        if (report != null) {
-            val versions = report.games.sumOf { g -> g.slots.sumOf { it.versions.size } }
-            add(HeroFact(FuseIcons.Clock, if (report.playSeconds > 0) playtimeText(report.playSeconds) else "No play yet", "played"))
-            add(HeroFact(FuseIcons.Gamepad, "${report.games.count { it.playSeconds > 0 }}", "games"))
-            add(HeroFact(FuseIcons.Save, "${report.games.count { it.slots.isNotEmpty() }}", "with saves"))
-            add(HeroFact(FuseIcons.History, "$versions", "versions kept"))
-            if (showDevices) {
-                val linked = devices.filterNot { it.revoked }
-                val now = kotlin.time.Clock.System.now().toEpochMilliseconds()
-                add(HeroFact(FuseIcons.MonitorSmartphone, "${linked.count { now - it.lastSeen < ONLINE_MS }}/${linked.size}", "devices online"))
+    Column(verticalArrangement = Arrangement.spacedBy(Space.s)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (profile != null) ProfileAvatar(profile.avatar, if (compact) 40.dp else 48.dp)
+            else SyncMark(if (compact) 40.dp else 48.dp)
+            Spacer(Modifier.width(Space.m))
+            Column(Modifier.weight(1f)) {
+                FText(profile?.name ?: "No one playing", if (compact) Fuse.type.bodyStrong else Fuse.type.title, maxLines = 1)
+                val totals = report?.let { r ->
+                    listOfNotNull(
+                        "${playtimeText(r.playSeconds)} played".takeIf { r.playSeconds > 0 },
+                        count(r.games.count { it.slots.isNotEmpty() }, "game") + " with saves",
+                    ).joinToString("  ·  ")
+                }
+                FText(
+                    listOfNotNull(if (host) "On $hostName, this computer" else "On $hostName", totals?.takeIf { !compact && it.isNotEmpty() }).joinToString("  ·  "),
+                    Fuse.type.caption, color = c.textMuted, maxLines = 1,
+                )
+            }
+            Spacer(Modifier.width(Space.m))
+            Row(horizontalArrangement = Arrangement.spacedBy(Space.s), verticalAlignment = Alignment.CenterVertically) {
+                actions.forEachIndexed { i, a ->
+                    ActionPill(a, selected = i == selected, label = labels, primary = i == 0, busy = i == 0 && busy) { onAction(i) }
+                }
+            }
+        }
+        // Only when something needs saying: the host away, a device unlinked, a PIN to type again.
+        if (words.ok != true) {
+            val shape = RoundedCornerShape(Fuse.geometry.control)
+            Row(
+                Modifier.fillMaxWidth().clip(shape).background(c.warning.copy(alpha = 0.12f)).border(1.dp, c.warning.copy(alpha = 0.35f), shape)
+                    .padding(horizontal = Space.m, vertical = Space.s),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                FuseIcon(FuseIcons.CloudOff, size = Size.iconS, tint = c.warning)
+                Spacer(Modifier.width(Space.s))
+                FText(words.title, Fuse.type.label, maxLines = 1)
+                if (words.detail.isNotEmpty()) FText("  ·  ${words.detail}", Fuse.type.caption, color = c.textMuted, maxLines = 2, modifier = Modifier.weight(1f, fill = false))
             }
         }
     }
-    AddonHero(
-        mark = { SyncMark(it, tint = tint) },
-        title = hostName,
-        tag = if (host) "This computer" else "Your host",
-        tagIcon = if (host) FuseIcons.Server else FuseIcons.Cloud,
-        tint = tint,
-        ok = words.ok, status = words.title, detail = words.detail,
-        facts = facts,
-        compact = compact,
-        modifier = modifier,
-        end = if (profile == null) null else ({
-            Row(
-                Modifier.clip(CircleShape).background(c.text.copy(alpha = 0.06f)).border(1.dp, c.hairline, CircleShape)
-                    .padding(start = 6.dp, end = Space.l, top = 6.dp, bottom = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                ProfileAvatar(profile.avatar, if (compact) 30.dp else 38.dp)
-                Spacer(Modifier.width(Space.s))
-                Column {
-                    FText("Playing here", Fuse.type.caption, color = c.textMuted, maxLines = 1)
-                    FText(profile.name, Fuse.type.bodyStrong, maxLines = 1)
+}
+
+/** An action on the Sync tab's top line: a pill with its label on wide screens, a round icon otherwise. */
+@Composable
+private fun ActionPill(a: SyncAction, selected: Boolean, label: Boolean, primary: Boolean, busy: Boolean, onClick: () -> Unit) {
+    val c = Fuse.colors
+    val bg by fuselineColor(
+        when {
+            selected -> c.text
+            primary -> c.accent.copy(alpha = 0.18f)
+            else -> c.text.copy(alpha = 0.07f)
+        },
+        Fuse.motion.tween(Durations.FAST), label = "syncAction",
+    )
+    val fg = when {
+        selected -> c.ink
+        primary -> c.accent
+        else -> c.text
+    }
+    Row(
+        Modifier.height(40.dp).clip(CircleShape).background(bg)
+            .clickable(remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null, onClick = onClick)
+            .padding(horizontal = if (label) Space.m else 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (busy) Spinner(size = 18.dp, color = fg) else FuseIcon(a.icon, size = Size.iconS, tint = fg)
+        if (label) {
+            Spacer(Modifier.width(Space.s))
+            FText(a.label, Fuse.type.label, color = fg, maxLines = 1)
+        }
+    }
+}
+
+/**
+ * A game on the host: its cover, its name and system, how long it has been played, its saves and
+ * where the newest came from, and the room it takes. Lifted and lit when chosen.
+ */
+@Composable
+private fun GameRow(g: GameReport, card: io.github.matiyaaa.fuse.ui.shell.store.GameCard?, selected: Boolean, height: Dp, onClick: () -> Unit) {
+    val c = Fuse.colors
+    val now = kotlin.time.Clock.System.now().toEpochMilliseconds()
+    val newest = g.slots.flatMap { it.versions }.maxByOrNull { it.at }
+    val saves = g.slots.filter { it.kind != io.github.matiyaaa.fuse.sync.SaveKind.STATE }.sumOf { it.versions.size }
+    val states = g.slots.filter { it.kind == io.github.matiyaaa.fuse.sync.SaveKind.STATE }.sumOf { it.versions.size }
+    val bytes = g.slots.sumOf { it.bytes }
+    val title = card?.title ?: g.name
+    val shape = RoundedCornerShape(Fuse.geometry.control)
+    val bg by fuselineColor(if (selected) c.surfaceRaised else c.surface.copy(alpha = 0.55f), Fuse.motion.tween(Durations.FAST), label = "syncGame")
+    Row(
+        Modifier.fillMaxWidth().height(height).testTag("sync.game").clip(shape).background(bg)
+            .then(if (selected) Modifier.border(Size.focusStroke, c.focus, shape) else Modifier.border(1.dp, c.hairline, shape))
+            .clickable(remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null, onClick = onClick)
+            .padding(horizontal = if (height < 56.dp) Space.s else Space.m),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        SyncCover(g.name, card, height - if (height < 56.dp) Space.s else Space.m)
+        Spacer(Modifier.width(Space.m))
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                FText(title, Fuse.type.bodyStrong, maxLines = 1, modifier = Modifier.weight(1f, fill = false))
+                val system = (card?.platformShort ?: g.platform.uppercase()).takeIf { it.isNotEmpty() }
+                if (system != null) {
+                    Spacer(Modifier.width(Space.s))
+                    FText(system, Fuse.type.caption, color = c.textMuted, maxLines = 1, modifier = Modifier.clip(RoundedCornerShape(6.dp)).background(c.text.copy(alpha = 0.07f)).padding(horizontal = 6.dp, vertical = 1.dp))
                 }
             }
-        }),
-    )
+            FText(
+                listOfNotNull(
+                    playtimeText(g.playSeconds).takeIf { g.playSeconds > 0 },
+                    listOfNotNull(
+                        "$saves ${if (saves == 1) "save" else "saves"}".takeIf { saves > 0 },
+                        "$states ${if (states == 1) "state" else "states"}".takeIf { states > 0 },
+                    ).joinToString(", ").ifEmpty { null },
+                    newest?.let { "newest from ${it.device}, ${TimeWords.relative(it.at, now, localOffsetMillis(now))}" },
+                ).joinToString("  ·  ").ifEmpty { "No saves kept yet" },
+                Fuse.type.caption, color = c.textMuted, maxLines = 1,
+            )
+        }
+        Spacer(Modifier.width(Space.m))
+        if (bytes > 0) FText(sizeText(bytes), Fuse.type.label, color = c.textMuted, maxLines = 1)
+        else FuseIcon(FuseIcons.ChevronRight, size = Size.iconS, tint = c.textFaint)
+    }
+}
+
+/** Each game's cover from this library, where it has the game: by its id across devices, or its name. */
+internal class SyncCovers(private val map: Map<String, io.github.matiyaaa.fuse.ui.shell.store.GameCard>) {
+    fun of(game: String, name: String) = map[game] ?: map["name:" + name.lowercase()]
+}
+
+@Composable
+internal fun rememberSyncCovers(app: AppState): SyncCovers {
+    val covers by androidx.compose.runtime.produceState(SyncCovers(emptyMap()), app.store) {
+        // Built off the interface's thread: a big library is thousands of keys.
+        app.store.library.games(io.github.matiyaaa.fuse.ui.shell.store.GameQuery()).map { cards ->
+            SyncCovers(buildMap {
+                for (card in cards) {
+                    put(io.github.matiyaaa.fuse.sync.GameKey.of(card.platformId.value, null, null, card.title).id, card)
+                    put("name:" + card.title.lowercase(), card)
+                }
+            })
+        }.flowOn(kotlinx.coroutines.Dispatchers.Default).collect { value = it }
+    }
+    return covers
+}
+
+/** A game's cover at [size], square, or art made from its name when the library has none. */
+@Composable
+internal fun SyncCover(name: String, card: io.github.matiyaaa.fuse.ui.shell.store.GameCard?, size: Dp, corner: Dp = Fuse.geometry.control) {
+    val art = Modifier.size(size).clip(RoundedCornerShape(corner))
+    val generated: @Composable () -> Unit = {
+        io.github.matiyaaa.fuse.ui.designsystem.media.GeneratedArt(name, androidx.compose.ui.graphics.Color(card?.accent ?: 0xFF8A93A6), art)
+    }
+    val model = card?.art?.square ?: card?.art?.boxart ?: card?.art?.icon
+    if (model != null) io.github.matiyaaa.fuse.ui.designsystem.media.Artwork(model, art, fallback = generated) else generated()
 }
 
 /** One figure under the hero's title. */
@@ -364,8 +512,11 @@ internal fun AddonHero(
                 }
                 Spacer(Modifier.height(2.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    StatusDot(ok)
-                    Spacer(Modifier.width(Space.s))
+                    // All being well needs no light: the dot shows only when something isn't.
+                    if (ok != true) {
+                        StatusDot(ok)
+                        Spacer(Modifier.width(Space.s))
+                    }
                     FText(status, Fuse.type.bodyStrong, maxLines = 1)
                     if (detail.isNotEmpty()) FText("  ·  $detail", Fuse.type.body, color = c.textMuted, maxLines = 1)
                 }
@@ -440,36 +591,6 @@ internal fun Quiet(icon: ImageVector, text: String) {
     }
 }
 
-/** A game on the host, as its row reads: its cover, play time, its saves, the newest and who saved it, and the space it takes. */
-private fun gameRow(app: AppState, g: GameReport, card: io.github.matiyaaa.fuse.ui.shell.store.GameCard?): MenuAction {
-    val now = kotlin.time.Clock.System.now().toEpochMilliseconds()
-    val newest = g.slots.flatMap { it.versions }.maxByOrNull { it.at }
-    val saves = g.slots.filter { it.kind != io.github.matiyaaa.fuse.sync.SaveKind.STATE }.sumOf { it.versions.size }
-    val states = g.slots.filter { it.kind == io.github.matiyaaa.fuse.sync.SaveKind.STATE }.sumOf { it.versions.size }
-    val detail = listOfNotNull(
-        (card?.platformShort ?: g.platform.uppercase()).takeIf { it.isNotEmpty() },
-        playtimeText(g.playSeconds).takeIf { g.playSeconds > 0 },
-        listOfNotNull(
-            "$saves ${if (saves == 1) "save" else "saves"}".takeIf { saves > 0 },
-            "$states ${if (states == 1) "state" else "states"}".takeIf { states > 0 },
-        ).joinToString(", ").ifEmpty { null },
-        newest?.let { "from ${it.device}, ${TimeWords.relative(it.at, now, localOffsetMillis(now))}" },
-    ).joinToString("  ·  ")
-    val bytes = g.slots.sumOf { it.bytes }
-    return MenuAction(
-        g.game, card?.title ?: g.name,
-        detail = detail,
-        art = io.github.matiyaaa.fuse.ui.designsystem.components.MenuArt(
-            model = card?.art?.square ?: card?.art?.boxart ?: card?.art?.icon,
-            square = true, fallbackTitle = g.name, accent = card?.accent ?: 0xFF8A93A6, wide = false,
-        ),
-        trailing = if (bytes > 0) Trailing.Value(sizeText(bytes)) else Trailing.Chevron,
-        onSelect = { app.go(Route.SyncGame(g.game, g.name)) },
-    )
-}
-
-
-
 @Composable
 internal fun Card(title: String, icon: ImageVector, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
     val c = Fuse.colors
@@ -512,12 +633,12 @@ internal fun PlayBars(play: Map<String, Long>, names: Map<String, String>) {
 
 
 @Composable
-private fun DeviceCard(devices: List<DeviceInfo>, self: String, profiles: List<ProfileInfo>) {
+private fun DeviceCard(devices: List<DeviceInfo>, self: String, profiles: List<ProfileInfo>, modifier: Modifier = Modifier) {
     val c = Fuse.colors
     val now = kotlin.time.Clock.System.now().toEpochMilliseconds()
     val offset = localOffsetMillis(now)
     val linked = devices.filterNot { it.revoked }
-    Card("Devices", FuseIcons.MonitorSmartphone) {
+    Card("Devices", FuseIcons.MonitorSmartphone, modifier) {
         if (linked.isEmpty()) FText("Only this one so far", Fuse.type.body, color = c.textMuted, maxLines = 1)
         for (d in linked.take(8)) {
             val online = now - d.lastSeen < ONLINE_MS
@@ -547,11 +668,11 @@ private fun DeviceCard(devices: List<DeviceInfo>, self: String, profiles: List<P
 }
 
 @Composable
-private fun ActivityCard(activity: List<SyncActivity>) {
+private fun ActivityCard(activity: List<SyncActivity>, modifier: Modifier = Modifier) {
     val c = Fuse.colors
     val now = kotlin.time.Clock.System.now().toEpochMilliseconds()
     val offset = localOffsetMillis(now)
-    Card("Lately", FuseIcons.History) {
+    Card("Lately", FuseIcons.History, modifier) {
         if (activity.isEmpty()) FText("Nothing yet. Play something and its save shows up here.", Fuse.type.body, color = c.textMuted, maxLines = 2)
         for (a in activity.take(6)) {
             Row(verticalAlignment = Alignment.Top) {
