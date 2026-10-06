@@ -565,9 +565,11 @@ it. When GitHub's hourly limit is reached, Fuse says so instead of failing silen
 
 **Approval and verification.** Nothing is downloaded until you confirm. The installer then downloads
 the asset into Fuse's cache, verifies its SHA-256 digest when GitHub published one, and hands it to
-the system installer on Android or places the new AppImage next to the running one and marks it
-executable on Linux (`ReleaseInstaller`). A digest mismatch deletes the download and reports the
-failure; on Linux an existing file is never overwritten. Every release also
+the system installer on Android, or on Linux puts the new AppImage in place of the one Fuse runs
+from, at the same path, so shortcuts and Steam's entry keep working (`ReleaseInstaller`). The version
+before is kept beside it as a hidden `.previous` file, and versioned copies earlier updates left
+there are removed. A digest mismatch deletes the download and reports the failure, and nothing is
+replaced. Every release also
 carries a `SHA256SUMS.txt` you can check by hand (see [README.md](README.md#install)).
 
 **Automatic checks.** "Check automatically" (Settings, About) is on by default and checks once a

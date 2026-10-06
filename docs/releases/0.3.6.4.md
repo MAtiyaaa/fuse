@@ -1,7 +1,7 @@
 # Fuse 0.3.6.4 - The Unity Update
 
-Box art on RomM games as soon as it is found, art for the PlayStation 5, and RomM on the second
-screen.
+Box art on RomM games as soon as it is found, system panels from your games, RomM on the second
+screen, Fuse's own art in Steam, and Linux updates that replace Fuse in place.
 
 ## New
 
@@ -21,7 +21,16 @@ screen.
   or a RomM collection shows on the second screen as the Library's does, with menus on top or
   flipped below, including RomM games and systems you don't have on this device yet.
 
+- **Fuse's own art in Steam.** Add Fuse to Steam (Game Mode) now gives the entry Fuse's library
+  capsule, wide capsule, hero, logo and icon, so it looks like any other game in Steam instead of a
+  grey tile. Art you already chose for it stays.
+
 ## Changed
+
+- **Linux updates replace Fuse in place.** An update now takes the place of the AppImage Fuse runs
+  from, at the same path, instead of adding another file beside it each time. Shortcuts, start at
+  login and Steam's entry keep working, the version before is kept as a hidden `.previous` file for
+  one step back, and the copies earlier updates left beside it are removed.
 
 - A RomM game's options show its box art, like a game on this device, instead of RomM's poster.
 
