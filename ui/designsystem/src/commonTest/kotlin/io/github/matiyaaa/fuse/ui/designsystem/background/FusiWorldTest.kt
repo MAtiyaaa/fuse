@@ -59,4 +59,49 @@ class FusiWorldTest {
         }
         assertEquals(at, world.across)
     }
+
+    @Test
+    fun boLooksLikeHerWithACollarAndNoBow() {
+        val frames = listOf(BoFrames.stand0, BoFrames.walk0, BoFrames.walk1, BoFrames.sit0, BoFrames.sit1, BoFrames.sleep, BoFrames.sniff0, BoFrames.sniff1)
+        val hers = listOf(FusiFrames.stand0, FusiFrames.walk0, FusiFrames.walk1, FusiFrames.sit0, FusiFrames.sit1, FusiFrames.sleep, FusiFrames.sniff0, FusiFrames.sniff1)
+        for ((bo, fusi) in frames.zip(hers)) {
+            val art = bo.rows.joinToString("\n")
+            assertTrue('b' !in art && 'B' !in art, "no bow:\n$art")
+            assertTrue('K' in art && 'g' in art, "a collar with its tag:\n$art")
+            assertTrue('c' !in art, "no pink blush:\n$art")
+            assertEquals(fusi.width, bo.width)
+            assertEquals(fusi.height, bo.height)
+        }
+    }
+
+    @Test
+    fun boStaysOnTheMainScreenAndInsideTheRoom() {
+        val clock = floatArrayOf(0f)
+        val world = FusiWorld { clock[0] }
+        live(world, clock, 900, listOf(0, 1)) {
+            assertTrue(world.boAcross in 0f..1f, "Bo wandered off to ${world.boAcross}")
+        }
+    }
+
+    @Test
+    fun whenSheNapsBoNapsBesideHer() {
+        val clock = floatArrayOf(0f)
+        val world = FusiWorld { clock[0] }
+        var napped = false
+        // Over half an hour she sleeps at least once; he lies down by the house with her.
+        live(world, clock, 1_800, listOf(0)) { if (world.boNapping) napped = true }
+        assertTrue(napped, "Bo should nap beside her when she sleeps")
+    }
+
+    @Test
+    fun drawnStillBoDoesNotMoveEither() {
+        val clock = floatArrayOf(0f)
+        val world = FusiWorld { clock[0] }
+        val at = world.boAcross
+        repeat(300) {
+            clock[0] += 1f
+            world.frame(0, 1920f, 1080f, 2f, still = true)
+        }
+        assertEquals(at, world.boAcross)
+    }
 }
