@@ -76,6 +76,8 @@ ICONS = [
     ('quick-menu', 'Dashboard', 'Quick menu'),
     ('touch', 'Hand', 'Touch'),
     ('sync', 'RefreshCcw', 'Fuse Sync'),
+    ('profiles', 'Users', 'Profiles'),
+    ('saves', 'FolderSync', 'Saves from every system'),
 ]
 
 # Badge geometry, in the 48 x 48 tile
