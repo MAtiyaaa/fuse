@@ -193,7 +193,28 @@ interface SyncService {
     /** Every device's place with [game]'s saves for the person playing here ("5 of 6 devices current"); null when the host can't say. */
     suspend fun convergence(game: GameKey): Convergence? = null
 
+    /**
+     * This device's own choice of whose saves move here: [pullOff] profiles' saves are never
+     * brought in (this device still sends theirs), [off] profiles' saves never move either way.
+     * Records and play time are unaffected, and so are saves the household plays together.
+     */
+    fun saveChoices(pullOff: Set<String>, off: Set<String>) {}
+
+    /**
+     * The household's RomM and Jellyfin from the host: addresses, and the sign-ins this device may
+     * have, opened ("romm", and "jellyfin:<profile>" for the profiles it may open). Null without a
+     * host, or from a host before 0.3.6.3.
+     */
+    suspend fun householdServices(): HouseholdShared? = null
+
+    /** Shares this device's RomM and Jellyfin with the household, or says no ([declined]); false when it can't. */
+    suspend fun shareServices(romm: ServiceAddress?, jellyfin: ServiceAddress?, signIns: Map<String, String>, declined: Boolean = false): Boolean = false
+
     val status: StateFlow<SyncStatus>
+
+    /** Goes up each time a round with the host ends (what another device sent since is in). */
+    val rounds: StateFlow<Int> get() = NoRounds
+
     val profiles: StateFlow<List<ProfileInfo>>
 
     /** The profile in use here, or null (Fuse Sync off, or no one chosen yet). */
@@ -417,3 +438,9 @@ private val NO_MERGE: StateFlow<ProfileMerge?> = kotlinx.coroutines.flow.Mutable
 
 private val NO_SHARED_GAMES: StateFlow<Set<String>> = kotlinx.coroutines.flow.MutableStateFlow(emptySet())
 
+
+
+/** The household's services as a device sees them: what the host keeps, with this device's sign-ins opened. */
+data class HouseholdShared(val services: HouseholdServices, val signIns: Map<String, String>)
+
+private val NoRounds: StateFlow<Int> = kotlinx.coroutines.flow.MutableStateFlow(0)

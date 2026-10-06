@@ -347,6 +347,48 @@ class ServiceTest {
     }
 
     @Test
+    fun aDeviceThatDoesntTakeAPersonsSavesNeverGetsThemAndOneThatDoesntSyncThemNeverSendsThem(): Unit = runBlocking {
+        val (pc, _) = service("Gaming PC", Library())
+        val (deck, _) = service("Steam Deck", Library())
+        val code = assertNotNull(pc.hostHere("Gaming PC", installService = false).getOrThrow().pairingCode)
+        deck.connect("127.0.0.1:$port", code).getOrThrow()
+        val mo = pc.createProfile("Mo", "fox", null).getOrThrow()
+        deck.switchTo(mo.id).getOrThrow()
+        pc.switchTo(mo.id).getOrThrow()
+        val pcRoms = File(root, "pc/Games/GBA").apply { mkdirs() }
+        val pcQuery = SaveQuery(ct, "gba", File(pcRoms, "Pokemon Ruby.gba").path.replace('\\', '/'), "mgba", title = "Pokemon Ruby")
+        pc.saveQueries { id -> pcQuery.takeIf { id == ct.id } }
+        // The PC never takes Mo's saves from elsewhere.
+        pc.saveChoices(pullOff = setOf(mo.id), off = emptySet())
+        val roms = File(root, "deck-roms").apply { mkdirs() }
+        val q = SaveQuery(ct, "gba", File(roms, "ruby.gba").path.replace('\\', '/'), "mgba", title = "Pokemon Ruby")
+        File(roms, "ruby.sav").writeText("made on the deck")
+        deck.afterExit(q, 0, 60_000)
+        kotlinx.coroutines.delay(1_500)
+        assertTrue(!File(pcRoms, "Pokemon Ruby.sav").exists(), "the PC doesn't take Mo's save by itself")
+        // Nor when the game starts there: it plays with what the PC has.
+        File(pcRoms, "Pokemon Ruby.sav").writeText("the pc's own")
+        assertIs<LaunchGate.Go>(pc.beforeLaunch(pcQuery))
+        assertEquals("the pc's own", File(pcRoms, "Pokemon Ruby.sav").readText())
+        // It still sends Mo's saves made on it.
+        pc.afterExit(pcQuery, 0, 60_000)
+        // (It never took the Deck's, so it doesn't follow on from it: it is kept beside it, not over it.)
+        assertTrue(deck.versions(q, SaveKind.SAVE).any { it.device == "Gaming PC" }, "the PC's save reached the host")
+
+        // The Deck stops syncing Mo's saves at all: a new one stays on the Deck.
+        deck.saveChoices(pullOff = emptySet(), off = setOf(mo.id))
+        val before = deck.versions(q, SaveKind.SAVE).size
+        File(roms, "ruby.sav").writeText("kept on the deck")
+        deck.afterExit(q, 0, 120_000)
+        assertEquals(before, deck.versions(q, SaveKind.SAVE).size, "nothing new went up from the Deck")
+        // And when it starts there, nothing from elsewhere replaces it.
+        assertIs<LaunchGate.Go>(deck.beforeLaunch(q))
+        assertEquals("kept on the deck", File(roms, "ruby.sav").readText())
+        pc.stop()
+        deck.stop()
+    }
+
+    @Test
     fun theHostsSavesMoveToAnotherFolderAndCanBeDeleted(): Unit = runBlocking {
         val (pc, pcSettings) = service("Gaming PC", Library())
         val (deck, _) = service("Steam Deck", Library())

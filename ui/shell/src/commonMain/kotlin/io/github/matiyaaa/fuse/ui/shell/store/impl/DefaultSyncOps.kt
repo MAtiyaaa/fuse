@@ -31,6 +31,20 @@ internal class DefaultSyncOps(
 
     override suspend fun saveFolders() = service?.saveFolders(runCatching { samples() }.getOrDefault(emptyList())).orEmpty()
 
+    /** The question for a device that updated; set and answered by [HouseholdSignIns]. */
+    internal val ask = kotlinx.coroutines.flow.MutableStateFlow(false)
+    override val signInsAsk: StateFlow<Boolean> = ask
+    internal var signIns: HouseholdSignIns? = null
+
+    override suspend fun answerSignIns(share: Boolean) {
+        signIns?.answer(share)
+    }
+
+    override suspend fun setShareSignIns(on: Boolean) {
+        ask.value = false
+        super.setShareSignIns(on)
+    }
+
     override val service: SyncService? = runCatching { ctx.services.syncService(port, ctx.scope) }.getOrNull()
 
     override val config: StateFlow<SyncSettings> = ctx.data.settings.settings.map { it.sync }

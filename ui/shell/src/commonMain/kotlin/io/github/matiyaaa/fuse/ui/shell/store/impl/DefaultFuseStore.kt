@@ -312,6 +312,18 @@ internal class DefaultFuseStore private constructor(
         }
     }
 
+    /** Jellyfin follows its switch and addresses; off, it does nothing at all. Safe mode leaves it off. */
+    private fun configureJellyfin(j: io.github.matiyaaa.fuse.data.settings.JellyfinSettings) {
+        jellyfin.configure(
+            enabled = j.enabled && !safe,
+            connection = io.github.matiyaaa.fuse.jellyfin.JellyfinConnection(
+                runCatching { io.github.matiyaaa.fuse.jellyfin.ConnectionMode.valueOf(j.mode) }.getOrDefault(io.github.matiyaaa.fuse.jellyfin.ConnectionMode.AUTO),
+                j.localAddress,
+                j.remoteAddress,
+            ),
+        )
+    }
+
     private fun start() {
         io.github.matiyaaa.fuse.ui.shell.platform.JellyfinImages.service = jellyfin
         // Downloads, and Fuse RomM feeding the library through them.
@@ -341,6 +353,55 @@ internal class DefaultFuseStore private constructor(
             svc.saveQueries { household -> profileData.gameFor(household)?.let { library.saveQueryFor(io.github.matiyaaa.fuse.model.GameId(it)) } }
             sync.samples = { library.saveSamples() }
             ctx.onUserChange = { if (sync.config.value.enabled) svc.changed() }
+            // Whose saves move on this device: its own choice, followed as it changes.
+            ctx.scope.launch {
+                sync.config.map { it.noPullProfiles.toSet() to it.noSyncProfiles.toSet() }.distinctUntilChanged()
+                    .collect { (pullOff, off) -> svc.saveChoices(pullOff, off) }
+            }
+            val setupDone = ctx.settings.value.onboarding.completed
+            // Who has had their welcome here. On a device that was already using profiles when it
+            // updated, everyone playing here has; anyone new to this device gets the grand one.
+            if (!sync.config.value.welcomedSeeded) {
+                val wasUsing = setupDone && sync.config.value.enabled
+                ctx.scope.launch {
+                    val known = if (wasUsing) kotlinx.coroutines.withTimeoutOrNull(5_000) { svc.profiles.first { it.isNotEmpty() } }.orEmpty().map { it.id } else emptyList()
+                    sync.configure { it.copy(welcomedSeeded = true, welcomedProfiles = (it.welcomedProfiles + known).distinct()) }
+                }
+            }
+            // RomM and Jellyfin for the household: shared from here, and brought in where this device has none.
+            val household = HouseholdSignIns(
+                ctx.scope, svc, sync.config, sync::configure, { setupDone },
+                romm = object : HouseholdSignIns.Romm {
+                    override suspend fun mine() = romm.forHousehold()?.takeIf { it.first.enabled }?.let { (s, credential) ->
+                        io.github.matiyaaa.fuse.sync.ServiceAddress(s.localAddress, s.remoteAddress, s.mode) to credential
+                    }
+                    override suspend fun take(address: io.github.matiyaaa.fuse.sync.ServiceAddress, credential: String?) =
+                        romm.fromHousehold(address.local, address.remote, address.mode, credential)
+                },
+                jellyfin = jellyfin,
+                jellyfinPlace = object : HouseholdSignIns.JellyfinPlace {
+                    override fun mine() = prefsState.value.jellyfin.takeIf { it.enabled && (it.localAddress.isNotBlank() || it.remoteAddress.isNotBlank()) }
+                        ?.let { io.github.matiyaaa.fuse.sync.ServiceAddress(it.localAddress, it.remoteAddress, it.mode) }
+                    override suspend fun take(address: io.github.matiyaaa.fuse.sync.ServiceAddress): Boolean {
+                        val j = prefsState.value.jellyfin
+                        if (j.localAddress.isNotBlank() || j.remoteAddress.isNotBlank()) return false
+                        if (address.local.isBlank() && address.remote.isBlank()) return false
+                        updatePrefs { it.copy(jellyfin = it.jellyfin.copy(enabled = true, localAddress = address.local, remoteAddress = address.remote, mode = address.mode)) }
+                        // In place now, so the person's own sign-in can follow straight away.
+                        configureJellyfin(prefsState.value.jellyfin)
+                        return true
+                    }
+                },
+                ask = sync.ask,
+            )
+            sync.signIns = household
+            household.start(
+                kotlinx.coroutines.flow.combine(
+                    ctx.settings.map { Triple(it.romm.localAddress + "|" + it.romm.remoteAddress, it.romm.enabled, it.romm.account) },
+                    prefsState.map { Triple(it.jellyfin.localAddress + "|" + it.jellyfin.remoteAddress, it.jellyfin.enabled, it.jellyfin.mode) },
+                    jellyfin.state.map { it.account?.userId },
+                ) { a, b, c -> Triple(a, b, c) }.distinctUntilChanged(),
+            )
         }
         // The interface follows Fuse Sync's settings as stored (the service writes some itself).
         ctx.scope.launch {
@@ -352,18 +413,7 @@ internal class DefaultFuseStore private constructor(
             }
         }
         // Jellyfin follows its switch and addresses; off, it does nothing at all. Safe mode leaves it off.
-        ctx.scope.launch {
-            prefsState.map { it.jellyfin }.distinctUntilChanged().collect { j ->
-                jellyfin.configure(
-                    enabled = j.enabled && !safe,
-                    connection = io.github.matiyaaa.fuse.jellyfin.JellyfinConnection(
-                        runCatching { io.github.matiyaaa.fuse.jellyfin.ConnectionMode.valueOf(j.mode) }.getOrDefault(io.github.matiyaaa.fuse.jellyfin.ConnectionMode.AUTO),
-                        j.localAddress,
-                        j.remoteAddress,
-                    ),
-                )
-            }
-        }
+        ctx.scope.launch { prefsState.map { it.jellyfin }.distinctUntilChanged().collect(::configureJellyfin) }
         // Home's Jellyfin widgets: asked for only while Jellyfin is on, signed in and one of them is
         // on Home; again when something was played or marked, and every few minutes.
         ctx.scope.launch {

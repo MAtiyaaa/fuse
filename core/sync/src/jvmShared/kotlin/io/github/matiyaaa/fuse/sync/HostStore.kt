@@ -21,6 +21,9 @@ internal data class ProfileRecord(
     val hostOnly: Boolean = false,
 )
 
+/** A map of sign-ins, by key ("romm", "jellyfin:<profile>"). */
+internal val SignInsSerializer = kotlinx.serialization.builtins.MapSerializer(String.serializer(), String.serializer())
+
 /** A device as the host keeps it, with the secret its calls are signed with. */
 @Serializable
 internal data class DeviceRecord(
@@ -71,6 +74,10 @@ class HostStore(val dir: File, private val clock: () -> Long = System::currentTi
     private val aliasFile = File(dir, "game-aliases.json")
     private val accountFile = File(dir, "account.json")
     private val outsideFile = File(dir, "outside.json")
+    /** The household's RomM and Jellyfin: addresses, and sign-ins sealed with [servicesKey]. */
+    private val servicesFile = File(dir, "services.json")
+    /** The host's own key for the sign-ins it keeps: never sent, never leaves this folder. */
+    private val servicesKeyFile = File(dir, "services.key")
 
     @Volatile private var account: HostAccount? = null
     @Volatile private var outside = OutsideAddress()
@@ -553,6 +560,78 @@ class HostStore(val dir: File, private val clock: () -> Long = System::currentTi
     }
 
     /** Keeps what [device] reports in place; older notes never replace newer ones. */
+    /** What the host keeps of the household's services: sign-ins sealed with the host's own key. */
+    @Serializable
+    private data class KeptServices(
+        val romm: ServiceAddress? = null,
+        val jellyfin: ServiceAddress? = null,
+        /** "romm" and "jellyfin:<profile>" to each sign-in, sealed with [servicesKey]. */
+        val signIns: Map<String, String> = emptyMap(),
+        val salt: String = "",
+        val shared: Boolean = false,
+        val declined: List<String> = emptyList(),
+    )
+
+    private val servicesKey: String by lazy {
+        if (servicesKeyFile.isFile) servicesKeyFile.readText().trim()
+        else SyncCrypto.token(32).also { writeAtomically(servicesKeyFile, it.toByteArray()); runCatching { servicesKeyFile.setReadable(false, false); servicesKeyFile.setReadable(true, true) } }
+    }
+
+    private fun keptServices(): KeptServices =
+        if (servicesFile.isFile) runCatching { json.decodeFromString(KeptServices.serializer(), servicesFile.readText()) }.getOrDefault(KeptServices()) else KeptServices()
+
+    /**
+     * The household's services for [device]: addresses, and the sign-ins it may have (RomM's, and
+     * Jellyfin's for the profiles it may open) sealed with its own secret. Null for a device that
+     * isn't trusted.
+     */
+    fun servicesFor(device: String): HouseholdServices? = synchronized(lock) {
+        val d = devices[device]?.takeIf { !it.revoked } ?: return@synchronized null
+        val kept = keptServices()
+        val open = kept.signIns.mapNotNull { (key, sealedHere) ->
+            val profile = key.substringAfter("jellyfin:", "").ifEmpty { null }
+            if (profile != null && !mayUse(device, profile)) return@mapNotNull null
+            SyncCrypto.open(sealedHere, servicesKey, kept.salt)?.let { key to it.decodeToString() }
+        }.toMap()
+        val salt = SyncCrypto.token(16)
+        val sealed = if (open.isEmpty()) null else SyncCrypto.seal(json.encodeToString(SignInsSerializer, open).toByteArray(), d.secret, salt)
+        HouseholdServices(kept.romm, kept.jellyfin, sealed, salt, kept.shared, kept.declined)
+    }
+
+    /**
+     * Takes what [device] shares: addresses replace the household's, sign-ins it sealed with its own
+     * secret are opened and kept sealed with the host's key (Jellyfin's only for profiles it may
+     * open). A device saying no is noted, so the next one asks. False when it can't be opened.
+     */
+    fun shareServices(device: String, share: ServicesShare): Boolean = synchronized(lock) {
+        val d = devices[device]?.takeIf { !it.revoked } ?: return@synchronized false
+        val kept = keptServices()
+        if (share.declined) {
+            writeAtomically(servicesFile, json.encodeToString(KeptServices.serializer(), kept.copy(declined = (kept.declined + device).distinct())).toByteArray())
+            return@synchronized true
+        }
+        val given: Map<String, String> = share.sealed?.let { sealedText ->
+            val plain = SyncCrypto.open(sealedText, d.secret, share.salt) ?: return@synchronized false
+            runCatching { json.decodeFromString(SignInsSerializer, plain.decodeToString()) }.getOrNull() ?: return@synchronized false
+        }.orEmpty().filterKeys { key ->
+            key == "romm" || key.substringAfter("jellyfin:", "").let { it.isNotEmpty() && mayUse(device, it) }
+        }
+        // Every sign-in is sealed again under one fresh salt with the host's key.
+        val current = kept.signIns.mapNotNull { (k, v) -> SyncCrypto.open(v, servicesKey, kept.salt)?.let { k to it.decodeToString() } }.toMap()
+        val all = current + given
+        val salt = SyncCrypto.token(16)
+        val next = KeptServices(
+            romm = share.romm ?: kept.romm,
+            jellyfin = share.jellyfin ?: kept.jellyfin,
+            signIns = all.mapValues { (_, v) -> SyncCrypto.seal(v.toByteArray(), servicesKey, salt) },
+            salt = salt,
+            shared = kept.shared || given.isNotEmpty() || share.romm != null || share.jellyfin != null,
+            declined = kept.declined - device,
+        )
+        writeAtomically(servicesFile, json.encodeToString(KeptServices.serializer(), next).toByteArray())
+        true
+    }
+
     fun noteApplied(device: String, notes: List<AppliedNote>): Unit = synchronized(lock) {
         val mine = applied.getOrPut(device) { HashMap() }
         var changed = false
@@ -812,7 +891,7 @@ internal const val ADMIN_AVATAR = "crown"
 object HostFiles {
     private val OWN = setOf(
         "host.json", "devices.json", "profiles.json", "shared-games.json", "game-aliases.json", "account.json", "outside.json",
-        "journal.jsonl", "applied.json", "admin.token", "objects", "profiles",
+        "journal.jsonl", "applied.json", "admin.token", "objects", "profiles", "services.json", "services.key",
     )
 
     /** The host's own files and folders in [dir] (with any write a crash left half done). */

@@ -380,3 +380,39 @@ data class SlotDevices(val game: String, val kind: SaveKind, val head: String?, 
 
 @Serializable
 data class Convergence(val slots: List<SlotDevices>)
+
+
+/** Where a service the household uses is (RomM or Jellyfin): its addresses and how they're tried. */
+@Serializable
+data class ServiceAddress(val local: String = "", val remote: String = "", val mode: String = "AUTO")
+
+/**
+ * The household's RomM and Jellyfin as the host keeps them for its devices: addresses as they are,
+ * sign-ins only ever [sealed] (AES-GCM, a key stretched from the asking device's own secret with
+ * [salt]) as a JSON map of `"romm"` and `"jellyfin:<profile>"` to each sign-in, holding only the
+ * profiles that device may open. [shared] says a device has shared its sign-ins; [declined] lists
+ * the devices that were asked and said no, so the next one to update asks instead.
+ */
+@Serializable
+data class HouseholdServices(
+    val romm: ServiceAddress? = null,
+    val jellyfin: ServiceAddress? = null,
+    val sealed: String? = null,
+    val salt: String = "",
+    val shared: Boolean = false,
+    val declined: List<String> = emptyList(),
+)
+
+/** What a device shares, its sign-ins sealed with its own secret as in [HouseholdServices]; or that it said no. */
+@Serializable
+data class ServicesShare(
+    val romm: ServiceAddress? = null,
+    val jellyfin: ServiceAddress? = null,
+    val sealed: String? = null,
+    val salt: String = "",
+    val declined: Boolean = false,
+)
+
+/** One Jellyfin sign-in, inside a sealed map. */
+@Serializable
+data class JellyfinLogin(val username: String, val password: String)

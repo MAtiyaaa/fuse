@@ -332,6 +332,23 @@ class JvmSyncService(
     /** Set once the saves that moved on while this device was away were looked at. */
     @Volatile private var caughtUp = false
 
+    /** Profiles whose saves this device never brings in: it still sends theirs ([saveChoices]). */
+    @Volatile private var pullOff: Set<String> = emptySet()
+
+    /** Profiles whose saves never move here, either way ([saveChoices]). */
+    @Volatile private var saveOff: Set<String> = emptySet()
+
+    override fun saveChoices(pullOff: Set<String>, off: Set<String>) {
+        this.pullOff = pullOff
+        this.saveOff = off
+    }
+
+    /** Whether this device brings in [owner]'s saves (the household's shared ones always). */
+    private fun takesFrom(owner: String): Boolean = owner == SHARED_SAVES || (owner !in pullOff && owner !in saveOff)
+
+    /** Whether this device keeps and sends [owner]'s saves (the household's shared ones always). */
+    private fun sendsFor(owner: String): Boolean = owner == SHARED_SAVES || owner !in saveOff
+
     @Volatile private var queries: (suspend (String) -> SaveQuery?)? = null
 
     /** Games between "about to start" and "stopped and sent": never written to in the background. */
@@ -349,7 +366,7 @@ class JvmSyncService(
     private fun convergeLater(events: List<JournalEvent>) {
         val active = cached.activeProfile
         if (active.isEmpty() || !cached.saves || queries == null) return
-        val games = events.filter { it.type == JournalEvent.REVISION && it.device != cached.deviceId && (it.profile == active || it.profile == SHARED_SAVES) }
+        val games = events.filter { it.type == JournalEvent.REVISION && it.device != cached.deviceId && ((it.profile == active && takesFrom(active)) || it.profile == SHARED_SAVES) }
             .mapNotNull { it.game }.distinct()
         if (games.isEmpty()) return
         scope.launch(Dispatchers.IO) { converging.withLock { for (g in games) runCatching { convergeGame(g) } } }
@@ -360,7 +377,8 @@ class JvmSyncService(
         val c = client ?: return
         val active = cached.activeProfile.ifEmpty { return }
         if (!cached.saves || queries == null) return
-        val games = (c.heads(active).heads + runCatching { c.heads(SHARED_SAVES).heads }.getOrDefault(emptyList()))
+        val mine = if (takesFrom(active)) c.heads(active).heads else emptyList()
+        val games = (mine + runCatching { c.heads(SHARED_SAVES).heads }.getOrDefault(emptyList()))
             .filter { it.device != cached.deviceId }.map { it.game }.distinct()
         converging.withLock { for (g in games) runCatching { convergeGame(g) } }
     }
@@ -381,11 +399,23 @@ class JvmSyncService(
         val notes = ArrayList<AppliedNote>()
         for (slot in slots(query)) {
             val owner = ownerOf(query, slot, profile)
+            // This person's saves aren't taken here (Settings, Fuse Sync, Saves on this device).
+            if (!takesFrom(owner)) continue
             val result = runCatching { d.converge(c, owner, slot) }.getOrNull() ?: continue
             if (result is PrepareResult.Updated) log("${query.title}: the newest save from ${result.revision.deviceName} is in place", query.game.id, "save")
             d.appliedNote(owner, slot, result, clock())?.let(notes::add)
         }
         runCatching { c.noteApplied(notes) }
+    }
+
+    override suspend fun householdServices(): HouseholdShared? = withContext(Dispatchers.IO) {
+        val c = client ?: return@withContext null
+        runCatching { c.services() }.getOrNull()?.let { (s, open) -> HouseholdShared(s, open) }
+    }
+
+    override suspend fun shareServices(romm: ServiceAddress?, jellyfin: ServiceAddress?, signIns: Map<String, String>, declined: Boolean): Boolean = withContext(Dispatchers.IO) {
+        val c = client ?: return@withContext false
+        runCatching { c.shareServices(romm, jellyfin, signIns, declined) }.getOrDefault(false)
     }
 
     override suspend fun convergence(game: GameKey): Convergence? = withContext(Dispatchers.IO) {
@@ -454,7 +484,11 @@ class JvmSyncService(
         }
         if (sent > 0) log(if (sent == 1) "Sent 1 change to $name" else "Sent $sent changes to $name")
         _status.value = SyncStatus.Online(name, c.route ?: Route.LOCAL, working = false, pending = d.pendingCount)
+        _rounds.update { it + 1 }
     }
+
+    private val _rounds = MutableStateFlow(0)
+    override val rounds: StateFlow<Int> = _rounds.asStateFlow()
 
     /** Sends what is queued (saves included) without bringing anything in. */
     private suspend fun sendWaiting() = work.withLock {
@@ -1454,6 +1488,8 @@ class JvmSyncService(
             val owner = ownerOf(query, slot, profile)
             runCatching { d.handover(owner, slot, { who -> if (who == SHARED_SAVES) 0L else canonical(d.meta(who)).game(query.game).totalSeconds }, File(File(dir, KEPT_DIR), REMOVED_DIR)) }
                 .onFailure { log("${query.title}: couldn't swap in this person's save (${it.message})", query.game.id, "save") }
+            // This person's saves aren't taken here: the game starts with the save this device has.
+            if (!takesFrom(owner)) continue
             if (c == null) {
                 // Without a host there is nothing to be offline from.
                 if (!keepsOwn) note = note ?: "Fuse Sync is offline: playing with this device's save"
@@ -1520,13 +1556,13 @@ class JvmSyncService(
             learnFromPlay(d, query)
             val c = liveLock.withLock {
                 val here = slots(query)
-                val captured = here.mapNotNull { slot ->
+                val captured = here.filter { sendsFor(ownerOf(query, it, profile)) }.mapNotNull { slot ->
                     runCatching { d.capture(ownerOf(query, slot, profile), slot, total, title = query.title) }.getOrNull()
                         ?.also { log("${query.title}: new ${it.kind.label.lowercase()} kept", query.game.id, "save") }
                 }
                 // Never silent: a save that couldn't be kept says why, once per game while Fuse runs
                 // (only with a host: without one, nothing is sent anywhere).
-                if (!keepsOwn && captured.none { it.kind != SaveKind.STATE }) whyNotKept(query, here)?.let { why ->
+                if (!keepsOwn && here.any { sendsFor(ownerOf(query, it, profile)) } && captured.none { it.kind != SaveKind.STATE }) whyNotKept(query, here)?.let { why ->
                     if (explained.add("${query.game.id}|$why")) {
                         log("${query.title}: save not sent. $why", query.game.id, "save")
                         _notices.tryEmit(SyncNotice.NotSynced(query.title, SaveKind.SAVE, why))
@@ -1696,7 +1732,7 @@ class JvmSyncService(
         val d = device ?: return
         val played = ((clock() - startedAt) / 1000).coerceAtLeast(0)
         val total = canonical(d.meta(profile)).game(query.game).totalSeconds + played
-        val captured = slots(query).mapNotNull { slot -> runCatching { d.capture(ownerOf(query, slot, profile), slot, total, title = query.title) }.getOrNull() }
+        val captured = slots(query).filter { sendsFor(ownerOf(query, it, profile)) }.mapNotNull { slot -> runCatching { d.capture(ownerOf(query, slot, profile), slot, total, title = query.title) }.getOrNull() }
         if (captured.isEmpty()) return
         log("${query.title}: new ${captured.first().kind.label.lowercase()} kept while playing", query.game.id, "save")
         val c = client ?: return

@@ -90,7 +90,7 @@ class JellyfinTest {
         JellyfinService(JellyfinClient(server.http, device), secrets, scope)
 
     @Test
-    fun signingInKeepsTheTokenNeverThePasswordAndSaysWhoIsAsking() = runTest {
+    fun signingInKeepsTheTokenAndTheSignInOnlyInTheSecretStoreAndSaysWhoIsAsking() = runTest {
         val server = FakeServer()
         val secrets = MemorySecrets()
         val scope = CoroutineScope(SupervisorJob())
@@ -99,7 +99,9 @@ class JellyfinTest {
         val account = s.signIn("pat", "secret-pw").getOrThrow()
         assertEquals("tok123", account.token)
         assertEquals("tok123", secrets.map[JellyfinService.TOKEN])
-        assertFalse(secrets.map.values.any { "secret-pw" in it }, "the password must never be kept")
+        // The sign-in itself is kept only for the household's other devices, in the secret store, under its own key.
+        assertEquals("pat\nsecret-pw", secrets.map[JellyfinService.LOGIN])
+        assertFalse(secrets.map.filterKeys { it != JellyfinService.LOGIN }.values.any { "secret-pw" in it }, "the password is kept nowhere else")
         val auth = server.requests.first { it.url.encodedPath.endsWith("AuthenticateByName") }
         assertEquals("https", auth.url.protocol.name)
         val header = auth.headers[HttpHeaders.Authorization]!!
@@ -377,6 +379,48 @@ class JellyfinTest {
         assertTrue(secrets.map.isEmpty())
         // Only one attempt: the right server said no, so no other address is tried.
         assertEquals(1, server.requests.count { it.url.encodedPath.endsWith("AuthenticateByName") })
+        scope.cancel()
+    }
+
+    @Test
+    fun eachPersonHasTheirOwnAccountOnTheSameServer() = runTest {
+        val server = FakeServer()
+        server.routes = { r ->
+            if (r.url.encodedPath.endsWith("AuthenticateByName") && "\"Username\":\"mo\"" in (r.body as TextContent).text) {
+                200 to """{"User":{"Id":"u2","Name":"mo"},"AccessToken":"tok-mo","ServerId":"srv1"}"""
+            } else {
+                null
+            }
+        }
+        val secrets = MemorySecrets()
+        val scope = CoroutineScope(SupervisorJob())
+        val s = service(server, secrets, scope)
+        s.configure(true, JellyfinConnection(ConnectionMode.REMOTE, remoteAddress = "media.example.com"))
+        // This device's account, from before profiles had their own.
+        s.signIn("pat", "pw").getOrThrow()
+
+        // Mo uses it until signing in as themselves; then theirs is used, and kept apart.
+        s.useProfile("mo-id")
+        assertEquals("u1", s.state.value.account?.userId)
+        assertFalse(s.state.value.own)
+        s.signIn("mo", "mo-pw").getOrThrow()
+        assertEquals("u2", s.state.value.account?.userId)
+        assertTrue(s.state.value.own && s.hasOwnAccount())
+        assertEquals("mo" to "mo-pw", s.keptLoginFor("mo-id"))
+        assertEquals("tok123", secrets.map[JellyfinService.TOKEN])
+
+        // Someone else on this device gets the device's account; back to Mo, Mo's.
+        s.useProfile("sam-id")
+        assertEquals("u1", s.state.value.account?.userId)
+        s.useProfile("mo-id")
+        assertEquals("u2", s.state.value.account?.userId)
+
+        // Mo signs out of their own: back on this device's account, which stays, and their shared sign-in isn't used again by itself.
+        s.signOut()
+        assertEquals("u1", s.state.value.account?.userId)
+        assertTrue(s.signedOutHere())
+        assertEquals(null, s.keptLoginFor("mo-id"))
+        assertEquals("tok123", secrets.map[JellyfinService.TOKEN])
         scope.cancel()
     }
 }

@@ -1,36 +1,47 @@
-# Fuse 0.3.6.2 - The Unity Update
+# Fuse 0.3.6.3 - The Unity Update
 
-Your RomM games, as much Fuse games as the ones on this device: the same art and details from your
-own sources, kept for good, editable, and a RomM tab that looks the part.
+Sign in to Fuse Sync and the rest comes with it: your household's RomM and Jellyfin, each person
+with their own Jellyfin account, and a say in whose saves move on each device.
 
 ## New
 
-- **RomM games get Fuse's art and details.** Games on your server that aren't on this device are
-  looked up with your own sources in your own order (SteamGridDB, IGDB, TheGamesDB and the rest,
-  whatever you have set up), the games you can see first. Their box art, icons, heroes, logos and
-  details are kept, so they are there at once next time and never looked for twice.
-- **Not on RomM.** A shelf under Systems on the RomM tab lists the games in your library your RomM
-  server hasn't got, with how many there are; each one's options include Upload to RomM. It shows
-  once Fuse has read the whole server's library, so nothing is listed only because it wasn't read
-  yet.
-- **Edit them like any game.** A RomM game's options and page offer Manage Media, Find Details and
-  Art, Rename Display Title and Reset Name and Details, as for a game on this device.
+- **RomM and Jellyfin come with Fuse Sync.** A device signed in to RomM or Jellyfin shares the
+  addresses and its sign-ins with your household, and a device without them gets them: join a host
+  and RomM and Jellyfin are there too, signed in. Sign-ins are sealed for each device on the way,
+  kept sealed on the host with a key only the host has, and kept on each device only in Fuse's
+  secure storage, never in its database, logs, diagnostics or exports. A device that already has
+  its own server or sign-in keeps it. Settings, Fuse Sync, Share Sign-ins turns it off for a device.
+- **Asked once, when you update.** Devices already in a household when they update aren't changed
+  by themselves: the first one with RomM or Jellyfin set up asks whether to share its sign-ins from
+  there. Yes shares them; Not From This Device leaves the question to the next device that updates.
+  Once one device has shared, the others come along without asking, and devices joining from now on
+  just share.
+- **Each person's own Jellyfin account.** Everyone can sign in to the same Jellyfin server as
+  themselves, so what they watch, resume and mark stays theirs. Switching profiles switches the
+  account; someone without their own uses the device's until they sign in. Settings, Addons,
+  Jellyfin shows whose account is in use and offers Use Mo's own account.
+- **Don't Take Saves From.** Settings, Fuse Sync can keep chosen people's saves from coming to a
+  device (a child's handheld that never takes a grown-up's saves). That device still sends theirs.
+- **Don't Sync Saves For.** Chosen people's saves on a device stay on it: nothing comes in and
+  nothing goes out. Play time and the library still sync for both.
 
 ## Changed
 
-- **Box art, not RomM's posters.** RomM games now show the box art Fuse found, like every other
-  game; RomM's own cover is only used when nothing else was found. Posters still show everywhere
-  when Posters is chosen in Settings, Appearance.
-- **The RomM tab looks the part.** The tab is called RomM. Its line names the server with a few
-  quiet facts (home or away, games, systems, how many are downloaded), the chosen game or system
-  fills the room behind the page, the chosen game is named under its shelf with its system, year and
-  whether it is downloaded, and collections lift when chosen like every other tile.
-- **Systems on the RomM tab show the server's count**, with how many of them are downloaded under
-  each, instead of the library's count beside a "1 of 1 here".
-- Bringing in only what changed on the server no longer shows a count like "1 of 1".
+- **Fuse Sync comes first in setup's connections**, right after BIOS and before RomM and Jellyfin,
+  so joining a household fills those steps in.
+- **The grand welcome, the first time anyone plays here.** The fuse that burns in and lights your
+  avatar now plays for every new profile, and the first time someone signs in to their profile on a
+  device, not only for the first profile ever made there. Devices that updated don't replay it for
+  the people already playing on them.
+- **Motion follows the device.** Motion on Automatic (until now Theme default) matches the effects
+  setup recommends for the device and the Performance choice: Minimal for light effects, Standard
+  for balanced, Enhanced for high quality. Setup's device step names both, and Settings,
+  Appearance, Motion shows what Automatic is on this device. A calm theme stays calm, and a level
+  you chose is kept.
+- Jellyfin keeps your user name and password in Fuse's secure storage after signing in (it used to
+  keep only the server's token), so your household's other devices can sign in as you. Signing out
+  forgets both.
 
 ## Fixed
 
-- The chosen tile on the RomM tab covered the title of its shelf.
-- Systems you only have on RomM (PS4, PS5, Vita, Wii, Wii U, Xbox and others) had no art and showed
-  a plain coloured tile; they now get Fuse's system art and colour like the library's systems.
+Nothing this time: this release adds and changes.

@@ -34,6 +34,8 @@ data class JellyfinState(
     val serverName: String? = null,
     val serverVersion: String? = null,
     val checking: Boolean = false,
+    /** The account is the profile in use's own, not this device's shared one. */
+    val own: Boolean = false,
 )
 
 /** The addresses and mode from Settings, Addons, Jellyfin. */
@@ -47,7 +49,8 @@ data class JellyfinConnection(
 data class DiscoveredServer(val name: String, val address: String, val id: String?)
 
 /**
- * Jellyfin for the rest of Fuse: signing in (the token in the secret store, the password never),
+ * Jellyfin for the rest of Fuse: signing in (the token and, for the household's other devices,
+ * the sign-in itself, only ever in the secret store),
  * reaching the server the right way (on the home network when it can, else from outside, and back
  * home when home returns, never mid-stream), and the media calls the screens make, with answers
  * kept for working offline. When Jellyfin is off in Settings nothing here runs or asks anything.
@@ -164,9 +167,10 @@ class JellyfinService(
                     val signed = client.signIn(base, username, password)
                     val account = signed.copy(serverName = info.name, serverId = signed.serverId ?: info.id)
                     saveAccount(account)
+                    rememberLogin(username, password)
                     lastBase = base
                     secrets.put(LAST_BASE, base)
-                    stateFlow.update { it.copy(account = account, route = route, base = base, offline = false, authRequired = false, serverName = info.name, serverVersion = info.version) }
+                    stateFlow.update { it.copy(account = account, route = route, base = base, offline = false, authRequired = false, serverName = info.name, serverVersion = info.version, own = profile != null) }
                     cache.clear()
                     revisionFlow.update { it + 1 }
                     return@runCatching account
@@ -185,10 +189,21 @@ class JellyfinService(
         val a = s.account
         val b = s.base
         if (a != null && b != null) client.signOut(b, a)
-        for (k in listOf(TOKEN, USER_ID, USER_NAME, SERVER_ID, SERVER_NAME, LAST_BASE)) secrets.remove(k)
-        lastBase = null
+        // Only the account in use goes: the person's own, or this device's when they were using it.
+        val own = s.own
+        val keyOf: (String) -> String = if (own) ::key else { k -> k }
+        for (k in listOf(TOKEN, USER_ID, USER_NAME, SERVER_ID, SERVER_NAME)) secrets.remove(keyOf(k))
+        secrets.remove(keyOf(LOGIN))
+        // Signed out on purpose: the household's sign-in isn't brought back by itself.
+        secrets.put(key(LEFT), "1")
+        if (!own) {
+            secrets.remove(LAST_BASE)
+            lastBase = null
+        }
         cache.clear()
-        stateFlow.update { JellyfinState(enabled = it.enabled) }
+        stateFlow.update { JellyfinState(enabled = it.enabled, route = it.route, base = it.base, serverName = it.serverName, serverVersion = it.serverVersion) }
+        // A person who signed out of their own account is back on this device's, if it has one.
+        if (own) loadAccount()
         revisionFlow.update { it + 1 }
     }
 
@@ -297,19 +312,67 @@ class JellyfinService(
 
     private suspend fun loadAccount() {
         lastBase = lastBase ?: secrets.get(LAST_BASE)
-        val token = secrets.get(TOKEN) ?: return
-        val userId = secrets.get(USER_ID) ?: return
-        val a = Account(secrets.get(SERVER_ID), secrets.get(SERVER_NAME), userId, secrets.get(USER_NAME), token)
-        stateFlow.update { it.copy(account = a, serverName = a.serverName ?: it.serverName) }
+        // The person's own account on the server, else this device's (as before profiles had their own).
+        val own = profile != null && secrets.get(key(TOKEN)) != null
+        val scope = if (own) ::key else { k: String -> k }
+        val token = secrets.get(scope(TOKEN)) ?: return
+        val userId = secrets.get(scope(USER_ID)) ?: return
+        val a = Account(secrets.get(scope(SERVER_ID)), secrets.get(scope(SERVER_NAME)), userId, secrets.get(scope(USER_NAME)), token)
+        stateFlow.update { it.copy(account = a, serverName = a.serverName ?: it.serverName, own = own) }
     }
 
     private suspend fun saveAccount(a: Account) {
-        secrets.put(TOKEN, a.token)
-        secrets.put(USER_ID, a.userId)
-        a.userName?.let { secrets.put(USER_NAME, it) }
-        a.serverId?.let { secrets.put(SERVER_ID, it) }
-        a.serverName?.let { secrets.put(SERVER_NAME, it) }
+        secrets.remove(key(LEFT))
+        secrets.put(key(TOKEN), a.token)
+        secrets.put(key(USER_ID), a.userId)
+        a.userName?.let { secrets.put(key(USER_NAME), it) }
+        a.serverId?.let { secrets.put(key(SERVER_ID), it) }
+        a.serverName?.let { secrets.put(key(SERVER_NAME), it) }
     }
+
+    /** The profile whose Jellyfin account is in use; null for this device's own. */
+    @kotlin.concurrent.Volatile
+    var profile: String? = null
+        private set
+
+    /** [base] for the profile in use: each person's account is kept apart on one server. */
+    private fun key(base: String): String = profile?.let { "$base.p.$it" } ?: base
+
+    /**
+     * Uses [id]'s own Jellyfin account on the same server (this device's own when they have none
+     * yet): what plays, resumes and is marked watched is theirs. Kept answers from the last
+     * account are forgotten; the next page asks again.
+     */
+    suspend fun useProfile(id: String?) {
+        if (id == profile) return
+        profile = id
+        cache.clear()
+        stateFlow.update { it.copy(account = null, authRequired = false, own = false) }
+        loadAccount()
+        revisionFlow.update { it + 1 }
+    }
+
+    /** Whether the profile in use has its own account here (not this device's shared one). */
+    suspend fun hasOwnAccount(): Boolean = profile != null && secrets.get(key(TOKEN)) != null
+
+    /**
+     * The sign-in to keep for the profile in use so the household's other devices can sign in as
+     * them too ([rememberLogin]); null when none was kept. Only ever in the secret store.
+     */
+    suspend fun keptLogin(): Pair<String, String>? = secrets.get(key(LOGIN))?.let { v ->
+        v.substringBefore('\n').ifEmpty { null }?.let { it to v.substringAfter('\n') }
+    }
+
+    /** The sign-in kept for [profileId] on this device (see [keptLogin]), whichever profile is in use. */
+    suspend fun keptLoginFor(profileId: String): Pair<String, String>? = secrets.get("$LOGIN.p.$profileId")?.let { v ->
+        v.substringBefore('\n').ifEmpty { null }?.let { it to v.substringAfter('\n') }
+    }
+
+    /** Whether the profile in use signed out here on purpose (so a shared sign-in isn't used again by itself). */
+    suspend fun signedOutHere(): Boolean = secrets.get(key(LEFT)) != null
+
+    /** Keeps the profile in use's [username] and [password] in the secret store, for sharing with the household. */
+    suspend fun rememberLogin(username: String, password: String) = secrets.put(key(LOGIN), username + "\n" + password)
 
     // Media -----------------------------------------------------------------------------------------
 
@@ -472,6 +535,9 @@ class JellyfinService(
 
         /** The last address that answered (not a secret; kept beside the account so it goes with it). */
         const val LAST_BASE = "jellyfin.lastBase"
+        /** A profile's username and password, kept only to share with the household's devices (secret store only). */
+        const val LOGIN = "jellyfin.login"
+        const val LEFT = "jellyfin.signedOut"
 
         const val PAGE = 60
         private const val FRESH_MS = 60_000L

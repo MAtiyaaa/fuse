@@ -130,6 +130,21 @@ data class SyncSettings(
     val hostPort: Int = 47311,
     /** Where the host keeps everyone's saves and profiles; empty is Fuse's own data folder. */
     val hostDataDir: String = "",
+    /** Profiles whose saves this device never brings in (it still sends theirs). This device's own choice. */
+    val noPullProfiles: List<String> = emptyList(),
+    /** Profiles whose saves never move on this device, either way. This device's own choice. */
+    val noSyncProfiles: List<String> = emptyList(),
+    /** RomM and Jellyfin sign-ins go to and come from the household (sealed, never in plain text). */
+    val shareSignIns: Boolean = true,
+    /**
+     * How [shareSignIns] was decided: "" not yet (a device that updated with Fuse Sync already set
+     * up, asked once), "AUTO" (joined on this version, or the household already shares), "YES" or "NO".
+     */
+    val signInsChoice: String = "",
+    /** Profiles that have had their welcome on this device: the first time someone plays here, they get the grand one. */
+    val welcomedProfiles: List<String> = emptyList(),
+    /** [welcomedProfiles] was started (with everyone already playing here on a device that updated). */
+    val welcomedSeeded: Boolean = false,
 )
 
 /**

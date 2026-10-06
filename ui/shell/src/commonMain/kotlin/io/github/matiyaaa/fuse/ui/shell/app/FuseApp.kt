@@ -39,6 +39,7 @@ import io.github.matiyaaa.fuse.model.ScopedSettings
 import io.github.matiyaaa.fuse.ui.designsystem.background.AmbientBackground
 import io.github.matiyaaa.fuse.ui.designsystem.background.CrtOverlay
 import io.github.matiyaaa.fuse.ui.designsystem.components.HintBar
+import io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction
 import io.github.matiyaaa.fuse.ui.designsystem.components.ToastHost
 import io.github.matiyaaa.fuse.ui.designsystem.components.ToastKind
 import io.github.matiyaaa.fuse.ui.designsystem.components.rememberHintFlash
@@ -118,6 +119,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 /**
@@ -217,8 +219,11 @@ private fun FuseAppContent(
     val drawing by platform.drawing.collectAsState()
     val cpuDrawing = drawing?.gpu == false
     val quality = RenderQuality.of(prefs.performance, platform.device, prefs.lowPower || cpuDrawing)
-    val motionProfile = (prefs.motion ?: spec.motion).let { m ->
-        if (cpuDrawing && m.ordinal > io.github.matiyaaa.fuse.model.MotionProfile.MINIMAL.ordinal) io.github.matiyaaa.fuse.model.MotionProfile.MINIMAL else prefs.motion
+    // Motion on Automatic follows the effects this device gets (setup's recommendation, or the
+    // Performance choice); a level the person picked is kept, except calmer when drawn without the graphics card.
+    val recommendedMotion = io.github.matiyaaa.fuse.model.recommendedMotion(prefs.performance, platform.device, prefs.lowPower || cpuDrawing)
+    val motionProfile = (prefs.motion ?: io.github.matiyaaa.fuse.model.automaticMotion(spec.motion, recommendedMotion)).let { m ->
+        if (cpuDrawing && m > io.github.matiyaaa.fuse.model.MotionProfile.MINIMAL) io.github.matiyaaa.fuse.model.MotionProfile.MINIMAL else m
     }
     val lastSource by router.lastSource.collectAsState()
     val padFamily by router.padFamily.collectAsState()
@@ -487,6 +492,40 @@ private fun FuseAppContent(
         LaunchedEffect(stState) { if (stState is io.github.matiyaaa.fuse.sync.syncthing.SyncthingState.Connected) app.awaitingSyncthing = false }
     }
     LaunchedEffect(Unit) { (store.offlineMedia as? io.github.matiyaaa.fuse.ui.shell.store.impl.DefaultOfflineMedia)?.notices?.collect { app.toasts.show(it) } }
+    // A device set up with Fuse Sync before it updated is asked once whether its sign-ins go to the
+    // household (devices joining now just share). Not now leaves it to the next device that updates.
+    val askSignIns by store.sync.signInsAsk.collectAsState()
+    LaunchedEffect(askSignIns) {
+        if (!askSignIns) return@LaunchedEffect
+        snapshotFlow { app.overlayOpen }.first { !it }
+        if (!store.sync.signInsAsk.value) return@LaunchedEffect
+        fun answer(share: Boolean) {
+            app.choice = null
+            app.scope.launch {
+                store.sync.answerSignIns(share)
+                if (share) app.toasts.show("Sharing RomM and Jellyfin with your household", ToastKind.SUCCESS, icon = FuseIcons.Key)
+                else app.toasts.show("Not shared from this device. You can turn it on in Settings, Fuse Sync", icon = FuseIcons.Key)
+            }
+        }
+        app.choice = ChoiceSpec(
+            "Share your sign-ins?",
+            "Fuse Sync can now bring RomM and Jellyfin to every device in your household, with each person's own Jellyfin account. " +
+                "Share them from this device and your others sign in by themselves. They are sealed for each device and never kept in plain text.",
+            listOf(
+                MenuAction(
+                    "yes", "Share From This Device", FuseIcons.Key,
+                    detail = "RomM's addresses and sign-in, Jellyfin's addresses and each person's account",
+                    onSelect = { answer(true) },
+                ),
+                MenuAction(
+                    "no", "Not From This Device", FuseIcons.CircleSlash,
+                    detail = "The next device that updates is asked instead",
+                    onSelect = { answer(false) },
+                ),
+            ),
+            icon = FuseIcons.Users,
+        )
+    }
 }
 
 /** The background: theme renderer, then the selected item's art with video after it rests. */

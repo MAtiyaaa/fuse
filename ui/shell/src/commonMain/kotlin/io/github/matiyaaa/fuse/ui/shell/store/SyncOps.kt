@@ -41,6 +41,19 @@ interface SyncOps {
     suspend fun setSaveFolder(emulator: String, path: String?) =
         configure { s -> s.copy(saveFolders = if (path.isNullOrBlank()) s.saveFolders - emulator else s.saveFolders + (emulator to path)) }
 
+    /**
+     * True while this device, set up with Fuse Sync before it updated, should be asked once whether
+     * to share its RomM and Jellyfin sign-ins with the household (see [answerSignIns]).
+     */
+    val signInsAsk: StateFlow<Boolean> get() = NeverAsk
+
+    /** The answer: yes shares from here now; no leaves the question to the next device that updates. */
+    suspend fun answerSignIns(share: Boolean) = Unit
+
+    /** Settings, Fuse Sync, Share Sign-ins: RomM and Jellyfin go to and come from the household, or not. */
+    suspend fun setShareSignIns(on: Boolean) =
+        configure { it.copy(shareSignIns = on, signInsChoice = it.signInsChoice.ifEmpty { if (on) "YES" else "NO" }) }
+
     object None : SyncOps {
         override val service: SyncService? = null
         override val config: StateFlow<SyncSettings> = MutableStateFlow(SyncSettings())
@@ -49,3 +62,5 @@ interface SyncOps {
         override suspend fun setOwnHome(own: Boolean) = Unit
     }
 }
+
+private val NeverAsk: StateFlow<Boolean> = MutableStateFlow(false)

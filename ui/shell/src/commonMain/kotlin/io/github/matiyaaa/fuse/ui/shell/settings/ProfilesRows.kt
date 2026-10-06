@@ -139,7 +139,7 @@ private fun profileMenu(app: AppState, svc: SyncService, p: ProfileInfo, active:
                 // A PIN is typed on Who's playing?'s own pad; without one, they arrive at once.
                 if (p.protected) app.whoAreYou = WhoMode.SWITCH
                 else app.scope.launch {
-                    svc.switchTo(p.id).onSuccess { app.profileArrival = p }.onFailure { app.toasts.show(it.message ?: "Couldn't switch profiles", ToastKind.ERROR) }
+                    svc.switchTo(p.id).onSuccess { io.github.matiyaaa.fuse.ui.shell.sync.arrive(app, p) }.onFailure { app.toasts.show(it.message ?: "Couldn't switch profiles", ToastKind.ERROR) }
                 }
             }).takeIf { p.id != active?.id },
             MenuAction("up", "Move Up", FuseIcons.ArrowUp, onSelect = { move(at - 1) }).takeIf { at > 0 },
