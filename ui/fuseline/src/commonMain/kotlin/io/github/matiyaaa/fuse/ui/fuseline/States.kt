@@ -38,6 +38,9 @@ fun <T> fuselineValueAsState(
     LaunchedEffect(targets) {
         for (target in targets) {
             val newest = targets.tryReceive().getOrNull() ?: target
+            // A spring under way takes the new target in place (Fuseline 2): no new move.
+            val motion = spec
+            if (newest != value.targetValue && motion is Spring && value.retarget(newest, motion)) continue
             launch {
                 if (newest != value.targetValue) {
                     value.animateTo(newest, spec)

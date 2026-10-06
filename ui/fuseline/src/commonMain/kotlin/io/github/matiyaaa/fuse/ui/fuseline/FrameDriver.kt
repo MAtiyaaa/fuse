@@ -23,23 +23,36 @@ import kotlin.coroutines.resume
  */
 internal class FrameDriver private constructor(private val clock: MonotonicFrameClock) {
 
-    private class Move(
-        val durationNanos: Long,
+    private inner class Move(
+        var durationNanos: Long,
         val scale: Float,
         val onFrame: (playNanos: Long) -> Unit,
         val waiting: CancellableContinuation<Unit>,
-    ) {
+    ) : Retimer {
         var start = Long.MIN_VALUE
         var gone = false
+
+        /**
+         * Plays again for [durationNanos] from the frame just shown (where its value is now), keeping
+         * its place among the moves: the next frame is one frame into the new motion, never a pause.
+         */
+        override fun retime(durationNanos: Long) {
+            this.durationNanos = durationNanos
+            start = if (start == Long.MIN_VALUE) Long.MIN_VALUE else lastFrame
+        }
     }
 
     private val moves = ArrayList<Move>()
     private var running = false
 
+    /** The time of the frame last stepped. */
+    private var lastFrame = Long.MIN_VALUE
+
     /** Steps [onFrame] on every frame until [durationNanos] has played (scaled by [scale]), then returns. */
-    suspend fun run(context: CoroutineContext, durationNanos: Long, scale: Float, onFrame: (Long) -> Unit) {
+    suspend fun run(context: CoroutineContext, durationNanos: Long, scale: Float, onStart: ((Retimer) -> Unit)?, onFrame: (Long) -> Unit) {
         suspendCancellableCoroutine { waiting ->
             val move = Move(durationNanos, scale, onFrame, waiting)
+            onStart?.invoke(move)
             moves += move
             waiting.invokeOnCancellation { move.gone = true }
             if (!running) start(context)
@@ -69,6 +82,7 @@ internal class FrameDriver private constructor(private val clock: MonotonicFrame
 
     /** One frame: every move steps; the ones that arrived carry on with the frames after. */
     private fun step(frameNanos: Long) {
+        lastFrame = frameNanos
         val count = moves.size
         var kept = 0
         for (i in 0 until count) {
@@ -95,4 +109,12 @@ internal class FrameDriver private constructor(private val clock: MonotonicFrame
         /** The driver for [clock], made when the first move on it starts. */
         fun of(clock: MonotonicFrameClock): FrameDriver = drivers.getOrPut(clock) { FrameDriver(clock) }
     }
+}
+
+/**
+ * A move under way that can be given a new length and started again from its next frame, in place:
+ * how a spring takes a new target without a new move (see [FuselineValue.retarget]).
+ */
+internal fun interface Retimer {
+    fun retime(durationNanos: Long)
 }
