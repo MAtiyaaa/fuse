@@ -156,7 +156,7 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
         ))
         add(Step(
             "device", "This device", "Tuned for this device",
-            "Fuse looked at this device to pick how rich the effects can be without slowing anything down. You can change it at the end.",
+            "Fuse looked at this device to pick how rich the effects and motion can be without slowing anything down. You can change it at the end.",
             icon = FuseIcons.Gauge, chapter = Chapters.START,
             actions = listOf(StepAction("Continue", primary = true, run = next)),
             content = { DeviceCard(cap) },
@@ -378,6 +378,71 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
         ))
 
         // ----------------------------------------------------------------------------- connect
+        // Keeping saves in step: Fuse Sync (the one Fuse recommends), Syncthing for people who run it, or neither.
+        // First of the connections: signing in to a household brings its RomM and Jellyfin along,
+        // so the steps after it show them connected.
+        val syncthing = store.syncthing
+        val sync = store.sync.service
+        if (sync != null || syncthing != null) {
+            val syncOn = prefs.sync.enabled && prefs.sync.role.isNotEmpty()
+            val syncthingOn = syncthingState != null && syncthingState !is io.github.matiyaaa.fuse.sync.syncthing.SyncthingState.Off
+            fun setUp(host: Boolean) {
+                if (!live) { next(); return }
+                app.scope.launch { store.sync.setEnabled(true) }
+                app.go(Route.SyncSetup(host))
+            }
+            fun useFuseSync() {
+                if (sync == null) return
+                if (!sync.canHost) { setUp(host = false); return }
+                app.choice = io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec(
+                    title = "Fuse Sync", icon = FuseIcons.RefreshCcw,
+                    message = "One computer at home keeps everything; every other device connects to it.",
+                    options = listOf(
+                        MenuAction("host", "Make This the Host", FuseIcons.Server, detail = "This device keeps everyone's saves and settings", onSelect = { app.choice = null; setUp(host = true) }),
+                        MenuAction("connect", "Connect to a Host", FuseIcons.Link2, detail = "Another device already keeps them", onSelect = { app.choice = null; setUp(host = false) }),
+                    ),
+                )
+            }
+            fun useSyncthing() {
+                if (syncthing == null) return
+                if (!live) { next(); return }
+                io.github.matiyaaa.fuse.ui.shell.sync.useSyncthing(app, syncthing, true)
+                app.go(Route.SyncthingSettings)
+            }
+            add(Step(
+                "sync", "Every device",
+                when {
+                    syncOn -> "Fuse Sync is on"
+                    syncthingOn -> "Syncthing is on"
+                    else -> "Play on, anywhere"
+                },
+                when {
+                    syncOn -> "Your saves, play time, favourites and settings stay the same on every device, kept by ${prefs.sync.hostName.ifBlank { "your host" }}. RomM and Jellyfin come along when your household shares them."
+                    syncthingOn -> "Fuse shares your emulators' save folders through Syncthing, brings in the newest save before a game, and asks when two devices both played."
+                    syncthing == null -> "Fuse Sync by Fuse keeps your saves, play time, favourites and settings the same on every device you play on, from a computer of your own at home. Stop on the PC, carry on on the handheld, and joining brings your household's RomM and Jellyfin too. One device? Skip this; it waits in Settings, Addons."
+                    else -> "Stop on the PC, carry on on the handheld. Fuse Sync is Fuse's own, and the one we recommend: it knows each game, adds up play time, gives each person their own saves, and brings your household's RomM and Jellyfin along. Already run Syncthing? Fuse can use it for your save folders instead, with one save per game for everyone. One device? Skip; both wait in Settings, Addons."
+                },
+                optional = true, icon = FuseIcons.RefreshCcw, chapter = Chapters.CONNECT,
+                actions = if (syncOn || syncthingOn) {
+                    listOf(StepAction("Continue", primary = true, run = next))
+                } else if (syncthing == null) {
+                    listOfNotNull(
+                        StepAction("Make This the Host", primary = true) { setUp(host = true) }.takeIf { sync?.canHost == true },
+                        StepAction("Connect to a Host", primary = sync?.canHost != true) { setUp(host = false) },
+                        StepAction("Skip", run = next),
+                    )
+                } else {
+                    listOfNotNull(
+                        StepAction("Use Fuse Sync", primary = true) { useFuseSync() }.takeIf { sync != null },
+                        StepAction("Use Syncthing", primary = sync == null) { useSyncthing() },
+                        StepAction("Skip", run = next),
+                    )
+                },
+                content = {
+                    if (syncthing == null) SyncStage(on = syncOn) else SyncChoiceStage(fuseSync = syncOn, syncthing = syncthingOn, hasFuseSync = sync != null)
+                },
+            ))
+        }
         val cartridgeHere = platform.features.cartridge
         val rommHere = store.romm.supported
         val rommConnected = prefs.romm.enabled && prefs.romm.configured
@@ -489,69 +554,6 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
             },
             content = { JellyfinStage(connected = jellyfinAccount != null, server = jellyfinAccount?.serverName) },
         ))
-        // Keeping saves in step: Fuse Sync (the one Fuse recommends), Syncthing for people who run it, or neither.
-        val syncthing = store.syncthing
-        val sync = store.sync.service
-        if (sync != null || syncthing != null) {
-            val syncOn = prefs.sync.enabled && prefs.sync.role.isNotEmpty()
-            val syncthingOn = syncthingState != null && syncthingState !is io.github.matiyaaa.fuse.sync.syncthing.SyncthingState.Off
-            fun setUp(host: Boolean) {
-                if (!live) { next(); return }
-                app.scope.launch { store.sync.setEnabled(true) }
-                app.go(Route.SyncSetup(host))
-            }
-            fun useFuseSync() {
-                if (sync == null) return
-                if (!sync.canHost) { setUp(host = false); return }
-                app.choice = io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec(
-                    title = "Fuse Sync", icon = FuseIcons.RefreshCcw,
-                    message = "One computer at home keeps everything; every other device connects to it.",
-                    options = listOf(
-                        MenuAction("host", "Make This the Host", FuseIcons.Server, detail = "This device keeps everyone's saves and settings", onSelect = { app.choice = null; setUp(host = true) }),
-                        MenuAction("connect", "Connect to a Host", FuseIcons.Link2, detail = "Another device already keeps them", onSelect = { app.choice = null; setUp(host = false) }),
-                    ),
-                )
-            }
-            fun useSyncthing() {
-                if (syncthing == null) return
-                if (!live) { next(); return }
-                io.github.matiyaaa.fuse.ui.shell.sync.useSyncthing(app, syncthing, true)
-                app.go(Route.SyncthingSettings)
-            }
-            add(Step(
-                "sync", "Every device",
-                when {
-                    syncOn -> "Fuse Sync is on"
-                    syncthingOn -> "Syncthing is on"
-                    else -> "Play on, anywhere"
-                },
-                when {
-                    syncOn -> "Your saves, play time, favourites and settings stay the same on every device, kept by ${prefs.sync.hostName.ifBlank { "your host" }}."
-                    syncthingOn -> "Fuse shares your emulators' save folders through Syncthing, brings in the newest save before a game, and asks when two devices both played."
-                    syncthing == null -> "Fuse Sync by Fuse keeps your saves, play time, favourites and settings the same on every device you play on, from a computer of your own at home. Stop on the PC, carry on on the handheld. One device? Skip this; it waits in Settings, Addons."
-                    else -> "Stop on the PC, carry on on the handheld. Fuse Sync is Fuse's own, and the one we recommend: it knows each game, adds up play time and gives each person their own saves. Already run Syncthing? Fuse can use it for your save folders instead, with one save per game for everyone. One device? Skip; both wait in Settings, Addons."
-                },
-                optional = true, icon = FuseIcons.RefreshCcw, chapter = Chapters.CONNECT,
-                actions = if (syncOn || syncthingOn) {
-                    listOf(StepAction("Continue", primary = true, run = next))
-                } else if (syncthing == null) {
-                    listOfNotNull(
-                        StepAction("Make This the Host", primary = true) { setUp(host = true) }.takeIf { sync?.canHost == true },
-                        StepAction("Connect to a Host", primary = sync?.canHost != true) { setUp(host = false) },
-                        StepAction("Skip", run = next),
-                    )
-                } else {
-                    listOfNotNull(
-                        StepAction("Use Fuse Sync", primary = true) { useFuseSync() }.takeIf { sync != null },
-                        StepAction("Use Syncthing", primary = sync == null) { useSyncthing() },
-                        StepAction("Skip", run = next),
-                    )
-                },
-                content = {
-                    if (syncthing == null) SyncStage(on = syncOn) else SyncChoiceStage(fuseSync = syncOn, syncthing = syncthingOn, hasFuseSync = sync != null)
-                },
-            ))
-        }
         add(Step(
             "ra", "Achievements", if (raConfigured) "RetroAchievements connected" else "Show your achievements?",
             if (raConfigured) "Recent unlocks and progress appear on Home and on each game's page."
@@ -661,7 +663,7 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
         ))
         add(Step(
             "performance", "Performance", "Effects and battery",
-            "Automatic suits this device. Low Power keeps navigation just as quick but skips video, blur and moving backgrounds.",
+            "Automatic suits this device. Low Power keeps navigation just as quick but skips video, blur and moving backgrounds, with calmer motion; High quality adds richer motion too.",
             icon = FuseIcons.Leaf, chapter = Chapters.YOURS,
             actions = listOf(
                 StepAction("Automatic", primary = prefs.performance == PerformanceProfile.AUTOMATIC) { store.updatePrefs { it.copy(performance = PerformanceProfile.AUTOMATIC) }; next() },
@@ -708,7 +710,11 @@ private fun DeviceCard(cap: io.github.matiyaaa.fuse.model.CapabilityProfile) {
             Fact("Screen", "${cap.screenWidthPx} x ${cap.screenHeightPx}, ${cap.maxRefreshRate.toInt()} Hz")
             Fact("Displays", "${cap.displayCount}")
             Spacer(Modifier.height(Space.s))
-            Chip("Recommended: ${cap.tier.name.lowercase().replaceFirstChar { it.uppercase() }} effects", icon = FuseIcons.Gauge, color = Fuse.colors.accent)
+            val motion = io.github.matiyaaa.fuse.model.recommendedMotion(PerformanceProfile.AUTOMATIC, cap, lowPower = false)
+            Chip(
+                "Recommended: ${cap.tier.name.lowercase().replaceFirstChar { it.uppercase() }} effects, ${motion.name.lowercase()} motion",
+                icon = FuseIcons.Gauge, color = Fuse.colors.accent,
+            )
         }
     }
 }

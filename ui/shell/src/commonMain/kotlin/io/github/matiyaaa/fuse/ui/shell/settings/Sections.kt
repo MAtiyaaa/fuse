@@ -72,7 +72,7 @@ import io.github.matiyaaa.fuse.ui.shell.store.UpdateState
 import kotlinx.coroutines.launch
 
 private fun motionName(m: MotionProfile?) = when (m) {
-    null -> "Theme default"
+    null -> "Automatic"
     MotionProfile.REDUCED -> "Reduced"
     MotionProfile.MINIMAL -> "Minimal"
     MotionProfile.STANDARD -> "Standard"
@@ -176,9 +176,24 @@ fun accessibilityRows(app: AppState): List<MenuAction> {
             ) { v -> set { it.copy(screenMargin = v) } })
         }
         labelled("Motion and focus") {
+            // Automatic is what this device's effects call for: the recommendation from setup, or the Performance choice.
+            val automatic = io.github.matiyaaa.fuse.model.automaticMotion(
+                p.theme.motion,
+                io.github.matiyaaa.fuse.model.recommendedMotion(p.performance, app.platform.device, p.lowPower),
+            )
             add(app.choiceRow(
-                "motion", "Motion", FuseIcons.Activity, p.motion, listOf(null, MotionProfile.REDUCED, MotionProfile.MINIMAL, MotionProfile.STANDARD, MotionProfile.ENHANCED).map { it to motionName(it) },
-                detail = "Reduced keeps only short fades: no scaling, sliding or moving backgrounds",
+                "motion", "Motion", FuseIcons.Activity, p.motion,
+                listOf(null, MotionProfile.REDUCED, MotionProfile.MINIMAL, MotionProfile.STANDARD, MotionProfile.ENHANCED).map { it to if (it == null) "Automatic (${motionName(automatic)})" else motionName(it) },
+                detail = "Automatic matches the effects this device runs. Reduced keeps only short fades: no scaling, sliding or moving backgrounds",
+                optionDetail = { m ->
+                    when (m) {
+                        null -> "Follows this device's effects, from setup's recommendation or Performance"
+                        MotionProfile.REDUCED -> "Short fades only"
+                        MotionProfile.MINIMAL -> "Quick, light movement. Suits low-power devices"
+                        MotionProfile.STANDARD -> "Fuse's full movement"
+                        MotionProfile.ENHANCED -> "Richer springs and flourishes, for devices with room to spare"
+                    }
+                },
             ) { v -> set { it.copy(motion = v) } })
             add(toggleRow("contrast", "High contrast focus", FuseIcons.ScanEye, p.highContrastFocus, "Adds an outline to everything that's selected") { v -> set { it.copy(highContrastFocus = v) } })
         }
@@ -1553,8 +1568,13 @@ fun aboutRows(app: AppState): List<MenuAction> = buildList {
             ))
             add(MenuAction(
                 "dev.firstArrival", "Play first profile welcome", FuseIcons.UserPlus,
-                detail = "The fuse that burns in when the first profile is made, as in setup",
-                onSelect = { app.arrivalGrand = true; app.profileArrival = arriving() },
+                detail = "The fuse that burns in when a profile is made, as in setup",
+                onSelect = { app.arrivalGrand = true; app.arrivalMade = true; app.profileArrival = arriving() },
+            ))
+            add(MenuAction(
+                "dev.firstSignIn", "Play first sign-in welcome", FuseIcons.UserRound,
+                detail = "The same welcome, the first time someone plays on this device",
+                onSelect = { app.arrivalGrand = true; app.arrivalMade = false; app.profileArrival = arriving() },
             ))
             add(MenuAction(
                 "dev.intro", "Play startup animation", FuseIcons.Sparkles,

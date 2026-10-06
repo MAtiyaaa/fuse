@@ -49,7 +49,7 @@ and redact credentials from every error message (`redact()`, see
 | RPCS3 compatibility list (rpcs3.net) | Nothing | A PS3 game's title id (for example `BLUS30443`), your IP address and the User-Agent | Only when you choose How It Runs in RPCS3 in a PS3 game's options; the answer is kept a week |
 | Fuse RomM (off until you turn it on) | Your RomM server's addresses, then an approval in RomM, a pairing code or token made in RomM, or (for a server without client tokens) a user name and password | To your own server only: the token (or the sign-in) on each request, this device's name and a random device id when pairing, requests for the server's API description, systems, collections, games and firmware, the files you download, and the files of games you upload | While Fuse RomM is on: a quick check of each address when it connects, the library brought up to date every 30 minutes (you choose 5 minutes to a day) and when you ask; downloads and uploads only when you start them |
 | Cartridge | Nothing | Nothing leaves the device through Fuse: Fuse reads Cartridge's local status and opens it with deep links. "Upload to RomM" hands Cartridge a game's file paths; Cartridge uploads the files to your own RomM server only after you confirm there. On Android Cartridge can read your play sessions (below) and adds their time to its own play sessions on your RomM server | On resume and when Cartridge reports a change; uploads only when you start one and confirm it in Cartridge; play sessions when Cartridge starts or comes back to the front |
-| Jellyfin (off until you turn it on) | Your server's addresses, your Jellyfin user name and password | To your own server only: the password once at sign-in (never stored), then the access token, this device's name and a random device id, what you browse and search, a device profile of what this device can play, and where you are in what you play (start, progress every ten seconds, stop), plus favourites and watched marks you change. For a download, the request for the original file, its subtitle files and pictures. A UDP broadcast on the local network asks which Jellyfin servers are there when you look for one | While Jellyfin is on: a check that the server answers every 30 seconds, pages as you open them, Home's Jellyfin widgets every 5 minutes while one is on Home, and downloads only when you start one; where you stopped in a downloaded copy is sent once the server can be reached |
+| Jellyfin (off until you turn it on) | Your server's addresses, your Jellyfin user name and password | To your own server only: the user name and password at sign-in (kept only in Fuse's secret store, and shared sealed with your own Fuse Sync host when Share Sign-ins is on), then the access token, this device's name and a random device id, what you browse and search, a device profile of what this device can play, and where you are in what you play (start, progress every ten seconds, stop), plus favourites and watched marks you change. For a download, the request for the original file, its subtitle files and pictures. A UDP broadcast on the local network asks which Jellyfin servers are there when you look for one | While Jellyfin is on: a check that the server answers every 30 seconds, pages as you open them, Home's Jellyfin widgets every 5 minutes while one is on Home, and downloads only when you start one; where you stopped in a downloaded copy is sent once the server can be reached |
 | Streaming (off until you add a computer) | The address of your computer running Sunshine, Apollo or GeForce Experience, optionally its network card address | To that computer only: a `serverinfo` request on its open GameStream port (47989). To wake it, a Wake-on-LAN packet with its network card address, broadcast on the local network and sent to its address. Moonlight, not Fuse, pairs and streams | When the Streaming tab is open and when you choose an app; the wake packet only when the computer doesn't answer and waking is on |
 
 The "When" column describes the store that drives these clients (`DefaultFuseStore`). The "Sent by Fuse" column is what the clients in `core:integrations` can send.
@@ -272,7 +272,10 @@ turning one on turns the other off in Fuse and keeps both set up.
   password, sent as HTTP Basic on each request.
 - **Credentials:** the token (or the sign-in) is kept only in Fuse's secret store (`romm.credential`),
   never in the database, settings, logs, screenshots, diagnostics, crash output or exported
-  settings, and is removed when you sign out. Errors are redacted like every other client's.
+  settings, and is removed when you sign out. Errors are redacted like every other client's. With
+  Fuse Sync's Share Sign-ins on, it also goes to your own Fuse Sync host, sealed with this device's
+  secret, and from there to your household's other devices, sealed for each
+  ([docs/sync.md](docs/sync.md#romm-and-jellyfin-for-the-household)); it never goes anywhere else.
 - **Routes:** a local address, an outside one, or Automatic. Automatic checks home first with a
   1.5 second limit and never waits on an address that doesn't answer; a server that went away is
   checked again every minute.
@@ -711,9 +714,12 @@ An addon, off by default (Settings, Addons, Jellyfin). Fuse speaks to your own J
 over its REST API with its own client (`core:jellyfin`), never to any other service. See
 [docs/jellyfin.md](docs/jellyfin.md) for what it shows and how it plays.
 
-- **Sign-in:** `Users/AuthenticateByName` with your user name and password, once. Fuse keeps the
-  access token, the user id and the server's id and name in its secret store; the password is never
-  kept, logged or backed up. Requests carry `Authorization: MediaBrowser Client="Fuse", Device,
+- **Sign-in:** `Users/AuthenticateByName` with your user name and password. Fuse keeps the access
+  token, the user id, the server's id and name, and the user name and password in its secret store
+  only, never logged or backed up; the sign-in is kept so your household's other devices can sign
+  in as you through Fuse Sync (sealed for each, to your own host only), and signing out forgets it.
+  With Fuse Sync profiles each person can have their own account on the same server. Requests
+  carry `Authorization: MediaBrowser Client="Fuse", Device,
   DeviceId, Version, Token`; pictures are fetched without the token.
 - **Reaching the server:** `System/Info/Public` checks each address (home first in Automatic, with
   a short timeout), every 30 seconds while Jellyfin is on. Discovery sends "who is JellyfinServer?"

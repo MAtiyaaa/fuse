@@ -24,8 +24,13 @@ Settings, Addons, Jellyfin (a group beside the Store and Cartridge), then Server
 4. **Test** each address: the server's name and version, or why it didn't answer.
 5. **Sign in** with your Jellyfin user name and password.
 
-The password is used once to sign in and never kept. Fuse keeps the access token, your user id and
-the server's id and name in its secret store, never in logs or backups.
+Fuse keeps the access token, your user id, the server's id and name, and your user name and password
+in its secret store only, never in its database, logs or backups. The user name and password are
+kept so your household's other devices can sign in as you through Fuse Sync (sealed for each
+device; see [Fuse Sync](sync.md#romm-and-jellyfin-for-the-household)); signing out forgets them.
+
+With Fuse Sync profiles, each person can sign in to the same server with their own account:
+switching profiles switches the account, and someone without one uses the device's until they sign in.
 
 ## Where it shows
 

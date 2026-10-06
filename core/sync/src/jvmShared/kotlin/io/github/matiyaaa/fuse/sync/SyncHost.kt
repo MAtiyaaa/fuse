@@ -391,6 +391,18 @@ class SyncHost(
                 if (game.isEmpty()) return@get call.fail(HttpStatusCode.BadRequest, "Which game?", "bad-request")
                 call.json(Convergence.serializer(), store.convergence(p, game))
             }
+            // The household's RomM and Jellyfin: addresses, and sign-ins sealed for the asking device alone.
+            get("/services") {
+                val d = device() ?: return@get
+                val services = store.servicesFor(d.id) ?: return@get call.fail(HttpStatusCode.Unauthorized, "This device was unlinked from the host. Connect it again.", "revoked")
+                call.json(HouseholdServices.serializer(), services)
+            }
+            post("/services") {
+                val d = device() ?: return@post
+                val req = signedBody(d, ServicesShare.serializer()) ?: return@post
+                if (!store.shareServices(d.id, req)) return@post call.fail(HttpStatusCode.BadRequest, "The sign-ins couldn't be opened.", "seal")
+                call.respondText("{}", ContentType.Application.Json)
+            }
             post("/applied") {
                 val d = device() ?: return@post
                 val req = signedBody(d, AppliedNotes.serializer()) ?: return@post

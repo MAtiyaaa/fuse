@@ -262,6 +262,24 @@ private fun syncRows(
     // What syncs -----------------------------------------------------------------------------------
     val what = "What syncs"
     add(toggleRow("saves", "Saves", FuseIcons.Save, c.saves, "Each game's saves, put in place before it starts and kept after it closes") { v -> configure { it.copy(saves = v) } }.copy(section = what))
+    // Whose saves move on this device: its own choice (a child's handheld that never takes a
+    // grown-up's saves, a profile kept to one device).
+    if (c.saves && profiles.isNotEmpty()) {
+        val names = profiles.associate { it.id to it.name }
+        fun summary(ids: List<String>) = ids.mapNotNull { names[it] }.let { if (it.isEmpty()) "Nobody" else if (it.size <= 2) it.joinToString(", ") else "${it.size} profiles" }
+        add(MenuAction(
+            "pulloff", "Don't Take Saves From", FuseIcons.CloudOff,
+            detail = "Their saves made elsewhere never come to this device. This device still sends theirs",
+            trailing = Trailing.Value(summary(c.noPullProfiles)), section = what,
+            onSelect = { profileChoices(app, "Don't take saves from", "Saves these people make on other devices stay off this one. Play time and the library still sync.", profiles, c.noPullProfiles.toSet()) { s, ids -> s.copy(noPullProfiles = ids) } },
+        ))
+        add(MenuAction(
+            "saveoff", "Don't Sync Saves For", FuseIcons.CircleSlash,
+            detail = "Their saves on this device stay here only: nothing comes in, nothing goes out",
+            trailing = Trailing.Value(summary(c.noSyncProfiles)), section = what,
+            onSelect = { profileChoices(app, "Don't sync saves for", "These people's saves on this device never leave it, and none come in. Play time and the library still sync.", profiles, c.noSyncProfiles.toSet()) { s, ids -> s.copy(noSyncProfiles = ids) } },
+        ))
+    }
     add(MenuAction(
         "folders", "Save Folders", FuseIcons.FolderOpen,
         detail = "Where each emulator keeps its saves here, and a folder to choose where Fuse can't find them",
@@ -271,6 +289,10 @@ private fun syncRows(
     add(toggleRow("states", "Save States", FuseIcons.Layers, c.states, "Snapshots from the emulator's own menu, for the same emulator elsewhere") { v -> configure { it.copy(states = v) } }.copy(section = what))
     add(toggleRow("records", "Play Time and Library", FuseIcons.Clock, c.records, "Play time, Last Played, favourites, hidden and pinned games, names and collections") { v -> configure { it.copy(records = v) } }.copy(section = what))
     add(toggleRow("settings", "Settings", FuseIcons.Palette, c.settings, "Your theme, Home, tabs, quick menu, sounds and music. Controllers, screens and drives stay this device's own") { v -> configure { it.copy(settings = v) } }.copy(section = what))
+    add(toggleRow(
+        "signins", "Share Sign-ins", FuseIcons.Key, c.shareSignIns,
+        "RomM and Jellyfin, with each person's own Jellyfin account, go to your other devices and come to this one. Sealed, never in plain text",
+    ) { v -> app.scope.launch { app.store.sync.setShareSignIns(v) } }.copy(section = what))
     // Home's scope only means something while settings follow a profile.
     if (c.settings && active != null) {
         add(app.choiceRow(
@@ -499,6 +521,24 @@ private fun syncRows(
  * username can change, or it can go (then devices join only with someone at a screen, and the Hub
  * opens on this computer only).
  */
+/**
+ * The profiles, each ticked or not for one of this device's save choices; choosing one switches it
+ * and the list stays open with the change, so several can be set in a row.
+ */
+private fun profileChoices(app: AppState, title: String, message: String, profiles: List<ProfileInfo>, chosen: Set<String>, set: (SyncSettings, List<String>) -> SyncSettings) {
+    app.choice = ChoiceSpec(
+        title, message,
+        profiles.map { p ->
+            MenuAction("p.${p.id}", p.name, FuseIcons.CircleUser, trailing = Trailing.Check(p.id in chosen), onSelect = {
+                val next = if (p.id in chosen) chosen - p.id else chosen + p.id
+                app.scope.launch { app.store.sync.configure { s -> set(s, profiles.map { it.id }.filter { it in next } + next.filter { id -> profiles.none { it.id == id } }) } }
+                profileChoices(app, title, message, profiles, next, set)
+            })
+        },
+        icon = FuseIcons.Users,
+    )
+}
+
 private fun hostAccount(app: AppState, svc: SyncService, current: String?) {
     fun askPassword(user: String) {
         app.textInput = TextInputSpec("A password for $user", "", "At least 8 characters", secret = true, capitalize = false, doneLabel = "Next") { first ->

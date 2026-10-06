@@ -51,17 +51,20 @@ data class RenderQuality(
     val statusRefreshMs: Long,
 ) {
     companion object {
-        fun of(profile: PerformanceProfile, capability: CapabilityProfile?, lowPower: Boolean): RenderQuality {
-            val effective = when {
-                lowPower -> PerformanceProfile.LOW_POWER
-                profile != PerformanceProfile.AUTOMATIC -> profile
-                capability == null -> PerformanceProfile.BALANCED
-                else -> when (capability.tier) {
-                    DeviceTier.LOW -> PerformanceProfile.LOW_POWER
-                    DeviceTier.MID -> PerformanceProfile.BALANCED
-                    DeviceTier.HIGH -> PerformanceProfile.HIGH_QUALITY
-                }
+        /** The profile in effect: the person's choice, or under Automatic the one the device's tier recommends. */
+        fun effective(profile: PerformanceProfile, capability: CapabilityProfile?, lowPower: Boolean): PerformanceProfile = when {
+            lowPower -> PerformanceProfile.LOW_POWER
+            profile != PerformanceProfile.AUTOMATIC -> profile
+            capability == null -> PerformanceProfile.BALANCED
+            else -> when (capability.tier) {
+                DeviceTier.LOW -> PerformanceProfile.LOW_POWER
+                DeviceTier.MID -> PerformanceProfile.BALANCED
+                DeviceTier.HIGH -> PerformanceProfile.HIGH_QUALITY
             }
+        }
+
+        fun of(profile: PerformanceProfile, capability: CapabilityProfile?, lowPower: Boolean): RenderQuality {
+            val effective = effective(profile, capability, lowPower)
             val longEdge = capability?.let { maxOf(it.screenWidthPx, it.screenHeightPx) } ?: 1920
             return when (effective) {
                 PerformanceProfile.LOW_POWER -> RenderQuality(
@@ -175,3 +178,22 @@ data class PerformanceMetric(
     val fraction: Float? = null,
     val source: String,
 )
+
+/**
+ * The motion that goes with the effects Fuse uses on this device (setup's "Recommended: High
+ * effects", and Settings, Performance): Minimal with light effects, Standard with balanced ones,
+ * Enhanced with high quality. Reduced is only ever the person's own choice.
+ */
+fun recommendedMotion(profile: PerformanceProfile, capability: CapabilityProfile?, lowPower: Boolean): MotionProfile =
+    when (RenderQuality.effective(profile, capability, lowPower)) {
+        PerformanceProfile.LOW_POWER -> MotionProfile.MINIMAL
+        PerformanceProfile.HIGH_QUALITY -> MotionProfile.ENHANCED
+        PerformanceProfile.BALANCED, PerformanceProfile.AUTOMATIC -> MotionProfile.STANDARD
+    }
+
+/**
+ * Motion left on Automatic: what the device's effects call for, except that a theme made to be
+ * calm ([theme] Minimal or Reduced) stays as calm when the device could do more.
+ */
+fun automaticMotion(theme: MotionProfile, recommended: MotionProfile): MotionProfile =
+    if (theme < MotionProfile.STANDARD) minOf(theme, recommended) else recommended

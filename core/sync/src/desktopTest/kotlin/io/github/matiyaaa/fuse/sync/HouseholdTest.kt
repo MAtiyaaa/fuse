@@ -73,6 +73,50 @@ class HouseholdTest {
     private val ruby = GameKey.of("gba", null, null, "Pokemon Ruby")
 
     @Test
+    fun `sign-ins shared by one device reach the others sealed for each, and a PIN keeps a person's own`() = runBlocking<Unit> {
+        val deck = Device("Deck", "LINUX").join()
+        val thor = Device("Thor", "ANDROID").join()
+        val mo = deck.client.createProfile(NewProfile("Mo", "fox")).id
+        val sam = deck.client.createProfile(NewProfile("Sam", "owl", pin = "4321")).id
+
+        // Nothing shared yet: an older device asked says no, and that is noted for the next to ask.
+        val first = assertNotNull(thor.client.services())
+        assertTrue(!first.first.shared && first.second.isEmpty())
+        assertTrue(thor.client.shareServices(null, null, emptyMap(), declined = true))
+        assertEquals(1, assertNotNull(deck.client.services()).first.declined.size, "the Thor's no is noted, so the next device asks")
+
+        // The Deck shares: RomM's address and sign-in, Jellyfin's address, and each person's Jellyfin sign-in.
+        val romm = ServiceAddress(local = "http://192.168.1.20:8080", remote = "https://romm.example.com")
+        val jelly = ServiceAddress(local = "http://192.168.1.20:8096")
+        val signIns = mapOf(
+            "romm" to """{"type":"token","token":"tok-123"}""",
+            "jellyfin:$mo" to """{"username":"mo","password":"pw-mo"}""",
+            "jellyfin:$sam" to """{"username":"sam","password":"pw-sam"}""",
+        )
+        assertTrue(deck.client.shareServices(romm, jelly, signIns))
+
+        // The Thor gets them, sealed for it alone: RomM's and Mo's, not Sam's (Sam's PIN wasn't typed there).
+        val (services, open) = assertNotNull(thor.client.services())
+        assertTrue(services.shared)
+        assertEquals(romm, services.romm)
+        assertEquals(jelly, services.jellyfin)
+        assertEquals(setOf("romm", "jellyfin:$mo"), open.keys)
+        assertEquals("""{"type":"token","token":"tok-123"}""", open["romm"])
+        // Shared now: the Thor's earlier no doesn't matter any more.
+        assertTrue(services.shared)
+        // Sealed text never carries a sign-in in the clear, and a sign-in is never kept in the clear on the host.
+        assertTrue("tok-123" !in services.sealed!!)
+        val kept = File(root, "host/services.json").readText()
+        assertTrue("tok-123" !in kept && "pw-mo" !in kept && "pw-sam" !in kept)
+        // Another device's secret can't open what was sealed for the Thor.
+        assertNull(SyncCrypto.open(services.sealed!!, "not-the-thor", services.salt))
+
+        // Once Sam's PIN is typed on the Thor, Sam's sign-in comes too.
+        thor.client.openProfile(sam, "4321")
+        assertEquals(setOf("romm", "jellyfin:$mo", "jellyfin:$sam"), assertNotNull(thor.client.services()).second.keys)
+    }
+
+    @Test
     fun `one save reaches every device that has the game, and the host knows who is current`() = runBlocking<Unit> {
         val deck = Device("Deck", "LINUX").join()
         val pc = Device("PC", "WINDOWS").join()

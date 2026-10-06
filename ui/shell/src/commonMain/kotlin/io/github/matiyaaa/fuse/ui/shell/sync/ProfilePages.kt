@@ -211,7 +211,7 @@ private fun MergePage(app: AppState, svc: SyncService, m: ProfileMerge) {
             r.onSuccess {
                 val brought = final.values.count { it != MergeChoice.LeaveOut }
                 app.toasts.show(if (brought == 0) "Using ${m.hostName}'s profiles" else "Your profiles are on ${m.hostName} now", ToastKind.SUCCESS, icon = FuseIcons.Users)
-                svc.activeProfile.value?.let { app.profileArrival = it }
+                svc.activeProfile.value?.let { arrive(app, it) }
             }.onFailure { e ->
                 app.platform.sounds.play(SoundCue.ERROR)
                 app.toasts.show(e.message ?: "Couldn't bring the profiles", ToastKind.ERROR)

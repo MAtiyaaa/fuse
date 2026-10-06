@@ -120,6 +120,45 @@ fresh. Every device then puts the same save in place for whoever plays, and it s
 everyone". Play time stays each person's own, and each person's earlier saves stay in their
 history, so turning it off later goes back to them.
 
+**Whose saves move on this device.** Settings, Fuse Sync has two choices of its own on each
+device. **Don't Take Saves From** keeps the chosen people's saves made elsewhere off this device
+(a child's handheld that never takes a grown-up's saves); this device still sends theirs. **Don't
+Sync Saves For** keeps the chosen people's saves on this device to itself: nothing comes in and
+nothing goes out. A game played as one save together is the household's, so it always moves. Play
+time and the library sync either way.
+
+## RomM and Jellyfin for the household
+
+A device signed in to RomM or Jellyfin shares them with the household: the addresses, the RomM
+sign-in, and each person's Jellyfin sign-in. A device without them gets them, so joining a host
+brings RomM and Jellyfin along, signed in (setup asks for Fuse Sync before RomM and Jellyfin for
+this reason). What a device already has is never replaced: its own server and sign-in stay, and a
+person who signed out on a device isn't signed back in by itself. A device whose person chose
+Cartridge in setup gets RomM's addresses but keeps Cartridge on.
+
+Each person can have their own Jellyfin account on the same server. Switching profiles switches the
+account; someone without one uses the device's until they sign in (Settings, Addons, Jellyfin,
+Use their own account).
+
+**Devices that update.** Devices already in a household when they update to 0.3.6.3 aren't changed
+by themselves. The first one with RomM or Jellyfin set up asks once whether to share its sign-ins
+from there. Yes shares them; Not From This Device notes the answer on the host and leaves the
+question to the next device that updates. Once any device has shared, the others come along
+without asking. Devices that join from 0.3.6.3 on share by themselves. **Share Sign-ins** in
+Settings, Fuse Sync turns it off (or on) for a device, both ways.
+
+How sign-ins travel and are kept:
+
+- On each device, only in Fuse's secure storage (the system keystore), never in its database,
+  logs, diagnostics, screenshots, crash reports or exported settings.
+- To the host, sealed with the sending device's own secret (AES-GCM, key from PBKDF2), inside a
+  signed request.
+- On the host, sealed with a key only the host has (`services.key`, readable by its user only);
+  the addresses sit beside them in `services.json` in plain text, the sign-ins never do.
+- To each device, sealed again with that device's own secret. A person's Jellyfin sign-in only goes
+  to devices allowed to open their profile (a PIN keeps it to the devices that know it).
+- A host older than 0.3.6.3 doesn't offer any of this, and devices carry on as before.
+
 ## What syncs, and what stays
 
 Settings are sorted into four kinds:
@@ -127,7 +166,7 @@ Settings are sorted into four kinds:
 | Kind | Examples | Where it lives |
 | --- | --- | --- |
 | A person's | Theme and appearance, Home layout and pages, tabs and their order, quick menu, library sort and art, sounds and music, the clock, Fuse Player's languages and subtitles | Follows the profile to every device |
-| A device's | Controllers and mappings, screens and the second screen, performance, drives and library folders, file paths, add-on accounts (Jellyfin, RetroAchievements), Fuse Sync's own connection | Stays on the device |
+| A device's | Controllers and mappings, screens and the second screen, performance, drives and library folders, file paths, add-on accounts (RetroAchievements; RomM and Jellyfin go to the household as above), Fuse Sync's own connection, whose saves move here | Stays on the device |
 | The host's | Profiles, devices, every save version, the journal | Only on the host |
 | Shared records | Each game's favourite, hidden, pinned, custom name, chosen emulator, play time, sessions and Last Played; collections | Merged across devices, per profile |
 
@@ -398,6 +437,8 @@ with someone at a screen, and the Hub opens on the host computer only.
 - Paths in a save are checked: nothing absolute, no `..`, nothing outside the save's own folder.
 - Requests are rate limited per address.
 - Managing a host that runs as a service uses a token readable only by your user, from this computer only.
+- RomM and Jellyfin sign-ins shared with the household are sealed for each device and kept sealed on
+  the host with its own key (see [RomM and Jellyfin for the household](#romm-and-jellyfin-for-the-household)).
 - Use an https address (or a VPN) from outside: signing protects every request, encryption hides it.
 
 ## Where it keeps things

@@ -195,8 +195,11 @@ class AppState(
     /** Someone just became the one playing: their arrival plays over everything, then clears. */
     var profileArrival by mutableStateOf<io.github.matiyaaa.fuse.sync.ProfileInfo?>(null)
 
-    /** The arrival is the first profile ever made here: it gets the grand one (a fuse burns in and lights them). */
+    /** The arrival is someone's first time playing here: it gets the grand one (a fuse burns in and lights them). */
     var arrivalGrand by mutableStateOf(false)
+
+    /** The grand arrival is for a profile just made here (not one signed in to from another device). */
+    var arrivalMade by mutableStateOf(true)
 
     /** Fuse is using Syncthing here (its state isn't Off): Addons shows its tab. */
     var syncthingActive by mutableStateOf(false)

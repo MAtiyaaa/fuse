@@ -45,6 +45,24 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
+ * [p] becomes the one playing, and their arrival plays. The first time someone plays on this device,
+ * whether their profile was just [made] or they signed in to one from another device, it is the
+ * grand welcome; after that, the usual one.
+ */
+internal fun arrive(app: AppState, p: io.github.matiyaaa.fuse.sync.ProfileInfo, made: Boolean = false) {
+    val sync = app.store.sync
+    val c = sync.config.value
+    if (made || (c.welcomedSeeded && p.id !in c.welcomedProfiles)) {
+        app.arrivalGrand = true
+        app.arrivalMade = made
+    }
+    if (p.id !in c.welcomedProfiles) {
+        app.scope.launch { sync.configure { s -> s.copy(welcomedProfiles = (s.welcomedProfiles + p.id).distinct()) } }
+    }
+    app.profileArrival = p
+}
+
+/**
  * Someone becomes the one playing ([AppState.profileArrival]): their avatar's colours bloom out
  * from the middle of the screen as a circle, their avatar springs up inside it with "Hi, Mo" under
  * it, and while everything of theirs arrives behind it the circle gathers itself up into the top
@@ -148,7 +166,8 @@ internal fun ProfileArrival(app: AppState) {
 }
 
 /**
- * The first profile ever made here arrives grandly: a lit fuse runs in from the corner of the screen
+ * Someone playing here for the first time arrives grandly (a profile just made, or one signed in to
+ * from another device): a lit fuse runs in from the corner of the screen
  * shedding sparks, reaches the middle and ignites; a ring of light bursts out with rays behind it,
  * their colours bloom, their avatar springs up, "Welcome, Mo" types itself in under it, and then it
  * all gathers into the top line's corner as every other arrival does. About two and a half seconds
@@ -167,6 +186,7 @@ private fun FirstArrival(app: AppState, p: io.github.matiyaaa.fuse.sync.ProfileI
     val words = remember(p.id) { FuselineValue(0f) }
     val gather = remember(p.id) { FuselineValue(0f) }
     val greeting = "Welcome, ${p.name}"
+    val made = app.arrivalMade
     LaunchedEffect(p.id) {
         app.platform.sounds.play(SoundCue.SELECT)
         if (motion.reduced) {
@@ -309,7 +329,7 @@ private fun FirstArrival(app: AppState, p: io.github.matiyaaa.fuse.sync.ProfileI
                 FText(greeting.drop(shown), Fuse.type.hero, color = Color.Transparent, maxLines = 1)
             }
             FText(
-                "Your saves, play time and theme are yours now", Fuse.type.body, color = Color.White.copy(alpha = 0.85f), maxLines = 1, align = TextAlign.Center,
+                if (made) "Your saves, play time and theme are yours now" else "Your saves, play time and theme are here now", Fuse.type.body, color = Color.White.copy(alpha = 0.85f), maxLines = 1, align = TextAlign.Center,
                 modifier = Modifier.graphicsLayer {
                     alpha = words.value
                     translationY = (1f - words.value) * 14.dp.toPx()

@@ -401,6 +401,38 @@ internal class DefaultRommOps(
         return account
     }
 
+    /**
+     * The household's RomM (Fuse Sync): its addresses where this device has none, and its sign-in
+     * where this device was never signed in to that server. A device whose person chose Cartridge in
+     * setup keeps it and only gets the addresses. True when anything changed.
+     */
+    internal suspend fun fromHousehold(local: String, remote: String, mode: String, credential: String?): Boolean {
+        val s = settings
+        val blank = s.localAddress.isBlank() && s.remoteAddress.isBlank()
+        val same = !blank && s.localAddress == local && s.remoteAddress == remote
+        var changed = false
+        if (blank && (local.isNotBlank() || remote.isNotBlank())) {
+            val keepCartridge = ctx.settings.value.onboarding.romm == "CARTRIDGE" && ctx.settings.value.cartridge.enabled
+            write { it.copy(localAddress = local, remoteAddress = remote, mode = mode, enabled = it.enabled || !keepCartridge) }
+            if (!keepCartridge) cartridgeOff()
+            changed = true
+        }
+        val readable = credential?.takeIf { runCatching { json.decodeFromString(RommCredential.serializer(), it) }.isSuccess }
+        if (readable != null && (blank || same) && !s.configured && credential() == null) {
+            ctx.services.secrets.put(SECRET, readable)
+            changed = true
+            if (settings.enabled) connect()
+        }
+        return changed
+    }
+
+    /** What this device would share with its household: its addresses and mode, and its sign-in. */
+    internal suspend fun forHousehold(): Pair<FuseRommSettings, String?>? {
+        val s = settings
+        if (s.localAddress.isBlank() && s.remoteAddress.isBlank()) return null
+        return s to ctx.services.secrets.get(SECRET)
+    }
+
     override suspend fun setEnabled(enabled: Boolean) {
         write { it.copy(enabled = enabled) }
         if (enabled) cartridgeOff()

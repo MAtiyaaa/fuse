@@ -294,30 +294,63 @@ private fun jellyfinRows(
     }
 
     // Account --------------------------------------------------------------------------------------
+    // With profiles, each person can have their own account on the same server; until they sign in,
+    // they use this device's.
     val account = "Account"
     val a = state.account
+    val person = if (app.store.sync.inUse) app.store.sync.service?.activeProfile?.value else null
+    val noAddress = j.localAddress.isBlank() && j.remoteAddress.isBlank()
+    fun signInRow(id: String, label: String, detail: String, icon: androidx.compose.ui.graphics.vector.ImageVector) = MenuAction(
+        id, label, icon,
+        detail = when {
+            noAddress -> "Add an address first"
+            page.signingIn -> "Signing in"
+            else -> detail
+        },
+        trailing = if (page.signingIn) Trailing.Value("Signing in") else Trailing.Chevron,
+        unavailableReason = if (noAddress) "Add an address first" else null,
+        section = account,
+        onSelect = { if (!page.signingIn) signIn(app, service, page, if (state.own) a?.userName.orEmpty() else "") },
+    )
+    val kept = "Kept only in Fuse's secure storage" + if (app.store.sync.inUse && app.store.sync.config.value.shareSignIns) ", and sealed for your other devices so they sign in too" else ""
     if (a == null || state.authRequired) {
-        add(MenuAction(
-            "signin", if (state.authRequired) "Sign in again" else "Sign in", if (state.authRequired) FuseIcons.Warning else FuseIcons.User,
-            detail = when {
-                j.localAddress.isBlank() && j.remoteAddress.isBlank() -> "Add an address first"
-                page.signingIn -> "Signing in"
-                else -> "Your Jellyfin user name and password. The password is used once and never kept"
+        add(signInRow(
+            "signin",
+            when {
+                state.authRequired -> "Sign in again"
+                person != null -> "Sign in as ${person.name}"
+                else -> "Sign in"
             },
-            trailing = if (page.signingIn) Trailing.Value("Signing in") else Trailing.Chevron,
-            unavailableReason = if (j.localAddress.isBlank() && j.remoteAddress.isBlank()) "Add an address first" else null,
-            section = account,
-            onSelect = { if (!page.signingIn) signIn(app, service, page, a?.userName.orEmpty()) },
+            "Your Jellyfin user name and password. $kept",
+            if (state.authRequired) FuseIcons.Warning else FuseIcons.User,
         ))
     }
     if (a != null) {
-        add(infoRow("user", "Signed in as ${a.userName ?: "you"}", value = state.serverName ?: a.serverName, icon = FuseIcons.CircleUser).copy(section = account))
+        add(infoRow(
+            "user", "Signed in as ${a.userName ?: "you"}", value = state.serverName ?: a.serverName,
+            detail = when {
+                person == null -> null
+                state.own -> "${person.name}'s own account"
+                else -> "This device's account, until ${person.name} signs in with their own"
+            },
+            icon = FuseIcons.CircleUser,
+        ).copy(section = account))
+        if (person != null && !state.own && !state.authRequired) {
+            add(signInRow(
+                "own", "Use ${person.name}'s own account",
+                "Same server, their own user name and password: what they watch and resume stays theirs. $kept",
+                FuseIcons.UserRound,
+            ))
+        }
         add(MenuAction(
             "signout", "Sign out", FuseIcons.LogOut,
-            detail = "Forgets this device's sign-in. Kept pages are cleared",
+            detail = when {
+                person != null && state.own -> "Forgets ${person.name}'s sign-in on this device. Kept pages are cleared"
+                else -> "Forgets this device's sign-in. Kept pages are cleared"
+            },
             section = account,
             onSelect = {
-                app.confirm = ConfirmSpec("Sign out of Jellyfin?", "Fuse forgets its sign-in on this device. Your server and what you've watched stay as they are.", "Sign out", false) {
+                app.confirm = ConfirmSpec("Sign out of Jellyfin?", "Fuse forgets this sign-in on this device. Your server and what you've watched stay as they are.", "Sign out", false) {
                     app.scope.launch {
                         runCatching { service.signOut() }
                         app.toasts.show("Signed out of Jellyfin")

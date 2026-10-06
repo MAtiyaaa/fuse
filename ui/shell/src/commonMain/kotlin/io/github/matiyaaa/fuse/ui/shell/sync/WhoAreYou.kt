@@ -131,6 +131,8 @@ private fun WhoAreYou(app: AppState, mode: WhoMode) {
     var step by remember(mode) { mutableStateOf<WhoStep>(if (mode == WhoMode.ADD) WhoStep.Create else WhoStep.People) }
     var index by remember { mutableIntStateOf(0) }
     var busy by remember { mutableStateOf<String?>(null) }
+    // The profile just made here, so its arrival says it is new.
+    var justMade by remember { mutableStateOf<String?>(null) }
     val c = Fuse.colors
     // Asked at startup with nobody chosen yet, it waits for a choice; but never on a host that isn't
     // answering: Fuse is used as it is meanwhile, and the question can be asked again from the top line.
@@ -158,8 +160,9 @@ private fun WhoAreYou(app: AppState, mode: WhoMode) {
             val r = svc.switchTo(p.id, pin)
             busy = null
             r.onSuccess {
-                // The person arrives: their avatar blooms over everything, then settles in the corner.
-                app.profileArrival = p
+                // The person arrives: their avatar blooms over everything, then settles in the corner
+                // (grandly, the first time they play here).
+                arrive(app, p, made = p.id == justMade)
                 app.whoAreYou = null
             }.onFailure { e ->
                 app.arrivalGrand = false
@@ -192,8 +195,8 @@ private fun WhoAreYou(app: AppState, mode: WhoMode) {
                 CreateProfile(
                     app,
                     onCreated = { p, pin ->
-                        // The very first profile here arrives with the grand welcome.
-                        if (profiles.none { it.id != p.id }) app.arrivalGrand = true
+                        // Someone new arrives with the grand welcome.
+                        justMade = p.id
                         index = profiles.size
                         step = WhoStep.People
                         switchTo(p, pin)

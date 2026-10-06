@@ -244,6 +244,25 @@ class SyncClient(
         }
     }
 
+    /** The household's RomM and Jellyfin, sign-ins opened with this device's secret; null from a host before 0.3.6.3. */
+    suspend fun services(): Pair<HouseholdServices, Map<String, String>>? = try {
+        val s = get("/services", HouseholdServices.serializer())
+        val open = s.sealed?.let { SyncCrypto.open(it, link.deviceSecret, s.salt) }?.let { runCatching { Json.decodeFromString(SignInsSerializer, it.decodeToString()) }.getOrNull() }.orEmpty()
+        s to open
+    } catch (e: SyncException) {
+        if (e.code == "offline") throw e else null
+    }
+
+    /** Shares this device's RomM and Jellyfin with the household (sign-ins sealed with its own secret); false from an older host. */
+    suspend fun shareServices(romm: ServiceAddress?, jellyfin: ServiceAddress?, signIns: Map<String, String>, declined: Boolean = false): Boolean = try {
+        val salt = SyncCrypto.token(16)
+        val sealed = signIns.takeIf { it.isNotEmpty() }?.let { SyncCrypto.seal(Json.encodeToString(SignInsSerializer, it).toByteArray(), link.deviceSecret, salt) }
+        send(HttpMethod.Post, "/services", ServicesShare(romm, jellyfin, sealed, salt, declined), ServicesShare.serializer(), kotlinx.serialization.json.JsonObject.serializer())
+        true
+    } catch (e: SyncException) {
+        if (e.code == "offline") throw e else false
+    }
+
     /** Every device's place with [game]'s saves for [profile]; null from a host before 0.3.6. */
     suspend fun convergence(profile: String, game: String): Convergence? = try {
         get("/profiles/$profile/convergence?game=${java.net.URLEncoder.encode(game, "UTF-8")}", Convergence.serializer())
