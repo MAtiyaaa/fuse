@@ -40,7 +40,7 @@ internal object DesktopStreaming {
     suspend fun start(host: String, app: String, chosen: String): String? = withContext(Dispatchers.IO) {
         val program = client(chosen) ?: return@withContext "Moonlight isn't installed here. Get it from moonlight-stream.org, pair it with your computer once, then stream from Fuse."
         runCatching {
-            ProcessBuilder(program + listOf("stream", host, app)).redirectErrorStream(true).redirectOutput(ProcessBuilder.Redirect.DISCARD).start()
+            ProcessBuilder(program + listOf("stream", host, app)).also { io.github.matiyaaa.fuse.desktop.system.Processes.hostEnvironment(it.environment()) }.redirectErrorStream(true).redirectOutput(ProcessBuilder.Redirect.DISCARD).start()
             null
         }.getOrElse { "Moonlight didn't start (${it.message ?: "no reason given"})." }
     }

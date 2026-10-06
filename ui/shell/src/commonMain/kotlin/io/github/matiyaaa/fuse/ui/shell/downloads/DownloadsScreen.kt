@@ -73,6 +73,10 @@ import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.ContextMenuSpec
 import io.github.matiyaaa.fuse.ui.shell.app.FocusZone
 import io.github.matiyaaa.fuse.ui.shell.app.Route
+import io.github.matiyaaa.fuse.ui.shell.app.play
+import io.github.matiyaaa.fuse.ui.shell.game.toCard
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import io.github.matiyaaa.fuse.ui.shell.app.rememberSystems
 import io.github.matiyaaa.fuse.ui.shell.components.SystemCardArt
 import io.github.matiyaaa.fuse.ui.shell.platform.RommImages
@@ -121,6 +125,8 @@ fun DownloadsScreen(app: AppState) {
 
     fun openOptions(row: TransferRow) = app.openContextMenu(optionsFor(app, row, systems))
     fun primary(row: TransferRow) {
+        // A game that came in: what confirming a game does anywhere (play it, or open its page).
+        if (finishedGame(row) != null) { app.openDownloadedGame(row); return }
         val first = row.actions.firstOrNull { it == TransferAction.PAUSE || it == TransferAction.RESUME || it == TransferAction.RETRY || it == TransferAction.OPEN }
         if (first != null) ops.act(row.item.id, first) else openOptions(row)
     }
@@ -129,7 +135,7 @@ fun DownloadsScreen(app: AppState) {
         if (!focused) return@PageEffect
         app.hints = when (zone) {
             2 -> listOfNotNull(
-                current?.let { r -> primaryLabel(r)?.let { Hint(HintButton.CONFIRM, it) } },
+                current?.let { r -> primaryLabel(r, app.store.prefs.value.openGamePage)?.let { Hint(HintButton.CONFIRM, it) } },
                 Hint(HintButton.OPTIONS, "Options"),
                 Hint(HintButton.BACK, "Back"),
             )
@@ -339,7 +345,31 @@ private fun queuePosition(rows: List<TransferRow>, row: TransferRow): Int? {
     return line.indexOf(row).takeIf { it >= 0 }?.plus(1)
 }
 
-private fun primaryLabel(row: TransferRow): String? = row.actions.firstOrNull {
+/** The RomM game a finished game download brought in, or null for anything else. */
+internal fun finishedGame(row: TransferRow): Long? {
+    val t = row.item
+    if (t.status != TransferStatus.DONE || t.upload || (t.kind != TransferKind.GAME && t.kind != TransferKind.CONTENT)) return null
+    return ROMM_KEY.find(t.key)?.groupValues?.get(1)?.toLongOrNull()
+}
+
+private val ROMM_KEY = Regex("^romm:rom:(\\d+)")
+
+/**
+ * Opens the game a finished download brought in, as confirming a game does anywhere: plays it, or
+ * opens its page when that is the setting. While Fuse is still adding it, its page opens (and turns
+ * into the library game's as soon as it is in).
+ */
+private fun AppState.openDownloadedGame(row: TransferRow) {
+    val romId = finishedGame(row) ?: return
+    scope.launch {
+        val local = store.romm.libraryGame(romId).first()
+        val detail = local?.let { store.library.game(it).first() }
+        if (detail != null && !store.prefs.value.openGamePage) play(detail.toCard())
+        else go(Route.GameInfo(local ?: io.github.matiyaaa.fuse.ui.shell.store.rommGameId(romId)))
+    }
+}
+
+private fun primaryLabel(row: TransferRow, openPage: Boolean): String? = if (finishedGame(row) != null) (if (openPage) "Open" else "Play") else row.actions.firstOrNull {
     it == TransferAction.PAUSE || it == TransferAction.RESUME || it == TransferAction.RETRY || it == TransferAction.OPEN
 }?.let { if (it == TransferAction.OPEN) "Open ${row.mirrored ?: ""}".trim() else it.label } ?: "Options"
 
@@ -366,7 +396,11 @@ private fun optionsFor(app: AppState, row: TransferRow, systems: Map<PlatformId,
         icon = if (t.upload) FuseIcons.Upload else FuseIcons.Download,
         art = RommImages.model(t.art.cover) ?: RommImages.model(t.art.icon),
         accent = sys?.platform?.accent,
-        actions = row.actions.map { a ->
+        actions = listOfNotNull(
+            finishedGame(row)?.let {
+                MenuAction("transfer.game", if (app.store.prefs.value.openGamePage) "Open Game" else "Play", if (app.store.prefs.value.openGamePage) FuseIcons.Gamepad else FuseIcons.Play, onSelect = { app.closeOverlays(); app.openDownloadedGame(row) })
+            },
+        ) + row.actions.map { a ->
             MenuAction(
                 "transfer.${a.name}", if (a == TransferAction.OPEN) "Open ${row.mirrored ?: ""}".trim() else a.label, icon(a),
                 destructive = a == TransferAction.CANCEL,

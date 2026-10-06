@@ -49,6 +49,18 @@ interface AppStoreOps {
     /** Asks Android to uninstall [key] (Android asks the user to confirm). */
     fun uninstall(key: String)
 
+    /**
+     * Uninstalls [key] with the account's [password], after [StoreState.password] asked for it (a
+     * program only an administrator can remove). Null [password] gives up on it.
+     */
+    fun uninstallWith(key: String, password: String?) = Unit
+
+    /** Installs every program of the Store this device can install and doesn't have yet. */
+    fun installAll() = Unit
+
+    /** Uninstalls every installed program of the Store (each one asked about as [uninstall] would). */
+    fun uninstallAll() = Unit
+
     /** Opens the installed app; false when it can't be opened. */
     fun launch(key: String): Boolean
 
@@ -142,6 +154,8 @@ data class StoreState(
     val folder: String? = null,
     /** The repository the catalogue follows when it isn't the Obtainium Emulation Pack. */
     val packRepo: String? = null,
+    /** A program waiting for the account's password to be removed; null when none is. */
+    val password: PasswordAsk? = null,
 ) {
     fun app(key: String): StoreApp? = catalogue?.apps?.firstOrNull { it.key == key }
 
@@ -312,3 +326,9 @@ sealed interface StoreJob {
     /** True while the job is still going. */
     val active: Boolean get() = this !is Failed
 }
+
+/**
+ * The account's password is needed to remove [name] ([key]): it was installed for every account.
+ * [wrong] after a password that didn't work.
+ */
+data class PasswordAsk(val key: String, val name: String, val wrong: Boolean = false)

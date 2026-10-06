@@ -72,6 +72,38 @@ private class RommSettingsState {
     var testing by mutableStateOf(false)
     var test by mutableStateOf<String?>(null)
     var bios by mutableStateOf(false)
+    var looking by mutableStateOf(false)
+}
+
+/**
+ * Looks for RomM on this network, then offers what answered along with typing an address (always
+ * there, for a server Fuse can't see) and clearing it. [looking] says a search is under way.
+ */
+internal fun chooseRommHome(app: AppState, current: String, looking: (Boolean) -> Unit, keep: (String) -> Unit) {
+    looking(true)
+    app.scope.launch {
+        val found = runCatching { app.store.romm.discover() }.getOrDefault(emptyList())
+        looking(false)
+        app.choice = ChoiceSpec(
+            title = "Home address",
+            icon = FuseIcons.Home,
+            message = if (found.isEmpty()) "No RomM server answered on this network. Type its address instead, like 192.168.1.20:8080." else "RomM on this network",
+            options = found.map { r ->
+                MenuAction("found.${r.address}", r.address.substringAfter("://"), FuseIcons.Server, detail = "RomM ${r.version}", trailing = Trailing.Check(r.address == current), onSelect = {
+                    app.choice = null
+                    keep(r.address)
+                })
+            } + MenuAction("type", "Type an address", FuseIcons.Keyboard, detail = "For a server Fuse can't see from here", onSelect = {
+                app.choice = null
+                app.textInput = TextInputSpec("Home address", current, "192.168.1.20:8080", capitalize = false) { v -> keep(v.trim()) }
+            }) + listOfNotNull(
+                MenuAction("clear", "Clear the home address", FuseIcons.Eraser, onSelect = {
+                    app.choice = null
+                    keep("")
+                }).takeIf { current.isNotBlank() },
+            ),
+        )
+    }
 }
 
 internal fun rommStatus(s: RommState, p: FuseRommSettings): Triple<Boolean?, String, String> = when {
@@ -174,9 +206,14 @@ private fun rommRows(
             }
         },
     ) { v -> set { it.copy(mode = v) } }.copy(section = connection))
-    add(MenuAction("local", "Home address", FuseIcons.Home, detail = "Your RomM server on this network", trailing = Trailing.Value(p.localAddress.ifBlank { "Not set" }), section = connection, onSelect = {
-        app.textInput = TextInputSpec("Home address", p.localAddress, "192.168.1.20:8080", capitalize = false) { v -> set { it.copy(localAddress = v.trim()) } }
-    }))
+    add(MenuAction(
+        "local", "Home address", FuseIcons.Home, detail = "Your RomM server on this network. Fuse looks for it, or type it",
+        trailing = Trailing.Value(if (page.looking) "Looking" else p.localAddress.ifBlank { "Not set" }), section = connection,
+        onSelect = {
+            if (page.looking) return@MenuAction
+            chooseRommHome(app, p.localAddress, { page.looking = it }) { a -> set { it.copy(localAddress = a) } }
+        },
+    ))
     add(MenuAction("remote", "Outside address", FuseIcons.Globe, detail = "For away from home: your server's address through a tunnel or VPN", trailing = Trailing.Value(p.remoteAddress.ifBlank { "Not set" }), section = connection, onSelect = {
         app.textInput = TextInputSpec("Outside address", p.remoteAddress, "https://romm.example.com", capitalize = false) { v -> set { it.copy(remoteAddress = v.trim()) } }
     }))
@@ -347,6 +384,25 @@ fun RommSetupScreen(app: AppState, pairing: Boolean) {
     var problem by remember { mutableStateOf<String?>(null) }
     var uploads by remember { mutableStateOf(false) }
     val sel = remember { LinearSelection(if (pairing && (p.localAddress.isNotBlank() || p.remoteAddress.isNotBlank())) 2 else 0) }
+    var looking by remember { mutableStateOf(false) }
+    fun keepHome(address: String) = app.store.updatePrefs { it.copy(romm = it.romm.copy(localAddress = address)) }
+    // With no home address yet, Fuse looks for RomM straight away: one server found is filled in,
+    // several are offered to choose from. Typing an address is always there instead.
+    LaunchedEffect(Unit) {
+        if (p.localAddress.isNotBlank() || p.remoteAddress.isNotBlank() || looking) return@LaunchedEffect
+        looking = true
+        val found = runCatching { ops.discover() }.getOrDefault(emptyList())
+        looking = false
+        if (app.store.prefs.value.romm.localAddress.isNotBlank()) return@LaunchedEffect
+        when (found.size) {
+            0 -> Unit
+            1 -> {
+                keepHome(found[0].address)
+                app.toasts.show("Found RomM at ${found[0].address.substringAfter("://")}", ToastKind.SUCCESS, icon = FuseIcons.Server)
+            }
+            else -> chooseRommHome(app, "", { looking = it }, ::keepHome)
+        }
+    }
     fun signedIn(name: String) {
         app.toasts.show("Fuse RomM is connected as $name", ToastKind.SUCCESS, icon = FuseIcons.CircleCheck)
         app.back()
@@ -366,9 +422,14 @@ fun RommSetupScreen(app: AppState, pairing: Boolean) {
         }
     }
     val rows = buildList {
-        add(MenuAction("s.local", "Home address", FuseIcons.Home, detail = "Your RomM server on this network, like 192.168.1.20:8080", trailing = Trailing.Value(p.localAddress.ifBlank { "Not set" }), onSelect = {
-            app.textInput = TextInputSpec("Home address", p.localAddress, "192.168.1.20:8080", capitalize = false) { v -> app.store.updatePrefs { it.copy(romm = it.romm.copy(localAddress = v.trim())) } }
-        }))
+        add(MenuAction(
+            "s.local", "Home address", FuseIcons.Home, detail = "Your RomM server on this network. Fuse looks for it, or type it",
+            trailing = Trailing.Value(if (looking) "Looking" else p.localAddress.ifBlank { "Not set" }),
+            onSelect = {
+                if (looking) return@MenuAction
+                chooseRommHome(app, p.localAddress, { looking = it }, ::keepHome)
+            },
+        ))
         add(MenuAction("s.remote", "Outside address (optional)", FuseIcons.Globe, detail = "For away from home, through a tunnel or VPN", trailing = Trailing.Value(p.remoteAddress.ifBlank { "Not set" }), onSelect = {
             app.textInput = TextInputSpec("Outside address", p.remoteAddress, "https://romm.example.com", capitalize = false) { v -> app.store.updatePrefs { it.copy(romm = it.romm.copy(remoteAddress = v.trim())) } }
         }))

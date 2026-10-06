@@ -1,6 +1,7 @@
 package io.github.matiyaaa.fuse.ui.designsystem.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -124,7 +125,12 @@ internal data class Key(
     val kind: KeyKind = KeyKind.CHAR,
     val icon: ImageVector? = null,
     val page: KeyPage? = null,
+    /** What holding the key offers instead (the full stop's .com, .net...). */
+    val alternates: List<String> = emptyList(),
 )
+
+/** A held key's alternatives on show, and the one chosen ([index]). [typed] when the key's own character went in first (a controller press). */
+internal data class KeyAlternates(val page: KeyPage, val row: Int, val column: Int, val options: List<String>, val index: Int = 0, val typed: Boolean = false)
 
 /** A key the controller pressed: which one, and a serial so pressing it twice shows twice. */
 internal data class KeyPulse(val page: KeyPage, val row: Int, val column: Int, val serial: Int)
@@ -137,6 +143,9 @@ private val deleteKey = Key("Delete", 1.25f, KeyKind.BACKSPACE, FuseIcons.Backsp
 private val pasteKey = Key("Paste", 1.2f, KeyKind.PASTE, FuseIcons.ClipboardPaste)
 private val phoneKey = Key("Type on your phone", 1.1f, KeyKind.PHONE, FuseIcons.Smartphone)
 private val doneKey = Key("Done", 2f, KeyKind.DONE)
+
+/** The full stop, for addresses as much as sentences; held, it offers the endings addresses use. */
+private val dotKey = Key(".", alternates = listOf(".com", ".net", ".org", ".io", ".local", ".lan", ":", "/"))
 private fun space(weight: Float) = Key("space", weight, KeyKind.SPACE)
 private fun page(label: String, to: KeyPage, weight: Float) = Key(label, weight, KeyKind.PAGE, page = to)
 
@@ -151,9 +160,9 @@ internal fun keyRows(page: KeyPage, phone: Boolean = false): List<List<Key>> = w
         listOf(gap(0.5f)) + chars("asdfghjkl") + gap(0.5f),
         listOf(shiftKey, gap(0.25f)) + chars("zxcvbnm") + listOf(gap(0.25f), deleteKey),
         if (phone) {
-            listOf(page("123", KeyPage.NUMBERS, 1.5f), phoneKey, pasteKey, space(3.2f), Key("'"), doneKey)
+            listOf(page("123", KeyPage.NUMBERS, 1.5f), phoneKey, pasteKey, space(3.2f), dotKey, doneKey)
         } else {
-            listOf(page("123", KeyPage.NUMBERS, 1.5f), pasteKey, Key("-"), space(3.3f), Key("'"), doneKey)
+            listOf(page("123", KeyPage.NUMBERS, 1.5f), pasteKey, Key("-"), space(3.3f), dotKey, doneKey)
         },
     )
     KeyPage.NUMBERS -> listOf(
@@ -183,6 +192,14 @@ private val HELD_KEYS = setOf(NavAction.CONTEXT, NavAction.PREVIOUS_SECTION, Nav
 
 /** Holding Delete (or X) this many repeats in starts deleting whole words. */
 private const val WORD_DELETE_AFTER = 10
+
+/**
+ * How long a finger is held before a key shows its alternatives, and how many of the controller's
+ * repeats (the third comes about as late) before a held button counts as held: later than the
+ * D-pad's repeat, so a deliberate press (a Steam Deck's buttons are firm) deletes one character.
+ */
+private const val HOLD_MS = 450L
+private const val HOLD_REPEATS = 3
 
 /**
  * The on-screen keyboard's state: the page, Shift, and which key the controller is on. Moving
@@ -261,9 +278,40 @@ class KeyboardState(val autoCapitalize: Boolean = false) {
     /** True while the controller is on Delete, so the screen lets a held A repeat (see [handle]). */
     val onDelete: Boolean get() = rows.getOrNull(row)?.getOrNull(column)?.kind == KeyKind.BACKSPACE
 
+    /** True while the controller is on a key with alternatives, so a held A can show them. */
+    private val onAlternates: Boolean get() = rows.getOrNull(row)?.getOrNull(column)?.alternates?.isNotEmpty() == true
+
     /** What a screen with this keyboard lets the controller repeat while held. */
     val repeats: Set<NavAction>
-        get() = if (onDelete) HELD_KEYS + NavAction.SELECT else HELD_KEYS
+        get() = if (onDelete || onAlternates || alternates != null) HELD_KEYS + NavAction.SELECT else HELD_KEYS
+
+    /** A held key's alternatives on show (see [Key.alternates]); null when none are. */
+    internal var alternates by mutableStateOf<KeyAlternates?>(null)
+        private set
+
+    /** Puts away the alternatives on show; true when there were some. */
+    fun closeAlternates(): Boolean {
+        if (alternates == null) return false
+        alternates = null
+        return true
+    }
+
+    internal fun showAlternates(page: KeyPage, row: Int, column: Int, options: List<String>, typed: Boolean) {
+        alternates = KeyAlternates(page, row, column, options, typed = typed)
+    }
+
+    internal fun pointAlternate(index: Int) {
+        alternates = alternates?.let { it.copy(index = index.coerceIn(0, it.options.lastIndex)) }
+    }
+
+    /** Types the chosen alternative in place of the key's own character, and puts them away. */
+    internal fun chooseAlternate(field: EditableText) {
+        val a = alternates ?: return
+        alternates = null
+        if (a.typed) field.backspace()
+        field.insert(a.options[a.index])
+        edited(field)
+    }
 
     /**
      * Controller keys: the D-pad moves between keys and A presses one (held on Delete, it keeps
@@ -274,6 +322,21 @@ class KeyboardState(val autoCapitalize: Boolean = false) {
     fun handle(event: NavEvent, field: EditableText, onDone: () -> Unit, onPaste: (() -> Unit)? = null, onPhone: (() -> Unit)? = null): NavResult {
         clampFocus()
         touchMode = false
+        // Alternatives on show: left and right choose, A types the one chosen.
+        alternates?.let { a ->
+            return when (event.action) {
+                NavAction.LEFT, NavAction.RIGHT -> {
+                    val next = a.index + if (event.action == NavAction.LEFT) -1 else 1
+                    if (next !in a.options.indices) NavResult.BLOCKED else { pointAlternate(next); NavResult.MOVED }
+                }
+                NavAction.SELECT -> {
+                    if (event.repeat == 0) chooseAlternate(field)
+                    NavResult.ACTIVATED
+                }
+                NavAction.BACK -> { closeAlternates(); NavResult.CONSUMED }
+                else -> NavResult.CONSUMED
+            }
+        }
         when (event.action) {
             NavAction.LEFT, NavAction.RIGHT -> {
                 val step = if (event.action == NavAction.LEFT) -1 else 1
@@ -294,8 +357,14 @@ class KeyboardState(val autoCapitalize: Boolean = false) {
             NavAction.SELECT -> {
                 val key = rows[row][column]
                 if (event.repeat > 0) {
-                    // Held: Delete keeps deleting, faster and then a word at a time; other keys
-                    // type once per press.
+                    // Held: a key with alternatives shows them; Delete keeps deleting, faster and
+                    // then a word at a time; other keys type once per press. Neither before the
+                    // hold is a real one.
+                    if (event.repeat < HOLD_REPEATS) return NavResult.CONSUMED
+                    if (key.alternates.isNotEmpty()) {
+                        showAlternates(page, row, column, key.alternates, typed = true)
+                        return NavResult.ACTIVATED
+                    }
                     if (key.kind != KeyKind.BACKSPACE) return NavResult.CONSUMED
                     showPress(row, column)
                     deleteHeld(field, event.repeat)
@@ -307,6 +376,7 @@ class KeyboardState(val autoCapitalize: Boolean = false) {
                 return NavResult.ACTIVATED
             }
             NavAction.CONTEXT -> {
+                if (event.repeat in 1 until HOLD_REPEATS) return NavResult.CONSUMED
                 showPress(KeyKind.BACKSPACE)
                 if (event.repeat >= WORD_DELETE_AFTER) field.deleteWordBack() else field.backspace()
                 edited(field)
@@ -780,7 +850,32 @@ private fun KeyCap(
                                     press()
                                 }
                             }
-                            else -> if (waitForUpOrCancellation() != null) press()
+                            else -> if (key.alternates.isEmpty()) {
+                                if (waitForUpOrCancellation() != null) press()
+                            } else {
+                                // Held, the key offers its alternatives: slide to one and let go to type it.
+                                var ended = false
+                                val up = withTimeoutOrNull(HOLD_MS) { waitForUpOrCancellation().also { ended = true } }
+                                if (ended) {
+                                    if (up != null) press()
+                                } else {
+                                    onKey()
+                                    state.showAlternates(position.page, position.row, position.column, key.alternates, typed = false)
+                                    val step = (size.width + KeyGap.toPx()).coerceAtLeast(1f)
+                                    val startX = down.position.x
+                                    while (true) {
+                                        val event = awaitPointerEvent()
+                                        val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                                        change.consume()
+                                        if (!change.pressed) {
+                                            state.chooseAlternate(field)
+                                            break
+                                        }
+                                        state.pointAlternate(((change.position.x - startX) / step).roundToInt())
+                                    }
+                                    state.closeAlternates()
+                                }
+                            }
                         }
                     } finally {
                         repeat?.cancel()
@@ -790,6 +885,9 @@ private fun KeyCap(
                 }
             },
     ) {
+        state.alternates?.takeIf { it.page == position.page && it.row == position.row && it.column == position.column }?.let { a ->
+            KeyAlternatesPopup(a, height)
+        }
         Box(
             Modifier
                 .fillMaxSize()
@@ -1059,6 +1157,56 @@ fun KeysAway(doneLabel: String, onShowKeys: () -> Unit, modifier: Modifier = Mod
             FuseIcon(FuseIcons.Grid3, size = Size.iconS, tint = c.text)
             Spacer(Modifier.width(Space.xs + Space.xxs))
             FText("Show keys", Fuse.type.caption, color = c.text, maxLines = 1)
+        }
+    }
+}
+
+/**
+ * A held key's alternatives, in a row of caps just above it (kept on screen at the edges): the
+ * chosen one lit in the accent. The controller chooses with left and right and A; a finger slides
+ * along and lets go.
+ */
+@Composable
+private fun KeyAlternatesPopup(a: KeyAlternates, height: Dp) {
+    val c = Fuse.colors
+    val density = LocalDensity.current
+    val gap = with(density) { Space.s.roundToPx() }
+    val provider = remember(gap) {
+        object : androidx.compose.ui.window.PopupPositionProvider {
+            override fun calculatePosition(
+                anchorBounds: androidx.compose.ui.unit.IntRect,
+                windowSize: androidx.compose.ui.unit.IntSize,
+                layoutDirection: androidx.compose.ui.unit.LayoutDirection,
+                popupContentSize: androidx.compose.ui.unit.IntSize,
+            ): androidx.compose.ui.unit.IntOffset {
+                val x = (anchorBounds.center.x - popupContentSize.width / 2).coerceIn(0, (windowSize.width - popupContentSize.width).coerceAtLeast(0))
+                return androidx.compose.ui.unit.IntOffset(x, (anchorBounds.top - popupContentSize.height - gap).coerceAtLeast(0))
+            }
+        }
+    }
+    val shape = RoundedCornerShape(Fuse.geometry.control + Space.xs)
+    androidx.compose.ui.window.Popup(popupPositionProvider = provider, properties = androidx.compose.ui.window.PopupProperties(focusable = false)) {
+        Row(
+            Modifier
+                .graphicsLayer {
+                    this.shape = shape
+                    clip = true
+                    shadowElevation = 14f * density.density
+                }
+                .background(c.surfaceRaised)
+                .padding(Space.xs),
+            horizontalArrangement = Arrangement.spacedBy(Space.xs),
+        ) {
+            a.options.forEachIndexed { i, option ->
+                val on = i == a.index
+                val bg by fuselineColor(if (on) c.accent else Color.Transparent, Fuse.motion.tween(Durations.INSTANT), label = "altKey")
+                Box(
+                    Modifier.widthIn(min = height * 1.1f).height(height).clip(RoundedCornerShape(Fuse.geometry.control)).background(bg).padding(horizontal = Space.s),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    FText(option, Fuse.type.bodyStrong, color = if (on) c.onAccent else c.text, maxLines = 1)
+                }
+            }
         }
     }
 }

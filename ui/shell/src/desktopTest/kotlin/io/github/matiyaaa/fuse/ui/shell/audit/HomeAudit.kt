@@ -206,7 +206,7 @@ internal fun AuditDriver.homeChannels(exhaustive: Boolean) {
         useLibrary { it.copy(home = HomeLayoutConfig(mode = HomeMode.CHANNELS)) }
         waitFor("Continue playing")
         // Hold a widget: the board starts arranging and the widget lifts under the finger.
-        val from = textCentre("STORAGE") + androidx.compose.ui.geometry.Offset(0f, 60f)
+        val from = textCentre("THIS WEEK") + androidx.compose.ui.geometry.Offset(0f, 60f)
         touch { down(from) }
         advanceExactly(700)
         shoot("held, the board arranges and the widget lifts")
@@ -220,10 +220,10 @@ internal fun AuditDriver.homeChannels(exhaustive: Boolean) {
         settle(1_200)
         shoot("dropped, the board still arranging")
         // Drag a corner to resize: the size follows the finger cell by cell.
-        touch { down(textCentre("STORAGE")); up() }
+        touch { down(textCentre("THIS WEEK")); up() }
         settle(400)
         shoot("chosen while arranging, its handles show")
-        val grip = describedBounds("Resize Storage from its corner").first().center
+        val grip = describedBounds("Resize This week from its corner").first().center
         touch { down(grip) }
         settle(100)
         touch { moveTo(grip + androidx.compose.ui.geometry.Offset(150f, 120f)) }

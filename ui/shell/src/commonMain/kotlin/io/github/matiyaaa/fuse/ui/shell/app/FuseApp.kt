@@ -146,8 +146,11 @@ fun FuseApp(
      */
     keepPlace: Boolean = false,
 ) {
-    CompositionLocalProvider(LocalShowcaseElsewhere provides showcaseElsewhere) {
-        FuseAppContent(store, platform, router, phoneLink, safeMode, onSettled, startupIntro, keepPlace)
+    val prefs by store.prefs.collectAsState()
+    InterfaceSize(prefs.display.interfaceSize) {
+        CompositionLocalProvider(LocalShowcaseElsewhere provides showcaseElsewhere) {
+            FuseAppContent(store, platform, router, phoneLink, safeMode, onSettled, startupIntro, keepPlace)
+        }
     }
 }
 
@@ -218,7 +221,7 @@ private fun FuseAppContent(
     // motion (short fades, no sliding pages) keep it smooth instead of stuttering.
     val drawing by platform.drawing.collectAsState()
     val cpuDrawing = drawing?.gpu == false
-    val quality = RenderQuality.of(prefs.performance, platform.device, prefs.lowPower || cpuDrawing)
+    val quality = RenderQuality.of(prefs.performance, platform.device, prefs.lowPower || cpuDrawing, LocalWindowPx.current)
     // Motion on Automatic follows the effects this device gets (setup's recommendation, or the
     // Performance choice); a level the person picked is kept, except calmer when drawn without the graphics card.
     val recommendedMotion = io.github.matiyaaa.fuse.model.recommendedMotion(prefs.performance, platform.device, prefs.lowPower || cpuDrawing)
@@ -473,6 +476,22 @@ private fun FuseAppContent(
     LaunchedEffect(Unit) { store.library.onResume() }
     // The Store's news (an app installed, updated or removed), wherever the user is.
     LaunchedEffect(Unit) { store.appStore.notices.collect { app.toasts.show(it) } }
+    // A program only an administrator can remove: the account's password, asked for there and then.
+    val storeState by store.appStore.state.collectAsState()
+    LaunchedEffect(storeState.password) {
+        val ask = storeState.password ?: return@LaunchedEffect
+        app.textInput = TextInputSpec(
+            title = if (ask.wrong) "That password didn't work" else "Password to remove ${ask.name}",
+            initial = "",
+            placeholder = "This computer's password",
+            secret = true,
+            capitalize = false,
+            doneLabel = "Remove",
+            message = "${ask.name} was installed for every account, so removing it needs this computer's password (sudo). Fuse uses it once and never keeps it." +
+                if (ask.wrong) " On a Steam Deck the account has no password until you set one: in Desktop Mode, open Konsole and type passwd." else "",
+            onCancel = { store.appStore.uninstallWith(ask.key, null) },
+        ) { password -> store.appStore.uninstallWith(ask.key, password.ifEmpty { null }) }
+    }
     LaunchedEffect(Unit) { store.cartridge.notices.collect { app.toasts.show(it) } }
     LaunchedEffect(Unit) { store.romm.notices.collect { app.toasts.show(it, durationMs = 5200) } }
     // Syncthing-Fork installed from the Store while setting Syncthing up: back to setup, and it starts.

@@ -88,11 +88,21 @@ fun ChannelHome(app: AppState) {
         if (loading) HomeSkeleton(app, channels = true) else HomeEmpty(app)
         return
     }
+    BoardPages(app, rememberHomeSpace(app))
+}
 
-    val home = prefs.home
+/**
+ * A board in pages ([space]'s: Home's widgets or the Systems page's systems), each page a board of
+ * its own, arranged on its own. See [ChannelHome].
+ */
+@Composable
+internal fun BoardPages(app: AppState, space: BoardSpace) {
+    val store = app.store
+    val prefs by store.prefs.collectAsState()
+    val home = space.config(prefs)
     val count = home.pageCount
     val keys = listOf("first") + home.pages.map { it.id }
-    val state = rememberRouteState(app.navigator, "home.pages") { HomePageState() }
+    val state = rememberRouteState(app.navigator, "${space.key}.pages") { HomePageState() }
     if (state.page >= count) state.page = count - 1
     val pager = rememberPagerState(initialPage = state.page) { count }
     val scope = rememberCoroutineScope()
@@ -124,17 +134,17 @@ fun ChannelHome(app: AppState) {
     }
     fun add() {
         val page = count
-        store.updatePrefs { p -> p.copy(home = p.home.addPage()) }
+        store.updatePrefs { p -> space.keep(p, space.config(p).addPage()) }
         // The new page exists after the next composition; turn to it then.
         scope.launch {
             snapshotFlow { pager.pageCount }.first { it > page }
             go(page)
         }
-        app.toasts.show("A new page. Add widgets to it, or turn back with the right stick")
+        app.toasts.show("A new page. Add ${space.item}s to it, or turn back with the right stick")
     }
     fun remove(page: Int) {
         if (page <= 0) return
-        val gone = { store.updatePrefs { p -> p.copy(home = p.home.removePage(page)) }; if (state.page >= page) state.page = page - 1 }
+        val gone = { store.updatePrefs { p -> space.keep(p, space.config(p).removePage(page)) }; if (state.page >= page) state.page = page - 1 }
         if (home.boardWidgets(page).isEmpty()) {
             gone()
             scope.launch { pager.animateScrollToPage(page - 1) }
@@ -142,7 +152,7 @@ fun ChannelHome(app: AppState) {
         }
         app.confirm = ConfirmSpec(
             title = "Remove this page?",
-            message = "Its widgets come off Home with it. The games, apps and everything they show stay as they are.",
+            message = space.removePageMessage,
             confirmLabel = "Remove page",
             destructive = true,
         ) {
@@ -164,9 +174,11 @@ fun ChannelHome(app: AppState) {
             val key = keys.getOrElse(page) { "first" }
             val paging = HomePaging(count, page, ::turn, ::add, ::remove)
             Box(Modifier.fillMaxSize()) {
-                ChannelBoard(app, page, key, active = page == pager.currentPage, editor = editorOf(key), paging = paging)
-                if (page > 0 && home.boardWidgets(page).isEmpty() && !editorOf(key).arranging) {
+                ChannelBoard(app, space, page, key, active = page == pager.currentPage, editor = editorOf(key), paging = paging)
+                if (page > 0 && space.shown(home, page).isEmpty() && !editorOf(key).arranging) {
                     EmptyPage(
+                        text = space.emptyPage,
+                        item = space.item,
                         onAdd = { editorOf(key).arranging = true },
                         onRemove = { remove(page) },
                     )
@@ -189,7 +201,7 @@ fun ChannelHome(app: AppState) {
 
 /** A page with nothing on it yet: what it is for, and how to fill it or take it away. */
 @Composable
-private fun EmptyPage(onAdd: () -> Unit, onRemove: () -> Unit) {
+private fun EmptyPage(text: String, item: String, onAdd: () -> Unit, onRemove: () -> Unit) {
     val c = Fuse.colors
     BoxWithConstraints(Modifier.fillMaxSize().padding(top = Size.hudHeight, bottom = Size.hintHeight + Space.xl), contentAlignment = Alignment.Center) {
         Panel(Modifier.widthIn(max = 460.dp).padding(horizontal = Space.gutter), raised = true) {
@@ -201,12 +213,12 @@ private fun EmptyPage(onAdd: () -> Unit, onRemove: () -> Unit) {
                 FText("A page of its own", Fuse.type.title, maxLines = 1, align = TextAlign.Center)
                 Spacer(Modifier.height(Space.xs))
                 FText(
-                    "Put the widgets you want together here: what you're playing, your systems, the time. The right stick or a swipe turns between pages.",
+                    text,
                     Fuse.type.body, color = c.textMuted, align = TextAlign.Center, maxLines = 4,
                 )
                 Spacer(Modifier.height(Space.l))
                 Row(horizontalArrangement = Arrangement.spacedBy(Space.s)) {
-                    FuseButton("Add widgets", selected = true, onClick = onAdd, kind = ButtonKind.PRIMARY, icon = FuseIcons.Plus)
+                    FuseButton("Add ${item}s", selected = true, onClick = onAdd, kind = ButtonKind.PRIMARY, icon = FuseIcons.Plus)
                     FuseButton("Remove", selected = false, onClick = onRemove, kind = ButtonKind.SECONDARY, icon = FuseIcons.Trash)
                 }
             }

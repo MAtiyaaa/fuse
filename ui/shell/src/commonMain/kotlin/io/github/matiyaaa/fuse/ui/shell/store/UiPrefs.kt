@@ -50,6 +50,8 @@ data class UiPrefs(
     /** Room kept clear at every edge, in percent, for TVs that cut the picture's edges off. */
     val screenMargin: Int = 0,
     val home: HomeLayoutConfig = HomeLayoutConfig(),
+    /** The Systems page as arranged (see HomeSettings.systemsBoard). */
+    val systemsBoard: HomeLayoutConfig = HomeLayoutConfig(),
     val destinations: List<Destination> = Destination.entries,
     val defaultLayout: LibraryLayout = LibraryLayout.ICON,
     /** Square box art or tall posters on game tiles. */
@@ -100,6 +102,8 @@ data class UiPrefs(
     val biosConfirmed: List<String> = emptyList(),
     /** Drives Fuse already asked about setting up for games, by drive id. */
     val drivesAsked: List<String> = emptyList(),
+    /** Steam's games in the library: "ON", "OFF", or "" (never asked). */
+    val steamGames: String = "",
     val scraperOrder: List<ScrapeProviderId> = io.github.matiyaaa.fuse.data.settings.ScrapingSettings.DefaultProviderOrder,
     val scraperLanguage: String = "en",
     val scraperRegion: String = "any",

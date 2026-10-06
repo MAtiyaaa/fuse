@@ -470,10 +470,10 @@ internal class AuditDriver(
     // ------------------------------------------------------------------------------------ shots
 
     /** The centre of the lowest on-screen [text] (a tile's label rather than a header above it). */
-    fun textCentre(text: String): androidx.compose.ui.geometry.Offset {
+    fun textCentre(text: String, topmost: Boolean = false): androidx.compose.ui.geometry.Offset {
         val nodes = ui.onAllNodesWithText(text, useUnmergedTree = true).fetchSemanticsNodes()
         check(nodes.isNotEmpty()) { "\"$text\" is not on screen" }
-        return nodes.maxBy { it.boundsInRoot.top }.boundsInRoot.center
+        return (if (topmost) nodes.minBy { it.boundsInRoot.top } else nodes.maxBy { it.boundsInRoot.top }).boundsInRoot.center
     }
 
     /** Where everything described as [description] (part of it) is on screen, as touch targets. */

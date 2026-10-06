@@ -27,6 +27,8 @@ import io.github.matiyaaa.fuse.model.MetadataSource
 import io.github.matiyaaa.fuse.model.Platform
 import io.github.matiyaaa.fuse.model.ScanScope
 import io.github.matiyaaa.fuse.romm.BiosPick
+import io.github.matiyaaa.fuse.romm.FoundRomm
+import io.github.matiyaaa.fuse.romm.RommDiscovery
 import io.github.matiyaaa.fuse.romm.LocalGame
 import io.github.matiyaaa.fuse.romm.MatchReason
 import io.github.matiyaaa.fuse.romm.PairingState
@@ -103,6 +105,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
 
 /** A picture RomM keeps, for Fuse's image loader: fetched with Fuse's sign-in and kept for offline. */
@@ -164,6 +167,12 @@ internal class DefaultRommOps(
 
     /** RomM game to the Fuse game it is, once matched. */
     private val matches = MutableStateFlow<Map<Long, Pair<GameId, MatchReason>>>(emptyMap())
+
+    /** Where RomM games landed on this device (normalised path to rom id), so the library game made from one takes its art. */
+    private val landedAt = MutableStateFlow<Map<String, Long>>(emptyMap())
+
+    /** Library games that already took their RomM game's art this run. */
+    private val adopted = HashSet<GameId>()
     /** Moves after every mirror sync, so the lists read the mirror again. */
     private val mirrorRevision = MutableStateFlow(0)
 
@@ -175,6 +184,7 @@ internal class DefaultRommOps(
     fun start() {
         ctx.remoteGames = remote
         ctx.remoteDetail = { id -> id.rommOnly?.let(::detail) }
+        ctx.adoptArt = ::adoptArt
         ctx.remoteGamesOn = { id ->
             mirror.all(server).filter { r -> (ctx.platforms.resolveFolder(r.platformSlug)?.id) == id }.map { rommGameId(it.id) }
         }
@@ -359,6 +369,16 @@ internal class DefaultRommOps(
         )
     }
 
+    override suspend fun discover(): List<FoundRomm> = withContext(Dispatchers.Default) {
+        val all = ctx.settings.value
+        val hints = listOf(settings.localAddress, all.jellyfin.localAddress, all.sync.localAddress)
+        RommDiscovery.find(hints) { address ->
+            val c = RommClient(ctx.services.http, RoutePicker(address, null, RouteMode.LOCAL, ctx.scope, ctx::now, { true }), null)
+            // Only a heartbeat that says RomM's version is RomM; anything else listening there is passed over.
+            withTimeoutOrNull(DISCOVER_ASK_MS) { runCatching { c.heartbeat() }.getOrNull() }?.takeIf { it.isNotBlank() }
+        }
+    }
+
     override suspend fun setAddresses(local: String, remote: String, mode: RouteMode) {
         write { it.copy(localAddress = local.trim(), remoteAddress = remote.trim(), mode = mode.name, enabled = true) }
         cartridgeOff()
@@ -475,7 +495,10 @@ internal class DefaultRommOps(
             val locals = rows.map { r -> LocalGame(r.id.value, r.platform, r.title, FsPath.name(r.path), r.serial, null, r.rommRomId, r.missing) }
             val roms = mirror.all(server)
             val result = RommMatch.match(roms, locals) { slug -> ctx.platforms.resolveFolder(slug)?.id?.value }
+            val before = matches.value
             matches.value = result.associate { it.romId to (GameId(it.gameId) to it.reason) }
+            // Newly joined: the library game keeps the art Fuse already found for the RomM game.
+            for (m in result) if (before[m.romId]?.first?.value != m.gameId) runCatching { adoptArt(GameId(m.gameId), m.romId) }
             // Linked from now on: the game page and Cartridge's Open both know it.
             val byId = rows.associateBy { it.id.value }
             for (m in result) {
@@ -661,6 +684,27 @@ internal class DefaultRommOps(
             view(romId, game, e?.value?.second)
         }.flowOn(Dispatchers.Default)
 
+    override fun libraryGame(romId: Long): Flow<GameId?> = matches.map { it[romId]?.first }.distinctUntilChanged()
+
+    /**
+     * Gives library game [id] the art found for the RomM game it came from ([romId], or the one
+     * downloaded to its path): every kind it has none of, so nothing is looked for twice.
+     */
+    private suspend fun adoptArt(id: GameId, romId: Long? = null): Boolean {
+        if (!synchronized(adopted) { adopted.add(id) }) return false
+        val rom = romId ?: matches.value.entries.firstOrNull { it.value.first == id }?.key ?: run {
+            val path = ctx.data.games.get(id)?.location?.path?.let(FsPath::normalize) ?: return false
+            landedAt.value.entries.firstOrNull { (at, _) -> path == at || FsPath.isWithin(path, at) }?.value
+        }
+        if (rom == null) {
+            synchronized(adopted) { adopted.remove(id) }
+            return false
+        }
+        val n = ctx.data.media.copyMissing(MediaOwner.OfGame(rommGameId(rom)), MediaOwner.OfGame(id))
+        if (n > 0) ctx.gameArtFound.update { it + 1 }
+        return n > 0
+    }
+
     override fun forRom(romId: Long): Flow<RommGameView?> = combine(matches, transfers.items, mirrorRevision) { m, _, _ -> m[romId] }
         .mapLatest { v -> view(romId, v?.first, v?.second) }.flowOn(Dispatchers.Default)
 
@@ -788,6 +832,10 @@ internal class DefaultRommOps(
             // The folder a game landed in is one Fuse reads: a system folder outside every library is added.
             val inLibrary = ctx.data.sources.all().any { it.enabled && FsPath.isWithin(FsPath.normalize(gamePath), FsPath.normalize(it.path)) }
             if (!inLibrary) FsPath.parent(gamePath)?.let { engine.add(it, LibrarySourceKind.PLATFORM_FOLDER) }
+            // The game made from these files takes what was already found for the RomM game.
+            // Only the game's own file or folder, never a system folder other games share.
+            val landed = if (job.newFolder || r.multi) gamePath else paths.firstOrNull()
+            if (landed != null) landedAt.update { it + (FsPath.normalize(landed) to r.id) }
             if (settings.scanAfterDownload) {
                 engine.rescan(ScanScope.PLATFORM, ctx.platforms.resolveFolder(r.platformSlug)?.id)
                 // Once indexed: linked to RomM, with RomM's details and pictures.
@@ -922,6 +970,7 @@ internal class DefaultRommOps(
 
         /** How long a burst of art arriving waits before the lists are drawn again. */
         private const val REDRAW_MS = 4_000L
+        private const val DISCOVER_ASK_MS = 3_000L
         private const val NS = "romm"
         private const val PROBE_MS = 1_500L
         private const val LOOP_MS = 60_000L

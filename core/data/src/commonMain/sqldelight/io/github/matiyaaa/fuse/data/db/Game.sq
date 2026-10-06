@@ -89,6 +89,9 @@ SELECT id FROM game WHERE path = ?;
 selectPaths:
 SELECT id, path FROM game WHERE removed_at IS NULL;
 
+selectInPlatform:
+SELECT id, source_id, hidden FROM game WHERE platform_id = ? AND removed_at IS NULL;
+
 selectIdsByRaGameIds:
 SELECT id, ra_game_id FROM game WHERE ra_game_id IN ?;
 

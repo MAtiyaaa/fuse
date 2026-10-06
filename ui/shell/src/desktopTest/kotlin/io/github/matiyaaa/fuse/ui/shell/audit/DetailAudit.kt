@@ -35,7 +35,7 @@ internal fun AuditDriver.detailScreens() {
     scenario("details", "firmware marked as set up") {
         useLibrary()
         tab(Destination.SYSTEMS)
-        waitFor("System options")
+        waitFor("Arrange")
         tap(PadButton.X)
         tapText("System Settings")
         waitFor("Disc playlists")

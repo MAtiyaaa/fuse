@@ -69,6 +69,21 @@ class MediaRepository(
         q.deleteOwner(owner.type(), owner.key())
     }
 
+    /**
+     * Gives [to] the art [from] has of each kind [to] has none of (the same pictures: a game found
+     * on RomM and then downloaded keeps what was found for it). Returns how many were copied.
+     */
+    suspend fun copyMissing(from: MediaOwner, to: MediaOwner): Int = withContext(dispatcher) {
+        val theirs = q.selectByOwner(from.type(), from.key()).executeAsList()
+        if (theirs.isEmpty()) return@withContext 0
+        db.transactionWithResult {
+            val have = q.selectByOwner(to.type(), to.key()).executeAsList().mapTo(HashSet()) { it.kind }
+            val copy = theirs.filter { it.kind !in have }
+            for (r in copy) q.insert(to.type(), to.key(), r.kind, r.source, r.local_path, r.remote_url, r.width, r.height, r.focus_x, r.focus_y, r.zoom, r.sort_order, r.added_at)
+            copy.size
+        }
+    }
+
     /** Puts [rows] back as they were (after [clearOwner]), replacing what [owner] has now. */
     suspend fun putBack(owner: MediaOwner, rows: List<io.github.matiyaaa.fuse.data.db.Media>): Unit = withContext(dispatcher) {
         db.transaction {

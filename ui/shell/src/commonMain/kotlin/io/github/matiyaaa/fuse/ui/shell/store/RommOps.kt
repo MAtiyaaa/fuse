@@ -7,6 +7,8 @@ import io.github.matiyaaa.fuse.model.ContentKind
 import io.github.matiyaaa.fuse.model.GameId
 import io.github.matiyaaa.fuse.model.PlatformId
 import io.github.matiyaaa.fuse.romm.BiosPick
+import io.github.matiyaaa.fuse.romm.FoundRomm
+import io.github.matiyaaa.fuse.romm.RommDiscovery
 import io.github.matiyaaa.fuse.romm.MirrorProgress
 import io.github.matiyaaa.fuse.romm.RommDeviceCode
 import kotlinx.coroutines.flow.Flow
@@ -168,6 +170,9 @@ interface RommOps {
     suspend fun test(local: String, remote: String, mode: RouteMode): RommTest
     suspend fun setAddresses(local: String, remote: String, mode: RouteMode)
 
+    /** RomM servers on this network, found the way Fuse Sync and Jellyfin find theirs ([RommDiscovery]). */
+    suspend fun discover(): List<FoundRomm> = emptyList()
+
     /** Starts pairing with the addresses set: RomM shows the code to approve. [upload] asks for upload rights too. */
     suspend fun startPairing(upload: Boolean): Result<RommDeviceCode>
 
@@ -209,6 +214,9 @@ interface RommOps {
     /** What RomM has of a Fuse game (null when it isn't on RomM, or Fuse RomM is off). */
     fun forGame(game: GameId): Flow<RommGameView?>
     fun forRom(romId: Long): Flow<RommGameView?>
+
+    /** The library game a RomM game became (downloaded, or found here), or null while it is only on RomM. */
+    fun libraryGame(romId: Long): Flow<GameId?> = flowOf(null)
 
     /** Queues a download; null when it was queued, else why not. */
     suspend fun download(romId: Long, what: RommDownloadWhat = RommDownloadWhat.Game): String?

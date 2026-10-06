@@ -49,6 +49,12 @@ data class ScanRequest(
     val policies: FolderPolicyResolver = FolderPolicyResolver.CatalogDefaults,
     val mediaRoots: List<String> = emptyList(),
     val sourcePlatforms: Map<LibrarySourceId, PlatformId> = emptyMap(),
+    /**
+     * Systems left out wherever they are found (Steam, when the person said no to it: a games
+     * folder's `steam` folder of shortcuts then isn't read). Shortcut folders, which hold Windows
+     * games too, are still read.
+     */
+    val leaveOut: Set<PlatformId> = emptySet(),
 )
 
 /** Events of [LibraryScanner.scanAsFlow]. */
@@ -133,7 +139,7 @@ class LibraryScanner(
         for (source in request.sources.filter { it.enabled }) {
             currentCoroutineContext().ensureActive()
             val discovery = discover(source, request.sourcePlatforms[source.id])
-            folders += discovery.platformFolders
+            folders += discovery.platformFolders.filter { it.shortcuts || it.platform.id !in request.leaveOut }
             unknown += discovery.unknownFolders
             errors += discovery.errors
         }

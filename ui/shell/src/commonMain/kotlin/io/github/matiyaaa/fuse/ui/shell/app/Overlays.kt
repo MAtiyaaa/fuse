@@ -291,7 +291,7 @@ private fun TextInputOverlay(app: AppState) {
             keyboard.prepare(field)
             app.keyboardTarget = KeyboardTarget(
                 field, title = spec.title, secret = spec.secret, placeholder = spec.placeholder, doneLabel = spec.doneLabel,
-                cancel = { app.textInput = null },
+                cancel = { app.textInput = null; spec.onCancel() },
             ) {
                 app.textInput = null
                 spec.onDone(field.text)
@@ -320,7 +320,8 @@ private fun TextInputOverlay(app: AppState) {
             repeats = keyboard.repeats,
         ) { e ->
             when (e.action) {
-                NavAction.BACK -> { app.textInput = null; NavResult.CONSUMED }
+                // Back puts a held key's alternatives away first.
+                NavAction.BACK -> { if (!keyboard.closeAlternates()) { app.textInput = null; spec.onCancel() }; NavResult.CONSUMED }
                 // Arrow keys move the caret while the keys are away.
                 NavAction.LEFT, NavAction.RIGHT -> if (!keysShown && e.source == InputSource.KEYBOARD) {
                     val at = field.value.selection.start + if (e.action == NavAction.RIGHT) 1 else -1
@@ -333,7 +334,7 @@ private fun TextInputOverlay(app: AppState) {
             }
         }
     }
-    Overlay(visible = spec != null, onDismiss = { app.textInput = null }, edge = OverlayEdge.BOTTOM) {
+    Overlay(visible = spec != null, onDismiss = { app.textInput = null; spec?.onCancel?.invoke() }, edge = OverlayEdge.BOTTOM) {
         val s = shown ?: return@Overlay
         BoxWithConstraints {
             // Short screens (handhelds) get shorter keys, so the field and hints still fit.
@@ -344,6 +345,10 @@ private fun TextInputOverlay(app: AppState) {
                         FText(s.title, Fuse.type.titleSmall, maxLines = 1, modifier = Modifier.weight(1f))
                         // A phone following along already has this field open on it.
                         if (phones > 0) PhoneOpenPill()
+                    }
+                    s.message?.let { m ->
+                        Spacer(Modifier.height(Space.xs))
+                        FText(m, Fuse.type.body, color = Fuse.colors.textMuted, maxLines = 4)
                     }
                     Spacer(Modifier.height(Space.m))
                     KeyboardField(

@@ -250,8 +250,13 @@ class DesktopPlatformUi(
 
     override fun clearCrashReport() = crashLog.clear()
 
-    override val steam: io.github.matiyaaa.fuse.ui.shell.platform.SteamIntegration =
-        DesktopSteam(io.github.matiyaaa.fuse.desktop.services.KnownFolders(dirs.home, os))
+    private val desktopSteam = DesktopSteam(io.github.matiyaaa.fuse.desktop.services.KnownFolders(dirs.home, os))
+    override val steam: io.github.matiyaaa.fuse.ui.shell.platform.SteamIntegration = desktopSteam
+
+    init {
+        // Fuse's art for any Steam entry that starts it, even one Steam made, every time Fuse starts.
+        scope.launch(Dispatchers.IO) { runCatching { desktopSteam.dressEntries() }.onSuccess { if (it > 0) Log.info("Steam: art for $it entries") } }
+    }
 
     override val windowControls: WindowControls = object : WindowControls {
         override val mode: WindowStyle get() = when (windowMode) {
@@ -296,8 +301,8 @@ class DesktopPlatformUi(
         val ram = totalRamMb() ?: (Runtime.getRuntime().maxMemory() / (1024 * 1024))
         val headless = GraphicsEnvironment.isHeadless()
         val screens = if (headless) emptyArray() else GraphicsEnvironment.getLocalGraphicsEnvironment().screenDevices
-        val primary = if (headless) null else GraphicsEnvironment.getLocalGraphicsEnvironment().defaultScreenDevice
-        val mode = primary?.displayMode
+        // The largest screen: Fuse may be moved to it, or shown there (a handheld on a TV).
+        val mode = screens.mapNotNull { runCatching { it.displayMode }.getOrNull() }.maxByOrNull { it.width.toLong() * it.height }
         // AWT reports 0 when the refresh rate is unknown; 60 Hz is then the assumption.
         val refresh = screens.maxOfOrNull { it.displayMode.refreshRate }?.takeIf { it > 0 }?.toFloat() ?: 60f
         val dpi = try {

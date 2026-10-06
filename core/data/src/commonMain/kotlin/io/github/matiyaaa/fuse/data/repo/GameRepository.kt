@@ -134,6 +134,11 @@ class GameRepository(
         q.selectPaths().executeAsList().map { GameId(it.id) to it.path }
     }
 
+    /** A system's games (removed games left out): id, library folder and whether it is hidden. */
+    suspend fun inPlatform(platform: PlatformId): List<Triple<GameId, LibrarySourceId, Boolean>> = withContext(dispatcher) {
+        q.selectInPlatform(platform.value).executeAsList().map { Triple(GameId(it.id), LibrarySourceId(it.source_id), it.hidden != 0L) }
+    }
+
     /** Every game with what tells it apart (its file, serial and RomM link), for Fuse RomM's matching. */
     suspend fun matchRows(): List<GameMatchRow> = withContext(dispatcher) {
         q.matchRows().executeAsList().map { r ->

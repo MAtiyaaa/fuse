@@ -18,7 +18,7 @@ object ProfileSettings {
         "appearance.heroDim", "appearance.highContrastFocus", "appearance.textScale", "appearance.startupAnimation",
         "appearance.recentColors", "appearance.rememberPlace", "appearance.standbyMinutes",
         // Home, the tabs and the quick menu.
-        "home.layout", "home.destinations", "home.addonsOrder", "home.quickMenu",
+        "home.layout", "home.systemsBoard", "home.destinations", "home.addonsOrder", "home.quickMenu",
         // The library as they like it.
         "library.cleanDisplayNames", "library.systemOrder", "library.sort", "library.systemArtStyle",
         "library.selectOpensGamePage", "library.collectionsEnabled", "library.autoSeries", "library.hiddenSeries",

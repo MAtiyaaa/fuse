@@ -1,5 +1,6 @@
 package io.github.matiyaaa.fuse.ui.player.ffmpeg
 
+import io.github.matiyaaa.fuse.playback.BitmapCue
 import io.github.matiyaaa.fuse.playback.Cue
 import io.github.matiyaaa.fuse.playback.PlaySource
 import org.bytedeco.ffmpeg.avcodec.AVCodec
@@ -644,7 +645,8 @@ internal class FfmpegPlayback(
                         if (c.endMs == Long.MAX_VALUE && c.startMs <= start) subtitleCues[i] = SubtitleConverter.ended(c, start)
                     }
                 }
-                subtitleCues += cues.cues
+                // A cue read twice (the stream read again after a stall) shows once.
+                for (c in cues.cues) if (c is BitmapCue || c !in subtitleCues) subtitleCues += c
             }
         } finally {
             avsubtitle_free(sub)

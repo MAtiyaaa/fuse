@@ -65,6 +65,7 @@ internal class SystemArtStore(private val ctx: StoreContext) {
             ctx.data.settings.settings.map { it.library.systemPanels.values.toSet() }.distinctUntilChanged().collect { GamePanels.models = it }
         }
         followGamesArt()
+        giveOwnLogos()
         val data = ctx.data
         ctx.scope.launch {
             data.games.platformCounts()
@@ -89,6 +90,32 @@ internal class SystemArtStore(private val ctx: StoreContext) {
                     }
                 }
         }
+    }
+
+    /**
+     * Systems the pack has no logo for that Fuse drew one for (the PlayStation 5) get Fuse's, as
+     * soon as they show, unless they already have a logo (the person's own, say).
+     */
+    private fun giveOwnLogos() {
+        val data = ctx.data
+        ctx.scope.launch {
+            data.games.platformCounts()
+                .map { counts -> counts.filterValues { it > 0 }.keys }
+                .combine(ctx.shownPlatforms) { here, shown -> (here + shown).filter { it.value in OWN_LOGOS } }
+                .distinctUntilChanged()
+                .collect { ids ->
+                    for (id in ids) runCatching {
+                        if (data.media.get(MediaOwner.OfPlatform(id)).logo == null) ownLogo(id)?.let { data.media.putScraped(MediaOwner.OfPlatform(id), listOf(it), MediaFillMode.FILL_MISSING, setOf(MediaKind.LOGO)) }
+                    }
+                }
+        }
+    }
+
+    /** Fuse's own logo for [id], as a file it can draw, or null when it has none. */
+    private suspend fun ownLogo(id: PlatformId): MediaItem? {
+        val resource = OWN_LOGOS[id.value] ?: return null
+        val path = ctx.services.cacheFile("system-logos/${id.value}.svg") { io.github.matiyaaa.fuse.ui.designsystem.res.Res.readBytes(resource) } ?: return null
+        return MediaItem(MediaKind.LOGO, MediaSource.ART_PACK, localPath = path)
     }
 
     /**
@@ -150,7 +177,8 @@ internal class SystemArtStore(private val ctx: StoreContext) {
      * when the pack has no such system or it can't be reached.
      */
     private suspend fun fetch(platform: Platform, mode: MediaFillMode): Int {
-        val name = SystemArtNames.forPlatform(platform.id, platform.folderAliases) ?: return fromGames(platform, mode)
+        val name = SystemArtNames.forPlatform(platform.id, platform.folderAliases) ?: return fromGames(platform, mode) +
+            (ownLogo(platform.id)?.let { ctx.data.media.putScraped(MediaOwner.OfPlatform(platform.id), listOf(it), mode, setOf(MediaKind.LOGO)) } ?: 0)
         // From your games: the pack's logo and colour, the panel from the system's own screenshots.
         val games = gamesStyle
         val art = (client.fetch(name, if (games) SystemArtStyle.CLASSIC else style) as? ApiResult.Success)?.value
@@ -296,3 +324,6 @@ internal const val GAMES_STYLE = "GAMES"
 
 /** How long after games' art was found that systems drawn from it look again (art comes in bursts). */
 private const val GAME_ART_SETTLE_MS = 2_000L
+
+/** Logos Fuse drew for systems the art pack has none for, by platform id, to the bundled file. */
+private val OWN_LOGOS = mapOf("ps5" to "files/system-logos/ps5.svg")

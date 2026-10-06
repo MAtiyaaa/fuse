@@ -29,7 +29,7 @@ Home screen.
 <a href="https://github.com/MAtiyaaa/fuse/releases/latest"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/brand/button-macos-dark.svg"><img src="docs/assets/brand/button-macos-light.svg" height="48" alt="Download for macOS"></picture></a>
 
 <sub>Android 9 or newer &nbsp;·&nbsp; 64-bit x86 Linux AppImage &nbsp;·&nbsp; Windows 10 and 11 &nbsp;·&nbsp; macOS on Apple silicon and Intel &nbsp;·&nbsp; <a href="#install">checksums and install notes</a></sub><br>
-<sub>0.3.6.4 is the <b>Unity Update</b> with your household's RomM and Jellyfin coming along with Fuse Sync, each person with their own Jellyfin account, and RomM games that get your own art and details: Fuse RomM, Fuse's native RomM integration, one Downloads page for every transfer, Jellyfin films and episodes kept for offline, streaming from a computer at home through Moonlight, saves that reach every device in the house by themselves, screenshots and recordings on computers and a friend for Fusi, after 0.3.5, the Swift Update (Fuse Sync straight to the outside address, quick profile switches, tabs that change in the next frame), and 0.3.4, the Household Update (a profile for everyone, with or without a host). <a href="#where-fuse-stands">Here is where it stands.</a></sub><br>
+<sub>0.3.6.5 is the <b>Unity Update</b> with your household's RomM and Jellyfin coming along with Fuse Sync, each person with their own Jellyfin account, and RomM games that get your own art and details: Fuse RomM, Fuse's native RomM integration, one Downloads page for every transfer, Jellyfin films and episodes kept for offline, streaming from a computer at home through Moonlight, saves that reach every device in the house by themselves, screenshots and recordings on computers and a friend for Fusi, after 0.3.5, the Swift Update (Fuse Sync straight to the outside address, quick profile switches, tabs that change in the next frame), and 0.3.4, the Household Update (a profile for everyone, with or without a host). <a href="#where-fuse-stands">Here is where it stands.</a></sub><br>
 <sub>Or download from <a href="https://matiyaaa.github.io/fuse/">Fuse's website</a>, which always offers the latest version for your system.</sub>
 
 <br>
@@ -554,7 +554,7 @@ Linux app, isn't offered on Windows and macOS (Fuse RomM is, on every computer).
 ## Where Fuse stands
 
 > [!IMPORTANT]
-> **Fuse 0.3.6.4 "The Unity Update" is still early, and brings everything into one place.** Fuse RomM,
+> **Fuse 0.3.6.5 "The Unity Update" is still early, and brings everything into one place.** Fuse RomM,
 > Fuse's native RomM integration, browses a RomM server, downloads games and BIOS into the folders
 > Fuse already has, uploads yours and keeps an offline copy of the library; Cartridge is still fully
 > supported. Every download and upload Fuse makes is on one Downloads page. Jellyfin films and
@@ -565,8 +565,11 @@ Linux app, isn't offered on Windows and macOS (Fuse RomM is, on every computer).
 > Sync by Fuse (saves, play time, library and settings on every device, a profile for each person)
 > is still the sync Fuse recommends. 0.3.6.1 brings large RomM libraries in quickly and keeps them,
 > 0.3.6.2 gives RomM games your own art and details, 0.3.6.3 brings your household's RomM and
-> Jellyfin along with Fuse Sync, each person with their own Jellyfin account, and 0.3.6.4 shows RomM
-> games' box art at once, makes system panels from your games' screenshots (the PS5's by itself) and puts RomM on the second screen. See [the release notes](docs/releases/0.3.6.4.md).
+> Jellyfin along with Fuse Sync, each person with their own Jellyfin account, 0.3.6.4 shows RomM
+> games' box art at once, makes system panels from your games' screenshots (the PS5's by itself) and
+> puts RomM on the second screen, and 0.3.6.5 sizes Fuse for a 4K TV by itself, lets you arrange
+> your systems like Home, starts emulators in Game Mode, removes any emulator from the Store (or all at
+> once), finds RomM on your network, sharpens big-screen backgrounds, cleans up subtitles and keeps Steam out when you say no. See [the release notes](docs/releases/0.3.6.5.md).
 
 <details>
 <summary><b>Every release so far</b></summary>
@@ -574,6 +577,7 @@ Linux app, isn't offered on Windows and macOS (Fuse RomM is, on every computer).
 
 | Version | Name | What it brought |
 |---|---|---|
+| [0.3.6.5](docs/releases/0.3.6.5.md) | The Unity Update | Fuse sized for a 4K TV by itself, with an Interface size setting; the Systems page arranged like Home, with sizes and pages; logos that fit every card and a PS5 logo; Downloads that open their game; RomM art kept on download; RomM found on the network; emulators that start in Game Mode; Store uninstalls with a password prompt, Install All and Uninstall All; one delete per press and a full stop key on the on-screen keyboard; Steam art on any Fuse entry; sharper backgrounds; subtitles outlined in black again; no to Steam kept |
 | [0.3.6.4](docs/releases/0.3.6.4.md) | The Unity Update | RomM games' box art shown as soon as it is found, without reopening Fuse; system panels from your games' screenshots, cut like Art Book Next's, by themselves for the PS5 and as a style or your pick for any system; RomM on the second screen; Fuse's art in Steam; Linux updates in place |
 | [0.3.6.3](docs/releases/0.3.6.3.md) | The Unity Update | RomM and Jellyfin that come with Fuse Sync, sealed for each device and asked once when you update; each person's own Jellyfin account; whose saves move on each device; Fuse Sync first in setup; the grand welcome the first time anyone plays here; motion that follows the device |
 | [0.3.6.2](docs/releases/0.3.6.2.md) | The Unity Update | RomM games with your own art and details, kept and editable; the library's games not on RomM; box art instead of RomM's posters; system art for RomM-only systems; a nicer RomM tab |
@@ -648,6 +652,7 @@ sha256sum -c SHA256SUMS.txt --ignore-missing
       <pre><code>chmod +x Fuse-*-x86_64.AppImage
 ./Fuse-*-x86_64.AppImage</code></pre>
       <p>If it does not start, your distribution may need the FUSE 2 library (<code>libfuse2</code>, or <code>libfuse2t64</code> on newer Ubuntu and Debian). See the <a href="https://docs.appimage.org/user-guide/troubleshooting/fuse.html">AppImage FUSE guide</a>.</p>
+      <p>On KDE Plasma with Wayland and a scaled screen (a 4K TV at 200%, say), set System Settings, Display and Monitor, Legacy Applications (X11) to <b>Apply scaling themselves</b>. Fuse is then drawn sharp and sizes itself for the screen; otherwise the system stretches it and it looks soft.</p>
     </td>
   </tr>
   <tr>

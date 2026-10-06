@@ -31,7 +31,10 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -221,6 +224,13 @@ internal class LibraryEngine(private val ctx: StoreContext) : SourceOps {
     private val requests = Channel<Pending>(Channel.UNLIMITED)
 
     fun start() {
+        // Steam in or out as the person answers (setup's Steam step, Settings, Library, Steam).
+        ctx.scope.launch {
+            ctx.settings.map { it.library.steamGames }.distinctUntilChanged().drop(1).collect {
+                runCatching { placeSteam(steamWanted()) }
+                rescan(ScanScope.QUICK)
+            }
+        }
         // Drives: plugging one in or out is noticed where the system tells, and on every scan.
         driveWatch = runCatching { ctx.services.volumes.watch { driveChanges.trySend(Unit) } }.getOrNull()
         ctx.scope.launch {
@@ -276,7 +286,8 @@ internal class LibraryEngine(private val ctx: StoreContext) : SourceOps {
         var last = ScanProgress(ScanPhase.DISCOVERING)
         scanState.value = last
         val report = try {
-            scanner.scan(ScanRequest(enabled, scope, platform, policyResolver())) { progress ->
+            val leaveOut = if (steamWanted()) emptySet() else setOf(STEAM)
+            scanner.scan(ScanRequest(enabled, scope, platform, policyResolver(), leaveOut = leaveOut)) { progress ->
                 last = progress
                 scanState.value = progress
             }
@@ -312,6 +323,7 @@ internal class LibraryEngine(private val ctx: StoreContext) : SourceOps {
             removed = delta.missing,
             changed = delta.updated + delta.restored,
         )
+        runCatching { placeSteam(steamWanted()) }
         if (delta.addedIds.isNotEmpty()) added.tryEmit(delta.addedIds)
         // Steam games left unticked when their library was added: hidden now that they are in.
         val hide = synchronized(hideAfterScan) { hideAfterScan.toSet() }
@@ -367,6 +379,37 @@ internal class LibraryEngine(private val ctx: StoreContext) : SourceOps {
         }
     }
 
+    /**
+     * Whether Steam's games belong in this library: the person's answer, or when never asked, on a
+     * computer only when they added Steam games (Steam's step in setup asks there), and elsewhere yes.
+     */
+    private suspend fun steamWanted(): Boolean = when (ctx.settings.value.library.steamGames) {
+        STEAM_ON -> true
+        STEAM_OFF -> false
+        else -> ctx.services.host == io.github.matiyaaa.fuse.model.Host.ANDROID ||
+            data.sources.all().any { it.kind == LibrarySourceKind.STEAM_LIBRARY || (it.kind == LibrarySourceKind.SHORTCUTS && it.label == "Steam") }
+    }
+
+    /**
+     * Steam's games out of the library when the person said no to Steam: those already in (Steam
+     * shortcuts a games folder brought along, like ES-DE's and EmuDeck's `steam` folder) are hidden,
+     * each once, so one shown again by hand stays shown; and back when they say yes.
+     */
+    private suspend fun placeSteam(wanted: Boolean) {
+        val put = data.cache.entry(STEAM_NS, STEAM_HIDDEN)?.valueJson.orEmpty()
+            .split(',').mapNotNull { it.toLongOrNull() }.toSet()
+        if (wanted) {
+            if (put.isEmpty()) return
+            put.forEach { data.games.setHidden(io.github.matiyaaa.fuse.model.GameId(it), false) }
+            data.cache.put(STEAM_NS, STEAM_HIDDEN, "", ctx.now(), ttlMs = null)
+            return
+        }
+        val out = data.games.inPlatform(STEAM).filter { (id, _, hidden) -> !hidden && id.value !in put }.map { it.first }
+        if (out.isEmpty()) return
+        out.forEach { data.games.setHidden(it, true) }
+        data.cache.put(STEAM_NS, STEAM_HIDDEN, (put + out.map { it.value }).joinToString(","), ctx.now(), ttlMs = null)
+    }
+
     private companion object {
         /** Wait after a drive event before looking, so a card that is still mounting reads whole. */
         const val DRIVE_SETTLE_MS = 1_200L
@@ -379,3 +422,12 @@ private const val RULES_KEY = "version"
 /** Moves when the scanner's idea of what a game is changes (2: a game's own folders are never games). */
 private const val SCAN_RULES = 2
 
+private val STEAM = PlatformId("steam")
+private const val STEAM_NS = "library.steam"
+private const val STEAM_HIDDEN = "hidden"
+
+/** [io.github.matiyaaa.fuse.data.settings.LibraryPreferences.steamGames]: Steam's games wanted. */
+internal const val STEAM_ON = "ON"
+
+/** [io.github.matiyaaa.fuse.data.settings.LibraryPreferences.steamGames]: no thanks. */
+internal const val STEAM_OFF = "OFF"

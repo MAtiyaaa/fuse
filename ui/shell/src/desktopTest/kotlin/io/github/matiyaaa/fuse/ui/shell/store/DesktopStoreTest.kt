@@ -78,6 +78,19 @@ class DesktopStoreTest {
         override suspend fun remove(path: String): Boolean = File(path).delete()
         override suspend fun exists(path: String): Boolean = File(path).exists()
         override fun launch(path: String): Boolean = File(path).exists()
+
+        /** Programs found here but not installed by Fuse: removed only with the right password. */
+        val removedOthers = mutableListOf<String>()
+        val passwordsTried = mutableListOf<String?>()
+
+        override suspend fun removeOther(appId: String, name: String, password: String?): RemoveOutcome {
+            passwordsTried += password
+            return when (password) {
+                null -> RemoveOutcome.NeedsPassword()
+                "right" -> { removedOthers += appId; RemoveOutcome.Removed }
+                else -> RemoveOutcome.NeedsPassword(wrong = true)
+            }
+        }
     }
 
     private fun release(repo: String, vararg assets: String) =
@@ -162,5 +175,40 @@ class DesktopStoreTest {
         assertNotNull(ops.addCustom("https://github.com/someone/handy"), "added once only")
         ops.removeCustom(added.key)
         assertTrue(ops.state.value.catalogue!!.apps.none { it.custom })
+    }
+
+    /**
+     * A program found on this computer that Fuse didn't install (DuckStation on the PATH here) is
+     * removed too: the account's password is asked for when only an administrator can, asked again
+     * when it was wrong, and Back gives up without removing anything.
+     */
+    @Test
+    fun aProgramFuseDidntInstallIsRemovedWithThePassword(): Unit = runBlocking {
+        val (services, installer) = services()
+        val store = createFuseStore(services, scope)
+        val ops = store.appStore
+        ops.open()
+        eventually("found") { ops.state.value.installed["duckstation"] }
+
+        ops.uninstall("duckstation")
+        val ask = eventually("asked") { ops.state.value.password }
+        assertEquals("duckstation", ask.key)
+        assertFalse(ask.wrong)
+
+        ops.uninstallWith("duckstation", "wrong")
+        eventually("asked again") { ops.state.value.password?.takeIf { it.wrong } }
+
+        // Given up: nothing removed, nothing waiting.
+        ops.uninstallWith("duckstation", null)
+        assertNull(ops.state.value.password)
+        assertNull(ops.state.value.jobs["duckstation"])
+        assertTrue(installer.removedOthers.isEmpty())
+
+        ops.uninstall("duckstation")
+        eventually("asked once more") { ops.state.value.password }
+        ops.uninstallWith("duckstation", "right")
+        // Gone from the list, and its Uninstalling job cleared just after.
+        eventually("removed") { ops.state.value.takeIf { "duckstation" !in it.installed && "duckstation" !in it.jobs } }
+        assertEquals(1, installer.removedOthers.size)
     }
 }

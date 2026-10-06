@@ -68,6 +68,24 @@ internal class DesktopSteam(private val folders: KnownFolders) : SteamIntegratio
         else Result.success(if (done == 1) "Fuse is in Steam's library. Start Steam and find it under Non-Steam." else "Fuse is in Steam's library for $done users. Start Steam and find it under Non-Steam.")
     }
 
+    /**
+     * Gives every Steam entry that starts Fuse its art, whoever made it: Add Fuse to Steam, or
+     * Steam's own Add a Non-Steam Game (which names it after the AppImage, often with a version).
+     * Only art files are written, never Steam's list, so this is safe while Steam runs; Steam shows
+     * them the next time it draws its library. Art already there stays. Returns how many entries.
+     */
+    fun dressEntries(): Int {
+        val exe = program()
+        var n = 0
+        for (dir in userConfigDirs(create = false)) {
+            val bytes = File(dir, "shortcuts.vdf").takeIf { it.isFile }?.let { runCatching { it.readBytes() }.getOrNull() } ?: continue
+            for (id in SteamShortcuts.idsOf(bytes) { path, name -> isFuse(path, name, exe) }) {
+                runCatching { placeArt(File(dir, "grid"), id) }.onSuccess { n++ }.onFailure { Log.warn("could not give Steam Fuse's art in $dir", it) }
+            }
+        }
+        return n
+    }
+
     /** What Steam should start: the AppImage Fuse runs from, or the installed program. */
     private fun program(): String? {
         System.getenv("APPIMAGE")?.takeIf { File(it).isFile }?.let { return it }
@@ -83,13 +101,30 @@ internal class DesktopSteam(private val folders: KnownFolders) : SteamIntegratio
 
     private fun quote(path: String): String = "\"$path\""
 
+    companion object {
+        private val FUSE_PROGRAM = Regex("(?i)^fuse([-_. ][^/\\\\]*)?\\.(appimage|exe)$|^fuse$")
+
+        /**
+         * Whether a Steam entry running [path] (named [name]) is Fuse: the program Fuse runs as now
+         * ([running]), or a Fuse AppImage or program by its file name (`Fuse.AppImage`,
+         * `Fuse-0.3.6.4-x86_64.AppImage`, `Fuse.exe`).
+         */
+        internal fun isFuse(path: String, name: String, running: String?): Boolean {
+            if (running != null && File(path).absolutePath == File(running).absolutePath) return true
+            return FUSE_PROGRAM.matches(File(path).name) || (name.equals("Fuse", ignoreCase = true) && path.contains("fuse", ignoreCase = true))
+        }
+    }
+
     /**
      * Writes Fuse's art for [shortcut] into [grid], named as Steam looks for a non-Steam game's:
      * `<id>p.png` (library capsule), `<id>.png` (wide capsule), `<id>_hero.png`, `<id>_logo.png` and
      * `<id>_icon.png`. Returns the icon's path for the entry.
      */
-    internal fun placeArt(grid: File, shortcut: SteamShortcut): String {
-        val id = SteamShortcuts.appId(shortcut.exe, shortcut.name).toLong() and 0xFFFFFFFFL
+    internal fun placeArt(grid: File, shortcut: SteamShortcut): String =
+        placeArt(grid, SteamShortcuts.appId(shortcut.exe, shortcut.name).toLong() and 0xFFFFFFFFL)
+
+    /** [placeArt] for the entry Steam knows as [id]. */
+    internal fun placeArt(grid: File, id: Long): String {
         grid.mkdirs()
         for ((resource, name) in listOf("portrait" to "${id}p", "capsule" to "$id", "hero" to "${id}_hero", "logo" to "${id}_logo", "icon" to "${id}_icon")) {
             // Art already there for this entry (the person's own, from SteamGridDB or Steam) stays.
@@ -107,10 +142,11 @@ internal class DesktopSteam(private val folders: KnownFolders) : SteamIntegratio
     }
 
     /** Every Steam user's config folder (`userdata/<id>/config`), on every Steam install found. */
-    private fun userConfigDirs(): List<File> = folders.steamPlaces().first
+    private fun userConfigDirs(create: Boolean = true): List<File> = folders.steamPlaces().first
         .map { File(it, "userdata") }
         .flatMap { root -> root.listFiles()?.filter { it.isDirectory && it.name.toLongOrNull()?.let { id -> id > 0 } == true }.orEmpty() }
-        .map { File(it, "config").apply { mkdirs() } }
+        .map { File(it, "config").apply { if (create) mkdirs() } }
+        .filter { it.isDirectory }
         .distinctBy { it.canonicalPath }
 
     private fun userLists(): List<File> = userConfigDirs().map { File(it, "shortcuts.vdf") }.filter { it.isFile }

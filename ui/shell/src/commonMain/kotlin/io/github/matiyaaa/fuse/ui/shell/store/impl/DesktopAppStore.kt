@@ -17,6 +17,8 @@ import io.github.matiyaaa.fuse.ui.shell.store.DesktopInstaller
 import io.github.matiyaaa.fuse.ui.shell.store.InFuse
 import io.github.matiyaaa.fuse.ui.shell.store.InstallRecord
 import io.github.matiyaaa.fuse.ui.shell.store.InstalledApp
+import io.github.matiyaaa.fuse.ui.shell.store.PasswordAsk
+import io.github.matiyaaa.fuse.ui.shell.store.RemoveOutcome
 import io.github.matiyaaa.fuse.ui.shell.store.ReleaseCheck
 import io.github.matiyaaa.fuse.ui.shell.store.SourceKind
 import io.github.matiyaaa.fuse.ui.shell.store.StoreApp
@@ -75,6 +77,14 @@ internal class DesktopAppStoreOps(
 
     fun start() {
         ctx.resumeHooks.update { it + ::onResume }
+        // Emulators found or gone (one removed, one installed by hand): the Store follows.
+        ctx.scope.launch {
+            ctx.installed.collect { list ->
+                val ids = list.map { it.id.value }.toSet()
+                gone.retainAll { key -> entries[key]?.emulator?.let { e -> ids.any { it.endsWith(".$e") } } == true }
+                refreshInstalled()
+            }
+        }
         ctx.scope.launch {
             token = ctx.services.secrets.get(DefaultAppStoreOps.TOKEN_KEY)
             mutable.update { it.copy(hasGitHubToken = token != null) }
@@ -170,6 +180,8 @@ internal class DesktopAppStoreOps(
                 continue
             }
             val other = e.emulator?.let { detected["$prefix$it"] } ?: continue
+            // Just removed: detection catches up a moment later.
+            if (e.key in gone) continue
             found[e.key] = InstalledApp(other.appId, other.version, 0, other.name)
         }
         mutable.update { it.copy(installed = found) }
@@ -328,24 +340,111 @@ internal class DesktopAppStoreOps(
 
     override fun uninstall(key: String) {
         if (mutable.value.jobs[key]?.active == true) return
-        val record = ctx.settings.value.store.installs[key]
-        val name = entries[key]?.name ?: key
-        if (record == null) {
-            noticesFlow.tryEmit("$name wasn't installed by Fuse, so Fuse leaves it as it is.")
-            return
-        }
-        setJob(key, StoreJob.Uninstalling)
         ctx.scope.launch {
-            if (installer.remove(record.packageName)) {
-                forget(key)
-                refreshInstalled()
-                clearJob(key)
-                redetect()
-                noticesFlow.tryEmit("$name is removed.")
-            } else {
-                setJob(key, StoreJob.Failed("Fuse couldn't remove $name. It may be open; close it and try again.", retry = false))
+            when (val step = removeOne(key, password = null, quiet = false)) {
+                is Step.Password -> ask(PasswordAsk(key, entries[key]?.name ?: key, step.wrong))
+                else -> Unit
             }
         }
+    }
+
+    override fun uninstallWith(key: String, password: String?) {
+        mutable.update { it.copy(password = null) }
+        if (key == ALL) {
+            val keys = pendingAll
+            pendingAll = emptyList()
+            if (password == null) keys.forEach(::clearJob) else ctx.scope.launch { uninstallMany(keys, password) }
+            return
+        }
+        if (password == null) {
+            clearJob(key)
+            return
+        }
+        ctx.scope.launch {
+            when (val step = removeOne(key, password, quiet = false)) {
+                is Step.Password -> ask(PasswordAsk(key, entries[key]?.name ?: key, step.wrong))
+                else -> Unit
+            }
+        }
+    }
+
+    override fun installAll() {
+        val installed = mutable.value.installed.keys
+        entries.values
+            .filter { it.key !in installed && it.repoFor(installer.host) != null && it.page == null }
+            .forEach { install(it.key) }
+    }
+
+    override fun uninstallAll() {
+        val keys = mutable.value.installed.keys.filter { mutable.value.jobs[it]?.active != true }
+        if (keys.isEmpty()) return
+        ctx.scope.launch { uninstallMany(keys, password = null) }
+    }
+
+    /** Removes [keys] one after another; the password, asked once when one needs it, does for the rest. */
+    private suspend fun uninstallMany(keys: List<String>, password: String?) {
+        var removed = 0
+        for ((i, key) in keys.withIndex()) {
+            when (val step = removeOne(key, password, quiet = true)) {
+                Step.Done -> removed++
+                is Step.Password -> {
+                    pendingAll = keys.drop(i)
+                    pendingAll.drop(1).forEach { setJob(it, StoreJob.Uninstalling) }
+                    ask(PasswordAsk(ALL, if (pendingAll.size == 1) entries[key]?.name ?: key else "${pendingAll.size} programs", step.wrong))
+                    if (removed > 0) noticesFlow.tryEmit(if (removed == 1) "1 program is removed." else "$removed programs are removed.")
+                    return
+                }
+                Step.Failed -> Unit
+            }
+        }
+        if (removed > 0) noticesFlow.tryEmit(if (removed == 1) "1 program is removed." else "$removed programs are removed.")
+    }
+
+    /**
+     * Removes [key]: what Fuse put in place is deleted; a program found here otherwise (a Flatpak, an
+     * AppImage) is removed as it was installed, with [password] when only an administrator can.
+     */
+    private suspend fun removeOne(key: String, password: String?, quiet: Boolean): Step {
+        val name = entries[key]?.name ?: key
+        val record = ctx.settings.value.store.installs[key]
+        setJob(key, StoreJob.Uninstalling)
+        if (record != null) {
+            if (!installer.remove(record.packageName)) {
+                setJob(key, StoreJob.Failed("Fuse couldn't remove $name. It may be open; close it and try again.", retry = false))
+                return Step.Failed
+            }
+            forget(key)
+        } else {
+            val other = mutable.value.installed[key] ?: run { clearJob(key); return Step.Done }
+            when (val r = installer.removeOther(other.packageName, name, password)) {
+                RemoveOutcome.Removed -> Unit
+                is RemoveOutcome.NeedsPassword -> return Step.Password(r.wrong)
+                is RemoveOutcome.Failed -> {
+                    setJob(key, StoreJob.Failed(r.message, retry = false))
+                    return Step.Failed
+                }
+            }
+        }
+        gone += key
+        refreshInstalled()
+        clearJob(key)
+        redetect()
+        if (!quiet) noticesFlow.tryEmit("$name is removed.")
+        return Step.Done
+    }
+
+    private fun ask(ask: PasswordAsk) = mutable.update { it.copy(password = ask) }
+
+    /** Programs the Store is waiting to remove once the password is given (Uninstall all). */
+    private var pendingAll: List<String> = emptyList()
+
+    /** Programs removed this run that detection may still list for a moment. */
+    private val gone = HashSet<String>()
+
+    private sealed interface Step {
+        data object Done : Step
+        data object Failed : Step
+        data class Password(val wrong: Boolean) : Step
     }
 
     // Apps the user adds
@@ -416,6 +515,9 @@ internal class DesktopAppStoreOps(
         const val LIMIT_PAUSE_MS = 15L * 60 * 1000
         const val AUTO_CHECK_DELAY_MS = 30_000L
         val GITHUB = Regex("^https://github\\.com/([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+)$")
+
+        /** The password asked for Uninstall all, not one program. */
+        const val ALL = "*all"
     }
 }
 

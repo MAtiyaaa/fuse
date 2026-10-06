@@ -247,7 +247,7 @@ class DesktopEmulatorFiles(
     }
 
     override suspend fun runInstaller(run: InstallerRun, onOutput: (String) -> Unit): InstallerResult = withContext(Dispatchers.IO) {
-        val builder = ProcessBuilder(run.argv).redirectErrorStream(true)
+        val builder = ProcessBuilder(run.argv).redirectErrorStream(true).also { io.github.matiyaaa.fuse.desktop.system.Processes.hostEnvironment(it.environment()) }
         run.workingDir?.let { builder.directory(File(it)) }
         val environment = builder.environment()
         // Fuse's own AppImage variables would make the emulator load Fuse's libraries, not its own.

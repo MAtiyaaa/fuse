@@ -49,6 +49,7 @@ internal fun AppSettings.toUiPrefs(scoped: GlobalScoped): UiPrefs {
         textScale = appearance.textScale.coerceIn(1f, 1.5f),
         screenMargin = appearance.screenMargin.coerceIn(0, 10),
         home = home.layout,
+        systemsBoard = home.systemsBoard,
         destinations = home.visibleDestinations(),
         defaultLayout = scoped.layout,
         gameArt = library.gameArt,
@@ -88,6 +89,7 @@ internal fun AppSettings.toUiPrefs(scoped: GlobalScoped): UiPrefs {
         hiddenSeries = library.hiddenSeries,
         biosConfirmed = library.biosConfirmed,
         drivesAsked = library.drivesAsked,
+        steamGames = library.steamGames,
         scraperOrder = scraping.providerOrder,
         scraperLanguage = scraping.preferredLanguage,
         scraperRegion = scraping.preferredRegion ?: ANY_REGION,
@@ -125,7 +127,7 @@ internal fun AppSettings.withUiPrefs(prefs: UiPrefs): AppSettings {
         Destination.entries.filterNot { it in visible }.map { DestinationSetting(it, visible = false) }
     return copy(
         onboarding = onboarding.copy(completed = prefs.onboardingDone, romm = prefs.rommAnswer),
-        home = home.copy(layout = prefs.home, destinations = destinations, continueDismissed = prefs.continueDismissed, addonsOrder = prefs.addonsOrder, quickMenu = prefs.quickMenu),
+        home = home.copy(layout = prefs.home, systemsBoard = prefs.systemsBoard, destinations = destinations, continueDismissed = prefs.continueDismissed, addonsOrder = prefs.addonsOrder, quickMenu = prefs.quickMenu),
         appearance = appearance.copy(
             themeId = theme.id,
             motion = prefs.motion,
@@ -165,6 +167,7 @@ internal fun AppSettings.withUiPrefs(prefs: UiPrefs): AppSettings {
             hiddenSeries = prefs.hiddenSeries,
             biosConfirmed = prefs.biosConfirmed,
             drivesAsked = prefs.drivesAsked,
+            steamGames = prefs.steamGames,
             appsFilter = prefs.appsFilter,
             gameArt = prefs.gameArt,
         ),

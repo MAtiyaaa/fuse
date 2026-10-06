@@ -115,17 +115,13 @@ import kotlin.time.TimeSource
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-/** Columns of the board on a landscape screen, and on a narrow one (a phone held upright). */
-private const val BOARD_COLUMNS = 4
-
 /** The room Undo and Reset take above the board while it is arranged. */
 private val ARRANGE_TOOLS_ROOM = 64.dp
 
 /** A board as it was before a change, for Undo (no board saved yet is the board Home came with). */
 private class KeptBoard(val board: List<HomeWidget>?)
-private const val BOARD_COLUMNS_NARROW = 2
 
-/** Narrower than this (and held upright), the board uses [BOARD_COLUMNS_NARROW] so widgets stay big enough to read. */
+/** Narrower than this (and held upright), the board uses two columns so items stay big enough to read. */
 private val NARROW_BELOW = 600.dp
 
 /** Thinner than this, two columns whichever way the screen is held. */
@@ -149,33 +145,24 @@ private const val WIDGET_CORNER = 0.6f
  * D-pad carries it a cell at a time; holding Options (X) turns the D-pad into resizing.
  */
 @Composable
-internal fun ChannelBoard(app: AppState, page: Int, pageKey: String, active: Boolean, editor: BoardEditor, paging: HomePaging) {
+internal fun ChannelBoard(app: AppState, space: BoardSpace, page: Int, pageKey: String, active: Boolean, editor: BoardEditor, paging: HomePaging) {
     val store = app.store
     val prefs by store.prefs.collectAsState()
-    val feed by store.homeFeed.collectAsState()
-    val cartridge by store.cartridge.status.collectAsState()
-    val achievementsOn by store.achievements.configured.collectAsState()
 
-    val widgets = prefs.home.boardWidgets(page).filter { onBoard(it, app, prefs, cartridge, achievementsOn) }
+    val widgets = space.shown(space.config(prefs), page)
     // Every change made while arranging can be taken back, newest first; the floating Undo and
     // Reset at the top right ([ArrangeTools]) are reached by moving up past the board's top row.
     val history = remember { mutableStateListOf<KeptBoard>() }
     var onTools by remember { mutableStateOf<Int?>(null) }
-    // With Fuse Sync and settings following a profile: whose Home this is, this device's or everyone's.
-    val syncPrefs = app.store.prefs.collectAsState().value.sync
-    val ownHome: Boolean? = if (app.syncProfile != null && syncPrefs.settings) syncPrefs.homeScope == "DEVICE" else null
-    fun setOwnHome(own: Boolean) {
-        app.scope.launch {
-            app.store.sync.setOwnHome(own)
-            app.toasts.show(if (own) "This Home is now this device's own. The profile's is kept for later" else "Home now follows you to every device")
-        }
-    }
+    // Whose arrangement this is, this device's or the profile's, where that can be chosen.
+    val ownHome: Boolean? = space.own
+    fun setOwnHome(own: Boolean) = space.setOwn(own)
     val arranging = editor.arranging
     val op = editor.op
-    val sel = rememberRouteState(app.navigator, if (page == 0) "home.board" else "home.board.$pageKey") { SpatialSelection() }
-    // Where each carousel widget stands, kept while Home is away so it comes back where it was.
-    val carousels = rememberRouteState(app.navigator, "home.carousels.$pageKey") { HashMap<String, CarouselState>() }
-    fun carouselOf(w: HomeWidget): CarouselState? = if (w.kind.isCarousel) carousels.getOrPut(w.id) { CarouselState() } else null
+    val sel = rememberRouteState(app.navigator, if (page == 0) "${space.key}.board" else "${space.key}.board.$pageKey") { SpatialSelection() }
+    // Where each carousel widget stands, kept while the board is away so it comes back where it was.
+    val carousels = rememberRouteState(app.navigator, "${space.key}.carousels.$pageKey") { HashMap<String, CarouselState>() }
+    fun carouselOf(w: HomeWidget): CarouselState? = if (space.carousel(w)) carousels.getOrPut(w.id) { CarouselState() } else null
     fun shownAt(w: HomeWidget?): Int = w?.let { carouselOf(it)?.index } ?: 0
     // After a change is kept the board's order follows its new reading order; the same widget stays chosen.
     var reselect by remember { mutableStateOf<String?>(null) }
@@ -206,13 +193,13 @@ internal fun ChannelBoard(app: AppState, page: Int, pageKey: String, active: Boo
         }
     }
 
-    val systems = rememberSystems(app)
     // The room behind the board takes the focused widget's game: for a carousel, the one in front.
     val shown = current?.let { carouselOf(it)?.index } ?: 0
-    PageEffect(current?.id, shown, systems, active) {
+    val hero = space.hero(current, shown)
+    PageEffect(current?.id, shown, hero, active) {
         if (!active) return@PageEffect
-        val game = current?.let { shownGame(it.kind, feed, shown) }
-        app.hero = game?.room(systems[game.platformId])
+        app.hero = hero
+        space.chosen(current)
     }
     val turns = current?.let { carouselOf(it) }?.takeIf { it.count > 1 } != null
     PageEffect(arranging, op is BoardOp.Carry, resizeLook, onTools, active, paging.count, turns) {
@@ -220,11 +207,11 @@ internal fun ChannelBoard(app: AppState, page: Int, pageKey: String, active: Boo
         val pages = (if (turns) listOf(Hint(HintButton.PAGE_PREV, ""), Hint(HintButton.PAGE_NEXT, "Browse")) else emptyList()) +
             if (paging.count > 1) listOf(Hint(HintButton.RIGHT_STICK, "Pages")) else emptyList()
         app.hints = when {
-            arranging && onTools != null -> listOf(Hint(HintButton.CONFIRM, when (onTools) { 0 -> "Undo"; 1 -> if (page == 0) "Reset Home" else "Clear page"; 2 -> "New page"; else -> if (ownHome == true) "Home on all devices" else "This device's own Home" }), Hint(HintButton.BACK, "Done"))
+            arranging && onTools != null -> listOf(Hint(HintButton.CONFIRM, when (onTools) { 0 -> "Undo"; 1 -> space.resetLabel(page); 2 -> "New page"; else -> if (ownHome == true) "${space.name} on all devices" else "This device's own ${space.name}" }), Hint(HintButton.BACK, "Done"))
             op is BoardOp.Carry -> listOf(Hint(HintButton.DPAD, "Move"), Hint(HintButton.CONFIRM, "Put down"), Hint(HintButton.BACK, "Cancel"))
             resizeLook -> listOf(Hint(HintButton.DPAD, "Resize"), Hint(HintButton.HOLD_OPTIONS, "Let go when done"))
             arranging -> listOf(Hint(HintButton.CONFIRM, "Pick up"), Hint(HintButton.HOLD_OPTIONS, "Resize"), Hint(HintButton.OPTIONS, "Edit"), Hint(HintButton.BACK, "Done"))
-            widgets.isEmpty() -> listOf(Hint(HintButton.CONFIRM, "Add widgets"), Hint(HintButton.OPTIONS, "Options")) + pages
+            widgets.isEmpty() -> listOf(Hint(HintButton.CONFIRM, "Add ${space.item}s"), Hint(HintButton.OPTIONS, "Options")) + pages
             else -> listOf(Hint(HintButton.CONFIRM, "Open"), Hint(HintButton.HOLD_CONFIRM, "Arrange"), Hint(HintButton.OPTIONS, "Options")) + pages
         }
     }
@@ -234,34 +221,23 @@ internal fun ChannelBoard(app: AppState, page: Int, pageKey: String, active: Boo
     }
 
     fun keepForUndo() {
-        if (editor.arranging) history.add(KeptBoard(store.prefs.value.home.storedBoard(page)))
+        if (editor.arranging) history.add(KeptBoard(space.config(store.prefs.value).storedBoard(page)))
     }
     fun undo() {
         val before = history.removeLastOrNull() ?: return app.toasts.show("Nothing to undo")
-        store.updatePrefs { p -> p.copy(home = p.home.withBoard(page, before.board)) }
+        store.updatePrefs { p -> space.keep(p, space.config(p).withBoard(page, before.board)) }
         app.platform.sounds.play(io.github.matiyaaa.fuse.ui.designsystem.sound.SoundCue.BACK)
     }
     fun reset() {
         // The first page goes back as it came; a page added later is cleared.
-        val first = page == 0
         app.confirm = ConfirmSpec(
-            title = if (first) "Put Home back as it came?" else "Clear this page?",
-            message = if (first) {
-                "On this device, every widget returns to its first place and size, and widgets you added go" +
-                    (if (store.sync.inUse) ". Your Home on your other devices stays as it is." else ".") + " Undo brings your board back."
-            } else {
-                "Its widgets come off. The page stays, and Undo brings them back."
-            },
-            confirmLabel = if (first) "Reset Home" else "Clear page",
+            title = space.resetTitle(page),
+            message = space.resetMessage(page),
+            confirmLabel = space.resetLabel(page),
         ) {
             keepForUndo()
-            if (first) {
-                // This device's alone, and kept for Undo Home Reset in Settings and Fuse Sync too.
-                store.resetHome { it.withBoard(page, io.github.matiyaaa.fuse.model.HomeLayoutConfig.DefaultBoard) }
-            } else {
-                store.updatePrefs { p -> p.copy(home = p.home.withBoard(page, emptyList())) }
-            }
-            app.toasts.show(if (first) "Home is back as it came on this device" else "This page is clear")
+            space.reset(page)
+            app.toasts.show(space.resetDone(page))
         }
     }
 
@@ -274,38 +250,40 @@ internal fun ChannelBoard(app: AppState, page: Int, pageKey: String, active: Boo
         keepForUndo()
         val reading = layout.ids.withIndex().associate { it.value to it.index }
         store.updatePrefs { p ->
-            val board = p.home.boardWidgets(page).map { w ->
+            val c = space.config(p)
+            val board = c.boardWidgets(page).map { w ->
                 val r = layout[w.id] ?: return@map w
                 val sized = if (w.id == resized) w.copy(width = r.width, height = r.height) else w
                 sized.copy(spots = w.spots + (columns to r.spot))
             }.sortedWith(compareBy({ reading[it.id] ?: Int.MAX_VALUE }, { it.order }))
-            p.copy(home = p.home.withBoard(page, board.mapIndexed { i, w -> w.copy(order = i) }))
+            space.keep(p, c.withBoard(page, board.mapIndexed { i, w -> w.copy(order = i) }))
         }
     }
     fun saveBoard(change: (List<HomeWidget>) -> List<HomeWidget>) {
         keepForUndo()
-        store.updatePrefs { p -> p.copy(home = p.home.withBoard(page, change(p.home.boardWidgets(page)).mapIndexed { i, w -> w.copy(order = i) })) }
+        store.updatePrefs { p -> space.config(p).let { c -> space.keep(p, c.withBoard(page, change(c.boardWidgets(page)).mapIndexed { i, w -> w.copy(order = i) })) } }
     }
     fun remove(w: HomeWidget) {
-        saveBoard { list -> list.filterNot { it.id == w.id } }
-        app.toasts.show("Took ${w.kind.title()} off Home. Add it back with Add widget")
+        saveBoard { list -> space.removed(list, w) }
+        app.toasts.show("Took ${space.title(w)} off ${space.name}. Add it back with Add ${space.item}")
     }
-    fun add(kind: WidgetKind) {
-        saveBoard { list -> list + HomeWidget(kind.name.lowercase(), kind, list.size) }
-        reselect = kind.name.lowercase()
-        app.toasts.show("Added ${kind.title()}")
+    fun add(a: Addable) {
+        keepForUndo()
+        store.updatePrefs { p -> space.keep(p, space.add(space.config(p), page, a)) }
+        reselect = a.widget.id
+        app.toasts.show("Added ${a.title}")
     }
     fun addPicker() {
-        val missing = WidgetKind.entries.filter { k -> prefs.home.boardWidgets(page).none { it.kind == k } && app.offersToAdd(k) }
+        val missing = space.addable(space.config(prefs), page)
         if (missing.isEmpty()) {
-            app.toasts.show(if (paging.count > 1) "Every widget is on this page already" else "Every widget is on Home already")
+            app.toasts.show(if (paging.count > 1) "Every ${space.item} is on this page already" else "Every ${space.item} is on ${space.name} already")
             return
         }
         app.choice = ChoiceSpec(
-            title = "Add a widget",
+            title = "Add a ${space.item}",
             icon = FuseIcons.CirclePlus,
             message = "It takes the first free place on the board. Then drag it anywhere, or resize it by its handles",
-            options = missing.map { k -> MenuAction("add.$k", k.title(), widgetIcon(k), onSelect = { app.choice = null; add(k) }) },
+            options = missing.map { a -> MenuAction(a.key, a.title, a.icon, detail = a.detail, onSelect = { app.choice = null; add(a) }) },
         )
     }
     fun stopArranging() {
@@ -316,7 +294,7 @@ internal fun ChannelBoard(app: AppState, page: Int, pageKey: String, active: Boo
         sel.clamp(widgets.size)
     }
 
-    fun open(w: HomeWidget) = app.openWidget(w.kind, feed, shownAt(w))
+    fun open(w: HomeWidget) = space.open(w, shownAt(w))
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
         // Two columns only on a screen held upright (a phone) or a very thin one. A small screen
@@ -324,15 +302,13 @@ internal fun ChannelBoard(app: AppState, page: Int, pageKey: String, active: Boo
         // cells as tall as a handheld's.
         val narrow = maxWidth < NARROW_BELOW && (maxWidth < maxHeight || maxWidth < TINY_BELOW)
         val small = maxHeight < SMALL_BELOW || maxWidth < NARROW_BELOW
-        val columns = if (narrow) BOARD_COLUMNS_NARROW else BOARD_COLUMNS
+        val columns = space.columns(narrow, maxWidth)
         val gutter = if (narrow || small) Space.gutterCompact else Space.gutter
         val gapX = if (narrow || small) Space.m else Space.l
         // Rows stay clear of the spark under a focused widget.
         val gapY = Size.sparkClearance
         val cellW = (maxWidth - gutter * 2 - gapX * (columns - 1)) / columns
-        // Never shorter than a handheld's cells, which every widget's face is made to fit; a small
-        // screen scrolls the board rather than cut a widget's words off.
-        val cellH = (cellW * if (narrow) 0.86f else 0.6f).coerceIn(CELL_MIN, CELL_MAX)
+        val cellH = space.cellHeight(cellW, narrow)
         val density = LocalDensity.current
         val geometry = with(density) { BoardGeometry(columns, cellW.toPx(), cellH.toPx(), gapX.toPx(), gapY.toPx()) }
         val committed = remember(widgets, columns) {
@@ -491,7 +467,7 @@ internal fun ChannelBoard(app: AppState, page: Int, pageKey: String, active: Boo
                         // repeats change nothing: one bump on the first press, then quiet.
                         if (turn.step(if (e.action == NavAction.PAGE_DOWN) 1 else -1, nudge = !e.isRepeat)) NavResult.MOVED else NavResult.BLOCKED
                     }
-                    NavAction.CONTEXT -> { app.openContextMenu(boardMenu(app, editor, w, ::addPicker, ::stopArranging, ::remove, committed, page, paging)); NavResult.ACTIVATED }
+                    NavAction.CONTEXT -> { app.openContextMenu(space.menu(w, editor.arranging, boardActions(app, space, editor, w, ::addPicker, ::stopArranging, ::remove, committed, page, paging))); NavResult.ACTIVATED }
                     NavAction.BACK -> if (arranging) { stopArranging(); NavResult.CONSUMED } else NavResult.IGNORED
                     else -> NavResult.IGNORED
                 }
@@ -502,7 +478,6 @@ internal fun ChannelBoard(app: AppState, page: Int, pageKey: String, active: Boo
         val controls = remember { mutableStateMapOf<String, Rect>() }
         var containerTopLeft by remember { mutableStateOf(Offset.Zero) }
         var viewport by remember { mutableStateOf(0f) }
-        val time = rememberClockText(prefs.clock24h)
         // One shared beat for the arranging wobble, read only while drawing, and only running while
         // arranging: a beat left running would wake every frame for nothing.
         val wobbling = arranging && op == null && !motion.reduced
@@ -514,16 +489,11 @@ internal fun ChannelBoard(app: AppState, page: Int, pageKey: String, active: Boo
             }
         }
         val wells by fuselineFloat(if (arranging) 1f else 0f, motion.fade(Durations.BASE), label = "wells")
-        val cartridgeIcon = remember { if (app.store.apps.supported) io.github.matiyaaa.fuse.ui.shell.store.AppIconModel(io.github.matiyaaa.fuse.integrations.cartridge.CartridgeProtocol.PACKAGE_NAME) else null }
-        CompositionLocalProvider(
-            LocalHomeTime provides time,
-            LocalCartridgeIcon provides cartridgeIcon.takeIf { cartridge.installed },
-            LocalSyncService provides app.store.sync.service.takeIf { prefs.sync.enabled },
-        ) {
+        space.Provide {
             Column(Modifier.fillMaxSize()) {
                 // While arranging the board moves down to make room for Undo and Reset above it.
                 val toolsRoom by fuselineDp(if (arranging) ARRANGE_TOOLS_ROOM else 0.dp, motion.tween(Durations.BASE), label = "toolsRoom")
-                Spacer(Modifier.height(Size.hudHeight + toolsRoom))
+                Spacer(Modifier.height(space.top + toolsRoom))
                 Box(
                     Modifier
                         .weight(1f)
@@ -594,15 +564,15 @@ internal fun ChannelBoard(app: AppState, page: Int, pageKey: String, active: Boo
                                     geometry.rect(rect)
                                 }
                                 val selected = i == sel.index && app.focusZone == FocusZone.CONTENT
+                                val carousel = carouselOf(w)
                                 BoardItem(
-                                    carousel = carouselOf(w),
+                                    carousel = carousel,
                                     widget = w,
                                     size = rect.size,
                                     rect = px,
                                     reveal = { m -> m.reveal(reveal, 1 + rect.row) },
-                                    feed = feed,
-                                    cartridge = cartridge,
-                                    clock24h = prefs.clock24h,
+                                    glow = space.glow(w, carousel?.index ?: 0),
+                                    face = { space.Face(w, rect.size, carousel?.index ?: 0) },
                                     selected = selected,
                                     lifted = dragged != null || (op is BoardOp.Carry && op.id == w.id),
                                     following = dragged != null,
@@ -617,7 +587,7 @@ internal fun ChannelBoard(app: AppState, page: Int, pageKey: String, active: Boo
                                             arranging -> sel.index = i
                                             // A tap on a widget that plays a game shows it first; the rest open
                                             // at once, and so does anything clicked with a mouse.
-                                            sel.index == i || w.kind !in playWidgets || router.mouse -> { sel.index = i; open(w) }
+                                            sel.index == i || !space.firstTapChooses(w) || router.mouse -> { sel.index = i; open(w) }
                                             else -> sel.index = i
                                         }
                                     },
@@ -632,7 +602,7 @@ internal fun ChannelBoard(app: AppState, page: Int, pageKey: String, active: Boo
                                         val resizingHere = (op as? BoardOp.Resize)?.takeIf { it.id == w.id }
                                         if (op == null && !resizeLook) {
                                             RemoveBadge(
-                                                w.kind.title(),
+                                                space.title(w),
                                                 Modifier.align(Alignment.TopStart).offset(-BADGE_OUT, -BADGE_OUT)
                                                     .onGloballyPositioned { controls["x:${w.id}"] = Rect(it.positionInRoot(), it.size.toSize()) },
                                             ) { remove(w) }
@@ -643,7 +613,7 @@ internal fun ChannelBoard(app: AppState, page: Int, pageKey: String, active: Boo
                                         // Handles on the chosen widget, or the one being resized.
                                         if ((selected && op == null && !resizeLook) || resizingHere != null) {
                                             ResizeHandles(
-                                                name = w.kind.title(),
+                                                name = space.title(w),
                                                 rect = rect,
                                                 columns = columns,
                                                 active = resizingHere?.edge,
@@ -683,6 +653,7 @@ internal fun ChannelBoard(app: AppState, page: Int, pageKey: String, active: Boo
                                 selected = sel.index == widgets.size && app.focusZone == FocusZone.CONTENT,
                                 shape = shape,
                                 modifier = Modifier.boardPlace(geometry.rect(addRect), animate = true),
+                                label = "Add ${space.item}",
                                 onClick = { sel.index = widgets.size; addPicker() },
                             )
                         }
@@ -701,6 +672,8 @@ internal fun ChannelBoard(app: AppState, page: Int, pageKey: String, active: Boo
         ) {
             ArrangeBar(
                 compact = narrow || small,
+                item = space.item,
+                name = space.name,
                 onAdd = ::addPicker,
                 onDone = ::stopArranging,
                 ownHome = ownHome,
@@ -710,7 +683,8 @@ internal fun ChannelBoard(app: AppState, page: Int, pageKey: String, active: Boo
         // Undo and Reset float at the top right while arranging, out of the board's way.
         Appear(
             arranging && op == null && !resizeLook,
-            modifier = Modifier.align(Alignment.TopEnd).padding(top = Size.hudHeight, end = gutter),
+            // In the room the board leaves above itself while arranging (under the top line on Home).
+            modifier = Modifier.align(Alignment.TopEnd).padding(top = space.top, end = gutter),
             enter = fadeIn(motion.enter(Durations.BASE)) + slideInVertically(motion.enter(Durations.BASE)) { -it / 2 },
             exit = fadeOut(motion.exit(Durations.FAST)) + slideOutVertically(motion.exit(Durations.FAST)) { -it / 2 },
         ) {
@@ -734,9 +708,10 @@ internal fun ChannelBoard(app: AppState, page: Int, pageKey: String, active: Boo
     }
 }
 
-/** Home's options: arranging, and for a chosen widget moving, resizing and removing it. */
-private fun boardMenu(
+/** A board's own options: arranging, and for a chosen item moving, resizing and removing it; pages. */
+private fun boardActions(
     app: AppState,
+    space: BoardSpace,
     editor: BoardEditor,
     w: HomeWidget?,
     addPicker: () -> Unit,
@@ -745,39 +720,35 @@ private fun boardMenu(
     board: BoardLayout,
     page: Int,
     paging: HomePaging,
-) = ContextMenuSpec(
-    title = w?.kind?.title() ?: "Home",
-    subtitle = "Home",
-    actions = listOfNotNull(
-        if (!editor.arranging) {
-            MenuAction("arrange", "Arrange Home", FuseIcons.Grid, detail = "Move, resize, add and remove widgets", onSelect = {
-                app.closeOverlays()
-                editor.arranging = true
-            })
-        } else {
-            null
-        },
-        w?.let {
-            MenuAction("move", "Move", FuseIcons.Move, detail = "Then drag it anywhere, or carry it with the D-pad", onSelect = {
-                app.closeOverlays()
-                editor.arranging = true
-                board[it.id]?.let { r -> editor.start(BoardOp.Carry(it.id, board, r)) }
-            })
-        },
-        w?.let {
-            val s = board[it.id]?.size ?: it.boardSize
-            MenuAction("resize", "Resize", FuseIcons.Scaling, detail = "Now ${s.width} by ${s.height}. Hold Options and use the D-pad, or drag a handle", onSelect = {
-                app.closeOverlays()
-                editor.arranging = true
-                app.toasts.show("Hold Options and press a direction to resize ${it.kind.title()}")
-            })
-        },
-        w?.let { MenuAction("remove", "Remove from Home", FuseIcons.Minus, destructive = true, onSelect = { app.closeOverlays(); remove(it) }) },
-        if (editor.arranging) MenuAction("add", "Add a widget", FuseIcons.CirclePlus, onSelect = { app.closeOverlays(); addPicker() }) else null,
-        MenuAction("page.new", "New page", FuseIcons.CopyPlus, detail = "A page of its own for more widgets. The right stick or a swipe turns pages", onSelect = { app.closeOverlays(); paging.add() }),
-        if (page > 0) MenuAction("page.remove", "Remove this page", FuseIcons.Trash, destructive = true, onSelect = { app.closeOverlays(); paging.remove(page) }) else null,
-        if (editor.arranging) MenuAction("done", "Done arranging", FuseIcons.Check, onSelect = { app.closeOverlays(); stopArranging() }) else null,
-    ) + if (editor.arranging) emptyList() else app.homeStyleActions(),
+): List<MenuAction> = listOfNotNull(
+    if (!editor.arranging) {
+        MenuAction("arrange", "Arrange ${space.name}", FuseIcons.Grid, detail = "Move, resize, add and remove ${space.item}s, on as many pages as you like", onSelect = {
+            app.closeOverlays()
+            editor.arranging = true
+        })
+    } else {
+        null
+    },
+    w?.let {
+        MenuAction("move", "Move", FuseIcons.Move, detail = "Then drag it anywhere, or carry it with the D-pad", onSelect = {
+            app.closeOverlays()
+            editor.arranging = true
+            board[it.id]?.let { r -> editor.start(BoardOp.Carry(it.id, board, r)) }
+        })
+    },
+    w?.let {
+        val s = board[it.id]?.size ?: it.boardSize
+        MenuAction("resize", "Resize", FuseIcons.Scaling, detail = "Now ${s.width} by ${s.height}. Hold Options and use the D-pad, or drag a handle", onSelect = {
+            app.closeOverlays()
+            editor.arranging = true
+            app.toasts.show("Hold Options and press a direction to resize ${space.title(it)}")
+        })
+    },
+    w?.let { MenuAction("remove", "Remove from ${space.name}", FuseIcons.Minus, destructive = true, onSelect = { app.closeOverlays(); remove(it) }) },
+    if (editor.arranging) MenuAction("add", "Add a ${space.item}", FuseIcons.CirclePlus, onSelect = { app.closeOverlays(); addPicker() }) else null,
+    MenuAction("page.new", "New page", FuseIcons.CopyPlus, detail = "A page of its own for more ${space.item}s. The right stick or a swipe turns pages", onSelect = { app.closeOverlays(); paging.add() }),
+    if (page > 0) MenuAction("page.remove", "Remove this page", FuseIcons.Trash, destructive = true, onSelect = { app.closeOverlays(); paging.remove(page) }) else null,
+    if (editor.arranging) MenuAction("done", "Done arranging", FuseIcons.Check, onSelect = { app.closeOverlays(); stopArranging() }) else null,
 )
 
 /**
@@ -793,9 +764,8 @@ private fun BoardItem(
     size: BoardSize,
     rect: Rect,
     reveal: (Modifier) -> Modifier,
-    feed: HomeFeed,
-    cartridge: CartridgeStatus,
-    clock24h: Boolean,
+    glow: androidx.compose.ui.graphics.Color,
+    face: @Composable () -> Unit,
     selected: Boolean,
     lifted: Boolean,
     following: Boolean,
@@ -854,7 +824,7 @@ private fun BoardItem(
             showSpark = !arranging,
             cornerFraction = cornerFraction,
             shape = shape,
-            glow = widgetGlow(widget.kind, feed, cartridge, carousel?.index ?: 0),
+            glow = glow,
             maxGrow = FOCUS_GROW,
             // A carousel draws its own cards (the next one peeking): no box around the empty parts.
             surface = carousel == null,
@@ -862,34 +832,12 @@ private fun BoardItem(
         ) {
             // A new shape gets its own face, crossfading from the old one.
             Crossfade(FaceSize.of(size), animationSpec = motion.fade(Durations.BASE), label = "face") { _ ->
-                CompositionLocalProvider(LocalCarousel provides carousel) {
-                    BoardFace(widget.kind, size, feed, cartridge, clock24h)
-                }
+                CompositionLocalProvider(LocalCarousel provides carousel) { face() }
             }
         }
         if (arranging) chrome()
     }
 }
-
-/** Whether [w] is shown on the board now: hidden, unavailable or switched-off widgets wait off it. */
-private fun onBoard(w: HomeWidget, app: AppState, prefs: UiPrefs, cartridge: CartridgeStatus, achievementsOn: Boolean): Boolean =
-    w.visible && app.offers(w.kind) &&
-        (w.kind != WidgetKind.CARTRIDGE_DOWNLOADS || (cartridge.installed && prefs.cartridgeEnabled)) &&
-        (w.kind != WidgetKind.COLLECTIONS || prefs.collectionsEnabled) &&
-        (!w.kind.isAchievements || achievementsOn)
-
-/** The game a game widget shows: for a carousel, the one in front ([at]). */
-private fun shownGame(kind: WidgetKind, feed: HomeFeed, at: Int): GameCard? = boardGames(kind, feed).let { it.getOrNull(at) ?: it.firstOrNull() }
-
-/** A widget's glow when focused: its game's colour for game widgets, else its own (the accent for neutral ones). */
-@Composable
-private fun widgetGlow(kind: WidgetKind, feed: HomeFeed, cartridge: CartridgeStatus, at: Int) =
-    shownGame(kind, feed, at)?.accent?.toColor() ?: widgetTint(kind, feed, cartridge).let { if (it == Fuse.colors.text) Fuse.colors.accent else it }
-
-/** Widgets whose confirm plays a game, so a first tap only shows it. */
-private val playWidgets = setOf(
-    WidgetKind.CONTINUE_PLAYING, WidgetKind.RECENTLY_PLAYED, WidgetKind.PINNED_GAMES, WidgetKind.CURRENT_GAME,
-)
 
 /** "1 game", "12 games". */
 internal fun gamesText(count: Int): String = "$count ${if (count == 1) "game" else "games"}"
@@ -987,10 +935,6 @@ private val LIFT_GROW = 10.dp
 
 /** How far the remove badge's target reaches out past the widget's corner. */
 private val BADGE_OUT = 17.dp
-
-/** The smallest and largest cell height, so widgets stay readable on a handheld and sane on a TV. */
-private val CELL_MIN = 104.dp
-private val CELL_MAX = 240.dp
 
 /** The wobble while arranging: one beat this long, at most this many degrees (for a one-cell widget). */
 private const val WOBBLE_MS = 520

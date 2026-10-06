@@ -148,4 +148,39 @@ class RommArtTest {
         assertEquals(first, panel.model)
         assertTrue(Art.from(data.media.get(owner)).boxartFromGames)
     }
+
+    /**
+     * A RomM game downloaded here keeps the art Fuse already found for it (nothing is looked for
+     * twice), and its RomM page becomes the library game's, with Play instead of Download.
+     */
+    @Test
+    fun aDownloadedRommGameKeepsItsArtAndBecomesTheLibraryGame(): Unit = runBlocking {
+        val data = FuseData(DesktopDatabase.open(File(dir, "landed.db").absolutePath))
+        data.settings.update { it.copy(romm = it.romm.copy(enabled = true)) }
+        val services = FakeServices(data, File(dir, "cache3").apply { mkdirs() })
+        data.database.rommQueries.upsertPlatform("main", 7, "snes", "snes", "Super Nintendo", 1, 0)
+        RommMirror(data.database, { System.currentTimeMillis() }).put(
+            "main",
+            RommRom(id = 42, platformId = 7, platformSlug = "snes", name = "Chrono Trigger", fsName = "Chrono Trigger (USA).sfc", files = listOf(RommFile(420, "Chrono Trigger (USA).sfc"))),
+        )
+        // Found while it was only on RomM.
+        data.media.putScraped(
+            MediaOwner.OfGame(rommGameId(42)),
+            listOf(io.github.matiyaaa.fuse.model.MediaItem(io.github.matiyaaa.fuse.model.MediaKind.BOXART, MediaSource.STEAMGRIDDB, remoteUrl = square, order = 0)),
+            io.github.matiyaaa.fuse.model.MediaFillMode.FILL_MISSING,
+        )
+        val store = createFuseStore(services, scope)
+
+        // It arrives in a games folder.
+        val roms = File(dir, "roms")
+        File(roms, "snes").mkdirs()
+        File(roms, "snes/Chrono Trigger (USA).sfc").writeBytes(ByteArray(256))
+        store.sources.add(roms.absolutePath, io.github.matiyaaa.fuse.model.LibrarySourceKind.ROMS_ROOT)
+
+        val local = withTimeout(30_000) { store.romm.libraryGame(42).first { it != null } }!!
+        assertTrue(local.value > 0, "the library's own game")
+        withTimeout(10_000) {
+            while (data.media.get(MediaOwner.OfGame(local)).boxart?.model != square) delay(50)
+        }
+    }
 }

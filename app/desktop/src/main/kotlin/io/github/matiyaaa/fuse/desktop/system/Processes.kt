@@ -42,20 +42,42 @@ object Processes {
      */
     fun builder(argv: List<String>): ProcessBuilder {
         val pb = ProcessBuilder(if (DesktopOs.isWindows) argv.map(::windowsArgument) else argv)
-        val env = pb.environment()
-        APPIMAGE_VARS.forEach { env.remove(it) }
+        hostEnvironment(pb.environment())
         return pb
     }
+
+    /**
+     * [env] as the system's own programs need it: without the AppImage runtime's variables for Fuse,
+     * and, when Steam started Fuse (a non-Steam game, as in Game Mode), without Steam's runtime. Steam
+     * puts its own old libraries first in LD_LIBRARY_PATH and its tools first on PATH for the game it
+     * starts; programs of the system that Fuse starts in turn (flatpak, emulators' AppImages) break on
+     * them, so they get back what the system had (Steam keeps it in SYSTEM_LD_LIBRARY_PATH and
+     * SYSTEM_PATH). Steam's game id stays, so Game Mode still counts the program as Fuse's.
+     */
+    fun hostEnvironment(env: MutableMap<String, String>) {
+        APPIMAGE_VARS.forEach { env.remove(it) }
+        val system = env["SYSTEM_LD_LIBRARY_PATH"]
+        val libraries = when {
+            system != null -> system
+            else -> env["LD_LIBRARY_PATH"]?.split(':')?.filterNot(::isSteamRuntime)?.joinToString(":")
+        }
+        if (libraries.isNullOrBlank()) env.remove("LD_LIBRARY_PATH") else env["LD_LIBRARY_PATH"] = libraries
+        env["SYSTEM_PATH"]?.takeIf { it.isNotBlank() }?.let { env["PATH"] = it }
+        env.remove("STEAM_RUNTIME_LIBRARY_PATH")
+    }
+
+    /** A folder of Steam's runtime libraries ("…/steam-runtime/…", "…/ubuntu12_32/…"). */
+    private fun isSteamRuntime(dir: String): Boolean = "/steam-runtime" in dir || "/ubuntu12_32" in dir || "/ubuntu12_64" in dir
 
     /**
      * Runs [argv] and waits up to [timeoutMs]. [stdin] is written and closed first. Returns null when
      * the program is missing, fails to start or times out (it is then killed). Blocking: call from an
      * IO thread. stdout is capped at [maxOutput] bytes; stderr is discarded.
      */
-    fun run(argv: List<String>, timeoutMs: Long = 5_000, stdin: String? = null, maxOutput: Int = 1 shl 20): Output? {
+    fun run(argv: List<String>, timeoutMs: Long = 5_000, stdin: String? = null, maxOutput: Int = 1 shl 20, withErrors: Boolean = false): Output? {
         val process = try {
             builder(argv)
-                .redirectError(ProcessBuilder.Redirect.DISCARD)
+                .apply { if (withErrors) redirectErrorStream(true) else redirectError(ProcessBuilder.Redirect.DISCARD) }
                 .apply { if (stdin == null) redirectInput(ProcessBuilder.Redirect.from(DesktopOs.nullDevice)) }
                 .start()
         } catch (e: IOException) {
