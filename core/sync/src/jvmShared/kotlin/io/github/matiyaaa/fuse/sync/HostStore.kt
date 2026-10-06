@@ -621,6 +621,7 @@ class HostStore(val dir: File, private val clock: () -> Long = System::currentTi
     fun push(profile: String, device: String, revision: SaveRevision): RevisionResult = synchronized(lock) {
         require(revision.profile == profile) { "Revision for another profile" }
         require(revision.manifest.files.all { SavePath.isSafe(it.path) && SavePath.isHash(it.hash) && it.size >= 0 }) { "Bad file in the save" }
+        require(revision.manifest.folders.size <= MAX_FOLDERS && revision.manifest.folders.all(SavePath::isSafe)) { "Bad folder in the save" }
         require(revision.id.length in 8..64 && revision.id.all { it.isLetterOrDigit() || it == '-' || it == '_' }) { "Bad revision id" }
         require(GameKey.parse(revision.game) != null) { "Bad game key" }
         val missing = missing(revision.manifest.files.map { it.hash })
@@ -772,6 +773,9 @@ private const val JOURNAL_KEEP = 10_000
 
 /** The most ids one game may be claimed under at once. */
 private const val MAX_ALIASES = 8
+
+/** Empty folders one save may carry. */
+private const val MAX_FOLDERS = 10_000
 
 /** The shortest password the host's account takes. */
 internal const val MIN_PASSWORD = 8

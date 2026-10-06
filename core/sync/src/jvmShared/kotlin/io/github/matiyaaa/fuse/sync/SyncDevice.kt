@@ -27,6 +27,8 @@ data class LocalSlot(
     val available: Boolean = true,
     /** Where each named file goes here, for saves whose files are named per device (`save.srm` is `Chrono Trigger.srm`). */
     val targets: Map<String, File> = emptyMap(),
+    /** A folder save's empty folders, by their path inside [root]: part of its structure. */
+    val folders: List<String> = emptyList(),
 ) {
     val key: String get() = "${game.id}|${kind.name}"
 
@@ -206,7 +208,7 @@ class SyncDevice(
 
     private fun fingerprintOf(slot: LocalSlot): Pair<SaveManifest, List<Pair<LocalFile, String>>> {
         val hashed = slot.files.filter { it.file.isFile && SavePath.isSafe(it.path) }.map { lf -> lf to lf.file.inputStream().use { SyncCrypto.sha256(it) } }
-        val manifest = SaveManifest(slot.format, hashed.map { (lf, h) -> SaveFile(lf.path, h, lf.file.length()) }.sortedBy { it.path })
+        val manifest = SaveManifest(slot.format, hashed.map { (lf, h) -> SaveFile(lf.path, h, lf.file.length()) }.sortedBy { it.path }, slot.folders.filter(SavePath::isSafe).sorted())
         return manifest to hashed
     }
 
@@ -270,7 +272,10 @@ class SyncDevice(
             val mine = state.parked[keyOf(profile, slot)]
             // Clear what is there (every file of it is in the store), then put this person's own
             // back. A file Fuse Sync can't keep (a name it can't carry) is never touched.
-            for ((lf, h) in hashed) if (store.has(h)) lf.file.delete()
+            val cleared = hashed.filter { (lf, h) -> store.has(h) && lf.file.delete() }.map { it.first.file }
+            // The folders the last person's save made go too, so theirs never shapes this one's.
+            slot.folders.mapNotNull(slot::target).forEach { it.delete() }
+            prune(slot, cleared + slot.folders.mapNotNull(slot::target))
             if (mine != null && mine.files.all { store.has(it.hash) }) write(slot, mine)
             var parked = state.parked - keyOf(profile, slot)
             if (current.files.isNotEmpty() && (!orphan || orphanTo == null)) parked = parked + (keyOf(holder, slot) to current)
@@ -398,6 +403,7 @@ class SyncDevice(
 
     /** Copies [manifest]'s files (in the store) into [folder] as plain files. */
     private fun writeOut(folder: File, manifest: SaveManifest) {
+        for (d in manifest.folders) if (SavePath.isSafe(d)) File(folder, d).mkdirs()
         for (f in manifest.files) {
             if (!SavePath.isSafe(f.path) || !store.has(f.hash)) continue
             val target = File(folder, f.path)
@@ -517,6 +523,12 @@ class SyncDevice(
                 state = state.copy(outbox = state.outbox + Outgoing(kept.id, Priority.SAVE.rank, owner, kept))
             }
             write(slot, incoming)
+            // The save as it was made, not a mix: files of the one replaced that the incoming save
+            // doesn't have go (each is in the store, and in history), with the folders they leave empty.
+            val keep = incoming.files.mapTo(HashSet()) { it.path }
+            val stale = hashed.filter { (lf, h) -> lf.path !in keep && store.has(h) }.map { it.first.file }
+            stale.forEach { it.delete() }
+            prune(slot, stale, keep = incoming.folders)
             state = state.copy(
                 // Agreed as written here, so the converted copy isn't taken for a new save after playing.
                 slots = state.slots + (keyOf(owner, slot) to SlotState(revision.id, incoming.fingerprint)),
@@ -545,6 +557,8 @@ class SyncDevice(
      */
     private fun write(slot: LocalSlot, manifest: SaveManifest) {
         val staged = ArrayList<Pair<File, File>>()
+        // A folder save's empty folders first: its files then fill in the rest of the structure.
+        for (folder in manifest.folders) slot.target(folder)?.mkdirs()
         try {
             for (f in manifest.files) {
                 val target = slot.target(f.path) ?: throw IntegrityException("A file in the save has nowhere safe to go: ${f.path}")
@@ -563,6 +577,23 @@ class SyncDevice(
             }
         } finally {
             staged.forEach { (tmp, _) -> tmp.delete() }
+        }
+    }
+
+    /**
+     * Removes the folders [gone] files leave empty, from each one's own folder up to (never
+     * including) [slot]'s root, and never one of [keep] or one with anything left in it.
+     */
+    private fun prune(slot: LocalSlot, gone: List<File>, keep: List<String> = emptyList()) {
+        val root = slot.root.canonicalFile
+        val kept = keep.mapNotNull(slot::target).mapTo(HashSet()) { it.canonicalFile }
+        for (f in gone) {
+            var dir = (if (f.isDirectory) f else f.parentFile)?.canonicalFile
+            while (dir != null && dir != root && dir.path.startsWith(root.path + File.separator)) {
+                if (dir in kept || !dir.isDirectory || dir.list()?.isNotEmpty() != false) break
+                if (!dir.delete()) break
+                dir = dir.parentFile
+            }
         }
     }
 
@@ -689,6 +720,7 @@ private val REFUSED_FOR_GOOD = setOf("bad-revision", "bad-body", "too-large", "t
 object Slots {
     fun of(game: GameKey, spot: SaveSpot): LocalSlot {
         val files = ArrayList<LocalFile>()
+        val empty = ArrayList<String>()
         val targets = LinkedHashMap<String, File>()
         for (f in spot.files) {
             val file = File(f.path)
@@ -702,13 +734,18 @@ object Slots {
             for (folder in folders) {
                 val dir = if (folder.isEmpty()) root else File(root, folder)
                 if (!dir.isDirectory) continue
-                dir.walkTopDown().filter { it.isFile && !it.name.startsWith(".") }.forEach { f ->
+                dir.walkTopDown().forEach { f ->
                     val name = f.relativeTo(root).path.replace(File.separatorChar, '/')
-                    if (SavePath.isSafe(name)) files += LocalFile(name, f)
+                    when {
+                        f.name.startsWith(".") -> {}
+                        f.isFile -> if (SavePath.isSafe(name)) files += LocalFile(name, f)
+                        // An empty folder inside the save is part of its structure too.
+                        f != dir && f.isDirectory && f.list()?.isEmpty() == true -> if (SavePath.isSafe(name)) empty += name
+                    }
                 }
             }
         }
-        return LocalSlot(game, spot.kind, spot.format, root, files.sortedBy { it.path }, spot.available, targets)
+        return LocalSlot(game, spot.kind, spot.format, root, files.sortedBy { it.path }, spot.available, targets, empty.sorted())
     }
 }
 

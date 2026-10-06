@@ -28,7 +28,18 @@ data class SaveFile(val path: String, val hash: String, val size: Long)
  * are the same save, wherever and whenever they were made.
  */
 @Serializable
-data class SaveManifest(val format: String, val files: List<SaveFile>) {
+data class SaveManifest(
+    val format: String,
+    val files: List<SaveFile>,
+    /**
+     * Empty folders inside a folder save (paths as [SaveFile.path]), so the save comes back with
+     * its whole structure. Not part of [fingerprint]: an empty folder alone is never a new save.
+     * Left out of the JSON when there are none, which is all an older host or device ever sees.
+     */
+    @OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)
+    @kotlinx.serialization.EncodeDefault(kotlinx.serialization.EncodeDefault.Mode.NEVER)
+    val folders: List<String> = emptyList(),
+) {
     val size: Long get() = files.sumOf { it.size }
 
     /** A digest of the whole save, independent of file order: equal saves have equal fingerprints. */
