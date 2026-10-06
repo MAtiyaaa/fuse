@@ -339,7 +339,7 @@ private fun MergeRow(p: ProfileInfo, choice: MergeChoice, m: ProfileMerge, selec
     val muted = if (selected) c.ink.copy(alpha = 0.65f) else c.textMuted
     val target = (choice as? MergeChoice.Same)?.let { s -> m.host.firstOrNull { it.id == s.hostProfile } }
     val (label, detail) = when (choice) {
-        is MergeChoice.Same -> "Same as ${target?.name ?: "them"}" to if (target?.protected == true) "Their PIN is asked" else "Records and saves join"
+        is MergeChoice.Same -> "Same as ${target?.name ?: "them"}" to if (target?.protected == true) "Their PIN is asked" else "Joins their profile"
         MergeChoice.Add -> "Someone new" to "Added to ${m.hostName}"
         MergeChoice.LeaveOut -> "Leave out" to "Saves kept as files"
     }
