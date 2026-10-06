@@ -195,10 +195,12 @@ class JellyfinTest {
         val server = FakeServer()
         val scope = CoroutineScope(SupervisorJob())
         val s = service(server, MemorySecrets(), scope)
-        s.configure(true, JellyfinConnection(ConnectionMode.AUTO, localAddress = "192.168.1.5:8096", remoteAddress = "media.example.com"))
         // Home answers only once the way in from outside has been asked too: asked at once, both are
         // seen whatever the machine's speed; asked one after the other, outside never is in time.
+        // Set before configuring, since configuring starts a look of its own: one that ran without
+        // it could find home first and call off the outside ask before it was made.
         server.after["192.168.1.5"] = "media.example.com"
+        s.configure(true, JellyfinConnection(ConnectionMode.AUTO, localAddress = "192.168.1.5:8096", remoteAddress = "media.example.com"))
         kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { s.reconnect(force = true) }
         assertEquals(Route.LOCAL, s.state.value.route)
         // Both were asked in the same look, not one after the other's timeout.
