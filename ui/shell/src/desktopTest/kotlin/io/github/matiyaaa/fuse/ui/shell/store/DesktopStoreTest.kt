@@ -207,8 +207,8 @@ class DesktopStoreTest {
         ops.uninstall("duckstation")
         eventually("asked once more") { ops.state.value.password }
         ops.uninstallWith("duckstation", "right")
-        eventually("removed") { ops.state.value.installed["duckstation"]?.let { null } ?: Unit }
+        // Gone from the list, and its Uninstalling job cleared just after.
+        eventually("removed") { ops.state.value.takeIf { "duckstation" !in it.installed && "duckstation" !in it.jobs } }
         assertEquals(1, installer.removedOthers.size)
-        assertNull(ops.state.value.jobs["duckstation"])
     }
 }
