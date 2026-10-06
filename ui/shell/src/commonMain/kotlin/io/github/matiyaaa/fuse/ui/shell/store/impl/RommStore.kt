@@ -27,6 +27,8 @@ import io.github.matiyaaa.fuse.model.MetadataSource
 import io.github.matiyaaa.fuse.model.Platform
 import io.github.matiyaaa.fuse.model.ScanScope
 import io.github.matiyaaa.fuse.romm.BiosPick
+import io.github.matiyaaa.fuse.romm.FoundRomm
+import io.github.matiyaaa.fuse.romm.RommDiscovery
 import io.github.matiyaaa.fuse.romm.LocalGame
 import io.github.matiyaaa.fuse.romm.MatchReason
 import io.github.matiyaaa.fuse.romm.PairingState
@@ -103,6 +105,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
 
 /** A picture RomM keeps, for Fuse's image loader: fetched with Fuse's sign-in and kept for offline. */
@@ -364,6 +367,16 @@ internal class DefaultRommOps(
                 else -> null
             },
         )
+    }
+
+    override suspend fun discover(): List<FoundRomm> = withContext(Dispatchers.Default) {
+        val all = ctx.settings.value
+        val hints = listOf(settings.localAddress, all.jellyfin.localAddress, all.sync.localAddress)
+        RommDiscovery.find(hints) { address ->
+            val c = RommClient(ctx.services.http, RoutePicker(address, null, RouteMode.LOCAL, ctx.scope, ctx::now, { true }), null)
+            // Only a heartbeat that says RomM's version is RomM; anything else listening there is passed over.
+            withTimeoutOrNull(DISCOVER_ASK_MS) { runCatching { c.heartbeat() }.getOrNull() }?.takeIf { it.isNotBlank() }
+        }
     }
 
     override suspend fun setAddresses(local: String, remote: String, mode: RouteMode) {
@@ -957,6 +970,7 @@ internal class DefaultRommOps(
 
         /** How long a burst of art arriving waits before the lists are drawn again. */
         private const val REDRAW_MS = 4_000L
+        private const val DISCOVER_ASK_MS = 3_000L
         private const val NS = "romm"
         private const val PROBE_MS = 1_500L
         private const val LOOP_MS = 60_000L

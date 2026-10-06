@@ -7,6 +7,8 @@ import io.github.matiyaaa.fuse.model.ContentKind
 import io.github.matiyaaa.fuse.model.GameId
 import io.github.matiyaaa.fuse.model.PlatformId
 import io.github.matiyaaa.fuse.romm.BiosPick
+import io.github.matiyaaa.fuse.romm.FoundRomm
+import io.github.matiyaaa.fuse.romm.RommDiscovery
 import io.github.matiyaaa.fuse.romm.MirrorProgress
 import io.github.matiyaaa.fuse.romm.RommDeviceCode
 import kotlinx.coroutines.flow.Flow
@@ -167,6 +169,9 @@ interface RommOps {
     // ---------------------------------------------------------------- set-up and sign-in
     suspend fun test(local: String, remote: String, mode: RouteMode): RommTest
     suspend fun setAddresses(local: String, remote: String, mode: RouteMode)
+
+    /** RomM servers on this network, found the way Fuse Sync and Jellyfin find theirs ([RommDiscovery]). */
+    suspend fun discover(): List<FoundRomm> = emptyList()
 
     /** Starts pairing with the addresses set: RomM shows the code to approve. [upload] asks for upload rights too. */
     suspend fun startPairing(upload: Boolean): Result<RommDeviceCode>
