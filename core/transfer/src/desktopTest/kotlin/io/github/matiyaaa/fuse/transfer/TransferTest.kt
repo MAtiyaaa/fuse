@@ -283,6 +283,24 @@ class TransferTest {
         assertEquals(1, server.requests.get())
     }
 
+    /**
+     * Starting the queue sends what was left running last time back to it. A transfer added right
+     * after the start may already be running when that happens: it must never be queued again and
+     * run a second time. Many times over, since it is a matter of timing.
+     */
+    @Test
+    fun `a transfer added as the queue starts runs once`() = runBlocking<Unit> {
+        repeat(60) { n ->
+            val server = Server().apply { status = HttpStatusCode.Unauthorized }
+            val m = manager(File(root, "state$n"))
+            m.register(FileHandler(server))
+            val id = m.enqueue(download("Once$n.bin"))
+            m.awaitStatus(id, TransferStatus.FAILED)
+            delay(30)
+            assertEquals(1, server.requests.get(), "run $n asked the server ${server.requests.get()} times")
+        }
+    }
+
     @Test
     fun `a server error waits and tries again`() = runBlocking<Unit> {
         val server = Server().apply { status = HttpStatusCode.InternalServerError }
