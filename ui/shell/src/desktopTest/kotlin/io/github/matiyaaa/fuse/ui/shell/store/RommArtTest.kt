@@ -30,8 +30,8 @@ import kotlinx.coroutines.withTimeout
 
 /**
  * A RomM game Fuse doesn't have gets Fuse's box art (the square art) on the lists already open, no
- * restart needed; and a system the system art pack has nothing for (PlayStation 5) takes its art
- * from its own games.
+ * restart needed, and shows on the second screen like a library game; and a system the system art
+ * pack has nothing for (PlayStation 5) takes its panel from its own games' screenshots.
  */
 class RommArtTest {
     private val dir: File = Files.createTempDirectory("fuse-romm-art").toFile()
@@ -88,7 +88,8 @@ class RommArtTest {
         // RomM's own cover stays behind it, only for where there is no box art.
         assertEquals(square, shown.first { it.romId == 42L }.card.art.square.toString())
 
-        // The PS5, which the pack has no art for, takes the background of one of its games.
+        // The PS5, which the pack has no art for, takes its panel from one of its games: a screenshot
+        // when it has one (here only a background was found, so that).
         val ps5 = MediaOwner.OfPlatform(PlatformId("ps5"))
         withTimeout(30_000) {
             while (data.media.get(ps5).boxart == null) delay(50)
@@ -96,6 +97,11 @@ class RommArtTest {
         val panel = data.media.get(ps5).boxart!!
         assertEquals(MediaSource.GAME_ART, panel.source)
         assertTrue(panel.model == hero, "${panel.model}")
+
+        // The second screen looks games up by id: a RomM game Fuse doesn't have is found there too.
+        val onSecondScreen = withTimeout(10_000) { store.library.game(rommGameId(42)).first { it != null } }!!
+        assertEquals("Chrono Trigger", onSecondScreen.game.displayTitle)
+        assertEquals(square, onSecondScreen.art.square.toString())
         watching.cancel()
     }
 }

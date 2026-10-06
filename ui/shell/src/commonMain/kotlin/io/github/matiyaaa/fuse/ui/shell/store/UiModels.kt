@@ -32,6 +32,11 @@ data class Art(
     val video: String? = null,
     /** The first screenshot, a background for games without one of their own. */
     val screenshot: Any? = null,
+    /**
+     * [boxart] is a system's artwork panel made from one of its games' screenshots (the system art
+     * pack has none for it): it is drawn cut to the pack's slanted panel, where the pack's own come cut.
+     */
+    val boxartFromGames: Boolean = false,
 ) {
     /** Art for a small square (thumbnails, menus): square box art, then icon, cover and wide art. */
     val tile: Any? get() = square ?: icon ?: boxart ?: grid
@@ -50,6 +55,7 @@ data class Art(
             heroFocusY = media.hero?.focusY ?: 0.35f,
             video = media.video?.model,
             screenshot = media.screenshots.firstOrNull()?.model,
+            boxartFromGames = media.boxart?.source == io.github.matiyaaa.fuse.model.MediaSource.GAME_ART,
         )
     }
 }

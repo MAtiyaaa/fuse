@@ -110,7 +110,7 @@ fun ShowcaseApp(store: FuseStore, platform: PlatformUi) {
         val home by store.homeFeed.collectAsState()
         val status by platform.status.collectAsState()
         val focus by Spotlight.focused.collectAsState()
-        val systems by store.library.platforms.collectAsState()
+        val systems = rememberShownSystems(store)
         val time = rememberClockText(prefs.clock24h)
         val playing = home.playtime.currentGame
         val media = io.github.matiyaaa.fuse.ui.shell.jellyfin.MediaFocus.get(focus.key)

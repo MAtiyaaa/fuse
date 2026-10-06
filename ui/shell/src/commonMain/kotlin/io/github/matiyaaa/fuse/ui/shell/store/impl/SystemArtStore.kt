@@ -147,10 +147,11 @@ internal class SystemArtStore(private val ctx: StoreContext) {
     }
 
     /**
-     * For a system the pack has nothing for (PlayStation 5, Switch 2): the same look, with the
-     * background of one of its own games (the most recently played here first, then the RomM
-     * server's), else a screenshot, as the artwork panel. 0 while none of its games has art yet;
-     * [start] looks again as their art arrives.
+     * For a system the pack has nothing for (PlayStation 5, Switch 2): the same look, with a
+     * screenshot of one of its own games (the most recently played here first, then the RomM
+     * server's), else its background, as the artwork panel, drawn cut to the pack's slanted shape
+     * at the pack's place and size. 0 while none of its games has art yet; [start] looks again as
+     * their art arrives.
      */
     private suspend fun fromGames(platform: Platform, mode: MediaFillMode): Int {
         val here = ctx.data.games.observeAll().first()
@@ -160,7 +161,7 @@ internal class SystemArtStore(private val ctx: StoreContext) {
         val ids = here + runCatching { ctx.remoteGamesOn(platform.id) }.getOrDefault(emptyList())
         if (ids.isEmpty()) return 0
         val media = ctx.data.media.observeFor(ids.map { MediaOwner.OfGame(it) }).first()
-        val pick = ids.firstNotNullOfOrNull { id -> media[MediaOwner.OfGame(id)]?.let { it.hero ?: it.screenshots.firstOrNull() } } ?: return 0
+        val pick = ids.firstNotNullOfOrNull { id -> media[MediaOwner.OfGame(id)]?.let { it.screenshots.firstOrNull() ?: it.hero } } ?: return 0
         val item = MediaItem(
             MediaKind.BOXART, MediaSource.GAME_ART, localPath = pick.localPath, remoteUrl = pick.remoteUrl,
             width = pick.width, height = pick.height, focusX = pick.focusX, focusY = pick.focusY,

@@ -40,6 +40,7 @@ import io.github.matiyaaa.fuse.ui.fuseline.PageEffect
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
 import io.github.matiyaaa.fuse.ui.shell.app.FocusZone
 import io.github.matiyaaa.fuse.ui.shell.app.Route
+import io.github.matiyaaa.fuse.ui.shell.app.room
 import io.github.matiyaaa.fuse.ui.shell.app.rememberPageState
 import io.github.matiyaaa.fuse.ui.shell.components.LocalTileMetrics
 import io.github.matiyaaa.fuse.ui.shell.store.RommGame
@@ -64,6 +65,12 @@ fun RommGamesScreen(app: AppState, slug: String?, name: String, collection: Stri
     val here = list.count { it.presence == RommPresence.INSTALLED || it.presence == RommPresence.PARTLY_INSTALLED }
     PageEffect(focused) {
         if (focused) app.hints = listOf(Hint(HintButton.CONFIRM, "Open"), Hint(HintButton.OPTIONS, "Options"), Hint(HintButton.BACK, "Back"))
+    }
+    // The chosen game's room behind the page, and on the second screen (in either arrangement), as in the Library.
+    val systems by app.store.library.platforms.collectAsState()
+    val chosen = list.getOrNull(sel.index)?.card
+    PageEffect(focused, chosen?.id, chosen?.art) {
+        if (focused) app.hero = chosen?.room(systems.firstOrNull { it.platform.id == chosen.platformId })
     }
     BoxWithConstraints(Modifier.fillMaxSize().testTag("romm.grid")) {
         val gap = LocalTileMetrics.current.gap

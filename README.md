@@ -566,7 +566,7 @@ Linux app, isn't offered on Windows and macOS (Fuse RomM is, on every computer).
 > is still the sync Fuse recommends. 0.3.6.1 brings large RomM libraries in quickly and keeps them,
 > 0.3.6.2 gives RomM games your own art and details, 0.3.6.3 brings your household's RomM and
 > Jellyfin along with Fuse Sync, each person with their own Jellyfin account, and 0.3.6.4 shows RomM
-> games' box art at once and gives the PS5 art. See [the release notes](docs/releases/0.3.6.4.md).
+> games' box art at once, gives the PS5 art from its games and puts RomM on the second screen. See [the release notes](docs/releases/0.3.6.4.md).
 
 <details>
 <summary><b>Every release so far</b></summary>
@@ -574,7 +574,7 @@ Linux app, isn't offered on Windows and macOS (Fuse RomM is, on every computer).
 
 | Version | Name | What it brought |
 |---|---|---|
-| [0.3.6.4](docs/releases/0.3.6.4.md) | The Unity Update | RomM games' box art shown as soon as it is found, without reopening Fuse; art for the PS5 and other systems the pack lacks, from their own games |
+| [0.3.6.4](docs/releases/0.3.6.4.md) | The Unity Update | RomM games' box art shown as soon as it is found, without reopening Fuse; art for the PS5 and other systems the pack lacks, from their own games' screenshots cut like the pack's; RomM on the second screen |
 | [0.3.6.3](docs/releases/0.3.6.3.md) | The Unity Update | RomM and Jellyfin that come with Fuse Sync, sealed for each device and asked once when you update; each person's own Jellyfin account; whose saves move on each device; Fuse Sync first in setup; the grand welcome the first time anyone plays here; motion that follows the device |
 | [0.3.6.2](docs/releases/0.3.6.2.md) | The Unity Update | RomM games with your own art and details, kept and editable; the library's games not on RomM; box art instead of RomM's posters; system art for RomM-only systems; a nicer RomM tab |
 | [0.3.6.1](docs/releases/0.3.6.1.md) | The Unity Update | Fuse RomM libraries with large PS4 and PS5 games read quickly, resumed and kept; Test Connection; PS4 and PS5 folders matched to their RomM zips |

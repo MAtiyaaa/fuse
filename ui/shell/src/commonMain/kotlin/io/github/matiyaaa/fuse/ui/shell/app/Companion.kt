@@ -157,7 +157,7 @@ fun CompanionApp(store: FuseStore, platform: PlatformUi, mode: DualScreenMode, o
         val home by store.homeFeed.collectAsState()
         val status by platform.status.collectAsState()
         val focus by Spotlight.focused.collectAsState()
-        val systems by store.library.platforms.collectAsState()
+        val systems = rememberShownSystems(store)
         val time = rememberClockText(prefs.clock24h)
         val playing = home.playtime.currentGame
         val scope = rememberCoroutineScope()
@@ -392,6 +392,20 @@ private fun SpotlightPage(
             is io.github.matiyaaa.fuse.jellyfin.MediaItem -> FocusedMedia(target, minimal = store.prefs.collectAsState().value.jellyfin.browsingCompanion == "MINIMAL")
             else -> Idle(time, room = store.prefs.collectAsState().value.display.companionFollowsBackground)
         }
+    }
+}
+
+/**
+ * The systems the second screen can show: the library's, and the RomM server's that Fuse has no
+ * games for yet (as RomM's tab shows them), so choosing either shows it there too.
+ */
+@Composable
+internal fun rememberShownSystems(store: FuseStore): List<PlatformCard> {
+    val library by store.library.platforms.collectAsState()
+    val romm by store.romm.systems.collectAsState()
+    return remember(library, romm) {
+        val here = library.mapTo(HashSet()) { it.platform.id }
+        library + romm.filter { s -> s.platform != null && s.platform !in here }.mapNotNull { io.github.matiyaaa.fuse.ui.shell.romm.systemCard(it, emptyMap()) }
     }
 }
 

@@ -101,6 +101,9 @@ internal class StoreContext(
     /** The games Fuse shows but doesn't have on [PlatformId] (a RomM server's), set by the store that keeps them. */
     @kotlin.concurrent.Volatile var remoteGamesOn: suspend (PlatformId) -> List<GameId> = { emptyList() }
 
+    /** A game Fuse shows but doesn't have, as its page would show it; null for the library's own games. */
+    @kotlin.concurrent.Volatile var remoteDetail: (GameId) -> kotlinx.coroutines.flow.Flow<io.github.matiyaaa.fuse.ui.shell.store.GameDetail?>? = { null }
+
     /** Goes up whenever art was found for a game, so what is drawn from games' art can follow. */
     val gameArtFound = MutableStateFlow(0)
 

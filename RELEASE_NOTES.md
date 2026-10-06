@@ -1,15 +1,20 @@
 # Fuse 0.3.6.4 - The Unity Update
 
-Box art on RomM games as soon as it is found, and art for the PlayStation 5.
+Box art on RomM games as soon as it is found, art for the PlayStation 5, and RomM on the second
+screen.
 
 ## New
 
 - **Systems without pack art get art from their games.** The PlayStation 5 (and any other system
   the Art Book Next pack has nothing for) now gets the same look as every other system: the brand
-  colour, its name, and the background of one of its own games as the artwork panel, the most
-  recently played here first, then your RomM server's. It shows as soon as one of its games has
-  art. Choose other art for it as for any system, or put Fuse's own back with Restore Fuse Default
-  Art.
+  colour, its name, and a screenshot of one of its own games as the artwork panel, cut to the
+  pack's slanted panel and drawn at the same place and size, so it sits with the rest of the set.
+  The most recently played game here is used first, then your RomM server's, and it happens by
+  itself as soon as one of its games has a screenshot (or, failing that, a background). Choose
+  other art for it as for any system, or put Fuse's own back with Restore Fuse Default Art.
+- **RomM on the second screen.** The game or system chosen on the RomM tab, a system's RomM games
+  or a RomM collection shows on the second screen as the Library's does, with menus on top or
+  flipped below, including RomM games and systems you don't have on this device yet.
 
 ## Changed
 

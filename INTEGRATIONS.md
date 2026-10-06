@@ -230,9 +230,10 @@ and Screenshots.
 
 **How it works** (`systemart/`). `SystemArtNames` maps each Fuse platform to the pack's system name
 (for example `3ds` to `n3ds`, `ngc` to `gc`); PlayStation 5 and Switch 2 have no art in the pack.
-A system the pack has nothing for takes its artwork panel from one of its own games instead (the
-background, else a screenshot, already found for that game by your art sources; nothing extra is
-fetched), and shows its name in place of a logo.
+A system the pack has nothing for takes its artwork panel from one of its own games instead (a
+screenshot, else the background, already found for that game by your art sources; nothing extra is
+fetched), drawn cut to the pack's slanted panel at the same place and size, and shows its name in
+place of a logo.
 `SystemArtPackClient` reads files from one pinned commit of the repository under
 `https://raw.githubusercontent.com/anthonycaccese/art-book-next-es-de/<commit>/_inc/systems/`:
 `logos/<name>.svg`, `artwork/<name>.png` (Classic) or `artwork-outline/`, `artwork-noir/`,

@@ -78,6 +78,7 @@ import io.github.matiyaaa.fuse.ui.shell.store.RommTest
 import io.github.matiyaaa.fuse.ui.shell.store.RommUploadLine
 import io.github.matiyaaa.fuse.ui.shell.store.RommUploadPlan
 import io.github.matiyaaa.fuse.ui.shell.store.rommGameId
+import io.github.matiyaaa.fuse.ui.shell.store.rommOnly
 import io.ktor.client.request.get
 import io.ktor.client.statement.bodyAsBytes
 import io.ktor.http.isSuccess
@@ -173,6 +174,7 @@ internal class DefaultRommOps(
 
     fun start() {
         ctx.remoteGames = remote
+        ctx.remoteDetail = { id -> id.rommOnly?.let(::detail) }
         ctx.remoteGamesOn = { id ->
             mirror.all(server).filter { r -> (ctx.platforms.resolveFolder(r.platformSlug)?.id) == id }.map { rommGameId(it.id) }
         }
