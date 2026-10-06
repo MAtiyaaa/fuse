@@ -16,8 +16,10 @@ import io.github.matiyaaa.fuse.model.ScrapeProviderId
 import io.github.matiyaaa.fuse.ui.shell.store.FillProgress
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
@@ -49,6 +51,7 @@ internal class SystemArtStore(private val ctx: StoreContext) {
 
     /** Fills systems that have games and no art, whenever that set changes, while the setting is on. */
     fun start() {
+        followGamesArt()
         val data = ctx.data
         ctx.scope.launch {
             data.games.platformCounts()
@@ -72,6 +75,30 @@ internal class SystemArtStore(private val ctx: StoreContext) {
                         runCatching { fetch(platform, MediaFillMode.FILL_MISSING) }
                     }
                 }
+        }
+    }
+
+    /**
+     * Systems the pack has nothing for take their art from their games, which often get theirs
+     * later (a RomM server's games are filled after they are listed): looked at again, a moment
+     * after games' art was found, while they are still bare.
+     */
+    private fun followGamesArt() {
+        ctx.scope.launch {
+            ctx.gameArtFound.collectLatest {
+                delay(GAME_ART_SETTLE_MS)
+                val lib = ctx.settings.value.library
+                if (!lib.systemArtAuto) return@collectLatest
+                val ids = ctx.data.games.platformCounts().first().filterValues { it > 0 }.keys + ctx.shownPlatforms.value
+                val packless = ids.mapNotNull { ctx.platform(it) }
+                    .filter { p -> p.id.value !in lib.systemArtDefault && SystemArtNames.forPlatform(p.id, p.folderAliases) == null }
+                if (packless.isEmpty()) return@collectLatest
+                val media = ctx.data.media.observeFor(packless.map { MediaOwner.OfPlatform(it.id) }).first()
+                for (p in packless) {
+                    val m = media[MediaOwner.OfPlatform(p.id)]
+                    if (m == null || (m.logo == null && m.boxart == null && m.icon == null && m.square == null)) runCatching { fromGames(p, MediaFillMode.FILL_MISSING) }
+                }
+            }
         }
     }
 
@@ -108,7 +135,7 @@ internal class SystemArtStore(private val ctx: StoreContext) {
      * when the pack has no such system or it can't be reached.
      */
     private suspend fun fetch(platform: Platform, mode: MediaFillMode): Int {
-        val name = SystemArtNames.forPlatform(platform.id, platform.folderAliases) ?: return 0
+        val name = SystemArtNames.forPlatform(platform.id, platform.folderAliases) ?: return fromGames(platform, mode)
         val art = (client.fetch(name, style) as? ApiResult.Success)?.value ?: return 0
         val items = listOfNotNull(
             MediaItem(MediaKind.LOGO, MediaSource.ART_PACK, remoteUrl = art.logoUrl),
@@ -117,6 +144,28 @@ internal class SystemArtStore(private val ctx: StoreContext) {
         val added = ctx.data.media.putScraped(MediaOwner.OfPlatform(platform.id), items, mode, setOf(MediaKind.LOGO, MediaKind.BOXART))
         art.meta?.color?.let { color -> saveColor(platform.id, color) }
         return added
+    }
+
+    /**
+     * For a system the pack has nothing for (PlayStation 5, Switch 2): the same look, with the
+     * background of one of its own games (the most recently played here first, then the RomM
+     * server's), else a screenshot, as the artwork panel. 0 while none of its games has art yet;
+     * [start] looks again as their art arrives.
+     */
+    private suspend fun fromGames(platform: Platform, mode: MediaFillMode): Int {
+        val here = ctx.data.games.observeAll().first()
+            .filter { it.platformId == platform.id && !it.isApp && !it.removed }
+            .sortedByDescending { it.lastPlayedAt ?: 0L }
+            .map { it.id }
+        val ids = here + runCatching { ctx.remoteGamesOn(platform.id) }.getOrDefault(emptyList())
+        if (ids.isEmpty()) return 0
+        val media = ctx.data.media.observeFor(ids.map { MediaOwner.OfGame(it) }).first()
+        val pick = ids.firstNotNullOfOrNull { id -> media[MediaOwner.OfGame(id)]?.let { it.hero ?: it.screenshots.firstOrNull() } } ?: return 0
+        val item = MediaItem(
+            MediaKind.BOXART, MediaSource.GAME_ART, localPath = pick.localPath, remoteUrl = pick.remoteUrl,
+            width = pick.width, height = pick.height, focusX = pick.focusX, focusY = pick.focusY,
+        )
+        return ctx.data.media.putScraped(MediaOwner.OfPlatform(platform.id), listOf(item), mode, setOf(MediaKind.BOXART))
     }
 
     private suspend fun saveColor(id: PlatformId, rgb: Long) {
@@ -180,3 +229,6 @@ class SystemArtUndo internal constructor(
 ) : io.github.matiyaaa.fuse.ui.shell.store.ArtUndo {
     override val count: Int get() = rows.count { it.value.isNotEmpty() }
 }
+
+/** How long after games' art was found that systems drawn from it look again (art comes in bursts). */
+private const val GAME_ART_SETTLE_MS = 2_000L

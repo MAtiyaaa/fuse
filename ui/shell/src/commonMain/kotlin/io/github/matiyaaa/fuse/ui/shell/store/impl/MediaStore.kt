@@ -660,7 +660,10 @@ internal class DefaultMediaOps(
                 MediaItem(option.kind, option.provider.mediaSource(), remoteUrl = option.url, width = option.width, height = option.height, order = index)
             }
         val added = if (items.isEmpty()) 0 else media.putScraped(MediaOwner.OfGame(game.id), items, mode, kinds)
-        if (added > 0) remoteOf(game.id)?.changed(game.id)
+        if (added > 0) {
+            remoteOf(game.id)?.changed(game.id)
+            ctx.gameArtFound.update { it + 1 }
+        }
         outcome.metadata?.let { meta ->
             applyMetadata(
                 game.id,

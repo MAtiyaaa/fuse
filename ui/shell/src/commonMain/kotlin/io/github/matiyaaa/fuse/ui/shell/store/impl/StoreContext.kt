@@ -98,6 +98,12 @@ internal class StoreContext(
     /** Games Fuse shows but doesn't have (RomM's, by negative id), set by the store that keeps them. */
     @kotlin.concurrent.Volatile var remoteGames: RemoteGames? = null
 
+    /** The games Fuse shows but doesn't have on [PlatformId] (a RomM server's), set by the store that keeps them. */
+    @kotlin.concurrent.Volatile var remoteGamesOn: suspend (PlatformId) -> List<GameId> = { emptyList() }
+
+    /** Goes up whenever art was found for a game, so what is drawn from games' art can follow. */
+    val gameArtFound = MutableStateFlow(0)
+
     fun now(): Long = Clock.System.now().toEpochMilliseconds()
 
     fun platform(id: PlatformId): Platform? = platforms.byId(id)

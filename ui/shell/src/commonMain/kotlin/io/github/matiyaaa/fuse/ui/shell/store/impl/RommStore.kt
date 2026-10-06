@@ -135,16 +135,16 @@ internal class DefaultRommOps(
 
     /** The server's games Fuse doesn't have, as games: their own names, details and art, kept ([RommGames]). */
     private val remote = RommGames(ctx, mirror, { server }, { redrawSoon() })
-    private var redrawJob: Job? = null
 
-    /** Art or details of a game Fuse doesn't have changed: the lists draw again, once for a burst of them. */
+    /**
+     * Art or details of games Fuse doesn't have changed. One waiting redraw covers a burst of them,
+     * and a change that lands while the lists are being drawn again gets one more, so art found
+     * mid-redraw shows without reopening Fuse.
+     */
+    private val redraws = kotlinx.coroutines.channels.Channel<Unit>(kotlinx.coroutines.channels.Channel.CONFLATED)
+
     private fun redrawSoon() {
-        if (redrawJob?.isActive == true) return
-        redrawJob = ctx.scope.launch {
-            delay(REDRAW_MS)
-            mirrorRevision.update { it + 1 }
-            publishLists()
-        }
+        redraws.trySend(Unit)
     }
 
     /** Games on the server that Fuse doesn't have, for Fuse's sources to fill, these first. */
@@ -173,6 +173,16 @@ internal class DefaultRommOps(
 
     fun start() {
         ctx.remoteGames = remote
+        ctx.remoteGamesOn = { id ->
+            mirror.all(server).filter { r -> (ctx.platforms.resolveFolder(r.platformSlug)?.id) == id }.map { rommGameId(it.id) }
+        }
+        ctx.scope.launch {
+            for (r in redraws) {
+                delay(REDRAW_MS)
+                mirrorRevision.update { it + 1 }
+                runCatching { publishLists() }
+            }
+        }
         rommArtCache = RommArtCache(ctx, this::clientFor)
         transfers.let { t -> rommHandlers(ctx.services.http, host).forEach(t::register) }
         ctx.scope.launch {

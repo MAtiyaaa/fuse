@@ -868,6 +868,7 @@ private fun sourceName(s: MediaSource) = when (s) {
     MediaSource.LIBRETRO -> "Libretro thumbnails"
     MediaSource.ART_PACK -> "Art Book Next"
     MediaSource.GENERATED -> "Generated"
+    MediaSource.GAME_ART -> "From its games"
 }
 
 private fun sourceLine(media: MediaSet, k: MediaKind): String {
