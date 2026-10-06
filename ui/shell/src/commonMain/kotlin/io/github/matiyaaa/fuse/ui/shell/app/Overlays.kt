@@ -320,7 +320,8 @@ private fun TextInputOverlay(app: AppState) {
             repeats = keyboard.repeats,
         ) { e ->
             when (e.action) {
-                NavAction.BACK -> { app.textInput = null; spec.onCancel(); NavResult.CONSUMED }
+                // Back puts a held key's alternatives away first.
+                NavAction.BACK -> { if (!keyboard.closeAlternates()) { app.textInput = null; spec.onCancel() }; NavResult.CONSUMED }
                 // Arrow keys move the caret while the keys are away.
                 NavAction.LEFT, NavAction.RIGHT -> if (!keysShown && e.source == InputSource.KEYBOARD) {
                     val at = field.value.selection.start + if (e.action == NavAction.RIGHT) 1 else -1

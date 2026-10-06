@@ -7,6 +7,8 @@ import io.github.matiyaaa.fuse.ui.designsystem.input.NavEvent
 import io.github.matiyaaa.fuse.ui.designsystem.input.NavResult
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class KeyboardTest {
 
@@ -146,5 +148,56 @@ class KeyboardTest {
         assertEquals(KeyPage.SYMBOLS, state.page)
         // Every row of every page is ten letter keys wide.
         for (page in KeyPage.entries) keyRows(page).forEach { row -> assertEquals(10f, row.sumOf { it.weight.toDouble() }.toFloat(), 0.001f) }
+    }
+
+    @Test
+    fun aFirmPressDeletesOnceAndOnlyAHoldRepeats() {
+        val state = KeyboardState()
+        val f = field("fuse")
+        // X pressed and held a little past the D-pad's repeat delay: still one character.
+        state.handle(nav(NavAction.CONTEXT), f, {})
+        state.handle(nav(NavAction.CONTEXT, repeat = 1), f, {})
+        state.handle(nav(NavAction.CONTEXT, repeat = 2), f, {})
+        assertEquals("fus", f.text)
+        // Really held: it keeps deleting.
+        state.handle(nav(NavAction.CONTEXT, repeat = 3), f, {})
+        assertEquals("fu", f.text)
+        // The same with A on Delete.
+        state.row = 2
+        state.column = state.rows[2].indexOfFirst { it.kind == KeyKind.BACKSPACE }
+        state.handle(nav(NavAction.SELECT), f, {})
+        state.handle(nav(NavAction.SELECT, repeat = 1), f, {})
+        assertEquals("f", f.text)
+    }
+
+    @Test
+    fun theFullStopHeldOffersAddressEndings() {
+        val state = KeyboardState()
+        val f = field("romm")
+        // The bottom row has a full stop where the apostrophe was.
+        val bottom = state.rows[3]
+        state.row = 3
+        state.column = bottom.indexOfFirst { it.label == "." }
+        assertTrue(state.column >= 0)
+        assertTrue(bottom.none { it.label == "'" })
+        assertTrue(NavAction.SELECT in state.repeats, "a held A reaches the keyboard")
+        state.handle(nav(NavAction.SELECT), f, {})
+        assertEquals("romm.", f.text)
+        // Held: the endings show, and the stop already typed becomes the one chosen.
+        state.handle(nav(NavAction.SELECT, repeat = 3), f, {})
+        assertEquals(".com", state.alternates?.options?.first())
+        state.handle(nav(NavAction.RIGHT), f, {})
+        state.handle(nav(NavAction.RIGHT), f, {})
+        state.handle(nav(NavAction.RIGHT), f, {})
+        state.handle(nav(NavAction.RIGHT), f, {})
+        state.handle(nav(NavAction.SELECT), f, {})
+        assertEquals("romm.local", f.text)
+        assertNull(state.alternates)
+        // Back puts them away without typing.
+        state.handle(nav(NavAction.SELECT), f, {})
+        state.handle(nav(NavAction.SELECT, repeat = 3), f, {})
+        assertEquals(NavResult.CONSUMED, state.handle(nav(NavAction.BACK), f, {}))
+        assertNull(state.alternates)
+        assertEquals("romm.local.", f.text)
     }
 }
