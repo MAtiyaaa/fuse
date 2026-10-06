@@ -233,7 +233,8 @@ and Screenshots.
 A system the pack has nothing for takes its artwork panel from one of its own games instead (a
 screenshot, else the background, already found for that game by your art sources; nothing extra is
 fetched), drawn cut to the pack's slanted panel at the same place and size, and shows its name in
-place of a logo.
+place of a logo. The From your games style does the same for every system, keeping the pack's logos
+and colours, and a system's Media page lets you pick the game and the screenshot.
 `SystemArtPackClient` reads files from one pinned commit of the repository under
 `https://raw.githubusercontent.com/anthonycaccese/art-book-next-es-de/<commit>/_inc/systems/`:
 `logos/<name>.svg`, `artwork/<name>.png` (Classic) or `artwork-outline/`, `artwork-noir/`,

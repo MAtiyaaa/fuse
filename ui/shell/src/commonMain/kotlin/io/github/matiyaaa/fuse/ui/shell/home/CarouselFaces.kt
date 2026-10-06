@@ -257,7 +257,7 @@ private fun BoxWithConstraintsScope.SystemPackSlide(s: PlatformCard, room: Room,
         // Clipped to its panel: the parallax zoom never lets the art spill past the fade.
         Box(Modifier.align(Alignment.CenterEnd).width(panel).fillMaxHeight().clipToBounds()) {
             Box(Modifier.fillMaxSize().carouselParallax(depth)) {
-                Artwork(s.art.boxart, Modifier.fillMaxSize(), contentScale = ContentScale.Crop, focusX = 0.5f, focusY = 0.38f)
+                io.github.matiyaaa.fuse.ui.shell.components.SystemPanel(s.art, Modifier.fillMaxSize(), focusY = 0.38f)
             }
         }
         // The panel's left edge melts into the card's colour.

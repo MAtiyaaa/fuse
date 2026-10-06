@@ -5,15 +5,20 @@ import io.github.matiyaaa.fuse.integrations.systemart.SystemArtNames
 import io.github.matiyaaa.fuse.integrations.systemart.SystemArtPackClient
 import io.github.matiyaaa.fuse.integrations.systemart.SystemArtStyle
 import io.github.matiyaaa.fuse.model.ArtworkOption
+import io.github.matiyaaa.fuse.model.GameId
 import io.github.matiyaaa.fuse.model.MediaFillMode
 import io.github.matiyaaa.fuse.model.MediaItem
 import io.github.matiyaaa.fuse.model.MediaKind
 import io.github.matiyaaa.fuse.model.MediaOwner
+import io.github.matiyaaa.fuse.model.MediaSet
 import io.github.matiyaaa.fuse.model.MediaSource
 import io.github.matiyaaa.fuse.model.Platform
 import io.github.matiyaaa.fuse.model.PlatformId
 import io.github.matiyaaa.fuse.model.ScrapeProviderId
+import io.github.matiyaaa.fuse.ui.shell.store.Art
 import io.github.matiyaaa.fuse.ui.shell.store.FillProgress
+import io.github.matiyaaa.fuse.ui.shell.store.GamePanels
+import io.github.matiyaaa.fuse.ui.shell.store.PanelGame
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -49,8 +54,16 @@ internal class SystemArtStore(private val ctx: StoreContext) {
     private val style: SystemArtStyle
         get() = SystemArtStyle.entries.firstOrNull { it.name == ctx.settings.value.library.systemArtStyle } ?: SystemArtStyle.CLASSIC
 
+    /** The "From your games" style: the pack's logos, with every system's panel made from its games' screenshots. */
+    private val gamesStyle: Boolean get() = ctx.settings.value.library.systemArtStyle == GAMES_STYLE
+
     /** Fills systems that have games and no art, whenever that set changes, while the setting is on. */
     fun start() {
+        // Panels picked from a game's screenshot are cut like the pack's wherever systems are drawn.
+        GamePanels.models = ctx.settings.value.library.systemPanels.values.toSet()
+        ctx.scope.launch {
+            ctx.data.settings.settings.map { it.library.systemPanels.values.toSet() }.distinctUntilChanged().collect { GamePanels.models = it }
+        }
         followGamesArt()
         val data = ctx.data
         ctx.scope.launch {
@@ -90,13 +103,15 @@ internal class SystemArtStore(private val ctx: StoreContext) {
                 val lib = ctx.settings.value.library
                 if (!lib.systemArtAuto) return@collectLatest
                 val ids = ctx.data.games.platformCounts().first().filterValues { it > 0 }.keys + ctx.shownPlatforms.value
-                val packless = ids.mapNotNull { ctx.platform(it) }
-                    .filter { p -> p.id.value !in lib.systemArtDefault && SystemArtNames.forPlatform(p.id, p.folderAliases) == null }
-                if (packless.isEmpty()) return@collectLatest
-                val media = ctx.data.media.observeFor(packless.map { MediaOwner.OfPlatform(it.id) }).first()
-                for (p in packless) {
+                // Systems the pack lacks, or every system in the From your games style.
+                val games = lib.systemArtStyle == GAMES_STYLE
+                val targets = ids.mapNotNull { ctx.platform(it) }
+                    .filter { p -> p.id.value !in lib.systemArtDefault && (games || SystemArtNames.forPlatform(p.id, p.folderAliases) == null) }
+                if (targets.isEmpty()) return@collectLatest
+                val media = ctx.data.media.observeFor(targets.map { MediaOwner.OfPlatform(it.id) }).first()
+                for (p in targets) {
                     val m = media[MediaOwner.OfPlatform(p.id)]
-                    if (m == null || (m.logo == null && m.boxart == null && m.icon == null && m.square == null)) runCatching { fromGames(p, MediaFillMode.FILL_MISSING) }
+                    if (m == null || (m.boxart == null && m.icon == null && m.square == null)) runCatching { fromGames(p, MediaFillMode.FILL_MISSING) }
                 }
             }
         }
@@ -136,14 +151,65 @@ internal class SystemArtStore(private val ctx: StoreContext) {
      */
     private suspend fun fetch(platform: Platform, mode: MediaFillMode): Int {
         val name = SystemArtNames.forPlatform(platform.id, platform.folderAliases) ?: return fromGames(platform, mode)
-        val art = (client.fetch(name, style) as? ApiResult.Success)?.value ?: return 0
+        // From your games: the pack's logo and colour, the panel from the system's own screenshots.
+        val games = gamesStyle
+        val art = (client.fetch(name, if (games) SystemArtStyle.CLASSIC else style) as? ApiResult.Success)?.value
+            ?: return if (games) fromGames(platform, mode) else 0
         val items = listOfNotNull(
             MediaItem(MediaKind.LOGO, MediaSource.ART_PACK, remoteUrl = art.logoUrl),
-            art.artworkUrl?.let { MediaItem(MediaKind.BOXART, MediaSource.ART_PACK, remoteUrl = it) },
+            art.artworkUrl?.takeIf { !games }?.let { MediaItem(MediaKind.BOXART, MediaSource.ART_PACK, remoteUrl = it) },
         )
-        val added = ctx.data.media.putScraped(MediaOwner.OfPlatform(platform.id), items, mode, setOf(MediaKind.LOGO, MediaKind.BOXART))
+        var added = ctx.data.media.putScraped(MediaOwner.OfPlatform(platform.id), items, mode, if (games) setOf(MediaKind.LOGO) else setOf(MediaKind.LOGO, MediaKind.BOXART))
         art.meta?.color?.let { color -> saveColor(platform.id, color) }
+        if (games) added += fromGames(platform, mode)
         return added
+    }
+
+    /** [platform]'s games with a screenshot or a background, the most recently played here first, then the RomM server's. */
+    private suspend fun gamesWithPictures(platform: PlatformId): List<Pair<GameId, MediaSet>> {
+        val here = ctx.data.games.observeAll().first()
+            .filter { it.platformId == platform && !it.isApp && !it.removed }
+            .sortedByDescending { it.lastPlayedAt ?: 0L }
+            .map { it.id }
+        val ids = here + runCatching { ctx.remoteGamesOn(platform) }.getOrDefault(emptyList())
+        if (ids.isEmpty()) return emptyList()
+        val media = ctx.data.media.observeFor(ids.map { MediaOwner.OfGame(it) }).first()
+        return ids.mapNotNull { id -> media[MediaOwner.OfGame(id)]?.takeIf { it.screenshots.isNotEmpty() || it.hero != null }?.let { id to it } }
+    }
+
+    /** For the Media page: [platform]'s games to take a panel from, with their art and how many pictures each has. */
+    suspend fun panelGames(platform: PlatformId): List<PanelGame> {
+        val titles = ctx.data.games.observeAll().first().associate { it.id to it.displayTitle }
+        return gamesWithPictures(platform).map { (id, m) ->
+            val title = titles[id] ?: ctx.remoteGames?.takeIf { it.owns(id) }?.get(id)?.displayTitle ?: "Game"
+            PanelGame(id, title, Art.from(m), m.screenshots.size + (if (m.hero != null) 1 else 0))
+        }
+    }
+
+    /** [game]'s screenshots, then its background, as options for a system's panel. */
+    suspend fun panelPictures(game: GameId): List<ArtworkOption> {
+        val m = ctx.data.media.get(MediaOwner.OfGame(game))
+        return (m.screenshots + listOfNotNull(m.hero)).mapNotNull { item ->
+            item.model?.let { ArtworkOption(ScrapeProviderId.LOCAL, MediaKind.BOXART, it, thumbUrl = it, width = item.width, height = item.height, style = if (item.kind == MediaKind.HERO) "Background" else "Screenshot") }
+        }
+    }
+
+    /** Makes [option] [platform]'s panel, picked by the person: kept, and cut like the pack's. */
+    suspend fun setPanel(platform: PlatformId, option: ArtworkOption) {
+        val model = option.url
+        // Marked first, so the panel is cut from the moment it shows.
+        GamePanels.models = GamePanels.models + model
+        ctx.settings.value = ctx.data.settings.update { it.copy(library = it.library.copy(systemPanels = it.library.systemPanels + (platform.value to model))) }
+        val local = !model.startsWith("http://") && !model.startsWith("https://")
+        ctx.data.media.setCustom(MediaOwner.OfPlatform(platform), MediaKind.BOXART, localPath = model.takeIf { local }, remoteUrl = model.takeIf { !local }, width = option.width, height = option.height)
+    }
+
+    /** [platform]'s panel goes back to the one Fuse takes from its games by itself. */
+    suspend fun autoPanel(platform: PlatformId) {
+        val owner = MediaOwner.OfPlatform(platform)
+        ctx.settings.value = ctx.data.settings.update { it.copy(library = it.library.copy(systemPanels = it.library.systemPanels - platform.value, systemArtDefault = it.library.systemArtDefault - platform.value)) }
+        ctx.data.media.resetCustom(owner, MediaKind.BOXART)
+        ctx.platform(platform)?.let { fromGames(it, MediaFillMode.REPLACE_SELECTED) }
     }
 
     /**
@@ -154,19 +220,13 @@ internal class SystemArtStore(private val ctx: StoreContext) {
      * their art arrives.
      */
     private suspend fun fromGames(platform: Platform, mode: MediaFillMode): Int {
-        val here = ctx.data.games.observeAll().first()
-            .filter { it.platformId == platform.id && !it.isApp && !it.removed }
-            .sortedByDescending { it.lastPlayedAt ?: 0L }
-            .map { it.id }
-        val ids = here + runCatching { ctx.remoteGamesOn(platform.id) }.getOrDefault(emptyList())
-        if (ids.isEmpty()) return 0
-        val media = ctx.data.media.observeFor(ids.map { MediaOwner.OfGame(it) }).first()
-        val pick = ids.firstNotNullOfOrNull { id -> media[MediaOwner.OfGame(id)]?.let { it.screenshots.firstOrNull() ?: it.hero } } ?: return 0
+        val pick = gamesWithPictures(platform.id).firstNotNullOfOrNull { (_, m) -> m.screenshots.firstOrNull() ?: m.hero } ?: return 0
         val item = MediaItem(
             MediaKind.BOXART, MediaSource.GAME_ART, localPath = pick.localPath, remoteUrl = pick.remoteUrl,
             width = pick.width, height = pick.height, focusX = pick.focusX, focusY = pick.focusY,
         )
-        return ctx.data.media.putScraped(MediaOwner.OfPlatform(platform.id), listOf(item), mode, setOf(MediaKind.BOXART))
+        val kinds = setOf(MediaKind.BOXART)
+        return ctx.data.media.putScraped(MediaOwner.OfPlatform(platform.id), listOf(item), if (mode == MediaFillMode.REPLACE_ALL) MediaFillMode.REPLACE_SELECTED else mode, kinds)
     }
 
     private suspend fun saveColor(id: PlatformId, rgb: Long) {
@@ -230,6 +290,9 @@ class SystemArtUndo internal constructor(
 ) : io.github.matiyaaa.fuse.ui.shell.store.ArtUndo {
     override val count: Int get() = rows.count { it.value.isNotEmpty() }
 }
+
+/** [io.github.matiyaaa.fuse.data.settings.LibrarySettings.systemArtStyle] for panels from the system's own games. */
+internal const val GAMES_STYLE = "GAMES"
 
 /** How long after games' art was found that systems drawn from it look again (art comes in bursts). */
 private const val GAME_ART_SETTLE_MS = 2_000L

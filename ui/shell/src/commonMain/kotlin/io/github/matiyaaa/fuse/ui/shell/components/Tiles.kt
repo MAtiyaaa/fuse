@@ -507,17 +507,7 @@ private fun PackCard(card: PlatformCard, accent: Color, large: Boolean) {
         // Pack artwork is a tall panel (about 454 x 1080); it fills the height on the right.
         val artWidth = (maxHeight * 0.52f).coerceAtMost(maxWidth * 0.6f)
         if (card.art.boxart != null) {
-            if (card.art.boxartFromGames) {
-                GamesPanel(card.art.boxart, Modifier.align(Alignment.CenterEnd).width(artWidth).fillMaxHeight())
-            } else {
-                Artwork(
-                    card.art.boxart,
-                    Modifier.align(Alignment.CenterEnd).width(artWidth).fillMaxHeight(),
-                    contentScale = ContentScale.Crop,
-                    focusX = 0.5f,
-                    focusY = 0.35f,
-                )
-            }
+            SystemPanel(card.art, Modifier.align(Alignment.CenterEnd).width(artWidth).fillMaxHeight())
             // Blend the panel's left edge into the card colour.
             Box(
                 Modifier.align(Alignment.CenterEnd).width(artWidth).fillMaxHeight()
@@ -554,13 +544,27 @@ private fun PackCard(card: PlatformCard, accent: Color, large: Boolean) {
 }
 
 /**
+ * A system's tall artwork panel, the same wherever systems are drawn (tiles, Home, the Systems page,
+ * Downloads, RomM): the pack's image as it comes, or one made from a game's screenshot cut to the
+ * pack's slanted band, at the same place and size.
+ */
+@Composable
+fun SystemPanel(art: Art, modifier: Modifier, focusY: Float = 0.35f) {
+    if (art.boxartFromGames) {
+        GamesPanel(art.boxart, modifier, focusY)
+    } else {
+        Artwork(art.boxart, modifier, contentScale = ContentScale.Crop, focusX = 0.5f, focusY = focusY)
+    }
+}
+
+/**
  * A system's artwork panel made from one of its games' screenshots, laid out exactly as a pack
  * panel is: the pack's 454 x 1080 frame, cropped into [modifier]'s box the way the pack image is
  * (filling it, a little above the middle), with the screenshot cut to the pack's slanted band so it
  * reads as one of the set.
  */
 @Composable
-private fun GamesPanel(model: Any?, modifier: Modifier) {
+private fun GamesPanel(model: Any?, modifier: Modifier, focusY: Float) {
     BoxWithConstraints(modifier.clipToBounds()) {
         val boxW = maxWidth
         val boxH = maxHeight
@@ -571,7 +575,7 @@ private fun GamesPanel(model: Any?, modifier: Modifier) {
         Box(
             Modifier
                 .requiredSize(frameW, frameH)
-                .offset(x = -(frameW - boxW) * 0.5f, y = -(frameH - boxH) * 0.35f)
+                .offset(x = -(frameW - boxW) * 0.5f, y = -(frameH - boxH) * focusY)
                 .align(Alignment.TopStart)
                 .clip(PackPanelShape),
         ) {

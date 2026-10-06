@@ -55,10 +55,21 @@ data class Art(
             heroFocusY = media.hero?.focusY ?: 0.35f,
             video = media.video?.model,
             screenshot = media.screenshots.firstOrNull()?.model,
-            boxartFromGames = media.boxart?.source == io.github.matiyaaa.fuse.model.MediaSource.GAME_ART,
+            boxartFromGames = media.boxart?.let { b -> b.source == io.github.matiyaaa.fuse.model.MediaSource.GAME_ART || b.model in GamePanels.models } == true,
         )
     }
 }
+
+/**
+ * The pictures people picked as a system's panel from a game's screenshot (Settings keeps them by
+ * system), so [Art.from] knows to cut them like the pack's. Set by the store as settings change.
+ */
+object GamePanels {
+    @kotlin.concurrent.Volatile var models: Set<String> = emptySet()
+}
+
+/** A game whose screenshots can make a system's panel, for the Media page's picker. */
+data class PanelGame(val id: io.github.matiyaaa.fuse.model.GameId, val title: String, val art: Art, val pictures: Int)
 
 /** A game as list screens need it: small, stable, cheap to compare. */
 @Immutable

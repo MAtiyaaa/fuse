@@ -632,6 +632,18 @@ interface MediaOps {
 
     /** Puts back what [restoreDefaultSystemArt] replaced. */
     suspend fun undoSystemArt(undo: ArtUndo) {}
+
+    /** [platform]'s games with screenshots (or a background) to make its panel from, the most recently played first. */
+    suspend fun panelGames(platform: PlatformId): List<PanelGame> = emptyList()
+
+    /** [game]'s screenshots and background, to pick a system's panel from. */
+    suspend fun panelPictures(game: GameId): List<ArtworkOption> = emptyList()
+
+    /** Makes [option] (one of [panelPictures]) [platform]'s panel, cut like the pack's; kept until changed. */
+    suspend fun setSystemPanel(platform: PlatformId, option: ArtworkOption) {}
+
+    /** [platform]'s panel goes back to the one Fuse picks from its games by itself. */
+    suspend fun autoSystemPanel(platform: PlatformId) {}
     val systemArtProgress: StateFlow<FillProgress?>
 }
 

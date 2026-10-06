@@ -71,6 +71,9 @@ import io.github.matiyaaa.fuse.ui.shell.store.MusicPrefs
 import io.github.matiyaaa.fuse.ui.shell.store.UpdateState
 import kotlinx.coroutines.launch
 
+/** System art styles: the pack's sets, and panels from the system's own games. */
+private val systemArtStyles: List<Pair<String, String>> = SystemArtStyle.entries.map { it.name to it.displayName } + ("GAMES" to "From your games")
+
 private fun motionName(m: MotionProfile?) = when (m) {
     null -> "Automatic"
     MotionProfile.REDUCED -> "Reduced"
@@ -577,8 +580,8 @@ fun systemsRows(app: AppState): List<MenuAction> {
             ))
             addAll(app.group(
                 "systems.art", "System art", FuseIcons.Image,
-                summary = if (prefs.systemArtAuto) SystemArtStyle.entries.firstOrNull { it.name == prefs.systemArtStyle }?.displayName else "Off",
-                detail = "Logos, artwork and colours from the Art Book Next pack",
+                summary = if (prefs.systemArtAuto) systemArtStyles.firstOrNull { it.first == prefs.systemArtStyle }?.second else "Off",
+                detail = "Logos, artwork and colours from the Art Book Next pack, or panels from your games' screenshots",
             ) {
                 buildList {
                     add(toggleRow("art.auto", "Download system art", FuseIcons.Image, prefs.systemArtAuto, "Downloaded when a system has none") { v ->
@@ -586,8 +589,12 @@ fun systemsRows(app: AppState): List<MenuAction> {
                     })
                     add(app.choiceRow(
                         "art.style", "System art style", FuseIcons.Paintbrush, prefs.systemArtStyle,
-                        SystemArtStyle.entries.map { it.name to it.displayName },
+                        systemArtStyles,
                         detail = "Used the next time system art is downloaded",
+                        optionDetail = { v ->
+                            if (v == "GAMES") "The pack's logos, with a screenshot of each system's own games as its panel, cut like the pack's"
+                            else "Art Book Next's ${systemArtStyles.firstOrNull { it.first == v }?.second?.lowercase() ?: ""} panels"
+                        },
                     ) { v ->
                         app.store.updatePrefs { it.copy(systemArtStyle = v) }
                         app.confirm = ConfirmSpec("Download in this style now?", "Fuse downloads art for every system again in the new style. Art you chose yourself stays.", "Download") {
@@ -599,7 +606,7 @@ fun systemsRows(app: AppState): List<MenuAction> {
                     add(MenuAction(
                         "art.all", "Download system art for all systems", FuseIcons.CloudDownload,
                         detail = when {
-                            progress == null -> "Fetches every system again in the chosen style. Art you chose yourself stays"
+                            progress == null -> "Every system again in the chosen style. Art you chose yourself stays"
                             !progress.finished -> "Working: ${progress.current ?: ""} (${progress.done + 1} of ${progress.total})"
                             else -> "Done: ${progress.added} images for ${progress.total} systems"
                         },

@@ -104,4 +104,48 @@ class RommArtTest {
         assertEquals(square, onSecondScreen.art.square.toString())
         watching.cancel()
     }
+
+    @Test
+    fun aSystemsPanelCanBePickedFromAGamesScreenshotKeptAndPutBackToAutomatic(): Unit = runBlocking {
+        val data = FuseData(DesktopDatabase.open(File(dir, "panel.db").absolutePath))
+        val services = FakeServices(data, File(dir, "cache2").apply { mkdirs() })
+        RommMirror(data.database, { System.currentTimeMillis() }).put(
+            "main",
+            RommRom(id = 42, platformId = 7, platformSlug = "snes", name = "Chrono Trigger", fsName = "Chrono Trigger (USA).sfc", files = listOf(RommFile(420, "Chrono Trigger (USA).sfc"))),
+        )
+        val first = "https://cdn.example/chrono-1.png"
+        val second = "https://cdn.example/chrono-2.png"
+        data.media.putScraped(
+            MediaOwner.OfGame(rommGameId(42)),
+            listOf(
+                io.github.matiyaaa.fuse.model.MediaItem(io.github.matiyaaa.fuse.model.MediaKind.SCREENSHOT, MediaSource.STEAMGRIDDB, remoteUrl = first, order = 0),
+                io.github.matiyaaa.fuse.model.MediaItem(io.github.matiyaaa.fuse.model.MediaKind.SCREENSHOT, MediaSource.STEAMGRIDDB, remoteUrl = second, order = 1),
+            ),
+            io.github.matiyaaa.fuse.model.MediaFillMode.FILL_MISSING,
+        )
+        val store = createFuseStore(services, scope)
+        val snes = PlatformId("snes")
+        val owner = MediaOwner.OfPlatform(snes)
+
+        // The Media page lists the system's games with pictures, then a game's pictures.
+        val games = withTimeout(10_000) { var g = store.media.panelGames(snes); while (g.isEmpty()) { delay(50); g = store.media.panelGames(snes) }; g }
+        assertEquals(listOf("Chrono Trigger"), games.map { it.title })
+        assertEquals(2, games.single().pictures)
+        val pictures = store.media.panelPictures(games.single().id)
+        assertEquals(listOf(first, second), pictures.map { it.url })
+
+        // Picked: kept as the person's own, and drawn cut like the pack's.
+        store.media.setSystemPanel(snes, pictures[1])
+        var panel = data.media.get(owner).boxart!!
+        assertEquals(MediaSource.USER, panel.source)
+        assertEquals(second, panel.model)
+        assertTrue(Art.from(data.media.get(owner)).boxartFromGames)
+
+        // Back to automatic: Fuse's own pick from its games, still cut like the pack's.
+        store.media.autoSystemPanel(snes)
+        panel = data.media.get(owner).boxart!!
+        assertEquals(MediaSource.GAME_ART, panel.source)
+        assertEquals(first, panel.model)
+        assertTrue(Art.from(data.media.get(owner)).boxartFromGames)
+    }
 }

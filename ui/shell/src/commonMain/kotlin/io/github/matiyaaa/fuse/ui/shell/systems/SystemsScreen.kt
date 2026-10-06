@@ -324,13 +324,7 @@ private fun SystemCardFace(card: PlatformCard, height: Dp) {
         GeneratedArt(title = card.platform.name, accent = accent, slot = ArtSlot.WIDE, showText = false)
         if (art.boxart != null) {
             // The art pack's tall panel stands at the right end, melting into the card's colour.
-            Artwork(
-                art.boxart,
-                Modifier.align(Alignment.CenterEnd).fillMaxHeight().fillMaxWidth(0.42f),
-                contentScale = ContentScale.Crop,
-                focusX = 0.5f,
-                focusY = 0.35f,
-            )
+            io.github.matiyaaa.fuse.ui.shell.components.SystemPanel(art, Modifier.align(Alignment.CenterEnd).fillMaxHeight().fillMaxWidth(0.42f))
             PanelMelt(accent, Modifier.align(Alignment.CenterEnd).fillMaxHeight().fillMaxWidth(0.42f))
         }
         // A floor under the logo, so it reads on any colour.
