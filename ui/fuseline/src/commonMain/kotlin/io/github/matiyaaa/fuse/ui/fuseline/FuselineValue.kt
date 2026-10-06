@@ -95,6 +95,18 @@ class FuselineValue<T>(
             return read
         }
 
+    /** One number of the value (x of a position, the width of a size), read without building the value. */
+    fun component(index: Int): Float {
+        version.intValue
+        return now[index]
+    }
+
+    /** One number of the target, read without building it. */
+    fun targetComponent(index: Int): Float {
+        targetVersion.intValue
+        return if (targetFollowsValue) now[index] else goal[index]
+    }
+
     /** A one-number value as a float, without boxing it. */
     val floatValue: Float
         get() {
