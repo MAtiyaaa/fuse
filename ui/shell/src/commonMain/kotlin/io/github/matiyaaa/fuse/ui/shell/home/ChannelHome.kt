@@ -683,7 +683,8 @@ internal fun ChannelBoard(app: AppState, space: BoardSpace, page: Int, pageKey: 
         // Undo and Reset float at the top right while arranging, out of the board's way.
         Appear(
             arranging && op == null && !resizeLook,
-            modifier = Modifier.align(Alignment.TopEnd).padding(top = Size.hudHeight, end = gutter),
+            // In the room the board leaves above itself while arranging (under the top line on Home).
+            modifier = Modifier.align(Alignment.TopEnd).padding(top = space.top, end = gutter),
             enter = fadeIn(motion.enter(Durations.BASE)) + slideInVertically(motion.enter(Durations.BASE)) { -it / 2 },
             exit = fadeOut(motion.exit(Durations.FAST)) + slideOutVertically(motion.exit(Durations.FAST)) { -it / 2 },
         ) {

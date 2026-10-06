@@ -393,8 +393,9 @@ internal fun AuditDriver.systemsScreens(exhaustive: Boolean) {
         tab(Destination.SYSTEMS)
         waitFor("Arrange")
         val systems = libraryStore.library.platforms.value.filter { it.gameCount > 0 }
-        val from = textCentre(systems[0].platform.shortName)
-        val to = textCentre(systems[2].platform.shortName)
+        // Home stays composed behind the tab with its own system names: the cards are the topmost.
+        val from = textCentre(systems[0].platform.shortName, topmost = true)
+        val to = textCentre(systems[2].platform.shortName, topmost = true)
         touch { down(from) }
         advanceExactly(800)
         shoot("held, lifted under the finger")
