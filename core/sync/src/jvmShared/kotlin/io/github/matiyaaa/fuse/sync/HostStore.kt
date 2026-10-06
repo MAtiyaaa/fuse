@@ -2,6 +2,7 @@ package io.github.matiyaaa.fuse.sync
 
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
 import java.io.File
 
@@ -102,6 +103,10 @@ class HostStore(val dir: File, private val clock: () -> Long = System::currentTi
     private val revisions = HashMap<String, MutableList<SaveRevision>>()
     private val shared = LinkedHashSet<String>()
     private val journal = ArrayList<JournalEvent>()
+    private val appliedFile = File(dir, "applied.json")
+
+    /** What each device reported in place for each save: device to `profile|game|kind` to note. */
+    private val applied = HashMap<String, HashMap<String, AppliedNote>>()
     private var seq = 0L
     val startedAt: Long = clock()
 
@@ -131,6 +136,9 @@ class HostStore(val dir: File, private val clock: () -> Long = System::currentTi
         if (outsideFile.isFile) outside = runCatching { json.decodeFromString(OutsideAddress.serializer(), outsideFile.readText()) }.getOrDefault(OutsideAddress())
         if (aliasFile.isFile) runCatching { json.decodeFromString(GameAliasesSerializer, aliasFile.readText()) }.getOrNull()?.let(aliases::putAll)
         if (sharedFile.isFile) runCatching { json.decodeFromString(SharedGames.serializer(), sharedFile.readText()).games }.getOrNull()?.let(shared::addAll)
+        if (appliedFile.isFile) runCatching {
+            json.decodeFromString(AppliedFileSerializer, appliedFile.readText()).forEach { (d, m) -> applied[d] = HashMap(m) }
+        }
         if (journalFile.isFile) {
             journalFile.readLines().mapNotNullTo(journal) { line -> runCatching { json.decodeFromString(JournalEvent.serializer(), line) }.getOrNull() }
             seq = journal.lastOrNull()?.seq ?: 0
@@ -544,6 +552,46 @@ class HostStore(val dir: File, private val clock: () -> Long = System::currentTi
         revisions[profile].orEmpty().filter { it.game == game && it.kind == kind && it.canBeNewest }.maxByOrNull { it.at }
     }
 
+    /** Keeps what [device] reports in place; older notes never replace newer ones. */
+    fun noteApplied(device: String, notes: List<AppliedNote>): Unit = synchronized(lock) {
+        val mine = applied.getOrPut(device) { HashMap() }
+        var changed = false
+        for (n in notes.take(MAX_APPLIED)) {
+            val key = "${n.profile}|${n.game}|${n.kind.name}"
+            val before = mine[key]
+            if (before != null && before.at > n.at) continue
+            if (before == n) continue
+            mine[key] = n.copy(at = if (n.at > 0) n.at else clock())
+            changed = true
+        }
+        if (changed) writeAtomically(appliedFile, json.encodeToString(AppliedFileSerializer, applied).toByteArray())
+    }
+
+    /**
+     * Every device's place with each save of [game] for [profile] (and the household's shared
+     * save): current, behind, waiting on the person, or never reported (likely without the game).
+     * The device that made the newest counts as current, report or not.
+     */
+    fun convergence(profile: String, game: String): Convergence = synchronized(lock) {
+        val owners = listOf(profile, SHARED_SAVES)
+        val heads = owners.flatMap { o -> revisions[o].orEmpty().filter { it.game == game && it.canBeNewest }.groupBy { it.kind }.map { (_, g) -> g.maxBy { it.at } } }
+        val live = devices.values.filter { !it.revoked }
+        Convergence(heads.map { head ->
+            val key = "${head.profile}|$game|${head.kind.name}"
+            SlotDevices(game, head.kind, head.id, head.deviceName, live.map { d ->
+                val n = applied[d.id]?.get(key)
+                val state = when {
+                    d.id == head.device -> AppliedState.CURRENT
+                    n == null -> null
+                    n.revision == head.id -> AppliedState.CURRENT
+                    n.state == AppliedState.CURRENT -> AppliedState.BEHIND
+                    else -> n.state
+                }
+                DeviceSlot(d.id, d.name, d.platform, state, n?.revision ?: head.id.takeIf { d.id == head.device }, n?.at ?: 0, d.lastSeen)
+            })
+        })
+    }
+
     fun heads(profile: String): Heads = synchronized(lock) {
         val all = revisions[profile].orEmpty().filter { it.canBeNewest }
         Heads(all.groupBy { it.game to it.kind }.values.map { group -> group.maxBy { it.at } }, seq)
@@ -660,6 +708,8 @@ class HostStore(val dir: File, private val clock: () -> Long = System::currentTi
         list += kept
         append(File(profileDir(profile), "revisions.jsonl"), json.encodeToString(SaveRevision.serializer(), kept))
         event(JournalEvent.REVISION, profile, revision.game, revision.kind, kept.id, device)
+        // The device that made the newest has it in place: it plays this game, and is current.
+        if (fits && !historyOnly) noteApplied(device, listOf(AppliedNote(profile, revision.game, revision.kind, kept.id, AppliedState.CURRENT, clock())))
         when {
             historyOnly -> RevisionResult(accepted = true, head = head)
             fits -> RevisionResult(accepted = true, head = kept)
@@ -762,7 +812,7 @@ internal const val ADMIN_AVATAR = "crown"
 object HostFiles {
     private val OWN = setOf(
         "host.json", "devices.json", "profiles.json", "shared-games.json", "game-aliases.json", "account.json", "outside.json",
-        "journal.jsonl", "admin.token", "objects", "profiles",
+        "journal.jsonl", "applied.json", "admin.token", "objects", "profiles",
     )
 
     /** The host's own files and folders in [dir] (with any write a crash left half done). */
@@ -794,3 +844,12 @@ internal const val MIN_PASSWORD = 8
 
 /** How hard the account's password is stretched (it guards joining and the Hub from away). */
 internal const val ACCOUNT_ITERATIONS = 210_000
+
+/** applied.json: device id to `profile|game|kind` to what it reported. */
+private val AppliedFileSerializer: kotlinx.serialization.KSerializer<Map<String, Map<String, AppliedNote>>> = kotlinx.serialization.builtins.MapSerializer(
+    String.serializer(),
+    kotlinx.serialization.builtins.MapSerializer(String.serializer(), AppliedNote.serializer()),
+)
+
+/** The most notes one report may carry. */
+private const val MAX_APPLIED = 5_000

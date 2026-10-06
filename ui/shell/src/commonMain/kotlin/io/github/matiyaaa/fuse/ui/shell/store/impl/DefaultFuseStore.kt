@@ -103,10 +103,8 @@ internal class DefaultFuseStore private constructor(
     override val offlineMedia: DefaultOfflineMedia by lazy { DefaultOfflineMedia(ctx, engine, transferEngine, jellyfin) }
 
     /** Fuse Sync over this library: the person's records and settings, read and put in place. */
-    override val sync = DefaultSyncOps(
-        ctx,
-        LibraryProfileData(ctx.data, settings = { settingsNow() }, applySettings = { t -> writeSettings(t) }),
-    ) { t -> writeSettings(t) }
+    private val profileData = LibraryProfileData(ctx.data, settings = { settingsNow() }, applySettings = { t -> writeSettings(t) })
+    override val sync = DefaultSyncOps(ctx, profileData) { t -> writeSettings(t) }
 
     override val syncthing: io.github.matiyaaa.fuse.sync.syncthing.SyncthingService? =
         runCatching { ctx.services.syncthingService(ctx.scope) }.getOrNull()
@@ -336,6 +334,8 @@ internal class DefaultFuseStore private constructor(
         sync.service?.let { svc ->
             library.sync = SyncLaunch(svc, sync.port)
             sync.queries = { id -> library.saveQueryFor(id) }
+            // A save made on another device comes into place here by itself, for games this library has.
+            svc.saveQueries { household -> profileData.gameFor(household)?.let { library.saveQueryFor(io.github.matiyaaa.fuse.model.GameId(it)) } }
             sync.samples = { library.saveSamples() }
             ctx.onUserChange = { if (sync.config.value.enabled) svc.changed() }
         }

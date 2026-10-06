@@ -418,6 +418,31 @@ class SyncDevice(
      * kept as a revision first); a save changed here and there too is a [PrepareResult.Conflict] for
      * the person to settle. Without the host, the game plays with what is here.
      */
+    /**
+     * [prepare] in the background, after another device saved: only when the folder holds this
+     * person's save (or no one's yet). Someone else's save in the folder is theirs until the next
+     * launch swaps it; a conflict is left for the person, exactly as it is.
+     */
+    suspend fun converge(client: SyncClient, profile: String, slot: LocalSlot): PrepareResult? {
+        val holder = holderOf(slot)
+        if (holder != null && holder != profile) return null
+        return prepare(client, profile, slot)
+    }
+
+    /** What to tell the host about [slot] after [result]: which revision is in place here, and how it stands. */
+    fun appliedNote(profile: String, slot: LocalSlot, result: PrepareResult, at: Long): AppliedNote? {
+        val base = state.slots[keyOf(profile, slot)]?.base
+        val (revision, st) = when (result) {
+            PrepareResult.Ready -> base to AppliedState.CURRENT
+            is PrepareResult.Updated -> result.revision.id to AppliedState.CURRENT
+            is PrepareResult.Conflict -> base to AppliedState.CONFLICT
+            is PrepareResult.Incompatible -> base to AppliedState.INCOMPATIBLE
+            PrepareResult.Unavailable -> base to AppliedState.UNAVAILABLE
+            PrepareResult.Offline -> return null
+        }
+        return AppliedNote(profile, slot.game.id, slot.kind, revision, st, at)
+    }
+
     suspend fun prepare(client: SyncClient?, profile: String, slot: LocalSlot): PrepareResult {
         if (!slot.available) return PrepareResult.Unavailable
         val head = try {

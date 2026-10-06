@@ -44,6 +44,10 @@ internal class LibraryProfileData(
 
     override fun useAliases(aliases: Map<String, String>) { this.aliases = aliases }
 
+    /** The game here the household knows as [household], or null when this library doesn't have it. */
+    suspend fun gameFor(household: String): Long? =
+        data.profileState.read().games.firstOrNull { r -> keyOf(r).id == household || candidatesOf(r).any { it.id == household } }?.id
+
     override suspend fun candidates(): List<List<GameKey>> =
         data.profileState.read().games.map { candidatesOf(it) }.distinct()
 

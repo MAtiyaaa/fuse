@@ -297,8 +297,14 @@ class JvmSyncService(
                     }
                     backoff = 2_000L
                     val since = device?.seq ?: 0
+                    // Back after being away (or just started): every save that moved on meanwhile.
+                    if (!caughtUp) {
+                        caughtUp = true
+                        scope.launch(Dispatchers.IO) { runCatching { convergeAll() } }
+                    }
                     val page = c.events(since, waitSeconds = 25)
                     if (page.events.isNotEmpty()) {
+                        convergeLater(page.events)
                         device?.saw(page.seq)
                         val active = cached.activeProfile
                         if (page.events.any { it.type == JournalEvent.PROFILE || it.type == JournalEvent.DEVICE }) refreshLists()
@@ -309,14 +315,83 @@ class JvmSyncService(
                     throw e
                 } catch (e: SyncException) {
                     handle(e)
+                    caughtUp = false
                     delay(backoff)
                     backoff = (backoff * 2).coerceAtMost(60_000L)
                 } catch (e: Exception) {
+                    caughtUp = false
                     delay(backoff)
                     backoff = (backoff * 2).coerceAtMost(60_000L)
                 }
             }
         }
+    }
+
+    // ---------------------------------------------------------------- convergence
+
+    /** Set once the saves that moved on while this device was away were looked at. */
+    @Volatile private var caughtUp = false
+
+    @Volatile private var queries: (suspend (String) -> SaveQuery?)? = null
+
+    /** Games between "about to start" and "stopped and sent": never written to in the background. */
+    private val busy = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+
+    /** One background pass at a time, so a burst of saves is one tidy round. */
+    private val converging = Mutex()
+
+    override fun saveQueries(provider: suspend (gameId: String) -> SaveQuery?) {
+        queries = provider
+        caughtUp = false
+    }
+
+    /** Saves another device just made, for the person here (or the household's shared ones): put in place soon. */
+    private fun convergeLater(events: List<JournalEvent>) {
+        val active = cached.activeProfile
+        if (active.isEmpty() || !cached.saves || queries == null) return
+        val games = events.filter { it.type == JournalEvent.REVISION && it.device != cached.deviceId && (it.profile == active || it.profile == SHARED_SAVES) }
+            .mapNotNull { it.game }.distinct()
+        if (games.isEmpty()) return
+        scope.launch(Dispatchers.IO) { converging.withLock { for (g in games) runCatching { convergeGame(g) } } }
+    }
+
+    /** Every save the host has for the person here, looked at once: catching up after being offline, or joining. */
+    private suspend fun convergeAll() {
+        val c = client ?: return
+        val active = cached.activeProfile.ifEmpty { return }
+        if (!cached.saves || queries == null) return
+        val games = (c.heads(active).heads + runCatching { c.heads(SHARED_SAVES).heads }.getOrDefault(emptyList()))
+            .filter { it.device != cached.deviceId }.map { it.game }.distinct()
+        converging.withLock { for (g in games) runCatching { convergeGame(g) } }
+    }
+
+    /**
+     * Puts the newest save of [gameId] in place here, quietly, when this device has the game and
+     * isn't playing it, then tells the host where this device stands. A conflict is never settled
+     * here: it waits for the person at the next launch, with both saves kept.
+     */
+    private suspend fun convergeGame(gameId: String) {
+        val provider = queries ?: return
+        val c = client ?: return
+        val d = device ?: return
+        val profile = cached.activeProfile.ifEmpty { return }
+        if (gameId in busy || watch?.query?.game?.id == gameId) return
+        val query = canonical(provider(gameId) ?: return)
+        if (query.game.id in busy) return
+        val notes = ArrayList<AppliedNote>()
+        for (slot in slots(query)) {
+            val owner = ownerOf(query, slot, profile)
+            val result = runCatching { d.converge(c, owner, slot) }.getOrNull() ?: continue
+            if (result is PrepareResult.Updated) log("${query.title}: the newest save from ${result.revision.deviceName} is in place", query.game.id, "save")
+            d.appliedNote(owner, slot, result, clock())?.let(notes::add)
+        }
+        runCatching { c.noteApplied(notes) }
+    }
+
+    override suspend fun convergence(game: GameKey): Convergence? = withContext(Dispatchers.IO) {
+        val c = client ?: return@withContext null
+        val profile = cached.activeProfile.ifEmpty { return@withContext null }
+        runCatching { c.convergence(profile, canonical(SaveQuery(game, game.platform, "", "")).game.id) }.getOrNull()
     }
 
     private fun handle(e: SyncException) {
@@ -1367,6 +1442,8 @@ class JvmSyncService(
         if (waitForOthers && c != null) othersOn(c, d, query, profile)?.let { return@withContext it }
         // From here until its save is sent after it stops (Android keeps Fuse going meanwhile).
         getReady(query.title)
+        busy += query.game.id
+        scope.launch { delay(READY_MS); if (watch?.query?.game != query.game) busy -= query.game.id }
         // Saves Fuse can't place yet (the game's id unknown): what each game's folder looks like now,
         // so the folders this play changes are learned as this game's.
         snapshotLearnable(query)
@@ -1384,6 +1461,7 @@ class JvmSyncService(
             }
             // A launch never waits long on a host that isn't there.
             val result = withTimeoutOrNull(LAUNCH_WAIT_MS) { runCatching { d.prepare(c, owner, slot) }.getOrElse { PrepareResult.Offline } } ?: PrepareResult.Offline
+            d.appliedNote(owner, slot, result, clock())?.let { n -> scope.launch(Dispatchers.IO) { runCatching { c.noteApplied(listOf(n)) } } }
             when (result) {
                 is PrepareResult.Conflict -> return@withContext LaunchGate.Conflict(
                     SaveConflict(
@@ -1429,8 +1507,8 @@ class JvmSyncService(
     override suspend fun afterExit(asked: SaveQuery, startedAt: Long, endedAt: Long) {
         val query = canonical(asked)
         stopWatching(query)
-        val d = device ?: return run { _nowPlaying.value = null }
-        val profile = cached.activeProfile.ifEmpty { return run { _nowPlaying.value = null } }
+        val d = device ?: return run { busy -= query.game.id; _nowPlaying.value = null }
+        val profile = cached.activeProfile.ifEmpty { return run { busy -= query.game.id; _nowPlaying.value = null } }
         withContext(Dispatchers.IO) {
             client?.let { c -> runCatching { c.notePresence(PresenceNote(profile, query.game.id, query.title, Presence.SENDING, startedAt)) } }
             // Emulators finish writing a moment after they close.
@@ -1467,6 +1545,7 @@ class JvmSyncService(
             // Done: nothing playing, nothing left to send (what is still queued says so by itself next time).
             runCatching { c.notePresence(PresenceNote(profile, query.game.id, query.title, if (d.pendingProfiles().isEmpty()) null else Presence.SENDING, startedAt)) }
         }
+        busy -= query.game.id
         if (watch == null) _nowPlaying.value = null
     }
 
@@ -1556,6 +1635,7 @@ class JvmSyncService(
         watch?.job?.cancel()
         // How the save looks as the game starts (what came down before it), taken now, before the game can write.
         val first = withContext(Dispatchers.IO) { looks(query) }
+        busy += query.game.id
         val job = scope.launch(Dispatchers.IO) { watchWhilePlaying(query, profile, startedAt, first) }
         watch = Watch(query, profile, startedAt, job)
         readying?.cancel()
