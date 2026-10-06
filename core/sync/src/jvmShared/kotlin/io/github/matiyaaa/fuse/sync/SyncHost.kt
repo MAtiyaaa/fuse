@@ -11,6 +11,7 @@ import io.ktor.server.request.httpMethod
 import io.ktor.server.request.receiveChannel
 import io.ktor.server.request.uri
 import io.ktor.server.response.respondOutputStream
+import io.ktor.server.response.respondBytes
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.RoutingContext
@@ -702,13 +703,24 @@ class SyncHost(
         return false
     }
 
-    private suspend fun <T> ApplicationCall.json(serializer: KSerializer<T>, value: T) =
-        respondText(json.encodeToString(serializer, value), ContentType.Application.Json)
+    private suspend fun <T> ApplicationCall.json(serializer: KSerializer<T>, value: T) {
+        val text = json.encodeToString(serializer, value)
+        // Gzipped when asked for and worth it: a profile's records for a big library are a lot of
+        // text, and from outside home every byte goes the long way.
+        val gzip = text.length >= GZIP_FROM && request.headers[io.ktor.http.HttpHeaders.AcceptEncoding]?.contains("gzip") == true
+        if (!gzip) return respondText(text, ContentType.Application.Json)
+        response.headers.append(io.ktor.http.HttpHeaders.ContentEncoding, "gzip")
+        response.headers.append(io.ktor.http.HttpHeaders.Vary, io.ktor.http.HttpHeaders.AcceptEncoding)
+        respondBytes(Gzip.pack(text.encodeToByteArray()), ContentType.Application.Json)
+    }
 
     private suspend fun ApplicationCall.fail(status: HttpStatusCode, message: String, code: String) =
         respondText(json.encodeToString(ApiError.serializer(), ApiError(message, code)), ContentType.Application.Json, status)
 
     companion object {
+        /** Answers this long or longer are gzipped for a caller that takes it. */
+        const val GZIP_FROM = 1_024
+
         /** The most profiles one reorder names. */
         const val MAX_ORDER = 200
 

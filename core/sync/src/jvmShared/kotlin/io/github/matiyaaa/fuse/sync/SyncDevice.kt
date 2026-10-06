@@ -500,7 +500,7 @@ class SyncDevice(
      * a restore, which is queued for the host). If anything fails part way, what was here stays.
      */
     suspend fun place(client: SyncClient, slot: LocalSlot, revision: SaveRevision, owner: String = revision.profile) {
-        for (f in revision.manifest.files) client.download(f.hash, store)
+        SyncClient.inParallel(revision.manifest.files.map { it.hash }.distinct().filterNot(store::has)) { client.download(it, store) }
         mutex.withLock {
             // The save as this emulator keeps it (converted when it came from one that keeps it differently).
             val incoming = inSlotFormat(slot, revision.manifest)
@@ -578,7 +578,7 @@ class SyncDevice(
      * failure to reach the host (it all stays queued); a revision the host refuses as a conflict
      * is kept there as a conflict copy and settled before the next launch.
      */
-    suspend fun flush(client: SyncClient): Int {
+    suspend fun flush(client: SyncClient, saves: Boolean = true): Int {
         var sent = 0
         val profiles = mutex.withLock { state.pendingMeta.keys.toList() }
         for (p in profiles) {
@@ -595,6 +595,8 @@ class SyncDevice(
             }
             sent++
         }
+        // Records only: what a profile switch waits for (its saves follow straight after, in the background).
+        if (!saves) return sent
         while (true) {
             val next = mutex.withLock { nextToSend() } ?: break
             val rev = next.revision ?: break

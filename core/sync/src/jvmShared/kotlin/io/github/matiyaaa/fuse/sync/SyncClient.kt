@@ -21,6 +21,9 @@ import io.ktor.utils.io.jvm.javaio.copyTo
 import io.ktor.utils.io.jvm.javaio.toInputStream
 import io.ktor.utils.io.writeFully
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.joinAll
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.builtins.ListSerializer
@@ -80,8 +83,9 @@ internal fun hostError(status: Int, text: String, json: Json): IOException {
 /**
  * A device's side of Fuse Sync: every call signed with the device's secret, sent to the home
  * address while it answers and to the address from outside otherwise ([route] says which is in
- * use; a call that fails at home tries outside before giving up, and the next call tries home
- * again first). Files go up and come down checked by their hash.
+ * use; a call that fails at home tries outside before giving up, and while away calls go outside
+ * first, home looked at now and then on the side). Files go up and come down checked by their
+ * hash, several at once.
  */
 class SyncClient(
     @Volatile var link: HostLink,
@@ -93,10 +97,44 @@ class SyncClient(
     @Volatile var route: Route? = null
         private set
 
-    private fun bases(): List<Pair<Route, String>> = buildList {
-        link.localAddress?.let { add(Route.LOCAL to normalise(it)) }
-        link.remoteAddress?.let { add(Route.REMOTE to normalise(it)) }
+    /** When home was last looked at while away (see [bases]). */
+    @Volatile private var homeLookedAt = 0L
+
+    /**
+     * Where calls go, in order. At home, or not knowing yet: home first, then outside. Away (the
+     * last call that got through went outside): outside first, so no call waits on an address that
+     * can't answer from here, and home is looked at quietly now and then ([lookForHome]); once it
+     * answers, calls go home again.
+     */
+    private fun bases(): List<Pair<Route, String>> {
+        val home = link.localAddress?.let { Route.LOCAL to normalise(it) }
+        val away = link.remoteAddress?.let { Route.REMOTE to normalise(it) }
+        if (route == Route.REMOTE && home != null && away != null) {
+            lookForHome(home.second)
+            return listOf(away, home)
+        }
+        return listOfNotNull(home, away)
     }
+
+    /** Asks home whether it answers (briefly, off to the side), at most every [HOME_LOOK_MS]. */
+    private fun lookForHome(base: String) {
+        val now = clock()
+        if (now - homeLookedAt < HOME_LOOK_MS) return
+        homeLookedAt = now
+        looking.launch {
+            val quick = SyncHttp.client {
+                install(HttpTimeout) { connectTimeoutMillis = 1_500; requestTimeoutMillis = 3_000 }
+                expectSuccess = false
+            }
+            try {
+                if (hello(base, quick)?.hostId == link.hostId && route == Route.REMOTE) route = Route.LOCAL
+            } finally {
+                quick.close()
+            }
+        }
+    }
+
+    private val looking = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + Dispatchers.IO)
 
     private suspend fun <T> call(
         method: HttpMethod,
@@ -128,6 +166,7 @@ class SyncClient(
                     header(RequestSigning.NONCE, nonce)
                     header(RequestSigning.SIGNATURE, sig)
                     header("X-Fuse-Route", r.name)
+                    header(io.ktor.http.HttpHeaders.AcceptEncoding, "gzip")
                     when {
                         content != null -> setBody(content)
                         body != null -> {
@@ -144,7 +183,7 @@ class SyncClient(
                     }
                 }
                 val resp = http.request(build)
-                val text = resp.bodyAsText()
+                val text = textOf(resp)
                 if (!resp.status.isSuccess()) throw hostError(resp.status.value, text, json)
                 route = r
                 @Suppress("UNCHECKED_CAST")
@@ -159,6 +198,13 @@ class SyncClient(
         }
         route = null
         throw SyncException("The host didn't answer. ${last?.message ?: ""}".trim(), "offline", 0)
+    }
+
+    /** An answer's text, unpacked when the host gzipped it. */
+    private suspend fun textOf(resp: io.ktor.client.statement.HttpResponse): String {
+        if (resp.headers[io.ktor.http.HttpHeaders.ContentEncoding]?.contains("gzip") != true) return resp.bodyAsText()
+        val packed = resp.bodyAsChannel().toInputStream().use { it.readBytes() }
+        return Gzip.unpack(packed, SyncHost.MAX_JSON).decodeToString()
     }
 
     private suspend fun <T> get(path: String, out: KSerializer<T>): T = call(HttpMethod.Get, path, null, out)
@@ -240,12 +286,28 @@ class SyncClient(
      * Files come from [store] (where the device keeps what it captured).
      */
     suspend fun push(profile: String, revision: SaveRevision, store: ContentStore): RevisionResult {
-        val need = missing(revision.manifest.files.map { it.hash })
-        for (h in need) upload(h, store.fileOf(h))
+        val need = missing(revision.manifest.files.map { it.hash }.distinct())
+        // Several at once: over a slow link each file's round trip, not its size, is what takes the time.
+        inParallel(need) { h -> upload(h, store.fileOf(h)) }
         return send(HttpMethod.Post, "/profiles/$profile/revisions", RevisionPush(revision), RevisionPush.serializer(), RevisionResult.serializer())
     }
 
     companion object {
+        /** How often home is looked at while away. */
+        const val HOME_LOOK_MS = 60_000L
+
+        /** Files moved at once, each way. */
+        const val TRANSFERS = 4
+
+        /** Runs [work] for each of [items], [TRANSFERS] at a time; the first failure fails it all. */
+        suspend fun <T> inParallel(items: List<T>, work: suspend (T) -> Unit) {
+            if (items.size <= 1) return items.forEach { work(it) }
+            val gate = kotlinx.coroutines.sync.Semaphore(TRANSFERS)
+            kotlinx.coroutines.coroutineScope {
+                items.map { item -> launch { gate.withPermit { work(item) } } }.joinAll()
+            }
+        }
+
         fun defaultClient(): HttpClient = SyncHttp.client {
             install(HttpTimeout) {
                 connectTimeoutMillis = 4_000

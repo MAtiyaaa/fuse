@@ -1234,9 +1234,9 @@ class JvmSyncService(
             val c = client
             work.withLock {
                 val before = cached.activeProfile
-                // What changed under the profile in use stays with it, sent now or later.
+                // What changed under the profile in use stays with it, sent now or later (its
+                // records go up with the next person's below; its saves straight after the switch).
                 if (before.isNotEmpty()) captureChanges(before)
-                if (c != null) runCatching { d.flush(c) }
                 if (id == null) {
                     saveConfig { it.copy(activeProfile = "") }
                     _active.value = null
@@ -1273,8 +1273,10 @@ class JvmSyncService(
                     saveConfig { it.copy(activeProfile = id) }
                     markAdopted()
                 }
+                // One round for the records (everyone's waiting, then this person's newest); saves,
+                // which can be large, never hold a switch up.
                 if (c != null) runCatching {
-                    d.flush(c)
+                    d.flush(c, saves = false)
                     d.pullMeta(c, id)
                 }
                 saveConfig { it.copy(activeProfile = id) }
@@ -1283,6 +1285,8 @@ class JvmSyncService(
                 _active.value = _profiles.value.firstOrNull { it.id == id }
                 log("Switched to ${_active.value?.name ?: "a profile"}")
             }
+            // Saves waiting to go (the last person's, anyone's) go up now, behind the switch.
+            if (c != null) scope.launch(Dispatchers.IO) { runCatching { syncOnce() }.onFailure { if (it is SyncException) handle(it) } }
         }
     }
 
