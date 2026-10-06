@@ -49,6 +49,7 @@ internal fun AppSettings.toUiPrefs(scoped: GlobalScoped): UiPrefs {
         textScale = appearance.textScale.coerceIn(1f, 1.5f),
         screenMargin = appearance.screenMargin.coerceIn(0, 10),
         home = home.layout,
+        systemsBoard = home.systemsBoard,
         destinations = home.visibleDestinations(),
         defaultLayout = scoped.layout,
         gameArt = library.gameArt,
@@ -126,7 +127,7 @@ internal fun AppSettings.withUiPrefs(prefs: UiPrefs): AppSettings {
         Destination.entries.filterNot { it in visible }.map { DestinationSetting(it, visible = false) }
     return copy(
         onboarding = onboarding.copy(completed = prefs.onboardingDone, romm = prefs.rommAnswer),
-        home = home.copy(layout = prefs.home, destinations = destinations, continueDismissed = prefs.continueDismissed, addonsOrder = prefs.addonsOrder, quickMenu = prefs.quickMenu),
+        home = home.copy(layout = prefs.home, systemsBoard = prefs.systemsBoard, destinations = destinations, continueDismissed = prefs.continueDismissed, addonsOrder = prefs.addonsOrder, quickMenu = prefs.quickMenu),
         appearance = appearance.copy(
             themeId = theme.id,
             motion = prefs.motion,

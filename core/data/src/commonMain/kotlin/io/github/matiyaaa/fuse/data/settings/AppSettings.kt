@@ -269,6 +269,11 @@ data class HomeSettings(
     val addonsOrder: List<String> = emptyList(),
     /** The quick menu's items and widths ("WIFI:1"), in the user's order; empty is Fuse's own. */
     val quickMenu: List<String> = emptyList(),
+    /**
+     * The Systems page arranged by hand, like Home's board: each system's place and size, on pages.
+     * Systems not on it yet join the first page; one taken off is kept, hidden.
+     */
+    val systemsBoard: HomeLayoutConfig = HomeLayoutConfig(),
     /** Home as it was before it was last reset here, for Undo Home Reset (this device's alone). */
     val beforeReset: HomeLayoutConfig? = null,
     /** That reset gave this device its own Home (the profile's stayed as it was on every other device). */

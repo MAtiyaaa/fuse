@@ -291,7 +291,7 @@ internal fun RemoveBadge(name: String, modifier: Modifier, onClick: () -> Unit) 
 
 /** A free place on a board being arranged that adds a widget: a dashed outline with a plus. */
 @Composable
-internal fun AddTile(selected: Boolean, shape: Shape, modifier: Modifier, onClick: () -> Unit) {
+internal fun AddTile(selected: Boolean, shape: Shape, modifier: Modifier, label: String = "Add widget", onClick: () -> Unit) {
     val c = Fuse.colors
     val edge = if (selected) c.accent else c.hairlineStrong
     Box(
@@ -324,7 +324,7 @@ internal fun AddTile(selected: Boolean, shape: Shape, modifier: Modifier, onClic
                 FuseIcon(FuseIcons.Plus, size = Size.iconM, tint = if (selected) c.accent else c.textMuted)
             }
             Spacer(Modifier.height(Space.s))
-            FText("Add widget", Fuse.type.label, color = if (selected) c.text else c.textMuted, maxLines = 1)
+            FText(label, Fuse.type.label, color = if (selected) c.text else c.textMuted, maxLines = 1)
         }
     }
 }
@@ -334,21 +334,21 @@ internal fun AddTile(selected: Boolean, shape: Shape, modifier: Modifier, onClic
  * for touch (the controller has the same in its hints). On a narrow screen only the buttons.
  */
 @Composable
-internal fun ArrangeBar(compact: Boolean, onAdd: () -> Unit, onDone: () -> Unit, ownHome: Boolean? = null, onOwnHome: (Boolean) -> Unit = {}) {
+internal fun ArrangeBar(compact: Boolean, onAdd: () -> Unit, onDone: () -> Unit, ownHome: Boolean? = null, onOwnHome: (Boolean) -> Unit = {}, item: String = "widget", name: String = "Home") {
     val c = Fuse.colors
     Panel(raised = true, shape = RoundedCornerShape(Radius.pill)) {
         Row(Modifier.padding(start = if (compact) Space.s else Space.xl, end = Space.s, top = Space.s, bottom = Space.s), verticalAlignment = Alignment.CenterVertically) {
             if (!compact) {
                 Column(Modifier.widthIn(max = ARRANGE_TEXT)) {
-                    FText("Arranging Home", Fuse.type.bodyStrong, maxLines = 1)
-                    FText("Drag a widget anywhere on the grid, or a handle to resize it", Fuse.type.caption, color = c.textMuted, maxLines = 1)
+                    FText("Arranging $name", Fuse.type.bodyStrong, maxLines = 1)
+                    FText("Drag a $item anywhere on the grid, or a handle to resize it", Fuse.type.caption, color = c.textMuted, maxLines = 1)
                 }
                 Spacer(Modifier.width(Space.xl))
             }
             Row(horizontalArrangement = Arrangement.spacedBy(Space.s), verticalAlignment = Alignment.CenterVertically) {
                 // With Fuse Sync, whose Home this is: this device's own, or the profile's everywhere.
                 if (ownHome != null) HomeScopeSwitch(ownHome, compact, onOwnHome)
-                FuseButton("Add widget", selected = false, onClick = onAdd, kind = ButtonKind.SECONDARY, icon = FuseIcons.Plus)
+                FuseButton("Add $item", selected = false, onClick = onAdd, kind = ButtonKind.SECONDARY, icon = FuseIcons.Plus)
                 FuseButton("Done", selected = false, onClick = onDone, kind = ButtonKind.PRIMARY)
             }
         }

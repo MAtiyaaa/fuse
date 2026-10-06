@@ -336,7 +336,7 @@ internal fun AuditDriver.systemsScreens(exhaustive: Boolean) {
     scenario("systems", "grid") {
         useLibrary()
         tab(Destination.SYSTEMS)
-        waitFor("System options")
+        waitFor("Arrange")
         val systems = libraryStore.library.platforms.value.filter { it.gameCount > 0 }
         tap(PadButton.DPAD_LEFT)
         shoot("default focus, ${systems.first().platform.shortName}")
@@ -372,7 +372,7 @@ internal fun AuditDriver.systemsScreens(exhaustive: Boolean) {
         }
         try {
             tab(Destination.SYSTEMS)
-            waitFor("System options")
+            waitFor("Arrange")
             tap(PadButton.DPAD_LEFT)
             settle(1_200)
             shoot("art panel behind the grid, ${systems.first().platform.shortName}")
@@ -383,6 +383,7 @@ internal fun AuditDriver.systemsScreens(exhaustive: Boolean) {
             settle(600)
             shoot("carrying a system")
             tap(PadButton.B)
+            tap(PadButton.B)
         } finally {
             runBlocking { withArt.forEach { libraryStore.media.reset(MediaOwner.OfPlatform(it.platform.id), null) } }
         }
@@ -390,7 +391,7 @@ internal fun AuditDriver.systemsScreens(exhaustive: Boolean) {
     scenario("systems", "move by touch") {
         useLibrary()
         tab(Destination.SYSTEMS)
-        waitFor("System options")
+        waitFor("Arrange")
         val systems = libraryStore.library.platforms.value.filter { it.gameCount > 0 }
         val from = textCentre(systems[0].platform.shortName)
         val to = textCentre(systems[2].platform.shortName)
@@ -405,13 +406,37 @@ internal fun AuditDriver.systemsScreens(exhaustive: Boolean) {
         touch { up() }
         settle(1_200)
         shoot("dropped in its new place")
-        // A hold let go where it started opens the options, which can move it too.
-        touch { down(textCentre(systems[1].platform.shortName)) }
-        advanceExactly(800)
-        touch { up() }
-        waitFor("Move this system")
-        shoot("a hold let go opens the options")
+        shoot("still arranging, the bar to add a system or finish")
         tap(PadButton.B)
+    }
+    scenario("systems", "arranged") {
+        useLibrary()
+        val systems = libraryStore.library.platforms.value.filter { it.gameCount > 0 }
+        val before = libraryStore.prefs.value.systemsBoard
+        fun tile(i: Int, w: Int, h: Int) = io.github.matiyaaa.fuse.model.HomeWidget("system.${systems[i].platform.id.value}", io.github.matiyaaa.fuse.model.WidgetKind.SYSTEMS, i, target = systems[i].platform.id.value, width = w, height = h)
+        // The first system large, the second wide, the rest one card each; two on a second page.
+        val first = systems.indices.filter { it < systems.size - 2 }.map { i -> when (i) { 0 -> tile(i, 2, 2); 1 -> tile(i, 2, 1); else -> tile(i, 1, 1) } }
+        val second = listOf(tile(systems.size - 2, 1, 1), tile(systems.size - 1, 2, 1))
+        libraryStore.updatePrefs { it.copy(systemsBoard = io.github.matiyaaa.fuse.model.HomeLayoutConfig(board = first, pages = listOf(io.github.matiyaaa.fuse.model.HomePage("page2", second)))) }
+        try {
+            tab(Destination.SYSTEMS)
+            waitFor("Arrange")
+            settle(1_000)
+            shoot("a large system, a wide one and the rest, on the first of two pages")
+            nav(NavAction.PAGE_NEXT)
+            settle(1_000)
+            shoot("the second page")
+            nav(NavAction.PAGE_PREVIOUS)
+            hold(PadButton.A)
+            settle(800)
+            shoot("arranging: carrying the chosen system")
+            tap(PadButton.B)
+            settle(400)
+            shoot("arranging: handles, remove badges, Undo and Reset")
+            tap(PadButton.B)
+        } finally {
+            libraryStore.updatePrefs { it.copy(systemsBoard = before) }
+        }
     }
 
     if (!exhaustive) return
@@ -419,7 +444,7 @@ internal fun AuditDriver.systemsScreens(exhaustive: Boolean) {
     scenario("systems", "options menu") {
         useLibrary()
         tab(Destination.SYSTEMS)
-        waitFor("System options")
+        waitFor("Arrange")
         Grid(libraryStore.library.platforms.value.count { it.gameCount > 0 }).goTo(platformIndex("psp"))
         tap(PadButton.X)
         waitFor("System Settings")
@@ -437,7 +462,7 @@ internal fun AuditDriver.systemsScreens(exhaustive: Boolean) {
     scenario("systems", "platform settings") {
         useLibrary()
         tab(Destination.SYSTEMS)
-        waitFor("System options")
+        waitFor("Arrange")
         tap(PadButton.X)
         tapText("System Settings")
         waitFor("Disc playlists")
@@ -460,7 +485,7 @@ internal fun AuditDriver.systemsScreens(exhaustive: Boolean) {
     scenario("systems", "platform settings switch") {
         useLibrary()
         tab(Destination.SYSTEMS)
-        waitFor("System options")
+        waitFor("Arrange")
         Grid(libraryStore.library.platforms.value.count { it.gameCount > 0 }).goTo(platformIndex("switch"))
         tap(PadButton.X)
         tapText("System Settings")
@@ -472,7 +497,7 @@ internal fun AuditDriver.systemsScreens(exhaustive: Boolean) {
     scenario("media", "system") {
         useLibrary()
         tab(Destination.SYSTEMS)
-        waitFor("System options")
+        waitFor("Arrange")
         tap(PadButton.X)
         tapText("Change System Media")
         waitFor("Manage media")

@@ -50,6 +50,8 @@ data class UiPrefs(
     /** Room kept clear at every edge, in percent, for TVs that cut the picture's edges off. */
     val screenMargin: Int = 0,
     val home: HomeLayoutConfig = HomeLayoutConfig(),
+    /** The Systems page as arranged (see HomeSettings.systemsBoard). */
+    val systemsBoard: HomeLayoutConfig = HomeLayoutConfig(),
     val destinations: List<Destination> = Destination.entries,
     val defaultLayout: LibraryLayout = LibraryLayout.ICON,
     /** Square box art or tall posters on game tiles. */

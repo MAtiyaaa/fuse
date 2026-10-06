@@ -57,7 +57,7 @@ internal fun AuditDriver.swapScreens() {
     scenario("swap", "system page up to the tabs") {
         useLibrary()
         tab(Destination.SYSTEMS)
-        waitFor("System options")
+        waitFor("Arrange")
         tap(PadButton.A)
         settle(1_200)
         tap(PadButton.DPAD_UP, 4)

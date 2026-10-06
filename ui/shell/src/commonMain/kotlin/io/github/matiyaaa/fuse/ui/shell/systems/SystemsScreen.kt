@@ -113,81 +113,36 @@ import io.github.matiyaaa.fuse.ui.shell.app.rememberRouteState
 import io.github.matiyaaa.fuse.ui.shell.app.startLocate
 import io.github.matiyaaa.fuse.ui.shell.components.SystemCardArt
 import io.github.matiyaaa.fuse.ui.shell.store.PlatformCard
+import io.github.matiyaaa.fuse.ui.shell.store.UiPrefs
+import io.github.matiyaaa.fuse.model.HomeLayoutConfig
+import io.github.matiyaaa.fuse.model.HomeWidget
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 
 /**
- * Every system Fuse found games for, as a compact grid under a slim header: the focused system's
- * logo or name, its game count and emulator. Its artwork panel from the system art pack stands on
- * the right as the backdrop (a background the user chose fills the screen instead). Firmware and
- * emulator details live on the system's page and settings; the grid only marks a system with no
- * emulator.
+ * Every system Fuse found games for, arranged by hand like Home's board: each system has its own
+ * place and size, on as many pages as wanted, under a slim header with the chosen system's logo or
+ * name, its game count and emulator. Its artwork panel from the system art pack stands on the right
+ * as the backdrop (a background the user chose fills the screen instead). Holding a system (or
+ * holding confirm, or Options, Arrange Systems) arranges them exactly as Home is arranged: drag or
+ * carry, resize, add back a system taken off, pages, Undo and Reset. The arrangement is kept with
+ * the settings, so it follows the person's profile, and its order is the systems' order everywhere.
  */
 @Composable
 fun SystemsScreen(app: AppState) {
     val platforms by app.store.library.platforms.collectAsState()
     val systems = platforms.filter { it.gameCount > 0 }
-    val sel = rememberRouteState(app.navigator, "systems") { GridSelection() }
-    sel.clamp(systems.size)
-    // By touch, a held system follows the finger and the others make room; the grid shows that order.
-    val drag = rememberDragReorderState()
-    val shown = drag.arrange(systems) { it.platform.id.value }
-    val current = drag.heldKey?.let { k -> shown.firstOrNull { it.platform.id.value == k } } ?: shown.getOrNull(sel.index)
-    var columns = 5
-    // Holding confirm picks a system up; the D-pad moves it and the order is saved for Home too.
-    var moving by remember { mutableStateOf(false) }
-    fun menu(card: PlatformCard, index: Int) = app.systemMenu(card) { sel.index = index; moving = true }
+    var chosen by remember { mutableStateOf<String?>(null) }
+    val current = systems.firstOrNull { it.platform.id.value == chosen } ?: systems.firstOrNull()
+    val space = remember(systems) { SystemsSpace(app, systems) { w -> chosen = w?.target } }
 
-    PageEffect(current?.platform?.id) {
-        app.hero = current?.let { HeroSource(it.platform.id, it.art.hero, it.platform.accent.toColor()) }
-    }
-    // Logos and art panels of the neighbouring systems are decoded ahead, so the header never waits.
-    PrefetchArt(remember(systems) { systems.map { it.art.logo } }, sel.index, size = 360.dp)
-    PrefetchArt(remember(systems) { systems.map { it.art.boxart } }, sel.index, size = 480.dp)
-    PageEffect(moving) {
-        app.hints = if (moving) {
-            listOf(Hint(HintButton.DPAD, "Move"), Hint(HintButton.CONFIRM, "Done"))
-        } else {
-            listOf(Hint(HintButton.CONFIRM, "Open"), Hint(HintButton.HOLD_CONFIRM, "Hold to move"), Hint(HintButton.OPTIONS, "System options"))
-        }
-    }
-
-    InputLayer(enabled = app.focusZone == FocusZone.CONTENT && !app.overlayOpen, longPress = true) { e ->
-        if (moving) {
-            val delta = when (e.action) {
-                NavAction.LEFT -> -1
-                NavAction.RIGHT -> 1
-                NavAction.UP -> -columns
-                NavAction.DOWN -> columns
-                NavAction.SELECT, NavAction.BACK, NavAction.REORDER -> { moving = false; return@InputLayer NavResult.CONSUMED }
-                else -> return@InputLayer NavResult.CONSUMED
-            }
-            val key = current?.platform?.id?.value ?: return@InputLayer NavResult.BLOCKED
-            val to = app.moveSystemBy(key, delta)
-            return@InputLayer if (to < 0 || to == sel.index) NavResult.BLOCKED else { sel.index = to; NavResult.MOVED }
-        }
-        when (e.action) {
-            NavAction.REORDER -> { if (current != null) moving = true; NavResult.ACTIVATED }
-            NavAction.UP, NavAction.DOWN, NavAction.LEFT, NavAction.RIGHT, NavAction.PAGE_UP, NavAction.PAGE_DOWN ->
-                sel.move(e.action, systems.size, columns).let { if (it == NavResult.IGNORED && e.action != NavAction.UP) NavResult.BLOCKED else it }
-            NavAction.SELECT -> { current?.let { app.go(Route.PlatformGames(it.platform.id)) }; NavResult.ACTIVATED }
-            NavAction.CONTEXT -> { current?.let { app.openContextMenu(menu(it, sel.index)) }; NavResult.ACTIVATED }
-            else -> NavResult.IGNORED
-        }
-    }
+    // Logos and art panels of the systems are decoded ahead, so the header never waits.
+    val index = systems.indexOf(current).coerceAtLeast(0)
+    PrefetchArt(remember(systems) { systems.map { it.art.logo } }, index, size = 360.dp)
+    PrefetchArt(remember(systems) { systems.map { it.art.boxart } }, index, size = 480.dp)
 
     val reveal = rememberReveal()
-    BoxWithConstraints(
-        Modifier.fillMaxSize()
-            // A tap outside the cards puts a carried system down.
-            .pointerInput(moving) { if (moving) detectTapGestures { moving = false } },
-    ) {
-        val gap = Space.m
-        val usable = maxWidth - Space.gutter * 2
-        // About six cards across, never smaller than a thumb; two across on a phone held upright.
-        val target = (maxWidth * 0.135f).coerceAtLeast(Size.touch * 2 + Space.l)
-        columns = ((usable + gap) / (target + gap)).toInt().coerceIn(if (maxWidth < Size.touch * 12) 2 else 3, 8)
-        val cardHeight = (usable - gap * (columns - 1)) / columns / Aspect.SYSTEM_CARD
+    BoxWithConstraints(Modifier.fillMaxSize()) {
         val compactHeader = maxHeight < Size.touch * 12
         // A phone held upright gives the header the whole width; wider screens keep the art's side free.
         val headerWidth = if (maxWidth < Size.touch * 14) 1f else 0.62f
@@ -195,13 +150,12 @@ fun SystemsScreen(app: AppState) {
         if (current?.art?.hero == null) SystemShowcase(current, Modifier.align(Alignment.CenterEnd).fillMaxHeight().width(maxHeight * 0.46f))
         Column(Modifier.fillMaxSize()) {
             Spacer(Modifier.height(Size.hudHeight + if (compactHeader) Space.s else Space.xl))
-            SystemHeader(
-                current, compactHeader, Modifier.padding(horizontal = Space.gutter).reveal(reveal, 0),
-                widthFraction = headerWidth,
-                moving = if (moving && systems.isNotEmpty()) "Moving, place ${sel.index + 1} of ${systems.size}" else null,
-            )
-            Spacer(Modifier.height(if (compactHeader) Space.xs else Space.m))
+            SystemHeader(current, compactHeader, Modifier.padding(horizontal = Space.gutter).reveal(reveal, 0), widthFraction = headerWidth)
             if (systems.isEmpty()) {
+                PageEffect(Unit) {
+                    app.hints = emptyList()
+                    app.hero = null
+                }
                 Box(Modifier.weight(1f).fillMaxWidth().padding(horizontal = Space.gutter, vertical = Space.xl), contentAlignment = Alignment.Center) {
                     EmptyState(
                         FuseIcons.Gamepad,
@@ -213,105 +167,154 @@ fun SystemsScreen(app: AppState) {
                 }
                 return@Column
             }
-            val grid = rememberLazyGridState()
-            // While a system is held the grid stays where the finger left it.
-            FollowSelection(grid, { sel.index }, anchor = 0.08f, enabled = { drag.heldKey == null })
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(columns),
-                state = grid,
-                modifier = Modifier
-                    .fadingEdges(grid, top = Space.xl, bottom = Size.hintHeight + Space.l)
-                    .dragReorder(
-                        drag,
-                        visibleKeys = { grid.layoutInfo.visibleItemsInfo.map { it.key } },
-                        scrollBy = { grid.scrollBy(it) },
-                        keepScroll = { grid.requestScrollToItem(grid.firstVisibleItemIndex, grid.firstVisibleItemScrollOffset) },
-                        enabled = !moving,
-                        longPressMs = ReorderDefaults.liftMs(app.store.prefs.value.input.longPressMs.toLong()),
-                        endInset = Size.hintHeight,
-                        onLift = { key ->
-                            app.focusZone = FocusZone.CONTENT
-                            sel.index = shown.indexOfFirst { it.platform.id.value == key }.coerceAtLeast(0)
-                            app.platform.haptics.lift()
-                        },
-                        onTarget = { app.platform.haptics.slot() },
-                        // A hold let go where it started still opens the options, as it always did.
-                        onHoldReleased = { key ->
-                            val i = systems.indexOfFirst { it.platform.id.value == key }
-                            if (i >= 0) {
-                                sel.index = i
-                                app.openContextMenu(menu(systems[i], i))
-                            }
-                        },
-                        onDrop = { key, to ->
-                            val placed = app.moveSystem(key.toString(), to)
-                            if (placed >= 0) sel.index = placed
-                            app.platform.haptics.drop()
-                        },
-                    ),
-                // Room above the first row for a lifted or carried card.
-                contentPadding = PaddingValues(start = Space.gutter, end = Space.gutter, top = Space.l, bottom = Size.hintHeight + Space.x4),
-                horizontalArrangement = Arrangement.spacedBy(gap),
-                // Rows stay clear of the spark under a lifted card.
-                verticalArrangement = Arrangement.spacedBy(Size.sparkClearance),
-            ) {
-                itemsIndexed(shown, key = { _, p -> p.platform.id.value }) { i, card ->
-                    val key = card.platform.id.value
-                    // While held, the selection stays on the held system wherever it would land.
-                    val selected = (drag.heldKey?.let { it == key } ?: (i == sel.index)) && app.focusZone == FocusZone.CONTENT
-                    val carried = moving && i == sel.index
-                    val lifted by fuselineFloat(if (carried) 1f else 0f, Fuse.motion.focusSpring(), label = "carry")
-                    val fraction = Fuse.geometry.tileCornerFraction
-                    val shape = remember(fraction) { SquircleShape.fraction(fraction) }
-                    Tile(
-                        selected = selected,
-                        glow = card.platform.accent.toColor(),
-                        modifier = Modifier
-                            // The held system follows the finger, never an animation behind it.
-                            .animateItem(fadeInSpec = null, fadeOutSpec = null, placementSpec = if (drag.heldKey == key) null else ReorderDefaults.Placement)
-                            // Row by row as the screen opens.
-                            .reveal(reveal, 1 + i / columns)
-                            .reorderItem(drag, key, shape = shape)
-                            .zIndex(if (carried) 1f else 0f)
-                            // Carried with the controller, a system floats the same as one held by touch.
-                            .carried({ lifted }, shape)
-                            .fillMaxWidth()
-                            .aspectRatio(Aspect.SYSTEM_CARD),
-                        onClick = {
-                            app.focusZone = FocusZone.CONTENT
-                            when {
-                                // Carrying with the controller, a tap on another system puts it there.
-                                moving -> {
-                                    val carriedKey = systems.getOrNull(sel.index)?.platform?.id?.value
-                                    if (i != sel.index && carriedKey != null) app.moveSystem(carriedKey, i).takeIf { it >= 0 }?.let { sel.index = it }
-                                    moving = false
-                                }
-                                // A tap opens the system at once; only games wait for a second tap.
-                                else -> {
-                                    sel.index = i
-                                    app.go(Route.PlatformGames(card.platform.id))
-                                }
-                            }
-                        },
-                    ) {
-                        SystemCardFace(card, cardHeight)
-                        // A carried system says so: it moves with the D-pad until confirmed.
-                        if (carried) IconBadge(FuseIcons.Move, Modifier.align(Alignment.TopEnd).padding(Space.s), tint = Fuse.colors.onArt, background = Fuse.colors.artScrim)
-                    }
-                }
+            Box(Modifier.weight(1f).fillMaxWidth()) {
+                io.github.matiyaaa.fuse.ui.shell.home.BoardPages(app, space)
             }
         }
     }
 }
 
+/** The Systems page's systems on a board of their own (see [SystemsScreen]). */
+internal class SystemsSpace(
+    private val app: AppState,
+    private val systems: List<PlatformCard>,
+    private val onChosen: (HomeWidget?) -> Unit,
+) : io.github.matiyaaa.fuse.ui.shell.home.BoardSpace() {
+    private val byId = systems.associateBy { it.platform.id.value }
+
+    override val key = "systems"
+    override val name = "Systems"
+    override val item = "system"
+    override val top: Dp get() = Space.xs
+
+    private fun card(w: HomeWidget?): PlatformCard? = w?.target?.let(byId::get)
+
+    /**
+     * The arrangement as kept, with every system it doesn't have yet joining the first page in the
+     * systems' order, one card each. Systems without games here stay in it, unseen, for when they
+     * come back.
+     */
+    override fun config(p: UiPrefs): HomeLayoutConfig = SystemsBoard.withNew(p.systemsBoard, systems.map { it.platform.id.value })
+
+    /** Kept, and its reading order is the systems' order everywhere else (Home's Systems, the Library). */
+    override fun keep(p: UiPrefs, c: HomeLayoutConfig): UiPrefs = p.copy(systemsBoard = c, systemOrder = SystemsBoard.order(c, p.systemOrder))
+
+    override fun shown(c: HomeLayoutConfig, page: Int) = c.boardWidgets(page).filter { it.visible && it.target in byId }
+    override fun title(w: HomeWidget) = card(w)?.platform?.name ?: "System"
+
+    // About six cards across a 1080p screen, four on a handheld, never fewer than three wide.
+    override fun columns(narrow: Boolean, width: Dp) = if (narrow) 2 else (width / CARD_TARGET).roundToInt().coerceIn(3, 6)
+    override fun cellHeight(cellW: Dp, narrow: Boolean): Dp = (cellW / Aspect.SYSTEM_CARD).coerceIn(CELL_MIN, CELL_MAX)
+
+    @Composable
+    override fun Face(w: HomeWidget, size: io.github.matiyaaa.fuse.model.BoardSize, at: Int) {
+        card(w)?.let { SystemCardFace(it) }
+    }
+
+    @Composable
+    override fun glow(w: HomeWidget, at: Int): Color = card(w)?.platform?.accent?.toColor() ?: Fuse.colors.accent
+
+    override fun hero(w: HomeWidget?, at: Int): HeroSource? = card(w)?.let { HeroSource(it.platform.id, it.art.hero, it.platform.accent.toColor()) }
+    override fun chosen(w: HomeWidget?) = onChosen(w)
+    override fun open(w: HomeWidget, at: Int) {
+        card(w)?.let { app.go(Route.PlatformGames(it.platform.id)) }
+    }
+
+    /** Systems taken off the board, to put back on this page. */
+    override fun addable(c: HomeLayoutConfig, page: Int): List<io.github.matiyaaa.fuse.ui.shell.home.Addable> =
+        SystemsBoard.hidden(c)
+            .mapNotNull { w -> card(w)?.let { io.github.matiyaaa.fuse.ui.shell.home.Addable("add.${w.id}", it.platform.name, FuseIcons.Gamepad, w, detail = gamesText(it.gameCount)) } }
+
+    /** Back from wherever it was kept, onto [page], shown, in the first free place. */
+    override fun add(c: HomeLayoutConfig, page: Int, a: io.github.matiyaaa.fuse.ui.shell.home.Addable) = SystemsBoard.putBack(c, page, a.widget)
+
+    /** Taken off, a system is kept hidden where it was, so it doesn't come straight back as new. */
+    override fun removed(list: List<HomeWidget>, w: HomeWidget) = SystemsBoard.takeOff(list, w.id)
+
+    override fun resetTitle(page: Int) = if (page == 0) "Put Systems back as they came?" else "Clear this page?"
+    override fun resetMessage(page: Int) = if (page == 0) {
+        "Every system on this page goes back to one card, in order, and systems you took off come back. Undo brings your arrangement back."
+    } else {
+        "Its systems go back to the first page. The page stays, and Undo brings them back."
+    }
+    override fun resetLabel(page: Int) = if (page == 0) "Reset Systems" else "Clear page"
+    override fun reset(page: Int) {
+        app.store.updatePrefs { p ->
+            val c = config(p)
+            val next = if (page == 0) {
+                c.withBoard(0, c.boardWidgets(0).map { it.copy(visible = true, width = 1, height = 1, spots = emptyMap()) })
+            } else {
+                c.withBoard(page, emptyList())
+            }
+            keep(p, next)
+        }
+    }
+    override fun resetDone(page: Int) = if (page == 0) "Systems are back as they came" else "This page's systems are back on the first"
+
+    override val emptyPage = "Put the systems you want together here: handhelds on one page, home consoles on another. The right stick or a swipe turns between pages."
+    override val removePageMessage = "Its systems go back to the first page. Their games stay as they are."
+
+    override fun menu(w: HomeWidget?, arranging: Boolean, actions: List<MenuAction>): ContextMenuSpec {
+        val c = card(w)
+        if (c == null || arranging) return ContextMenuSpec(title = c?.platform?.name ?: "Systems", subtitle = "Systems", icon = FuseIcons.Grid, actions = actions)
+        val own = app.systemMenu(c)
+        return own.copy(actions = own.actions.take(1) + actions + own.actions.drop(1))
+    }
+
+    private companion object {
+        val CARD_TARGET = 300.dp
+        val CELL_MIN = 72.dp
+        val CELL_MAX = 420.dp
+    }
+}
+
+/** The Systems page's arrangement rules, apart from drawing it. */
+internal object SystemsBoard {
+    /** One system's card on the board, one cell. */
+    fun tile(id: String) = HomeWidget(id = "system.$id", kind = io.github.matiyaaa.fuse.model.WidgetKind.SYSTEMS, order = 0, target = id, width = 1, height = 1)
+
+    private fun all(c: HomeLayoutConfig) = c.board.orEmpty() + c.pages.flatMap { it.widgets }
+
+    /**
+     * [c] with every system of [ids] it doesn't have yet joining the first page, in that order, one
+     * card each. Systems it has without games here stay in it, unseen, for when they come back.
+     */
+    fun withNew(c: HomeLayoutConfig, ids: List<String>): HomeLayoutConfig {
+        val placed = all(c).mapNotNullTo(HashSet()) { it.target }
+        val fresh = ids.filter { it !in placed }.map(::tile)
+        if (c.board != null && fresh.isEmpty()) return c
+        return c.copy(board = (c.board.orEmpty() + fresh).mapIndexed { i, w -> w.copy(order = i) })
+    }
+
+    /** The systems' order as [c] reads, page after page, then any of [before] it doesn't name. */
+    fun order(c: HomeLayoutConfig, before: List<String>): List<String> {
+        val order = all(c).mapNotNull { it.target }.distinct()
+        return order + before.filter { it !in order }
+    }
+
+    /** Systems taken off the board. */
+    fun hidden(c: HomeLayoutConfig): List<HomeWidget> = all(c).filter { !it.visible }
+
+    /** [list] with system [id] taken off: kept hidden where it was. */
+    fun takeOff(list: List<HomeWidget>, id: String) = list.map { if (it.id == id) it.copy(visible = false) else it }
+
+    /** [c] with [w] back from wherever it was kept, onto [page], shown, in the first free place. */
+    fun putBack(c: HomeLayoutConfig, page: Int, w: HomeWidget): HomeLayoutConfig {
+        var out = c
+        for (pg in 0 until c.pageCount) out = out.withBoard(pg, out.boardWidgets(pg).filterNot { it.id == w.id })
+        val list = out.boardWidgets(page)
+        return out.withBoard(page, (list + w.copy(visible = true, spots = emptyMap())).mapIndexed { i, x -> x.copy(order = i) })
+    }
+}
+
 /**
- * A system's face on the Systems grid. Systems with their own square art or icon show it whole.
- * Otherwise the card is the system's colour (or its art pack's panel) with its logo, or its name
- * where it has none. How many games it has and what runs them are in the header above the grid,
- * for the system in focus, so the cards stay as clean as a shelf of consoles.
+ * A system's face on the Systems board, at any size it is given: its own square art or icon whole
+ * where it has one; otherwise the system's colour with the art pack's panel standing at the right
+ * (no wider than suits the card's height) and its logo (or name) set inside the coloured part,
+ * kept clear of the panel and of the card's rounded corners however wide, tall or small it is.
  */
 @Composable
-private fun SystemCardFace(card: PlatformCard, height: Dp) {
+private fun SystemCardFace(card: PlatformCard) {
     val art = card.art
     if ((art.square ?: art.icon) != null) {
         SystemCardArt(card)
@@ -319,39 +322,43 @@ private fun SystemCardFace(card: PlatformCard, height: Dp) {
     }
     val c = Fuse.colors
     val accent = card.platform.accent.toColor()
-    val roomy = height >= Size.touch * 2
-    Box(Modifier.fillMaxSize()) {
+    val cornerFraction = Fuse.geometry.tileCornerFraction
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val w = maxWidth
+        val h = maxHeight
+        val short = minOf(w, h)
         GeneratedArt(title = card.platform.name, accent = accent, slot = ArtSlot.WIDE, showText = false)
+        // The panel keeps its tall shape: about two thirds of the card's height wide, at most half the card.
+        val panel = if (art.boxart != null) minOf(h * 0.62f, w * 0.5f) else 0.dp
         if (art.boxart != null) {
-            // The art pack's tall panel stands at the right end, melting into the card's colour.
-            io.github.matiyaaa.fuse.ui.shell.components.SystemPanel(art, Modifier.align(Alignment.CenterEnd).fillMaxHeight().fillMaxWidth(0.42f))
-            PanelMelt(accent, Modifier.align(Alignment.CenterEnd).fillMaxHeight().fillMaxWidth(0.42f))
+            io.github.matiyaaa.fuse.ui.shell.components.SystemPanel(art, Modifier.align(Alignment.CenterEnd).fillMaxHeight().width(panel))
+            PanelMelt(accent, Modifier.align(Alignment.CenterEnd).fillMaxHeight().width(panel))
         }
         // A floor under the logo, so it reads on any colour.
         Box(Modifier.fillMaxSize().drawBehind { drawRect(Brush.verticalGradient(0.4f to Color.Transparent, 1f to c.artScrim.copy(alpha = c.artScrim.alpha * 0.6f))) })
-        Box(
-            Modifier.fillMaxSize().padding(if (roomy) Space.m else Space.s + Space.xxs),
-            contentAlignment = Alignment.BottomStart,
-        ) {
+        // Clear of the rounded corner (a curve's inset is under half its radius) and in proportion to the card.
+        val inset = maxOf(short * 0.08f, short * cornerFraction * 0.5f, Space.xs)
+        // The coloured part left of the panel, which the panel's melt overlaps a little.
+        val roomW = (w - panel * 0.8f - inset * 2).coerceAtLeast(short * 0.3f)
+        val logoH = minOf(h * 0.3f, roomW * 0.42f, h - inset * 2).coerceAtLeast(Space.s)
+        Box(Modifier.align(Alignment.BottomStart).padding(inset).width(roomW).height(logoH), contentAlignment = Alignment.BottomStart) {
             val name: @Composable () -> Unit = {
-                FText(card.platform.shortName, if (roomy) Fuse.type.title else Fuse.type.titleSmall, color = c.onArt, maxLines = 1)
+                val style = Fuse.type.title
+                BasicText(
+                    card.platform.shortName,
+                    style = style.copy(color = c.onArt),
+                    maxLines = 1,
+                    autoSize = TextAutoSize.StepBased(minFontSize = style.fontSize * 0.4f, maxFontSize = style.fontSize * 2.2f),
+                )
             }
             if (art.logo != null) {
-                Artwork(
-                    art.logo,
-                    Modifier.fillMaxWidth(0.6f).height((height * 0.3f).coerceIn(Space.l + Space.xs, Size.touch + Space.xxl)),
-                    contentScale = ContentScale.Fit,
-                    focusX = 0f,
-                    focusY = 1f,
-                    tint = c.onArt,
-                    fallback = name,
-                )
+                Artwork(art.logo, Modifier.fillMaxSize(), contentScale = ContentScale.Fit, focusX = 0f, focusY = 1f, tint = c.onArt, fallback = name)
             } else {
                 name()
             }
         }
         if (!card.emulatorInstalled) {
-            IconBadge(FuseIcons.Warning, Modifier.align(Alignment.TopEnd).padding(Space.s), tint = c.warning, background = c.artScrim, size = Size.badge)
+            IconBadge(FuseIcons.Warning, Modifier.align(Alignment.TopEnd).padding(inset * 0.75f), tint = c.warning, background = c.artScrim, size = Size.badge)
         }
     }
 }
