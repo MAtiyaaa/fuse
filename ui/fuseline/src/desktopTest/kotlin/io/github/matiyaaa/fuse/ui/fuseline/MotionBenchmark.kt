@@ -143,17 +143,22 @@ class MotionBenchmark {
     fun theWholeMatrix() {
         if (!enabled) return
         // The first rows would otherwise run while the JVM still compiles the harness and every
-        // engine's common paths: one pass of the value cases first, thrown away.
+        // engine's common paths: one pass first, thrown away (the value cases, or for a chosen few
+        // rows, those rows themselves).
         warming = true
-        valuesInMotion()
+        if (only.isEmpty()) valuesInMotion() else everyCase()
         warming = false
+        everyCase()
+        report()
+    }
+
+    private fun everyCase() {
         valuesInMotion()
         retargeting()
         velocityAndDecay()
         transitionsAndTimelines()
         scheduling()
         refreshRates()
-        report()
     }
 
     // ------------------------------------------------------------------ cases

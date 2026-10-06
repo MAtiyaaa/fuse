@@ -69,28 +69,37 @@ internal class FrameDriver private constructor(private val clock: MonotonicFrame
                 // (its window closed, a test over) would otherwise hold the driver for ever.
                 if (moves.all { m -> m.gone }) loop?.cancel()
             }
-            if (!running) start(context)
+            // A loop that was just told to stop (its last move cancelled) ends a moment later: a
+            // move joining in that moment (an effect restarting, its old animation cancelled and the
+            // new one started in the same pass) gets a loop of its own rather than that ending.
+            if (!running || loop?.isCancelled == true) start(context)
         }
     }
 
     private fun start(context: CoroutineContext) {
         running = true
         // Its own job: a move that is cancelled never takes the others' frames with it.
-        loop = CoroutineScope(context.minusKey(Job) + Job()).launch(start = CoroutineStart.UNDISPATCHED) {
+        val job = Job()
+        loop = job
+        CoroutineScope(context.minusKey(Job) + job).launch(start = CoroutineStart.UNDISPATCHED) {
             try {
                 while (true) {
                     clock.withFrameNanos(stepper)
                     if (moves.isEmpty()) break
                 }
             } finally {
-                // Normally every move has ended; if the clock itself stopped (its window closed),
-                // the moves still waiting end with it rather than wait for a frame that never comes.
-                running = false
-                loop = null
-                if (drivers[clock] === this@FrameDriver) drivers.remove(clock)
-                val left = moves.toList()
-                moves.clear()
-                for (m in left) if (!m.gone) m.waiting.cancel()
+                // A newer loop has taken over (this one was stopped as its last move went): the
+                // moves are that loop's now, and this ending leaves them alone.
+                if (loop === job) {
+                    // Normally every move has ended; if the clock itself stopped (its window closed),
+                    // the moves still waiting end with it rather than wait for a frame that never comes.
+                    running = false
+                    loop = null
+                    if (drivers[clock] === this@FrameDriver) drivers.remove(clock)
+                    val left = moves.toList()
+                    moves.clear()
+                    for (m in left) if (!m.gone) m.waiting.cancel()
+                }
             }
         }
     }

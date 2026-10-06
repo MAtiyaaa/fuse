@@ -177,4 +177,28 @@ class FrameDriverTest {
         c.close()
         assertFalse(c.busy, "no frame is waited for once every move is gone")
     }
+
+    /**
+     * The last move cancelled stops the driver's frame loop, which finishes a moment later. A move
+     * that joins in that moment (an effect restarting: its old animation cancelled and the new one
+     * started in the same pass) gets frames from a new loop, and the old loop's ending touches nothing.
+     */
+    @Test
+    fun aMoveStartedAsTheLastOneIsCancelledStillRuns() {
+        val c = MotionClock()
+        val a = FuselineValue(0f)
+        val b = FuselineValue(0f)
+        val first = c.launch { a.animateTo(1f, Spring()) }
+        c.advance(16_666_667L)
+        c.launch {
+            first.cancel()
+            b.animateTo(1f, Tween(200, curve = Curves.Linear))
+        }
+        c.run(3)
+        assertTrue(b.value > 0f && b.isRunning, "the new move is under way: ${b.value}")
+        c.runFor(1_000_000_000L)
+        assertEquals(1f, b.value)
+        assertFalse(c.busy)
+        c.close()
+    }
 }
