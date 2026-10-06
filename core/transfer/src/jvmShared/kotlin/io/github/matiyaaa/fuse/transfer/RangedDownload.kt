@@ -1,6 +1,10 @@
 package io.github.matiyaaa.fuse.transfer
 
 import io.ktor.client.HttpClient
+import io.ktor.client.plugins.HttpTimeout
+import io.ktor.client.plugins.HttpTimeoutConfig
+import io.ktor.client.plugins.pluginOrNull
+import io.ktor.client.plugins.timeout
 import io.ktor.client.request.HttpRequestBuilder
 import io.ktor.client.request.header
 import io.ktor.client.request.prepareGet
@@ -58,7 +62,10 @@ object RangedDownload {
             have = 0
         }
         val address = url()
+        // A big file takes as long as it takes: only a stalled connection (the socket timeout) ends it.
+        val timeouts = http.pluginOrNull(HttpTimeout) != null
         http.prepareGet(address) {
+            if (timeouts) timeout { requestTimeoutMillis = HttpTimeoutConfig.INFINITE_TIMEOUT_MS }
             request()
             if (have > 0) header(HttpHeaders.Range, "bytes=$have-")
         }.execute { resp ->

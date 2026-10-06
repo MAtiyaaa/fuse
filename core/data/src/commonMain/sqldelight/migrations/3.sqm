@@ -1,0 +1,101 @@
+-- 0.3.6: Fuse RomM's mirror of a RomM server's library, so it opens at once and works offline.
+-- A row is RomM's game as Fuse last heard it; on_server goes to 0 when the server no longer lists it
+-- (kept, never deleted, until the person forgets the server).
+CREATE TABLE romm_platform (
+    server TEXT NOT NULL,
+    id INTEGER NOT NULL,
+    slug TEXT NOT NULL,
+    fs_slug TEXT NOT NULL,
+    name TEXT NOT NULL,
+    rom_count INTEGER NOT NULL DEFAULT 0,
+    size_bytes INTEGER NOT NULL DEFAULT 0,
+    on_server INTEGER NOT NULL DEFAULT 1,
+    PRIMARY KEY (server, id)
+);
+
+CREATE TABLE romm_rom (
+    server TEXT NOT NULL,
+    id INTEGER NOT NULL,
+    platform_id INTEGER NOT NULL,
+    platform_slug TEXT NOT NULL,
+    name TEXT NOT NULL,
+    sort_name TEXT NOT NULL,
+    fs_name TEXT NOT NULL,
+    size_bytes INTEGER NOT NULL DEFAULT 0,
+    md5 TEXT,
+    sha1 TEXT,
+    crc TEXT,
+    title_id TEXT,
+    regions TEXT NOT NULL DEFAULT '',
+    revision TEXT,
+    year INTEGER,
+    summary TEXT,
+    genres TEXT NOT NULL DEFAULT '',
+    developer TEXT,
+    cover TEXT,
+    logo TEXT,
+    screenshot TEXT,
+    files_json TEXT NOT NULL DEFAULT '[]',
+    multi INTEGER NOT NULL DEFAULT 0,
+    on_server INTEGER NOT NULL DEFAULT 1,
+    created_at INTEGER NOT NULL DEFAULT 0,
+    updated_at INTEGER NOT NULL DEFAULT 0,
+    first_seen INTEGER NOT NULL DEFAULT 0,
+    is_new INTEGER NOT NULL DEFAULT 0,
+    checked_at INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (server, id)
+);
+
+CREATE INDEX romm_rom_platform ON romm_rom(server, platform_slug, sort_name);
+CREATE INDEX romm_rom_created ON romm_rom(server, created_at);
+CREATE INDEX romm_rom_md5 ON romm_rom(md5);
+
+CREATE TABLE romm_firmware (
+    server TEXT NOT NULL,
+    id INTEGER NOT NULL,
+    platform_id INTEGER NOT NULL,
+    file_name TEXT NOT NULL,
+    size_bytes INTEGER NOT NULL DEFAULT 0,
+    md5 TEXT,
+    sha1 TEXT,
+    crc TEXT,
+    verified INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (server, id)
+);
+
+CREATE TABLE romm_collection (
+    server TEXT NOT NULL,
+    id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    smart INTEGER NOT NULL DEFAULT 0,
+    rom_ids TEXT NOT NULL DEFAULT '',
+    cover TEXT,
+    PRIMARY KEY (server, id)
+);
+
+-- 0.3.6: films and episodes kept for watching offline, each with where it is (and on which drive),
+-- its subtitle and what Fuse Player needs to show it while the server is away.
+CREATE TABLE offline_media (
+    key TEXT NOT NULL PRIMARY KEY,
+    source TEXT NOT NULL,
+    server TEXT NOT NULL,
+    item_id TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    title TEXT NOT NULL,
+    series_name TEXT,
+    series_id TEXT,
+    season_id TEXT,
+    season INTEGER,
+    episode INTEGER,
+    path TEXT NOT NULL,
+    volume_json TEXT,
+    subtitle_path TEXT,
+    subtitle_language TEXT,
+    size_bytes INTEGER NOT NULL DEFAULT 0,
+    runtime_ms INTEGER,
+    poster TEXT,
+    meta_json TEXT NOT NULL DEFAULT '{}',
+    added_at INTEGER NOT NULL
+);
+
+CREATE INDEX offline_media_item ON offline_media(source, server, item_id);

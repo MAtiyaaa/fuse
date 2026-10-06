@@ -29,6 +29,7 @@ include(
     ":core:jellyfin",
     ":core:sync",
     ":core:transfer",
+    ":core:romm",
     ":ui:fuseline",
     ":ui:designsystem",
     ":ui:player",

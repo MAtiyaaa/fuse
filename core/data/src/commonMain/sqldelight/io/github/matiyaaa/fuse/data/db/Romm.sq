@@ -1,0 +1,169 @@
+-- 0.3.6: Fuse RomM's mirror of a RomM server's library, so it opens at once and works offline.
+-- A row is RomM's game as Fuse last heard it; on_server goes to 0 when the server no longer lists it
+-- (kept, never deleted, until the person forgets the server).
+CREATE TABLE romm_platform (
+    server TEXT NOT NULL,
+    id INTEGER NOT NULL,
+    slug TEXT NOT NULL,
+    fs_slug TEXT NOT NULL,
+    name TEXT NOT NULL,
+    rom_count INTEGER NOT NULL DEFAULT 0,
+    size_bytes INTEGER NOT NULL DEFAULT 0,
+    on_server INTEGER NOT NULL DEFAULT 1,
+    PRIMARY KEY (server, id)
+);
+
+CREATE TABLE romm_rom (
+    server TEXT NOT NULL,
+    id INTEGER NOT NULL,
+    platform_id INTEGER NOT NULL,
+    platform_slug TEXT NOT NULL,
+    name TEXT NOT NULL,
+    sort_name TEXT NOT NULL,
+    fs_name TEXT NOT NULL,
+    size_bytes INTEGER NOT NULL DEFAULT 0,
+    md5 TEXT,
+    sha1 TEXT,
+    crc TEXT,
+    title_id TEXT,
+    regions TEXT NOT NULL DEFAULT '',
+    revision TEXT,
+    year INTEGER,
+    summary TEXT,
+    genres TEXT NOT NULL DEFAULT '',
+    developer TEXT,
+    cover TEXT,
+    logo TEXT,
+    screenshot TEXT,
+    files_json TEXT NOT NULL DEFAULT '[]',
+    multi INTEGER NOT NULL DEFAULT 0,
+    on_server INTEGER NOT NULL DEFAULT 1,
+    created_at INTEGER NOT NULL DEFAULT 0,
+    updated_at INTEGER NOT NULL DEFAULT 0,
+    first_seen INTEGER NOT NULL DEFAULT 0,
+    is_new INTEGER NOT NULL DEFAULT 0,
+    checked_at INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (server, id)
+);
+
+CREATE INDEX romm_rom_platform ON romm_rom(server, platform_slug, sort_name);
+CREATE INDEX romm_rom_created ON romm_rom(server, created_at);
+CREATE INDEX romm_rom_md5 ON romm_rom(md5);
+
+CREATE TABLE romm_firmware (
+    server TEXT NOT NULL,
+    id INTEGER NOT NULL,
+    platform_id INTEGER NOT NULL,
+    file_name TEXT NOT NULL,
+    size_bytes INTEGER NOT NULL DEFAULT 0,
+    md5 TEXT,
+    sha1 TEXT,
+    crc TEXT,
+    verified INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (server, id)
+);
+
+CREATE TABLE romm_collection (
+    server TEXT NOT NULL,
+    id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    smart INTEGER NOT NULL DEFAULT 0,
+    rom_ids TEXT NOT NULL DEFAULT '',
+    cover TEXT,
+    PRIMARY KEY (server, id)
+);
+
+
+upsertPlatform:
+INSERT OR REPLACE INTO romm_platform(server, id, slug, fs_slug, name, rom_count, size_bytes, on_server)
+VALUES (?, ?, ?, ?, ?, ?, ?, 1);
+
+platforms:
+SELECT * FROM romm_platform WHERE server = ? ORDER BY name COLLATE NOCASE;
+
+markPlatformsGone:
+UPDATE romm_platform SET on_server = 0 WHERE server = :server AND id NOT IN :ids;
+
+insertRomIfAbsent:
+INSERT OR IGNORE INTO romm_rom(server, id, platform_id, platform_slug, name, sort_name, fs_name, size_bytes, md5, sha1, crc,
+    title_id, regions, revision, year, summary, genres, developer, cover, logo, screenshot, files_json, multi, on_server,
+    created_at, updated_at, first_seen, is_new, checked_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?);
+
+updateRom:
+UPDATE romm_rom SET platform_id = :platformId, platform_slug = :platformSlug, name = :name, sort_name = :sortName,
+    fs_name = :fsName, size_bytes = :sizeBytes, md5 = :md5, sha1 = :sha1, crc = :crc, title_id = :titleId, regions = :regions,
+    revision = :revision, year = :year, summary = :summary, genres = :genres, developer = :developer, cover = :cover,
+    logo = :logo, screenshot = :screenshot, files_json = :filesJson, multi = :multi, on_server = 1,
+    created_at = :createdAt, updated_at = :updatedAt, checked_at = :checkedAt
+WHERE server = :server AND id = :id;
+
+touchRoms:
+UPDATE romm_rom SET checked_at = :checkedAt, on_server = 1 WHERE server = :server AND id IN :ids;
+
+markRomsGoneBefore:
+UPDATE romm_rom SET on_server = 0 WHERE server = :server AND checked_at < :before AND on_server = 1;
+
+markRomsGone:
+UPDATE romm_rom SET on_server = 0 WHERE server = :server AND id IN :ids;
+
+romIds:
+SELECT id FROM romm_rom WHERE server = ? AND on_server = 1;
+
+rom:
+SELECT * FROM romm_rom WHERE server = ? AND id = ?;
+
+romsOnPlatform:
+SELECT * FROM romm_rom WHERE server = :server AND platform_slug = :slug AND on_server = 1 ORDER BY sort_name LIMIT :limit OFFSET :offset;
+
+allRoms:
+SELECT * FROM romm_rom WHERE server = ? AND on_server = 1 ORDER BY sort_name;
+
+romCount:
+SELECT count(*) FROM romm_rom WHERE server = ? AND on_server = 1;
+
+platformCounts:
+SELECT platform_slug, count(*) AS games, sum(size_bytes) AS bytes FROM romm_rom WHERE server = ? AND on_server = 1 GROUP BY platform_slug;
+
+recentRoms:
+SELECT * FROM romm_rom WHERE server = ? AND on_server = 1 ORDER BY created_at DESC, id DESC LIMIT ?;
+
+newRoms:
+SELECT * FROM romm_rom WHERE server = ? AND on_server = 1 AND is_new = 1 ORDER BY first_seen DESC, sort_name LIMIT ?;
+
+clearNew:
+UPDATE romm_rom SET is_new = 0 WHERE server = ? AND is_new = 1;
+
+searchRoms:
+SELECT * FROM romm_rom WHERE server = :server AND on_server = 1 AND (sort_name LIKE :pattern OR fs_name LIKE :pattern) ORDER BY sort_name LIMIT :limit;
+
+romsByMd5:
+SELECT * FROM romm_rom WHERE md5 = ? AND on_server = 1;
+
+romsWithIds:
+SELECT * FROM romm_rom WHERE server = :server AND id IN :ids;
+
+forgetRoms:
+DELETE FROM romm_rom WHERE server = ?;
+
+forgetPlatforms:
+DELETE FROM romm_platform WHERE server = ?;
+
+upsertFirmware:
+INSERT OR REPLACE INTO romm_firmware(server, id, platform_id, file_name, size_bytes, md5, sha1, crc, verified)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+firmware:
+SELECT * FROM romm_firmware WHERE server = ? ORDER BY file_name COLLATE NOCASE;
+
+clearFirmware:
+DELETE FROM romm_firmware WHERE server = ?;
+
+upsertCollection:
+INSERT OR REPLACE INTO romm_collection(server, id, name, smart, rom_ids, cover) VALUES (?, ?, ?, ?, ?, ?);
+
+collections:
+SELECT * FROM romm_collection WHERE server = ? ORDER BY smart, name COLLATE NOCASE;
+
+clearCollections:
+DELETE FROM romm_collection WHERE server = ?;
