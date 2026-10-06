@@ -69,4 +69,39 @@ class UpdateAndSteamTest {
         assertEquals("theirs", File(grid, "${id}_hero.jpg").readText())
         assertEquals(File(grid, "${id}_icon.png").absolutePath, icon)
     }
+
+    @Test
+    fun aSteamEntryForFuseGetsItsArtWhoeverMadeIt() {
+        // Steam's own Add a Non-Steam Game: named after the AppImage, with an id Steam picked.
+        val config = File(root, ".local/share/Steam/userdata/123/config").apply { mkdirs() }
+        val steamMade = SteamShortcut(name = "Fuse-0.3.6.4-x86_64.AppImage", exe = "\"/home/deck/Downloads/Fuse-0.3.6.4-x86_64.AppImage\"", startDir = "\"/home/deck/Downloads\"")
+        val other = SteamShortcut(name = "Cartridge", exe = "\"/home/deck/Applications/Cartridge-0.9.10-x86_64.AppImage\"", startDir = "\"/home/deck\"")
+        var vdf = SteamShortcuts.add(null, other)!!
+        vdf = SteamShortcuts.add(vdf, steamMade)!!
+        File(config, "shortcuts.vdf").writeBytes(vdf)
+        val fuseId = SteamShortcuts.appId(steamMade.exe, steamMade.name).toLong() and 0xFFFFFFFFL
+        val otherId = SteamShortcuts.appId(other.exe, other.name).toLong() and 0xFFFFFFFFL
+
+        val dressed = DesktopSteam(KnownFolders(root.path, io.github.matiyaaa.fuse.desktop.system.DesktopOs.LINUX)).dressEntries()
+
+        assertEquals(1, dressed)
+        val grid = File(config, "grid")
+        for (name in listOf("${fuseId}p", "$fuseId", "${fuseId}_hero", "${fuseId}_logo", "${fuseId}_icon")) {
+            assertTrue(File(grid, "$name.png").isFile, name)
+        }
+        assertFalse(File(grid, "${otherId}p.png").exists(), "another program's entry is left alone")
+        // The list itself is never written: safe while Steam runs.
+        assertTrue(File(config, "shortcuts.vdf").readBytes().contentEquals(vdf))
+    }
+
+    @Test
+    fun onlyFuseProgramsCountAsFuse() {
+        assertTrue(DesktopSteam.isFuse("/home/deck/Applications/Fuse.AppImage", "Fuse", null))
+        assertTrue(DesktopSteam.isFuse("/home/deck/Downloads/Fuse-0.3.6.4-x86_64.AppImage", "anything", null))
+        assertTrue(DesktopSteam.isFuse("C:/Users/me/AppData/Local/Fuse/Fuse.exe", "Fuse", null))
+        assertTrue(DesktopSteam.isFuse("/opt/odd/name.bin", "x", "/opt/odd/name.bin"))
+        assertFalse(DesktopSteam.isFuse("/home/deck/Applications/Cartridge-0.9.10-x86_64.AppImage", "Cartridge", null))
+        assertFalse(DesktopSteam.isFuse("/usr/bin/fusermount", "fusermount", null))
+        assertFalse(DesktopSteam.isFuse("/home/deck/Games/Fusebox.AppImage", "Fusebox", null))
+    }
 }

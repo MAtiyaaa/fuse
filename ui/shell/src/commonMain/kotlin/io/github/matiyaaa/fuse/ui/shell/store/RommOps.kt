@@ -210,6 +210,9 @@ interface RommOps {
     fun forGame(game: GameId): Flow<RommGameView?>
     fun forRom(romId: Long): Flow<RommGameView?>
 
+    /** The library game a RomM game became (downloaded, or found here), or null while it is only on RomM. */
+    fun libraryGame(romId: Long): Flow<GameId?> = flowOf(null)
+
     /** Queues a download; null when it was queued, else why not. */
     suspend fun download(romId: Long, what: RommDownloadWhat = RommDownloadWhat.Game): String?
 

@@ -250,8 +250,13 @@ class DesktopPlatformUi(
 
     override fun clearCrashReport() = crashLog.clear()
 
-    override val steam: io.github.matiyaaa.fuse.ui.shell.platform.SteamIntegration =
-        DesktopSteam(io.github.matiyaaa.fuse.desktop.services.KnownFolders(dirs.home, os))
+    private val desktopSteam = DesktopSteam(io.github.matiyaaa.fuse.desktop.services.KnownFolders(dirs.home, os))
+    override val steam: io.github.matiyaaa.fuse.ui.shell.platform.SteamIntegration = desktopSteam
+
+    init {
+        // Fuse's art for any Steam entry that starts it, even one Steam made, every time Fuse starts.
+        scope.launch(Dispatchers.IO) { runCatching { desktopSteam.dressEntries() }.onSuccess { if (it > 0) Log.info("Steam: art for $it entries") } }
+    }
 
     override val windowControls: WindowControls = object : WindowControls {
         override val mode: WindowStyle get() = when (windowMode) {

@@ -438,6 +438,8 @@ internal class DefaultMediaOps(
     }
 
     private suspend fun fillFresh(id: GameId) {
+        // A game downloaded from RomM takes what was found for it there; only what is still missing is looked for.
+        runCatching { ctx.adoptArt(id) }
         val g = gameOf(id) ?: return
         if (!ctx.data.scopedSettings.resolve(ScopedSettings.ScrapeEnabled, g.platformId, g.id).value) return
         val (configured, coordinator) = coordinator()

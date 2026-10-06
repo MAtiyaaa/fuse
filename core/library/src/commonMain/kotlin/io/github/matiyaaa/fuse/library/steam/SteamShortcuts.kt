@@ -155,6 +155,24 @@ object SteamShortcuts {
         return BinaryVdf.write(root)
     }
 
+    /**
+     * The ids (as Steam names art files: unsigned) of the shortcuts in [bytes] that [match] picks by
+     * their program (quotes taken off) and name. A shortcut keeps the id it was given; one without
+     * gets the id Steam works out for it.
+     */
+    fun idsOf(bytes: ByteArray?, match: (exe: String, name: String) -> Boolean): List<Long> {
+        val root = bytes?.let(BinaryVdf::parse) ?: return emptyList()
+        val list = root["shortcuts"] as? BinaryVdf.Block ?: return emptyList()
+        return list.entries.mapNotNull { (_, v) ->
+            val e = v as? BinaryVdf.Block ?: return@mapNotNull null
+            val exe = (e["Exe"] as? BinaryVdf.Str)?.value ?: return@mapNotNull null
+            val name = (e["AppName"] as? BinaryVdf.Str)?.value.orEmpty()
+            if (!match(exe.trim('"'), name)) return@mapNotNull null
+            val id = (e["appid"] as? BinaryVdf.Int32)?.value ?: appId(exe, name)
+            id.toLong() and 0xFFFFFFFFL
+        }.distinct()
+    }
+
     /** Whether [bytes] already hold a shortcut that runs [exe]. */
     fun contains(bytes: ByteArray?, exe: String): Boolean {
         val root = bytes?.let(BinaryVdf::parse) ?: return false

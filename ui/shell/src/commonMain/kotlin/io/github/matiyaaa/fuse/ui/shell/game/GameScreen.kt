@@ -161,9 +161,12 @@ private enum class InfoCard { STARTS, PLAY, EXTRAS, FILE }
  */
 @Composable
 fun GameScreen(app: AppState, id: GameId) {
-    // A RomM game Fuse doesn't have yet opens on the same page, from Fuse RomM's mirror.
+    // A RomM game Fuse doesn't have yet opens on the same page, from Fuse RomM's mirror; once it is
+    // downloaded (or found here) the page is the library game's, with Play instead of Download.
     val romOnly = id.rommOnly
-    val flow = remember(id) { (if (romOnly != null) app.store.romm.detail(romOnly) else app.store.library.game(id)).map { d -> if (d == null) GameLoad.Gone else GameLoad.Ready(d) } }
+    val local by remember(id) { if (romOnly != null) app.store.romm.libraryGame(romOnly) else kotlinx.coroutines.flow.flowOf(null) }.collectAsState(initial = null)
+    val shown = local ?: id
+    val flow = remember(shown) { (shown.rommOnly?.let { app.store.romm.detail(it) } ?: app.store.library.game(shown)).map { d -> if (d == null) GameLoad.Gone else GameLoad.Ready(d) } }
     val load by flow.collectAsState(initial = GameLoad.Loading)
     // A short fade from the placeholder to the page, never a jump.
     Crossfade(load is GameLoad.Ready, animationSpec = Fuse.motion.fade(), label = "gameLoad") { ready ->

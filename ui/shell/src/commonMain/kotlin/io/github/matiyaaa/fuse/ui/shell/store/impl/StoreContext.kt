@@ -104,6 +104,12 @@ internal class StoreContext(
     /** A game Fuse shows but doesn't have, as its page would show it; null for the library's own games. */
     @kotlin.concurrent.Volatile var remoteDetail: (GameId) -> kotlinx.coroutines.flow.Flow<io.github.matiyaaa.fuse.ui.shell.store.GameDetail?>? = { null }
 
+    /**
+     * Gives a game just added to the library the art already found for it elsewhere (the RomM game
+     * it was downloaded from), so it isn't looked for again. True when it took some. Set by Fuse RomM.
+     */
+    @kotlin.concurrent.Volatile var adoptArt: suspend (io.github.matiyaaa.fuse.model.GameId) -> Boolean = { false }
+
     /** Goes up whenever art was found for a game, so what is drawn from games' art can follow. */
     val gameArtFound = MutableStateFlow(0)
 
