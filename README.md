@@ -29,7 +29,7 @@ Home screen.
 <a href="https://github.com/MAtiyaaa/fuse/releases/latest"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/brand/button-macos-dark.svg"><img src="docs/assets/brand/button-macos-light.svg" height="48" alt="Download for macOS"></picture></a>
 
 <sub>Android 9 or newer &nbsp;·&nbsp; 64-bit x86 Linux AppImage &nbsp;·&nbsp; Windows 10 and 11 &nbsp;·&nbsp; macOS on Apple silicon and Intel &nbsp;·&nbsp; <a href="#install">checksums and install notes</a></sub><br>
-<sub>0.3.5 is the <b>Swift Update</b>: Fuse Sync that goes straight to the outside address away from home and sends saves several files at a time, quick profile switches, tabs that change in the very next frame, a Sync tab with your games first and a timeline of every save, folder saves that keep their whole structure and a Hub that opens at once, after 0.3.4, the Household Update (a profile for everyone, with or without a host, saves from every system reaching it), and 0.3.3, the Together Update (saves sent while you play, joining without a code, one outside address for every device). <a href="#where-fuse-stands">Here is where it stands.</a></sub><br>
+<sub>0.3.6 is the <b>Unity Update</b>: Fuse RomM, Fuse's native RomM integration, one Downloads page for every transfer, Jellyfin films and episodes kept for offline, streaming from a computer at home through Moonlight, saves that reach every device in the house by themselves, screenshots and recordings on computers and a friend for Fusi, after 0.3.5, the Swift Update (Fuse Sync straight to the outside address, quick profile switches, tabs that change in the next frame), and 0.3.4, the Household Update (a profile for everyone, with or without a host). <a href="#where-fuse-stands">Here is where it stands.</a></sub><br>
 <sub>Or download from <a href="https://matiyaaa.github.io/fuse/">Fuse's website</a>, which always offers the latest version for your system.</sub>
 
 <br>
@@ -38,6 +38,7 @@ Home screen.
 <b><a href="#made-by-fuse">Made by Fuse</a></b> &nbsp;&nbsp;·&nbsp;&nbsp;
 <b><a href="#everything-in-its-place">Features</a></b> &nbsp;&nbsp;·&nbsp;&nbsp;
 <b><a href="#install">Install</a></b> &nbsp;&nbsp;·&nbsp;&nbsp;
+<b><a href="#fuse-romm-fuses-native-romm-integration">Fuse RomM</a></b> &nbsp;&nbsp;·&nbsp;&nbsp;
 <b><a href="#romm-through-cartridge">Cartridge</a></b> &nbsp;&nbsp;·&nbsp;&nbsp;
 <b><a href="#build-it-yourself">Build</a></b> &nbsp;&nbsp;·&nbsp;&nbsp;
 <b><a href="#documentation">Docs</a></b>
@@ -135,6 +136,9 @@ They behave the same on every device, answer to one design, and get better with 
         Folders shows where each one keeps them, and takes a folder you chose.</li>
         <li><b>Play time that adds up.</b> 30 minutes on one device and 20 offline on another is 50,
         never 30 and never 80. Everything works offline and catches up later.</li>
+        <li><b>Synced everywhere, by itself.</b> A save made on one device reaches every other
+        device with the game in the background, without launching it, and devices that were off
+        catch up when they return. Each game says "Synced everywhere" or "4 of 5 devices current".</li>
         <li><b>Asks, never guesses.</b> When two devices both played, you choose which save to use;
         the other is kept. Every save keeps its versions, from every device, to go back to.</li>
         <li><b>A profile for each person</b>, with one of Fuse's own avatars and a PIN if they like:
@@ -186,6 +190,9 @@ They behave the same on every device, answer to one design, and get better with 
         hundred: a screen full of motion takes about a tenth of Compose's time and memory.</li>
         <li><b>Exact curves and springs.</b> Béziers solved with Newton steps, springs in closed
         form, retargeted mid-flight without a jolt.</li>
+        <li><b>Fuseline 2 follows in place.</b> A spring following a finger or a scroll takes each
+        new target without a new move: about 16 times faster than before when every value is
+        retargeted every frame, measured.</li>
         <li><b>Colours blend through Oklab</b>, so a fade stays even instead of dipping grey.</li>
         <li><b>Your motion choice everywhere</b>: Enhanced, Standard, Minimal, Reduced and Low Power apply to every
         animation at once.</li>
@@ -267,8 +274,8 @@ Play.
     </td>
     <td width="33%" valign="top">
       <img src="docs/assets/icons/cartridge.svg" width="44" height="44" alt=""><br>
-      <b>RomM, through Cartridge</b><br>
-      <sub>Pair with the Cartridge app to follow each download, pick up new games when you come back, bring in RomM's details and art, and jump to a game's RomM entry.</sub>
+      <b>RomM, built in or through Cartridge</b><br>
+      <sub>Fuse RomM browses your server, downloads games and BIOS into the folders you have and uploads yours, with an offline copy of the library. Or pair with the Cartridge app, still fully supported.</sub>
     </td>
     <td width="33%" valign="top">
       <img src="docs/assets/icons/second-screen.svg" width="44" height="44" alt=""><br>
@@ -540,24 +547,23 @@ Play.
 </table>
 
 On every computer Fuse manages games only: there is no Apps section, and Cartridge, an Android and
-Linux app, isn't offered on Windows and macOS.
+Linux app, isn't offered on Windows and macOS (Fuse RomM is, on every computer).
 
 </details>
 
 ## Where Fuse stands
 
 > [!IMPORTANT]
-> **Fuse 0.3.5 "The Swift Update" is still early, and quicker where it was slow.** Fuse Sync goes
-> straight to the outside address away from home instead of waiting on home for every call, sends
-> and brings saves four files at a time, and switching profiles no longer waits on saves. Tabs change
-> in the very next frame, with Systems and the Library built ahead. The Sync tab shows your games
-> first, at least four at a time even on the AYN Thor's upper screen, and each game's saves on a
-> timeline; how things stand shows only when something is wrong. Folder saves keep their whole
-> structure, and the Hub in a browser opens at once. 0.3.4, "The Household Update", gave everyone in
-> the house their own profile, with or without a host, and brought saves from every system to it.
-> For people who already run Syncthing, Fuse can use it for their emulators' save folders, though
-> Fuse Sync by Fuse (saves, play time, library and settings on every device, a profile for each
-> person) is still the one it recommends. See [the release notes](docs/releases/0.3.5.md).
+> **Fuse 0.3.6 "The Unity Update" is still early, and brings everything into one place.** Fuse RomM,
+> Fuse's native RomM integration, browses a RomM server, downloads games and BIOS into the folders
+> Fuse already has, uploads yours and keeps an offline copy of the library; Cartridge is still fully
+> supported. Every download and upload Fuse makes is on one Downloads page. Jellyfin films and
+> episodes can be kept for offline, a computer at home streams through Moonlight, and a save made
+> on any device reaches every other one with the game by itself, each game saying how many are
+> current. Computers take screenshots and recordings, and Fusi has a friend, Bo. 0.3.5, "The Swift
+> Update", made Fuse Sync quick from outside home and tabs change in the very next frame. Fuse
+> Sync by Fuse (saves, play time, library and settings on every device, a profile for each person)
+> is still the sync Fuse recommends. See [the release notes](docs/releases/0.3.6.md).
 
 <details>
 <summary><b>Every release so far</b></summary>
@@ -565,6 +571,7 @@ Linux app, isn't offered on Windows and macOS.
 
 | Version | Name | What it brought |
 |---|---|---|
+| [0.3.6](docs/releases/0.3.6.md) | The Unity Update | Fuse RomM, one Downloads page, Jellyfin downloads for offline, streaming through Moonlight, saves that reach every device by themselves, each handheld emulator's saves from its own code, Restore Fuse Default Art, Syncthing-Fork in the Store, Fuseline 2, screenshots and recordings on computers, Fusi's friend Bo |
 | [0.3.5](docs/releases/0.3.5.md) | The Swift Update | Fuse Sync from outside home without waiting on home, saves sent several files at a time, quick profile switches, tabs that change in the next frame, a Sync tab with games first and a timeline of saves, folder saves with their whole structure, a Hub that opens at once, a new update viewer on the website |
 | [0.3.4](docs/releases/0.3.4.md) | The Household Update | Profiles without a host, saves from every system reaching it, Fuse Sync and Syncthing that never lose a save or touch what you set up, hints that follow your button mapping, Nintendo pads that confirm with A everywhere, PICO-8 and Flash on the computer, small screens that fit |
 | [0.3.3](docs/releases/0.3.3.md) | The Together Update | Saves sent while you play, who is playing what, one game across devices, joining without a code, a host account and shared outside address, Erase Fuse, a mouse that works first click, redesigned Sync and Syncthing tabs |
@@ -590,7 +597,7 @@ macOS builds pass their tests and a self-test of the packaged app on each system
 been tried by hand on a PC or Mac yet. Expect rough edges and changes between versions.
 
 Not there yet: checks on more handhelds and on Windows and Mac computers, signed Windows and macOS
-builds, video previews and screen capture on the desktop, a storage mode without All files access, translations (the
+builds, video previews and sound in recordings on the desktop, a storage mode without All files access, translations (the
 interface is English only), RetroAchievements hashing for 3DS, Saturn, Dreamcast and compressed disc
 images, and ScreenScraper credentials. [ROADMAP.md](ROADMAP.md) ticks a box only when the
 code is in this repository.
@@ -654,11 +661,48 @@ sha256sum -c SHA256SUMS.txt --ignore-missing
 Fuse does not include emulators, BIOS files or games. Install the emulators you want; Fuse finds them
 automatically.
 
+## Fuse RomM: Fuse's native RomM integration
+
+Fuse RomM talks to your [RomM](https://github.com/rommapp/romm) server itself, on Android and on
+every computer. Turn it on in setup ("Do you use RomM?") or in Addons, Fuse RomM.
+
+```mermaid
+flowchart LR
+    romm[("Your RomM server")] <-->|"browse, downloads, uploads, BIOS"| fuse["Fuse RomM"]
+    fuse -->|"places games in"| folders[/"Your system folders"/]
+    fuse -->|"offline copy"| db[("Fuse's database")]
+```
+
+- **Pairing without a password where it can.** On a RomM server that offers it, Fuse asks to be
+  approved as a device, or takes a pairing code made in RomM, and keeps a read-only or
+  upload-capable token you can revoke in RomM. A server without client tokens takes a sign-in.
+  Either way it lives only in Fuse's secure secret storage, never in the database, logs,
+  screenshots, diagnostics or exported settings.
+- **Home and away.** A local address, an outside one, or both: Fuse uses whichever answers and
+  never waits on one that doesn't.
+- **What the server can do, from the server.** Fuse reads RomM's own API description, so features
+  a server lacks are simply not offered.
+- **An offline copy.** The server's library is kept in Fuse's database, brought up to date a page
+  at a time, so the Fuse RomM tab, its systems and collections, and Search work without the server.
+- **Games in the folders you have.** Downloads go through Downloads into the system folders Fuse
+  already uses, resumed where they stopped and checked before they are put in place. A RomM game
+  is matched to one in your library only by its RomM link, a hash, the console's own title id, the
+  exact file name, or the same name with the same region and revision when it is the only one on
+  each side; a name that only looks alike never joins two games.
+- **Uploads** in pieces, resumed where they stopped, with a token that allows them.
+- **BIOS from RomM** on health pages and each system's BIOS menu. A file you already have is never
+  replaced by one of the same name; firmware an emulator installs itself goes to a Firmware folder
+  with how to install it.
+
+Fuse RomM and Cartridge are both supported. Turning one on turns the other off in Fuse, keeping
+both set up, so you can switch back at any time.
+
 ## RomM through Cartridge
 
 <a href="docs/assets/screenshots/cartridge.webp"><img src="docs/assets/screenshots/cartridge.webp" width="100%" alt="Fuse's Cartridge page, connected to RomM: Open Cartridge, Browse, Search, Upload, Downloads and Consoles, then Browse by system with Steam, PlayStation, PS2, PS3, PSP, Nintendo 64 and DS, and Recently downloaded games."></a>
 
-Fuse does not talk to RomM servers. [Cartridge](https://github.com/abdu2304/cartridge) by
+Cartridge remains fully supported for people who prefer it to Fuse RomM. With Cartridge, Fuse
+itself does not talk to RomM: [Cartridge](https://github.com/abdu2304/cartridge) by
 [abdu2304](https://github.com/abdu2304), a RomM companion app, signs in to your RomM server, keeps
 the credentials, and downloads games into folders on your device. Fuse scans those folders like any other and reads Cartridge's local status to show
 what it is doing.

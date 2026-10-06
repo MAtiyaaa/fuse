@@ -145,7 +145,13 @@ yet tried by hand on a PC or a Mac.
 - [x] In-app text size, TV-safe screen edges and a Play time page (0.2.0)
 - [x] PS1 and PS2 disc serials and PCSX2 CRCs, PCSX2 patches with ownership records, PS3 and Vita package installs, and RPCS3 compatibility (0.2.0)
 - [x] A release consistency check in CI (0.2.0)
-- [ ] Screenshots and recordings on Linux, Windows and macOS (the interface is ready; each needs its own capture and encoder)
+- [x] Screenshots and recordings on Linux, Windows and macOS, with the bundled FFmpeg (0.3.6; no sound in recordings yet)
+- [x] Fuse RomM, Fuse's native RomM integration: pairing, an offline mirror, downloads, uploads and BIOS (0.3.6)
+- [x] One transfer queue and Downloads page for every download and upload (0.3.6)
+- [x] Jellyfin downloads for watching offline (0.3.6)
+- [x] Streaming from a computer at home through Moonlight, with Wake-on-LAN (0.3.6)
+- [x] Fuse Sync saves that reach every device with the game by themselves, with each device's state (0.3.6)
+- [ ] Sound in recordings on Linux, Windows and macOS
 - [ ] SAF-only storage mode that works without All files access (emulators that need FileProvider URIs would then be limited)
 - [ ] R8 shrinking on by default for release APKs (rules written and opt-in with `-Pfuse.r8=true` in 0.2.0: 78.0 MB to 50.2 MB; waiting on a shrunk build run on devices)
 - [ ] Screenshot tests for the design system and main screens

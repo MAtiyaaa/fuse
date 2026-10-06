@@ -1,51 +1,84 @@
-# Fuse 0.3.5 - The Swift Update
+# Fuse 0.3.6 - The Unity Update
 
-Quicker where it was slow: Fuse Sync from outside home, switching profiles, moving between tabs and
-the Hub in a browser. The Sync tab is rebuilt so your games come first, and saves that are whole
-folders now arrive exactly as they were made.
+Everything in one place: RomM built into Fuse, one Downloads page for every transfer,
+films and episodes kept for offline, streaming from a computer at home, and saves that reach every
+device in the house by themselves. Fusi has a friend too.
 
 ## New
 
-- **A Sync tab you can see.** Who's playing and the things to do sit in one slim line that folds
-  away with the tabs as you move into your games, so four or more are always in view, even on the
-  AYN Thor's upper screen. Each game shows its cover, system, play time, saves and states, and
-  which device saved last. Devices and recent activity sit beside the games on wide screens and
-  after them on smaller ones.
-- **A page for each game's saves.** Opening a game on the Sync tab shows its cover and figures
-  (play time, sessions, last played, what the host keeps), then every version of each save on a
-  timeline: the one in use lit, the ones kept for good marked, each with its device, how far in
-  and why it was kept.
-- **Folder saves keep their whole structure.** Saves that are folders (PSP, PS3, Switch and the
-  like) travel with every nested folder, empty ones included, and a save put in place is that
-  save exactly: files of the one it replaced that it doesn't have are removed, and kept in its
-  history first.
-- **A new update viewer on the website.** Every release, newest first, with its notes in sections
-  you can filter and a link straight to any version.
+- **Fuse RomM, Fuse's native RomM integration.** Pair Fuse with a RomM server by approving it in
+  RomM or with a pairing code, and Fuse keeps a read-only or upload-capable token, revocable in
+  RomM, in its secure storage (a server without tokens takes a sign-in, kept there too, never in
+  its database, logs or exports). It reads what the server can do from the server itself, keeps
+  an offline copy of its library brought up to date a page at a time, and reaches it at home,
+  from outside, or both, never waiting on an address that doesn't answer. RomM gets its own
+  Addons tab with system and collection grids, and its games open in Fuse's game page with their
+  discs, updates and DLC.
+- **RomM games land in the folders you already have.** Downloads go into the system folders Fuse
+  already uses. A RomM game is matched to the one in your library by its hash, the console's own
+  title id, the exact file name, or the same name with the same region and revision when it is
+  the only one, never by a name that only looks alike. Your games can go up to RomM too, in
+  pieces, resumed where they stopped.
+- **BIOS from RomM.** Missing firmware on a health page and each system's BIOS menu offer
+  Download from RomM. A file you already have is never replaced by one of the same name; firmware
+  an emulator installs itself is put in a Firmware folder with how to install it.
+- **RomM in Search.** Search lists the RomM games you haven't downloaded yet, from the offline
+  copy, so it works without the server.
+- **"Do you use RomM?" in setup.** First-run setup asks, and offers Fuse RomM, Cartridge or
+  neither. People who already finished setup are never asked again. Cartridge is still fully
+  supported; turning one on turns the other off in Fuse, keeping both set up.
+- **One Downloads page.** The Downloads button opens every download and upload Fuse makes, from
+  RomM, Jellyfin, the Store and the rest: up to five each way at once, kept across restarts,
+  resumed where they stopped, checked before they are put in place, waiting for a missing drive
+  or the network. Filter them, reorder the queue, pause, retry or cancel each. On Android they
+  carry on in the background with a quiet progress notification, and ones kept to Wi-Fi follow
+  the connection.
+- **Jellyfin downloads.** Options on a film, episode, season or show offers Download: Fuse keeps
+  the server's original file, the subtitles beside it and the pictures, in tidy Films and Shows
+  folders. Hold Options to play the downloaded copy; where you stopped is sent to the server once
+  it can be reached. The Downloaded page plays everything kept without the server, and deletes it
+  or moves it to another drive, several at once too. A server that doesn't allow downloads is
+  respected.
+- **Streaming from a computer at home.** Add the computer running Sunshine (or Apollo, or
+  GeForce Experience) in Addons, Streaming. Fuse reads its open GameStream port to name it and
+  learn how to wake it, and never pairs with it or changes its settings. Choosing an app wakes a
+  sleeping computer, waits with a countdown, then starts Moonlight on that app. A computer that
+  doesn't answer or wake says why and offers to try again.
+- **Syncthing-Fork in the Store.** Every edition's Store offers it. Getting it from Syncthing's
+  setup goes to its Store page, and once it installs Fuse goes back to setup and starts it.
+- **Saves synced everywhere.** A save made on any device now reaches every other device that has
+  the game, in the background, without launching it. Devices that were off catch up when they
+  come back, new devices catch up when they join, and a game being played or a folder holding
+  another person's save is never written. Each game's Fuse Sync page says "Synced everywhere" or
+  "4 of 5 devices current", with each device's state.
+- **Restore Fuse Default Art.** A system's options and Settings, Systems, System art put Fuse's
+  own icon, background and logo back for one system or every system. Downloaded and chosen art is
+  set aside, not deleted, nothing is downloaded for it by itself afterwards, and Undo puts back
+  exactly what was there.
+- **Screenshots and recordings on computers.** L3 + R3 on a controller, F12 for a screenshot and
+  Shift+F12 to start or stop a recording, on Linux, Windows and macOS. Screenshots go to
+  Pictures/Fuse at the screen's full sharpness; recordings to Videos/Fuse (Movies/Fuse on a Mac)
+  as MP4, without sound for now.
+- **Fusi has a friend.** Bo, a white pixel dog with a black collar and a small gold tag, shares
+  her room in the Fusi theme. He watches her, trots after her when she runs, says hello when she
+  comes close, and naps beside her house when she sleeps.
 
 ## Changed
 
-- **Fuse Sync from outside home is much quicker.** Away from home, Fuse goes straight to the
-  outside address instead of waiting on home first for every call, and only looks for home now
-  and then on the side, switching to it the moment it answers. Saves go up and come down four
-  files at a time, and big answers from the host come compressed.
-- **Switching profiles is quick.** A switch sends and brings in only the records, once; saves
-  waiting to go follow in the background without holding the switch up or rewriting the library
-  as you start using it.
-- **Tabs change at once.** Moving from Home to Systems or the Library shows the page in the very
-  next frame, with a short nudge from its side, instead of sliding two pages across each other.
-  Systems and the Library are built ahead while Home sits idle, so even the first visit is
-  instant.
-- **The Hub opens at once.** The Hub in a browser lists every game first, and brings a game's
-  versions and files only when you open it. Pages come compressed, and Refresh with nothing new
-  sends nothing again.
-- **No light for all being well.** The Sync and Syncthing tabs only show how things stand when
-  something is wrong, such as the host being away.
-- The website tells more of what Fuse does, from profiles for everyone to saves from every system.
+- **Each handheld emulator's saves where its own code puts them.** melonDS follows the save
+  folder in its settings, NooDS its separate saves folder, mGBA its savegamePath, Mednafen's saves
+  are found by name and fingerprint, and My Boy and My OldBoy use their own folders. melonDS on
+  Android warns when a game is outside its own ROM list. Every save spot now says how sure Fuse
+  is: found, known, or a guess for emulators that don't publish their layout.
+- **Fuseline 2.** A spring following a finger, a scroll or a selection now takes each new target
+  in place instead of starting a new move. With 100 values retargeted every frame a frame costs
+  25 us instead of 414 us, and with 1000 values 267 us instead of 4.4 ms, about 16 times faster
+  with an eighth of the memory. That is the case it was built for; other moves cost what they did.
+- Settings has a Downloads section, and Storage lists what Jellyfin keeps offline.
 
 ## Fixed
 
-- On a handheld, the Sync tab's games were hidden behind its header, its buttons and the column
-  beside them, leaving about one and a half games on screen.
-- A folder save brought down over another could leave the other's files mixed into it.
-- Switching people on one device could leave the last person's empty folders in the next person's
-  save.
+- Logs, caches, temporary files and system leftovers (Thumbs.db, desktop.ini and the like) in a
+  save folder could be taken for a change to the save; they are never part of a save now.
+- melonDS, NooDS and mGBA saves on computers were looked for beside the game even when the
+  emulator was set to keep them elsewhere.

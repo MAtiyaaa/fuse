@@ -17,13 +17,15 @@ import kotlin.test.assertTrue
 
 /**
  * A screenshot and a short recording of a real window, where there is a screen to take them from
- * (a desktop, or Xvfb in CI). Skipped on a machine with no display.
+ * (a Linux desktop, or Xvfb). Skipped elsewhere.
  */
 class DesktopScreenCaptureTest {
     @Test
     fun aScreenshotAndARecordingOfTheWindowAreSaved() = runBlocking<Unit> {
-        // No display here (a headless build machine): nothing to capture.
-        if (GraphicsEnvironment.isHeadless() || System.getenv("DISPLAY").isNullOrEmpty() && !System.getProperty("os.name").orEmpty().let { "win" in it.lowercase() || "mac" in it.lowercase() }) return@runBlocking
+        // Linux with a display (a desktop, or Xvfb) only: a build machine without one has nothing to
+        // capture, and Windows and macOS runners may not allow capturing their screen at all.
+        val linux = System.getProperty("os.name").orEmpty().lowercase().contains("linux")
+        if (!linux || GraphicsEnvironment.isHeadless() || System.getenv("DISPLAY").isNullOrEmpty()) return@runBlocking
         val home = Files.createTempDirectory("capture-home").toFile()
         val before = System.getProperty("user.home")
         System.setProperty("user.home", home.path)

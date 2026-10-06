@@ -12,6 +12,8 @@ It sits beside Fuse's other first-party parts: **Fuse Player by Fuse** (films, s
 - Play time adds up across devices: 30 minutes on one and 20 offline on another is 50.
 - A profile for each person: their own saves, play time, favourites, collections, Home and theme.
 - Nothing is ever silently lost. When two devices both played, you choose, and the other is kept.
+- One household, one newest save: a save made on any device reaches every other device that has
+  the game by itself, and each game says "Synced everywhere" or "5 of 6 devices current".
 
 Your games themselves are never synced or copied to the host: each device keeps its own games, and
 Fuse Sync carries only what you made playing them.
@@ -162,7 +164,13 @@ Saves are found by per-emulator adapters. Fuse Sync and Syncthing use the same o
 | PCSX2, NetherSX2, AetherSX2, ARMSX2, Play! | Memory cards (shared by every game on them, synced as cards) | |
 | PPSSPP | SAVEDATA folders by game id, on the memory stick you chose | |
 | Dolphin (and MMJR) | GameCube memory cards, Wii saves | |
-| melonDS, mGBA, Mednafen, SkyEmu, My Boy!, My OldBoy!, Pizza Boy, NooDS and others | Saves beside the game, or their save folder | |
+| melonDS (computer) | The save folder in its settings (`SaveFilePath` in `melonDS.toml`), else beside the game; portable, Flatpak and system config folders | |
+| melonDS (Android) | Beside the game for games in its ROM search folders; games opened another way save in its private `Android/data` folder, and Fuse says so | |
+| NooDS | Beside the game, or its separate `saves` folder when that setting is on | |
+| mGBA (computer) | `savegamePath` in its `config.ini`, else beside the game | |
+| Mednafen | `sav/<name>.<fingerprint>.sav` (and `.eep`, `.rtc` for GBA), only between Mednafen installs | |
+| My Boy!, My OldBoy! | Their own `MyBoy/save` and `MyOldBoy/save` folders | |
+| mGBA, SkyEmu (Android), Pizza Boy, Linkboy, other handheld emulators | Beside the game (a guess where the emulator publishes no layout) | |
 | DraStic | `backup/<game>.dsv`, converted to and from a plain DS save | |
 | Mupen64Plus, M64Plus FZ | The game's EEPROM, SRAM, FlashRAM and paks, converted to and from RetroArch's one file | |
 | Flycast, Redream | VMUs | |
@@ -191,6 +199,26 @@ layout wherever it is, in the device's storage or on a card (two folders down an
 under folders named for emulation, never inside photos, music or other apps' private storage),
 after the folder chosen in Save Folders and the usual places. With several, the one holding the
 game's save wins.
+
+**How sure Fuse is.** Every save spot says whether Fuse **found** it (read from the emulator's own
+settings or seen on disk), **knows** it (the emulator's documented or source-code default), or is
+making a **guess** (an emulator whose source and layout aren't published). Save Folders shows it, so
+a guess is never presented as fact.
+
+| Emulator | Evidence for where its saves go |
+| --- | --- |
+| melonDS (computer) | Its source: `SaveFilePath` under `[Instance0]` in `melonDS.toml`, relative to the config folder; config in a portable folder, `~/.config/melonDS`, the Flatpak's, `%LOCALAPPDATA%` or `~/Library/Preferences` |
+| melonDS (Android) | Its source: a game found through a ROM search folder saves beside it; one opened without that folder's permission saves in the app's private files |
+| NooDS | Its source: `savesFolder` in `noods.ini`; `1` means a `saves` folder beside the settings |
+| mGBA (computer) | Its source: `savegamePath` in `config.ini` under `[ports.qt]` or `[default]`, relative to the config folder |
+| SkyEmu | Its source on computers (beside the game); unpublished on Android, so a guess there |
+| Mednafen | Its documentation and source: `sav/<stem>.<md5>.<ext>`, so its saves only fit another Mednafen |
+| My Boy!, My OldBoy! | Their own folders, as their users and documentation describe |
+| Pizza Boy, Linkboy, Seedless DS | No published layout: a guess, beside the game |
+
+**Not a save.** Logs, caches, shader caches, temporary and partial files, and system leftovers
+(`Thumbs.db`, `desktop.ini`, `.DS_Store`) in a save folder are never part of a save, and a folder
+only they changed is never learned as a game's save folder.
 
 **Folder saves.** A save that is a folder (a PSP or PS3 game's save folder, a Switch save) goes
 with its whole structure: every nested folder, empty ones included. Putting a save in place makes the
@@ -238,6 +266,36 @@ when each was saved and how long the game had been played by then: **Use This De
 **Use Fuse Sync**. The one not chosen is kept in the game's history as the other side of a
 conflict. Timestamps alone never decide: every version records the one it was made from, so a
 conflict is told by history, not clocks.
+
+## Every device, by itself
+
+Fuse Sync is a household system: every device that has a game converges on its newest save, in the
+background, without anyone launching it there. When a device sends a new save, the host tells the
+others (its journal), and each one that has the game puts the save in place. A device that was off
+or away catches up on every game when it comes back; a new device catches up when it joins; a
+device without the game skips it, and gets the newest save the day the game arrives. Folders the
+save needs are made as needed.
+
+A device never writes a save under a game that is being played on it, and never into a folder that
+holds another person's save (a shared device whose emulator keeps one save per game). When both
+sides played, nothing is put in place in the background: the choice waits for the person, at
+launch, as above.
+
+Each device tells the host what is in place for each game:
+
+| State | Meaning |
+| --- | --- |
+| Current | This device has the newest save in place |
+| Behind | It has an older one (it hasn't caught up yet, or is off) |
+| Conflict | It played too since they last agreed; the person chooses at launch |
+| Another emulator | Its emulator reads another format, which Fuse can't convert |
+| Unreachable | The save's folder isn't reachable here (a missing card, private storage) |
+
+A game's page on the Sync tab sums it up: **Synced everywhere**, or **5 of 6 devices current** with
+each device and its state. Hosts before 0.3.6 don't keep these states; devices simply carry on.
+Tests run six devices against one host: a save fanning out, an offline device catching up, a
+device joining late, a device without the game, a conflict left for the person, and per-person
+folders on a shared device.
 
 ## Save history
 

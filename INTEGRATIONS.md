@@ -2,7 +2,7 @@
 
 Fuse works fully offline with the games and art already on your device. Every online service below is
 optional, is used only after you set it up (GitHub update checks are the one exception and can be
-turned off), and only reads data for display. This page lists, for each integration, what it is for,
+turned off), and, apart from downloads and uploads you start, only reads data for display. This page lists, for each integration, what it is for,
 what you provide, what the code does, and exactly what leaves the device and when.
 
 All provider clients live in `core/integrations/src/commonMain/kotlin/io/github/matiyaaa/fuse/integrations/`.
@@ -22,6 +22,7 @@ and redact credentials from every error message (`redact()`, see
 - [Libretro thumbnails](#libretro-thumbnails)
 - [System art (Art Book Next)](#system-art-art-book-next)
 - [How scraping picks a match](#how-scraping-picks-a-match)
+- [Fuse RomM](#fuse-romm)
 - [RomM via Cartridge](#romm-via-cartridge)
 - [Cartridge bridge protocol](#cartridge-bridge-protocol)
 - [GitHub Releases](#github-releases)
@@ -29,6 +30,7 @@ and redact credentials from every error message (`redact()`, see
 - [Steam and Windows launchers](#steam-and-windows-launchers)
 - [RPCS3 compatibility list](#rpcs3-compatibility-list)
 - [Jellyfin](#jellyfin)
+- [Streaming (GameStream and Moonlight)](#streaming-gamestream-and-moonlight)
 - [Emulators' own files](#emulators-own-files)
 
 ## Summary: what leaves the device
@@ -45,15 +47,18 @@ and redact credentials from every error message (`redact()`, see
 | GitHub Releases | Nothing | A request for the latest release of Fuse or Cartridge, your IP address and the User-Agent with Fuse's version | Update checks (automatic check can be turned off) and "Install Cartridge"; downloads only after you confirm |
 | Store (Android): Obtainium Emulation Pack, app sources | Optionally a GitHub token | Requests for the pack's newest release on github.com, each app's releases (GitHub's API, or the download page the pack names), and the APK you install; your IP address and the User-Agent (or the one the pack sets for a download page) | The catalogue when the Store opens and is older than 6 hours, or on "Check now"; an app's releases when its page or card is shown, for installed apps a little after start (at most twice a day, can be turned off); downloads only when you press Install or Update |
 | RPCS3 compatibility list (rpcs3.net) | Nothing | A PS3 game's title id (for example `BLUS30443`), your IP address and the User-Agent | Only when you choose How It Runs in RPCS3 in a PS3 game's options; the answer is kept a week |
+| Fuse RomM (off until you turn it on) | Your RomM server's addresses, then an approval in RomM, a pairing code or token made in RomM, or (for a server without client tokens) a user name and password | To your own server only: the token (or the sign-in) on each request, this device's name and a random device id when pairing, requests for the server's API description, systems, collections, games and firmware, the files you download, and the files of games you upload | While Fuse RomM is on: a quick check of each address when it connects, the library brought up to date every 30 minutes (you choose 5 minutes to a day) and when you ask; downloads and uploads only when you start them |
 | Cartridge | Nothing | Nothing leaves the device through Fuse: Fuse reads Cartridge's local status and opens it with deep links. "Upload to RomM" hands Cartridge a game's file paths; Cartridge uploads the files to your own RomM server only after you confirm there. On Android Cartridge can read your play sessions (below) and adds their time to its own play sessions on your RomM server | On resume and when Cartridge reports a change; uploads only when you start one and confirm it in Cartridge; play sessions when Cartridge starts or comes back to the front |
-| Jellyfin (off until you turn it on) | Your server's addresses, your Jellyfin user name and password | To your own server only: the password once at sign-in (never stored), then the access token, this device's name and a random device id, what you browse and search, a device profile of what this device can play, and where you are in what you play (start, progress every ten seconds, stop), plus favourites and watched marks you change. A UDP broadcast on the local network asks which Jellyfin servers are there when you look for one | While Jellyfin is on: a check that the server answers every 30 seconds, pages as you open them, and Home's Jellyfin widgets every 5 minutes while one is on Home |
+| Jellyfin (off until you turn it on) | Your server's addresses, your Jellyfin user name and password | To your own server only: the password once at sign-in (never stored), then the access token, this device's name and a random device id, what you browse and search, a device profile of what this device can play, and where you are in what you play (start, progress every ten seconds, stop), plus favourites and watched marks you change. For a download, the request for the original file, its subtitle files and pictures. A UDP broadcast on the local network asks which Jellyfin servers are there when you look for one | While Jellyfin is on: a check that the server answers every 30 seconds, pages as you open them, Home's Jellyfin widgets every 5 minutes while one is on Home, and downloads only when you start one; where you stopped in a downloaded copy is sent once the server can be reached |
+| Streaming (off until you add a computer) | The address of your computer running Sunshine, Apollo or GeForce Experience, optionally its network card address | To that computer only: a `serverinfo` request on its open GameStream port (47989). To wake it, a Wake-on-LAN packet with its network card address, broadcast on the local network and sent to its address. Moonlight, not Fuse, pairs and streams | When the Streaming tab is open and when you choose an app; the wake packet only when the computer doesn't answer and waking is on |
 
 The "When" column describes the store that drives these clients (`DefaultFuseStore`). The "Sent by Fuse" column is what the clients in `core:integrations` can send.
 
 Never sent anywhere by Fuse: ROM files, your folder paths, your play time, your collections, device
 identifiers, analytics or crash reports, backups, diagnostics reports, or licence keys (a Vita
 package's zRIF goes only to Vita3K on your device). Fuse contains no telemetry. The one way a game's files
-leave the device is an upload you start and confirm, which Cartridge sends to your own RomM server. Your play time
+leave the device is an upload you start, which Fuse RomM (or Cartridge, after you confirm there) sends
+to your own RomM server. Your play time
 leaves Fuse only to Cartridge on the same device, which may send it on to your own RomM server.
 
 **Filling art by itself.** With "Find art by itself" on (Settings, Art and details; on by
@@ -249,9 +254,47 @@ explains the score; a result is accepted without asking only when it clears the 
 anything: the data layer decides what to store, and `FillPlanner` guarantees that **art you set
 yourself is never replaced** except by the explicit "reset custom art" action.
 
+## Fuse RomM
+
+Fuse's native RomM integration (`core:romm`, with the screens in `ui/shell/.../romm`). It is off
+until you turn it on in setup ("Do you use RomM?") or Settings, Addons, Fuse RomM, and talks only
+to the RomM server you name. Fuse RomM and [Cartridge](#romm-via-cartridge) are both supported;
+turning one on turns the other off in Fuse and keeps both set up.
+
+- **What the server can do:** `GET /api/heartbeat` (no sign-in) for its version, then RomM's own
+  OpenAPI document. Device pairing, pairing codes, chunked uploads, scans and the rom identifier
+  list are each used only when the server lists them, so an older RomM simply offers less.
+- **Pairing:** with device pairing (`/api/auth/device/init` and `/token`) RomM shows a code to
+  approve; Fuse polls at the interval RomM gives and backs off when told to slow down. A pairing
+  code from RomM is exchanged at `/api/client-tokens/exchange`. Either gives a client token scoped
+  to reading, or to reading, uploading and scanning; Fuse asks for the narrowest that does what you
+  chose, and you can revoke it in RomM. A server without client tokens takes a user name and
+  password, sent as HTTP Basic on each request.
+- **Credentials:** the token (or the sign-in) is kept only in Fuse's secret store (`romm.credential`),
+  never in the database, settings, logs, screenshots, diagnostics, crash output or exported
+  settings, and is removed when you sign out. Errors are redacted like every other client's.
+- **Routes:** a local address, an outside one, or Automatic. Automatic checks home first with a
+  1.5 second limit and never waits on an address that doesn't answer; a server that went away is
+  checked again every minute.
+- **The offline copy:** `/api/platforms`, `/api/collections`, `/api/collections/smart` and
+  `/api/roms` a page at a time (only games changed since the last time, after the first), kept in
+  Fuse's database. Games removed on the server are found through `/api/roms/identifiers` where it
+  exists. The Fuse RomM tab, its grids and Search read the copy, so they work offline.
+- **Matching:** a RomM game is joined to a library game by the link Fuse keeps, an MD5, a console's
+  title id, the exact file name, or the same name with the same region, revision, version and disc
+  when it is the only one on each side. A name that only looks alike is never enough, and a library
+  game is matched at most once.
+- **Downloads** (`/api/roms/{id}/content/{file}`) go through Downloads into the system folder Fuse
+  already uses for that system, resumed with HTTP ranges and checked before being put in place.
+- **Uploads** use `/api/roms/upload/start`, a `PUT` per piece and `/complete`, resumed where they
+  stopped, and optionally a scan of that system (`/api/tasks/scan`) afterwards.
+- **BIOS** (`/api/firmware`): planned against what Fuse's system health expects. A file already in
+  place is never replaced, whatever the server has under the same name; firmware an emulator
+  installs itself is downloaded to a `Firmware/<emulator>` folder with how to install it.
+
 ## RomM via Cartridge
 
-Fuse has no RomM client and never talks to a RomM server. [Cartridge](https://github.com/abdu2304/cartridge)
+With Cartridge instead of Fuse RomM, Fuse never talks to a RomM server itself. [Cartridge](https://github.com/abdu2304/cartridge)
 (a RomM companion app by abdu2304, MIT licensed; Fuse installs it from the
 [MAtiyaaa/cartridge](https://github.com/MAtiyaaa/cartridge) fork until Fuse's bridge is merged
 upstream) signs in to RomM, downloads games into local folders and owns the RomM credentials. Fuse then:
@@ -674,6 +717,29 @@ over its REST API with its own client (`core:jellyfin`), never to any other serv
   follow you.
 - **Kept on the device:** answers for pages, per user, so they open offline; pictures, cached by
   the picture itself. Signing out clears the kept answers.
+- **Downloads:** only when the server allows your user to download (`Policy.EnableContentDownloading`).
+  Fuse fetches the original file (`Items/{id}/Download`), the external subtitle files the server
+  keeps beside it and the pictures, through Downloads, into Films and Shows folders under the
+  offline folder you choose. Playing a downloaded copy needs nothing from the server; where you
+  stopped is kept and sent with `Sessions/Playing/Stopped` once the server can be reached.
+
+## Streaming (GameStream and Moonlight)
+
+Fuse starts streams from a computer at home; [Moonlight](https://moonlight-stream.org) does the
+streaming, and [Sunshine](https://github.com/LizardByte/Sunshine), Apollo or GeForce Experience
+serves it. Fuse only reads the host's open GameStream port:
+
+- `GET http://<host>:47989/serverinfo` (no pairing) for its name, its id (how Moonlight knows it),
+  its network card address when it shares it, and whether it is busy.
+- **Wake-on-LAN:** when the computer doesn't answer and waking is on, the magic packet goes to the
+  local broadcast address and the computer's address on the ports Moonlight uses (9, 7, 47998,
+  47999, 48000, 48002, 48010), again every few seconds while Fuse waits (75 seconds by default).
+- **Starting:** on Android, Moonlight's own shortcut entry (`com.limelight.ShortcutTrampoline`)
+  with the computer's id, name and app; on a computer, `moonlight stream <host> <app>` (the
+  Flatpak too). Pairing happens in Moonlight, once, as usual.
+
+Fuse never pairs with the host, never writes to it, and never reads or changes Sunshine's
+configuration files.
 
 ## RPCS3 compatibility list
 

@@ -60,6 +60,8 @@ jobs:
           :core:sync:desktopTest
           :core:jellyfin:desktopTest
           :core:playback:desktopTest
+          :core:transfer:desktopTest
+          :core:romm:desktopTest
           :ui:fuseline:desktopTest
           :ui:player:desktopTest
           :ui:shell:desktopTest
