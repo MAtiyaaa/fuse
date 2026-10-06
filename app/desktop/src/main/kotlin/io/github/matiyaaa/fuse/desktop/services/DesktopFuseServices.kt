@@ -54,6 +54,7 @@ class DesktopFuseServices private constructor(
     private val engine = CIO.create()
     override val http: HttpClient = FuseHttp.client(engine, FuseHttpConfig(appVersion = appVersion))
     override val cacheDir: String = dirs.cache
+    override val dataDir: String = dirs.data
     override val deviceName: String = runCatching { java.net.InetAddress.getLocalHost().hostName }.getOrNull()?.takeIf { it.isNotBlank() } ?: "Fuse"
     override val jellyfinDiscovery = io.github.matiyaaa.fuse.jellyfin.UdpDiscovery()
 

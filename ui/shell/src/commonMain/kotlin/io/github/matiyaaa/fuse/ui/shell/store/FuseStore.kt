@@ -100,6 +100,12 @@ interface FuseStore {
     /** Fuse Sync by Fuse: off and invisible until turned on in Settings, Addons, Fuse Sync. */
     val sync: SyncOps get() = SyncOps.None
 
+    /** Downloads: every transfer Fuse makes for the person, in one place. */
+    val transfers: TransfersOps get() = TransfersOps.None
+
+    /** Fuse RomM, the Fuse RomM native integration. */
+    val romm: RommOps get() = RommOps.None
+
     /** Syncthing, for people who run it: off until chosen in setup or Settings, Addons, Syncthing. */
     val syncthing: io.github.matiyaaa.fuse.sync.syncthing.SyncthingService? get() = null
 

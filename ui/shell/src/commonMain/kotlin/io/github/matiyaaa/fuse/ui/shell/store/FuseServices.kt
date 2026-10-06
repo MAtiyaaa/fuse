@@ -44,6 +44,21 @@ interface FuseServices {
      */
     val cacheDir: String
 
+    /**
+     * Fuse's own data directory, which the system never clears (unlike [cacheDir]): the transfer
+     * queue and its partial work are kept here so they survive a restart. Defaults to the cache.
+     */
+    val dataDir: String get() = cacheDir
+
+    /** Whether this device's connection is unmetered (Wi-Fi or wired), for transfers kept to Wi-Fi. */
+    fun unmetered(): Boolean = true
+
+    /**
+     * Keeps Fuse running while transfers the person started are moving (Android: a foreground
+     * service with a quiet notification); [active] false lets it go. Nothing to do on a computer.
+     */
+    fun keepAliveForTransfers(active: Boolean, label: String) = Unit
+
     /** This device's name, as servers list it (Jellyfin's dashboard). */
     val deviceName: String get() = "Fuse"
 

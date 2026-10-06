@@ -106,6 +106,10 @@ internal class DefaultLibraryOps(
 ) : LibraryOps {
     private val data = ctx.data
     private var active: ActiveSession? = null
+        set(value) {
+            field = value
+            ctx.playing.value = value?.gameId
+        }
 
     /** Fuse Sync, set by the store when it runs here. */
     @kotlin.concurrent.Volatile var sync: SyncLaunch? = null
@@ -349,6 +353,14 @@ internal class DefaultLibraryOps(
         val week: Long,
         val ra: io.github.matiyaaa.fuse.model.AchievementState?,
     )
+
+    /** Which emulator would play [game] here, as its page says it (a RomM game not downloaded yet included). */
+    internal suspend fun choiceFor(game: Game): EmulatorChoice {
+        val platform = ctx.platform(game.platformId) ?: return EmulatorChoice(null, emptyList(), "Automatic", null, false)
+        val installed = ctx.installed.value
+        val chosen = data.scopedSettings.resolve(ScopedSettings.Emulator, game.platformId, null).value.takeIf { it.isNotBlank() }?.let(::EmulatorId)
+        return choiceOf(game, platform, ctx.resolver.resolve(game, chosen, installed, ctx.host), installed)
+    }
 
     private fun choiceOf(game: Game, platform: Platform, resolved: ResolvedLaunch, installed: List<InstalledEmulator>): EmulatorChoice {
         val name = resolved.installed?.name ?: resolved.adapter?.name

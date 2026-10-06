@@ -383,3 +383,7 @@ WHERE removed_at IS NULL AND missing = 0 AND (disc_count > 1
     OR lower(launch_path) LIKE '%.cue' OR lower(launch_path) LIKE '%.m3u' OR lower(launch_path) LIKE '%.gdi')
 ORDER BY id
 LIMIT :limit;
+
+-- Every game with what tells it apart, for joining it to its RomM entry (Fuse RomM).
+matchRows:
+SELECT id, platform_id, title_original, path, tags_json, romm_rom_id, missing FROM game WHERE removed_at IS NULL;

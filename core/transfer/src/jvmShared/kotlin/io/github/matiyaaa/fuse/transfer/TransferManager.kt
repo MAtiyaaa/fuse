@@ -21,45 +21,6 @@ import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * Does one kind of transfer for the [TransferManager]: a RomM game, a Jellyfin film, an upload.
- * [run] moves the bytes through [io] and returns once the result is checked and in place; it throws
- * [TransferInterrupted] (or an [IOException]) when the network or server went away (Fuse waits and
- * tries again, carrying on from where it was), [DriveMissing] when a drive went, and
- * [TransferFailure] when it can't be done.
- */
-interface TransferHandler {
-    val source: String
-
-    suspend fun run(item: TransferItem, io: TransferIo)
-
-    /** The person cancelled [item]: whatever it left half done (a partial file, an upload session) goes. */
-    suspend fun discard(item: TransferItem, io: TransferIo) {}
-
-    /** Called once [item] finished well, outside the transfer's own work (rescans, notices). */
-    suspend fun done(item: TransferItem) {}
-}
-
-/** What a running transfer may ask of the manager. */
-interface TransferIo {
-    /** A folder kept for this transfer until it finishes (its partial files, if it can't keep them beside the destination). */
-    val workDir: File
-
-    /** Where [place] is now; throws [DriveMissing] when its drive isn't connected. */
-    suspend fun resolve(place: TransferPlace): String
-
-    /** Bytes moved so far, and the total when known. Cheap: call it as often as bytes move. */
-    fun progress(done: Long, total: Long? = null)
-
-    fun phase(phase: TransferPhase)
-
-    /** Keeps the handler's own note with the transfer (survives a restart). */
-    suspend fun note(payload: String)
-
-    /** Waits until [bytes] more may move, under the bandwidth limit and the while-playing rule. */
-    suspend fun throttle(bytes: Int)
-}
-
-/**
  * Every transfer Fuse makes for the person, in one queue: up to five downloads and five uploads at
  * once (the person chooses), in the order they set, kept in [dir] across restarts. A transfer whose
  * drive is gone waits for it; one whose server went away waits and carries on; a pause keeps what
@@ -71,7 +32,7 @@ class TransferManager(
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
     private val clock: () -> Long = System::currentTimeMillis,
     private val volumes: suspend () -> List<StorageVolume> = { emptyList() },
-) {
+) : Transfers {
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
     private val file = File(dir, "transfers.json")
     private val mutex = Mutex()
@@ -81,23 +42,23 @@ class TransferManager(
     private val meters = ConcurrentHashMap<String, SpeedMeter>()
 
     private val _items = MutableStateFlow(load())
-    val items: StateFlow<List<TransferItem>> = _items.asStateFlow()
+    override val items: StateFlow<List<TransferItem>> = _items.asStateFlow()
 
     private val _settings = MutableStateFlow(TransferSettings())
-    val settings: StateFlow<TransferSettings> = _settings.asStateFlow()
+    override val settings: StateFlow<TransferSettings> = _settings.asStateFlow()
 
     private val _conditions = MutableStateFlow(TransferConditions())
 
     private val _summary = MutableStateFlow(TransferSummary())
     /** Counts and progress for the Downloads button, updated about twice a second while anything moves. */
-    val summary: StateFlow<TransferSummary> = _summary.asStateFlow()
+    override val summary: StateFlow<TransferSummary> = _summary.asStateFlow()
 
     private val buckets = TransferDirection.entries.associateWith { TokenBucket(clock) }
     private var ticker: Job? = null
     private var started = false
 
     /** Starts the queue: unfinished transfers from last time carry on (or wait for a resume, when the person said so). */
-    fun start() {
+    override fun start() {
         if (started) return
         started = true
         scope.launch {
@@ -120,12 +81,12 @@ class TransferManager(
         }
     }
 
-    fun register(handler: TransferHandler) {
+    override fun register(handler: TransferHandler) {
         handlers[handler.source] = handler
         kick()
     }
 
-    fun configure(settings: TransferSettings) {
+    override fun configure(settings: TransferSettings) {
         val s = settings.copy(maxDownloads = settings.maxDownloads.coerceIn(1, TransferSettings.MAX_PARALLEL), maxUploads = settings.maxUploads.coerceIn(1, TransferSettings.MAX_PARALLEL))
         if (s == _settings.value) return
         _settings.value = s
@@ -133,14 +94,14 @@ class TransferManager(
     }
 
     /** What is going on around the transfers: a game being played, the kind of connection. */
-    fun conditions(c: TransferConditions) {
+    override fun conditions(c: TransferConditions) {
         if (c == _conditions.value) return
         _conditions.value = c
         applyConditions()
     }
 
     /** A drive was connected or removed: transfers waiting for a drive look again at once. */
-    fun drivesChanged() {
+    override fun drivesChanged() {
         scope.launch {
             update { list -> list.map { if (it.status == TransferStatus.WAITING && it.waiting == WaitReason.DRIVE) it.copy(retryAt = null) else it } }
             kick()
@@ -148,13 +109,13 @@ class TransferManager(
     }
 
     /** The moving numbers of [id]: bytes, speed and time left. */
-    fun live(id: String): StateFlow<TransferLive> = liveOf(id)
+    override fun live(id: String): StateFlow<TransferLive> = liveOf(id)
 
     /**
      * Queues a transfer and returns its id. The same [TransferItem.key] already queued, running,
      * waiting or paused is that transfer: its id comes back and nothing is queued twice.
      */
-    suspend fun enqueue(item: TransferItem): String {
+    override suspend fun enqueue(item: TransferItem): String {
         val id = mutex.withLock {
             val existing = _items.value.firstOrNull { it.key == item.key && !it.status.finished }
             if (existing != null) return@withLock existing.id
@@ -176,13 +137,13 @@ class TransferManager(
         return id
     }
 
-    fun pause(id: String) = scope.launch {
+    override fun pause(id: String) = scope.launch {
         jobs.remove(id)?.cancel(Paused())
         update { list -> list.map { if (it.id == id && !it.status.finished) it.copy(status = TransferStatus.PAUSED, phase = null, waiting = null) else it } }
         kick()
     }
 
-    fun resume(id: String) = scope.launch {
+    override fun resume(id: String) = scope.launch {
         update { list ->
             list.map {
                 if (it.id == id && (it.status == TransferStatus.PAUSED || it.status == TransferStatus.WAITING || it.status == TransferStatus.FAILED)) {
@@ -196,21 +157,21 @@ class TransferManager(
     }
 
     /** Tries a failed transfer again, from where it stopped when its source allows. */
-    fun retry(id: String) = resume(id)
+    override fun retry(id: String) = resume(id)
 
-    fun pauseAll() = scope.launch {
+    override fun pauseAll() = scope.launch {
         val active = _items.value.filter { !it.status.finished && it.status != TransferStatus.PAUSED }.map { it.id }.toSet()
         active.forEach { jobs.remove(it)?.cancel(Paused()) }
         update { list -> list.map { if (it.id in active) it.copy(status = TransferStatus.PAUSED, phase = null, waiting = null) else it } }
     }
 
-    fun resumeAll() = scope.launch {
+    override fun resumeAll() = scope.launch {
         update { list -> list.map { if (it.status == TransferStatus.PAUSED) it.copy(status = TransferStatus.QUEUED) else it } }
         kick()
     }
 
     /** Stops [id] for good: what it left half done is removed. */
-    fun cancel(id: String) = scope.launch {
+    override fun cancel(id: String) = scope.launch {
         jobs.remove(id)?.let { it.cancel(Cancelled()); it.join() }
         val item = _items.value.firstOrNull { it.id == id } ?: return@launch
         if (item.status.finished && item.status != TransferStatus.FAILED) return@launch
@@ -221,9 +182,9 @@ class TransferManager(
         kick()
     }
 
-    fun moveUp(id: String) = reorder(id, -1)
-    fun moveDown(id: String) = reorder(id, 1)
-    fun moveToTop(id: String) = reorder(id, 0, toTop = true)
+    override fun moveUp(id: String) = reorder(id, -1)
+    override fun moveDown(id: String) = reorder(id, 1)
+    override fun moveToTop(id: String) = reorder(id, 0, toTop = true)
 
     private fun reorder(id: String, by: Int, toTop: Boolean = false) = scope.launch {
         update { list ->
@@ -234,12 +195,12 @@ class TransferManager(
     }
 
     /** Clears finished transfers (done and cancelled; failed ones stay until retried or cancelled). */
-    fun clearFinished() = scope.launch {
+    override fun clearFinished() = scope.launch {
         update { list -> list.filterNot { it.status == TransferStatus.DONE || it.status == TransferStatus.CANCELLED } }
     }
 
     /** Removes [id] from the list once it is finished. */
-    fun remove(id: String) = scope.launch {
+    override fun remove(id: String) = scope.launch {
         update { list -> list.filterNot { it.id == id && it.status.finished } }
     }
 
@@ -355,7 +316,7 @@ class TransferManager(
     }
 
     private fun ioFor(item: TransferItem): TransferIo = object : TransferIo {
-        override val workDir: File get() = workDirOf(item.id).also { it.mkdirs() }
+        override val workDir: String get() = workDirOf(item.id).also { it.mkdirs() }.path
 
         override suspend fun resolve(place: TransferPlace): String {
             val all = volumes()
@@ -481,3 +442,6 @@ class TokenBucket(private val clock: () -> Long) {
         if (wait > 0) delay(wait)
     }
 }
+
+actual fun newTransfers(dir: String, scope: CoroutineScope, clock: () -> Long, volumes: suspend () -> List<StorageVolume>): Transfers =
+    TransferManager(File(dir), scope, clock, volumes)

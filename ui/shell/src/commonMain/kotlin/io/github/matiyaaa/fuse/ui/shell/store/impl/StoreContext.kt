@@ -65,6 +65,9 @@ internal class StoreContext(
     val systemOrder = MutableStateFlow(initialSettings.library.systemOrder)
     val installed = MutableStateFlow<List<InstalledEmulator>>(emptyList())
 
+    /** The game being played on this device right now, if any (transfers ease off or pause meanwhile). */
+    val playing = MutableStateFlow<GameId?>(null)
+
     /** The last launch problems, newest last, for the diagnostics report. Kept in memory only. */
     val recentProblems = MutableStateFlow<List<Pair<Long, io.github.matiyaaa.fuse.ui.shell.store.Problem>>>(emptyList())
 

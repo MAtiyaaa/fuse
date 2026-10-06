@@ -50,6 +50,8 @@ data class AppSettings(
     val jellyfin: JellyfinSettings = JellyfinSettings(),
     val sync: SyncSettings = SyncSettings(),
     val syncthing: SyncthingSettings = SyncthingSettings(),
+    val romm: FuseRommSettings = FuseRommSettings(),
+    val downloads: DownloadSettings = DownloadSettings(),
 ) {
     companion object {
         const val CURRENT_VERSION = 3
@@ -225,6 +227,8 @@ data class OnboardingState(
     val completed: Boolean = false,
     /** Index of the step to resume at when onboarding was interrupted. */
     val step: Int = 0,
+    /** What the person answered to "Do you use RomM?": "FUSE", "CARTRIDGE", "NONE", or "" when not asked. */
+    val romm: String = "",
 )
 
 /** One root destination and whether it is shown. */
@@ -442,6 +446,70 @@ data class StatusAreaSettings(
     val showWifi: Boolean = true,
     val showBluetooth: Boolean = true,
     val showNetwork: Boolean = true,
+)
+
+/**
+ * Fuse RomM, the Fuse RomM native integration (Settings, Addons, Fuse RomM): off until set up. How
+ * Fuse reaches the RomM server, where its games land and how transfers to it behave. The sign-in
+ * itself is in the secret store, never here. Turning it off keeps all of this, so turning it on again
+ * reconnects without setting it up again.
+ */
+@Serializable
+data class FuseRommSettings(
+    val enabled: Boolean = false,
+    /** True once the server was reached and signed in to at least once. */
+    val configured: Boolean = false,
+    /** "AUTO" (recommended), "LOCAL" or "REMOTE". */
+    val mode: String = "AUTO",
+    val localAddress: String = "",
+    val remoteAddress: String = "",
+    /** The mirror's key for this server in Fuse's database. */
+    val server: String = "main",
+    /** Who Fuse is signed in as, to show (never a password or token). */
+    val account: String = "",
+    /** The RomM version last seen, to show. */
+    val serverVersion: String = "",
+    /** The library folder new systems' folders are made in; empty asks the first time. */
+    val libraryRoot: String = "",
+    /** The folder for a system's games, by Fuse's platform id, when the person chose one. */
+    val systemFolders: Map<String, String> = emptyMap(),
+    /** Look at a downloaded game's folder at once, so it is playable without a full scan. */
+    val scanAfterDownload: Boolean = true,
+    /** What new games on the server do: "BADGE" (marked new in Fuse RomM), "NOTIFY" (and a message), "QUIET". */
+    val newGames: String = "BADGE",
+    /** Keep the library mirrored for browsing while the server is away. */
+    val offlineMirror: Boolean = true,
+    /** How often the mirror catches up while Fuse is open, in minutes. */
+    val refreshMinutes: Int = 30,
+    /** Show what will be sent before an upload starts. */
+    val confirmUploads: Boolean = true,
+    /** Ask RomM to scan after an upload, when the sign-in may. */
+    val scanAfterUpload: Boolean = true,
+    /** Where BIOS files from RomM go when an emulator has no folder of its own; empty is Fuse's BIOS folder. */
+    val biosFolder: String = "",
+    /** Put downloaded BIOS where each emulator reads it. */
+    val placeBios: Boolean = true,
+)
+
+/**
+ * Downloads (Settings, Downloads): how Fuse's transfers behave, for every source together. Up to five
+ * downloads and five uploads at once, each counted apart. [chosen] stays false until the person
+ * changes the counts, so a sensible number for the device is used meanwhile.
+ */
+@Serializable
+data class DownloadSettings(
+    val maxDownloads: Int = 3,
+    val maxUploads: Int = 2,
+    val chosen: Boolean = false,
+    /** Kilobytes a second for all transfers together; 0 for no limit. */
+    val bandwidthKbps: Int = 0,
+    /** "FULL", "REDUCED" or "PAUSE" while a game is being played. */
+    val downloadsWhilePlaying: String = "REDUCED",
+    val uploadsWhilePlaying: String = "REDUCED",
+    val wifiOnly: Boolean = false,
+    val resumeOnStart: Boolean = true,
+    /** Days finished transfers stay listed. */
+    val keepFinishedDays: Int = 7,
 )
 
 @Serializable

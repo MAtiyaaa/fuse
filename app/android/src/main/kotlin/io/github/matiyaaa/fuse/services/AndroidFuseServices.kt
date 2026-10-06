@@ -49,6 +49,7 @@ class AndroidFuseServices(
     override val fs: FuseFileSystem = AndroidFileSystem(storageVolumes::mounted, appContext.packageName, storageVolumes::hasFullAccess)
     override val secrets: SecretStore = KeystoreSecretStore(appContext)
     override val cacheDir: String = appContext.cacheDir.absolutePath
+    override val dataDir: String = appContext.filesDir.absolutePath
     override val deviceName: String =
         android.provider.Settings.Global.getString(appContext.contentResolver, android.provider.Settings.Global.DEVICE_NAME)?.takeIf { it.isNotBlank() } ?: android.os.Build.MODEL
 

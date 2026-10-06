@@ -50,6 +50,9 @@ fun fuseImageLoader(
         // Jellyfin's pictures: fetched on the route in use, cached by the picture (JellyfinImages).
         add(JellyfinImages.Key())
         add(JellyfinImages.Fetch(http))
+        // Fuse RomM's pictures: fetched with Fuse's sign-in, kept for offline (RommImages).
+        add(RommImages.Key())
+        add(RommImages.Fetch())
         // System logos from the system art pack are SVG.
         add(SvgDecoder.Factory(density = { svgDensity }))
         components()

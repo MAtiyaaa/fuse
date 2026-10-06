@@ -120,9 +120,12 @@ class RommTest {
         assertEquals("https://romm.example.com", c.routes.bases().first().second)
         // Home comes back: noticed on the side, and calls go home again.
         fake.down -= "home.lan"
-        c.routes.bases()
+        // Calls keep coming, as they do: one of them looks at home again on the side.
         val until = System.currentTimeMillis() + 3000
-        while (c.route != NetRoute.LOCAL && System.currentTimeMillis() < until) delay(20)
+        while (c.route != NetRoute.LOCAL && System.currentTimeMillis() < until) {
+            c.routes.bases()
+            delay(20)
+        }
         assertEquals(NetRoute.LOCAL, c.route)
     }
 
