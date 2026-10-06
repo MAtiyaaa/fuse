@@ -141,6 +141,10 @@ class DesktopSession(
                 if (safe != null) Log.info("starting in safe mode (${safe.reason})")
                 val services = withContext(Dispatchers.IO) { DesktopFuseServices.create(dirs, scope) }
                 services.launcherHooks.onGameExited = { EventQueue.invokeLater { bringToFront() } }
+                // Game Mode shows one window of the app at a time: Fuse steps aside for the game it started.
+                services.launcherHooks.onGameStarted = {
+                    if (io.github.matiyaaa.fuse.desktop.system.GameMode.active) EventQueue.invokeLater { stepAside() }
+                }
                 val store = createFuseStore(services, scope, safeMode = safe != null)
                 // Phone Link waits for a normal start: safe mode runs nothing that listens on the network.
                 startState = StartState.Ready(store, services, if (safe == null) startPhoneLink(store, services) else null, safe)
@@ -199,6 +203,11 @@ class DesktopSession(
             router.releaseAll()
             store?.library?.onPause()
         }
+    }
+
+    private fun stepAside() {
+        val w = window ?: return
+        w.extendedState = w.extendedState or java.awt.Frame.ICONIFIED
     }
 
     private fun bringToFront() {

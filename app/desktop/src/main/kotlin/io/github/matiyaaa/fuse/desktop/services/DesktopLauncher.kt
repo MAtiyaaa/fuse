@@ -27,6 +27,10 @@ import java.util.concurrent.TimeUnit
 class LauncherHooks {
     @Volatile
     var onGameExited: (() -> Unit)? = null
+
+    /** A game Fuse waits on has started (in Game Mode Fuse steps aside so it shows). */
+    @Volatile
+    var onGameStarted: (() -> Unit)? = null
 }
 
 internal class DesktopLauncher(
@@ -63,9 +67,13 @@ internal class DesktopLauncher(
         else -> Processes.which(appId)?.let { start(listOf(it), null, emptyMap(), appId) } ?: RunResult.NotInstalled
     }
 
-    /** Opens a `.desktop` file with `gio launch`, or runs its Exec line when gio is missing. */
+    /**
+     * Opens a `.desktop` file with `gio launch`, or runs its Exec line when gio is missing. In Game
+     * Mode its Exec line always runs as Fuse's own child: gamescope only shows windows that belong to
+     * the app on screen, and one gio started for the session would stay hidden.
+     */
     suspend fun launchDesktopFile(path: String): RunResult {
-        val gio = Processes.which("gio")
+        val gio = Processes.which("gio")?.takeUnless { io.github.matiyaaa.fuse.desktop.system.GameMode.active }
         if (gio != null) return start(listOf(gio, "launch", path), null, emptyMap(), baseName(path))
         val text = SystemLinuxEnvironment.readSmallText(path) ?: return RunResult.NotInstalled
         val entry = ShortcutParser.parseDesktop(text) ?: return RunResult.Failed("${baseName(path)} is not a valid .desktop file.")
@@ -107,8 +115,9 @@ internal class DesktopLauncher(
             }
             // Hand-off commands return at once while the game runs elsewhere (Steam, gio, xdg-open);
             // the play session then ends when Fuse comes back to the front, like on Android.
-            if (isHandoff(argv)) RunResult.Started(awaitExit = null)
-            else RunResult.Started(awaitExit = {
+            if (isHandoff(argv)) return@withContext RunResult.Started(awaitExit = null)
+            hooks.onGameStarted?.invoke()
+            RunResult.Started(awaitExit = {
                 process.onExit().await()
                 hooks.onGameExited?.invoke()
             })

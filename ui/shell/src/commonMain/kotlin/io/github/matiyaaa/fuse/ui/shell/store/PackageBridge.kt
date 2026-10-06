@@ -120,4 +120,23 @@ interface DesktopInstaller {
 
     /** Opens the program at [path]; false when it can't. */
     fun launch(path: String): Boolean
+
+    /**
+     * Removes a program found on this computer that Fuse didn't put in place: [appId] is how it was
+     * found (a Flatpak id, or its program's path), [name] what to call it. Some can only be removed
+     * by an administrator (a Flatpak installed for every account): then [password] (the account's,
+     * for sudo) is asked for and passed; it is never kept or written anywhere.
+     */
+    suspend fun removeOther(appId: String, name: String, password: String? = null): RemoveOutcome =
+        RemoveOutcome.Failed("Remove $name the way it was installed.")
+}
+
+/** How removing a program Fuse didn't install went. */
+sealed interface RemoveOutcome {
+    data object Removed : RemoveOutcome
+
+    /** Only an administrator can remove it: ask for the account's password. [wrong] after one that didn't work. */
+    data class NeedsPassword(val wrong: Boolean = false) : RemoveOutcome
+
+    data class Failed(val message: String) : RemoveOutcome
 }

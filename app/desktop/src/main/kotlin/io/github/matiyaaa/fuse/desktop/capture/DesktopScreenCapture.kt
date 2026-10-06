@@ -85,7 +85,7 @@ class DesktopScreenCapture(private val window: () -> Window?) : ScreenCapture {
                 "-f", "rawvideo", "-pix_fmt", "bgr0", "-s", "${outW}x$outH", "-r", "$FPS", "-i", "-",
                 "-c:v", "libx264", "-preset", "veryfast", "-crf", "21", "-pix_fmt", "yuv420p", "-movflags", "+faststart",
                 file.path,
-            ).redirectErrorStream(true).redirectOutput(ProcessBuilder.Redirect.DISCARD).start()
+            ).also { io.github.matiyaaa.fuse.desktop.system.Processes.hostEnvironment(it.environment()) }.redirectErrorStream(true).redirectOutput(ProcessBuilder.Redirect.DISCARD).start()
         }.getOrNull() ?: return
         recording = Recording(process, file, outW, outH).also { it.start() }
     }

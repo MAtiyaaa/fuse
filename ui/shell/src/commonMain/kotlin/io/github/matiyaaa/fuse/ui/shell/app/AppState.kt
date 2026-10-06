@@ -53,6 +53,10 @@ data class TextInputSpec(
     /** A capital to start with and after full stops; off for keys, addresses and user names. */
     val capitalize: Boolean = true,
     val doneLabel: String = "Done",
+    /** A line under the title saying what the text is for. */
+    val message: String? = null,
+    /** Closed without Done (Back, a tap outside). */
+    val onCancel: () -> Unit = {},
     val onDone: (String) -> Unit,
 )
 
@@ -268,7 +272,7 @@ class AppState(
         quickMenuOpen = false
         contextMenu = null
         confirm = null
-        textInput = null
+        textInput?.let { t -> textInput = null; t.onCancel() }
         phoneTyping = false
         choice = null
         screenPrompt = null

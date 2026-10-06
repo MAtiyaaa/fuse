@@ -118,7 +118,7 @@ private fun StorePage(app: AppState, state: StoreState, item: StoreApp) {
             add(PageButton("Uninstall", FuseIcons.Trash, ButtonKind.SECONDARY) {
                 app.confirm = ConfirmSpec(
                     title = "Uninstall ${item.name}?",
-                    message = if (state.desktop) "Fuse removes the program it put in ${state.folder ?: "place"}. Its own settings and saves, and your games, stay where they are."
+                    message = if (state.desktop) "Fuse removes it however it was installed: the program it put in ${state.folder ?: "place"}, a Flatpak or an AppImage. One installed for every account asks for this computer's password. Its own settings and saves, and your games, stay where they are."
                     else "Android asks you to confirm, and removes the app with its own data. Games and files in your folders stay where they are.",
                     confirmLabel = "Uninstall",
                     onConfirm = { ops.uninstall(key) },

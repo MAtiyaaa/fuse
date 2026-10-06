@@ -134,6 +134,38 @@ private fun desktopStoreRows(app: AppState, s: io.github.matiyaaa.fuse.ui.shell.
     val p by app.store.prefs.collectAsState()
     return buildList {
         add(infoRow("folder", "Programs go to", detail = s.folder ?: "Your Applications folder", icon = FuseIcons.FolderOpen))
+        // Every program at once: the ones that publish builds for this computer, or everything installed.
+        val missing = s.catalogue?.apps.orEmpty().count { it.key !in s.installed && s.jobs[it.key]?.active != true }
+        val installed = s.installed.size
+        add(MenuAction(
+            "installall", "Install All", FuseIcons.CircleArrowDown,
+            detail = if (missing == 0) "Every program in the Store is installed" else "Every program in the Store that isn't installed yet, one after another",
+            enabled = missing > 0,
+            onSelect = {
+                app.confirm = ConfirmSpec(
+                    "Install every program?",
+                    "Fuse downloads each program in the Store that isn't here yet from its own releases, a few at a time. Programs that only publish on their own sites are left for you. It can take a while and a few gigabytes.",
+                    "Install All",
+                ) {
+                    ops.installAll()
+                    app.toasts.show("Installing the Store's programs. Downloads shows how it goes")
+                }
+            },
+        ))
+        add(MenuAction(
+            "uninstallall", "Uninstall All", FuseIcons.Trash,
+            detail = if (installed == 0) "Nothing from the Store is installed" else "Removes ${if (installed == 1) "the 1 installed program" else "all $installed installed programs"}, however they were installed. Their settings and saves stay",
+            enabled = installed > 0,
+            destructive = true,
+            onSelect = {
+                app.confirm = ConfirmSpec(
+                    "Uninstall every program?",
+                    "Fuse removes ${if (installed == 1) "the 1 program" else "the $installed programs"} the Store lists as installed, including ones installed outside Fuse (Flatpaks, AppImages). Their settings, saves and games stay. Programs installed for every account ask for this computer's password once.",
+                    "Uninstall All",
+                    destructive = true,
+                ) { ops.uninstallAll() }
+            },
+        ))
         add(toggleRow(
             "autocheck", "Check installed programs for updates", FuseIcons.CircleArrowDown, p.storeAutoCheck,
             "A little after Fuse starts. Updates are never installed without you",
