@@ -92,10 +92,13 @@ data class HeroSource(
     val placeholder: Any? = null,
 )
 
-/** The size backgrounds are decoded at: they sit dimmed behind the interface, so a little under the screen's. */
+/**
+ * The size backgrounds are decoded at: they sit dimmed behind the interface, so a little under the
+ * screen's, but not so far under that a big TV shows them soft.
+ */
 val RenderQuality.heroDecodePx: Int get() = (heroMaxPx * HERO_DECODE_SHARE).roundToInt()
 
-private const val HERO_DECODE_SHARE = 0.7f
+private const val HERO_DECODE_SHARE = 0.85f
 
 /** How long a new background may take before the room shows its placeholder instead of the old one. */
 private const val PLACEHOLDER_MS = 120L

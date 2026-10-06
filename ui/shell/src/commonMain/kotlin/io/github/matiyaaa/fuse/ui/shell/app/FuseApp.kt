@@ -146,8 +146,11 @@ fun FuseApp(
      */
     keepPlace: Boolean = false,
 ) {
-    CompositionLocalProvider(LocalShowcaseElsewhere provides showcaseElsewhere) {
-        FuseAppContent(store, platform, router, phoneLink, safeMode, onSettled, startupIntro, keepPlace)
+    val prefs by store.prefs.collectAsState()
+    InterfaceSize(prefs.display.interfaceSize) {
+        CompositionLocalProvider(LocalShowcaseElsewhere provides showcaseElsewhere) {
+            FuseAppContent(store, platform, router, phoneLink, safeMode, onSettled, startupIntro, keepPlace)
+        }
     }
 }
 
@@ -218,7 +221,7 @@ private fun FuseAppContent(
     // motion (short fades, no sliding pages) keep it smooth instead of stuttering.
     val drawing by platform.drawing.collectAsState()
     val cpuDrawing = drawing?.gpu == false
-    val quality = RenderQuality.of(prefs.performance, platform.device, prefs.lowPower || cpuDrawing)
+    val quality = RenderQuality.of(prefs.performance, platform.device, prefs.lowPower || cpuDrawing, LocalWindowPx.current)
     // Motion on Automatic follows the effects this device gets (setup's recommendation, or the
     // Performance choice); a level the person picked is kept, except calmer when drawn without the graphics card.
     val recommendedMotion = io.github.matiyaaa.fuse.model.recommendedMotion(prefs.performance, platform.device, prefs.lowPower || cpuDrawing)

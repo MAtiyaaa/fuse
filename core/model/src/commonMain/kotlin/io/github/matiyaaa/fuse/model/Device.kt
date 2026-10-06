@@ -63,9 +63,13 @@ data class RenderQuality(
             }
         }
 
-        fun of(profile: PerformanceProfile, capability: CapabilityProfile?, lowPower: Boolean): RenderQuality {
+        /**
+         * [windowPx] is the long edge of the window Fuse is drawn in right now, when known: a
+         * handheld docked to a 4K TV after Fuse started gets art sized for the TV.
+         */
+        fun of(profile: PerformanceProfile, capability: CapabilityProfile?, lowPower: Boolean, windowPx: Int = 0): RenderQuality {
             val effective = effective(profile, capability, lowPower)
-            val longEdge = capability?.let { maxOf(it.screenWidthPx, it.screenHeightPx) } ?: 1920
+            val longEdge = maxOf(capability?.let { maxOf(it.screenWidthPx, it.screenHeightPx) } ?: 1920, windowPx)
             return when (effective) {
                 PerformanceProfile.LOW_POWER -> RenderQuality(
                     backgroundVideo = false, blur = false, animatedBackground = false, particles = false,
@@ -73,16 +77,24 @@ data class RenderQuality(
                 )
                 PerformanceProfile.BALANCED, PerformanceProfile.AUTOMATIC -> RenderQuality(
                     backgroundVideo = true, blur = capability?.supportsBlur ?: true, animatedBackground = true,
-                    particles = false, crtShader = true, prefetchDepth = 4, heroMaxPx = minOf(longEdge, 1920),
+                    // A big screen with many pixels (a 4K TV, a 1440p monitor) gets art past 1080p's.
+                    particles = false, crtShader = true, prefetchDepth = 4,
+                    heroMaxPx = if (longEdge >= BIG_SCREEN_PX) BIG_SCREEN_ART_PX else minOf(longEdge, 1920),
                     statusRefreshMs = 30_000,
                 )
                 PerformanceProfile.HIGH_QUALITY -> RenderQuality(
                     backgroundVideo = true, blur = capability?.supportsBlur ?: true, animatedBackground = true,
-                    particles = true, crtShader = true, prefetchDepth = 6, heroMaxPx = minOf(longEdge, 2560),
+                    particles = true, crtShader = true, prefetchDepth = 6, heroMaxPx = minOf(longEdge, 3840),
                     statusRefreshMs = 15_000,
                 )
             }
         }
+
+        /** A screen this wide or wider counts as big for art sizes. */
+        private const val BIG_SCREEN_PX = 2560
+
+        /** Art sizes for a big screen on Balanced. */
+        private const val BIG_SCREEN_ART_PX = 2560
     }
 }
 
@@ -134,6 +146,11 @@ data class DisplayProfile(
     val rotation: ScreenRotation = ScreenRotation.AUTO,
     /** The second screen is put away: dark, showing nothing, until it is shown again. */
     val secondScreenHidden: Boolean = false,
+    /**
+     * How large the whole interface is drawn, in percent of its normal size, or 0 for automatic:
+     * larger by itself on a big screen with many pixels (a 4K TV), the way it looks on a 1080p one.
+     */
+    val interfaceSize: Int = 0,
 )
 
 /**

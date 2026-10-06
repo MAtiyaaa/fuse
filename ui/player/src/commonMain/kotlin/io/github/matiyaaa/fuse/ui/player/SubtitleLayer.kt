@@ -144,7 +144,10 @@ private fun CueText(cue: TextCue, height: Dp, settings: PlayerSettings, horizont
             else -> TextAlign.Center
         },
     )
-    val text = remember(cue) { annotated(cue) }
+    val text = remember(cue) { annotated(cue, colors = true) }
+    // The outline is one colour: a span's own colour (white, as many subtitles say) would outline
+    // white text in white, and it reads doubled and blurred.
+    val outline = remember(cue) { annotated(cue, colors = false) }
     val fill = cue.style.color?.let { Color(it) } ?: Color.White
     Box(
         if (boxColor != null) {
@@ -156,7 +159,7 @@ private fun CueText(cue: TextCue, height: Dp, settings: PlayerSettings, horizont
         if (boxColor == null) {
             // The outline: the same text stroked, under the fill, with a soft shadow for light scenes.
             BasicText(
-                text,
+                outline,
                 style = base.copy(
                     color = cue.style.outlineColor?.let { Color(it) } ?: Color.Black,
                     drawStyle = Stroke(width = outlinePx * 2, join = androidx.compose.ui.graphics.StrokeJoin.Round),
@@ -168,13 +171,13 @@ private fun CueText(cue: TextCue, height: Dp, settings: PlayerSettings, horizont
     }
 }
 
-private fun annotated(cue: TextCue): AnnotatedString = buildAnnotatedString {
+internal fun annotated(cue: TextCue, colors: Boolean): AnnotatedString = buildAnnotatedString {
     cue.lines.forEachIndexed { i, line ->
         if (i > 0) append('\n')
         for (span in line) {
             withStyle(
                 SpanStyle(
-                    color = span.color?.let { Color(it) } ?: Color.Unspecified,
+                    color = span.color?.takeIf { colors }?.let { Color(it) } ?: Color.Unspecified,
                     fontWeight = if (span.bold) FontWeight.Bold else null,
                     fontStyle = if (span.italic) FontStyle.Italic else null,
                     textDecoration = if (span.underline) TextDecoration.Underline else null,

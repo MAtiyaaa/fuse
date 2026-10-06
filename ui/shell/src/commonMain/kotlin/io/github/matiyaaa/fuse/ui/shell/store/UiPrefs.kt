@@ -100,6 +100,8 @@ data class UiPrefs(
     val biosConfirmed: List<String> = emptyList(),
     /** Drives Fuse already asked about setting up for games, by drive id. */
     val drivesAsked: List<String> = emptyList(),
+    /** Steam's games in the library: "ON", "OFF", or "" (never asked). */
+    val steamGames: String = "",
     val scraperOrder: List<ScrapeProviderId> = io.github.matiyaaa.fuse.data.settings.ScrapingSettings.DefaultProviderOrder,
     val scraperLanguage: String = "en",
     val scraperRegion: String = "any",

@@ -1,41 +1,38 @@
-# Fuse 0.3.6.4 - The Unity Update
+# Fuse 0.3.6.5 - The Unity Update
 
-Box art on RomM games as soon as it is found, system panels from your games, RomM on the second
-screen, Fuse's own art in Steam, and Linux updates that replace Fuse in place.
+Fuse sized for a 4K TV by itself, sharper backgrounds on big screens, clean subtitles, and Steam
+kept out when you say no.
 
 ## New
 
-- **System panels from your games' screenshots.** A system's artwork panel can be a screenshot of
-  one of its own games, cut to the Art Book Next pack's slanted panel and drawn at the same place
-  and size, so it sits with the rest of the set. It shows the same wherever the system does: tiles,
-  Home and its widgets, the Systems page, Downloads, RomM and the second screen.
-  - **By itself** for systems the pack has nothing for, like the PlayStation 5: the most recently
-    played game here first, then your RomM server's, as soon as one has a screenshot (or, failing
-    that, a background).
-  - **For every system**, with System art style From your games in Settings, Systems, System art:
-    the pack's logos and colours, with panels from each system's games.
-  - **Your pick**, on a system's Media page: choose Cover, then From a game's screenshot, pick one
-    of its games and then one of its screenshots, and it is kept. Automatic, from its games hands it
-    back to Fuse. Restore Fuse Default Art still puts Fuse's own back.
-- **RomM on the second screen.** The game or system chosen on the RomM tab, a system's RomM games
-  or a RomM collection shows on the second screen as the Library's does, with menus on top or
-  flipped below, including RomM games and systems you don't have on this device yet.
-
-- **Fuse's own art in Steam.** Add Fuse to Steam (Game Mode) now gives the entry Fuse's library
-  capsule, wide capsule, hero, logo and icon, so it looks like any other game in Steam instead of a
-  grey tile. Art you already chose for it stays.
+- **Fuse sizes itself for the screen.** On a big screen with many pixels, like a 4K TV from a
+  Steam Deck in Game Mode, a computer counts every pixel as one, so Fuse was drawn at a quarter of
+  its size: a tiny Home in a corner and a Library twenty covers wide. Fuse now draws everything as
+  large as on a 1080p screen there (twice the size on 4K, a quarter more on 1440p), and again when
+  the screen changes, like docking. Handhelds, phones and 1080p TVs look as before.
+- **Interface size** in Settings, Display, This screen: Automatic (it says what it picked), or 100%
+  to 300% for a size of your own.
+- **Steam games** in Settings, Library, Steam: a switch for whether Steam's games are in your
+  library at all.
 
 ## Changed
 
-- **Linux updates replace Fuse in place.** An update now takes the place of the AppImage Fuse runs
-  from, at the same path, instead of adding another file beside it each time. Shortcuts, start at
-  login and Steam's entry keep working, the version before is kept as a hidden `.previous` file for
-  one step back, and the copies earlier updates left beside it are removed.
-
-- A RomM game's options show its box art, like a game on this device, instead of RomM's poster.
+- **Sharper backgrounds on big screens.** Background art is decoded for the screen Fuse is on now
+  and at closer to its full size, so it stays crisp on a TV: a Deck that started on its own screen
+  and was docked afterwards no longer stretches art made for 1280 pixels across a 4K TV, and
+  Balanced allows art past 1080p's on a big screen (High quality up to 4K).
 
 ## Fixed
 
-- RomM games kept showing RomM's posters until Fuse was closed and opened again, even after Fuse
-  had found their box art. Art found while the RomM lists were being drawn again was missed; it now
-  shows on the lists already open.
+- **Saying no to Steam is kept.** No thanks (or Skip) on setup's Steam step now stays no: Steam
+  shortcuts a games folder brings along, like the `steam` folder EmuDeck and ES-DE make, no longer
+  put a Steam system in the library anyway. On a computer that never added Steam, they are left
+  out too. The switch in Settings, Library, Steam brings them back, and adding Steam games turns it
+  on.
+- **Subtitles looked doubled and blurred.** Subtitles inside a video (on a computer every text
+  subtitle reads as an ASS one) were outlined in their own white instead of black, so the letters
+  looked thick, doubled and soft. Their outline is black again, as the subtitle says, and a cue read
+  twice after the stream catches up shows once.
+- On KDE Plasma with Wayland, Fuse (like every X11 app) is stretched by the system on a scaled
+  screen and looks soft. Set System Settings, Display and Monitor, Legacy Applications (X11) to
+  Apply scaling themselves: Fuse is then drawn sharp and sizes itself for the screen.

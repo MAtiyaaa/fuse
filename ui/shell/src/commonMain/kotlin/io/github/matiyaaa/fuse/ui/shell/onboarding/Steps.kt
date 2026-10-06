@@ -280,6 +280,11 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
         if (desktop) {
             val picked = steamGames.filter { it.appId in steamChosen }
             val drives = steamGames.map { it.library }.distinct().size
+            // No is kept: Steam's games stay out, even a games folder's own Steam shortcuts.
+            val noSteam: () -> Unit = {
+                if (live) store.updatePrefs { it.copy(steamGames = io.github.matiyaaa.fuse.ui.shell.store.impl.STEAM_OFF) }
+                next()
+            }
             val pickSteam: () -> Unit = {
                 app.scope.launch {
                     val path = platform.storage.pickFolder("Choose a Steam library folder") ?: return@launch
@@ -317,17 +322,18 @@ fun rememberSteps(app: AppState, state: OnboardingState): List<Step> {
                 },
                 actions = when {
                     steamAdded != null -> listOf(StepAction("Continue", primary = true, run = next))
-                    steamGames.isEmpty() -> listOf(StepAction("Choose a Steam folder", primary = true, run = pickSteam), StepAction("Skip", run = next))
+                    steamGames.isEmpty() -> listOf(StepAction("Choose a Steam folder", primary = true, run = pickSteam), StepAction("Skip", run = noSteam))
                     else -> listOf(
                         StepAction(if (picked.size == 1) "Add 1 game" else "Add ${picked.size} games", primary = true, enabled = picked.isNotEmpty(), note = "Tick at least one game to add") {
                             if (!live) { next(); return@StepAction }
+                            store.updatePrefs { it.copy(steamGames = io.github.matiyaaa.fuse.ui.shell.store.impl.STEAM_ON) }
                             app.scope.launch {
                                 steamAdded = store.sources.addSteamGames(picked)
                                 next()
                             }
                         },
                         StepAction("Another folder", run = pickSteam),
-                        StepAction("No thanks", run = next),
+                        StepAction("No thanks", run = noSteam),
                     )
                 },
                 content = {

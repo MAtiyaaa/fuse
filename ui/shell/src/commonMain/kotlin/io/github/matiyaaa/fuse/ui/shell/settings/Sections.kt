@@ -447,7 +447,15 @@ fun libraryRows(app: AppState): List<MenuAction> {
                 onSelect = { app.addGame() },
             ))
         }
-        app.platform.steam?.let { steam -> labelled("Steam") { addAll(steamRows(app, steam)) } }
+        app.platform.steam?.let { steam ->
+            // Never asked: on only when Steam games were added (as the library does).
+            val steamOn = when (p.steamGames) {
+                io.github.matiyaaa.fuse.ui.shell.store.impl.STEAM_ON -> true
+                io.github.matiyaaa.fuse.ui.shell.store.impl.STEAM_OFF -> false
+                else -> sources.any { it.kind == io.github.matiyaaa.fuse.model.LibrarySourceKind.STEAM_LIBRARY || (it.kind == io.github.matiyaaa.fuse.model.LibrarySourceKind.SHORTCUTS && it.label == "Steam") }
+            }
+            labelled("Steam") { addAll(steamRows(app, steam, steamOn)) }
+        }
         labelled("Scanning") {
             add(MenuAction("scan", "Scan for changes", FuseIcons.Refresh, detail = "Only folders that changed. Also runs whenever you return to Fuse", trailing = Trailing.Value(scan.phase.name.lowercase().replaceFirstChar { it.uppercase() }), onSelect = {
                 app.store.sources.rescan(ScanScope.QUICK); app.toasts.show("Scanning")
@@ -967,7 +975,7 @@ fun cartridgeRows(app: AppState): List<MenuAction> {
  * Steam on a computer: its installed games in the library (found on every drive, or in a folder the
  * user picks), and Fuse in Steam's library for Game Mode.
  */
-private fun steamRows(app: AppState, steam: io.github.matiyaaa.fuse.ui.shell.platform.SteamIntegration): List<MenuAction> {
+private fun steamRows(app: AppState, steam: io.github.matiyaaa.fuse.ui.shell.platform.SteamIntegration, on: Boolean): List<MenuAction> {
     fun addFound(games: List<io.github.matiyaaa.fuse.library.steam.SteamGame>) {
         if (games.isEmpty()) {
             app.toasts.show("No Steam games found there")
@@ -978,6 +986,7 @@ private fun steamRows(app: AppState, steam: io.github.matiyaaa.fuse.ui.shell.pla
             games.take(6).joinToString("\n") { it.name } + if (games.size > 6) "\nand ${games.size - 6} more" else "",
             "Add them",
         ) {
+            app.store.updatePrefs { it.copy(steamGames = io.github.matiyaaa.fuse.ui.shell.store.impl.STEAM_ON) }
             app.scope.launch {
                 val n = app.store.sources.addSteamGames(games)
                 app.toasts.show(if (n == 1) "1 Steam game added" else "$n Steam games added")
@@ -985,6 +994,15 @@ private fun steamRows(app: AppState, steam: io.github.matiyaaa.fuse.ui.shell.pla
         }
     }
     return listOf(
+        MenuAction(
+            "steam.games", "Steam games", FuseIcons.Gamepad,
+            detail = if (on) "Steam's games are in your library, starting through Steam" else "Left out, even Steam shortcuts in your games folders",
+            trailing = Trailing.Switch(on),
+            onSelect = {
+                val next = if (on) io.github.matiyaaa.fuse.ui.shell.store.impl.STEAM_OFF else io.github.matiyaaa.fuse.ui.shell.store.impl.STEAM_ON
+                app.store.updatePrefs { it.copy(steamGames = next) }
+            },
+        ),
         MenuAction(
             "steam.find", "Find Steam games", FuseIcons.FolderSearch,
             detail = "Every game Steam has installed, on any drive. They start through Steam",
@@ -1191,8 +1209,17 @@ fun displayRows(app: AppState): List<MenuAction> {
     val p by app.store.prefs.collectAsState()
     val log by app.platform.secondScreenLog.collectAsState()
     val d = p.display
+    val automaticSize = io.github.matiyaaa.fuse.ui.shell.app.LocalAutomaticInterfaceSize.current
     return buildList {
         labelled("This screen") {
+            add(app.choiceRow(
+                "uisize", "Interface size", FuseIcons.Scaling, d.interfaceSize,
+                io.github.matiyaaa.fuse.ui.shell.app.InterfaceSizes.map { v ->
+                    v to if (v == 0) "Automatic (${(automaticSize * 100).toInt()}%)" else "$v%"
+                },
+                detail = "Automatic draws Fuse larger on a big screen with many pixels, like a 4K TV, so it looks as it does on a 1080p one",
+                optionDetail = { v -> if (v == 0) "Sized for this screen, and again when it changes" else null },
+            ) { v -> app.store.updatePrefs { it.copy(display = it.display.copy(interfaceSize = v)) } })
             if (app.platform.features.rotation) {
                 add(app.choiceRow(
                     "rotation", "Rotation", FuseIcons.RotateCw, d.rotation,

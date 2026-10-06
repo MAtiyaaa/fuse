@@ -394,6 +394,11 @@ data class LibraryPreferences(
     val biosConfirmed: List<String> = emptyList(),
     /** Drives Fuse asked about setting up for games (yes or no), by drive id, so it asks once. */
     val drivesAsked: List<String> = emptyList(),
+    /**
+     * Steam's games in the library here: "ON", "OFF" (no thanks, in setup's Steam step or Settings,
+     * Library, Steam), or "" when never asked: then on a computer only when Steam games were added.
+     */
+    val steamGames: String = "",
     /** Fetch system logos and art from the system art pack when a system has none. */
     val systemArtAuto: Boolean = true,
     /** How the Library is sorted. */

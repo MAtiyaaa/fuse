@@ -108,4 +108,41 @@ class SteamLibraryStoreTest {
         val game = withTimeout(10_000) { store.library.game(celeste.id).first { it != null } }!!
         assertEquals(File(lib, "steamapps/common/Celeste").absolutePath, game.game.location.path)
     }
+
+    /**
+     * An EmuDeck or ES-DE games folder keeps Steam's own shortcuts in a `steam` folder. On a
+     * computer whose person said no to Steam (or never added it) they stay out; yes brings them in,
+     * and no again hides them.
+     */
+    @Test
+    fun aGamesFoldersSteamShortcutsFollowTheSteamAnswer(): Unit = runBlocking {
+        val roms = File(base, "roms")
+        File(roms, "snes").mkdirs()
+        File(roms, "snes/Chrono Trigger.sfc").writeBytes(ByteArray(64))
+        File(roms, "steam").mkdirs()
+        File(roms, "steam/Hades.desktop").writeText("[Desktop Entry]\nName=Hades\nExec=steam steam://rungameid/1145360\nType=Application\n")
+        val services = FakeServices(FuseData(DesktopDatabase.open(File(cache, "fuse.db").absolutePath)), cache)
+        val store = createFuseStore(services, scope)
+        store.sources.add(roms.absolutePath, LibrarySourceKind.ROMS_ROOT)
+        val steam = io.github.matiyaaa.fuse.model.PlatformId("steam")
+
+        // Never added Steam on this computer: only the SNES game.
+        withTimeout(20_000) { store.sources.scan.first { it.phase == io.github.matiyaaa.fuse.model.ScanPhase.DONE } }
+        val first = withTimeout(20_000) { store.library.platforms.first { s -> s.any { it.platform.id.value == "snes" } } }
+        assertTrue(first.none { it.platform.id == steam })
+
+        // Yes: Hades comes in.
+        store.updatePrefs { it.copy(steamGames = io.github.matiyaaa.fuse.ui.shell.store.impl.STEAM_ON) }
+        withTimeout(20_000) { store.library.platforms.first { s -> s.any { it.platform.id == steam && it.gameCount == 1 } } }
+
+        // No: gone from the library again (kept hidden, nothing deleted).
+        store.updatePrefs { it.copy(steamGames = io.github.matiyaaa.fuse.ui.shell.store.impl.STEAM_OFF) }
+        withTimeout(20_000) { store.library.platforms.first { s -> s.none { it.platform.id == steam } } }
+        val hidden = withTimeout(20_000) { store.library.games(GameQuery(set = GameSet.HIDDEN)).first { it.isNotEmpty() } }
+        assertEquals(listOf("Hades"), hidden.map { it.title })
+
+        // Yes again: back, not hidden.
+        store.updatePrefs { it.copy(steamGames = io.github.matiyaaa.fuse.ui.shell.store.impl.STEAM_ON) }
+        withTimeout(20_000) { store.library.platforms.first { s -> s.any { it.platform.id == steam && it.gameCount == 1 } } }
+    }
 }
