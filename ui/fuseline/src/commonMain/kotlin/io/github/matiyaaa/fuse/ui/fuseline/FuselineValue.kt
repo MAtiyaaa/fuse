@@ -228,7 +228,16 @@ class FuselineValue<T>(
                 moved()
                 block?.invoke(this)
             } finally {
-                if (ride === r) ride = null
+                if (ride === r) {
+                    ride = null
+                    // Cancelled from outside (not taken over): it rests where it got to, which is now
+                    // its target. Its velocity is kept, so the next move carries on from it.
+                    if (job === currentCoroutineContext().job && r.playNanos < r.durationNanos) {
+                        now.copyInto(goal)
+                        targetFollowsValue = false
+                        targetVersion.intValue++
+                    }
+                }
             }
         }
     }
@@ -517,6 +526,7 @@ internal suspend fun runFrames(durationNanos: Long, onStart: ((Retimer) -> Unit)
     })
     while (true) {
         val done = frame(length == Long.MAX_VALUE) { frameNanos ->
+            FramePacing.frameAt(frameNanos)
             last = frameNanos
             if (start == Long.MIN_VALUE) start = frameNanos - if (pending >= 0) (pending * scale).toLong() else 0L
             val play = ((frameNanos - start) / scale).toLong()

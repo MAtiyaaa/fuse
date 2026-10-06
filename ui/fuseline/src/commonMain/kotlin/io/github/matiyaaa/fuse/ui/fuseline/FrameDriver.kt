@@ -93,6 +93,7 @@ internal class FrameDriver private constructor(private val clock: MonotonicFrame
 
     /** One frame: every move steps; the ones that arrived carry on with the frames after. */
     private fun step(frameNanos: Long) {
+        FramePacing.frameAt(frameNanos)
         lastFrame = frameNanos
         val count = moves.size
         var kept = 0
@@ -139,4 +140,99 @@ internal interface Retimer {
 
     /** Moves the play to [playNanos], as of the frame just shown. */
     fun seek(playNanos: Long)
+}
+
+/**
+ * What the frames themselves say about the display and the load: the interval between frames as it
+ * really is (30 Hz is about 33.3 ms, 120 Hz 8.3 ms, 240 Hz 4.2 ms; never assumed to be 60 Hz), and
+ * whether frames are running late. Late frames are answered by thinning out decoration only (ambient
+ * loops update every other frame), never by changing any motion's time: every value is always worked
+ * out from the real frame time, so physics stays exactly the same however busy the device is, and
+ * interaction, focus, navigation, gestures and transitions keep every frame.
+ */
+object FramePacing {
+    private const val HISTORY = 32
+
+    /** Frames at least this much longer than the display's interval count as late. */
+    private const val LATE_RATIO = 1.5f
+
+    /** Late frames in a row (of the history) before decoration is thinned, and on-time ones before it comes back. */
+    private const val LATE_TO_THIN = 6
+    private const val ON_TIME_TO_RESTORE = 30
+
+    private val intervals = LongArray(HISTORY)
+    private var count = 0
+    private var head = 0
+    private var late = 0
+    private var onTime = 0
+
+    /** The display's own frame interval as measured (the shortest interval seen lately), in nanoseconds. */
+    var intervalNanos: Long = 16_666_667L
+        private set
+
+    /** Frames per second, as measured. */
+    val refreshRate: Float get() = (1e9 / intervalNanos).toFloat()
+
+    /** True while frames run late: decoration is thinned (see [shouldDrawDecoration]). */
+    var underLoad: Boolean = false
+        private set
+
+    private var decorationTick = 0L
+
+    private var lastSeen = Long.MIN_VALUE
+
+    /**
+     * A frame at [frameNanos], from whoever sees it first (the shared driver, or a loop on its own):
+     * each frame time counts once however many moves and loops share it.
+     */
+    fun frameAt(frameNanos: Long) {
+        if (frameNanos == lastSeen) return
+        val before = lastSeen
+        lastSeen = frameNanos
+        if (before != Long.MIN_VALUE && frameNanos > before) frame(frameNanos - before)
+    }
+
+    /** Records one frame [nanos] after the one before. */
+    fun frame(nanos: Long) {
+        if (nanos <= 0L || nanos > 1_000_000_000L) return
+        intervals[head] = nanos
+        head = (head + 1) % HISTORY
+        if (count < HISTORY) count++
+        // The display's interval is the quickest steady frame lately: late frames only ever add time.
+        var best = Long.MAX_VALUE
+        for (i in 0 until count) if (intervals[i] < best) best = intervals[i]
+        intervalNanos = best
+        if (nanos > intervalNanos * LATE_RATIO) {
+            late++
+            onTime = 0
+            if (late >= LATE_TO_THIN) underLoad = true
+        } else {
+            onTime++
+            if (onTime >= ON_TIME_TO_RESTORE) {
+                underLoad = false
+                late = 0
+            }
+        }
+    }
+
+    /**
+     * Whether a decorative loop should show this frame: always, unless frames are running late, when
+     * it shows every other frame. Its value is still worked out from the real time when it shows.
+     */
+    fun shouldDrawDecoration(): Boolean {
+        decorationTick++
+        return !underLoad || decorationTick % 2L == 0L
+    }
+
+    /** Forgets what it has measured (tests, and a display that changed). */
+    fun reset() {
+        count = 0
+        head = 0
+        late = 0
+        onTime = 0
+        underLoad = false
+        intervalNanos = 16_666_667L
+        decorationTick = 0L
+        lastSeen = Long.MIN_VALUE
+    }
 }
