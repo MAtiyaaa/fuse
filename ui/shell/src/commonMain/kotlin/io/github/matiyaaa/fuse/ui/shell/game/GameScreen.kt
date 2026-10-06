@@ -108,6 +108,8 @@ import io.github.matiyaaa.fuse.ui.fuseline.fuselineFloat
 import io.github.matiyaaa.fuse.ui.fuseline.fuselineScrollTo
 import io.github.matiyaaa.fuse.ui.fuseline.tween
 import io.github.matiyaaa.fuse.ui.shell.app.AppState
+import io.github.matiyaaa.fuse.ui.shell.romm.rommDownload
+import io.github.matiyaaa.fuse.ui.shell.store.rommOnly
 import io.github.matiyaaa.fuse.ui.shell.app.FocusZone
 import io.github.matiyaaa.fuse.ui.shell.app.GallerySpec
 import io.github.matiyaaa.fuse.ui.shell.app.Route
@@ -159,7 +161,9 @@ private enum class InfoCard { STARTS, PLAY, EXTRAS, FILE }
  */
 @Composable
 fun GameScreen(app: AppState, id: GameId) {
-    val flow = remember(id) { app.store.library.game(id).map { d -> if (d == null) GameLoad.Gone else GameLoad.Ready(d) } }
+    // A RomM game Fuse doesn't have yet opens on the same page, from Fuse RomM's mirror.
+    val romOnly = id.rommOnly
+    val flow = remember(id) { (if (romOnly != null) app.store.romm.detail(romOnly) else app.store.library.game(id)).map { d -> if (d == null) GameLoad.Gone else GameLoad.Ready(d) } }
     val load by flow.collectAsState(initial = GameLoad.Loading)
     // A short fade from the placeholder to the page, never a jump.
     Crossfade(load is GameLoad.Ready, animationSpec = Fuse.motion.fade(), label = "gameLoad") { ready ->
@@ -190,9 +194,27 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
         value = if (!card.isApp && game.platformId.value in CONTENT_SYSTEMS) app.store.content.view(game.id) else null
     }
     val contentStates = content?.states.orEmpty()
+    // Fuse RomM: a game only on RomM (downloaded from this page), or what RomM has of a game here.
+    val remote = game.id.rommOnly
+    val rommFlow = remember(game.id) { if (remote != null) app.store.romm.forRom(remote) else app.store.romm.forGame(game.id) }
+    val romm by rommFlow.collectAsState(initial = null)
+    val rommButtons = remember(romm, remote) { rommButtonsOf(romm, remote != null) }
 
     // Play first, then the emulator it starts in, then the quick actions, then everything else.
-    val actions = listOfNotNull(
+    val actions = if (remote != null) listOfNotNull(
+        // Not here yet: Download is the page's first button, and the emulator says what would play it.
+        DetailAction(
+            "download", if (romm?.transfer != null) "Downloading" else "Download", FuseIcons.Download, "Download", primary = true,
+        ) { if (romm?.transfer != null) app.go(Route.Downloads) else app.rommDownload(remote, game.displayTitle) },
+        DetailAction("emu", d.emulator.selected?.name ?: "Choose emulator", if (d.emulator.selected == null) FuseIcons.Warning else FuseIcons.Chip, "Choose emulator") {
+            app.go(Route.PlatformSettings(game.platformId))
+        },
+        romm?.takeIf { v -> v.parts.any { it.kind != io.github.matiyaaa.fuse.model.ContentKind.GAME && it.kind.holdsGameData } }?.let {
+            DetailAction("everything", null, FuseIcons.CloudDownload, "Download everything") {
+                app.rommDownload(remote, game.displayTitle, io.github.matiyaaa.fuse.ui.shell.store.RommDownloadWhat.Everything)
+            }
+        },
+    ) else listOfNotNull(
         // A game Fuse can't reach right now keeps its Play button (pressing it explains why), drawn
         // as not ready, so the page never promises a start it knows won't happen.
         DetailAction("play", "Play", if (d.unavailable != null) FuseIcons.HardDrive else FuseIcons.Play, "Play", primary = d.unavailable == null && !d.missing) { app.play(card) },
@@ -220,9 +242,12 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
     val shots = d.media.screenshots
     val cards = buildList {
         add(InfoCard.STARTS)
-        add(InfoCard.PLAY)
-        if (game.content.isNotEmpty()) add(InfoCard.EXTRAS)
-        add(InfoCard.FILE)
+        // A game not here yet has no play time, extras or file of its own to show.
+        if (remote == null) {
+            add(InfoCard.PLAY)
+            if (game.content.isNotEmpty()) add(InfoCard.EXTRAS)
+            add(InfoCard.FILE)
+        }
     }
     // The detail cards wrap into lines on narrower screens; each line is its own row for the
     // controller, so Down from the first line reaches the cards under it.
@@ -239,6 +264,7 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
         // The time played is a stop of its own, so the stick brings it into view on any screen.
         add("playtime")
         if (description != null) add("about")
+        if (rommButtons.isNotEmpty() || (romm?.parts?.size ?: 0) > 1) add("romm")
         if (discs.size > 1) add("discs")
         if (badges.isNotEmpty()) add("achievements")
         if (shots.isNotEmpty()) add("shots")
@@ -247,6 +273,7 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
     fun sizeOf(key: String) = when (key) {
         "facts", "about", "playtime" -> 1
         "actions" -> actions.size
+        "romm" -> rommButtons.size.coerceAtLeast(1)
         "discs" -> discs.size
         "achievements" -> badges.size
         "shots" -> shots.size
@@ -309,6 +336,7 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
         "about" -> "Read it all"
         "playtime" -> "All play time"
         "shots" -> "View full screen"
+        "romm" -> rommButtons.getOrNull(col)?.label ?: "Downloads"
         "actions" -> actions.getOrNull(col)?.name
         "discs" -> "Play this disc"
         else -> when (cardAt(row, col)) {
@@ -384,13 +412,30 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
                     "about" -> readAbout()
                     "playtime" -> app.go(Route.PlayTime)
                     "shots" -> viewing = col
+                    "romm" -> rommButtons.getOrNull(col)?.let { b -> romm?.let { v -> app.rommDownload(v.romId, game.displayTitle, b.what) } } ?: app.go(Route.Downloads)
                     "actions" -> actions.getOrNull(col)?.run?.invoke()
                     "discs" -> discs.getOrNull(col)?.let { disc -> app.play(card, discPath = disc.path) }
                     else -> cardAt(row, col)?.let(::openCard)
                 }
                 NavResult.ACTIVATED
             }
-            NavAction.CONTEXT -> { app.openContextMenu(app.gameMenu(card, fromDetail = true)); NavResult.ACTIVATED }
+            NavAction.CONTEXT -> {
+                // A game not here yet has only RomM's options: what to download.
+                if (remote != null) {
+                    app.openContextMenu(io.github.matiyaaa.fuse.ui.shell.app.ContextMenuSpec(
+                        title = game.displayTitle, subtitle = d.platform.name, art = d.art.boxart, accent = d.platform.accent,
+                        actions = listOf(
+                            io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction("r.dl", "Download", FuseIcons.Download, onSelect = { app.closeOverlays(); app.rommDownload(remote, game.displayTitle) }),
+                            io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction("r.all", "Download Everything", FuseIcons.CloudDownload, detail = "With its updates and DLC, where RomM has them", onSelect = {
+                                app.closeOverlays(); app.rommDownload(remote, game.displayTitle, io.github.matiyaaa.fuse.ui.shell.store.RommDownloadWhat.Everything)
+                            }),
+                        ),
+                    ))
+                } else {
+                    app.openContextMenu(app.gameMenu(card, fromDetail = true))
+                }
+                NavResult.ACTIVATED
+            }
             else -> NavResult.IGNORED
         }
     }
@@ -515,6 +560,14 @@ private fun GameDetailContent(app: AppState, d: GameDetail) {
                     AboutBlock(
                         it, selected = row == "about" && focused, reading = layout.reading,
                         onClick = { sel.row = rows.indexOf("about"); readAbout() },
+                    )
+                }
+            }
+            romm?.takeIf { "romm" in rows }?.let { v ->
+                Section(if (remote != null) "On your RomM server" else "Content on RomM", Modifier.section("romm", 5), count = v.matchedBy) {
+                    RommPartsBlock(
+                        v, rommButtons, selected = if (row == "romm" && focused) col else -1,
+                        onButton = { i -> sel.row = rows.indexOf("romm"); sel.setColumn("romm", i); app.rommDownload(v.romId, game.displayTitle, rommButtons[i].what) },
                     )
                 }
             }
@@ -1329,3 +1382,60 @@ private fun detailsPerLine(cards: Int, fits: Int): Int = (if (cards == 4 && fits
 
 /** Systems whose games can come as packages that Fuse installs into the emulator. */
 private val CONTENT_SYSTEMS = setOf("ps3", "psvita", "3ds", "new-nintendo-3ds")
+
+
+/** A download the game page offers for what RomM has of a game. */
+private class RommButton(val label: String, val what: io.github.matiyaaa.fuse.ui.shell.store.RommDownloadWhat)
+
+/** What can be brought in from RomM: missing discs, updates, DLC, or all of it. */
+private fun rommButtonsOf(v: io.github.matiyaaa.fuse.ui.shell.store.RommGameView?, remote: Boolean): List<RommButton> {
+    if (v == null || v.transfer != null) return emptyList()
+    val missing = v.missing
+    if (remote || missing.isEmpty()) return emptyList()
+    val out = ArrayList<RommButton>()
+    if (v.missingDiscs.isNotEmpty()) out += RommButton("Download Missing Discs", io.github.matiyaaa.fuse.ui.shell.store.RommDownloadWhat.MissingDiscs)
+    for (p in missing.filter { it.kind == ContentKind.UPDATE }) out += RommButton("Download Update ${p.label}", io.github.matiyaaa.fuse.ui.shell.store.RommDownloadWhat.Files(p.fileIds, "Update ${p.label}"))
+    for (p in missing.filter { it.kind == ContentKind.DLC }) out += RommButton("Download ${p.label}", io.github.matiyaaa.fuse.ui.shell.store.RommDownloadWhat.Files(p.fileIds, p.label))
+    for (p in missing.filter { it.kind != ContentKind.UPDATE && it.kind != ContentKind.DLC && it.kind != ContentKind.GAME }) out += RommButton("Download ${p.label}", io.github.matiyaaa.fuse.ui.shell.store.RommDownloadWhat.Files(p.fileIds, p.label))
+    if (out.size > 1) out += RommButton("Download All Available Content", io.github.matiyaaa.fuse.ui.shell.store.RommDownloadWhat.Everything)
+    return out
+}
+
+/**
+ * A game's parts as RomM has them, grouped as the game page groups content (the game or its discs,
+ * then updates, DLC and the rest), each marked Here, on RomM, or coming; then what can be brought in.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun RommPartsBlock(v: io.github.matiyaaa.fuse.ui.shell.store.RommGameView, buttons: List<RommButton>, selected: Int, onButton: (Int) -> Unit) {
+    val c = Fuse.colors
+    val groups = v.parts.groupBy { it.kind }
+    Column(verticalArrangement = Arrangement.spacedBy(Space.m)) {
+        for ((kind, parts) in groups) {
+            Column(verticalArrangement = Arrangement.spacedBy(Space.xs)) {
+                FText(kindLabel(kind, parts.size), Fuse.type.overline, color = c.textMuted, maxLines = 1)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(Space.s), verticalArrangement = Arrangement.spacedBy(Space.s)) {
+                    parts.forEach { p ->
+                        val (word, color) = when {
+                            p.here -> "Here" to c.success
+                            p.downloading -> "Coming" to c.accent
+                            else -> "RomM" to c.textMuted
+                        }
+                        io.github.matiyaaa.fuse.ui.designsystem.components.Chip(
+                            "${p.label}  ·  $word", icon = if (p.here) FuseIcons.CircleCheck else if (p.downloading) FuseIcons.Download else FuseIcons.Cloud, color = color,
+                        )
+                    }
+                }
+            }
+        }
+        if (buttons.isNotEmpty()) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(Space.m), verticalArrangement = Arrangement.spacedBy(Space.m)) {
+                buttons.forEachIndexed { i, b ->
+                    FuseButton(b.label, selected = selected == i, icon = FuseIcons.CloudDownload, onClick = { onButton(i) })
+                }
+            }
+        } else if (v.transfer != null) {
+            FText("Downloading now. Follow it in Downloads.", Fuse.type.caption, color = c.textMuted, maxLines = 1)
+        }
+    }
+}

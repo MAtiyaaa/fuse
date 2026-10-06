@@ -416,6 +416,7 @@ private fun FuseAppContent(
                             onStatusClick = { app.quickMenuOpen = true },
                             activities = hudActivities(app),
                             profile = hudProfile(app),
+                            downloads = rememberHudDownloads(app),
                         )
                     }
                     if (prefs.performanceOverlay) {
@@ -733,6 +734,10 @@ private fun PushedPages(app: AppState, current: Route, direction: NavDirection, 
             is Route.SyncSetup -> io.github.matiyaaa.fuse.ui.shell.sync.SyncSetupScreen(app, route.host)
             is Route.SaveHistory -> io.github.matiyaaa.fuse.ui.shell.sync.SaveHistoryScreen(app, route.game, route.title)
             is Route.SyncGame -> io.github.matiyaaa.fuse.ui.shell.sync.SyncGameScreen(app, route.game, route.name)
+            Route.Downloads -> io.github.matiyaaa.fuse.ui.shell.downloads.DownloadsScreen(app)
+            Route.RommSettings -> io.github.matiyaaa.fuse.ui.shell.romm.RommSettingsScreen(app)
+            is Route.RommSetup -> io.github.matiyaaa.fuse.ui.shell.romm.RommSetupScreen(app, route.pairing)
+            is Route.RommGames -> io.github.matiyaaa.fuse.ui.shell.romm.RommGamesScreen(app, route.slug, route.name, route.collection)
                     is Route.Root -> Unit
                 }
             }
@@ -747,8 +752,9 @@ private fun PushedPages(app: AppState, current: Route, direction: NavDirection, 
 internal fun hudPage(stack: List<Route>): HudButton? {
     for (route in stack.asReversed()) {
         when (route) {
+            Route.Downloads -> return HudButton.DOWNLOADS
             Route.Search -> return HudButton.SEARCH
-            is Route.Settings, is Route.PlatformSettings, Route.Controls, Route.Licenses, is Route.ReleaseNotes, Route.Themes, Route.Storage, Route.PhoneLink, Route.JellyfinSettings, Route.SyncSettings, Route.SyncthingSettings, Route.SaveFolders, is Route.SyncSetup ->
+            is Route.Settings, is Route.PlatformSettings, Route.Controls, Route.Licenses, is Route.ReleaseNotes, Route.Themes, Route.Storage, Route.PhoneLink, Route.JellyfinSettings, Route.SyncSettings, Route.SyncthingSettings, Route.SaveFolders, is Route.SyncSetup, Route.RommSettings, is Route.RommSetup ->
                 return HudButton.SETTINGS
             else -> Unit
         }
@@ -765,6 +771,7 @@ private fun ShellInput(app: AppState) {
     val prefs by app.store.prefs.collectAsState()
     val tabs = rememberTabs(app, prefs)
     val onboarding = app.navigator.current == Route.Onboarding
+    val downloads = rememberHudDownloads(app) != null
     InputLayer(priority = LayerPriority.SHELL) { e ->
         if (onboarding) return@InputLayer NavResult.IGNORED
         val active = app.navigator.root?.destination
@@ -783,9 +790,16 @@ private fun ShellInput(app: AppState) {
                     HudButton.PROFILE -> { app.hudButton = HudButton.STATUS; NavResult.MOVED }
                     HudButton.STATUS -> { app.hudButton = HudButton.SETTINGS; NavResult.MOVED }
                     HudButton.SETTINGS -> { app.hudButton = HudButton.SEARCH; NavResult.MOVED }
-                    // Left of Search is the last tab, as the line shows it, whichever tab Search
-                    // or Settings was opened from.
-                    HudButton.SEARCH -> {
+                    // Downloads sits between the tabs and Search while anything moves.
+                    HudButton.SEARCH -> if (downloads) { app.hudButton = HudButton.DOWNLOADS; NavResult.MOVED } else {
+                        app.hudButton = null
+                        val last = tabs.lastOrNull()
+                        if (hudPage(app.navigator.stack) != null || last != active) last?.let { app.selectTab(it) }
+                        NavResult.MOVED
+                    }
+                    // Left of Search (or Downloads) is the last tab, as the line shows it, whichever
+                    // tab Search or Settings was opened from.
+                    HudButton.DOWNLOADS -> {
                         app.hudButton = null
                         val last = tabs.lastOrNull()
                         if (hudPage(app.navigator.stack) != null || last != active) last?.let { app.selectTab(it) }
@@ -794,13 +808,14 @@ private fun ShellInput(app: AppState) {
                     null -> cycle(-1)
                 }
                 NavAction.RIGHT -> when (button) {
+                    HudButton.DOWNLOADS -> { app.hudButton = HudButton.SEARCH; NavResult.MOVED }
                     HudButton.SEARCH -> { app.hudButton = HudButton.SETTINGS; NavResult.MOVED }
                     // Past Settings: Wi-Fi, battery and the clock, which open the quick menu, then
                     // at the far end who is playing.
                     HudButton.SETTINGS -> { app.hudButton = HudButton.STATUS; NavResult.MOVED }
                     HudButton.STATUS -> if (app.hudHasProfile) { app.hudButton = HudButton.PROFILE; NavResult.MOVED } else NavResult.BLOCKED
                     HudButton.PROFILE -> NavResult.BLOCKED
-                    null -> if (tabs.lastOrNull() == active) { app.hudButton = HudButton.SEARCH; NavResult.MOVED } else cycle(1)
+                    null -> if (tabs.lastOrNull() == active) { app.hudButton = if (downloads) HudButton.DOWNLOADS else HudButton.SEARCH; NavResult.MOVED } else cycle(1)
                 }
                 NavAction.SELECT -> if (button != null) { leave(); app.runHudButton(button); NavResult.ACTIVATED } else leave()
                 NavAction.DOWN -> leave()
@@ -830,6 +845,7 @@ private fun ShellInput(app: AppState) {
             }
             NavAction.NEXT_SECTION -> when (page) {
                 null -> cycle(1)
+                HudButton.DOWNLOADS -> { app.go(Route.Search); NavResult.MOVED }
                 HudButton.SEARCH -> { app.go(Route.Settings()); NavResult.MOVED }
                 HudButton.SETTINGS, HudButton.PROFILE, HudButton.STATUS -> NavResult.BLOCKED
             }
@@ -848,6 +864,8 @@ private fun ShellInput(app: AppState) {
 }
 
 private fun AppState.runHudButton(button: HudButton) = when (button) {
+    // Opening Downloads keeps the page underneath: Back returns to it as it was.
+    HudButton.DOWNLOADS -> if (navigator.current != Route.Downloads) go(Route.Downloads) else Unit
     HudButton.SEARCH -> go(Route.Search)
     HudButton.SETTINGS -> go(Route.Settings())
     HudButton.PROFILE -> whoAreYou = io.github.matiyaaa.fuse.ui.shell.sync.WhoMode.SWITCH
@@ -1014,15 +1032,13 @@ private fun FillFinishedToast(app: AppState) {
     }
 }
 
-/** What is working in the background, for the top line: recordings, art fills, uploads, downloads and updates. */
+/** What is working in the background, for the top line: recordings, art fills and updates (transfers are Downloads'). */
 @Composable
 private fun hudActivities(app: AppState): List<HudActivity> {
     val health = io.github.matiyaaa.fuse.ui.shell.settings.rememberHealthIssues(app)
     val update by app.store.updates.state.collectAsState()
     val available by app.store.updates.available.collectAsState()
-    val cartridge by app.store.cartridge.status.collectAsState()
     val fill by app.store.media.fillProgress.collectAsState()
-    val shop by app.store.appStore.state.collectAsState()
     val recordingTime = rememberRecordingTime(app.capture)
     val playing = if (io.github.matiyaaa.fuse.ui.player.FusePlayer.available) io.github.matiyaaa.fuse.ui.player.FusePlayer.session.item else null
     return buildList {
@@ -1051,33 +1067,26 @@ private fun hudActivities(app: AppState): List<HudActivity> {
                 progress = f.fraction.takeIf { f.total > 0 },
             ) { app.go(Route.Settings("media")) })
         }
-        // Only while bytes are going: once RomM is adding the game, the upload is done for the user.
-        cartridge.uploads.firstOrNull { it.state == io.github.matiyaaa.fuse.model.UploadState.UPLOADING || it.state == io.github.matiyaaa.fuse.model.UploadState.WAITING }?.let { u ->
-            add(HudActivity(
-                "upload", FuseIcons.Upload, "Uploading ${u.title} to RomM",
-                progress = u.progress.takeIf { u.state == io.github.matiyaaa.fuse.model.UploadState.UPLOADING },
-            ) { app.openCartridge() })
-        }
-        if (cartridge.installed && (cartridge.activeDownloads > 0 || cartridge.queue.any { it.state == io.github.matiyaaa.fuse.model.QueueState.DOWNLOADING })) {
-            val current = cartridge.queue.firstOrNull { it.state == io.github.matiyaaa.fuse.model.QueueState.DOWNLOADING }
-            add(HudActivity(
-                "cartridge", io.github.matiyaaa.fuse.ui.designsystem.icons.FuseMarks.Cartridge, "Cartridge is downloading ${current?.title ?: cartridge.currentTitle ?: "a game"}",
-                progress = current?.progress ?: cartridge.progress,
-            ) { app.openCartridge() })
-        }
-        // Store installs carry on anywhere in Fuse; the top line keeps them in view.
-        val installing = shop.jobs.filter { (_, j) -> j.active && j !is io.github.matiyaaa.fuse.ui.shell.store.StoreJob.Uninstalling }
-        installing.entries.firstOrNull()?.let { (key, job) ->
-            val name = shop.app(key)?.name ?: "an app"
-            val label = if (installing.size > 1) "Store: ${installing.size} apps on their way" else "$name  ·  ${io.github.matiyaaa.fuse.ui.shell.addons.jobShort(job)}"
-            add(HudActivity("store", FuseIcons.Store, label, progress = io.github.matiyaaa.fuse.ui.shell.addons.jobProgress(job)) { app.openStore(key) })
-        }
+        // Transfers (Cartridge's downloads and uploads, Store installs, Fuse's own update, Fuse RomM,
+        // Jellyfin) all live behind the Downloads button now; only what isn't one stays here.
         when (val u = update) {
-            is UpdateState.Downloading -> add(HudActivity("update", FuseIcons.Download, "Downloading ${u.release.name}", progress = u.progress) { app.go(Route.Settings("about")) })
+            is UpdateState.Downloading -> Unit
             is UpdateState.Ready -> add(HudActivity("update", FuseIcons.Refresh, "${u.release.name} is ready: restart to update", attention = true) { app.go(Route.Settings("about")) })
             else -> if (available != null) add(HudActivity("update", FuseIcons.Download, "${available?.name} is available", attention = true) { app.go(Route.Settings("about")) })
         }
     }
+}
+
+/**
+ * The Downloads button's state: shown while anything moves or waits, while something failed, and
+ * while Downloads is the page that is open (so it can be seen as where you are).
+ */
+@Composable
+internal fun rememberHudDownloads(app: AppState): HudDownloads? {
+    val summary by app.store.transfers.summary.collectAsState()
+    val onPage = app.navigator.current == Route.Downloads
+    if (!summary.any && summary.failed == 0 && !onPage) return null
+    return HudDownloads(summary.active, summary.activeUploads > 0, summary.progress, summary.failed, summary.queued + summary.waiting)
 }
 
 /** How long a selection must rest before the room fades in its art. */

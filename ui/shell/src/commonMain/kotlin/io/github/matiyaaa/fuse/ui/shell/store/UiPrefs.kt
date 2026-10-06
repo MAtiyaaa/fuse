@@ -36,6 +36,8 @@ data class UiPrefs(
      */
     val sync: io.github.matiyaaa.fuse.data.settings.SyncSettings = io.github.matiyaaa.fuse.data.settings.SyncSettings(),
     val onboardingDone: Boolean = false,
+    /** The answer to setup's "Do you use RomM?": "FUSE", "CARTRIDGE", "NONE", or "" when not asked yet. */
+    val rommAnswer: String = "",
     val themeId: String = "fuse",
     val motion: MotionProfile? = null,
     val glass: GlassSettings = GlassSettings(),

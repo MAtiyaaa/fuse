@@ -194,7 +194,7 @@ internal fun SyncChoiceStage(fuseSync: Boolean, syncthing: Boolean, hasFuseSync:
 
 /** One of the two on the stage: its mark, name and tag, then what it keeps in step, one line each. */
 @Composable
-private fun ChoiceCard(
+internal fun ChoiceCard(
     name: String,
     tag: String,
     tint: Color,
@@ -203,10 +203,11 @@ private fun ChoiceCard(
     on: Boolean,
     filled: Boolean,
     modifier: Modifier,
+    width: Dp = 176.dp,
 ) {
     val c = Fuse.colors
     Column(
-        modifier.width(176.dp).clip(RoundedCornerShape(22.dp)).background(c.surfaceOverlay)
+        modifier.width(width).clip(RoundedCornerShape(22.dp)).background(c.surfaceOverlay)
             .background(Brush.verticalGradient(listOf(tint.copy(alpha = 0.16f), Color.Transparent)))
             .padding(Space.m),
         verticalArrangement = Arrangement.spacedBy(Space.s),
