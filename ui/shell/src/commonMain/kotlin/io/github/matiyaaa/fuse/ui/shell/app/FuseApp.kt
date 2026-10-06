@@ -646,8 +646,12 @@ private fun Pages(app: AppState, tabs: List<Destination>) {
  * builds nothing. Only the page shown is drawn; the others hear no input, run no loops and keep
  * their effects waiting ([LocalPageActive], [PageEffect]) until shown again.
  *
- * A tab changes in the very frame it is chosen: the page is simply there, with a short nudge from
- * the side it came from (a moving layer, nothing faded or drawn twice).
+ * A tab changes in the very frame it is chosen: the new page is simply there, opaque, sliding in a
+ * short way from the side of the tab chosen, and the old page is no longer drawn (pages are see-through
+ * over the background, so two at once would overlap). The slide is a Fuseline transition
+ * ([MotionTransition]): changing tab again before it settles (a shoulder button held down, quick taps)
+ * carries on from where the page is and how fast it is moving, so Home to Library to Apps never
+ * snaps back to the start of a slide, and going back reverses.
  */
 @Composable
 private fun RootPages(app: AppState, current: Route, direction: NavDirection, place: (Destination) -> Int, tabs: List<Destination>) {
@@ -664,18 +668,17 @@ private fun RootPages(app: AppState, current: Route, direction: NavDirection, pl
     }
     val shownRoot = kept.lastOrNull() ?: return
     val onRoot = current is Route.Root
-    // The page coming in as a share of its nudge, and whether tab pages show at all (a pushed page covers them).
-    val incoming = remember { FuselineValue(1f) }
+    // The tab pages as one transition, and whether tab pages show at all (a pushed page covers them).
+    val tabMotion = when {
+        cpuDrawing -> io.github.matiyaaa.fuse.ui.fuseline.Snap()
+        motion.reduced -> motion.fade(Durations.FAST)
+        else -> io.github.matiyaaa.fuse.ui.fuseline.Spring(dampingRatio = 1f, stiffness = TAB_STIFFNESS)
+    }
+    // Read through state, so tabs rearranged later still give the right direction.
+    val placeNow by androidx.compose.runtime.rememberUpdatedState(place)
+    val tabsMoving = io.github.matiyaaa.fuse.ui.fuseline.rememberMotionTransition(shownRoot, tabMotion, order = { placeNow(it) })
     val visible = remember { FuselineValue(if (onRoot) 1f else 0f) }
     val dir = remember { intArrayOf(1) }
-    val last = remember { arrayOf<Destination?>(shownRoot) }
-    var nudging by remember { mutableStateOf(false) }
-    if (last[0] != shownRoot) {
-        val before = last[0]
-        last[0] = shownRoot
-        nudging = before != null && !motion.reduced && !cpuDrawing
-        if (before != null) dir[0] = if (place(shownRoot) >= place(before)) 1 else -1
-    }
     // Remember where you were, off: a tab left behind is let go, so it opens at its start next time.
     val forgets = app.navigator.forgetsTabs
     if (forgets) kept.retainAll { it == shownRoot }
@@ -687,15 +690,6 @@ private fun RootPages(app: AppState, current: Route, direction: NavDirection, pl
     }
     val ahead = if (warm && !forgets) WARM_PAGES.filter { it != shownRoot && it !in kept && it in tabs } else emptyList()
     val pages = ahead + kept
-    LaunchedEffect(shownRoot) {
-        if (!nudging) {
-            incoming.snapTo(1f)
-            return@LaunchedEffect
-        }
-        incoming.snapTo(0f)
-        incoming.animateTo(1f, motion.tween(Durations.FAST, Curves.Enter))
-        nudging = false
-    }
     LaunchedEffect(onRoot) {
         dir[0] = if (direction == NavDirection.BACK) -1 else 1
         if (motion.reduced || cpuDrawing) visible.snapTo(if (onRoot) 1f else 0f)
@@ -712,12 +706,13 @@ private fun RootPages(app: AppState, current: Route, direction: NavDirection, pl
                         Modifier.fillMaxSize().graphicsLayer {
                             if (d != shownRoot) return@graphicsLayer
                             val w = size.width
-                            val v = visible.value
-                            // A pushed page leaving fades this one back in; a new tab is there at
-                            // once, nudged in from its side.
+                            val v = visible.floatValue
+                            // A pushed page leaving fades the tabs back in; a tab change slides the new
+                            // page in from its side, continuing from wherever an earlier change left it.
                             alpha = v
-                            val nudge = if (nudging) (1f - incoming.value) * TAB_NUDGE.toPx() * dir[0] else 0f
-                            translationX = nudge + (1f - v) * -shift * 0.5f * w * dir[0]
+                            val position = tabsMoving.partOf(d)?.position ?: 0f
+                            val travel = if (motion.reduced) 0f else TAB_NUDGE.toPx()
+                            translationX = position * travel + (1f - v) * -shift * 0.5f * w * dir[0]
                         },
                     ) {
                         RevealScope(Route.Root(d)) {
@@ -730,7 +725,7 @@ private fun RootPages(app: AppState, current: Route, direction: NavDirection, pl
     ) { measurables, constraints ->
         // Every page is measured (a page already laid out costs nothing to measure again, and one
         // built ahead is then ready to show), but only the one in front is placed, so only it is drawn.
-        val inFront = visible.value > 0f
+        val inFront = visible.floatValue > 0f
         val measured = measurables.map { it.measure(constraints) }
         layout(constraints.maxWidth, constraints.maxHeight) {
             if (inFront) measured.getOrNull(pages.indexOf(shownRoot))?.place(0, 0)
@@ -1173,6 +1168,9 @@ private const val HERO_SETTLE_MS = 160L
 /** A page that arrives sooner than this after the last one switches without a transition. */
 /** How far a new tab's page slides in from the side it came from. */
 private val TAB_NUDGE = 24.dp
+
+/** How firmly a tab change settles: critically damped, about 200 ms, and quick enough for a held shoulder button. */
+private const val TAB_STIFFNESS = 900f
 
 /** The tabs built ahead (beside Home), and how long after starting. */
 private val WARM_PAGES = listOf(Destination.SYSTEMS, Destination.LIBRARY)
