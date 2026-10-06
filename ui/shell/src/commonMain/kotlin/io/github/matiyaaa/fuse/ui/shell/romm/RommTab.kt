@@ -25,6 +25,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import io.github.matiyaaa.fuse.integrations.net.RouteMode
+import io.github.matiyaaa.fuse.ui.designsystem.components.ToastKind
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -104,8 +106,10 @@ fun RommContent(app: AppState, active: Boolean, topPadding: Dp) {
         NotSetUp(app, state, focused, topPadding)
         return
     }
+    val prefs by app.store.prefs.collectAsState()
     val actions = buildList {
         add(PillAction("Refresh", FuseIcons.RefreshCcw) { ops.refresh() })
+        add(PillAction("Test Connection", FuseIcons.Signal) { testConnection(app, prefs.romm) })
         add(PillAction("All Games", FuseIcons.LayoutList) { app.go(Route.RommGames(null, "All games")) })
         if (summary.any) add(PillAction("Downloads", FuseIcons.Download) { app.go(Route.Downloads) })
         if (state.link == RommLink.SIGNED_OUT) add(PillAction("Sign In", FuseIcons.Key) { app.go(Route.RommSetup(pairing = true)) })
@@ -218,6 +222,22 @@ fun RommContent(app: AppState, active: Boolean, topPadding: Dp) {
     }
 }
 
+/** Asks each address whether RomM answers, says what it found, and connects again when one does. */
+private fun testConnection(app: AppState, p: io.github.matiyaaa.fuse.data.settings.FuseRommSettings) {
+    app.toasts.show("Testing the connection to RomM...", ToastKind.INFO)
+    app.scope.launch {
+        val t = app.store.romm.test(p.localAddress, p.remoteAddress, runCatching { RouteMode.valueOf(p.mode) }.getOrDefault(RouteMode.AUTO))
+        val parts = listOfNotNull(
+            t.localOk?.let { "Home ${if (it) "answers" else "doesn't answer"}" },
+            t.remoteOk?.let { "outside ${if (it) "answers" else "doesn't answer"}" },
+            t.version?.let { "RomM $it" },
+        )
+        val answered = t.localOk == true || t.remoteOk == true
+        app.toasts.show(t.problem ?: parts.joinToString(", ").replaceFirstChar { it.uppercase() }, if (answered) ToastKind.SUCCESS else ToastKind.WARNING)
+        if (answered) app.store.romm.refresh()
+    }
+}
+
 private class PillAction(val label: String, val icon: ImageVector, val run: () -> Unit)
 
 /**
@@ -254,7 +274,8 @@ private fun Header(state: RommState, actions: List<PillAction>, selected: Int, c
         val warning = when (state.link) {
             RommLink.OFFLINE -> "The server isn't answering. Browsing what Fuse kept; downloads wait for it."
             RommLink.SIGNED_OUT -> "RomM no longer accepts Fuse's sign-in. Sign in again to download."
-            else -> null
+            // Connected, but the last look ran into something (a slow page): it carries on from there next time.
+            else -> state.problem?.takeIf { state.syncing == null }
         }
         if (warning != null) {
             val shape = RoundedCornerShape(Fuse.geometry.control)

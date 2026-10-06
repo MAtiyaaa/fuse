@@ -223,10 +223,21 @@ internal class DefaultRommOps(
             }
             startLoop()
         } catch (e: RommException) {
-            _state.update { it.copy(link = if (e.forbidden) RommLink.SIGNED_OUT else RommLink.OFFLINE, problem = e.message) }
+            _state.update { it.copy(link = linkAfter(e), problem = e.message) }
             // Away: look again in a while.
             startLoop()
         }
+    }
+
+    /**
+     * The link after [e]: signed out when RomM refused the sign-in, away only when no address could
+     * be reached at all. A server that answered slowly, or with something Fuse couldn't read, is
+     * still there: the problem is shown and the next look tries again.
+     */
+    private fun linkAfter(e: RommException): RommLink = when {
+        e.forbidden -> RommLink.SIGNED_OUT
+        e.code == "offline" || e.code == "no-address" -> RommLink.OFFLINE
+        else -> RommLink.ONLINE
     }
 
     /** Keeps the mirror up to date while Fuse runs, and notices when the server comes back. */
@@ -274,7 +285,7 @@ internal class DefaultRommOps(
         } catch (e: CancellationException) {
             throw e
         } catch (e: RommException) {
-            _state.update { it.copy(syncing = null, link = if (e.forbidden) RommLink.SIGNED_OUT else RommLink.OFFLINE, problem = e.message) }
+            _state.update { it.copy(syncing = null, link = linkAfter(e), problem = e.message) }
         } catch (e: Exception) {
             _state.update { it.copy(syncing = null, problem = "The library couldn't be brought up to date.") }
         }
@@ -502,7 +513,7 @@ internal class DefaultRommOps(
     // ------------------------------------------------------------------ one game
 
     override fun detail(romId: Long): Flow<GameDetail?> = combine(mirrorRevision, ctx.installed) { _, _ -> }.mapLatest {
-        val r = mirror.rom(server, romId) ?: return@mapLatest null
+        val r = mirror.withFiles(clientFor(server), server, romId) ?: return@mapLatest null
         val platform = ctx.platforms.resolveFolder(r.platformSlug) ?: return@mapLatest null
         val game = Game(
             id = rommGameId(r.id),
@@ -533,7 +544,7 @@ internal class DefaultRommOps(
         .mapLatest { v -> view(romId, v?.first, v?.second) }.flowOn(Dispatchers.Default)
 
     private suspend fun view(romId: Long, game: GameId?, reason: MatchReason?): RommGameView? {
-        val r = mirror.rom(server, romId) ?: return null
+        val r = mirror.withFiles(clientFor(server), server, romId) ?: return null
         val here = game?.let { localNames(it) }.orEmpty()
         val running = transfers.items.value.firstOrNull { it.source == ROMM_SOURCE && it.key.startsWith(keyOf(romId)) && !it.status.finished }
         return RommGameView(
@@ -570,7 +581,8 @@ internal class DefaultRommOps(
 
     override suspend fun download(romId: Long, what: RommDownloadWhat): String? = withContext(Dispatchers.Default) {
         if (!settings.enabled) return@withContext "Turn on Fuse RomM in Settings, Addons, Fuse RomM."
-        val r = mirror.rom(server, romId) ?: return@withContext "That game isn't in your RomM library any more."
+        val r = mirror.withFiles(clientFor(server), server, romId) ?: return@withContext "That game isn't in your RomM library any more."
+        if (r.files.isEmpty()) return@withContext "Fuse needs RomM to list this game's files first. Try again once the server answers."
         val platform = ctx.platforms.resolveFolder(r.platformSlug) ?: return@withContext "Fuse doesn't know RomM's system \"${r.platformSlug}\", so it can't tell where this goes."
         val game = matches.value[romId]?.first
         val here = game?.let { localNames(it) }.orEmpty()

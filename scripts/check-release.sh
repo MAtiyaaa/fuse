@@ -14,7 +14,7 @@ version="$(sed -n 's/^fuse\.version=//p' gradle.properties | tr -d '[:space:]')"
 code="$(sed -n 's/^fuse\.versionCode=//p' gradle.properties | tr -d '[:space:]')"
 name="$(sed -n 's/^fuse\.releaseName=//p' gradle.properties | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
 
-printf '%s' "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' || fail "fuse.version '$version' is not a version"
+printf '%s' "$version" | grep -Eq '^[0-9]+(\.[0-9]+){2,3}$' || fail "fuse.version '$version' is not a version (three or four numbers)"
 printf '%s' "$code" | grep -Eq '^[0-9]+$' || fail "fuse.versionCode '$code' is not a number"
 [ -n "$name" ] || fail "fuse.releaseName is missing"
 

@@ -39,6 +39,10 @@ class FakeRomm(var version: String = "4.4.0") {
     val calls = CopyOnWriteArrayList<String>()
     val down = ConcurrentHashMap.newKeySet<String>()
     @Volatile var openApi = true
+    /** Pages of the library bigger than this take too long to put together (as a big PS5 page does). */
+    @Volatile var slowAbove: Int = Int.MAX_VALUE
+    /** The library can't be read from this many games on (the connection drops part way). */
+    @Volatile var dropFrom: Int = Int.MAX_VALUE
     @Volatile var acceptedTokens = setOf("good", "readonly")
     /** Scopes per token. */
     val scopes = mapOf("good" to RommScopes.UPLOAD_AND_SCAN, "readonly" to RommScopes.READ)
@@ -55,8 +59,8 @@ class FakeRomm(var version: String = "4.4.0") {
     private fun MockRequestHandleScope.json(text: String, status: HttpStatusCode = HttpStatusCode.OK): HttpResponseData =
         respond(text, status, headersOf(HttpHeaders.ContentType, "application/json"))
 
-    private fun romJson(g: Game): String {
-        val files = g.files.joinToString(",") { (id, name, bytes) ->
+    private fun romJson(g: Game, withFiles: Boolean = true): String {
+        val files = if (!withFiles) "" else g.files.joinToString(",") { (id, name, bytes) ->
             val folder = g.folderPaths[id]?.let { "/$it" } ?: ""
             """{"id":$id,"file_name":"$name","file_path":"${g.slug}/${g.fsName}$folder","file_size_bytes":${bytes.size},"md5_hash":"${md5(bytes)}","category":null}"""
         }
@@ -74,7 +78,7 @@ class FakeRomm(var version: String = "4.4.0") {
 
     private fun MockRequestHandleScope.handle(req: HttpRequestData): HttpResponseData {
         val host = req.url.host
-        calls += "${req.method.value} ${req.url.encodedPath}"
+        calls += "${req.method.value} ${req.url.encodedPath}" + req.url.encodedQuery.let { if (it.isEmpty()) "" else "?$it" }
         if (host in down) throw java.net.ConnectException("$host is down")
         val path = req.url.encodedPath
         when {
@@ -111,8 +115,12 @@ class FakeRomm(var version: String = "4.4.0") {
                 if (after != null) list = list.filter { RommParse.millis(it.updated) > RommParse.millis(after) }
                 if (search != null) list = list.filter { it.fsName.contains(search, ignoreCase = true) }
                 if (platform != null) list = list.filter { it.platformId == platform }
+                if (search == null && limit > slowAbove) throw io.ktor.client.plugins.HttpRequestTimeoutException(req.url.toString(), 1_000)
+                if (search == null && offset >= dropFrom) throw java.io.IOException("Connection reset")
+                // As RomM: a page of the library lists each game's files only when asked to.
+                val withFiles = req.url.parameters["with_files"] == "true"
                 val page = list.drop(offset).take(limit)
-                return json("""{"items":[${page.joinToString(",") { romJson(it) }}],"total":${list.size}}""")
+                return json("""{"items":[${page.joinToString(",") { romJson(it, withFiles) }}],"total":${list.size}}""")
             }
             path.startsWith("/api/roms/") && path.contains("/content/") -> {
                 val id = path.removePrefix("/api/roms/").substringBefore('/').toLong()
@@ -123,6 +131,10 @@ class FakeRomm(var version: String = "4.4.0") {
                 val from = range?.removePrefix("bytes=")?.substringBefore('-')?.toInt() ?: 0
                 val body = bytes.copyOfRange(from, bytes.size)
                 return respond(body, if (range != null) HttpStatusCode.PartialContent else HttpStatusCode.OK, headersOf(HttpHeaders.ContentLength, body.size.toString()))
+            }
+            path.matches(Regex("/api/roms/\\d+")) && req.method == HttpMethod.Get -> {
+                val game = games.firstOrNull { it.id == path.removePrefix("/api/roms/").toLong() } ?: return respond("", HttpStatusCode.NotFound)
+                return json(romJson(game))
             }
             path == "/api/firmware" -> return json(firmware.joinToString(",", "[", "]") { (id, name, b) -> """{"id":$id,"platform_id":1,"file_name":"$name","file_size_bytes":${b.size},"md5_hash":"${md5(b)}","sha1_hash":"","crc_hash":"","is_verified":true,"missing_from_fs":false}""" })
             path.startsWith("/api/firmware/") -> {

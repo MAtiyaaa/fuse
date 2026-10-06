@@ -3,6 +3,7 @@ package io.github.matiyaaa.fuse.romm
 import io.github.matiyaaa.fuse.integrations.net.NetRoute
 import io.github.matiyaaa.fuse.integrations.net.RoutePicker
 import io.ktor.client.HttpClient
+import io.ktor.client.plugins.timeout
 import io.ktor.client.request.HttpRequestBuilder
 import io.ktor.client.request.header
 import io.ktor.client.request.parameter
@@ -68,6 +69,7 @@ class RommClient(
         method: HttpMethod,
         path: String,
         signed: Boolean = true,
+        timeoutMs: Long? = null,
         extra: HttpRequestBuilder.() -> Unit = {},
         read: suspend (HttpResponse) -> T,
     ): T {
@@ -75,34 +77,57 @@ class RommClient(
         if (targets.isEmpty()) throw RommException("Fuse RomM has no address for the server. Add one in Settings, Addons, Fuse RomM.", code = "no-address")
         var last: Exception? = null
         for ((route, base) in targets) {
-            try {
-                val resp = http.request(base + path) {
+            val resp = try {
+                http.request(base + path) {
                     this.method = method
                     header(HttpHeaders.Accept, "application/json")
                     if (signed) authorize(this)
+                    if (timeoutMs != null) timeout { requestTimeoutMillis = timeoutMs; socketTimeoutMillis = timeoutMs }
                     // Not `build`: that name is HttpRequestBuilder's own and would win.
                     extra()
                 }
-                if (resp.status.value in 300..399) {
-                    throw RommException("The server sent Fuse to a sign-in page. If it is behind Cloudflare Access or a similar gate, let Fuse through it.", resp.status.value, "redirect")
-                }
-                routes.answered(route)
-                if (!resp.status.isSuccess()) throw refusal(resp, path)
-                return read(resp)
-            } catch (e: RommException) {
-                throw e
-            } catch (e: CancellationException) {
-                throw e
             } catch (e: Exception) {
+                // A request that timed out once connected reached a server that is there but slow
+                // (asking it another way would only wait as long again); only one that couldn't
+                // connect at all means this way in is down.
+                if (isSlow(e)) {
+                    routes.answered(route)
+                    throw RommException("RomM is taking too long to answer.", code = SLOW, cause = e)
+                }
+                if (e is CancellationException) throw e
                 last = e
+                continue
+            }
+            if (resp.status.value in 300..399) {
+                throw RommException("The server sent Fuse to a sign-in page. If it is behind Cloudflare Access or a similar gate, let Fuse through it.", resp.status.value, "redirect")
+            }
+            routes.answered(route)
+            if (!resp.status.isSuccess()) throw refusal(resp, path)
+            // The server answered: whatever goes wrong reading the answer is never "not answering".
+            return try {
+                read(resp)
+            } catch (e: Exception) {
+                if (isSlow(e)) throw RommException("RomM took too long to send everything. Fuse tries again with less at a time.", code = SLOW, cause = e)
+                if (e is CancellationException || e is RommException) throw e
+                throw RommException("RomM sent an answer Fuse couldn't read.", code = "unreadable", cause = e)
             }
         }
         routes.lost()
         throw RommException("The RomM server didn't answer.", code = "offline", cause = last)
     }
 
-    private suspend fun json(method: HttpMethod, path: String, signed: Boolean = true, extra: HttpRequestBuilder.() -> Unit = {}): JsonElement =
-        call(method, path, signed, extra) { RommParse.element(it.bodyAsText()) }
+    /** A request or read that ran out of time once connected (not one that couldn't connect). */
+    private fun isSlow(e: Throwable): Boolean {
+        // A caller's own withTimeout is a cancellation, never the server's doing.
+        if (e is kotlinx.coroutines.TimeoutCancellationException) return false
+        val name = e::class.simpleName.orEmpty()
+        // Some engines report a connection that never opened as a plain socket timeout ("connect timed out").
+        val connecting = "Connect" in name || e.message.orEmpty().contains("connect", ignoreCase = true)
+        return "Timeout" in name && !connecting
+    }
+
+    private suspend fun json(method: HttpMethod, path: String, signed: Boolean = true, timeoutMs: Long? = null, extra: HttpRequestBuilder.() -> Unit = {}): JsonElement =
+        call(method, path, signed, timeoutMs, extra) { RommParse.element(it.bodyAsText()) }
 
     private suspend fun refusal(resp: HttpResponse, path: String): RommException {
         val detail = runCatching { (RommParse.element(resp.bodyAsText()) as? JsonObject)?.get("detail")?.let { (it as? JsonPrimitive)?.contentOrNull } }.getOrNull()
@@ -227,17 +252,19 @@ class RommClient(
     suspend fun platforms(): List<RommPlatform> = RommParse.platforms(json(HttpMethod.Get, "/api/platforms"))
 
     /**
-     * One page of games, [limit] at a time from [offset], with their files. [updatedAfter] (epoch
-     * millis) brings only what changed since, where the server can.
+     * One page of games, [limit] at a time from [offset]. [updatedAfter] (epoch millis) brings only
+     * what changed since, where the server can. [withFiles] adds every game's file list: a PS4 or PS5
+     * game kept as a folder can list tens of thousands, so the library is read without them and a
+     * game's files are brought when it is opened or downloaded ([rom]).
      */
-    suspend fun roms(offset: Int, limit: Int, platformId: Long? = null, updatedAfter: Long? = null): RommPage =
+    suspend fun roms(offset: Int, limit: Int, platformId: Long? = null, updatedAfter: Long? = null, withFiles: Boolean = false): RommPage =
         RommParse.page(
-            json(HttpMethod.Get, "/api/roms") {
+            json(HttpMethod.Get, "/api/roms", timeoutMs = PAGE_TIMEOUT_MS) {
                 parameter("offset", offset)
                 parameter("limit", limit)
                 parameter("order_by", "id")
                 parameter("order_dir", "asc")
-                parameter("with_files", true)
+                parameter("with_files", withFiles)
                 parameter("with_char_index", false)
                 parameter("with_filter_values", false)
                 parameter("with_rom_id_index", false)
@@ -265,7 +292,8 @@ class RommClient(
         return page.items.firstOrNull { it.fsName == fileName || it.files.any { f -> f.name == fileName && f.path.isEmpty() } }
     }
 
-    suspend fun rom(id: Long): RommRom? = RommParse.rom(json(HttpMethod.Get, "/api/roms/$id"))
+    /** One game with every file it has. */
+    suspend fun rom(id: Long): RommRom? = RommParse.rom(json(HttpMethod.Get, "/api/roms/$id", timeoutMs = PAGE_TIMEOUT_MS))
 
     /** Every game's id on the server, for noticing ones that went. */
     suspend fun romIds(): List<Long> = RommParse.identifiers(json(HttpMethod.Get, "/api/roms/identifiers"))
@@ -342,6 +370,12 @@ class RommClient(
     val route: NetRoute? get() = routes.route.value
 
     companion object {
+        /** A call that reached the server but ran out of time: the server is there, just slow. */
+        const val SLOW = "slow"
+
+        /** How long a page of the library (or one large game) may take: big libraries answer slowly. */
+        const val PAGE_TIMEOUT_MS = 120_000L
+
         /** RomM's chunk size for uploads: well under its 64 MB limit, small enough to retry cheaply. */
         const val CHUNK_BYTES = 8 * 1024 * 1024
 
