@@ -20,7 +20,13 @@ class MoreAdaptersTest {
         val files: Map<String, String> = emptyMap(),
         val bin: Map<String, ByteArray> = emptyMap(),
         val chosen: Map<String, String> = emptyMap(),
+        val roots: List<String> = emptyList(),
+        val times: Map<String, Long> = emptyMap(),
+        val learnedMap: Map<String, List<String>> = emptyMap(),
     ) : SaveEnvironment {
+        override fun storageRoots() = roots
+        override fun modified(path: String) = times[path] ?: if (exists(path)) 0L else null
+        override fun learned(game: String, format: String) = learnedMap["$game|$format"].orEmpty()
         private val all get() = files.keys + bin.keys
         override fun exists(path: String) = path in all || all.any { it.startsWith("$path/") }
         override fun isDirectory(path: String) = all.any { it.startsWith("$path/") } || files[path] == ""
@@ -209,5 +215,162 @@ class MoreAdaptersTest {
             host.stop()
             root.deleteRecursively()
         }
+    }
+
+    // ---------------------------------------------------------------- data folders anywhere (Android)
+
+    private val ruby3ds = "0004000000055D00"
+
+    /** An NCSD cartridge header with [titleId] at 0x108 (little-endian), as a .3ds image starts. */
+    private fun ncsd(titleId: String): ByteArray = ByteArray(0x120).also { b ->
+        "NCSD".encodeToByteArray().copyInto(b, 0x100)
+        val id = titleId.toULong(16)
+        for (i in 0 until 8) b[0x108 + i] = ((id shr (8 * i)) and 0xFFu).toByte()
+    }
+
+    @Test
+    fun azaharsFolderIsFoundWhereverItWasPicked() {
+        // Picked inside an emulation folder three levels down, on the device's own storage.
+        val user = "/storage/emulated/0/Emulation/3DS/azahar"
+        val env = FakeEnv(
+            "ANDROID", "/storage/emulated/0",
+            files = mapOf("$user/sdmc/Nintendo 3DS/" to "", "$user/config/" to "", "/storage/emulated/0/Music/" to ""),
+            bin = mapOf("/roms/3ds/Ruby.3ds" to ncsd(ruby3ds)),
+            roots = listOf("/storage/emulated/0"),
+        )
+        val save = SaveAdapters.forEmulator("azahar")!!.locate(q("3ds", "/roms/3ds/Ruby.3ds", "azahar"), env).first()
+        assertTrue(save.available, save.note)
+        assertEquals("$user/sdmc/Nintendo 3DS/00000000000000000000000000000000/00000000000000000000000000000000/title/00040000/00055d00/data", save.root)
+    }
+
+    @Test
+    fun azaharsFolderOnACardIsFoundAndTheOneHoldingTheGameWins() {
+        val card = "/storage/1234-ABCD/Azahar"
+        val old = "/storage/emulated/0/citra-old"
+        val title = "sdmc/Nintendo 3DS/00000000000000000000000000000000/00000000000000000000000000000000/title/00040000/00055d00/data/00000001/main"
+        val env = FakeEnv(
+            "ANDROID", "/storage/emulated/0",
+            files = mapOf("$old/sdmc/Nintendo 3DS/" to "", "$old/nand/" to "", "$card/nand/" to "", "$card/$title" to "save"),
+            bin = mapOf("/roms/3ds/Ruby.3ds" to ncsd(ruby3ds)),
+            roots = listOf("/storage/emulated/0", "/storage/1234-ABCD"),
+            // The other folder changed more recently, but this game's save is on the card.
+            times = mapOf(old to 9_000L, card to 1_000L),
+        )
+        val save = SaveAdapters.forEmulator("azahar")!!.locate(q("3ds", "/roms/3ds/Ruby.3ds", "azahar"), env).first()
+        assertTrue(save.root!!.startsWith(card), save.root)
+    }
+
+    @Test
+    fun foldersInsideOtherAppsStorageAndPhotosAreNeverSearched() {
+        val env = FakeEnv(
+            "ANDROID", "/storage/emulated/0",
+            files = mapOf("/storage/emulated/0/Android/data/org.azahar_emu.azahar/files/sdmc/Nintendo 3DS/" to "", "/storage/emulated/0/Android/data/org.azahar_emu.azahar/files/nand/" to ""),
+            bin = mapOf("/roms/3ds/Ruby.3ds" to ncsd(ruby3ds)),
+            roots = listOf("/storage/emulated/0"),
+        )
+        val save = SaveAdapters.forEmulator("azahar")!!.locate(q("3ds", "/roms/3ds/Ruby.3ds", "azahar"), env).first()
+        assertFalse(save.available)
+        assertTrue(save.note!!.contains("Save folders"))
+    }
+
+    @Test
+    fun theFinderLooksOnlyOnAndroid() {
+        val env = FakeEnv("LINUX", "/home/mo", files = mapOf("/home/mo/Emulation/azahar/sdmc/Nintendo 3DS/" to "", "/home/mo/Emulation/azahar/nand/" to ""), roots = listOf("/home/mo"))
+        assertTrue(DataFolders.find(env, "3ds", listOf("azahar")) { d -> d.takeIf { env.isDirectory("$it/nand") } }.isEmpty())
+    }
+
+    @Test
+    fun ppssppDolphinDuckStationAndArmsx2AreFoundWhereverPicked() {
+        val env = FakeEnv(
+            "ANDROID", "/storage/emulated/0",
+            files = mapOf(
+                "/storage/emulated/0/Games/ppsspp/PSP/SAVEDATA/ULUS10041DATA00/DATA.BIN" to "x",
+                "/storage/emulated/0/Games/Dolphin/GC/" to "", "/storage/emulated/0/Games/Dolphin/Config/" to "",
+                "/storage/emulated/0/Games/DuckStation/memcards/" to "", "/storage/emulated/0/Games/DuckStation/settings.ini" to "",
+                "/storage/emulated/0/Games/ARMSX2/memcards/Mcd001.ps2" to "card",
+            ),
+            roots = listOf("/storage/emulated/0"),
+        )
+        val psp = SaveAdapters.forEmulator("ppsspp")!!.locate(q("psp", "/roms/psp/game.iso", "ppsspp", serial = "ULUS10041"), env).first()
+        assertEquals("/storage/emulated/0/Games/ppsspp/PSP/SAVEDATA", psp.root)
+        assertEquals(listOf("ULUS10041DATA00"), psp.folders)
+        val gc = SaveAdapters.forEmulator("dolphin")!!.locate(q("ngc", "/roms/gc/game.iso", "dolphin", serial = "GALE01"), env).first()
+        assertTrue(gc.files.single().path.startsWith("/storage/emulated/0/Games/Dolphin/GC/"), gc.files.toString())
+        val psx = SaveAdapters.forEmulator("duckstation")!!.locate(q("psx", "/roms/psx/game.cue", "duckstation", title = "Game"), env).first()
+        assertTrue(psx.files.single().path.startsWith("/storage/emulated/0/Games/DuckStation/memcards/"))
+        val ps2 = SaveAdapters.forEmulator("armsx2")!!.locate(q("ps2", "/roms/ps2/game.iso", "armsx2"), env).first()
+        assertEquals("/storage/emulated/0/Games/ARMSX2/memcards/Mcd001.ps2", ps2.files.first().path)
+    }
+
+    // ---------------------------------------------------------------- game ids from more files, or learned
+
+    @Test
+    fun aThreeDsTitleIdIsReadFromAnNcchAndACia() {
+        val ncch = ByteArray(0x120).also { b ->
+            "NCCH".encodeToByteArray().copyInto(b, 0x100)
+            val id = ruby3ds.toULong(16)
+            for (i in 0 until 8) b[0x118 + i] = ((id shr (8 * i)) and 0xFFu).toByte()
+        }
+        // A CIA: header 0x2020, a cert chain and ticket, then a TMD (RSA-2048) whose title id is big-endian.
+        val cert = 0xA00
+        val ticket = 0x350
+        val tmdAt = ((((0x2020 + 63) / 64 * 64) + cert + 63) / 64 * 64 + ticket + 63) / 64 * 64
+        val cia = ByteArray(tmdAt + 0x240 + 0x200).also { b ->
+            fun le(at: Int, v: Int) { for (i in 0 until 4) b[at + i] = ((v shr (8 * i)) and 0xFF).toByte() }
+            le(0, 0x2020); le(0x08, cert); le(0x0C, ticket); le(0x10, 0x240 + 0x200)
+            b[tmdAt + 1] = 0x01; b[tmdAt + 3] = 0x04
+            val id = "0004000E00055D00".toULong(16)
+            for (i in 0 until 8) b[tmdAt + 0x140 + 0x4C + i] = ((id shr (8 * (7 - i))) and 0xFFu).toByte()
+        }
+        val env = FakeEnv("LINUX", "/home/mo", bin = mapOf("/roms/a.cxi" to ncch, "/roms/b.cia" to cia))
+        assertEquals(ruby3ds, ThreeDs.titleId(q("3ds", "/roms/a.cxi", "azahar"), env))
+        // An update's CIA belongs to the game: the save is kept under the game's id.
+        assertEquals(ruby3ds, ThreeDs.titleId(q("3ds", "/roms/b.cia", "azahar"), env))
+    }
+
+    @Test
+    fun aCompressedThreeDsGameIsPlacedOnceAPlayTaughtItsFolder() {
+        val user = "/home/mo/.local/share/azahar-emu"
+        val titles = "$user/sdmc/Nintendo 3DS/00000000000000000000000000000000/00000000000000000000000000000000/title/00040000"
+        val game = q("3ds", "/roms/Ruby.zcci", "azahar")
+        val before = FakeEnv("LINUX", "/home/mo", files = mapOf("$titles/" to ""), bin = mapOf("/roms/Ruby.zcci" to "Z3DS....".encodeToByteArray()))
+        val waiting = SaveAdapters.forEmulator("azahar")!!.locate(game, before).first()
+        assertFalse(waiting.available)
+        assertEquals(titles, waiting.learnIn)
+        val after = FakeEnv(
+            "LINUX", "/home/mo", files = mapOf("$titles/00055d00/data/00000001/main" to "save"),
+            learnedMap = mapOf("${game.game.id}|3ds.savedata" to listOf("00055d00")),
+        )
+        val save = SaveAdapters.forEmulator("azahar")!!.locate(game, after)
+        assertEquals("$titles/00055d00/data", save.first().root)
+        assertTrue(save.last().files.first().path.endsWith("/states/0004000000055D00.00.cst"))
+    }
+
+    @Test
+    fun pspWiiAndSwitchSavesAreLearnedWhenTheirIdsAreUnknown() {
+        val home = "/home/mo"
+        val psp = q("psp", "/roms/psp/game.iso", "ppsspp")
+        val wii = q("wii", "/roms/wii/game.rvz", "dolphin")
+        val sw = q("switch", "/roms/switch/game.xci", "eden")
+        val stick = "$home/.config/ppsspp/PSP/SAVEDATA"
+        val nand = "$home/.local/share/dolphin-emu/Wii/title/00010000"
+        val users = "$home/.local/share/eden/nand/user/save/0000000000000000"
+        val user = "0123456789ABCDEF0123456789ABCDEF"
+        val files = mapOf("$stick/" to "", "$nand/" to "", "$users/$user/" to "")
+        val blank = FakeEnv("LINUX", home, files = files)
+        assertEquals(stick, SaveAdapters.forEmulator("ppsspp")!!.locate(psp, blank).single().learnIn)
+        assertEquals(nand, SaveAdapters.forEmulator("dolphin")!!.locate(wii, blank).single().learnIn)
+        assertEquals("$users/$user", SaveAdapters.forEmulator("eden")!!.locate(sw, blank).single().learnIn)
+        val taught = FakeEnv(
+            "LINUX", home, files = files,
+            learnedMap = mapOf(
+                "${psp.game.id}|psp.savedata" to listOf("ULUS10041DATA00", "ULUS10041DATA01"),
+                "${wii.game.id}|wii.nand" to listOf("52534245"),
+                "${sw.game.id}|switch.savedata" to listOf("0100000000010000"),
+            ),
+        )
+        assertEquals(listOf("ULUS10041DATA00", "ULUS10041DATA01"), SaveAdapters.forEmulator("ppsspp")!!.locate(psp, taught).single().folders)
+        assertEquals("$nand/52534245/data", SaveAdapters.forEmulator("dolphin")!!.locate(wii, taught).single().root)
+        assertEquals("$users/$user/0100000000010000", SaveAdapters.forEmulator("eden")!!.locate(sw, taught).single().root)
     }
 }

@@ -81,7 +81,7 @@ class JvmSyncService(
     @Volatile private var cached: SyncSettings = SyncSettings()
 
     /** The device's files, with the save folders the person chose on top. */
-    private val saveEnv: SaveEnvironment = WithSaveFolders(files) { cached.saveFolders }
+    private val saveEnv: SaveEnvironment = WithSaveFolders(files, { game, format -> device?.learned(game, format).orEmpty() }) { cached.saveFolders }
 
     init {
         scope.launch(Dispatchers.IO) { runCatching { start() } }
@@ -998,6 +998,9 @@ class JvmSyncService(
         if (waitForOthers && c != null) othersOn(c, d, query, profile)?.let { return@withContext it }
         // From here until its save is sent after it stops (Android keeps Fuse going meanwhile).
         getReady(query.title)
+        // Saves Fuse can't place yet (the game's id unknown): what each game's folder looks like now,
+        // so the folders this play changes are learned as this game's.
+        snapshotLearnable(query)
         var note: String? = null
         for (slot in slots(query)) {
             // On a device more than one person plays, the folder must hold this person's save
@@ -1066,10 +1069,19 @@ class JvmSyncService(
             val session = SessionEntry(SessionEntry.idOf(startedAt, endedAt), d.deviceId, startedAt, endedAt, query.emulatorId)
             if (cached.records) d.played(profile, query.game, session, ::canonical)
             val total = canonical(d.meta(profile)).game(query.game).totalSeconds
+            learnFromPlay(d, query)
             val c = liveLock.withLock {
-                val captured = slots(query).mapNotNull { slot ->
+                val here = slots(query)
+                val captured = here.mapNotNull { slot ->
                     runCatching { d.capture(ownerOf(query, slot, profile), slot, total, title = query.title) }.getOrNull()
                         ?.also { log("${query.title}: new ${it.kind.label.lowercase()} kept", query.game.id, "save") }
+                }
+                // Never silent: a save that couldn't be kept says why, once per game while Fuse runs.
+                if (captured.none { it.kind != SaveKind.STATE }) whyNotKept(query, here)?.let { why ->
+                    if (explained.add("${query.game.id}|$why")) {
+                        log("${query.title}: save not sent. $why", query.game.id, "save")
+                        _notices.tryEmit(SyncNotice.NotSynced(query.title, SaveKind.SAVE, why))
+                    }
                 }
                 val c = client ?: return@withLock null
                 runCatching { d.flush(c) }
@@ -1081,6 +1093,59 @@ class JvmSyncService(
             runCatching { c.notePresence(PresenceNote(profile, query.game.id, query.title, if (d.pendingProfiles().isEmpty()) null else Presence.SENDING, startedAt)) }
         }
         if (watch == null) _nowPlaying.value = null
+    }
+
+    /** A learnable save's folders as they were before a game: each game's subfolder and when it last changed. */
+    private class LearnSnap(val format: String, val folder: String, val times: Map<String, Long>)
+
+    private val learnSnaps = java.util.concurrent.ConcurrentHashMap<String, List<LearnSnap>>()
+
+    /** Explanations already given (game and reason), so each is said once while Fuse runs. */
+    private val explained: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet()
+
+    private fun snapshotLearnable(query: SaveQuery) {
+        val adapter = SaveAdapters.forEmulator(query.emulatorId) ?: return
+        val snaps = runCatching { adapter.locate(query, saveEnv) }.getOrDefault(emptyList()).mapNotNull { spot ->
+            val folder = spot.learnIn ?: return@mapNotNull null
+            LearnSnap(spot.format, folder, saveEnv.list(folder).associateWith { saveEnv.modified("$folder/$it") ?: 0L })
+        }
+        if (snaps.isEmpty()) learnSnaps.remove(query.game.id) else learnSnaps[query.game.id] = snaps
+    }
+
+    /**
+     * After a game whose saves couldn't be placed: the game folders it changed are its own. Only a
+     * clear answer is kept (a few folders, as one game makes); anything else waits for the next play.
+     */
+    private suspend fun learnFromPlay(d: SyncDevice, query: SaveQuery) {
+        val snaps = learnSnaps.remove(query.game.id) ?: return
+        for (snap in snaps) {
+            val changed = saveEnv.list(snap.folder).filter { name ->
+                val now = saveEnv.modified("${snap.folder}/$name") ?: return@filter false
+                val before = snap.times[name]
+                before == null || now > before
+            }
+            if (changed.size !in 1..LEARN_MAX) continue
+            d.learn(query.game.id, snap.format, changed)
+            log("${query.title}: learned where its save is", query.game.id, "save")
+        }
+    }
+
+    /**
+     * Why nothing of [query]'s save could be kept after it was played, or null when there is nothing
+     * to say (it simply didn't change, saves don't sync, or the game keeps its own saves).
+     */
+    private fun whyNotKept(query: SaveQuery, here: List<LocalSlot>): String? {
+        if (!cached.saves || query.platform in OWN_SAVES_PLATFORMS) return null
+        val adapter = SaveAdapters.forEmulator(query.emulatorId)
+            ?: return SaveAdapters.whyNot(query.emulatorId).takeIf { SaveAdapters.baseId(query.emulatorId) !in OWN_SAVES_EMULATORS }
+        val spots = runCatching { adapter.locate(query, saveEnv) }.getOrDefault(emptyList()).filter { it.kind != SaveKind.STATE }
+        spots.firstOrNull { !it.available }?.let { return it.note ?: "Fuse can't reach this game's save folder here." }
+        val saves = here.filter { it.kind != SaveKind.STATE && it.available }
+        if (saves.isNotEmpty() && saves.all { it.files.isEmpty() }) {
+            val where = saves.first().let { s -> s.targets.values.firstOrNull()?.parentFile ?: s.root }.path.replace('\\', '/')
+            return "Fuse found no save for it in $where. If you saved, choose the emulator's save folder in Fuse, Settings, Save folders."
+        }
+        return null
     }
 
     // ---------------------------------------------------------------- while a game runs
@@ -1354,6 +1419,16 @@ class JvmSyncService(
         const val ADOPTED_AT = 1L
 
         /** Tries, a moment apart, for a background service holding the host's port to answer. */
+        /** The most game folders one play may change and still be learned as one game's. */
+        const val LEARN_MAX = 4
+
+        /** Systems whose games keep their own saves (PC games, Android apps): nothing to explain. */
+        val OWN_SAVES_PLATFORMS = setOf("win", "steam", "android", "dos")
+        val OWN_SAVES_EMULATORS = setOf(
+            "steam", "steam-url", "desktop", "shortcut", "open", "script", "winlator", "winlator-cmod", "winlator-frost", "winlator-glibc",
+            "winlator-proot", "winnative", "gamehub", "gamehub-lite", "gamehub-lite-local", "gamenative", "bannerlator", "dosbox-staging", "dosbox-x",
+        )
+
         const val ADMIN_TRIES = 4
         const val ADMIN_RETRY_MS = 750L
 

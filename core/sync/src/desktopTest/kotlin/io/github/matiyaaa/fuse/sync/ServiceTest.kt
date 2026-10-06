@@ -15,6 +15,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.JsonPrimitive
@@ -78,10 +79,11 @@ class ServiceTest {
         root.deleteRecursively()
     }
 
-    private fun service(name: String, library: Library, platform: String = "LINUX"): Pair<JvmSyncService, SettingsStore> {
+    private fun service(name: String, library: Library, platform: String = "LINUX", home: File? = null): Pair<JvmSyncService, SettingsStore> {
         val settings = SettingsStore(DesktopDatabase.open(null))
         runBlocking { settings.update { it.copy(sync = it.sync.copy(enabled = true, hostPort = port, deviceName = name)) } }
-        val svc = JvmSyncService(File(root, name), settings, Secrets(), library, platform, name, "test", NoHostLifetime("test"), scope, liveLookMs = 300)
+        val files = home?.let { FileSaveEnvironment(platform, it.path.replace('\\', '/'), variables = { null }) } ?: FileSaveEnvironment(platform)
+        val svc = JvmSyncService(File(root, name), settings, Secrets(), library, platform, name, "test", NoHostLifetime("test"), scope, files = files, liveLookMs = 300)
         return svc to settings
     }
 
@@ -403,5 +405,63 @@ class ServiceTest {
         svc.afterExit(SaveQuery(ct, "gba", "/x.gba", "mgba"), 0, 1)
         assertEquals(0, lib.writes)
         assertTrue(svc.profiles.value.isEmpty())
+    }
+
+    @Test
+    fun aPlayTeachesFuseWhereASaveWithAnUnknownIdLives(): Unit = runBlocking {
+        // PPSSPP names saves by a game's id, which Fuse doesn't know for this game: its first play here
+        // shows which save folder is its, and from then on the save is kept in step.
+        val home = File(root, "home").apply { mkdirs() }
+        val savedata = File(home, ".config/ppsspp/PSP/SAVEDATA").apply { mkdirs() }
+        File(savedata, "NPUH10001DATA/DATA.BIN").apply { parentFile.mkdirs(); writeText("another game") }.setLastModified(1_000_000)
+        File(savedata, "NPUH10001DATA").setLastModified(1_000_000)
+        val (pc, _) = service("Gaming PC", Library(), home = home)
+        pc.hostHere("Gaming PC", installService = false).getOrThrow()
+        val game = GameKey.of("psp", null, null, "Patapon")
+        val q = SaveQuery(game, "psp", File(root, "Patapon.iso").path.replace('\\', '/'), "ppsspp", title = "Patapon")
+        val notices = java.util.Collections.synchronizedList(ArrayList<SyncNotice>())
+        val listening = scope.launch { pc.notices.collect { notices += it } }
+        assertIs<LaunchGate.Go>(pc.beforeLaunch(q))
+        // The game saves into its own folder while it runs.
+        File(savedata, "UCUS98711DATA00/DATA.BIN").apply { parentFile.mkdirs(); writeText("level 3") }
+        pc.afterExit(q, 0, 60_000)
+        val versions = pc.versions(q, SaveKind.SAVE)
+        assertEquals(1, versions.size, "the learned save was kept")
+        // Next time it is found before the game starts, like any other.
+        File(savedata, "UCUS98711DATA00/DATA.BIN").writeText("level 4")
+        pc.afterExit(q, 0, 60_000)
+        assertEquals(2, pc.versions(q, SaveKind.SAVE).size)
+        listening.cancel()
+        assertTrue(notices.none { it is SyncNotice.NotSynced }, notices.toString())
+        pc.stop()
+    }
+
+    @Test
+    fun aSaveThatCantBeKeptSaysWhyOnceAndAnUnchangedOneSaysNothing(): Unit = runBlocking {
+        val home = File(root, "home").apply { mkdirs() }
+        val (pc, _) = service("Gaming PC", Library(), home = home)
+        pc.hostHere("Gaming PC", installService = false).getOrThrow()
+        val notices = java.util.Collections.synchronizedList(ArrayList<SyncNotice>())
+        val listening = scope.launch { pc.notices.collect { notices += it } }
+        // DuckStation's folder isn't on this computer: the save can't be kept, and Fuse says so, once.
+        val psx = SaveQuery(GameKey.of("psx", null, null, "Vagrant Story"), "psx", File(root, "vs.cue").path, "duckstation", title = "Vagrant Story")
+        pc.afterExit(psx, 0, 60_000)
+        pc.afterExit(psx, 0, 60_000)
+        withTimeout(5_000) { while (notices.none { it is SyncNotice.NotSynced }) kotlinx.coroutines.delay(20) }
+        val said = notices.filterIsInstance<SyncNotice.NotSynced>()
+        assertEquals(1, said.size, said.toString())
+        assertEquals("Vagrant Story", said.single().title)
+        // A game whose save didn't change since it was last kept: nothing to say.
+        val roms = File(root, "roms").apply { mkdirs() }
+        File(roms, "Ruby.sav").writeText("8 badges")
+        val gba = SaveQuery(ct, "gba", File(roms, "Ruby.gba").path.replace('\\', '/'), "mgba", title = "Pokemon Ruby")
+        pc.afterExit(gba, 0, 60_000)
+        pc.afterExit(gba, 0, 60_000)
+        // A game that keeps its own saves (a PC game): nothing to say either.
+        pc.afterExit(SaveQuery(GameKey.of("win", null, null, "Hades"), "win", "/games/Hades.exe", "steam", title = "Hades"), 0, 60_000)
+        kotlinx.coroutines.delay(300)
+        listening.cancel()
+        assertEquals(1, notices.filterIsInstance<SyncNotice.NotSynced>().size, notices.toString())
+        pc.stop()
     }
 }

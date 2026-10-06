@@ -96,6 +96,8 @@ internal data class DeviceState(
     val metas: Map<String, ProfileMeta> = emptyMap(),
     /** Records changed here and not yet on the host, by profile. */
     val pendingMeta: Map<String, ProfileMeta> = emptyMap(),
+    /** The folders a play showed hold a game's saves when its id couldn't be read: `game|format`. */
+    val learned: Map<String, List<String>> = emptyMap(),
 )
 
 /** How urgent a transfer is: the save for a game about to start goes before everything else. */
@@ -151,6 +153,15 @@ class SyncDevice(
     fun pendingProfiles(): Set<String> = state.outbox.map { it.profile }.toSet()
     val pendingCount: Int get() = state.outbox.size + state.pendingMeta.count { it.value != ProfileMeta() }
     val seq: Long get() = state.seq
+
+    /** The folders [game]'s saves of [format] were learned to be in, from a play here. */
+    fun learned(game: String, format: String): List<String> = state.learned["$game|$format"].orEmpty()
+
+    /** Remembers that [game]'s saves of [format] are in [folders] (a play changed exactly those). */
+    suspend fun learn(game: String, format: String, folders: List<String>) = mutex.withLock {
+        state = state.copy(learned = state.learned + ("$game|$format" to folders.sorted()))
+        persist()
+    }
 
     suspend fun useProfile(id: String?) = mutex.withLock {
         state = state.copy(profile = id)
@@ -584,6 +595,42 @@ class FileSaveEnvironment(
         if (!f.isFile || f.length() > limit) null else f.readText()
     }.getOrNull()
     override fun env(name: String): String? = variables(name)
+
+    override fun modified(path: String): Long? {
+        val f = File(path)
+        if (!f.exists()) return null
+        if (f.isFile) return f.lastModified()
+        // A folder: its newest file, a few levels down (a game's save folder is small).
+        var newest = f.lastModified()
+        var seen = 0
+        f.walkTopDown().maxDepth(MODIFIED_DEPTH).forEach { child ->
+            if (++seen > MODIFIED_FILES) return newest
+            if (child.isFile) newest = maxOf(newest, child.lastModified())
+        }
+        return newest
+    }
+
+    override fun storageRoots(): List<String> {
+        if (host != "ANDROID") return emptyList()
+        // The device's own storage, then every card and drive Android mounts beside it.
+        val cards = File("/storage").listFiles().orEmpty()
+            .filter { it.name != "self" && it.name != "emulated" && it.isDirectory && it.canRead() }
+            .map { it.path }.sorted()
+        return listOf("/storage/emulated/0") + cards
+    }
+
+    private val remembered = java.util.concurrent.ConcurrentHashMap<String, Pair<Long, List<String>>>()
+
+    override fun remember(key: String, compute: () -> List<String>): List<String> {
+        val now = System.currentTimeMillis()
+        remembered[key]?.let { (at, found) ->
+            // Found folders are kept while they are all still there; "nothing" is asked again after a while.
+            val fresh = if (found.isEmpty()) now - at < EMPTY_FOR_MS else found.all { File(it).exists() }
+            if (fresh) return found
+        }
+        return compute().also { remembered[key] = now to it }
+    }
+
     override fun readBytes(path: String, offset: Long, length: Int): ByteArray? = runCatching {
         java.io.RandomAccessFile(path, "r").use { f ->
             if (offset < 0 || offset >= f.length()) return@use null
@@ -592,3 +639,10 @@ class FileSaveEnvironment(
         }
     }.getOrNull()
 }
+
+/** How deep, and over how many files, a folder's last change is looked for. */
+private const val MODIFIED_DEPTH = 6
+private const val MODIFIED_FILES = 5_000
+
+/** How long "no such folder" is believed before storage is searched again. */
+private const val EMPTY_FOR_MS = 10 * 60_000L

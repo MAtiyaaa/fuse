@@ -163,17 +163,23 @@ internal object ScummVm : SaveAdapter {
 /**
  * Nintendo 3DS emulators (Azahar, Citra and its builds, Lime3DS, Mandarine): a game's save in the
  * emulated SD card under its title id, `sdmc/Nintendo 3DS/<id0>/<id1>/title/00040000/<id>/data`.
+ * On Android the user folder is wherever the person picked it, so Fuse looks for it there too.
  */
 internal object ThreeDs : SaveAdapter {
     override val emulators = setOf("azahar", "azaharplus", "citra", "citra-canary", "citra-mmj", "lime3ds", "mandarine")
 
-    private fun base(env: SaveEnvironment, q: SaveQuery): String? = SaveAdapters.chosen(env, q) ?: when (env.host) {
+    private const val FORMAT = "3ds.savedata"
+
+    private fun base(env: SaveEnvironment, q: SaveQuery, id: String?): String? = SaveAdapters.chosen(env, q) ?: when (env.host) {
         "WINDOWS" -> SaveAdapters.firstDir(
             env, q.emulatorPath?.let { SaveAdapters.parent(it) + "/user" },
             "${SaveAdapters.appData(env)}/Azahar", "${SaveAdapters.appData(env)}/Citra", "${SaveAdapters.appData(env)}/Lime3DS", "${SaveAdapters.appData(env)}/Mandarine",
         )
         "MACOS" -> SaveAdapters.firstDir(env, "${SaveAdapters.macSupport(env)}/Azahar", "${SaveAdapters.macSupport(env)}/Citra", "${SaveAdapters.macSupport(env)}/Lime3DS")
         "ANDROID" -> SaveAdapters.firstDir(env, "/storage/emulated/0/Azahar", "/storage/emulated/0/azahar-emu", "/storage/emulated/0/citra-emu", "/storage/emulated/0/lime3ds-emu", "/storage/emulated/0/Citra")
+            ?: DataFolders.find(env, "3ds", listOf("azahar", "citra", "lime3ds", "mandarine", "3ds"), holds = { b -> id != null && env.isDirectory(titles(env, b) + "/" + id.drop(8).lowercase()) }) { d ->
+                d.takeIf { env.isDirectory("$it/sdmc/Nintendo 3DS") && (env.isDirectory("$it/nand") || env.isDirectory("$it/config")) }
+            }.firstOrNull()
         else -> SaveAdapters.firstDir(
             env, "${SaveAdapters.xdgData(env)}/azahar-emu", "${env.home}/.var/app/org.azahar_emu.Azahar/data/azahar-emu",
             "${SaveAdapters.xdgData(env)}/citra-emu", "${env.home}/.var/app/org.citra_emu.citra/data/citra-emu",
@@ -181,21 +187,67 @@ internal object ThreeDs : SaveAdapter {
         )
     }
 
-    /** The game's title id: its serial when Fuse has one, else read from the cartridge header (NCSD). */
-    internal fun titleId(q: SaveQuery, env: SaveEnvironment): String? {
-        q.serial?.uppercase()?.takeIf { HEX16.matches(it) && it.startsWith("00040000") }?.let { return it }
-        val b = env.readBytes(q.romPath, 0x100, 0x10) ?: return null
-        if (b.size < 0x10 || b.decodeToString(0, 4) != "NCSD") return null
-        return leHex(b, 8, 8).takeIf { it.startsWith("00040000") }
-    }
-
-    override fun locate(q: SaveQuery, env: SaveEnvironment): List<SaveSpot> {
-        val base = base(env, q) ?: return listOf(SaveAdapters.unavailable(SaveKind.SAVE, "3ds.savedata", if (env.host == "ANDROID") "Choose the user folder you picked in Azahar (the one with sdmc inside) in Fuse, Settings, Save folders." else "The 3DS emulator's folder wasn't found here."))
-        val id = titleId(q, env) ?: return listOf(SaveAdapters.unavailable(SaveKind.SAVE, "3ds.savedata", "Fuse couldn't read this game's title id (installed .cia games keep theirs inside)."))
+    /** Where the user folder [base] keeps games' saves: `sdmc/Nintendo 3DS/<id0>/<id1>/title/00040000`. */
+    private fun titles(env: SaveEnvironment, base: String): String {
         val n3ds = "$base/sdmc/Nintendo 3DS"
         val id0 = env.list(n3ds).firstOrNull { HEX32.matches(it) } ?: ZERO
         val id1 = env.list("$n3ds/$id0").firstOrNull { HEX32.matches(it) } ?: ZERO
-        val save = SaveSpot(SaveKind.SAVE, "3ds.savedata", root = "$n3ds/$id0/$id1/title/${id.take(8).lowercase()}/${id.drop(8).lowercase()}/data")
+        return "$n3ds/$id0/$id1/title/00040000"
+    }
+
+    /**
+     * The game's title id: its serial when Fuse has one, else what the file itself says (a cartridge
+     * image's NCSD header, an NCCH's program id, a CIA's title metadata). Null for files whose header
+     * is compressed (`.zcci`, `.zcxi`): their id is learned from the first play instead.
+     */
+    internal fun titleId(q: SaveQuery, env: SaveEnvironment): String? {
+        q.serial?.uppercase()?.takeIf { HEX16.matches(it) && it.startsWith("00040000") }?.let { return it }
+        val b = env.readBytes(q.romPath, 0x100, 0x20)
+        if (b != null && b.size >= 0x20) {
+            when (b.decodeToString(0, 4)) {
+                // Cartridge image: the media id at 0x108.
+                "NCSD" -> return leHex(b, 8, 8).takeIf { it.startsWith("00040000") }
+                // One NCCH (.cxi, .app): the program id at 0x118.
+                "NCCH" -> return leHex(b, 0x18, 8).takeIf { it.startsWith("00040000") }
+            }
+        }
+        return ciaTitle(env, q.romPath)?.let { "00040000" + it.takeLast(8) }
+    }
+
+    /**
+     * A CIA's title id from its title metadata (TMD), laid out as 3dbrew documents it and as
+     * `core/library`'s Cia reads it: a little-endian header of section sizes, each section aligned to
+     * 64 bytes, then the TMD whose signature type says where its big-endian title id is.
+     */
+    internal fun ciaTitle(env: SaveEnvironment, path: String): String? {
+        val head = env.readBytes(path, 0, 0x20) ?: return null
+        if (head.size < 0x20 || le32(head, 0) != CIA_HEADER) return null
+        fun align(v: Long) = (v + 63) / 64 * 64
+        val ticketAt = align(align(CIA_HEADER) + le32(head, 0x08))
+        val tmdAt = align(ticketAt + le32(head, 0x0C))
+        val sig = env.readBytes(path, tmdAt, 4) ?: return null
+        if (sig.size < 4) return null
+        val header = when (((sig[0].toLong() and 0xFF) shl 24) or ((sig[1].toLong() and 0xFF) shl 16) or ((sig[2].toLong() and 0xFF) shl 8) or (sig[3].toLong() and 0xFF)) {
+            0x10003L -> 0x240
+            0x10004L -> 0x140
+            0x10005L -> 0x80
+            else -> return null
+        }
+        val id = env.readBytes(path, tmdAt + header + 0x4C, 8) ?: return null
+        if (id.size < 8) return null
+        return id.joinToString("") { ((it.toInt() and 0xFF) + 0x100).toString(16).substring(1) }.uppercase().takeIf { HEX16.matches(it) }
+    }
+
+    private fun le32(b: ByteArray, at: Int): Long =
+        (b[at].toLong() and 0xFF) or ((b[at + 1].toLong() and 0xFF) shl 8) or ((b[at + 2].toLong() and 0xFF) shl 16) or ((b[at + 3].toLong() and 0xFF) shl 24)
+
+    override fun locate(q: SaveQuery, env: SaveEnvironment): List<SaveSpot> {
+        val read = titleId(q, env)
+        val base = base(env, q, read) ?: return listOf(SaveAdapters.unavailable(SaveKind.SAVE, FORMAT, if (env.host == "ANDROID") "Fuse didn't find the user folder you picked in Azahar (the one with sdmc inside). Choose it in Fuse, Settings, Save folders." else "The 3DS emulator's folder wasn't found here."))
+        val titles = titles(env, base)
+        val id = read ?: SaveAdapters.learned(env, q, FORMAT).firstOrNull()?.let { "00040000" + it.uppercase() }
+            ?: return listOf(SaveAdapters.unavailable(SaveKind.SAVE, FORMAT, SaveAdapters.PLAY_ONCE, learnIn = titles))
+        val save = SaveSpot(SaveKind.SAVE, FORMAT, root = "$titles/${id.drop(8).lowercase()}/data")
         // Save states: `states/<TITLE ID>.<slot>.cst` in the same user folder, slots 0 to 10.
         val states = SaveSpot(SaveKind.STATE, "3ds.state", (0..STATE_SLOTS).map { n ->
             val slot = n.toString().padStart(2, '0')
@@ -205,6 +257,8 @@ internal object ThreeDs : SaveAdapter {
     }
 
     private const val STATE_SLOTS = 10
+
+    private const val CIA_HEADER = 0x2020L
 
     private const val ZERO = "00000000000000000000000000000000"
 }
@@ -236,11 +290,13 @@ internal object SwitchNand : SaveAdapter {
 
     override fun locate(q: SaveQuery, env: SaveEnvironment): List<SaveSpot> {
         val base = base(env, q) ?: return listOf(SaveAdapters.unavailable(SaveKind.SAVE, "switch.savedata", if (env.host == "ANDROID") SaveAdapters.androidPrivateNote("This Switch emulator", "Use its Manage save data export, then choose that folder in Fuse, Settings, Save folders.") else "The Switch emulator's folder wasn't found here."))
-        val id = SwitchIds.of(q, env) ?: return listOf(SaveAdapters.unavailable(SaveKind.SAVE, "switch.savedata", "Fuse doesn't know this game's title id yet (a [0100…] tag in its file name tells it)."))
+        val read = SwitchIds.of(q, env)
         val users = "$base/nand/user/save/0000000000000000"
         val people = env.list(users).filter { HEX32.matches(it) }
-        val user = people.firstOrNull { env.isDirectory("$users/$it/$id") } ?: people.firstOrNull()
+        val user = people.firstOrNull { read != null && env.isDirectory("$users/$it/$read") } ?: people.firstOrNull()
             ?: return listOf(SaveAdapters.unavailable(SaveKind.SAVE, "switch.savedata", "Play a game once in the emulator so it makes its user, then Fuse keeps saves in step."))
+        val id = read ?: SaveAdapters.learned(env, q, "switch.savedata").firstOrNull()
+            ?: return listOf(SaveAdapters.unavailable(SaveKind.SAVE, "switch.savedata", SaveAdapters.PLAY_ONCE, learnIn = "$users/$user"))
         return listOf(SaveSpot(SaveKind.SAVE, "switch.savedata", root = "$users/$user/$id"))
     }
 }
@@ -319,7 +375,9 @@ internal object Cemu : SaveAdapter {
             else -> SaveAdapters.firstDir(env, "${SaveAdapters.xdgData(env)}/Cemu", "${env.home}/.var/app/info.cemu.Cemu/data/Cemu")
         } ?: return listOf(SaveAdapters.unavailable(SaveKind.SAVE, "wiiu.savedata", if (env.host == "ANDROID") SaveAdapters.androidPrivateNote("Cemu", "Choose the custom folder you set in Cemu in Fuse, Settings, Save folders.") else "Cemu's folder wasn't found here."))
         val mlc = if (env.isDirectory("$base/mlc01")) "$base/mlc01" else base
-        val id = titleId(q, env) ?: return listOf(SaveAdapters.unavailable(SaveKind.SAVE, "wiiu.savedata", "Fuse couldn't read this game's title id (from meta/meta.xml in its folder)."))
+        val games = "$mlc/usr/save/00050000"
+        val id = titleId(q, env) ?: SaveAdapters.learned(env, q, "wiiu.savedata").firstOrNull()?.let { "00050000" + it.uppercase() }
+            ?: return listOf(SaveAdapters.unavailable(SaveKind.SAVE, "wiiu.savedata", SaveAdapters.PLAY_ONCE, learnIn = games))
         return listOf(SaveSpot(SaveKind.SAVE, "wiiu.savedata", root = "$mlc/usr/save/${id.take(8).lowercase()}/${id.drop(8).lowercase()}/user"))
     }
 }
@@ -334,11 +392,12 @@ internal object Xenia : SaveAdapter {
         val content = SaveAdapters.chosen(env, q) ?: SaveAdapters.firstDir(
             env, q.emulatorPath?.let { SaveAdapters.parent(it) + "/content" }, "${SaveAdapters.documents(env)}/Xenia/content", "${SaveAdapters.xdgData(env)}/Xenia/content",
         ) ?: return listOf(SaveAdapters.unavailable(SaveKind.SAVE, "x360.savedata", "Xenia's content folder wasn't found here."))
-        val id = q.serial?.uppercase()?.takeIf { HEX8.matches(it) } ?: TAG8.find(q.romPath)?.groupValues?.get(1)?.uppercase()
-            ?: return listOf(SaveAdapters.unavailable(SaveKind.SAVE, "x360.savedata", "Fuse doesn't know this game's title id (an [XXXXXXXX] tag in its name tells it)."))
+        val read = q.serial?.uppercase()?.takeIf { HEX8.matches(it) } ?: TAG8.find(q.romPath)?.groupValues?.get(1)?.uppercase()
         val profiles = env.list(content).filter { HEX16.matches(it) }
-        val profile = profiles.firstOrNull { env.isDirectory("$content/$it/$id") } ?: profiles.firstOrNull()
+        val profile = profiles.firstOrNull { read != null && env.isDirectory("$content/$it/$read") } ?: profiles.firstOrNull()
             ?: return listOf(SaveAdapters.unavailable(SaveKind.SAVE, "x360.savedata", "Play it once in Xenia so it makes its profile and save."))
+        val id = read ?: SaveAdapters.learned(env, q, "x360.savedata").firstOrNull()
+            ?: return listOf(SaveAdapters.unavailable(SaveKind.SAVE, "x360.savedata", SaveAdapters.PLAY_ONCE, learnIn = "$content/$profile"))
         return listOf(SaveSpot(SaveKind.SAVE, "x360.savedata", root = "$content/$profile/$id/00000001"))
     }
 }

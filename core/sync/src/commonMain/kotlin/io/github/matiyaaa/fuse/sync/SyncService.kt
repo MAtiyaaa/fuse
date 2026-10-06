@@ -82,6 +82,9 @@ sealed interface SyncNotice {
 
     /** The newest save could not be used here (another emulator's, or another format), and stays on the host. */
     data class CantUse(val title: String, val kind: SaveKind, val from: String, val why: String) : SyncNotice
+
+    /** After a game, nothing of its save could be kept to send: [why] says why, and what to do. */
+    data class NotSynced(val title: String, val kind: SaveKind, val why: String) : SyncNotice
 }
 
 /** A save conflict, as the person sees it. */
