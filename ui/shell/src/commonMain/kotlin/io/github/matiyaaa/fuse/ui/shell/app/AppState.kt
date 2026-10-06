@@ -133,6 +133,9 @@ class AppState(
     var quickMenuOpen by mutableStateOf(false)
     var contextMenu by mutableStateOf<ContextMenuSpec?>(null)
     var confirm by mutableStateOf<ConfirmSpec?>(null)
+
+    /** What the last "Restore Fuse Default Art" replaced, while it can still be undone (this session). */
+    var artUndo by mutableStateOf<io.github.matiyaaa.fuse.ui.shell.store.ArtUndo?>(null)
     var textInput by mutableStateOf<TextInputSpec?>(null)
     var choice by mutableStateOf<ChoiceSpec?>(null)
 

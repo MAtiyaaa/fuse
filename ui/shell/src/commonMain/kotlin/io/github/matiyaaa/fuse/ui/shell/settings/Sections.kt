@@ -1,5 +1,7 @@
 package io.github.matiyaaa.fuse.ui.shell.settings
 
+import io.github.matiyaaa.fuse.ui.shell.systems.restoreSystemArt
+import io.github.matiyaaa.fuse.ui.shell.systems.undoSystemArt
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -591,6 +593,14 @@ fun systemsRows(app: AppState): List<MenuAction> {
                             app.toasts.show("Downloading system art")
                         },
                     ))
+                    add(MenuAction(
+                        "art.default", "Restore Fuse Default Art", FuseIcons.RotateCcw,
+                        detail = "Every system shows Fuse's own icon, background and logo again; nothing is downloaded for them by itself",
+                        onSelect = { app.restoreSystemArt(emptyList(), null) },
+                    ))
+                    app.artUndo?.let { u ->
+                        add(MenuAction("art.undo", "Undo Restore Art", FuseIcons.Undo, detail = "Puts back the art ${u.count} systems had", onSelect = { app.undoSystemArt(u) }))
+                    }
                     add(infoRow("art.credit", "Art Book Next", detail = SystemArtPack.ATTRIBUTION, icon = FuseIcons.Info))
                 }
             })

@@ -59,7 +59,10 @@ internal class SystemArtStore(private val ctx: StoreContext) {
                         ids.filter { id -> media[MediaOwner.OfPlatform(id)].let { it == null || (it.logo == null && it.boxart == null && it.icon == null) } }
                     }
                 }
-                .combine(data.settings.settings.map { it.library.systemArtAuto }.distinctUntilChanged()) { bare, auto -> if (auto) bare else emptyList() }
+                .combine(data.settings.settings.map { it.library.systemArtAuto to it.library.systemArtDefault.toSet() }.distinctUntilChanged()) { bare, (auto, kept) ->
+                    // Systems put back to Fuse's own art keep it.
+                    if (auto) bare.filter { it.value !in kept } else emptyList()
+                }
                 .collect { bare ->
                     val fresh = lock.withLock { bare.filter { attempted.add(it) } }
                     for (id in fresh) {
@@ -74,6 +77,10 @@ internal class SystemArtStore(private val ctx: StoreContext) {
     fun downloadAll() {
         job?.cancel()
         job = ctx.scope.launch {
+            // Asked for every system: the ones put back to Fuse's art take the pack again too.
+            if (ctx.settings.value.library.systemArtDefault.isNotEmpty()) {
+                ctx.settings.value = ctx.data.settings.update { it.copy(library = it.library.copy(systemArtDefault = emptyList())) }
+            }
             val ids = ctx.data.games.platformCounts().first().filterValues { it > 0 }.keys.toList()
             var added = 0
             progressState.value = FillProgress(0, ids.size, null, 0, finished = ids.isEmpty())
@@ -134,4 +141,40 @@ internal class SystemArtStore(private val ctx: StoreContext) {
     private fun option(kind: MediaKind, url: String, style: String) =
         // The provider id is only a label here; the author names the pack in the art browser.
         ArtworkOption(ScrapeProviderId.LOCAL, kind, url, thumbUrl = null, width = null, height = null, style = style, author = "Art Book Next")
+
+    /**
+     * Puts [ids] back to Fuse's own art: their downloaded and chosen art is removed (the files stay)
+     * and their pack colours go, and nothing is downloaded for them by itself after. Returns what
+     * was there, for [undo].
+     */
+    suspend fun restoreDefault(ids: List<PlatformId>): SystemArtUndo {
+        val before = ids.associateWith { ctx.data.media.rows(MediaOwner.OfPlatform(it)) }
+        val colors = ctx.settings.value.library.systemColors.filterKeys { k -> ids.any { it.value == k } }
+        val wasDefault = ctx.settings.value.library.systemArtDefault
+        for (id in ids) ctx.data.media.clearOwner(MediaOwner.OfPlatform(id))
+        ctx.settings.value = ctx.data.settings.update { s ->
+            s.copy(library = s.library.copy(
+                systemColors = s.library.systemColors - ids.map { it.value }.toSet(),
+                systemArtDefault = (s.library.systemArtDefault + ids.map { it.value }).distinct(),
+            ))
+        }
+        return SystemArtUndo(before, colors, wasDefault)
+    }
+
+    /** Puts back what [restoreDefault] removed. */
+    suspend fun undo(u: SystemArtUndo) {
+        for ((id, rows) in u.rows) ctx.data.media.putBack(MediaOwner.OfPlatform(id), rows)
+        ctx.settings.value = ctx.data.settings.update { s ->
+            s.copy(library = s.library.copy(systemColors = s.library.systemColors + u.colors, systemArtDefault = u.wasDefault))
+        }
+    }
+}
+
+/** What restoring Fuse's art replaced, kept for Undo. */
+class SystemArtUndo internal constructor(
+    internal val rows: Map<PlatformId, List<io.github.matiyaaa.fuse.data.db.Media>>,
+    internal val colors: Map<String, Long>,
+    internal val wasDefault: List<String>,
+) : io.github.matiyaaa.fuse.ui.shell.store.ArtUndo {
+    override val count: Int get() = rows.count { it.value.isNotEmpty() }
 }

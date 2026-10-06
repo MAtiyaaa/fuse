@@ -85,6 +85,15 @@ internal class DefaultMediaOps(
 
     override fun downloadSystemArt() = systemArt.downloadAll()
 
+    override suspend fun restoreDefaultSystemArt(platforms: List<PlatformId>): io.github.matiyaaa.fuse.ui.shell.store.ArtUndo {
+        val ids = platforms.ifEmpty { ctx.data.games.platformCounts().first().filterValues { it > 0 }.keys.toList() }
+        return systemArt.restoreDefault(ids)
+    }
+
+    override suspend fun undoSystemArt(undo: io.github.matiyaaa.fuse.ui.shell.store.ArtUndo) {
+        (undo as? SystemArtUndo)?.let { systemArt.undo(it) }
+    }
+
     private val checks = MutableStateFlow<Map<ScrapeProviderId, KeyCheck?>>(emptyMap())
     override val keyChecks: StateFlow<Map<ScrapeProviderId, KeyCheck?>> = checks
     private var checkJob: Job? = null

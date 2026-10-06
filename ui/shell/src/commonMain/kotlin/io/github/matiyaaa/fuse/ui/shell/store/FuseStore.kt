@@ -620,6 +620,15 @@ interface MediaOps {
     fun checkKeys()
     /** Fetches logos, artwork and colours from the system art pack for every system with games. */
     fun downloadSystemArt()
+
+    /**
+     * Puts [platforms] (every system with games when empty) back to Fuse's own art: downloaded and
+     * chosen art is removed and not downloaded again by itself. Null where this can't be done.
+     */
+    suspend fun restoreDefaultSystemArt(platforms: List<PlatformId>): ArtUndo? = null
+
+    /** Puts back what [restoreDefaultSystemArt] replaced. */
+    suspend fun undoSystemArt(undo: ArtUndo) {}
     val systemArtProgress: StateFlow<FillProgress?>
 }
 
@@ -829,3 +838,8 @@ data class PhoneLinkState(
     val sessions: Int = 0,
     val error: String? = null,
 )
+
+/** What a "Restore Fuse Default Art" replaced, for Undo; [count] systems had art of their own. */
+interface ArtUndo {
+    val count: Int
+}

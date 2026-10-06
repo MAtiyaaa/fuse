@@ -17,6 +17,26 @@ class MediaRepositoryTest {
     private fun sgdb(kind: MediaKind, url: String) = MediaItem(kind, MediaSource.STEAMGRIDDB, remoteUrl = url)
 
     @Test
+    fun systemArtGoesBackToFusesOwnAndComesBackExactlyOnUndo() = runBlocking {
+        TestDb().use { t ->
+            val media = t.data.media
+            val owner = MediaOwner.OfPlatform(PlatformId("snes"))
+            media.setCustom(owner, MediaKind.ICON, "/user/icon.png", focusX = 0.3f)
+            media.putScraped(owner, listOf(MediaItem(MediaKind.LOGO, MediaSource.ART_PACK, remoteUrl = "pack/logo")), MediaFillMode.FILL_MISSING)
+            val kept = media.rows(owner)
+            assertEquals(2, kept.size)
+            media.clearOwner(owner)
+            assertNull(media.get(owner).icon)
+            assertNull(media.get(owner).logo)
+            media.putBack(owner, kept)
+            val back = media.get(owner)
+            assertEquals("/user/icon.png", back.icon?.localPath)
+            assertEquals(0.3f, back.icon?.focusX)
+            assertEquals("pack/logo", back.logo?.remoteUrl)
+        }
+    }
+
+    @Test
     fun scrapersNeverTouchUserMedia() = runBlocking {
         TestDb().use { t ->
             val media = t.data.media
