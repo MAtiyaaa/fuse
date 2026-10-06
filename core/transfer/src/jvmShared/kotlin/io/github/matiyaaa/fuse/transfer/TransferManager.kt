@@ -62,12 +62,16 @@ class TransferManager(
     override fun start() {
         if (started) return
         started = true
+        // Only what was left from last time: a transfer added after this call may already be running
+        // by the time this runs, and must not be sent back to the queue (and started a second time).
+        val fromLastTime = _items.value.map { it.id }.toSet()
         scope.launch {
             mutex.withLock {
                 val now = clock()
                 val keep = _settings.value.keepFinishedDays
                 _items.value = _items.value.mapNotNull { t ->
                     when {
+                        t.id !in fromLastTime -> t
                         // Finished long enough ago: gone from the list.
                         t.status.finished && (t.finishedAt ?: 0) < now - keep * DAY_MS -> null
                         t.status == TransferStatus.ACTIVE ->
@@ -226,14 +230,15 @@ class TransferManager(
     }
 
     private fun applyConditions() {
+        // The rates first, at once: a transfer started right after a new limit is set moves at that limit.
+        val s = _settings.value
+        for (d in TransferDirection.entries) {
+            val playingRate = if (_conditions.value.playing && s.whilePlaying(d) == WhilePlaying.REDUCED) TransferSettings.REDUCED_RATE else 0L
+            // The overall limit is shared between the directions that are moving.
+            val user = if (s.bandwidthLimit > 0) s.bandwidthLimit / 2 else 0L
+            buckets.getValue(d).rate = listOf(user, playingRate).filter { it > 0 }.minOrNull() ?: 0L
+        }
         scope.launch {
-            val s = _settings.value
-            for (d in TransferDirection.entries) {
-                val playingRate = if (_conditions.value.playing && s.whilePlaying(d) == WhilePlaying.REDUCED) TransferSettings.REDUCED_RATE else 0L
-                // The overall limit is shared between the directions that are moving.
-                val user = if (s.bandwidthLimit > 0) s.bandwidthLimit / 2 else 0L
-                buckets.getValue(d).rate = listOf(user, playingRate).filter { it > 0 }.minOrNull() ?: 0L
-            }
             // Held directions: running transfers step aside (keeping what they did) and wait.
             for (d in TransferDirection.entries) {
                 val reason = held(d)
