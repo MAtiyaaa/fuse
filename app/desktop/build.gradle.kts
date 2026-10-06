@@ -27,6 +27,9 @@ dependencies {
     implementation(libs.coil.svg)
     // MP3 decoding for menu music (LGPL-2.1-or-later, see THIRD_PARTY_NOTICES.md).
     implementation(libs.jlayer)
+    // Recordings: the FFmpeg program Fuse Player already carries encodes them (see DesktopScreenCapture).
+    implementation(libs.ffmpeg)
+    implementation(libs.javacpp)
     // Controllers on Windows and macOS through SDL2 (Apache-2.0; SDL2 is zlib). Linux reads
     // /dev/input itself, so only the Windows and macOS builds carry it.
     compileOnly(libs.jamepad)

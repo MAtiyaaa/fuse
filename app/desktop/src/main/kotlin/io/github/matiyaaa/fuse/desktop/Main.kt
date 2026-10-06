@@ -14,6 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.isAltPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.type
@@ -158,6 +159,15 @@ private fun onKey(session: DesktopSession, e: KeyEvent): Boolean {
     val fullscreenKey = e.key == Key.F11 || (e.key == Key.Enter && e.isAltPressed)
     if (fullscreenKey) {
         if (e.type == KeyEventType.KeyDown) session.toggleFullscreen()
+        return true
+    }
+    // F12 takes a screenshot of Fuse's window; Shift+F12 starts or stops a recording (as L3 + R3 on a pad).
+    if (e.key == Key.F12) {
+        if (e.type == KeyEventType.KeyDown) {
+            session.router.onCaptureCombo?.invoke(
+                if (e.isShiftPressed) io.github.matiyaaa.fuse.ui.designsystem.input.ComboGesture.HOLD else io.github.matiyaaa.fuse.ui.designsystem.input.ComboGesture.TAP,
+            )
+        }
         return true
     }
     val handled = session.router.handleKeyEvent(e)
