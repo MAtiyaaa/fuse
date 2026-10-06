@@ -1,24 +1,39 @@
 package io.github.matiyaaa.fuse.ui.fuseline
 
 import androidx.compose.runtime.Immutable
-import kotlin.math.abs
-import kotlin.math.cos
-import kotlin.math.exp
-import kotlin.math.sin
-import kotlin.math.sqrt
 
 /**
- * How a value travels from where it is to where it is going: over a fixed time along a curve
- * ([Tween]), as a spring ([Spring]), at once ([Snap]), or a tween played again and again
- * ([Repeating]). A motion says nothing about what is moving: Fuseline runs the same motion on a
- * float, a size, a position or a colour, one component at a time.
+ * How a value travels from where it is to where it is going. A motion says nothing about what is
+ * moving: Fuseline runs the same motion on a float, a size, a position or a colour, one component
+ * at a time, and every motion knows its exact position and speed at any moment, so whatever takes
+ * over from it (another motion, a finger) starts exactly where it was and as fast as it was going.
+ *
+ * - [Tween]: a fixed time along a [Curve].
+ * - [Spring]: a damped spring, solved exactly.
+ * - [Decay]: coasting to a stop under friction, ignoring the target (a fling).
+ * - [Snap]: at once.
+ * - [Keyframes]: a choreography of the way between start and target.
+ * - [Repeating]: a finite motion played again and again.
+ * - [Delayed], [Sequence], [Parallel]: motions composed.
  */
 @Immutable
 sealed interface Motion
 
-/** [durationMs] long along [curve], after waiting [delayMs]. */
+/**
+ * [durationMs] long along [curve], after waiting [delayMs]. With [inheritVelocity] (the default), a
+ * tween that starts while the value is already moving carries that speed on and blends into the
+ * curve, so a value redirected mid-flight never jolts: on a curve that leaves gently its position and
+ * speed at the start are exactly what they were, and it still arrives on time and as the curve lands.
+ * A curve that leaves at a dash ([Curves.Enter]) keeps its dash, with the value's speed added. A
+ * value at rest starts the curve as drawn, and a delayed tween waits still, so it starts from rest.
+ */
 @Immutable
-data class Tween(val durationMs: Int, val delayMs: Int = 0, val curve: Curve = Curves.Standard) : Motion {
+data class Tween(
+    val durationMs: Int,
+    val delayMs: Int = 0,
+    val curve: Curve = Curves.Standard,
+    val inheritVelocity: Boolean = true,
+) : Motion {
     init {
         require(durationMs >= 0 && delayMs >= 0) { "A tween's times can't be negative" }
     }
@@ -38,8 +53,9 @@ data class Spring(
     val threshold: Float? = null,
 ) : Motion {
     init {
-        require(dampingRatio >= 0f) { "A spring's damping ratio can't be negative" }
-        require(stiffness > 0f) { "A spring needs some stiffness" }
+        require(dampingRatio >= 0f && dampingRatio.isFinite()) { "A spring's damping ratio can't be negative" }
+        require(stiffness > 0f && stiffness.isFinite()) { "A spring needs some stiffness" }
+        require(threshold == null || threshold > 0f) { "A spring's threshold must be above zero" }
     }
 
     companion object {
@@ -55,27 +71,87 @@ data class Spring(
     }
 }
 
+/**
+ * Coasting under friction from the speed it has: the speed falls by [friction] per second
+ * exponentially (v(t) = v₀·e^(−friction·t)), so it travels v₀ / friction in all, and it stops once
+ * what is left to travel is within [threshold] (in the value's own units; null takes the value
+ * type's default). The target is ignored: where it ends is where its speed takes it
+ * ([projectDecay] says where in advance), which is how a fling finds its destination.
+ */
+@Immutable
+data class Decay(val friction: Float = DEFAULT_FRICTION, val threshold: Float? = null) : Motion {
+    init {
+        require(friction > 0f && friction.isFinite()) { "A decay needs some friction" }
+        require(threshold == null || threshold > 0f) { "A decay's threshold must be above zero" }
+    }
+
+    companion object {
+        /** About as quickly as a flung list comes to rest on a phone. */
+        const val DEFAULT_FRICTION = 4.2f
+    }
+}
+
 /** Straight to the target after [delayMs]. */
 @Immutable
-data class Snap(val delayMs: Int = 0) : Motion
+data class Snap(val delayMs: Int = 0) : Motion {
+    init {
+        require(delayMs >= 0) { "A snap's delay can't be negative" }
+    }
+}
 
-/** Whether a repeating tween starts over each time, or plays back the way it came. */
+/**
+ * A choreography over [durationMs]: each [Keyframe] says what share of the way from start (0) to
+ * target (1) the value has reached at its time, reached along its own curve from the keyframe
+ * before. Shares outside 0..1 overshoot or undershoot, for anticipation. Without a keyframe at the
+ * start or the end, the start is 0 and the end is 1. Its speed is exact everywhere.
+ */
+@Immutable
+class Keyframes(val durationMs: Int, keys: List<Keyframe>) : Motion {
+    init {
+        require(durationMs >= 0) { "Keyframes can't last a negative time" }
+        require(keys.all { it.atMs in 0..durationMs }) { "Every keyframe falls within the keyframes' length" }
+        require(keys.all { it.fraction.isFinite() }) { "A keyframe's share of the way must be finite" }
+    }
+
+    /** The keyframes in time order, with the start (0) and end (1) filled in where missing. */
+    val keys: List<Keyframe> = buildList {
+        // Stable: keyframes at the same moment keep the order given (a jump, from the first to the last).
+        val sorted = keys.sortedBy { it.atMs }
+        if (sorted.none { it.atMs == 0 }) add(Keyframe(0, 0f, Curves.Linear))
+        addAll(sorted)
+        if (sorted.none { it.atMs == durationMs }) add(Keyframe(durationMs, 1f, Curves.Standard))
+    }
+
+    override fun equals(other: Any?): Boolean = other is Keyframes && durationMs == other.durationMs && keys == other.keys
+    override fun hashCode(): Int = durationMs * 31 + keys.hashCode()
+    override fun toString(): String = "Keyframes($durationMs, $keys)"
+}
+
+/** At [atMs], [fraction] of the way from start to target, reached along [curve] from the keyframe before. */
+@Immutable
+data class Keyframe(val atMs: Int, val fraction: Float, val curve: Curve = Curves.Standard)
+
+/** Whether a repeating motion starts over each time, or plays back the way it came. */
 enum class RepeatMode { Restart, Reverse }
 
 /**
- * [tween] played [iterations] times ([FOREVER] for a loop that never ends), each time from the
- * start ([RepeatMode.Restart]) or back and forth ([RepeatMode.Reverse]). [startOffsetMs] starts the
- * loop that far in, so neighbours sharing a loop can be out of step.
+ * [motion] (any motion that ends) played [iterations] times ([FOREVER] for a loop that never ends),
+ * each time from the start ([RepeatMode.Restart]) or back and forth ([RepeatMode.Reverse], where
+ * the speed turns round with it). [startOffsetMs] starts the loop that far in, so neighbours
+ * sharing a loop can be out of step.
  */
 @Immutable
 data class Repeating(
-    val tween: Tween,
+    val motion: Motion,
     val iterations: Int = FOREVER,
     val mode: RepeatMode = RepeatMode.Restart,
     val startOffsetMs: Int = 0,
 ) : Motion {
     init {
         require(iterations >= 1) { "A repeat plays at least once" }
+        require(startOffsetMs >= 0) { "A repeat's offset can't be negative" }
+        require(motion.ends) { "Only a motion that ends can repeat" }
+        require(motion !is Decay) { "A decay goes where its speed takes it, so it has nothing to repeat" }
     }
 
     val infinite: Boolean get() = iterations == FOREVER
@@ -84,6 +160,64 @@ data class Repeating(
         const val FOREVER = Int.MAX_VALUE
     }
 }
+
+/** [motion] after holding still for [delayMs]: it starts from rest, wherever the value was. */
+@Immutable
+data class Delayed(val delayMs: Int, val motion: Motion) : Motion {
+    init {
+        require(delayMs >= 0) { "A delay can't be negative" }
+    }
+}
+
+/**
+ * [legs] one after another: each runs toward the target for its own length, and the next takes
+ * over exactly where the one before was and as fast as it was going. A decay followed by a spring
+ * is a fling that settles on its target; a tween followed by a spring lands softly. Only the last
+ * leg may go on for ever.
+ */
+@Immutable
+class Sequence(val legs: List<Motion>) : Motion {
+    constructor(vararg legs: Motion) : this(legs.toList())
+
+    init {
+        require(legs.isNotEmpty()) { "A sequence needs at least one motion" }
+        require(legs.dropLast(1).all { it.ends }) { "Only a sequence's last motion may go on for ever" }
+    }
+
+    override fun equals(other: Any?): Boolean = other is Sequence && legs == other.legs
+    override fun hashCode(): Int = legs.hashCode()
+    override fun toString(): String = "Sequence($legs)"
+}
+
+/**
+ * A different motion for each part of a value moving together: the first component (x, width, a
+ * colour's lightness) under the first motion, the second under the second, and any further ones
+ * under the last. A position can glide sideways on a spring while it fades up on a tween.
+ */
+@Immutable
+class Parallel(val motions: List<Motion>) : Motion {
+    constructor(vararg motions: Motion) : this(motions.toList())
+
+    init {
+        require(motions.isNotEmpty()) { "Parallel needs at least one motion" }
+    }
+
+    fun forComponent(component: Int): Motion = motions[component.coerceIn(0, motions.lastIndex)]
+
+    override fun equals(other: Any?): Boolean = other is Parallel && motions == other.motions
+    override fun hashCode(): Int = motions.hashCode()
+    override fun toString(): String = "Parallel($motions)"
+}
+
+/** Whether this motion comes to an end by itself (a loop played for ever doesn't). */
+val Motion.ends: Boolean
+    get() = when (this) {
+        is Repeating -> !infinite
+        is Delayed -> motion.ends
+        is Sequence -> legs.last().ends
+        is Parallel -> motions.all { it.ends }
+        else -> true
+    }
 
 // ----------------------------------------------------------------------------------------------
 // Builders. They read like the motion they make, and take the same names a reader of animation
@@ -100,207 +234,35 @@ fun spring(
     visibilityThreshold: Float? = null,
 ): Spring = Spring(dampingRatio, stiffness, visibilityThreshold)
 
+/** A [Decay] slowing by [friction] per second. */
+fun decay(friction: Float = Decay.DEFAULT_FRICTION, threshold: Float? = null): Decay = Decay(friction, threshold)
+
 /** A [Snap] after [delayMillis]. */
 fun snap(delayMillis: Int = 0): Snap = Snap(delayMillis)
 
 /** [animation] looped forever. */
-fun infiniteRepeatable(animation: Tween, repeatMode: RepeatMode = RepeatMode.Restart, initialStartOffsetMs: Int = 0): Repeating =
+fun infiniteRepeatable(animation: Motion, repeatMode: RepeatMode = RepeatMode.Restart, initialStartOffsetMs: Int = 0): Repeating =
     Repeating(animation, Repeating.FOREVER, repeatMode, initialStartOffsetMs)
 
 /** [animation] played [iterations] times. */
-fun repeatable(iterations: Int, animation: Tween, repeatMode: RepeatMode = RepeatMode.Restart): Repeating =
+fun repeatable(iterations: Int, animation: Motion, repeatMode: RepeatMode = RepeatMode.Restart): Repeating =
     Repeating(animation, iterations, repeatMode)
+
+/** [motion] after [delayMillis] still. */
+fun delayed(delayMillis: Int, motion: Motion): Delayed = Delayed(delayMillis, motion)
+
+/** [Keyframes] over [durationMillis], built with [KeyframesBuilder.at]. */
+fun keyframes(durationMillis: Int, build: KeyframesBuilder.() -> Unit): Keyframes =
+    Keyframes(durationMillis, KeyframesBuilder().apply(build).keys)
+
+class KeyframesBuilder internal constructor() {
+    internal val keys = ArrayList<Keyframe>()
+
+    /** At [ms], [fraction] of the way from start to target, along [curve] from the keyframe before. */
+    fun at(ms: Int, fraction: Float, curve: Curve = Curves.Standard) {
+        keys += Keyframe(ms, fraction, curve)
+    }
+}
 
 /** The length of a tween given no length. */
 const val DEFAULT_TWEEN_MS = 300
-
-// ----------------------------------------------------------------------------------------------
-// Running a motion: one component from [start] to [target], starting at [velocity] (units per
-// second). Times are in nanoseconds of play.
-
-internal const val NANOS_PER_MS = 1_000_000L
-private const val NANOS_PER_SECOND = 1_000_000_000.0
-
-/** One component of a value travelling under a motion. */
-internal sealed class Track(val start: Float, val target: Float) {
-    /** How long the motion plays, in nanoseconds ([Long.MAX_VALUE] for a loop that never ends). */
-    abstract val durationNanos: Long
-
-    abstract fun valueAt(playNanos: Long): Float
-
-    abstract fun velocityAt(playNanos: Long): Float
-
-    companion object {
-        fun of(motion: Motion, start: Float, target: Float, velocity: Float, threshold: Float): Track = when (motion) {
-            is Tween -> TweenTrack(motion, start, target)
-            is Spring -> SpringTrack(motion, start, target, velocity, motion.threshold ?: threshold)
-            is Snap -> SnapTrack(motion, start, target)
-            is Repeating -> RepeatTrack(motion, start, target)
-        }
-    }
-}
-
-internal class TweenTrack(private val tween: Tween, start: Float, target: Float) : Track(start, target) {
-    private val delay = tween.delayMs * NANOS_PER_MS
-    private val length = tween.durationMs * NANOS_PER_MS
-    override val durationNanos: Long = delay + length
-
-    fun fraction(playNanos: Long): Float {
-        if (length == 0L) return if (playNanos >= delay) 1f else 0f
-        return ((playNanos - delay).toFloat() / length).coerceIn(0f, 1f)
-    }
-
-    override fun valueAt(playNanos: Long): Float {
-        val f = tween.curve.transform(fraction(playNanos))
-        return start + (target - start) * f
-    }
-
-    /** A tween's speed, measured across a millisecond, for a spring that takes over from it. */
-    override fun velocityAt(playNanos: Long): Float {
-        if (playNanos <= delay || playNanos >= durationNanos) return 0f
-        val before = valueAt((playNanos - NANOS_PER_MS).coerceAtLeast(0))
-        val now = valueAt(playNanos)
-        return (now - before) * 1_000f
-    }
-}
-
-internal class SnapTrack(private val snap: Snap, start: Float, target: Float) : Track(start, target) {
-    override val durationNanos: Long = snap.delayMs * NANOS_PER_MS
-    override fun valueAt(playNanos: Long): Float = if (playNanos >= durationNanos) target else start
-    override fun velocityAt(playNanos: Long): Float = 0f
-}
-
-internal class RepeatTrack(private val repeat: Repeating, start: Float, target: Float) : Track(start, target) {
-    private val inner = TweenTrack(repeat.tween, start, target)
-    private val once = inner.durationNanos.coerceAtLeast(1)
-    private val offset = repeat.startOffsetMs * NANOS_PER_MS
-    override val durationNanos: Long = if (repeat.infinite) Long.MAX_VALUE else once * repeat.iterations
-
-    /** Where in its own run the current iteration is, played backwards on reversed iterations. */
-    private fun local(playNanos: Long): Long {
-        val t = playNanos + offset
-        if (!repeat.infinite && t >= durationNanos) {
-            // Finished: where the last iteration ends.
-            val lastReversed = repeat.mode == RepeatMode.Reverse && repeat.iterations % 2 == 0
-            return if (lastReversed) 0 else once
-        }
-        val iteration = t / once
-        val within = t % once
-        return if (repeat.mode == RepeatMode.Reverse && iteration % 2 == 1L) once - within else within
-    }
-
-    override fun valueAt(playNanos: Long): Float = inner.valueAt(local(playNanos))
-    override fun velocityAt(playNanos: Long): Float = inner.velocityAt(local(playNanos))
-}
-
-/**
- * A damped spring solved exactly: the displacement from the target x(t) obeys
- * x'' + 2 ζ ω x' + ω² x = 0, with ω = √stiffness and ζ the damping ratio, from x(0) = start - target
- * and x'(0) = velocity. Under-, critically and over-damped springs each have their closed form.
- */
-internal class SpringTrack(
-    spring: Spring,
-    start: Float,
-    target: Float,
-    private val velocity: Float,
-    private val threshold: Float,
-) : Track(start, target) {
-    private val omega = sqrt(spring.stiffness.toDouble())
-    private val zeta = spring.dampingRatio.toDouble()
-    private val x0 = (start - target).toDouble()
-    private val v0 = velocity.toDouble()
-
-    // Under-damped: the frequency it rings at.
-    private val omegaD = if (zeta < 1.0) omega * sqrt(1.0 - zeta * zeta) else 0.0
-
-    // Over-damped: the two decay rates and their weights.
-    private val r1: Double
-    private val r2: Double
-    private val c1: Double
-    private val c2: Double
-
-    init {
-        if (zeta > 1.0) {
-            val root = sqrt(zeta * zeta - 1.0)
-            r1 = -omega * (zeta - root)
-            r2 = -omega * (zeta + root)
-            c2 = (r1 * x0 - v0) / (r1 - r2)
-            c1 = x0 - c2
-        } else {
-            r1 = 0.0; r2 = 0.0; c1 = 0.0; c2 = 0.0
-        }
-    }
-
-    // Under-damped: the weight of the sine term, fixed for the whole move.
-    private val bUnder = if (zeta < 1.0) (v0 + zeta * omega * x0) / omegaD else 0.0
-
-    // Critically damped: the weight of the linear term.
-    private val bCritical = v0 + omega * x0
-
-    /** Displacement at [t] seconds, without allocating (it runs every frame). */
-    private fun displacement(t: Double): Double = when {
-        zeta < 1.0 -> exp(-zeta * omega * t) * (x0 * cos(omegaD * t) + bUnder * sin(omegaD * t))
-        zeta == 1.0 -> (x0 + bCritical * t) * exp(-omega * t)
-        else -> c1 * exp(r1 * t) + c2 * exp(r2 * t)
-    }
-
-    /** Velocity at [t] seconds. */
-    private fun speed(t: Double): Double = when {
-        zeta < 1.0 -> {
-            val decay = exp(-zeta * omega * t)
-            val cos = cos(omegaD * t)
-            val sin = sin(omegaD * t)
-            decay * ((bUnder * omegaD - zeta * omega * x0) * cos - (x0 * omegaD + zeta * omega * bUnder) * sin)
-        }
-        zeta == 1.0 -> (bCritical - omega * (x0 + bCritical * t)) * exp(-omega * t)
-        else -> c1 * r1 * exp(r1 * t) + c2 * r2 * exp(r2 * t)
-    }
-
-    private fun resting(ms: Long): Boolean {
-        val t = ms / 1_000.0
-        val x = displacement(t)
-        return abs(x) <= threshold && x * speed(t) <= 0.0
-    }
-
-    /**
-     * When the spring is at rest: it never again strays more than [threshold] from the target. A
-     * spring that swings past is bounded by its decaying envelope, so the moment that envelope is
-     * within the threshold it is done (never in the middle of an overshoot). One that doesn't
-     * swing is done once within the threshold and heading home: found in strides, then to the
-     * millisecond, so a spring retargeted every frame stays cheap.
-     */
-    override val durationNanos: Long by lazy(LazyThreadSafetyMode.NONE) {
-        if (x0 == 0.0 && v0 == 0.0) return@lazy 0L
-        if (zeta < 1.0) {
-            val amplitude = sqrt(x0 * x0 + bUnder * bUnder)
-            if (amplitude <= threshold) return@lazy 0L
-            val seconds = kotlin.math.ln(amplitude / threshold) / (zeta * omega)
-            return@lazy (seconds * NANOS_PER_SECOND).toLong().coerceAtMost(MAX_SPRING_MS * NANOS_PER_MS)
-        }
-        if (resting(0)) return@lazy 0L
-        var ms = 0L
-        while (ms < MAX_SPRING_MS && !resting(ms + STRIDE_MS)) ms += STRIDE_MS
-        // The first resting millisecond within the last stride.
-        while (ms < MAX_SPRING_MS && !resting(ms)) ms++
-        ms.coerceAtMost(MAX_SPRING_MS) * NANOS_PER_MS
-    }
-
-    override fun valueAt(playNanos: Long): Float {
-        if (playNanos >= durationNanos) return target
-        return (target + displacement(playNanos / NANOS_PER_SECOND)).toFloat()
-    }
-
-    override fun velocityAt(playNanos: Long): Float {
-        if (playNanos >= durationNanos) return 0f
-        return speed(playNanos / NANOS_PER_SECOND).toFloat()
-    }
-
-    private companion object {
-        /** No spring runs longer than this, however soft. */
-        const val MAX_SPRING_MS = 60_000L
-
-        /** How far the search for a calm spring's end steps before it narrows to the millisecond. */
-        const val STRIDE_MS = 8L
-
-    }
-}

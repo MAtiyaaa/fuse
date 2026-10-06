@@ -1,4 +1,4 @@
-package io.github.matiyaaa.fuse.ui.fuseline
+package io.github.matiyaaa.fuse.ui.fuseline.v2
 
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.State
@@ -114,10 +114,8 @@ class FuselineValue<T>(
                     // The tracks may have been replaced since the last frame (a new target, in place).
                     val tr = r.tracks
                     for (i in 0 until dims) {
-                        val t = tr[i]
-                        t.sample(play)
-                        now[i] = t.sampledValue
-                        speed[i] = t.sampledVelocity
+                        now[i] = tr[i].valueAt(play)
+                        speed[i] = tr[i].velocityAt(play)
                     }
                     // Converters only read the array, so no copy is made per frame.
                     value = converter.read(now)
