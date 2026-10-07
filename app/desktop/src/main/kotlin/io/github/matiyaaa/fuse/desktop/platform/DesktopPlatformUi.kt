@@ -198,6 +198,10 @@ class DesktopPlatformUi(
         return true
     }
 
+    private val awake = DesktopStayAwake()
+
+    override fun stayAwake(awake: io.github.matiyaaa.fuse.ui.shell.platform.StayAwake) = this.awake.apply(awake)
+
     override fun restart() {
         val command = restartCommand()
         if (command == null) {

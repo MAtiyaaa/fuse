@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 import java.io.File
@@ -61,12 +62,16 @@ class TransferManager(
     override fun start() {
         if (started) return
         started = true
+        // Only what was left from last time: a transfer added after this call may already be running
+        // by the time this runs, and must not be sent back to the queue (and started a second time).
+        val fromLastTime = _items.value.map { it.id }.toSet()
         scope.launch {
             mutex.withLock {
                 val now = clock()
                 val keep = _settings.value.keepFinishedDays
                 _items.value = _items.value.mapNotNull { t ->
                     when {
+                        t.id !in fromLastTime -> t
                         // Finished long enough ago: gone from the list.
                         t.status.finished && (t.finishedAt ?: 0) < now - keep * DAY_MS -> null
                         t.status == TransferStatus.ACTIVE ->
@@ -225,14 +230,15 @@ class TransferManager(
     }
 
     private fun applyConditions() {
+        // The rates first, at once: a transfer started right after a new limit is set moves at that limit.
+        val s = _settings.value
+        for (d in TransferDirection.entries) {
+            val playingRate = if (_conditions.value.playing && s.whilePlaying(d) == WhilePlaying.REDUCED) TransferSettings.REDUCED_RATE else 0L
+            // The overall limit is shared between the directions that are moving.
+            val user = if (s.bandwidthLimit > 0) s.bandwidthLimit / 2 else 0L
+            buckets.getValue(d).rate = listOf(user, playingRate).filter { it > 0 }.minOrNull() ?: 0L
+        }
         scope.launch {
-            val s = _settings.value
-            for (d in TransferDirection.entries) {
-                val playingRate = if (_conditions.value.playing && s.whilePlaying(d) == WhilePlaying.REDUCED) TransferSettings.REDUCED_RATE else 0L
-                // The overall limit is shared between the directions that are moving.
-                val user = if (s.bandwidthLimit > 0) s.bandwidthLimit / 2 else 0L
-                buckets.getValue(d).rate = listOf(user, playingRate).filter { it > 0 }.minOrNull() ?: 0L
-            }
             // Held directions: running transfers step aside (keeping what they did) and wait.
             for (d in TransferDirection.entries) {
                 val reason = held(d)
@@ -277,7 +283,9 @@ class TransferManager(
         meters.getOrPut(item.id) { SpeedMeter() }.reset()
         val job = scope.launch(start = kotlinx.coroutines.CoroutineStart.LAZY) {
             val outcome: (TransferItem) -> TransferItem = try {
-                handler.run(item, io)
+                // A transfer reads and hashes whole files: never on the thread that draws Fuse (a
+                // desktop's scope is the UI's own), so the interface keeps moving while it runs.
+                withContext(Dispatchers.IO) { handler.run(item, io) }
                 val live = liveOf(item.id).value
                 ({ t -> t.copy(status = TransferStatus.DONE, phase = null, finishedAt = clock(), doneBytes = live.totalBytes ?: live.doneBytes, totalBytes = live.totalBytes ?: t.totalBytes, error = null) })
             } catch (e: CancellationException) {

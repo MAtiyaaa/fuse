@@ -12,8 +12,10 @@ import io.ktor.http.headersOf
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import java.io.File
 import java.nio.file.Files
@@ -203,6 +205,41 @@ class TransferTest {
         assertEquals(1, handler.done.get())
     }
 
+    /**
+     * On a computer Fuse hands the transfers the UI's own scope. A transfer that reads a big file
+     * (an upload hashing a disc image) must leave that thread free, or Fuse freezes until it ends.
+     */
+    @Test
+    fun `a transfer never runs on the thread that draws Fuse`() = runBlocking<Unit> {
+        val ui = java.util.concurrent.Executors.newSingleThreadExecutor { r -> Thread(r, "fuse-ui") }
+        val scope = CoroutineScope(SupervisorJob() + ui.asCoroutineDispatcher())
+        scopes += scope
+        val ranOn = java.util.concurrent.atomic.AtomicReference<String>()
+        val release = java.util.concurrent.CountDownLatch(1)
+        val m = TransferManager(File(root, "ui-state"), scope, volumes = { emptyList() }).also { it.start() }
+        m.register(object : TransferHandler {
+            override val source = "test"
+            override suspend fun run(item: TransferItem, io: TransferIo) {
+                ranOn.set(Thread.currentThread().name)
+                // Blocking work, like hashing a file.
+                release.await()
+            }
+        })
+        val id = m.enqueue(download("Big.iso"))
+        val until = System.currentTimeMillis() + 10_000
+        while (ranOn.get() == null && System.currentTimeMillis() < until) delay(10)
+        // While the transfer blocks, the UI thread still answers straight away.
+        val reply = kotlinx.coroutines.CompletableDeferred<Boolean>()
+        scope.launch { reply.complete(true) }
+        val answered = kotlinx.coroutines.withTimeoutOrNull(1_000) { reply.await() }
+        release.countDown()
+        assertEquals(true, answered, "The UI thread was blocked by the transfer")
+        assertNotNull(ranOn.get())
+        assertFalse(ranOn.get() == "fuse-ui")
+        m.awaitStatus(id, TransferStatus.DONE)
+        ui.shutdown()
+    }
+
     @Test
     fun `the same thing queued twice is one transfer`() = runBlocking<Unit> {
         val m = manager()
@@ -244,6 +281,24 @@ class TransferTest {
         val failed = m.awaitStatus(id, TransferStatus.FAILED)
         assertFalse(failed.retryable)
         assertEquals(1, server.requests.get())
+    }
+
+    /**
+     * Starting the queue sends what was left running last time back to it. A transfer added right
+     * after the start may already be running when that happens: it must never be queued again and
+     * run a second time. Many times over, since it is a matter of timing.
+     */
+    @Test
+    fun `a transfer added as the queue starts runs once`() = runBlocking<Unit> {
+        repeat(60) { n ->
+            val server = Server().apply { status = HttpStatusCode.Unauthorized }
+            val m = manager(File(root, "state$n"))
+            m.register(FileHandler(server))
+            val id = m.enqueue(download("Once$n.bin"))
+            m.awaitStatus(id, TransferStatus.FAILED)
+            delay(30)
+            assertEquals(1, server.requests.get(), "run $n asked the server ${server.requests.get()} times")
+        }
     }
 
     @Test

@@ -147,6 +147,10 @@ class AndroidPlatformUi(
         return out.toByteArray()
     }
 
+    private val awake = AndroidStayAwake(appContext, activities)
+
+    override fun stayAwake(awake: io.github.matiyaaa.fuse.ui.shell.platform.StayAwake) = this.awake.apply(awake)
+
     override fun openUrl(url: String) {
         val uri = url.toUri()
         if (uri.scheme != "https" && uri.scheme != "http") return

@@ -213,6 +213,7 @@ private fun FuseAppContent(
     StandbyWatch(app, router, prefs.standbyMinutes) {
         app.intro || app.launching != null || homeFeed.playtime.currentGame != null || app.navigator.current == Route.Onboarding
     }
+    StayAwakeWatch(app)
     DriveWatch(app) {
         app.intro || app.standby || app.launching != null || homeFeed.playtime.currentGame != null || app.navigator.current == Route.Onboarding
     }
@@ -1236,4 +1237,24 @@ internal fun padGlyphs(setting: GlyphStyle, family: GlyphStyle?): GlyphStyle = w
 internal fun hintConfirmOnRight(input: io.github.matiyaaa.fuse.model.InputProfile, shown: GlyphStyle, family: GlyphStyle?): Boolean = when {
     input.autoGlyphs && shown != GlyphStyle.NINTENDO && (family == GlyphStyle.PLAYSTATION || family == GlyphStyle.XBOX) -> input.swapConfirmBack
     else -> input.confirmOnRight
+}
+
+/**
+ * Tells the system to stay awake while Fuse finds art, downloads or uploads, so the standby screen
+ * (or the system turning the screen off) never stops that work. Let go as soon as it is done.
+ */
+@Composable
+private fun StayAwakeWatch(app: AppState) {
+    val transfers by app.store.transfers.summary.collectAsState()
+    val filling by app.store.media.fillProgress.collectAsState()
+    val systemArt by app.store.media.systemArtProgress.collectAsState()
+    val awake = io.github.matiyaaa.fuse.ui.shell.platform.StayAwake.plan(
+        transfers = transfers.active + transfers.queued,
+        finding = filling != null || systemArt != null,
+        standby = app.standby,
+    )
+    LaunchedEffect(awake) { app.platform.stayAwake(awake) }
+    androidx.compose.runtime.DisposableEffect(Unit) {
+        onDispose { app.platform.stayAwake(io.github.matiyaaa.fuse.ui.shell.platform.StayAwake.NONE) }
+    }
 }
