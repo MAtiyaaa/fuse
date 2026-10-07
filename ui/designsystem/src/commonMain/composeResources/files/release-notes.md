@@ -59,8 +59,12 @@ moves exactly as it did; the engine does a great deal less to make it move.
   fading over the tabs no longer compose or measure again every frame either.
 - **Benchmarks against every Fuseline and Compose.** Fuseline 4 is measured against Fuseline 3.1,
   3, 2, 1 and Compose on every workload, drawn, read every frame and unread (see
-  [docs/fuseline.md](../fuseline.md#speed) for the method and every row). The numbers come from a
-  computer (OpenJDK on Linux); Fuseline 4 has not yet been measured on an Android device.
+  [docs/fuseline.md](../fuseline.md#speed) for the method and every row). A thousand springs nobody
+  is looking at cost 1.3 µs a frame instead of 173 µs, a thousand tweens 5.9 µs instead of 90;
+  springs given a new target every frame take about half the time, values following a finger half.
+  Of 111 rows Fuseline 4 is clearly first on 52, within run-to-run noise on 57, and behind on 2
+  (both explained there). The numbers come from a computer (OpenJDK on Linux); Fuseline 4 has not
+  yet been measured on an Android device.
 
 ## Fixed
 

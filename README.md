@@ -225,17 +225,20 @@ They behave the same on every device, answer to one design, and get better with 
 
 <div align="center">
 
-| Each frame | Fuseline 3.1 | Fuseline 3 | Fuseline 2 | Fuseline 1 | Compose |
-|---|--:|--:|--:|--:|--:|
-| 100 springs | **12.78 µs** | 13.71 µs | 16.80 µs | 16.74 µs | 184.82 µs |
-| 1,000 tweens | **51.28 µs** | 73.45 µs | 103.99 µs | 141.40 µs | 1692.95 µs |
-| 100 colour fades | **7.65 µs** | 9.33 µs | 15.23 µs | 14.73 µs | 147.28 µs |
-| 1,000 springs given a new target every frame | **5.54 µs** | 5.78 µs | 255.28 µs | n/a | 11829.74 µs |
-| A page of 120 tiles with 3 animated values each, composed | **2156 µs** | 2853 µs | n/a | n/a | 2999 µs |
-| The selection moving across 120 tiles | **1917 µs** | 1989 µs | n/a | n/a | 2221 µs |
-| A theme's room, redrawn per second while you press buttons | **3** | 44 | n/a | n/a | 130 |
+| Each frame | Fuseline 4 | Fuseline 3.1 | Fuseline 3 | Fuseline 2 | Fuseline 1 | Compose |
+|---|--:|--:|--:|--:|--:|--:|
+| 1,000 springs nobody is looking at | **1.33 µs** | 173.36 µs | 183.38 µs | 214.38 µs | 217.47 µs | 2057.55 µs |
+| 1,000 tweens nobody is looking at | **5.85 µs** | 89.68 µs | 175.89 µs | 211.89 µs | 206.46 µs | 2054.35 µs |
+| 1,000 two-number springs, read every frame | **135.94 µs** | 194.70 µs | 199.13 µs | 251.51 µs | 256.86 µs | 2022.47 µs |
+| 1,000 springs given a new target every frame, drawn | **444.43 µs** | 826.75 µs | 844.07 µs | 688.97 µs | 5960.13 µs | 16388.75 µs |
+| 100 values following a finger, drawn | **25.14 µs** | 51.79 µs | 52.70 µs | n/a | n/a | 200.14 µs |
+| Tabs changed every 3 frames, drawn | **4.07 µs** | 4.87 µs | 5.08 µs | 7.14 µs | 21.25 µs | 50.80 µs |
+| A busy screen for 10 seconds | **85.80 µs** | 95.02 µs | 98.92 µs | 105.90 µs | 146.57 µs | 714.77 µs |
+| A page of 120 tiles with 3 animated values each, composed | 2240 µs | 2237 µs | 3482 µs | n/a | n/a | 3952 µs |
+| The selection moving across 120 tiles | 1718 µs | 1672 µs | 1844 µs | n/a | n/a | 1912 µs |
+| A theme's room, redrawn per second while you press buttons | 3 | 3 | 44 | n/a | n/a | 130 |
 
-<sub>Measured on one machine, every engine warmed up and given the same work; Fuseline 3, 2 and 1 are kept in Fuse's tests exactly as they shipped. Of 43 cases Fuseline 3.1 is first on 27, tied on 14 and behind Fuseline 3 on 2 (<a href="docs/fuseline.md#speed">method and every case</a>).</sub>
+<sub>Measured on one computer (OpenJDK on Linux), every engine warmed up and given the same work; Fuseline 3.1, 3, 2 and 1 are kept in Fuse's tests exactly as they shipped. Bold: clearly first. Of 111 cases Fuseline 4 is clearly first on 52, 57 are within run-to-run noise, and another engine is clearly first on 2 (<a href="docs/fuseline.md#speed">method and every case</a>).</sub>
 
 </div>
 
