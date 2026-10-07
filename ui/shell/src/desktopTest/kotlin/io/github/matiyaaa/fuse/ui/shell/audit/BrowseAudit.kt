@@ -442,6 +442,15 @@ internal fun AuditDriver.systemsScreens(exhaustive: Boolean) {
 
     scenario("systems", "editing on a two-screen handheld") {
         useLibrary()
+        // As a board made larger twice came back through Fuse Sync from a device on an older version.
+        val systems = libraryStore.library.platforms.value.filter { it.gameCount > 0 }
+        val before = libraryStore.prefs.value.systemsBoard
+        libraryStore.updatePrefs {
+            it.copy(systemsBoard = io.github.matiyaaa.fuse.model.HomeLayoutConfig(
+                board = systems.mapIndexed { i, c -> io.github.matiyaaa.fuse.model.HomeWidget("system.${c.platform.id.value}", io.github.matiyaaa.fuse.model.WidgetKind.SYSTEMS, i, target = c.platform.id.value, width = if (i == 2) 6 else 9, height = 4) },
+                grain = 3,
+            ))
+        }
         show(libraryStore, twoScreens)
         tab(Destination.SYSTEMS)
         waitFor("Arrange")
@@ -468,6 +477,7 @@ internal fun AuditDriver.systemsScreens(exhaustive: Boolean) {
         tap(PadButton.B)
         settle(800)
         shoot("done")
+        libraryStore.updatePrefs { it.copy(systemsBoard = before) }
         show(libraryStore)
     }
 

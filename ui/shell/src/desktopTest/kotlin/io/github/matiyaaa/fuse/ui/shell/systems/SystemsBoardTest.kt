@@ -125,4 +125,29 @@ class SystemsBoardTest {
         assertEquals(listOf("gba"), flipped.boardWidgets(1).map { it.target })
         assertTrue((flipped.boardWidgets(0) + flipped.boardWidgets(1)).all { it.boardSize == SystemsBoard.CARD })
     }
+
+    @Test
+    fun aBoardThatLostItsGridMarkIsNotMadeLargerAgainAndOneMadeLargerIsPutBack() {
+        fun tile(id: String, w: Int, h: Int) = SystemsBoard.tile(id).copy(width = w, height = h)
+        // In the finer grid already (cards and small squares), but without the mark: kept as it is.
+        val unmarked = HomeLayoutConfig(board = listOf(tile("psx", 3, 2), tile("snes", 2, 2), tile("gba", 3, 4)))
+        val kept = SystemsBoard.migrate(unmarked)
+        assertEquals(SystemsBoard.GRAIN, kept.grain)
+        assertEquals(listOf(3, 2, 3), kept.boardWidgets(0).map { it.boardSize.width })
+        assertEquals(listOf(2, 2, 4), kept.boardWidgets(0).map { it.boardSize.height })
+        // Made finer twice (every system three times as wide and twice as tall): put back.
+        val blown = HomeLayoutConfig(board = listOf(tile("psx", 9, 4), tile("snes", 6, 4), tile("gba", 9, 6)), grain = SystemsBoard.GRAIN)
+        val fixed = SystemsBoard.migrate(blown)
+        assertEquals(listOf(3, 2, 3), fixed.boardWidgets(0).map { it.boardSize.width })
+        assertEquals(listOf(2, 2, 2), fixed.boardWidgets(0).map { it.boardSize.height })
+        // A board someone arranged with a few large systems is left alone.
+        val arranged = HomeLayoutConfig(board = listOf(tile("psx", 6, 4), tile("snes", 3, 2)), grain = SystemsBoard.GRAIN)
+        assertTrue(SystemsBoard.migrate(arranged) === arranged)
+    }
+
+    @Test
+    fun theSystemsArrangementIsEachDevicesOwn() {
+        assertTrue("home.systemsBoard" !in io.github.matiyaaa.fuse.data.settings.ProfileSettings.paths)
+        assertTrue("library.systemOrder" in io.github.matiyaaa.fuse.data.settings.ProfileSettings.paths)
+    }
 }

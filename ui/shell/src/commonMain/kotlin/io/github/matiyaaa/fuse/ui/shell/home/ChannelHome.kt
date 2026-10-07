@@ -161,6 +161,7 @@ internal fun ChannelBoard(app: AppState, space: BoardSpace, page: Int, pageKey: 
     val look = space.look
     val arranging = editor.arranging
     val op = editor.op
+    PageEffect(arranging) { space.arranging(arranging) }
     val sel = rememberRouteState(app.navigator, if (page == 0) "${space.key}.board" else "${space.key}.board.$pageKey") { SpatialSelection() }
     // Where each carousel widget stands, kept while the board is away so it comes back where it was.
     val carousels = rememberRouteState(app.navigator, "${space.key}.carousels.$pageKey") { HashMap<String, CarouselState>() }
@@ -729,6 +730,7 @@ internal fun ChannelBoard(app: AppState, space: BoardSpace, page: Int, pageKey: 
                 onOwnHome = { onTools = 3; setOwnHome(ownHome != true) },
                 look = look,
                 onLook = { onTools = 3; look?.let { it.pick(1 - it.editing) } },
+                compact = narrow || small,
             )
         }
         // Controls of widgets that are gone, or of a board no longer arranged, catch no touches.

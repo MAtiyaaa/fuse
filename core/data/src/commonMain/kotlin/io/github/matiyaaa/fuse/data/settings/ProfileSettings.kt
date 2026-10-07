@@ -18,7 +18,10 @@ object ProfileSettings {
         "appearance.heroDim", "appearance.highContrastFocus", "appearance.textScale", "appearance.startupAnimation",
         "appearance.recentColors", "appearance.rememberPlace", "appearance.standbyMinutes",
         // Home, the tabs and the quick menu.
-        "home.layout", "home.systemsBoard", "home.destinations", "home.addonsOrder", "home.quickMenu",
+        // The Systems page's arrangement is each device's own: a TV, a monitor and a handheld (each
+        // of a two-screen handheld's screens) size systems for themselves. The order follows the
+        // person (library.systemOrder).
+        "home.layout", "home.destinations", "home.addonsOrder", "home.quickMenu",
         // The library as they like it.
         "library.cleanDisplayNames", "library.systemOrder", "library.sort", "library.systemArtStyle",
         "library.selectOpensGamePage", "library.collectionsEnabled", "library.autoSeries", "library.hiddenSeries",

@@ -79,6 +79,8 @@ class UiAudit {
 
     @Test fun systemsJ() = audit(AuditSize.J) { systemsScreens(exhaustive = false) }
 
+    @Test fun systemsEverySize() = AuditSize.entries.filter { it.name in (System.getProperty("fuse.audit.sizes")?.takeIf { s -> s.isNotBlank() } ?: "T,M,D,H,J,L").split(',') }.forEach { size -> audit(size) { systemsScreens(exhaustive = false) } }
+
     @Test fun m04Game() = audit(AuditSize.M) { gameScreens(exhaustive = true); contentScreens() }
 
     @Test fun m05Launch() = audit(AuditSize.M) { launchScreens() }
