@@ -447,11 +447,19 @@ private object TwoScreenPlatform : PlatformUi by TestPlatform {
 /**
  * The interface animates forever (clock, ambient light), so the test clock never goes idle on its
  * own. This advances it by frames, while real time passes for the store's background work.
+ *
+ * The wait lasts until both [timeoutMs] of the interface's own time (the test clock) and [timeoutMs]
+ * of real time have passed: what the interface plays out (a page changing, the profile arrival)
+ * takes its own time whatever the machine, and a slow runner only takes longer in real time to get
+ * there, while the store's background work still gets its real time. Real time is capped
+ * separately, and generously, only to stop a test that is truly stuck.
  */
 @OptIn(ExperimentalTestApi::class)
 private fun androidx.compose.ui.test.ComposeUiTest.pumpUntil(timeoutMs: Long = 15_000, condition: () -> Boolean) {
-    val end = System.currentTimeMillis() + timeoutMs
-    while (System.currentTimeMillis() < end) {
+    val until = mainClock.currentTime + timeoutMs
+    val realEnd = System.currentTimeMillis() + timeoutMs
+    val stuck = System.currentTimeMillis() + REAL_TIME_CAP_MS
+    while ((mainClock.currentTime < until || System.currentTimeMillis() < realEnd) && System.currentTimeMillis() < stuck) {
         mainClock.advanceTimeBy(64)
         if (condition()) return
         Thread.sleep(16)
@@ -459,6 +467,9 @@ private fun androidx.compose.ui.test.ComposeUiTest.pumpUntil(timeoutMs: Long = 1
     val tree = runCatching { onRoot(useUnmergedTree = true).printToString(maxDepth = 60) }.getOrDefault("(no tree)")
     throw AssertionError("Condition not met within $timeoutMs ms. Screen:\n" + tree.lines().filter { "Text" in it }.joinToString("\n"))
 }
+
+/** The most real time a wait may take, whatever the machine: only a test that is truly stuck reaches it. */
+private const val REAL_TIME_CAP_MS = 120_000L
 
 private fun InputRouter.tap(button: PadButton) {
     press(button, InputSource.GAMEPAD)
