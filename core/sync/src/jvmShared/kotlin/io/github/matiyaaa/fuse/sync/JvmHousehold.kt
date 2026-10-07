@@ -89,12 +89,14 @@ class JvmHousehold(
         clock = clock,
     )
 
-    private val http: HttpClient by lazy {
-        SyncHttp.client {
-            install(HttpTimeout) { connectTimeoutMillis = 1_500; socketTimeoutMillis = 60_000; requestTimeoutMillis = 30 * 60_000 }
-            expectSuccess = false
+    @Volatile private var httpClient: HttpClient? = null
+    private val http: HttpClient
+        get() = httpClient ?: synchronized(this) {
+            httpClient ?: SyncHttp.client {
+                install(HttpTimeout) { connectTimeoutMillis = 1_500; socketTimeoutMillis = 60_000; requestTimeoutMillis = 30 * 60_000 }
+                expectSuccess = false
+            }.also { httpClient = it }
         }
-    }
 
     init {
         runCatching { json.decodeFromString(KeptLibraries.serializer(), keptFile.readText()) }.getOrNull()?.let {
@@ -142,6 +144,8 @@ class JvmHousehold(
         _supported.value = false
         lookJob?.cancel()
         server.stop()
+        // Its client for other devices goes too: each one keeps a network thread of its own.
+        synchronized(this) { httpClient?.close(); httpClient = null }
     }
 
     /** The host said these are waiting (see [JournalPage.wake]). */

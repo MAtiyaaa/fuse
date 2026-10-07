@@ -11,6 +11,7 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
 import java.io.File
 import java.io.InputStream
@@ -84,13 +85,31 @@ class PeerServer(
     suspend fun start(preferred: Int = SyncApi.PEER_PORT): Int {
         if (server != null) return port
         for (candidate in listOf(preferred, preferred + 1, preferred + 2, 0)) {
-            val s = runCatching { embeddedServer(CIO, port = candidate, host = bind) { routing { api() } }.also { it.start(wait = false) } }.getOrNull() ?: continue
+            // The server binds its port only after starting, and a port another program holds
+            // would fail there, out of reach: so a port is taken only once it is known to be free.
+            val free = freePort(candidate) ?: continue
+            val s = runCatching { embeddedServer(CIO, port = free, host = bind) { routing { api() } }.also { it.start(wait = false) } }.getOrNull() ?: continue
+            val bound = runCatching { withTimeoutOrNull(5_000) { s.engine.resolvedConnectors().firstOrNull()?.port } }.getOrNull()
+            if (bound == null || bound != free) {
+                runCatching { s.stop(0, 200) }
+                continue
+            }
             server = s
-            port = s.engine.resolvedConnectors().firstOrNull()?.port ?: candidate
+            port = bound
             return port
         }
         return 0
     }
+
+    /** [candidate] (or, for 0, a port the system picks) if nothing listens on it here, else null. */
+    private fun freePort(candidate: Int): Int? = runCatching {
+        java.net.ServerSocket().use { socket ->
+            // Not shared: on Windows a shared address would bind even where another program listens.
+            socket.reuseAddress = false
+            socket.bind(java.net.InetSocketAddress(bind, candidate))
+            socket.localPort
+        }
+    }.getOrNull()
 
     fun stop() {
         server?.stop(200, 1_000)

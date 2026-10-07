@@ -1,5 +1,6 @@
 package io.github.matiyaaa.fuse.sync
 
+import io.ktor.client.request.get
 import io.github.matiyaaa.fuse.data.settings.SyncSettings
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -49,6 +50,7 @@ class HouseholdGamesTest {
         joined.forEach { it.off() }
         scope.cancel()
         host.stop()
+        http.close()
         root.deleteRecursively()
     }
 
@@ -273,5 +275,20 @@ class HouseholdGamesTest {
         assertEquals("Mario", t.title)
         assertEquals(43, t.done)
         pc.household.watchTransfers(false)
+    }
+
+    @Test
+    fun aPortAnotherProgramHoldsIsPassedOverForOneThatAnswers(): Unit = runBlocking {
+        java.net.ServerSocket(0, 50, java.net.InetAddress.getByName("127.0.0.1")).use { taken ->
+            val server = PeerServer({ "dev-a" }, { "secret" }, { _, _ -> null }, bind = "127.0.0.1")
+            try {
+                val port = server.start(preferred = taken.localPort)
+                assertTrue(port > 0 && port != taken.localPort, "moved off the taken port, to $port")
+                val hello = http.get("http://127.0.0.1:$port" + SyncApi.PEER_BASE + "/hello")
+                assertEquals(200, hello.status.value, "the port it reports is the one it answers on")
+            } finally {
+                server.stop()
+            }
+        }
     }
 }

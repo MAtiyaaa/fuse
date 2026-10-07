@@ -74,12 +74,14 @@ class SyncHost(
     private val tickets = ConcurrentHashMap<String, PeerTicket>()
 
     /** For trying a device directly when passing a game through (the host is usually at home with it). */
-    private val peerHttp by lazy {
-        SyncHttp.client {
-            install(io.ktor.client.plugins.HttpTimeout) { connectTimeoutMillis = 1_500; socketTimeoutMillis = 60_000; requestTimeoutMillis = 10 * 60_000 }
-            expectSuccess = false
+    @Volatile private var peerClient: io.ktor.client.HttpClient? = null
+    private val peerHttp: io.ktor.client.HttpClient
+        get() = peerClient ?: synchronized(this) {
+            peerClient ?: SyncHttp.client {
+                install(io.ktor.client.plugins.HttpTimeout) { connectTimeoutMillis = 1_500; socketTimeoutMillis = 60_000; requestTimeoutMillis = 10 * 60_000 }
+                expectSuccess = false
+            }.also { peerClient = it }
         }
-    }
 
     /** Devices the host couldn't reach directly lately, until when: their pieces go the other way meanwhile. */
     private val unreachable = ConcurrentHashMap<String, Long>()
@@ -209,6 +211,8 @@ class SyncHost(
     fun stop() {
         server?.stop(500, 2_000)
         server = null
+        // Its client for reaching devices goes too: each one keeps a network thread of its own.
+        synchronized(this) { peerClient?.close(); peerClient = null }
     }
 
     private fun bump() {

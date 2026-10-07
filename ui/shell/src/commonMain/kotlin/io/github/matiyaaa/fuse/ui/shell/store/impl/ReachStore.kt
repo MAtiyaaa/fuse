@@ -77,7 +77,6 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
@@ -734,13 +733,10 @@ internal class DefaultReachOps(
             val from = job.sources.firstOrNull { it.key == job.partFrom[job.files.firstOrNull()?.path] }?.name ?: job.sources.firstOrNull()?.name ?: "another device"
             ctx.data.cache.put(ARRIVED, FsPath.normalize(lead), json.encodeToString(Arrival.serializer(), Arrival(from, ctx.now())), ctx.now(), null)
             landedAt.update { it + (FsPath.normalize(lead) to job.game) }
-            engine.rescan(ScanScope.PLATFORM, PlatformId(job.platform))
-            withContext(Dispatchers.Default) {
-                withTimeoutOrNull(120_000) { engine.scan.first { it.phase == ScanPhase.DONE || it.phase == ScanPhase.FAILED } }
-                refreshLocal()
-                household.libraryChanged()
-            }
+            // The game is whole where it belongs: whoever asked for it hears so now. The library
+            // catches up with the scan, and this device's list goes up again when it ends (see start).
             job.command?.let { settle(it, DeviceCommand.DONE, "On ${ctx.services.deviceName} now") }
+            engine.rescan(ScanScope.PLATFORM, PlatformId(job.platform))
         }
     }
 
