@@ -103,6 +103,9 @@ class FuselineValue<T>(
         /** Work its caller does every frame ([animateTo]'s block): the move then comes up on every frame. */
         var block: (FuselineValue<T>.() -> Unit)? = null
 
+        /** Every component runs the same tween: the curve is solved once for all of them ([TweenTrack.shape]). */
+        var sharedTween = false
+
         // The longest track's length, worked out on first need (a spring's settling is a Newton solve).
         private var exact = -1L
 
@@ -587,6 +590,7 @@ class FuselineValue<T>(
             tracks[i] = Track.reuse(tracks[i], motion, now[i], goal[i], speed[i], threshold, i)
         }
         r.motion = motion
+        r.sharedTween = motion is Tween && dims > 1
         r.reset()
         r.playNanos = 0L
     }
@@ -632,9 +636,12 @@ class FuselineValue<T>(
         }
         val shown = shownRest!!
         var seen = false
+        // One tween for every component: its curve is solved once, by the first, for all of them.
+        val lead = if (r.sharedTween) tracks[0] as TweenTrack else null
+        lead?.shape(play)
         for (i in 0 until dims) {
             val t = tracks[i]!!
-            t.sample(play)
+            if (lead != null) (t as TweenTrack).sampleLike(lead, play) else t.sample(play)
             val v = t.sampledValue
             now[i] = v
             speed[i] = t.sampledVelocity
@@ -659,6 +666,13 @@ class FuselineValue<T>(
     private fun horizon(play: Long): Long {
         val step = threshold * PUBLISH_SHARE
         val frameSeconds = FramePacing.intervalNanos / NANOS_PER_SECOND
+        // First, cheaply: a component that would use its room up within a few frames at its present
+        // speed means the value is simply stepped (proving a short rest costs more than stepping).
+        for (i in 0 until dims) {
+            val shownI = if (dims == 1) shown0 else shownRest!![i]
+            val room = step - abs(now[i] - shownI)
+            if (!(room > 0f) || abs(speed[i]) * frameSeconds * HORIZON_FRAMES >= room) return FrameDriver.PLAY_NEXT
+        }
         var until = Long.MAX_VALUE
         for (i in 0 until dims) {
             val shownI = if (dims == 1) shown0 else shownRest!![i]
@@ -666,8 +680,6 @@ class FuselineValue<T>(
             val room = step.toDouble() - abs(x - shownI).toDouble() -
                 2.0 * (maxOf(abs(x), abs(shownI)).ulp + step.ulp).toDouble()
             if (!(room > 0.0)) return FrameDriver.PLAY_NEXT
-            // At its present speed it would use the room up within the next frame: no point asking.
-            if (abs(speed[i]) * frameSeconds >= room) return FrameDriver.PLAY_NEXT
             val calm = tracks[i]!!.calmUntil(play, room)
             if (calm <= play) return FrameDriver.PLAY_NEXT
             if (calm < until) until = calm
@@ -983,6 +995,9 @@ class FuselineValue<T>(
 
 /** How far (a share of a value's threshold) a frame must move it to be shown. */
 private const val PUBLISH_SHARE = 0.125f
+
+/** A horizon nearer than this many frames isn't worth proving: the value is stepped instead. */
+private const val HORIZON_FRAMES = 8f
 
 private val origin = TimeSource.Monotonic.markNow()
 

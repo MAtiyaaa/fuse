@@ -304,8 +304,9 @@ internal class FrameDriver private constructor(private val clock: MonotonicFrame
         return m
     }
 
-    /** Every move that has come up in a frame so far, by join order: the frame's own list. */
-    private val visiting = ArrayList<Move>()
+    /** This frame's moves, by join order: the every-frame list itself, or [merged] when others came due. */
+    private var visiting = ArrayList<Move>()
+    private val merged = ArrayList<Move>()
     private var visitIndex = 0
 
     /** Moves joined since the last frame (or during this one): started on their first frame. */
@@ -439,19 +440,19 @@ internal class FrameDriver private constructor(private val clock: MonotonicFrame
         if (remoteReads) takeRemoteReads()
 
         // This frame's moves, by join order: those due every frame, those whose time has come, and
-        // those that joined since the last frame.
-        val visit = visiting
-        visit.clear()
-        visitIndex = 0
+        // those that joined since the last frame. With nothing come due from the heap (the usual
+        // case), the every-frame list is gone through as it is, not copied.
         val due = dueNow(frameNanos)
-        merge(listed, due, visit)
+        val current = listed
+        val visit = if (due.isEmpty()) current else merged.also { it.clear(); merge(current, due, it) }
+        visiting = visit
+        visitIndex = 0
         // Joiners all came after every move already here.
         for (m in joined) if (!m.gone) {
             m.joining = false
             visit += m
         }
         joined.clear()
-        listed.clear()
 
         passing = true
         val counting = MotionInspector.enabled
@@ -491,10 +492,10 @@ internal class FrameDriver private constructor(private val clock: MonotonicFrame
         passing = false
         cursor = Long.MAX_VALUE
         visit.clear()
-        // Moves due every frame, for the next one; the list swapped, so nothing is made per frame.
-        val l = listed
+        current.clear()
+        // Moves due every frame, for the next one; the lists swapped, so nothing is made per frame.
         listed = listedNext
-        listedNext = l
+        listedNext = current
     }
 
     /** Where [m] waits after this frame, given it can be left alone until play time [calmUntil]. */
@@ -513,7 +514,8 @@ internal class FrameDriver private constructor(private val clock: MonotonicFrame
         // Whichever comes first: the horizon or the end (both as frame times, rounded early).
         val end = frameAt(m, m.bound)
         val wake = if (calmUntil == Long.MAX_VALUE) end else minOf(frameAt(m, calmUntil), end)
-        if (wake <= frameNanos + FramePacing.intervalNanos / 2) listOnward(m) else schedule(m, wake)
+        // Due within a few frames: kept on the every-frame list (a look at it costs less than the heap).
+        if (wake <= frameNanos + FramePacing.intervalNanos * 4) listOnward(m) else schedule(m, wake)
     }
 
     private fun listOnward(m: Move) {

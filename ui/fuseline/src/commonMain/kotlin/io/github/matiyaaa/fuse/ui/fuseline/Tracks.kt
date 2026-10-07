@@ -168,21 +168,59 @@ internal class TweenTrack(tween: Tween, start: Float, target: Float, velocity: F
      * gives both its height and its slope, where asking for each would solve it twice.
      */
     override fun sample(playNanos: Long) {
-        val c = curve
-        if (c !is CubicCurve || playNanos <= delay || playNanos >= duration || length == 0L) {
-            super.sample(playNanos)
-            return
-        }
-        // The same rounding as valueAt and velocityAt, so sampling is exactly the same function of time.
+        shape(playNanos)
+        sampleLike(this, playNanos)
+    }
+
+    // Fuseline 4: the curve's answer at a moment (its height and slope at the share of time played),
+    // worked out once per value. Every component of a value moving under one tween (a colour's four,
+    // a position's two) has the same timing and curve, so the first works it out ([shape]) and the
+    // rest read it ([sampleLike]): the same numbers, solved once instead of once per component.
+    private var shapeY = 0f
+    private var shapeD = 0f
+
+    /** Works out the curve's height and slope at [playNanos] (only where the formula needs them). */
+    fun shape(playNanos: Long) {
+        if (playNanos < delay || playNanos >= duration || length == 0L) return
         val f = fraction(playNanos)
-        val t = c.solveShared(f.toDouble())
-        var value = start + distance * c.y(t).toFloat()
-        var velocity = distance * c.slope(t).toFloat() / seconds
-        if (boost != 0.0) {
-            val tau = (playNanos - delay) / NANOS_PER_SECOND
-            val u = tau / seconds
-            value += boost * tau * (1.0 - u) * (1.0 - u)
-            velocity += boost * (1.0 - u) * (1.0 - 3.0 * u)
+        val c = curve
+        if (c is CubicCurve) {
+            // The same rounding as valueAt and velocityAt, so sampling is exactly the same function of time.
+            val t = c.solveShared(f.toDouble())
+            shapeY = c.y(t).toFloat()
+            shapeD = c.slope(t).toFloat()
+        } else {
+            shapeY = c.transform(f)
+            shapeD = c.derivative(f)
+        }
+    }
+
+    /** Samples this component at [playNanos] from [lead]'s curve answer for the same moment (see [shape]). */
+    fun sampleLike(lead: TweenTrack, playNanos: Long) {
+        val value: Double = when {
+            playNanos <= delay -> (if (length == 0L && playNanos >= delay) target else start).toDouble()
+            playNanos >= duration -> target.toDouble()
+            else -> {
+                var v = start + distance * lead.shapeY
+                if (boost != 0.0) {
+                    val tau = (playNanos - delay) / NANOS_PER_SECOND
+                    val u = tau / seconds
+                    v += boost * tau * (1.0 - u) * (1.0 - u)
+                }
+                v
+            }
+        }
+        val velocity: Double = when {
+            playNanos < delay || length == 0L -> 0.0
+            playNanos >= duration -> distance * curve.derivative(1f) / seconds
+            else -> {
+                var v = distance * lead.shapeD / seconds
+                if (boost != 0.0) {
+                    val u = (playNanos - delay) / NANOS_PER_SECOND / seconds
+                    v += boost * (1.0 - u) * (1.0 - 3.0 * u)
+                }
+                v
+            }
         }
         sampledValue = value.toFloat()
         sampledVelocity = velocity.toFloat()
