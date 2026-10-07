@@ -67,3 +67,7 @@ moves exactly as it did; the engine does a great deal less to make it move.
 - **A second screen no longer upsets the first's frame pacing.** Frame intervals are measured per
   screen: the second screen's frames no longer mix into the main window's, which could make Fuse
   think frames were running late and thin decoration for nothing.
+- **A game asked of another device is never reported failed as it arrives.** The device asked took
+  the same request again and again while the game came over; taken once more just as it landed,
+  before its library had found it, the request could fail as it succeeded. Each request is now
+  taken once.
