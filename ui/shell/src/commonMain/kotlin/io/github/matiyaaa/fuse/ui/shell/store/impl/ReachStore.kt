@@ -184,8 +184,17 @@ internal class DefaultReachOps(
             }
         }
         ctx.scope.launch {
-            combine(remoteTransfers, devices) { rows, _ -> rows }.collect { rows ->
-                showRemote(rows.map(::rowOf)) { row, action -> rows.firstOrNull { it.id == row.item.id }?.let { actRemote(it, action) } }
+            combine(remoteTransfers, requests, devices) { rows, asked, devs -> Triple(rows, asked, devs) }.collect { (rows, asked, devs) ->
+                // What this device asked that hasn't started there yet (its device is away), or didn't work.
+                val started = rows.map { it.device to it.item.title }.toSet()
+                val waiting = asked.filter { c ->
+                    (c.type == DeviceCommand.FETCH || c.type == DeviceCommand.ROMM_UPLOAD) &&
+                        ((c.open && (c.target to c.title) !in started && !online(c.target, devs)) || (c.state == DeviceCommand.FAILED && ctx.now() - c.doneAt < 60 * 60_000L))
+                }
+                showRemote(rows.map(::rowOf) + waiting.map { requestRow(it, devs) }) { row, action ->
+                    if (row.item.id.startsWith("request:")) ctx.scope.launch { cancelRequest(row.item.id.removePrefix("request:")) }
+                    else rows.firstOrNull { it.id == row.item.id }?.let { actRemote(it, action) }
+                }
             }
         }
     }
@@ -299,7 +308,7 @@ internal class DefaultReachOps(
         .stateIn(ctx.scope, SharingStarted.Eagerly, emptyList())
 
     override val systems: StateFlow<List<HouseholdSystem>> = lists.map { all ->
-        all.groupBy { it.card.platformId }.map { (p, list) -> HouseholdSystem(p, ctx.platform(p)?.name ?: p.value, list.size) }.sortedBy { it.name.lowercase() }
+        all.groupBy { it.card.platformId }.map { (p, list) -> HouseholdSystem(p, ctx.platform(p)?.name ?: p.value, list.size, holders = list.flatMap { it.holders }.distinct()) }.sortedBy { it.name.lowercase() }
     }.mapLatest { list ->
         ctx.shownPlatforms.update { it + list.map { s -> s.platform } }
         val media = if (list.isEmpty()) emptyMap() else ctx.data.media.observeFor(list.map { MediaOwner.OfPlatform(it.platform) }).first()
@@ -356,7 +365,7 @@ internal class DefaultReachOps(
 
     /** Other devices' copies of RomM's game [romId]: linked to it, or with its files. */
     private suspend fun copiesWithRom(romId: Long): List<Pair<DeviceLibrary, LibraryEntry>> {
-        val rom = romm.romWithFiles(romId) ?: return emptyList()
+        val rom = romm.romHere(romId) ?: return emptyList()
         val md5s = (rom.files.mapNotNull { it.md5 } + listOfNotNull(rom.md5)).map { it.lowercase() }.toSet()
         val self = household.self
         return household.libraries.value.filter { it.device != self }.flatMap { lib ->
@@ -377,7 +386,7 @@ internal class DefaultReachOps(
         val others = if (keys.isEmpty()) emptyList() else copiesOf(keys)
         val romId = id.rommOnly ?: local?.let { romm.romOf(it.id) ?: it.links.rommRomId } ?: others.firstNotNullOfOrNull { it.second.rommRomId }
             ?: others.firstNotNullOfOrNull { (_, e) -> romm.sameOnServer(null, e.files.mapNotNull { it.md5 })?.id }
-        val rom = romId?.takeIf { romm.enabled }?.let { romm.romWithFiles(it) }
+        val rom = romId?.takeIf { romm.enabled }?.let { romm.romHere(it) }
         if (local == null && others.isEmpty() && rom == null) return null
         val fingerprints = (others.map { it.second } + listOfNotNull(mineEntry)).mapNotNull { it.fingerprint }
         val rommHashes = rom?.let { r -> (r.files.mapNotNull { it.sha1 } + r.files.mapNotNull { it.md5 } + listOfNotNull(r.sha1, r.md5)).map { it.lowercase() }.toSet() }.orEmpty()
@@ -413,7 +422,8 @@ internal class DefaultReachOps(
                 sizeBytes = rom.sizeBytes, check = if (verified) CopyCheck.VERIFIED else CopyCheck.UNKNOWN, date = rom.createdAt,
             )
         }
-        return GameCopies(copies)
+        val running = transfers.items.value.firstOrNull { t -> t.source == REACH_SOURCE && !t.status.finished && keys.any { t.key == "$REACH_SOURCE:$it" } }
+        return GameCopies(copies, running?.id)
     }
 
     private suspend fun arrivalOf(path: String): Arrival? =
@@ -587,7 +597,24 @@ internal class DefaultReachOps(
             TransferStatus.FAILED -> listOf(TransferAction.RETRY, TransferAction.CANCEL)
             else -> emptyList()
         }
-        return TransferRow(item, actions, device = r.device, deviceName = r.deviceName, deviceOnline = r.online)
+        return TransferRow(item, actions, device = r.device, deviceName = r.deviceName, deviceOnline = r.online, deviceSeen = r.lastSeen)
+    }
+
+    /**
+     * A request this device made that is still waiting for its device (one that is away), or that
+     * didn't work, as a row of Downloads: "Waiting for Thor", with Cancel.
+     */
+    private fun requestRow(c: DeviceCommand, devs: List<DeviceInfo>): TransferRow {
+        val name = devs.firstOrNull { it.id == c.target }?.name ?: "the other device"
+        val failed = c.state == DeviceCommand.FAILED
+        val item = TransferItem(
+            id = "request:${c.id}", key = "request:${c.id}", source = "request", direction = if (c.type == DeviceCommand.ROMM_UPLOAD) TransferDirection.UPLOAD else TransferDirection.DOWNLOAD,
+            kind = TransferKind.GAME, title = c.title.ifBlank { "A game" }, detail = if (c.type == DeviceCommand.ROMM_UPLOAD) "To RomM" else "",
+            platform = c.platform, target = "",
+            status = if (failed) TransferStatus.FAILED else TransferStatus.WAITING, waiting = if (failed) null else io.github.matiyaaa.fuse.transfer.WaitReason.DEVICE,
+            waitingFor = name, error = c.message, createdAt = c.at,
+        )
+        return TransferRow(item, if (failed) emptyList() else listOf(TransferAction.CANCEL), device = c.target, deviceName = name, deviceOnline = online(c.target, devs), deviceSeen = lastSeen(c.target, devs))
     }
 
     // ------------------------------------------------------------------ what this device does for the others

@@ -68,7 +68,10 @@ fun AppState.rommUpload(card: GameCard) {
 /** Queues [what] of RomM game [romId] and says so. */
 fun AppState.rommDownload(romId: Long, title: String, what: RommDownloadWhat = RommDownloadWhat.Game) {
     scope.launch {
-        val why = store.romm.download(romId, what)
+        // With the household's devices linked, the game comes from wherever is best (another device
+        // at home with exactly RomM's files first), RomM itself when no device has it.
+        val why = if (what == RommDownloadWhat.Game && store.reach.state.value.supported) store.reach.download(io.github.matiyaaa.fuse.ui.shell.store.rommGameId(romId))
+        else store.romm.download(romId, what)
         if (why != null) toasts.show(why, ToastKind.WARNING)
         else toasts.show("$title is on its way", ToastKind.SUCCESS, icon = FuseIcons.Download)
     }

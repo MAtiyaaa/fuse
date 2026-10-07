@@ -101,6 +101,11 @@ import io.github.matiyaaa.fuse.ui.shell.app.transferRoom
 fun DownloadsScreen(app: AppState) {
     val ops = app.store.transfers
     val all by ops.rows.collectAsState()
+    // While the page is open, every device's transfers are kept fresh (every couple of seconds).
+    androidx.compose.runtime.DisposableEffect(Unit) {
+        app.store.reach.watchTransfers(true)
+        onDispose { app.store.reach.watchTransfers(false) }
+    }
     val summary by ops.summary.collectAsState()
     val systems = rememberSystems(app)
     var filter by remember { mutableStateOf(TransferFilter.ALL) }
@@ -123,8 +128,9 @@ fun DownloadsScreen(app: AppState) {
         add(TopAction("Settings", FuseIcons.Settings) { app.go(Route.Settings("downloads")) })
     }
     if (action > actions.lastIndex) action = actions.lastIndex
-    val filters = TransferFilter.entries
-    val counts = remember(all) { filters.associateWith { f -> all.count(f::shows) } }
+    val counts = remember(all) { TransferFilter.entries.associateWith { f -> all.count(f::shows) } }
+    // Other Devices only once the household's devices have something going.
+    val filters = TransferFilter.entries.filter { it != TransferFilter.OTHER_DEVICES || (counts[it] ?: 0) > 0 || filter == it }
 
     fun openOptions(row: TransferRow) = app.openContextMenu(optionsFor(app, row, systems))
     fun primary(row: TransferRow) {
@@ -160,8 +166,8 @@ fun DownloadsScreen(app: AppState) {
                 else -> NavResult.IGNORED
             }
             1 -> when (e.action) {
-                NavAction.LEFT -> if (filter.ordinal > 0) { filter = filters[filter.ordinal - 1]; sel.index = 0; NavResult.MOVED } else NavResult.BLOCKED
-                NavAction.RIGHT -> if (filter.ordinal < filters.lastIndex) { filter = filters[filter.ordinal + 1]; sel.index = 0; NavResult.MOVED } else NavResult.BLOCKED
+                NavAction.LEFT -> filters.indexOf(filter).let { at -> if (at > 0) { filter = filters[at - 1]; sel.index = 0; NavResult.MOVED } else NavResult.BLOCKED }
+                NavAction.RIGHT -> filters.indexOf(filter).let { at -> if (at in 0 until filters.lastIndex) { filter = filters[at + 1]; sel.index = 0; NavResult.MOVED } else NavResult.BLOCKED }
                 NavAction.UP -> { zone = 0; NavResult.MOVED }
                 NavAction.DOWN -> if (rows.isNotEmpty()) { zone = 2; NavResult.MOVED } else NavResult.BLOCKED
                 NavAction.SELECT -> if (rows.isNotEmpty()) { zone = 2; NavResult.MOVED } else NavResult.BLOCKED
@@ -214,11 +220,15 @@ fun DownloadsScreen(app: AppState) {
             } else {
                 items(rows, key = { it.item.id }) { row ->
                     val i = rows.indexOf(row)
-                    TransferRowView(
-                        row, ops.live(row.item.id), system(systems, row.item.platform), queuePosition(rows, row),
-                        selected = focused && zone == 2 && sel.index == i, height = rowHeight, wide = wide,
-                        onClick = { sel.index = i; zone = 2; openOptions(row) },
-                    )
+                    Column {
+                        // Another device's transfers sit under its name, the first of them with the heading.
+                        if (row.device != null && rows.getOrNull(i - 1)?.device != row.device) DeviceHeading(row, Modifier.padding(top = Space.m, bottom = Space.xs))
+                        TransferRowView(
+                            row, ops.live(row.item.id), system(systems, row.item.platform), queuePosition(rows, row),
+                            selected = focused && zone == 2 && sel.index == i, height = rowHeight, wide = wide,
+                            onClick = { sel.index = i; zone = 2; openOptions(row) },
+                        )
+                    }
                 }
             }
         }
@@ -411,16 +421,24 @@ private fun optionsFor(app: AppState, row: TransferRow, systems: Map<PlatformId,
             MenuAction(
                 "transfer.${a.name}", if (a == TransferAction.OPEN) "Open ${row.mirrored ?: ""}".trim() else a.label, icon(a),
                 destructive = a == TransferAction.CANCEL,
-                detail = when (a) {
+                detail = when {
+                    t.source == "request" && a == TransferAction.CANCEL -> "${row.deviceName ?: "The other device"} won't fetch it"
+                    else -> null
+                } ?: when (a) {
                     TransferAction.CANCEL -> if (t.upload) "Stops sending; nothing on the server changes" else "What was downloaded so far is removed"
                     TransferAction.PAUSE -> "Keeps what is done, to carry on later"
                     else -> null
                 },
                 onSelect = { app.closeOverlays(); app.store.transfers.act(t.id, a) },
             )
-        } + MenuAction(
-            "transfer.where", t.target.ifBlank { "This device" }, if (t.upload) FuseIcons.CloudUpload else FuseIcons.HardDrive,
-            detail = if (t.upload) "Where it goes" else "Where it lands", enabled = false,
+        } + listOfNotNull(
+            row.deviceName?.let { n -> MenuAction("transfer.device", "On $n", FuseIcons.MonitorSmartphone, detail = if (row.deviceOnline) "Online now: changes reach it at once" else "Away: changes reach it once it is back", enabled = false) },
+        ) + listOfNotNull(
+            // Where it lands (another device's says it under its name, above, when it has nothing more to say).
+            MenuAction(
+                "transfer.where", t.target.ifBlank { "This device" }, if (t.upload) FuseIcons.CloudUpload else FuseIcons.HardDrive,
+                detail = if (t.upload) "Where it goes" else "Where it lands", enabled = false,
+            ).takeIf { row.deviceName == null || t.target.isNotBlank() },
         ),
     )
 }
@@ -452,7 +470,7 @@ private fun TransferRowView(
         Modifier.fillMaxWidth().height(height).testTag("downloads.row").clip(shape).background(bg)
             .then(if (selected) Modifier.border(Size.focusStroke, c.focus, shape) else Modifier.border(1.dp, c.hairline, shape))
             .clickable(remember { MutableInteractionSource() }, indication = null, onClick = onClick)
-            .semantics { contentDescription = "${t.title}, ${statusWords(t, live, queuePosition)}" },
+            .semantics { contentDescription = "${t.title}, ${rowWords(row, live, queuePosition)}" },
     ) {
         Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
             // The system's art anchors the row, fading into it.
@@ -472,7 +490,7 @@ private fun TransferRowView(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     DirectionMark(t.upload, t.status)
                     Spacer(Modifier.width(Space.xs))
-                    FText(statusWords(t, live, queuePosition), Fuse.type.caption, color = if (failed) c.danger else c.textMuted, maxLines = 1, modifier = Modifier.weight(1f, fill = false))
+                    FText(rowWords(row, live, queuePosition), Fuse.type.caption, color = if (failed) c.danger else c.textMuted, maxLines = 1, modifier = Modifier.weight(1f, fill = false))
                 }
             }
             Spacer(Modifier.width(Space.s))
@@ -548,6 +566,56 @@ private fun kindIcon(k: TransferKind): ImageVector = when (k) {
     TransferKind.FUSE_UPDATE -> FuseIcons.Sparkles
     TransferKind.SAVES -> FuseIcons.Save
     TransferKind.OTHER -> FuseIcons.File
+}
+
+/**
+ * What a row is doing, in one line: this device's own as [statusWords], another device's said for
+ * that device ("Downloading to Thor  ·  43%"), and a request still waiting for its device.
+ */
+internal fun rowWords(row: TransferRow, live: TransferLive, queuePosition: Int?): String {
+    val t = row.item
+    val name = row.deviceName ?: return statusWords(t, live, queuePosition)
+    if (t.source == "request") {
+        return if (t.status == TransferStatus.FAILED) "$name couldn't: ${t.error ?: "it didn't work"}"
+        else "Waiting for $name to be back  ·  asked from this device"
+    }
+    // The percentage is already on the right of the row, so the line says how much instead.
+    val total = live.totalBytes ?: t.totalBytes
+    val done = live.doneBytes.takeIf { it > 0 } ?: t.doneBytes
+    val amount = if (total != null && total > 0 && done > 0) "${sizeOf(done)} of ${sizeOf(total)}" else null
+    // Whether the device is around, and since when, is on the heading above its rows.
+    val words = when (t.status) {
+        TransferStatus.ACTIVE -> listOfNotNull(if (t.upload) "Uploading from $name" else "Downloading to $name", live.speed.takeIf { it > 0 }?.let(::speedText), amount)
+        TransferStatus.QUEUED -> listOfNotNull("Waiting its turn on $name", amount)
+        TransferStatus.WAITING -> listOf(statusWords(t, live, null), "on $name")
+        TransferStatus.PAUSED -> listOfNotNull("Paused on $name", amount)
+        TransferStatus.FAILED -> listOf("Failed on $name" + (t.error?.let { ": $it" } ?: ""))
+        TransferStatus.DONE -> listOf("Done on $name")
+        TransferStatus.CANCELLED -> listOf("Cancelled on $name")
+    }
+    return words.joinToString("  ·  ")
+}
+
+/** The heading over another device's transfers: its picture, its name, and whether it is around. */
+@Composable
+private fun DeviceHeading(row: TransferRow, modifier: Modifier) {
+    val c = Fuse.colors
+    Row(modifier, verticalAlignment = Alignment.CenterVertically) {
+        FuseIcon(FuseIcons.MonitorSmartphone, size = Size.iconS, tint = c.textMuted)
+        Spacer(Modifier.width(Space.s))
+        FText("On ${row.deviceName ?: "another device"}", Fuse.type.bodyStrong, maxLines = 1)
+        Spacer(Modifier.width(Space.s))
+        Box(Modifier.size(7.dp).clip(CircleShape).background(if (row.deviceOnline) c.success else c.textFaint))
+        Spacer(Modifier.width(Space.xs))
+        FText(
+            when {
+                row.deviceOnline -> "Online"
+                row.deviceSeen > 0 -> "Away, seen ${io.github.matiyaaa.fuse.ui.shell.components.agoText(row.deviceSeen)}"
+                else -> "Away"
+            },
+            Fuse.type.caption, color = c.textMuted, maxLines = 1,
+        )
+    }
 }
 
 /** What a transfer is doing, in one line: "12.4 MB/s · 2.1 of 4.7 GB · 3 min left · SD card". */

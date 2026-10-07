@@ -1,5 +1,7 @@
 package io.github.matiyaaa.fuse.ui.shell.romm
 
+import io.github.matiyaaa.fuse.ui.shell.reach.sendPicker
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -104,6 +106,8 @@ fun RommContent(app: AppState, active: Boolean, topPadding: Dp) {
     val collections by ops.collections.collectAsState()
     val notOnServer by ops.notOnServer.collectAsState()
     val missing = notOnServer.games
+    // The household's other devices' games RomM doesn't have, at the foot of the page.
+    val others by app.store.reach.notOnRomm.collectAsState()
     val summary by app.store.transfers.summary.collectAsState()
     val library = rememberSystems(app)
     val focused = active && app.focusZone == FocusZone.CONTENT && !app.overlayOpen
@@ -127,6 +131,7 @@ fun RommContent(app: AppState, active: Boolean, topPadding: Dp) {
         if (systems.isNotEmpty()) add("systems")
         if (missing.isNotEmpty()) add("missing")
         if (collections.isNotEmpty()) add("collections")
+        if (others.isNotEmpty()) add("others")
     }
     fun sizeOf(key: String) = when (key) {
         "head" -> actions.size
@@ -135,6 +140,7 @@ fun RommContent(app: AppState, active: Boolean, topPadding: Dp) {
         "systems" -> systems.size
         "missing" -> missing.size
         "collections" -> collections.size
+        "others" -> others.size
         else -> 0
     }
     val sel = remember { ShelfSelection() }
@@ -160,7 +166,7 @@ fun RommContent(app: AppState, active: Boolean, topPadding: Dp) {
     }
     // The room behind the page: the chosen game's or system's art, as on the Library and Systems pages;
     // on the line at the top, the first game shown.
-    val shown = gameAt(row, col)?.card ?: (if (row == "missing") missing.getOrNull(col) else null)
+    val shown = gameAt(row, col)?.card ?: (if (row == "missing") missing.getOrNull(col) else null) ?: (if (row == "others") others.getOrNull(col)?.card else null)
         ?: if (row == "head") (fresh.firstOrNull() ?: recent.firstOrNull())?.card else null
     val shownSystem = if (row == "systems") systems.getOrNull(col)?.let { systemCard(it, library) } else null
     PageEffect(focused, shown?.id, shown?.art, shownSystem?.art) {
@@ -192,6 +198,7 @@ fun RommContent(app: AppState, active: Boolean, topPadding: Dp) {
                     "systems" -> systems.getOrNull(col)?.let(::openSystem)
                     "missing" -> missing.getOrNull(col)?.let { app.go(Route.GameInfo(it.id)) }
                     "collections" -> collections.getOrNull(col)?.let(::openCollection)
+                    "others" -> others.getOrNull(col)?.let { app.go(Route.GameInfo(it.id)) }
                 }
                 NavResult.ACTIVATED
             }
@@ -201,6 +208,7 @@ fun RommContent(app: AppState, active: Boolean, topPadding: Dp) {
                     "recent" -> recent.getOrNull(col)?.let(::gameOptions)
                     // A game of the library's: its own options, Upload to RomM among them.
                     "missing" -> missing.getOrNull(col)?.let { app.openContextMenu(app.gameMenu(it)) }
+                    "others" -> others.getOrNull(col)?.let { app.openContextMenu(io.github.matiyaaa.fuse.ui.shell.reach.householdMenu(app, it, romm = state.canUpload)) }
                 }
                 NavResult.ACTIVATED
             }
@@ -242,6 +250,14 @@ fun RommContent(app: AppState, active: Boolean, topPadding: Dp) {
             }
             if ("collections" in rows) item("collections") {
                 CollectionShelf(collections, if (focused && row == "collections") col else -1, tile, onOpen = ::openCollection)
+            }
+            if ("others" in rows) item("others") {
+                io.github.matiyaaa.fuse.ui.shell.reach.HouseholdShelf(
+                    "Not on RomM, from Another Device", FuseIcons.MonitorSmartphone, others, if (focused && row == "others") col else -1, tile,
+                    if (others.size == 1) "1 game" else "${others.size} games",
+                    onOpen = { app.go(Route.GameInfo(it.id)) },
+                    onOptions = { app.openContextMenu(io.github.matiyaaa.fuse.ui.shell.reach.householdMenu(app, it, romm = state.canUpload)) },
+                )
             }
             if (rows.size == 1) item("empty") {
                 Quiet(
@@ -344,7 +360,7 @@ private fun StatChip(icon: ImageVector, text: String) {
  * spreads), and without this it would cover the shelf's title above.
  */
 @Composable
-private fun liftRoom(tile: Dp): Dp = tile * ((Fuse.motion.focusScale - 1f) / 2f) + Space.s
+internal fun liftRoom(tile: Dp): Dp = tile * ((Fuse.motion.focusScale - 1f) / 2f) + Space.s
 
 /** Fuse RomM's mark: Fuse's library drawn in its accent, not RomM's own logo (RomM is its own project). */
 @Composable
@@ -386,7 +402,7 @@ private fun Pill(a: PillAction, selected: Boolean, label: Boolean, primary: Bool
 }
 
 @Composable
-private fun ShelfTitle(title: String, icon: ImageVector, trailing: String?) {
+internal fun ShelfTitle(title: String, icon: ImageVector, trailing: String?) {
     val c = Fuse.colors
     Row(Modifier.padding(horizontal = Space.gutter), verticalAlignment = Alignment.CenterVertically) {
         FuseIcon(icon, size = Size.iconS, tint = c.textMuted)
@@ -614,7 +630,7 @@ private fun NotSetUp(app: AppState, state: RommState, focused: Boolean, topPaddi
  * What can be changed about a RomM game Fuse doesn't have, as about any game: its art, its details
  * found again, its name, or what sources said about it forgotten. Kept with Fuse RomM.
  */
-internal fun rommEditActions(app: AppState, id: io.github.matiyaaa.fuse.model.GameId, title: String): List<MenuAction> = listOf(
+internal fun rommEditActions(app: AppState, id: io.github.matiyaaa.fuse.model.GameId, title: String, owner: String = "RomM"): List<MenuAction> = listOf(
     MenuAction("media", "Manage Media", FuseIcons.Images, trailing = io.github.matiyaaa.fuse.ui.designsystem.components.Trailing.Chevron, onSelect = {
         app.closeOverlays(); app.go(Route.Media(io.github.matiyaaa.fuse.model.MediaOwner.OfGame(id), title))
     }),
@@ -623,7 +639,7 @@ internal fun rommEditActions(app: AppState, id: io.github.matiyaaa.fuse.model.Ga
         app.store.media.fill(io.github.matiyaaa.fuse.model.MediaFillMode.FILL_MISSING, io.github.matiyaaa.fuse.model.MediaKind.Fillable, game = id)
         app.toasts.show("Looking for details and art for $title")
     }),
-    MenuAction("rename", "Rename Display Title", FuseIcons.TextCursor, detail = "RomM keeps its own name", onSelect = {
+    MenuAction("rename", "Rename Display Title", FuseIcons.TextCursor, detail = "$owner keeps its own name", onSelect = {
         app.closeOverlays()
         app.textInput = io.github.matiyaaa.fuse.ui.shell.app.TextInputSpec("Display title", title) { t ->
             app.scope.launch {
@@ -636,9 +652,9 @@ internal fun rommEditActions(app: AppState, id: io.github.matiyaaa.fuse.model.Ga
         app.closeOverlays()
         app.confirm = io.github.matiyaaa.fuse.ui.shell.app.ConfirmSpec(
             "Reset $title?",
-            "Fuse forgets the name, details and art sources gave this game and goes back to RomM's. Your own name and the art you chose stay. Find Details and Art looks again.",
+            "Fuse forgets the name, details and art sources gave this game and goes back to $owner's. Your own name and the art you chose stay. Find Details and Art looks again.",
             "Reset",
-        ) { app.scope.launch { if (app.store.media.resetDetails(id)) app.toasts.show("Reset. It goes by RomM's name again") } }
+        ) { app.scope.launch { if (app.store.media.resetDetails(id)) app.toasts.show("Reset. It goes by $owner's name again") } }
     }),
 )
 
@@ -662,11 +678,17 @@ internal fun gameMenu(app: AppState, g: RommGame): ContextMenuSpec {
             add(MenuAction("romm.open", "Open", FuseIcons.Info, onSelect = { app.closeOverlays(); app.go(Route.GameInfo(g.game ?: g.card.id)) }))
             when (g.presence) {
                 RommPresence.ON_SERVER -> {
-                    add(MenuAction("romm.download", "Download", FuseIcons.Download, onSelect = { queue(RommDownloadWhat.Game) }))
+                    add(MenuAction("romm.download", "Download", FuseIcons.Download, onSelect = { app.closeOverlays(); app.rommDownload(g.romId, g.card.title) }))
                     add(MenuAction("romm.everything", "Download Everything", FuseIcons.CloudDownload, detail = "With its updates and DLC, where RomM has them", onSelect = { queue(RommDownloadWhat.Everything) }))
                 }
                 RommPresence.DOWNLOADING, RommPresence.QUEUED -> add(MenuAction("romm.downloads", "See in Downloads", FuseIcons.Download, onSelect = { app.closeOverlays(); app.go(Route.Downloads) }))
                 else -> add(MenuAction("romm.content", "Download Missing Content", FuseIcons.CloudDownload, onSelect = { queue(RommDownloadWhat.Everything) }))
+            }
+            // To another of the household's devices, from wherever is best (RomM, or a device that has it).
+            if (app.store.reach.state.value.supported) {
+                add(MenuAction("romm.send", "Send to Another Device", FuseIcons.Share, trailing = io.github.matiyaaa.fuse.ui.designsystem.components.Trailing.Chevron, onSelect = {
+                    app.sendPicker(g.game ?: g.card.id, g.card.title)
+                }))
             }
             // Not here yet: its art, details and name are Fuse RomM's to change, as for any game.
             if (g.game == null) addAll(rommEditActions(app, g.card.id, g.card.title))

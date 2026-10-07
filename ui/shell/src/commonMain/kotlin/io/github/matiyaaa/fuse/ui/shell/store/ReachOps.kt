@@ -66,7 +66,11 @@ data class CopyView(
 
 /** Every copy of a game Fuse knows, this device's first, then other devices', then RomM's. */
 @Immutable
-data class GameCopies(val copies: List<CopyView>) {
+data class GameCopies(
+    val copies: List<CopyView>,
+    /** Its transfer here, while one brings it. */
+    val transfer: String? = null,
+) {
     val here: CopyView? get() = copies.firstOrNull { it.place == CopyPlace.HERE }
     val devices: List<CopyView> get() = copies.filter { it.place == CopyPlace.DEVICE }
     val romm: CopyView? get() = copies.firstOrNull { it.place == CopyPlace.ROMM }
@@ -121,7 +125,15 @@ data class HouseholdGame(
 
 /** A system the household's other devices have games for. */
 @Immutable
-data class HouseholdSystem(val platform: PlatformId, val name: String, val games: Int, val art: Art = Art.None, val accent: Long? = null)
+data class HouseholdSystem(
+    val platform: PlatformId,
+    val name: String,
+    val games: Int,
+    val art: Art = Art.None,
+    val accent: Long? = null,
+    /** The devices its games are on, by name. */
+    val holders: List<String> = emptyList(),
+)
 
 /** The household's games as this device sees them. */
 @Immutable

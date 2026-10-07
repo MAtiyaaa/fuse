@@ -202,6 +202,9 @@ interface RommOps {
      * library is known: the ones to send to RomM. [RommNotOnServer.total] counts them all.
      */
     val notOnServer: StateFlow<RommNotOnServer> get() = MutableStateFlow(RommNotOnServer())
+
+    /** Library games on [platform] that RomM has no match for, every one of them (empty until the server's library is known). */
+    fun notOnServerOn(platform: PlatformId): Flow<List<GameCard>> = flowOf(emptyList())
     fun games(slug: String?): Flow<List<RommGame>>
     fun collection(id: String): Flow<List<RommGame>>
     fun search(text: String): Flow<List<RommGame>>

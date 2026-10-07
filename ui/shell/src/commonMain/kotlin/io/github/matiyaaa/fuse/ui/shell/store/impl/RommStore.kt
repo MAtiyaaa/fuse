@@ -243,6 +243,9 @@ internal class DefaultRommOps(
         return null
     }
 
+    /** RomM's game [romId] as the mirror has it (never asks the server). */
+    internal suspend fun romHere(romId: Long): RommRom? = if (!settings.enabled) null else mirror.rom(server, romId)
+
     /** RomM's game [romId] with its files listed (asked of the server when the mirror lacks them). */
     internal suspend fun romWithFiles(romId: Long): RommRom? = mirror.withFiles(clientFor(server), server, romId)
 
@@ -625,6 +628,15 @@ internal class DefaultRommOps(
         val media = if (shown.isEmpty()) emptyMap() else ctx.data.media.observeFor(shown.map { MediaOwner.OfGame(it.id) }).first()
         return RommNotOnServer(shown.map { ctx.summaryToCard(it, media[MediaOwner.OfGame(it.id)]) }, missing.size)
     }
+
+    override fun notOnServerOn(platform: io.github.matiyaaa.fuse.model.PlatformId): Flow<List<GameCard>> = combine(matches, mirrorRevision, ctx.data.games.observeByPlatform(platform)) { m, _, games -> m to games }
+        .mapLatest { (m, games) ->
+            if (!settings.enabled || mirror.syncedAt(server) <= 0L) return@mapLatest emptyList()
+            val matched = m.values.mapTo(HashSet()) { it.first }
+            val missing = games.filter { !it.isApp && !it.missing && !it.removed && it.id !in matched }.sortedBy { it.sortKey }
+            val media = if (missing.isEmpty()) emptyMap() else ctx.data.media.observeFor(missing.map { MediaOwner.OfGame(it.id) }).first()
+            missing.map { ctx.summaryToCard(it, media[MediaOwner.OfGame(it.id)]) }
+        }.flowOn(Dispatchers.Default)
 
     override fun games(slug: String?): Flow<List<RommGame>> = combine(mirrorRevision, matches, transfers.items) { _, _, _ -> }.mapLatest {
         toGames(if (slug == null) mirror.all(server) else mirror.onPlatform(server, slug))

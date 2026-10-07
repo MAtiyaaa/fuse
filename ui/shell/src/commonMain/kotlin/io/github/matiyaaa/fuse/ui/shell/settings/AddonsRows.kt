@@ -45,6 +45,19 @@ fun addonsRows(app: AppState): List<MenuAction> {
                 sync.map { it.copy(id = "sync.${it.id}") }
             })
         }
+        // The household's games on its other devices: what this device shares, what it takes, and how they move.
+        if (sync != null && prefs.sync.enabled) {
+            val reach = app.store.reach.state.collectAsState().value
+            val reachRows = remoteLibraryRows(app, prefs.sync)
+            addAll(app.group("addons.reach", "Remote Library", FuseIcons.MonitorSmartphone, summary = when {
+                !reach.supported -> "Waiting for the host"
+                reach.games == 0 -> "Nothing new"
+                reach.games == 1 -> "1 game"
+                else -> "${reach.games} games"
+            }, detail = "Every device's games, sent between them, through Fuse Sync") {
+                reachRows.map { it.copy(id = "reach.${it.id}") }
+            })
+        }
         if (syncthing != null) {
             val st = syncthing.state.collectAsState().value
             val on = st !is io.github.matiyaaa.fuse.sync.syncthing.SyncthingState.Off
@@ -190,6 +203,7 @@ private fun syncRowsFor(app: AppState, service: io.github.matiyaaa.fuse.sync.Syn
 
 /** Addons' groups, by the ids that open them (from search, or a link to the Store's or Cartridge's settings). */
 const val ADDONS_SYNC = "addons.sync"
+const val ADDONS_REACH = "addons.reach"
 const val ADDONS_SYNCTHING = "addons.syncthing"
 const val ADDONS_JELLYFIN = "addons.jellyfin"
 const val ADDONS_STORE = "addons.store"
@@ -203,4 +217,59 @@ fun addonsStatus(app: AppState): Trailing {
     val j = app.store.prefs.collectAsState().value.jellyfin
     val s: JellyfinState = service.state.collectAsState().value
     return if (j.enabled && (s.authRequired || (s.account != null && s.offline))) Trailing.Badge("1") else Trailing.None
+}
+
+/**
+ * The Remote Library's rows: whether this device's games are listed for the others, whether it
+ * takes games they send, where those land, whether games may pass through the host, and whether
+ * the others' games show in the RomM tab.
+ */
+@Composable
+private fun remoteLibraryRows(app: AppState, s: io.github.matiyaaa.fuse.data.settings.SyncSettings): List<MenuAction> {
+    val reach = app.store.reach.state.collectAsState().value
+    fun set(change: (io.github.matiyaaa.fuse.data.settings.SyncSettings) -> io.github.matiyaaa.fuse.data.settings.SyncSettings) {
+        app.scope.launch { app.store.sync.configure(change) }
+    }
+    return buildList {
+        if (!reach.supported) add(infoRow("host", "Update Fuse on the host computer", detail = "The Remote Library needs Fuse 0.3.9 or later on the computer that hosts Fuse Sync", icon = FuseIcons.Info))
+        add(MenuAction(
+            "open", "Open the Remote Library", FuseIcons.LibraryBig,
+            detail = io.github.matiyaaa.fuse.ui.shell.reach.householdWords(reach),
+            trailing = Trailing.Chevron, onSelect = { app.go(Route.HouseholdLibrary) },
+        ))
+        add(toggleRow("share", "Share This Device's Games", FuseIcons.Share, s.shareLibrary, if (s.shareLibrary) "Your other devices see them, and can fetch them while Fuse is open here" else "Off: no other device sees or fetches this device's games") { v ->
+            set { it.copy(shareLibrary = v) }
+        })
+        add(toggleRow("accept", "Let Other Devices Send Games Here", FuseIcons.Download, s.acceptSends, if (s.acceptSends) "Any of your devices can send a game here, now or once this device is back" else "Off: games come here only when you ask for them here") { v ->
+            set { it.copy(acceptSends = v) }
+        })
+        add(MenuAction(
+            "folder", "Where Games Sent Here Go", FuseIcons.FolderOpen,
+            detail = if (s.receiveFolder.isBlank()) "Each system's folder, as Fuse RomM's downloads choose it" else s.receiveFolder,
+            trailing = Trailing.Value(if (s.receiveFolder.isBlank()) "Automatic" else "Chosen"),
+            onSelect = {
+                app.choice = io.github.matiyaaa.fuse.ui.shell.app.ChoiceSpec(
+                    title = "Where Games Sent Here Go",
+                    message = "Each game goes into its system's folder inside the folder you choose, or the system folder Fuse already knows.",
+                    icon = FuseIcons.FolderOpen,
+                    options = listOf(
+                        MenuAction("auto", "Automatic", FuseIcons.Wand, detail = "Each system's folder, as Fuse RomM's downloads choose it", onSelect = { app.choice = null; set { it.copy(receiveFolder = "") } }),
+                        MenuAction("pick", "Choose a Folder", FuseIcons.FolderSearch, onSelect = {
+                            app.choice = null
+                            app.scope.launch {
+                                val path = app.platform.storage.pickFolder("Where should games sent here go?") ?: return@launch
+                                app.store.sync.configure { it.copy(receiveFolder = path) }
+                            }
+                        }),
+                    ),
+                )
+            },
+        ))
+        add(toggleRow("relay", "Pass Games Through the Host", FuseIcons.Router, s.relay, if (s.relay) "When two devices can't reach each other (one away from home), the host passes the game on, keeping none of it" else "Off: games move only between devices that reach each other directly") { v ->
+            set { it.copy(relay = v) }
+        })
+        if (app.store.romm.supported) add(toggleRow("romm", "Show Other Devices' Games in RomM", FuseIcons.LibraryBig, s.showInRomm, "Not on RomM, from another device, at the foot of the RomM tab and in each system") { v ->
+            set { it.copy(showInRomm = v) }
+        })
+    }
 }

@@ -246,6 +246,12 @@ class UiAudit {
 
     @Test fun rommD() = audit(AuditSize.D) { rommScreens() }
 
+    @Test fun reachM() = audit(AuditSize.M) { reachScreens() }
+
+    @Test fun reachV() = audit(AuditSize.V) { reachScreens() }
+
+    @Test fun reachC() = audit(AuditSize.C) { reachScreens() }
+
     @Test fun rommH() = audit(AuditSize.H) { rommScreens() }
 
     @Test fun jellyfinM() = audit(AuditSize.M) { jellyfinScreens() }

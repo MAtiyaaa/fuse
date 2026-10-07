@@ -12,6 +12,8 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performMouseInput
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeDown
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.v2.runComposeUiTest
@@ -165,6 +167,55 @@ class UiFlowTest {
             if (services.launched.isEmpty()) runCatching { pumpUntil(1_500) { services.launched.isNotEmpty() } }
         }
         assertEquals(1, clicks, "Clicks it took to play a game")
+    }
+
+    @Test
+    fun aGridScrolledUpByTouchStaysWhereTheFingerLeftIt() = runComposeUiTest(testTimeout = kotlin.time.Duration.parse("3m")) {
+        repeat(80) { File(root, "gba/Quest %02d (USA).gba".format(it)).writeBytes(ByteArray(512)) }
+        val services = newServices()
+        val store: FuseStore = runBlocking {
+            createFuseStore(services, scope).also { s ->
+                s.updatePrefs { it.copy(onboardingDone = true) }
+                s.sources.add(root.absolutePath, LibrarySourceKind.ROMS_ROOT)
+                withTimeout(30_000) { s.library.home.first { feed -> feed.recentlyAdded.isNotEmpty() } }
+            }
+        }
+        val router = InputRouter(scope)
+        mainClock.autoAdvance = false
+        setContent { FuseApp(store, TestPlatform, router) }
+        pumpUntil { onAllNodesWithText("NEW IN YOUR LIBRARY").fetchSemanticsNodes().isNotEmpty() }
+        router.tap(PadButton.R1)
+        repeat(20) { mainClock.advanceTimeBy(64); Thread.sleep(4) }
+        router.tap(PadButton.R1)
+        // Advance Wars sorts first: its tile shows its initials while it has no cover.
+        val first = androidx.compose.ui.test.hasText("AW")
+        fun firstOnScreen(): Boolean {
+            val height = onRoot().fetchSemanticsNode().size.height
+            return onAllNodes(first, useUnmergedTree = true).fetchSemanticsNodes().any { it.boundsInRoot.bottom > 0f && it.boundsInRoot.top < height }
+        }
+        pumpUntil(30_000) { firstOnScreen() }
+
+        // The controller walks far down the grid, so the first row scrolls away.
+        repeat(14) { router.tap(PadButton.DPAD_DOWN); repeat(6) { mainClock.advanceTimeBy(64) } }
+        pumpUntil { !firstOnScreen() }
+
+        // A finger drags the grid back up to the top.
+        var swipes = 0
+        while (!firstOnScreen() && swipes < 12) {
+            onRoot().performTouchInput { swipeDown(startY = height * 0.3f, endY = height * 0.85f, durationMillis = 300) }
+            repeat(10) { mainClock.advanceTimeBy(64); Thread.sleep(4) }
+            swipes++
+        }
+        assertTrue(firstOnScreen(), "The first row is back on screen after $swipes swipes")
+
+        // Nothing throws it back down to the game the controller had chosen.
+        repeat(40) { mainClock.advanceTimeBy(64); Thread.sleep(4) }
+        assertTrue(firstOnScreen(), "The grid stayed where the finger left it")
+
+        // The controller carries on from what is on screen, not from the row scrolled away.
+        router.tap(PadButton.DPAD_RIGHT)
+        repeat(40) { mainClock.advanceTimeBy(64); Thread.sleep(4) }
+        assertTrue(firstOnScreen(), "A press after the touch scroll keeps the top of the grid in view")
     }
 
     @Test

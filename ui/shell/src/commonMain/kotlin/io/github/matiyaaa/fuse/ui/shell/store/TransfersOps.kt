@@ -40,6 +40,8 @@ data class TransferRow(
     val device: String? = null,
     val deviceName: String? = null,
     val deviceOnline: Boolean = true,
+    /** When that device was last heard from. */
+    val deviceSeen: Long = 0,
 )
 
 /**
