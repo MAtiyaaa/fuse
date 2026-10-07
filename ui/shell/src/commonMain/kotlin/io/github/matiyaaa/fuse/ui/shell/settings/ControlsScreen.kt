@@ -357,86 +357,16 @@ private fun GlyphLine(caption: String, buttons: List<PadButton>, align: Alignmen
 }
 
 /**
- * The pad drawn from its own glyphs on a soft silhouette: triggers and bumpers along the top, the
- * D-pad, the centre buttons and the face buttons on the body, and the two sticks between the grips.
- * Glyphs follow the pad's style (letters or shapes), and [nintendoKeys] places A on the right as a
- * pad that sends Nintendo keycodes has it. [pressed] buttons light up solid in the accent; [marked]
- * ones take its tint.
+ * The pad as setup draws it ([io.github.matiyaaa.fuse.ui.shell.onboarding.PadArt]), labelled in the
+ * pad's own style; [nintendoKeys] places A on the right as a pad that sends Nintendo keycodes has it.
+ * [pressed] buttons fill with the accent; [marked] ones take its outline.
  */
 @Composable
 internal fun PadDiagram(pressed: Set<PadButton>, marked: Set<PadButton>, nintendoKeys: Boolean, modifier: Modifier = Modifier) {
-    BoxWithConstraints(modifier, contentAlignment = Alignment.Center) {
-        val g = (maxWidth / PAD_WIDTH).coerceIn(PAD_UNIT_MIN, PAD_UNIT_MAX)
-        val c = Fuse.colors
-        val accent = c.accent
-        val body = c.text.copy(alpha = if (c.isDark) 0.05f else 0.045f)
-        val rim = c.text.copy(alpha = if (c.isDark) 0.1f else 0.12f)
-        val light = Color.White.copy(alpha = if (c.isDark) 0.12f else 0.6f)
-
-        @Composable
-        fun Button(b: PadButton, cx: Float, cy: Float, size: Float) {
-            val on = b in pressed
-            val tint = if (on || b in marked) accent else c.text
-            Box(
-                Modifier.offset(g * (cx - size), g * (cy - size / 2)).size(g * size * 2, g * size),
-                contentAlignment = Alignment.Center,
-            ) {
-                PadGlyph(b, size = g * size, color = tint, emphasized = on)
-            }
-        }
-
-        Box(Modifier.size(g * PAD_WIDTH, g * PAD_HEIGHT)) {
-            // The body: a rounded slab with two grips, lit along its top like every other object.
-            Spacer(
-                Modifier.offset(y = g * BODY_TOP).size(g * PAD_WIDTH, g * (PAD_HEIGHT - BODY_TOP)).drawWithCache {
-                    val u = size.width / PAD_WIDTH
-                    val slab = Path().apply { addRoundRect(RoundRect(Rect(0f, 0f, size.width, u * 4f), CornerRadius(u * 2f))) }
-                    val left = Path().apply { addOval(Rect(Offset(u * 2.4f, u * 3.35f), u * 1.3f)) }
-                    val right = Path().apply { addOval(Rect(Offset(size.width - u * 2.4f, u * 3.35f), u * 1.3f)) }
-                    val withLeft = Path().apply { op(slab, left, PathOperation.Union) }
-                    val shape = Path().apply { op(withLeft, right, PathOperation.Union) }
-                    val edge = Brush.verticalGradient(0f to light, 0.25f to Color.Transparent, endY = size.height)
-                    val stroke = Stroke(1.dp.toPx() * 2)
-                    onDrawBehind {
-                        drawPath(shape, body)
-                        clipPath(shape) {
-                            drawPath(shape, rim, style = stroke)
-                            drawPath(shape, edge, style = stroke)
-                        }
-                    }
-                },
-            )
-            // Shoulders: triggers outside, bumpers inside.
-            Button(PadButton.L2, 1.3f, SHOULDER_Y, 0.8f)
-            Button(PadButton.L1, 3.0f, SHOULDER_Y, 0.8f)
-            Button(PadButton.R1, PAD_WIDTH - 3.0f, SHOULDER_Y, 0.8f)
-            Button(PadButton.R2, PAD_WIDTH - 1.3f, SHOULDER_Y, 0.8f)
-            // The D-pad lights the arm that is held.
-            val arm = listOf(PadButton.DPAD_UP, PadButton.DPAD_DOWN, PadButton.DPAD_LEFT, PadButton.DPAD_RIGHT).firstOrNull { it in pressed }
-            Box(
-                Modifier.offset(g * (DPAD_X - 1.1f), g * (FACE_Y - 1.1f)).size(g * 2.2f),
-                contentAlignment = Alignment.Center,
-            ) {
-                if (arm != null) PadGlyph(arm, size = g * 2f, color = accent) else ButtonGlyph(HintButton.DPAD, size = g * 2f)
-            }
-            // The centre buttons.
-            Button(PadButton.SELECT, PAD_WIDTH / 2 - 1.05f, CENTRE_Y, 0.62f)
-            Button(PadButton.MODE, PAD_WIDTH / 2, CENTRE_Y, 0.78f)
-            Button(PadButton.START, PAD_WIDTH / 2 + 1.05f, CENTRE_Y, 0.62f)
-            // The face buttons, where this pad has them.
-            val fx = PAD_WIDTH - DPAD_X
-            val top = if (nintendoKeys) PadButton.X else PadButton.Y
-            val leftFace = if (nintendoKeys) PadButton.Y else PadButton.X
-            val rightFace = if (nintendoKeys) PadButton.A else PadButton.B
-            val bottom = if (nintendoKeys) PadButton.B else PadButton.A
-            Button(top, fx, FACE_Y - 0.95f, 0.9f)
-            Button(leftFace, fx - 0.95f, FACE_Y, 0.9f)
-            Button(rightFace, fx + 0.95f, FACE_Y, 0.9f)
-            Button(bottom, fx, FACE_Y + 0.95f, 0.9f)
-            // The sticks, between the grips.
-            Button(PadButton.L3, PAD_WIDTH / 2 - 1.55f, STICK_Y, 1.15f)
-            Button(PadButton.R3, PAD_WIDTH / 2 + 1.55f, STICK_Y, 1.15f)
-        }
+    Box(modifier, contentAlignment = Alignment.Center) {
+        io.github.matiyaaa.fuse.ui.shell.onboarding.PadArt(
+            pressed, Fuse.glyphs.style, nintendoKeys, Modifier.widthIn(max = PAD_MAX_WIDTH).fillMaxWidth(), marked = marked,
+        )
     }
 }
 
@@ -464,17 +394,8 @@ private const val TEST_EXIT_MS = 1_200L
 private val NARROW_BELOW = 640.dp
 private val SHORT_BELOW = 560.dp
 
-/** The pad's picture in units of its button size: overall size and where its parts sit. */
-private const val PAD_WIDTH = 11f
-private const val PAD_HEIGHT = 5.95f
-private const val SHOULDER_Y = 0.45f
-private const val BODY_TOP = 1.2f
-private const val DPAD_X = 2.3f
-private const val FACE_Y = BODY_TOP + 1.85f
-private const val CENTRE_Y = BODY_TOP + 1.05f
-private const val STICK_Y = BODY_TOP + 3.2f
-private val PAD_UNIT_MIN = 22.dp
-private val PAD_UNIT_MAX = 40.dp
+/** The widest the controller test's picture is drawn. */
+private val PAD_MAX_WIDTH = 520.dp
 
 /** The test and capture dialogs' widest; on narrow screens they keep a margin instead. */
 private val TEST_MAX = 560.dp
