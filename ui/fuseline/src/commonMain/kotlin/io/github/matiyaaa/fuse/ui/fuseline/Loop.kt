@@ -90,21 +90,27 @@ suspend fun decorationFrames(fps: Int, infinite: Boolean = true, onFrame: (playe
     var last = frame(infinite) { it }
     var played = 0L
     var shownAt = 0L
+    // The display's interval, from frames that came one after the other (not after a wait).
+    var interval = FramePacing.intervalNanos
+    var waited = false
     while (true) {
         val now = frame(infinite) { it }
         FramePacing.decorationWakeups++
         val step = (now - last).coerceAtLeast(0L)
         last = now
+        if (!waited && step in 1 until interval) interval = step
         if (!FramePacing.decorationHeld()) {
             played += step
-            if (played - shownAt >= every && FramePacing.shouldDrawDecoration()) {
+            // Due within half a frame counts as due: updates land on the display's frames, never a frame late.
+            if (played - shownAt + interval / 2 >= every && FramePacing.shouldDrawDecoration()) {
                 shownAt = played
                 onFrame(played)
             }
         }
         // Wait out the rest of the interval, less a frame, rather than taking frames in between.
-        val wait = every - (played - shownAt) - FramePacing.intervalNanos
-        if (wait > MIN_WAIT_NANOS) kotlinx.coroutines.delay(wait / NANOS_PER_MS)
+        val wait = every - (played - shownAt) - interval
+        waited = wait > MIN_WAIT_NANOS
+        if (waited) kotlinx.coroutines.delay(wait / NANOS_PER_MS)
     }
 }
 

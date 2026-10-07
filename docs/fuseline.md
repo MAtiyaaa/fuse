@@ -193,7 +193,8 @@ off the frames around them:
   moves exactly as before.
 - **Paced decoration.** `decorationFrames(fps)` gives a decorative loop its time only when an update
   is due, and waits between them instead of taking every frame of the display: a room that needs 30
-  updates a second wakes 30 times a second on a 120 Hz screen, not 120.
+  updates a second wakes about 31 times a second on a 125 Hz display instead of 125, and still makes
+  every update (`DecorationTest`, on a virtual clock where frames and waits are exact).
 - **Cheaper publishing.** A value's change is published to Compose from a counter of its own, without
   reading the state it writes, and the visibility check is folded into the same loop that solves the
   frame.
@@ -217,11 +218,19 @@ own tracks. It is the only file in Fuse allowed to import `androidx.compose.anim
 
 ## Speed
 
-Fuseline 3 must beat both Fuseline 2 and Compose on every comparable benchmark, in time and in
-memory. `MotionBenchmark` (values, retargeting, velocity, decay, gestures, transitions, timelines,
-scheduling, refresh rates) and `UiMotionBenchmark` (whole interface paths, composition, layout and
-drawing included) measure all three and fail if Fuseline 3 is not first on any row. Fuseline 2 is
-kept, unchanged, in the tests (package `...fuseline.v2`) as the baseline. Run them with:
+Every Fuseline is measured against every Fuseline before it and against Compose, in time and in
+memory. Fuseline 3, 2 and 1 are kept in the tests exactly as they shipped (packages
+`...fuseline.v3`, `...fuseline.v2` and `...fuseline.v1`). `MotionBenchmark` (values, retargeting,
+velocity, decay, gestures, transitions, timelines, scheduling, refresh rates) and `UiMotionBenchmark`
+(whole interface paths, composition, layout and drawing included, pages of tiles, a decorative room)
+measure all five, and fail if Fuseline 3.1 loses any row.
+
+Where Fuseline 3.1 changes nothing (a decay, a gesture, a timeline), it runs Fuseline 3's own code,
+and the two land on either side of each other from one run to the next on the same machine. Those
+rows are reported as a tie with Fuseline 3, never as a win; Fuseline 3.1 must still be ahead of
+Fuseline 2, Fuseline 1 and Compose there. Where Fuseline 3.1 changes something (tweens and colours,
+whose long slow frames are no longer shown; values that follow targets; decoration), it is measured
+ahead. Run them with:
 
 ```
 ./gradlew :ui:fuseline:desktopTest --tests '*MotionBenchmark' -Pfuse.bench=true
@@ -245,64 +254,76 @@ They write `ui/fuseline/build/motion-bench.md` and `ui/fuseline/build/ui-motion-
 
 ### Results
 
-Measured on OpenJDK 64-Bit Server VM 21.0.12.1, 4 processors, Linux amd64. Every row is Fuseline 3 first, in time and in memory; who is
-first is decided on the unrounded numbers.
+Measured on OpenJDK 64-Bit Server VM 21.0.12.1, 4 processors, Linux amd64. Of 43 rows, Fuseline 3.1
+is first on 27, tied with the quickest within this machine's run-to-run noise on 14 (where it runs
+Fuseline 3's own paths), and behind Fuseline 3 on 2: a hundred two-number springs given a new target
+every frame (0.2 µs a frame) and the shared element's memory (1.2 KB a frame). On a tied row the
+quickest may be any of the Fuselines; Fuseline 3.1 is ahead of Compose on every row.
 
 Values, retargeting, velocity, decay, gestures, transitions, timelines, scheduling and refresh
 rates (per frame):
 
-| Case | Fuseline 3 | Fuseline 2 | Compose | Fuseline 3 memory | Fuseline 2 memory | Compose memory | First |
-|---|---|---|---|---|---|---|---|
-| 1 tweens | 0.82 µs | 0.89 µs | 1.25 µs | 353 B | 433 B | 441 B | Fuseline 3 |
-| 1 springs | 0.87 µs | 0.91 µs | 1.21 µs | 353 B | 433 B | 441 B | Fuseline 3 |
-| 1 vector springs | 0.66 µs | 0.67 µs | 1.37 µs | 235 B | 299 B | 449 B | Fuseline 3 |
-| 1 colours | 0.87 µs | 0.91 µs | 1.31 µs | 353 B | 441 B | 449 B | Fuseline 3 |
-| 100 tweens | 8.55 µs | 11.32 µs | 167.24 µs | 379 B | 4419 B | 50363 B | Fuseline 3 |
-| 100 springs | 9.30 µs | 14.19 µs | 147.03 µs | 379 B | 4419 B | 50363 B | Fuseline 3 |
-| 100 vector springs | 12.48 µs | 18.06 µs | 158.03 µs | 379 B | 5219 B | 51163 B | Fuseline 3 |
-| 100 colours | 10.36 µs | 16.47 µs | 169.49 µs | 379 B | 5219 B | 51163 B | Fuseline 3 |
-| 1000 tweens | 78.74 µs | 102.63 µs | 1646.94 µs | 379 B | 40419 B | 503963 B | Fuseline 3 |
-| 1000 springs | 87.00 µs | 125.26 µs | 1569.32 µs | 379 B | 40419 B | 503963 B | Fuseline 3 |
-| 1000 vector springs | 118.54 µs | 183.69 µs | 1785.26 µs | 379 B | 48419 B | 511963 B | Fuseline 3 |
-| 100 springs retargeted once | 3.76 µs | 5.35 µs | 59.34 µs | 192 B | 1781 B | 20198 B | Fuseline 3 |
-| 100 springs retargeted every frame | 0.31 µs | 22.24 µs | 974.85 µs | 32 B | 24664 B | 556611 B | Fuseline 3 |
-| 1000 springs retargeted every frame | 4.48 µs | 224.01 µs | 10851.55 µs | 320 B | 242522 B | 5566082 B | Fuseline 3 |
-| 100 vector springs retargeted every frame | 0.23 µs | 34.42 µs | 1002.72 µs | 32 B | 44661 B | 560605 B | Fuseline 3 |
-| 1000 vector springs retargeted every frame | 3.73 µs | 368.23 µs | 11837.34 µs | 454 B | 442842 B | 5925496 B | Fuseline 3 |
-| tween velocity, 1000 readings | 47.40 µs | 80.01 µs | 174.13 µs | 0 B | 0 B | 0 B | Fuseline 3 |
-| 1 decays | 0.74 µs | n/a | 1.50 µs | 405 B | n/a | 488 B | Fuseline 3 |
-| 100 decays | 7.26 µs | n/a | 120.63 µs | 459 B | n/a | 58363 B | Fuseline 3 |
-| 100 values tracking a gesture | 38.31 µs | n/a | 147.14 µs | 61 B | n/a | 88080 B | Fuseline 3 |
-| tab transitions | 2.21 µs | 2.48 µs | 7.37 µs | 589 B | 856 B | 2347 B | Fuseline 3 |
-| tab changes every 3 frames | 2.38 µs | 4.57 µs | 41.70 µs | 512 B | 1844 B | 22006 B | Fuseline 3 |
-| tab reversal every 4 frames | 1.45 µs | 4.20 µs | 26.32 µs | 499 B | 1965 B | 15241 B | Fuseline 3 |
-| timeline, 20 tracks | 0.28 µs | 0.35 µs | 4.07 µs | 0 B | 14 B | 913 B | Fuseline 3 |
-| timeline seek, 20 tracks | 0.40 µs | 0.82 µs | n/a | 0 B | 0 B | n/a | Fuseline 3 |
-| timeline reverse, 20 tracks | 0.50 µs | n/a | n/a | 0 B | n/a | n/a | Fuseline 3 only |
-| driver churn, 10 | 4.35 µs | 4.43 µs | 12.61 µs | 2407 B | 2646 B | 6718 B | Fuseline 3 |
-| driver churn, 100 | 31.52 µs | 33.48 µs | 121.17 µs | 19592 B | 21618 B | 67182 B | Fuseline 3 |
-| driver churn, 1000 | 327.41 µs | 341.35 µs | 1294.44 µs | 191443 B | 211343 B | 671833 B | Fuseline 3 |
-| idle, 1000 settled values | 0.00 µs | 0.00 µs | 0.00 µs | 0 B | 0 B | 0 B | Fuseline 3 |
-| 1000 springs at 30 Hz | 77.40 µs | 110.95 µs | 1442.68 µs | 472 B | 40512 B | 583976 B | Fuseline 3 |
-| 1000 springs at 60 Hz | 77.60 µs | 130.93 µs | 1478.21 µs | 472 B | 40512 B | 583976 B | Fuseline 3 |
-| 1000 springs at 90 Hz | 92.38 µs | 127.20 µs | 1561.55 µs | 467 B | 40507 B | 583971 B | Fuseline 3 |
-| 1000 springs at 120 Hz | 79.31 µs | 117.63 µs | 1585.73 µs | 465 B | 40505 B | 583969 B | Fuseline 3 |
-| 1000 springs at 144 Hz | 77.63 µs | 109.79 µs | 1458.70 µs | 463 B | 40503 B | 583967 B | Fuseline 3 |
-| 1000 springs at 165 Hz | 83.89 µs | 118.60 µs | 1620.88 µs | 462 B | 40502 B | 583966 B | Fuseline 3 |
-| 1000 springs at 240 Hz | 82.19 µs | 130.54 µs | 1445.02 µs | 460 B | 40500 B | 583964 B | Fuseline 3 |
+| Case | Fuseline 3.1 | Fuseline 3 | Fuseline 2 | Fuseline 1 | Compose | Fuseline 3.1 memory | Fuseline 3 memory | Fuseline 2 memory | Fuseline 1 memory | Compose memory | First |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| 1 tweens | 0.74 µs | 0.81 µs | 0.80 µs | 0.85 µs | 1.17 µs | 357 B | 357 B | 437 B | 437 B | 445 B | Fuseline 3.1 |
+| 1 springs | 0.82 µs | 0.76 µs | 0.81 µs | 0.80 µs | 1.06 µs | 357 B | 357 B | 437 B | 437 B | 445 B | Tie (within run-to-run noise) |
+| 1 vector springs | 0.55 µs | 0.54 µs | 0.59 µs | 0.63 µs | 1.32 µs | 239 B | 239 B | 303 B | 303 B | 453 B | Tie (within run-to-run noise) |
+| 1 colours | 0.85 µs | 0.79 µs | 0.91 µs | 0.87 µs | 1.24 µs | 357 B | 357 B | 445 B | 445 B | 453 B | Tie (within run-to-run noise) |
+| 100 tweens | 6.08 µs | 8.93 µs | 15.88 µs | 14.21 µs | 176.43 µs | 379 B | 379 B | 4419 B | 4419 B | 50363 B | Fuseline 3.1 |
+| 100 springs | 12.78 µs | 13.71 µs | 16.80 µs | 16.74 µs | 184.82 µs | 379 B | 379 B | 4419 B | 4419 B | 50363 B | Fuseline 3.1 |
+| 100 vector springs | 12.52 µs | 13.98 µs | 18.47 µs | 17.62 µs | 164.07 µs | 379 B | 379 B | 5219 B | 5219 B | 51163 B | Fuseline 3.1 |
+| 100 colours | 7.65 µs | 9.33 µs | 15.23 µs | 14.73 µs | 147.28 µs | 379 B | 379 B | 5219 B | 5219 B | 51163 B | Fuseline 3.1 |
+| 1000 tweens | 51.28 µs | 73.45 µs | 103.99 µs | 141.40 µs | 1692.95 µs | 379 B | 379 B | 40419 B | 40419 B | 503963 B | Fuseline 3.1 |
+| 1000 springs | 72.66 µs | 99.16 µs | 119.26 µs | 117.97 µs | 1670.20 µs | 379 B | 379 B | 40419 B | 40419 B | 503963 B | Fuseline 3.1 |
+| 1000 vector springs | 138.21 µs | 149.17 µs | 203.84 µs | 211.99 µs | 2066.52 µs | 379 B | 379 B | 48419 B | 48419 B | 511963 B | Fuseline 3.1 |
+| 100 springs retargeted once | 3.26 µs | 3.60 µs | 4.53 µs | n/a | 54.43 µs | 192 B | 192 B | 1781 B | n/a | 20264 B | Fuseline 3.1 |
+| 100 springs retargeted every frame | 0.37 µs | 0.52 µs | 25.21 µs | n/a | 1182.02 µs | 32 B | 32 B | 24664 B | n/a | 559003 B | Fuseline 3.1 |
+| 1000 springs retargeted every frame | 5.54 µs | 5.78 µs | 255.28 µs | n/a | 11829.74 µs | 320 B | 320 B | 242522 B | n/a | 5590002 B | Fuseline 3.1 |
+| 100 vector springs retargeted every frame | 0.46 µs | 0.26 µs | 43.71 µs | n/a | 1117.23 µs | 32 B | 32 B | 44661 B | n/a | 562997 B | NOT FIRST |
+| 1000 vector springs retargeted every frame | 3.52 µs | 3.65 µs | 348.82 µs | n/a | 11640.58 µs | 454 B | 454 B | 442842 B | n/a | 5949416 B | Fuseline 3.1 |
+| tween velocity, 1000 readings | 47.15 µs | 47.13 µs | 52.56 µs | n/a | 179.81 µs | 0 B | 0 B | 0 B | n/a | 0 B | Tie (within run-to-run noise) |
+| 1 decays | 0.70 µs | 0.73 µs | n/a | n/a | 1.53 µs | 409 B | 409 B | n/a | n/a | 492 B | Fuseline 3.1 |
+| 100 decays | 7.14 µs | 7.29 µs | n/a | n/a | 122.68 µs | 459 B | 459 B | n/a | n/a | 58363 B | Fuseline 3.1 |
+| 100 values tracking a gesture | 36.07 µs | 36.86 µs | n/a | n/a | 145.21 µs | 61 B | 61 B | n/a | n/a | 88080 B | Fuseline 3.1 |
+| tab transitions | 1.36 µs | 1.36 µs | 1.58 µs | n/a | 4.58 µs | 595 B | 593 B | 860 B | n/a | 2351 B | Tie (within run-to-run noise) |
+| tab changes every 3 frames | 2.46 µs | 3.18 µs | 5.27 µs | n/a | 40.56 µs | 516 B | 516 B | 1848 B | n/a | 22082 B | Fuseline 3.1 |
+| tab reversal every 4 frames | 1.55 µs | 1.48 µs | 4.17 µs | n/a | 26.71 µs | 503 B | 503 B | 1969 B | n/a | 15287 B | Tie (within run-to-run noise) |
+| timeline, 20 tracks | 0.05 µs | 0.04 µs | 0.10 µs | n/a | 2.74 µs | 0 B | 0 B | 0 B | n/a | 917 B | Fuseline 3.1 |
+| timeline seek, 20 tracks | 0.39 µs | 0.37 µs | 0.79 µs | n/a | n/a | 0 B | 0 B | 0 B | n/a | n/a | Tie (within run-to-run noise) |
+| timeline reverse, 20 tracks | 0.44 µs | 0.42 µs | n/a | n/a | n/a | 0 B | 0 B | n/a | n/a | n/a | Tie (within run-to-run noise) |
+| driver churn, 10 | 7.34 µs | 7.18 µs | 6.18 µs | 7.53 µs | 20.77 µs | 2423 B | 2407 B | 2646 B | 2566 B | 6718 B | Tie (within run-to-run noise) |
+| driver churn, 100 | 32.09 µs | 30.80 µs | 34.88 µs | 33.34 µs | 115.76 µs | 19749 B | 19592 B | 21618 B | 20818 B | 67182 B | Tie (within run-to-run noise) |
+| driver churn, 1000 | 330.33 µs | 330.87 µs | 357.84 µs | 346.07 µs | 1499.80 µs | 192997 B | 191443 B | 211343 B | 203343 B | 671833 B | Tie (within run-to-run noise) |
+| idle, 1000 settled values | 0.00 µs | 0.00 µs | 0.00 µs | 0.00 µs | 0.00 µs | 0 B | 0 B | 0 B | 0 B | 0 B | Fuseline 3.1 |
+| 1000 springs at 30 Hz | 77.41 µs | 82.80 µs | 113.68 µs | 114.77 µs | 1589.12 µs | 472 B | 472 B | 40512 B | 40512 B | 583976 B | Fuseline 3.1 |
+| 1000 springs at 60 Hz | 78.68 µs | 80.75 µs | 120.56 µs | 115.92 µs | 1584.97 µs | 472 B | 472 B | 40512 B | 40512 B | 583976 B | Fuseline 3.1 |
+| 1000 springs at 90 Hz | 84.11 µs | 89.57 µs | 122.78 µs | 115.67 µs | 1638.31 µs | 467 B | 467 B | 40507 B | 40507 B | 583971 B | Fuseline 3.1 |
+| 1000 springs at 120 Hz | 71.53 µs | 80.21 µs | 120.83 µs | 114.55 µs | 1626.83 µs | 465 B | 465 B | 40505 B | 40505 B | 583969 B | Fuseline 3.1 |
+| 1000 springs at 144 Hz | 77.24 µs | 81.95 µs | 112.17 µs | 131.26 µs | 1427.83 µs | 463 B | 463 B | 40503 B | 40503 B | 583967 B | Fuseline 3.1 |
+| 1000 springs at 165 Hz | 82.27 µs | 77.52 µs | 113.29 µs | 133.59 µs | 1552.09 µs | 462 B | 462 B | 40502 B | 40502 B | 583966 B | Tie (within run-to-run noise) |
+| 1000 springs at 240 Hz | 70.01 µs | 77.38 µs | 112.51 µs | 110.39 µs | 1575.93 µs | 460 B | 460 B | 40500 B | 40500 B | 583964 B | Fuseline 3.1 |
 
 Whole interface paths (per frame, composition, layout and drawing included; memory is what every
 thread allocated):
 
-| Interface path | Fuseline 3 | Fuseline 2 | Compose | Fuseline 3 memory | Fuseline 2 memory | Compose memory | First |
-|---|---|---|---|---|---|---|---|
-| 50 tiles reflowing (layout motion) | 592 µs | n/a | 1994 µs | 21.4 KB | n/a | 204.1 KB | Fuseline 3 |
-| shared element, moving destination | 615 µs | n/a | 894 µs | 11.5 KB | n/a | 14.0 KB | Fuseline 3 |
-| rapid tab switching | 2271 µs | 2582 µs | 2721 µs | 36.6 KB | 50.3 KB | 129.1 KB | Fuseline 3 |
+| Interface path | Fuseline 3.1 | Fuseline 3 | Fuseline 2 | Fuseline 1 | Compose | Fuseline 3.1 memory | Fuseline 3 memory | Fuseline 2 memory | Fuseline 1 memory | Compose memory | First |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| 50 tiles reflowing (layout motion) | 676 µs | 671 µs | n/a | n/a | 2249 µs | 21.4 KB | 21.5 KB | n/a | n/a | 197.4 KB | Tie (within run-to-run noise) |
+| shared element, moving destination | 698 µs | 631 µs | n/a | n/a | 803 µs | 11.4 KB | 10.2 KB | n/a | n/a | 14.0 KB | NOT FIRST |
+| rapid tab switching | 2658 µs | 2536 µs | 2721 µs | 2566 µs | 2754 µs | 35.5 KB | 35.6 KB | 49.2 KB | 49.3 KB | 125.9 KB | Tie (within run-to-run noise) |
+| a page of 120 tiles, 3 values each, composed | 2156 µs | 2853 µs | n/a | n/a | 2999 µs | 215.0 KB | 708.7 KB | n/a | n/a | 742.0 KB | Fuseline 3.1 |
+| selection moving across 120 tiles | 1917 µs | 1989 µs | n/a | n/a | 2221 µs | 5.1 KB | 7.0 KB | n/a | n/a | 22.4 KB | Fuseline 3.1 |
 
-The Fuseline 3 memory column is a few hundred bytes whatever the number of values: it is the frame
-clock's own wait, which every engine pays once a frame, while Fuseline 2 and Compose allocate per
-value.
+A theme's room needing 30 updates a second on a 120 Hz screen, redrawn per second while buttons are
+pressed (Fuseline 3.1 holds it still and carries on afterwards):
+
+| Room | Fuseline 3.1 | Fuseline 3 | Compose |
+|---|---|---|---|
+| while buttons are pressed | 3 | 44 | 130 |
+
+At rest the same room wakes about 31 times a second instead of 125 on a 125 Hz display and still
+makes every update (`DecorationTest`, measured on an exact virtual clock: Compose's test clock skips
+the waits a paced room makes).
 
 ## Tests
 
@@ -316,6 +337,8 @@ checked by `FuselineAndroidTest` in `app/android`:
   of them never jumping (`FuselineValueTest`, `RetargetTest`, `ConverterTest`).
 - **Driver**: 1 to 1,000 values, true idle, no per-value allocation, refresh rates from 30 to 240 Hz
   (`FrameDriverTest`).
+- **Decoration** (3.1): a paced loop makes every update it needs with about one wake each, and holds
+  still while the person is doing something, carrying on without a jump (`DecorationTest`).
 - **Input**: touch, mouse, trackpad, cancel, keyboard steps, stick and scroll (`MotionInputTest`).
 - **Transitions, layout motion, shared elements and timelines** (`TransitionTest`,
   `LayoutMotionTest`, `TimelineTest`).

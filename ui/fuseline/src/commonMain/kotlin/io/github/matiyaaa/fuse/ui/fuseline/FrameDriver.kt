@@ -23,14 +23,12 @@ import kotlin.coroutines.resume
  */
 internal class FrameDriver private constructor(private val clock: MonotonicFrameClock) {
 
-    private inner class Move(
+    private open inner class Move(
         var durationNanos: Long,
         val scale: Float,
         val onFrame: FrameStep,
         /** A suspended caller to resume on arrival, or null for a move made without a coroutine. */
         val waiting: CancellableContinuation<Unit>?,
-        /** Called on arrival for a move made without a coroutine ([start]). */
-        val arrived: (() -> Unit)?,
     ) : Retimer, MoveHandle {
         var start = Long.MIN_VALUE
         var gone = false
@@ -59,10 +57,18 @@ internal class FrameDriver private constructor(private val clock: MonotonicFrame
             if (moves.all { m -> m.gone }) loop?.cancel()
         }
 
-        fun arrive() {
+        open fun arrive() {
             gone = true
             waiting?.resume(Unit)
-            arrived?.invoke()
+        }
+    }
+
+    /** A move made without a coroutine ([start]): [arrived] is called when it lands. */
+    private inner class NativeMove(durationNanos: Long, scale: Float, onFrame: FrameStep, private val arrived: () -> Unit) :
+        Move(durationNanos, scale, onFrame, null) {
+        override fun arrive() {
+            gone = true
+            arrived()
         }
     }
 
@@ -76,7 +82,7 @@ internal class FrameDriver private constructor(private val clock: MonotonicFrame
     /** Steps [onFrame] on every frame until [durationNanos] has played (scaled by [scale]), then returns. */
     suspend fun run(context: CoroutineContext, durationNanos: Long, scale: Float, onStart: ((Retimer) -> Unit)?, onFrame: FrameStep) {
         suspendCancellableCoroutine { waiting ->
-            val move = Move(durationNanos, scale, onFrame, waiting, null)
+            val move = Move(durationNanos, scale, onFrame, waiting)
             onStart?.invoke(move)
             moves += move
             waiting.invokeOnCancellation {
@@ -98,7 +104,7 @@ internal class FrameDriver private constructor(private val clock: MonotonicFrame
      * a target ([rememberFollowing]) costs no coroutine of its own. Ends early with [MoveHandle.cancel].
      */
     fun start(context: CoroutineContext, durationNanos: Long, scale: Float, onStart: ((Retimer) -> Unit)?, onFrame: FrameStep, arrived: () -> Unit): MoveHandle {
-        val move = Move(durationNanos, scale, onFrame, null, arrived)
+        val move = NativeMove(durationNanos, scale, onFrame, arrived)
         onStart?.invoke(move)
         moves += move
         if (!running || loop?.isCancelled == true) start(context)

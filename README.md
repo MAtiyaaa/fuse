@@ -216,14 +216,17 @@ They behave the same on every device, answer to one design, and get better with 
 
 <div align="center">
 
-| Each frame, once every value moves | Fuseline by Fuse | Compose | |
-|---|--:|--:|--:|
-| 100 springs | 19.6 µs | 206.3 µs | **10x faster** |
-| 1,000 tweens | 145.1 µs | 2,848.0 µs | **20x faster** |
-| 100 colour fades | 19.9 µs | 208.4 µs | **10x faster** |
-| A page of 120 tiles swapping | 315 ms | 569 ms | **1.8x faster** |
+| Each frame | Fuseline 3.1 | Fuseline 3 | Fuseline 2 | Fuseline 1 | Compose |
+|---|--:|--:|--:|--:|--:|
+| 100 springs | **12.78 µs** | 13.71 µs | 16.80 µs | 16.74 µs | 184.82 µs |
+| 1,000 tweens | **51.28 µs** | 73.45 µs | 103.99 µs | 141.40 µs | 1692.95 µs |
+| 100 colour fades | **7.65 µs** | 9.33 µs | 15.23 µs | 14.73 µs | 147.28 µs |
+| 1,000 springs given a new target every frame | **5.54 µs** | 5.78 µs | 255.28 µs | n/a | 11829.74 µs |
+| A page of 120 tiles with 3 animated values each, composed | **2156 µs** | 2853 µs | n/a | n/a | 2999 µs |
+| The selection moving across 120 tiles | **1917 µs** | 1989 µs | n/a | n/a | 2221 µs |
+| A theme's room, redrawn per second while you press buttons | **3** | 44 | n/a | n/a | 130 |
 
-<sub>Measured on one thread with one manual frame clock, both warmed up (<a href="docs/fuseline.md#speed">method and every case</a>).</sub>
+<sub>Measured on one machine, every engine warmed up and given the same work; Fuseline 3, 2 and 1 are kept in Fuse's tests exactly as they shipped. Of 43 cases Fuseline 3.1 is first on 27, tied on 14 and behind Fuseline 3 on 2 (<a href="docs/fuseline.md#speed">method and every case</a>).</sub>
 
 </div>
 

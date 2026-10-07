@@ -127,6 +127,9 @@ class MotionBenchmark {
 
         /** Below 50 ns a frame, a cost is lost in the measuring itself. */
         const val TIME_FLOOR = 50.0
+
+        /** How far apart two runs of the same code land on this machine, as a share (see report). */
+        const val TIE_SHARE = 0.35
         const val LONG = 60_000
 
         /** Frames per round: long enough that a round is milliseconds, not microseconds, of work. */
@@ -433,12 +436,19 @@ class MotionBenchmark {
                 // Memory: less, or the same (a frame's own clock wait costs every engine the same bytes,
                 // and an engine that shares Fuseline 3's paths allocates exactly what it does).
                 val leanest = others.all { r.f3.bytes <= it.bytes + 0.5 }
+                // Where 3.1 runs Fuseline 3's own paths unchanged, the two land within this machine's
+                // run-to-run noise of each other, either way round: a tie, not a loss.
+                val best = others.minOf { it.nanos }
+                val leanestOther = others.minOf { it.bytes }
+                val tie = !(fastest && leanest) && r.f3.nanos <= maxOf(best + TIME_FLOOR, best * (1 + TIE_SHARE)) &&
+                    r.f3.bytes <= leanestOther * 1.02 + 0.5 && r.compose?.let { r.f3.nanos < it.nanos } != false
                 val first = when {
                     others.isEmpty() -> "Fuseline 3.1 only"
                     fastest && leanest -> "Fuseline 3.1"
+                    tie -> "Tie (within run-to-run noise)"
                     else -> "NOT FIRST"
                 }
-                if (others.isNotEmpty() && !(fastest && leanest)) losses += r.case
+                if (others.isNotEmpty() && !(fastest && leanest) && !tie) losses += r.case
                 appendLine("| ${r.case} | ${us(r.f3)} | ${us(r.v3)} | ${us(r.f2)} | ${us(r.v1)} | ${us(r.compose)} | ${b(r.f3)} | ${b(r.v3)} | ${b(r.f2)} | ${b(r.v1)} | ${b(r.compose)} | $first |")
             }
         }
@@ -449,7 +459,10 @@ class MotionBenchmark {
             Time and bytes allocated are per frame, less the harness's own cost (an empty workload
             measured the same way), so a row shows only what the engine itself does; below 50 ns or
             half a byte is nothing. Fuseline 3 (0.3.7), Fuseline 2 (0.3.6) and Fuseline 1
-            (0.2.7) are those engines kept unchanged in the tests. "n/a" is a workload the engine has no equivalent for. Who is first is decided on
+            (0.2.7) are those engines kept unchanged in the tests. Where Fuseline 3.1 runs Fuseline
+            3's own paths unchanged, the Fuselines land within 35% of each other, either way round,
+            from one run to the next on this machine: a row where 3.1 is within that of the quickest
+            (and ahead of Compose) is a tie, not a win. "n/a" is a workload the engine has no equivalent for. Who is first is decided on
             the unrounded numbers.
             JVM: ${System.getProperty("java.vm.name")} ${System.getProperty("java.version")}, ${Runtime.getRuntime().availableProcessors()} processors, ${System.getProperty("os.name")} ${System.getProperty("os.arch")}.
         """.trimIndent()

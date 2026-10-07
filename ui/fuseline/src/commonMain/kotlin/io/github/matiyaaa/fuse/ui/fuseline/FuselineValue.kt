@@ -67,11 +67,12 @@ class FuselineValue<T>(
     private var native: MoveHandle? = null
 
     /**
-     * Where the value was last shown (published to Compose): a frame that moves it less than
-     * [publishStep] from there is worked out but not shown, since nothing on screen would change.
+     * Where the value was last shown (published to Compose): a frame that moves it less than an
+     * eighth of its threshold from there is worked out but not shown, since nothing on screen would
+     * change. One number is kept in a field ([shown0]); only values of several numbers need an array.
      */
-    private val shown = FloatArray(dims).also { converter.write(initialValue, it) }
-    private val publishStep = threshold * PUBLISH_SHARE
+    private var shown0 = now[0]
+    private val shownRest: FloatArray? = if (dims > 1) now.copyOf() else null
 
     /** The move under way: its motion, where it lands, how far it has played. */
     private class Ride(var motion: Motion) {
@@ -200,14 +201,15 @@ class FuselineValue<T>(
     private var floatState: FloatState? = null
 
     private fun moved() {
-        now.copyInto(shown)
+        shown0 = now[0]
+        shownRest?.let { now.copyInto(it) }
         // Written from a counter of its own: bumping the state itself would read it first, a
-        // snapshot lookup on every frame of every value for nothing.
+        // snapshot lookup on every frame of every value for nothing. Any new number does, so the
+        // value and its target share the one counter.
         version.intValue = ++published
     }
 
     private var published = 0
-    private var aimedCount = 0
 
     /** Ends a move made without a coroutine, if one is in charge. */
     private fun dropNative() {
@@ -225,7 +227,7 @@ class FuselineValue<T>(
             for (i in 0 until dims) goal[i] = tracks[i]!!.endValue
         }
         targetFollowsValue = false
-        targetVersion.intValue = ++aimedCount
+        targetVersion.intValue = ++published
     }
 
     /** Puts the value at [targetValue] at once, stopping any move or gesture. */
@@ -235,7 +237,7 @@ class FuselineValue<T>(
             converter.write(targetValue, goal)
             speed.fill(0f)
             targetFollowsValue = false
-            targetVersion.intValue = ++aimedCount
+            targetVersion.intValue = ++published
             moved()
             if (MotionTrace.enabled) trace(MotionTrace.Kind.SNAP)
         }
@@ -247,7 +249,7 @@ class FuselineValue<T>(
             speed.fill(0f)
             now.copyInto(goal)
             targetFollowsValue = false
-            targetVersion.intValue = ++aimedCount
+            targetVersion.intValue = ++published
             moved()
             if (MotionTrace.enabled) trace(MotionTrace.Kind.STOP)
         }
@@ -304,7 +306,7 @@ class FuselineValue<T>(
                     if (job === currentCoroutineContext().job && r.playNanos < r.durationNanos) {
                         now.copyInto(goal)
                         targetFollowsValue = false
-                        targetVersion.intValue = ++aimedCount
+                        targetVersion.intValue = ++published
                     }
                 }
             }
@@ -345,13 +347,16 @@ class FuselineValue<T>(
             val v = t.sampledValue
             now[0] = v
             speed[0] = t.sampledVelocity
-            val d = v - shown[0]
-            if (d > publishStep || d < -publishStep) {
-                shown[0] = v
+            val d = v - shown0
+            val step = threshold * PUBLISH_SHARE
+            if (d > step || d < -step) {
+                shown0 = v
                 version.intValue = ++published
             }
             return
         }
+        val shown = shownRest!!
+        val publishStep = threshold * PUBLISH_SHARE
         var seen = false
         for (i in 0 until dims) {
             val t = tracks[i]!!
@@ -366,6 +371,7 @@ class FuselineValue<T>(
         }
         if (seen) {
             for (i in 0 until dims) shown[i] = now[i]
+            shown0 = now[0]
             version.intValue = ++published
         }
     }
@@ -516,7 +522,7 @@ class FuselineValue<T>(
         converter.write(target, goal)
         speed.fill(0f)
         targetFollowsValue = false
-        targetVersion.intValue = ++aimedCount
+        targetVersion.intValue = ++published
         moved()
     }
 
@@ -547,7 +553,7 @@ class FuselineValue<T>(
         now.copyInto(goal)
         if (!targetFollowsValue) {
             targetFollowsValue = true
-            targetVersion.intValue = ++aimedCount
+            targetVersion.intValue = ++published
         }
         moved()
     }
