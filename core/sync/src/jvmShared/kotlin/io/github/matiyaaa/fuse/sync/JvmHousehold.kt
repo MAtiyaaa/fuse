@@ -303,10 +303,19 @@ class JvmHousehold(
         keep()
     }
 
+    private val commandsLock = Mutex()
+
+    /**
+     * The household's requests as the host has them now. One at a time: each wake starts one, and
+     * an older answer arriving after a newer one would put a request back as it was (a game that
+     * came over would look still on its way).
+     */
     private suspend fun refreshCommands() {
-        val c = client() ?: return
-        _commands.value = c.commands()
-        keep()
+        commandsLock.withLock {
+            val c = client() ?: return
+            _commands.value = c.commands()
+            keep()
+        }
     }
 
     private val inboxLock = Mutex()
