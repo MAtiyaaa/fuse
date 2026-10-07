@@ -1,37 +1,31 @@
-# Fuse 0.3.8.1 - The Reach Update
+# Fuse 0.3.8.2 - The Reach Update
 
-Switch libraries read the way people really keep them: every game once, with its updates and DLC,
-however the files are named and wherever they sit.
+Games folders named for anything, a Systems page that starts at the left, and a host that keeps up
+with Fuse.
 
 ## New
 
-- **Updates folder and DLC folder.** A Switch system's settings (Files) can name a folder its
-  updates are kept in and one for its DLC, anywhere. Both are optional: Fuse finds updates and DLC
-  beside their games, and in `updates` and `dlc` folders inside the games folder, without them.
-- **.nsz and .xcz files** are Switch games, updates and DLC too.
+- **Library list in the developer options.** Settings, About, five taps on the version, then Library
+  list: every game Fuse found, by system, with its folder, file, title id, size, and the updates and
+  DLC found with it, as text to copy or save (to share in a bug report about a game Fuse missed or
+  read wrongly). It names your folders and files, and is shown before anything is copied or saved.
 
 ## Changed
 
-- **Switch names are read however they are written.** With or without a title id, Fuse tells a game
-  from its update and DLC: versions (`v1.1.3`, `v524288`, `Update 1.0.3`, `(Update 1.0.1)`,
-  `[Up v1.86]`), "DLC" anywhere in a name, a DLC's name in brackets (`Game [Hat DLC]`,
-  `Game [New Uniform Set]`), and an update named with its game's own id. Words that only describe
-  the file (`Base eShop NSP`, `Switch XCI Base Game`), scene and download-site names, copy numbers
-  like `(1)`, and look-alike punctuation no longer get in the way.
-- **Updates and DLC join their game wherever they are.** In the game's own folder, beside it, in one
-  big folder of many games, in `updates` and `dlc` folders, or in the folders chosen in settings,
-  each update and DLC is listed with its game. One whose game isn't there stays on its own, so
-  nothing disappears.
-- **Copies count once.** The same file in several folders (the same title id or name, version and
-  size) is one game, kept from the folder of its own. Another region, another version or one file
-  holding a game with all its updates and DLC stays a game of its own.
-- **Uploading a Switch game to RomM brings its updates and DLC.** They go into `update` and `dlc`
-  under the game, as RomM keeps them, from wherever they are on this device, and each is sent once.
+- **A games folder can be called anything.** A folder Fuse doesn't know by name (`Games`, `My Games`,
+  `Downloads`) is read by its files: one full of `.nsp`, `.xci` and `.nsz` files, in folders of their
+  own or not, is a Switch folder. File types many systems share (`.zip`, `.iso`, `.bin`) never decide,
+  and a folder mixing systems is left as it is.
+- **One system, or a few, start at the left of the Systems page.** They used to sit alone in the
+  middle of the screen; the board is centred only when its rows are full but for a sliver.
 
 ## Fixed
 
-- **Copies and updates no longer show as missing.** Files Fuse once listed as games of their own,
-  and now lists with their game, are forgotten after the next scan instead of shown as missing,
-  unless you made one a favourite, played it or renamed it.
-- **Uploading a game kept in base, update and dlc folders stopped.** Its game file is now sent first
-  as the game, and the rest goes under it.
+- **The Remote Library said the host needs 0.3.8 on the host itself.** A host that keeps running with
+  Fuse closed ran the Fuse it was set up with, even after an update (on Linux, the old AppImage).
+  Opening a newer Fuse now starts the host again on it, and on Linux and Windows setting the host up
+  again restarts one that is already running.
+- **The Remote Library's settings named the wrong computer.** On the host itself they now say its own
+  host is starting again, instead of asking to update Fuse on the host computer.
+- **A game sent to another device could look like it never arrived.** The device that asked could
+  keep showing the request as on its way after the game was there. It now hears it is done.

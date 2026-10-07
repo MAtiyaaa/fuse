@@ -320,9 +320,13 @@ internal fun ChannelBoard(app: AppState, space: BoardSpace, page: Int, pageKey: 
         val committed = remember(widgets, columns, packed) {
             BoardGrid.layout(widgets.map { BoardGrid.Item(it.id, if (packed) space.allowed(it.boardSize, columns) else it.boardSize, if (packed) null else it.spots[columns]) }, columns)
         }
-        // A packed board whose rows all stop short of the edge (small squares in an odd number of
-        // columns) is centred, so the room left over is shared by both sides.
-        val spare = if (packed) (columns - (committed.rects.values.maxOfOrNull { it.right } ?: columns)).coerceAtLeast(0) else 0
+        // A packed board whose rows all stop short of the edge by less than one more of its items
+        // (small squares in an odd number of columns) is centred, so that sliver is shared by both
+        // sides. A board with room for more (one system, or a few left after others went) starts
+        // at the left like any row, never alone in the middle.
+        val leftOver = if (packed) (columns - (committed.rects.values.maxOfOrNull { it.right } ?: columns)).coerceAtLeast(0) else 0
+        val narrowest = committed.rects.values.minOfOrNull { it.width } ?: 1
+        val spare = if (leftOver < narrowest) leftOver else 0
         val geometry = with(density) { BoardGeometry(columns, cellW.toPx(), cellH.toPx(), gapX.toPx(), gapY.toPx(), offsetX = spare * (cellW + gapX).toPx() / 2) }
         val shown = editor.preview ?: committed
         // Arranging: the first free place adds a widget (hidden while something is being changed).

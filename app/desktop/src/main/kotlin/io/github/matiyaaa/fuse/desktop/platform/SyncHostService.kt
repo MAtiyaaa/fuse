@@ -91,8 +91,11 @@ class SyncHostService(private val dirs: FuseDirs, private val port: () -> Int, p
         f.parentFile.mkdirs()
         f.writeText(systemdUnit(exec))
         Processes.run(listOf("systemctl", "--user", "daemon-reload"), timeoutMs = 15_000)
-        val enabled = Processes.run(listOf("systemctl", "--user", "enable", "--now", UNIT), timeoutMs = 20_000)
-        if (enabled?.exitCode != 0) throw IOException("systemd didn't start the service. Is this a systemd system?")
+        val enabled = Processes.run(listOf("systemctl", "--user", "enable", UNIT), timeoutMs = 20_000)
+        if (enabled?.exitCode != 0) throw IOException("systemd didn't take the service. Is this a systemd system?")
+        // Restart, not start: a host already running (an older Fuse's) is replaced by this one.
+        val started = Processes.run(listOf("systemctl", "--user", "restart", UNIT), timeoutMs = 20_000)
+        if (started?.exitCode != 0) throw IOException("systemd didn't start the service.")
         // Lingering starts this person's services at boot. Most systems allow it for yourself; when not, it starts at sign-in.
         if (!lingering()) Processes.run(listOf("loginctl", "enable-linger", System.getProperty("user.name")), timeoutMs = 15_000)
     }
@@ -112,6 +115,7 @@ class SyncHostService(private val dirs: FuseDirs, private val port: () -> Int, p
             ${'$'}action = New-ScheduledTaskAction -Execute ${PowerShell.literal(File(exec).absolutePath)} -Argument '$ARGUMENT'
             ${'$'}trigger = New-ScheduledTaskTrigger -AtLogOn -User ${'$'}env:USERNAME
             ${'$'}settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit ([TimeSpan]::Zero) -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) -StartWhenAvailable
+            Stop-ScheduledTask -TaskName '$TASK' -ErrorAction SilentlyContinue
             Register-ScheduledTask -TaskName '$TASK' -Description 'Fuse Sync by Fuse: the host for your devices' -Action ${'$'}action -Trigger ${'$'}trigger -Settings ${'$'}settings -Force | Out-Null
             Start-ScheduledTask -TaskName '$TASK'
         """.trimIndent()

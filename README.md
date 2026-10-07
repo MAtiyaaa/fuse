@@ -29,7 +29,7 @@ Home screen.
 <a href="https://github.com/MAtiyaaa/fuse/releases/latest"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/brand/button-macos-dark.svg"><img src="docs/assets/brand/button-macos-light.svg" height="48" alt="Download for macOS"></picture></a>
 
 <sub>Android 9 or newer &nbsp;·&nbsp; 64-bit x86 Linux AppImage &nbsp;·&nbsp; Windows 10 and 11 &nbsp;·&nbsp; macOS on Apple silicon and Intel &nbsp;·&nbsp; <a href="#install">checksums and install notes</a></sub><br>
-<sub>0.3.8.1 is the <b>Reach Update</b>, with Switch libraries read the way people keep them (every game once, with its updates and DLC, however the files are named and wherever they sit, and uploaded to RomM together): every game in your household, reachable from every device. With Fuse Sync, see what your other devices have (in the RomM tab, or a Remote Library in the Sync tab), bring any of it here, send a game to any device (even one that is away) or ask the device that has it to upload it to RomM, and see where every game is on its page. Fuse picks the best source by itself, from another device at home to RomM from outside, checks every file and never shows half a game. It follows 0.3.7, the Motion Update (Fuseline 3, where motion never breaks), and 0.3.6, the Unity Update (Fuse RomM, one Downloads page, Jellyfin for offline, streaming through Moonlight and saves that reach every device by themselves). <a href="#where-fuse-stands">Here is where it stands.</a></sub><br>
+<sub>0.3.8.2 is the <b>Reach Update</b>, with games folders read by their files whatever they are called, a host that keeps up with Fuse, and Switch libraries read the way people keep them (every game once, with its updates and DLC, however the files are named and wherever they sit, and uploaded to RomM together): every game in your household, reachable from every device. With Fuse Sync, see what your other devices have (in the RomM tab, or a Remote Library in the Sync tab), bring any of it here, send a game to any device (even one that is away) or ask the device that has it to upload it to RomM, and see where every game is on its page. Fuse picks the best source by itself, from another device at home to RomM from outside, checks every file and never shows half a game. It follows 0.3.7, the Motion Update (Fuseline 3, where motion never breaks), and 0.3.6, the Unity Update (Fuse RomM, one Downloads page, Jellyfin for offline, streaming through Moonlight and saves that reach every device by themselves). <a href="#where-fuse-stands">Here is where it stands.</a></sub><br>
 <sub>Or download from <a href="https://matiyaaa.github.io/fuse/">Fuse's website</a>, which always offers the latest version for your system.</sub>
 
 <br>
@@ -567,7 +567,7 @@ Linux app, isn't offered on Windows and macOS (Fuse RomM is, on every computer).
 ## Where Fuse stands
 
 > [!IMPORTANT]
-> **Fuse 0.3.8.1 "The Reach Update" is still early, and brings every game in your household within
+> **Fuse 0.3.8.2 "The Reach Update" is still early, and brings every game in your household within
 > reach.** With Fuse Sync, each device sees what your other devices have, in the RomM tab ("Not on
 > RomM, from another device", and each system in sections) or in a Remote Library in the Sync tab,
 > and every game's page says where it is: this device, your other devices and RomM, online or away,
@@ -576,8 +576,9 @@ Linux app, isn't offered on Windows and macOS (Fuse RomM is, on every computer).
 > device at home, RomM at home, a device through your host, RomM from outside), checks every file
 > and never shows half a game; every device's downloads are on the Downloads page. 0.3.8.1 reads
 > Switch libraries the way people keep them: every game once, with its updates and DLC, however the
-> files are named and wherever they sit, and uploaded to RomM together. See
-> [the release notes](docs/releases/0.3.8.1.md).
+> files are named and wherever they sit, and uploaded to RomM together. 0.3.8.2 reads a games folder
+> by its files whatever it is called, keeps a background host on the newest Fuse, and starts the
+> Systems page at the left. See [the release notes](docs/releases/0.3.8.2.md).
 >
 > 0.3.7.5, "The Motion Update", moves like never before. Fuseline 3, Fuse's
 > animation engine, keeps every motion continuous: whatever interrupts something moving (a new tab, a
@@ -614,6 +615,7 @@ Linux app, isn't offered on Windows and macOS (Fuse RomM is, on every computer).
 
 | Version | Name | What it brought |
 |---|---|---|
+| [0.3.8.2](docs/releases/0.3.8.2.md) | The Reach Update | Games folders read by their files whatever they are called; a background Fuse Sync host started again on the newest Fuse (the Remote Library on the host); one or a few systems at the left of the Systems page; a Library list in the developer options |
 | [0.3.8.1](docs/releases/0.3.8.1.md) | The Reach Update | Switch libraries read the way people keep them: updates and DLC told apart with or without title ids, joined to their game wherever they sit (own folder, one big folder, updates and dlc folders, or folders chosen in settings), copies counted once, .nsz and .xcz, RomM uploads that bring updates and DLC along |
 | [0.3.8](docs/releases/0.3.8.md) | The Reach Update | Every game in the household within reach: other devices' games in the RomM tab and a Remote Library in the Sync tab, Available On for every game, Send to Another Device (queued while it is away), uploads to RomM asked from any device, the best source chosen by itself, every device's downloads, all remembered offline; Library touch scrolling that stays where you leave it |
 | [0.3.7.5](docs/releases/0.3.7.5.md) | The Motion Update | Fuseline 3.1 (values without coroutines, no invisible frames, decoration that waits for you, paced decoration), measured against Fuseline 3, 2, 1 and Compose; an optimised Android build compiled ahead of time; 0.3.7.4's slowdown on Android undone; selection moves that redraw two items |

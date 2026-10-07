@@ -43,6 +43,39 @@ class LibraryScannerTest {
 
     private fun ScanReport.of(platform: String): PlatformFolderScan = scanned.single { it.platformId.value == platform }
 
+    // A games folder named for nothing Fuse knows ("Games/<game>/<files>"): its files say it is Switch.
+    @Test
+    fun aFolderOfGameFoldersIsReadByItsFilesWhenItsNameSaysNothing() = runTest {
+        fs.file("/home/me/Downloads/Games/Harbor Lights/Harbor Lights [0100AAAA11112000][v0].nsp", size = 2000)
+        fs.file("/home/me/Downloads/Games/Harbor Lights/Harbor Lights [0100AAAA11112800][v65536].nsp", size = 300)
+        fs.file("/home/me/Downloads/Games/Moss Garden/Moss Garden.xci", size = 1500)
+        fs.file("/home/me/Downloads/Games/Moss Garden/Moss Garden (Base Game).7z", size = 1400)
+        fs.file("/home/me/Downloads/Games/Notes/readme.txt")
+
+        for (path in listOf("/home/me/Downloads/Games", "/home/me/Downloads")) {
+            val report = scan(source(path, LibrarySourceKind.ROMS_ROOT))
+            val switch = report.of("switch")
+            assertEquals(path, switch.folderPath)
+            assertEquals(setOf("Harbor Lights", "Moss Garden"), switch.games.map { it.title }.toSet())
+            assertTrue(report.unknownFolders.isEmpty())
+        }
+        // Added as one system's folder, the same.
+        assertEquals(2, scan(source("/home/me/Downloads/Games", LibrarySourceKind.PLATFORM_FOLDER)).of("switch").games.size)
+    }
+
+    @Test
+    fun foldersWhoseFilesTellNothingOrDisagreeStayUnknown() = runTest {
+        fs.file("/lib/Stuff/a.zip")
+        fs.file("/lib/Stuff/b.iso")
+        fs.file("/lib/Mixed/a.nsp")
+        fs.file("/lib/Mixed/b.gba")
+        fs.file("/lib/Mixed/c.gba")
+        fs.file("/lib/Mixed/d.nds")
+        val report = scan(source("/lib", LibrarySourceKind.ROMS_ROOT))
+        assertTrue(report.scanned.isEmpty(), report.scanned.map { it.folderPath }.toString())
+        assertEquals(setOf("Mixed", "Stuff"), report.unknownFolders.map { it.name }.toSet())
+    }
+
     @Test
     fun rommStructureA() = runTest {
         fs.file("/lib/roms/psx/Crash (USA).chd")

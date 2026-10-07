@@ -231,7 +231,17 @@ private fun remoteLibraryRows(app: AppState, s: io.github.matiyaaa.fuse.data.set
         app.scope.launch { app.store.sync.configure(change) }
     }
     return buildList {
-        if (!reach.supported) add(infoRow("host", "Update Fuse on the host computer", detail = "The Remote Library needs Fuse 0.3.8 or later on the computer that hosts Fuse Sync", icon = FuseIcons.Info))
+        if (!reach.supported) {
+            // This computer may be the host itself: then it is its own host's Fuse that is behind.
+            val hostHere = app.store.sync.service?.host?.collectAsState()?.value != null
+            add(
+                if (hostHere) {
+                    infoRow("host", "The host here is starting again", detail = "Fuse Sync's host on this computer is being moved to this version of Fuse. If this stays, close Fuse and open it again", icon = FuseIcons.Info)
+                } else {
+                    infoRow("host", "Update Fuse on the host computer", detail = "The Remote Library needs Fuse 0.3.8 or later on the computer that hosts Fuse Sync", icon = FuseIcons.Info)
+                },
+            )
+        }
         add(MenuAction(
             "open", "Open the Remote Library", FuseIcons.LibraryBig,
             detail = io.github.matiyaaa.fuse.ui.shell.reach.householdWords(reach),
