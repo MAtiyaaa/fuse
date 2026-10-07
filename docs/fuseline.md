@@ -5,8 +5,8 @@ logo that carries the spark. Every animation in Fuse runs on it, from a focus li
 opening sequence.
 
 It lives in `ui/fuseline` (package `io.github.matiyaaa.fuse.ui.fuseline`). Fuse 0.3.7 brought
-**Fuseline 3**, and Fuse 0.3.7.5 brings **Fuseline 3.1** ([what 3.1 adds](#fuseline-31)). Both are
-built around two rules:
+**Fuseline 3**, Fuse 0.3.7.5 **Fuseline 3.1** ([what 3.1 adds](#fuseline-31)), and Fuse 0.4.0
+brings **Fuseline 4** ([what 4 changes](#fuseline-4)). All are built around two rules:
 
 - **Motion never breaks continuity.** Whatever happens to a moving thing (a new target, a finger
   catching it, a reversal, a seek, a new motion, the window changing size), it carries on from the
@@ -160,10 +160,10 @@ pinned in `SemanticMotionTest`.
 ## The frame driver
 
 Every move on a frame clock shares one frame callback (`FrameDriver`): a move hands the driver its
-step and waits once, until it ends; the driver waits for each frame once and steps them all, from
-1 value to 1,000 and beyond. A move retargeted keeps its place, and the driver lets go of the frame
-clock when nothing moves (true idle: no frame is asked for). Steady frames allocate nothing per
-value.
+value and waits once, until it ends; the driver waits for each frame once and brings up only the
+moves that need that frame (see [Fuseline 4](#fuseline-4)), in the order they started. A move
+retargeted keeps its place, and the driver lets go of the frame clock when nothing moves (true idle:
+no frame is asked for). Steady frames allocate nothing per value.
 
 `FramePacing` measures the real frame interval (30 to 240 Hz and anything between, never assumed to
 be 60) and whether frames run late. Under load only decoration thins out (`shouldDrawDecoration`);
@@ -198,6 +198,80 @@ off the frames around them:
 - **Cheaper publishing.** A value's change is published to Compose from a counter of its own, without
   reading the state it writes, and the visibility check is folded into the same loop that solves the
   frame.
+
+## Fuseline 4
+
+Fuseline 4 keeps every curve, spring and motion of Fuseline 3.1 and changes what the engine does
+with time. Every motion in Fuseline is solved in closed form: a spring's displacement is
+e^(−at)(x₀·C(t) + B·S(t)), a tween is its curve at the share of its time played, a decay is
+x₀ + v₀/k·(1 − e^(−kt)). Where a value is at any moment follows from when its motion started and
+where from. Fuseline 3.1 still stepped every value through every frame; Fuseline 4 asks, for each
+value and each frame, whether that frame needs the value at all.
+
+- **Worked out when read.** `FuselineValue` keeps the state it was last worked out at and the frame
+  it is as of. Reading it (`value`, `floatValue`, `component`, a retarget, a takeover, a gesture
+  catching it) works it out from its motion's formula for the frame being shown: exactly what
+  stepping it through every frame would have left. A read during a frame, of a value the frame
+  hasn't reached yet, gets the frame before, as it always did.
+- **The event horizon.** After stepping a value, the engine proves from its motion's own formula
+  the first moment it could move far enough from what readers last saw to be seen (an eighth of its
+  threshold, the same rule Fuseline 3.1 published by), and leaves it alone until then (`Track.calmUntil`):
+  - a spring: its speed never exceeds e^(−rt)(|v₀| + |k|·min(t, cap)) from here on, and its
+    displacement e^(−rt)(|x₀| + |B|·min(t, cap)) (the same bounds that say when it comes to rest), so
+    it cannot cover the room left before room ÷ that speed; and where the displacement alone stays
+    within the room, never again before it arrives. A spring's last jump to its target, at rest, is
+    a moment of its own: the horizon never reaches past it.
+  - a tween: no faster than its distance times the curve's steepest slope from here on (a proven
+    bound for each of 256 stretches of the curve, from the extremes of x′(t) and y′(t)), plus the
+    speed it is blending away.
+  - a decay: exactly, −ln(1 − room·k / |v|) / k.
+  - a snap or a delay: until its moment.
+  A horizon only a few frames away isn't worth proving: the value is stepped instead. Every bound is
+  checked against the motion itself every 10 µs in `Fuseline4Test`.
+- **Resting unread.** A value's readers subscribe to it like any Compose state. When it has told
+  them of a change and none of them has read it since, every reader it had is already redrawing or
+  gone: another frame of it would tell nobody anything. So the engine leaves it alone until it
+  arrives (an arrival is known in advance, and lands on exactly the frame it always did). The first
+  read brings it back, worked out exactly where its motion has reached. This is what makes an
+  offscreen tile, a value nobody draws or a page kept in the background cost nothing per frame.
+- **Shared solutions.** A spring's e^(−at)·C(t) and e^(−at)·S(t) depend on the spring and the moment,
+  not on the value: a kernel per stiffness and damping (`SpringKernel`) solves them once a moment for
+  every value and component on that spring, and carries a value on from its own solution a frame ago
+  with a rotation and a scale (a few multiplications, in double precision, solved afresh every 64
+  steps). A spring only runs its Newton solve for when it comes to rest once a one-logarithm bound
+  says it could be near it. A tween's curve is solved once per value and moment however many
+  components it has, and once per moment for every tween on the same curve.
+- **The driver.** Moves due every frame are kept in a list in join order; the rest wait in an
+  indexed heap ordered by when they are due. A frame brings up, in join order, the listed moves, the
+  heap's moves whose time has come and the moves that joined. A move brought into a frame by an
+  earlier move's work (a retarget from another value's block) is put in its place in that frame. A
+  move finishing is checked after its frame, as before, so one that gives itself a shorter motion
+  from its own block still arrives that frame.
+- **Exactly the same motion.** Fuseline 3.1 is kept in the tests (package `v31`).
+  `Fuseline4EquivalenceTest` runs both through the same random histories (every kind of motion,
+  retargets, seeks, gestures, takeovers, cancellations, motion-speed settings, moves made from inside
+  other moves' frames, values read and unread, and frames from 30 to 240 Hz with jitter, drops and
+  stalls) and compares, after every operation and every frame: position, velocity, target, owner,
+  progress, time played and left, which moves finished and in what order, and what every reader on
+  screen shows. Positions and velocities agree to within one step of a float (a spring carried on
+  from the frame before can round its last bit the other way); everything else agrees exactly, with
+  one exception, stated: a value brought back from resting unread can tell its readers of its next
+  change a frame sooner or later than frame-by-frame publishing would have (which would have gone on
+  telling nobody while it rested), so a reader can show a place up to two eighths of a threshold
+  from what 3.1 would show (for a position, an eighth of a pixel at most: two eighths of its 0.5 px
+  threshold). Thousands of histories run in every test run; 60,000 were run before release.
+- **Why values don't stop asking for frames.** The driver keeps asking for frames while any move is
+  under way, because a frame time is the only exact clock: a value read while the engine slept
+  would have no exact frame time to be worked out at. An idle frame (every value resting or before
+  its horizon) costs the driver a look at its heap and nothing per value. Decoration, whose updates
+  are worked out from the real time whenever they come, does wait between updates
+  (`decorationFrames`), and updates less often still when the device is hot or saving power
+  (`FramePacing.devicePressure`, `FramePacing.powerSaving`, set from Android's thermal status and
+  battery saver).
+- **Seen from inside.** `MotionInspector` shows, every frame, how many values are moving, how many
+  were stepped, how many wait for their horizon and how many rest unread, springs solved, shared and
+  stepped, curves shared, values woken by a read, and when the next value is due; for each value,
+  how the engine treats it. Fuse shows it in Developer options ("Motion inspector").
 
 ## Debugging
 

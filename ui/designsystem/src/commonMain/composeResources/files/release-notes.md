@@ -1,64 +1,69 @@
-# Fuse 0.3.8 - The Reach Update
+# Fuse 0.4.0 - The Speed Release
 
-Every game in your household, reachable from every device. With Fuse Sync, each of your devices
-can see what the others have, bring any of it here, or send a game to another device, even one
-that is away. Fuse picks the best place to bring it from by itself, checks every file, and never
-shows a game until it is whole.
+Fuseline 4. Fuse's animation engine no longer runs motion just because time passes. Every motion in
+Fuse is solved in closed form, so where something is at any moment follows from when it started and
+where from: Fuseline 4 works a value out when something looks at it, leaves it alone until it could
+next change by enough to be seen, and lets a value nobody is looking at rest until it arrives. Fuse
+moves exactly as it did; the engine does a great deal less to make it move.
 
 ## New
 
-- **Not on RomM, from another device.** With Fuse RomM and Fuse Sync on, the RomM tab ends with a
-  shelf of the games your other devices have that RomM doesn't, each saying which device has it.
-  Games this device already has are never listed.
-- **A system's page in sections.** Each system on the RomM tab shows its games in three sections:
-  On RomM, Not on RomM (this device's) and Not on RomM, from another device. Up and down keep your
-  column as they cross from one section to the next.
-- **A Remote Library without RomM.** With Fuse Sync on and no RomM, the Sync tab has a Library with
-  Recently Added and Systems, laid out and moving like RomM's. Its games can be downloaded here or
-  sent to another device.
-- **Download here, or upload to RomM.** Another device's game can be brought to this device, or
-  uploaded to RomM. The upload is done by the device that has the game, and any device can ask for
-  it: if that device is away, it does it once it is back.
-- **Available on.** Every game's page says where the game is: this device, each of your other
-  devices, and RomM. Each copy shows whether its device is online or away, its size there, whether
-  it is verified (the same files as another copy or RomM), a different version, or still being
-  checked, and when it was downloaded or added.
-- **Send to Another Device.** From any game's page or options, send a game to any of your devices.
-  A device that is away gets it when it is back, and the picker says which devices already have
-  the game or don't take games from others.
-- **The best source, by itself.** Fuse brings a game from another device on the same network
-  first, then RomM at home, then another device through your Fuse Sync host, then RomM from
-  outside, fastest first. It works whichever device is away from home. If a source drops, Fuse
-  carries on from the next one, keeping what was downloaded when the files are the same.
-- **Every device's downloads.** Downloads lists what your other devices are downloading under each
-  device's name ("Downloading to Thor"), with a new Other Devices filter. Pause, cancel and
-  reordering there act on that device.
-- **Remembered offline.** What your other devices have, with its art and details, is kept on this
-  device, so the Remote Library can be browsed with the host away. Art follows the same rules as
-  RomM's games, SteamGridDB included.
-- **Fill Everything, your way.** Fill Everything asks whether to fill your library, or your library
-  and the Remote Library.
-- **Remote Library settings.** Settings, Addons, Remote Library: share this device's games, let
-  other devices send games here, where games sent here go, passing games through the host, and
-  showing other devices' games in RomM.
-- **On the second screen.** A game in focus shows which other devices have it, and another
-  device's download names that device.
+- **Fuseline 4: motion is a function of time, not a job run every frame.** Fuseline 1 gave Fuse its
+  own engine, Fuseline 2 stopped retargeting from restarting motion, Fuseline 3 made motion fully
+  continuous and Fuseline 3.1 took work off the frames around it. Fuseline 4 asks whether a frame
+  needs to touch a value at all:
+  - **Worked out when it is read.** A value's position and speed come from its motion's own formula
+    as of the frame being shown, exactly what stepping it through every frame would have left,
+    without the frames.
+  - **Left alone until it could be seen to change.** After each frame a value proves, from its
+    motion's formula, the first moment it could move far enough from what is on screen to be seen
+    (its event horizon), and the engine leaves it alone until then: the long, slow landing of a tween
+    or the last of a spring's settle costs nothing in between.
+  - **Resting while nobody looks.** A value whose readers have all been told of its last change, and
+    haven't looked since (offscreen, or not drawn), isn't touched again until it arrives. The first
+    look brings it back exactly where its motion has reached, at the speed it has: a list scrolled
+    away mid-animation and back finds every tile where it would have been.
+  - **Shared motion, solved once.** Every value on the same spring shares that spring's solution
+    for the moment: solved once a frame for all of them, and carried on from the last frame with a
+    few multiplications instead of an exponential, a sine and a cosine. A colour's four numbers or a
+    position's two solve their curve once, not once each. A spring's Newton solve for when it comes
+    to rest only runs once it could be near rest.
+  - **One driver, no coroutine per motion.** Moves due every frame are kept in a list in the order
+    they started; the rest wait in a heap ordered by when they are due. Finishing on exactly the
+    frame it always did, a move started, retargeted or cancelled anywhere in a frame behaves as it
+    always did.
+- **The Motion Inspector, in Developer options.** What the engine does every frame: how many values
+  are moving, how many were stepped, how many wait for their horizon and how many rest unread,
+  springs solved, shared and stepped, curves shared, when the next value is due, and the frame's
+  cost against its budget; for every value, how the engine treats it now. Off, it costs nothing.
+- **Heat and battery saver ease decoration.** On Android, the device's thermal status and battery
+  saver reach Fuseline: an ambient room or a slow drift updates less often while the device runs
+  hot or saves power, always at its true time, so it never catches up. What you are doing (input,
+  navigation, focus, transitions) keeps every frame and the same motion.
 
 ## Changed
 
-- **Downloads from another device are safe like every other download.** They use Fuse's one
-  Downloads queue: they resume after a restart, every file is checked against its hash, a game made
-  of a folder is put together out of sight and moved into place in one step, and a cancelled or
-  failed download leaves nothing behind.
-- **Fuse Sync carries games when you ask.** Games go device to device on your network, or pass
-  through your host without being kept there. A device sends only files it lists as its own games,
-  and only to a device holding a ticket from your host. See
-  [Games across the household](../sync.md#games-across-the-household).
-- **RomM downloads use the same sources.** With the Remote Library on, a RomM game another device
-  of yours already has can come from that device when it is closer.
+- **Fuse moves exactly as before.** Every curve, spring, decay, keyframe, duration, overshoot and
+  handoff is the same. Fuseline 3.1 is kept in Fuse's tests as it shipped, and a differential test
+  runs Fuseline 4 and 3.1 through the same random histories (every kind of motion, retargets, seeks,
+  gestures, takeovers, cancellations, motion-speed settings, moves started inside other moves'
+  frames, and frames from 30 to 240 Hz with jitter, drops and stalls) and compares everything a
+  caller can see after every step. Positions and velocities agree to the last bit of a float or one
+  step either side (where a spring was carried on from the frame before rather than solved afresh);
+  arrivals, ownership and order agree exactly; what is drawn agrees exactly, except that a value
+  brought back from resting unread may show its next change a frame sooner or later, by at most a
+  quarter of its threshold (an eighth of a pixel for a position).
+- **Colours that fade redraw, not recompose.** Buttons, menus, chips, tabs, keys, control tiles and
+  the Hud, Sync, RomM and Downloads rows read their animated colours while drawing: a focus fade
+  redraws the one component instead of composing it again every frame. The startup intro and pages
+  fading over the tabs no longer compose or measure again every frame either.
+- **Benchmarks against every Fuseline and Compose.** Fuseline 4 is measured against Fuseline 3.1,
+  3, 2, 1 and Compose on every workload, drawn, read every frame and unread (see
+  [docs/fuseline.md](../fuseline.md#speed) for the method and every row). The numbers come from a
+  computer (OpenJDK on Linux); Fuseline 4 has not yet been measured on an Android device.
 
 ## Fixed
 
-- **Scrolling the Library up by touch jumped back.** After moving down with a controller, dragging
-  the grid back up snapped it to the game the controller had chosen. The grid now stays where your
-  finger leaves it, and the controller carries on from what is on screen.
+- **A second screen no longer upsets the first's frame pacing.** Frame intervals are measured per
+  screen: the second screen's frames no longer mix into the main window's, which could make Fuse
+  think frames were running late and thin decoration for nothing.
