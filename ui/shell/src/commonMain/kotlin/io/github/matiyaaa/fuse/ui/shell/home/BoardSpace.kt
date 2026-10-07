@@ -33,6 +33,13 @@ import io.github.matiyaaa.fuse.ui.shell.store.PlatformCard
 import io.github.matiyaaa.fuse.ui.shell.store.UiPrefs
 import io.github.matiyaaa.fuse.model.PlatformId
 
+/**
+ * A board kept once per screen of a two-screen device (the Systems page with the menus on top, and
+ * with them below): [labels] and [icons] for each, the one [editing] now, the one [here] on this
+ * screen, and [pick] to arrange the other.
+ */
+internal class BoardLook(val labels: List<String>, val icons: List<ImageVector>, val editing: Int, val here: Int, val pick: (Int) -> Unit)
+
 /** Something that can be put on a board from its Add picker. */
 internal class Addable(val key: String, val title: String, val icon: ImageVector, val widget: HomeWidget, val detail: String? = null)
 
@@ -74,8 +81,34 @@ internal abstract class BoardSpace {
      */
     abstract fun columns(narrow: Boolean, small: Boolean, width: Dp): Int
 
-    /** A cell's height for cells [cellW] wide. */
-    abstract fun cellHeight(cellW: Dp, narrow: Boolean): Dp
+    /** A cell's height for cells [cellW] wide, [gapX] apart side by side and [gapY] apart above and below. */
+    abstract fun cellHeight(cellW: Dp, gapX: Dp, gapY: Dp, narrow: Boolean): Dp
+
+    /** The tallest an item can be, in rows. */
+    open val maxHeight: Int get() = BoardSize.MAX_HEIGHT
+
+    /** [size] made one the board allows (the Systems page has a small square and cards); as it is by default. */
+    open fun allowed(size: BoardSize, columns: Int): BoardSize = size
+
+    /** One controller step of resizing [rect] (Options held, the D-pad), or null when it can go no further that way. */
+    open fun resizeStep(rect: BoardRect, action: io.github.matiyaaa.fuse.model.NavAction, columns: Int): BoardRect? =
+        BoardGrid.resizeStep(rect, action, columns)?.getOrNull()
+
+    /**
+     * Whether the board is packed in reading order (the Systems page): nothing keeps a place of its
+     * own, so moving one item moves the rest along in order instead of pushing them aside, and the
+     * board fills itself in again at any width.
+     */
+    open val packed: Boolean get() = false
+
+    /** The size of the Add tile while arranging. */
+    open val addSize: BoardSize get() = BoardSize(1, 1)
+
+    /** A second arrangement this board keeps for another screen, switched while arranging; null where there is none. */
+    open val look: BoardLook? get() = null
+
+    /** Told when arranging ends. */
+    open fun arrangingEnded() {}
 
     /** Whether [w] turns through several things (a carousel), with the triggers. */
     open fun carousel(w: HomeWidget): Boolean = false
@@ -92,6 +125,9 @@ internal abstract class BoardSpace {
 
     /** Told whenever the chosen item changes, for whatever shows it beside the board. */
     open fun chosen(w: HomeWidget?) {}
+
+    /** Told which page is in front while the board is. */
+    open fun chosenPage(page: Int) {}
 
     abstract fun open(w: HomeWidget, at: Int)
 
@@ -163,7 +199,7 @@ internal class HomeSpace(
 
     // Never shorter than a handheld's cells, which every widget's face is made to fit; a small
     // screen scrolls the board rather than cut a widget's words off.
-    override fun cellHeight(cellW: Dp, narrow: Boolean): Dp = (cellW * if (narrow) 0.86f else 0.6f).coerceIn(CELL_MIN, CELL_MAX)
+    override fun cellHeight(cellW: Dp, gapX: Dp, gapY: Dp, narrow: Boolean): Dp = (cellW * if (narrow) 0.86f else 0.6f).coerceIn(CELL_MIN, CELL_MAX)
 
     override fun carousel(w: HomeWidget) = w.kind.isCarousel
 

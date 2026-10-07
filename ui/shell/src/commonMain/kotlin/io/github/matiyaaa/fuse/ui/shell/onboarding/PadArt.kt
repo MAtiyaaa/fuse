@@ -13,12 +13,12 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathOperation
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
-import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
@@ -34,35 +34,40 @@ import io.github.matiyaaa.fuse.ui.fuseline.fuselineFloat
 import io.github.matiyaaa.fuse.ui.shell.app.BrandArt
 
 /**
- * A controller, drawn whole in the theme's own colours: a sculpted body with its grips, the
- * bumpers and triggers tucked behind its shoulders, two sticks in their wells, a D-pad, the face
- * buttons in their diamond, View and Menu, and Fuse's own mark as the guide button, with a thin
- * light between them. Every part that is held lights in the accent, sinks a little and glows, and
- * the light above the guide button wakes while anything is held.
+ * A controller seen from the front, drawn in the theme's own colours: a solid body with a clean rim,
+ * the bumpers and triggers along its shoulders, an outlined D-pad, the face buttons in their diamond,
+ * View and Menu as small pills, two sticks, and Fuse's own mark as the button between them. Every
+ * part that is held fills with the accent and glows; [marked] parts (the ones a remap is waiting on)
+ * take the accent's outline.
  *
  * Shoulder, trigger and face labels follow the pad's [style] (LB and LT, L1 and L2, L and ZL; the
  * PlayStation shapes); [nintendoKeys] puts the face buttons where a pad sending Nintendo keycodes
  * has them (A on the right).
  */
 @Composable
-internal fun PadArt(pressed: Set<PadButton>, style: GlyphStyle, nintendoKeys: Boolean, modifier: Modifier = Modifier) {
+internal fun PadArt(
+    pressed: Set<PadButton>,
+    style: GlyphStyle,
+    nintendoKeys: Boolean,
+    modifier: Modifier = Modifier,
+    marked: Set<PadButton> = emptySet(),
+) {
     val c = Fuse.colors
     val motion = Fuse.motion
     val measurer = rememberTextMeasurer()
     // Each part's light, eased in and out so a quick tap still shows.
     val lit = PadParts.associateWith { b -> fuselineFloat(if (b in pressed) 1f else 0f, motion.tween(Durations.FAST), label = "pad").value }
-    val any = fuselineFloat(if (pressed.any { it in PadParts }) 1f else 0f, motion.tween(Durations.BASE), label = "padAny").value
     val geometry = remember { PadGeometry() }
     Canvas(modifier.aspectRatio(PAD_W / PAD_H)) {
         val s = size.width / PAD_W
         withTransform({ scale(s, s, pivot = Offset.Zero) }) {
-            drawPad(geometry, c, lit, any, style, nintendoKeys, measurer, s)
+            drawPad(geometry, c, lit, marked, style, nintendoKeys, measurer, s)
         }
     }
 }
 
 private const val PAD_W = 400f
-private const val PAD_H = 276f
+private const val PAD_H = 262f
 
 /** The buttons the drawing shows. */
 private val PadParts = listOf(
@@ -72,276 +77,272 @@ private val PadParts = listOf(
     PadButton.DPAD_UP, PadButton.DPAD_DOWN, PadButton.DPAD_LEFT, PadButton.DPAD_RIGHT,
 )
 
-/** The pad's shapes, in a 400 by 276 box, built once. */
+/** The pad's shapes, in a 400 by 262 box, built once: drawn for the left and mirrored for the right. */
 private class PadGeometry {
+    /** A broad, flat top that rounds over the shoulders and flares into two grips. */
     val body = Path().apply {
-        moveTo(95f, 42f)
-        cubicTo(140f, 38f, 168f, 52f, 200f, 52f)
-        cubicTo(232f, 52f, 260f, 38f, 305f, 42f)
-        cubicTo(350f, 38f, 372f, 62f, 380f, 97f)
-        cubicTo(392f, 142f, 400f, 192f, 398f, 227f)
-        cubicTo(396f, 262f, 364f, 272f, 344f, 252f)
-        cubicTo(324f, 234f, 300f, 198f, 268f, 192f)
-        cubicTo(240f, 188f, 160f, 188f, 132f, 192f)
-        cubicTo(100f, 198f, 76f, 234f, 56f, 252f)
-        cubicTo(36f, 272f, 4f, 262f, 2f, 227f)
-        cubicTo(0f, 192f, 8f, 142f, 20f, 97f)
-        cubicTo(28f, 62f, 50f, 38f, 95f, 42f)
+        moveTo(200f, 40f)
+        lineTo(122f, 40f)
+        cubicTo(74f, 40f, 44f, 50f, 30f, 88f)
+        cubicTo(18f, 122f, 8f, 176f, 5f, 212f)
+        cubicTo(2f, 242f, 22f, 258f, 44f, 257f)
+        cubicTo(64f, 256f, 78f, 244f, 92f, 218f)
+        cubicTo(104f, 196f, 114f, 186f, 140f, 186f)
+        lineTo(260f, 186f)
+        cubicTo(286f, 186f, 296f, 196f, 308f, 218f)
+        cubicTo(322f, 244f, 336f, 256f, 356f, 257f)
+        cubicTo(378f, 258f, 398f, 242f, 395f, 212f)
+        cubicTo(392f, 176f, 382f, 122f, 370f, 88f)
+        cubicTo(356f, 50f, 326f, 40f, 278f, 40f)
         close()
     }
 
-    /** The top edge alone, for the light along it. */
+    /** The top edge, for the light along it. */
     val ridge = Path().apply {
-        moveTo(24f, 90f)
-        cubicTo(32f, 60f, 54f, 40f, 95f, 42f)
-        cubicTo(140f, 38f, 168f, 52f, 200f, 52f)
-        cubicTo(232f, 52f, 260f, 38f, 305f, 42f)
-        cubicTo(346f, 40f, 368f, 60f, 376f, 90f)
+        moveTo(36f, 76f)
+        cubicTo(50f, 48f, 78f, 40f, 122f, 40f)
+        lineTo(278f, 40f)
+        cubicTo(322f, 40f, 350f, 48f, 364f, 76f)
     }
+
     val leftBumper = bumper { it }
-    val leftTrigger = trigger { it }
     val rightBumper = bumper { PAD_W - it }
+    val leftTrigger = trigger { it }
     val rightTrigger = trigger { PAD_W - it }
 
-    /** A bumper's shape; [x] places it (as it is for the left, mirrored for the right). */
+    /** A bumper hugging the shoulder; only its top shows above the body. [x] places it. */
     private fun bumper(x: (Float) -> Float) = Path().apply {
-        moveTo(x(44f), 86f)
-        cubicTo(x(46f), 48f, x(78f), 24f, x(124f), 22f)
-        lineTo(x(146f), 22f)
-        cubicTo(x(157f), 22f, x(161f), 30f, x(159f), 41f)
-        lineTo(x(156f), 76f)
+        moveTo(x(33f), 82f)
+        cubicTo(x(40f), 48f, x(68f), 24f, x(118f), 24f)
+        lineTo(x(148f), 24f)
+        cubicTo(x(154f), 24f, x(157f), 28f, x(157f), 34f)
+        lineTo(x(157f), 60f)
+        lineTo(x(60f), 72f)
         close()
     }
 
+    /** A trigger standing behind the bumper. */
     private fun trigger(x: (Float) -> Float) = Path().apply {
-        moveTo(x(82f), 48f)
-        cubicTo(x(82f), 22f, x(98f), 6f, x(120f), 6f)
-        cubicTo(x(138f), 6f, x(146f), 16f, x(146f), 32f)
-        lineTo(x(146f), 52f)
+        moveTo(x(78f), 36f)
+        cubicTo(x(80f), 14f, x(96f), 4f, x(116f), 4f)
+        lineTo(x(136f), 4f)
+        cubicTo(x(143f), 4f, x(146f), 8f, x(146f), 15f)
+        lineTo(x(146f), 36f)
         close()
+    }
+
+    /** The D-pad: two rounded bars, joined. */
+    val dpad = Path().apply {
+        op(
+            Path().apply { addRoundRect(RoundRect(Rect(DPad.x - DPAD_HALF, DPad.y - DPAD_ARM, DPad.x + DPAD_HALF, DPad.y + DPAD_ARM), CornerRadius(DPAD_ROUND))) },
+            Path().apply { addRoundRect(RoundRect(Rect(DPad.x - DPAD_ARM, DPad.y - DPAD_HALF, DPad.x + DPAD_ARM, DPad.y + DPAD_HALF), CornerRadius(DPAD_ROUND))) },
+            PathOperation.Union,
+        )
     }
 }
 
-private val LeftStick = Offset(110f, 102f)
-private val RightStick = Offset(254f, 158f)
-private val DPad = Offset(146f, 158f)
-private val Face = Offset(290f, 102f)
-private val Guide = Offset(200f, 132f)
+private val DPad = Offset(86f, 100f)
+private const val DPAD_ARM = 30f
+private const val DPAD_HALF = 10.5f
+private const val DPAD_ROUND = 6f
+private val Face = Offset(316f, 100f)
+private const val FACE_SPREAD = 24f
+private const val FACE_R = 12f
+private val LeftStick = Offset(138f, 150f)
+private val RightStick = Offset(262f, 150f)
+private val Guide = Offset(200f, 150f)
+private val View = Offset(158f, 76f)
+private val Menu = Offset(242f, 76f)
+
+/** The colours one drawing uses, worked out once per frame from the theme. */
+private class PadInk(c: FuseColors) {
+    val accent = c.accent
+    val onAccent = c.onAccent
+    /** The body: solid, never see-through, whatever the theme's surfaces are. */
+    val shell = solid(mix(c.surfaceRaised, c.text, 0.05f), c.ink)
+    val shellLow = solid(mix(c.surfaceRaised, c.ink, 0.35f), c.ink)
+    /** Wells the controls sit in: a step darker than the body. */
+    val well = solid(mix(c.surfaceRaised, c.ink, 0.55f), c.ink)
+    val rim = solid(mix(c.surfaceRaised, c.text, 0.32f), c.ink)
+    val line = c.text.copy(alpha = 0.55f)
+    val label = c.text.copy(alpha = 0.85f)
+    val faint = c.text.copy(alpha = 0.14f)
+}
 
 private fun DrawScope.drawPad(
     g: PadGeometry,
     c: FuseColors,
     lit: Map<PadButton, Float>,
-    any: Float,
+    marked: Set<PadButton>,
     style: GlyphStyle,
     nintendoKeys: Boolean,
     measurer: TextMeasurer,
     scale: Float,
 ) {
-    val accent = c.accent
-    val shell = c.surfaceRaised
-    val deep = c.surface
-    val rim = c.text.copy(alpha = 0.16f)
+    val k = PadInk(c)
     val labels = PadLabels.of(style)
 
     // A soft shadow on the floor under it.
     drawOval(
-        Brush.radialGradient(listOf(Color.Black.copy(alpha = 0.45f), Color.Transparent), center = Offset(200f, 262f), radius = 180f),
-        topLeft = Offset(20f, 248f), size = Size(360f, 28f),
+        Brush.radialGradient(listOf(Color.Black.copy(alpha = 0.4f), Color.Transparent), center = Offset(200f, 254f), radius = 190f),
+        topLeft = Offset(10f, 240f), size = Size(380f, 22f),
     )
 
-    // Triggers, then bumpers, behind the shoulders.
+    // Triggers, then bumpers, behind the shoulders: solid, outlined like the body.
     for ((path, b, label, at) in listOf(
-        Quad(g.leftTrigger, PadButton.L2, labels.leftTrigger, Offset(116f, 16f)),
-        Quad(g.rightTrigger, PadButton.R2, labels.rightTrigger, Offset(284f, 16f)),
+        Quad(g.leftTrigger, PadButton.L2, labels.leftTrigger, Offset(118f, 13.5f)),
+        Quad(g.rightTrigger, PadButton.R2, labels.rightTrigger, Offset(PAD_W - 118f, 13.5f)),
+        Quad(g.leftBumper, PadButton.L1, labels.leftBumper, Offset(114f, 31.5f)),
+        Quad(g.rightBumper, PadButton.R1, labels.rightBumper, Offset(PAD_W - 114f, 31.5f)),
     )) {
         val l = lit[b] ?: 0f
-        withTransform({ translate(0f, 2.5f * l) }) {
-            drawPath(path, Brush.verticalGradient(listOf(mix(deep, accent, l), mix(Color.Black.copy(alpha = 0.6f).compositeOver(deep), accent, l * 0.8f)), startY = 6f, endY = 52f))
-            drawPath(path, mix(rim, accent, l), style = Stroke(1.2f))
-            centredText(measurer, label, at, 7.5f, if (l > 0.5f) c.onAccent else c.textMuted, scale)
-        }
-    }
-    for ((path, b, label, at) in listOf(
-        Quad(g.leftBumper, PadButton.L1, labels.leftBumper, Offset(110f, 31f)),
-        Quad(g.rightBumper, PadButton.R1, labels.rightBumper, Offset(290f, 31f)),
-    )) {
-        val l = lit[b] ?: 0f
-        withTransform({ translate(0f, 2.5f * l) }) {
-            drawPath(path, Brush.verticalGradient(listOf(mix(shell, accent, l), mix(deep, accent, l * 0.85f)), startY = 22f, endY = 80f))
-            drawPath(path, mix(rim, accent, l), style = Stroke(1.2f))
-            centredText(measurer, label, at, 8.5f, if (l > 0.5f) c.onAccent else c.text.copy(alpha = 0.75f), scale)
+        withTransform({ translate(0f, 2f * l) }) {
+            if (l > 0f) drawPath(path, k.accent.copy(alpha = 0.3f * l), style = Stroke(7f, join = StrokeJoin.Round))
+            drawPath(path, mix(k.shellLow, k.accent, l))
+            drawPath(path, if (b in marked && l < 0.5f) k.accent else mix(k.rim, k.accent, l), style = Stroke(2f, join = StrokeJoin.Round))
+            centredText(measurer, label, at, 8f, if (l > 0.5f) k.onAccent else k.label, scale, bold = true)
         }
     }
 
-    // The body: lit from above, darker towards the grips, with a rim and a light along its top.
-    drawPath(g.body, Brush.verticalGradient(listOf(mix(shell, c.text, 0.08f), mix(shell, deep, 0.5f), mix(deep, Color.Black, 0.35f)), startY = 40f, endY = 270f))
+    // The body: solid, lit a little from above, with a clean rim and a light along its top.
+    drawPath(g.body, Brush.verticalGradient(listOf(k.shell, k.shellLow), startY = 40f, endY = 258f))
     clipPath(g.body) {
-        // A broad sheen across the top, as light falls on a curved shell.
-        withTransform({ scale(1f, 0.42f, pivot = Offset(200f, 60f)) }) {
-            drawCircle(Brush.radialGradient(listOf(Color.White.copy(alpha = 0.09f), Color.Transparent), center = Offset(200f, 60f), radius = 210f), radius = 210f, center = Offset(200f, 60f))
-        }
-        // An inner bevel: darker just inside the edge, so the shell reads rounded.
-        drawPath(g.body, Color.Black.copy(alpha = 0.28f), style = Stroke(9f, join = StrokeJoin.Round))
-        drawPath(g.body, mix(shell, c.text, 0.06f).copy(alpha = 0.5f), style = Stroke(3f, join = StrokeJoin.Round))
-        // The faintest wash of the accent from inside, stronger while something is held.
-        drawCircle(Brush.radialGradient(listOf(accent.copy(alpha = 0.06f + 0.08f * any), Color.Transparent), center = Offset(200f, 120f), radius = 190f), radius = 190f, center = Offset(200f, 120f))
-        // The grips' inner shadow.
-        drawRect(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.28f)), startY = 170f, endY = 270f), topLeft = Offset(0f, 170f), size = Size(PAD_W, 106f))
+        drawCircle(
+            Brush.radialGradient(listOf(Color.White.copy(alpha = 0.05f), Color.Transparent), center = Offset(200f, 40f), radius = 230f),
+            radius = 230f, center = Offset(200f, 40f),
+        )
     }
-    drawPath(g.body, rim, style = Stroke(1.4f))
-    drawPath(g.ridge, Brush.horizontalGradient(listOf(Color.Transparent, Color.White.copy(alpha = 0.16f), Color.White.copy(alpha = 0.16f), Color.Transparent), startX = 20f, endX = 380f), style = Stroke(1.6f, cap = StrokeCap.Round))
+    drawPath(g.body, k.rim, style = Stroke(2.6f, join = StrokeJoin.Round))
+    drawPath(g.ridge, Brush.horizontalGradient(listOf(Color.Transparent, Color.White.copy(alpha = 0.14f), Color.White.copy(alpha = 0.14f), Color.Transparent), startX = 36f, endX = 364f), style = Stroke(1.4f, cap = StrokeCap.Round))
 
-    // The light between the sticks: a thin line that wakes while anything is held.
-    val led = Offset(200f, 72f)
-    drawRoundRect(c.ink.copy(alpha = 0.6f), Offset(led.x - 20f, led.y - 2f), Size(40f, 4f), CornerRadius(2f))
-    drawRoundRect(accent.copy(alpha = 0.35f + 0.65f * any), Offset(led.x - 20f * (0.4f + 0.6f * any), led.y - 1.5f), Size(40f * (0.4f + 0.6f * any), 3f), CornerRadius(1.5f))
-    if (any > 0f) drawCircle(Brush.radialGradient(listOf(accent.copy(alpha = 0.35f * any), Color.Transparent), center = led, radius = 30f), radius = 30f, center = led)
-
-    stick(LeftStick, lit[PadButton.L3] ?: 0f, c)
-    stick(RightStick, lit[PadButton.R3] ?: 0f, c)
-    dpad(DPad, lit, c)
-    face(Face, lit, c, style, nintendoKeys, measurer, scale)
-
-    // View and Menu.
-    small(Offset(172f, 100f), lit[PadButton.SELECT] ?: 0f, c) { at, ink ->
-        drawRoundRect(ink, Offset(at.x - 3.6f, at.y - 2.2f), Size(5f, 3.6f), CornerRadius(0.8f), style = Stroke(0.9f))
-        drawRoundRect(ink, Offset(at.x - 1.4f, at.y - 0.6f), Size(5f, 3.6f), CornerRadius(0.8f), style = Stroke(0.9f))
+    dpad(g, lit, marked, k)
+    face(lit, marked, k, style, nintendoKeys, measurer, scale)
+    pill(View, PadButton.SELECT, lit, marked, k) { at, ink ->
+        drawRoundRect(ink, Offset(at.x - 4f, at.y - 2.6f), Size(5.4f, 4f), CornerRadius(1f), style = Stroke(1.1f))
+        drawRoundRect(ink, Offset(at.x - 1.4f, at.y - 0.8f), Size(5.4f, 4f), CornerRadius(1f), style = Stroke(1.1f))
     }
-    small(Offset(228f, 100f), lit[PadButton.START] ?: 0f, c) { at, ink ->
-        for (i in -1..1) drawLine(ink, Offset(at.x - 3.2f, at.y + i * 1.9f), Offset(at.x + 3.2f, at.y + i * 1.9f), 0.9f, StrokeCap.Round)
+    pill(Menu, PadButton.START, lit, marked, k) { at, ink ->
+        for (i in -1..1) drawLine(ink, Offset(at.x - 3.6f, at.y + i * 2.1f), Offset(at.x + 3.6f, at.y + i * 2.1f), 1.1f, StrokeCap.Round)
     }
-    guide(Guide, lit[PadButton.MODE] ?: 0f, c)
+    stick(LeftStick, PadButton.L3, lit, marked, k)
+    stick(RightStick, PadButton.R3, lit, marked, k)
+    guide(Guide, lit[PadButton.MODE] ?: 0f, PadButton.MODE in marked, k)
 }
 
 private data class Quad(val path: Path, val button: PadButton, val label: String, val at: Offset)
 
-/** A stick: its well, then the cap with its grip ring; held in (L3, R3), it sinks and lights. */
-private fun DrawScope.stick(at: Offset, l: Float, c: FuseColors) {
-    drawCircle(Brush.radialGradient(listOf(Color.Black.copy(alpha = 0.55f), c.ink.copy(alpha = 0.35f)), center = at + Offset(0f, -3f), radius = 30f), radius = 28f, center = at)
-    drawCircle(c.text.copy(alpha = 0.10f), radius = 28f, center = at, style = Stroke(1f))
-    val cap = at + Offset(0f, 1.5f * l)
-    val r = 20f - 1.2f * l
-    if (l > 0f) drawCircle(Brush.radialGradient(listOf(c.accent.copy(alpha = 0.45f * l), Color.Transparent), center = cap, radius = 36f), radius = 36f, center = cap)
-    drawCircle(Color.Black.copy(alpha = 0.35f), radius = r + 1.5f, center = cap + Offset(0f, 2.5f))
-    drawCircle(Brush.verticalGradient(listOf(mix(c.surfaceRaised, c.text, 0.10f), c.surface), startY = cap.y - r, endY = cap.y + r), radius = r, center = cap)
-    // The dished top and its textured ring.
-    drawCircle(Brush.radialGradient(listOf(Color.Black.copy(alpha = 0.25f), Color.Transparent), center = cap + Offset(0f, 2f), radius = r * 0.72f), radius = r * 0.72f, center = cap)
-    drawCircle(mix(c.text.copy(alpha = 0.14f), c.accent, l), radius = r - 2.5f, center = cap, style = Stroke(1.6f + 0.6f * l))
-    drawCircle(c.text.copy(alpha = 0.10f + 0.1f * (1f - l)), radius = r, center = cap, style = Stroke(1f))
+/** A held part's glow, under it. */
+private fun DrawScope.glow(at: Offset, radius: Float, l: Float, k: PadInk) {
+    if (l <= 0f) return
+    drawCircle(Brush.radialGradient(listOf(k.accent.copy(alpha = 0.45f * l), Color.Transparent), center = at, radius = radius), radius = radius, center = at)
 }
 
-/** The D-pad: one raised cross in its well; a held direction lights its arm and tips it down. */
-private fun DrawScope.dpad(at: Offset, lit: Map<PadButton, Float>, c: FuseColors) {
-    val arm = 23f
-    val half = 8.5f
-    val cross = Path().apply {
-        addRoundRect(RoundRect(Rect(at.x - half, at.y - arm, at.x + half, at.y + arm), CornerRadius(3.5f)))
-        addRoundRect(RoundRect(Rect(at.x - arm, at.y - half, at.x + arm, at.y + half), CornerRadius(3.5f)))
-    }
-    val outline = Path().apply { op(
-        Path().apply { addRoundRect(RoundRect(Rect(at.x - half, at.y - arm, at.x + half, at.y + arm), CornerRadius(3.5f))) },
-        Path().apply { addRoundRect(RoundRect(Rect(at.x - arm, at.y - half, at.x + arm, at.y + half), CornerRadius(3.5f))) },
-        androidx.compose.ui.graphics.PathOperation.Union,
-    ) }
-    drawCircle(Brush.radialGradient(listOf(Color.Black.copy(alpha = 0.45f), c.ink.copy(alpha = 0.25f)), center = at, radius = 32f), radius = 30f, center = at)
-    translate(0f, 2.5f) { drawPath(outline, Color.Black.copy(alpha = 0.4f)) }
-    drawPath(outline, Brush.verticalGradient(listOf(mix(c.surfaceRaised, c.text, 0.08f), c.surface), startY = at.y - arm, endY = at.y + arm))
-    clipPath(cross) {
-        for ((b, dir) in listOf(PadButton.DPAD_UP to Offset(0f, -1f), PadButton.DPAD_DOWN to Offset(0f, 1f), PadButton.DPAD_LEFT to Offset(-1f, 0f), PadButton.DPAD_RIGHT to Offset(1f, 0f))) {
+/** The outline of a part: the accent while held or marked, the line colour otherwise. */
+private fun outline(l: Float, marked: Boolean, k: PadInk): Color = if (marked && l < 0.5f) k.accent else mix(k.line, k.accent, l)
+
+/** The D-pad: an outlined cross in its well; a held direction fills its arm with the accent. */
+private fun DrawScope.dpad(g: PadGeometry, lit: Map<PadButton, Float>, marked: Set<PadButton>, k: PadInk) {
+    val arms = listOf(PadButton.DPAD_UP to Offset(0f, -1f), PadButton.DPAD_DOWN to Offset(0f, 1f), PadButton.DPAD_LEFT to Offset(-1f, 0f), PadButton.DPAD_RIGHT to Offset(1f, 0f))
+    for ((b, dir) in arms) glow(DPad + dir * (DPAD_ARM - 8f), 26f, lit[b] ?: 0f, k)
+    drawPath(g.dpad, k.well)
+    clipPath(g.dpad) {
+        for ((b, dir) in arms) {
             val l = lit[b] ?: 0f
             if (l <= 0f) continue
-            val tip = at + dir * arm
-            val from = at + dir * half
+            val from = DPad + dir * DPAD_HALF
+            val tip = DPad + dir * DPAD_ARM
             drawRect(
-                c.accent.copy(alpha = l),
-                topLeft = Offset(minOf(from.x, tip.x) - if (dir.x == 0f) half else 0f, minOf(from.y, tip.y) - if (dir.y == 0f) half else 0f),
-                size = Size(if (dir.x == 0f) half * 2 else arm - half, if (dir.y == 0f) half * 2 else arm - half),
+                k.accent.copy(alpha = l),
+                topLeft = Offset(minOf(from.x, tip.x) - if (dir.x == 0f) DPAD_HALF else 0f, minOf(from.y, tip.y) - if (dir.y == 0f) DPAD_HALF else 0f),
+                size = Size(if (dir.x == 0f) DPAD_HALF * 2 else DPAD_ARM - DPAD_HALF, if (dir.y == 0f) DPAD_HALF * 2 else DPAD_ARM - DPAD_HALF),
             )
         }
     }
-    drawPath(outline, c.text.copy(alpha = 0.14f), style = Stroke(1f, join = StrokeJoin.Round))
-    // An arrow pressed into each arm, and a dimple in the middle.
-    for ((b, dir) in listOf(PadButton.DPAD_UP to Offset(0f, -1f), PadButton.DPAD_DOWN to Offset(0f, 1f), PadButton.DPAD_LEFT to Offset(-1f, 0f), PadButton.DPAD_RIGHT to Offset(1f, 0f))) {
+    val anyMarked = arms.any { it.first in marked }
+    val anyLit = arms.maxOf { lit[it.first] ?: 0f }
+    drawPath(g.dpad, outline(anyLit, anyMarked, k), style = Stroke(1.8f, join = StrokeJoin.Round))
+    // An arrow in each arm.
+    for ((b, dir) in arms) {
         val l = lit[b] ?: 0f
-        val tip = at + dir * (arm - 5f)
-        val side = Offset(dir.y, dir.x) * 3.2f
-        val back = tip - dir * 4f
+        val tip = DPad + dir * (DPAD_ARM - 6f)
+        val side = Offset(dir.y, dir.x) * 3.4f
+        val back = tip - dir * 4.4f
         val arrow = Path().apply { moveTo(tip.x, tip.y); lineTo(back.x + side.x, back.y + side.y); lineTo(back.x - side.x, back.y - side.y); close() }
-        drawPath(arrow, if (l > 0.5f) c.onAccent.copy(alpha = 0.9f) else c.text.copy(alpha = 0.32f))
-        if (l > 0f) drawCircle(Brush.radialGradient(listOf(c.accent.copy(alpha = 0.4f * l), Color.Transparent), center = tip, radius = 22f), radius = 22f, center = tip)
+        drawPath(arrow, if (l > 0.5f) k.onAccent else k.line)
     }
-    drawCircle(Color.Black.copy(alpha = 0.22f), radius = 4.5f, center = at)
 }
 
-/** The face buttons in their diamond, each with its letter (or its PlayStation shape). */
-private fun DrawScope.face(at: Offset, lit: Map<PadButton, Float>, c: FuseColors, style: GlyphStyle, nintendoKeys: Boolean, measurer: TextMeasurer, scale: Float) {
-    val d = 23f
+/** The face buttons in their diamond: outlined circles with their letter (or PlayStation shape). */
+private fun DrawScope.face(lit: Map<PadButton, Float>, marked: Set<PadButton>, k: PadInk, style: GlyphStyle, nintendoKeys: Boolean, measurer: TextMeasurer, scale: Float) {
+    val d = FACE_SPREAD
     val places = if (nintendoKeys) {
         listOf(PadButton.X to Offset(0f, -d), PadButton.Y to Offset(-d, 0f), PadButton.A to Offset(d, 0f), PadButton.B to Offset(0f, d))
     } else {
         listOf(PadButton.Y to Offset(0f, -d), PadButton.X to Offset(-d, 0f), PadButton.B to Offset(d, 0f), PadButton.A to Offset(0f, d))
     }
-    drawCircle(Brush.radialGradient(listOf(Color.Black.copy(alpha = 0.32f), Color.Transparent), center = at, radius = 46f), radius = 46f, center = at)
     for ((b, off) in places) {
         val l = lit[b] ?: 0f
-        val p = at + off + Offset(0f, 1.5f * l)
-        val r = 12.5f
-        if (l > 0f) drawCircle(Brush.radialGradient(listOf(c.accent.copy(alpha = 0.55f * l), Color.Transparent), center = p, radius = 30f), radius = 30f, center = p)
-        drawCircle(Color.Black.copy(alpha = 0.4f * (1f - l * 0.6f)), radius = r + 0.5f, center = p + Offset(0f, 2.5f - 1.5f * l))
-        drawCircle(Brush.verticalGradient(listOf(mix(mix(c.surfaceRaised, c.text, 0.1f), c.accent, l), mix(c.surface, c.accent, l * 0.85f)), startY = p.y - r, endY = p.y + r), radius = r, center = p)
-        drawCircle(mix(c.text.copy(alpha = 0.16f), Color.White.copy(alpha = 0.5f), l), radius = r, center = p, style = Stroke(1f))
-        val ink = if (l > 0.5f) c.onAccent else c.text.copy(alpha = 0.85f)
-        if (style == GlyphStyle.PLAYSTATION) {
-            shape(b, p, ink)
-        } else {
-            centredText(measurer, b.name, p, 10f, ink, scale, bold = true)
-        }
+        val p = Face + off
+        glow(p, FACE_R * 2.3f, l, k)
+        drawCircle(mix(k.well, k.accent, l), radius = FACE_R, center = p)
+        drawCircle(outline(l, b in marked, k), radius = FACE_R, center = p, style = Stroke(1.8f))
+        val ink = if (l > 0.5f) k.onAccent else k.label
+        if (style == GlyphStyle.PLAYSTATION) shape(b, p, ink) else centredText(measurer, b.name, p, 10.5f, ink, scale, bold = true)
     }
 }
 
 /** A PlayStation face button's shape: triangle (Y), square (X), circle (B), cross (A). */
 private fun DrawScope.shape(b: PadButton, at: Offset, ink: Color) {
-    val stroke = Stroke(1.5f, cap = StrokeCap.Round, join = StrokeJoin.Round)
+    val stroke = Stroke(1.6f, cap = StrokeCap.Round, join = StrokeJoin.Round)
     when (b) {
-        PadButton.Y -> drawPath(Path().apply { moveTo(at.x, at.y - 5f); lineTo(at.x + 5f, at.y + 3.5f); lineTo(at.x - 5f, at.y + 3.5f); close() }, ink, style = stroke)
-        PadButton.X -> drawRect(ink, Offset(at.x - 4.2f, at.y - 4.2f), Size(8.4f, 8.4f), style = stroke)
-        PadButton.B -> drawCircle(ink, radius = 4.8f, center = at, style = stroke)
+        PadButton.Y -> drawPath(Path().apply { moveTo(at.x, at.y - 5.2f); lineTo(at.x + 5.2f, at.y + 3.6f); lineTo(at.x - 5.2f, at.y + 3.6f); close() }, ink, style = stroke)
+        PadButton.X -> drawRect(ink, Offset(at.x - 4.4f, at.y - 4.4f), Size(8.8f, 8.8f), style = stroke)
+        PadButton.B -> drawCircle(ink, radius = 5f, center = at, style = stroke)
         else -> {
-            drawLine(ink, Offset(at.x - 4.2f, at.y - 4.2f), Offset(at.x + 4.2f, at.y + 4.2f), 1.5f, StrokeCap.Round)
-            drawLine(ink, Offset(at.x + 4.2f, at.y - 4.2f), Offset(at.x - 4.2f, at.y + 4.2f), 1.5f, StrokeCap.Round)
+            drawLine(ink, Offset(at.x - 4.4f, at.y - 4.4f), Offset(at.x + 4.4f, at.y + 4.4f), 1.6f, StrokeCap.Round)
+            drawLine(ink, Offset(at.x + 4.4f, at.y - 4.4f), Offset(at.x - 4.4f, at.y + 4.4f), 1.6f, StrokeCap.Round)
         }
     }
 }
 
-/** View or Menu: a small pill with its symbol. */
-private fun DrawScope.small(at: Offset, l: Float, c: FuseColors, symbol: DrawScope.(Offset, Color) -> Unit) {
-    val p = at + Offset(0f, 1f * l)
-    if (l > 0f) drawCircle(Brush.radialGradient(listOf(c.accent.copy(alpha = 0.45f * l), Color.Transparent), center = p, radius = 20f), radius = 20f, center = p)
-    drawRoundRect(Color.Black.copy(alpha = 0.35f), Offset(p.x - 9f, p.y - 4.5f + 1.8f), Size(18f, 9f), CornerRadius(4.5f))
-    drawRoundRect(mix(mix(c.surfaceRaised, c.text, 0.08f), c.accent, l), Offset(p.x - 9f, p.y - 4.5f), Size(18f, 9f), CornerRadius(4.5f))
-    drawRoundRect(c.text.copy(alpha = 0.14f), Offset(p.x - 9f, p.y - 4.5f), Size(18f, 9f), CornerRadius(4.5f), style = Stroke(0.8f))
-    symbol(p, if (l > 0.5f) c.onAccent else c.text.copy(alpha = 0.6f))
+/** View or Menu: a small outlined pill with its symbol. */
+private fun DrawScope.pill(at: Offset, b: PadButton, lit: Map<PadButton, Float>, marked: Set<PadButton>, k: PadInk, symbol: DrawScope.(Offset, Color) -> Unit) {
+    val l = lit[b] ?: 0f
+    glow(at, 22f, l, k)
+    val topLeft = Offset(at.x - 13f, at.y - 6.5f)
+    val size = Size(26f, 13f)
+    drawRoundRect(mix(k.well, k.accent, l), topLeft, size, CornerRadius(6.5f))
+    drawRoundRect(outline(l, b in marked, k), topLeft, size, CornerRadius(6.5f), style = Stroke(1.6f))
+    symbol(at, if (l > 0.5f) k.onAccent else k.label)
 }
 
-/** The guide button: Fuse's own mark, its spark lit in the accent, glowing while held. */
-private fun DrawScope.guide(at: Offset, l: Float, c: FuseColors) {
-    val r = 13.5f
-    drawCircle(Brush.radialGradient(listOf(c.accent.copy(alpha = 0.18f + 0.4f * l), Color.Transparent), center = at, radius = 30f), radius = 30f, center = at)
-    drawCircle(Color.Black.copy(alpha = 0.4f), radius = r + 0.5f, center = at + Offset(0f, 2.2f))
-    drawCircle(Brush.verticalGradient(listOf(mix(c.surfaceRaised, c.text, 0.1f), c.surface), startY = at.y - r, endY = at.y + r), radius = r, center = at)
-    drawCircle(mix(c.text.copy(alpha = 0.18f), c.accent, l), radius = r, center = at, style = Stroke(1f + 0.6f * l))
-    val mark = 15f
+/** A stick: its well, then the cap's ring; pressed in (L3, R3), the cap fills with the accent. */
+private fun DrawScope.stick(at: Offset, b: PadButton, lit: Map<PadButton, Float>, marked: Set<PadButton>, k: PadInk) {
+    val l = lit[b] ?: 0f
+    drawCircle(k.well, radius = 25f, center = at)
+    drawCircle(k.faint, radius = 25f, center = at, style = Stroke(1.2f))
+    glow(at, 34f, l, k)
+    drawCircle(mix(k.shellLow, k.accent, l), radius = 17.5f, center = at)
+    drawCircle(outline(l, b in marked, k), radius = 17.5f, center = at, style = Stroke(1.8f))
+}
+
+/** The guide button: Fuse's own mark in an outlined circle, its spark lit in the accent. */
+private fun DrawScope.guide(at: Offset, l: Float, marked: Boolean, k: PadInk) {
+    val r = 14f
+    glow(at, 32f, 0.35f + 0.65f * l, k)
+    drawCircle(mix(k.well, k.accent, l * 0.85f), radius = r, center = at)
+    drawCircle(outline(l, marked, k), radius = r, center = at, style = Stroke(1.8f))
+    val mark = 16f
     val u = mark / BrandArt.MARK
     withTransform({
         translate(at.x - mark / 2, at.y - mark / 2)
         scale(u, u, pivot = Offset.Zero)
     }) {
-        val ink = mix(c.text.copy(alpha = 0.85f), Color.White, l)
+        val ink = if (l > 0.5f) k.onAccent else k.label
         drawPath(BrandArt.frame, ink, style = Stroke(BrandArt.MARK_STROKE))
         drawPath(BrandArt.fuse, ink, style = Stroke(BrandArt.MARK_STROKE, cap = StrokeCap.Round))
-        drawCircle(BrandArt.glow(c.accent), radius = BrandArt.GLOW_R * (0.8f + 0.5f * l), center = BrandArt.SPARK)
-        drawCircle(BrandArt.core(c.accent), radius = BrandArt.CORE_R, center = BrandArt.SPARK)
+        drawCircle(BrandArt.glow(k.accent), radius = BrandArt.GLOW_R * (0.8f + 0.5f * l), center = BrandArt.SPARK)
+        drawCircle(BrandArt.core(k.accent), radius = BrandArt.CORE_R, center = BrandArt.SPARK)
     }
 }
 
@@ -378,13 +379,14 @@ private fun mix(a: Color, b: Color, f: Float): Color {
     )
 }
 
-private fun Color.compositeOver(under: Color): Color {
-    val a = alpha + under.alpha * (1f - alpha)
-    if (a == 0f) return Color.Transparent
+/** [color] laid over [under] and made fully opaque, so the drawing never shows what is behind it. */
+private fun solid(color: Color, under: Color): Color {
+    val base = under.copy(alpha = 1f)
+    val a = color.alpha
     return Color(
-        (red * alpha + under.red * under.alpha * (1f - alpha)) / a,
-        (green * alpha + under.green * under.alpha * (1f - alpha)) / a,
-        (blue * alpha + under.blue * under.alpha * (1f - alpha)) / a,
-        a,
+        color.red * a + base.red * (1f - a),
+        color.green * a + base.green * (1f - a),
+        color.blue * a + base.blue * (1f - a),
+        1f,
     )
 }

@@ -49,7 +49,8 @@ the profile it was using.
 Android devices connect to a host rather than being one: Android stops background work to save
 battery, so it couldn't promise to be there for your other devices.
 
-Onboarding offers the same two buttons, and both can be skipped.
+Setup offers the same two buttons near the start, right after the Home screen step and before
+Who's playing, and both can be skipped.
 
 **If a device can't reach the host.** A computer with Docker, WSL, Hyper-V or virtual machines has
 networks of its own (`172.17.0.1` to `172.31.x.x` are typical) that no other device can reach. The
@@ -66,8 +67,9 @@ play time, favourites, collections, Home and theme, and a PIN kept only as a sal
 person's save in an emulator's folder is put away when someone else plays that game and put back
 when they do. With a host, profiles are the host's and follow each person to every device.
 
-Setup asks who's playing near the start (**Create Your Profile**, then **Add Another** or
-**Continue**; it can be skipped). **Settings, Profiles** lists everyone, adds someone, edits a
+Setup asks who's playing near the start, right after Fuse Sync, so a device that just joined a host
+shows the household's profiles to choose from (**Continue**, or **Add Another**); with no host, or
+a host with no profiles yet, it starts with none (**Create Your Profile**; it can be skipped). **Settings, Profiles** lists everyone, adds someone, edits a
 profile (name, picture and PIN, asking for the PIN first when it has one), puts them in order
 (**Profile Order**, the same order on every device with a host) and deletes one. Deleting a
 profile without a host keeps their saves as plain files in Fuse Sync's `kept` folder.

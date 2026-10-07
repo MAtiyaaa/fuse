@@ -1,5 +1,6 @@
 package io.github.matiyaaa.fuse.ui.shell.home
 
+import kotlin.math.roundToInt
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -95,10 +96,12 @@ internal fun GridWells(
         val cell = squirclePath(geometry.cellW, geometry.cellH, corner, 0.6f)
         val hair = Stroke(1.dp.toPx())
         for (r in 0 until rows) {
-            for (col in 0 until geometry.columns) {
+            // A centred board leaves its last columns' room to both sides: those have no wells.
+            val spare = (geometry.offsetX * 2 / geometry.stepX).roundToInt()
+            for (col in 0 until geometry.columns - spare) {
                 // Cells under a resting widget are covered by it anyway; only the empty ones are drawn.
                 if (occupied.occupant(col, r) != null && target?.contains(col, r) != true) continue
-                translate(col * geometry.stepX, r * geometry.stepY) {
+                translate(geometry.offsetX + col * geometry.stepX, r * geometry.stepY) {
                     drawPath(cell, well, alpha = shown)
                     drawPath(cell, edge, alpha = shown, style = hair)
                 }
@@ -131,9 +134,10 @@ internal fun BoxScope.ResizeHandles(
     active: ResizeEdge?,
     handle: @Composable (ResizeEdge) -> Modifier,
     onPlaced: (ResizeEdge, Rect?) -> Unit,
+    maxHeight: Int = io.github.matiyaaa.fuse.model.BoardSize.MAX_HEIGHT,
 ) {
     for (edge in ResizeEdge.entries) {
-        val enabled = canResize(rect, edge, columns)
+        val enabled = canResize(rect, edge, columns, maxHeight)
         val align = when (edge) {
             ResizeEdge.LEFT -> Alignment.CenterStart
             ResizeEdge.RIGHT -> Alignment.CenterEnd
@@ -205,7 +209,7 @@ private fun Grip(edge: ResizeEdge, lit: Boolean, enabled: Boolean) {
  * lifted look of a widget being moved.
  */
 @Composable
-internal fun BoxScope.ResizeFrame(rect: BoardRect, columns: Int, shape: Shape) {
+internal fun BoxScope.ResizeFrame(rect: BoardRect, columns: Int, shape: Shape, maxHeight: Int = io.github.matiyaaa.fuse.model.BoardSize.MAX_HEIGHT) {
     val c = Fuse.colors
     val accent = c.accent
     Box(
@@ -217,7 +221,7 @@ internal fun BoxScope.ResizeFrame(rect: BoardRect, columns: Int, shape: Shape) {
             },
     )
     val growRight = rect.width < BoardGrid.maxWidth(columns)
-    val growDown = rect.height < io.github.matiyaaa.fuse.model.BoardSize.MAX_HEIGHT
+    val growDown = rect.height < maxHeight
     Arrow(FuseIcons.ChevronRight, growRight, Modifier.align(Alignment.CenterEnd).offset(x = ARROW_OUT))
     Arrow(FuseIcons.ChevronDown, growDown, Modifier.align(Alignment.BottomCenter).offset(y = ARROW_OUT))
     Arrow(FuseIcons.ChevronLeft, rect.width > 1, Modifier.align(Alignment.CenterStart).offset(x = -ARROW_OUT))
@@ -334,7 +338,7 @@ internal fun AddTile(selected: Boolean, shape: Shape, modifier: Modifier, label:
  * for touch (the controller has the same in its hints). On a narrow screen only the buttons.
  */
 @Composable
-internal fun ArrangeBar(compact: Boolean, onAdd: () -> Unit, onDone: () -> Unit, ownHome: Boolean? = null, onOwnHome: (Boolean) -> Unit = {}, item: String = "widget", name: String = "Home") {
+internal fun ArrangeBar(compact: Boolean, onAdd: () -> Unit, onDone: () -> Unit, ownHome: Boolean? = null, onOwnHome: (Boolean) -> Unit = {}, item: String = "widget", name: String = "Home", look: BoardLook? = null) {
     val c = Fuse.colors
     Panel(raised = true, shape = RoundedCornerShape(Radius.pill)) {
         Row(Modifier.padding(start = if (compact) Space.s else Space.xl, end = Space.s, top = Space.s, bottom = Space.s), verticalAlignment = Alignment.CenterVertically) {
@@ -348,6 +352,7 @@ internal fun ArrangeBar(compact: Boolean, onAdd: () -> Unit, onDone: () -> Unit,
             Row(horizontalArrangement = Arrangement.spacedBy(Space.s), verticalAlignment = Alignment.CenterVertically) {
                 // With Fuse Sync, whose Home this is: this device's own, or the profile's everywhere.
                 if (ownHome != null) HomeScopeSwitch(ownHome, compact, onOwnHome)
+                if (look != null) LookSwitch(look, compact)
                 FuseButton("Add $item", selected = false, onClick = onAdd, kind = ButtonKind.SECONDARY, icon = FuseIcons.Plus)
                 FuseButton("Done", selected = false, onClick = onDone, kind = ButtonKind.PRIMARY)
             }
@@ -386,6 +391,36 @@ internal fun HomeScopeSwitch(own: Boolean, compact: Boolean, onChange: (Boolean)
 }
 
 /**
+ * Which screen's look of a board kept once per screen is being arranged: two segments in a pill,
+ * each with its screen's icon, the one being arranged lit. Compact, the icons say it.
+ */
+@Composable
+internal fun LookSwitch(look: BoardLook, compact: Boolean) {
+    val c = Fuse.colors
+    Row(
+        Modifier.clip(RoundedCornerShape(Radius.pill)).background(c.text.copy(alpha = 0.06f)).padding(3.dp),
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        look.labels.forEachIndexed { i, label ->
+            val on = look.editing == i
+            val bg by fuselineColor(if (on) c.accent else c.text.copy(alpha = 0f), Fuse.motion.tween(Durations.FAST), label = "look")
+            Row(
+                Modifier.height(40.dp).clip(RoundedCornerShape(Radius.pill)).background(bg)
+                    .fuseClickable(shape = RoundedCornerShape(Radius.pill), scale = false, role = androidx.compose.ui.semantics.Role.RadioButton, onClickLabel = "Arrange the $label look") { look.pick(i) }
+                    .padding(horizontal = if (compact) Space.m else Space.l),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                FuseIcon(look.icons[i], size = Size.iconS, tint = if (on) c.onAccent else c.textMuted)
+                if (!compact) {
+                    Spacer(Modifier.width(Space.s))
+                    FText(label, Fuse.type.label, color = if (on) c.onAccent else c.textMuted, maxLines = 1)
+                }
+            }
+        }
+    }
+}
+
+/**
  * Undo and Reset, floating at the top right while Home is arranged: Undo takes back the last change
  * made while arranging, Reset puts the board back as it came (after asking). [focused] is the one
  * the controller is on (0 Undo, 1 Reset), reached by moving up past the board's top row.
@@ -401,6 +436,9 @@ internal fun ArrangeTools(
     /** With Fuse Sync: whether this is this device's own Home (the controller's way to the scope). */
     ownHome: Boolean? = null,
     onOwnHome: () -> Unit = {},
+    /** A board kept once per screen: the controller's way to the other screen's look. */
+    look: BoardLook? = null,
+    onLook: () -> Unit = {},
 ) {
     Panel(raised = true, shape = RoundedCornerShape(Radius.pill)) {
         Row(Modifier.padding(Space.s), horizontalArrangement = Arrangement.spacedBy(Space.s), verticalAlignment = Alignment.CenterVertically) {
@@ -411,6 +449,13 @@ internal fun ArrangeTools(
                 FuseButton(
                     if (ownHome) "This Device" else "All Devices", selected = focused == 3, onClick = onOwnHome,
                     kind = ButtonKind.SECONDARY, icon = if (ownHome) FuseIcons.MonitorSmartphone else FuseIcons.Users,
+                )
+            } else if (look != null) {
+                // Lit while the other screen's look is the one being arranged.
+                val other = 1 - look.here
+                FuseButton(
+                    look.labels[other], selected = focused == 3, onClick = onLook,
+                    kind = if (look.editing == other) ButtonKind.PRIMARY else ButtonKind.SECONDARY, icon = look.icons[other],
                 )
             }
         }

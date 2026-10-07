@@ -77,6 +77,8 @@ class UiAudit {
 
     @Test fun m03Systems() = audit(AuditSize.M) { systemsScreens(exhaustive = true) }
 
+    @Test fun systemsJ() = audit(AuditSize.J) { systemsScreens(exhaustive = false) }
+
     @Test fun m04Game() = audit(AuditSize.M) { gameScreens(exhaustive = true); contentScreens() }
 
     @Test fun m05Launch() = audit(AuditSize.M) { launchScreens() }

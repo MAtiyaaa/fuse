@@ -10,6 +10,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performMouseInput
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.onNodeWithText
@@ -295,7 +296,10 @@ class UiFlowTest {
         router.tap(PadButton.A)
         pumpUntil { shows("Tuned for this device") }
         router.tap(PadButton.A)
-        // Who's playing comes early: no host needed, and skipping it is fine.
+        // Fuse Sync comes before Who's playing, so a household's profiles are there to choose from.
+        pumpUntil { shows("Play on, anywhere") }
+        onAllNodesWithText("Skip", useUnmergedTree = true).onFirst().performClick()
+        // Who's playing: no host needed, and skipping it is fine.
         pumpUntil { shows("Make your profile") }
         router.tap(PadButton.A)
         pumpUntil { shows("New Profile") }

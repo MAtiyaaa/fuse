@@ -85,6 +85,9 @@ import io.github.matiyaaa.fuse.ui.shell.store.PlatformCard
 import io.github.matiyaaa.fuse.ui.shell.store.TransferAction
 import io.github.matiyaaa.fuse.ui.shell.store.TransferFilter
 import io.github.matiyaaa.fuse.ui.shell.store.TransferRow
+import io.github.matiyaaa.fuse.ui.shell.app.TransferSpot
+import io.github.matiyaaa.fuse.ui.shell.app.rememberShownSystems
+import io.github.matiyaaa.fuse.ui.shell.app.transferRoom
 
 /**
  * Downloads: everything Fuse moves for the person, in one list. Each transfer is one slim row: its
@@ -131,6 +134,10 @@ fun DownloadsScreen(app: AppState) {
         if (first != null) ops.act(row.item.id, first) else openOptions(row)
     }
     val current = rows.getOrNull(sel.index)
+    // The second screen shows the transfer the selection is on (the first, before the list is entered).
+    val spot = (current ?: rows.firstOrNull())?.item?.id?.let(::TransferSpot)
+    val room = spot?.let { transferRoom(app.store, rememberShownSystems(app.store), it) }
+    LaunchedEffect(focused, spot, room) { if (focused) app.hero = room }
     PageEffect(focused, zone, current?.item?.status, current?.actions) {
         if (!focused) return@PageEffect
         app.hints = when (zone) {

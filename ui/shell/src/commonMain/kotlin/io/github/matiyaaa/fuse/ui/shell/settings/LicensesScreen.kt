@@ -88,6 +88,16 @@ private val docs = listOf(
             "colours for your systems from the pack's repository and keeps them on your device. Console names " +
             "and logos are trademarks of their owners and are shown only to identify each system.",
     ),
+    LicenceDoc(
+        "systematic", "System pictures", "RetroArch's Systematic icons, CC BY 4.0. Downloaded when used, not part of Fuse",
+        inline = io.github.matiyaaa.fuse.integrations.systemart.SystemIcons.ATTRIBUTION + "\n\n" +
+            "Source: ${io.github.matiyaaa.fuse.integrations.systemart.SystemIcons.REPO_URL}\n" +
+            "Licence: ${io.github.matiyaaa.fuse.integrations.systemart.SystemIcons.LICENSE} (${io.github.matiyaaa.fuse.integrations.systemart.SystemIcons.LICENSE_URL}). " +
+            "You may share and adapt these pictures for any purpose with credit to the libretro team.\n\n" +
+            "Fuse never bundles these pictures. A system shown as a small tile on the Systems page has its " +
+            "picture downloaded from the repository and kept on your device. Console names and designs are " +
+            "trademarks of their owners and are shown only to identify each system.",
+    ),
 )
 
 /** Every licence text Fuse ships, readable with the controller (L2/R2 page through the text). */

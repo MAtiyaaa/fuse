@@ -52,6 +52,15 @@ data class UiPrefs(
     val home: HomeLayoutConfig = HomeLayoutConfig(),
     /** The Systems page as arranged (see HomeSettings.systemsBoard). */
     val systemsBoard: HomeLayoutConfig = HomeLayoutConfig(),
+    /** The Systems page with the menus on the lower screen (see HomeSettings.systemsBoardFlipped). */
+    val systemsBoardFlipped: HomeLayoutConfig? = null,
+    /** How many more systems a row holds than at their usual size, menus on top and below. */
+    val systemTileStep: Int = 0,
+    val systemTileStepFlipped: Int = 0,
+    /** System cards across the Systems page at their usual size as last shown, by screen ("fuse", "flipped"). */
+    val systemsCardsSeen: Map<String, Int> = emptyMap(),
+    /** Each system's small tile as the person changed it, by platform id. */
+    val systemTiles: Map<String, io.github.matiyaaa.fuse.model.SystemTileLook> = emptyMap(),
     val destinations: List<Destination> = Destination.entries,
     val defaultLayout: LibraryLayout = LibraryLayout.ICON,
     /** Square box art or tall posters on game tiles. */

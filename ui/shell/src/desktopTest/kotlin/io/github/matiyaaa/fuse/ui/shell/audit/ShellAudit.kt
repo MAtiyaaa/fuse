@@ -519,6 +519,10 @@ internal fun AuditDriver.onboardingScreens(exhaustive: Boolean) {
         if (exhaustive) shoot("Home screen role (optional)")
         tap(PadButton.DPAD_RIGHT)
         tap(PadButton.A)
+        waitFor("Play on, anywhere")
+        shoot("every device: Fuse Sync, Syncthing or skip (optional)", 1_500)
+        tap(PadButton.DPAD_RIGHT, 2)
+        tap(PadButton.A)
         waitFor("Make your profile")
         if (exhaustive) {
             shoot("who's playing: no profile yet (optional)", 1_200)
@@ -585,10 +589,6 @@ internal fun AuditDriver.onboardingScreens(exhaustive: Boolean) {
         waitFor("Your films, here too")
         shoot("Jellyfin, what it is (optional)", 1_500)
         tap(PadButton.DPAD_RIGHT)
-        tap(PadButton.A)
-        waitFor("Play on, anywhere")
-        shoot("every device: Fuse Sync, Syncthing or skip (optional)", 1_500)
-        tap(PadButton.DPAD_RIGHT, 2)
         tap(PadButton.A)
         waitFor("Show your achievements?")
         shoot("achievements (optional)")
@@ -910,6 +910,57 @@ internal fun AuditDriver.companionScreens() {
             CompanionPage.current.value = 0
         } finally {
             runBlocking { libraryData.playSessions.end(session, Clock.System.now().toEpochMilliseconds()) }
+        }
+    }
+
+    scenario("companion", "a transfer focused on Downloads") {
+        val base = libraryStore
+        val velvet = runBlocking { base.library.games(GameQuery()).first().first { it.title == "Velvet Orbit" } }
+        val logo = java.io.File(cache, "companion-logo.png").also { AuditSystemArt.logo(it, "Velvet Orbit") }
+        val owner = io.github.matiyaaa.fuse.model.MediaOwner.OfGame(velvet.id)
+        runBlocking { base.media.setFromFile(owner, io.github.matiyaaa.fuse.model.MediaKind.LOGO, logo.absolutePath) }
+        val gb = 1L shl 30
+        val down = io.github.matiyaaa.fuse.transfer.TransferItem(
+            "t1", "romm:rom:7", "romm", io.github.matiyaaa.fuse.transfer.TransferDirection.DOWNLOAD, io.github.matiyaaa.fuse.transfer.TransferKind.GAME,
+            "Velvet Orbit", platform = "dc", totalBytes = 4 * gb, doneBytes = 2 * gb, status = io.github.matiyaaa.fuse.transfer.TransferStatus.ACTIVE,
+            phase = io.github.matiyaaa.fuse.transfer.TransferPhase.TRANSFERRING,
+        )
+        val up = down.copy(id = "t2", key = "romm:up:1", direction = io.github.matiyaaa.fuse.transfer.TransferDirection.UPLOAD, title = "Hollow Meridian", platform = "psx", totalBytes = 700L shl 20, doneBytes = 210L shl 20)
+        val rows = kotlinx.coroutines.flow.MutableStateFlow(listOf(
+            io.github.matiyaaa.fuse.ui.shell.store.TransferRow(down, emptyList(), game = velvet.id),
+            io.github.matiyaaa.fuse.ui.shell.store.TransferRow(up, emptyList()),
+        ))
+        val live = mapOf(
+            "t1" to io.github.matiyaaa.fuse.transfer.TransferLive(2 * gb + 300L * (1 shl 20), 4 * gb, 24L shl 20, 74),
+            "t2" to io.github.matiyaaa.fuse.transfer.TransferLive(210L shl 20, 700L shl 20, 3L shl 20, 163),
+        )
+        val ops = object : io.github.matiyaaa.fuse.ui.shell.store.TransfersOps {
+            override val rows = rows
+            override val summary = kotlinx.coroutines.flow.MutableStateFlow(io.github.matiyaaa.fuse.transfer.TransferSummary())
+            override val settings = kotlinx.coroutines.flow.MutableStateFlow(io.github.matiyaaa.fuse.transfer.TransferSettings())
+            override fun live(id: String) = kotlinx.coroutines.flow.MutableStateFlow(live[id] ?: io.github.matiyaaa.fuse.transfer.TransferLive())
+            override fun act(id: String, action: io.github.matiyaaa.fuse.ui.shell.store.TransferAction) = Unit
+            override fun pauseAll() = Unit
+            override fun resumeAll() = Unit
+            override fun clearFinished() = Unit
+        }
+        val store = object : io.github.matiyaaa.fuse.ui.shell.store.FuseStore by base { override val transfers = ops }
+        try {
+            CompanionPage.current.value = 0
+            Spotlight.set(null)
+            view = AuditView.Companion(store, platform, DualScreenMode.LIBRARY_COMPANION)
+            settle(1_200)
+            Spotlight.set(io.github.matiyaaa.fuse.ui.shell.app.TransferSpot("t1"))
+            waitFor("Downloading")
+            shoot("a download in focus", 2_000)
+            Spotlight.set(io.github.matiyaaa.fuse.ui.shell.app.TransferSpot("t2"))
+            waitFor("Uploading")
+            shoot("an upload in focus", 2_000)
+            rows.value = listOf(io.github.matiyaaa.fuse.ui.shell.store.TransferRow(up.copy(status = io.github.matiyaaa.fuse.transfer.TransferStatus.WAITING, waiting = io.github.matiyaaa.fuse.transfer.WaitReason.NETWORK, phase = null), emptyList()))
+            shoot("an upload waiting for the connection", 1_500)
+            Spotlight.set(null)
+        } finally {
+            runBlocking { base.media.reset(owner, io.github.matiyaaa.fuse.model.MediaKind.LOGO) }
         }
     }
 

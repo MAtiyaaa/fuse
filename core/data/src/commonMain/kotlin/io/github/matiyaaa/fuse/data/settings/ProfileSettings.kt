@@ -22,7 +22,7 @@ object ProfileSettings {
         // The library as they like it.
         "library.cleanDisplayNames", "library.systemOrder", "library.sort", "library.systemArtStyle",
         "library.selectOpensGamePage", "library.collectionsEnabled", "library.autoSeries", "library.hiddenSeries",
-        "library.systemColors", "library.appsFilter", "library.gameArt",
+        "library.systemColors", "library.systemTiles", "library.appsFilter", "library.gameArt",
         "videoPreview.enabled", "videoPreview.delaySeconds",
         // Sound and music (not a song's path, which is this device's file).
         "sound.enabled", "sound.volume", "sound.profile",

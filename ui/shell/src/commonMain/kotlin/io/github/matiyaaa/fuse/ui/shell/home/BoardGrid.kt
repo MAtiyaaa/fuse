@@ -121,9 +121,9 @@ object BoardGrid {
     }
 
     /** Why [rect] can't be a widget's place on a board [columns] wide, or null when it can. */
-    fun sizeLimit(rect: BoardRect, columns: Int): BoardLimit? = when {
+    fun sizeLimit(rect: BoardRect, columns: Int, maxHeight: Int = BoardSize.MAX_HEIGHT): BoardLimit? = when {
         rect.width < 1 || rect.height < 1 -> BoardLimit.SMALLEST
-        rect.width > maxWidth(columns) || rect.height > BoardSize.MAX_HEIGHT -> BoardLimit.LARGEST
+        rect.width > maxWidth(columns) || rect.height > maxHeight -> BoardLimit.LARGEST
         rect.column < 0 || rect.row < 0 || rect.right > columns -> BoardLimit.EDGE
         else -> null
     }
@@ -151,6 +151,79 @@ object BoardGrid {
 
     /** Carries the [BoardLimit] a step ran into. */
     class LimitException(val limit: BoardLimit) : Exception(limit.name)
+
+    // ------------------------------------------------------------------ packed boards
+
+    /**
+     * A packed board, as the Systems page keeps it: the items of [order] in turn, each in the first
+     * place it fits reading from the top left, so the order and the sizes alone decide where
+     * everything is, and the board fills itself in again at any width.
+     */
+    fun pack(order: List<String>, sizes: Map<String, BoardSize>, columns: Int): BoardLayout =
+        layout(order.map { Item(it, sizes.getValue(it), null) }, columns)
+
+    /** Packed [layout] with [id] at [index] of its reading order, packed again. */
+    fun reorder(layout: BoardLayout, id: String, index: Int): BoardLayout {
+        val order = layout.ids.filter { it != id }.toMutableList()
+        order.add(index.coerceIn(0, order.size), id)
+        return pack(order, layout.rects.mapValues { it.value.size }, layout.columns)
+    }
+
+    /**
+     * Where [id] goes in the reading order of packed [layout] when put with its top left corner at
+     * [column], [row]: before what starts there when it is carried back, after it when carried on,
+     * so a system put on its neighbour trades places with it and the rest stay in their order.
+     */
+    fun dropIndex(layout: BoardLayout, id: String, column: Int, row: Int): Int {
+        val from = layout[id] ?: return 0
+        val forward = row > from.row || (row == from.row && column > from.column)
+        return layout.ids.count { o ->
+            if (o == id) return@count false
+            val r = layout.rects.getValue(o)
+            r.row < row || (r.row == row && (if (forward) r.column <= column else r.column < column))
+        }
+    }
+
+    /** Packed [layout] with [id] put down at [column], [row] (see [dropIndex]). */
+    fun drop(layout: BoardLayout, id: String, column: Int, row: Int): BoardChange.Done {
+        val next = reorder(layout, id, dropIndex(layout, id, column, row))
+        return BoardChange.Done(next, next.rects.keys.filter { it != id && next[it] != layout[it] }.toSet())
+    }
+
+    /**
+     * One controller step of carrying [id] on packed [layout]: left and right trade places with the
+     * one before or after it in reading order; up and down go to the row above or below, where the
+     * board has one. Null when it can go no further that way.
+     */
+    fun carry(layout: BoardLayout, id: String, action: NavAction): BoardLayout? {
+        val at = layout.ids.indexOf(id)
+        val rect = layout[id] ?: return null
+        return when (action) {
+            NavAction.LEFT -> if (at > 0) reorder(layout, id, at - 1) else null
+            NavAction.RIGHT -> if (at < layout.ids.lastIndex) reorder(layout, id, at + 1) else null
+            NavAction.UP, NavAction.DOWN -> {
+                val step = if (action == NavAction.UP) -1 else 1
+                var row = rect.row + step
+                // A tall neighbour can leave a row with nowhere new to land: look a row further.
+                while (row >= 0 && row <= layout.rows) {
+                    val next = drop(layout, id, rect.column, row).layout
+                    if (next[id] != rect) return next
+                    row += step
+                }
+                null
+            }
+            else -> null
+        }
+    }
+
+    /** Packed [layout] with [id] made [size], packed again in the same order. */
+    fun resizePacked(layout: BoardLayout, id: String, size: BoardSize, maxHeight: Int = BoardSize.MAX_HEIGHT): BoardChange {
+        val from = layout[id] ?: return BoardChange.Blocked(BoardLimit.EDGE)
+        sizeLimit(BoardRect(0, 0, size.width, size.height), layout.columns, maxHeight)?.let { return BoardChange.Blocked(it) }
+        if (size == from.size) return BoardChange.Done(layout, emptySet())
+        val next = pack(layout.ids, layout.rects.mapValues { if (it.key == id) size else it.value.size }, layout.columns)
+        return BoardChange.Done(next, next.rects.keys.filter { it != id && next[it] != layout[it] }.toSet())
+    }
 
     /**
      * Puts [id] at [target]. Widgets it covers move, in reading order: first to the same place

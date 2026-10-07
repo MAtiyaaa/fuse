@@ -440,6 +440,42 @@ internal fun AuditDriver.systemsScreens(exhaustive: Boolean) {
         }
     }
 
+    scenario("systems", "small tiles") {
+        useLibrary()
+        val systems = libraryStore.library.platforms.value.filter { it.gameCount > 0 }
+        val before = libraryStore.prefs.value
+        fun tile(i: Int, w: Int, h: Int) = io.github.matiyaaa.fuse.model.HomeWidget("system.${systems[i].platform.id.value}", io.github.matiyaaa.fuse.model.WidgetKind.SYSTEMS, i, target = systems[i].platform.id.value, width = w, height = h)
+        // Every system a small square, the first two as cards, one tall: the way a shelf of systems looks.
+        val board = systems.indices.map { i -> when (i) { 0 -> tile(i, 3, 2); 1 -> tile(i, 3, 4); else -> tile(i, 2, 2) } }
+        libraryStore.updatePrefs {
+            it.copy(
+                systemsBoard = io.github.matiyaaa.fuse.model.HomeLayoutConfig(board = board, grain = 3),
+                systemTiles = mapOf(systems[3].platform.id.value to io.github.matiyaaa.fuse.model.SystemTileLook(pattern = io.github.matiyaaa.fuse.model.TilePattern.WAVES, tone = io.github.matiyaaa.fuse.model.TileTone.LIGHT)),
+            )
+        }
+        try {
+            tab(Destination.SYSTEMS)
+            waitFor("Arrange")
+            settle(2_500)
+            shoot("small tiles beside cards")
+            libraryStore.updatePrefs { it.copy(systemTileStep = 1) }
+            settle(1_500)
+            shoot("smaller: one more in a row")
+            libraryStore.updatePrefs { it.copy(systemTileStep = 0) }
+            hold(PadButton.A)
+            settle(800)
+            tap(PadButton.DPAD_RIGHT)
+            settle(600)
+            shoot("carrying a system along: the next trades places with it")
+            tap(PadButton.A)
+            settle(600)
+            shoot("put down, still arranging")
+            tap(PadButton.B)
+        } finally {
+            libraryStore.updatePrefs { it.copy(systemsBoard = before.systemsBoard, systemTiles = before.systemTiles, systemTileStep = before.systemTileStep) }
+        }
+    }
+
     if (!exhaustive) return
 
     scenario("systems", "options menu") {

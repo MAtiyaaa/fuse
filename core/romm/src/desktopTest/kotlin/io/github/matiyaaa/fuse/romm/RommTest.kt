@@ -545,6 +545,39 @@ class RommTest {
     }
 
     @Test
+    fun `a big game RomM takes long to put together still finishes, sent once`() = runBlocking<Unit> {
+        val fake = server().apply { slowComplete = true }
+        val c = client(fake).also { it.detect() }
+        val mirror = RommMirror(db(), System::currentTimeMillis).also { it.sync(c, "main") }
+        val m = manager()
+        RommUploadHandler.LANDING_POLL_MS = 20
+        m.register(RommUploadHandler(Host(fake, c, mirror)))
+        val bytes = ByteArray(RommClient.CHUNK_BYTES + 99) { (it % 31).toByte() }
+        val file = File(root, "Okami (USA).iso").apply { writeBytes(bytes) }
+        val job = RommUploadJob("main", 10, listOf(RommUploadFile(file.path, file.name, sizeBytes = bytes.size.toLong())), scanAfter = false)
+        val id = m.enqueue(TransferItem("", "romm:up:slow", ROMM_UPLOAD_SOURCE, TransferDirection.UPLOAD, TransferKind.GAME, "Okami", payload = job.encode(), totalBytes = bytes.size.toLong()))
+        // RomM didn't answer in time, but the game is there: done, not failed, and never sent twice.
+        m.await(id, TransferStatus.DONE)
+        assertContentEquals(bytes, fake.received.single().second)
+    }
+
+    @Test
+    fun `a piece that is slow to send waits and carries on, never fails`() = runBlocking<Unit> {
+        val fake = server().apply { slowChunks = 1 }
+        val c = client(fake).also { it.detect() }
+        val mirror = RommMirror(db(), System::currentTimeMillis).also { it.sync(c, "main") }
+        val m = manager()
+        m.register(RommUploadHandler(Host(fake, c, mirror)))
+        val bytes = ByteArray(4000) { 5 }
+        val file = File(root, "Advance Wars (USA).gba").apply { writeBytes(bytes) }
+        val job = RommUploadJob("main", 10, listOf(RommUploadFile(file.path, file.name, sizeBytes = bytes.size.toLong())), scanAfter = false)
+        val id = m.enqueue(TransferItem("", "romm:up:chunk", ROMM_UPLOAD_SOURCE, TransferDirection.UPLOAD, TransferKind.GAME, "Advance Wars", payload = job.encode(), totalBytes = bytes.size.toLong()))
+        m.await(id, TransferStatus.WAITING)
+        m.await(id, TransferStatus.DONE)
+        assertContentEquals(bytes, fake.received.single().second)
+    }
+
+    @Test
     fun `a file RomM already has exactly is not sent again`() = runBlocking<Unit> {
         val fake = server()
         val c = client(fake).also { it.detect() }

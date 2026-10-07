@@ -170,7 +170,14 @@ class RommUploadHandler(private val host: RommTransferHost) : TransferHandler {
                 io.note(job.encode())
             }
             io.phase(TransferPhase.FINISHING)
-            guarded { client.completeUpload(job.uploadId!!) }
+            if (!finish(client, job, f)) {
+                // RomM no longer knows this upload and hasn't got the file: it starts again from the beginning.
+                job = job.copy(uploadId = null, chunksDone = 0)
+                io.note(job.encode())
+                done = job.files.take(job.current).sumOf { it.sizeBytes }
+                io.progress(done, total)
+                throw TransferInterrupted("RomM lost ${f.name} before it was put together. Fuse sends it again.")
+            }
             job = job.copy(current = job.current + 1, uploadId = null, chunksDone = 0)
             io.note(job.encode())
         }
@@ -196,11 +203,46 @@ class RommUploadHandler(private val host: RommTransferHost) : TransferHandler {
         throw TransferInterrupted("Waiting for RomM to add $lead before sending its other files.")
     }
 
+    /**
+     * Asks RomM to put [f] together. A large game takes RomM a while: when it doesn't answer in time,
+     * the file is waited for (never sent twice), and an upload RomM no longer knows (its answer was
+     * lost) counts as done once the game is there. False when RomM lost the upload without the file.
+     */
+    private suspend fun finish(client: RommClient, job: RommUploadJob, f: RommUploadFile): Boolean {
+        try {
+            client.completeUpload(job.uploadId!!)
+            return true
+        } catch (e: RommException) {
+            when {
+                e.code == RommClient.SLOW -> {
+                    // Every piece arrived; RomM is still writing the file. Content inside a game can't be
+                    // looked up by name, so its arrival is trusted.
+                    if (f.folder.isNotEmpty() || landed(client, job, f, LANDING_WAIT_MS)) return true
+                    throw TransferInterrupted("RomM is still putting ${f.name} together.", e)
+                }
+                e.status == 404 -> return f.folder.isEmpty() && landed(client, job, f, 0)
+                else -> guarded<Unit> { throw e }
+            }
+        }
+        return true
+    }
+
+    /** Whether RomM has [f] on its system, looking again for up to [waitMs]. */
+    private suspend fun landed(client: RommClient, job: RommUploadJob, f: RommUploadFile, waitMs: Long): Boolean {
+        val until = System.currentTimeMillis() + waitMs
+        while (true) {
+            if (runCatching { client.findByFileName(job.platformId, f.name) }.getOrNull() != null) return true
+            if (System.currentTimeMillis() >= until) return false
+            delay(LANDING_POLL_MS)
+        }
+    }
+
     private suspend fun <T> guarded(block: suspend () -> T): T = try {
         block()
     } catch (e: RommException) {
         when {
-            e.code == "offline" || e.status >= 500 || e.status == 429 -> throw TransferInterrupted(e.message ?: "RomM went away", e)
+            // Slow (a big piece on a slow connection) or away: waits and carries on from the piece it was on.
+            e.code == RommClient.SLOW || e.code == "offline" || e.status >= 500 || e.status == 429 -> throw TransferInterrupted(e.message ?: "RomM went away", e)
             e.forbidden -> throw TransferFailure(UPLOAD_PERMISSION, retryable = false)
             else -> throw TransferFailure(e.message ?: "RomM refused the upload.", retryable = e.status == 409)
         }
@@ -214,6 +256,10 @@ class RommUploadHandler(private val host: RommTransferHost) : TransferHandler {
 
     companion object {
         const val UPLOAD_PERMISSION = "Fuse's RomM sign-in can only read. To upload, pair Fuse again in Settings, Addons, Fuse RomM and allow uploads."
+
+        /** How long a finished upload RomM is still writing is waited for, and how often it is looked for. */
+        internal var LANDING_WAIT_MS = 10 * 60_000L
+        internal var LANDING_POLL_MS = 10_000L
     }
 }
 

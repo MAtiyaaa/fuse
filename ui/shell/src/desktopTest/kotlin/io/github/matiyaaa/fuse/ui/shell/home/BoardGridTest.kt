@@ -188,4 +188,67 @@ class BoardGridTest {
         val fit = BoardGrid.layout(listOf(item("b", 4, 1)), 2)
         assertEquals(2, fit["b"]!!.width)
     }
+
+    // ------------------------------------------------------------------ packed boards (the Systems page)
+
+    /** Twelve cards of one size, four across, packed in order. */
+    private fun shelf(columns: Int = 4, n: Int = 12, size: BoardSize = BoardSize(1, 1)) =
+        BoardGrid.pack((0 until n).map { "s$it" }, (0 until n).associate { "s$it" to size }, columns)
+
+    @Test
+    fun aSystemPutOnItsNeighbourTradesPlacesAndNothingElseMoves() {
+        val board = shelf()
+        val next = BoardGrid.drop(board, "s1", 2, 0)
+        assertEquals(listOf("s0", "s2", "s1", "s3"), next.layout.ids.take(4))
+        assertEquals(setOf("s2"), next.moved)
+        // Back again the other way.
+        val back = BoardGrid.drop(next.layout, "s1", 1, 0)
+        assertEquals(board.ids, back.layout.ids)
+    }
+
+    @Test
+    fun carriedFarTheOthersShiftAlongInOrderInsteadOfScattering() {
+        val board = shelf()
+        // From the top left to the second row's third place: the ones between move back one, in order.
+        val next = BoardGrid.drop(board, "s0", 2, 1).layout
+        assertEquals(listOf("s1", "s2", "s3", "s4", "s5", "s6", "s0", "s7"), next.ids.take(8))
+        next.noOverlaps()
+        // Everything after where it landed stays exactly where it was.
+        for (id in listOf("s7", "s8", "s9", "s10", "s11")) assertEquals(board[id], next[id])
+    }
+
+    @Test
+    fun theControllerCarriesASystemAlongTheReadingOrderAndAcrossRows() {
+        var board = shelf()
+        board = BoardGrid.carry(board, "s3", NavAction.RIGHT)!!
+        // Past the row's end it goes on to the next row's start.
+        assertEquals(BoardRect(0, 1, 1, 1), board["s3"])
+        board = BoardGrid.carry(board, "s3", NavAction.DOWN)!!
+        assertEquals(BoardRect(0, 2, 1, 1), board["s3"])
+        board = BoardGrid.carry(board, "s3", NavAction.UP)!!
+        board = BoardGrid.carry(board, "s3", NavAction.UP)!!
+        assertEquals(BoardRect(0, 0, 1, 1), board["s3"])
+        // Nowhere further up or back.
+        assertEquals(null, BoardGrid.carry(board, "s3", NavAction.UP))
+        assertEquals(null, BoardGrid.carry(board, "s3", NavAction.LEFT))
+        board.noOverlaps()
+    }
+
+    @Test
+    fun resizingAPackedSystemKeepsTheOrderAndTheRestFlowAroundIt() {
+        val board = shelf(columns = 8, size = BoardSize(2, 1))
+        // Half a card: the ones after it move up into the room it left.
+        val small = BoardGrid.resizePacked(board, "s1", BoardSize(1, 1)).layout()
+        assertEquals(board.ids, small.ids)
+        assertEquals(BoardRect(2, 0, 1, 1), small["s1"])
+        assertEquals(BoardRect(3, 0, 2, 1), small["s2"])
+        // Taller: two rows, and the rows flow around it.
+        val tall = BoardGrid.resizePacked(board, "s1", BoardSize(2, 2)).layout()
+        assertEquals(BoardRect(2, 0, 2, 2), tall["s1"])
+        tall.noOverlaps()
+        // And back to a card: as it was.
+        assertEquals(board, BoardGrid.resizePacked(tall, "s1", BoardSize(2, 1)).layout())
+        // Never past the largest.
+        assertIs<BoardChange.Blocked>(BoardGrid.resizePacked(board, "s1", BoardSize(2, 4)))
+    }
 }
