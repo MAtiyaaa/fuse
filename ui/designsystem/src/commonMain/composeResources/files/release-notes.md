@@ -1,64 +1,37 @@
-# Fuse 0.3.8 - The Reach Update
+# Fuse 0.3.8.1 - The Reach Update
 
-Every game in your household, reachable from every device. With Fuse Sync, each of your devices
-can see what the others have, bring any of it here, or send a game to another device, even one
-that is away. Fuse picks the best place to bring it from by itself, checks every file, and never
-shows a game until it is whole.
+Switch libraries read the way people really keep them: every game once, with its updates and DLC,
+however the files are named and wherever they sit.
 
 ## New
 
-- **Not on RomM, from another device.** With Fuse RomM and Fuse Sync on, the RomM tab ends with a
-  shelf of the games your other devices have that RomM doesn't, each saying which device has it.
-  Games this device already has are never listed.
-- **A system's page in sections.** Each system on the RomM tab shows its games in three sections:
-  On RomM, Not on RomM (this device's) and Not on RomM, from another device. Up and down keep your
-  column as they cross from one section to the next.
-- **A Remote Library without RomM.** With Fuse Sync on and no RomM, the Sync tab has a Library with
-  Recently Added and Systems, laid out and moving like RomM's. Its games can be downloaded here or
-  sent to another device.
-- **Download here, or upload to RomM.** Another device's game can be brought to this device, or
-  uploaded to RomM. The upload is done by the device that has the game, and any device can ask for
-  it: if that device is away, it does it once it is back.
-- **Available on.** Every game's page says where the game is: this device, each of your other
-  devices, and RomM. Each copy shows whether its device is online or away, its size there, whether
-  it is verified (the same files as another copy or RomM), a different version, or still being
-  checked, and when it was downloaded or added.
-- **Send to Another Device.** From any game's page or options, send a game to any of your devices.
-  A device that is away gets it when it is back, and the picker says which devices already have
-  the game or don't take games from others.
-- **The best source, by itself.** Fuse brings a game from another device on the same network
-  first, then RomM at home, then another device through your Fuse Sync host, then RomM from
-  outside, fastest first. It works whichever device is away from home. If a source drops, Fuse
-  carries on from the next one, keeping what was downloaded when the files are the same.
-- **Every device's downloads.** Downloads lists what your other devices are downloading under each
-  device's name ("Downloading to Thor"), with a new Other Devices filter. Pause, cancel and
-  reordering there act on that device.
-- **Remembered offline.** What your other devices have, with its art and details, is kept on this
-  device, so the Remote Library can be browsed with the host away. Art follows the same rules as
-  RomM's games, SteamGridDB included.
-- **Fill Everything, your way.** Fill Everything asks whether to fill your library, or your library
-  and the Remote Library.
-- **Remote Library settings.** Settings, Addons, Remote Library: share this device's games, let
-  other devices send games here, where games sent here go, passing games through the host, and
-  showing other devices' games in RomM.
-- **On the second screen.** A game in focus shows which other devices have it, and another
-  device's download names that device.
+- **Updates folder and DLC folder.** A Switch system's settings (Files) can name a folder its
+  updates are kept in and one for its DLC, anywhere. Both are optional: Fuse finds updates and DLC
+  beside their games, and in `updates` and `dlc` folders inside the games folder, without them.
+- **.nsz and .xcz files** are Switch games, updates and DLC too.
 
 ## Changed
 
-- **Downloads from another device are safe like every other download.** They use Fuse's one
-  Downloads queue: they resume after a restart, every file is checked against its hash, a game made
-  of a folder is put together out of sight and moved into place in one step, and a cancelled or
-  failed download leaves nothing behind.
-- **Fuse Sync carries games when you ask.** Games go device to device on your network, or pass
-  through your host without being kept there. A device sends only files it lists as its own games,
-  and only to a device holding a ticket from your host. See
-  [Games across the household](../sync.md#games-across-the-household).
-- **RomM downloads use the same sources.** With the Remote Library on, a RomM game another device
-  of yours already has can come from that device when it is closer.
+- **Switch names are read however they are written.** With or without a title id, Fuse tells a game
+  from its update and DLC: versions (`v1.1.3`, `v524288`, `Update 1.0.3`, `(Update 1.0.1)`,
+  `[Up v1.86]`), "DLC" anywhere in a name, a DLC's name in brackets (`Game [Hat DLC]`,
+  `Game [New Uniform Set]`), and an update named with its game's own id. Words that only describe
+  the file (`Base eShop NSP`, `Switch XCI Base Game`), scene and download-site names, copy numbers
+  like `(1)`, and look-alike punctuation no longer get in the way.
+- **Updates and DLC join their game wherever they are.** In the game's own folder, beside it, in one
+  big folder of many games, in `updates` and `dlc` folders, or in the folders chosen in settings,
+  each update and DLC is listed with its game. One whose game isn't there stays on its own, so
+  nothing disappears.
+- **Copies count once.** The same file in several folders (the same title id or name, version and
+  size) is one game, kept from the folder of its own. Another region, another version or one file
+  holding a game with all its updates and DLC stays a game of its own.
+- **Uploading a Switch game to RomM brings its updates and DLC.** They go into `update` and `dlc`
+  under the game, as RomM keeps them, from wherever they are on this device, and each is sent once.
 
 ## Fixed
 
-- **Scrolling the Library up by touch jumped back.** After moving down with a controller, dragging
-  the grid back up snapped it to the game the controller had chosen. The grid now stays where your
-  finger leaves it, and the controller carries on from what is on screen.
+- **Copies and updates no longer show as missing.** Files Fuse once listed as games of their own,
+  and now lists with their game, are forgotten after the next scan instead of shown as missing,
+  unless you made one a favourite, played it or renamed it.
+- **Uploading a game kept in base, update and dlc folders stopped.** Its game file is now sent first
+  as the game, and the rest goes under it.
