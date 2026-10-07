@@ -575,6 +575,7 @@ internal fun statusWords(t: io.github.matiyaaa.fuse.transfer.TransferItem, live:
             WaitReason.NETWORK -> "Waiting for the connection  ·  tries again by itself"
             WaitReason.PLAYING -> "Paused while you play"
             WaitReason.WIFI -> "Waiting for Wi-Fi"
+            WaitReason.DEVICE -> "Waiting for ${t.waitingFor ?: "the other device"} to be back"
             null -> "Waiting"
         }.let { w -> listOfNotNull(w, amount).joinToString("  ·  ") }
         TransferStatus.PAUSED -> listOfNotNull("Paused", amount).joinToString("  ·  ")

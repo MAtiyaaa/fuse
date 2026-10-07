@@ -34,25 +34,6 @@ import java.io.File
 import java.io.InputStream
 import java.security.MessageDigest
 
-/** Moving a game's bytes from another device: directly when it answers, through the host otherwise. */
-interface PeerBytes {
-    /** Leave from the host to fetch [files] of [game] from [source], with its key opened. */
-    suspend fun openTicket(source: String, game: String, files: List<String>): OpenTicket
-
-    /** Whether [source] answers directly on the home network, quickly. */
-    suspend fun reachable(ticket: PeerTicket): Boolean
-
-    /**
-     * [length] bytes of [file] from [offset], straight from the device ([direct]) or through the
-     * host; [sink] reads them as they come and returns what it read. The file's whole size goes
-     * to [sink] when the answer says it.
-     */
-    suspend fun fetch(open: OpenTicket, file: String, offset: Long, length: Long, direct: Boolean, sink: suspend (InputStream, Long?) -> Long): Long
-}
-
-/** A ticket with its key, ready to sign requests with. */
-class OpenTicket(val ticket: PeerTicket, val key: String)
-
 /** A device's own list of others' lists, kept so the household's games show while the host is away. */
 @Serializable
 private data class KeptLibraries(val libraries: List<DeviceLibrary> = emptyList(), val commands: List<DeviceCommand> = emptyList())
@@ -178,13 +159,20 @@ class JvmHousehold(
         }
     }
 
-    /** Lists this device's games (or none, when it doesn't share) for the household. */
-    suspend fun publish() = publishing.withLock {
+    /**
+     * Lists this device's games (or none, when it doesn't share) for the household. [rebuild] asks
+     * the app for its games again; otherwise the last list goes up with the hashes read since.
+     */
+    suspend fun publish(rebuild: Boolean = true) = publishing.withLock {
         val l = local ?: return
         val c = client() ?: return
         if (!_supported.value) return
         val cfg = config()
-        val games = if (cfg.shareLibrary) runCatching { l.games() }.getOrDefault(emptyList()) else emptyList()
+        val games = when {
+            !cfg.shareLibrary -> emptyList()
+            rebuild || shared.isEmpty() -> runCatching { l.games() }.getOrDefault(emptyList())
+            else -> shared.values.toList()
+        }
         shared = games.associateBy { it.entry.game }
         if (cfg.shareLibrary) runCatching { server.start(peerPort) } else server.stop()
         val entries = games.map { g -> withHashes(g) }
@@ -215,19 +203,38 @@ class JvmHousehold(
                 }
                 if (clock() - since > REPUBLISH_MS) {
                     hashes.save()
-                    runCatching { publish() }
+                    runCatching { publish(rebuild = false) }
                     since = clock()
                 }
             }
             hashes.save()
-            runCatching { publish() }
+            runCatching { publish(rebuild = false) }
         }
     }
 
     private suspend fun resolve(game: String, file: String): File? {
         val g = shared[game] ?: return null
         if (file !in g.entry.files.map { it.path }) return null
-        return g.paths[file]?.let(::File)
+        return g.paths[file]?.let(::File)?.also(::hashSoon)
+    }
+
+    private val urgent = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+
+    /**
+     * A file another device is fetching is read for its hashes straight away (if it wasn't yet), so
+     * the device fetching it can check what it got without waiting for the slow pass over everything.
+     */
+    private fun hashSoon(f: File) {
+        if (hashes.known(f) != null || !urgent.add(f.path)) return
+        scope.launch(Dispatchers.IO) {
+            try {
+                runCatching { hashes.compute(f) }
+                hashes.save()
+                runCatching { publish(rebuild = false) }
+            } finally {
+                urgent.remove(f.path)
+            }
+        }
     }
 
     // ---------------------------------------------------------------- the others' lists
@@ -354,7 +361,22 @@ class JvmHousehold(
         ok
     }.getOrDefault(false)
 
-    override suspend fun fetch(open: OpenTicket, file: String, offset: Long, length: Long, direct: Boolean, sink: suspend (InputStream, Long?) -> Long): Long {
+    override suspend fun fetch(open: OpenTicket, file: String, offset: Long, length: Long, direct: Boolean, write: suspend (ByteArray, Int, Long?) -> Unit): Long =
+        fetchStream(open, file, offset, length, direct) { input, size ->
+            val buf = ByteArray(64 * 1024)
+            var total = 0L
+            while (true) {
+                val n = input.read(buf)
+                if (n < 0) break
+                if (n == 0) continue
+                write(buf, n, size)
+                total += n
+            }
+            total
+        }
+
+    /** As [fetch], reading the piece as a stream. */
+    suspend fun fetchStream(open: OpenTicket, file: String, offset: Long, length: Long, direct: Boolean, sink: suspend (InputStream, Long?) -> Long): Long {
         val t = open.ticket
         if (!direct) {
             val c = client() ?: throw SyncException("This device isn't linked to a host.", "no-link", 0)

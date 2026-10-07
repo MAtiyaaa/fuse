@@ -100,7 +100,7 @@ class HouseholdGamesTest {
         var offset = 0L
         while (true) {
             var size: Long? = null
-            val got = to.household.fetch(open, file, offset, 100_000, direct) { input, total -> size = total; input.copyTo(out).toLong() }
+            val got = to.household.fetch(open, file, offset, 100_000, direct) { buf, n, total -> size = total; out.write(buf, 0, n) }
             offset += got
             if (got == 0L || (size != null && offset >= size!!)) break
         }

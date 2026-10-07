@@ -127,6 +127,7 @@ internal fun TransferCard(t: TransferItem, live: TransferLive, modifier: Modifie
             io.github.matiyaaa.fuse.transfer.WaitReason.DRIVE -> "Waiting for ${t.waitingFor ?: "its drive"}"
             io.github.matiyaaa.fuse.transfer.WaitReason.PLAYING -> "Paused while you play"
             io.github.matiyaaa.fuse.transfer.WaitReason.WIFI -> "Waiting for Wi-Fi"
+            io.github.matiyaaa.fuse.transfer.WaitReason.DEVICE -> "Waiting for ${t.waitingFor ?: "the other device"}"
             null -> "Waiting"
         }
         TransferStatus.PAUSED -> "Paused"

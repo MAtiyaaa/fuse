@@ -30,6 +30,7 @@ include(
     ":core:sync",
     ":core:transfer",
     ":core:romm",
+    ":core:reach",
     ":ui:fuseline",
     ":ui:designsystem",
     ":ui:player",

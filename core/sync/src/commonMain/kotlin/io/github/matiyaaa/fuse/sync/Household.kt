@@ -269,5 +269,24 @@ interface Household {
     }
 }
 
+/** Moving a game's bytes from another device: directly when it answers, through the host otherwise. */
+interface PeerBytes {
+    /** Leave from the host to fetch [files] of [game] from [source], with its key opened. */
+    suspend fun openTicket(source: String, game: String, files: List<String>): OpenTicket
+
+    /** Whether [ticket]'s source answers directly on the home network, quickly. */
+    suspend fun reachable(ticket: PeerTicket): Boolean
+
+    /**
+     * [length] bytes of [file] from [offset], straight from the device ([direct]) or through the
+     * host. [write] gets them as they come (a buffer, how much of it, and the file's whole size when
+     * the answer says it). Returns how many bytes came.
+     */
+    suspend fun fetch(open: OpenTicket, file: String, offset: Long, length: Long, direct: Boolean, write: suspend (ByteArray, Int, Long?) -> Unit): Long
+}
+
+/** A ticket with its key, ready to sign requests with. */
+class OpenTicket(val ticket: PeerTicket, val key: String)
+
 /** A device seen this recently is online. */
 const val ONLINE_MS: Long = 2 * 60_000L
