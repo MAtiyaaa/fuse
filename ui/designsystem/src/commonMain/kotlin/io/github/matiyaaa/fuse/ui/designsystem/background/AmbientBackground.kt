@@ -51,7 +51,10 @@ fun AmbientBackground(
     val scene = remember(style, accent, ambient.secondary, colors, k, fusi) {
         sceneFor(style, SceneLook(accent, ambient.secondary?.let { Color(it) }, colors, k), fusi)
     }
-    if (animate && style.moves && ambient.speed > 0f && k > 0f) {
+    val moving = animate && style.moves && ambient.speed > 0f && k > 0f
+    // A room at rest is drawn once into one picture and shown as that picture every frame.
+    val flat = remember { io.github.matiyaaa.fuse.ui.designsystem.effects.FlatLayer() }
+    if (moving) {
         // Slow scenes ask for fewer frames than the caller allows; nothing moves faster than it needs.
         val rate = minOf(fps, scene.fps).coerceAtLeast(1)
         LaunchedEffect(rate, ambient.speed) {
@@ -69,10 +72,18 @@ fun AmbientBackground(
         }
     }
     Canvas(modifier.fillMaxSize().graphicsLayer()) {
-        drawRect(colors.ink)
-        scene.draw(this, time)
-        // Scenes are mostly soft light on a dark room: grain keeps them from banding.
-        drawGrain()
+        if (moving) {
+            drawRect(colors.ink)
+            scene.draw(this, time)
+            // Scenes are mostly soft light on a dark room: grain keeps them from banding.
+            drawGrain()
+        } else {
+            flat.draw(this, scene) {
+                drawRect(colors.ink)
+                scene.draw(this, time)
+                drawGrain()
+            }
+        }
     }
 }
 

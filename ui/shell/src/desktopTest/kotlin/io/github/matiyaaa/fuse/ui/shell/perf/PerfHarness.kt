@@ -136,6 +136,22 @@ class PerfHarness {
             driver.home()
             driver.settle(1_500)
             measure("idle-home", frames = 20, everyFrames = 1000) { }
+            // What the rest costs, layer by layer: Home without the room's art, Settings, and nothing at all.
+            if (only.any { it.startsWith("idle") }) {
+                store.updatePrefs { it.copy(showHero = false) }
+                driver.settle(1_000)
+                measure("idle-home-noart", frames = 20, everyFrames = 1000) { }
+                store.updatePrefs { it.copy(showHero = true) }
+                driver.openSettings()
+                driver.settle(1_500)
+                measure("idle-settings", frames = 20, everyFrames = 1000) { }
+                val shown = driver.view
+                driver.view = io.github.matiyaaa.fuse.ui.shell.audit.AuditView.Blank
+                driver.settle(500)
+                measure("idle-blank", frames = 20, everyFrames = 1000) { }
+                driver.view = shown
+                driver.settle(1_500)
+            }
             switch("switch-systems-cold", 1)
             switch("switch-library-cold", 2)
             switch("switch-systems-warm", 1)

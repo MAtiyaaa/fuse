@@ -440,6 +440,37 @@ internal fun AuditDriver.systemsScreens(exhaustive: Boolean) {
         }
     }
 
+    scenario("systems", "editing on a two-screen handheld") {
+        useLibrary()
+        show(libraryStore, twoScreens)
+        tab(Destination.SYSTEMS)
+        waitFor("Arrange")
+        settle(1_500)
+        shoot("at rest")
+        hold(PadButton.A)
+        settle(800)
+        tap(PadButton.B)
+        settle(600)
+        shoot("arranging")
+        // Options held, left: the chosen system narrows to a small square.
+        router.press(PadButton.X, io.github.matiyaaa.fuse.ui.designsystem.input.InputSource.GAMEPAD)
+        settle(700)
+        tap(PadButton.DPAD_LEFT)
+        router.release(PadButton.X, io.github.matiyaaa.fuse.ui.designsystem.input.InputSource.GAMEPAD)
+        settle(800)
+        shoot("one system made small")
+        tap(PadButton.DPAD_RIGHT)
+        tap(PadButton.A)
+        tap(PadButton.DPAD_RIGHT)
+        settle(600)
+        shoot("carrying the next one along")
+        tap(PadButton.A)
+        tap(PadButton.B)
+        settle(800)
+        shoot("done")
+        show(libraryStore)
+    }
+
     scenario("systems", "small tiles") {
         useLibrary()
         val systems = libraryStore.library.platforms.value.filter { it.gameCount > 0 }
