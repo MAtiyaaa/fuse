@@ -36,5 +36,8 @@ page, and Fuse draws far less on every frame.
   back to its sizes by itself.
 - **Arranging could turn a handheld's board into a TV's.** The board keeps the kind of screen it
   was shown on while you arrange, whatever room the header leaves it.
+- **The Add system space could reach past the screen's edge.** On a Systems page centred on a TV or
+  a handheld, the space for adding a system now stays inside the board, on the next row when the
+  current one is full.
 - **Fuse's performance measurements opened on setup.** The measuring harness marks setup done after
   the store reads its saved settings, so it measures Home, Systems and the Library again.

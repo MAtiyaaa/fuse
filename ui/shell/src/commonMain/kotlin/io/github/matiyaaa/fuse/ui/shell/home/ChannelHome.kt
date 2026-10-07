@@ -326,9 +326,11 @@ internal fun ChannelBoard(app: AppState, space: BoardSpace, page: Int, pageKey: 
         val geometry = with(density) { BoardGeometry(columns, cellW.toPx(), cellH.toPx(), gapX.toPx(), gapY.toPx(), offsetX = spare * (cellW + gapX).toPx() / 2) }
         val shown = editor.preview ?: committed
         // Arranging: the first free place adds a widget (hidden while something is being changed).
+        // On a centred board it stays inside the columns the board shows, so it never reaches past
+        // the screen's edge.
         val addRect = if (arranging && op == null) BoardGrid.layout(
             committed.rects.map { (id, r) -> BoardGrid.Item(id, r.size, r.spot) } + BoardGrid.Item(ADD_KEY, space.addSize, null),
-            columns,
+            columns - spare,
         )[ADD_KEY] else null
         val usedRows = maxOf(shown.rows, op?.target?.bottom ?: 0, addRect?.bottom ?: 0)
         // While arranging one spare row shows below, so there is always somewhere to put a widget.
