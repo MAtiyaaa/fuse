@@ -86,7 +86,11 @@ class PerfHarness {
             val driver = AuditDriver(this, size, router, root, cache, File(root.parentFile, "fuse-perf-sd"), scope)
             setContent { CompositionLocalProvider(LocalDensity provides Density(size.density)) { driver.Content() } }
             val store = runBlocking { perfStore(driver) }
-            driver.show(store)
+            // The store reads its saved settings as it starts, after setup was marked done: mark it again.
+            store.updatePrefs { it.copy(onboardingDone = true) }
+            // -Dfuse.perf.device=cpu measures a device drawing without a graphics card, the slowest kind.
+            val cpu = System.getProperty(DEVICE_PROPERTY) == "cpu"
+            driver.show(store, if (cpu) io.github.matiyaaa.fuse.ui.shell.audit.AuditPlatform(size, drawing = io.github.matiyaaa.fuse.ui.shell.platform.DrawingInfo("Software", gpu = false)) else driver.platform)
             driver.waitFor("Continue playing", 30_000)
             driver.settle(2_000)
 
@@ -98,18 +102,22 @@ class PerfHarness {
                     start()
                 }
                 val times = ArrayList<Double>(frames)
+                // Each frame's span in wall time, to put the profile's samples into the frame they fell in.
+                val spans = ArrayList<Pair<java.time.Instant, java.time.Instant>>(frames)
                 for (f in 0 until frames) {
                     if (f % everyFrames == 0) action(f / everyFrames)
+                    val w0 = java.time.Instant.now()
                     val t0 = System.nanoTime()
                     mainClock.advanceTimeBy(FRAME_MS)
                     times += (System.nanoTime() - t0) / 1e6
+                    spans += w0 to java.time.Instant.now()
                 }
                 recording.stop()
                 val jfr = File(outDir, "$name.jfr")
                 recording.dump(jfr.toPath())
                 recording.close()
                 results += name to times
-                profiles += name to profile(jfr)
+                profiles += name to profile(jfr) + perFrame(jfr, spans, times)
                 println("Perf: $name ${summary(times)}")
                 driver.settle(600)
             }
@@ -124,6 +132,10 @@ class PerfHarness {
                 val first = results.last().second.take(3).joinToString(" ") { "%.1f".format(it) }
                 println("Perf: $name first frames $first ms, done in ${results.last().second.indexOfLast { it > FRAME_MS * 0.5 }.coerceAtLeast(0) * FRAME_MS} ms")
             }
+            // Home at rest: what a frame costs with nothing changing.
+            driver.home()
+            driver.settle(1_500)
+            measure("idle-home", frames = 20, everyFrames = 1000) { }
             switch("switch-systems-cold", 1)
             switch("switch-library-cold", 2)
             switch("switch-systems-warm", 1)
@@ -254,6 +266,48 @@ class PerfHarness {
         }
     }
 
+    /**
+     * The first frames of an interaction one by one: their time, and how it splits between
+     * composition, layout and drawing (from the profile's samples in each frame's span), with Fuse's
+     * own code that took the most of the work that isn't drawing. Drawing is what a graphics card
+     * takes over on a device; the rest is what every device pays.
+     */
+    private fun perFrame(jfr: File, spans: List<Pair<java.time.Instant, java.time.Instant>>, times: List<Double>, first: Int = 6): String {
+        val events = RecordingFile.readAllEvents(jfr.toPath()).filter {
+            (it.eventType.name == "jdk.ExecutionSample" || it.eventType.name == "jdk.NativeMethodSample") &&
+                it.getThread("sampledThread")?.javaName?.startsWith("AWT-EventQueue") == true
+        }
+        return buildString {
+            appendLine("Frames one by one (samples every 2 ms):")
+            for (i in 0 until minOf(first, spans.size)) {
+                val (a, b) = spans[i]
+                val inFrame = events.filter { !it.startTime.isBefore(a) && !it.startTime.isAfter(b) }
+                val phases = HashMap<String, Int>()
+                val work = HashMap<String, Int>()
+                for (e in inFrame) {
+                    val names = e.stackTrace?.frames?.map { "${it.method.type.name}.${it.method.name}" } ?: continue
+                    val phase = phaseOf(names)
+                    phases.merge(phase, 1, Int::plus)
+                    if (phase != "draw") names.filter { it.startsWith("io.github.matiyaaa") }.map { it.substringBefore("\$\$Lambda") }.distinct().forEach { work.merge(it, 1, Int::plus) }
+                }
+                appendLine(
+                    "  frame $i: %.1f ms  (".format(times[i]) +
+                        listOf("compose", "layout", "draw", "other").joinToString("  ") { "$it ${(phases[it] ?: 0) * 2} ms" } + ")",
+                )
+                work.entries.sortedByDescending { it.value }.take(6).forEach { appendLine("      ${it.value * 2} ms  ${it.key}") }
+            }
+        }
+    }
+
+    private fun phaseOf(names: List<String>): String = names.firstNotNullOfOrNull { n ->
+        when {
+            n.startsWith("org.jetbrains.skia") || ".draw" in n || "DrawScope" in n || "GraphicsLayer" in n || "RenderNode" in n -> "draw"
+            "MeasureAndLayoutDelegate" in n || ".measure" in n || ".remeasure" in n || ".placeAt" in n || "LayoutNode.layout" in n -> "layout"
+            "Recomposer" in n || "ComposerImpl" in n || "recompose" in n -> "compose"
+            else -> null
+        }
+    } ?: "other"
+
     private fun writeSummary() {
         val out = buildString {
             appendLine("| Interaction | Frames | Mean ms | p50 | p95 | Max |")
@@ -277,6 +331,7 @@ class PerfHarness {
         const val DIR_PROPERTY = "fuse.perf.dir"
         const val ONLY_PROPERTY = "fuse.perf.only"
         private const val EXTRA_GAMES = 600
+        private const val DEVICE_PROPERTY = "fuse.perf.device"
         private const val FRAME_MS = 16L
     }
 }
