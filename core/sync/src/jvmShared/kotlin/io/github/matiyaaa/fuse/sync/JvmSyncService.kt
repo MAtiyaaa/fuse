@@ -69,6 +69,12 @@ class JvmSyncService(
 
     private var client: SyncClient? = null
     private var device: SyncDevice? = null
+
+    /** The household's games through this device's host (see [Household]). */
+    val householdHere: JvmHousehold by lazy {
+        JvmHousehold(File(dir, "household"), scope, { client }, { cached.deviceId }, { cached }, busy = { _nowPlaying.value != null }, clock = clock)
+    }
+    override val household: Household get() = householdHere
     private var hostServer: SyncHost? = null
     /** The host as its own process (the background service), managed through its admin calls. */
     private var hostAdmin: HostAdmin? = null
@@ -301,8 +307,10 @@ class JvmSyncService(
                     if (!caughtUp) {
                         caughtUp = true
                         scope.launch(Dispatchers.IO) { runCatching { convergeAll() } }
+                        scope.launch(Dispatchers.IO) { runCatching { householdHere.connected() } }
                     }
                     val page = c.events(since, waitSeconds = 25)
+                    householdHere.woken(page.wake)
                     if (page.events.isNotEmpty()) {
                         convergeLater(page.events)
                         device?.saw(page.seq)
@@ -754,6 +762,7 @@ class JvmSyncService(
     override fun stop() {
         loop?.cancel()
         nudge?.cancel()
+        householdHere.off()
         hostServer?.stop()
         responder?.stop()
         hostServer = null
@@ -1823,6 +1832,7 @@ class JvmSyncService(
             }
             loop?.cancel()
             nudge?.cancel()
+            householdHere.off()
             watch?.job?.cancel()
             watch = null
             _nowPlaying.value = null

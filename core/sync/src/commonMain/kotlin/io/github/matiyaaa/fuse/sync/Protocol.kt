@@ -17,6 +17,16 @@ object SyncApi {
     /** The UDP port hosts answer discovery on, and the port they serve on by default. */
     const val DISCOVERY_PORT = 47310
     const val DEFAULT_PORT = 47311
+
+    /** Where a device answers other devices for its games (the next free port when taken). */
+    const val PEER_PORT = 47312
+    const val PEER_BASE = "/peer/v1"
+
+    /** The household's games (0.3.9): lists, requests between devices, passing games through. */
+    const val FEATURE_HOUSEHOLD = "household"
+
+    /** The most a piece of a game passed through the host carries (a tunnel refuses big uploads). */
+    const val RELAY_PIECE = 32L * 1024 * 1024
 }
 
 /** Which way a device reaches its host: at home, or from outside. */
@@ -36,6 +46,8 @@ data class HostHello(
     val outside: String = "",
     /** It has an account, so a device can join with its username and password when nobody is at a screen. */
     val account: Boolean = false,
+    /** What this host offers beyond saves and records ([SyncApi.FEATURE_HOUSEHOLD]); a device asks only for what is listed. */
+    val features: List<String> = emptyList(),
 )
 
 /** A device asking to join: the code shown on the host, and who the device is. */
@@ -249,7 +261,12 @@ data class Presence(
 data class PresenceNote(val profile: String, val game: String, val title: String = "", val state: String? = null, val since: Long = 0)
 
 @Serializable
-data class JournalPage(val events: List<JournalEvent>, val seq: Long)
+data class JournalPage(
+    val events: List<JournalEvent>,
+    val seq: Long,
+    /** What is waiting for this device besides the journal (see [HouseholdHost]): never kept, only told. */
+    val wake: List<String> = emptyList(),
+)
 
 /** Every slot's newest revision for a profile, for a device starting fresh or catching up in full. */
 @Serializable

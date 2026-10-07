@@ -107,6 +107,16 @@ data class SyncSettings(
     val settings: Boolean = true,
     /** Games themselves, off: they are large, and Cartridge or the person's own copies usually have them. */
     val gameFiles: Boolean = false,
+    /** This device's games are listed for the household (Remote Library), so others can see and fetch them. */
+    val shareLibrary: Boolean = true,
+    /** Other devices may send games here (they land where RomM's downloads do, or [receiveFolder]). */
+    val acceptSends: Boolean = true,
+    /** Where games sent here go: a library folder of the person's; empty uses each system's folder, as RomM does. */
+    val receiveFolder: String = "",
+    /** Games may pass through the host when this device and another can't reach each other. */
+    val relay: Boolean = true,
+    /** Other devices' games show in the RomM tab ("Not on RomM, from another device"). */
+    val showInRomm: Boolean = true,
     val keepRecent: Int = 10,
     val keepDays: Int = 14,
     val keepWeeks: Int = 8,
