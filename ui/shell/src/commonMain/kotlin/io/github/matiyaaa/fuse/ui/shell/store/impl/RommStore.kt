@@ -931,7 +931,7 @@ internal class DefaultRommOps(
     override suspend fun uploadPlan(game: GameId): RommUploadPlan? = withContext(Dispatchers.Default) {
         val g = ctx.data.games.get(game) ?: return@withContext null
         val c = client
-        val files = runCatching { UploadFiles.collect(ctx.services.fs, g.location, g.discs) }.getOrDefault(emptyList())
+        val files = runCatching { UploadFiles.collect(ctx.services.fs, g.location, g.discs, g.content) }.getOrDefault(emptyList())
         val platform = ctx.platform(g.platformId)
         val rommPlatform = mirror.platforms(server).firstOrNull { p -> ctx.platforms.resolveFolder(p.slug)?.id == g.platformId }
             ?: runCatching { c?.platforms() }.getOrNull()?.firstOrNull { p -> ctx.platforms.resolveFolder(p.slug)?.id == g.platformId }
@@ -956,7 +956,7 @@ internal class DefaultRommOps(
         if (plan.needsPermission) return@withContext "Fuse's RomM sign-in can only read. Pair Fuse again and allow uploads."
         val pid = plan.platformId ?: return@withContext plan.problem ?: "RomM has no such system."
         val g = ctx.data.games.get(game) ?: return@withContext "That game isn't in the library any more."
-        val files = UploadFiles.collect(ctx.services.fs, g.location, g.discs)
+        val files = UploadFiles.collect(ctx.services.fs, g.location, g.discs, g.content)
         val job = RommUploadJob(server, pid, files.map { RommUploadFile(it.path, it.name, it.folder, it.sizeBytes) }, romId = g.links.rommRomId, scanAfter = settings.scanAfterUpload)
         val volumes = engine.drives.volumes.value
         transfers.enqueue(

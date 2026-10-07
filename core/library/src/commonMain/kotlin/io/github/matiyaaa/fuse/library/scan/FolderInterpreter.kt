@@ -11,6 +11,7 @@ import io.github.matiyaaa.fuse.library.content.PsPackages
 import io.github.matiyaaa.fuse.library.parse.FilenameParser
 import io.github.matiyaaa.fuse.library.parse.NameFlags
 import io.github.matiyaaa.fuse.library.parse.Serials
+import io.github.matiyaaa.fuse.library.parse.SwitchNames
 import io.github.matiyaaa.fuse.model.ChildContent
 import io.github.matiyaaa.fuse.model.ContentKind
 import io.github.matiyaaa.fuse.model.Disc
@@ -44,7 +45,12 @@ data class FolderScanResult(
     val listed: Set<String> = emptySet(),
     /** Emulator data folders skipped whole: nothing below them is a game. */
     val skipped: Set<String> = emptySet(),
+    /** Files that were games of their own and now belong to another game (a copy of it, its update or DLC). */
+    val absorbed: Set<String> = emptySet(),
 )
+
+/** A folder the person keeps one system's updates or DLC in, outside its games folder. */
+data class ContentFolder(val kind: ContentKind, val path: String)
 
 /**
  * Decides what the folders inside a platform folder are, following the effective [FolderPolicy].
@@ -101,13 +107,37 @@ class FolderInterpreter(
         sourceId: LibrarySourceId,
         policies: FolderPolicyResolver = FolderPolicyResolver.CatalogDefaults,
         listing: List<FsEntry>? = null,
+        contentFolders: List<ContentFolder> = emptyList(),
         onFolder: suspend (String) -> Unit = {},
     ): FolderScanResult {
         val walk = Walk(platform, sourceId, policies, onFolder)
         val root = FsPath.normalize(folderPath)
         walk.visited += fs.canonical(root) ?: root
         val children = listing ?: walk.list(root) ?: return walk.result(emptyList())
-        return walk.result(scanLevel(root, children, depth = 0, walk = walk))
+        val games = scanLevel(root, children, depth = 0, walk = walk)
+        if (!walk.switch) return walk.result(games)
+        // Folders the person keeps updates and DLC in, anywhere: their files join their games.
+        val extra = ArrayList<ScannedGame>()
+        for (folder in contentFolders) {
+            val path = FsPath.normalize(folder.path)
+            if (path.isEmpty() || path == root || path.startsWith("$root/")) continue
+            extra += contentFiles(path, folder.kind, 0, walk)
+        }
+        return walk.result(SwitchContent.consolidate(games + extra, walk::sizeOf, walk.forced, walk.absorbed))
+    }
+
+    /** Every Switch file in [dir] (and its folders, a few levels down), each of [kind]. */
+    private suspend fun contentFiles(dir: String, kind: ContentKind, depth: Int, walk: Walk): List<ScannedGame> {
+        if (depth > 3 || !walk.visited.add(fs.canonical(dir) ?: dir)) return emptyList()
+        val children = walk.list(dir) ?: return emptyList()
+        val grouping = grouper.group(dir, children, walk::isGameFile)
+        val out = ArrayList<ScannedGame>()
+        for (group in grouping.groups) {
+            walk.forced[FsPath.normalize(group.primary.path)] = kind
+            out += fileGame(group, emptyList(), walk)
+        }
+        for (sub in children.filter { it.isDirectory && !it.name.startsWith(".") }) out += contentFiles(sub.path, kind, depth + 1, walk)
+        return out
     }
 
     /**
@@ -144,11 +174,31 @@ class FolderInterpreter(
         /** Package headers read during this walk, by path. */
         val packages = HashMap<String, PackageInfo>()
 
+        /** Switch names follow their own rules (see [SwitchContent]). */
+        val switch = platform.id.value in SwitchContent.platforms
+
+        /** Each game file's own size, by path. */
+        val sizes = HashMap<String, Long>()
+
+        /** Files from folders set aside for updates or DLC, with that kind. */
+        val forced = HashMap<String, ContentKind>()
+
+        /** Files merged into another game (see [FolderScanResult.absorbed]). */
+        val absorbed = HashSet<String>()
+
+        fun sizeOf(path: String): Long? = sizes[FsPath.normalize(path)]
+
         /** UPDATE or DLC for a package that isn't a game, else what its name says. */
-        fun kindOf(group: FileGroup): ContentKind? = packages[group.primary.path]?.kind ?: LooseContent.markerKind(group)
+        fun kindOf(group: FileGroup): ContentKind? {
+            packages[group.primary.path]?.kind?.let { return it }
+            if (!switch) return LooseContent.markerKind(group)
+            forced[FsPath.normalize(group.primary.path)]?.let { return it }
+            return SwitchContent.kindOf(group.primary.name, FsPath.parent(group.primary.path)?.let(FsPath::name))
+        }
 
         /** What tells titles apart: a package's title id, else the name. */
-        fun titleKeyOf(group: FileGroup): String = packages[group.primary.path]?.titleId ?: LooseContent.titleKey(group.parsed.baseTitle)
+        fun titleKeyOf(group: FileGroup): String = packages[group.primary.path]?.titleId
+            ?: if (switch) SwitchContent.titleKey(group.primary.name) else LooseContent.titleKey(group.parsed.baseTitle)
 
         fun isHidden(game: ScannedGame): Boolean =
             FsPath.normalize(game.launchPath) in hidden || FsPath.normalize(game.path) in hidden
@@ -174,12 +224,13 @@ class FolderInterpreter(
         }
 
         fun isGameFile(entry: FsEntry): Boolean =
-            !entry.isDirectory && entry.extension in platform.extensions &&
-                !ScanRules.isIgnoredFile(entry.name) && !ScanRules.isBiosFile(platform, entry.name)
+            (!entry.isDirectory && entry.extension in platform.extensions &&
+                !ScanRules.isIgnoredFile(entry.name) && !ScanRules.isBiosFile(platform, entry.name))
+                .also { if (it) sizes[FsPath.normalize(entry.path)] = entry.sizeBytes }
 
         fun result(games: List<ScannedGame>): FolderScanResult {
             val gamePaths = games.map { it.path }.toSet()
-            return FolderScanResult(games, complete, errors.toList(), folders, listed - gamePaths, skipped.toSet())
+            return FolderScanResult(games, complete, errors.toList(), folders, listed - gamePaths, skipped.toSet(), absorbed - gamePaths)
         }
     }
 
@@ -206,7 +257,8 @@ class FolderInterpreter(
             // Its storage folders (Cemu's mlc01/usr/title/00050000) only lead to the games inside.
             games += interpret(sub, if (native && isEmulatorStorage(sub.name)) depth else depth + 1, walk)
         }
-        return foldUpdates(games, walk)
+        val folded = foldUpdates(games, walk)
+        return if (walk.switch) SwitchContent.consolidate(folded, walk::sizeOf, walk.forced, walk.absorbed) else folded
     }
 
     /** Interprets [folder], dropping games whose files a playlist higher up already owns. */
@@ -249,7 +301,8 @@ class FolderInterpreter(
             if (layout.otherDirs.isNotEmpty()) {
                 val nested = layout.otherDirs.flatMap { interpret(it, depth + 1, walk) }
                 if (nested.isNotEmpty()) {
-                    return attach(grouping.groups, walk).map { (g, extra) -> fileGame(g, extra, walk) } + nested
+                    val here = attach(grouping.groups, walk).map { (g, extra) -> fileGame(g, extra, walk) } + nested
+                    return if (walk.switch) SwitchContent.consolidate(here, walk::sizeOf, walk.forced, walk.absorbed) else here
                 }
             }
             return listOf(multiFileGame(folder, children, grouping, layout, walk))
@@ -323,7 +376,7 @@ class FolderInterpreter(
             extraGroups += baseGroups.filter { it !== candidate }
         }
 
-        for (group in extraGroups) content += LooseContent.child(walk.packages[group.primary.path]?.kind ?: LooseContent.childKind(group), group)
+        for (group in extraGroups) content += LooseContent.child(walk.packages[group.primary.path]?.kind ?: childKind(group, main, walk), group)
 
         val grouped = grouping.groups.flatMap { g -> g.members.map { FsPath.normalize(it.path) } }.toSet()
         for (file in children.filter { !it.isDirectory }) {
@@ -360,6 +413,23 @@ class FolderInterpreter(
         )
     }
 
+    /**
+     * What a file beside a game's main file is. On Switch its name decides (an update or DLC), and a
+     * smaller file named after the game with something more in brackets (`Game [New Uniform Set]`)
+     * is DLC; elsewhere the usual markers.
+     */
+    private fun childKind(group: FileGroup, main: FileGroup?, walk: Walk): ContentKind {
+        if (!walk.switch) return LooseContent.childKind(group)
+        walk.kindOf(group)?.let { return it }
+        val name = SwitchNames.read(group.primary.name)
+        if (main != null && name.extra && group.sizeBytes < main.sizeBytes &&
+            name.key == SwitchNames.read(main.primary.name).key
+        ) {
+            return ContentKind.DLC
+        }
+        return LooseContent.childKind(group)
+    }
+
     /** The main game among [groups]: playlists and disc sets first, clean dumps over hacks and betas. */
     private fun pickMain(groups: List<FileGroup>, folderTitle: String, platform: Platform): FileGroup? =
         groups.maxWithOrNull(
@@ -379,12 +449,14 @@ class FolderInterpreter(
         if (NameFlags.VERIFIED in flags) s += 10
         if (LooseContent.sameTitle(folderTitle, group.parsed.baseTitle)) s += 15
         s -= 30 * flags.count { it in DISFAVOURED_FLAGS }
-        if (platform.id.value == "switch") {
+        if (platform.id.value in SwitchContent.platforms) {
             s += when (group.primary.extension) {
-                "xci" -> 5
-                "nsp" -> 4
+                "xci", "xcz" -> 5
+                "nsp", "nsz" -> 4
                 else -> 0
             }
+            // "Game [New Uniform Set]" beside "Game" is something for the game, not the game.
+            if (SwitchNames.read(group.primary.name).extra) s -= 20
         }
         return s
     }
@@ -603,6 +675,8 @@ class FolderInterpreter(
      * (a package game, a disc or a folder named with it). One whose game isn't here stays on its own.
      */
     private fun attach(groups: List<FileGroup>, walk: Walk): List<Pair<FileGroup, List<ChildContent>>> {
+        // Switch updates and DLC join their games over the whole system at once (SwitchContent).
+        if (walk.switch) return groups.map { it to emptyList() }
         if (walk.packages.isEmpty()) return LooseContent.attach(groups)
         val extras = groups.filter { walk.packages[it.primary.path]?.kind != null }
         val rest = groups.filter { g -> extras.none { it === g } }

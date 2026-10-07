@@ -626,7 +626,7 @@ internal class DefaultReachOps(
             list.mapNotNull { s ->
                 val g = ctx.data.games.get(s.id) ?: return@mapNotNull null
                 val keys = ids[s.id.value].orEmpty().ifEmpty { return@mapNotNull null }
-                val files = runCatching { UploadFiles.collect(ctx.services.fs, g.location, g.discs) }.getOrDefault(emptyList())
+                val files = runCatching { UploadFiles.collect(ctx.services.fs, g.location, g.discs, g.content) }.getOrDefault(emptyList())
                 if (files.isEmpty()) return@mapNotNull null
                 val folder = g.location.kind == LocationKind.FOLDER || (files.size > 1 && files.all { FsPath.isWithin(FsPath.normalize(it.path), FsPath.normalize(g.location.path)) } && g.location.kind != LocationKind.FILE)
                 val rel = files.map { f -> (if (f.folder.isEmpty()) f.name else f.folder + "/" + f.name) to f }

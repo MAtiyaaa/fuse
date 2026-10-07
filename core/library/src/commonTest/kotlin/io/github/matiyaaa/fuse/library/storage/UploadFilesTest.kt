@@ -1,6 +1,8 @@
 package io.github.matiyaaa.fuse.library.storage
 
 import io.github.matiyaaa.fuse.library.InMemoryFileSystem
+import io.github.matiyaaa.fuse.model.ChildContent
+import io.github.matiyaaa.fuse.model.ContentKind
 import io.github.matiyaaa.fuse.model.Disc
 import io.github.matiyaaa.fuse.model.FolderInterpretation
 import io.github.matiyaaa.fuse.model.GameLocation
@@ -51,6 +53,45 @@ class UploadFilesTest {
         )
         assertEquals(listOf("Pepsiman.m3u", "Pepsiman (Disc 1).chd", "Pepsiman (Disc 2).chd"), files.map { it.name })
         assertTrue(files.all { it.folder.isEmpty() })
+    }
+
+    @Test
+    fun aGameBringsItsUpdatesAndDlcFromWhereverTheyAreIntoRommsFolders() = runTest {
+        val fs = InMemoryFileSystem()
+            .file("/roms/switch/Harbor Lights.xci", size = 900)
+            .file("/roms/switch/Harbor Lights v1.1.0.nsp", size = 70)
+            .file("/elsewhere/dlc/Harbor Lights Fog.nsp", size = 5)
+        val loc = GameLocation(LibrarySourceId(1), "/roms/switch/Harbor Lights.xci", LocationKind.FILE, "/roms/switch/Harbor Lights.xci")
+        val content = listOf(
+            ChildContent(ContentKind.UPDATE, "Harbor Lights v1.1.0.nsp", "/roms/switch/Harbor Lights v1.1.0.nsp", false, 70),
+            ChildContent(ContentKind.DLC, "Harbor Lights Fog.nsp", "/elsewhere/dlc/Harbor Lights Fog.nsp", false, 5),
+        )
+        assertEquals(
+            listOf(
+                UploadFile("/roms/switch/Harbor Lights.xci", "Harbor Lights.xci", "", 900),
+                UploadFile("/roms/switch/Harbor Lights v1.1.0.nsp", "Harbor Lights v1.1.0.nsp", "update", 70),
+                UploadFile("/elsewhere/dlc/Harbor Lights Fog.nsp", "Harbor Lights Fog.nsp", "dlc", 5),
+            ),
+            UploadFiles.collect(fs, loc, emptyList(), content),
+        )
+    }
+
+    @Test
+    fun updatesLooseInAGameFolderGoInUpdateAndTheBaseFileIsTheGame() = runTest {
+        val game = "/roms/switch/Moss Garden"
+        val fs = InMemoryFileSystem()
+            .file("$game/base/Moss Garden.nsp", size = 900)
+            .file("$game/Moss Garden v1.1.3.nsp", size = 70)
+            .file("$game/dlc/Seed Pack.nsp", size = 5)
+        val loc = GameLocation(LibrarySourceId(1), game, LocationKind.FOLDER, "$game/base/Moss Garden.nsp", interpretation = FolderInterpretation.MULTI_FILE_GAME)
+        val content = listOf(
+            ChildContent(ContentKind.UPDATE, "Moss Garden v1.1.3.nsp", "$game/Moss Garden v1.1.3.nsp", false, 70),
+            ChildContent(ContentKind.DLC, "Seed Pack.nsp", "$game/dlc/Seed Pack.nsp", false, 5),
+        )
+        val files = UploadFiles.collect(fs, loc, emptyList(), content)
+        // RomM makes the game from the first file, so it goes first and not inside base/.
+        assertEquals(UploadFile("$game/base/Moss Garden.nsp", "Moss Garden.nsp", "", 900), files.first())
+        assertEquals(setOf("update" to "Moss Garden v1.1.3.nsp", "dlc" to "Seed Pack.nsp"), files.drop(1).map { it.folder to it.name }.toSet())
     }
 
     @Test

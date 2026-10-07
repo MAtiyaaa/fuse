@@ -303,11 +303,13 @@ class JvmHousehold(
         keep()
     }
 
-    // One look at the host's requests at a time: two at once (the first after linking, another on a
-    // wake) could answer out of order, the older list landing last and putting a request that is
-    // done back to how it was, with nothing left to say otherwise.
     private val commandsLock = Mutex()
 
+    /**
+     * The household's requests as the host has them now. One at a time: each wake starts one, and
+     * an older answer arriving after a newer one would put a request back as it was (a game that
+     * came over would look still on its way).
+     */
     private suspend fun refreshCommands() {
         commandsLock.withLock {
             val c = client() ?: return

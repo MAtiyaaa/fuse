@@ -181,11 +181,18 @@ class LibraryIndexer(
         var missing = 0
         var forgotten = 0
         if (scan.complete) {
+            val partOfAnother = scan.partOfAnother()
             for (state in known.values) {
                 if (state.id in seen || state.missing || state.path in foundElsewhere) continue
                 // A folder that is still there but isn't a game (a game's own data folder, which
                 // older versions listed as games): forgotten, unless the user did something with it.
                 if (!state.removed && scan.isNotAGame(state.path) && gq.deleteUntouchedFolder(state.id).value > 0) {
+                    db.mediaQueries.deleteOwner(MediaOwner.OfGame(GameId(state.id)).type(), state.id.toString())
+                    forgotten++
+                    continue
+                }
+                // A copy of another game, or an update or DLC that now sits with its game.
+                if (!state.removed && normal(state.path) in partOfAnother && gq.deleteUntouchedGame(state.id).value > 0) {
                     db.mediaQueries.deleteOwner(MediaOwner.OfGame(GameId(state.id)).type(), state.id.toString())
                     forgotten++
                     continue
@@ -263,6 +270,12 @@ internal fun fingerprint(game: ScannedGame, cleaned: String?, tagsJson: String?)
 }
 
 /** True when [path] was read in this scan and found not to be a game, or lies in a skipped data folder. */
+/** Paths that are now part of another game: merged copies, and every game's updates, DLC and other content. */
+private fun PlatformFolderScan.partOfAnother(): Set<String> =
+    (absorbed + games.flatMap { g -> g.content.map { it.path } }).mapTo(HashSet(), ::normal)
+
+private fun normal(path: String): String = path.replace('\\', '/').trimEnd('/')
+
 private fun PlatformFolderScan.isNotAGame(path: String): Boolean {
     if (path in notGames) return true
     val p = path.trimEnd('/')

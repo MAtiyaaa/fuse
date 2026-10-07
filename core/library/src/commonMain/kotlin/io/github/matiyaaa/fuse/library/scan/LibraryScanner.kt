@@ -55,6 +55,8 @@ data class ScanRequest(
      * games too, are still read.
      */
     val leaveOut: Set<PlatformId> = emptySet(),
+    /** Folders each system keeps its updates and DLC in, outside its games folder (Switch). */
+    val contentFolders: Map<PlatformId, List<ContentFolder>> = emptyMap(),
 )
 
 /** Events of [LibraryScanner.scanAsFlow]. */
@@ -168,7 +170,9 @@ class LibraryScanner(
             }
 
             // Steam's manifests are few and cheap to read, and change without touching the folder times.
-            if (request.scope == ScanScope.QUICK && !folder.steamLibrary && isUnchanged(folder.entry, children)) {
+            // A system with updates and DLC kept elsewhere is read again each time: those folders change on their own.
+            val elsewhere = platformsOf(folder).any { !request.contentFolders[it.id].isNullOrEmpty() }
+            if (request.scope == ScanScope.QUICK && !folder.steamLibrary && !elsewhere && isUnchanged(folder.entry, children)) {
                 for (platform in platformsOf(folder)) {
                     unchanged += DiscoveredFolder(folder.path, folder.entry.name, platform.id, folder.entry.modifiedAt)
                 }
@@ -189,6 +193,7 @@ class LibraryScanner(
                     folder.sourceId,
                     request.policies,
                     listing = children,
+                    contentFolders = request.contentFolders[folder.platform.id].orEmpty(),
                 ) {
                     visited++
                     progress(ScanPhase.SCANNING, it)
@@ -211,6 +216,7 @@ class LibraryScanner(
                     complete = result.complete,
                     notGames = result.listed,
                     notGameTrees = result.skipped,
+                    absorbed = result.absorbed,
                 )
             }
             if (complete) rememberState(folder.entry, children)
@@ -258,7 +264,7 @@ class LibraryScanner(
         }
     }
 
-    private fun discoverPlatformFolder(source: LibrarySource, root: FsEntry, explicit: PlatformId?): SourceDiscovery {
+    private suspend fun discoverPlatformFolder(source: LibrarySource, root: FsEntry, explicit: PlatformId?): SourceDiscovery {
         explicit?.let(platforms::byId)?.let { return SourceDiscovery(listOf(PlatformFolder(source.id, it, root))) }
         platforms.resolveFolder(root.name)?.let { return SourceDiscovery(listOf(PlatformFolder(source.id, it, root))) }
         // RomM Structure B platform folder added directly: ".../psx/roms".
@@ -268,7 +274,46 @@ class LibraryScanner(
                 return SourceDiscovery(listOf(PlatformFolder(source.id, it, root, systemName = parentName)))
             }
         }
+        // A folder named for something else ("Games", "My Switch"): its files say what it holds.
+        systemOfFiles(root)?.let { return SourceDiscovery(listOf(PlatformFolder(source.id, it, root))) }
         return SourceDiscovery(unknownFolders = listOf(DiscoveredFolder(root.path, root.name, null, root.modifiedAt)))
+    }
+
+    /**
+     * The one system whose own kind of files fill [folder] and the folders below it (a few levels),
+     * when its name names no system: a folder of game folders full of `.nsp` and `.xci` files is a
+     * Switch folder, whatever it is called. Only file types few systems use count (never `.zip`,
+     * `.iso` or `.bin`), and one system must clearly lead; otherwise null.
+     */
+    private suspend fun systemOfFiles(folder: FsEntry): Platform? {
+        val owners = HashMap<String, MutableList<Platform>>()
+        for (p in platforms.all) for (e in p.extensions) owners.getOrPut(e.lowercase()) { ArrayList() } += p
+        val telling = owners.filterValues { it.size <= 2 }.keys - SNIFF_IGNORED
+        val counts = HashMap<Platform, Int>()
+        var seen = 0
+        var told = 0
+        suspend fun walk(dir: String, depth: Int) {
+            if (depth > SNIFF_DEPTH || seen > SNIFF_ENTRIES) return
+            val children = runCatching { fs.list(dir) }.getOrNull() ?: return
+            for (c in children) {
+                if (++seen > SNIFF_ENTRIES) return
+                if (c.isDirectory) continue
+                val ext = FsPath.extension(c.name).lowercase()
+                if (ext !in telling) continue
+                told++
+                for (p in owners.getValue(ext)) counts[p] = (counts[p] ?: 0) + 1
+            }
+            for (c in children.filter { it.isDirectory && !it.name.startsWith(".") && !ScanRules.isExcludedFolder(it.name, options.extraExcludedFolders) }) {
+                walk(c.path, depth + 1)
+            }
+        }
+        walk(folder.path, 0)
+        if (told < SNIFF_MIN_FILES) return null
+        // Ties (Switch and Switch 2 share .nsp and .xci) go to the system with more of the files, then the older one.
+        val best = counts.entries.sortedWith(
+            compareByDescending<Map.Entry<Platform, Int>> { it.value }.thenBy { it.key.releaseYear ?: Int.MAX_VALUE },
+        ).firstOrNull() ?: return null
+        return best.key.takeIf { best.value * 10 >= told * 8 }
     }
 
     private suspend fun discoverRoot(source: LibrarySource, root: FsEntry): SourceDiscovery {
@@ -317,7 +362,18 @@ class LibraryScanner(
             }
             if (romsDir == null) classify(dir)
         }
-        return SourceDiscovery(found.sortedBy { it.path }, unknown, errors)
+        // Nothing inside is named for a system: a folder of games ("Games/<game>/<files>") is one
+        // system's folder when its files say so; otherwise each unknown folder may say so itself.
+        if (found.isEmpty() && errors.isEmpty()) {
+            systemOfFiles(root)?.let { return SourceDiscovery(listOf(PlatformFolder(source.id, it, root))) }
+        }
+        val named = unknown.mapNotNull { u ->
+            val entry = fs.stat(u.path)?.takeIf { it.isDirectory } ?: return@mapNotNull null
+            systemOfFiles(entry)?.let { u to PlatformFolder(source.id, it, entry, systemName = u.name) }
+        }
+        found += named.map { it.second }
+        val stillUnknown = unknown - named.map { it.first }.toSet()
+        return SourceDiscovery(found.sortedBy { it.path }, stillUnknown, errors)
     }
 
     private suspend fun isUnchanged(folder: FsEntry, children: List<FsEntry>): Boolean {
@@ -452,3 +508,11 @@ class LibraryScanner(
         val WINDOWS_SHORTCUTS = setOf("gog", "epic", "amazon", "pcgame", "lnk", "exe", "bat")
     }
 }
+
+/** How deep, and how many entries, a folder's files are looked at to tell its system. */
+private const val SNIFF_DEPTH = 3
+private const val SNIFF_ENTRIES = 4000
+private const val SNIFF_MIN_FILES = 2
+
+/** File types too common across systems to tell one apart. */
+private val SNIFF_IGNORED = setOf("zip", "7z", "rar", "iso", "bin", "cue", "img", "chd", "m3u", "txt", "exe", "bat", "sh", "lnk", "url", "desktop")

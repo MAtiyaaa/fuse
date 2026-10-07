@@ -79,7 +79,7 @@ private const val CD_IMAGES = "cue chd ccd iso m3u"
 private const val SNES_EXT = "sfc smc fig swc bs st bsx bml dx2 gd3 gd7 mgd bin $CART_ARCHIVES"
 private const val NES_EXT = "nes unf unif 3dsen $CART_ARCHIVES"
 private const val N3DS_EXT = "3ds cci cia cxi 3dsx app axf elf zcci zcxi z3dsx 7z zip"
-private const val SWITCH_EXT = "nsp xci nca nro nso"
+private const val SWITCH_EXT = "nsp xci nsz xcz nca nro nso"
 
 /**
  * The curated platform table. Ids are RomM slugs (docs/research/romm-ra-scrapers.md); aliases add
