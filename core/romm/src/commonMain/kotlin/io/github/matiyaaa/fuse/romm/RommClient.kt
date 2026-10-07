@@ -323,7 +323,7 @@ class RommClient(
      * (an update or DLC beside it). Returns RomM's id for the upload.
      */
     suspend fun startUpload(platformId: Long, fileName: String, size: Long, chunks: Int, romId: Long? = null, folder: String = ""): String {
-        val o = json(HttpMethod.Post, "/api/roms/upload/start") {
+        val o = json(HttpMethod.Post, "/api/roms/upload/start", timeoutMs = START_TIMEOUT_MS) {
             header("x-upload-platform", platformId.toString())
             // A header carries only Latin-1: the real name goes in the body, which RomM prefers.
             header("x-upload-filename", fileName.map { if (it.code in 32..255) it else '_' }.joinToString(""))
@@ -339,16 +339,21 @@ class RommClient(
         return (o["upload_id"] as? JsonPrimitive)?.contentOrNull ?: throw RommException("RomM didn't open the upload.")
     }
 
+    /** Sends one piece of an upload, given time for its size on a slow connection (a home's upload speed from outside). */
     suspend fun uploadChunk(uploadId: String, index: Int, bytes: ByteArray) {
-        call(HttpMethod.Put, "/api/roms/upload/$uploadId", extra = {
+        call(HttpMethod.Put, "/api/roms/upload/$uploadId", timeoutMs = chunkTimeout(bytes.size), extra = {
             header("x-chunk-index", index.toString())
             contentType(ContentType.Application.OctetStream)
             setBody(bytes)
         }) { }
     }
 
+    /**
+     * Finishes an upload: RomM puts the pieces together into the game's file before it answers,
+     * which for a large game takes minutes, so this waits that long.
+     */
     suspend fun completeUpload(uploadId: String) {
-        call(HttpMethod.Post, "/api/roms/upload/$uploadId/complete") { }
+        call(HttpMethod.Post, "/api/roms/upload/$uploadId/complete", timeoutMs = COMPLETE_TIMEOUT_MS) { }
     }
 
     suspend fun cancelUpload(uploadId: String) {
@@ -378,6 +383,18 @@ class RommClient(
 
         /** RomM's chunk size for uploads: well under its 64 MB limit, small enough to retry cheaply. */
         const val CHUNK_BYTES = 8 * 1024 * 1024
+
+        /** How long opening an upload may take. */
+        const val START_TIMEOUT_MS = 120_000L
+
+        /** How long RomM may take to put a finished upload together (a large game's file is written whole). */
+        const val COMPLETE_TIMEOUT_MS = 30 * 60_000L
+
+        /** The slowest connection a piece of an upload is given time for: 16 KB a second. */
+        private const val SLOWEST_UPLOAD_BYTES_PER_SECOND = 16 * 1024L
+
+        /** Time for sending [bytes] at the slowest upload speed Fuse allows for, never under two minutes. */
+        fun chunkTimeout(bytes: Int): Long = maxOf(120_000L, bytes * 1000L / SLOWEST_UPLOAD_BYTES_PER_SECOND)
 
         /** The paths in an OpenAPI document, without holding the rest of it. */
         internal fun openApiPaths(text: String): Set<String> {

@@ -50,6 +50,10 @@ class FakeRomm(var version: String = "4.4.0") {
     val uploadMeta = ConcurrentHashMap<String, Triple<String, Long, String>>()
     val received = CopyOnWriteArrayList<Pair<String, ByteArray>>()
     @Volatile var scans = 0
+    /** Putting an upload together takes longer than Fuse waits for an answer (a big game on a slow disk): the file still lands. */
+    @Volatile var slowComplete = false
+    /** This many pieces of uploads take too long to arrive (a slow connection) and are lost. */
+    @Volatile var slowChunks = 0
     @Volatile var pairingApproved = false
 
     val client = HttpClient(MockEngine { req -> handle(req) })
@@ -155,7 +159,8 @@ class FakeRomm(var version: String = "4.4.0") {
             }
             path.startsWith("/api/roms/upload/") && path.endsWith("/complete") -> {
                 val id = path.removePrefix("/api/roms/upload/").removeSuffix("/complete")
-                val parts = uploads.remove(id)!!
+                // As RomM: the upload is claimed by the first answer, so asking again finds nothing.
+                val parts = uploads.remove(id) ?: return json("""{"detail":"Upload session not found or expired"}""", HttpStatusCode.NotFound)
                 val all = parts.toSortedMap().values.fold(ByteArray(0)) { a, b -> a + b }
                 val (name, platform, folder) = uploadMeta[id]!!
                 received += (if (folder.isEmpty()) name else "$folder/$name") to all
@@ -163,9 +168,11 @@ class FakeRomm(var version: String = "4.4.0") {
                     val newId = (games.maxOfOrNull { it.id } ?: 0) + 1
                     games += Game(newId, platform, games.firstOrNull { it.platformId == platform }?.slug ?: "gba", name.substringBeforeLast('.'), name, listOf(Triple(newId * 100, name, all)))
                 }
+                if (slowComplete) throw io.ktor.client.plugins.HttpRequestTimeoutException(req.url.toString(), 1_000)
                 return respond("", HttpStatusCode.Created)
             }
             path.startsWith("/api/roms/upload/") -> {
+                if (slowChunks > 0) { slowChunks--; throw io.ktor.client.plugins.HttpRequestTimeoutException(req.url.toString(), 1_000) }
                 val id = path.removePrefix("/api/roms/upload/")
                 val index = req.headers["x-chunk-index"]!!.toInt()
                 uploads[id]!![index] = (req.body as OutgoingContent.ByteArrayContent).bytes()
