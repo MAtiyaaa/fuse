@@ -52,8 +52,7 @@ enum class ArtSlot { ICON, BOX, WIDE, HERO, SYSTEM }
  * display face with a soft shadow; covers, wide and hero slots set the full title over a dark
  * floor. The platform tag is a small uppercase pill.
  *
- * Cheap to draw: every brush and path is built once per size and drawn once into a picture that is
- * shown from then on, since nothing moves.
+ * Cheap to draw: every brush and path is built once per size and recorded once, since nothing moves.
  */
 @Composable
 fun GeneratedArt(
@@ -230,9 +229,10 @@ private fun CacheDrawScope.composeArt(seed: Int, accent: Color, floor: Boolean):
         else -> facets(w, h, rng, leanRight)
     }
 
-    // Nothing here moves: the picture is drawn once at this size and shown as one image after that,
-    // instead of six gradients and a pattern of dozens of shapes on every tile, every frame.
-    val flat = io.github.matiyaaa.fuse.ui.designsystem.effects.FlatLayer()
+    // Nothing here moves: the art is recorded once at this size, so a tile lifting or a row scrolling
+    // never records its six gradients and dozens of shapes again. The graphics card draws it; it is
+    // never painted into a bitmap by the processor (see FlatLayer).
+    val flat = io.github.matiyaaa.fuse.ui.designsystem.effects.FlatLayer(obtainGraphicsLayer(), cached = false)
     return onDrawBehind {
         flat.draw(this, null) {
             drawRect(base)

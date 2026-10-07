@@ -8,7 +8,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -52,22 +51,17 @@ fun AmbientBackground(
         sceneFor(style, SceneLook(accent, ambient.secondary?.let { Color(it) }, colors, k), fusi)
     }
     val moving = animate && style.moves && ambient.speed > 0f && k > 0f
-    // A room at rest is drawn once into one picture and shown as that picture every frame.
-    val flat = remember { io.github.matiyaaa.fuse.ui.designsystem.effects.FlatLayer() }
+    // A room at rest is recorded once and kept by the graphics card as one picture.
+    val flat = io.github.matiyaaa.fuse.ui.designsystem.effects.rememberFlatLayer()
     if (moving) {
         // Slow scenes ask for fewer frames than the caller allows; nothing moves faster than it needs.
         val rate = minOf(fps, scene.fps).coerceAtLeast(1)
         LaunchedEffect(rate, ambient.speed) {
-            val frame = 1000L / rate
-            var last = 0L
-            val start = withFrameMillis { it }
-            while (true) {
-                withFrameMillis { now ->
-                    if (now - last >= frame) {
-                        time = (now - start) / 1000f * ambient.speed
-                        last = now
-                    }
-                }
+            // Fuseline 3.1: woken only when an update is due, and held still while the person is
+            // doing something, carrying on from there (decorationFrames).
+            val from = time / ambient.speed
+            io.github.matiyaaa.fuse.ui.fuseline.decorationFrames(rate, infinite = false) { played ->
+                time = (from + played / 1e9f) * ambient.speed
             }
         }
     }

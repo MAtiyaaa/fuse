@@ -1,5 +1,5 @@
-# Fuse release shrinking (opt in with -Pfuse.r8=true until verified on devices).
-# Shrink only: names stay readable, so a crash report on the device still says where it happened.
+# Fuse release optimisation (on by default; -Pfuse.r8=false builds without it).
+# Names stay readable, so a crash report on the device still says where it happened.
 -dontobfuscate
 
 # Fuse's own code: serializers, enums read from stored settings, and Compose screens are all reached
@@ -27,3 +27,16 @@
 -dontwarn javax.naming.**
 -dontwarn reactor.blockhound.**
 -dontwarn io.netty.**
+
+# Libraries that find their own parts by name (image fetchers and decoders, player renderers and
+# extensions): kept whole, so nothing they look up at run time can be missing.
+-keep class coil3.** { *; }
+-keep class androidx.media3.** { *; }
+-dontwarn coil3.**
+-dontwarn androidx.media3.**
+
+# Enums are read back from stored settings by name.
+-keepclassmembers enum * {
+    public static **[] values();
+    public static ** valueOf(java.lang.String);
+}

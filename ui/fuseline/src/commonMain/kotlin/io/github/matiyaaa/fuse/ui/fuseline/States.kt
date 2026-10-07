@@ -2,19 +2,18 @@ package io.github.matiyaaa.fuse.ui.fuseline
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.FloatState
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.RememberObserver
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
-import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.launch
+import kotlin.coroutines.CoroutineContext
 
 /**
  * A value that follows [targetValue]: whenever the target changes it moves there under
@@ -35,6 +34,11 @@ fun <T> fuselineValueAsState(
  * The [FuselineValue] behind [fuselineValueAsState]: it follows [targetValue], and a motion under way
  * takes each new target in place ([FuselineValue.retarget]), carrying on from where it is and how fast
  * it is going, whatever kind of motion it is.
+ *
+ * Fuseline 3.1: a follower has no coroutine, channel or effect of its own. A new target is handed to
+ * the value as composition is applied, and the frame driver moves it directly ([FuselineValue.follow]);
+ * when it leaves composition its move ends with it. A page of tiles with a few animated values each
+ * costs that many small objects, not that many coroutines.
  */
 @Composable
 fun <T> rememberFollowing(
@@ -45,27 +49,41 @@ fun <T> rememberFollowing(
     label: String = "FuselineValue",
     finishedListener: ((T) -> Unit)? = null,
 ): FuselineValue<T> {
-    val value = remember { FuselineValue(targetValue, converter, threshold, label) }
-    val spec by rememberUpdatedState(animationSpec)
-    val listener by rememberUpdatedState(finishedListener)
-    // Only the newest target matters: targets set faster than frames are skipped.
-    val targets = remember { Channel<T>(Channel.CONFLATED) }
-    SideEffect { targets.trySend(targetValue) }
-    LaunchedEffect(targets) {
-        for (target in targets) {
-            val newest = targets.tryReceive().getOrNull() ?: target
-            // A motion under way takes the new target in place: no new move, no jolt.
-            val motion = spec
-            if (newest != value.targetValue && value.retarget(newest, motion)) continue
-            launch {
-                if (newest != value.targetValue) {
-                    value.animateTo(newest, spec)
-                    listener?.invoke(value.value)
-                }
-            }
-        }
+    val context = rememberCoroutineScope().coroutineContext
+    val follower = remember { Follower(FuselineValue(targetValue, converter, threshold, label), context) }
+    follower.spec = animationSpec
+    follower.listener = finishedListener
+    SideEffect { follower.follow(targetValue) }
+    return follower.value
+}
+
+/**
+ * Moves [value] to each new target as composition hands it over, and stops it when it leaves
+ * composition (so the frame driver never steps a value nobody shows).
+ */
+private class Follower<T>(val value: FuselineValue<T>, private val context: CoroutineContext) : RememberObserver {
+    var spec: Motion = Spring()
+    var listener: ((T) -> Unit)? = null
+    private var gone = false
+
+    fun follow(target: T) {
+        if (gone || target == value.targetValue) return
+        // A motion under way takes the new target in place: no new move, no jolt.
+        if (value.retarget(target, spec)) return
+        value.follow(target, spec, context) { listener?.invoke(value.value) }
     }
-    return value
+
+    override fun onRemembered() {}
+
+    override fun onForgotten() {
+        gone = true
+        value.halt()
+    }
+
+    override fun onAbandoned() {
+        gone = true
+        value.halt()
+    }
 }
 
 /** A float that follows [targetValue] (see [fuselineValueAsState]), read without boxing. */

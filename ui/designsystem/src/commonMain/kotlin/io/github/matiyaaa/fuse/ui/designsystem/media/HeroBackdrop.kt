@@ -210,7 +210,7 @@ fun HeroBackdrop(
         val accent = layers.lastOrNull { !it.leaving }?.source?.accent ?: colors.accent
         val ink = colors.ink
         // The dim and the three scrims never change with the art: drawn once into one picture.
-        val flat = remember { io.github.matiyaaa.fuse.ui.designsystem.effects.FlatLayer() }
+        val flat = io.github.matiyaaa.fuse.ui.designsystem.effects.rememberFlatLayer()
         val dark = colors.isDark
         Box(
             Modifier.fillMaxSize().drawWithCache {
@@ -359,14 +359,10 @@ private fun HeroLayerView(layer: HeroLayer, brightness: Float, onReady: () -> Un
     if (drifting) {
         LaunchedEffect(layer) {
             snapshotFlow { layer.alpha.value >= 1f }.first { it }
-            val start = withInfiniteFrameMillis { it }
-            var last = start
-            while (true) {
-                val now = withInfiniteFrameMillis { it }
-                if (now - last < DRIFT_FRAME_MS) continue
-                last = now
+            // Woken only when an update is due, and held still while the person is doing something.
+            io.github.matiyaaa.fuse.ui.fuseline.decorationFrames((1000L / DRIFT_FRAME_MS).toInt()) { played ->
                 // 0 to 1 and back, eased at both ends, one leg per Durations.DRIFT.
-                val t = ((now - start) % (Durations.DRIFT * 2L)).toFloat() / Durations.DRIFT
+                val t = ((played / 1_000_000L) % (Durations.DRIFT * 2L)).toFloat() / Durations.DRIFT
                 drift = (1f - cos(PI.toFloat() * t)) / 2f
             }
         }

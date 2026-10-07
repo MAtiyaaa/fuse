@@ -287,6 +287,7 @@ class InputRouter(
 
     /** A physical button went down. Platform key repeats must not be forwarded. */
     fun press(button: PadButton, source: InputSource) {
+        io.github.matiyaaa.fuse.ui.fuseline.FramePacing.input()
         touched()
         rawListener?.invoke(button, true)
         exclusive?.let {
@@ -472,6 +473,7 @@ class InputRouter(
      * the user's navigation threshold; the dominant axis wins so diagonals never double-move.
      */
     fun stick(x: Float, y: Float, source: InputSource = InputSource.GAMEPAD) {
+        io.github.matiyaaa.fuse.ui.fuseline.FramePacing.input()
         val threshold = max(profile.navigationThreshold, profile.stickDeadzone)
         // Hysteresis: once pressed, release only when clearly back toward the centre.
         val releaseAt = threshold * 0.7f

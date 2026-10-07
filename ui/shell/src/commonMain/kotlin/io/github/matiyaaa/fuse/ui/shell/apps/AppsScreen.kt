@@ -206,7 +206,7 @@ fun AppsScreen(app: AppState) {
                         verticalArrangement = Arrangement.spacedBy(Space.xl),
                     ) {
                         itemsIndexed(apps, key = { _, a -> a.entry.id }) { i, a ->
-                            val selected = !inFilters && i == sel.index && app.focusZone == FocusZone.CONTENT
+                            val selected = io.github.matiyaaa.fuse.ui.designsystem.components.isSelected { !inFilters && i == sel.index && app.focusZone == FocusZone.CONTENT }
                             AppDrawerItem(
                                 a, selected, size,
                                 // Pins are marked where they aren't the whole list.

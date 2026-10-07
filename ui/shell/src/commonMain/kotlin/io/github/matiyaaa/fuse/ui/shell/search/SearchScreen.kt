@@ -566,7 +566,7 @@ private fun ResultList(
                 }
             }
             item(key = h.key, contentType = "hit") {
-                val selected = showSelection && i == sel.index
+                val selected = io.github.matiyaaa.fuse.ui.designsystem.components.isSelected { showSelection && i == sel.index }
                 Row(
                     Modifier
                         .fillMaxWidth()

@@ -87,6 +87,9 @@ class FuseApplication : Application(), SingletonImageLoader.Factory {
     override fun onCreate() {
         // Fuse Player plays on Media3 here.
         io.github.matiyaaa.fuse.ui.player.FusePlayer.engineFactory = { io.github.matiyaaa.fuse.ui.player.Media3Engine(applicationContext) }
+        // Android keeps a hardware layer as a finished picture until it changes: drawing that never
+        // changes (scrims, a resting room, generated art) is recorded once and kept by the graphics card.
+        io.github.matiyaaa.fuse.ui.designsystem.effects.Drawing.cachedLayers = true
         super.onCreate()
         crashLog.install()
         activities = ActivityHolder(this)

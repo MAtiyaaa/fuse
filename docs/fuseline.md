@@ -4,8 +4,9 @@ Fuseline by Fuse is Fuse's animation engine. It is named after the line of a fus
 logo that carries the spark. Every animation in Fuse runs on it, from a focus lift to the setup's
 opening sequence.
 
-It lives in `ui/fuseline` (package `io.github.matiyaaa.fuse.ui.fuseline`). Fuse 0.3.7 brings
-**Fuseline 3**, built around two rules:
+It lives in `ui/fuseline` (package `io.github.matiyaaa.fuse.ui.fuseline`). Fuse 0.3.7 brought
+**Fuseline 3**, and Fuse 0.3.7.5 brings **Fuseline 3.1** ([what 3.1 adds](#fuseline-31)). Both are
+built around two rules:
 
 - **Motion never breaks continuity.** Whatever happens to a moving thing (a new target, a finger
   catching it, a reversal, a seek, a new motion, the window changing size), it carries on from the
@@ -168,6 +169,34 @@ value.
 be 60) and whether frames run late. Under load only decoration thins out (`shouldDrawDecoration`);
 physics is always worked out from the real frame time, so motion looks the same however busy the
 device is.
+
+## Fuseline 3.1
+
+Fuseline 3.1 keeps every curve, spring and motion of Fuseline 3 exactly as they were, and takes work
+off the frames around them:
+
+- **Values that follow without a coroutine.** `fuselineFloat`, `fuselineColor`, `fuselineDp` and the
+  others (everything built on `rememberFollowing`) used to start a channel and an effect coroutine for
+  every value. In 3.1 a new target is handed to the value as composition is applied, and the frame
+  driver moves it directly (`FuselineValue.follow`, `FrameDriver.start`); when the value leaves
+  composition its move ends with it. Composing a page of tiles costs a few small objects per value
+  instead of a coroutine each.
+- **No invisible frames.** A frame that moves a value less than an eighth of its threshold (a
+  little over a thousandth for an opacity) is worked out but not shown: what reads the value is not
+  redrawn or laid out again for a change nobody could see. Where the motion lands is always shown,
+  and a seek always shows the moment it asked for.
+- **Decoration yields to the person.** `FramePacing.input()` is called by the input router for every
+  button, key and stick movement. For a moment after it, and for as long as what it set moving is
+  still moving, decoration (a theme's room, the background's slow drift, a shimmer) holds its frame
+  (`FramePacing.decorationHeld`) and carries on from there afterwards, never jumping. Motion that
+  runs on its own, with nobody touching anything, never holds decoration, so at rest everything
+  moves exactly as before.
+- **Paced decoration.** `decorationFrames(fps)` gives a decorative loop its time only when an update
+  is due, and waits between them instead of taking every frame of the display: a room that needs 30
+  updates a second wakes 30 times a second on a 120 Hz screen, not 120.
+- **Cheaper publishing.** A value's change is published to Compose from a counter of its own, without
+  reading the state it writes, and the visibility check is folded into the same loop that solves the
+  frame.
 
 ## Debugging
 

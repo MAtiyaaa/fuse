@@ -225,6 +225,8 @@ private fun FuseAppContent(
     // motion (short fades, no sliding pages) keep it smooth instead of stuttering.
     val drawing by platform.drawing.collectAsState()
     val cpuDrawing = drawing?.gpu == false
+    // Drawing that never changes is kept by the graphics card, or painted once without one.
+    io.github.matiyaaa.fuse.ui.designsystem.effects.Drawing.cpu = cpuDrawing
     val quality = RenderQuality.of(prefs.performance, platform.device, prefs.lowPower || cpuDrawing, LocalWindowPx.current)
     // Motion on Automatic follows the effects this device gets (setup's recommendation, or the
     // Performance choice); a level the person picked is kept, except calmer when drawn without the graphics card.

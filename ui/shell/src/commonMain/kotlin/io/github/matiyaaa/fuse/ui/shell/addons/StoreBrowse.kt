@@ -450,6 +450,8 @@ private fun AppShelf(
             row.title, Modifier.padding(start = Space.gutter, bottom = Space.s),
             color = if (selected >= 0) c.text else c.textMuted, count = row.apps.size.toString(), icon = row.icon,
         )
+        // Read by each card only through isSelected, so a move rebuilds the two cards it changes.
+        val latestSelected = androidx.compose.runtime.rememberUpdatedState(selected)
         LazyRow(
             state = list,
             contentPadding = PaddingValues(start = Space.gutter, end = Space.gutter * 2, top = Space.xs, bottom = Space.xs),
@@ -457,10 +459,11 @@ private fun AppShelf(
         ) {
             itemsIndexed(row.apps, key = { _, a -> a.key }) { i, a ->
                 val reason = row.featured[a.key]
+                val on = io.github.matiyaaa.fuse.ui.designsystem.components.isSelected { i == latestSelected.value }
                 if (reason != null) {
-                    FeaturedCard(a, reason, state, i == selected, compact, iconOf(a), { onClick(i) }, { onLongClick(i) })
+                    FeaturedCard(a, reason, state, on, compact, iconOf(a), { onClick(i) }, { onLongClick(i) })
                 } else {
-                    AppCard(a, state, i == selected, compact, iconOf(a), { onClick(i) }, { onLongClick(i) })
+                    AppCard(a, state, on, compact, iconOf(a), { onClick(i) }, { onLongClick(i) })
                 }
             }
         }

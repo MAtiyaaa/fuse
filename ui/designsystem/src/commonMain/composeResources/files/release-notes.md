@@ -1,43 +1,48 @@
-# Fuse 0.3.7.4 - The Motion Update
+# Fuse 0.3.7.5 - The Motion Update
 
-Systems no longer blow up to TV size while you arrange them, each device keeps its own Systems
-page, and Fuse draws far less on every frame.
+0.3.7.4 made Fuse slower on Android. This release undoes the change that caused it, runs a
+properly optimised build on your device, and brings Fuseline 3.1. Everything looks and moves
+exactly as it did.
 
 ## New
 
-- **Where a slow frame went, on the device.** With the performance overlay on (Settings, Display),
-  Android shows the slowest frame of each second next to the average, and what it spent its time
-  on: waiting for the main thread, input, animation, layout, drawing, rendering and the graphics
-  chip. A stutter no longer hides inside an average.
+- **Fuseline 3.1.** Fuse's animation engine keeps every curve, spring and motion of Fuseline 3, and
+  takes work off the frames around them:
+  - **Animated values without coroutines.** The values that follow a tile's focus, a button's
+    colour or a panel's size no longer start a coroutine each. A page of tiles costs a few small
+    objects per value, so tab switches and new Library rows compose faster.
+  - **No invisible frames.** A frame that would move something less than anyone could see is
+    worked out but not drawn again. The long, slow end of a spring stops redrawing the screen.
+  - **Decoration waits for you.** While you press buttons, and while what you pressed is still
+    moving, the theme's room and the background's slow drift hold still, so every frame goes to
+    what you are doing. At rest they move exactly as before, on both screens of a two-screen
+    handheld.
+  - **Paced decoration.** A room that needs 30 updates a second wakes 30 times a second, not 120
+    times on a 120 Hz screen.
+- **Fuseline 3.1 measured against every Fuseline and Compose.** Fuseline 3, 2 and 1 are kept, as
+  they shipped, in Fuse's tests, and the benchmarks compare all five. See
+  [How Fuseline works](../fuseline.md#speed).
 
 ## Changed
 
-- **Each device keeps its own Systems page.** A TV, a monitor, a handheld and each screen of a
-  two-screen handheld arrange and size their systems for themselves; Fuse Sync no longer carries
-  one device's arrangement to another. The order of your systems still follows you everywhere.
-- **Arranging on a short screen.** On a handheld, the system header folds away while you arrange,
-  so the board has the room, and Undo, Reset, New page and the other screen's look are compact
-  icon buttons that cover less of it.
-- **Fuse draws far less on every frame, and looks exactly the same.** The room's shading over the
-  art, a theme's room while it isn't moving, and the lit picture behind every game without art are
-  drawn once and then shown as one image, instead of stacks of screen-sized gradients and patterns
-  of dozens of shapes on every frame. A page changing its art or hints no longer rebuilds the whole
-  interface around it. Measured without a graphics card (the slowest way to draw), Home at rest
-  went from 459 ms a frame to 215 ms and Settings from 321 ms to 78 ms; on a device with a graphics
-  card the same work is a small part of a frame.
+- **An optimised Android build.**
+  - The Android app is now built with R8, Android's optimiser. Compose, the toolkit Fuse's
+    interface is built with, runs much faster optimised.
+  - Fuse's interface code and Compose's own code are compiled ahead of time when Fuse is installed
+    (a startup profile), instead of running interpreted until Android gets round to compiling them,
+    which for an app installed from GitHub could take days.
+  - Fuse's interface is compiled without per-screen debugging records it never used.
+- **Moving the selection redraws two items, not the whole view.** In the Library (icons, covers
+  and list), Addons, Apps, Collections and Search, moving the selection now rebuilds only the item
+  it leaves and the one it reaches.
 
 ## Fixed
 
-- **Systems became huge after arranging on the AYN Thor.** A Systems page arranged in 0.3.7.3
-  synced through Fuse Sync to a device on an older version, which lost the mark that it was
-  already in the finer grid. It then came back and was made finer a second time, so every system
-  became three times as wide and twice as tall, like a TV's. Each device now keeps its own page,
-  a page that lost the mark is recognised and kept as it is, and one already made too large is put
-  back to its sizes by itself.
-- **Arranging could turn a handheld's board into a TV's.** The board keeps the kind of screen it
-  was shown on while you arrange, whatever room the header leaves it.
-- **The Add system space could reach past the screen's edge.** On a Systems page centred on a TV or
-  a handheld, the space for adding a system now stays inside the board, on the next row when the
-  current one is full.
-- **Fuse's performance measurements opened on setup.** The measuring harness marks setup done after
-  the store reads its saved settings, so it measures Home, Systems and the Library again.
+- **0.3.7.4 made Fuse slower on Android.**
+  - **What went wrong:** 0.3.7.4 drew the room's shading, a resting room and the picture behind
+    every game without art into images painted by the processor. That is quick on a computer
+    drawing without a graphics card, which is where it was measured. On a phone it moved the
+    graphics card's work onto the processor and made the Library's scrolling laggy.
+  - **The fix:** on Android that drawing is now recorded once and kept by the graphics card as a
+    finished picture. Nothing is painted by the processor, and nothing is drawn again until it
+    changes. Computers keep the picture painted once.

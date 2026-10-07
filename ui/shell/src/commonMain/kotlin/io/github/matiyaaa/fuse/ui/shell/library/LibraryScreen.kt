@@ -837,7 +837,7 @@ private fun IconGrid(
             Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
                 GameIconTile(
                     card,
-                    selected = focused && i == state.grid.index,
+                    selected = io.github.matiyaaa.fuse.ui.designsystem.components.isSelected { focused && i == state.grid.index },
                     size = size,
                     modifier = Modifier.reveal(reveal, 2 + i / columns).mouseHover { onHover(i) },
                     onClick = { onTap(i) },
@@ -885,7 +885,7 @@ private fun CoverGrid(
             itemsIndexed(list, key = { _, g -> g.id.value }) { i, card ->
                 GameCoverTile(
                     card,
-                    selected = focused && i == state.grid.index,
+                    selected = io.github.matiyaaa.fuse.ui.designsystem.components.isSelected { focused && i == state.grid.index },
                     width = width,
                     aspect = Aspect.BOX,
                     modifier = Modifier.reveal(reveal, 2 + i / columns).mouseHover { onHover(i) },
@@ -959,6 +959,8 @@ private fun GlidingList(
     val c = Fuse.colors
     val motion = Fuse.motion
     val target = selectedIndex.coerceIn(0, (list.size - 1).coerceAtLeast(0)).toFloat()
+    // Read by each row only through isSelected, so a move rebuilds the two rows it changes.
+    val latestIndex = androidx.compose.runtime.rememberUpdatedState(selectedIndex)
     val top = remember { FuselineValue(target) }
     val bottom = remember { FuselineValue(target) }
     val shown by fuselineFloat(if (focused) 1f else 0f, motion.tween(if (focused) Durations.FAST else Durations.INSTANT), label = "list highlight")
@@ -1024,7 +1026,7 @@ private fun GlidingList(
         verticalArrangement = Arrangement.spacedBy(Space.xxs),
     ) {
         itemsIndexed(list, key = { _, g -> g.id.value }) { i, card ->
-            row(i, card, focused && i == selectedIndex)
+            row(i, card, io.github.matiyaaa.fuse.ui.designsystem.components.isSelected { focused && i == latestIndex.value })
         }
     }
 }
