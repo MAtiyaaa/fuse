@@ -155,11 +155,12 @@ class ReachHandler(private val host: ReachTransferHost, private val clock: () ->
         return when (s.kind) {
             ReachSource.PEER -> {
                 val peers = host.peers ?: return Candidate(s, Reach.NONE)
-                if (!host.online(s.id)) return Candidate(s, Reach.NONE)
                 val open = tickets.getOrPut(s.id) { runCatching { peers.openTicket(s.id, job.game, job.files.map { it.path }) }.getOrNull() } ?: return Candidate(s, Reach.NONE)
+                // A device that answers directly is tried whatever the host last heard; through the
+                // host only while the host hears from it (or it couldn't send anything).
                 when {
                     peers.reachable(open.ticket) -> Candidate(s, Reach.PEER_LOCAL, speed)
-                    host.relay && open.ticket.relay -> Candidate(s, Reach.PEER_RELAY, speed)
+                    host.relay && open.ticket.relay && host.online(s.id) -> Candidate(s, Reach.PEER_RELAY, speed)
                     else -> Candidate(s, Reach.NONE)
                 }
             }

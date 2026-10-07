@@ -61,7 +61,7 @@ class ReachHandlerTest {
             override suspend fun openTicket(source: String, game: String, files: List<String>) =
                 OpenTicket(PeerTicket("t", "me", source, game, files, Long.MAX_VALUE, PeerEndpoint(listOf("x"), 1)), "key")
 
-            override suspend fun reachable(ticket: PeerTicket) = this@Host.devices.getValue(ticket.source).local
+            override suspend fun reachable(ticket: PeerTicket) = this@Host.devices.getValue(ticket.source).let { it.local && it.online }
 
             override suspend fun fetch(open: OpenTicket, file: String, offset: Long, length: Long, direct: Boolean, write: suspend (ByteArray, Int, Long?) -> Unit): Long {
                 val p = this@Host.devices.getValue(open.ticket.source)

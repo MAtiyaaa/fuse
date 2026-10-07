@@ -76,11 +76,12 @@ class HouseholdHost(dir: File, private val clock: () -> Long = System::currentTi
     }
 
     /** The lists [known] doesn't have the newest of, leaving out [except]'s own and [hidden] devices. */
-    fun libraries(known: Map<String, String>, except: String, live: Set<String>): LibrariesPage {
+    fun libraries(known: Map<String, String>, except: String, live: Set<String>, seen: Map<String, Long> = emptyMap()): LibrariesPage {
         val present = libraries.values.filter { it.device != except && it.device in live }
         return LibrariesPage(
             changed = present.filter { known[it.device] != it.version },
             devices = present.map { it.device },
+            seen = seen,
         )
     }
 

@@ -27,6 +27,8 @@ data class PeerFile(
 @Serializable
 data class LibraryEntry(
     val game: String,
+    /** Every id the game is known by on this device (its serial, its title): another device may know it by one of these. */
+    val ids: List<String> = emptyList(),
     val title: String,
     val platform: String,
     val sizeBytes: Long,
@@ -79,7 +81,12 @@ data class LibrariesKnown(val have: Map<String, String> = emptyMap())
 
 /** The lists that changed since [LibrariesKnown], and every device that has one at all (the rest went). */
 @Serializable
-data class LibrariesPage(val changed: List<DeviceLibrary> = emptyList(), val devices: List<String> = emptyList())
+data class LibrariesPage(
+    val changed: List<DeviceLibrary> = emptyList(),
+    val devices: List<String> = emptyList(),
+    /** When the host last heard from each device (every device, sharing or not). */
+    val seen: Map<String, Long> = emptyMap(),
+)
 
 /** Asking the host for leave to fetch [files] of [game] from [source]. */
 @Serializable
@@ -224,6 +231,12 @@ interface Household {
     val supported: StateFlow<Boolean>
     val libraries: StateFlow<List<DeviceLibrary>>
 
+    /** This device's own list as it last went up, with the hashes read so far. */
+    val mine: StateFlow<List<LibraryEntry>>
+
+    /** When the host last heard from each device, as fresh as the last look (every half minute while linked). */
+    val seen: StateFlow<Map<String, Long>>
+
     /** Requests still open, from and to any device (so "Waiting for Thor" shows everywhere). */
     val commands: StateFlow<List<DeviceCommand>>
     val transfers: StateFlow<List<TransferSnapshot>>
@@ -246,6 +259,9 @@ interface Household {
 
     suspend fun cancel(command: String): Result<Unit>
 
+    /** Says how a request this device was working on went (a game it was asked for arrived, or couldn't). */
+    suspend fun settle(command: String, state: String, message: String? = null) {}
+
     /** While true (Downloads is open), the other devices' transfers are kept fresh. */
     fun watchTransfers(on: Boolean)
 
@@ -255,6 +271,8 @@ interface Household {
     object None : Household {
         override val supported: StateFlow<Boolean> = MutableStateFlow(false)
         override val libraries: StateFlow<List<DeviceLibrary>> = MutableStateFlow(emptyList())
+        override val mine: StateFlow<List<LibraryEntry>> = MutableStateFlow(emptyList())
+        override val seen: StateFlow<Map<String, Long>> = MutableStateFlow(emptyMap())
         override val commands: StateFlow<List<DeviceCommand>> = MutableStateFlow(emptyList())
         override val transfers: StateFlow<List<TransferSnapshot>> = MutableStateFlow(emptyList())
         override val self: String = ""

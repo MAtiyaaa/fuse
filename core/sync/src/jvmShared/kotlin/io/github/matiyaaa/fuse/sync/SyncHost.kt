@@ -620,7 +620,8 @@ class SyncHost(
         post("/libraries") {
             val d = device() ?: return@post
             val req = signedBody(d, LibrariesKnown.serializer()) ?: return@post
-            call.json(LibrariesPage.serializer(), household.libraries(req.have, d.id, liveDevices()))
+            val all = store.devices().filter { !it.revoked }
+            call.json(LibrariesPage.serializer(), household.libraries(req.have, d.id, all.map { it.id }.toSet(), all.associate { it.id to it.lastSeen }))
         }
         post("/tickets") {
             val d = device() ?: return@post

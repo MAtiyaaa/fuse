@@ -64,6 +64,11 @@ class JvmHousehold(
     private val _transfers = MutableStateFlow<List<TransferSnapshot>>(emptyList())
     override val supported: StateFlow<Boolean> = _supported.asStateFlow()
     override val libraries: StateFlow<List<DeviceLibrary>> = _libraries.asStateFlow()
+    private val _mine = MutableStateFlow<List<LibraryEntry>>(emptyList())
+    override val mine: StateFlow<List<LibraryEntry>> = _mine.asStateFlow()
+    private val _seen = MutableStateFlow<Map<String, Long>>(emptyMap())
+    override val seen: StateFlow<Map<String, Long>> = _seen.asStateFlow()
+    private var lookJob: Job? = null
     override val commands: StateFlow<List<DeviceCommand>> = _commands.asStateFlow()
     override val transfers: StateFlow<List<TransferSnapshot>> = _transfers.asStateFlow()
     override val self: String get() = selfId()
@@ -120,6 +125,13 @@ class JvmHousehold(
         if (config().shareLibrary) runCatching { server.start(peerPort) }
         libraryChanged()
         runCatching { refresh() }
+        // Who is around, kept fresh: a device that went away shows so within a minute.
+        if (lookJob?.isActive != true) lookJob = scope.launch(Dispatchers.IO) {
+            while (isActive && _supported.value) {
+                delay(LOOK_MS)
+                runCatching { refresh() }
+            }
+        }
         runCatching { refreshCommands() }
         runCatching { takeInbox() }
         runCatching { sendPieces() }
@@ -128,6 +140,7 @@ class JvmHousehold(
     /** Unlinked, or Fuse Sync off: nothing more is served. What was kept stays for a later link. */
     fun off() {
         _supported.value = false
+        lookJob?.cancel()
         server.stop()
     }
 
@@ -176,6 +189,7 @@ class JvmHousehold(
         shared = games.associateBy { it.entry.game }
         if (cfg.shareLibrary) runCatching { server.start(peerPort) } else server.stop()
         val entries = games.map { g -> withHashes(g) }
+        _mine.value = entries
         val endpoint = if (cfg.shareLibrary && server.port > 0) PeerEndpoint(bindAddresses(), server.port) else null
         val body = DeviceLibrary(device = selfId(), entries = entries, endpoint = endpoint, accepts = cfg.acceptSends)
         val version = SyncCrypto.sha256(json.encodeToString(DeviceLibrary.serializer(), body).toByteArray()).take(24)
@@ -248,6 +262,7 @@ class JvmHousehold(
         val byDevice = _libraries.value.associateBy { it.device }.toMutableMap()
         byDevice.keys.retainAll(present)
         for (l in page.changed) byDevice[l.device] = l
+        if (page.seen.isNotEmpty()) _seen.value = page.seen
         _libraries.value = byDevice.values.sortedBy { it.name.lowercase() }
         keep()
     }
@@ -301,7 +316,7 @@ class JvmHousehold(
     }
 
     /** Settles a request this device was working on (a game it was asked for arrived, or couldn't). */
-    suspend fun settle(command: String, state: String, message: String? = null) {
+    override suspend fun settle(command: String, state: String, message: String?) {
         runCatching { client()?.ack(command, CommandAck(state, message)) }
     }
 
@@ -439,6 +454,7 @@ class JvmHousehold(
         const val REPUBLISH_MS = 60_000L
         const val WATCH_MS = 2_000L
         const val POST_EVERY_MS = 2_000L
+        const val LOOK_MS = 30_000L
     }
 }
 

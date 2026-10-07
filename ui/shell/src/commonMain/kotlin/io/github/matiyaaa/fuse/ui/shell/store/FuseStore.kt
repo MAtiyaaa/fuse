@@ -106,6 +106,9 @@ interface FuseStore {
     /** Fuse RomM, the Fuse RomM native integration. */
     val romm: RommOps get() = RommOps.None
 
+    /** The Remote Library: the household's games on its other devices, through Fuse Sync. */
+    val reach: ReachOps get() = ReachOps.None
+
     /** Streaming games from a computer at home with Moonlight. */
     val streaming: StreamingOps get() = StreamingOps.None
 
@@ -595,7 +598,13 @@ interface MediaOps {
      */
     fun fill(mode: MediaFillMode, kinds: Set<MediaKind>, platform: PlatformId? = null, game: GameId? = null)
     /** Every art kind and every detail the sources have, for games missing any, plus system art. */
-    fun fillEverything(platform: PlatformId? = null)
+    fun fillEverything(platform: PlatformId? = null) = fillEverything(platform, remote = false)
+
+    /**
+     * Fill everything over the library, and with [remote] the Remote Library too: RomM's games and
+     * the household's other devices' games Fuse shows without having, remembered the same way.
+     */
+    fun fillEverything(platform: PlatformId?, remote: Boolean)
     fun cancelFill()
     val fillProgress: StateFlow<FillProgress?>
     /** The name art and details are searched with for [game]; null when the game is gone. */

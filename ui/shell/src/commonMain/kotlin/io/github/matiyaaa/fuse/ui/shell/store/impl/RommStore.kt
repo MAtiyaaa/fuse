@@ -182,11 +182,19 @@ internal class DefaultRommOps(
     // ------------------------------------------------------------------ start
 
     fun start() {
-        ctx.remoteGames = remote
-        ctx.remoteDetail = { id -> id.rommOnly?.let(::detail) }
-        ctx.adoptArt = ::adoptArt
+        ctx.addRemoteGames(remote)
+        val otherDetail = ctx.remoteDetail
+        ctx.remoteDetail = { id -> id.rommOnly?.let(::detail) ?: otherDetail(id) }
+        val otherAdopt = ctx.adoptArt
+        ctx.adoptArt = { id -> adoptArt(id) || otherAdopt(id) }
+        val otherOn = ctx.remoteGamesOn
         ctx.remoteGamesOn = { id ->
-            mirror.all(server).filter { r -> (ctx.platforms.resolveFolder(r.platformSlug)?.id) == id }.map { rommGameId(it.id) }
+            mirror.all(server).filter { r -> (ctx.platforms.resolveFolder(r.platformSlug)?.id) == id }.map { rommGameId(it.id) } + otherOn(id)
+        }
+        val otherIds = ctx.remoteIds
+        ctx.remoteIds = { platform ->
+            val m = matches.value
+            (if (!settings.enabled) emptyList() else mirror.all(server).filter { r -> r.id !in m && (platform == null || ctx.platforms.resolveFolder(r.platformSlug)?.id == platform) }.map { rommGameId(it.id) }) + otherIds(platform)
         }
         ctx.scope.launch {
             for (r in redraws) {
@@ -215,6 +223,46 @@ internal class DefaultRommOps(
                 if (phase == io.github.matiyaaa.fuse.model.ScanPhase.DONE && settings.enabled) rematch()
             }
         }
+    }
+
+    // ------------------------------------------------------------------ for the household's games
+
+    /** The server in use, as its transfers name it. */
+    internal val serverKey: String get() = server
+
+    internal val enabled: Boolean get() = settings.enabled
+
+    /**
+     * The RomM game that is [romId] or has one of [md5s] (a game file's), by link or by hash only,
+     * never by a look-alike name: the same game, byte for byte, as another device's copy.
+     */
+    internal suspend fun sameOnServer(romId: Long?, md5s: Collection<String>): RommRom? {
+        if (!settings.enabled) return null
+        romId?.let { id -> mirror.rom(server, id)?.let { return it } }
+        for (m in md5s) mirror.byMd5(m).firstOrNull()?.let { return it }
+        return null
+    }
+
+    /** RomM's game [romId] with its files listed (asked of the server when the mirror lacks them). */
+    internal suspend fun romWithFiles(romId: Long): RommRom? = mirror.withFiles(clientFor(server), server, romId)
+
+    /** The RomM game library game [game] was matched to, if any. */
+    internal fun romOf(game: GameId): Long? = matches.value.entries.firstOrNull { it.value.first == game }?.key
+
+    /** The library game RomM's [romId] was matched to, if any. */
+    internal fun gameOf(romId: Long): GameId? = matches.value[romId]?.first
+
+    /** The system folder a game for [platform] goes in, as RomM's downloads choose it (the person's choice, else what Fuse knows). */
+    internal suspend fun folderFor(platform: Platform, slug: String): Pair<String, Boolean>? {
+        val s = settings
+        val sources = ctx.data.sources.all().filter { it.enabled && (it.kind == LibrarySourceKind.ROMS_ROOT || it.kind == LibrarySourceKind.ROMM_LIBRARY) }
+        engine.platformFolders.value[platform.id]?.firstOrNull()?.let { if (s.systemFolders[platform.id.value].isNullOrBlank()) return it to false }
+        val roots = sources.map { src ->
+            val base = FsPath.normalize(src.path)
+            val inner = if (fileExists(FsPath.join(base, "roms"))) FsPath.join(base, "roms") else base
+            RootListing(inner, runCatching { ctx.services.fs.list(inner) }.getOrDefault(emptyList()).filter { it.isDirectory }.map { it.name }, romm = src.kind == LibrarySourceKind.ROMM_LIBRARY)
+        }
+        return RommPlacement.systemFolder(platform, slug, roots, s.systemFolders, s.libraryRoot.ifBlank { null }, ctx.platforms::resolveFolder)
     }
 
     /** The client for [server] as set up now (the one in use), or null when off or signed out. */
@@ -547,7 +595,7 @@ internal class DefaultRommOps(
             RommSystem(ctx.platforms.resolveFolder(p.slug)?.id ?: ctx.platforms.resolveFolder(p.fsSlug)?.id, p.slug, p.name, p.romCount, installedBySlug[p.slug] ?: 0, p.sizeBytes)
         }.sortedWith(compareBy({ it.platform == null }, { it.name.lowercase() }))
         // These get Fuse's system art like the library's systems.
-        ctx.shownPlatforms.value = _systems.value.mapNotNull { it.platform }.toSet()
+        ctx.shownPlatforms.update { it + _systems.value.mapNotNull { s -> s.platform } }
         val recentRoms = mirror.recent(server, 40)
         _recent.value = toGames(recentRoms)
         val fresh = mirror.newGames(server, 200)
