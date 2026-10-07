@@ -191,7 +191,7 @@ internal class DefaultCartridgeOps(
         if (!CartridgeProtocol.supportsUploads(status)) return@withContext UploadHandoff.TOO_OLD
         val g = ctx.data.games.get(game) ?: return@withContext UploadHandoff.NO_FILES
         val files = try {
-            UploadFiles.collect(ctx.services.fs, g.location, g.discs)
+            UploadFiles.collect(ctx.services.fs, g.location, g.discs, g.content)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {

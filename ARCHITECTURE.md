@@ -173,6 +173,13 @@ Everything in this section is in `core:library` and `core:data` and covered by t
    Loose updates and DLC next to a base game (`[UPD]`, `(Update)`, Switch update versions that are
    multiples of 65536, Switch title ids, `[DLC]`, `(Add-On)`) attach to the matching base game; if
    none matches they stay games of their own, so nothing disappears.
+   Switch has its own pass over the whole system folder (`SwitchNames`, `SwitchContent`): names are
+   read with or without a title id (`v1.1.3`, `v524288`, `Update 1.0.3`, `(Update 1.0.1)`, `DLC`,
+   `[Hat DLC]`, `Base eShop`, scene and download-site names, an update named with its game's id), each
+   update and DLC joins its game wherever it sits (its own folder, a flat folder, `updates/` and
+   `dlc/` folders, or folders chosen in the system's settings), and copies of the same file (the same
+   id or name, version and size) count once. A different region, version or all-in-one dump stays a
+   game of its own. Entries for files merged this way are forgotten rather than shown as missing.
 5. **Parse names** (`FilenameParser`, `TagTables`, `Serials`, `DisplayNameCleaner`). Regions,
    languages, revision, version, disc number, dump flags and PlayStation-style serials become
    `FilenameTags`. Display-name cleanup is optional (off by default) and reversible. `SearchTitles`

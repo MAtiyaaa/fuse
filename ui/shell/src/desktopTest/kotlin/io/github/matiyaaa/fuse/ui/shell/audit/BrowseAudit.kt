@@ -537,6 +537,23 @@ internal fun AuditDriver.systemsScreens(exhaustive: Boolean) {
         shoot("ROM folders row focused")
     }
 
+    scenario("systems", "switch settings") {
+        useLibrary()
+        tab(Destination.SYSTEMS)
+        waitFor("Arrange")
+        val systems = libraryStore.library.platforms.value.filter { it.gameCount > 0 }
+        tap(PadButton.DPAD_LEFT)
+        Grid(systems.size).goTo(platformIndex("switch"))
+        tap(PadButton.X)
+        tapText("System Settings")
+        waitFor("Disc playlists")
+        focusText("Updates folder")
+        shoot("updates and DLC folder rows")
+        tap(PadButton.A)
+        waitFor("Choose a Folder")
+        shoot("updates folder choice")
+    }
+
     scenario("systems", "platform settings") {
         useLibrary()
         tab(Destination.SYSTEMS)

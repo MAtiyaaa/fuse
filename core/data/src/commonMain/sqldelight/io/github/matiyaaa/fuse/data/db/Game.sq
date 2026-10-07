@@ -208,6 +208,10 @@ deleteUntouchedFolder:
 DELETE FROM game WHERE id = :id AND kind = 'FOLDER' AND favorite = 0 AND pinned = 0
     AND last_played_at IS NULL AND title_custom IS NULL AND removed_at IS NULL;
 
+deleteUntouchedGame:
+DELETE FROM game WHERE id = :id AND favorite = 0 AND pinned = 0
+    AND last_played_at IS NULL AND title_custom IS NULL AND removed_at IS NULL;
+
 -- Play time ---------------------------------------------------------------------------------------
 
 markPlayStarted:

@@ -72,6 +72,32 @@ class LibraryIndexerTest {
         }
     }
 
+    // A copy of a game, or an update or DLC that now sits with its game, was a game of its own in
+    // earlier scans: it is forgotten, not shown as missing, unless the person did something with it.
+    @Test
+    fun copiesAndContentThatJoinedAGameAreForgottenNotMissing() = runBlocking {
+        TestDb().use { t ->
+            val d = t.data
+            val game = scanned("/roms/switch/Harbor Lights/Harbor Lights.nsp", platform = "switch")
+            val copy = scanned("/roms/switch/1- All/Harbor Lights.nsp", platform = "switch")
+            val update = scanned("/roms/switch/1- All/Harbor Lights v1.1.0.nsp", platform = "switch")
+            val dlc = scanned("/roms/switch/1- All/Harbor Lights [Fog Pack].nsp", platform = "switch")
+            d.indexer.apply(report(folder("/roms/switch", listOf(game, copy, update, dlc), platform = "switch")), now = 1_000, cleaner = testCleaner)
+            d.games.setFavorite(d.games.idByPath(dlc.path)!!, true)
+
+            val joined = game.copy(content = listOf(ChildContent(ContentKind.UPDATE, "Harbor Lights v1.1.0.nsp", update.path, false, 1)))
+            val delta = d.indexer.apply(
+                report(folder("/roms/switch", listOf(joined), platform = "switch").copy(absorbed = setOf(copy.path, dlc.path))),
+                now = 2_000,
+                cleaner = testCleaner,
+            )
+            assertNull(d.games.idByPath(copy.path), "a copy is forgotten")
+            assertNull(d.games.idByPath(update.path), "an update now with its game is forgotten")
+            assertTrue(d.games.get(d.games.idByPath(dlc.path)!!)!!.favorite, "a favourite is kept, as missing")
+            assertEquals(1, delta.missing)
+        }
+    }
+
     // A shortcuts folder holds Steam and Windows games and is scanned once for each: the Windows
     // pass, which finds no Steam game, must not mark the Steam games missing (0.2.7 did, so Steam
     // games read as missing after every scan).
