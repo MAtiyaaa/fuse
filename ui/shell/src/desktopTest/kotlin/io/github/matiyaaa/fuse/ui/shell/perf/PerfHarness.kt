@@ -79,7 +79,8 @@ class PerfHarness {
 
     @Test
     fun interactions() {
-        val size = AuditSize.M
+        // The AYN Thor's top screen by default; -Dfuse.perf.size picks another audit size.
+        val size = System.getProperty(SIZE_PROPERTY)?.takeIf { it.isNotBlank() }?.let { AuditSize.valueOf(it) } ?: AuditSize.J
         runDesktopComposeUiTest(size.widthPx, size.heightPx) {
             val router = InputRouter(scope)
             mainClock.autoAdvance = false
@@ -117,6 +118,7 @@ class PerfHarness {
                 recording.dump(jfr.toPath())
                 recording.close()
                 results += name to times
+                uiThread += name to uiThreadMs(jfr, spans)
                 profiles += name to profile(jfr) + perFrame(jfr, spans, times)
                 println("Perf: $name ${summary(times)}")
                 driver.settle(600)
@@ -193,7 +195,11 @@ class PerfHarness {
             measure("settings-dpad", frames = 90, everyFrames = 5) { press(PadButton.DPAD_DOWN) }
             measure("settings-fling", frames = 60, everyFrames = 60) { driver.touch { swipeUp(startY = height * 0.85f, endY = height * 0.3f, durationMillis = 120) } }
 
+            // Only the interactions asked for (-Dfuse.perf.only) are walked to, so a run of a few is quick.
+            fun wants(name: String) = only.isEmpty() || only.any { name.startsWith(it) }
+
             // Storage: down hundreds of games, then a fling.
+            if (wants("storage")) {
             driver.openSettings()
             driver.tap(PadButton.DPAD_DOWN, settingsSections.indexOfFirst { it.id == "storage" })
             driver.tap(PadButton.DPAD_RIGHT)
@@ -202,14 +208,17 @@ class PerfHarness {
             driver.settle(3_000)
             measure("storage-dpad", frames = 120, everyFrames = 4) { press(PadButton.DPAD_DOWN) }
             measure("storage-fling", frames = 60, everyFrames = 60) { driver.touch { swipeUp(startY = height * 0.85f, endY = height * 0.3f, durationMillis = 120) } }
+            }
 
             // A game's options from Home, down and up its rows.
+            if (wants("options")) {
             driver.home()
             driver.settle(800)
             press(PadButton.X)
             driver.waitFor("Game Info")
             measure("options-dpad", frames = 60, everyFrames = 5) { i -> press(if (i < 7) PadButton.DPAD_DOWN else PadButton.DPAD_UP) }
             press(PadButton.B)
+            }
 
             writeSummary()
         }
@@ -242,6 +251,27 @@ class PerfHarness {
     }
 
     private val profiles = mutableListOf<Pair<String, String>>()
+
+    /** Each frame's work on the UI thread other than Skia painting pixels, per interaction. */
+    private val uiThread = mutableListOf<Pair<String, List<Double>>>()
+
+    /**
+     * Each frame's UI thread time that is not Skia painting pixels: composition, layout and the
+     * drawing code recording what to draw. On a phone this is the main thread's share of a frame
+     * (the graphics card paints); painting is what this machine, with no graphics card, adds on top.
+     */
+    private fun uiThreadMs(jfr: File, spans: List<Pair<java.time.Instant, java.time.Instant>>): List<Double> {
+        val events = RecordingFile.readAllEvents(jfr.toPath()).filter {
+            (it.eventType.name == "jdk.ExecutionSample" || it.eventType.name == "jdk.NativeMethodSample") &&
+                it.getThread("sampledThread")?.javaName?.startsWith("AWT-EventQueue") == true
+        }.sortedBy { it.startTime }
+        return spans.map { (a, b) ->
+            events.count { e ->
+                !e.startTime.isBefore(a) && !e.startTime.isAfter(b) &&
+                    e.stackTrace?.frames?.none { it.method.type.name.startsWith("org.jetbrains.skia") || it.method.type.name.startsWith("org.jetbrains.skiko") } != false
+            } * SAMPLE_MS
+        }
+    }
 
     /**
      * Where the UI thread spent one interaction: by phase (composition, layout, drawing, the rest),
@@ -326,12 +356,14 @@ class PerfHarness {
 
     private fun writeSummary() {
         val out = buildString {
-            appendLine("| Interaction | Frames | Mean ms | p50 | p95 | Max |")
-            appendLine("|---|---|---|---|---|---|")
+            appendLine("| Interaction | Frames | Mean ms | p50 | p95 | Max | UI thread mean ms | UI thread p95 |")
+            appendLine("|---|---|---|---|---|---|---|---|")
             for ((name, times) in results) {
                 val s = times.sorted()
                 fun p(q: Double) = s[((s.size - 1) * q).toInt()]
-                appendLine("| $name | ${s.size} | %.1f | %.1f | %.1f | %.1f |".format(s.average(), p(0.5), p(0.95), s.last()))
+                val u = uiThread.firstOrNull { it.first == name }?.second.orEmpty().sorted()
+                val up = if (u.isEmpty()) 0.0 else u[((u.size - 1) * 0.95).toInt()]
+                appendLine("| $name | ${s.size} | %.1f | %.1f | %.1f | %.1f | %.1f | %.1f |".format(s.average(), p(0.5), p(0.95), s.last(), u.average().takeIf { !it.isNaN() } ?: 0.0, up))
             }
             for ((name, text) in profiles) {
                 appendLine()
@@ -349,5 +381,7 @@ class PerfHarness {
         private const val EXTRA_GAMES = 600
         private const val DEVICE_PROPERTY = "fuse.perf.device"
         private const val FRAME_MS = 16L
+        private const val SIZE_PROPERTY = "fuse.perf.size"
+        private const val SAMPLE_MS = 2.0
     }
 }

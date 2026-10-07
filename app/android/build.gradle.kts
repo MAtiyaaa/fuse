@@ -25,9 +25,10 @@ android {
 
     buildTypes {
         getByName("release") {
-            // R8 (shrinking only, see proguard-rules.pro) is opt-in with -Pfuse.r8=true until a shrunk
-            // build has been run on devices; the default release stays exactly as before.
-            val shrink = providers.gradleProperty("fuse.r8").orNull == "true"
+            // R8 optimises the release (Compose's own code most of all, which runs much faster
+            // optimised); names are kept and nothing reached by reflection is removed (see
+            // proguard-rules.pro). -Pfuse.r8=false builds without it.
+            val shrink = providers.gradleProperty("fuse.r8").orNull != "false"
             isMinifyEnabled = shrink
             isShrinkResources = shrink
             if (shrink) proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
@@ -64,6 +65,8 @@ dependencies {
     implementation(projects.ui.link)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.core.ktx)
+    // Installs the compiled-ahead profiles (Compose's own and Fuse's, baseline-prof.txt) on a sideloaded install.
+    implementation(libs.androidx.profileinstaller)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.ktor.client.okhttp)
     implementation(libs.coil.compose)

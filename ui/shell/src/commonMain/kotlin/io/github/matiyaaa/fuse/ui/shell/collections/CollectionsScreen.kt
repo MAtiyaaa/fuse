@@ -270,7 +270,7 @@ fun CollectionsScreen(app: AppState) {
                     verticalArrangement = Arrangement.spacedBy(Space.xl),
                 ) {
                     itemsIndexed(items, key = { _, item -> if (item is CollectionItem.Of) item.collection.id.value else -1L }) { i, item ->
-                        val selected = !inTabs && i == sel.index && app.focusZone == FocusZone.CONTENT
+                        val selected = io.github.matiyaaa.fuse.ui.designsystem.components.isSelected { !inTabs && i == sel.index && app.focusZone == FocusZone.CONTENT }
                         val tap = {
                             app.focusZone = FocusZone.CONTENT
                             state.inTabs = false

@@ -21,6 +21,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.job
+import kotlinx.coroutines.launch
 import kotlin.coroutines.coroutineContext
 import kotlin.time.TimeSource
 
@@ -61,6 +62,17 @@ class FuselineValue<T>(
 
     /** The coroutine of the move in charge, if any. */
     private var job: Job? = null
+
+    /** The move in charge when it was made without a coroutine ([follow]). */
+    private var native: MoveHandle? = null
+
+    /**
+     * Where the value was last shown (published to Compose): a frame that moves it less than an
+     * eighth of its threshold from there is worked out but not shown, since nothing on screen would
+     * change. One number is kept in a field ([shown0]); only values of several numbers need an array.
+     */
+    private var shown0 = now[0]
+    private val shownRest: FloatArray? = if (dims > 1) now.copyOf() else null
 
     /** The move under way: its motion, where it lands, how far it has played. */
     private class Ride(var motion: Motion) {
@@ -189,7 +201,21 @@ class FuselineValue<T>(
     private var floatState: FloatState? = null
 
     private fun moved() {
-        version.intValue++
+        shown0 = now[0]
+        shownRest?.let { now.copyInto(it) }
+        // Written from a counter of its own: bumping the state itself would read it first, a
+        // snapshot lookup on every frame of every value for nothing. Any new number does, so the
+        // value and its target share the one counter.
+        version.intValue = ++published
+    }
+
+    private var published = 0
+
+    /** Ends a move made without a coroutine, if one is in charge. */
+    private fun dropNative() {
+        val n = native ?: return
+        native = null
+        n.cancel()
     }
 
     /**
@@ -201,7 +227,7 @@ class FuselineValue<T>(
             for (i in 0 until dims) goal[i] = tracks[i]!!.endValue
         }
         targetFollowsValue = false
-        targetVersion.intValue++
+        targetVersion.intValue = ++published
     }
 
     /** Puts the value at [targetValue] at once, stopping any move or gesture. */
@@ -211,7 +237,7 @@ class FuselineValue<T>(
             converter.write(targetValue, goal)
             speed.fill(0f)
             targetFollowsValue = false
-            targetVersion.intValue++
+            targetVersion.intValue = ++published
             moved()
             if (MotionTrace.enabled) trace(MotionTrace.Kind.SNAP)
         }
@@ -223,7 +249,7 @@ class FuselineValue<T>(
             speed.fill(0f)
             now.copyInto(goal)
             targetFollowsValue = false
-            targetVersion.intValue++
+            targetVersion.intValue = ++published
             moved()
             if (MotionTrace.enabled) trace(MotionTrace.Kind.STOP)
         }
@@ -280,7 +306,7 @@ class FuselineValue<T>(
                     if (job === currentCoroutineContext().job && r.playNanos < r.durationNanos) {
                         now.copyInto(goal)
                         targetFollowsValue = false
-                        targetVersion.intValue++
+                        targetVersion.intValue = ++published
                     }
                 }
             }
@@ -306,16 +332,113 @@ class FuselineValue<T>(
         r.playNanos = 0L
     }
 
-    /** One frame of the move: every component's position and velocity, solved together. */
+    /**
+     * One frame of the move: every component's position and velocity, solved together. It is shown
+     * only if it moved the value far enough to be seen (more than an eighth of its threshold, in any
+     * component): the long, slow tail of a spring then stops redrawing and relaying out what reads
+     * it for changes nobody could see. Where it lands is always shown.
+     */
     private fun step(r: Ride, play: Long) {
         r.playNanos = play
+        if (dims == 1) {
+            // One number (most values): no loops, no copies.
+            val t = tracks[0]!!
+            t.sample(play)
+            val v = t.sampledValue
+            now[0] = v
+            speed[0] = t.sampledVelocity
+            val d = v - shown0
+            val step = threshold * PUBLISH_SHARE
+            if (d > step || d < -step) {
+                shown0 = v
+                version.intValue = ++published
+            }
+            return
+        }
+        val shown = shownRest!!
+        val publishStep = threshold * PUBLISH_SHARE
+        var seen = false
         for (i in 0 until dims) {
             val t = tracks[i]!!
             t.sample(play)
-            now[i] = t.sampledValue
+            val v = t.sampledValue
+            now[i] = v
             speed[i] = t.sampledVelocity
+            if (!seen) {
+                val d = v - shown[i]
+                seen = d > publishStep || d < -publishStep
+            }
         }
+        if (seen) {
+            for (i in 0 until dims) shown[i] = now[i]
+            shown0 = now[0]
+            version.intValue = ++published
+        }
+    }
+
+    /**
+     * Moves to [targetValue] under [animationSpec] like [animateTo], without a coroutine: the frame
+     * driver steps it directly and [arrived] is called when it lands. This is how a value following
+     * a target ([rememberFollowing]) moves, so a page of tiles costs no coroutine per value. [context]
+     * gives the frame clock and the animation speed (a composition's coroutine context). Any move or
+     * gesture under way is taken over, carrying on from the position and velocity it has.
+     */
+    internal fun follow(targetValue: T, animationSpec: Motion, context: kotlin.coroutines.CoroutineContext, arrived: (() -> Unit)?) {
+        job?.cancel(TakenOver())
+        job = null
+        dropNative()
+        converter.write(targetValue, goal)
+        val r = Ride(animationSpec)
+        val fromGesture = owner == MotionOwner.GESTURE
+        build(r, animationSpec)
+        aimed(animationSpec)
+        val scale = context[MotionDurationScale]?.scaleFactor ?: 1f
+        val clock = context[androidx.compose.runtime.MonotonicFrameClock]
+        if (r.durationNanos == Long.MAX_VALUE || clock == null) {
+            // A motion that never ends (or no frame clock): the coroutine path, as before.
+            kotlinx.coroutines.CoroutineScope(context).launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
+                animateTo(targetValue, animationSpec)
+                arrived?.invoke()
+            }
+            return
+        }
+        ride = r
+        if (owner != MotionOwner.ANIMATION) owner = MotionOwner.ANIMATION
+        if (MotionTrace.enabled) trace(if (fromGesture) MotionTrace.Kind.RELEASE else MotionTrace.Kind.START, MotionInspector.describe(animationSpec))
+        if (MotionInspector.enabled) MotionInspector.watch(this)
+        if (r.durationNanos == 0L || scale == 0f) {
+            land(r)
+            arrived?.invoke()
+            return
+        }
+        var handle: MoveHandle? = null
+        handle = FrameDriver.of(clock).start(context, r.durationNanos, scale, onStart = { r.retimer = it }, onFrame = { play -> step(r, play) }) {
+            if (native === handle) native = null
+            if (ride === r) land(r)
+            arrived?.invoke()
+        }
+        native = handle
+    }
+
+    /** Lands exactly where the motion [r] ends, still, and lets it go. */
+    private fun land(r: Ride) {
+        for (i in 0 until dims) now[i] = tracks[i]!!.endValue
+        speed.fill(0f)
+        r.playNanos = r.durationNanos
         moved()
+        if (MotionTrace.enabled) trace(MotionTrace.Kind.SETTLE)
+        ride = null
+        if (owner == MotionOwner.ANIMATION) owner = MotionOwner.IDLE
+    }
+
+    /** Ends whatever moves it, leaving it where it is: for a value no longer shown. */
+    internal fun halt() {
+        if (native == null && job == null) return
+        job?.cancel(TakenOver())
+        job = null
+        dropNative()
+        ride = null
+        if (owner == MotionOwner.ANIMATION) owner = MotionOwner.IDLE
     }
 
     /**
@@ -372,6 +495,8 @@ class FuselineValue<T>(
         val play = playNanos.coerceIn(0L, r.durationNanos)
         retimer.seek(play)
         step(r, play)
+        // A seek always shows the moment it asked for.
+        moved()
         if (MotionTrace.enabled) trace(MotionTrace.Kind.SEEK)
         return true
     }
@@ -390,13 +515,14 @@ class FuselineValue<T>(
     internal fun jumpTo(target: T) {
         job?.cancel(TakenOver())
         job = null
+        dropNative()
         ride = null
         if (owner != MotionOwner.IDLE) owner = MotionOwner.IDLE
         converter.write(target, now)
         converter.write(target, goal)
         speed.fill(0f)
         targetFollowsValue = false
-        targetVersion.intValue++
+        targetVersion.intValue = ++published
         moved()
     }
 
@@ -409,6 +535,7 @@ class FuselineValue<T>(
         // The move under way stops where it is; the gesture holds it from there.
         job?.cancel(TakenOver())
         job = null
+        dropNative()
         ride = null
         owner = MotionOwner.GESTURE
         val t = tracker ?: DragVelocity(dims).also { tracker = it }
@@ -426,7 +553,7 @@ class FuselineValue<T>(
         now.copyInto(goal)
         if (!targetFollowsValue) {
             targetFollowsValue = true
-            targetVersion.intValue++
+            targetVersion.intValue = ++published
         }
         moved()
     }
@@ -501,6 +628,7 @@ class FuselineValue<T>(
         val before = job
         job = me
         if (before != null && before !== me) before.cancel(TakenOver())
+        dropNative()
         try {
             block()
         } finally {
@@ -511,6 +639,9 @@ class FuselineValue<T>(
         }
     }
 }
+
+/** How far (a share of a value's threshold) a frame must move it to be shown. */
+private const val PUBLISH_SHARE = 0.125f
 
 private val origin = TimeSource.Monotonic.markNow()
 

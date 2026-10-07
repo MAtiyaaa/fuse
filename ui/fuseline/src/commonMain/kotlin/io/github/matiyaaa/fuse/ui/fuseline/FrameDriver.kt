@@ -23,12 +23,13 @@ import kotlin.coroutines.resume
  */
 internal class FrameDriver private constructor(private val clock: MonotonicFrameClock) {
 
-    private inner class Move(
+    private open inner class Move(
         var durationNanos: Long,
         val scale: Float,
         val onFrame: FrameStep,
-        val waiting: CancellableContinuation<Unit>,
-    ) : Retimer {
+        /** A suspended caller to resume on arrival, or null for a move made without a coroutine. */
+        val waiting: CancellableContinuation<Unit>?,
+    ) : Retimer, MoveHandle {
         var start = Long.MIN_VALUE
         var gone = false
 
@@ -47,6 +48,27 @@ internal class FrameDriver private constructor(private val clock: MonotonicFrame
         /** Puts the play at [playNanos] as of the frame just shown, so the next frame carries on from there. */
         override fun seek(playNanos: Long) {
             if (start == Long.MIN_VALUE) pending = playNanos else start = lastFrame - (playNanos * scale).toLong()
+        }
+
+        /** Leaves at once (taken over, or its value no longer shown): never stepped again. */
+        override fun cancel() {
+            if (gone) return
+            gone = true
+            if (moves.all { m -> m.gone }) loop?.cancel()
+        }
+
+        open fun arrive() {
+            gone = true
+            waiting?.resume(Unit)
+        }
+    }
+
+    /** A move made without a coroutine ([start]): [arrived] is called when it lands. */
+    private inner class NativeMove(durationNanos: Long, scale: Float, onFrame: FrameStep, private val arrived: () -> Unit) :
+        Move(durationNanos, scale, onFrame, null) {
+        override fun arrive() {
+            gone = true
+            arrived()
         }
     }
 
@@ -76,6 +98,19 @@ internal class FrameDriver private constructor(private val clock: MonotonicFrame
         }
     }
 
+    /**
+     * [run] without a coroutine: the move steps [onFrame] on every frame and calls [arrived] when
+     * [durationNanos] has played. Nothing is suspended or launched for it, so a value that follows
+     * a target ([rememberFollowing]) costs no coroutine of its own. Ends early with [MoveHandle.cancel].
+     */
+    fun start(context: CoroutineContext, durationNanos: Long, scale: Float, onStart: ((Retimer) -> Unit)?, onFrame: FrameStep, arrived: () -> Unit): MoveHandle {
+        val move = NativeMove(durationNanos, scale, onFrame, arrived)
+        onStart?.invoke(move)
+        moves += move
+        if (!running || loop?.isCancelled == true) start(context)
+        return move
+    }
+
     private fun start(context: CoroutineContext) {
         running = true
         // Its own job: a move that is cancelled never takes the others' frames with it.
@@ -98,7 +133,10 @@ internal class FrameDriver private constructor(private val clock: MonotonicFrame
                     if (drivers[clock] === this@FrameDriver) drivers.remove(clock)
                     val left = moves.toList()
                     moves.clear()
-                    for (m in left) if (!m.gone) m.waiting.cancel()
+                    for (m in left) if (!m.gone) {
+                        m.gone = true
+                        m.waiting?.cancel()
+                    }
                 }
             }
         }
@@ -120,6 +158,7 @@ internal class FrameDriver private constructor(private val clock: MonotonicFrame
 
     private fun stepMoves(frameNanos: Long) {
         FramePacing.frameAt(frameNanos)
+        FramePacing.movesUnderWay = moves.isNotEmpty()
         lastFrame = frameNanos
         val count = moves.size
         var kept = 0
@@ -127,12 +166,10 @@ internal class FrameDriver private constructor(private val clock: MonotonicFrame
             val m = moves[i]
             if (!m.gone) {
                 if (m.start == Long.MIN_VALUE) m.start = frameNanos - if (m.pending >= 0) (m.pending * m.scale).toLong() else 0L
-                val play = ((frameNanos - m.start) / m.scale).toLong()
+                val elapsed = frameNanos - m.start
+                val play = if (m.scale == 1f) elapsed else (elapsed / m.scale).toLong()
                 m.onFrame.step(play.coerceAtMost(m.durationNanos))
-                if (play >= m.durationNanos) {
-                    m.gone = true
-                    m.waiting.resume(Unit)
-                }
+                if (play >= m.durationNanos) m.arrive()
             }
             if (!m.gone) moves[kept++] = m
         }
@@ -159,6 +196,11 @@ internal class FrameDriver private constructor(private val clock: MonotonicFrame
  */
 internal fun interface FrameStep {
     fun step(playNanos: Long)
+}
+
+/** A move made without a coroutine ([FrameDriver.start]), ended early with [cancel]. */
+internal interface MoveHandle {
+    fun cancel()
 }
 
 internal interface Retimer {
@@ -258,8 +300,45 @@ object FramePacing {
         return !underLoad || decorationTick % 2L == 0L
     }
 
+    /** How many frames decorative loops ([decorationFrames]) have woken for, for measuring. */
+    var decorationWakeups: Long = 0L
+        internal set
+
+    /** Whether the frame driver had moves to step on its last frame. */
+    internal var movesUnderWay = false
+
+    private var lastInput = Long.MIN_VALUE
+
+    /**
+     * Fuseline 3.1: input just arrived (a button, a key, a touch, a scroll). Decoration then holds
+     * still while the person is doing something ([decorationHeld]), so every frame goes to what they
+     * are doing.
+     */
+    fun input(nowNanos: Long = monotonicNanos()) {
+        lastInput = nowNanos
+    }
+
+    /**
+     * Whether decoration (an ambient room, a slow drift, a shimmer) should hold its frame now: just
+     * after input, and for as long as what that input set moving is still moving. A room drifting a
+     * pixel a second that pauses for a moment while a page slides is never seen to stop; at rest
+     * everything moves exactly as it would. Motion that runs on its own, with nobody touching
+     * anything, never holds decoration.
+     */
+    fun decorationHeld(nowNanos: Long = monotonicNanos()): Boolean {
+        if (lastInput == Long.MIN_VALUE) return false
+        val since = nowNanos - lastInput
+        return since in 0 until INPUT_HOLD_NANOS || (since in 0 until INPUT_HOLD_MAX_NANOS && movesUnderWay)
+    }
+
+    /** How long decoration holds after the last input, and the longest it holds while things still move. */
+    private const val INPUT_HOLD_NANOS = 300_000_000L
+    private const val INPUT_HOLD_MAX_NANOS = 1_500_000_000L
+
     /** Forgets what it has measured (tests, and a display that changed). */
     fun reset() {
+        lastInput = Long.MIN_VALUE
+        movesUnderWay = false
         count = 0
         head = 0
         late = 0

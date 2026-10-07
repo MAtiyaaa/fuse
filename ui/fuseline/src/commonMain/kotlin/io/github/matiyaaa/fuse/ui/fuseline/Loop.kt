@@ -62,9 +62,57 @@ fun rememberLoopClock(label: String = "LoopClock", decorative: Boolean = true): 
     LaunchedEffect(clock, active) {
         if (!active) return@LaunchedEffect
         val from = clock.playNanos
+        // Time held still while the person is doing something ([FramePacing.decorationHeld]): the
+        // loop carries on from where it paused, never jumping ahead.
+        var held = 0L
+        var last = 0L
         runFrames(Long.MAX_VALUE) { play ->
-            if (!clock.decorative || FramePacing.shouldDrawDecoration()) clock.playNanos = from + play
+            val step = play - last
+            last = play
+            if (clock.decorative && FramePacing.decorationHeld()) held += step
+            else if (!clock.decorative || FramePacing.shouldDrawDecoration()) clock.playNanos = from + play - held
         }
     }
     return clock
 }
+
+/**
+ * Fuseline 3.1: the time of a decorative loop that needs [fps] updates a second (a room's light, a
+ * slow drift), in nanoseconds since it started, given to [onFrame] only when it is due. Between updates
+ * it waits instead of taking every frame of the display, so a 30 a second loop on a 120 Hz screen
+ * wakes 30 times a second, not 120. It holds still while the person is doing something
+ * ([FramePacing.decorationHeld]) and carries on from there, never jumping, and thins out with the
+ * other decoration while frames run late. [infinite] frames go through the platform's policy for
+ * endless animation ([withInfiniteFrameMillis]). Returns only when cancelled.
+ */
+suspend fun decorationFrames(fps: Int, infinite: Boolean = true, onFrame: (playedNanos: Long) -> Unit) {
+    val every = 1_000_000_000L / fps.coerceAtLeast(1)
+    var last = frame(infinite) { it }
+    var played = 0L
+    var shownAt = 0L
+    // The display's interval, from frames that came one after the other (not after a wait).
+    var interval = FramePacing.intervalNanos
+    var waited = false
+    while (true) {
+        val now = frame(infinite) { it }
+        FramePacing.decorationWakeups++
+        val step = (now - last).coerceAtLeast(0L)
+        last = now
+        if (!waited && step in 1 until interval) interval = step
+        if (!FramePacing.decorationHeld()) {
+            played += step
+            // Due within half a frame counts as due: updates land on the display's frames, never a frame late.
+            if (played - shownAt + interval / 2 >= every && FramePacing.shouldDrawDecoration()) {
+                shownAt = played
+                onFrame(played)
+            }
+        }
+        // Wait out the rest of the interval, less a frame, rather than taking frames in between.
+        val wait = every - (played - shownAt) - interval
+        waited = wait > MIN_WAIT_NANOS
+        if (waited) kotlinx.coroutines.delay(wait / NANOS_PER_MS)
+    }
+}
+
+/** Waits shorter than this aren't worth a timer: the next frame comes sooner. */
+private const val MIN_WAIT_NANOS = 4_000_000L

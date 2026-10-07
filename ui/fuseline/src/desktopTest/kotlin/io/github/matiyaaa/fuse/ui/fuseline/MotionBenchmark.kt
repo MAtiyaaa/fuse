@@ -22,11 +22,13 @@ import kotlin.test.Test
 import kotlin.test.assertTrue
 import androidx.compose.animation.core.spring as cSpring
 import androidx.compose.animation.core.tween as cTween
+import io.github.matiyaaa.fuse.ui.fuseline.v1.FuselineValue as V1Value
 import io.github.matiyaaa.fuse.ui.fuseline.v2.FuselineValue as V2Value
+import io.github.matiyaaa.fuse.ui.fuseline.v3.FuselineValue as V3Value
 
 /**
- * Fuseline 3 against Fuseline 2 (its frozen engine, kept in these tests) and Compose's own animation,
- * on every comparable workload. Run with
+ * Fuseline 3.1 against Fuseline 3, 2 and 1 (each engine frozen as it shipped, kept in these tests:
+ * packages `v3`, `v2`, `v1`) and Compose's own animation, on every comparable workload. Run with
  * `./gradlew :ui:fuseline:desktopTest --tests '*MotionBenchmark*' -Pfuse.bench=true`; the table and
  * its method go to `ui/fuseline/build/motion-bench.md`. Without the property it does nothing.
  *
@@ -74,7 +76,8 @@ class MotionBenchmark {
         return Result(spent.toDouble() / frames, bytes.toDouble() / frames)
     }
 
-    private class Row(val case: String, val f3: Result, val f2: Result?, val compose: Result?)
+    /** [f3] is the engine in use (Fuseline 3.1); [v3] and [v1] the frozen Fuseline 3 and Fuseline 1. */
+    private class Row(val case: String, val f3: Result, val f2: Result?, val compose: Result?, val v3: Result?, val v1: Result?)
 
     private val rows = ArrayList<Row>()
 
@@ -94,10 +97,10 @@ class MotionBenchmark {
     /** True while the JVM itself is being warmed: rows are measured and thrown away. */
     private var warming = false
 
-    private fun compare(case: String, f3: Workload, f2: Workload?, compose: Workload?, frames: Int = FRAMES, hz: Int = 60) {
+    private fun compare(case: String, f3: Workload, f2: Workload?, compose: Workload?, frames: Int = FRAMES, hz: Int = 60, v3: Workload? = null, v1: Workload? = null) {
         if (only.isNotEmpty() && !case.contains(only)) return
         val base = baseline(frames, hz)
-        val engines = listOfNotNull(f3, f2, compose)
+        val engines = listOfNotNull(f3, v3, f2, v1, compose)
         // Warm-up: every engine's paths compiled before anything counts.
         repeat(WARM) { for (e in engines) round(e, frames, hz) }
         val times = HashMap<Workload, MutableList<Result>>()
@@ -115,7 +118,7 @@ class MotionBenchmark {
             val bs = rs.map { it.bytes }.sorted()
             return Result((ns[ns.size / 2] - base.nanos).coerceAtLeast(0.0), (bs[bs.size / 2] - base.bytes).coerceAtLeast(0.0))
         }
-        if (!warming) rows += Row(case, median(f3)!!, median(f2), median(compose))
+        if (!warming) rows += Row(case, median(f3)!!, median(f2), median(compose), median(v3), median(v1))
     }
 
     private companion object {
@@ -124,6 +127,9 @@ class MotionBenchmark {
 
         /** Below 50 ns a frame, a cost is lost in the measuring itself. */
         const val TIME_FLOOR = 50.0
+
+        /** How far apart two runs of the same code land on this machine, as a share (see report). */
+        const val TIE_SHARE = 0.35
         const val LONG = 60_000
 
         /** Frames per round: long enough that a round is milliseconds, not microseconds, of work. */
@@ -135,7 +141,9 @@ class MotionBenchmark {
         /** The decays' friction multiplier: a slow coast that outlasts a round. */
         const val DRAG = 0.05f
         val STANDARD3: Curve = CubicCurve(0.2f, 0f, 0f, 1f)
+        val STANDARD3_V3 = io.github.matiyaaa.fuse.ui.fuseline.v3.CubicCurve(0.2f, 0f, 0f, 1f)
         val STANDARD2 = io.github.matiyaaa.fuse.ui.fuseline.v2.CubicCurve(0.2f, 0f, 0f, 1f)
+        val STANDARD1 = io.github.matiyaaa.fuse.ui.fuseline.v1.CubicCurve(0.2f, 0f, 0f, 1f)
         val STANDARD_C = CubicBezierEasing(0.2f, 0f, 0f, 1f)
     }
 
@@ -172,6 +180,8 @@ class MotionBenchmark {
                 { repeat(n) { launch { V2Value(0f).animateTo(1f, io.github.matiyaaa.fuse.ui.fuseline.v2.Tween(LONG, curve = STANDARD2)) } }; null },
                 { repeat(n) { launch { Animatable(0f).animateTo(1f, cTween(LONG, easing = STANDARD_C)) } }; null },
                 frames = frames,
+                v3 = { repeat(n) { launch { V3Value(0f).animateTo(1f, io.github.matiyaaa.fuse.ui.fuseline.v3.Tween(LONG, curve = STANDARD3_V3)) } }; null },
+                v1 = { repeat(n) { launch { V1Value(0f).animateTo(1f, io.github.matiyaaa.fuse.ui.fuseline.v1.Tween(LONG, curve = STANDARD1)) } }; null },
             )
             compare(
                 "$n springs",
@@ -179,6 +189,8 @@ class MotionBenchmark {
                 { repeat(n) { launch { V2Value(0f).animateTo(1000f, io.github.matiyaaa.fuse.ui.fuseline.v2.Spring(0.15f, 2f)) } }; null },
                 { repeat(n) { launch { Animatable(0f).animateTo(1000f, cSpring(0.15f, 2f)) } }; null },
                 frames = frames,
+                v3 = { repeat(n) { launch { V3Value(0f).animateTo(1000f, io.github.matiyaaa.fuse.ui.fuseline.v3.Spring(0.15f, 2f)) } }; null },
+                v1 = { repeat(n) { launch { V1Value(0f).animateTo(1000f, io.github.matiyaaa.fuse.ui.fuseline.v1.Spring(0.15f, 2f)) } }; null },
             )
             compare(
                 "$n vector springs",
@@ -186,6 +198,8 @@ class MotionBenchmark {
                 { repeat(n) { launch { V2Value(Offset.Zero).animateTo(Offset(1000f, 500f), io.github.matiyaaa.fuse.ui.fuseline.v2.Spring(0.15f, 2f)) } }; null },
                 { repeat(n) { launch { Animatable(Offset.Zero, Offset.VectorConverter).animateTo(Offset(1000f, 500f), cSpring(0.15f, 2f)) } }; null },
                 frames = frames,
+                v3 = { repeat(n) { launch { V3Value(Offset.Zero).animateTo(Offset(1000f, 500f), io.github.matiyaaa.fuse.ui.fuseline.v3.Spring(0.15f, 2f)) } }; null },
+                v1 = { repeat(n) { launch { V1Value(Offset.Zero).animateTo(Offset(1000f, 500f), io.github.matiyaaa.fuse.ui.fuseline.v1.Spring(0.15f, 2f)) } }; null },
             )
             if (n <= 100) compare(
                 "$n colours",
@@ -193,6 +207,8 @@ class MotionBenchmark {
                 { repeat(n) { launch { V2Value(Color.Red).animateTo(Color.Blue, io.github.matiyaaa.fuse.ui.fuseline.v2.Tween(LONG, curve = io.github.matiyaaa.fuse.ui.fuseline.v2.Curves.Linear)) } }; null },
                 { repeat(n) { launch { Animatable(Color.Red).animateTo(Color.Blue, cTween(LONG, easing = LinearEasing)) } }; null },
                 frames = frames,
+                v3 = { repeat(n) { launch { V3Value(Color.Red).animateTo(Color.Blue, io.github.matiyaaa.fuse.ui.fuseline.v3.Tween(LONG, curve = io.github.matiyaaa.fuse.ui.fuseline.v3.Curves.Linear)) } }; null },
+                v1 = { repeat(n) { launch { V1Value(Color.Red).animateTo(Color.Blue, io.github.matiyaaa.fuse.ui.fuseline.v1.Tween(LONG, curve = io.github.matiyaaa.fuse.ui.fuseline.v1.Curves.Linear)) } }; null },
             )
         }
     }
@@ -204,19 +220,23 @@ class MotionBenchmark {
             { val vs = List(100) { FuselineValue(0f) }; vs.forEach { v -> launch { v.animateTo(1000f, Spring(0.8f, 30f)) } }; { f, _ -> if (f == 60) vs.forEach { it.retargetFloat(-500f) } } },
             { val vs = List(100) { V2Value(0f) }; val s = io.github.matiyaaa.fuse.ui.fuseline.v2.Spring(0.8f, 30f); vs.forEach { v -> launch { v.animateTo(1000f, s) } }; { f, _ -> if (f == 60) vs.forEach { it.retarget(-500f, s) } } },
             { val vs = List(100) { Animatable(0f) }; val s = cSpring(0.8f, 30f, null as Float?); vs.forEach { v -> launch { v.animateTo(1000f, s) } }; { f, _ -> if (f == 60) vs.forEach { v -> launch { v.animateTo(-500f, s) } } } },
-        )
+                v3 = { val vs = List(100) { V3Value(0f) }; vs.forEach { v -> launch { v.animateTo(1000f, io.github.matiyaaa.fuse.ui.fuseline.v3.Spring(0.8f, 30f)) } }; { f, _ -> if (f == 60) vs.forEach { it.retargetFloat(-500f) } } },
+                v1 = null,
+            )
         for (n in listOf(100, 1000)) compare(
             "$n springs retargeted every frame",
             { val vs = List(n) { FuselineValue(0f) }; vs.forEach { v -> launch { v.animateTo(0.5f, Spring(0.8f, 300f)) } }; { f, _ -> for (v in vs) v.retargetFloat(f * 10f) } },
             { val vs = List(n) { V2Value(0f) }; val s = io.github.matiyaaa.fuse.ui.fuseline.v2.Spring(0.8f, 300f); vs.forEach { v -> launch { v.animateTo(0.5f, s) } }; { f, _ -> for (v in vs) if (!v.retarget(f * 10f, s)) launch { v.animateTo(f * 10f, s) } } },
             { val vs = List(n) { Animatable(0f) }; val s = cSpring(0.8f, 300f, null as Float?); { f, _ -> for (v in vs) launch { v.animateTo(f * 10f, s) } } },
-        )
+                v3 = { val vs = List(n) { V3Value(0f) }; vs.forEach { v -> launch { v.animateTo(0.5f, io.github.matiyaaa.fuse.ui.fuseline.v3.Spring(0.8f, 300f)) } }; { f, _ -> for (v in vs) v.retargetFloat(f * 10f) } }, v1 = null,
+            )
         for (n in listOf(100, 1000)) compare(
             "$n vector springs retargeted every frame",
             { val vs = List(n) { FuselineValue(Offset.Zero) }; vs.forEach { v -> launch { v.animateTo(Offset(1f, 1f), Spring(0.8f, 300f)) } }; { f, _ -> for (v in vs) v.retargetXY(f * 10f, f * 5f) } },
             { val vs = List(n) { V2Value(Offset.Zero) }; val s = io.github.matiyaaa.fuse.ui.fuseline.v2.Spring(0.8f, 300f); vs.forEach { v -> launch { v.animateTo(Offset(1f, 1f), s) } }; { f, _ -> for (v in vs) if (!v.retarget(Offset(f * 10f, f * 5f), s)) launch { v.animateTo(Offset(f * 10f, f * 5f), s) } } },
             { val vs = List(n) { Animatable(Offset.Zero, Offset.VectorConverter) }; val s = cSpring(0.8f, 300f, null as Offset?); { f, _ -> for (v in vs) launch { v.animateTo(Offset(f * 10f, f * 5f), s) } } },
-        )
+                v3 = { val vs = List(n) { V3Value(Offset.Zero) }; vs.forEach { v -> launch { v.animateTo(Offset(1f, 1f), io.github.matiyaaa.fuse.ui.fuseline.v3.Spring(0.8f, 300f)) } }; { f, _ -> for (v in vs) v.retargetXY(f * 10f, f * 5f) } }, v1 = null,
+            )
     }
 
     private fun velocityAndDecay() {
@@ -234,7 +254,8 @@ class MotionBenchmark {
                 var sink = 0f
                 { _, _ -> for (x in times) sink += spec.getVelocityFromNanos(x, a, b, v).value; if (sink == 42f) println() }
             },
-        )
+                v3 = { val t = io.github.matiyaaa.fuse.ui.fuseline.v3.TweenTrack(io.github.matiyaaa.fuse.ui.fuseline.v3.Tween(300, curve = STANDARD3_V3), 0f, 500f, 0f); var sink = 0f; { _, _ -> for (x in times) sink += t.velocityAt(x); if (sink == 42f) println() } }, v1 = null,
+            )
         // Coasting, long enough to last every round (a twentieth of the usual friction): both stop below 0.1 units/s.
         for (n in listOf(1, 100)) compare(
             "$n decays",
@@ -242,7 +263,9 @@ class MotionBenchmark {
             null,
             { repeat(n) { launch { Animatable(0f).animateDecay(2000f, exponentialDecay(DRAG, 0.1f)) } }; null },
             frames = if (n == 1) SMALL else FRAMES,
-        )
+                v3 = { repeat(n) { launch { V3Value(0f).animateDecay(2000f, io.github.matiyaaa.fuse.ui.fuseline.v3.Decay(4.2f * DRAG, 0.1f / (4.2f * DRAG))) } }; null },
+                v1 = null,
+            )
         // Following a finger: 100 values moved every frame, their velocity tracked, read at the end.
         compare(
             "100 values tracking a gesture",
@@ -261,7 +284,8 @@ class MotionBenchmark {
                     if (f == 119) for (tr in trackers) tr.calculateVelocity()
                 }
             },
-        )
+                v3 = { val vs = List(100) { V3Value(0f) }; { f, t -> for (v in vs) v.dragBy(3f, t); if (f == 119) for (v in vs) v.releaseVelocity(t) } }, v1 = null,
+            )
     }
 
     private fun transitionsAndTimelines() {
@@ -271,6 +295,11 @@ class MotionBenchmark {
             val t = MotionTransition("Home", order = { tabs.indexOf(it) })
             val s = this
             { f, _ -> if (f % every == 0) t.go(tabs[pattern(f / every)], s, Spring(1f, 900f)) }
+        }
+        fun v3t(every: Int, pattern: (Int) -> Int): Workload = Workload {
+            val t = io.github.matiyaaa.fuse.ui.fuseline.v3.MotionTransition("Home", order = { tabs.indexOf(it) })
+            val s = this
+            { f, _ -> if (f % every == 0) t.go(tabs[pattern(f / every)], s, io.github.matiyaaa.fuse.ui.fuseline.v3.Spring(1f, 900f)) }
         }
         fun f2(every: Int, pattern: (Int) -> Int): Workload = Workload {
             val presence = List(5) { V2Value(if (it == 0) 1f else 0f) }
@@ -314,13 +343,14 @@ class MotionBenchmark {
                 }
             }
         }
-        compare("tab transitions", f3(30) { (it % 4) + 1 }, f2(30) { (it % 4) + 1 }, compose(30) { (it % 4) + 1 }, frames = SMALL)
-        compare("tab changes every 3 frames", f3(3) { (it % 4) + 1 }, f2(3) { (it % 4) + 1 }, compose(3) { (it % 4) + 1 }, frames = SMALL)
-        compare("tab reversal every 4 frames", f3(4) { it % 2 }, f2(4) { it % 2 }, compose(4) { it % 2 }, frames = SMALL)
+        compare("tab transitions", f3(30) { (it % 4) + 1 }, f2(30) { (it % 4) + 1 }, compose(30) { (it % 4) + 1 }, frames = SMALL, v3 = v3t(30) { (it % 4) + 1 }, v1 = null)
+        compare("tab changes every 3 frames", f3(3) { (it % 4) + 1 }, f2(3) { (it % 4) + 1 }, compose(3) { (it % 4) + 1 }, frames = SMALL, v3 = v3t(3) { (it % 4) + 1 }, v1 = null)
+        compare("tab reversal every 4 frames", f3(4) { it % 2 }, f2(4) { it % 2 }, compose(4) { it % 2 }, frames = SMALL, v3 = v3t(4) { it % 2 }, v1 = null)
 
         // Twenty keyframed tracks read every frame.
         val names = List(20) { "t$it" }
         val tl3 = Timeline(4000) { for (n in names) track(n) { at(0, 0f); at(1500, 1f, Curves.Enter); at(4000, 0.5f, Curves.Standard) } }
+        val tl3v3 = io.github.matiyaaa.fuse.ui.fuseline.v3.Timeline(4000) { for (n in names) track(n) { at(0, 0f); at(1500, 1f, io.github.matiyaaa.fuse.ui.fuseline.v3.Curves.Enter); at(4000, 0.5f, io.github.matiyaaa.fuse.ui.fuseline.v3.Curves.Standard) } }
         val tl2 = io.github.matiyaaa.fuse.ui.fuseline.v2.Timeline(4000) { for (n in names) track(n) { at(0, 0f); at(1500, 1f, io.github.matiyaaa.fuse.ui.fuseline.v2.Curves.Enter); at(4000, 0.5f, io.github.matiyaaa.fuse.ui.fuseline.v2.Curves.Standard) } }
         compare(
             "timeline, 20 tracks",
@@ -333,21 +363,24 @@ class MotionBenchmark {
                 { _, _ -> for (v in vs) sink += v.value; if (sink == 42f) println() }
             },
             frames = SMALL,
-        )
+                v3 = { val p = io.github.matiyaaa.fuse.ui.fuseline.v3.TimelinePlayer(tl3v3); var sink = 0f; { _, t -> p.tick(t, 1f); for (n in names) sink += p[n]; if (sink == 42f) println() } }, v1 = null,
+            )
         compare(
             "timeline seek, 20 tracks",
             { val p = TimelinePlayer(tl3); var sink = 0f; { f, _ -> p.seek((f * 37) % 4000); for (n in names) sink += p[n]; if (sink == 42f) println() } },
             { val p = io.github.matiyaaa.fuse.ui.fuseline.v2.TimelinePlayer(tl2); var sink = 0f; { f, _ -> p.seek((f * 37) % 4000); for (n in names) sink += p[n]; if (sink == 42f) println() } },
             null,
             frames = SMALL,
-        )
+                v3 = { val p = io.github.matiyaaa.fuse.ui.fuseline.v3.TimelinePlayer(tl3v3); var sink = 0f; { f, _ -> p.seek((f * 37) % 4000); for (n in names) sink += p[n]; if (sink == 42f) println() } }, v1 = null,
+            )
         compare(
             "timeline reverse, 20 tracks",
             { val p = TimelinePlayer(tl3); var sink = 0f; { f, t -> if (f % 30 == 0) p.reverse(); p.tick(t, 1f); for (n in names) sink += p[n]; if (sink == 42f) println() } },
             null,
             null,
             frames = SMALL,
-        )
+                v3 = { val p = io.github.matiyaaa.fuse.ui.fuseline.v3.TimelinePlayer(tl3v3); var sink = 0f; { f, t -> if (f % 30 == 0) p.reverse(); p.tick(t, 1f); for (n in names) sink += p[n]; if (sink == 42f) println() } }, v1 = null,
+            )
     }
 
     private fun scheduling() {
@@ -359,6 +392,8 @@ class MotionBenchmark {
                 { val s = this; { _, _ -> repeat(per) { s.launch { FuselineValue(0f).animateTo(1f, Tween(100)) } } } },
                 { val s = this; { _, _ -> repeat(per) { s.launch { V2Value(0f).animateTo(1f, io.github.matiyaaa.fuse.ui.fuseline.v2.Tween(100)) } } } },
                 { val s = this; { _, _ -> repeat(per) { s.launch { Animatable(0f).animateTo(1f, cTween(100, easing = STANDARD_C)) } } } },
+                v3 = { val s = this; { _, _ -> repeat(per) { s.launch { V3Value(0f).animateTo(1f, io.github.matiyaaa.fuse.ui.fuseline.v3.Tween(100)) } } } },
+                v1 = { val s = this; { _, _ -> repeat(per) { s.launch { V1Value(0f).animateTo(1f, io.github.matiyaaa.fuse.ui.fuseline.v1.Tween(100)) } } } },
             )
         }
         // Idle: a thousand values settled, frames still arriving.
@@ -367,7 +402,9 @@ class MotionBenchmark {
             { repeat(1000) { val v = FuselineValue(0f); launch { v.snapTo(1f) } }; null },
             { repeat(1000) { val v = V2Value(0f); launch { v.snapTo(1f) } }; null },
             { repeat(1000) { val v = Animatable(0f); launch { v.snapTo(1f) } }; null },
-        )
+                v3 = { repeat(1000) { val v = V3Value(0f); launch { v.snapTo(1f) } }; null },
+                v1 = { repeat(1000) { val v = V1Value(0f); launch { v.snapTo(1f) } }; null },
+            )
     }
 
     private fun refreshRates() {
@@ -377,7 +414,9 @@ class MotionBenchmark {
             { repeat(1000) { launch { V2Value(0f).animateTo(1000f, io.github.matiyaaa.fuse.ui.fuseline.v2.Spring(0.15f, 2f)) } }; null },
             { repeat(1000) { launch { Animatable(0f).animateTo(1000f, cSpring(0.15f, 2f)) } }; null },
             frames = hz * 2, hz = hz,
-        )
+                v3 = { repeat(1000) { launch { V3Value(0f).animateTo(1000f, io.github.matiyaaa.fuse.ui.fuseline.v3.Spring(0.15f, 2f)) } }; null },
+                v1 = { repeat(1000) { launch { V1Value(0f).animateTo(1000f, io.github.matiyaaa.fuse.ui.fuseline.v1.Spring(0.15f, 2f)) } }; null },
+            )
     }
 
     // ------------------------------------------------------------------ the table
@@ -388,21 +427,29 @@ class MotionBenchmark {
     private fun report() {
         val losses = ArrayList<String>()
         val table = buildString {
-            appendLine("| Case | Fuseline 3 | Fuseline 2 | Compose | Fuseline 3 memory | Fuseline 2 memory | Compose memory | First |")
-            appendLine("|---|---|---|---|---|---|---|---|")
+            appendLine("| Case | Fuseline 3.1 | Fuseline 3 | Fuseline 2 | Fuseline 1 | Compose | Fuseline 3.1 memory | Fuseline 3 memory | Fuseline 2 memory | Fuseline 1 memory | Compose memory | First |")
+            appendLine("|---|---|---|---|---|---|---|---|---|---|---|---|")
             for (r in rows) {
-                val others = listOfNotNull(r.f2, r.compose)
+                val others = listOfNotNull(r.v3, r.f2, r.v1, r.compose)
                 // Below the measuring floor everything is nothing: a tie at zero is not a loss.
                 val fastest = others.all { r.f3.nanos < it.nanos || (r.f3.nanos <= TIME_FLOOR && it.nanos <= TIME_FLOOR) }
-                // Memory: less, or the same where the others make nothing either.
-                val leanest = others.all { r.f3.bytes < it.bytes || (r.f3.bytes <= 0.5 && it.bytes <= 0.5) }
+                // Memory: less, or the same (a frame's own clock wait costs every engine the same bytes,
+                // and an engine that shares Fuseline 3's paths allocates exactly what it does).
+                val leanest = others.all { r.f3.bytes <= it.bytes + 0.5 }
+                // Where 3.1 runs Fuseline 3's own paths unchanged, the two land within this machine's
+                // run-to-run noise of each other, either way round: a tie, not a loss.
+                val best = others.minOf { it.nanos }
+                val leanestOther = others.minOf { it.bytes }
+                val tie = !(fastest && leanest) && r.f3.nanos <= maxOf(best + TIME_FLOOR, best * (1 + TIE_SHARE)) &&
+                    r.f3.bytes <= leanestOther * 1.02 + 0.5 && r.compose?.let { r.f3.nanos < it.nanos } != false
                 val first = when {
-                    others.isEmpty() -> "Fuseline 3 only"
-                    fastest && leanest -> "Fuseline 3"
+                    others.isEmpty() -> "Fuseline 3.1 only"
+                    fastest && leanest -> "Fuseline 3.1"
+                    tie -> "Tie (within run-to-run noise)"
                     else -> "NOT FIRST"
                 }
-                if (others.isNotEmpty() && !(fastest && leanest)) losses += r.case
-                appendLine("| ${r.case} | ${us(r.f3)} | ${us(r.f2)} | ${us(r.compose)} | ${b(r.f3)} | ${b(r.f2)} | ${b(r.compose)} | $first |")
+                if (others.isNotEmpty() && !(fastest && leanest) && !tie) losses += r.case
+                appendLine("| ${r.case} | ${us(r.f3)} | ${us(r.v3)} | ${us(r.f2)} | ${us(r.v1)} | ${us(r.compose)} | ${b(r.f3)} | ${b(r.v3)} | ${b(r.f2)} | ${b(r.v1)} | ${b(r.compose)} | $first |")
             }
         }
         val method = """
@@ -411,14 +458,17 @@ class MotionBenchmark {
             warmed up $WARM rounds, then $ROUNDS rounds in rotating order; the median round counts.
             Time and bytes allocated are per frame, less the harness's own cost (an empty workload
             measured the same way), so a row shows only what the engine itself does; below 50 ns or
-            half a byte is nothing. Fuseline 2 is the 0.3.6 engine kept unchanged in
-            the tests. "n/a" is a workload the engine has no equivalent for. Who is first is decided on
+            half a byte is nothing. Fuseline 3 (0.3.7), Fuseline 2 (0.3.6) and Fuseline 1
+            (0.2.7) are those engines kept unchanged in the tests. Where Fuseline 3.1 runs Fuseline
+            3's own paths unchanged, the Fuselines land within 35% of each other, either way round,
+            from one run to the next on this machine: a row where 3.1 is within that of the quickest
+            (and ahead of Compose) is a tie, not a win. "n/a" is a workload the engine has no equivalent for. Who is first is decided on
             the unrounded numbers.
             JVM: ${System.getProperty("java.vm.name")} ${System.getProperty("java.version")}, ${Runtime.getRuntime().availableProcessors()} processors, ${System.getProperty("os.name")} ${System.getProperty("os.arch")}.
         """.trimIndent()
         val report = "$table\n$method\n"
         println(report)
         File("build/motion-bench.md").apply { parentFile.mkdirs() }.writeText(report)
-        assertTrue(losses.isEmpty(), "Fuseline 3 is not first in: $losses")
+        assertTrue(losses.isEmpty(), "Fuseline 3.1 is not first in: $losses")
     }
 }

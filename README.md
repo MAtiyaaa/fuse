@@ -29,7 +29,7 @@ Home screen.
 <a href="https://github.com/MAtiyaaa/fuse/releases/latest"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/brand/button-macos-dark.svg"><img src="docs/assets/brand/button-macos-light.svg" height="48" alt="Download for macOS"></picture></a>
 
 <sub>Android 9 or newer &nbsp;·&nbsp; 64-bit x86 Linux AppImage &nbsp;·&nbsp; Windows 10 and 11 &nbsp;·&nbsp; macOS on Apple silicon and Intel &nbsp;·&nbsp; <a href="#install">checksums and install notes</a></sub><br>
-<sub>0.3.7.4 is the <b>Motion Update</b>, with each device keeping its own Systems page and far less drawn every frame: Fuseline 3, Fuse's animation engine rebuilt so motion never breaks: anything moving carries on from where it is, at the speed it has, whatever interrupts it, with tabs that slide and reverse mid-change, layouts and shared elements that glide, and every input (touch, mouse, trackpad, keyboard, controller and stick) moving things the same way, faster than Fuseline 2 and Compose on every measured benchmark. It follows 0.3.6, the Unity Update (Fuse RomM, one Downloads page, Jellyfin for offline, streaming through Moonlight and saves that reach every device by themselves), and 0.3.5, the Swift Update. <a href="#where-fuse-stands">Here is where it stands.</a></sub><br>
+<sub>0.3.7.5 is the <b>Motion Update</b>, with Fuseline 3.1 and an optimised Android build that undoes 0.3.7.4's slowdown: Fuseline 3, Fuse's animation engine rebuilt so motion never breaks: anything moving carries on from where it is, at the speed it has, whatever interrupts it, with tabs that slide and reverse mid-change, layouts and shared elements that glide, and every input (touch, mouse, trackpad, keyboard, controller and stick) moving things the same way, faster than Fuseline 2 and Compose on every measured benchmark. It follows 0.3.6, the Unity Update (Fuse RomM, one Downloads page, Jellyfin for offline, streaming through Moonlight and saves that reach every device by themselves), and 0.3.5, the Swift Update. <a href="#where-fuse-stands">Here is where it stands.</a></sub><br>
 <sub>Or download from <a href="https://matiyaaa.github.io/fuse/">Fuse's website</a>, which always offers the latest version for your system.</sub>
 
 <br>
@@ -184,8 +184,18 @@ They behave the same on every device, answer to one design, and get better with 
       <img src="docs/assets/icons/fuseline.svg" width="56" height="56" alt=""><br>
       <h3>Fuseline <sub>by Fuse</sub></h3>
       Fuse's own animation engine, named after the line in Fuse's logo that carries the spark. Every
-      movement in Fuse runs on it, from a tile's lift to the setup's opening.
+      movement in Fuse runs on it, from a tile's lift to the setup's opening. Fuse 0.3.7 brought
+      <b>Fuseline 3</b>, where motion never breaks, and 0.3.7.5 brings <b>Fuseline 3.1</b>, which
+      takes work off every frame around it.
       <ul>
+        <li><b>Fuseline 3.1: values without coroutines.</b> A tile's lift, a button's colour and a
+        panel's size follow their targets with no coroutine of their own, so a page of tiles
+        composes faster and in a third of the memory.</li>
+        <li><b>Fuseline 3.1: no invisible frames, and decoration that waits for you.</b> A frame that
+        would move something less than anyone could see isn't drawn again, and the theme's room
+        holds still while you press buttons, then carries on as before.</li>
+        <li><b>Fuseline 3: motion never breaks.</b> Whatever interrupts something moving, it carries
+        on from where it is, at the speed it has.</li>
         <li><b>One frame for every move.</b> A hundred values moving cost one frame wait, not a
         hundred: a screen full of motion takes about a tenth of Compose's time and memory.</li>
         <li><b>Exact curves and springs.</b> Béziers solved with Newton steps, springs in closed
@@ -196,8 +206,8 @@ They behave the same on every device, answer to one design, and get better with 
         <li><b>Colours blend through Oklab</b>, so a fade stays even instead of dipping grey.</li>
         <li><b>Your motion choice everywhere</b>: Enhanced, Standard, Minimal, Reduced and Low Power apply to every
         animation at once.</li>
-        <li><b>Guarded by tests:</b> nothing in Fuse may import Compose's animation, and the
-        benchmarks fail the build if Fuseline is ever slower.</li>
+        <li><b>Guarded by tests:</b> nothing in Fuse may import Compose's animation, and Fuseline 3,
+        2 and 1 are kept in the tests, as they shipped, to measure every new Fuseline against.</li>
       </ul>
       <a href="docs/fuseline.md"><b>How Fuseline works</b></a>
     </td>
@@ -206,14 +216,17 @@ They behave the same on every device, answer to one design, and get better with 
 
 <div align="center">
 
-| Each frame, once every value moves | Fuseline by Fuse | Compose | |
-|---|--:|--:|--:|
-| 100 springs | 19.6 µs | 206.3 µs | **10x faster** |
-| 1,000 tweens | 145.1 µs | 2,848.0 µs | **20x faster** |
-| 100 colour fades | 19.9 µs | 208.4 µs | **10x faster** |
-| A page of 120 tiles swapping | 315 ms | 569 ms | **1.8x faster** |
+| Each frame | Fuseline 3.1 | Fuseline 3 | Fuseline 2 | Fuseline 1 | Compose |
+|---|--:|--:|--:|--:|--:|
+| 100 springs | **12.78 µs** | 13.71 µs | 16.80 µs | 16.74 µs | 184.82 µs |
+| 1,000 tweens | **51.28 µs** | 73.45 µs | 103.99 µs | 141.40 µs | 1692.95 µs |
+| 100 colour fades | **7.65 µs** | 9.33 µs | 15.23 µs | 14.73 µs | 147.28 µs |
+| 1,000 springs given a new target every frame | **5.54 µs** | 5.78 µs | 255.28 µs | n/a | 11829.74 µs |
+| A page of 120 tiles with 3 animated values each, composed | **2156 µs** | 2853 µs | n/a | n/a | 2999 µs |
+| The selection moving across 120 tiles | **1917 µs** | 1989 µs | n/a | n/a | 2221 µs |
+| A theme's room, redrawn per second while you press buttons | **3** | 44 | n/a | n/a | 130 |
 
-<sub>Measured on one thread with one manual frame clock, both warmed up (<a href="docs/fuseline.md#speed">method and every case</a>).</sub>
+<sub>Measured on one machine, every engine warmed up and given the same work; Fuseline 3, 2 and 1 are kept in Fuse's tests exactly as they shipped. Of 43 cases Fuseline 3.1 is first on 27, tied on 14 and behind Fuseline 3 on 2 (<a href="docs/fuseline.md#speed">method and every case</a>).</sub>
 
 </div>
 
@@ -554,10 +567,11 @@ Linux app, isn't offered on Windows and macOS (Fuse RomM is, on every computer).
 ## Where Fuse stands
 
 > [!IMPORTANT]
-> **Fuse 0.3.7.4 "The Motion Update" is still early, and moves like never before.** Fuseline 3, Fuse's
+> **Fuse 0.3.7.5 "The Motion Update" is still early, and moves like never before.** Fuseline 3, Fuse's
 > animation engine, keeps every motion continuous: whatever interrupts something moving (a new tab, a
 > finger, a reversal, the window changing size), it carries on from where it is at the speed it has.
-> It is faster than Fuseline 2 and Compose on every benchmark measured. 0.3.6, "The Unity Update",
+> Fuseline 3.1 keeps all of that and takes work off every frame around it, and is measured against
+> Fuseline 3, 2, 1 and Compose on every benchmark. 0.3.6, "The Unity Update",
 > brought everything into one place: Fuse RomM,
 > Fuse's native RomM integration, browses a RomM server, downloads games and BIOS into the folders
 > Fuse already has, uploads yours and keeps an offline copy of the library; Cartridge is still fully
@@ -578,8 +592,9 @@ Linux app, isn't offered on Windows and macOS (Fuse RomM is, on every computer).
 > 0.3.7.1 puts system cards on a handheld back to the size they were, 0.3.7.2 asks about Fuse Sync
 > before Who's playing and draws the controller anew, and 0.3.7.3 lets systems be as small as box art
 > with a picture of each console, keeps a look for each screen of a two-screen device, finishes RomM
-> uploads and has the second screen follow Downloads, and 0.3.7.4 keeps each device's Systems page its
-> own and draws far less every frame. See [the release notes](docs/releases/0.3.7.4.md).
+> uploads and has the second screen follow Downloads, 0.3.7.4 keeps each device's Systems page its
+> own, and 0.3.7.5 undoes 0.3.7.4's slowdown on Android, builds Fuse optimised for your device and
+> brings Fuseline 3.1. See [the release notes](docs/releases/0.3.7.5.md).
 
 <details>
 <summary><b>Every release so far</b></summary>
@@ -587,6 +602,7 @@ Linux app, isn't offered on Windows and macOS (Fuse RomM is, on every computer).
 
 | Version | Name | What it brought |
 |---|---|---|
+| [0.3.7.5](docs/releases/0.3.7.5.md) | The Motion Update | Fuseline 3.1 (values without coroutines, no invisible frames, decoration that waits for you, paced decoration), measured against Fuseline 3, 2, 1 and Compose; an optimised Android build compiled ahead of time; 0.3.7.4's slowdown on Android undone; selection moves that redraw two items |
 | [0.3.7.4](docs/releases/0.3.7.4.md) | The Motion Update | Each device keeps its own Systems page; systems made too large through Fuse Sync are put back; arranging on a short screen; far less drawn every frame; the slowest frame shown on the device |
 | [0.3.7.3](docs/releases/0.3.7.3.md) | The Motion Update | Systems as small as a game's box art, with a picture of each console you can change; a System size setting; arranging that moves systems along in order; a Systems look for each screen of a two-screen device; RomM uploads that finish; the second screen following Downloads |
 | [0.3.7.2](docs/releases/0.3.7.2.md) | The Motion Update | Fuse Sync before Who's playing in setup, so your household's profiles are there to choose; a new, solid controller picture with Fuse's mark in the middle |

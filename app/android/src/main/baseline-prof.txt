@@ -1,0 +1,5 @@
+# Fuse's own code, compiled ahead of time at install (profileinstaller) instead of interpreted until
+# the device gets round to compiling it: the interface, Fuseline and everything they call. Compose's
+# libraries bring their own profiles, installed the same way.
+HSPLio/github/matiyaaa/fuse/**->**(**)**
+Lio/github/matiyaaa/fuse/**;
