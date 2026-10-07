@@ -1,8 +1,10 @@
 package io.github.matiyaaa.fuse.ui.fuseline
 
+import androidx.compose.runtime.FloatState
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
@@ -17,83 +19,221 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.cancelAndJoin
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.job
 import kotlin.coroutines.coroutineContext
+import kotlin.time.TimeSource
 
 /**
- * A value that moves: Fuseline's animated value. [animateTo] runs it to a target under a [Motion],
- * frame by frame, and [snapTo] puts it there at once. A new move takes over from one under way
- * (that one ends with a [CancellationException]), starting from the value and speed it had, so a
- * spring retargeted mid-flight carries on without a jolt.
+ * A value that moves: Fuseline's animated value, and the one place its motion lives. It owns its
+ * position, its velocity, its target, the motion under way, how far that motion has played and who
+ * is moving it ([owner]: nobody, a motion, or a gesture). Every way of moving it carries on from the
+ * exact position and velocity it has, so motion never breaks continuity:
  *
- * Reading [value] in composition or drawing subscribes to it like any Compose state. Moves are
- * made from the main thread, as Compose code is.
+ * - [animateTo] runs it to a target under any [Motion]; a new one takes over from the one under way.
+ * - [retarget] gives the motion under way a new target (or a new motion) in place, without a new
+ *   move, so a value following a finger, a scroll or the selection every frame stays cheap.
+ * - [seek] moves the motion under way to any moment of its play, forward or back.
+ * - [dragBy] and [dragTo] hand it to a gesture; [release], [fling] and [flingTo] hand it back to a
+ *   motion with the gesture's own velocity; [cancelDrag] lets go where it is.
+ * - [animateDecay] coasts it from a velocity, [snapTo] puts it somewhere at once, [stop] stills it.
+ *
+ * Reading [value] (or [floatValue]) in composition or drawing subscribes to it like any Compose
+ * state. A frame writes one number that Compose watches and nothing else: the value itself is kept
+ * as plain floats and put together only when read, so a value in motion makes no objects per frame.
+ * Moves are made from the main thread, as Compose code is.
  */
 @Stable
 class FuselineValue<T>(
     initialValue: T,
     val converter: Converter<T>,
-    /** How close counts as arrived for a spring without its own threshold. */
+    /** How close counts as arrived for a motion without its own threshold. */
     private val threshold: Float = converter.threshold,
     val label: String = "FuselineValue",
 ) {
     private val dims = converter.size
     private val now = FloatArray(dims).also { converter.write(initialValue, it) }
     private val speed = FloatArray(dims)
-    private var owner: Job? = null
+    private val goal = FloatArray(dims).also { converter.write(initialValue, it) }
+    private var scratchArray: FloatArray? = null
+    private val scratch: FloatArray get() = scratchArray ?: FloatArray(dims).also { scratchArray = it }
+    private val tracks = arrayOfNulls<Track>(dims)
 
-    /** The move under way: its tracks and where it lands, which [retarget] replaces in place. */
-    private class Ride<T>(var tracks: Array<Track>, val goal: FloatArray, var target: T, val spring: Boolean) {
+    /** The coroutine of the move in charge, if any. */
+    private var job: Job? = null
+
+    /** The move under way: its motion, where it lands, how far it has played. */
+    private class Ride(var motion: Motion) {
         var retimer: Retimer? = null
+        var durationNanos = 0L
+        var playNanos = 0L
     }
 
-    private var ride: Ride<T>? = null
+    private var ride: Ride? = null
+
+    // What Compose watches: a number bumped whenever the value moves. The value is read from the
+    // floats and kept until the next bump, so reading it twice in a frame builds it once.
+    private val version = mutableIntStateOf(0)
+    private var readAt = -1
+    private var read: T = initialValue
+
+    // The target is kept as floats too ([goal]), and put together only when read.
+    private val targetVersion = mutableIntStateOf(0)
+    private var targetReadAt = -1
+    private var targetRead: T = initialValue
+
+    /** While a gesture holds it, the target is wherever the value is (read from it, never built per event). */
+    private var targetFollowsValue = false
 
     /** Where the value is now. */
-    var value: T by mutableStateOf(initialValue)
+    val value: T
+        get() {
+            val v = version.intValue
+            if (v != readAt) {
+                read = converter.read(now)
+                readAt = v
+            }
+            return read
+        }
+
+    /** One number of the value (x of a position, the width of a size), read without building the value. */
+    fun component(index: Int): Float {
+        version.intValue
+        return now[index]
+    }
+
+    /** One number of the velocity, read without building it. */
+    fun velocityComponent(index: Int): Float {
+        version.intValue
+        return speed[index]
+    }
+
+    /** How long the motion under way has left, in nanoseconds (0 at rest; [Long.MAX_VALUE] for a loop). */
+    val remainingNanos: Long
+        get() {
+            val r = ride ?: return 0L
+            if (r.durationNanos == Long.MAX_VALUE) return Long.MAX_VALUE
+            return (r.durationNanos - r.playNanos).coerceAtLeast(0L)
+        }
+
+    private fun trace(kind: MotionTrace.Kind, detail: String? = null) {
+        MotionTrace.record(kind, label, now[0], speed[0], detail)
+    }
+
+    /** One number of the target, read without building it. */
+    fun targetComponent(index: Int): Float {
+        targetVersion.intValue
+        return if (targetFollowsValue) now[index] else goal[index]
+    }
+
+    /** A one-number value as a float, without boxing it. */
+    val floatValue: Float
+        get() {
+            version.intValue
+            return now[0]
+        }
+
+    /** Where it is going (where it is, at rest; where a decay will stop). */
+    val targetValue: T
+        get() {
+            val v = targetVersion.intValue
+            if (targetFollowsValue) return value
+            if (v != targetReadAt) {
+                targetRead = converter.read(goal)
+                targetReadAt = v
+            }
+            return targetRead
+        }
+
+    /** Who moves it now. */
+    var owner: MotionOwner by mutableStateOf(MotionOwner.IDLE)
         private set
 
-    /** Where it is going (where it is, at rest). */
-    var targetValue: T by mutableStateOf(initialValue)
-        private set
+    /** True while a motion moves it. */
+    val isRunning: Boolean get() = owner == MotionOwner.ANIMATION
 
-    /** True while a move is under way. */
-    var isRunning: Boolean by mutableStateOf(false)
-        private set
+    /** True while a gesture moves it. */
+    val isDragging: Boolean get() = owner == MotionOwner.GESTURE
 
     /** How fast it is moving, in its own units per second. */
-    val velocity: T get() = converter.read(speed.copyOf())
+    val velocity: T get() = converter.read(speed)
+
+    /** The motion under way, or null. */
+    val motion: Motion? get() = ride?.motion
+
+    /** How far the motion under way has played, 0 to 1 (1 at rest; 0 for a loop that never ends). */
+    val progress: Float
+        get() {
+            version.intValue
+            val r = ride ?: return 1f
+            if (r.durationNanos == Long.MAX_VALUE) return 0f
+            if (r.durationNanos <= 0L) return 1f
+            return (r.playNanos.toDouble() / r.durationNanos).coerceIn(0.0, 1.0).toFloat()
+        }
+
+    /** How long the motion under way has played, in nanoseconds. */
+    val playNanos: Long get() = ride?.playNanos ?: 0L
 
     /** The value as read-only state, for handing out. */
-    fun asState(): State<T> = valueState
-
-    private val valueState = object : State<T> {
+    fun asState(): State<T> = valueState ?: object : State<T> {
         override val value: T get() = this@FuselineValue.value
-    }
+    }.also { valueState = it }
 
-    /** Puts the value at [targetValue] at once, stopping any move. */
-    suspend fun snapTo(targetValue: T) {
-        takeOver {
-            converter.write(targetValue, now)
-            speed.fill(0f)
-            this.targetValue = targetValue
-            value = targetValue
-        }
-    }
+    private var valueState: State<T>? = null
 
-    /** Stops where it is. */
-    suspend fun stop() {
-        takeOver { speed.fill(0f); targetValue = value }
+    /** A one-number value as [FloatState], read without boxing. */
+    fun asFloatState(): FloatState = floatState ?: object : FloatState {
+        override val floatValue: Float get() = this@FuselineValue.floatValue
+    }.also { floatState = it }
+
+    private var floatState: FloatState? = null
+
+    private fun moved() {
+        version.intValue++
     }
 
     /**
-     * Moves to [targetValue] under [animationSpec], starting at [initialVelocity] (or the speed it
-     * has now). [block] runs on every frame after the value is updated. Returns once there; ends with
-     * a [CancellationException] when another move takes over or the caller is cancelled, leaving the
-     * value (and its speed) where it got to.
+     * The target is now [goal] (as the motion has it): for motions that go their own way (a decay,
+     * keyframes, a sequence), where they end.
+     */
+    private fun aimed(motion: Motion) {
+        if (!(motion is Spring || motion is Tween || motion is Snap) && motion.ends) {
+            for (i in 0 until dims) goal[i] = tracks[i]!!.endValue
+        }
+        targetFollowsValue = false
+        targetVersion.intValue++
+    }
+
+    /** Puts the value at [targetValue] at once, stopping any move or gesture. */
+    suspend fun snapTo(targetValue: T) {
+        takeOver {
+            converter.write(targetValue, now)
+            converter.write(targetValue, goal)
+            speed.fill(0f)
+            targetFollowsValue = false
+            targetVersion.intValue++
+            moved()
+            if (MotionTrace.enabled) trace(MotionTrace.Kind.SNAP)
+        }
+    }
+
+    /** Stops where it is, still. */
+    suspend fun stop() {
+        takeOver {
+            speed.fill(0f)
+            now.copyInto(goal)
+            targetFollowsValue = false
+            targetVersion.intValue++
+            moved()
+            if (MotionTrace.enabled) trace(MotionTrace.Kind.STOP)
+        }
+    }
+
+    /**
+     * Moves to [targetValue] under [animationSpec], starting at [initialVelocity] (or the velocity it
+     * has now, whoever was moving it). [block] runs on every frame after the value is updated. Returns
+     * once there; ends with a [CancellationException] when another move or a gesture takes over or the
+     * caller is cancelled, leaving the value (and its velocity) where it got to.
      */
     suspend fun animateTo(
         targetValue: T,
@@ -102,81 +242,280 @@ class FuselineValue<T>(
         block: (FuselineValue<T>.() -> Unit)? = null,
     ) {
         takeOver {
-            val goal = FloatArray(dims).also { converter.write(targetValue, it) }
-            val startSpeed = initialVelocity?.let { v -> FloatArray(dims).also { converter.write(v, it) } } ?: speed.copyOf()
-            val tracks = Array(dims) { i -> Track.of(animationSpec, now[i], goal[i], startSpeed[i], threshold) }
-            val r = Ride(tracks, goal, targetValue, animationSpec is Spring)
+            converter.write(targetValue, goal)
+            if (initialVelocity != null) converter.write(initialVelocity, speed)
+            val r = Ride(animationSpec)
+            val fromGesture = owner == MotionOwner.GESTURE
+            build(r, animationSpec)
+            aimed(animationSpec)
             ride = r
-            this.targetValue = targetValue
-            isRunning = true
+            owner = MotionOwner.ANIMATION
+            if (MotionTrace.enabled) trace(
+                when {
+                    fromGesture -> MotionTrace.Kind.RELEASE
+                    animationSpec is Decay -> MotionTrace.Kind.DECAY
+                    speed.any { it != 0f } -> MotionTrace.Kind.HANDOFF
+                    else -> MotionTrace.Kind.START
+                },
+                MotionInspector.describe(animationSpec),
+            )
+            if (MotionInspector.enabled) MotionInspector.watch(this)
             try {
-                runFrames(tracks.maxOf { it.durationNanos }, onStart = { r.retimer = it }) { play ->
-                    // The tracks may have been replaced since the last frame (a new target, in place).
-                    val tr = r.tracks
-                    for (i in 0 until dims) {
-                        now[i] = tr[i].valueAt(play)
-                        speed[i] = tr[i].velocityAt(play)
-                    }
-                    // Converters only read the array, so no copy is made per frame.
-                    value = converter.read(now)
+                runFrames(r.durationNanos, onStart = { r.retimer = it }) { play ->
+                    step(r, play)
                     block?.invoke(this)
                 }
-                // Lands exactly, whatever the last frame's rounding.
-                r.goal.copyInto(now)
+                // Lands exactly where the motion ends, whatever the last frame's rounding.
+                for (i in 0 until dims) now[i] = tracks[i]!!.endValue
                 speed.fill(0f)
-                value = r.target
+                r.playNanos = r.durationNanos
+                moved()
+                if (MotionTrace.enabled) trace(MotionTrace.Kind.SETTLE)
                 block?.invoke(this)
             } finally {
-                if (ride === r) ride = null
-                // A move that was taken over leaves the running flag to the one in charge now.
-                if (owner === currentCoroutineContext().job) isRunning = false
+                if (ride === r) {
+                    ride = null
+                    // Cancelled from outside (not taken over): it rests where it got to, which is now
+                    // its target. Its velocity is kept, so the next move carries on from it.
+                    if (job === currentCoroutineContext().job && r.playNanos < r.durationNanos) {
+                        now.copyInto(goal)
+                        targetFollowsValue = false
+                        targetVersion.intValue++
+                    }
+                }
             }
         }
     }
 
+    /** Coasts from [initialVelocity] under [decay] to wherever that takes it ([targetValue] says where, from the start). */
+    suspend fun animateDecay(initialVelocity: T, decay: Decay = Decay(), block: (FuselineValue<T>.() -> Unit)? = null) {
+        animateTo(value, decay, initialVelocity, block)
+    }
+
+    /** The tracks for [motion] from where and how fast the value is now, reusing the ones it has. */
+    private fun build(r: Ride, motion: Motion) {
+        var longest = 0L
+        for (i in 0 until dims) {
+            val t = Track.reuse(tracks[i], motion, now[i], goal[i], speed[i], threshold, i)
+            tracks[i] = t
+            val d = t.durationNanos
+            if (d > longest) longest = d
+        }
+        r.motion = motion
+        r.durationNanos = longest
+        r.playNanos = 0L
+    }
+
+    /** One frame of the move: every component's position and velocity, solved together. */
+    private fun step(r: Ride, play: Long) {
+        r.playNanos = play
+        for (i in 0 until dims) {
+            val t = tracks[i]!!
+            t.sample(play)
+            now[i] = t.sampledValue
+            speed[i] = t.sampledVelocity
+        }
+        moved()
+    }
+
     /**
-     * Gives the spring under way a new [targetValue] in place: it carries on from where it is, at
-     * the speed it has, toward the new target under [animationSpec], without a new move. This is
-     * what a value following a finger, a scroll or a selection wants every frame, and it costs a
-     * few small objects instead of a whole move. The move's caller still returns when it arrives
-     * (at the new target). False when no spring is under way here: then start one with [animateTo].
+     * Gives the move under way a new [targetValue] in place (and a new motion, with [animationSpec]):
+     * it carries on from where it is, at the velocity it has, without a new move or any new objects.
+     * This is what a value following a finger, a scroll or a selection wants every frame. The move's
+     * caller still returns when it arrives (at the new target). False when nothing is moving it:
+     * then start a move with [animateTo].
      */
-    fun retarget(targetValue: T, animationSpec: Spring = Spring(threshold = threshold)): Boolean {
+    fun retarget(targetValue: T, animationSpec: Motion? = null): Boolean {
         val r = ride ?: return false
         val retimer = r.retimer ?: return false
-        if (!r.spring) return false
-        converter.write(targetValue, r.goal)
-        var longest = 0L
-        val tracks = r.tracks
-        for (i in 0 until dims) {
-            val t = Track.of(animationSpec, now[i], r.goal[i], speed[i], threshold)
-            tracks[i] = t
-            if (t.durationNanos > longest) longest = t.durationNanos
-        }
-        r.target = targetValue
-        this.targetValue = targetValue
-        retimer.retime(longest)
+        if (owner != MotionOwner.ANIMATION) return false
+        converter.write(targetValue, goal)
+        return rebuild(r, retimer, animationSpec)
+    }
+
+    /** [retarget] for a one-number value, without boxing the target: the path for following a finger every frame. */
+    fun retargetFloat(target: Float, animationSpec: Motion? = null): Boolean {
+        val r = ride ?: return false
+        val retimer = r.retimer ?: return false
+        if (owner != MotionOwner.ANIMATION) return false
+        goal[0] = target
+        return rebuild(r, retimer, animationSpec)
+    }
+
+    /** [retarget] for a two-number value (a position, a size), without boxing the target. */
+    fun retargetXY(x: Float, y: Float, animationSpec: Motion? = null): Boolean {
+        val r = ride ?: return false
+        val retimer = r.retimer ?: return false
+        if (owner != MotionOwner.ANIMATION) return false
+        goal[0] = x
+        goal[1] = y
+        return rebuild(r, retimer, animationSpec)
+    }
+
+    private fun rebuild(r: Ride, retimer: Retimer, animationSpec: Motion?): Boolean {
+        val motion = animationSpec ?: r.motion
+        val switched = motion != r.motion
+        build(r, motion)
+        aimed(motion)
+        retimer.retime(r.durationNanos)
+        if (MotionTrace.enabled) trace(MotionTrace.Kind.RETARGET, if (switched) MotionInspector.describe(motion) else null)
         return true
     }
 
     /**
-     * Runs [block] as the one move in charge, cancelling the one before it. Moves run on the main
-     * thread and only between frames, so the old one has stopped writing the moment it is
-     * cancelled: it waits on a frame it will never get. Nothing waits for it to unwind, which keeps
-     * a value retargeted every frame (following a finger or a scroll) as cheap as one that isn't.
+     * Moves the motion under way to [playNanos] into its play (any moment, forward or back, past its
+     * end ends it there) and shows that moment now. False when nothing is moving it.
+     */
+    fun seek(playNanos: Long): Boolean {
+        val r = ride ?: return false
+        val retimer = r.retimer ?: return false
+        val play = playNanos.coerceIn(0L, r.durationNanos)
+        retimer.seek(play)
+        step(r, play)
+        if (MotionTrace.enabled) trace(MotionTrace.Kind.SEEK)
+        return true
+    }
+
+    /** [seek] to a share of the motion under way, 0 to 1. False for a loop that never ends, or nothing moving. */
+    fun seekProgress(fraction: Float): Boolean {
+        val d = ride?.durationNanos ?: return false
+        if (d == Long.MAX_VALUE) return false
+        return seek((d * fraction.coerceIn(0f, 1f).toDouble()).toLong())
+    }
+
+    /**
+     * Puts the value at [target] at once, still, from outside a coroutine: for Fuseline's own parts
+     * placing a value nobody sees yet (a page waiting off to its side, an element's first place).
+     */
+    internal fun jumpTo(target: T) {
+        job?.cancel(TakenOver())
+        job = null
+        ride = null
+        if (owner != MotionOwner.IDLE) owner = MotionOwner.IDLE
+        converter.write(target, now)
+        converter.write(target, goal)
+        speed.fill(0f)
+        targetFollowsValue = false
+        targetVersion.intValue++
+        moved()
+    }
+
+    // ----------------------------------------------------------------------------------------
+    // Gestures
+
+    private var tracker: DragVelocity? = null
+
+    private fun grab(timeNanos: Long) {
+        // The move under way stops where it is; the gesture holds it from there.
+        job?.cancel(TakenOver())
+        job = null
+        ride = null
+        owner = MotionOwner.GESTURE
+        val t = tracker ?: DragVelocity(dims).also { tracker = it }
+        t.reset()
+        t.add(timeNanos, now)
+        speed.fill(0f)
+        if (MotionTrace.enabled) trace(MotionTrace.Kind.GESTURE_TAKEOVER)
+        if (MotionInspector.enabled) MotionInspector.watch(this)
+    }
+
+    private fun dragged(timeNanos: Long) {
+        val t = tracker!!
+        t.add(timeNanos, now)
+        t.velocity(timeNanos, speed)
+        now.copyInto(goal)
+        if (!targetFollowsValue) {
+            targetFollowsValue = true
+            targetVersion.intValue++
+        }
+        moved()
+    }
+
+    /** Moves the value by [delta] under a gesture (taking it from any move under way), at [timeNanos]. */
+    fun dragBy(delta: T, timeNanos: Long = monotonicNanos()) {
+        if (owner != MotionOwner.GESTURE) grab(timeNanos)
+        converter.write(delta, scratch)
+        for (i in 0 until dims) now[i] += scratch[i]
+        dragged(timeNanos)
+    }
+
+    /** Puts the value at [position] under a gesture (taking it from any move under way), at [timeNanos]. */
+    fun dragTo(position: T, timeNanos: Long = monotonicNanos()) {
+        if (owner != MotionOwner.GESTURE) grab(timeNanos)
+        converter.write(position, now)
+        dragged(timeNanos)
+    }
+
+    /** How fast the gesture was moving the value at [timeNanos] (still, if it had paused). */
+    fun releaseVelocity(timeNanos: Long = monotonicNanos()): T {
+        val t = tracker ?: return converter.read(speed.also { it.fill(0f) })
+        t.velocity(timeNanos, speed)
+        return converter.read(speed)
+    }
+
+    /** Lets go where it is: the gesture ends without a motion, and the value rests. */
+    fun cancelDrag() {
+        if (owner != MotionOwner.GESTURE) return
+        owner = MotionOwner.IDLE
+        speed.fill(0f)
+        moved()
+    }
+
+    /** Lets go and moves to [targetValue] under [animationSpec], starting at the gesture's own velocity. */
+    suspend fun release(targetValue: T, animationSpec: Motion = Spring(threshold = threshold), timeNanos: Long = monotonicNanos()) {
+        animateTo(targetValue, animationSpec, releaseVelocity(timeNanos))
+    }
+
+    /** Lets go and coasts at the gesture's own velocity under [decay]. */
+    suspend fun fling(decay: Decay = Decay(), timeNanos: Long = monotonicNanos()) {
+        animateDecay(releaseVelocity(timeNanos), decay)
+    }
+
+    /**
+     * Lets go and lands on a resting place: where a coast under [decay] would stop is worked out first,
+     * [choose] picks the place from that (the nearest page, item or edge), and [settle] takes the value
+     * there starting at the gesture's own velocity.
+     */
+    suspend fun flingTo(
+        choose: (projected: T) -> T,
+        decay: Decay = Decay(),
+        settle: Motion = Spring(threshold = threshold),
+        timeNanos: Long = monotonicNanos(),
+    ) {
+        val v = releaseVelocity(timeNanos)
+        converter.write(v, scratch)
+        val projected = FloatArray(dims) { i -> projectDecay(now[i], scratch[i], decay, decay.threshold ?: threshold) }
+        val chosen = choose(converter.read(projected))
+        if (MotionTrace.enabled) trace(MotionTrace.Kind.DESTINATION, "projected ${projected.joinToString { fmt(it, 1) }}, chose $chosen")
+        animateTo(chosen, settle, v)
+    }
+
+    /**
+     * Runs [block] as the one move in charge, cancelling the one before it (or ending a gesture).
+     * Moves run on the main thread and only between frames, so the old one has stopped writing the
+     * moment it is cancelled: it waits on a frame it will never get. Nothing waits for it to unwind,
+     * which keeps a value retargeted every frame as cheap as one that isn't.
      */
     private suspend inline fun takeOver(block: () -> Unit) {
         val me = currentCoroutineContext().job
-        val before = owner
-        owner = me
+        val before = job
+        job = me
         if (before != null && before !== me) before.cancel(TakenOver())
         try {
             block()
         } finally {
-            if (owner === me) owner = null
+            if (job === me) {
+                job = null
+                if (owner == MotionOwner.ANIMATION) owner = MotionOwner.IDLE
+            }
         }
     }
 }
+
+private val origin = TimeSource.Monotonic.markNow()
+
+/** Nanoseconds on a clock that only moves forward, for gestures that don't give their own times. */
+fun monotonicNanos(): Long = origin.elapsedNow().inWholeNanoseconds
 
 /** A [FuselineValue] of a float. */
 fun FuselineValue(initialValue: Float, threshold: Float = FloatConverter.threshold): FuselineValue<Float> =
@@ -215,8 +554,11 @@ suspend fun animate(
     block: (value: Float, velocity: Float) -> Unit,
 ) {
     val track = Track.of(animationSpec, initialValue, targetValue, initialVelocity, FloatConverter.threshold)
-    runFrames(track.durationNanos) { play -> block(track.valueAt(play), track.velocityAt(play)) }
-    block(targetValue, 0f)
+    runFrames(track.durationNanos) { play ->
+        track.sample(play)
+        block(track.sampledValue, track.sampledVelocity)
+    }
+    block(track.endValue, 0f)
 }
 
 /**
@@ -225,7 +567,7 @@ suspend fun animate(
  * turned off) nothing plays and the move ends at once. A move that never ends tells the platform
  * so, the way tests and screenshot tools expect of loops ([InfiniteAnimationPolicy]).
  */
-internal suspend fun runFrames(durationNanos: Long, onStart: ((Retimer) -> Unit)? = null, onFrame: (playNanos: Long) -> Unit) {
+internal suspend fun runFrames(durationNanos: Long, onStart: ((Retimer) -> Unit)? = null, onFrame: FrameStep) {
     val context = currentCoroutineContext()
     val scale = context[MotionDurationScale]?.scaleFactor ?: 1f
     if (durationNanos == 0L || scale == 0f) return
@@ -239,14 +581,25 @@ internal suspend fun runFrames(durationNanos: Long, onStart: ((Retimer) -> Unit)
     var start = Long.MIN_VALUE
     var last = Long.MIN_VALUE
     var length = durationNanos
+    var pending = -1L
     // Again from the frame just shown, as on the shared driver.
-    onStart?.invoke(Retimer { d -> length = d; start = last })
+    onStart?.invoke(object : Retimer {
+        override fun retime(durationNanos: Long) {
+            length = durationNanos
+            if (start != Long.MIN_VALUE) start = last
+        }
+
+        override fun seek(playNanos: Long) {
+            if (start == Long.MIN_VALUE) pending = playNanos else start = last - (playNanos * scale).toLong()
+        }
+    })
     while (true) {
         val done = frame(length == Long.MAX_VALUE) { frameNanos ->
+            FramePacing.frameAt(frameNanos)
             last = frameNanos
-            if (start == Long.MIN_VALUE) start = frameNanos
+            if (start == Long.MIN_VALUE) start = frameNanos - if (pending >= 0) (pending * scale).toLong() else 0L
             val play = ((frameNanos - start) / scale).toLong()
-            onFrame(play.coerceAtMost(length))
+            onFrame.step(play.coerceAtMost(length))
             play >= length
         }
         if (done) return

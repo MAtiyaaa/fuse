@@ -37,15 +37,41 @@ object Durations {
 }
 
 /**
+ * What the device itself asks of motion, where it can tell reliably: saving power, drawing without
+ * the graphics card, its refresh rate. Decoration goes first (ambient loops, light sweeps, drift,
+ * parallax); interaction (focus, selection, navigation, gestures) keeps its full quality, and no
+ * motion's physics ever changes with it.
+ */
+@Immutable
+data class MotionEnvironment(
+    val lowPower: Boolean = false,
+    val cpuDrawing: Boolean = false,
+    val refreshRate: Float = 60f,
+) {
+    /** Decoration costs nothing worth saving here. */
+    val decorates: Boolean get() = !lowPower && !cpuDrawing
+
+    companion object {
+        val Default = MotionEnvironment()
+    }
+}
+
+/**
  * Fuse's motion at one [level]: the motions every part of the interface uses, scaled to the
  * person's choice. Reduced keeps only short fades (no scale, slide or parallax); Enhanced adds
  * depth but keeps the same durations, so it never slows navigation down.
+ *
+ * Fuse asks for an intent ([focus], [selection], [follow], [settle], [enter], [exit], [dismiss],
+ * [reveal], [navigation], [press], [hover], [sharedElement], [overscroll]) rather than tuning
+ * numbers in place, and the intent adapts: under Reduced, large movement becomes a fade, overshoot
+ * and parallax go and ambient loops stop, while the feedback that says something happened stays.
+ * The [environment] trims decoration first and never interaction.
  *
  * Every motion here can be interrupted by the next change, and the springs settle without a
  * visible wobble unless their description says otherwise.
  */
 @Immutable
-class FuselineMotion(val level: MotionLevel) {
+class FuselineMotion(val level: MotionLevel, val environment: MotionEnvironment = MotionEnvironment.Default) {
     val reduced: Boolean get() = level == MotionLevel.REDUCED
 
     /** Tiles scale up when focused (1 = no scaling). */
@@ -57,16 +83,16 @@ class FuselineMotion(val level: MotionLevel) {
     }
 
     /** Light sweep across a tile when it gains focus. */
-    val sweep: Boolean = level == MotionLevel.STANDARD || level == MotionLevel.ENHANCED
+    val sweep: Boolean = (level == MotionLevel.STANDARD || level == MotionLevel.ENHANCED) && environment.decorates
 
     /** Hero drifts slower than content while scrolling. */
-    val parallax: Boolean = level == MotionLevel.ENHANCED || level == MotionLevel.STANDARD
+    val parallax: Boolean = (level == MotionLevel.ENHANCED || level == MotionLevel.STANDARD) && environment.decorates
 
     /** Animated theme backgrounds. */
-    val ambient: Boolean = level != MotionLevel.REDUCED && level != MotionLevel.MINIMAL
+    val ambient: Boolean = level != MotionLevel.REDUCED && level != MotionLevel.MINIMAL && environment.decorates
 
     /** The hero art drifts and zooms very slowly while it rests. Enhanced only. */
-    val drift: Boolean = level == MotionLevel.ENHANCED
+    val drift: Boolean = level == MotionLevel.ENHANCED && environment.decorates
 
     /** Slide distance used by page transitions, as a fraction of the page. */
     val slideFraction: Float = when (level) {
@@ -174,6 +200,56 @@ class FuselineMotion(val level: MotionLevel) {
     /** Mouse hover highlights: quick in, a little slower out. */
     fun hover(entering: Boolean): Motion =
         Tween(ms(if (entering) Durations.INSTANT else Durations.FAST), curve = Curves.Standard)
+
+    // ------------------------------------------------------------------------------------------
+    // Intents. Each says what the motion is for; the level and environment decide its shape.
+
+    /** Overshoot is a flourish: gone under Reduced (and kept gentle under Minimal), the movement itself kept. */
+    fun adapt(motion: Motion): Motion = when {
+        motion is Spring && level == MotionLevel.REDUCED && motion.dampingRatio < 1f -> motion.copy(dampingRatio = 1f)
+        motion is Spring && level == MotionLevel.MINIMAL && motion.dampingRatio < 0.85f -> motion.copy(dampingRatio = 0.85f)
+        else -> motion
+    }
+
+    /**
+     * How far something travels for a full move of [distance]: all of it normally, a little under
+     * Minimal, none under Reduced, where large movement becomes a fade.
+     */
+    fun travel(distance: Float): Float = when (level) {
+        MotionLevel.REDUCED -> 0f
+        MotionLevel.MINIMAL -> distance * 0.5f
+        else -> distance
+    }
+
+    /** Focus moving to an item (its lift and ring). */
+    fun focus(): Motion = focusSpring()
+
+    /** The selection moving along a row or a menu (its highlight, an indicator). */
+    fun selection(): Motion = glide()
+
+    /** Something keeping up with the selection or a finger (a list scrolling to keep it in view). */
+    fun follow(): Motion = followScroll()
+
+    /** Coming to rest where it belongs (after a gesture, a fling, a drop). */
+    fun settle(): Motion = if (reduced) Tween(ms(Durations.FAST), curve = Curves.Standard) else Spring(1f, 500f)
+
+    /** Moving between places (tabs, pages, screens): quick, and every change carries on from the last. */
+    fun navigation(): Motion = if (reduced) Tween(ms(Durations.FAST), curve = Curves.Fade) else Spring(1f, 900f)
+
+    /** Something put away by the person (a sheet swiped down, a toast flicked off): carries their speed. */
+    fun dismiss(): Motion = if (reduced) Tween(ms(Durations.FAST), curve = Curves.Exit) else Spring(1f, 600f)
+
+    /** Content revealed as a screen opens. */
+    fun reveal(): Motion = enter()
+
+    /** Press feedback, kept under every level: something happened. */
+    fun press(down: Boolean): Motion = if (down) pressIn() else pressOut()
+
+    /** An element travelling between screens: still, cross-faded, under Reduced. */
+    fun sharedElement(): Motion = if (reduced) Snap() else Spring(1f, 450f)
+
+    /** Pulling past an end and springing back. */
+    fun overscroll(): Motion = if (reduced) Snap() else Spring(1f, 700f)
 
     companion object {
         /** Items past this index are revealed together with it, so long lists never queue up. */

@@ -117,7 +117,7 @@ jobs:
         uses: gradle/actions/setup-gradle@v6
 
       - name: Test the shared and desktop code
-        run: ./gradlew --stacktrace :core:library:desktopTest :core:launch:desktopTest :app:desktop:test
+        run: ./gradlew --stacktrace :core:library:desktopTest :core:launch:desktopTest :ui:fuseline:desktopTest :app:desktop:test
 
       - name: Build the installer and zip, and self-test them
         run: bash scripts/build-windows.sh
@@ -171,7 +171,7 @@ jobs:
         uses: gradle/actions/setup-gradle@v6
 
       - name: Test the shared and desktop code
-        run: ./gradlew --stacktrace :core:library:desktopTest :core:launch:desktopTest :app:desktop:test
+        run: ./gradlew --stacktrace :core:library:desktopTest :core:launch:desktopTest :ui:fuseline:desktopTest :app:desktop:test
 
       - name: Build the disk image and self-test the app
         run: bash scripts/build-macos.sh

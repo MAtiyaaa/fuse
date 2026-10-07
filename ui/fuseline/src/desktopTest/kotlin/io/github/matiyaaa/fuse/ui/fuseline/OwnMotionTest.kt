@@ -15,9 +15,10 @@ class OwnMotionTest {
         val root = generateSequence(File("").absoluteFile) { it.parentFile }.first { File(it, "settings.gradle.kts").isFile }
         val sources = listOf("ui", "app").flatMap { dir ->
             File(root, dir).walkTopDown()
-                .filter { it.isFile && it.extension == "kt" && "/build/" !in it.path && "/src/" in it.path }
+                // Paths with forward slashes on every system (Windows writes them with backslashes).
+                .filter { it.isFile && it.extension == "kt" && "/build/" !in it.invariantSeparatorsPath && "/src/" in it.invariantSeparatorsPath }
                 // Tests may compare Fuseline against Compose; shipped code may not use it.
-                .filter { f -> TEST_DIRS.none { it in f.path } }
+                .filter { f -> TEST_DIRS.none { it in f.invariantSeparatorsPath } }
                 .toList()
         }
         assertTrue(sources.size > 100, "found the sources (${sources.size})")

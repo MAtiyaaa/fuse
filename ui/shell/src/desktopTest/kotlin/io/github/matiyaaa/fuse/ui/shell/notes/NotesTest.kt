@@ -40,6 +40,31 @@ class NotesTest {
     }
 
     @Test
+    fun tableRowsBecomeItemsAndCodeIsLeftOut() {
+        val lines = noteLines(
+            """
+            ## Benchmarks
+
+            Run it again:
+
+            ```
+            ./gradlew :ui:fuseline:desktopTest -Pfuse.bench=true
+            ```
+
+            | Case | Fuseline 3 | Compose |
+            |---|---|---|
+            | 1 tweens | 0.82 µs | 1.25 µs |
+            | 1 decays | 0.79 µs | n/a |
+
+            After the table.
+            """.trimIndent(),
+        )
+        assertEquals(listOf("Benchmarks", "Run it again:", "Fuseline 3 0.82 µs, Compose 1.25 µs", "Fuseline 3 0.79 µs, Compose n/a", "After the table."), lines.map { it.text })
+        assertEquals(listOf(null, null, "1 tweens", "1 decays", null), lines.map { it.lead })
+        assertEquals(NoteLine.Kind.ITEM, lines[2].kind)
+    }
+
+    @Test
     fun versionAndNameComeFromTheTitle() {
         assertEquals("0.2.7", releaseVersionOf(notes))
         assertEquals("The Swap & Clean Update", releaseNameOf(notes))

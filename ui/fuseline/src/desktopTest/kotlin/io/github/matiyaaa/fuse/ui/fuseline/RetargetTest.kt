@@ -12,7 +12,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
-/** Fuseline 2's in-place retarget: a spring given a new target carries on, smoothly, without a new move. */
+/** In-place retargeting: a motion given a new target carries on, smoothly, without a new move. */
 class RetargetTest {
     private val frame = 16_666_667L
 
@@ -44,13 +44,23 @@ class RetargetTest {
     }
 
     @Test
-    fun `a tween under way isn't retargeted (it has its own time), only a spring is`() {
+    fun `a tween under way is retargeted too, from where it is and how fast it is going (Fuseline 3)`() {
         val clock = BroadcastFrameClock()
         val scope = CoroutineScope(Dispatchers.Unconfined + clock + Job())
         val v = FuselineValue(0f)
-        scope.launch { v.animateTo(1f, tween(500)) }
-        clock.sendFrame(1_000_000_000L)
-        assertFalse(v.retarget(2f))
+        scope.launch { v.animateTo(100f, tween(500)) }
+        var t = 1_000_000_000L
+        clock.sendFrame(t)
+        repeat(10) { t += frame; clock.sendFrame(t) }
+        val at = v.value
+        val speed = v.velocity
+        assertTrue(v.retarget(200f))
+        assertEquals(200f, v.targetValue)
+        // The same place and the same speed carry on: the next frame continues the line it was on.
+        t += frame; clock.sendFrame(t)
+        assertEquals(at + speed * frame / 1e9f, v.value, abs(speed) * 0.02f + 0.5f)
+        repeat(60) { t += frame; clock.sendFrame(t) }
+        assertEquals(200f, v.value)
         scope.cancel()
     }
 
