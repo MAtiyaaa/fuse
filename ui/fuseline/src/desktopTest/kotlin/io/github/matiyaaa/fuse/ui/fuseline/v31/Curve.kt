@@ -1,4 +1,4 @@
-package io.github.matiyaaa.fuse.ui.fuseline
+package io.github.matiyaaa.fuse.ui.fuseline.v31
 
 import androidx.compose.runtime.Immutable
 import kotlin.concurrent.Volatile
@@ -183,84 +183,6 @@ class CubicCurve(val x1: Float, val y1: Float, val x2: Float, val y2: Float) : C
         if (fraction <= 0f) return 0f
         if (fraction >= 1f) return 1f
         return y(solve(fraction.toDouble())).toFloat()
-    }
-
-    // Fuseline 4: the last time solved, shared by every tween on this curve that asks for the same
-    // moment in the same frame (tiles revealed together, a page's values moving as one). Used only by
-    // the frame driver's own tracks, on the main thread.
-    private var memoX = Double.NaN
-    private var memoT = 0.0
-
-    /** [solve], answered from the curve's last solve when it was for the same [x]. */
-    internal fun solveShared(x: Double): Double {
-        if (x == memoX) {
-            if (Kernels.counting) Kernels.curveReused++
-            return memoT
-        }
-        val t = solve(x)
-        memoX = x
-        memoT = t
-        return t
-    }
-
-    /**
-     * For each of the inverse's intervals, a proven bound on |dy/dx| from that interval to the end of
-     * the curve (positive infinity where the time axis goes flat and the curve can be vertical):
-     * |y'(t)| at its largest over the interval's t, over x'(t) at its smallest, each a quadratic whose
-     * extremes are at the ends or the vertex. A tween's event horizon reads it: past here the value can
-     * move no faster than this.
-     */
-    @Volatile
-    private var steepest: DoubleArray? = null
-
-    internal fun steepestFrom(x: Double): Double {
-        val s = steepest ?: buildSteepest()
-        val j = (x * INVERSE).toInt().coerceIn(0, INVERSE - 1)
-        return s[j]
-    }
-
-    private fun buildSteepest(): DoubleArray {
-        val nodes = DoubleArray(INVERSE + 1) { j ->
-            val target = j / INVERSE.toDouble()
-            var lo = 0.0
-            var hi = 1.0
-            repeat(60) { val m = (lo + hi) / 2.0; if (x(m) < target) lo = m else hi = m }
-            (lo + hi) / 2.0
-        }
-        // Each node is within 2^-60 of the true one: widen the interval by a hair to cover it.
-        val out = DoubleArray(INVERSE)
-        var after = 0.0
-        for (j in INVERSE - 1 downTo 0) {
-            val t0 = (nodes[j] - 1e-12).coerceAtLeast(0.0)
-            val t1 = (nodes[j + 1] + 1e-12).coerceAtMost(1.0)
-            val dyMax = quadraticAbsMax(3.0 * ay, 2.0 * by, cy, t0, t1)
-            val dxMin = quadraticMin(3.0 * ax, 2.0 * bx, cx, t0, t1)
-            val bound = if (dxMin <= 1e-9) Double.POSITIVE_INFINITY else dyMax / dxMin * (1.0 + 1e-9)
-            after = maxOf(after, bound)
-            out[j] = after
-        }
-        steepest = out
-        return out
-    }
-
-    private fun quadraticAbsMax(a: Double, b: Double, c: Double, t0: Double, t1: Double): Double {
-        fun f(t: Double) = (a * t + b) * t + c
-        var m = maxOf(kotlin.math.abs(f(t0)), kotlin.math.abs(f(t1)))
-        if (a != 0.0) {
-            val v = -b / (2.0 * a)
-            if (v > t0 && v < t1) m = maxOf(m, kotlin.math.abs(f(v)))
-        }
-        return m
-    }
-
-    private fun quadraticMin(a: Double, b: Double, c: Double, t0: Double, t1: Double): Double {
-        fun f(t: Double) = (a * t + b) * t + c
-        var m = minOf(f(t0), f(t1))
-        if (a != 0.0) {
-            val v = -b / (2.0 * a)
-            if (v > t0 && v < t1) m = minOf(m, f(v))
-        }
-        return m
     }
 
     override fun derivative(fraction: Float): Float = slope(solve(fraction.toDouble().coerceIn(0.0, 1.0))).toFloat()

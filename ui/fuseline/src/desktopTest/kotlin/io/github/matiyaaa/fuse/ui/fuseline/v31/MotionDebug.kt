@@ -1,4 +1,4 @@
-package io.github.matiyaaa.fuse.ui.fuseline
+package io.github.matiyaaa.fuse.ui.fuseline.v31
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -105,7 +105,7 @@ object MotionInspector {
     internal fun sample() {
         watched.removeAll { !it.value.isRunning && !it.value.isDragging }
         for (w in watched) {
-            w.history[w.samples % HISTORY] = w.value.peekComponent(0)
+            w.history[w.samples % HISTORY] = w.value.component(0)
             w.samples++
         }
         frames.intValue++

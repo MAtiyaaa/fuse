@@ -1,4 +1,4 @@
-package io.github.matiyaaa.fuse.ui.fuseline
+package io.github.matiyaaa.fuse.ui.fuseline.v31
 
 import androidx.compose.runtime.Immutable
 
@@ -57,11 +57,6 @@ data class Spring(
         require(stiffness > 0f && stiffness.isFinite()) { "A spring needs some stiffness" }
         require(threshold == null || threshold > 0f) { "A spring's threshold must be above zero" }
     }
-
-    // The spring's shared solution (Fuseline 4), found once per object: not part of what the spring is.
-    private var kernelFound: SpringKernel? = null
-
-    internal fun kernel(): SpringKernel = kernelFound ?: SpringKernel.of(dampingRatio, stiffness).also { kernelFound = it }
 
     companion object {
         const val DampingRatioHighBouncy = 0.2f
