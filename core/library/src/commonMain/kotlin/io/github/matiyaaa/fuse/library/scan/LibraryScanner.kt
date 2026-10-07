@@ -55,6 +55,8 @@ data class ScanRequest(
      * games too, are still read.
      */
     val leaveOut: Set<PlatformId> = emptySet(),
+    /** Folders each system keeps its updates and DLC in, outside its games folder (Switch). */
+    val contentFolders: Map<PlatformId, List<ContentFolder>> = emptyMap(),
 )
 
 /** Events of [LibraryScanner.scanAsFlow]. */
@@ -168,7 +170,9 @@ class LibraryScanner(
             }
 
             // Steam's manifests are few and cheap to read, and change without touching the folder times.
-            if (request.scope == ScanScope.QUICK && !folder.steamLibrary && isUnchanged(folder.entry, children)) {
+            // A system with updates and DLC kept elsewhere is read again each time: those folders change on their own.
+            val elsewhere = platformsOf(folder).any { !request.contentFolders[it.id].isNullOrEmpty() }
+            if (request.scope == ScanScope.QUICK && !folder.steamLibrary && !elsewhere && isUnchanged(folder.entry, children)) {
                 for (platform in platformsOf(folder)) {
                     unchanged += DiscoveredFolder(folder.path, folder.entry.name, platform.id, folder.entry.modifiedAt)
                 }
@@ -189,6 +193,7 @@ class LibraryScanner(
                     folder.sourceId,
                     request.policies,
                     listing = children,
+                    contentFolders = request.contentFolders[folder.platform.id].orEmpty(),
                 ) {
                     visited++
                     progress(ScanPhase.SCANNING, it)
@@ -211,6 +216,7 @@ class LibraryScanner(
                     complete = result.complete,
                     notGames = result.listed,
                     notGameTrees = result.skipped,
+                    absorbed = result.absorbed,
                 )
             }
             if (complete) rememberState(folder.entry, children)

@@ -42,6 +42,11 @@ data class PlatformFolderScan(
     val notGames: Set<String> = emptySet(),
     /** Folders whose whole tree is not games (an emulator's saves and caches). */
     val notGameTrees: Set<String> = emptySet(),
+    /**
+     * Files that were games of their own and are now part of another game (a copy of it, its update
+     * or DLC): an earlier entry for one of them is forgotten, unless the person did something with it.
+     */
+    val absorbed: Set<String> = emptySet(),
 )
 
 /** A folder the scanner could map to a platform, or could not. */

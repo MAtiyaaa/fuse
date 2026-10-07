@@ -4,6 +4,7 @@ import io.github.matiyaaa.fuse.library.FsPath
 import io.github.matiyaaa.fuse.library.bios.BiosChecker
 import io.github.matiyaaa.fuse.library.bios.BiosSearchPaths
 import io.github.matiyaaa.fuse.library.parse.DisplayNameCleaner
+import io.github.matiyaaa.fuse.library.scan.ContentFolder
 import io.github.matiyaaa.fuse.library.scan.FolderPolicyResolver
 import io.github.matiyaaa.fuse.library.scan.LibraryScanner
 import io.github.matiyaaa.fuse.library.scan.ScanRequest
@@ -12,6 +13,7 @@ import io.github.matiyaaa.fuse.model.FolderPolicy
 import io.github.matiyaaa.fuse.model.LibrarySource
 import io.github.matiyaaa.fuse.model.LibrarySourceId
 import io.github.matiyaaa.fuse.model.LibrarySourceKind
+import io.github.matiyaaa.fuse.model.ContentKind
 import io.github.matiyaaa.fuse.model.PlatformId
 import io.github.matiyaaa.fuse.model.ScanPhase
 import io.github.matiyaaa.fuse.model.ScanProgress
@@ -287,7 +289,7 @@ internal class LibraryEngine(private val ctx: StoreContext) : SourceOps {
         scanState.value = last
         val report = try {
             val leaveOut = if (steamWanted()) emptySet() else setOf(STEAM)
-            scanner.scan(ScanRequest(enabled, scope, platform, policyResolver(), leaveOut = leaveOut)) { progress ->
+            scanner.scan(ScanRequest(enabled, scope, platform, policyResolver(), leaveOut = leaveOut, contentFolders = contentFolders())) { progress ->
                 last = progress
                 scanState.value = progress
             }
@@ -342,6 +344,18 @@ internal class LibraryEngine(private val ctx: StoreContext) : SourceOps {
     }
 
     /** Game -> Platform -> Global folder policies for the scanner. */
+    /** The folders each system keeps its updates and DLC in, where the person chose some. */
+    private suspend fun contentFolders(): Map<PlatformId, List<ContentFolder>> {
+        val settings = data.scopedSettings
+        return ctx.platforms.all.mapNotNull { p ->
+            val folders = listOf(ScopedSettings.UpdatesFolder to ContentKind.UPDATE, ScopedSettings.DlcFolder to ContentKind.DLC)
+                .mapNotNull { (key, kind) ->
+                    settings.resolve(key, p.id, null).takeIf { it.from == SettingScope.PLATFORM && it.value.isNotBlank() }?.let { ContentFolder(kind, it.value) }
+                }
+            if (folders.isEmpty()) null else p.id to folders
+        }.toMap()
+    }
+
     private suspend fun policyResolver(): FolderPolicyResolver {
         val settings = data.scopedSettings
         val global = settings.resolve(ScopedSettings.FolderMode, null, null)

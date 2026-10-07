@@ -537,6 +537,21 @@ internal fun AuditDriver.systemsScreens(exhaustive: Boolean) {
         shoot("ROM folders row focused")
     }
 
+    scenario("systems", "switch settings") {
+        useLibrary()
+        tab(Destination.SYSTEMS)
+        waitFor("Arrange")
+        focusText("Switch", substring = true) { tap(PadButton.DPAD_RIGHT) }
+        tap(PadButton.X)
+        tapText("System Settings")
+        waitFor("Disc playlists")
+        focusText("Updates folder")
+        shoot("updates and DLC folder rows")
+        tap(PadButton.A)
+        waitFor("Choose a Folder")
+        shoot("updates folder choice")
+    }
+
     scenario("systems", "platform settings") {
         useLibrary()
         tab(Destination.SYSTEMS)

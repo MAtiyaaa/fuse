@@ -53,10 +53,18 @@ object ScopedSettings {
     /** Asks by default; devices with one screen treat asking as the main screen and never ask. */
     val LaunchScreen = ScopedKey("launch.display", LaunchDisplay.ASK, LaunchDisplay.serializer())
     val GenerateM3u = ScopedKey("launch.m3u", true, Boolean.serializer(), setOf(SettingScope.GLOBAL, SettingScope.PLATFORM))
+    /**
+     * A folder a system's updates are kept in, outside its games folder (some keep Switch updates
+     * apart); empty for none. Updates are found in the games folder and its `update/` folders either way.
+     */
+    val UpdatesFolder = ScopedKey("content.updates", "", String.serializer(), setOf(SettingScope.PLATFORM))
+    /** A folder a system's DLC is kept in, outside its games folder; empty for none. */
+    val DlcFolder = ScopedKey("content.dlc", "", String.serializer(), setOf(SettingScope.PLATFORM))
 
     val all: List<ScopedKey<*>> = listOf(
         Layout, ShowHero, ShowLogo, PreferredCover, Border, Emulator, RetroArchCore, FolderMode,
         VideoPreview, VideoDelaySeconds, ScrapeEnabled, SearchTitle, Matching, LaunchScreen, GenerateM3u,
+        UpdatesFolder, DlcFolder,
     )
 }
 

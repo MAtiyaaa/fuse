@@ -110,6 +110,47 @@ fun <T> AppState.scopedRow(
     })
 }
 
+/** Systems whose updates and DLC can be kept in folders of their own. */
+private val CONTENT_FOLDER_SYSTEMS = setOf("switch", "switch-2")
+
+/**
+ * A folder a system's updates or DLC are kept in, outside its games folder. Optional: Fuse finds
+ * them beside their games, and in `update/` and `dlc/` folders inside the games folder, without it.
+ */
+@Composable
+private fun AppState.contentFolderRow(key: ScopedKey<String>, system: PlatformId, label: String, what: String, icon: ImageVector): MenuAction {
+    val flow = remember(key, system) { store.settings.observe(key, system, null) }
+    val resolved by flow.collectAsState(initial = null)
+    val path = resolved?.takeIf { it.from == SettingScope.PLATFORM }?.value.orEmpty()
+    val rescan = { scope.launch { store.sources.rescan(ScanScope.PLATFORM, system) } }
+    return MenuAction(
+        key.id, label, icon,
+        detail = path.ifBlank { "Optional. Fuse finds $what beside their games, and in a $what folder inside the games folder" },
+        trailing = Trailing.Value(if (path.isBlank()) "None" else "Chosen"),
+        onSelect = {
+            choice = ChoiceSpec(
+                title = label,
+                message = "Choose a folder only if you keep $what somewhere else. Each file joins its game by its title id or name, and anything Fuse can't match stays on its own.",
+                icon = icon,
+                options = listOf(
+                    MenuAction("none", "None", FuseIcons.Close, trailing = Trailing.Check(path.isBlank()), onSelect = {
+                        choice = null
+                        scope.launch { store.settings.clear(key, ScopeRef.platform(system)); rescan() }
+                    }),
+                    MenuAction("pick", "Choose a Folder", FuseIcons.FolderSearch, onSelect = {
+                        choice = null
+                        scope.launch {
+                            val picked = platform.storage.pickFolder("Where are the $what kept?") ?: return@launch
+                            store.settings.set(key, ScopeRef.platform(system), picked)
+                            rescan()
+                        }
+                    }),
+                ),
+            )
+        },
+    )
+}
+
 /**
  * One system's settings: which emulator its games start in, how its folders are read, how its
  * games look, and its files. The page leads with the system itself (its mark, name, game count and
@@ -191,6 +232,12 @@ fun PlatformSettingsScreen(app: AppState, platformId: PlatformId) {
         }
         if (card.romFolders.isEmpty()) add(infoRow("rom.none", "ROM folder", value = "None found", icon = FuseIcons.Folder).copy(section = files))
         for (folder in card.romFolders) add(infoRow("rom.$folder", "ROM folder", detail = folder, icon = FuseIcons.Folder).copy(section = files))
+        // Updates and DLC kept apart from the games (optional: they are found beside the games, and in
+        // update/ and dlc/ folders inside the games folder, either way).
+        if (platformId.value in CONTENT_FOLDER_SYSTEMS) {
+            add(app.contentFolderRow(ScopedSettings.UpdatesFolder, platformId, "Updates folder", "updates", FuseIcons.PackagePlus).copy(section = files))
+            add(app.contentFolderRow(ScopedSettings.DlcFolder, platformId, "DLC folder", "DLC", FuseIcons.Puzzle).copy(section = files))
+        }
         val tools = "Tools"
         add(MenuAction("media", "System media", FuseIcons.Image, detail = "Icon, background and logo", trailing = Trailing.Chevron, section = tools, onSelect = { app.go(Route.Media(MediaOwner.OfPlatform(platformId), p.name)) }))
         add(MenuAction("fill", "Fill missing game art", FuseIcons.Wand, detail = "Only games without art; your own art is never replaced", section = tools, onSelect = {

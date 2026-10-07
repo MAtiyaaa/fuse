@@ -192,7 +192,7 @@ class RommUploadHandler(private val host: RommTransferHost) : TransferHandler {
      * its system, a while at most, then the rest of the upload goes into it.
      */
     private suspend fun waitForGame(client: RommClient, job: RommUploadJob, io: TransferIo): Long {
-        val lead = job.files.first { it.folder.isEmpty() }.name
+        val lead = (job.files.firstOrNull { it.folder.isEmpty() } ?: job.files.first()).name
         io.phase(TransferPhase.FINISHING)
         if (client.may(RommScopes.TASKS_RUN) && client.capabilities.tokenScans) runCatching { client.scan(listOf(job.platformId)) }
         repeat(40) {

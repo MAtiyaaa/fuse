@@ -56,20 +56,21 @@ object Serials {
     fun switchBaseTitleId(titleId: String): String? {
         if (!isSwitchTitleId(titleId)) return null
         val value = titleId.trim().toLong(16)
-        val low = value and 0xFFF
-        val base = when {
-            low == 0L -> value
-            low == 0x800L -> value - 0x800
+        val base = when (switchTitleKind(titleId)) {
+            SwitchTitleKind.BASE -> value
+            SwitchTitleKind.UPDATE -> value - 0x800
             else -> (value and 0xFFF.inv().toLong()) - 0x1000
         }
         return base.toString(16).uppercase().padStart(16, '0')
     }
 
-    /** What a Switch title id stands for, from its low bits. */
+    /**
+     * What a Switch title id stands for, from its low 12 bits: `000` is the game, `800` its update,
+     * and anything else DLC (DLC ids are the game's id + 0x1000 + n, n from 1, so never end in `000`).
+     */
     fun switchTitleKind(titleId: String): SwitchTitleKind? {
         if (!isSwitchTitleId(titleId)) return null
-        val low = titleId.trim().toLong(16) and 0xFFF
-        return when (low) {
+        return when (titleId.trim().toLong(16) and 0xFFF) {
             0L -> SwitchTitleKind.BASE
             0x800L -> SwitchTitleKind.UPDATE
             else -> SwitchTitleKind.DLC
