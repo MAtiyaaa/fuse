@@ -80,7 +80,7 @@ internal class FrameDriver private constructor(private val clock: MonotonicFrame
         /** A time no later than the end ([exactDuration] once known). */
         var bound = if (exactDuration >= 0) exactDuration else driven!!.boundNanos()
 
-        /** When it is next due, as a frame time (0: the next frame). */
+        /** When it is next due, as a frame time (0: the next frame), in the heap or on the every-frame list. */
         var wake = 0L
 
         /** Its place in the heap, or -1 when it isn't waiting there. */
@@ -166,7 +166,7 @@ internal class FrameDriver private constructor(private val clock: MonotonicFrame
                 insertIntoPass(this)
                 return
             }
-            if (!listed) schedule(this, 0L)
+            if (listed) wake = 0L else schedule(this, 0L)
         }
     }
 
@@ -321,8 +321,12 @@ internal class FrameDriver private constructor(private val clock: MonotonicFrame
             val mid = (lo + hi) ushr 1
             if (visiting[mid].seq < m.seq) lo = mid + 1 else hi = mid
         }
-        if (lo < visiting.size && visiting[lo] === m) return
+        if (lo < visiting.size && visiting[lo] === m) {
+            m.wake = 0L
+            return
+        }
         unschedule(m)
+        m.wake = 0L
         visiting.add(lo, m)
     }
 
@@ -461,6 +465,11 @@ internal class FrameDriver private constructor(private val clock: MonotonicFrame
             cursor = m.seq
             visitIndex++
             if (m.gone) continue
+            if (m.wake > frameNanos) {
+                // On the every-frame list but proved calm until a later frame: left alone, as the heap would.
+                listedNext += m
+                continue
+            }
             m.listed = false
             if (m.start == Long.MIN_VALUE) {
                 m.start = frameNanos - if (m.pending >= 0) (m.pending * m.scale).toLong() else 0L
@@ -501,7 +510,7 @@ internal class FrameDriver private constructor(private val clock: MonotonicFrame
     /** Where [m] waits after this frame, given it can be left alone until play time [calmUntil]. */
     private fun place(m: Move, play: Long, calmUntil: Long, frameNanos: Long) {
         if (m.eager || calmUntil <= play + 1) {
-            listOnward(m)
+            listOnward(m, 0L)
             return
         }
         if (calmUntil == Long.MAX_VALUE) {
@@ -514,12 +523,14 @@ internal class FrameDriver private constructor(private val clock: MonotonicFrame
         // Whichever comes first: the horizon or the end (both as frame times, rounded early).
         val end = frameAt(m, m.bound)
         val wake = if (calmUntil == Long.MAX_VALUE) end else minOf(frameAt(m, calmUntil), end)
-        // Due within a few frames: kept on the every-frame list (a look at it costs less than the heap).
-        if (wake <= frameNanos + FramePacing.intervalNanos * 4) listOnward(m) else schedule(m, wake)
+        // Due within a few frames: kept on the every-frame list, passed over until then (a look at it
+        // costs less than the heap).
+        if (wake <= frameNanos + FramePacing.intervalNanos * 4) listOnward(m, wake) else schedule(m, wake)
     }
 
-    private fun listOnward(m: Move) {
+    private fun listOnward(m: Move, wake: Long) {
         unschedule(m)
+        m.wake = wake
         m.listed = true
         listedNext += m
     }
