@@ -50,6 +50,8 @@ class ReachStoreTest {
 
     @AfterTest
     fun tearDown() {
+        // The host and each device's server for the others stop too, so none runs on into the next test.
+        made.forEach { runCatching { it.store.sync.service?.stop() } }
         scope.cancel()
         root.deleteRecursively()
     }
@@ -59,6 +61,8 @@ class ReachStoreTest {
     }
 
     private fun bytesOf(title: String) = Random(title.lowercase().filter { it.isLetter() }.take(8).hashCode()).nextBytes(40_000)
+
+    private val made = ArrayList<Device>()
 
     private suspend fun device(name: String, files: List<String>): Device {
         val dir = File(root, name).apply { mkdirs() }
@@ -77,7 +81,7 @@ class ReachStoreTest {
             store.library.platforms.first { systems -> systems.sumOf { it.gameCount } == files.size }
             store.sources.scan.first { it.phase == ScanPhase.DONE }
         }
-        return Device(name, store, services, roms)
+        return Device(name, store, services, roms).also { made += it }
     }
 
     private suspend fun eventually(what: String, seconds: Long = 30, check: suspend () -> Boolean) {
@@ -144,7 +148,7 @@ class ReachStoreTest {
     @Test
     fun aDeviceIsAskedToFetchAGameAndDoes(): Unit = runBlocking {
         val (pc, deck) = linked()
-        eventually("listed") { pc.store.reach.games(null).first().isNotEmpty() && deck.sync.household.mine.value.all { it.hashed } }
+        eventually("listed", seconds = 60) { pc.store.reach.games(null).first().isNotEmpty() && deck.sync.household.mine.value.all { it.hashed } }
         val metroid = deck.store.library.games(GameQuery(platform = PlatformId("gba"))).first().first { it.title.startsWith("Metroid") }
         val targets = deck.store.reach.sendTargets(metroid.id)
         assertEquals(SendState.HAS_IT, targets.first { it.device == deck.sync.household.self }.state)

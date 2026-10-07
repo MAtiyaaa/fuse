@@ -206,19 +206,27 @@ class JvmHousehold(
         if (hashJob?.isActive == true) return
         hashJob = scope.launch(Dispatchers.IO) {
             var since = clock()
-            for (g in shared.values.toList()) {
-                for (path in g.paths.values) {
-                    while (busy()) delay(5_000)
-                    if (!isActive) return@launch
-                    val f = File(path)
-                    if (!f.isFile || hashes.known(f) != null) continue
-                    runCatching { hashes.compute(f) }
-                    yield()
-                }
-                if (clock() - since > REPUBLISH_MS) {
-                    hashes.save()
-                    runCatching { publish(rebuild = false) }
-                    since = clock()
+            // Games listed while this runs are read too: it goes round until every shared file has
+            // been read once (a file that can't be read isn't tried again until the next change).
+            val tried = HashSet<String>()
+            fun unread(path: String) = path !in tried && File(path).let { it.isFile && hashes.known(it) == null }
+            while (true) {
+                val pending = shared.values.toList().filter { g -> g.paths.values.any(::unread) }
+                if (pending.isEmpty()) break
+                for (g in pending) {
+                    for (path in g.paths.values) {
+                        while (busy()) delay(5_000)
+                        if (!isActive) return@launch
+                        if (!unread(path)) continue
+                        tried += path
+                        runCatching { hashes.compute(File(path)) }
+                        yield()
+                    }
+                    if (clock() - since > REPUBLISH_MS) {
+                        hashes.save()
+                        runCatching { publish(rebuild = false) }
+                        since = clock()
+                    }
                 }
             }
             hashes.save()

@@ -35,6 +35,7 @@ class HouseholdGamesTest {
     private lateinit var host: SyncHost
     private val http = SyncClient.defaultClient()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val joined = ArrayList<JvmHousehold>()
 
     @BeforeTest
     fun start(): Unit = runBlocking {
@@ -44,6 +45,8 @@ class HouseholdGamesTest {
 
     @AfterTest
     fun stop() {
+        // Each device's server for other devices stops with it, so none is left running into the next test.
+        joined.forEach { it.off() }
         scope.cancel()
         host.stop()
         root.deleteRecursively()
@@ -68,6 +71,7 @@ class HouseholdGamesTest {
                 }
                 override fun transfers() = listOf(RemoteTransfer(key = "romm:rom:7", title = "Mario", status = "ACTIVE", done = 43, total = 100))
             })
+            joined += household
             return this
         }
 
