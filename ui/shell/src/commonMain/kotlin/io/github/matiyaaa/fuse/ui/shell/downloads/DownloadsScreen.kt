@@ -54,6 +54,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.components.Hint
 import io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction
 import io.github.matiyaaa.fuse.ui.designsystem.components.Spinner
 import io.github.matiyaaa.fuse.ui.designsystem.components.fadingEdges
+import io.github.matiyaaa.fuse.ui.designsystem.effects.background
 import io.github.matiyaaa.fuse.ui.designsystem.focus.LinearSelection
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
@@ -261,7 +262,7 @@ internal fun ActionPill(a: TopAction, selected: Boolean, label: Boolean, onClick
     val bg by fuselineColor(if (selected) c.text else c.text.copy(alpha = 0.07f), Fuse.motion.tween(Durations.FAST), label = "dlAction")
     val fg = if (selected) c.ink else c.text
     Row(
-        Modifier.height(36.dp).clip(CircleShape).background(bg)
+        Modifier.height(36.dp).clip(CircleShape).background({ bg })
             .clickable(remember { MutableInteractionSource() }, indication = null, onClick = onClick)
             .semantics { contentDescription = a.label }
             .padding(horizontal = if (label) Space.m else 9.dp),
@@ -296,7 +297,7 @@ private fun Filters(filters: List<TransferFilter>, counts: Map<TransferFilter, I
                 else -> c.textMuted
             }
             Row(
-                Modifier.height(32.dp).clip(CircleShape).background(bg)
+                Modifier.height(32.dp).clip(CircleShape).background({ bg })
                     .then(if (!on) Modifier.border(1.dp, c.hairline, CircleShape) else Modifier)
                     .clickable(remember { MutableInteractionSource() }, indication = null) { onPick(f) }
                     .padding(horizontal = Space.m),
@@ -449,7 +450,7 @@ private fun TransferRowView(
     val failed = t.status == TransferStatus.FAILED
     val done = t.status == TransferStatus.DONE
     Box(
-        Modifier.fillMaxWidth().height(height).testTag("downloads.row").clip(shape).background(bg)
+        Modifier.fillMaxWidth().height(height).testTag("downloads.row").clip(shape).background({ bg })
             .then(if (selected) Modifier.border(Size.focusStroke, c.focus, shape) else Modifier.border(1.dp, c.hairline, shape))
             .clickable(remember { MutableInteractionSource() }, indication = null, onClick = onClick)
             .semantics { contentDescription = "${t.title}, ${statusWords(t, live, queuePosition)}" },

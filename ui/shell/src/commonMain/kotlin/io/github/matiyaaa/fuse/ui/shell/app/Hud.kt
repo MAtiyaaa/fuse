@@ -700,7 +700,7 @@ private fun HudIconButton(icon: ImageVector, label: String, focused: Boolean, ac
             },
         contentAlignment = Alignment.Center,
     ) {
-        FuseIcon(icon, size = Size.iconM, tint = tint)
+        FuseIcon(icon, tint = { tint }, size = Size.iconM)
     }
 }
 
@@ -721,7 +721,7 @@ private fun Tab(label: String, icon: ImageVector, selected: Boolean, focused: Bo
             .padding(horizontal = Space.m),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        FuseIcon(icon, size = Size.iconM, tint = tint)
+        FuseIcon(icon, tint = { tint }, size = Size.iconM)
         Appear(
             visible = showLabel,
             // The label opens out of its icon, reading from its first letter.
@@ -730,7 +730,7 @@ private fun Tab(label: String, icon: ImageVector, selected: Boolean, focused: Bo
         ) {
             Row {
                 Spacer(Modifier.width(Space.s))
-                FText(label, Fuse.type.bodyStrong, color = tint, maxLines = 1)
+                FText(label, Fuse.type.bodyStrong, color = { tint }, maxLines = 1)
             }
         }
     }
