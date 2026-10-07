@@ -185,9 +185,18 @@ They behave the same on every device, answer to one design, and get better with 
       <h3>Fuseline <sub>by Fuse</sub></h3>
       Fuse's own animation engine, named after the line in Fuse's logo that carries the spark. Every
       movement in Fuse runs on it, from a tile's lift to the setup's opening. Fuse 0.3.7 brought
-      <b>Fuseline 3</b>, where motion never breaks, and 0.3.7.5 brings <b>Fuseline 3.1</b>, which
-      takes work off every frame around it.
+      <b>Fuseline 3</b>, where motion never breaks, 0.3.7.5 <b>Fuseline 3.1</b>, which took work off
+      every frame around it, and 0.4.0 brings <b>Fuseline 4</b>, which no longer runs motion just
+      because time passes.
       <ul>
+        <li><b>Fuseline 4: worked out when it is read.</b> Every motion is solved in closed form, so
+        a value is worked out from its formula for the frame being shown, exactly where stepping it
+        every frame would have left it, without the frames.</li>
+        <li><b>Fuseline 4: left alone until it could be seen to change.</b> A value proves the first
+        moment it could move far enough to be seen and isn't touched before then; a value nobody is
+        looking at rests until it arrives, and comes back exactly where it would have been.</li>
+        <li><b>Fuseline 4: shared motion, solved once.</b> Every value on the same spring shares one
+        solution a frame, and a colour's four numbers solve their curve once.</li>
         <li><b>Fuseline 3.1: values without coroutines.</b> A tile's lift, a button's colour and a
         panel's size follow their targets with no coroutine of their own, so a page of tiles
         composes faster and in a third of the memory.</li>
