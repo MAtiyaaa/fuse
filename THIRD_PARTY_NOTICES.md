@@ -118,6 +118,7 @@ cached on their device. None of it is part of Fuse's distribution.
 | ScreenScraper | [API documentation](https://www.screenscraper.fr/webapi2.php) |
 | Libretro thumbnails | [Repository](https://github.com/libretro-thumbnails/libretro-thumbnails) (no licence file; images belong to their owners). Fetched at runtime, never bundled |
 | Art Book Next system art | [Repository](https://github.com/anthonycaccese/art-book-next-es-de), [CC BY-NC-SA 2.0](https://creativecommons.org/licenses/by-nc-sa/2.0/). Theme by Anthony Caccese; system logos modified from Dan Patrick's console logos; Noir artwork set by tenlevels with help from f8less; Outline artwork set by Joppa Fallston; some artwork by theUnBurn. Fetched at runtime from a pinned commit, never bundled, credited wherever it is shown |
+| RetroArch Systematic icons | [Repository](https://github.com/libretro/retroarch-assets), [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). The pictures of each system on the Systems page's small tiles, by the libretro team. Fetched at runtime from a pinned commit, never bundled; only their file names are part of Fuse. Credited in Settings, Systems and in Licences |
 | GitHub REST API | [Releases API](https://docs.github.com/en/rest/releases/releases), [GitHub Terms of Service](https://docs.github.com/en/site-policy/github-terms/github-terms-of-service) |
 | Apps in the Store | Each app comes from the source the Obtainium Emulation Pack names (its developers' GitHub releases or download page), under that app's own licence, downloaded by the user. Fuse distributes none of them |
 
@@ -147,6 +148,7 @@ library.
 | SIL OFL 1.1 | Sora and Manrope fonts | Compatible for distribution. The fonts stay under the OFL and are not relicensed; the OFL explicitly allows bundling the fonts with software under any licence as long as the fonts are not sold on their own and the licence travels with them. Fuse does not modify the fonts, and neither declares a Reserved Font Name |
 | AGPL-3.0 | RomM | No code is used, only facts and names, which carry no licence obligations. (AGPL-3.0 and GPL-3.0 are also explicitly combinable under section 13 of each) |
 | No licence | Daijisho files, community configs, libretro thumbnails | Nothing is copied or bundled with Fuse. The documentation screenshots show some libretro thumbnails, credited there (see Screenshots) |
+| CC BY 4.0 | RetroArch Systematic icons | Compatible as used: the pictures are downloaded by each user at runtime and cached on their device, never bundled with Fuse. Fuse ships only the icons' file names, and shows the required attribution where the pictures are offered |
 | CC BY-NC-SA 2.0 | Art Book Next system art | Not combined with Fuse. The files are downloaded by each user at runtime and cached on their device, never bundled with Fuse, so the NonCommercial and ShareAlike terms do not reach Fuse's own licence. Fuse shows the required attribution with the art. The documentation screenshots that show some of it credit it and leave it under its licence (see Screenshots) |
 
 ### Licence texts

@@ -183,7 +183,12 @@ internal fun Modifier.boardDrag(
     onLift: (String) -> Unit,
     onTarget: () -> Unit,
     onDrop: (BoardLayout?) -> Unit,
+    /** The board with the held widget put at a spot, and where it then is; the board's own rules by default. */
+    move: (BoardLayout, String, Int, Int) -> Pair<BoardRect, BoardLayout>? = { base, id, column, row ->
+        (BoardGrid.move(base, id, column, row) as? BoardChange.Done)?.let { d -> base.rects.getValue(id).let { BoardRect(column, row, it.width, it.height) } to d.layout }
+    },
 ): Modifier {
+    val currentMove by rememberUpdatedState(move)
     val currentGeometry by rememberUpdatedState(geometry)
     val currentLayout by rememberUpdatedState(layout)
     val currentOrigin by rememberUpdatedState(origin)
@@ -207,8 +212,9 @@ internal fun Modifier.boardDrag(
             val size = op.target.size
             val spot = g.snap(editor.finger - editor.grab, size, op.target.spot, lastRow = op.base.rows)
             if (spot == op.target.spot) return
-            val change = BoardGrid.move(op.base, op.id, spot.column, spot.row) as? BoardChange.Done ?: return
-            editor.update(BoardRect(spot.column, spot.row, size.width, size.height), change.layout)
+            val (target, next) = currentMove(op.base, op.id, spot.column, spot.row) ?: return
+            if (next == editor.preview && target == op.target) return
+            editor.update(target, next)
             currentOnTarget()
         }
 
@@ -299,7 +305,10 @@ internal fun Modifier.resizeHandle(
     onSize: () -> Unit,
     onLimit: () -> Unit,
     onEnd: (BoardLayout?) -> Unit,
+    /** The board with the widget given a place and size; the board's own rules by default. */
+    resize: (BoardLayout, String, BoardRect) -> BoardLayout? = { base, id, rect -> (BoardGrid.resize(base, id, rect) as? BoardChange.Done)?.layout },
 ): Modifier {
+    val currentResize by rememberUpdatedState(resize)
     val currentGeometry by rememberUpdatedState(geometry)
     val currentLayout by rememberUpdatedState(layout)
     val currentOnStart by rememberUpdatedState(onStart)
@@ -328,8 +337,8 @@ internal fun Modifier.resizeHandle(
                 if (wanted != fitted && !limited) currentOnLimit()
                 limited = wanted != fitted
                 if (fitted == op.target) return@detectDragGestures
-                val result = BoardGrid.resize(op.base, id, fitted) as? BoardChange.Done ?: return@detectDragGestures
-                editor.update(fitted, result.layout)
+                val result = currentResize(op.base, id, fitted) ?: return@detectDragGestures
+                editor.update(fitted, result)
                 currentOnSize()
             },
             onDragEnd = { currentOnEnd(editor.finish()) },

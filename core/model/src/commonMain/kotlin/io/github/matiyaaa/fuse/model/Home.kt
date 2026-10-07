@@ -82,15 +82,16 @@ private val RowKinds = setOf(
 )
 
 /**
- * A widget's size on the Channels board, in cells of its grid: one to [MAX_WIDTH] across and one
- * to [MAX_HEIGHT] down.
+ * A widget's size on a board, in cells of its grid: one to [MAX_WIDTH] across (never more than the
+ * board's columns, so four on Home) and one to [MAX_HEIGHT] down. The Systems page's grid has two
+ * columns to a system card, so a card can be half as wide.
  */
 data class BoardSize(val width: Int, val height: Int) {
     /** This size made to fit a board of [columns] (a phone held upright has two). */
     fun fit(columns: Int): BoardSize = BoardSize(width.coerceIn(1, minOf(MAX_WIDTH, columns.coerceAtLeast(1))), height.coerceIn(1, MAX_HEIGHT))
 
     companion object {
-        const val MAX_WIDTH = 4
+        const val MAX_WIDTH = 8
         const val MAX_HEIGHT = 3
     }
 }
@@ -153,6 +154,11 @@ data class HomeLayoutConfig(
     val board: List<HomeWidget>? = null,
     /** The board's pages after the first ([board]), in order; empty while Home is one page. */
     val pages: List<HomePage> = emptyList(),
+    /**
+     * Columns of the grid to one system card, for the Systems page: 2 since 0.3.7.3, when a system
+     * could first be made half a card wide; boards kept before then counted whole cards (1).
+     */
+    val grain: Int = 1,
 ) {
     /** How many pages the board has: the first, and [pages]. */
     val pageCount: Int get() = 1 + pages.size
@@ -230,3 +236,23 @@ data class HomeLayoutConfig(
         ).mapIndexed { i, k -> HomeWidget(id = k.name.lowercase(), kind = k, order = i) }
     }
 }
+
+/**
+ * How a system's small tile on the Systems page looks, as the person changed it; null parts are
+ * Fuse's own choice. [icon] names a picture of the system from Fuse's icon set, or is empty for the
+ * system's logo instead.
+ */
+@Serializable
+data class SystemTileLook(
+    val icon: String? = null,
+    val pattern: TilePattern? = null,
+    val tone: TileTone? = null,
+)
+
+/** The pattern behind a system's small tile. */
+@Serializable
+enum class TilePattern(val label: String) { DOTS("Dots"), GRID("Grid"), DIAGONAL("Stripes"), WAVES("Waves"), PLAIN("Plain") }
+
+/** The colour behind a system's small tile: near white, a light wash of its colour, its colour, or dark. */
+@Serializable
+enum class TileTone(val label: String) { LIGHT("Light"), TINT("Tinted"), ACCENT("Its colour"), DARK("Dark") }

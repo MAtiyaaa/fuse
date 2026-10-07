@@ -577,6 +577,37 @@ fun systemsRows(app: AppState): List<MenuAction> {
         }
         addAll(emulators)
         labelled("Order and art") {
+            // How many systems a row of the Systems page holds; on a two-screen device, for each screen.
+            val twoScreens = app.platform.features.secondScreen || app.menusOnSecondScreen
+            val sizes = listOf(0 to "Usual", 1 to "Smaller", 2 to "Smallest")
+            val sizeDetail: (Int) -> String? = { v ->
+                when (v) {
+                    0 -> "As many systems in a row as suit the screen"
+                    1 -> "One more system in each row, each a little narrower"
+                    else -> "Two more systems in each row"
+                }
+            }
+            add(app.choiceRow(
+                "systems.size", if (twoScreens) "System size in Fuse Mode" else "System size", FuseIcons.Grid, prefs.systemTileStep, sizes,
+                detail = "Smaller fits more systems in each row of the Systems page, and the rest move up to make room",
+                optionDetail = sizeDetail,
+            ) { v -> app.store.updatePrefs { it.copy(systemTileStep = v) } })
+            if (twoScreens) {
+                add(app.choiceRow(
+                    "systems.size.flipped", "System size when flipped", FuseIcons.PanelBottom, prefs.systemTileStepFlipped, sizes,
+                    detail = "The same with the menus on the lower screen, kept apart from Fuse Mode",
+                    optionDetail = sizeDetail,
+                ) { v -> app.store.updatePrefs { it.copy(systemTileStepFlipped = v) } })
+            }
+            add(MenuAction(
+                "tiles.reset", "Reset small tiles", FuseIcons.RotateCcw,
+                detail = if (prefs.systemTiles.isEmpty()) "Every system's small tile is Fuse's own" else "Fuse's own picture, pattern and colour for every system's small tile",
+                enabled = prefs.systemTiles.isNotEmpty(),
+                onSelect = {
+                    app.store.updatePrefs { it.copy(systemTiles = emptyMap()) }
+                    app.toasts.show("Small tiles reset")
+                },
+            ))
             add(MenuAction(
                 "order.reset", "Reset system order", FuseIcons.RotateCcw,
                 detail = if (prefs.systemOrder.isEmpty()) "Hold a system in Systems or on Home and drag it, or move it with the D-pad. The order is used everywhere" else "Back to the order Fuse uses by default",
@@ -632,6 +663,7 @@ fun systemsRows(app: AppState): List<MenuAction> {
                         add(MenuAction("art.undo", "Undo Restore Art", FuseIcons.Undo, detail = "Puts back the art ${u.count} systems had", onSelect = { app.undoSystemArt(u) }))
                     }
                     add(infoRow("art.credit", "Art Book Next", detail = SystemArtPack.ATTRIBUTION, icon = FuseIcons.Info))
+                    add(infoRow("art.icons", "System pictures", detail = io.github.matiyaaa.fuse.integrations.systemart.SystemIcons.ATTRIBUTION, icon = FuseIcons.Info))
                 }
             })
         }

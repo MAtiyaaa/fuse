@@ -203,6 +203,28 @@ internal fun AuditDriver.flippedMenus() {
         shoot("Systems")
         show(libraryStore)
     }
+    scenario("flipped", "systems arranged below") {
+        useLibrary()
+        show(libraryStore, twoScreens, flipped = true)
+        waitFor("Continue playing")
+        tab(io.github.matiyaaa.fuse.model.Destination.SYSTEMS)
+        settle(1_200)
+        hold(PadButton.A)
+        settle(800)
+        tap(PadButton.B)
+        settle(600)
+        shoot("arranging: the flipped look, with the switch to Fuse Mode's")
+        // Up past the top row to the tools, then along to the other screen's look.
+        tap(PadButton.DPAD_UP, 4)
+        tap(PadButton.DPAD_RIGHT, 3)
+        tap(PadButton.A)
+        settle(1_200)
+        shoot("arranging Fuse Mode's look from the lower screen")
+        tap(PadButton.B)
+        settle(600)
+        shoot("done: the lower screen's own look again")
+        show(libraryStore)
+    }
     scenario("flipped", "channels below") {
         useLibrary { it.copy(home = HomeLayoutConfig(mode = HomeMode.CHANNELS)) }
         show(libraryStore, twoScreens, flipped = true)

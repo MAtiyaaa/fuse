@@ -157,6 +157,8 @@ internal fun ChannelBoard(app: AppState, space: BoardSpace, page: Int, pageKey: 
     // Whose arrangement this is, this device's or the profile's, where that can be chosen.
     val ownHome: Boolean? = space.own
     fun setOwnHome(own: Boolean) = space.setOwn(own)
+    // Where the board is kept once per screen, which look is being arranged.
+    val look = space.look
     val arranging = editor.arranging
     val op = editor.op
     val sel = rememberRouteState(app.navigator, if (page == 0) "${space.key}.board" else "${space.key}.board.$pageKey") { SpatialSelection() }
@@ -200,14 +202,15 @@ internal fun ChannelBoard(app: AppState, space: BoardSpace, page: Int, pageKey: 
         if (!active) return@PageEffect
         app.hero = hero
         space.chosen(current)
+        space.chosenPage(page)
     }
     val turns = current?.let { carouselOf(it) }?.takeIf { it.count > 1 } != null
-    PageEffect(arranging, op is BoardOp.Carry, resizeLook, onTools, active, paging.count, turns) {
+    PageEffect(arranging, op is BoardOp.Carry, resizeLook, onTools, active, paging.count, turns, look?.editing) {
         if (!active) return@PageEffect
         val pages = (if (turns) listOf(Hint(HintButton.PAGE_PREV, ""), Hint(HintButton.PAGE_NEXT, "Browse")) else emptyList()) +
             if (paging.count > 1) listOf(Hint(HintButton.RIGHT_STICK, "Pages")) else emptyList()
         app.hints = when {
-            arranging && onTools != null -> listOf(Hint(HintButton.CONFIRM, when (onTools) { 0 -> "Undo"; 1 -> space.resetLabel(page); 2 -> "New page"; else -> if (ownHome == true) "${space.name} on all devices" else "This device's own ${space.name}" }), Hint(HintButton.BACK, "Done"))
+            arranging && onTools != null -> listOf(Hint(HintButton.CONFIRM, when (onTools) { 0 -> "Undo"; 1 -> space.resetLabel(page); 2 -> "New page"; else -> look?.let { "Arrange the ${it.labels[1 - it.editing]} look" } ?: if (ownHome == true) "${space.name} on all devices" else "This device's own ${space.name}" }), Hint(HintButton.BACK, "Done"))
             op is BoardOp.Carry -> listOf(Hint(HintButton.DPAD, "Move"), Hint(HintButton.CONFIRM, "Put down"), Hint(HintButton.BACK, "Cancel"))
             resizeLook -> listOf(Hint(HintButton.DPAD, "Resize"), Hint(HintButton.HOLD_OPTIONS, "Let go when done"))
             arranging -> listOf(Hint(HintButton.CONFIRM, "Pick up"), Hint(HintButton.HOLD_OPTIONS, "Resize"), Hint(HintButton.OPTIONS, "Edit"), Hint(HintButton.BACK, "Done"))
@@ -254,7 +257,8 @@ internal fun ChannelBoard(app: AppState, space: BoardSpace, page: Int, pageKey: 
             val board = c.boardWidgets(page).map { w ->
                 val r = layout[w.id] ?: return@map w
                 val sized = if (w.id == resized) w.copy(width = r.width, height = r.height) else w
-                sized.copy(spots = w.spots + (columns to r.spot))
+                // A packed board keeps only the order: places follow from it at any width.
+                sized.copy(spots = if (space.packed) emptyMap() else w.spots + (columns to r.spot))
             }.sortedWith(compareBy({ reading[it.id] ?: Int.MAX_VALUE }, { it.order }))
             space.keep(p, c.withBoard(page, board.mapIndexed { i, w -> w.copy(order = i) }))
         }
@@ -289,6 +293,7 @@ internal fun ChannelBoard(app: AppState, space: BoardSpace, page: Int, pageKey: 
     fun stopArranging() {
         editor.cancel()
         editor.arranging = false
+        space.arrangingEnded()
         history.clear()
         onTools = null
         sel.clamp(widgets.size)
@@ -308,16 +313,17 @@ internal fun ChannelBoard(app: AppState, space: BoardSpace, page: Int, pageKey: 
         // Rows stay clear of the spark under a focused widget.
         val gapY = Size.sparkClearance
         val cellW = (maxWidth - gutter * 2 - gapX * (columns - 1)) / columns
-        val cellH = space.cellHeight(cellW, narrow)
+        val cellH = space.cellHeight(cellW, gapX, narrow)
         val density = LocalDensity.current
         val geometry = with(density) { BoardGeometry(columns, cellW.toPx(), cellH.toPx(), gapX.toPx(), gapY.toPx()) }
-        val committed = remember(widgets, columns) {
-            BoardGrid.layout(widgets.map { BoardGrid.Item(it.id, it.boardSize, it.spots[columns]) }, columns)
+        val packed = space.packed
+        val committed = remember(widgets, columns, packed) {
+            BoardGrid.layout(widgets.map { BoardGrid.Item(it.id, it.boardSize, if (packed) null else it.spots[columns]) }, columns)
         }
         val shown = editor.preview ?: committed
         // Arranging: the first free place adds a widget (hidden while something is being changed).
         val addRect = if (arranging && op == null) BoardGrid.layout(
-            committed.rects.map { (id, r) -> BoardGrid.Item(id, r.size, r.spot) } + BoardGrid.Item(ADD_KEY, BoardSize(1, 1), null),
+            committed.rects.map { (id, r) -> BoardGrid.Item(id, r.size, r.spot) } + BoardGrid.Item(ADD_KEY, space.addSize, null),
             columns,
         )[ADD_KEY] else null
         val usedRows = maxOf(shown.rows, op?.target?.bottom ?: 0, addRect?.bottom ?: 0)
@@ -367,7 +373,7 @@ internal fun ChannelBoard(app: AppState, space: BoardSpace, page: Int, pageKey: 
             if (arranging && tools != null && carried == null && e.modifier == null) {
                 return@InputLayer when (e.action) {
                     NavAction.LEFT -> if (tools > 0) { onTools = tools - 1; NavResult.MOVED } else NavResult.BLOCKED
-                    NavAction.RIGHT -> if (tools < (if (ownHome != null) 3 else 2)) { onTools = tools + 1; NavResult.MOVED } else NavResult.BLOCKED
+                    NavAction.RIGHT -> if (tools < (if (ownHome != null || look != null) 3 else 2)) { onTools = tools + 1; NavResult.MOVED } else NavResult.BLOCKED
                     NavAction.DOWN -> { onTools = null; NavResult.MOVED }
                     NavAction.UP -> NavResult.BLOCKED
                     NavAction.SELECT -> {
@@ -375,7 +381,7 @@ internal fun ChannelBoard(app: AppState, space: BoardSpace, page: Int, pageKey: 
                             0 -> undo()
                             1 -> reset()
                             2 -> { onTools = null; paging.add() }
-                            else -> setOwnHome(ownHome != true)
+                            else -> if (look != null) look.pick(1 - look.editing) else setOwnHome(ownHome != true)
                         }
                         NavResult.ACTIVATED
                     }
@@ -394,7 +400,7 @@ internal fun ChannelBoard(app: AppState, space: BoardSpace, page: Int, pageKey: 
                     val rect = committed[w.id] ?: return@InputLayer NavResult.BLOCKED
                     val horizontal = e.action == NavAction.LEFT || e.action == NavAction.RIGHT
                     val next = BoardGrid.resizeStep(rect, e.action, columns)?.getOrNull()
-                    val change = next?.let { BoardGrid.resize(committed, w.id, it) } as? BoardChange.Done
+                    val change = next?.let { if (space.packed) BoardGrid.resizePacked(committed, w.id, it.size) else BoardGrid.resize(committed, w.id, it) } as? BoardChange.Done
                     if (change == null) {
                         editor.bump(w.id, horizontal)
                         NavResult.BLOCKED
@@ -405,7 +411,17 @@ internal fun ChannelBoard(app: AppState, space: BoardSpace, page: Int, pageKey: 
                     }
                 }
                 carried != null -> when (e.action) {
-                    NavAction.LEFT, NavAction.RIGHT, NavAction.UP, NavAction.DOWN -> {
+                    NavAction.LEFT, NavAction.RIGHT, NavAction.UP, NavAction.DOWN -> if (space.packed) {
+                        // A packed board: the system trades places along the reading order.
+                        val next = BoardGrid.carry(editor.preview ?: carried.base, carried.id, e.action)
+                        if (next == null) {
+                            editor.bump(carried.id, horizontal = e.action == NavAction.LEFT || e.action == NavAction.RIGHT)
+                            NavResult.BLOCKED
+                        } else {
+                            editor.update(next.rects.getValue(carried.id), next)
+                            NavResult.MOVED
+                        }
+                    } else {
                         val t = carried.target
                         val col = t.column + when (e.action) { NavAction.LEFT -> -1; NavAction.RIGHT -> 1; else -> 0 }
                         val row = t.row + when (e.action) { NavAction.UP -> -1; NavAction.DOWN -> 1; else -> 0 }
@@ -533,6 +549,11 @@ internal fun ChannelBoard(app: AppState, space: BoardSpace, page: Int, pageKey: 
                                 reselect = id
                                 haptics.drop()
                             },
+                            move = if (packed) { base, id, column, row ->
+                                BoardGrid.drop(base, id, column, row).layout.let { it.rects.getValue(id) to it }
+                            } else { base, id, column, row ->
+                                (BoardGrid.move(base, id, column, row) as? BoardChange.Done)?.let { d -> base.rects.getValue(id).let { BoardRect(column, row, it.width, it.height) } to d.layout }
+                            },
                         )
                         .verticalScroll(scroll),
                 ) {
@@ -637,6 +658,9 @@ internal fun ChannelBoard(app: AppState, space: BoardSpace, page: Int, pageKey: 
                                                             reselect = w.id
                                                             haptics.drop()
                                                         },
+                                                        resize = if (packed) { base, id, r ->
+                                                            (BoardGrid.resizePacked(base, id, r.size) as? BoardChange.Done)?.layout
+                                                        } else { base, id, r -> (BoardGrid.resize(base, id, r) as? BoardChange.Done)?.layout },
                                                     )
                                                 },
                                                 onPlaced = { edge, r -> if (r == null) controls.remove("r$edge:${w.id}") else controls["r$edge:${w.id}"] = r },
@@ -678,6 +702,7 @@ internal fun ChannelBoard(app: AppState, space: BoardSpace, page: Int, pageKey: 
                 onDone = ::stopArranging,
                 ownHome = ownHome,
                 onOwnHome = { setOwnHome(it) },
+                look = look,
             )
         }
         // Undo and Reset float at the top right while arranging, out of the board's way.
@@ -697,6 +722,8 @@ internal fun ChannelBoard(app: AppState, space: BoardSpace, page: Int, pageKey: 
                 onNewPage = { onTools = null; paging.add() },
                 ownHome = ownHome,
                 onOwnHome = { onTools = 3; setOwnHome(ownHome != true) },
+                look = look,
+                onLook = { onTools = 3; look?.let { it.pick(1 - it.editing) } },
             )
         }
         // Controls of widgets that are gone, or of a board no longer arranged, catch no touches.

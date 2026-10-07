@@ -50,6 +50,11 @@ internal fun AppSettings.toUiPrefs(scoped: GlobalScoped): UiPrefs {
         screenMargin = appearance.screenMargin.coerceIn(0, 10),
         home = home.layout,
         systemsBoard = home.systemsBoard,
+        systemsBoardFlipped = home.systemsBoardFlipped,
+        systemTileStep = home.systemTileStep.coerceIn(0, 2),
+        systemTileStepFlipped = home.systemTileStepFlipped.coerceIn(0, 2),
+        systemsCardsSeen = home.systemsCardsSeen,
+        systemTiles = library.systemTiles,
         destinations = home.visibleDestinations(),
         defaultLayout = scoped.layout,
         gameArt = library.gameArt,
@@ -127,7 +132,7 @@ internal fun AppSettings.withUiPrefs(prefs: UiPrefs): AppSettings {
         Destination.entries.filterNot { it in visible }.map { DestinationSetting(it, visible = false) }
     return copy(
         onboarding = onboarding.copy(completed = prefs.onboardingDone, romm = prefs.rommAnswer),
-        home = home.copy(layout = prefs.home, systemsBoard = prefs.systemsBoard, destinations = destinations, continueDismissed = prefs.continueDismissed, addonsOrder = prefs.addonsOrder, quickMenu = prefs.quickMenu),
+        home = home.copy(layout = prefs.home, systemsBoard = prefs.systemsBoard, systemsBoardFlipped = prefs.systemsBoardFlipped, systemTileStep = prefs.systemTileStep, systemTileStepFlipped = prefs.systemTileStepFlipped, systemsCardsSeen = prefs.systemsCardsSeen, destinations = destinations, continueDismissed = prefs.continueDismissed, addonsOrder = prefs.addonsOrder, quickMenu = prefs.quickMenu),
         appearance = appearance.copy(
             themeId = theme.id,
             motion = prefs.motion,
@@ -170,6 +175,7 @@ internal fun AppSettings.withUiPrefs(prefs: UiPrefs): AppSettings {
             steamGames = prefs.steamGames,
             appsFilter = prefs.appsFilter,
             gameArt = prefs.gameArt,
+            systemTiles = prefs.systemTiles,
         ),
         sound = sound.copy(
             enabled = prefs.sound != SoundProfile.OFF,

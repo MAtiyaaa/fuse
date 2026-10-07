@@ -274,6 +274,20 @@ data class HomeSettings(
      * Systems not on it yet join the first page; one taken off is kept, hidden.
      */
     val systemsBoard: HomeLayoutConfig = HomeLayoutConfig(),
+    /**
+     * The Systems page while the menus are on the lower screen (flipped): its own sizes and order,
+     * this device's alone. Null until it is first arranged there; it starts from [systemsBoard]'s order.
+     */
+    val systemsBoardFlipped: HomeLayoutConfig? = null,
+    /** How many more systems a row of the Systems page holds than at their usual size (0 to 2). */
+    val systemTileStep: Int = 0,
+    /** The same while the menus are on the lower screen. */
+    val systemTileStepFlipped: Int = 0,
+    /**
+     * System cards across the Systems page at their usual size, as last shown with the menus on top
+     * ("fuse") and below ("flipped"), so either can be arranged from the other screen.
+     */
+    val systemsCardsSeen: Map<String, Int> = emptyMap(),
     /** Home as it was before it was last reset here, for Undo Home Reset (this device's alone). */
     val beforeReset: HomeLayoutConfig? = null,
     /** That reset gave this device its own Home (the profile's stayed as it was on every other device). */
@@ -432,6 +446,8 @@ data class LibraryPreferences(
     val hiddenSeries: List<String> = emptyList(),
     /** Brand colours from the system art pack (opaque ARGB), by platform id. */
     val systemColors: Map<String, Long> = emptyMap(),
+    /** How each system's small tile looks where the person changed it, by platform id. */
+    val systemTiles: Map<String, io.github.matiyaaa.fuse.model.SystemTileLook> = emptyMap(),
     /** Systems the person put back to Fuse's own art: nothing is downloaded for them by itself. */
     val systemArtDefault: List<String> = emptyList(),
     /** Which of its lists the Apps tab opens on. */
