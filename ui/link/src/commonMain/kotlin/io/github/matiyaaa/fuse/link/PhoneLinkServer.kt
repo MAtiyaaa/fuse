@@ -34,7 +34,6 @@ import io.ktor.utils.io.writeFully
 import io.ktor.utils.io.writeStringUtf8
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -151,7 +150,10 @@ class PhoneLinkServer(
         // The usual port, or the next free one (Cartridge's own remote uses 47280 and 47281).
         for (candidate in PORT until PORT + 10) {
             try {
-                val s = withContext(Dispatchers.Default) { launchServer(candidate) }
+                // Starting blocks its thread until the server is bound, and stopping can block for a
+                // second: both on the threads made for blocking, never the shared computation ones
+                // the server's own start-up (and everything else in Fuse) runs on.
+                val s = withContext(ioDispatcher) { launchServer(candidate) }
                 server = s
                 port = candidate
                 refreshState(error = null)
@@ -176,7 +178,7 @@ class PhoneLinkServer(
         val s = server ?: return@withLock
         server = null
         port = null
-        withContext(Dispatchers.Default) { runCatching { s.stop(200, 1_000) } }
+        withContext(ioDispatcher) { runCatching { s.stop(200, 1_000) } }
         refreshState(error = null)
     }
 

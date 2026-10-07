@@ -124,6 +124,17 @@ class PhoneLinkCapturesTest {
         return out.toByteArray()
     }
 
+    /** The server's state once it is up (or failed), with every thread's stack printed if it never comes. */
+    private suspend fun started(link: PhoneLinkServer): io.github.matiyaaa.fuse.ui.shell.store.PhoneLinkState = try {
+        withTimeout(20_000) { link.state.first { it.running || it.error != null } }
+    } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
+        for ((t, stack) in Thread.getAllStackTraces()) {
+            System.err.println("${t.name} (${t.state})")
+            stack.take(30).forEach { System.err.println("    at $it") }
+        }
+        throw e
+    }
+
     @Test
     fun capturesAreListedPlayedAndDownloaded(): Unit = runBlocking {
         val png = Random(1).nextBytes(300_000)
@@ -136,7 +147,7 @@ class PhoneLinkCapturesTest {
         val link = PhoneLinkServer(store, services.secrets, scope, "Test Device", "0.1.4", captures = FileCaptures(dir), clock = { now })
         link.start()
         store.updatePrefs { it.copy(phoneLinkEnabled = true) }
-        assertTrue(withTimeout(20_000) { link.state.first { it.running || it.error != null } }.running)
+        assertTrue(started(link).running)
         val port = link.boundPort()!!
 
         assertTrue("\"captures\":true" in http(port, "GET", "/api/session").body)
@@ -234,7 +245,7 @@ class PhoneLinkCapturesTest {
         val link = PhoneLinkServer(store, services.secrets, scope, "Test Device", "0.1.4")
         link.start()
         store.updatePrefs { it.copy(phoneLinkEnabled = true) }
-        assertTrue(withTimeout(20_000) { link.state.first { it.running || it.error != null } }.running)
+        assertTrue(started(link).running)
         val port = link.boundPort()!!
         assertTrue("\"captures\":false" in http(port, "GET", "/api/session").body)
         link.setAccount("player", "secret123").getOrThrow()
