@@ -2,6 +2,7 @@ package io.github.matiyaaa.fuse.ui.shell.systems
 
 import io.github.matiyaaa.fuse.model.HomeLayoutConfig
 import io.github.matiyaaa.fuse.model.HomePage
+import androidx.compose.ui.unit.dp
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -49,5 +50,18 @@ class SystemsBoardTest {
             pages = listOf(HomePage("page2", listOf(SystemsBoard.tile("gba")))),
         )
         assertEquals(listOf("psx", "snes", "gba", "n64"), SystemsBoard.order(c, listOf("snes", "n64", "gba")))
+    }
+
+    @Test
+    fun aHandheldKeepsItsSystemsTheSizeTheyWereAndATvKeepsItsOwn() {
+        // A Thor's upper screen (1080p at 6 inches): five across, as the grid always had there.
+        assertEquals(5, SystemsBoard.columns(narrow = false, small = true, width = 731.dp))
+        // Its lower screen, small and wider than tall: three.
+        assertEquals(3, SystemsBoard.columns(narrow = false, small = true, width = 470.dp))
+        // A TV keeps the board's own size: three across 1080p at TV density, six across a full 1080p.
+        assertEquals(3, SystemsBoard.columns(narrow = false, small = false, width = 960.dp))
+        assertEquals(6, SystemsBoard.columns(narrow = false, small = false, width = 1920.dp))
+        // A phone held upright: two.
+        assertEquals(2, SystemsBoard.columns(narrow = true, small = true, width = 400.dp))
     }
 }
