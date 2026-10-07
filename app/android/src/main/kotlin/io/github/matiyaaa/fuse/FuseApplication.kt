@@ -92,6 +92,8 @@ class FuseApplication : Application(), SingletonImageLoader.Factory {
         io.github.matiyaaa.fuse.ui.designsystem.effects.Drawing.cachedLayers = true
         super.onCreate()
         crashLog.install()
+        // Heat and battery saver reach Fuseline: decoration eases off, interaction never does.
+        io.github.matiyaaa.fuse.platform.DevicePacing.start(this)
         activities = ActivityHolder(this)
         registerActivityLifecycleCallbacks(activities)
         activities.onFuseResumed = { platformUi.onFuseResumed() }

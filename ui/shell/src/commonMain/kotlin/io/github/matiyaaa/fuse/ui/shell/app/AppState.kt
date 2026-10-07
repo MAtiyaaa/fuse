@@ -357,6 +357,13 @@ class DevOptions {
     var frameGraph by mutableStateOf(false)
 
     /**
+     * Fuseline's Motion Inspector in the corner: what the motion engine does each frame (values
+     * stepped, waiting for their horizon, resting unread, shared spring and curve work) and every
+     * value in motion. Counting costs a little while it is on, nothing while it is off.
+     */
+    var motionInspector by mutableStateOf(false)
+
+    /**
      * While setup is replayed as a rehearsal: the preferences as they were before it started.
      * Nothing a step does outside preferences is carried out, and these are put back at the end.
      */

@@ -348,6 +348,20 @@ class FuselineValue<T>(
     /** True while the frame driver leaves it to rest unread until its motion arrives (for the inspector). */
     internal val resting: Boolean get() = ride?.move?.parked == true
 
+    /** How the frame driver treats it now, in words (for the inspector). */
+    internal fun schedule(): String {
+        val r = ride ?: return if (isDragging) "held by a gesture" else "idle"
+        val m = r.move ?: return "stepped every frame (its own loop)"
+        return when {
+            m.gone -> "arrived"
+            m.joining -> "starting"
+            m.parked -> "resting unread until it arrives"
+            m.eager -> "stepped every frame (per-frame work)"
+            m.listed -> "stepped every frame"
+            else -> "waiting for its event horizon"
+        }
+    }
+
     /** Who moves it now. */
     var owner: MotionOwner by mutableStateOf(MotionOwner.IDLE)
         private set
@@ -1053,7 +1067,7 @@ internal suspend fun runFrames(durationNanos: Long, onStart: ((Retimer) -> Unit)
     })
     while (true) {
         val done = frame(length == Long.MAX_VALUE) { frameNanos ->
-            FramePacing.frameAt(frameNanos)
+            FramePacing.frameAt(frameNanos, clock)
             last = frameNanos
             if (start == Long.MIN_VALUE) start = frameNanos - if (pending >= 0) (pending * scale).toLong() else 0L
             val play = ((frameNanos - start) / scale).toLong()

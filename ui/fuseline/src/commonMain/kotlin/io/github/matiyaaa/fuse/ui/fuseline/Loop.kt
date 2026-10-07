@@ -86,7 +86,7 @@ fun rememberLoopClock(label: String = "LoopClock", decorative: Boolean = true): 
  * endless animation ([withInfiniteFrameMillis]). Returns only when cancelled.
  */
 suspend fun decorationFrames(fps: Int, infinite: Boolean = true, onFrame: (playedNanos: Long) -> Unit) {
-    val every = 1_000_000_000L / fps.coerceAtLeast(1)
+    val base = 1_000_000_000L / fps.coerceAtLeast(1)
     var last = frame(infinite) { it }
     var played = 0L
     var shownAt = 0L
@@ -94,6 +94,8 @@ suspend fun decorationFrames(fps: Int, infinite: Boolean = true, onFrame: (playe
     var interval = FramePacing.intervalNanos
     var waited = false
     while (true) {
+        // Under the device's pressure (heat, battery saver) fewer updates, each at its true time.
+        val every = base * FramePacing.pressureEvery
         val now = frame(infinite) { it }
         FramePacing.decorationWakeups++
         val step = (now - last).coerceAtLeast(0L)
@@ -102,7 +104,7 @@ suspend fun decorationFrames(fps: Int, infinite: Boolean = true, onFrame: (playe
         if (!FramePacing.decorationHeld()) {
             played += step
             // Due within half a frame counts as due: updates land on the display's frames, never a frame late.
-            if (played - shownAt + interval / 2 >= every && FramePacing.shouldDrawDecoration()) {
+            if (played - shownAt + interval / 2 >= every && FramePacing.shouldDrawDecorationUnderLoad()) {
                 shownAt = played
                 onFrame(played)
             }

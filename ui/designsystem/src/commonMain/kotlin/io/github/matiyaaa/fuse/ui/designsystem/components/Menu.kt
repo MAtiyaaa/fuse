@@ -1,5 +1,6 @@
 package io.github.matiyaaa.fuse.ui.designsystem.components
 
+import io.github.matiyaaa.fuse.ui.designsystem.effects.background
 import io.github.matiyaaa.fuse.ui.designsystem.input.mouseHover
 
 import androidx.compose.foundation.background
@@ -208,7 +209,7 @@ fun MenuRow(
                 scaleY = s
             }
             .clip(shape)
-            .background(bg)
+            .background({ bg })
             .then(if (outline != null) Modifier.border(Size.focusStroke, outline, shape) else Modifier)
             .drawBehind { if (!selected && press.hovered > 0f) drawRect(hover, alpha = press.hovered) }
             .clickable(interaction, null, enabled = available, onClick = onClick)
@@ -288,7 +289,7 @@ private fun IconWell(icon: ImageVector, tint: Color, selected: Boolean, destruct
         Modifier
             .size(ICON_WELL)
             .clip(shape)
-            .background(fill),
+            .background({ fill }),
         contentAlignment = Alignment.Center,
     ) {
         FuseIcon(icon, size = WELL_ICON, tint = if (selected || destructive) tint else tint.copy(alpha = if (available) 0.82f else 0.5f))

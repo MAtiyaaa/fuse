@@ -25,6 +25,7 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import io.github.matiyaaa.fuse.ui.designsystem.effects.background
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
 import io.github.matiyaaa.fuse.ui.designsystem.theme.FuseColors
@@ -112,7 +113,7 @@ fun FuseButton(
             }
             .ringOutside({ if (ringed) lift else 0f }, focus, ringShape)
             .clip(shape)
-            .background(bgAnim)
+            .background({ bgAnim })
             .drawBehind {
                 if (press.hovered > 0f) drawRect(hover, alpha = press.hovered)
                 if (press.pressed > 0f) drawRect(sink, alpha = press.pressed)
@@ -141,10 +142,10 @@ fun FuseButton(
     ) {
         when {
             loading -> Spinner(size = iconSize, color = fgAnim)
-            icon != null -> FuseIcon(icon, size = iconSize, tint = fgAnim)
+            icon != null -> FuseIcon(icon, tint = { fgAnim }, size = iconSize)
         }
-        FText(label, if (compact) Fuse.type.label else Fuse.type.bodyStrong, color = fgAnim, maxLines = 1)
-        if (trailingIcon != null) FuseIcon(trailingIcon, size = iconSize, tint = fgAnim.copy(alpha = fgAnim.alpha * 0.8f))
+        FText(label, if (compact) Fuse.type.label else Fuse.type.bodyStrong, color = { fgAnim }, maxLines = 1)
+        if (trailingIcon != null) FuseIcon(trailingIcon, tint = { fgAnim.copy(alpha = fgAnim.alpha * 0.8f) }, size = iconSize)
     }
 }
 
@@ -196,7 +197,7 @@ fun IconButton(
             }
             .ringOutside({ if (highContrast) lift else 0f }, c.focus, controlRingShape())
             .clip(shape)
-            .background(bg)
+            .background({ bg })
             .drawBehind {
                 if (press.hovered > 0f) drawRect(hover, alpha = press.hovered)
                 if (press.pressed > 0f) drawRect(sink, alpha = press.pressed)
@@ -210,6 +211,6 @@ fun IconButton(
             .defaultMinSize(minWidth = size),
         contentAlignment = Alignment.Center,
     ) {
-        FuseIcon(icon, size = if (size >= 44.dp) Size.iconM else Size.iconS, tint = fg)
+        FuseIcon(icon, tint = { fg }, size = if (size >= 44.dp) Size.iconM else Size.iconS)
     }
 }

@@ -423,12 +423,15 @@ internal class FrameDriver private constructor(private val clock: MonotonicFrame
         stepMoves(frameNanos)
         if (inspected) {
             MotionInspector.frameCostNanos = monotonicNanos() - began
+            var resting = 0
+            for (i in 0 until heapSize) if (heap[i]!!.parked) resting++
+            MotionInspector.pass(live, listed.size, heapSize, resting, if (heapSize > 0) (heap[0]!!.wake - frameNanos).coerceAtLeast(0L) else -1L)
             MotionInspector.sample()
         }
     }
 
     private fun stepMoves(frameNanos: Long) {
-        FramePacing.frameAt(frameNanos)
+        FramePacing.frameAt(frameNanos, clock)
         FramePacing.movesUnderWay = live > 0
         frameThread = currentThreadId()
         previousFrame = lastFrame
@@ -671,16 +674,25 @@ object FramePacing {
 
     private var decorationTick = 0L
 
-    private var lastSeen = Long.MIN_VALUE
+    // The last frame seen from each frame clock (a device with a second screen has two, ticking on
+    // their own displays' timing): an interval is only ever measured between two frames of the same
+    // clock, never from one screen's frame to the other's.
+    private val sources = arrayOfNulls<Any>(4)
+    private val lastSeenBy = LongArray(4) { Long.MIN_VALUE }
 
     /**
-     * A frame at [frameNanos], from whoever sees it first (the shared driver, or a loop on its own):
-     * each frame time counts once however many moves and loops share it.
+     * A frame at [frameNanos] from the frame clock [source] (the shared driver's, or a loop on its
+     * own), from whoever sees it first: each frame time counts once however many moves and loops
+     * share it.
      */
-    fun frameAt(frameNanos: Long) {
-        if (frameNanos == lastSeen) return
-        val before = lastSeen
-        lastSeen = frameNanos
+    fun frameAt(frameNanos: Long, source: Any? = null) {
+        var slot = 0
+        while (slot < sources.size && sources[slot] != null && sources[slot] !== source) slot++
+        if (slot == sources.size) slot = 0
+        if (sources[slot] == null) sources[slot] = source
+        val before = lastSeenBy[slot]
+        if (frameNanos == before) return
+        lastSeenBy[slot] = frameNanos
         if (before != Long.MIN_VALUE && frameNanos > before) frame(frameNanos - before)
     }
 
@@ -715,10 +727,39 @@ object FramePacing {
     }
 
     /**
-     * Whether a decorative loop should show this frame: always, unless frames are running late, when
-     * it shows every other frame. Its value is still worked out from the real time when it shows.
+     * What the device says about itself, where it can tell (Android's thermal status, battery saver):
+     * set by the platform. Under pressure decoration updates less often, always at its true time;
+     * interaction, navigation, focus and transitions keep every frame and their exact physics.
+     */
+    var devicePressure: DevicePressure = DevicePressure.NONE
+
+    /** Battery saver is on: decoration updates half as often. */
+    var powerSaving: Boolean = false
+
+    /**
+     * Of decoration's updates, one in this many is kept for the device's sake: 1 normally, 2 while
+     * it runs hot or battery saver is on, 3 while it is throttling.
+     */
+    val pressureEvery: Int
+        get() = when {
+            devicePressure >= DevicePressure.THROTTLED -> 3
+            powerSaving || devicePressure >= DevicePressure.HOT -> 2
+            else -> 1
+        }
+
+    /**
+     * Whether a decorative loop should show this frame: always, unless frames are running late
+     * (every other frame) or the device is under pressure ([pressureEvery]). Its value is still worked
+     * out from the real time when it shows, so it never catches up: it is simply where it should be.
      */
     fun shouldDrawDecoration(): Boolean {
+        decorationTick++
+        val every = maxOf(if (underLoad) 2 else 1, pressureEvery)
+        return every == 1 || decorationTick % every == 0L
+    }
+
+    /** [shouldDrawDecoration] for frames running late only (a paced loop counts the device's pressure in its own rate). */
+    internal fun shouldDrawDecorationUnderLoad(): Boolean {
         decorationTick++
         return !underLoad || decorationTick % 2L == 0L
     }
@@ -767,9 +808,15 @@ object FramePacing {
         late = 0
         onTime = 0
         underLoad = false
+        devicePressure = DevicePressure.NONE
+        powerSaving = false
         intervalNanos = 16_666_667L
         shortest = Long.MAX_VALUE
         decorationTick = 0L
-        lastSeen = Long.MIN_VALUE
+        sources.fill(null)
+        lastSeenBy.fill(Long.MIN_VALUE)
     }
 }
+
+/** How much the device itself says it is struggling (its thermal state), from none to throttling. */
+enum class DevicePressure { NONE, WARM, HOT, THROTTLED }

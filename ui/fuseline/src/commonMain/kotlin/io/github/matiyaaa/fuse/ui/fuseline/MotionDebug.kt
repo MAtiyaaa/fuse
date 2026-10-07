@@ -75,12 +75,85 @@ object MotionTrace {
 
 /**
  * Every value in motion, on demand: its motion and tuning, value, target, velocity, progress, time
- * played and left, who moves it, and a short history of its value to graph; and what a frame of the
- * shared driver costs. Off by default; while off, starting a move costs one check of [enabled].
+ * played and left, who moves it, and a short history of its value to graph; and what the frame
+ * driver did each frame: how many moves are alive, how many came up, how many wait for their event
+ * horizon or rest unread, how much spring and curve work was shared instead of repeated, and when it
+ * next needs a frame. Off by default; while off, a frame costs one check of [enabled] and starting
+ * a move one more. The inspector reads values without waking them.
  */
 object MotionInspector {
-    /** Whether values in motion are watched. */
+    /** Whether values in motion are watched (and the engine's own work counted). */
     var enabled = false
+        set(on) {
+            field = on
+            Kernels.counting = on
+        }
+
+    /** What the frame driver did on the last frame it stepped (any clock). */
+    class Pass(
+        /** Moves under way. */
+        val live: Int,
+        /** Moves that came up (were stepped) this frame. */
+        val visited: Long,
+        /** Moves stepped every frame (visibly moving, or doing work every frame). */
+        val everyFrame: Int,
+        /** Moves waiting for their event horizon or their arrival. */
+        val waiting: Int,
+        /** Of those, moves resting because nobody reads them. */
+        val resting: Int,
+        /** Spring solutions solved afresh, read from a shared solution, and stepped on, this frame. */
+        val solved: Long,
+        val shared: Long,
+        val stepped: Long,
+        /** Curve solutions shared instead of solved, this frame. */
+        val curvesShared: Long,
+        /** Values brought back by a read, and horizons that let a move skip frames, this frame. */
+        val woken: Long,
+        val horizons: Long,
+        /** When the next waiting move is due, in milliseconds from this frame (-1: none waits). */
+        val nextDueMs: Float,
+        /** This frame's cost and the display's frame interval, in microseconds. */
+        val costMicros: Float,
+        val budgetMicros: Float,
+    )
+
+    /** The last frame's account (null before any frame was inspected). */
+    var lastPass: Pass? = null
+        internal set
+
+    private var lastSolved = 0L
+    private var lastShared = 0L
+    private var lastStepped = 0L
+    private var lastCurves = 0L
+    private var lastVisited = 0L
+    private var lastWoken = 0L
+    private var lastHorizons = 0L
+
+    internal fun pass(live: Int, everyFrame: Int, waiting: Int, resting: Int, nextDueNanos: Long) {
+        lastPass = Pass(
+            live = live,
+            visited = Inspection.visited - lastVisited,
+            everyFrame = everyFrame,
+            waiting = waiting,
+            resting = resting,
+            solved = Kernels.solved - lastSolved,
+            shared = Kernels.reused - lastShared,
+            stepped = Kernels.stepped - lastStepped,
+            curvesShared = Kernels.curveReused - lastCurves,
+            woken = Inspection.rearmed - lastWoken,
+            horizons = Inspection.horizonSkips - lastHorizons,
+            nextDueMs = if (nextDueNanos < 0) -1f else nextDueNanos / 1e6f,
+            costMicros = frameCostNanos / 1000f,
+            budgetMicros = FramePacing.intervalNanos / 1000f,
+        )
+        lastSolved = Kernels.solved
+        lastShared = Kernels.reused
+        lastStepped = Kernels.stepped
+        lastCurves = Kernels.curveReused
+        lastVisited = Inspection.visited
+        lastWoken = Inspection.rearmed
+        lastHorizons = Inspection.horizonSkips
+    }
 
     internal const val HISTORY = 120
 
@@ -127,6 +200,10 @@ object MotionInspector {
         val leftMs: Float,
         val running: Boolean,
         val history: FloatArray,
+        /** How the frame driver treats it: stepped every frame, waiting for its horizon, resting unread, or idle. */
+        val schedule: String,
+        /** How many times a read has brought it back from resting unread. */
+        val woken: Int,
     )
 
     /** Every watched value, now. */
@@ -140,14 +217,16 @@ object MotionInspector {
             label = v.label,
             owner = v.owner,
             motion = v.motion?.let(::describe) ?: if (v.isDragging) "Gesture" else "At rest",
-            value = components(v) { v.component(it) },
-            target = components(v) { v.targetComponent(it) },
-            velocity = components(v) { i -> v.velocityComponent(i) },
-            progress = v.progress,
-            playedMs = v.playNanos / 1e6f,
-            leftMs = v.remainingNanos / 1e6f,
+            value = components(v) { v.peekComponent(it) },
+            target = components(v) { v.peekTargetComponent(it) },
+            velocity = components(v) { i -> v.peekVelocityComponent(i) },
+            progress = v.peekProgress(),
+            playedMs = v.peekPlayNanos() / 1e6f,
+            leftMs = v.peekRemainingNanos() / 1e6f,
             running = v.isRunning,
             history = history,
+            schedule = v.schedule(),
+            woken = v.woken,
         )
     }
 
@@ -216,15 +295,27 @@ fun MotionInspectorPanel(modifier: Modifier = Modifier) {
             .padding(12.dp),
     ) {
         BasicText(
-            "Fuseline · ${infos.size} moving · frame ${(MotionInspector.frameCostNanos / 1000f).roundToInt()} µs · ${FramePacing.refreshRate.roundToInt()} Hz" +
+            "Fuseline 4 · ${infos.size} watched · frame ${(MotionInspector.frameCostNanos / 1000f).roundToInt()} µs · ${FramePacing.refreshRate.roundToInt()} Hz" +
                 if (FramePacing.underLoad) " · under load" else "",
             style = TextStyle(color = ink, fontSize = 12.sp),
         )
+        MotionInspector.lastPass?.let { p ->
+            BasicText(
+                "${p.live} moving · ${p.visited} stepped this frame · ${p.everyFrame} every frame · ${p.waiting} waiting (${p.resting} unread)" +
+                    if (p.nextDueMs >= 0f) " · next due in ${fmt(p.nextDueMs, 1)} ms" else "",
+                style = small,
+            )
+            BasicText(
+                "springs: ${p.solved} solved, ${p.shared} shared, ${p.stepped} stepped · curves shared ${p.curvesShared} · woken ${p.woken} · horizons ${p.horizons} · " +
+                    "${fmt(p.costMicros, 1)} of ${fmt(p.budgetMicros, 0)} µs",
+                style = small,
+            )
+        }
         for (i in infos) {
             Spacer(Modifier.height(8.dp))
             BasicText("${i.label} · ${i.owner.name.lowercase()} · ${i.motion}", style = TextStyle(color = ink, fontSize = 12.sp))
             BasicText("value ${i.value} → ${i.target} · velocity ${i.velocity}", style = small)
-            BasicText("progress ${(i.progress * 100).roundToInt()}% · ${i.playedMs.roundToInt()} ms played · ${i.leftMs.roundToInt()} ms left", style = small)
+            BasicText("progress ${(i.progress * 100).roundToInt()}% · ${i.playedMs.roundToInt()} ms played · ${i.leftMs.roundToInt()} ms left · ${i.schedule}" + if (i.woken > 0) " · woken ${i.woken}×" else "", style = small)
             val history = i.history
             Row {
                 Canvas(Modifier.fillMaxWidth().height(28.dp)) {

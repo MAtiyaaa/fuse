@@ -42,6 +42,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import io.github.matiyaaa.fuse.model.NavAction
+import io.github.matiyaaa.fuse.ui.designsystem.effects.background
 import io.github.matiyaaa.fuse.ui.designsystem.focus.KeepSelectionInView
 import io.github.matiyaaa.fuse.ui.designsystem.focus.LinearSelection
 import io.github.matiyaaa.fuse.ui.designsystem.focus.ReorderDefaults
@@ -345,7 +346,7 @@ private fun ReorderRow(
             .heightIn(min = Size.row)
             .carried({ lift }, shape, scale = LIFT_SCALE)
             .clip(shape)
-            .background(bg)
+            .background({ bg })
             .border(Size.stroke, edge, shape)
             .clickable(remember { MutableInteractionSource() }, null, onClick = onClick)
             .semantics { this.selected = selected },
