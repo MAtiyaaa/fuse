@@ -1,5 +1,6 @@
 package io.github.matiyaaa.fuse.ui.shell.home
 
+import io.github.matiyaaa.fuse.ui.designsystem.effects.background
 import kotlin.math.roundToInt
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -376,7 +377,7 @@ internal fun HomeScopeSwitch(own: Boolean, compact: Boolean, onChange: (Boolean)
             val on = own == mine
             val bg by fuselineColor(if (on) c.accent else c.text.copy(alpha = 0f), Fuse.motion.tween(Durations.FAST), label = "scope")
             Row(
-                Modifier.height(40.dp).clip(RoundedCornerShape(Radius.pill)).background(bg)
+                Modifier.height(40.dp).clip(RoundedCornerShape(Radius.pill)).background({ bg })
                     .fuseClickable(shape = RoundedCornerShape(Radius.pill), scale = false, role = androidx.compose.ui.semantics.Role.RadioButton, onClickLabel = if (mine) "This device's Home" else "Home on all devices") { onChange(mine) }
                     .padding(horizontal = if (compact) Space.m else Space.l),
                 verticalAlignment = Alignment.CenterVertically,
@@ -406,7 +407,7 @@ internal fun LookSwitch(look: BoardLook, compact: Boolean) {
             val on = look.editing == i
             val bg by fuselineColor(if (on) c.accent else c.text.copy(alpha = 0f), Fuse.motion.tween(Durations.FAST), label = "look")
             Row(
-                Modifier.height(40.dp).clip(RoundedCornerShape(Radius.pill)).background(bg)
+                Modifier.height(40.dp).clip(RoundedCornerShape(Radius.pill)).background({ bg })
                     .fuseClickable(shape = RoundedCornerShape(Radius.pill), scale = false, role = androidx.compose.ui.semantics.Role.RadioButton, onClickLabel = "Arrange the $label look") { look.pick(i) }
                     .padding(horizontal = if (compact) Space.m else Space.l),
                 verticalAlignment = Alignment.CenterVertically,

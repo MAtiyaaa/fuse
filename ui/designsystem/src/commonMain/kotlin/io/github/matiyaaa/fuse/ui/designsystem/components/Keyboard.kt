@@ -75,6 +75,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import io.github.matiyaaa.fuse.model.NavAction
+import io.github.matiyaaa.fuse.ui.designsystem.effects.background
 import io.github.matiyaaa.fuse.ui.designsystem.icons.ButtonGlyph
 import io.github.matiyaaa.fuse.ui.designsystem.icons.ButtonGlyphDefaults
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
@@ -934,7 +935,7 @@ private fun KeyCap(
                     },
                 contentAlignment = Alignment.Center,
             ) {
-                KeyLabel(key, label, state, fg)
+                KeyLabel(key, label, state) { fg }
             }
         }
         // The pressed letter pops up above the finger.
@@ -961,18 +962,19 @@ private fun KeyCap(
 
 /** What a key shows: its character, or an icon for the keys that do something. */
 @Composable
-private fun KeyLabel(key: Key, label: String, state: KeyboardState, fg: Color) {
+private fun KeyLabel(key: Key, label: String, state: KeyboardState, fg: () -> Color) {
+    // The ink is read while drawing, so a key fading as the highlight passes only redraws.
     when {
-        key.kind == KeyKind.SPACE && state.trackpad -> FuseIcon(FuseIcons.MoveHorizontal, size = Size.iconM, tint = fg)
+        key.kind == KeyKind.SPACE && state.trackpad -> FuseIcon(FuseIcons.MoveHorizontal, tint = fg, size = Size.iconM)
         // Lucide's space bar sits low in its box; lift it to the key's optical middle.
-        key.kind == KeyKind.SPACE -> FuseIcon(FuseIcons.Space, Modifier.offset(y = -Size.iconL * 0.22f), size = Size.iconL, tint = fg)
-        key.kind == KeyKind.SHIFT -> FuseIcon(if (state.shift == ShiftState.LOCK) FuseIcons.CapsLock else FuseIcons.Shift, size = Size.iconM, tint = fg)
+        key.kind == KeyKind.SPACE -> FuseIcon(FuseIcons.Space, tint = fg, modifier = Modifier.offset(y = -Size.iconL * 0.22f), size = Size.iconL)
+        key.kind == KeyKind.SHIFT -> FuseIcon(if (state.shift == ShiftState.LOCK) FuseIcons.CapsLock else FuseIcons.Shift, tint = fg, size = Size.iconM)
         key.kind == KeyKind.DONE -> Row(verticalAlignment = Alignment.CenterVertically) {
-            FuseIcon(FuseIcons.Return, size = Size.iconS, tint = fg)
+            FuseIcon(FuseIcons.Return, tint = fg, size = Size.iconS)
             Spacer(Modifier.width(Space.s))
             FText(label, Fuse.type.label, color = fg, maxLines = 1)
         }
-        key.icon != null -> FuseIcon(key.icon, size = Size.iconM, tint = fg)
+        key.icon != null -> FuseIcon(key.icon, tint = fg, size = Size.iconM)
         key.kind == KeyKind.CHAR -> FText(label, Fuse.type.titleSmall, color = fg, maxLines = 1)
         else -> FText(label, Fuse.type.label, color = fg, maxLines = 1)
     }
@@ -1031,7 +1033,7 @@ fun KeyboardField(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (leading != null) {
-            FuseIcon(leading, tint = icon)
+            FuseIcon(leading, tint = { icon })
             Spacer(Modifier.width(Space.m))
         }
         BoxWithConstraints(Modifier.weight(1f)) {
@@ -1105,7 +1107,7 @@ fun KeyboardField(
                             .size(Size.chipCompact)
                             .graphicsLayer { if (!motion.reduced) { val k = if (pressed) 0.92f else 1f; scaleX = k; scaleY = k } }
                             .clip(CircleShape)
-                            .background(fill)
+                            .background({ fill })
                             .hoverable(interaction)
                             .clickable(interaction, null, onClick = onClear),
                         contentAlignment = Alignment.Center,
@@ -1201,7 +1203,7 @@ private fun KeyAlternatesPopup(a: KeyAlternates, height: Dp) {
                 val on = i == a.index
                 val bg by fuselineColor(if (on) c.accent else Color.Transparent, Fuse.motion.tween(Durations.INSTANT), label = "altKey")
                 Box(
-                    Modifier.widthIn(min = height * 1.1f).height(height).clip(RoundedCornerShape(Fuse.geometry.control)).background(bg).padding(horizontal = Space.s),
+                    Modifier.widthIn(min = height * 1.1f).height(height).clip(RoundedCornerShape(Fuse.geometry.control)).background({ bg }).padding(horizontal = Space.s),
                     contentAlignment = Alignment.Center,
                 ) {
                     FText(option, Fuse.type.bodyStrong, color = if (on) c.onAccent else c.text, maxLines = 1)

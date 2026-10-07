@@ -45,6 +45,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.components.FuseAvatars
 import io.github.matiyaaa.fuse.ui.designsystem.components.FuseButton
 import io.github.matiyaaa.fuse.ui.designsystem.components.ProfileAvatar
 import io.github.matiyaaa.fuse.ui.designsystem.components.ToastKind
+import io.github.matiyaaa.fuse.ui.designsystem.effects.background
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
 import io.github.matiyaaa.fuse.ui.designsystem.input.InputLayer
@@ -297,7 +298,7 @@ private fun EditorField(label: String, value: String, filled: Boolean, icon: Ima
     val bg by fuselineColor(if (selected) c.text else c.text.copy(alpha = 0.06f), Fuse.motion.tween(Durations.FAST), label = "field")
     val fg = if (selected) c.ink else c.text
     Row(
-        Modifier.fillMaxWidth().testTag(tag).clip(RoundedCornerShape(Fuse.geometry.control)).background(bg)
+        Modifier.fillMaxWidth().testTag(tag).clip(RoundedCornerShape(Fuse.geometry.control)).background({ bg })
             .clickable(remember { MutableInteractionSource() }, indication = null, onClick = onClick)
             .padding(horizontal = Space.l, vertical = Space.m),
         verticalAlignment = Alignment.CenterVertically,

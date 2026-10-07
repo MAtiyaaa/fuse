@@ -17,6 +17,7 @@ import androidx.compose.ui.geometry.Offset
 import io.github.matiyaaa.fuse.sync.SaveKind
 import io.github.matiyaaa.fuse.sync.SlotReport
 import io.github.matiyaaa.fuse.ui.designsystem.components.fadingEdges
+import io.github.matiyaaa.fuse.ui.designsystem.effects.background
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
 import io.github.matiyaaa.fuse.ui.fuseline.Durations
 import io.github.matiyaaa.fuse.ui.fuseline.fuselineColor
@@ -306,7 +307,7 @@ private fun VersionRow(v: VersionReport, last: Boolean, now: Long, offset: Long,
         }
         Spacer(Modifier.width(Space.s))
         Row(
-            Modifier.weight(1f).fillMaxHeight().padding(vertical = 3.dp).clip(shape).background(bg)
+            Modifier.weight(1f).fillMaxHeight().padding(vertical = 3.dp).clip(shape).background({ bg })
                 .then(if (selected) Modifier.border(Size.focusStroke, c.focus, shape) else Modifier)
                 .clickable(remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null, onClick = onClick)
                 .padding(horizontal = Space.m),

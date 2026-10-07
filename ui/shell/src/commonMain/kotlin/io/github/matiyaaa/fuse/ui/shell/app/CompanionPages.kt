@@ -50,6 +50,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.components.BatteryCapsule
 import io.github.matiyaaa.fuse.ui.designsystem.components.FText
 import io.github.matiyaaa.fuse.ui.designsystem.components.FillSlider
 import io.github.matiyaaa.fuse.ui.designsystem.components.ProgressRing
+import io.github.matiyaaa.fuse.ui.designsystem.effects.background
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
 import io.github.matiyaaa.fuse.ui.designsystem.media.ArtSlot
@@ -450,13 +451,13 @@ private fun TargetChips(options: List<String>, selected: Int, onSelect: (Int) ->
                     .weight(1f)
                     .heightIn(min = 32.dp)
                     .clip(PillShape)
-                    .background(bg)
+                    .background({ bg })
                     .clickable(remember { MutableInteractionSource() }, null) { onSelect(i) }
                     .semantics { this.selected = on }
                     .padding(horizontal = Space.xs, vertical = 6.dp),
                 contentAlignment = Alignment.Center,
             ) {
-                FText(label, Fuse.type.label, color = fg, maxLines = 1)
+                FText(label, Fuse.type.label, color = { fg }, maxLines = 1)
             }
         }
     }
@@ -475,8 +476,8 @@ private fun ControlOrb(label: String, icon: ImageVector, on: Boolean, state: Str
         BoxWithConstraints(Modifier.fillMaxSize()) {
             val orb = minOf(maxHeight * 0.48f, maxWidth * 0.5f, 52.dp).coerceAtLeast(30.dp)
             Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Box(Modifier.size(orb).clip(CircleShape).background(disc), contentAlignment = Alignment.Center) {
-                    FuseIcon(icon, size = orb * 0.42f, tint = glyph)
+                Box(Modifier.size(orb).clip(CircleShape).background({ disc }), contentAlignment = Alignment.Center) {
+                    FuseIcon(icon, tint = { glyph }, size = orb * 0.42f)
                 }
                 FText(label, Fuse.type.label, maxLines = 1)
                 FText(state, Fuse.type.caption, color = if (on) c.accent else c.textMuted, maxLines = 1)

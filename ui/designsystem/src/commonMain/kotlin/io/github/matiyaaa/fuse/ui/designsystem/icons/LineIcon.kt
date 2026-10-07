@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.paint
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
@@ -55,4 +56,38 @@ fun FuseIcon(
             .size(size)
             .paint(painter, colorFilter = filter, contentScale = ContentScale.Fit),
     )
+}
+
+/**
+ * [FuseIcon] with its tint read while drawing, not while composing: an icon whose tint fades (a tab
+ * lighting as focus arrives) redraws, and nothing composes again. The same picture, in the tint as it
+ * is at that frame; the tint filter is made again only when the tint has changed.
+ */
+@Composable
+fun FuseIcon(
+    icon: ImageVector,
+    tint: () -> Color,
+    modifier: Modifier = Modifier,
+    size: Dp = Size.iconM,
+) {
+    val painter = rememberVectorPainter(icon)
+    val filter = remember { TintFilter() }
+    Box(
+        modifier
+            .size(size)
+            .drawBehind { with(painter) { draw(this@drawBehind.size, colorFilter = filter.of(tint())) } },
+    )
+}
+
+/** A tint filter, made again only when its colour changes. */
+private class TintFilter {
+    private var color = Color.Unspecified
+    private var filter: ColorFilter? = null
+
+    fun of(c: Color): ColorFilter {
+        val f = filter
+        if (f != null && c == color) return f
+        color = c
+        return ColorFilter.tint(c).also { filter = it }
+    }
 }

@@ -55,6 +55,7 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import io.github.matiyaaa.fuse.ui.designsystem.effects.background
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
 import io.github.matiyaaa.fuse.ui.designsystem.shape.PillShape
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
@@ -556,8 +557,8 @@ fun SegmentedControl(
                 horizontalArrangement = Arrangement.spacedBy(Space.s, Alignment.CenterHorizontally),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                icons.getOrNull(i)?.let { FuseIcon(it, size = Size.iconS, tint = tint) }
-                FText(label, Fuse.type.label, color = tint, maxLines = 1)
+                icons.getOrNull(i)?.let { FuseIcon(it, tint = { tint }, size = Size.iconS) }
+                FText(label, Fuse.type.label, color = { tint }, maxLines = 1)
             }
         }
     }
@@ -608,16 +609,16 @@ fun Chip(
                     Modifier
                 },
             )
-            .background(fill)
+            .background({ fill })
             .drawBehind { if (press.hovered > 0f) drawRect(hover, alpha = press.hovered) }
             .padding(horizontal = Space.m, vertical = Space.xs + 1.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (icon != null) {
-            FuseIcon(icon, size = CHIP_ICON, tint = tint)
+            FuseIcon(icon, tint = { tint }, size = CHIP_ICON)
             Box(Modifier.width(Space.xs + 2.dp))
         }
-        FText(text, Fuse.type.label, color = tint, maxLines = 1)
+        FText(text, Fuse.type.label, color = { tint }, maxLines = 1)
     }
 }
 

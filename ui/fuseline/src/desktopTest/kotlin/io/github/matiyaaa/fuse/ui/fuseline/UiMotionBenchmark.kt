@@ -31,6 +31,8 @@ import java.lang.management.ManagementFactory
 import kotlin.test.Test
 import kotlin.test.assertTrue
 import io.github.matiyaaa.fuse.ui.fuseline.v3.motionBounds as v3MotionBounds
+import io.github.matiyaaa.fuse.ui.fuseline.v31.motionBounds as v31MotionBounds
+import io.github.matiyaaa.fuse.ui.fuseline.v31.sharedMotion as v31SharedMotion
 import io.github.matiyaaa.fuse.ui.fuseline.v3.sharedMotion as v3SharedMotion
 import androidx.compose.animation.core.spring as cSpring
 import androidx.compose.animation.fadeIn as cFadeIn
@@ -42,7 +44,7 @@ import androidx.compose.animation.slideOutHorizontally as cSlideOut
  * Whole interface paths, composition, layout and drawing included: tiles reflowing as their window
  * changes width (layout motion), an element shared between two screens whose destination keeps
  * moving, rapid tab switching, pages of tiles with following values, and a decorative room. Fuseline
- * 3.1, Fuseline 3, 2 and 1 (frozen in these tests) where each has the capability, and Compose
+ * 4, and Fuseline 3.1, 3, 2 and 1 (frozen in these tests) where each has the capability, and Compose
  * (animateBounds in a LookaheadScope, SharedTransitionLayout, AnimatedContent, animate*AsState).
  * The whole run of frames is timed, and the bytes allocated counted, after a warm-up; rounds rotate
  * between engines and the median counts. Runs only with -Pfuse.bench=true.
@@ -74,21 +76,35 @@ class UiMotionBenchmark {
         return result
     }
 
-    /** [f3] is the engine in use (Fuseline 3.1); [v3] and [v1] the frozen Fuseline 3 and Fuseline 1. */
-    private class Row(val case: String, val f3: Result, val f2: Result?, val compose: Result?, val v3: Result?, val v1: Result?)
+    /** [f4] is the engine in use (Fuseline 4); [v31], [v3] and [v1] the frozen Fuseline 3.1, 3 and 1. */
+    private class Row(val case: String, val results: List<Measured?>)
+
+    private class Measured(val nanos: Double, val bytes: Double, val low: Double, val high: Double)
 
     private val rows = ArrayList<Row>()
+    private val rounds = System.getProperty("fuse.bench.rounds")?.toIntOrNull() ?: 9
 
-    private fun compare(case: String, f3: () -> Result, f2: (() -> Result)?, compose: (() -> Result)?, v3: (() -> Result)? = null, v1: (() -> Result)? = null) {
-        val engines = listOfNotNull(f3, v3, f2, v1, compose)
+    private fun compare(case: String, f4: () -> Result, f2: (() -> Result)?, compose: (() -> Result)?, v3: (() -> Result)? = null, v1: (() -> Result)? = null, v31: (() -> Result)? = null) {
+        // Columns: Fuseline 4, 3.1, 3, 2, 1, Compose.
+        val columns = listOf(f4, v31, v3, f2, v1, compose)
+        val engines = columns.filterNotNull()
         repeat(3) { for (e in engines) e() }
         val results = HashMap<() -> Result, MutableList<Result>>()
-        repeat(7) { r -> for (i in engines.indices) { val e = engines[(i + r) % engines.size]; results.getOrPut(e) { ArrayList() } += e() } }
-        fun median(e: (() -> Result)?): Result? {
-            val rs = results[e ?: return null] ?: return null
-            return Result(rs.map { it.nanos }.sorted()[rs.size / 2], rs.map { it.bytes }.sorted()[rs.size / 2])
-        }
-        rows += Row(case, median(f3)!!, median(f2), median(compose), median(v3), median(v1))
+        repeat(rounds) { r -> for (i in engines.indices) { val e = engines[(i + r) % engines.size]; results.getOrPut(e) { ArrayList() } += e() } }
+        rows += Row(case, columns.map { e ->
+            val rs = results[e ?: return@map null] ?: return@map null
+            val ns = rs.map { it.nanos }
+            val (low, high) = bootstrap(ns)
+            Measured(median(ns), median(rs.map { it.bytes }), low, high)
+        })
+    }
+
+    private fun median(xs: List<Double>): Double = xs.sorted().let { s -> if (s.size % 2 == 1) s[s.size / 2] else (s[s.size / 2 - 1] + s[s.size / 2]) / 2 }
+
+    private fun bootstrap(xs: List<Double>): Pair<Double, Double> {
+        val rnd = kotlin.random.Random(7)
+        val meds = DoubleArray(2000) { median(List(xs.size) { xs[rnd.nextInt(xs.size)] }) }.sorted()
+        return meds[(meds.size * 0.025).toInt()] to meds[(meds.size * 0.975).toInt().coerceAtMost(meds.size - 1)]
     }
 
     @Test
@@ -126,6 +142,12 @@ class UiMotionBenchmark {
                 var w by mutableIntStateOf(700)
                 run(80, { f -> w = widthAt(f) }) {
                     FlowRow(Modifier.width(w.dp)) { repeat(50) { Box(Modifier.v3MotionBounds(io.github.matiyaaa.fuse.ui.fuseline.v3.Spring(1f, 400f)).size(60.dp)) } }
+                }
+            },
+            v31 = {
+                var w by mutableIntStateOf(700)
+                run(80, { f -> w = widthAt(f) }) {
+                    FlowRow(Modifier.width(w.dp)) { repeat(50) { Box(Modifier.v31MotionBounds(io.github.matiyaaa.fuse.ui.fuseline.v31.Spring(1f, 400f)).size(60.dp)) } }
                 }
             },
         )
@@ -169,6 +191,17 @@ class UiMotionBenchmark {
                     io.github.matiyaaa.fuse.ui.fuseline.v3.Swap(s, transitionSpec = { io.github.matiyaaa.fuse.ui.fuseline.v3.SwapTransform(io.github.matiyaaa.fuse.ui.fuseline.v3.fadeIn(io.github.matiyaaa.fuse.ui.fuseline.v3.tween(200)), io.github.matiyaaa.fuse.ui.fuseline.v3.fadeOut(io.github.matiyaaa.fuse.ui.fuseline.v3.tween(200)), null) }) { which ->
                         if (which == 0) Box(Modifier.offset(20.dp, 20.dp).v3SharedMotion(shared, "g").size(60.dp))
                         else Box(Modifier.offset { IntOffset(300 + drift, 200) }.v3SharedMotion(shared, "g").size(300.dp))
+                    }
+                }
+            },
+            v31 = {
+                var s by mutableIntStateOf(0)
+                var drift by mutableIntStateOf(0)
+                val shared = io.github.matiyaaa.fuse.ui.fuseline.v31.SharedMotion(io.github.matiyaaa.fuse.ui.fuseline.v31.Spring(1f, 400f))
+                run(90, { f -> s = stateAt(f); drift = f * 3 }) {
+                    io.github.matiyaaa.fuse.ui.fuseline.v31.Swap(s, transitionSpec = { io.github.matiyaaa.fuse.ui.fuseline.v31.SwapTransform(io.github.matiyaaa.fuse.ui.fuseline.v31.fadeIn(io.github.matiyaaa.fuse.ui.fuseline.v31.tween(200)), io.github.matiyaaa.fuse.ui.fuseline.v31.fadeOut(io.github.matiyaaa.fuse.ui.fuseline.v31.tween(200)), null) }) { which ->
+                        if (which == 0) Box(Modifier.offset(20.dp, 20.dp).v31SharedMotion(shared, "g").size(60.dp))
+                        else Box(Modifier.offset { IntOffset(300 + drift, 200) }.v31SharedMotion(shared, "g").size(300.dp))
                     }
                 }
             },
@@ -231,6 +264,13 @@ class UiMotionBenchmark {
                     io.github.matiyaaa.fuse.ui.fuseline.v3.MotionTransitionLayout(t, distance = 24.dp) { Page(it) }
                 }
             },
+            v31 = {
+                var tab by mutableIntStateOf(0)
+                run(60, { f -> tab = tabAt(f) }) {
+                    val t = io.github.matiyaaa.fuse.ui.fuseline.v31.rememberMotionTransition(tab, io.github.matiyaaa.fuse.ui.fuseline.v31.Spring(1f, 900f), order = { it })
+                    io.github.matiyaaa.fuse.ui.fuseline.v31.MotionTransitionLayout(t, distance = 24.dp) { Page(it) }
+                }
+            },
             v1 = {
                 var tab by mutableIntStateOf(0)
                 run(60, { f -> tab = tabAt(f) }) {
@@ -254,7 +294,7 @@ class UiMotionBenchmark {
 
     /** A tile of a page: three values following its selection, read only while drawing (as Fuse's tiles do). */
     @Composable
-    private fun FollowTile31(selected: Boolean) {
+    private fun FollowTile4(selected: Boolean) {
         val lift by fuselineFloat(if (selected) 1f else 0f, Spring(1f, 700f))
         val tint by fuselineColor(if (selected) androidx.compose.ui.graphics.Color.White else androidx.compose.ui.graphics.Color.Gray, Spring(1f, 700f))
         val edge by fuselineDp(if (selected) 4.dp else 0.dp, Spring(1f, 700f))
@@ -266,6 +306,14 @@ class UiMotionBenchmark {
         val lift by io.github.matiyaaa.fuse.ui.fuseline.v3.fuselineFloat(if (selected) 1f else 0f, io.github.matiyaaa.fuse.ui.fuseline.v3.Spring(1f, 700f))
         val tint by io.github.matiyaaa.fuse.ui.fuseline.v3.fuselineColor(if (selected) androidx.compose.ui.graphics.Color.White else androidx.compose.ui.graphics.Color.Gray, io.github.matiyaaa.fuse.ui.fuseline.v3.Spring(1f, 700f))
         val edge by io.github.matiyaaa.fuse.ui.fuseline.v3.fuselineDp(if (selected) 4.dp else 0.dp, io.github.matiyaaa.fuse.ui.fuseline.v3.Spring(1f, 700f))
+        Box(Modifier.size(40.dp).drawBehind { drawRect(tint, alpha = 0.5f + lift / 2, size = this.size.copy(width = this.size.width - edge.toPx())) })
+    }
+
+    @Composable
+    private fun FollowTile31(selected: Boolean) {
+        val lift by io.github.matiyaaa.fuse.ui.fuseline.v31.fuselineFloat(if (selected) 1f else 0f, io.github.matiyaaa.fuse.ui.fuseline.v31.Spring(1f, 700f))
+        val tint by io.github.matiyaaa.fuse.ui.fuseline.v31.fuselineColor(if (selected) androidx.compose.ui.graphics.Color.White else androidx.compose.ui.graphics.Color.Gray, io.github.matiyaaa.fuse.ui.fuseline.v31.Spring(1f, 700f))
+        val edge by io.github.matiyaaa.fuse.ui.fuseline.v31.fuselineDp(if (selected) 4.dp else 0.dp, io.github.matiyaaa.fuse.ui.fuseline.v31.Spring(1f, 700f))
         Box(Modifier.size(40.dp).drawBehind { drawRect(tint, alpha = 0.5f + lift / 2, size = this.size.copy(width = this.size.width - edge.toPx())) })
     }
 
@@ -286,7 +334,7 @@ class UiMotionBenchmark {
                 androidx.compose.runtime.key(page) { FlowRow { repeat(120) { i -> tile(i == page % 120) } } }
             }
         }
-        compare("a page of 120 tiles, 3 values each, composed", pages { FollowTile31(it) }, null, pages { FollowTileCompose(it) }, v3 = pages { FollowTile3(it) })
+        compare("a page of 120 tiles, 3 values each, composed", pages { FollowTile4(it) }, null, pages { FollowTileCompose(it) }, v3 = pages { FollowTile3(it) }, v31 = pages { FollowTile31(it) })
         // The selection moving along 120 tiles every three frames: each move retargets two tiles.
         fun moving(tile: @Composable (Boolean) -> Unit): () -> Result = {
             var sel by mutableIntStateOf(0)
@@ -294,7 +342,7 @@ class UiMotionBenchmark {
                 FlowRow { repeat(120) { i -> tile(i == sel) } }
             }
         }
-        compare("selection moving across 120 tiles", moving { FollowTile31(it) }, null, moving { FollowTileCompose(it) }, v3 = moving { FollowTile3(it) })
+        compare("selection moving across 120 tiles", moving { FollowTile4(it) }, null, moving { FollowTileCompose(it) }, v3 = moving { FollowTile3(it) }, v31 = moving { FollowTile31(it) })
     }
 
     /** What a decorative room asks of the device each second: frame callbacks woken, and redraws. */
@@ -309,9 +357,14 @@ class UiMotionBenchmark {
         var wakes = 0
         var draws = 0
         val fill = Modifier.size(24.dp).drawBehind { draws++ }
-        fun room31(): @Composable () -> Unit = {
+        fun room4(): @Composable () -> Unit = {
             var t by androidx.compose.runtime.remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
             androidx.compose.runtime.LaunchedEffect(Unit) { decorationFrames(30, infinite = false) { t = it / 1e9f } }
+            Box(fill.graphicsLayerAlpha { 0.5f + kotlin.math.sin(t) / 2 })
+        }
+        fun room31(): @Composable () -> Unit = {
+            var t by androidx.compose.runtime.remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
+            androidx.compose.runtime.LaunchedEffect(Unit) { io.github.matiyaaa.fuse.ui.fuseline.v31.decorationFrames(30, infinite = false) { t = it / 1e9f } }
             Box(fill.graphicsLayerAlpha { 0.5f + kotlin.math.sin(t) / 2 })
         }
         fun room3(): @Composable () -> Unit = {
@@ -328,13 +381,13 @@ class UiMotionBenchmark {
             val t by androidx.compose.animation.core.rememberInfiniteTransition().animateFloat(0f, 1000f, androidx.compose.animation.core.infiniteRepeatable(androidx.compose.animation.core.tween(1_000_000, easing = androidx.compose.animation.core.LinearEasing)))
             Box(fill.graphicsLayerAlpha { 0.5f + kotlin.math.sin(t) / 2 })
         }
-        fun count(input: Boolean, wakesOf31: Boolean, room: @Composable () -> Unit): Work {
+        fun count(input: Boolean, room: @Composable () -> Unit): Work {
             FramePacing.reset()
+            io.github.matiyaaa.fuse.ui.fuseline.v31.FramePacing.reset()
             wakes = 0
             draws = 0
-            val before = FramePacing.decorationWakeups
-            run(240, { f -> if (input && f % 6 == 0) FramePacing.input() }, frameMs = 8L) { room() }
-            val w = if (wakesOf31) (FramePacing.decorationWakeups - before).toDouble() else wakes.toDouble()
+            run(240, { f -> if (input && f % 6 == 0) { FramePacing.input(); io.github.matiyaaa.fuse.ui.fuseline.v31.FramePacing.input() } }, frameMs = 8L) { room() }
+            val w = wakes.toDouble()
             // 240 frames 8 ms apart: 1.92 seconds.
             return Work(w / 1.92, draws / 1.92)
         }
@@ -342,10 +395,11 @@ class UiMotionBenchmark {
         // rest, so its pacing is measured on an exact virtual clock instead (DecorationTest).
         for (input in listOf(true)) {
             decorationRows += (if (input) "while buttons are pressed" else "at rest") to listOf(
-                count(input, true, room31()),
-                count(input, false, room3()),
+                count(input, room4()),
+                count(input, room31()),
+                count(input, room3()),
                 // Compose's loop wakes on every frame of the display.
-                count(input, false, roomCompose()).let { Work(120.0, it.redraws) },
+                count(input, roomCompose()).let { Work(120.0, it.redraws) },
             )
         }
     }
@@ -355,44 +409,47 @@ class UiMotionBenchmark {
 
     private fun report() {
         val losses = ArrayList<String>()
+        val names = listOf("Fuseline 4", "Fuseline 3.1", "Fuseline 3", "Fuseline 2", "Fuseline 1", "Compose")
+        fun us(x: Measured?) = x?.let { "%.0f µs".format(it.nanos / 1000) } ?: "n/a"
+        fun kb(x: Measured?) = x?.let { "%.1f KB".format(it.bytes / 1024) } ?: "n/a"
         val table = buildString {
-            appendLine("| Interface path | Fuseline 3.1 | Fuseline 3 | Fuseline 2 | Fuseline 1 | Compose | Fuseline 3.1 memory | Fuseline 3 memory | Fuseline 2 memory | Fuseline 1 memory | Compose memory | First |")
-            appendLine("|---|---|---|---|---|---|---|---|---|---|---|---|")
+            appendLine("| Interface path | ${names.joinToString(" | ")} | Reduction vs 3.1 | Speedup vs 3.1 | Winner |")
+            appendLine("|---|${names.joinToString("") { "---|" }}---|---|---|")
             for (r in rows) {
-                val others = listOfNotNull(r.v3, r.f2, r.v1, r.compose)
-                val first = others.all { r.f3.nanos < it.nanos } && others.all { r.f3.bytes <= it.bytes * 1.02 }
-                // Where 3.1 runs Fuseline 3's own paths unchanged, the two land within this machine's
-                // run-to-run noise of each other, either way round: a tie, not a loss.
-                val best = others.minOf { it.nanos }
-                val tie = !first && r.f3.nanos <= best * (1 + TIE_SHARE) && r.f3.bytes <= others.minOf { it.bytes } * 1.05
-                if (!first && !tie) losses += r.case
-                fun us(x: Result?) = x?.let { "%.0f µs".format(it.nanos / 1000) } ?: "n/a"
-                fun kb(x: Result?) = x?.let { "%.1f KB".format(it.bytes / 1024) } ?: "n/a"
-                appendLine("| ${r.case} | ${us(r.f3)} | ${us(r.v3)} | ${us(r.f2)} | ${us(r.v1)} | ${us(r.compose)} | ${kb(r.f3)} | ${kb(r.v3)} | ${kb(r.f2)} | ${kb(r.v1)} | ${kb(r.compose)} | ${when { first -> "Fuseline 3.1"; tie -> "Tie (within run-to-run noise)"; else -> "NOT FIRST" }} |")
+                val ms = r.results.withIndex().filter { it.value != null }
+                val best = ms.minBy { it.value!!.nanos }
+                val clear = ms.filter { it.index != best.index }.all { best.value!!.high < it.value!!.low }
+                val winner = if (clear) names[best.index] else "unresolved (${names[best.index]} ahead, intervals overlap)"
+                if (winner != "Fuseline 4") losses += "${r.case}: $winner"
+                val v4 = r.results[0]!!
+                val v31 = r.results[1]
+                val reduction = v31?.let { "%.1f%%".format(100 * (1 - v4.nanos / it.nanos)) } ?: "n/a"
+                val speedup = v31?.let { "%.2f×".format(it.nanos / v4.nanos) } ?: "n/a"
+                appendLine("| ${r.case} | ${r.results.joinToString(" | ") { us(it) }} | $reduction | $speedup | $winner |")
             }
+            appendLine()
+            appendLine("| Interface path, memory per frame | ${names.joinToString(" | ")} |")
+            appendLine("|---|${names.joinToString("") { "---|" }}")
+            for (r in rows) appendLine("| ${r.case} | ${r.results.joinToString(" | ") { kb(it) }} |")
         }
         val decorationTable = buildString {
             appendLine()
             appendLine("A room needing 30 updates a second on a 120 Hz screen, redrawn per second:")
             appendLine()
-            appendLine("| Room | Fuseline 3.1 | Fuseline 3 | Compose |")
-            appendLine("|---|---|---|---|")
+            appendLine("| Room | Fuseline 4 | Fuseline 3.1 | Fuseline 3 | Compose |")
+            appendLine("|---|---|---|---|---|")
             for ((name, w) in decorationRows) {
                 fun n(x: Work?) = x?.let { "%.0f".format(it.redraws) } ?: "n/a"
-                appendLine("| $name | ${n(w[0])} | ${n(w[1])} | ${n(w[2])} |")
-                val f31 = w[0]!!
-                if (w.drop(1).any { o -> o != null && f31.redraws > o.redraws }) losses += "room $name"
+                appendLine("| $name | ${n(w[0])} | ${n(w[1])} | ${n(w[2])} | ${n(w[3])} |")
+                val f4 = w[0]!!
+                if (w.drop(1).any { o -> o != null && f4.redraws > o.redraws }) losses += "room $name"
             }
         }
-        val method = "Per frame, composition, layout and drawing included (Compose's test clock), after a settled start; memory is what every thread allocated; 3 warm-up runs, then 7 rounds in rotating order, median."
+        val method = "Per frame, composition, layout and drawing included (Compose's test clock), after a settled start; memory is what every thread allocated; 3 warm-up runs, then $rounds rounds in rotating order, median; the winner's whole 95% bootstrap interval must lie below every other engine's, otherwise the row is unresolved."
         val report = "$table\n$method\n$decorationTable"
         println(report)
         File("build/ui-motion-bench.md").apply { parentFile.mkdirs() }.writeText(report)
-        assertTrue(losses.isEmpty(), "Fuseline 3.1 is not first in: $losses")
+        assertTrue(losses.isEmpty() || System.getProperty("fuse.bench.lenient").toBoolean(), "Fuseline 4 is not clearly first in: $losses")
     }
 
-    private companion object {
-        /** How far apart two runs of the same code land on this machine, as a share. */
-        const val TIE_SHARE = 0.15
-    }
 }

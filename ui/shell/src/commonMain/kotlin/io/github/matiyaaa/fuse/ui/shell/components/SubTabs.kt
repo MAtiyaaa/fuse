@@ -30,6 +30,7 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import io.github.matiyaaa.fuse.ui.designsystem.effects.background
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
 import io.github.matiyaaa.fuse.ui.designsystem.shape.PillShape
 import io.github.matiyaaa.fuse.ui.designsystem.theme.Fuse
@@ -99,12 +100,12 @@ fun CompactTabs(items: List<CompactTab>, active: Int, onSelect: (Int) -> Unit, m
                 Modifier
                     .size(COMPACT_TAB)
                     .clip(CircleShape)
-                    .background(fill)
+                    .background({ fill })
                     .clickable(remember { MutableInteractionSource() }, null, role = Role.Tab) { onSelect(i) }
                     .semantics { contentDescription = tab.label; selected = on },
                 contentAlignment = Alignment.Center,
             ) {
-                FuseIcon(tab.icon, size = Size.iconS, tint = tint)
+                FuseIcon(tab.icon, tint = { tint }, size = Size.iconS)
                 // A count shows as a dot here; the open tabs spell it out.
                 if (tab.badge != null) {
                     Box(Modifier.align(Alignment.TopEnd).padding(top = 3.dp, end = 3.dp).size(8.dp).clip(CircleShape).background(if (on) c.onAccent else c.accent))

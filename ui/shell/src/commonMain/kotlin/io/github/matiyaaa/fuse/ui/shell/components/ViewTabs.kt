@@ -301,10 +301,10 @@ private fun TabLabel(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             if (tab.icon != null) {
-                FuseIcon(tab.icon, size = Size.iconS, tint = tint)
+                FuseIcon(tab.icon, tint = { tint }, size = Size.iconS)
                 Spacer(Modifier.width(Space.s - Space.xxs))
             }
-            FText(tab.label, Fuse.type.titleSmall, color = tint, maxLines = 1)
+            FText(tab.label, Fuse.type.titleSmall, color = { tint }, maxLines = 1)
         }
         Appear(
             visible = tab.badge != null,
@@ -338,7 +338,7 @@ fun CountPill(text: String, modifier: Modifier = Modifier, emphasised: Boolean =
             .padding(horizontal = Space.s - Space.xxs, vertical = Space.xxs),
         contentAlignment = Alignment.Center,
     ) {
-        FText(text, Fuse.type.numericSmall, color = tint, maxLines = 1)
+        FText(text, Fuse.type.numericSmall, color = { tint }, maxLines = 1)
     }
 }
 

@@ -53,6 +53,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import io.github.matiyaaa.fuse.ui.designsystem.components.FText
+import io.github.matiyaaa.fuse.ui.designsystem.effects.background
 import io.github.matiyaaa.fuse.ui.designsystem.shape.PillShape
 import io.github.matiyaaa.fuse.ui.designsystem.effects.fuseClickable
 import io.github.matiyaaa.fuse.ui.designsystem.effects.lightEdge
@@ -137,7 +138,7 @@ internal fun QuickCard(
                 this.shape = shape
                 clip = true
             }
-            .background(bg)
+            .background({ bg })
             .lightEdge(shape, { edgeRest + (edgeLit - edgeRest) * lift.coerceIn(0f, 1f) })
             .semantics { this.selected = selected },
         content = content,
@@ -486,7 +487,7 @@ internal fun ChoiceWidget(
                                 .fuseClickable(shape = PillShape, role = Role.Tab, onClick = { onChoose(i) })
                                 .semantics { this.selected = on },
                             contentAlignment = Alignment.Center,
-                        ) { FText(label, Fuse.type.label, color = tint, maxLines = 1) }
+                        ) { FText(label, Fuse.type.label, color = { tint }, maxLines = 1) }
                     }
                 }
             }

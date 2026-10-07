@@ -29,7 +29,7 @@ Home screen.
 <a href="https://github.com/MAtiyaaa/fuse/releases/latest"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/brand/button-macos-dark.svg"><img src="docs/assets/brand/button-macos-light.svg" height="48" alt="Download for macOS"></picture></a>
 
 <sub>Android 9 or newer &nbsp;·&nbsp; 64-bit x86 Linux AppImage &nbsp;·&nbsp; Windows 10 and 11 &nbsp;·&nbsp; macOS on Apple silicon and Intel &nbsp;·&nbsp; <a href="#install">checksums and install notes</a></sub><br>
-<sub>0.3.8.2 is the <b>Reach Update</b>, with games folders read by their files whatever they are called, a host that keeps up with Fuse, and Switch libraries read the way people keep them (every game once, with its updates and DLC, however the files are named and wherever they sit, and uploaded to RomM together): every game in your household, reachable from every device. With Fuse Sync, see what your other devices have (in the RomM tab, or a Remote Library in the Sync tab), bring any of it here, send a game to any device (even one that is away) or ask the device that has it to upload it to RomM, and see where every game is on its page. Fuse picks the best source by itself, from another device at home to RomM from outside, checks every file and never shows half a game. It follows 0.3.7, the Motion Update (Fuseline 3, where motion never breaks), and 0.3.6, the Unity Update (Fuse RomM, one Downloads page, Jellyfin for offline, streaming through Moonlight and saves that reach every device by themselves). <a href="#where-fuse-stands">Here is where it stands.</a></sub><br>
+<sub>0.4.0 is the <b>Speed Release</b>: Fuseline 4, an animation engine that no longer runs motion just because time passes. Every motion is worked out from its formula when something looks at it, left alone until it could next change by enough to be seen, and rests while nobody looks, so Fuse moves exactly as before with far less work. It follows 0.3.8.2, the Reach Update (every game in your household reachable from every device, and Switch libraries read the way people keep them), and 0.3.7, the Motion Update (Fuseline 3, where motion never breaks). <a href="#where-fuse-stands">Here is where it stands.</a></sub><br>
 <sub>Or download from <a href="https://matiyaaa.github.io/fuse/">Fuse's website</a>, which always offers the latest version for your system.</sub>
 
 <br>
@@ -185,9 +185,18 @@ They behave the same on every device, answer to one design, and get better with 
       <h3>Fuseline <sub>by Fuse</sub></h3>
       Fuse's own animation engine, named after the line in Fuse's logo that carries the spark. Every
       movement in Fuse runs on it, from a tile's lift to the setup's opening. Fuse 0.3.7 brought
-      <b>Fuseline 3</b>, where motion never breaks, and 0.3.7.5 brings <b>Fuseline 3.1</b>, which
-      takes work off every frame around it.
+      <b>Fuseline 3</b>, where motion never breaks, 0.3.7.5 <b>Fuseline 3.1</b>, which took work off
+      every frame around it, and 0.4.0 brings <b>Fuseline 4</b>, which no longer runs motion just
+      because time passes.
       <ul>
+        <li><b>Fuseline 4: worked out when it is read.</b> Every motion is solved in closed form, so
+        a value is worked out from its formula for the frame being shown, exactly where stepping it
+        every frame would have left it, without the frames.</li>
+        <li><b>Fuseline 4: left alone until it could be seen to change.</b> A value proves the first
+        moment it could move far enough to be seen and isn't touched before then; a value nobody is
+        looking at rests until it arrives, and comes back exactly where it would have been.</li>
+        <li><b>Fuseline 4: shared motion, solved once.</b> Every value on the same spring shares one
+        solution a frame, and a colour's four numbers solve their curve once.</li>
         <li><b>Fuseline 3.1: values without coroutines.</b> A tile's lift, a button's colour and a
         panel's size follow their targets with no coroutine of their own, so a page of tiles
         composes faster and in a third of the memory.</li>
@@ -216,17 +225,20 @@ They behave the same on every device, answer to one design, and get better with 
 
 <div align="center">
 
-| Each frame | Fuseline 3.1 | Fuseline 3 | Fuseline 2 | Fuseline 1 | Compose |
-|---|--:|--:|--:|--:|--:|
-| 100 springs | **12.78 µs** | 13.71 µs | 16.80 µs | 16.74 µs | 184.82 µs |
-| 1,000 tweens | **51.28 µs** | 73.45 µs | 103.99 µs | 141.40 µs | 1692.95 µs |
-| 100 colour fades | **7.65 µs** | 9.33 µs | 15.23 µs | 14.73 µs | 147.28 µs |
-| 1,000 springs given a new target every frame | **5.54 µs** | 5.78 µs | 255.28 µs | n/a | 11829.74 µs |
-| A page of 120 tiles with 3 animated values each, composed | **2156 µs** | 2853 µs | n/a | n/a | 2999 µs |
-| The selection moving across 120 tiles | **1917 µs** | 1989 µs | n/a | n/a | 2221 µs |
-| A theme's room, redrawn per second while you press buttons | **3** | 44 | n/a | n/a | 130 |
+| Each frame | Fuseline 4 | Fuseline 3.1 | Fuseline 3 | Fuseline 2 | Fuseline 1 | Compose |
+|---|--:|--:|--:|--:|--:|--:|
+| 1,000 springs nobody is looking at | **1.33 µs** | 173.36 µs | 183.38 µs | 214.38 µs | 217.47 µs | 2057.55 µs |
+| 1,000 tweens nobody is looking at | **5.85 µs** | 89.68 µs | 175.89 µs | 211.89 µs | 206.46 µs | 2054.35 µs |
+| 1,000 two-number springs, read every frame | **135.94 µs** | 194.70 µs | 199.13 µs | 251.51 µs | 256.86 µs | 2022.47 µs |
+| 1,000 springs given a new target every frame, drawn | **444.43 µs** | 826.75 µs | 844.07 µs | 688.97 µs | 5960.13 µs | 16388.75 µs |
+| 100 values following a finger, drawn | **25.14 µs** | 51.79 µs | 52.70 µs | n/a | n/a | 200.14 µs |
+| Tabs changed every 3 frames, drawn | **4.07 µs** | 4.87 µs | 5.08 µs | 7.14 µs | 21.25 µs | 50.80 µs |
+| A busy screen for 10 seconds | **85.80 µs** | 95.02 µs | 98.92 µs | 105.90 µs | 146.57 µs | 714.77 µs |
+| A page of 120 tiles with 3 animated values each, composed | 2240 µs | 2237 µs | 3482 µs | n/a | n/a | 3952 µs |
+| The selection moving across 120 tiles | 1718 µs | 1672 µs | 1844 µs | n/a | n/a | 1912 µs |
+| A theme's room, redrawn per second while you press buttons | 3 | 3 | 44 | n/a | n/a | 130 |
 
-<sub>Measured on one machine, every engine warmed up and given the same work; Fuseline 3, 2 and 1 are kept in Fuse's tests exactly as they shipped. Of 43 cases Fuseline 3.1 is first on 27, tied on 14 and behind Fuseline 3 on 2 (<a href="docs/fuseline.md#speed">method and every case</a>).</sub>
+<sub>Measured on one computer (OpenJDK on Linux), every engine warmed up and given the same work; Fuseline 3.1, 3, 2 and 1 are kept in Fuse's tests exactly as they shipped. Bold: clearly first. Of 111 cases Fuseline 4 is clearly first on 52, 57 are within run-to-run noise, and another engine is clearly first on 2 (<a href="docs/fuseline.md#speed">method and every case</a>).</sub>
 
 </div>
 
@@ -567,8 +579,15 @@ Linux app, isn't offered on Windows and macOS (Fuse RomM is, on every computer).
 ## Where Fuse stands
 
 > [!IMPORTANT]
-> **Fuse 0.3.8.2 "The Reach Update" is still early, and brings every game in your household within
-> reach.** With Fuse Sync, each device sees what your other devices have, in the RomM tab ("Not on
+> **Fuse 0.4.0 "The Speed Release" is still early, and brings Fuseline 4.** Fuse's animation engine
+> no longer runs motion just because time passes: a value is worked out from its motion's formula
+> when something looks at it, left alone until it could next change by enough to be seen, and rests
+> while nobody looks, coming back exactly where it would have been. Values on the same spring share
+> one solution a frame. Fuse moves exactly as it did, and Fuseline 4 is measured against Fuseline
+> 3.1, 3, 2, 1 and Compose on every workload. See [the release notes](docs/releases/0.4.0.md).
+>
+> 0.3.8, "The Reach Update", brings every game in your household within
+> reach. With Fuse Sync, each device sees what your other devices have, in the RomM tab ("Not on
 > RomM, from another device", and each system in sections) or in a Remote Library in the Sync tab,
 > and every game's page says where it is: this device, your other devices and RomM, online or away,
 > verified or not. Bring a game here, send it to any device (one that is away gets it when it is
@@ -615,6 +634,7 @@ Linux app, isn't offered on Windows and macOS (Fuse RomM is, on every computer).
 
 | Version | Name | What it brought |
 |---|---|---|
+| [0.4.0](docs/releases/0.4.0.md) | The Speed Release | Fuseline 4: values worked out from their motion's formula when read, left alone until they could visibly change, resting while nobody looks; springs solved once for every value on them; a Motion Inspector in Developer options; heat and battery saver ease decoration on Android; fading colours that redraw instead of recomposing |
 | [0.3.8.2](docs/releases/0.3.8.2.md) | The Reach Update | Games folders read by their files whatever they are called; a background Fuse Sync host started again on the newest Fuse (the Remote Library on the host); one or a few systems at the left of the Systems page; a Library list in the developer options |
 | [0.3.8.1](docs/releases/0.3.8.1.md) | The Reach Update | Switch libraries read the way people keep them: updates and DLC told apart with or without title ids, joined to their game wherever they sit (own folder, one big folder, updates and dlc folders, or folders chosen in settings), copies counted once, .nsz and .xcz, RomM uploads that bring updates and DLC along |
 | [0.3.8](docs/releases/0.3.8.md) | The Reach Update | Every game in the household within reach: other devices' games in the RomM tab and a Remote Library in the Sync tab, Available On for every game, Send to Another Device (queued while it is away), uploads to RomM asked from any device, the best source chosen by itself, every device's downloads, all remembered offline; Library touch scrolling that stays where you leave it |

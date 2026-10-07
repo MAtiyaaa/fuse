@@ -70,6 +70,33 @@ fun FText(
 }
 
 /**
+ * [FText] with its colour read while drawing: for a colour that animates (a label brightening as
+ * focus arrives), each frame of the fade redraws the text without composing it again or laying it
+ * out again. The same glyphs, in the colour as it is at that frame.
+ */
+@Composable
+fun FText(
+    text: String,
+    style: TextStyle,
+    modifier: Modifier = Modifier,
+    color: () -> Color,
+    maxLines: Int = Int.MAX_VALUE,
+    align: TextAlign? = null,
+    overflow: TextOverflow = TextOverflow.Ellipsis,
+    minLines: Int = 1,
+) {
+    BasicText(
+        text = text,
+        modifier = modifier,
+        style = if (align != null) style.copy(textAlign = align) else style,
+        maxLines = maxLines,
+        minLines = minLines.coerceAtMost(maxLines),
+        overflow = overflow,
+        color = { color() },
+    )
+}
+
+/**
  * Small uppercase section label ("CONTINUE PLAYING"). A quiet [count] may follow it in tabular
  * figures, an [icon] may lead it, and with [rule] a hairline runs on to the end of the row, for
  * sections in long pages that want a clear edge. Screen readers hear it as a heading.

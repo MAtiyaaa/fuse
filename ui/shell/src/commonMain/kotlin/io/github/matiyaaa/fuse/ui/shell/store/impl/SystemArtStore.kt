@@ -121,11 +121,13 @@ internal class SystemArtStore(private val ctx: StoreContext) {
     /**
      * Systems the pack has nothing for take their art from their games, which often get theirs
      * later (a RomM server's games are filled after they are listed): looked at again, a moment
-     * after games' art was found, while they are still bare.
+     * after games' art was found or the systems shown changed, while they are still bare. Either can
+     * come last (a game's art found before its system is listed, or after), and whichever does
+     * brings the look that finds both.
      */
     private fun followGamesArt() {
         ctx.scope.launch {
-            ctx.gameArtFound.collectLatest {
+            combine(ctx.gameArtFound, ctx.shownPlatforms, ctx.data.games.platformCounts().map { c -> c.filterValues { it > 0 }.keys }.distinctUntilChanged()) { art, _, _ -> art }.collectLatest {
                 delay(GAME_ART_SETTLE_MS)
                 val lib = ctx.settings.value.library
                 if (!lib.systemArtAuto) return@collectLatest

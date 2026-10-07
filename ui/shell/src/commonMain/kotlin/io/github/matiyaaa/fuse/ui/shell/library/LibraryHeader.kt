@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import io.github.matiyaaa.fuse.model.LibraryLayout
 import io.github.matiyaaa.fuse.model.SortOrder
 import io.github.matiyaaa.fuse.ui.designsystem.components.FText
+import io.github.matiyaaa.fuse.ui.designsystem.effects.background
 import io.github.matiyaaa.fuse.ui.designsystem.effects.fuseClickable
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
@@ -298,7 +299,7 @@ private fun ToolButton(label: String, icon: ImageVector, focused: Boolean, tone:
         Modifier
             .height(Size.chip)
             .fuseClickable(shape = shape, role = Role.Button, onClick = onClick)
-            .background(wash, shape)
+            .background({ wash }, shape)
             .lineFocus(shape, { focus }, lineFocusFill(), c.focus)
             .semantics {
                 this.selected = focused
@@ -307,7 +308,7 @@ private fun ToolButton(label: String, icon: ImageVector, focused: Boolean, tone:
             .padding(horizontal = Space.m),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        FuseIcon(icon, size = Size.iconS, tint = tint)
+        FuseIcon(icon, tint = { tint }, size = Size.iconS)
         Appear(
             visible = showLabel,
             enter = expandHorizontally(motion.enter(Durations.BASE)) + fadeIn(motion.fade(Durations.BASE)),
@@ -315,7 +316,7 @@ private fun ToolButton(label: String, icon: ImageVector, focused: Boolean, tone:
         ) {
             Row {
                 Spacer(Modifier.width(Space.s))
-                FText(label, Fuse.type.label, color = tint, maxLines = 1)
+                FText(label, Fuse.type.label, color = { tint }, maxLines = 1)
             }
         }
     }

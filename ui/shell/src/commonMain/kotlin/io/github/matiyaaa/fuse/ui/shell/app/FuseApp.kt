@@ -1,6 +1,7 @@
 package io.github.matiyaaa.fuse.ui.shell.app
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
@@ -417,6 +418,11 @@ private fun FuseAppContent(
                     if (app.dev.frameGraph) {
                         FrameTimeOverlay(Modifier.align(Alignment.TopStart).padding(start = Space.gutter, top = Size.hudHeight + Space.xs))
                     }
+                    if (app.dev.motionInspector) {
+                        io.github.matiyaaa.fuse.ui.fuseline.MotionInspectorPanel(
+                            Modifier.align(Alignment.BottomStart).padding(Space.gutter).widthIn(max = 420.dp),
+                        )
+                    }
                     app.gallery?.let { g -> io.github.matiyaaa.fuse.ui.shell.game.PictureViewer(g.pictures, g.start, g.onIndex, g.onClose) }
                     HintLine(app, hintFlash)
                     QuickMenu(app)
@@ -756,10 +762,11 @@ private fun RootPages(app: AppState, current: Route, direction: NavDirection, pl
     ) { measurables, constraints ->
         // Every page is measured (a page already laid out costs nothing to measure again, and one
         // built ahead is then ready to show), but only the one in front is placed, so only it is drawn.
-        val inFront = visible.floatValue > 0f
+        // Whether it is in front is read while placing, so a pushed page fading over the tabs only
+        // places them again each frame, never measures them again.
         val measured = measurables.map { it.measure(constraints) }
         layout(constraints.maxWidth, constraints.maxHeight) {
-            if (inFront) measured.getOrNull(pages.indexOf(shownRoot))?.place(0, 0)
+            if (visible.floatValue > 0f) measured.getOrNull(pages.indexOf(shownRoot))?.place(0, 0)
         }
     }
 }

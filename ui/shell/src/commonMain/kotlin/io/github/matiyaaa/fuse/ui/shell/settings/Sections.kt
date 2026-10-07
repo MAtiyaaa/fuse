@@ -1681,11 +1681,19 @@ fun aboutRows(app: AppState): List<MenuAction> = buildList {
             ))
             add(toggleRow("dev.skip", "Skip required setup steps", FuseIcons.ChevronsRight, app.dev.skipRequired) { app.dev.skipRequired = it })
             add(toggleRow("dev.frames", "Frame-time overlay", FuseIcons.Activity, app.dev.frameGraph) { app.dev.frameGraph = it })
+            add(toggleRow("dev.motion", "Motion inspector", FuseIcons.Gauge, app.dev.motionInspector) {
+                app.dev.motionInspector = it
+                io.github.matiyaaa.fuse.ui.fuseline.MotionInspector.enabled = it
+                if (!it) io.github.matiyaaa.fuse.ui.fuseline.MotionInspector.clear()
+            })
             add(MenuAction("dev.off", "Turn off developer options", FuseIcons.Power, onSelect = {
                 app.dev.enabled = false
                 app.dev.taps = 0
                 app.dev.skipRequired = false
                 app.dev.frameGraph = false
+                app.dev.motionInspector = false
+                io.github.matiyaaa.fuse.ui.fuseline.MotionInspector.enabled = false
+                io.github.matiyaaa.fuse.ui.fuseline.MotionInspector.clear()
             }))
         }
     }

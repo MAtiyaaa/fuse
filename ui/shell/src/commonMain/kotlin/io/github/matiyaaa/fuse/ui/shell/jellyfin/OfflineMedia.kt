@@ -49,6 +49,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.components.MenuAction
 import io.github.matiyaaa.fuse.ui.designsystem.components.ToastKind
 import io.github.matiyaaa.fuse.ui.designsystem.components.Trailing
 import io.github.matiyaaa.fuse.ui.designsystem.components.fadingEdges
+import io.github.matiyaaa.fuse.ui.designsystem.effects.background
 import io.github.matiyaaa.fuse.ui.designsystem.focus.LinearSelection
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
@@ -403,7 +404,7 @@ private fun OfflineRow(e: OfflineEntry, selected: Boolean, height: androidx.comp
     val position = m.unsentMs ?: m.resumeMs
     val progress = m.runtimeMs?.takeIf { it > 0 && position > 0 }?.let { (position.toFloat() / it).coerceIn(0f, 1f) }
     Row(
-        Modifier.fillMaxWidth().height(height).clip(RoundedCornerShape(Fuse.geometry.control)).background(bg)
+        Modifier.fillMaxWidth().height(height).clip(RoundedCornerShape(Fuse.geometry.control)).background({ bg })
             .then(if (selected) Modifier.border(2.dp, c.focus, RoundedCornerShape(Fuse.geometry.control)) else Modifier)
             .combinedClickable(remember { MutableInteractionSource() }, indication = null, onClick = onClick, onLongClick = onLongClick)
             .padding(end = Space.m),

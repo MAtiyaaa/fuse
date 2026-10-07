@@ -60,6 +60,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.components.HintBar
 import io.github.matiyaaa.fuse.ui.designsystem.components.ProfileAvatar
 import io.github.matiyaaa.fuse.ui.designsystem.components.Spinner
 import io.github.matiyaaa.fuse.ui.designsystem.components.ToastKind
+import io.github.matiyaaa.fuse.ui.designsystem.effects.background
 import io.github.matiyaaa.fuse.ui.designsystem.effects.rememberReveal
 import io.github.matiyaaa.fuse.ui.designsystem.effects.reveal
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
@@ -368,7 +369,7 @@ private fun PersonCard(p: ProfileInfo, selected: Boolean, here: Boolean, working
             }
         }
         Spacer(Modifier.height(Space.m))
-        FText(p.name, Fuse.type.bodyStrong, color = nameColor, maxLines = 1, align = TextAlign.Center)
+        FText(p.name, Fuse.type.bodyStrong, color = { nameColor }, maxLines = 1, align = TextAlign.Center)
         FText(if (here) "Playing here" else if (p.hostOnly) "This computer only" else " ", Fuse.type.caption, color = if (here) c.accent else c.textMuted, maxLines = 1, align = TextAlign.Center)
     }
 }
@@ -553,7 +554,7 @@ private fun PadKey(k: String, selected: Boolean, size: Dp, enabled: Boolean, wor
                 alpha = if (enabled) 1f else 0.4f
             }
             .clip(CircleShape)
-            .background(bg)
+            .background({ bg })
             .clickable(remember { MutableInteractionSource() }, indication = null, enabled = enabled, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {

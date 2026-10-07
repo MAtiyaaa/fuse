@@ -83,10 +83,11 @@ internal fun StartupIntroOverlay(onDone: () -> Unit) {
         clock.animateTo(length.toFloat(), tween(length, easing = Curves.Linear))
         onDone()
     }
-    // The spark reaches the frame: the launch sound, once.
-    val t = clock.value
-    LaunchedEffect(t >= BURST_AT && !reduced) {
-        if (t >= BURST_AT && !reduced && !burstPlayed) {
+    // The spark reaches the frame: the launch sound, once. Only that moment is composed; the
+    // intro's own time is read while drawing, so seven seconds of animation redraw, never recompose.
+    val burstReached by remember { androidx.compose.runtime.derivedStateOf { clock.value >= BURST_AT } }
+    LaunchedEffect(burstReached && !reduced) {
+        if (burstReached && !reduced && !burstPlayed) {
             burstPlayed = true
             sounds.play(SoundCue.LAUNCH)
         }
@@ -126,12 +127,13 @@ internal fun StartupIntroOverlay(onDone: () -> Unit) {
                     }
                 }
             }
-            .graphicsLayer { alpha = 1f - phase(t, if (reduced) length * 0.6f else EXIT_FADE_FROM, length.toFloat()).ease() },
+            .graphicsLayer { alpha = 1f - phase(clock.value, if (reduced) length * 0.6f else EXIT_FADE_FROM, length.toFloat()).ease() },
         contentAlignment = Alignment.Center,
     ) {
         // The lockup's capitals: large, but the whole lockup always fits across the screen.
         val capDp = min(min(maxWidth.value, maxHeight.value) * 0.17f, maxWidth.value * 0.78f / BrandArt.LOCKUP_W).coerceIn(28f, 150f).dp
         Canvas(Modifier.fillMaxSize()) {
+            val t = clock.value
             drawRect(colors.ink)
             val lockup = Lockup(center, capDp.toPx())
             val exit = phase(t, EXIT_FROM, length.toFloat()).easeIn()

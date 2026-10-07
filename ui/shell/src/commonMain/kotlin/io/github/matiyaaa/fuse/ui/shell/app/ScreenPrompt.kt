@@ -44,6 +44,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.components.FText
 import io.github.matiyaaa.fuse.ui.designsystem.components.Overlay
 import io.github.matiyaaa.fuse.ui.designsystem.components.OverlayEdge
 import io.github.matiyaaa.fuse.ui.designsystem.components.Panel
+import io.github.matiyaaa.fuse.ui.designsystem.effects.background
 import io.github.matiyaaa.fuse.ui.designsystem.effects.fuseClickable
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcons
@@ -267,7 +268,7 @@ private fun ScreenCard(
                 scaleY = s
             }
             .clip(shape)
-            .background(fill)
+            .background({ fill })
             .border(if (focused || marked) Size.focusStroke else Size.stroke, ring, shape)
             .fuseClickable(shape = shape, scale = false, role = Role.Button, onClickLabel = screenName(display), onClick = onClick)
             .semantics { selected = focused }
@@ -398,7 +399,7 @@ private fun Tick(label: String, checked: Boolean, focused: Boolean, modifier: Mo
             Modifier
                 .size(Size.iconM)
                 .clip(mark)
-                .background(box)
+                .background({ box })
                 .then(if (checked) Modifier else Modifier.border(Size.focusStroke * 0.75f, c.textMuted, mark)),
             contentAlignment = Alignment.Center,
         ) {

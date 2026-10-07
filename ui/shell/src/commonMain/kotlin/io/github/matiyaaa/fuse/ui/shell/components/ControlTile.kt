@@ -34,6 +34,7 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import io.github.matiyaaa.fuse.model.CornerFamily
 import io.github.matiyaaa.fuse.ui.designsystem.components.FText
+import io.github.matiyaaa.fuse.ui.designsystem.effects.background
 import io.github.matiyaaa.fuse.ui.designsystem.effects.fuseClickable
 import io.github.matiyaaa.fuse.ui.designsystem.effects.lightEdge
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
@@ -124,7 +125,7 @@ fun ControlTile(
                 this.shape = shape
                 clip = true
             }
-            .background(bg)
+            .background({ bg })
             .lightEdge(shape, { edgeRest + (edgeLit - edgeRest) * lift.coerceIn(0f, 1f) })
             .semantics { this.selected = selected }
             .padding(if (compact) Space.s else Space.m),
@@ -139,7 +140,7 @@ fun ControlTile(
                     FText(label, Fuse.type.label, color = c.text, maxLines = 1)
                     // The state line is always laid out, so every label sits on the same line.
                     val state = if (toggle) (if (active) "On" else "Off") else detail
-                    FText(state.orEmpty(), Fuse.type.caption, color = stateColor, maxLines = 1)
+                    FText(state.orEmpty(), Fuse.type.caption, color = { stateColor }, maxLines = 1)
                 }
             },
             modifier = Modifier.matchParentSize(),
@@ -199,10 +200,10 @@ internal fun ControlWell(icon: ImageVector, active: Boolean, compact: Boolean = 
                 this.shape = shape
                 clip = true
             }
-            .background(fill),
+            .background({ fill }),
         contentAlignment = Alignment.Center,
     ) {
-        FuseIcon(icon, size = if (compact) Size.iconS else Size.iconM, tint = tint)
+        FuseIcon(icon, tint = { tint }, size = if (compact) Size.iconS else Size.iconM)
     }
 }
 

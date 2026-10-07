@@ -320,12 +320,21 @@ class JvmHousehold(
 
     private val inboxLock = Mutex()
 
+    /**
+     * Requests taken since Fuse started here. The host keeps offering a request that was taken but
+     * isn't settled (so one taken just before a restart is taken again after it), and taking it a
+     * second time could answer differently: a game that has just landed, before the library has
+     * found it, is neither here nor on another device, and the request would fail as it succeeds.
+     */
+    private val taken = HashSet<String>()
+
     /** Does what other devices asked of this one, each once, and says how it went. */
     private suspend fun takeInbox() = inboxLock.withLock {
         val c = client() ?: return
         val l = local ?: return
         for (cmd in c.inbox()) {
             if (cmd.state != DeviceCommand.PENDING && cmd.state != DeviceCommand.DELIVERED) continue
+            if (cmd.id in taken) continue
             val result = try {
                 l.perform(cmd)
             } catch (e: CancellationException) {
@@ -333,7 +342,9 @@ class JvmHousehold(
             } catch (e: Exception) {
                 CommandResult(DeviceCommand.FAILED, e.message ?: "It couldn't be done.")
             }
-            runCatching { c.ack(cmd.id, CommandAck(result.state, result.message)) }
+            taken += cmd.id
+            // If the host didn't hear, the request is offered again and taken again.
+            if (runCatching { c.ack(cmd.id, CommandAck(result.state, result.message)) }.isFailure) taken -= cmd.id
         }
     }
 

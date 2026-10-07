@@ -60,6 +60,7 @@ import io.github.matiyaaa.fuse.ui.designsystem.components.MenuList
 import io.github.matiyaaa.fuse.ui.designsystem.components.Panel
 import io.github.matiyaaa.fuse.ui.designsystem.components.Trailing
 import io.github.matiyaaa.fuse.ui.designsystem.components.handleMenuAction
+import io.github.matiyaaa.fuse.ui.designsystem.effects.background
 import io.github.matiyaaa.fuse.ui.designsystem.effects.fuseClickable
 import io.github.matiyaaa.fuse.ui.designsystem.effects.lightEdge
 import io.github.matiyaaa.fuse.ui.designsystem.effects.reveal
@@ -423,15 +424,15 @@ private fun SearchRow(selected: Boolean, compact: Boolean, onOpen: () -> Unit) {
             .padding(bottom = Space.s)
             .height(if (compact) Size.touch - Space.xs else Size.touch)
             .clip(shape)
-            .background(fill)
+            .background({ fill })
             .border(if (selected) Size.focusStroke else Size.stroke, edge, shape)
             .clickable(interactionSource = interaction, indication = null, onClick = onOpen)
             .padding(horizontal = Space.m),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        FuseIcon(FuseIcons.Search, size = Size.iconS, tint = tint)
+        FuseIcon(FuseIcons.Search, tint = { tint }, size = Size.iconS)
         Spacer(Modifier.width(Space.m))
-        FText("Search settings", Fuse.type.body, color = tint, maxLines = 1, modifier = Modifier.weight(1f))
+        FText("Search settings", Fuse.type.body, color = { tint }, maxLines = 1, modifier = Modifier.weight(1f))
     }
 }
 
