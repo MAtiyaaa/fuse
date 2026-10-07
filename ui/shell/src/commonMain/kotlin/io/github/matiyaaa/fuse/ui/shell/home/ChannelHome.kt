@@ -161,6 +161,7 @@ internal fun ChannelBoard(app: AppState, space: BoardSpace, page: Int, pageKey: 
     val look = space.look
     val arranging = editor.arranging
     val op = editor.op
+    PageEffect(arranging) { space.arranging(arranging) }
     val sel = rememberRouteState(app.navigator, if (page == 0) "${space.key}.board" else "${space.key}.board.$pageKey") { SpatialSelection() }
     // Where each carousel widget stands, kept while the board is away so it comes back where it was.
     val carousels = rememberRouteState(app.navigator, "${space.key}.carousels.$pageKey") { HashMap<String, CarouselState>() }
@@ -325,9 +326,11 @@ internal fun ChannelBoard(app: AppState, space: BoardSpace, page: Int, pageKey: 
         val geometry = with(density) { BoardGeometry(columns, cellW.toPx(), cellH.toPx(), gapX.toPx(), gapY.toPx(), offsetX = spare * (cellW + gapX).toPx() / 2) }
         val shown = editor.preview ?: committed
         // Arranging: the first free place adds a widget (hidden while something is being changed).
+        // On a centred board it stays inside the columns the board shows, so it never reaches past
+        // the screen's edge.
         val addRect = if (arranging && op == null) BoardGrid.layout(
             committed.rects.map { (id, r) -> BoardGrid.Item(id, r.size, r.spot) } + BoardGrid.Item(ADD_KEY, space.addSize, null),
-            columns,
+            columns - spare,
         )[ADD_KEY] else null
         val usedRows = maxOf(shown.rows, op?.target?.bottom ?: 0, addRect?.bottom ?: 0)
         // While arranging one spare row shows below, so there is always somewhere to put a widget.
@@ -729,6 +732,7 @@ internal fun ChannelBoard(app: AppState, space: BoardSpace, page: Int, pageKey: 
                 onOwnHome = { onTools = 3; setOwnHome(ownHome != true) },
                 look = look,
                 onLook = { onTools = 3; look?.let { it.pick(1 - it.editing) } },
+                compact = narrow || small,
             )
         }
         // Controls of widgets that are gone, or of a board no longer arranged, catch no touches.

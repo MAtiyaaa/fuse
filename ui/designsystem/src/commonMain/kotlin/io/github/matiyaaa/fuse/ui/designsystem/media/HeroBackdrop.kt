@@ -209,11 +209,15 @@ fun HeroBackdrop(
         }
         val accent = layers.lastOrNull { !it.leaving }?.source?.accent ?: colors.accent
         val ink = colors.ink
+        // The dim and the three scrims never change with the art: drawn once into one picture.
+        val flat = remember { io.github.matiyaaa.fuse.ui.designsystem.effects.FlatLayer() }
+        val dark = colors.isDark
         Box(
             Modifier.fillMaxSize().drawWithCache {
                 val left = Brush.horizontalGradient(*scrim(ink, 0.94f * gradient, LEFT_SCRIM))
                 val top = Brush.verticalGradient(*scrim(ink, 0.6f * gradient, TOP_SCRIM))
                 val bottom = Brush.verticalGradient(*scrim(ink, 0.97f * gradient, BOTTOM_SCRIM))
+                val key = listOf(ink, dark, dim, gradient)
                 // The room is lit by the game: a low, wide glow in its colour.
                 val glow = Brush.radialGradient(
                     0f to lerp(accent, Color.Transparent, 0.35f).copy(alpha = 0.28f),
@@ -223,12 +227,14 @@ fun HeroBackdrop(
                     radius = size.maxDimension * 0.7f,
                 )
                 onDrawBehind {
-                    // A dark room dims the art; a bright one washes it toward its paper, so dark text
-                    // reads on it instead of on a grey haze.
-                    if (colors.isDark) drawRect(Color.Black.copy(alpha = dim)) else drawRect(ink.copy(alpha = (dim + LIGHT_WASH).coerceAtMost(0.9f)))
-                    drawRect(left)
-                    drawRect(top)
-                    drawRect(bottom)
+                    flat.draw(this, key) {
+                        // A dark room dims the art; a bright one washes it toward its paper, so dark text
+                        // reads on it instead of on a grey haze.
+                        if (dark) drawRect(Color.Black.copy(alpha = dim)) else drawRect(ink.copy(alpha = (dim + LIGHT_WASH).coerceAtMost(0.9f)))
+                        drawRect(left)
+                        drawRect(top)
+                        drawRect(bottom)
+                    }
                     drawRect(glow)
                 }
             },

@@ -440,6 +440,47 @@ internal fun AuditDriver.systemsScreens(exhaustive: Boolean) {
         }
     }
 
+    scenario("systems", "editing on a two-screen handheld") {
+        useLibrary()
+        // As a board made larger twice came back through Fuse Sync from a device on an older version.
+        val systems = libraryStore.library.platforms.value.filter { it.gameCount > 0 }
+        val before = libraryStore.prefs.value.systemsBoard
+        libraryStore.updatePrefs {
+            it.copy(systemsBoard = io.github.matiyaaa.fuse.model.HomeLayoutConfig(
+                board = systems.mapIndexed { i, c -> io.github.matiyaaa.fuse.model.HomeWidget("system.${c.platform.id.value}", io.github.matiyaaa.fuse.model.WidgetKind.SYSTEMS, i, target = c.platform.id.value, width = if (i == 2) 6 else 9, height = 4) },
+                grain = 3,
+            ))
+        }
+        show(libraryStore, twoScreens)
+        tab(Destination.SYSTEMS)
+        waitFor("Arrange")
+        settle(1_500)
+        shoot("at rest")
+        hold(PadButton.A)
+        settle(800)
+        tap(PadButton.B)
+        settle(600)
+        shoot("arranging")
+        // Options held, left: the chosen system narrows to a small square.
+        router.press(PadButton.X, io.github.matiyaaa.fuse.ui.designsystem.input.InputSource.GAMEPAD)
+        settle(700)
+        tap(PadButton.DPAD_LEFT)
+        router.release(PadButton.X, io.github.matiyaaa.fuse.ui.designsystem.input.InputSource.GAMEPAD)
+        settle(800)
+        shoot("one system made small")
+        tap(PadButton.DPAD_RIGHT)
+        tap(PadButton.A)
+        tap(PadButton.DPAD_RIGHT)
+        settle(600)
+        shoot("carrying the next one along")
+        tap(PadButton.A)
+        tap(PadButton.B)
+        settle(800)
+        shoot("done")
+        libraryStore.updatePrefs { it.copy(systemsBoard = before) }
+        show(libraryStore)
+    }
+
     scenario("systems", "small tiles") {
         useLibrary()
         val systems = libraryStore.library.platforms.value.filter { it.gameCount > 0 }

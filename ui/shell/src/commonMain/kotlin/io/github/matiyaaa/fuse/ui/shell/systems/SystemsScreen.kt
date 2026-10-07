@@ -153,7 +153,14 @@ fun SystemsScreen(app: AppState) {
         if (current?.art?.hero == null) SystemShowcase(current, Modifier.align(Alignment.CenterEnd).fillMaxHeight().width(maxHeight * 0.46f))
         Column(Modifier.fillMaxSize()) {
             Spacer(Modifier.height(Size.hudHeight + if (compactHeader) Space.s else Space.xl))
-            SystemHeader(current, compactHeader, Modifier.padding(horizontal = Space.gutter).reveal(reveal, 0), widthFraction = headerWidth)
+            // On a short screen the header folds away while systems are arranged, so the board has the room.
+            io.github.matiyaaa.fuse.ui.fuseline.Appear(
+                !(compactHeader && looks.arranging),
+                enter = io.github.matiyaaa.fuse.ui.fuseline.fadeIn(Fuse.motion.enter(Durations.BASE)) + io.github.matiyaaa.fuse.ui.fuseline.expandVertically(Fuse.motion.enter(Durations.BASE)),
+                exit = io.github.matiyaaa.fuse.ui.fuseline.fadeOut(Fuse.motion.exit(Durations.FAST)) + io.github.matiyaaa.fuse.ui.fuseline.shrinkVertically(Fuse.motion.exit(Durations.BASE)),
+            ) {
+                SystemHeader(current, compactHeader, Modifier.padding(horizontal = Space.gutter).reveal(reveal, 0), widthFraction = headerWidth)
+            }
             if (systems.isEmpty()) {
                 PageEffect(Unit) {
                     app.hints = emptyList()
@@ -185,6 +192,9 @@ fun SystemsScreen(app: AppState) {
 internal class SystemsLooks(val twoScreens: Boolean, val flippedHere: Boolean) {
     /** The other screen's look while it is being arranged from this one; null for this screen's own. */
     var editingFlipped by mutableStateOf<Boolean?>(null)
+
+    /** Whether the board is being arranged. */
+    var arranging by mutableStateOf(false)
     val flipped: Boolean get() = editingFlipped ?: flippedHere
 }
 
@@ -237,11 +247,18 @@ internal class SystemsSpace(
         looks.editingFlipped = null
     }
 
+    override fun arranging(on: Boolean) {
+        looks.arranging = on
+    }
+
     /** Whether the look shown is for the lower screen, and what it is called in settings. */
     private val lookKey: String get() = if (looks.flipped) SystemsBoard.FLIPPED else SystemsBoard.FUSE
 
     /** A row's worth already being written down, so it is written once. */
     private var noting: Pair<String, Int>? = null
+
+    /** Whether the board was on a small screen when last shown at rest. */
+    private var shownSmall: Boolean? = null
 
     override fun shown(c: HomeLayoutConfig, page: Int) = c.boardWidgets(page).filter { it.visible && it.target in byId }
     override fun title(w: HomeWidget) = card(w)?.platform?.name ?: "System"
@@ -252,6 +269,9 @@ internal class SystemsSpace(
      * cards that screen showed last time, so it looks as it will there.
      */
     override fun columns(narrow: Boolean, small: Boolean, width: Dp): Int {
+        // While arranging, the board keeps the kind of screen it had: the header folding away on a
+        // short screen gives it more room, which must never turn it into a TV's board mid-change.
+        val small = if (looks.arranging) shownSmall ?: small else small.also { shownSmall = it }
         val p = app.store.prefs.value
         val key = lookKey
         val step = if (looks.flipped) p.systemTileStepFlipped else p.systemTileStep
@@ -462,13 +482,41 @@ internal object SystemsBoard {
      * are kept.
      */
     fun migrate(c: HomeLayoutConfig): HomeLayoutConfig {
-        if (c.grain >= GRAIN) return c
+        if (c.grain >= GRAIN) return repaired(c)
+        // Already in the finer grid but without saying so (a device on an older version had it last,
+        // through Fuse Sync, and dropped the mark): every system two rows or more tall, which a board
+        // in whole cards never was. Kept as it is, marked.
+        if (looksFine(c)) return repaired(c.copy(grain = GRAIN))
         fun scaled(w: HomeWidget) = w.copy(
             width = ((w.width ?: 1) * GRAIN).coerceAtMost(GRAIN * 4),
             height = ((w.height ?: 1) * ROWS).coerceAtMost(MAX_ROWS),
             spots = emptyMap(),
         )
         return c.copy(board = c.board?.map(::scaled), pages = c.pages.map { pg -> pg.copy(widgets = pg.widgets.map(::scaled)) }, grain = GRAIN)
+    }
+
+    private fun widgets(c: HomeLayoutConfig) = c.board.orEmpty() + c.pages.flatMap { it.widgets }
+
+    /** Every system on [c] at least a card's two rows tall: a board already in the finer grid. */
+    private fun looksFine(c: HomeLayoutConfig): Boolean {
+        val all = widgets(c)
+        return all.isNotEmpty() && all.all { (it.height ?: 1) >= ROWS && (it.height ?: 1) % ROWS == 0 }
+    }
+
+    /**
+     * [c] (in the finer grid) with the sizes a board made twice as large in 0.3.7.3 had put back:
+     * every system at least two cards wide and two tall is what a board already in the finer grid
+     * looks like after being made finer again, never what someone arranged.
+     */
+    fun repaired(c: HomeLayoutConfig): HomeLayoutConfig {
+        val all = widgets(c)
+        val blown = all.isNotEmpty() && all.all { (it.width ?: GRAIN) >= GRAIN * 2 && (it.height ?: ROWS) >= ROWS * 2 }
+        if (!blown) return c
+        fun shrink(w: HomeWidget): HomeWidget {
+            val width = (w.width ?: GRAIN * 3) / GRAIN
+            return w.copy(width = if (width < GRAIN) SMALL.width else width, height = ((w.height ?: ROWS * 2) / ROWS).coerceIn(ROWS, MAX_ROWS) / ROWS * ROWS, spots = emptyMap())
+        }
+        return c.copy(board = c.board?.map(::shrink), pages = c.pages.map { pg -> pg.copy(widgets = pg.widgets.map(::shrink)) })
     }
 
     /** The lower screen's arrangement before it is first arranged there: [main]'s pages and order, every system one card. */

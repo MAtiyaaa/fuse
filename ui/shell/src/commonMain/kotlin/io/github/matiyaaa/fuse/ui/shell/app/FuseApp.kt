@@ -102,6 +102,9 @@ import io.github.matiyaaa.fuse.ui.shell.onboarding.OnboardingScreen
 import io.github.matiyaaa.fuse.ui.shell.onboarding.SetupOpening
 import io.github.matiyaaa.fuse.ui.shell.platform.MenuMusicPlayer
 import io.github.matiyaaa.fuse.ui.shell.platform.PlatformUi
+import io.github.matiyaaa.fuse.ui.shell.store.UiPrefs
+import io.github.matiyaaa.fuse.ui.designsystem.components.HintFlash
+import androidx.compose.foundation.layout.BoxScope
 import io.github.matiyaaa.fuse.ui.shell.quick.QuickMenu
 import io.github.matiyaaa.fuse.ui.shell.search.SearchScreen
 import io.github.matiyaaa.fuse.ui.shell.settings.PlatformSettingsScreen
@@ -296,7 +299,7 @@ private fun FuseAppContent(
         }
     }
     // The companion screen (second display) follows what the main screen has in focus.
-    LaunchedEffect(app.hero?.id) { Spotlight.set(app.hero?.id) }
+    SpotlightFollows(app)
     LaunchedEffect(prefs.sound, prefs.soundVolume) {
         platform.sounds.setProfile(prefs.sound)
         platform.sounds.setVolume(prefs.soundVolume)
@@ -403,31 +406,7 @@ private fun FuseAppContent(
                         if (root != null && root !in tabs && app.navigator.stack.size == 1) app.selectTab(Destination.HOME)
                     }
                     Pages(app, tabs)
-                    val route = app.navigator.current
-                    if (route != Route.Onboarding) {
-                        val status by platform.status.collectAsState()
-                        // Settings or Search open is where you are, not the tab underneath them.
-                        val page = hudPage(app.navigator.stack)
-                        HudScrim(art = prefs.showHero && app.hero != null)
-                        Hud(
-                            destinations = tabs,
-                            sections = app.sections,
-                            active = if (page == null) app.navigator.root?.destination else null,
-                            activeButton = page,
-                            tabsFocused = app.focusZone == FocusZone.TABS,
-                            focusedButton = app.hudButton,
-                            onButton = { app.focusZone = FocusZone.CONTENT; app.hudButton = null; app.runHudButton(it) },
-                            status = status,
-                            clock24h = prefs.clock24h,
-                            showWifi = prefs.showWifi,
-                            showBluetooth = prefs.showBluetooth,
-                            onSelect = { app.focusZone = FocusZone.CONTENT; app.selectTab(it) },
-                            onStatusClick = { app.quickMenuOpen = true },
-                            activities = hudActivities(app),
-                            profile = hudProfile(app),
-                            downloads = rememberHudDownloads(app),
-                        )
-                    }
+                    TopLine(app, platform, tabs, prefs)
                     if (prefs.performanceOverlay) {
                         val metrics by platform.performance.collectAsState()
                         // Under the status it extends, where it covers the least of any page.
@@ -437,17 +416,7 @@ private fun FuseAppContent(
                         FrameTimeOverlay(Modifier.align(Alignment.TopStart).padding(start = Space.gutter, top = Size.hudHeight + Space.xs))
                     }
                     app.gallery?.let { g -> io.github.matiyaaa.fuse.ui.shell.game.PictureViewer(g.pictures, g.start, g.onIndex, g.onClose) }
-                    // Content fades out under the hint line, so hints never sit on top of tiles.
-                    if (app.hints.isNotEmpty()) {
-                        Box(
-                            Modifier
-                                .align(Alignment.BottomCenter)
-                                .fillMaxWidth()
-                                .height(Size.hintHeight + Space.xxl)
-                                .background(Brush.verticalGradient(0f to Color.Transparent, 0.55f to Fuse.colors.ink.copy(alpha = 0.78f), 1f to Fuse.colors.ink.copy(alpha = 0.94f))),
-                        )
-                    }
-                    HintBar(app.hints, Modifier.align(Alignment.BottomEnd).padding(horizontal = Space.gutter, vertical = Space.s), flash = hintFlash)
+                    HintLine(app, hintFlash)
                     QuickMenu(app)
                     OverlayHost(app)
                     ToastHost(app.toasts)
@@ -546,6 +515,66 @@ private fun FuseAppContent(
             icon = FuseIcons.Users,
         )
     }
+}
+
+/**
+ * Keeps the second screen on what the main screen has in focus. Its own scope, so a page setting
+ * its art never recomposes the shell around it.
+ */
+@Composable
+private fun SpotlightFollows(app: AppState) {
+    val id = app.hero?.id
+    LaunchedEffect(id) { Spotlight.set(id) }
+}
+
+/**
+ * The top line: the scrim under it and the HUD with the tabs, buttons and status. Its own scope,
+ * so focus, art and page changes recompose it alone.
+ */
+@Composable
+private fun BoxScope.TopLine(app: AppState, platform: PlatformUi, tabs: List<Destination>, prefs: UiPrefs) {
+    if (app.navigator.current == Route.Onboarding) return
+    val status by platform.status.collectAsState()
+    // Settings or Search open is where you are, not the tab underneath them.
+    val page = hudPage(app.navigator.stack)
+    HudScrim(art = prefs.showHero && app.hero != null)
+    Hud(
+        destinations = tabs,
+        sections = app.sections,
+        active = if (page == null) app.navigator.root?.destination else null,
+        activeButton = page,
+        tabsFocused = app.focusZone == FocusZone.TABS,
+        focusedButton = app.hudButton,
+        onButton = { app.focusZone = FocusZone.CONTENT; app.hudButton = null; app.runHudButton(it) },
+        status = status,
+        clock24h = prefs.clock24h,
+        showWifi = prefs.showWifi,
+        showBluetooth = prefs.showBluetooth,
+        onSelect = { app.focusZone = FocusZone.CONTENT; app.selectTab(it) },
+        onStatusClick = { app.quickMenuOpen = true },
+        activities = hudActivities(app),
+        profile = hudProfile(app),
+        downloads = rememberHudDownloads(app),
+    )
+}
+
+/**
+ * The hint line along the bottom, with the fade that keeps tiles from showing under it. Its own
+ * scope: every page sets its hints as it is shown, and only this redraws for it.
+ */
+@Composable
+private fun BoxScope.HintLine(app: AppState, hintFlash: HintFlash) {
+    // Content fades out under the hint line, so hints never sit on top of tiles.
+    if (app.hints.isNotEmpty()) {
+        Box(
+            Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .height(Size.hintHeight + Space.xxl)
+                .background(Brush.verticalGradient(0f to Color.Transparent, 0.55f to Fuse.colors.ink.copy(alpha = 0.78f), 1f to Fuse.colors.ink.copy(alpha = 0.94f))),
+        )
+    }
+    HintBar(app.hints, Modifier.align(Alignment.BottomEnd).padding(horizontal = Space.gutter, vertical = Space.s), flash = hintFlash)
 }
 
 /** The background: theme renderer, then the selected item's art with video after it rests. */

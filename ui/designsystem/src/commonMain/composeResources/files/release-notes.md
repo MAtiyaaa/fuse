@@ -1,54 +1,43 @@
-# Fuse 0.3.7.3 - The Motion Update
+# Fuse 0.3.7.4 - The Motion Update
 
-Systems can be made small, as small as a game's box art, with a picture of each console; RomM
-uploads finish; and the second screen follows what Downloads has in focus.
+Systems no longer blow up to TV size while you arrange them, each device keeps its own Systems
+page, and Fuse draws far less on every frame.
 
 ## New
 
-- **Small systems.** A system on the Systems page can now be a small square, the size of a game's
-  box art. A small system shows a picture of the system itself (its console or handheld) on a
-  patterned background washed in that system's own colour, like a shelf of systems. Resize one by
-  its handles or hold Options and use the D-pad: narrower down to the small square, wider a card at a
-  time, taller and back again. While arranging, Options offers
-  Make Every System Small and Make Every System a Card.
-- **Change a small tile's look.** Options on a system, Small Tile, changes its picture (every model
-  and colour of that system the picture set has, or its logo instead), its pattern (dots, grid,
-  stripes, waves or plain) and its colour (its own colour, its colour strong, plain or dark). Reset Small Tile
-  puts Fuse's own back, and Settings, Systems, Reset small tiles does it for every system.
-- **System size.** Settings, Systems, System size fits one more system in each row of the Systems
-  page (Smaller) or two more (Smallest). Every system narrows a little and the rest move up to make
-  room. When small squares leave room at the end of their rows, the page is centred.
-- **The second screen follows Downloads.** With Downloads open, the second screen shows the
-  transfer you are on: its game's art and logo, and where the achievements card sits for a game, a
-  card with how it is going. It shows whether it is downloading or uploading, a progress bar, how
-  much has moved, how fast and how long is left, or what it is waiting for.
-- **A look for each screen on two-screen devices.** On a device with two screens, the Systems page
-  is kept once with the menus on top (Fuse Mode) and once with them below (Flipped). Their sizes and
-  order are each their own, and changing one never changes the other. While arranging, a small
-  switch beside Add system arranges the other screen's look from this one, shown as it will look
-  there. Flipped also has its own System size, so the lower screen can hold four systems in a row
-  instead of three. None of this is mentioned on a device with one screen.
+- **Where a slow frame went, on the device.** With the performance overlay on (Settings, Display),
+  Android shows the slowest frame of each second next to the average, and what it spent its time
+  on: waiting for the main thread, input, animation, layout, drawing, rendering and the graphics
+  chip. A stutter no longer hides inside an average.
 
 ## Changed
 
-- **Arranging systems moves the rest along in order.** Moving a system now moves the systems
-  between where it was and where it goes along by one place, in reading order, the way a phone's
-  home screen does. Putting a system on its neighbour swaps the two; nothing jumps to a far corner.
-  With the controller, left and right trade places with the system before or after, and up and down
-  move to the row above or below.
-- **The Systems page fills itself in at any size.** Places come from the systems' order and sizes,
-  so a smaller System size, a new system or a resized one never leaves gaps or overlaps. An
-  arrangement made before keeps each system's size and its order.
+- **Each device keeps its own Systems page.** A TV, a monitor, a handheld and each screen of a
+  two-screen handheld arrange and size their systems for themselves; Fuse Sync no longer carries
+  one device's arrangement to another. The order of your systems still follows you everywhere.
+- **Arranging on a short screen.** On a handheld, the system header folds away while you arrange,
+  so the board has the room, and Undo, Reset, New page and the other screen's look are compact
+  icon buttons that cover less of it.
+- **Fuse draws far less on every frame, and looks exactly the same.** The room's shading over the
+  art, a theme's room while it isn't moving, and the lit picture behind every game without art are
+  drawn once and then shown as one image, instead of stacks of screen-sized gradients and patterns
+  of dozens of shapes on every frame. A page changing its art or hints no longer rebuilds the whole
+  interface around it. Measured without a graphics card (the slowest way to draw), Home at rest
+  went from 459 ms a frame to 215 ms and Settings from 321 ms to 78 ms; on a device with a graphics
+  card the same work is a small part of a frame.
 
 ## Fixed
 
-- **RomM uploads never finished.** Each piece of an upload had 30 seconds to arrive and RomM had
-  30 seconds to put the game together, which a large game or a home connection from outside never
-  managed, so every upload stopped with "RomM is taking too long to answer". Each piece now has time
-  for its size on a slow connection, RomM has up to half an hour to put a game together, and an
-  upload that is slow waits and carries on from the piece it was on instead of failing. When RomM
-  finishes putting a game together after Fuse stopped waiting, Fuse sees the game there and counts
-  the upload as done, so it is never sent twice.
-- **Arranging systems on the AYN Thor moved everything around.** Moving one system pushed the ones
-  in its way down the board and the ones under them further down, so a few moves scattered the
-  page. Systems now keep their order (see Changed).
+- **Systems became huge after arranging on the AYN Thor.** A Systems page arranged in 0.3.7.3
+  synced through Fuse Sync to a device on an older version, which lost the mark that it was
+  already in the finer grid. It then came back and was made finer a second time, so every system
+  became three times as wide and twice as tall, like a TV's. Each device now keeps its own page,
+  a page that lost the mark is recognised and kept as it is, and one already made too large is put
+  back to its sizes by itself.
+- **Arranging could turn a handheld's board into a TV's.** The board keeps the kind of screen it
+  was shown on while you arrange, whatever room the header leaves it.
+- **The Add system space could reach past the screen's edge.** On a Systems page centred on a TV or
+  a handheld, the space for adding a system now stays inside the board, on the next row when the
+  current one is full.
+- **Fuse's performance measurements opened on setup.** The measuring harness marks setup done after
+  the store reads its saved settings, so it measures Home, Systems and the Library again.

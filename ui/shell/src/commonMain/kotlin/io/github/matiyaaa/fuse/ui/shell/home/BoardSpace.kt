@@ -110,6 +110,9 @@ internal abstract class BoardSpace {
     /** Told when arranging ends. */
     open fun arrangingEnded() {}
 
+    /** Told whether the board is being arranged, whenever that changes while it is shown. */
+    open fun arranging(on: Boolean) {}
+
     /** Whether [w] turns through several things (a carousel), with the triggers. */
     open fun carousel(w: HomeWidget): Boolean = false
 

@@ -112,6 +112,7 @@ tasks.register<Test>("desktopPerf") {
     systemProperty("fuse.perf.dir", dir.orEmpty())
     systemProperty("fuse.perf.only", providers.gradleProperty("fuse.perf.only").getOrElse(""))
     systemProperty("fuse.perf.lowPower", providers.gradleProperty("fuse.perf.lowPower").getOrElse(""))
+    systemProperty("fuse.perf.device", providers.gradleProperty("fuse.perf.device").getOrElse(""))
     systemProperty("kotlinx.coroutines.test.default_timeout", "40m")
     maxHeapSize = "1536m"
     testLogging { showStandardStreams = true }

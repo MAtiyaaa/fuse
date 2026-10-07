@@ -52,6 +52,7 @@ import androidx.compose.ui.unit.dp
 import io.github.matiyaaa.fuse.ui.designsystem.components.ButtonKind
 import io.github.matiyaaa.fuse.ui.designsystem.components.FText
 import io.github.matiyaaa.fuse.ui.designsystem.components.FuseButton
+import io.github.matiyaaa.fuse.ui.designsystem.components.IconButton
 import io.github.matiyaaa.fuse.ui.designsystem.components.Panel
 import io.github.matiyaaa.fuse.ui.designsystem.effects.fuseClickable
 import io.github.matiyaaa.fuse.ui.designsystem.icons.FuseIcon
@@ -439,9 +440,23 @@ internal fun ArrangeTools(
     /** A board kept once per screen: the controller's way to the other screen's look. */
     look: BoardLook? = null,
     onLook: () -> Unit = {},
+    /** A short screen: the tools as icons only, so they cover as little of the board as they can. */
+    compact: Boolean = false,
 ) {
     Panel(raised = true, shape = RoundedCornerShape(Radius.pill)) {
-        Row(Modifier.padding(Space.s), horizontalArrangement = Arrangement.spacedBy(Space.s), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.padding(if (compact) Space.xs else Space.s), horizontalArrangement = Arrangement.spacedBy(if (compact) Space.xs else Space.s), verticalAlignment = Alignment.CenterVertically) {
+            if (compact) {
+                IconButton(FuseIcons.Undo, selected = focused == 0, onClick = onUndo, enabled = canUndo, contentDescription = "Undo")
+                IconButton(FuseIcons.RotateCcw, selected = focused == 1, onClick = onReset, contentDescription = resetLabel)
+                IconButton(FuseIcons.CopyPlus, selected = focused == 2, onClick = onNewPage, contentDescription = "New page")
+                if (ownHome != null) {
+                    IconButton(if (ownHome) FuseIcons.MonitorSmartphone else FuseIcons.Users, selected = focused == 3, onClick = onOwnHome, contentDescription = if (ownHome) "This Device" else "All Devices")
+                } else if (look != null) {
+                    val other = 1 - look.here
+                    IconButton(look.icons[other], selected = focused == 3, onClick = onLook, contentDescription = "${look.labels[other]} look", tint = if (look.editing == other) Fuse.colors.accent else Fuse.colors.text)
+                }
+                return@Row
+            }
             FuseButton("Undo", selected = focused == 0, onClick = onUndo, kind = ButtonKind.SECONDARY, icon = FuseIcons.Undo, enabled = canUndo)
             FuseButton(resetLabel, selected = focused == 1, onClick = onReset, kind = ButtonKind.SECONDARY, icon = FuseIcons.RotateCcw)
             FuseButton("New page", selected = focused == 2, onClick = onNewPage, kind = ButtonKind.SECONDARY, icon = FuseIcons.CopyPlus)

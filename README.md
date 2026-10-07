@@ -29,7 +29,7 @@ Home screen.
 <a href="https://github.com/MAtiyaaa/fuse/releases/latest"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/brand/button-macos-dark.svg"><img src="docs/assets/brand/button-macos-light.svg" height="48" alt="Download for macOS"></picture></a>
 
 <sub>Android 9 or newer &nbsp;·&nbsp; 64-bit x86 Linux AppImage &nbsp;·&nbsp; Windows 10 and 11 &nbsp;·&nbsp; macOS on Apple silicon and Intel &nbsp;·&nbsp; <a href="#install">checksums and install notes</a></sub><br>
-<sub>0.3.7.3 is the <b>Motion Update</b>, with small systems the size of box art, RomM uploads that finish and the second screen following Downloads: Fuseline 3, Fuse's animation engine rebuilt so motion never breaks: anything moving carries on from where it is, at the speed it has, whatever interrupts it, with tabs that slide and reverse mid-change, layouts and shared elements that glide, and every input (touch, mouse, trackpad, keyboard, controller and stick) moving things the same way, faster than Fuseline 2 and Compose on every measured benchmark. It follows 0.3.6, the Unity Update (Fuse RomM, one Downloads page, Jellyfin for offline, streaming through Moonlight and saves that reach every device by themselves), and 0.3.5, the Swift Update. <a href="#where-fuse-stands">Here is where it stands.</a></sub><br>
+<sub>0.3.7.4 is the <b>Motion Update</b>, with each device keeping its own Systems page and far less drawn every frame: Fuseline 3, Fuse's animation engine rebuilt so motion never breaks: anything moving carries on from where it is, at the speed it has, whatever interrupts it, with tabs that slide and reverse mid-change, layouts and shared elements that glide, and every input (touch, mouse, trackpad, keyboard, controller and stick) moving things the same way, faster than Fuseline 2 and Compose on every measured benchmark. It follows 0.3.6, the Unity Update (Fuse RomM, one Downloads page, Jellyfin for offline, streaming through Moonlight and saves that reach every device by themselves), and 0.3.5, the Swift Update. <a href="#where-fuse-stands">Here is where it stands.</a></sub><br>
 <sub>Or download from <a href="https://matiyaaa.github.io/fuse/">Fuse's website</a>, which always offers the latest version for your system.</sub>
 
 <br>
@@ -554,7 +554,7 @@ Linux app, isn't offered on Windows and macOS (Fuse RomM is, on every computer).
 ## Where Fuse stands
 
 > [!IMPORTANT]
-> **Fuse 0.3.7.3 "The Motion Update" is still early, and moves like never before.** Fuseline 3, Fuse's
+> **Fuse 0.3.7.4 "The Motion Update" is still early, and moves like never before.** Fuseline 3, Fuse's
 > animation engine, keeps every motion continuous: whatever interrupts something moving (a new tab, a
 > finger, a reversal, the window changing size), it carries on from where it is at the speed it has.
 > It is faster than Fuseline 2 and Compose on every benchmark measured. 0.3.6, "The Unity Update",
@@ -578,7 +578,8 @@ Linux app, isn't offered on Windows and macOS (Fuse RomM is, on every computer).
 > 0.3.7.1 puts system cards on a handheld back to the size they were, 0.3.7.2 asks about Fuse Sync
 > before Who's playing and draws the controller anew, and 0.3.7.3 lets systems be as small as box art
 > with a picture of each console, keeps a look for each screen of a two-screen device, finishes RomM
-> uploads and has the second screen follow Downloads. See [the release notes](docs/releases/0.3.7.3.md).
+> uploads and has the second screen follow Downloads, and 0.3.7.4 keeps each device's Systems page its
+> own and draws far less every frame. See [the release notes](docs/releases/0.3.7.4.md).
 
 <details>
 <summary><b>Every release so far</b></summary>
@@ -586,6 +587,7 @@ Linux app, isn't offered on Windows and macOS (Fuse RomM is, on every computer).
 
 | Version | Name | What it brought |
 |---|---|---|
+| [0.3.7.4](docs/releases/0.3.7.4.md) | The Motion Update | Each device keeps its own Systems page; systems made too large through Fuse Sync are put back; arranging on a short screen; far less drawn every frame; the slowest frame shown on the device |
 | [0.3.7.3](docs/releases/0.3.7.3.md) | The Motion Update | Systems as small as a game's box art, with a picture of each console you can change; a System size setting; arranging that moves systems along in order; a Systems look for each screen of a two-screen device; RomM uploads that finish; the second screen following Downloads |
 | [0.3.7.2](docs/releases/0.3.7.2.md) | The Motion Update | Fuse Sync before Who's playing in setup, so your household's profiles are there to choose; a new, solid controller picture with Fuse's mark in the middle |
 | [0.3.7.1](docs/releases/0.3.7.1.md) | The Motion Update | System cards on a handheld, such as the AYN Thor, back to the size they were before 0.3.6.5; TVs keep theirs |

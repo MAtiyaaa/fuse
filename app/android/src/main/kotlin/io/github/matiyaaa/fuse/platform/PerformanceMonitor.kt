@@ -42,12 +42,17 @@ class PerformanceMonitor(
 
     private val frames = AtomicInteger()
     private val frameNanos = AtomicLong()
+
+    /** The slowest frame of the current sample and where its time went, for spikes an average hides. */
+    @Volatile private var slowest: SlowFrame? = null
     private var metricsThread: HandlerThread? = null
     private var attachedWindow: Window? = null
     private val frameListener = Window.OnFrameMetricsAvailableListener { _, metrics, _ ->
         if (metrics.getMetric(FrameMetrics.FIRST_DRAW_FRAME) == 0L) {
             frames.incrementAndGet()
-            frameNanos.addAndGet(metrics.getMetric(FrameMetrics.TOTAL_DURATION))
+            val total = metrics.getMetric(FrameMetrics.TOTAL_DURATION)
+            frameNanos.addAndGet(total)
+            if (total > (slowest?.total ?: 0L)) slowest = SlowFrame.of(metrics, total)
         }
     }
 
@@ -60,6 +65,7 @@ class PerformanceMonitor(
                 withContext(Dispatchers.Main) { attachToWindow() }
                 frames.set(0)
                 frameNanos.set(0)
+                slowest = null
                 delay(SAMPLE_MS)
                 emit(withContext(Dispatchers.IO) { sample() })
             }
@@ -107,6 +113,10 @@ class PerformanceMonitor(
             if (drawn > 0) {
                 val ms = frameNanos.get() / drawn / 1_000_000.0
                 add(PerformanceMetric("fuse_frame_time", "Fuse frame time", String.format(Locale.US, "%.1f ms", ms), source = "FrameMetrics"))
+            }
+            slowest?.let { s ->
+                add(PerformanceMetric("fuse_slowest_frame", "Slowest frame", String.format(Locale.US, "%.1f ms", s.total / 1_000_000.0), source = "FrameMetrics"))
+                add(PerformanceMetric("fuse_slowest_parts", "Spent on", s.parts(), source = "FrameMetrics"))
             }
         }
         am?.let { manager ->
@@ -183,5 +193,35 @@ class PerformanceMonitor(
 
     private companion object {
         const val SAMPLE_MS = 1_000L
+    }
+}
+
+/**
+ * One frame's time by where it went (FrameMetrics): waiting for the main thread before the frame
+ * could start, input, animation, measure and layout, recording the drawing, handing it to the
+ * renderer, and the GPU. Kept for the slowest frame of each sample.
+ */
+private class SlowFrame(val total: Long, private val parts: List<Pair<String, Long>>) {
+    /** The parts that took a millisecond or more, largest first: "waiting 62 · layout 18 · draw 9 ms". */
+    fun parts(): String {
+        val shown = parts.filter { it.second >= 1_000_000L }.sortedByDescending { it.second }.take(4)
+        if (shown.isEmpty()) return "Under a millisecond each"
+        return shown.joinToString("  ·  ") { (name, ns) -> "$name ${(ns + 500_000L) / 1_000_000L}" } + " ms"
+    }
+
+    companion object {
+        fun of(m: FrameMetrics, total: Long): SlowFrame {
+            val parts = buildList {
+                add("waiting" to m.getMetric(FrameMetrics.UNKNOWN_DELAY_DURATION))
+                add("input" to m.getMetric(FrameMetrics.INPUT_HANDLING_DURATION))
+                add("animation" to m.getMetric(FrameMetrics.ANIMATION_DURATION))
+                add("layout" to m.getMetric(FrameMetrics.LAYOUT_MEASURE_DURATION))
+                add("draw" to m.getMetric(FrameMetrics.DRAW_DURATION))
+                add("sync" to m.getMetric(FrameMetrics.SYNC_DURATION))
+                add("render" to m.getMetric(FrameMetrics.COMMAND_ISSUE_DURATION) + m.getMetric(FrameMetrics.SWAP_BUFFERS_DURATION))
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) add("GPU" to m.getMetric(FrameMetrics.GPU_DURATION))
+            }
+            return SlowFrame(total, parts)
+        }
     }
 }

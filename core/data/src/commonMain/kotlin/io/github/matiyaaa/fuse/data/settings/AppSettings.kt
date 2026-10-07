@@ -271,7 +271,8 @@ data class HomeSettings(
     val quickMenu: List<String> = emptyList(),
     /**
      * The Systems page arranged by hand, like Home's board: each system's place and size, on pages.
-     * Systems not on it yet join the first page; one taken off is kept, hidden.
+     * Systems not on it yet join the first page; one taken off is kept, hidden. This device's own
+     * (each screen sizes systems for itself); the systems' order follows the person.
      */
     val systemsBoard: HomeLayoutConfig = HomeLayoutConfig(),
     /**

@@ -283,7 +283,10 @@ internal class AuditPlatform(
     override val homeRole: HomeRole? = null,
     metrics: List<PerformanceMetric> = SampleMetrics,
     override val capture: io.github.matiyaaa.fuse.ui.shell.platform.ScreenCapture? = null,
+    /** How the device draws (null: not reported, so Fuse draws with every effect). */
+    drawing: io.github.matiyaaa.fuse.ui.shell.platform.DrawingInfo? = null,
 ) : PlatformUi by ScreenshotPlatform {
+    override val drawing: StateFlow<io.github.matiyaaa.fuse.ui.shell.platform.DrawingInfo?> = MutableStateFlow(drawing)
     override val device: CapabilityProfile = ScreenshotPlatform.device.copy(
         screenWidthPx = size.widthPx,
         screenHeightPx = size.heightPx,
