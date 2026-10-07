@@ -125,7 +125,7 @@ private fun AppState.contentFolderRow(key: ScopedKey<String>, system: PlatformId
     val rescan = { scope.launch { store.sources.rescan(ScanScope.PLATFORM, system) } }
     return MenuAction(
         key.id, label, icon,
-        detail = path.ifBlank { "Optional. Fuse finds $what beside their games, and in a $what folder inside the games folder" },
+        detail = path.ifBlank { "Optional. Fuse finds $what beside their games, and in ${if (what.first().lowercaseChar() in "aeiou") "an" else "a"} $what folder inside the games folder" },
         trailing = Trailing.Value(if (path.isBlank()) "None" else "Chosen"),
         onSelect = {
             choice = ChoiceSpec(

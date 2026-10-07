@@ -541,7 +541,9 @@ internal fun AuditDriver.systemsScreens(exhaustive: Boolean) {
         useLibrary()
         tab(Destination.SYSTEMS)
         waitFor("Arrange")
-        focusText("Switch", substring = true) { tap(PadButton.DPAD_RIGHT) }
+        val systems = libraryStore.library.platforms.value.filter { it.gameCount > 0 }
+        tap(PadButton.DPAD_LEFT)
+        Grid(systems.size).goTo(platformIndex("switch"))
         tap(PadButton.X)
         tapText("System Settings")
         waitFor("Disc playlists")
