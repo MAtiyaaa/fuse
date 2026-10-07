@@ -390,6 +390,7 @@ private fun SpotlightPage(
             is PlatformId -> FocusedPlatform(systems.firstOrNull { it.platform.id == target })
             is CollectionId -> FocusedCollection(store, target)
             is io.github.matiyaaa.fuse.jellyfin.MediaItem -> FocusedMedia(target, minimal = store.prefs.collectAsState().value.jellyfin.browsingCompanion == "MINIMAL")
+            is TransferSpot -> FocusedTransfer(store, target) { logo, title, below -> GameLogo(logo, title, below = below) }
             else -> Idle(time, room = store.prefs.collectAsState().value.display.companionFollowsBackground)
         }
     }
@@ -420,6 +421,7 @@ internal fun companionHero(store: FuseStore, systems: List<PlatformCard>, target
     }
     is PlatformId -> systems.firstOrNull { it.platform.id == target }?.let(::systemRoom)
     is io.github.matiyaaa.fuse.jellyfin.MediaItem -> io.github.matiyaaa.fuse.ui.shell.jellyfin.heroOf(target)
+    is TransferSpot -> transferRoom(store, systems, target)
     // A collection's room is its first game's.
     is CollectionId -> {
         val flow = remember(target) { store.library.games(GameQuery(collection = target)) }
