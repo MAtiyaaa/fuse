@@ -27,3 +27,5 @@ with Fuse.
   again restarts one that is already running.
 - **The Remote Library's settings named the wrong computer.** On the host itself they now say its own
   host is starting again, instead of asking to update Fuse on the host computer.
+- **A game sent to another device could look like it never arrived.** The device that asked could
+  keep showing the request as on its way after the game was there. It now hears it is done.
